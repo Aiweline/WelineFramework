@@ -20,17 +20,21 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? '');
                 <p class="text-text-secondary-light dark:text-text-secondary-dark mt-2"><?= __('Sign in to your account') ?></p>
             </div>
 
+            <div class="auth-form__flash wf-system-messages mb-5" aria-live="polite">
+                <template>Weline_Component::message.phtml</template>
+            </div>
+
             <form action="<?= $this->getUrl('weshop/customer/account/login') ?>" method="post" class="space-y-6">
                 <?= $this->getFormKey() ?>
                 <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>">
 
                 <div>
-                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Email Address') ?></label>
+                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Username or Email') ?></label>
                     <div class="relative">
-                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">mail</span>
-                        <input type="email" id="email" name="email" required
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">person</span>
+                        <input type="text" id="email" name="email" required autocomplete="username"
                                class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-4 focus:border-primary focus:ring-primary"
-                               placeholder="<?= __('you@example.com') ?>">
+                               placeholder="<?= __('Enter your username or email') ?>">
                     </div>
                 </div>
 

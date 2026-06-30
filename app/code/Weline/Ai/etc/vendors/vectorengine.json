@@ -1,0 +1,212 @@
+{
+    "name": "VectorEngine",
+    "code": "vectorengine",
+    "base_url": "https://api.vectorengine.cn/v1",
+    "models_prefix": [
+        "ve-",
+        "gpt-",
+        "claude",
+        "gemini",
+        "deepseek",
+        "qwen",
+        "doubao",
+        "text-embedding-",
+        "bge-",
+        "gte-",
+        "e5-",
+        "text-to-image",
+        "text2image",
+        "text2img",
+        "txt2img",
+        "image-generation",
+        "z-image",
+        "image-",
+        "gpt-image",
+        "dall-e",
+        "imagen",
+        "flux",
+        "stable-diffusion",
+        "sdxl",
+        "seedream",
+        "doubao-seedream",
+        "jimeng",
+        "midjourney",
+        "nano-banana"
+    ],
+    "test_model": "deepseek-v4-flash",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "VectorEngine OpenAI-compatible provider for chat, embeddings, models listing, and text-to-image models.",
+    "website": "https://vectorengine.apifox.cn",
+    "documentation": "https://vectorengine.apifox.cn/api-349239086",
+    "account_setup_guide": {
+        "title": "VectorEngine 接入指南",
+        "summary": "VectorEngine 使用 OpenAI 兼容的 Bearer Token 鉴权方式，支持 models 列表、聊天补全、Embedding 和部分文生图模型。",
+        "links": [
+            {
+                "label": "VectorEngine 文档库",
+                "url": "https://vectorengine.apifox.cn"
+            },
+            {
+                "label": "模型列表接口",
+                "url": "https://vectorengine.apifox.cn/api-349239086"
+            }
+        ],
+        "steps": [
+            "打开 VectorEngine 控制台或文档库，创建并复制 API Key / Bearer Token。",
+            "回到 Weline 后台 AI > 供应商账户，供应商选择 VectorEngine。",
+            "账户名称建议填写 VectorEngine 或业务用途名称。",
+            "API 密钥粘贴 VectorEngine 提供的 API Key，不需要手动加 Bearer 前缀。",
+            "API 基础 URL 默认使用 https://api.vectorengine.ai/v1；如果你的控制台给出 https://api.vectorengine.cn/v1，也可以按实际地址填写。",
+            "保存后点击连接测试，系统会先调用 /v1/models 拉取当前账户可用模型，并让你选择一个模型进行测试。",
+            "测试通过后，到 AI 模型中新建或从供应商 models 接口选择模型；文生图模型会标记为 text2image，供 AI 建站工作台选择。"
+        ],
+        "field_hints": {
+            "provider_code": "VectorEngine",
+            "account_name": "VectorEngine",
+            "api_key": "粘贴 VectorEngine API Key / Bearer Token",
+            "base_url": "默认 https://api.vectorengine.ai/v1；如控制台给出 .cn 域名则以控制台为准",
+            "balance": "可选，仅用于后台展示/排序；不了解可先填 1",
+            "currency": "USD"
+        },
+        "notes": [
+            "models 接口为 GET /v1/models，鉴权为 Authorization: Bearer <token>。",
+            "文本模型走 POST /v1/chat/completions。",
+            "Embedding 模型走 POST /v1/embeddings。",
+            "OpenAI 兼容文生图模型走 POST /v1/images/generations。"
+        ]
+    },
+    "supported_features": {
+        "chat": true,
+        "completion": true,
+        "embedding": true,
+        "image": true,
+        "audio": false
+    },
+    "rate_limits": {
+        "requests_per_minute": 60,
+        "tokens_per_minute": 100000
+    },
+    "models_api": {
+        "path": "/models",
+        "auth_type": "bearer",
+        "data_key": "data",
+        "id_key": "id",
+        "name_key": "id",
+        "desc_key": "description",
+        "context_key": "context_window",
+        "max_tokens_key": "max_tokens",
+        "primary_modality_default": "text2text"
+    },
+    "model_config_defaults": {
+        "max_tokens": 8192,
+        "temperature": 0,
+        "top_p": 1,
+        "stream": false,
+        "timeout": 120,
+        "max_retries": 2,
+        "encoding_format": "float",
+        "response_format": "url",
+        "capabilities": [
+            "chat",
+            "completion",
+            "embedding",
+            "image",
+            "vector"
+        ]
+    },
+    "models": [
+        {
+            "code": "gpt-4o-mini",
+            "name": "GPT-4o Mini",
+            "description": "OpenAI-compatible chat model option proxied by VectorEngine when enabled on the account.",
+            "max_tokens": 8192,
+            "context_window": 128000,
+            "input_price": 0,
+            "output_price": 0,
+            "primary_modality": "text2text",
+            "capabilities": [
+                "chat",
+                "completion"
+            ],
+            "is_active": 1
+        },
+        {
+            "code": "text-embedding-3-small",
+            "name": "Text Embedding 3 Small",
+            "description": "Default VectorEngine embedding test model; OpenAI-compatible embedding model.",
+            "max_tokens": 8192,
+            "context_window": 8192,
+            "input_price": 0,
+            "output_price": 0,
+            "primary_modality": "embedding",
+            "capabilities": [
+                "embedding",
+                "vector"
+            ],
+            "is_active": 1,
+            "is_default": 1
+        },
+        {
+            "code": "text-embedding-3-large",
+            "name": "Text Embedding 3 Large",
+            "description": "Higher quality OpenAI-compatible embedding model option for VectorEngine.",
+            "max_tokens": 8192,
+            "context_window": 8192,
+            "input_price": 0,
+            "output_price": 0,
+            "primary_modality": "embedding",
+            "capabilities": [
+                "embedding",
+                "vector"
+            ],
+            "is_active": 1
+        },
+        {
+            "code": "text-embedding-ada-002",
+            "name": "Text Embedding Ada 002",
+            "description": "Legacy OpenAI-compatible embedding model option for VectorEngine fallback compatibility.",
+            "max_tokens": 8192,
+            "context_window": 8192,
+            "input_price": 0,
+            "output_price": 0,
+            "primary_modality": "embedding",
+            "capabilities": [
+                "embedding",
+                "vector"
+            ],
+            "is_active": 1
+        },
+        {
+            "code": "z-image-turbo",
+            "name": "Z Image Turbo",
+            "description": "VectorEngine text-to-image model using /v1/images/generations.",
+            "max_tokens": 4096,
+            "context_window": 4096,
+            "input_price": 0,
+            "output_price": 0,
+            "primary_modality": "text2image",
+            "capabilities": [
+                "image",
+                "text2image"
+            ],
+            "is_active": 1
+        },
+        {
+            "code": "doubao-seedream-4-5-251128",
+            "name": "Doubao Seedream 4.5",
+            "description": "VectorEngine text-to-image model using /v1/images/generations.",
+            "max_tokens": 4096,
+            "context_window": 4096,
+            "input_price": 0,
+            "output_price": 0,
+            "primary_modality": "text2image",
+            "capabilities": [
+                "image",
+                "text2image"
+            ],
+            "is_active": 1
+        }
+    ]
+}

@@ -146,13 +146,9 @@ class RouteHintService
         
         // 插入路由提示头
         $hint = self::generateHint($sni, $ttl);
-        $body = \substr($response, $headerEnd + 4);
-
         // $headers 本身通常以 \r\n 结尾（最后一行 header 后包含换行）。
         // 这里不应再额外插入空行，否则会把额外的 \r\n 带到 body 前，造成 Content-Length 与实际收到字节不一致。
-        $headers = \rtrim($headers, "\r\n");
-
-        return $headers . "\r\n" . self::HEADER_NAME . ': ' . $hint . "\r\n\r\n" . $body;
+        return \substr_replace($response, self::HEADER_NAME . ': ' . $hint . "\r\n", $headerEnd + 2, 0);
     }
     
     /**

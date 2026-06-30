@@ -138,7 +138,7 @@
     function add(event) {
         var node = document.getElementById('drag-div')
         var wrapper= document.createElement('div');
-        wrapper.innerHTML= '<div class="drag-item" draggable="true"> <div class="close" onclick="del(event)">x</div> <img src="./img/9.jpg" class="drag-pic" draggable="false"> </div>';
+        wrapper.innerHTML= '<div class="drag-item" draggable="true"> <div class="close" data-drag-delete>x</div> <img src="./img/9.jpg" class="drag-pic" draggable="false"> </div>';
         var html= wrapper.firstChild;
         node.appendChild(html)
     }

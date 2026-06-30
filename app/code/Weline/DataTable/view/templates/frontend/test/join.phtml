@@ -4,7 +4,7 @@
     .dt-demo-note{padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #dfe7ef;margin-bottom:20px}
 </style>
 
-<?= $frontend_api_bootstrap ?? '' ?>
+<?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-page" data-demo-page="<?= $page_key ?>">
     <div class="dt-demo-top">
@@ -27,9 +27,7 @@
                sortable="true"
                page-size="6"
                show-pagination="true"
-               allow-frontend="true"
-               api-url="datatable/rest/v1/demo-table"
-               field-api-url="datatable/rest/v1/demo-form/fields">
+               allow-frontend="true">
         <thead>
             <tr>
                 <th data-field="u.id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User ID">User ID</th>

@@ -37,6 +37,7 @@ final class StopCommandIpcStreamBufferTest extends TestCase
         $observedStopStage = 0;
         $childrenFullyExited = false;
         $masterAboutToExit = false;
+        $stopAccepted = false;
 
         $stop->processLine(
             ControlMessage::commandResult(true, [], '阶段5完成: 全部 2 个子进程已退出'),
@@ -45,7 +46,8 @@ final class StopCommandIpcStreamBufferTest extends TestCase
             $totalInstances,
             $observedStopStage,
             $childrenFullyExited,
-            $masterAboutToExit
+            $masterAboutToExit,
+            $stopAccepted
         );
 
         self::assertSame(5, $observedStopStage);
@@ -93,7 +95,8 @@ final class StopCommandIpcStreamBufferTest extends TestCase
                 int &$totalInstances,
                 int &$observedStopStage,
                 bool &$childrenFullyExited,
-                bool &$masterAboutToExit
+                bool &$masterAboutToExit,
+                bool &$stopAccepted
             ): void {
                 $this->processStopProgressLine(
                     $line,
@@ -102,7 +105,8 @@ final class StopCommandIpcStreamBufferTest extends TestCase
                     $totalInstances,
                     $observedStopStage,
                     $childrenFullyExited,
-                    $masterAboutToExit
+                    $masterAboutToExit,
+                    $stopAccepted
                 );
             }
         };

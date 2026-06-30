@@ -83,7 +83,8 @@ class WebsiteForm implements TaglibInterface
             $formAction = $attributes['form_action'] ?? 'null';
             $showSaveBtn = $attributes['show_save_btn'] ?? 'true';
             $saveBtnText = $attributes['save_btn_text'] ?? "'保存'";
-            $cancelUrl = $attributes['cancel_url'] ?? "'javascript:history.back()'";
+            $cancelUrl = $attributes['cancel_url'] ?? "''";
+            $hasCancelUrl = array_key_exists('cancel_url', $attributes);
 
             // 解析所有属性
             $code = \Weline\Taglib\Taglib::attributes($attributes);
@@ -341,56 +342,36 @@ class WebsiteForm implements TaglibInterface
             $html[] = '            <?php endif; ?>';
             $html[] = '            <div class="form-text-hint"><lang>按住Ctrl或Cmd键可多选</lang></div>';
             $html[] = '          </div>';
-            $html[] = '          <div class="col-12 mb-3">';
-            $html[] = '            <label for="<?= htmlspecialchars($Taglib__id) ?>_seo_account" class="form-label"><lang>SEO 账户</lang></label>';
-            $html[] = '            <?php';
-            $html[] = '            $seoAccountId = \'\';';
-            $html[] = '            $seoAccountName = __(\'未绑定\');';
-            $html[] = '            if (!empty($website[\'website_id\'])) {';
-            $html[] = '              try {';
-            $html[] = '                $seoBinding = ObjectManager::getInstance(\\Weline\\Seo\\Model\\SeoWebsiteAccount::class);';
-            $html[] = '                $binding = $seoBinding->getByWebsiteId((int)$website[\'website_id\']);';
-            $html[] = '                if ($binding) {';
-            $html[] = '                  if (is_array($binding) && isset($binding[0]) && !empty($binding[0][\'account_id\'])) {';
-            $html[] = '                    $seoAccountId = $binding[0][\'account_id\'];';
-            $html[] = '                  } elseif (is_array($binding) && !empty($binding[\'account_id\'])) {';
-            $html[] = '                    $seoAccountId = $binding[\'account_id\'];';
-            $html[] = '                  } elseif (is_object($binding) && method_exists($binding, \'getAccountId\')) {';
-            $html[] = '                    $seoAccountId = $binding->getAccountId();';
-            $html[] = '                  }';
-            $html[] = '                  if ($seoAccountId) {';
-            $html[] = '                    $seoAccount = ObjectManager::getInstance(\\Weline\\Seo\\Model\\SeoAccount::class);';
-            $html[] = '                    $account = $seoAccount->load($seoAccountId);';
-            $html[] = '                    if ($account->getId()) {';
-            $html[] = '                      $seoAccountName = $account->getData(\'name\') . \' (\' . $account->getData(\'provider\') . \')\';';
-            $html[] = '                    }';
-            $html[] = '                  }';
-            $html[] = '                }';
-            $html[] = '              } catch (\\Exception $e) {';
-            $html[] = '              }';
-            $html[] = '            }';
-            $html[] = '            ?>';
-            $html[] = '            <w:seo:account:select';
-            $html[] = '                id="<?= htmlspecialchars($Taglib__id) ?>_seo_account"';
-            $html[] = '                name="seo_account_id"';
-            $html[] = '                value="seoAccountId|\'\'"';
-            $html[] = '                display="seoAccountName|\'请选择SEO账户\'"';
-            $html[] = '                class="w-100"';
-            $html[] = '            />';
-            $html[] = '            <div class="form-text-hint"><lang>绑定后将自动提交sitemap到该SEO账户的搜索引擎</lang></div>';
-            $html[] = '          </div>';
             $html[] = '        </div>';
             $html[] = '        <?php $this->dispatchHook("website_form_advanced", ["id" => $Taglib__id, "website" => $website]); ?>';
             $html[] = '      </div>';
             $html[] = '    </div>';
             $html[] = '  </div>';
+            $html[] = '  <?php $this->dispatchHook("Weline_Websites::backend::website::form::sections-after", ["id" => $Taglib__id, "website" => $website, "accordion_parent_id" => $Taglib__id . "_wrapper"]); ?>';
 
             // 操作按钮
             if ($showSaveBtn === 'true' || $showSaveBtn === '1') {
                 $html[] = '  <div class="d-flex justify-content-between mt-4 pt-2">';
-                $html[] = '    <a href="<?= $cancelUrl ?>" class="btn btn-secondary"><lang>取消</lang></a>';
+                if ($hasCancelUrl) {
+                    $html[] = '    <a href="<?= htmlspecialchars((string)$cancelUrl, ENT_QUOTES, \'UTF-8\') ?>" class="btn btn-secondary"><lang>取消</lang></a>';
+                } else {
+                    $html[] = '    <button type="button" class="btn btn-secondary" data-website-form-action="history-back"><lang>取消</lang></button>';
+                }
                 $html[] = '    <button type="submit" class="btn btn-primary"><?= $saveBtnText ?></button>';
                 $html[] = '  </div>';
+            }
+
+            if (!$hasCancelUrl) {
+                $html[] = '<script>';
+                $html[] = '(function(){';
+                $html[] = '  document.addEventListener("click", function(event) {';
+                $html[] = '    var trigger = event.target.closest("[data-website-form-action]");';
+                $html[] = '    if (!trigger || trigger.getAttribute("data-website-form-action") !== "history-back") { return; }';
+                $html[] = '    event.preventDefault();';
+                $html[] = '    window.history.back();';
+                $html[] = '  });';
+                $html[] = '})();';
+                $html[] = '</script>';
             }
 
             $html[] = '</div>';

@@ -824,7 +824,7 @@ class WebsiteAgentService
         }
         $suffix = \substr(\md5($base . '-' . \microtime(true)), 0, 6);
 
-        return $base . '-' . $suffix . '.' . LocalDomainPolicy::currentRootDomain();
+        return $base . '-' . $suffix . '.' . LocalDomainPolicy::TEST_ROOT_DOMAIN;
     }
 
     /**

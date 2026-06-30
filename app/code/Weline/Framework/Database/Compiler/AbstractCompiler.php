@@ -41,7 +41,7 @@ abstract class AbstractCompiler implements CompilerInterface
         $joins = $this->buildJoins($ast['joins'] ?? [], $tableAlias);
         $wheres = $this->buildWheres($ast['where'] ?? [], $ast);
         $order = $this->buildOrder($ast['order'] ?? []);
-        $groupBy = !empty($ast['group']) ? 'GROUP BY ' . $ast['group'] : '';
+        $groupBy = $this->buildGroupBy((string)($ast['group'] ?? ''));
         $having = !empty($ast['having']) ? 'HAVING ' . $ast['having'] : '';
         $extra = $ast['extra'] ?? '';
         $limit = $ast['limit'] ?? '';
@@ -236,6 +236,29 @@ abstract class AbstractCompiler implements CompilerInterface
             $parts[] = $this->quoteFieldExpression(is_string($field) ? $field : (string)$field) . ' ' . $dir;
         }
         return $parts === [] ? '' : 'ORDER BY ' . implode(', ', $parts);
+    }
+
+    protected function buildGroupBy(string $group): string
+    {
+        $group = trim($group);
+        if ($group === '') {
+            return '';
+        }
+
+        if (stripos($group, 'GROUP BY') === 0) {
+            $group = trim(substr($group, 8));
+        }
+
+        $parts = [];
+        foreach (SelectFieldListSplitter::split($group) as $field) {
+            $field = trim($field);
+            if ($field === '') {
+                continue;
+            }
+            $parts[] = $this->quoteFieldExpression($field);
+        }
+
+        return $parts === [] ? '' : 'GROUP BY ' . implode(', ', $parts);
     }
 
     protected function formatFields(string $fields, string $tableAlias): string

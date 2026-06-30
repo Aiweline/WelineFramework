@@ -203,6 +203,40 @@ class Processer
         return self::resolveWelinePnameByPortHint($port) !== '';
     }
 
+    private static function looksLikeWelineProcessName(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+
+        return \strpos($value, self::WELINE_PROCESS_PREFIX) !== false
+            || \strpos($value, '--name=' . self::WELINE_PROCESS_PREFIX) !== false;
+    }
+
+    private static function resolveWelinePnameByPidHint(int $pid): string
+    {
+        if ($pid <= 0) {
+            return '';
+        }
+
+        $record = self::readPidIndex()[$pid] ?? null;
+        if (!\is_array($record)) {
+            return '';
+        }
+
+        foreach ([
+            (string)($record['pname'] ?? ''),
+            (string)($record['process_name'] ?? ''),
+            (string)($record['task_name'] ?? ''),
+        ] as $candidate) {
+            if (self::looksLikeWelineProcessName($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
     /**
      * 在 pid_index 中查找与该端口可能关联的 weline 进程名（用于 history 推断）。
      * 命中返回原始 pname（含 --name= 前缀时保留），否则返回空串。
@@ -224,9 +258,7 @@ class Processer
                 ? \substr($pname, 7)
                 : $pname;
 
-            $looksLikeWeline = (\strpos($taskName, self::WELINE_PROCESS_PREFIX) !== false)
-                || (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
-            if (!$looksLikeWeline) {
+            if (!self::looksLikeWelineProcessName($taskName) && !self::looksLikeWelineProcessName($pname)) {
                 continue;
             }
 
@@ -606,7 +638,11 @@ class Processer
         if (self::shouldTryManagedProcessReuse((bool) $block, $foreground)) {
             $existingPid = (int) self::getData($pname, 'pid');
             if ($existingPid > 0) {
-                return $existingPid;
+                $expectedProcessName = (string) ($processInfo['name'] ?? '');
+                if (self::isManagedProcessRunning($existingPid, $expectedProcessName !== '' ? $expectedProcessName : null, '', $pname)) {
+                    return $existingPid;
+                }
+                self::removePidFile($pname);
             }
         }
         
@@ -1247,7 +1283,7 @@ class Processer
         string $expectedLaunchId = '',
         ?string $expectedPname = null
     ): bool {
-        if ($pid <= 0 || !self::isRunningByPid($pid)) {
+        if ($pid <= 0) {
             return false;
         }
 
@@ -1732,7 +1768,7 @@ class Processer
             return 0;
         }
         $removed = 0;
-        $stalePids = [];
+        $recordsByPid = [];
 
         // 清理陈旧的 *-pid.json 文件（进程不存活的）
         $files = \glob($dir . '*-pid.json');
@@ -1742,33 +1778,66 @@ class Processer
                 continue;
             }
             $data = \json_decode($raw, true);
+            if (!\is_array($data)) {
+                continue;
+            }
             $pid = isset($data['pid']) ? (int) $data['pid'] : 0;
             if ($pid <= 0) {
                 continue;
             }
 
-            $matchesIdentity = \is_array($data) && self::doesPidMatchRecordedIdentity($pid, $data);
-            if (!$matchesIdentity) {
-                @\unlink($path);
-                $stalePids[] = $pid;
-                $removed++;
-            }
+            $recordsByPid[$pid][] = [
+                'path' => $path,
+                'data' => $data,
+            ];
         }
         
         // 同步清理 pid_index.json 中的陈旧记录
-        if (!empty($stalePids)) {
+        if ($recordsByPid !== []) {
+            $pidInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($recordsByPid)));
             $pidIndex = self::readPidIndex();
             $pidIndexChanged = false;
-            foreach ($stalePids as $stalePid) {
-                if (isset($pidIndex[$stalePid])) {
-                    unset($pidIndex[$stalePid]);
+
+            foreach ($recordsByPid as $pid => $records) {
+                $info = \is_array($pidInfo[$pid] ?? null) ? $pidInfo[$pid] : [];
+                if ((bool)($info['exists'] ?? false)) {
+                    continue;
+                }
+
+                foreach ($records as $record) {
+                    $path = (string)($record['path'] ?? '');
+                    if ($path !== '' && \is_file($path)) {
+                        @\unlink($path);
+                        $removed++;
+                    }
+                }
+
+                if (isset($pidIndex[$pid])) {
+                    unset($pidIndex[$pid]);
                     $pidIndexChanged = true;
                 }
-                self::untrustPid($stalePid);
+                self::untrustPid((int)$pid);
             }
+
             if ($pidIndexChanged) {
                 self::writePidIndex($pidIndex);
             }
+        }
+
+        foreach ($files ?? [] as $path) {
+            if (!\is_file($path)) {
+                continue;
+            }
+
+            $raw = @\file_get_contents($path);
+            $data = \json_decode($raw === false ? '' : $raw, true);
+            $pid = \is_array($data) ? (int)($data['pid'] ?? 0) : 0;
+            if ($pid > 0) {
+                continue;
+            }
+
+            @\unlink($path);
+            $removed++;
         }
 
         $pidIndex = self::filterPidIndexExistingJsonPaths(self::readPidIndex());
@@ -2185,7 +2254,17 @@ class Processer
         if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
             return false;
         }
-        
+
+        if (IS_WIN && $skipCheck) {
+            $result = self::dispatchBatchSignal([$pid], 9);
+            self::untrustPid($pid);
+            if (($result[$pid] ?? false) === true) {
+                self::finalizeBatchGracefulKillPid($pid, 'force kill dispatched async');
+            }
+
+            return (bool) ($result[$pid] ?? false);
+        }
+
         $pname   = self::getNameByPid($pid);
         $logfile = '';
         if ($pname && $pname !== 'unknown') {
@@ -2227,6 +2306,13 @@ class Processer
         // 己方进程校验：非己方进程拒绝杀
         if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
             return false;
+        }
+
+        if (IS_WIN && $skipCheck) {
+            $result = self::dispatchBatchKillProcessTreesWindows([$pid]);
+            self::untrustPid($pid);
+
+            return (int) ($result['killed'] ?? 0) > 0;
         }
 
         $pname = self::getNameByPid($pid);
@@ -2391,6 +2477,17 @@ class Processer
         if (empty($validPids)) {
             return $result;
         }
+
+        if (IS_WIN) {
+            $batched = self::batchKillProcessTreesWindows($validPids);
+            if ($batched !== null) {
+                $result['killed'] += $batched['killed'];
+                $result['failed'] += $batched['failed'];
+                $result['remaining'] = $batched['remaining'];
+
+                return $result;
+            }
+        }
         
         self::batchSendSignal($validPids, 15);
         if ($timeout > 0.0) {
@@ -2462,7 +2559,8 @@ class Processer
 
     /**
      * Dispatch process-tree termination without waiting for Windows taskkill to
-     * finish walking every child. Callers must verify remaining PIDs separately.
+     * finish walking every child. Hot stop paths should treat dispatch as the
+     * completion signal and leave any later residue to the next cleanup pass.
      *
      * @param int[] $pids
      * @return array{killed: int, failed: int, remaining: int[]}
@@ -2975,9 +3073,9 @@ class Processer
             } while (\microtime(true) < $deadline);
         }
 
-        if (($status['running'] ?? false) === false) {
-            @\proc_close($process);
-        }
+        // Do not call proc_close() here on Windows detached helpers. In
+        // practice proc_close() can wait behind the detached child process and
+        // turn an async launch into a multi-second synchronous stall.
     }
 
     /**
@@ -3112,6 +3210,54 @@ class Processer
         return "'" . \str_replace("'", "''", $value) . "'";
     }
 
+    private static function quoteWindowsCommandLineArg(string $argument): string
+    {
+        if ($argument === '') {
+            return '""';
+        }
+
+        if (!\preg_match('/[\s"]/', $argument)) {
+            return $argument;
+        }
+
+        $quoted = '"';
+        $slashes = 0;
+        $length = \strlen($argument);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $argument[$i];
+            if ($char === '\\') {
+                $slashes++;
+                continue;
+            }
+            if ($char === '"') {
+                $quoted .= \str_repeat('\\', ($slashes * 2) + 1) . '"';
+                $slashes = 0;
+                continue;
+            }
+            if ($slashes > 0) {
+                $quoted .= \str_repeat('\\', $slashes);
+                $slashes = 0;
+            }
+            $quoted .= $char;
+        }
+        if ($slashes > 0) {
+            $quoted .= \str_repeat('\\', $slashes * 2);
+        }
+
+        return $quoted . '"';
+    }
+
+    /**
+     * @param list<string> $argv
+     */
+    private static function buildWindowsCommandLineFromArgv(array $argv): string
+    {
+        return \implode(' ', \array_map(
+            static fn (string $argument): string => self::quoteWindowsCommandLineArg($argument),
+            $argv
+        ));
+    }
+
     /**
      * @param list<string> $values
      */
@@ -3140,35 +3286,35 @@ class Processer
             return null;
         }
 
-        $argLines = [];
-        for ($i = 1, $n = \count($argv); $i < $n; $i++) {
-            $argLines[] = '    ' . self::toPowerShellSingleQuoted((string) $argv[$i]);
-        }
-        $argListBody = \implode(",\n", $argLines);
-
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $phpExe = __PHP__
 $wd = __WD__
-$argList = @(
-__ARGS__
-)
+$argList = __ARGS__
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
 } catch {
     [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
     exit 1
 }
-$startArgs = @{
-    FilePath = $phpExe
-    WindowStyle = 'Hidden'
-    PassThru = $true
-    ErrorAction = 'Stop'
-    ArgumentList = $argList
-}
 try {
-    $p = Start-Process @startArgs
-    [Console]::Out.WriteLine([string]$p.Id)
+    $startArgs = @{
+        FilePath = $phpExe
+        WorkingDirectory = $wd
+        WindowStyle = 'Hidden'
+        PassThru = $true
+        ErrorAction = 'Stop'
+    }
+    if ($argList.Count -gt 0) {
+        $startArgs.ArgumentList = $argList
+    }
+    $process = Start-Process @startArgs
+    if ($null -ne $process -and [int]$process.Id -gt 0) {
+        [Console]::Out.WriteLine([string]$process.Id)
+        exit 0
+    }
+    [Console]::Error.WriteLine('Start-Process did not return a process id')
+    exit 1
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
@@ -3177,7 +3323,11 @@ POWERSHELL;
 
         $script = \str_replace(
             ['__PHP__', '__WD__', '__ARGS__'],
-            [self::toPowerShellSingleQuoted((string) $argv[0]), self::toPowerShellSingleQuoted($workingDir), $argListBody],
+            [
+                self::toPowerShellSingleQuoted((string) $argv[0]),
+                self::toPowerShellSingleQuoted($workingDir),
+                self::buildPowerShellArrayLiteral(\array_map('strval', \array_slice($argv, 1))),
+            ],
             $template
         );
 
@@ -3202,26 +3352,33 @@ POWERSHELL;
     {
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
-$arguments = '__ARGUMENTS__'
-$wd = '__WORKING_DIR__'
+$phpExe = __PHP__
+$wd = __WD__
+$arguments = __ARGUMENTS__
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
 } catch {
     [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
     exit 1
 }
-$startArgs = @{
-    FilePath = '__PHP_BINARY__'
-    WindowStyle = 'Hidden'
-    PassThru = $true
-    ErrorAction = 'Stop'
-}
-if ($arguments -ne '') {
-    $startArgs.ArgumentList = $arguments
-}
 try {
-    $p = Start-Process @startArgs
-    [Console]::Out.WriteLine([string]$p.Id)
+    $startArgs = @{
+        FilePath = $phpExe
+        WorkingDirectory = $wd
+        WindowStyle = 'Hidden'
+        PassThru = $true
+        ErrorAction = 'Stop'
+    }
+    if ($arguments -ne '') {
+        $startArgs.ArgumentList = $arguments
+    }
+    $process = Start-Process @startArgs
+    if ($null -ne $process -and [int]$process.Id -gt 0) {
+        [Console]::Out.WriteLine([string]$process.Id)
+        exit 0
+    }
+    [Console]::Error.WriteLine('Start-Process did not return a process id')
+    exit 1
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
@@ -3229,11 +3386,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP_BINARY__', '__ARGUMENTS__', '__WORKING_DIR__'],
+            ['__PHP__', '__WD__', '__ARGUMENTS__'],
             [
-                self::escapePowerShellLiteral($phpBinary),
-                self::escapePowerShellLiteral($arguments),
-                self::escapePowerShellLiteral($workingDir),
+                self::toPowerShellSingleQuoted($phpBinary),
+                self::toPowerShellSingleQuoted($workingDir),
+                self::toPowerShellSingleQuoted(\trim($arguments)),
             ],
             $template
         );
@@ -3505,7 +3662,7 @@ POWERSHELL;
     private static function buildWindowsPowerShellProcOpenCommand(string $scriptPath): array
     {
         return [
-            'powershell',
+            self::resolveWindowsPowerShellExecutable(),
             '-NoProfile',
             '-NonInteractive',
             '-ExecutionPolicy',
@@ -3513,6 +3670,40 @@ POWERSHELL;
             '-File',
             $scriptPath,
         ];
+    }
+
+    private static function resolveWindowsPowerShellExecutable(): string
+    {
+        if (!IS_WIN) {
+            return 'powershell';
+        }
+
+        $systemRoot = \rtrim((string) (\getenv('SystemRoot') ?: \getenv('windir') ?: 'C:\\Windows'), '\\/');
+        $candidates = [
+            $systemRoot . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+            $systemRoot . '\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe',
+            $systemRoot . '\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe',
+            $systemRoot . '\\System32\\powershell.exe',
+        ];
+
+        $path = (string) \getenv('PATH');
+        if ($path !== '') {
+            foreach (\explode(PATH_SEPARATOR, $path) as $directory) {
+                $directory = \trim($directory, " \t\n\r\0\x0B\"'");
+                if ($directory !== '') {
+                    $candidates[] = \rtrim($directory, '\\/') . '\\powershell.exe';
+                    $candidates[] = \rtrim($directory, '\\/') . '\\powershell';
+                }
+            }
+        }
+
+        foreach (\array_unique($candidates) as $candidate) {
+            if (\is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'powershell';
     }
 
     /**
@@ -3952,6 +4143,7 @@ POWERSHELL;
 
         foreach ($pids as $pid) {
             $result['killed']++;
+            self::untrustPid((int) $pid);
             self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
         }
 
@@ -3985,6 +4177,7 @@ POWERSHELL;
 
         foreach ($pids as $pid) {
             $result['killed']++;
+            self::untrustPid((int) $pid);
             self::finalizeBatchGracefulKillPid((int) $pid, 'force tree kill dispatched async');
         }
 
@@ -4167,19 +4360,30 @@ POWERSHELL;
     }
 
     /**
+     * Windows：用 start /B 脱离当前 CLI，避免 taskkill /T 在父进程内同步扫完整棵子树。
+     */
+    private static function wrapWindowsDetachedAsyncCommand(string $command): string
+    {
+        $command = \trim($command);
+        if ($command === '') {
+            return $command;
+        }
+
+        if (\preg_match('/\s2>NUL\s*$/i', $command)) {
+            $command = (string) \preg_replace('/\s2>NUL\s*$/i', '', $command) . ' 1>NUL 2>NUL';
+        } elseif (!\preg_match('/1>NUL/i', $command)) {
+            $command .= ' 1>NUL 2>NUL';
+        }
+
+        return 'cmd /d /c start "" /B cmd /d /c "' . $command . '"';
+    }
+
+    /**
      * @param int[] $pids
      */
     private static function buildWindowsAsyncBatchSignalCommand(array $pids): string
     {
-        $pidArgs = [];
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid > 0) {
-                $pidArgs[] = '/PID ' . $pid;
-            }
-        }
-
-        return self::buildWindowsBatchSignalCommand($pids);
+        return self::wrapWindowsDetachedAsyncCommand(self::buildWindowsBatchSignalCommand($pids));
     }
 
     /**
@@ -4187,15 +4391,7 @@ POWERSHELL;
      */
     private static function buildWindowsAsyncBatchTreeKillCommand(array $pids): string
     {
-        $pidArgs = [];
-        foreach ($pids as $pid) {
-            $pid = (int) $pid;
-            if ($pid > 0) {
-                $pidArgs[] = '/PID ' . $pid;
-            }
-        }
-
-        return self::buildWindowsBatchTreeKillCommand($pids);
+        return self::wrapWindowsDetachedAsyncCommand(self::buildWindowsBatchTreeKillCommand($pids));
     }
 
     /**
@@ -4225,13 +4421,19 @@ POWERSHELL;
             'exited' => [],
         ];
 
+        $validPids = [];
         foreach ($pids as $pid) {
             $pid = (int) $pid;
             if ($pid <= 0) {
                 continue;
             }
 
-            if (self::isRunningByPid($pid)) {
+            $validPids[$pid] = $pid;
+        }
+
+        $runningMap = self::batchCheckRunning(\array_values($validPids));
+        foreach ($validPids as $pid) {
+            if ($runningMap[$pid] ?? false) {
                 $state['running'][] = $pid;
             } else {
                 $state['exited'][] = $pid;
@@ -4300,33 +4502,24 @@ POWERSHELL;
             return [];
         }
 
-        if (\count($pids) > 16) {
-            return null;
-        }
-
         $results = [];
+        $validPids = [];
         foreach ($pids as $pid) {
             $pid = (int) $pid;
             if ($pid <= 0) {
                 continue;
             }
-
-            $output = [];
-            $returnCode = 0;
-            self::execute("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $returnCode);
-
+            $validPids[$pid] = $pid;
             $results[$pid] = false;
-            foreach ($output as $line) {
-                $parts = \str_getcsv(\trim($line), ',', '"', '');
-                if (\count($parts) < 2) {
-                    continue;
-                }
+        }
 
-                if ((int) \preg_replace('/[^\d]/', '', (string) $parts[1]) === $pid) {
-                    $results[$pid] = true;
-                    break;
-                }
-            }
+        if ($validPids === []) {
+            return $results;
+        }
+
+        $processInfo = self::batchGetProcessInfo(\array_values($validPids));
+        foreach ($validPids as $pid) {
+            $results[$pid] = (bool)($processInfo[$pid]['exists'] ?? false);
         }
 
         return $results;
@@ -4354,9 +4547,10 @@ POWERSHELL;
         $stillRunning = \array_map('intval', $pids);
         
         while (\microtime(true) - $startTime < $timeout && !empty($stillRunning)) {
+            $runningMap = self::batchCheckRunning($stillRunning);
             $newStillRunning = [];
             foreach ($stillRunning as $pid) {
-                if (self::isRunningByPid($pid)) {
+                if ($runningMap[$pid] ?? false) {
                     $newStillRunning[] = $pid;
                 } else {
                     $result['exited'][] = $pid;
@@ -4923,25 +5117,32 @@ POWERSHELL;
         }
 
         $identitySource = $pname;
-        if ($pid !== \getmypid()) {
+        $processName = self::extractCommandLineArg($identitySource, 'name');
+        $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
+        $epoch = self::extractCommandLineArg($identitySource, 'epoch');
+
+        // Newly-created managed processes already carry stable identity flags in
+        // the command we used to launch them. Avoid an immediate WMI command-line
+        // query on Windows startup; later control paths still verify live PIDs.
+        if ($pid !== \getmypid() && $processName === '' && $launchId === '' && $epoch === '') {
             $cmdLine = self::getProcessCommandLine($pid);
             if ($cmdLine !== '') {
                 $identitySource = $cmdLine;
                 $record['command_line_hash'] = \sha1($cmdLine);
+                $processName = self::extractCommandLineArg($identitySource, 'name');
+                $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
+                $epoch = self::extractCommandLineArg($identitySource, 'epoch');
             }
         }
 
-        $processName = self::extractCommandLineArg($identitySource, 'name');
         if ($processName !== '') {
             $record['process_name'] = self::normalizeName($processName);
         }
 
-        $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
         if ($launchId !== '') {
             $record['launch_id'] = $launchId;
         }
 
-        $epoch = self::extractCommandLineArg($identitySource, 'epoch');
         if ($epoch !== '' && \is_numeric($epoch)) {
             $record['epoch'] = (int) $epoch;
         }
@@ -5902,8 +6103,7 @@ POWERSHELL;
         $portIndex = self::readPortIndex();
         if (isset($portIndex[$portKey])) {
             $portIndexPname = (string) $portIndex[$portKey];
-            $portIndexSuggestsWeline = (\strpos($portIndexPname, self::WELINE_PROCESS_PREFIX) !== false)
-                || (\strpos($portIndexPname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
+            $portIndexSuggestsWeline = self::looksLikeWelineProcessName($portIndexPname);
         }
 
         $pid = self::getProcessIdByPort($port);
@@ -5932,10 +6132,13 @@ POWERSHELL;
             ];
         }
 
-        $isWeline = $portIndexSuggestsWeline || self::isWelineServerProcess($pid);
+        $pidIndexPname = self::resolveWelinePnameByPidHint($pid);
+        $isWeline = $portIndexSuggestsWeline
+            || $pidIndexPname !== ''
+            || self::isWelineServerProcess($pid);
 
         // 命中 weline 时尽量补齐 pname，便于上层按项目作用域辨别归属。
-        $pname = $portIndexPname;
+        $pname = $portIndexPname !== '' ? $portIndexPname : $pidIndexPname;
         if ($pname === '' && $isWeline) {
             $cmdLine = self::getProcessCommandLine($pid);
             if ($cmdLine !== '') {
@@ -6077,7 +6280,9 @@ POWERSHELL;
             return [];
         }
 
-        $pids = [];
+        $candidatePids = [];
+        $pidExpectedNames = [];
+        $pidExpectedPnames = [];
         $currentPid = \getmypid();
         $nameIndex = self::readNameIndex();
         foreach ($nameIndex as $pname => $entries) {
@@ -6098,11 +6303,34 @@ POWERSHELL;
                     continue;
                 }
 
-                if (self::canOperateOnRegisteredPid($pid, $taskName !== '' ? $taskName : null, '', $pname)) {
-                    $pids[$pid] = true;
-                }
+                $candidatePids[$pid] = true;
+                $pidExpectedNames[$pid] = $taskName !== '' ? $taskName : null;
+                $pidExpectedPnames[$pid] = $pname;
             }
         }
+
+        if ($candidatePids === []) {
+            return [];
+        }
+
+        $processInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($candidatePids)));
+        $pids = [];
+        foreach (\array_keys($candidatePids) as $pid) {
+            $pid = (int) $pid;
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if (!(bool) ($info['exists'] ?? false) || (bool) ($info['is_zombie'] ?? false)) {
+                continue;
+            }
+            if (self::isManagedProcessRunning(
+                $pid,
+                $pidExpectedNames[$pid] ?? null,
+                '',
+                (string) ($pidExpectedPnames[$pid] ?? '')
+            )) {
+                $pids[$pid] = true;
+            }
+        }
+
         return \array_map('intval', \array_keys($pids));
     }
 
@@ -6170,7 +6398,10 @@ POWERSHELL;
                     if ($pid <= 0 || $pid === $currentPid) {
                         continue;
                     }
-                    $targetPids[$pid] = true;
+                    $targetPids[$pid] = [
+                        'pname' => (string) $pname,
+                        'taskName' => (string) $taskName,
+                    ];
                 }
 
                 break;
@@ -6180,9 +6411,52 @@ POWERSHELL;
             return 0;
         }
 
-        $result = self::batchKillProcessTrees(\array_map('intval', \array_keys($targetPids)), true);
+        $processInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($targetPids)));
+        $livePids = [];
+        foreach (\array_keys($targetPids) as $pid) {
+            $pid = (int)$pid;
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if ((bool)($info['exists'] ?? false) && !(bool)($info['is_zombie'] ?? false)) {
+                $commandLine = (string) ($info['command'] ?? '');
+                if ($commandLine === '') {
+                    $commandLine = self::getProcessCommandLine($pid);
+                }
+                $expected = \is_array($targetPids[$pid] ?? null) ? $targetPids[$pid] : [];
+                $expectedTaskName = (string) ($expected['taskName'] ?? '');
+                if (!self::commandLineMatchesManagedProcessName($commandLine, $expectedTaskName)) {
+                    continue;
+                }
+                $livePids[] = $pid;
+            }
+        }
+
+        if ($livePids === []) {
+            return 0;
+        }
+
+        $result = self::batchKillProcessTrees($livePids, true);
         
         return (int) ($result['killed'] ?? 0);
+    }
+
+    /**
+     * Prefix-based cleanup must validate the live command line, not only stale pid/name indexes.
+     */
+    private static function commandLineMatchesManagedProcessName(string $commandLine, string $expectedTaskName): bool
+    {
+        if ($commandLine === '' || $expectedTaskName === '') {
+            return false;
+        }
+
+        $actualProcessName = self::extractCommandLineArg($commandLine, 'name');
+        if ($actualProcessName === '') {
+            $actualProcessName = self::extractCommandLineArg($commandLine, 'process');
+        }
+        if ($actualProcessName === '') {
+            return false;
+        }
+
+        return self::normalizeName($actualProcessName) === self::normalizeName($expectedTaskName);
     }
 
     /**

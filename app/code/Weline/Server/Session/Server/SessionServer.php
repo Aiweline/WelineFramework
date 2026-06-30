@@ -20,6 +20,7 @@ declare(strict_types=1);
 namespace Weline\Server\Session\Server;
 
 use Weline\Framework\Session\Storage\FileStorage;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Socket\ListenSocketOptions;
 use Weline\Server\Service\SharedStateServiceRegistry;
@@ -75,6 +76,7 @@ final class SessionServer
     private ?string $authToken = null;
     private int $authTokenVersion = 0; // Token 版本号，每次生成新 token 时递增
     private float $lastTokenFileCheck = 0.0; // 上次检查 token 文件的时间
+    private float $lastListenOwnerCheckAt = 0.0;
 
     /** Token 文件路径 */
     private string $tokenFilePath = '';
@@ -174,6 +176,16 @@ final class SessionServer
         $errno = 0;
         $errstr = '';
 
+        if ($this->port > 0) {
+            Processer::clearPortCache($this->port);
+            $existingPid = Processer::getProcessIdByPort($this->port);
+            if ($existingPid > 0 && $existingPid !== \getmypid()) {
+                $this->lastBindError = "port already owned by PID {$existingPid} ({$this->host}:{$this->port})";
+                $this->log("Failed to start: {$this->lastBindError}");
+                return false;
+            }
+        }
+
         $ctx = \stream_context_create([
             'socket' => ListenSocketOptions::streamContextOptions([]),
         ]);
@@ -199,6 +211,14 @@ final class SessionServer
             if ($localName !== false && ($colonPos = \strrpos($localName, ':')) !== false) {
                 $this->port = (int)\substr($localName, $colonPos + 1);
             }
+        }
+
+        if (!$this->isCurrentProcessListenOwner(true)) {
+            $this->lastBindError = "listen port owner mismatch after bind: {$this->host}:{$this->port}";
+            $this->log($this->lastBindError);
+            @\fclose($this->serverSocket);
+            $this->serverSocket = null;
+            return false;
         }
 
         $this->publishAuthTokenFile();
@@ -278,11 +298,15 @@ final class SessionServer
     public function stop(): void
     {
         $this->running = false;
+        $ownsListenPort = $this->isCurrentProcessListenOwner(true);
 
         $this->store->forcePersist();
 
         foreach ($this->clients as $clientId => $client) {
-            @\fclose($client['socket']);
+            $socket = $client['socket'] ?? null;
+            if (\is_resource($socket)) {
+                @\fclose($socket);
+            }
         }
         $this->clients = [];
 
@@ -291,9 +315,12 @@ final class SessionServer
             $this->serverSocket = null;
         }
 
-        $this->sharedRegistry->removeRecord($this->serviceRole);
-        
-        $this->cleanupTokenFile();
+        if ($ownsListenPort || $this->isCurrentProcessRegistryOwner()) {
+            $this->sharedRegistry->removeRecord($this->serviceRole);
+            $this->cleanupTokenFile($ownsListenPort);
+        } else {
+            $this->log('Skip shared registry/token cleanup because this process is not the listen-port owner');
+        }
 
         $this->log('Stopped');
     }
@@ -316,20 +343,30 @@ final class SessionServer
      */
     public function tick(int $timeoutUsec = 0): int
     {
-        $this->ensureAuthTokenFile();
-
         if (!$this->serverSocket) {
             return 0;
         }
+        if (!$this->ensureCurrentProcessOwnsListenPort()) {
+            return 0;
+        }
+        $this->ensureAuthTokenFile();
 
         $read = [$this->serverSocket];
-        foreach ($this->clients as $client) {
-            if (\is_resource($client['socket'])) {
-                $read[] = $client['socket'];
+        $write = [];
+        foreach ($this->clients as $clientId => $client) {
+            $socket = $client['socket'] ?? null;
+            if (\is_resource($socket)) {
+                $read[] = $socket;
+                if ((string)($client['write_buffer'] ?? '') !== '') {
+                    $write[] = $socket;
+                }
+                continue;
             }
+
+            unset($this->clients[$clientId]);
         }
 
-        $write = null;
+        $write = $write !== [] ? $write : null;
         $except = null;
         $tvSec = (int)($timeoutUsec / 1000000);
         $tvUsec = $timeoutUsec % 1000000;
@@ -357,6 +394,15 @@ final class SessionServer
             }
         }
 
+        if (\is_array($write)) {
+            foreach ($write as $socket) {
+                $clientId = $this->getClientId($socket);
+                if ($clientId !== null) {
+                    $this->flushClientWriteBuffer($clientId);
+                }
+            }
+        }
+
         $this->doMaintenance();
 
         return $processed;
@@ -378,6 +424,7 @@ final class SessionServer
         $this->clients[$clientId] = [
             'socket' => $clientSocket,
             'buffer' => '',
+            'write_buffer' => '',
             'addr' => $peerName ?? 'unknown',
             'authenticated' => $this->authToken === null,
             'consumer_code' => '',
@@ -402,7 +449,11 @@ final class SessionServer
             return 0;
         }
 
-        $socket = $this->clients[$clientId]['socket'];
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (!\is_resource($socket)) {
+            unset($this->clients[$clientId]);
+            return 0;
+        }
         $data = @\fread($socket, 65536);
 
         // 非阻塞模式下空读不一定是断连，需结合 feof 判断。
@@ -633,13 +684,45 @@ final class SessionServer
             return false;
         }
 
-        $socket = $this->clients[$clientId]['socket'];
+        $socket = $this->clients[$clientId]['socket'] ?? null;
         if (!\is_resource($socket)) {
+            unset($this->clients[$clientId]);
             return false;
         }
 
-        $written = @\fwrite($socket, $message);
-        return $written !== false;
+        $this->clients[$clientId]['write_buffer'] = (string)($this->clients[$clientId]['write_buffer'] ?? '') . $message;
+        return $this->flushClientWriteBuffer($clientId);
+    }
+
+    private function flushClientWriteBuffer(int $clientId): bool
+    {
+        if (!isset($this->clients[$clientId])) {
+            return false;
+        }
+
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (!\is_resource($socket)) {
+            unset($this->clients[$clientId]);
+            return false;
+        }
+
+        $buffer = (string)($this->clients[$clientId]['write_buffer'] ?? '');
+        while ($buffer !== '') {
+            $written = @\fwrite($socket, \substr($buffer, 0, 65536));
+            if ($written === false) {
+                $this->disconnectClient($clientId);
+                return false;
+            }
+            if ($written === 0) {
+                $this->clients[$clientId]['write_buffer'] = $buffer;
+                return true;
+            }
+
+            $buffer = (string)\substr($buffer, $written);
+        }
+
+        $this->clients[$clientId]['write_buffer'] = '';
+        return true;
     }
 
     /**
@@ -651,9 +734,12 @@ final class SessionServer
             return;
         }
 
-        $addr = $this->clients[$clientId]['addr'];
+        $addr = $this->clients[$clientId]['addr'] ?? 'unknown';
         $consumerCode = (string) ($this->clients[$clientId]['consumer_code'] ?? '');
-        @\fclose($this->clients[$clientId]['socket']);
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (\is_resource($socket)) {
+            @\fclose($socket);
+        }
         unset($this->clients[$clientId]);
 
         if ($consumerCode !== '') {
@@ -669,7 +755,8 @@ final class SessionServer
     private function getClientId($socket): ?int
     {
         foreach ($this->clients as $clientId => $client) {
-            if ($client['socket'] === $socket) {
+            $clientSocket = $client['socket'] ?? null;
+            if (\is_resource($clientSocket) && $clientSocket === $socket) {
                 return $clientId;
             }
         }
@@ -887,7 +974,10 @@ final class SessionServer
                 continue;
             }
 
-            @\fclose($this->clients[$clientId]['socket']);
+            $socket = $this->clients[$clientId]['socket'] ?? null;
+            if (\is_resource($socket)) {
+                @\fclose($socket);
+            }
             unset($this->clients[$clientId]);
         }
     }
@@ -997,10 +1087,12 @@ final class SessionServer
 
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
-            $this->logDebug("Client authenticated: {$this->clients[$clientId]['addr']} (id={$clientId})");
+            $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
+            $this->logDebug("Client authenticated: {$addr} (id={$clientId})");
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));
         } else {
-            $this->log("Client auth failed: {$this->clients[$clientId]['addr']} (id={$clientId}) - Expected len=" . \strlen($this->authToken) . ", Got len=" . \strlen($token) . ", Match=" . ($this->authToken === $token ? 'Y' : 'N'));
+            $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
+            $this->log("Client auth failed: {$addr} (id={$clientId}) - Expected len=" . \strlen($this->authToken) . ", Got len=" . \strlen($token) . ", Match=" . ($this->authToken === $token ? 'Y' : 'N'));
             $this->sendToClient($clientId, SessionProtocol::encodeError('Invalid token', 'AUTH_FAILED'));
             $this->disconnectClient($clientId);
         }
@@ -1135,8 +1227,11 @@ final class SessionServer
     /**
      * 清理 token 文件（关闭时调用）
      */
-    private function cleanupTokenFile(): void
+    private function cleanupTokenFile(bool $ownsListenPort): void
     {
+        if (!$ownsListenPort) {
+            return;
+        }
         if ($this->tokenFilePath && \is_file($this->tokenFilePath)) {
             $currentToken = @\file_get_contents($this->tokenFilePath);
             $currentToken = \is_string($currentToken) ? $this->normalizeAuthToken($currentToken) : '';
@@ -1154,6 +1249,9 @@ final class SessionServer
     private function ensureAuthTokenFile(): void
     {
         if ($this->tokenFilePath === '' || $this->authToken === null) {
+            return;
+        }
+        if (!$this->isCurrentProcessListenOwner(false)) {
             return;
         }
 
@@ -1204,6 +1302,13 @@ final class SessionServer
     private function publishAuthTokenFile(): void
     {
         if ($this->tokenFilePath === '' || $this->authToken === null) {
+            return;
+        }
+        if (!$this->isCurrentProcessListenOwner(false)) {
+            $this->lastBindError = "listen port owner mismatch before token publish: {$this->host}:{$this->port}";
+            $this->log($this->lastBindError);
+            $this->authToken = null;
+            $this->tokenFilePath = '';
             return;
         }
 
@@ -1367,6 +1472,72 @@ final class SessionServer
 
         $parts = \explode(':', $token, 2);
         return \trim((string)($parts[0] ?? ''));
+    }
+
+    private function ensureCurrentProcessOwnsListenPort(): bool
+    {
+        if ($this->hasActiveListenSocket()) {
+            return true;
+        }
+
+        $now = \microtime(true);
+        if (($now - $this->lastListenOwnerCheckAt) < 2.0) {
+            return true;
+        }
+        $this->lastListenOwnerCheckAt = $now;
+
+        if ($this->isCurrentProcessListenOwner(true)) {
+            return true;
+        }
+
+        $ownerPid = $this->resolveListenOwnerPid(false);
+        $this->log(
+            'Listen port owner mismatch detected; stopping stale shared sidecar'
+            . " self=" . \getmypid()
+            . " owner={$ownerPid}"
+            . " role={$this->serviceRole}"
+            . " {$this->host}:{$this->port}"
+        );
+        $this->running = false;
+        return false;
+    }
+
+    private function isCurrentProcessListenOwner(bool $refresh): bool
+    {
+        if ($this->hasActiveListenSocket()) {
+            return true;
+        }
+
+        $ownerPid = $this->resolveListenOwnerPid($refresh);
+        if ($ownerPid <= 0) {
+            return true;
+        }
+
+        return $ownerPid === \getmypid();
+    }
+
+    private function hasActiveListenSocket(): bool
+    {
+        return \is_resource($this->serverSocket);
+    }
+
+    private function resolveListenOwnerPid(bool $refresh): int
+    {
+        if ($this->port <= 0) {
+            return 0;
+        }
+        if ($refresh) {
+            Processer::clearPortCache($this->port);
+        }
+
+        return Processer::getProcessIdByPort($this->port);
+    }
+
+    private function isCurrentProcessRegistryOwner(): bool
+    {
+        $record = $this->sharedRegistry->getRecord($this->serviceRole);
+
+        return (int) ($record['pid'] ?? 0) === \getmypid();
     }
 
     /**

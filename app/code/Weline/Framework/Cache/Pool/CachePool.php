@@ -21,6 +21,7 @@ use Weline\Framework\Cache\Contract\RemembererInterface;
 use Weline\Framework\Cache\Contract\RememberOptions;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\Service\HotKeyTracker;
 use Weline\Framework\Cache\Service\SingleFlightCoordinator;
 use Weline\Framework\Event\EventsManager;
@@ -39,6 +40,7 @@ class CachePool implements CachePoolInterface, RemembererInterface
     private bool $permanent;
     private int $defaultTtl;
     private bool $enabled;
+    private bool $environmentScoped;
     private CacheAdapterInterface $adapter;
     private float $jitterRatio;
     private ?SingleFlightInterface $singleFlight = null;
@@ -54,7 +56,8 @@ class CachePool implements CachePoolInterface, RemembererInterface
         bool $permanent = false,
         int $defaultTtl = 1800,
         bool $enabled = true,
-        float $jitterRatio = 0.0
+        float $jitterRatio = 0.0,
+        bool $environmentScoped = false
     ) {
         $this->identity = $identity;
         $this->adapter = $adapter;
@@ -62,6 +65,7 @@ class CachePool implements CachePoolInterface, RemembererInterface
         $this->permanent = $permanent;
         $this->defaultTtl = $defaultTtl;
         $this->enabled = $enabled;
+        $this->environmentScoped = $environmentScoped;
         $this->jitterRatio = $this->normalizeJitterRatio($jitterRatio);
     }
 
@@ -267,6 +271,9 @@ class CachePool implements CachePoolInterface, RemembererInterface
                 'adapter_misses' => $this->adapter->getMisses(),
                 'adapter_hit_ratio' => $this->adapter->getHitRatio(),
             ];
+            if (\method_exists($this->adapter, 'getDetailedStats')) {
+                $adapterStats['adapter_details'] = $this->adapter->getDetailedStats();
+            }
         }
 
         $total = $this->hits + $this->misses;
@@ -279,6 +286,7 @@ class CachePool implements CachePoolInterface, RemembererInterface
             'hit_ratio' => $total > 0 ? round($this->hits / $total * 100, 2) : 0,
             'permanent' => $this->permanent,
             'enabled' => $this->enabled,
+            'environment_scoped' => $this->environmentScoped,
             'default_ttl' => $this->defaultTtl,
             'jitter_ratio' => $this->jitterRatio,
             'adapter' => get_class($this->adapter),
@@ -290,10 +298,11 @@ class CachePool implements CachePoolInterface, RemembererInterface
      */
     protected function buildKey(string $key): string
     {
-        if (function_exists('hash') && in_array('xxh3', hash_algos(), true)) {
-            return hash('xxh3', $this->identity . ':' . $key);
+        if ($this->environmentScoped) {
+            $key = 'env:' . KeyBuilder::environmentHash(['pool' => $this->identity]) . ':' . $key;
         }
-        return sprintf('%08x%08x', crc32($this->identity . ':' . $key), crc32($key));
+
+        return KeyBuilder::build($this->identity, $key);
     }
 
     /**

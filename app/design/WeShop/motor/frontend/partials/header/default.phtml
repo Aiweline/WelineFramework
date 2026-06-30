@@ -20,8 +20,8 @@
                 <span class="uppercase tracking-widest"><?= __('Free Shipping on Orders Over $99') ?></span>
             </div>
             <div class="hidden md:flex items-center gap-4">
-                <w:hook>WeShop_Frontend::frontend::partials::header::language-switcher</w:hook>
-                <w:hook>WeShop_Frontend::frontend::partials::header::currency-switcher</w:hook>
+                <w:hook>header-language-switcher</w:hook>
+                <w:hook>header-currency-switcher</w:hook>
             </div>
         </div>
     </div>
@@ -105,10 +105,6 @@
             data-wslot-position="header"
         >
             <w:hook>WeShop_Frontend::frontend::partials::header::account</w:hook>
-            <a href="<?= $this->getUrl('customer/account') ?>" class="flex items-center justify-center rounded h-10 gap-2 px-3 text-gray-300 hover:text-primary hover:bg-white/5 transition-colors">
-                <span class="material-symbols-outlined text-2xl">person_outline</span>
-                <span class="hidden md:inline text-sm font-semibold uppercase tracking-wide"><?= __('Account') ?></span>
-            </a>
 
             <!-- Mini Cart -->
             <w:hook>WeShop_Frontend::frontend::partials::header::mini-cart</w:hook>

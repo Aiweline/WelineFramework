@@ -266,6 +266,23 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
         $this->assertCount(count($rows) * 3, $compiled->bindings);
     }
 
+    public function testPgsqlCompilerQuotesGroupByFieldsForAggregateSelects(): void
+    {
+        $query = new CompilerTestQuery();
+        $query->table('eav_product_select_option')
+            ->fields(['value', 'COUNT(DISTINCT entity_id) as count'])
+            ->where('attribute_id', 8)
+            ->group('value');
+        $query->rebuildAst('select');
+
+        $compiled = (new PgsqlCompiler())->compile($query->getAst(), [
+            'table_alias' => $query->table_alias,
+        ]);
+
+        $this->assertStringContainsString('GROUP BY "value"', $compiled->sql);
+        $this->assertStringContainsString('"value", COUNT(DISTINCT entity_id) AS "count"', $compiled->sql);
+    }
+
     /**
      * @dataProvider adapterQueryProvider
      */

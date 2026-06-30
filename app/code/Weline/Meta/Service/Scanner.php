@@ -107,6 +107,8 @@ class Scanner
         
         // 验证必需字段
         $this->validateMetadata($metaData, $filePath, $strictMode);
+        $setting = $metaData['setting'] ?? [];
+        unset($metaData['setting']);
         
         // 使用文件中的namespace或传入的namespace
         $finalNamespace = $metaData['namespace'] ?? $namespace;
@@ -136,6 +138,7 @@ class Scanner
         $meta->setData(Meta::schema_fields_AREA, $metaData['area'] ?? null);
         $meta->setData(Meta::schema_fields_CATEGORY, $metaData['category'] ?? null);
         $meta->setData(Meta::schema_fields_META_DATA, json_encode($metaData, JSON_UNESCAPED_UNICODE));
+        $meta->setData(Meta::schema_fields_SETTING, !empty($setting) ? json_encode($setting, JSON_UNESCAPED_UNICODE) : null);
 
         $meta->saveMeta($metaData);
         
@@ -207,6 +210,11 @@ class Scanner
             throw new Exception(__('文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2', $namespace, $filePath));
         }
         
+        $params = $this->extractParamDefinitions($content);
+        if (!empty($params)) {
+            $metaData['setting']['param'] = $params;
+        }
+
         return $metaData;
     }
 
@@ -232,6 +240,16 @@ class Scanner
     /**
      * 获取模块路径
      */
+    /**
+     * Extract @param definitions from phtml metadata comments.
+     */
+    private function extractParamDefinitions(string $content): array
+    {
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        return $normalizer->extractParamAnnotations($content);
+    }
+
     protected function getModulePath(string $moduleName): ?string
     {
         $env = \Weline\Framework\App\Env::getInstance();

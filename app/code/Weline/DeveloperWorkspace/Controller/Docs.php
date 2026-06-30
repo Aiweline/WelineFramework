@@ -6,6 +6,11 @@ namespace Weline\DeveloperWorkspace\Controller;
 
 use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
+use Weline\DeveloperWorkspace\Model\Document\Translation;
+use Weline\DeveloperWorkspace\Service\Document\ApiDocumentTranslationMapper;
+use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationConfigService;
+use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationReadService;
+use Weline\DeveloperWorkspace\Service\ApiDocCollector;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
@@ -18,23 +23,18 @@ use Weline\Websites\Data\WebsiteData;
  */
 class Docs extends FrontendController
 {
+    protected ?string $layoutType = 'blank.full';
+
     private Document $documentModel;
     private Catalog $catalogModel;
+    private DocumentTranslationReadService $translationReadService;
+    private DocumentTranslationConfigService $translationConfigService;
+    private ApiDocumentTranslationMapper $apiTranslationMapper;
     
     /**
      * 存储最后一次错误信息
      */
     private ?string $lastError = null;
-    
-    /**
-     * 缓存分类树原始数据，避免重复查询
-     */
-    private static ?array $cachedCatalogTree = null;
-    
-    /**
-     * 缓存清理后的分类树数据，避免重复处理
-     */
-    private static ?array $cachedCleanedCatalogTree = null;
     
     public function __construct(
         Document $documentModel,
@@ -42,6 +42,9 @@ class Docs extends FrontendController
     ) {
         $this->documentModel = $documentModel;
         $this->catalogModel = $catalogModel;
+        $this->translationReadService = ObjectManager::getInstance(DocumentTranslationReadService::class);
+        $this->translationConfigService = ObjectManager::getInstance(DocumentTranslationConfigService::class);
+        $this->apiTranslationMapper = ObjectManager::getInstance(ApiDocumentTranslationMapper::class);
         $this->assign('title', __('WelineFramework开发文档'));
     }
     
@@ -53,7 +56,7 @@ class Docs extends FrontendController
     {
         // 获取当前货币和语言
         $currentCurrency = \w_env('user.currency', 'CNY');
-        $currentLanguage = \w_env('user.lang', 'zh_Hans_CN');
+        $currentLanguage = $this->getRequestLocale();
         
         // 获取网站默认货币和语言
         $defaultCurrency = \w_env('website.currency', 'CNY');
@@ -94,6 +97,11 @@ class Docs extends FrontendController
                         }
                     }
                 }
+                $view = $this->translationReadService->getDocumentView($document, $currentLanguage, true, true);
+                $document->setData('title', $view['title'] ?? $document->getTitle());
+                $document->setData('summary', $view['summary'] ?? $document->getData('summary'));
+                $document->setData('content', htmlspecialchars((string)($view['content'] ?? '')));
+                $document->setData('translation_status', $view['translation_status'] ?? Translation::STATUS_MISSING);
                 $this->assign('document', $document);
                 // 获取文档所属分类ID
                 $catalogId = $document->getCategoryId();
@@ -109,6 +117,15 @@ class Docs extends FrontendController
                 ->select()
                 ->fetch()
                 ->getItems();
+            foreach ($documents as $document) {
+                if (!$document instanceof Document || !$document->getId()) {
+                    continue;
+                }
+                $view = $this->translationReadService->getDocumentView($document, $currentLanguage, false, true);
+                $document->setData('title', $view['title'] ?? $document->getTitle());
+                $document->setData('summary', $view['summary'] ?? $document->getData('summary'));
+                $document->setData('translation_status', $view['translation_status'] ?? Translation::STATUS_MISSING);
+            }
             $this->assign('documents', $documents);
         }
         
@@ -122,19 +139,13 @@ class Docs extends FrontendController
     public function tree()
     {
         try {
-            // 使用缓存的清理后的分类树，避免重复查询和处理
-            if (self::$cachedCleanedCatalogTree === null) {
-                // 使用缓存的原始分类树，避免重复查询
-                if (self::$cachedCatalogTree === null) {
-                    self::$cachedCatalogTree = $this->catalogModel->clear()->getTree('pid');
-                }
-                $trees = self::$cachedCatalogTree;
-                
-                // 清理数据，只返回必要字段
-                self::$cachedCleanedCatalogTree = $this->cleanTreeData($trees);
-            }
-            
-            return $this->fetchJson(self::$cachedCleanedCatalogTree);
+            $locale = $this->getRequestLocale();
+            $trees = $this->filterTreeWithDocuments(
+                $this->loadCatalogTree(),
+                $this->getDocumentCategoryIdMap()
+            );
+
+            return $this->fetchJson($this->cleanTreeData($trees, $locale));
         } catch (\Exception $e) {
             return $this->fetchJson(['error' => $e->getMessage()], 500);
         }
@@ -149,6 +160,7 @@ class Docs extends FrontendController
     {
         try {
             $catalogId = (int)($this->request->getParam('catalog_id') ?? 0);
+            $locale = $this->getRequestLocale();
             if (!$catalogId) {
                 return $this->fetchJson(['error' => __('分类ID不能为空')], 400);
             }
@@ -163,21 +175,40 @@ class Docs extends FrontendController
             // 查询所有这些分类下的文档
             $documents = $this->documentModel->clear()
                 ->where(Document::schema_fields_CATEGORY_ID, $catalogIds, 'in')
-                ->order('sort_order', 'ASC')
-                ->order('id', 'DESC')
+                ->order(Document::schema_fields_SORT_ORDER, 'ASC')
+                ->order(Document::schema_fields_FILE_PATH, 'ASC')
+                ->order(Document::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
             
-            $result = [];
+            $documentsByCatalogId = [];
             foreach ($documents as $doc) {
-                $result[] = [
-                    'id' => $doc->getId(),
-                    'title' => $doc->getTitle() ?? '',
-                    'summary' => $doc->getData('summary') ?? '',
-                    'category_id' => $doc->getCategoryId(),
-                    'module_name' => $doc->getModuleName() ?? '',
-                ];
+                if (!$doc instanceof Document || !$doc->getId()) {
+                    continue;
+                }
+                $docCatalogId = (int)($doc->getCategoryId() ?? 0);
+                if (!isset($documentsByCatalogId[$docCatalogId])) {
+                    $documentsByCatalogId[$docCatalogId] = [];
+                }
+                $documentsByCatalogId[$docCatalogId][] = $doc;
+            }
+
+            $result = [];
+            foreach ($catalogIds as $orderedCatalogId) {
+                foreach (($documentsByCatalogId[(int)$orderedCatalogId] ?? []) as $doc) {
+                    $view = $this->translationReadService->getDocumentView($doc, $locale, false, true);
+                    $result[] = [
+                        'id' => $doc->getId(),
+                        'title' => $view['title'] ?? $doc->getTitle() ?? '',
+                        'summary' => $view['summary'] ?? $doc->getData('summary') ?? '',
+                        'category_id' => $doc->getCategoryId(),
+                        'module_name' => $doc->getModuleName() ?? '',
+                        'locale' => $view['locale'] ?? $locale,
+                        'is_translated' => $view['is_translated'] ?? false,
+                        'translation_status' => $view['translation_status'] ?? Translation::STATUS_MISSING,
+                    ];
+                }
             }
             
             return $this->fetchJson($result);
@@ -193,12 +224,7 @@ class Docs extends FrontendController
     private function getCatalogIdsWithChildren(int $catalogId): array
     {
         $catalogIds = [$catalogId];
-        
-        // 使用缓存的分类树，避免每次查询所有分类
-        if (self::$cachedCatalogTree === null) {
-            self::$cachedCatalogTree = $this->catalogModel->clear()->getTree('pid');
-        }
-        $tree = self::$cachedCatalogTree;
+        $tree = $this->loadCatalogTree();
         
         // 如果树为空，直接返回当前分类ID
         if (empty($tree)) {
@@ -216,8 +242,97 @@ class Docs extends FrontendController
      */
     public function clearCatalogTreeCache(): void
     {
-        self::$cachedCatalogTree = null;
-        self::$cachedCleanedCatalogTree = null;
+        // 分类树不再跨请求静态缓存；保留方法兼容旧调用。
+    }
+
+    private function loadCatalogTree(): array
+    {
+        return $this->sortCatalogTree($this->catalogModel->clear()->getTree('pid'));
+    }
+
+    private function sortCatalogTree(array $trees): array
+    {
+        foreach ($trees as &$tree) {
+            if (isset($tree['nodes']) && is_array($tree['nodes'])) {
+                $tree['nodes'] = $this->sortCatalogTree($tree['nodes']);
+            }
+        }
+        unset($tree);
+
+        usort($trees, function (array $left, array $right): int {
+            $leftPosition = $this->normalizeCatalogPosition($left);
+            $rightPosition = $this->normalizeCatalogPosition($right);
+            if ($leftPosition !== $rightPosition) {
+                return $leftPosition <=> $rightPosition;
+            }
+
+            $nameCompare = strcmp((string)($left['name'] ?? ''), (string)($right['name'] ?? ''));
+            if ($nameCompare !== 0) {
+                return $nameCompare;
+            }
+
+            return (int)($left['id'] ?? 0) <=> (int)($right['id'] ?? 0);
+        });
+
+        return $trees;
+    }
+
+    private function normalizeCatalogPosition(array $tree): int
+    {
+        $position = (int)($tree[Catalog::schema_fields_position] ?? 0);
+
+        return $position >= 0 && $position < 999999 ? $position : 999999;
+    }
+
+    private function getDocumentCategoryIdMap(): array
+    {
+        $rows = $this->documentModel->clear()
+            ->fields(Document::schema_fields_CATEGORY_ID)
+            ->where(Document::schema_fields_CATEGORY_ID, 0, '>')
+            ->group(Document::schema_fields_CATEGORY_ID)
+            ->select()
+            ->fetchArray();
+
+        $categoryIds = [];
+        foreach (($rows ?? []) as $row) {
+            $categoryId = (int)($row[Document::schema_fields_CATEGORY_ID] ?? 0);
+            if ($categoryId > 0) {
+                $categoryIds[$categoryId] = true;
+            }
+        }
+
+        return $categoryIds;
+    }
+
+    private function filterTreeWithDocuments(array $trees, array $documentCategoryIds): array
+    {
+        if ($trees === [] || $documentCategoryIds === []) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($trees as $tree) {
+            if (!is_array($tree)) {
+                continue;
+            }
+
+            $children = [];
+            if (isset($tree['nodes']) && is_array($tree['nodes'])) {
+                $children = $this->filterTreeWithDocuments($tree['nodes'], $documentCategoryIds);
+            }
+
+            $nodeId = (int)($tree['id'] ?? 0);
+            if (isset($documentCategoryIds[$nodeId]) || $children !== []) {
+                if ($children !== []) {
+                    $tree['nodes'] = $children;
+                } else {
+                    unset($tree['nodes']);
+                }
+                $result[] = $tree;
+            }
+        }
+
+        return $result;
     }
     
     /**
@@ -272,6 +387,7 @@ class Docs extends FrontendController
     {
         try {
             $documentId = (int)($this->request->getParam('id') ?? 0);
+            $locale = $this->getRequestLocale();
             if (!$documentId) {
                 return $this->fetchJson(['error' => __('文档ID不能为空')], 400);
             }
@@ -315,15 +431,19 @@ class Docs extends FrontendController
                 // 清理HTML注释（数据库中的内容也可能包含HTML注释）
                 $content = $this->cleanHtmlComments($content);
             }
-            
+            $view = $this->translationReadService->getDocumentView($document, $locale, true, true);
+
             return $this->fetchJson([
                 'id' => $document->getId(),
-                'title' => $document->getTitle() ?? '',
-                'summary' => $document->getData('summary') ?? '',
-                'content' => $content,
+                'title' => $view['title'] ?? $document->getTitle() ?? '',
+                'summary' => $view['summary'] ?? $document->getData('summary') ?? '',
+                'content' => $view['content'] ?? $content,
                 'category_id' => $document->getCategoryId(),
                 'module_name' => $document->getModuleName() ?? '',
                 'file_name' => $document->getFileName() ?? '',
+                'locale' => $view['locale'] ?? $locale,
+                'is_translated' => $view['is_translated'] ?? false,
+                'translation_status' => $view['translation_status'] ?? Translation::STATUS_MISSING,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson(['error' => $e->getMessage()], 500);
@@ -523,7 +643,10 @@ class Docs extends FrontendController
             if (empty($keyword)) {
                 return $this->fetchJson(['error' => __('搜索关键词不能为空')], 400);
             }
-            
+            $includeCatalogs = (string)($this->request->getParam('include_catalogs') ?? '') === '1';
+            $locale = $this->getRequestLocale();
+            $sourceLocale = (string)$this->translationConfigService->getConfig()['source_locale'];
+
             $documents = $this->documentModel->clear()
                 ->where(Document::schema_fields_TITLE, '%' . $keyword . '%', 'LIKE')
                 ->where(Document::schema_fields_summary, '%' . $keyword . '%', 'LIKE', 'OR')
@@ -535,17 +658,71 @@ class Docs extends FrontendController
                 ->getItems();
             
             $result = [];
+            $seen = [];
             foreach ($documents as $doc) {
+                $view = $this->translationReadService->getDocumentView($doc, $locale, false, true);
+                $seen[(int)$doc->getId()] = true;
                 $result[] = [
                     'id' => $doc->getId(),
-                    'title' => $doc->getTitle() ?? '',
-                    'summary' => $doc->getData('summary') ?? '',
+                    'title' => $view['title'] ?? $doc->getTitle() ?? '',
+                    'summary' => $view['summary'] ?? $doc->getData('summary') ?? '',
                     'category_id' => $doc->getCategoryId(),
                     'module_name' => $doc->getModuleName() ?? '',
+                    'locale' => $view['locale'] ?? $locale,
+                    'is_translated' => $view['is_translated'] ?? false,
+                    'translation_status' => $view['translation_status'] ?? Translation::STATUS_MISSING,
                 ];
             }
+
+            if ($locale !== $sourceLocale) {
+                $translations = ObjectManager::make(Translation::class)->clear()
+                    ->where(Translation::schema_fields_LOCALE, $locale)
+                    ->where(Translation::schema_fields_TITLE, '%' . $keyword . '%', 'LIKE')
+                    ->where(Translation::schema_fields_SUMMARY, '%' . $keyword . '%', 'LIKE', 'OR')
+                    ->where(Translation::schema_fields_CONTENT, '%' . $keyword . '%', 'LIKE', 'OR')
+                    ->order(Translation::schema_fields_ID, 'DESC')
+                    ->limit(50)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+
+                foreach ($translations as $translation) {
+                    if (!$translation instanceof Translation) {
+                        continue;
+                    }
+                    $sourceId = (int)$translation->getData(Translation::schema_fields_SOURCE_DOCUMENT_ID);
+                    if ($sourceId <= 0 || isset($seen[$sourceId])) {
+                        continue;
+                    }
+                    $doc = $this->documentModel->clear()->load($sourceId);
+                    if (!$doc || !$doc->getId()) {
+                        continue;
+                    }
+                    $seen[$sourceId] = true;
+                    $result[] = [
+                        'id' => $doc->getId(),
+                        'title' => $translation->getData(Translation::schema_fields_TITLE) ?: $doc->getTitle(),
+                        'summary' => $translation->getData(Translation::schema_fields_SUMMARY) ?: $doc->getData('summary'),
+                        'category_id' => $doc->getCategoryId(),
+                        'module_name' => $doc->getModuleName() ?? '',
+                        'locale' => $locale,
+                        'is_translated' => true,
+                        'translation_status' => $translation->getData(Translation::schema_fields_STATUS) ?: Translation::STATUS_TRANSLATED,
+                    ];
+                    if (count($result) >= 50) {
+                        break;
+                    }
+                }
+            }
             
-            return $this->fetchJson($result);
+            if (!$includeCatalogs) {
+                return $this->fetchJson($result);
+            }
+
+            return $this->fetchJson([
+                'documents' => $result,
+                'catalogs' => $this->searchCatalogs($keyword, 50, $locale),
+            ]);
         } catch (\Exception $e) {
             return $this->fetchJson(['error' => $e->getMessage()], 500);
         }
@@ -555,10 +732,76 @@ class Docs extends FrontendController
      * 清理树形数据，只返回必要字段
      * 直接使用数据中的level字段，不进行递增计算（数据已经是正确的层级值）
      */
-    private function cleanTreeData(array $trees): array
+    private function searchCatalogs(string $keyword, int $limit = 50, ?string $locale = null): array
     {
+        $locale = $locale ?: $this->getRequestLocale();
+        $tree = $this->cleanTreeData(
+            $this->filterTreeWithDocuments(
+                $this->loadCatalogTree(),
+                $this->getDocumentCategoryIdMap()
+            ),
+            $locale
+        );
+
+        $matches = [];
+        $this->collectCatalogSearchMatches($tree, $keyword, $matches, $limit);
+
+        return $matches;
+    }
+
+    private function collectCatalogSearchMatches(
+        array $nodes,
+        string $keyword,
+        array &$matches,
+        int $limit,
+        array $path = []
+    ): void {
+        if (count($matches) >= $limit) {
+            return;
+        }
+
+        foreach ($nodes as $node) {
+            if (count($matches) >= $limit) {
+                return;
+            }
+
+            $name = (string)($node['name'] ?? '');
+            $description = (string)($node['description'] ?? '');
+            $currentPath = array_values(array_filter(array_merge($path, [$name]), static fn($item) => $item !== ''));
+
+            if ($this->containsKeyword($name, $keyword) || $this->containsKeyword($description, $keyword)) {
+                $matches[] = [
+                    'id' => (int)($node['id'] ?? 0),
+                    'name' => $name,
+                    'description' => $description,
+                    'pid' => (int)($node['pid'] ?? 0),
+                    'level' => (int)($node['level'] ?? 1),
+                    'path' => implode(' / ', $currentPath),
+                    'has_children' => !empty($node['nodes']) && is_array($node['nodes']),
+                ];
+            }
+
+            if (!empty($node['nodes']) && is_array($node['nodes'])) {
+                $this->collectCatalogSearchMatches($node['nodes'], $keyword, $matches, $limit, $currentPath);
+            }
+        }
+    }
+
+    private function containsKeyword(string $haystack, string $keyword): bool
+    {
+        if ($keyword === '') {
+            return true;
+        }
+
+        return mb_stripos($haystack, $keyword, 0, 'UTF-8') !== false;
+    }
+
+    private function cleanTreeData(array $trees, ?string $locale = null): array
+    {
+        $locale = $locale ?: $this->getRequestLocale();
         $result = [];
         foreach ($trees as $tree) {
+            $tree = $this->translationReadService->localizeCatalogRow($tree, $locale, true);
             // 直接使用数据中的level字段（数据已经是正确的层级值）
             $itemLevel = isset($tree['level']) && $tree['level'] !== null && $tree['level'] !== '' 
                 ? (int)$tree['level'] 
@@ -575,7 +818,7 @@ class Docs extends FrontendController
             
             // 递归处理子节点，子节点的level值已经在数据中了，不需要传递level参数
             if (isset($tree['nodes']) && is_array($tree['nodes']) && count($tree['nodes']) > 0) {
-                $item['nodes'] = $this->cleanTreeData($tree['nodes']);
+                $item['nodes'] = $this->cleanTreeData($tree['nodes'], $locale);
             }
             
             $result[] = $item;
@@ -592,7 +835,7 @@ class Docs extends FrontendController
         try {
             // 获取当前货币和语言
             $currentCurrency = \w_env('user.currency', 'CNY');
-            $currentLanguage = \w_env('user.lang', 'zh_Hans_CN');
+            $currentLanguage = $this->getRequestLocale();
             
             // 获取网站默认货币和语言
             $defaultCurrency = \w_env('website.currency', 'CNY');
@@ -619,9 +862,9 @@ class Docs extends FrontendController
             $this->assign('apiAdminArea', $apiAdminArea);
             
             // 获取API文档数据
-            /** @var \Weline\Api\Service\ApiDocService $apiDocService */
-            $apiDocService = ObjectManager::getInstance(\Weline\Api\Service\ApiDocService::class);
-            $allApis = $apiDocService->generateAll(true); // 强制重新生成，忽略缓存
+            /** @var ApiDocCollector $apiDocCollector */
+            $apiDocCollector = ObjectManager::getInstance(ApiDocCollector::class);
+            $allApis = $apiDocCollector->generateAll(true); // 强制重新生成，忽略缓存
             
             // 提取displayName的辅助函数
             $extractDisplayName = function(string $name): string {
@@ -633,6 +876,7 @@ class Docs extends FrontendController
             };
             
             // 按模块和版本组织数据
+            $selectedApiId = (string)$this->request->getParam('api_id', '');
             $organizedApis = [];
             $moduleDisplayNames = []; // 存储模块的display_name映射
             $apiMap = []; // 用于快速查找API
@@ -662,6 +906,7 @@ class Docs extends FrontendController
                         // 生成API唯一ID
                         $apiId = 'api_' . $moduleName . '_' . $version . '_' . $className . '_' . $methodName;
                         $api['id'] = $apiId;
+                        $api = $this->localizeApiDocument($api, $currentLanguage, true);
                         
                         if (!isset($organizedApis[$moduleName])) {
                             $organizedApis[$moduleName] = [];
@@ -680,7 +925,7 @@ class Docs extends FrontendController
             }
             
             // 获取选中的API
-            $apiId = $this->request->getParam('api_id');
+            $apiId = $selectedApiId;
             $selectedApi = null;
             if (!empty($apiId) && isset($apiMap[$apiId])) {
                 $selectedApi = $apiMap[$apiId];
@@ -703,12 +948,49 @@ class Docs extends FrontendController
             return $this->fetch('Weline_DeveloperWorkspace::templates/Docs/api-manager');
         }
     }
+
+    private function localizeApiDocument(array $api, string $locale, bool $includeContent = false): array
+    {
+        $module = (string)($api['module'] ?? '');
+        $version = (string)($api['version'] ?? 'v1');
+        $class = (string)($api['class'] ?? '');
+        $method = (string)($api['method'] ?? '');
+        if ($module === '' || $class === '' || $method === '') {
+            return $api;
+        }
+
+        $documentKey = $module . '/' . $version . '/' . $class . '/' . $method;
+        $document = $this->documentModel->clear()
+            ->where(Document::schema_fields_MODULE_NAME, 'API_' . $module)
+            ->where(Document::schema_fields_FILE_PATH, $documentKey)
+            ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
+            ->find()
+            ->fetch();
+
+        if (!$document || !$document->getId()) {
+            return $api;
+        }
+
+        $view = $this->translationReadService->getDocumentView($document, $locale, $includeContent, true);
+
+        return $this->apiTranslationMapper->apply($api, $view);
+    }
     
     /**
      * 获取可用的货币列表（从当前网站关联的货币中获取）
      * 
      * @return array 货币列表 [['code' => 'CNY', 'name' => '人民币'], ...]
      */
+    private function getRequestLocale(): string
+    {
+        $locale = trim((string)$this->request->getParam('locale', ''));
+        if ($locale !== '') {
+            return $locale;
+        }
+
+        return (string)\w_env('user.lang', DocumentTranslationConfigService::SOURCE_LOCALE);
+    }
+
     private function getAvailableCurrencies(): array
     {
         try {
@@ -750,8 +1032,8 @@ class Docs extends FrontendController
     private function getAvailableLocales(): array
     {
         try {
-            $languageCodes = WebsiteData::getLanguageCodes();
-            $displayLocaleCode = \w_env('user.lang', \w_env('website.lang', 'zh_Hans_CN'));
+            $languageCodes = $this->translationConfigService->getSupportedLocales();
+            $displayLocaleCode = $this->getRequestLocale();
 
             /** @var Locale $localeModel */
             $localeModel = ObjectManager::getInstance(Locale::class);
@@ -770,30 +1052,27 @@ class Docs extends FrontendController
             // Use fetchArray here to avoid cloning the model for every locale row.
             $rows = $query->select()->fetchArray();
             if (!is_array($rows) || empty($rows)) {
-                return [
-                    ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
-                    ['code' => 'en_US', 'name' => 'English'],
-                ];
+                $fallback = [];
+                foreach ($languageCodes as $code) {
+                    $fallback[] = $this->buildLocaleCodeOnlyOption((string)$code);
+                }
+                return $fallback ?: $this->getFallbackLocaleOptions();
             }
 
-            $namesByCode = [];
+            $optionsByCode = [];
             foreach ($rows as $row) {
                 if (!is_array($row)) {
                     continue;
                 }
                 $code = trim((string)($row[Locale::schema_fields_CODE] ?? ''));
-                if ($code === '' || isset($namesByCode[$code])) {
+                if ($code === '' || isset($optionsByCode[$code])) {
                     continue;
                 }
-                $name = (string)$i18n->getLocaleName($code, $displayLocaleCode);
-                $namesByCode[$code] = $name !== '' ? $name : $code;
+                $optionsByCode[$code] = $this->buildLocaleDisplayOption($code, $i18n, (string)$displayLocaleCode);
             }
 
-            if (empty($namesByCode)) {
-                return [
-                    ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
-                    ['code' => 'en_US', 'name' => 'English'],
-                ];
+            if (empty($optionsByCode)) {
+                return $this->getFallbackLocaleOptions();
             }
 
             $result = [];
@@ -803,30 +1082,86 @@ class Docs extends FrontendController
                     if ($code === '') {
                         continue;
                     }
-                    $result[] = [
-                        'code' => $code,
-                        'name' => $namesByCode[$code] ?? $code,
-                    ];
+                    $result[] = $optionsByCode[$code] ?? $this->buildLocaleCodeOnlyOption($code);
                 }
                 if (!empty($result)) {
                     return $result;
                 }
             }
 
-            foreach ($namesByCode as $code => $name) {
-                $result[] = [
-                    'code' => $code,
-                    'name' => $name,
-                ];
+            foreach ($optionsByCode as $option) {
+                $result[] = $option;
             }
 
             return $result;
         } catch (\Exception $e) {
-            return [
-                ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
-                ['code' => 'en_US', 'name' => 'English'],
-            ];
+            $fallback = [];
+            foreach ($this->translationConfigService->getSupportedLocales() as $code) {
+                $fallback[] = $this->buildLocaleCodeOnlyOption((string)$code);
+            }
+            return $fallback ?: $this->getFallbackLocaleOptions();
         }
+    }
+
+    private function buildLocaleDisplayOption(string $code, I18n $i18n, string $displayLocaleCode): array
+    {
+        $localizedName = trim((string)$i18n->getLocaleName($code, $displayLocaleCode));
+        $nativeName = trim((string)$i18n->getLocaleName($code, $code));
+        $referenceName = trim((string)$i18n->getLocaleName($code, 'en'));
+
+        if ($localizedName === '') {
+            $localizedName = $nativeName !== '' ? $nativeName : ($referenceName !== '' ? $referenceName : $code);
+        }
+
+        $locatorName = '';
+        if ($referenceName !== '' && $referenceName !== $localizedName) {
+            $locatorName = $referenceName;
+        } elseif ($nativeName !== '' && $nativeName !== $localizedName) {
+            $locatorName = $nativeName;
+        } elseif ($code !== $localizedName) {
+            $locatorName = $code;
+        }
+
+        $displayName = $locatorName !== '' ? $localizedName . ' (' . $locatorName . ')' : $localizedName;
+
+        return [
+            'code' => $code,
+            'name' => $localizedName,
+            'native_name' => $nativeName,
+            'reference_name' => $referenceName,
+            'display_name' => $displayName,
+        ];
+    }
+
+    private function buildLocaleCodeOnlyOption(string $code): array
+    {
+        return [
+            'code' => $code,
+            'name' => $code,
+            'native_name' => $code,
+            'reference_name' => $code,
+            'display_name' => $code,
+        ];
+    }
+
+    private function getFallbackLocaleOptions(): array
+    {
+        return [
+            [
+                'code' => 'zh_Hans_CN',
+                'name' => '简体中文',
+                'native_name' => '简体中文',
+                'reference_name' => 'Chinese (Simplified, China)',
+                'display_name' => '简体中文 (Chinese (Simplified, China))',
+            ],
+            [
+                'code' => 'en_US',
+                'name' => 'English',
+                'native_name' => 'English',
+                'reference_name' => 'English (United States)',
+                'display_name' => 'English (United States)',
+            ],
+        ];
     }
 }
 

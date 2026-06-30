@@ -455,9 +455,9 @@ $typeCount = count($typeStats);
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
                     <li class='breadcrumb-item'>
-                        <a href='javascript: void(0);'>
+                        <span>
                             <lang>系统配置</lang>
-                        </a>
+                        </span>
                     </li>
                     <li class='breadcrumb-item active'>
                         <lang>权限管理</lang>
@@ -550,12 +550,12 @@ $typeCount = count($typeStats);
             
             <!-- 筛选器 -->
             <div class="weline-acl-filters">
-                <select id="acl-filter-type" class="weline-acl-filter-select" onchange="filterByType(this.value)">
+                <select id="acl-filter-type" class="weline-acl-filter-select" data-acl-filter="type">
                     <option value=""><?php echo __('所有类型'); ?></option>
                     <option value="menus"><?php echo __('菜单'); ?></option>
                     <option value="pc"><?php echo __('接口'); ?></option>
                 </select>
-                <select id="acl-filter-module" class="weline-acl-filter-select" onchange="filterByModule(this.value)">
+                <select id="acl-filter-module" class="weline-acl-filter-select" data-acl-filter="module">
                     <option value=""><?php echo __('所有模块'); ?></option>
                     <?php foreach (array_keys($moduleStats) as $module): ?>
                     <option value="<?php echo htmlspecialchars($module); ?>"><?php echo htmlspecialchars($module); ?> (<?php echo $moduleStats[$module]; ?>)</option>
@@ -671,6 +671,10 @@ $typeCount = count($typeStats);
     window.filterByModule = function(module) {
         filterTable();
     };
+
+    document.querySelectorAll('[data-acl-filter]').forEach(function(select) {
+        select.addEventListener('change', filterTable);
+    });
     
     function filterTable() {
         var typeFilter = document.getElementById('acl-filter-type').value.toLowerCase();

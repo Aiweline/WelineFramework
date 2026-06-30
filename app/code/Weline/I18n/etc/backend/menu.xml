@@ -22,4 +22,10 @@
           parent="Weline_Backend::i18n_group"
           icon="mdi mdi-book-open-page-variant-outline"
           order="30"/>
+
+    <!-- AI缈昏瘧 -->
+    <menu source="Weline_I18n::i18n_ai_translation" name="i18n_ai_translation" title="AI翻译" action="/i18n/backend/ai-translation"
+          parent="Weline_Backend::i18n_group"
+          icon="mdi mdi-translate"
+          order="40"/>
 </menus>

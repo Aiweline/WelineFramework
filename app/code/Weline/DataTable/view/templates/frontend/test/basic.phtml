@@ -4,7 +4,7 @@
     .dt-demo-note{padding:16px 18px;border-radius:16px;background:#eef6ff;border:1px solid #d6e8fb;margin-bottom:20px}
 </style>
 
-<?= $frontend_api_bootstrap ?? '' ?>
+<?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-page" data-demo-page="<?= $page_key ?>">
     <div class="dt-demo-top">
@@ -27,9 +27,7 @@
                sortable="true"
                page-size="5"
                show-pagination="true"
-               allow-frontend="true"
-               api-url="datatable/rest/v1/demo-table"
-               field-api-url="datatable/rest/v1/demo-form/fields">
+               allow-frontend="true">
         <thead>
             <tr>
                 <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
@@ -45,8 +43,6 @@
               model="Weline\DataTable\Model\TestUser"
               scope="demo-basic-users"
               allow-frontend="true"
-              api-url="datatable/rest/v1/demo-table"
-              field-api-url="datatable/rest/v1/demo-form/fields"
               auto_fields="true"
               include_fields="name,email,phone,status,gender"
               show-trigger-button="false"

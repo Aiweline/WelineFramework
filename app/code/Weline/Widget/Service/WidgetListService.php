@@ -77,6 +77,9 @@ class WidgetListService
                 if (!isset($widget['slots'])) {
                     $widget['slots'] = $originalConfig['slots'] ?? [];
                 }
+                if (!isset($widget['supports'])) {
+                    $widget['supports'] = $originalConfig['supports'] ?? [];
+                }
                 if (!empty($widget['params']) && is_array($widget['params'])) {
                     $translatedParams = [];
                     foreach ($widget['params'] as $paramKey => $paramConfig) {
@@ -187,6 +190,13 @@ class WidgetListService
         if ($area === 'backend') {
             return true;
         }
+        $acceptCodes = $this->normalizeCodeList($filterOptions['accept'] ?? $filterOptions['accept_codes'] ?? []);
+        $rejectCodes = $this->normalizeCodeList($filterOptions['reject'] ?? $filterOptions['reject_codes'] ?? []);
+        $widgetCodes = $this->collectWidgetSupportCodes($widget);
+        if ($rejectCodes !== [] && array_intersect($rejectCodes, $widgetCodes) !== []) {
+            return false;
+        }
+
         $widgetExclusive = $widget['exclusive'] ?? false;
         $widgetSlot = $widget['slot'] ?? null;
         $widgetPositions = $widget['position'] ?? [];
@@ -198,17 +208,20 @@ class WidgetListService
         $isExclusiveArea = in_array($area, self::EXCLUSIVE_AREAS);
 
         if ($isSubSlot) {
-            if ($widgetSlot === $slotId || in_array($slotId, $widgetPositions)) {
+            if ($acceptCodes !== []) {
+                return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
+            }
+            if (in_array((string)$slotId, $widgetCodes, true) || $widgetSlot === $slotId || in_array($slotId, $widgetPositions)) {
                 return true;
             }
             return false;
         }
         if ($isExclusiveArea && ($area === $slotId || $slotId === null)) {
             if ($showExclusiveOnly) {
-                return $widgetExclusive === true;
+                return $widgetExclusive === true && $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
             }
             if (in_array($area, $widgetPositions) || in_array('*', $widgetPositions)) {
-                return true;
+                return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
             }
             return false;
         }
@@ -217,13 +230,87 @@ class WidgetListService
                 return false;
             }
             if (in_array('content', $widgetPositions) || in_array('*', $widgetPositions)) {
-                return true;
+                return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
             }
             return false;
         }
         if ($area && (in_array($area, $widgetPositions) || in_array('*', $widgetPositions))) {
-            return true;
+            return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
         }
         return false;
+    }
+
+    private function matchesSlotCodeProtocol(array $acceptCodes, array $widgetCodes): bool
+    {
+        return $acceptCodes === []
+            || in_array('*', $acceptCodes, true)
+            || array_intersect($acceptCodes, $widgetCodes) !== [];
+    }
+
+    private function collectWidgetSupportCodes(array $widget): array
+    {
+        $codes = [
+            $widget['code'] ?? null,
+            $widget['type'] ?? null,
+            $widget['slot'] ?? null,
+        ];
+
+        $supports = $widget['supports'] ?? [];
+        if (!is_array($supports)) {
+            $supports = [$supports];
+        }
+        foreach ($supports as $supportCode) {
+            $codes[] = $supportCode;
+        }
+
+        $positions = $widget['position'] ?? [];
+        if (!is_array($positions)) {
+            $positions = [$positions];
+        }
+        foreach ($positions as $position) {
+            $codes[] = $position;
+        }
+
+        $slots = $widget['slots'] ?? [];
+        if (is_array($slots)) {
+            foreach ($slots as $key => $slotConfig) {
+                $codes[] = $key;
+                if (is_array($slotConfig)) {
+                    $codes[] = $slotConfig['id'] ?? null;
+                    $codes[] = $slotConfig['code'] ?? null;
+                }
+            }
+        }
+
+        return $this->normalizeCodeList($codes);
+    }
+
+    private function normalizeCodeList(mixed $value): array
+    {
+        $items = [];
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    foreach ($item as $nested) {
+                        $items[] = $nested;
+                    }
+                    continue;
+                }
+                $items[] = $item;
+            }
+        } else {
+            $items = explode(',', (string)$value);
+        }
+
+        $codes = [];
+        foreach ($items as $item) {
+            $code = strtolower(trim((string)$item));
+            if ($code === '') {
+                continue;
+            }
+            $codes[$code] = $code;
+        }
+
+        return array_values($codes);
     }
 }

@@ -3,6 +3,11 @@
  * 客服配置管理页面
  */
 $configs = $this->getData('configs') ?? [];
+$jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$configText = [
+    'saveSuccess' => (string)__('保存成功'),
+    'saveFailed' => (string)__('保存失败'),
+];
 ?>
 <div class="customer-service-config">
     <div class="page-header">
@@ -10,7 +15,7 @@ $configs = $this->getData('configs') ?? [];
     </div>
     
     <div class="config-form">
-        <form id="config-form" onsubmit="return false;">
+        <form id="config-form">
             <div class="form-group">
                 <label><?= __('启用客服服务') ?></label>
                 <select name="config[enabled]" class="form-control">
@@ -58,7 +63,7 @@ $configs = $this->getData('configs') ?? [];
             </div>
             
             <div class="form-actions">
-                <button type="button" class="btn btn-primary" onclick="saveConfig()">
+                <button type="submit" class="btn btn-primary">
                     <?= __('保存配置') ?>
                 </button>
             </div>
@@ -67,6 +72,21 @@ $configs = $this->getData('configs') ?? [];
 </div>
 
 <script>
+const customerServiceConfigText = <?= json_encode($configText, $jsonForScriptFlags) ?>;
+const customerServiceConfigSaveUrl = <?= json_encode($this->getBackendUrl('customerservice/backend/config/save'), $jsonForScriptFlags) ?>;
+
+function showConfigToast(type, message) {
+    const text = String(message || customerServiceConfigText.saveFailed);
+    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+        window.BackendToast[type](text);
+        return;
+    }
+    const logger = type === 'error' ? 'error' : 'log';
+    if (window.console && typeof window.console[logger] === 'function') {
+        window.console[logger](text);
+    }
+}
+
 function saveConfig() {
     const form = document.getElementById('config-form');
     const formData = new FormData(form);
@@ -76,20 +96,27 @@ function saveConfig() {
         data[key] = value;
     }
     
-    var url = '<?= $this->getBackendUrl("customerservice/backend/config/save") ?>';
     var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
-    var req = window.Weline.Api.request(url, opts);
+    var req = window.Weline.Api.request(customerServiceConfigSaveUrl, opts);
     req.then(function(res) {
         var data = (res && res.data) || res;
         if (data.success) {
-            alert('<?= __('保存成功') ?>');
+            showConfigToast('success', customerServiceConfigText.saveSuccess);
         } else {
-            alert(data.message || '<?= __('保存失败') ?>');
+            showConfigToast('error', data.message || customerServiceConfigText.saveFailed);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('<?= __('保存失败') ?>');
+        showConfigToast('error', customerServiceConfigText.saveFailed);
+    });
+}
+
+const customerServiceConfigForm = document.getElementById('config-form');
+if (customerServiceConfigForm) {
+    customerServiceConfigForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+        saveConfig();
     });
 }
 </script>

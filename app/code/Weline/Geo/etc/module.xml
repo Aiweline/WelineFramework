@@ -4,9 +4,9 @@
     <module name="Weline_Geo" setup_version="1.0.0">
         <sequence>
             <module name="Weline_Framework"/>
-            <module name="Weline_Theme"/>
+            <module name="Weline_Backend"/>
             <module name="Weline_I18n"/>
+            <module name="Weline_Seo"/>
         </sequence>
     </module>
 </config>
-

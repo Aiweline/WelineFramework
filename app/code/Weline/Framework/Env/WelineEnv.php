@@ -163,11 +163,119 @@ class WelineEnv
             $context->setRuntimeAttr($key, $value);
         }
 
+        $serverKey = self::SERVER_MAPPINGS[$key] ?? null;
+        if ($serverKey !== null) {
+            $context->set('input.server.' . $serverKey, $value);
+            self::syncContextFromServerValue($context, $serverKey, $value);
+        }
+
         if (\class_exists(RequestContext::class, false)) {
             RequestContext::set('env.' . $key, $value);
         }
 
         self::getInstance()->recordOverride($key, $value, $reason);
+    }
+
+    public static function server(?string $key = null, mixed $default = null): mixed
+    {
+        $context = self::currentRequestContext();
+        if ($context !== null) {
+            return $key === null ? $context->server() : $context->server($key, $default);
+        }
+
+        if (!self::canFallbackToServerGlobal()) {
+            return $key === null ? [] : $default;
+        }
+
+        if ($key === null) {
+            return \is_array($_SERVER ?? null) ? $_SERVER : [];
+        }
+
+        return $_SERVER[$key] ?? $default;
+    }
+
+    public static function serverAll(): array
+    {
+        $server = self::server(null, []);
+        return \is_array($server) ? $server : [];
+    }
+
+    public static function setServer(string $key, mixed $value, string $reason = ''): void
+    {
+        $context = Context::current();
+        $context->set('input.server.' . $key, $value);
+        self::syncContextFromServerValue($context, $key, $value);
+
+        $alias = self::serverAliasForKey($key);
+        if ($alias !== null) {
+            self::set($alias, $value, $reason !== '' ? $reason : 'WelineEnv::setServer');
+            return;
+        }
+
+        if (\class_exists(RequestContext::class, false)) {
+            RequestContext::set('env.server.' . $key, $value);
+        }
+    }
+
+    public static function removeServer(string $key): void
+    {
+        $context = Context::current();
+        $server = $context->server();
+        if (\is_array($server) && \array_key_exists($key, $server)) {
+            unset($server[$key]);
+            $context->set('input.server', $server);
+        }
+
+        $alias = self::serverAliasForKey($key);
+        if ($alias !== null) {
+            $contextPath = self::CONTEXT_MAPPINGS[$alias] ?? null;
+            if ($contextPath !== null) {
+                $context->remove($contextPath);
+            }
+            if (\class_exists(RequestContext::class, false)) {
+                RequestContext::remove('env.' . $alias);
+            }
+            return;
+        }
+
+        if (\class_exists(RequestContext::class, false)) {
+            RequestContext::remove('env.server.' . $key);
+        }
+    }
+
+    public static function replaceServer(array $server, string $reason = ''): void
+    {
+        self::getInstance()->initFromSnapshot(
+            (array)self::getGet(null, []),
+            (array)self::getPost(null, []),
+            (array)self::getCookie(null, []),
+            (array)self::getFiles(null),
+            $server
+        );
+
+        if ($reason !== '') {
+            foreach ($server as $key => $value) {
+                if (\is_string($key)) {
+                    self::getInstance()->recordOverride('server.' . $key, $value, $reason);
+                }
+            }
+        }
+    }
+
+    public static function setGet(string $key, mixed $value): void
+    {
+        $context = Context::current();
+        $query = $context->query();
+        if (!\is_array($query)) {
+            $query = [];
+        }
+        $query[$key] = $value;
+        $context->set('input.query', $query);
+    }
+
+    public static function replaceGet(array $get): void
+    {
+        Context::current()->set('input.query', $get);
     }
 
     public static function getGet(?string $key = null, mixed $default = null): mixed
@@ -500,6 +608,54 @@ class WelineEnv
         return $this->overrides;
     }
 
+    private static function currentRequestContext(): ?Context
+    {
+        if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
+            && \Weline\Framework\Runtime\Runtime::isPersistent()
+            && \class_exists(\Fiber::class)
+            && \Fiber::getCurrent() === null
+        ) {
+            return null;
+        }
+
+        return Context::getCurrent();
+    }
+
+    private static function canFallbackToServerGlobal(): bool
+    {
+        return !(\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
+            && \Weline\Framework\Runtime\Runtime::isPersistent()
+            && \class_exists(\Fiber::class)
+            && \Fiber::getCurrent() === null);
+    }
+
+    private static function serverAliasForKey(string $serverKey): ?string
+    {
+        $alias = \array_search($serverKey, self::SERVER_MAPPINGS, true);
+        return \is_string($alias) ? $alias : null;
+    }
+
+    private static function syncContextFromServerValue(Context $context, string $key, mixed $value): void
+    {
+        match ($key) {
+            'REQUEST_METHOD' => $context->set('input.method', (string)$value),
+            'REQUEST_URI' => $context->set('input.uri', (string)$value),
+            'WELINE_ORIGIN_REQUEST_URI' => $context->set('input.origin_request_uri', (string)$value),
+            'WELINE_FULL_REQUEST_URI' => $context->set('input.full_request_uri', (string)$value),
+            'REQUEST_SCHEME' => $context->set('input.scheme', (string)$value),
+            'HTTP_HOST', 'SERVER_NAME' => $context->set('input.host', (string)$value),
+            'REMOTE_ADDR' => $context->set('input.ip', (string)$value),
+            default => null,
+        };
+
+        if (\str_starts_with($key, 'HTTP_') || \in_array($key, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true)) {
+            $headers = (array)$context->header();
+            $headerKey = \str_starts_with($key, 'HTTP_') ? \substr($key, 5) : $key;
+            $headers[\str_replace('_', '-', $headerKey)] = $value;
+            $context->set('input.headers', $headers);
+        }
+    }
+
     private static function extractHeadersFromServer(array $server): array
     {
         $headers = [];
@@ -527,8 +683,17 @@ class WelineEnv
             'value' => $value,
             'reason' => $reason,
             'fiber_id' => self::getFiberId(),
-            'trace' => $this->getCallerTrace(),
+            'trace' => $this->shouldCaptureOverrideTrace() ? $this->getCallerTrace() : [],
         ];
+    }
+
+    private function shouldCaptureOverrideTrace(): bool
+    {
+        if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
+            return false;
+        }
+
+        return (bool)\Weline\Framework\App\Env::get('wls.debug.env_override_trace', false);
     }
 
     private function getCallerTrace(): array

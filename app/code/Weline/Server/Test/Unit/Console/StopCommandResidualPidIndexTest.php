@@ -8,35 +8,30 @@ require_once __DIR__ . '/stop_test_bootstrap.php';
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Stop;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
-use Weline\Server\Service\Contract\ServiceInfo;
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 
 final class StopCommandResidualPidIndexTest extends TestCase
 {
-    public function testCollectIndexedResidualPidsFromPidIndexFallsBackWithoutJsonPathWhenProcessStillMatchesInstance(): void
+    public function testCollectIndexedResidualPidsFromPidIndexMatchesScopedProcessNamesOnly(): void
     {
         $stop = new class extends Stop {
-            protected function isResidualIndexedPidStillRunning(int $pid, string $pname, string $taskName): bool
-            {
-                return true;
-            }
         };
 
         $pids = $this->invokeProtected(
             $stop,
             'collectIndexedResidualPidsFromPidIndex',
             [
-                101 => ['pname' => '--name=weline-wls-master-default', 'jsonPath' => __FILE__],
-                202 => ['pname' => '"php.exe" "worker_ssl.php" --name="weline-wls-worker-default-1"', 'jsonPath' => __FILE__],
-                303 => ['pname' => '--name=weline-wls-worker-other-1', 'jsonPath' => __FILE__],
-                404 => ['pname' => '--name=weline-wls-session-default', 'jsonPath' => __FILE__ . '.missing'],
-                505 => ['pname' => '--name=weline-master-default-worker-3', 'jsonPath' => __FILE__],
+                101 => ['pname' => '--name=' . MasterProcess::getMasterProcessName('default'), 'jsonPath' => __FILE__],
+                202 => ['pname' => '"php.exe" "worker_ssl.php" --name="' . MasterProcess::buildScopedProcessName('weline-wls-worker', 'default', 1) . '"', 'jsonPath' => __FILE__],
+                303 => ['pname' => '--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', 'other', 1), 'jsonPath' => __FILE__],
+                404 => ['pname' => '--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', 'default'), 'jsonPath' => __FILE__ . '.missing'],
             ],
             'default',
             202
         );
 
-        self::assertSame([101, 505], $pids);
+        self::assertSame([101], $pids);
     }
 
     public function testCollectResidualCleanupCandidatePidsIncludesRecoverableManagedPids(): void
@@ -83,7 +78,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         self::assertSame([101, 202, 303, 404], $pids);
     }
 
-    public function testCollectResidualPidsFromAppendOnlyInstanceRecords(): void
+    public function testCollectResidualPidsFromEndpointRecord(): void
     {
         $manager = new class extends ServerInstanceManager {
             public function __construct()
@@ -101,31 +96,6 @@ final class StopCommandResidualPidIndexTest extends TestCase
                     'launcher_pid' => 556,
                     'master_pid' => 222,
                     'retained_pids' => [777, '888', 0],
-                    'services' => [
-                        'worker' => [
-                            'instances' => [
-                                [
-                                    'pid' => 333,
-                                    'root_pid' => 444,
-                                    'launcher_pid' => 555,
-                                    'tracking_pid' => 444,
-                                    'metadata' => ['process_name' => 'weline-wls-worker-default-p1-1'],
-                                ],
-                            ],
-                        ],
-                        'session_server' => [
-                            'instances' => [
-                                [
-                                    'pid' => 666,
-                                    'metadata' => ['process_name' => 'weline-wls-session-default'],
-                                ],
-                            ],
-                        ],
-                    ],
-                    'instance_records' => [
-                        ['pid' => 901, 'master_pid' => 902],
-                        ['pid' => 0, 'master_pid' => 903],
-                    ],
                 ];
             }
         };
@@ -142,16 +112,16 @@ final class StopCommandResidualPidIndexTest extends TestCase
         };
 
         self::assertSame(
-            [111, 222, 556, 777, 888, 333, 444, 555, 901, 902, 903],
-            $this->invokeProtected($stop, 'collectResidualPidsFromInstanceRecords', 'default')
+            [111, 222, 556, 777, 888],
+            $this->invokeProtected($stop, 'collectResidualPidsFromEndpointRecord', 'default')
         );
         self::assertSame(
-            [111, 222, 556, 777, 888, 333, 444, 555, 666, 901, 902, 903],
-            $this->invokeProtected($stop, 'collectResidualPidsFromInstanceRecords', 'default', true)
+            [111, 222, 556, 777, 888],
+            $this->invokeProtected($stop, 'collectResidualPidsFromEndpointRecord', 'default', true)
         );
     }
 
-    public function testCollectRecoverablePortsFromAppendOnlyInstanceRecords(): void
+    public function testCollectRecoverablePortsFromEndpointRecord(): void
     {
         $manager = new class extends ServerInstanceManager {
             public function __construct()
@@ -170,26 +140,6 @@ final class StopCommandResidualPidIndexTest extends TestCase
                     'control_port' => 26895,
                     'worker_port' => 16895,
                     'http_redirect_port' => 80,
-                    'services' => [
-                        'worker' => [
-                            'instances' => [
-                                ['port' => 16897],
-                            ],
-                        ],
-                        'memory_server' => [
-                            'instances' => [
-                                ['port' => 26423],
-                            ],
-                        ],
-                    ],
-                    'instance_records' => [
-                        [
-                            'port' => 9500,
-                            'count' => 3,
-                            'control_port' => 26950,
-                            'http_redirect_port' => 9580,
-                        ],
-                    ],
                 ];
             }
         };
@@ -206,16 +156,16 @@ final class StopCommandResidualPidIndexTest extends TestCase
         };
 
         self::assertSame(
-            [80, 443, 444, 9500, 9501, 9502, 9580, 16895, 16896, 16897, 26895, 26950],
-            $this->invokeProtected($stop, 'collectRecoverablePortsFromInstanceRecords', 'default')
+            [80, 443, 444, 16895, 16896, 26895],
+            $this->invokeProtected($stop, 'collectRecoverablePortsFromEndpointRecord', 'default')
         );
         self::assertSame(
-            [80, 443, 444, 9500, 9501, 9502, 9580, 16895, 16896, 16897, 26423, 26895, 26950],
-            $this->invokeProtected($stop, 'collectRecoverablePortsFromInstanceRecords', 'default', true)
+            [80, 443, 444, 16895, 16896, 26895],
+            $this->invokeProtected($stop, 'collectRecoverablePortsFromEndpointRecord', 'default', true)
         );
     }
 
-    public function testFindInstanceByPortUsesPersistedAppendOnlyRecords(): void
+    public function testFindInstanceByPortUsesPersistedEndpointRecord(): void
     {
         $manager = new class extends ServerInstanceManager {
             public function __construct()
@@ -249,10 +199,8 @@ final class StopCommandResidualPidIndexTest extends TestCase
 
                 return [
                     'lifecycle_state' => 'stopped',
-                    'port' => 0,
-                    'instance_records' => [
-                        ['port' => 9500, 'count' => 3],
-                    ],
+                    'port' => 9500,
+                    'count' => 3,
                 ];
             }
         };
@@ -326,7 +274,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         self::assertNull($stop->findWelineServerInstanceNameByPort(9502));
     }
 
-    public function testFindInstanceByPortIgnoresSharedStatePortsInPersistedRecords(): void
+    public function testFindInstanceByPortDoesNotInferFromEndpointWhenPortIsAbsent(): void
     {
         $manager = new class extends ServerInstanceManager {
             public function __construct()
@@ -358,26 +306,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
                     return null;
                 }
 
-                return [
-                    'services' => [
-                        'session_server' => [
-                            'instances' => [
-                                ['port' => 26422, 'metadata' => ['process_name' => 'weline-wls-session-default']],
-                            ],
-                        ],
-                    ],
-                    'instance_records' => [
-                        [
-                            'services' => [
-                                'memory_server' => [
-                                    'instances' => [
-                                        ['port' => 26423, 'metadata' => ['process_name' => 'weline-wls-memory-default']],
-                                    ],
-                                ],
-                            ],
-                        ],
-                    ],
-                ];
+                return [];
             }
         };
 
@@ -434,7 +363,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         );
     }
 
-    public function testCollectRunningResidualPidsTrustsCurrentSnapshotPidsAfterNameFilter(): void
+    public function testCollectRunningResidualPidsTrustsExplicitEndpointPidsAfterNameFilter(): void
     {
         $stop = new class extends Stop {
             public array $ownershipChecks = [];
@@ -490,7 +419,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
         );
     }
 
-    public function testDirectForceCandidatesIgnoreAppendOnlyHistoryOnFirstPass(): void
+    public function testDirectForceCandidatesStayOnCurrentInstanceInfoHotPath(): void
     {
         $stop = new class extends Stop {
             public function collect(ServerInstanceInfo $info): array
@@ -498,18 +427,18 @@ final class StopCommandResidualPidIndexTest extends TestCase
                 return $this->collectDirectForceStopCandidatePids($info);
             }
 
-            protected function collectResidualPidsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+            protected function collectResidualPidsFromEndpointRecord(string $name, bool $includeSharedState = false): array
             {
                 unset($name, $includeSharedState);
 
-                throw new \RuntimeException('direct force-stop must not scan append-only PID history');
+                throw new \RuntimeException('direct force-stop must not scan endpoint PID records');
             }
 
-            protected function collectRecoverablePortsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+            protected function collectRecoverablePortsFromEndpointRecord(string $name, bool $includeSharedState = false): array
             {
                 unset($name, $includeSharedState);
 
-                throw new \RuntimeException('direct force-stop must not scan append-only port history');
+                throw new \RuntimeException('direct force-stop must not scan endpoint port records');
             }
 
             protected function collectIndexedResidualPids(string $name, bool $includeSharedState = false): array
@@ -554,13 +483,10 @@ final class StopCommandResidualPidIndexTest extends TestCase
             0,
             '2026-04-24 10:00:00',
             1777015200,
-            [
-                new ServiceInfo('session_server', 'Session Server', 1, 303, 9701, 'ready'),
-                new ServiceInfo('worker', 'HTTP Worker', 1, 404, 9601, 'ready'),
-            ]
+            []
         );
 
-        self::assertSame([101, 303, 404], $stop->collect($info));
+        self::assertSame([101], $stop->collect($info));
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

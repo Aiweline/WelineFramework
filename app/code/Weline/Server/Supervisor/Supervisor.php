@@ -69,6 +69,8 @@ final class Supervisor
         $port = (int)($message['port'] ?? 0);
         $launchNonce = (string)($message['launch_nonce'] ?? '');
         $msgId = (string)($message['msg_id'] ?? '');
+        $leaseId = (string)($message['lease_id'] ?? '');
+        $generation = (int)($message['generation'] ?? 0);
 
         $lease = $this->leases->assign(
             slotId: $slotId,
@@ -76,6 +78,8 @@ final class Supervisor
             pid: $pid,
             port: $port,
             launchNonce: $launchNonce,
+            leaseId: $leaseId,
+            generation: $generation,
         );
 
         return SupervisorMessage::leaseAssign($lease, $msgId, $channel);

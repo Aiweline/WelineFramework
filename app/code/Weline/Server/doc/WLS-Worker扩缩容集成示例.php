@@ -393,7 +393,8 @@ class DispatcherProvider
             return true;
         }
 
-        return parent::handleMessage($message, $instance, $orchestrator);
+        // 集成到真实 Dispatcher 子类时：return parent::handleMessage($message, $instance, $orchestrator);
+        return false;
     }
 
     /**

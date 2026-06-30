@@ -43,6 +43,56 @@ class SlotTaglibCompileStateTest extends TestCore
         $this->assertSame([], Slot::getRegisteredSlots(), 'Top-level compile should not leak slot state across cycles.');
     }
 
+    public function testSlotTagUsesBodyAsDefaultContent(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $content = '<w:slot id="widget-hero" name="Hero"><section>Default Hero</section></w:slot>';
+
+        $result = $taglib->compile($template, $content, 'slot-body-default-' . uniqid('', true) . '.phtml');
+
+        $this->assertStringContainsString('data-wslot="widget-hero"', $result);
+        $this->assertStringContainsString('<section>Default Hero</section>', $result);
+        $this->assertStringNotContainsString('<else', $result);
+    }
+
+    public function testHookElseInsideSlotRemainsHookFallback(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $content = '<w:slot id="widget-hero" name="Hero"><w:hook>Missing_Module::frontend::slot-test::content<else/><span>Hook fallback</span></w:hook></w:slot>';
+
+        $result = $taglib->compile($template, $content, 'slot-hook-else-fallback-' . uniqid('', true) . '.phtml');
+
+        $this->assertStringContainsString('data-wslot="widget-hero"', $result);
+        $this->assertStringContainsString('<span>Hook fallback</span>', $result);
+        $this->assertStringNotContainsString('Missing_Module::frontend::slot-test::content', $result);
+        $this->assertStringNotContainsString('<else', $result);
+    }
+
+    public function testIfElseInsideSlotIsNotTreatedAsSlotFallback(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $content = '<w:slot id="widget-hero" name="Hero"><if condition="meta.enabled"><span>Enabled</span><else/><span>Disabled</span></if></w:slot>';
+
+        $result = $taglib->compile($template, $content, 'slot-nested-if-else-' . uniqid('', true) . '.phtml');
+
+        $this->assertStringContainsString('data-wslot="widget-hero"', $result);
+        $this->assertStringContainsString('<span>Enabled</span>', $result);
+        $this->assertStringContainsString('<span>Disabled</span>', $result);
+        $this->assertStringContainsString('<?php else:', $result);
+    }
+
     public function testDuplicateSlotErrorReportsTemplateSource(): void
     {
         /** @var Taglib $taglib */

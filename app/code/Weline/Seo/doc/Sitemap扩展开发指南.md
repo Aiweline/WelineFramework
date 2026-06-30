@@ -273,7 +273,15 @@ pub/
 | scope | 对应 Provider 的 `getScope()` 返回值 |
 | module | 对应 Provider 的 `getModule()` 返回值 |
 | enable_cron_sitemap | 是否启用定时提交 |
-| provider | 搜索引擎适配器（如 google_indexing_api） |
+| provider | 搜索引擎适配器或平台代码（如 google、google_indexing_api、bing、baidu、yandex） |
+
+内置平台覆盖：
+
+- 官方自动提交：`google`、`bing`、`baidu`、`yandex`、`naver`、`seznam`、`yep`、`internetarchive`、`amazonbot`。
+- 官方 URL 收集请求：`naver_searchadvisor`、`naver_crawl_request` 可作为 URL 推送 provider 使用，要求 Naver 合作开通和站点验证；它不是 Sitemap 文件提交通道。
+- Sitemap 生成与手动/间接发现：`yahoo`、`duckduckgo`、`360`、`sogou`、`shenma`、`toutiao`、`brave`、`qwant`、`ecosia`、`startpage`、`swisscows`、`mojeek`、`petal`、`daum`、`coccoc`、`mailru`、`rambler`、`you`、`kagi`、`aol`、`ask`、`quark`、`metager`、`gibiru`。
+
+新增平台若没有官方 API 或 IndexNow 支持，应继承 `CatalogSitemapAdapter`，仅声明平台代码、名称、颜色和 sitemap 限制；不要把手动站长平台提交包装成自动提交。
 
 ## 最佳实践
 

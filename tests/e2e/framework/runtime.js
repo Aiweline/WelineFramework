@@ -7,6 +7,18 @@ const BACKEND_SESSION_BOOTSTRAP_SCRIPT = path.join(__dirname, 'backend-session-b
 
 let runtimeCache = null;
 
+function parseJsonFromPhpOutput(stdout) {
+  const raw = String(stdout || '').trim();
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+
+  if (start !== -1 && end >= start) {
+    return JSON.parse(raw.slice(start, end + 1));
+  }
+
+  return JSON.parse(raw);
+}
+
 function isAbsoluteUrl(value) {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(String(value || ''));
 }
@@ -52,7 +64,7 @@ function getRuntimeInfo(options = {}) {
     encoding: 'utf8',
   });
 
-  runtimeCache = JSON.parse(stdout);
+  runtimeCache = parseJsonFromPhpOutput(stdout);
   return runtimeCache;
 }
 
@@ -92,7 +104,7 @@ function bootstrapAdminSession(mode, options = {}) {
     encoding: 'utf8',
   });
 
-  return JSON.parse(stdout);
+  return parseJsonFromPhpOutput(stdout);
 }
 
 async function applyAdminSessionCookie(page, sessionInfo, options = {}) {

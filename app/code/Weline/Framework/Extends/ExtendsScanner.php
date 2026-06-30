@@ -5,12 +5,24 @@ declare(strict_types=1);
 namespace Weline\Framework\Extends;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Module\Service\ModuleScanService;
+use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\System\File\Scan;
 
 /**
  * Scan module extends definitions and implementations.
  */
 class ExtendsScanner
 {
+    private ModuleScanService $moduleScanService;
+
+    public function __construct($moduleScanService = null)
+    {
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService(new Scan());
+    }
+
     public function scanAllExtends(): array
     {
         return $this->scanRegisteredModules(Env::getInstance()->getModuleList());
@@ -33,12 +45,22 @@ class ExtendsScanner
     private function scanRegisteredModules(array $modules): array
     {
         $result = [];
+        $totalModules = 0;
+        foreach ($modules as $module) {
+            $basePath = $module['base_path'] ?? '';
+            if ($basePath !== '' && ($module['status'] ?? false)) {
+                $totalModules++;
+            }
+        }
+        $moduleIndex = 0;
 
         foreach ($modules as $moduleName => $module) {
             $basePath = $module['base_path'] ?? '';
             if ($basePath === '' || !($module['status'] ?? false)) {
                 continue;
             }
+            $moduleIndex++;
+            RegistryProgress::module('Extends scan module', $moduleIndex, $totalModules, (string)$moduleName, 'start');
 
             $extendsConfig = $this->scanModuleExtendsConfig($moduleName, $basePath);
             if ($extendsConfig) {
@@ -49,6 +71,14 @@ class ExtendsScanner
             }
 
             $extendedBy = $this->scanModuleExtends($moduleName, $basePath);
+            $extendedFileCount = array_sum(array_map('count', $extendedBy));
+            RegistryProgress::module(
+                'Extends scan module',
+                $moduleIndex,
+                $totalModules,
+                (string)$moduleName,
+                sprintf('done config=%s extension_files=%d', $extendsConfig ? 'yes' : 'no', $extendedFileCount)
+            );
             foreach ($extendedBy as $targetModule => $extendInfo) {
                 if (!isset($result[$targetModule])) {
                     $result[$targetModule] = [
@@ -65,6 +95,7 @@ class ExtendsScanner
                     $extendInfo
                 );
             }
+            unset($extendsConfig, $extendedBy);
         }
 
         return $result;
@@ -72,8 +103,8 @@ class ExtendsScanner
 
     private function scanModuleExtendsConfig(string $moduleName, string $basePath): ?array
     {
-        $extendsFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends.php';
-        if (!file_exists($extendsFile)) {
+        $extendsFile = $this->moduleScanService->resolveFile($basePath, 'extends.php');
+        if ($extendsFile === null) {
             return null;
         }
 
@@ -82,9 +113,8 @@ class ExtendsScanner
             return null;
         }
 
-        $docFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends.md';
-        if (!file_exists($docFile)) {
-            w_log_warning("璀﹀憡: 妯″潡 {$moduleName} 瀹氫箟浜?extends.php 浣嗙己灏?extends.md 鏂囨。");
+        if ($this->moduleScanService->resolveFile($basePath, 'extends.md') === null) {
+            w_log_warning("Warning: module {$moduleName} defines extends.php but misses extends.md");
         }
 
         return $config;
@@ -94,13 +124,15 @@ class ExtendsScanner
     {
         $result = [];
 
-        $extendsModuleDir = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'module';
-        if (is_dir($extendsModuleDir)) {
+        $extendsModuleDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/module')
+            ?? $this->moduleScanService->resolveDirectory($basePath, 'Extends/module');
+        if ($extendsModuleDir !== null) {
             $this->scanExtendsDirectory($extendsModuleDir, $sourceModule, $basePath, 'module', $result);
         }
 
-        $extendsThemeDir = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'theme';
-        if (is_dir($extendsThemeDir)) {
+        $extendsThemeDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/theme')
+            ?? $this->moduleScanService->resolveDirectory($basePath, 'Extends/theme');
+        if ($extendsThemeDir !== null) {
             $this->scanExtendsDirectory($extendsThemeDir, $sourceModule, $basePath, 'theme', $result);
         }
 
@@ -129,11 +161,11 @@ class ExtendsScanner
                 $relativePath = str_replace($basePath . DIRECTORY_SEPARATOR, '', $filePath);
                 $relativePath = str_replace('\\', '/', $relativePath);
 
-                if (!str_starts_with($relativePath, 'extends/')) {
+                if (!str_starts_with(strtolower($relativePath), 'extends/')) {
                     $basePathTrimmed = rtrim($basePath, '/\\');
                     $relativePath = str_replace($basePathTrimmed . DIRECTORY_SEPARATOR, '', $filePath);
                     $relativePath = str_replace('\\', '/', $relativePath);
-                    if (!str_starts_with($relativePath, 'extends/')) {
+                    if (!str_starts_with(strtolower($relativePath), 'extends/')) {
                         continue;
                     }
                 }
@@ -176,13 +208,13 @@ class ExtendsScanner
                 $result[$targetModule][] = $extendInfo;
             }
         } catch (\Exception $e) {
-            w_log_error("鎵弿妯″潡鎵╁睍澶辫触: {$sourceModule}, 閿欒: " . $e->getMessage());
+            w_log_error("Failed to scan module extends: {$sourceModule}, error: " . $e->getMessage());
         }
     }
 
     private function parseExtensionTarget(array $pathParts, string $type): ?array
     {
-        if (($pathParts[0] ?? '') !== 'extends' || ($pathParts[1] ?? '') !== $type) {
+        if (strcasecmp($pathParts[0] ?? '', 'extends') !== 0 || strcasecmp($pathParts[1] ?? '', $type) !== 0) {
             return null;
         }
 

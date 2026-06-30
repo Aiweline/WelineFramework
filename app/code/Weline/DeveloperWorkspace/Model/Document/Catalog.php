@@ -25,7 +25,7 @@ class Catalog extends Model
     public const schema_fields_NAME = 'name';
     #[Col('text', nullable: false, comment: '简介')]
     public const schema_fields_DESCRIPTION = 'description';
-    #[Col('int', comment: '父目录')]
+    #[Col('int', nullable: false, default: 0, comment: '父目录')]
     public const schema_fields_PID = 'pid';
     #[Col('int', nullable: false, default: 0, comment: '目录层级')]
     public const schema_fields_level = 'level';

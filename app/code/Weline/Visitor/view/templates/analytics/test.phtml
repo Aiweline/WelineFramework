@@ -1,9 +1,23 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>像素数据分析API测试</title>
+    <script>
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
+    </script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
     <style>
         * {
             margin: 0;
@@ -140,7 +154,7 @@
                 </select>
                 <input type="date" id="business-startDate" placeholder="开始日期 (可选)">
                 <input type="date" id="business-endDate" placeholder="结束日期 (可选)">
-                <button class="btn" onclick="testBusinessValue()">测试</button>
+                <button class="btn" data-visitor-test-action="test-business-value">测试</button>
             </div>
             <div id="business-result" class="result" style="display:none;"></div>
         </div>
@@ -155,7 +169,7 @@
                     <option value="30">30分钟</option>
                 </select>
                 <input type="number" id="dashboard-hours" placeholder="最近N小时" value="24" min="1" max="168">
-                <button class="btn" onclick="testDashboard()">测试</button>
+                <button class="btn" data-visitor-test-action="test-dashboard">测试</button>
             </div>
             <div id="dashboard-result" class="result" style="display:none;"></div>
         </div>
@@ -170,7 +184,7 @@
                     <option value="30">30分钟</option>
                 </select>
                 <input type="number" id="change-hours" placeholder="最近N小时" value="24" min="1" max="168">
-                <button class="btn" onclick="testChangePercentage()">测试</button>
+                <button class="btn" data-visitor-test-action="test-change-percentage">测试</button>
             </div>
             <div id="change-result" class="result" style="display:none;"></div>
         </div>
@@ -181,7 +195,7 @@
             <div class="test-form">
                 <input type="text" id="daily-websiteId" placeholder="站点ID (可选)" value="">
                 <input type="number" id="daily-days" placeholder="最近N天" value="7" min="1" max="30">
-                <button class="btn" onclick="testDailyComparison()">测试</button>
+                <button class="btn" data-visitor-test-action="test-daily-comparison">测试</button>
             </div>
             <div id="daily-result" class="result" style="display:none;"></div>
         </div>
@@ -197,7 +211,7 @@
                     <option value="A">变体A</option>
                     <option value="B">变体B</option>
                 </select>
-                <button class="btn" onclick="testAbTest()">测试</button>
+                <button class="btn" data-visitor-test-action="test-abtest">测试</button>
             </div>
             <div id="abtest-result" class="result" style="display:none;"></div>
         </div>
@@ -230,7 +244,62 @@
         }
 
         const baseUrl = getBaseUrl();
-        const apiBase = baseUrl + '/visitor/rest/v1/analytics';
+
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-visitor-test-action]');
+            if (!trigger) {
+                return;
+            }
+
+            event.preventDefault();
+            const actions = {
+                'test-business-value': testBusinessValue,
+                'test-dashboard': testDashboard,
+                'test-change-percentage': testChangePercentage,
+                'test-daily-comparison': testDailyComparison,
+                'test-abtest': testAbTest
+            };
+            const action = actions[trigger.getAttribute('data-visitor-test-action')];
+            if (typeof action === 'function') {
+                action();
+            }
+        });
+        const apiBase = 'worker:visitor.analytics';
+        let visitorApiPromise = null;
+        function getVisitorApi() {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                visitorApiPromise = Promise.resolve(window.Weline.Api.resource('visitor'));
+                return visitorApiPromise;
+            }
+            if (visitorApiPromise) {
+                return visitorApiPromise;
+            }
+            visitorApiPromise = new Promise((resolve, reject) => {
+                let attempts = 0;
+                const waitForApi = () => {
+                    attempts += 1;
+                    if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                        resolve(window.Weline.Api.resource('visitor'));
+                        return;
+                    }
+                    if (attempts >= 80) {
+                        reject(new Error('Weline.Api.resource is not available'));
+                        return;
+                    }
+                    window.setTimeout(waitForApi, 50);
+                };
+                waitForApi();
+            });
+            visitorApiPromise.catch(() => {
+                visitorApiPromise = null;
+            });
+            return visitorApiPromise;
+        }
+
+        async function requestVisitor(operation, params) {
+            const api = await getVisitorApi();
+            return api[operation](params || {});
+        }
 
         // 显示结果
         function showResult(elementId, data, isError = false) {
@@ -266,17 +335,16 @@
 
             showLoading('business-result');
 
-            const params = buildParams({
+            const params = {
                 websiteId: websiteId || undefined,
                 period: period,
                 startDate: startDate || undefined,
                 endDate: endDate || undefined
-            });
+            };
 
             try {
-                const response = await fetch(apiBase + '/business-value' + params);
-                const data = await response.json();
-                showResult('business-result', data, !response.ok);
+                const data = await requestVisitor('analyticsBusinessValue', params);
+                showResult('business-result', data, data.code !== 200);
             } catch (error) {
                 showResult('business-result', { error: error.message }, true);
             }
@@ -290,16 +358,15 @@
 
             showLoading('dashboard-result');
 
-            const params = buildParams({
+            const params = {
                 websiteId: websiteId || undefined,
                 interval: interval,
                 hours: hours
-            });
+            };
 
             try {
-                const response = await fetch(apiBase + '/dashboard' + params);
-                const data = await response.json();
-                showResult('dashboard-result', data, !response.ok);
+                const data = await requestVisitor('analyticsDashboard', params);
+                showResult('dashboard-result', data, data.code !== 200);
             } catch (error) {
                 showResult('dashboard-result', { error: error.message }, true);
             }
@@ -313,16 +380,15 @@
 
             showLoading('change-result');
 
-            const params = buildParams({
+            const params = {
                 websiteId: websiteId || undefined,
                 interval: interval,
                 hours: hours
-            });
+            };
 
             try {
-                const response = await fetch(apiBase + '/change-percentage' + params);
-                const data = await response.json();
-                showResult('change-result', data, !response.ok);
+                const data = await requestVisitor('analyticsChangePercentage', params);
+                showResult('change-result', data, data.code !== 200);
             } catch (error) {
                 showResult('change-result', { error: error.message }, true);
             }
@@ -335,15 +401,14 @@
 
             showLoading('daily-result');
 
-            const params = buildParams({
+            const params = {
                 websiteId: websiteId || undefined,
                 days: days
-            });
+            };
 
             try {
-                const response = await fetch(apiBase + '/daily-comparison' + params);
-                const data = await response.json();
-                showResult('daily-result', data, !response.ok);
+                const data = await requestVisitor('analyticsDailyComparison', params);
+                showResult('daily-result', data, data.code !== 200);
             } catch (error) {
                 showResult('daily-result', { error: error.message }, true);
             }
@@ -371,16 +436,15 @@
 
             showLoading('abtest-result');
 
-            const params = buildParams({
+            const params = {
                 websiteId: websiteId || undefined,
                 testId: testId,
                 variant: variant || undefined
-            });
+            };
 
             try {
-                const response = await fetch(apiBase + '/ab-test' + params);
-                const data = await response.json();
-                showResult('abtest-result', data, !response.ok);
+                const data = await requestVisitor('analyticsAbTest', params);
+                showResult('abtest-result', data, data.code !== 200);
             } catch (error) {
                 showResult('abtest-result', { error: error.message }, true);
             }

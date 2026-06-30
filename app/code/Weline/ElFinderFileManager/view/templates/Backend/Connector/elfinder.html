@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
-    <title>@lang{Elfinder文件管理器-2.1.6}</title>
+    <title>@lang{Elfinder文件管理器-2.1.69}</title>
     <style>
         /* 使 #elfinder 自动占满除 #elfinder-recommend-hint 外的可用高度 */
         html, body { height: 100%; margin: 0; }
@@ -25,7 +25,7 @@
         search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(match, key, value) {
             urlParams[key] = value;
         });
-        let startPath = urlParams.startPath;
+        let startPath = urlParams.startPath || '';
         let targetId = null;
         if(urlParams.target){
             targetId = '#'+urlParams.target;
@@ -35,13 +35,13 @@
             closeId = '#'+urlParams.close;
         }
         let preview = urlParams.preview;
-        let multi = urlParams.multi;
-        let ext = urlParams.ext;
-        let size = urlParams.size;
+        let multi = urlParams.multi || '';
+        let ext = urlParams.ext || '*';
+        let size = urlParams.size || '';
         let setAttr = urlParams.setAttr;
         let recommendWidth = urlParams.recommend_width || '';
         let recommendHeight = urlParams.recommend_height || '';
-        function qs(v) { return (v != null && v !== 'undefined') ? v : ''; }
+        function qs(v) { return (v != null && v !== 'undefined') ? encodeURIComponent(String(v)) : ''; }
         define('elFinderConfig', {
             // elFinder options (REQUIRED)
             // Documentation for client options:
@@ -367,16 +367,36 @@
                             // 使用完整的URL路径
                             previewUrl = f.baseUrl + f.path;
                         }
-                        var wrapper = document.createElement('div');
-                        wrapper.innerHTML = `<div class="drag-item" draggable="true">
-                                                        <div class="close" onclick="delSelectedImage(event)">x</div>
-                                                        <img data-src="${f.path}" src="${previewUrl}" alt="${f.name}" 
-                                                             class="drag-pic img-responsive" draggable="false" 
-                                                             data-file="${fileJson}"
-                                                             style="${isSvg ? 'background: #fff; padding: 5px;' : ''}">
-                                                    </div>`;
-                        var html = wrapper.firstChild;
-                        preview.append(html)
+                        var html = document.createElement('div');
+                        html.className = 'drag-item';
+                        html.setAttribute('draggable', 'true');
+
+                        var close = document.createElement('div');
+                        close.className = 'close';
+                        close.textContent = 'x';
+                        close.addEventListener('click', function (event) {
+                            if (parent && typeof parent.delSelectedImage === 'function') {
+                                parent.delSelectedImage(event);
+                            } else if (typeof delSelectedImage === 'function') {
+                                delSelectedImage(event);
+                            }
+                        });
+
+                        var img = document.createElement('img');
+                        img.className = 'drag-pic img-responsive';
+                        img.setAttribute('draggable', 'false');
+                        img.setAttribute('data-src', String(f.path || ''));
+                        img.setAttribute('src', String(previewUrl || ''));
+                        img.setAttribute('alt', String(f.name || ''));
+                        img.setAttribute('data-file', JSON.stringify(f));
+                        if (isSvg) {
+                            img.style.background = '#fff';
+                            img.style.padding = '5px';
+                        }
+
+                        html.appendChild(close);
+                        html.appendChild(img);
+                        preview.append(html);
                     }
                     if (closeId !== undefined) {
                         parentDocument.find(closeId).click()

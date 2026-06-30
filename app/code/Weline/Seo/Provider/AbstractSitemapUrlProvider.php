@@ -144,6 +144,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
                 'lastmod' => $url['lastmod'] ?? date('Y-m-d'),
                 'changefreq' => $url['changefreq'] ?? 'weekly',
                 'priority' => isset($url['priority']) ? (string)$url['priority'] : '0.5',
+                'metadata' => $this->normalizeSitemapMetadata($url),
             ];
         }
         
@@ -254,6 +255,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             'lastmod' => SitemapUrl::schema_fields_LASTMOD,
             'changefreq' => SitemapUrl::schema_fields_CHANGEFREQ,
             'priority' => SitemapUrl::schema_fields_PRIORITY,
+            'metadata' => SitemapUrl::schema_fields_METADATA,
         ];
         
         foreach ($comparisons as $newField => $dbField) {
@@ -281,6 +283,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             SitemapUrl::schema_fields_LASTMOD => $urlData['lastmod'],
             SitemapUrl::schema_fields_CHANGEFREQ => $urlData['changefreq'],
             SitemapUrl::schema_fields_PRIORITY => $urlData['priority'],
+            SitemapUrl::schema_fields_METADATA => $urlData['metadata'] ?? '',
             SitemapUrl::schema_fields_STATUS => 1, // active
         ]);
         $model->save();
@@ -298,8 +301,33 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             SitemapUrl::schema_fields_LASTMOD => $urlData['lastmod'],
             SitemapUrl::schema_fields_CHANGEFREQ => $urlData['changefreq'],
             SitemapUrl::schema_fields_PRIORITY => $urlData['priority'],
+            SitemapUrl::schema_fields_METADATA => $urlData['metadata'] ?? '',
         ]);
         $model->save();
+    }
+
+    /**
+     * @param array<string, mixed> $url
+     */
+    protected function normalizeSitemapMetadata(array $url): string
+    {
+        $metadata = [];
+        if (isset($url['metadata']) && is_array($url['metadata'])) {
+            $metadata = $url['metadata'];
+        } elseif (isset($url['metadata']) && is_string($url['metadata'])) {
+            $decoded = json_decode($url['metadata'], true);
+            $metadata = is_array($decoded) ? $decoded : [];
+        }
+        if (isset($url['sitemap']) && is_array($url['sitemap'])) {
+            $metadata = array_replace_recursive($metadata, $url['sitemap']);
+        }
+        foreach (['images', 'image', 'videos', 'video', 'news', 'alternates', 'hreflang'] as $key) {
+            if (array_key_exists($key, $url)) {
+                $metadata[$key] = $url[$key];
+            }
+        }
+
+        return $metadata === [] ? '' : json_encode($metadata, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /**

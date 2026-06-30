@@ -107,6 +107,29 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
         self::assertSame(2, $workerHealthAfterSecondCall[19091]['total_failures']);
     }
 
+    public function testRecentSuccessfulWorkerConnectFailuresDoNotBlacklistDuringGrace(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 2);
+        $this->writePrivateProperty($core, 'workerHealth', [
+            19091 => [
+                'failures' => 2,
+                'blacklisted_at' => 0.0,
+                'last_success' => \microtime(true) - 1.0,
+                'total_failures' => 7,
+            ],
+        ]);
+
+        $this->invokePrivateMethod($core, 'recordWorkerFailure', 19091, true);
+        $this->invokePrivateMethod($core, 'recordWorkerFailure', 19091, true);
+        $this->invokePrivateMethod($core, 'recordWorkerFailure', 19091, true);
+
+        $workerHealth = $this->readPrivateProperty($core, 'workerHealth');
+
+        self::assertSame(2, $workerHealth[19091]['failures']);
+        self::assertSame(10, $workerHealth[19091]['total_failures']);
+        self::assertSame(0.0, $workerHealth[19091]['blacklisted_at']);
+    }
+
     public function testAuditWorkerApplicationHealthReportsFailedPoolPorts(): void
     {
         $core = new class('127.0.0.1', 19981, 2) extends PassthroughCore {

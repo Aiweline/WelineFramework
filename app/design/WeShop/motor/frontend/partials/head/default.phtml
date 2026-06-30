@@ -4,8 +4,6 @@
  * 页面头部区域（meta标签、CSS、JS初始化等）
  * Motor 主题覆盖版本
  */
-$meta = $this->getData('meta') ?? [];
-$layout = $this->getData('layout') ?? [];
 $themeData = $this->getData('theme') ?? [];
 
 $frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
@@ -18,6 +16,7 @@ $frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 <link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 <link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 </w:hook>
+<w:geo slot="head"/>
 
 <w:block class='Weline\Frontend\Block\Header\Base' template='Weline_Frontend::header/base.phtml'/>
 
@@ -54,12 +53,40 @@ if ($isDev) {
     $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
 }
 
-$currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
-$currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+$currentLang = \w_env('user.lang', 'zh_Hans_CN');
+$htmlDir = (string)($this->getData('htmlDir') ?: 'ltr');
+$htmlDir = $htmlDir === 'rtl' ? 'rtl' : 'ltr';
+$currentCurrency = \w_env('user.currency', 'CNY');
+$defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$availableCurrencies = [];
+try {
+    if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        foreach (\Weline\Websites\Data\WebsiteData::getCurrencyCodes() as $currencyCode) {
+            $currencyCode = strtoupper(trim((string)$currencyCode));
+            if ($currencyCode !== '') {
+                $availableCurrencies[] = $currencyCode;
+            }
+        }
+    }
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
+$availableCurrencies[] = $defaultCurrency;
+$availableCurrencies = array_values(array_unique($availableCurrencies));
+$currentCurrency = strtoupper(trim((string)$currentCurrency));
+if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
+    $currentCurrency = $defaultCurrency;
+}
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
-$pageTitle = $meta['title'] ?? $this->getData('title') ?? __('欢迎使用WelineFramework框架！');
-$pageDescription = $meta['description'] ?? __('Weline Framework - 现代化的PHP框架');
-$pageKeywords = $meta['keywords'] ?? __('Weline, Framework, PHP');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 
 $envConfig = [
     'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
@@ -72,14 +99,23 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'assetVersion' => '20260606-language-flag',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
+    'defaultLang' => $defaultLang,
+    'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
+    'htmlDir' => $htmlDir,
+    'textDirection' => $htmlDir,
+    'isRtl' => $htmlDir === 'rtl',
     'debug' => DEV,
+    'i18n' => [
+        'currentLang' => $currentLang,
+        'defaultLang' => $defaultLang,
+        'direction' => $htmlDir,
+    ],
     'site' => [
         'name' => $siteName,
-        'title' => $pageTitle,
-        'description' => $pageDescription,
-        'keywords' => $pageKeywords,
     ],
     'theme' => [
         'area' => $area,
@@ -89,7 +125,7 @@ $themeConfigPayload = [
     ],
 ];
 
-$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, $jsonForScriptFlags));
 $this->setData('envConfig', $envConfig);
 ?>
 <!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
@@ -98,8 +134,13 @@ $this->setData('envConfig', $envConfig);
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
-        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        const themeConfig = <?= json_encode($themeConfigPayload, $jsonForScriptFlags) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
+        const textDirection = themeConfig.htmlDir === 'rtl' || themeConfig.textDirection === 'rtl' ? 'rtl' : 'ltr';
+        document.documentElement.setAttribute('dir', textDirection);
+        document.documentElement.setAttribute('data-dir', textDirection);
+        document.documentElement.classList.toggle('is-rtl', textDirection === 'rtl');
+        document.documentElement.classList.toggle('is-ltr', textDirection !== 'rtl');
 
         if (window.__WelineThemeConfig.modulesConfigUrl) {
             window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
@@ -108,6 +149,7 @@ $this->setData('envConfig', $envConfig);
 </script>
 <!-- 主题JS -->
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css')) ?>" type="text/css">
 <?php
 if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
@@ -134,7 +176,7 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     }
 }
 ?>
-<script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
-<theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+<script src="<?= htmlspecialchars($isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js?v=20260522-dev-cache' : '/static/Weline/Frontend/js/weline-api-fallback.js') ?>"></script>
+<script src="<?= htmlspecialchars($isDev ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260606-language-flag' : '/static/Weline/Theme/theme/frontend/assets/js/theme.js') ?>"></script>
 <!-- Hook: 允许其他模块在 head 中注入 JS 模块声明 -->
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

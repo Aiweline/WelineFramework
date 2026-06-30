@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Adapter;
 
+use Weline\Ai\Interface\AdapterModelBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
@@ -16,7 +17,7 @@ use Weline\Ai\Interface\ScenarioAdapterInterface;
  * - 支持结构化输出（JSON 格式）
  * - 支持自定义文章风格和长度
  */
-class ArticleGenerationAdapter implements ScenarioAdapterInterface
+class ArticleGenerationAdapter implements ScenarioAdapterInterface, AdapterModelBindingInterface
 {
     public const ARTICLE_TYPE_BLOG = 'blog';
     public const ARTICLE_TYPE_NEWS = 'news';
@@ -42,6 +43,11 @@ class ArticleGenerationAdapter implements ScenarioAdapterInterface
         self::LENGTH_MEDIUM => [500, 800],
         self::LENGTH_LONG => [800, 1500],
     ];
+
+    public function getDefaultModelBindings(): array
+    {
+        return ['text2text' => 'deepseek-v4-flash'];
+    }
 
     public function getCode(): string
     {

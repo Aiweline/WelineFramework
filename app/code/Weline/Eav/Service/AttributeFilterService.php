@@ -582,7 +582,7 @@ class AttributeFilterService
             ->where('entity_id', array_values(array_map('intval', $entityIds)), 'in')
             ->where('value', null, 'IS NOT NULL')
             ->where('value', '', '!=')
-            ->groupBy('value');
+            ->group('value');
 
         $results = $valueModel->select()->fetchArray();
         $values = [];
@@ -716,6 +716,24 @@ class AttributeFilterService
         /** @var EavAttribute $attribute */
         $attribute = $this->freshModel(EavAttribute::class);
         $attribute->setData($row);
+        try {
+            $entityId = (int) ($row[EavAttribute::schema_fields_eav_entity_id] ?? 0);
+            if ($entityId > 0) {
+                /** @var EavEntity $entity */
+                $entity = $this->freshModel(EavEntity::class);
+                $entity->load($entityId);
+                if ($entity->getId()) {
+                    $entityClass = (string) ($entity->getData('class') ?? '');
+                    if ($entityClass !== '' && class_exists($entityClass)) {
+                        $entityModel = $this->freshModel($entityClass);
+                        if ($entityModel instanceof \Weline\Eav\EavModel) {
+                            $attribute->current_setEntity($entityModel);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
 
         return $attribute;
     }

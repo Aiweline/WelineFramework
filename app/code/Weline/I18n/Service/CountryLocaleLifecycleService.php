@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
-use Symfony\Component\Intl\Countries as IntlCountries;
-use Symfony\Component\Intl\Locales as IntlLocales;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -349,7 +347,7 @@ class CountryLocaleLifecycleService
         $flag = (string)$this->i18n->getCountryFlag($countryCode);
 
         if (!$country->getId()) {
-            if (!IntlCountries::exists($countryCode)) {
+            if (!$this->countryCodeExists($countryCode)) {
                 throw new \RuntimeException((string)__('国家不存在！国家代码：%{1}', [$countryCode]));
             }
 
@@ -516,8 +514,9 @@ class CountryLocaleLifecycleService
         }
 
         try {
-            if (IntlCountries::exists($countryCode)) {
-                $name = (string)IntlCountries::getName($countryCode, $displayLocaleCode);
+            if ($this->countryCodeExists($countryCode)) {
+                $countries = $this->i18n->getCountries($displayLocaleCode);
+                $name = (string)($countries[$countryCode] ?? '');
                 if ($name !== '') {
                     return $name;
                 }
@@ -526,7 +525,7 @@ class CountryLocaleLifecycleService
         }
 
         try {
-            return (string)IntlCountries::getName($countryCode, 'en');
+            return (string)($this->i18n->getCountries('en')[$countryCode] ?? $countryCode);
         } catch (\Throwable) {
             return $countryCode;
         }
@@ -543,8 +542,8 @@ class CountryLocaleLifecycleService
         }
 
         try {
-            if (IntlLocales::exists($localeCode)) {
-                $name = (string)IntlLocales::getName($localeCode, $displayLocaleCode);
+            if ($this->i18n->localeExists($localeCode)) {
+                $name = (string)$this->i18n->getLocaleName($localeCode, $displayLocaleCode);
                 if ($name !== '') {
                     return $name;
                 }
@@ -587,6 +586,17 @@ class CountryLocaleLifecycleService
         try {
             w_cache('phrase')->clear();
         } catch (\Throwable) {
+        }
+
+        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+        \Weline\I18n\Parser::clearWorkerCaches();
+
+        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
+        if (class_exists($dispatchClass)) {
+            try {
+                ObjectManager::getInstance($dispatchClass)->cacheClear();
+            } catch (\Throwable) {
+            }
         }
     }
 
@@ -647,11 +657,20 @@ class CountryLocaleLifecycleService
     {
         $parts = explode('_', $localeCode);
         $countryCode = strtoupper((string)end($parts));
-        if (strlen($countryCode) === 2 && IntlCountries::exists($countryCode)) {
+        if (strlen($countryCode) === 2 && $this->countryCodeExists($countryCode)) {
             return $countryCode;
         }
 
         return null;
+    }
+
+    private function countryCodeExists(string $countryCode): bool
+    {
+        try {
+            return $this->i18n->getCountry($countryCode) !== [];
+        } catch (\Throwable) {
+            return preg_match('/^[A-Z]{2}$/', strtoupper($countryCode)) === 1;
+        }
     }
 
     private function getCountryRecord(string $countryCode): Countries

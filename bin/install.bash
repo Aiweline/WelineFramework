@@ -24,12 +24,13 @@ WELINE_USER="${WELINE_USER:-weline}"
 WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 
 usage() {
-  echo "Usage: $0 [--path-only] [--rebuild-php] [-f|--force] [-y|--yes] [-b BRANCH] [php] [pgsql] [mysql]"
+  echo "Usage: $0 [--path-only] [--rebuild-php] [--env-file FILE] [-f|--force] [-y|--yes] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
   echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl)."
   echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
   echo "  -y, --yes: when already installed, directly run setup:upgrade without prompting."
+  echo "  --env-file FILE: load DB_* and installer settings from a custom env file."
   echo "  --link-system: create symlinks in /usr/local/bin (php, psql) for system-wide use (uses sudo when needed)."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
@@ -43,6 +44,7 @@ BRANCH="master"
 FORCE_INSTALL=false
 AUTO_UPGRADE=false
 LINK_SYSTEM=false
+ENV_FILE_ARG=""
 COMPONENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +53,8 @@ while [[ $# -gt 0 ]]; do
     --rebuild-php) REBUILD_PHP=true; shift ;;
     -f|--force) FORCE_INSTALL=true; shift ;;
     -y|--yes) AUTO_UPGRADE=true; shift ;;
+    --env-file) [[ -n "${2:-}" ]] && { ENV_FILE_ARG="$2"; shift 2; } || { echo "--env-file requires a file path" >&2; exit 1; } ;;
+    --env-file=*) ENV_FILE_ARG="${1#--env-file=}"; shift ;;
     --link-system) LINK_SYSTEM=true; shift ;;
     -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
@@ -68,7 +72,20 @@ done
 
 # 读取 weline.env 并检查配置完整性（与 Windows 一致）
 WELINE_ENV_INCOMPLETE=false
-if [[ -f "$ROOT/weline.env" ]]; then
+ENV_FILE_PATH="$ROOT/weline.env"
+if [[ -n "$ENV_FILE_ARG" ]]; then
+  case "$ENV_FILE_ARG" in
+    /*) ENV_FILE_PATH="$ENV_FILE_ARG" ;;
+    [A-Za-z]:*) ENV_FILE_PATH="$ENV_FILE_ARG" ;;
+    *) ENV_FILE_PATH="$ROOT/$ENV_FILE_ARG" ;;
+  esac
+  if [[ ! -f "$ENV_FILE_PATH" ]]; then
+    echo "ERROR: env file not found: $ENV_FILE_PATH" >&2
+    exit 1
+  fi
+  export WELINE_ENV_FILE="$ENV_FILE_ARG"
+fi
+if [[ -f "$ENV_FILE_PATH" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${line//[[:space:]]/}" ]] && continue
@@ -77,7 +94,7 @@ if [[ -f "$ROOT/weline.env" ]]; then
     else
       WELINE_ENV_INCOMPLETE=true
     fi
-  done < "$ROOT/weline.env"
+  done < "$ENV_FILE_PATH"
 fi
 INSTALL_PGSQL_VERSION="${INSTALL_PGSQL_VERSION:-16}"
 INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
@@ -169,11 +186,14 @@ add_to_path() {
 # 需 sudo，确保新终端、SSH、su - 等均使用项目安装的 php
 add_to_profile_d() {
   [[ "$PLATFORM" != "linux" ]] && return
+  local cmp="$SERVER_DIR"
   local ph="$SERVER_DIR/php/bin"
   local pg="$SERVER_DIR/pgsql/bin"
   local bn="$ROOT/bin"
-  local content="# WelineFramework - prepend project php/pgsql/w to PATH (written by install.bash)
+  local content="# WelineFramework - prepend project php/pgsql/composer/w to PATH (written by install.bash)
 # Ensures project PHP takes precedence over system PHP
+"
+  [[ -d "$cmp" ]] && content="${content}[ -d '$cmp' ] && export PATH='$cmp':\"\$PATH\"
 "
   [[ -d "$ph" ]] && content="${content}[ -d '$ph' ] && export PATH='$ph':\"\$PATH\"
 "
@@ -181,7 +201,7 @@ add_to_profile_d() {
 "
   [[ -d "$bn" ]] && content="${content}[ -d '$bn' ] && export PATH='$bn':\"\$PATH\"
 "
-  if [[ ! -d "$ph" ]] && [[ ! -d "$pg" ]] && [[ ! -d "$bn" ]]; then
+  if [[ ! -d "$cmp" ]] && [[ ! -d "$ph" ]] && [[ ! -d "$pg" ]] && [[ ! -d "$bn" ]]; then
     return
   fi
   if run_privileged tee /etc/profile.d/weline-path.sh >/dev/null <<< "$content"; then
@@ -276,6 +296,11 @@ if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "${WELINE_AS_USE
   run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$ROOT" 2>/dev/null || true
   [[ -d "$ROOT/.git" ]] && run_privileged sudo -u "$WELINE_USER" git config --global --add safe.directory "$ROOT" 2>/dev/null || true
   exec sudo -u "$WELINE_USER" env WELINE_AS_USER=1 PATH="$PATH" bash "$SCRIPT_DIR/install.bash" "${ORIG_ARGS[@]}"
+fi
+
+if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -un 2>/dev/null || true)" != "$WELINE_USER" ]]; then
+  echo "ERROR: Linux install must run as $WELINE_USER. Run as root so the script can switch to $WELINE_USER, or switch user first." >&2
+  exit 1
 fi
 
 # 确保 git 已安装（拉取代码时需要）；按平台自动安装
@@ -1022,33 +1047,8 @@ install_pgsql_linux() {
   local os_id=""
   [[ -f /etc/os-release ]] && . /etc/os-release 2>/dev/null && os_id="${ID:-}"
 
-  # 先判断：系统已有 PostgreSQL 且 5432 可连接则直接用，不安装
-  local pg_port=5432
-  local pg_bin_check=""
-  pg_bin_check=$(command -v psql 2>/dev/null)
-  [[ -z "$pg_bin_check" ]] && [[ -x /usr/bin/psql ]] && pg_bin_check="/usr/bin/psql"
-  if [[ -n "$pg_bin_check" ]] && [[ -x "$pg_bin_check" ]]; then
-    if (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${pg_port}([^0-9]|$)"; then
-      local pg_can_connect=0
-      for try_pass in "" "postgres" "weline"; do
-        if [[ -z "$try_pass" ]]; then
-          "$pg_bin_check" -h 127.0.0.1 -p "$pg_port" -d postgres -tAc "SELECT 1" 2>/dev/null | grep -q 1 && { pg_can_connect=1; break; }
-        else
-          PGPASSWORD="$try_pass" "$pg_bin_check" -h 127.0.0.1 -p "$pg_port" -U postgres -d postgres -tAc "SELECT 1" 2>/dev/null | grep -q 1 && { pg_can_connect=1; break; }
-        fi
-      done
-      if [[ "$pg_can_connect" -eq 1 ]]; then
-        echo "检测到系统已有 PostgreSQL（5432 可连接），直接使用，跳过安装：$pg_bin_check"
-        local pg_dir_check
-        pg_dir_check="$(dirname "$pg_bin_check")"
-        mkdir -p "$dest"
-        rm -rf "$dest/bin"
-        safe_ln_sf "$pg_dir_check" "$dest/bin"
-        add_to_path "$dest/bin"
-        return
-      fi
-    fi
-  fi
+  # Do not reuse a system PostgreSQL service on 5432. Project installs only link
+  # binaries and initialize extend/server/pgsql/data on a project-owned port.
 
   if [[ -f /etc/debian_version ]]; then
     echo "Installing PostgreSQL ${INSTALL_PGSQL_VERSION} (apt)..."
@@ -1138,10 +1138,22 @@ install_pgsql_linux() {
     return 1
   fi
 
-  run_privileged systemctl stop postgresql 2>/dev/null || run_privileged service postgresql stop 2>/dev/null || true
-  run_privileged systemctl disable postgresql 2>/dev/null || true
+  echo "Leaving any system PostgreSQL service untouched; project data will use its own port."
 
-  # 端口检测：5432 被占用时自动选用 5433、5434 等
+  # Project PostgreSQL ports deliberately avoid 5432.
+  project_preferred_pg_port() {
+    local min=55432 max=65535 range seed normalized hex
+    range=$((max - min + 1))
+    normalized="$(printf '%s' "$ROOT" | tr '\\' '/' | tr '[:upper:]' '[:lower:]')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      hex="$(printf '%s' "$normalized" | sha256sum | awk '{print substr($1,1,8)}')"
+      seed=$((16#$hex))
+    else
+      seed="$(printf '%s' "$normalized" | cksum 2>/dev/null | awk '{print $1}')"
+    fi
+    [[ -z "$seed" ]] && seed=0
+    echo $((min + (seed % range)))
+  }
   is_port_in_use() {
     local p="$1"
     (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${p}([^0-9]|$)" && return 0
@@ -1149,18 +1161,23 @@ install_pgsql_linux() {
     return 1
   }
   find_available_pg_port() {
-    local p=5432
-    while is_port_in_use "$p"; do
+    local min=55432 max=65535 p attempts i
+    p="$(project_preferred_pg_port)"
+    attempts=$((max - min + 1))
+    for ((i=0; i<attempts; i++)); do
+      if [[ "$p" -ne 5432 ]] && ! is_port_in_use "$p"; then
+        echo "$p"
+        return 0
+      fi
       p=$((p + 1))
-      [[ $p -gt 65535 ]] && { echo 5432; return; }
+      [[ "$p" -gt "$max" ]] && p="$min"
     done
-    echo "$p"
+    echo "ERROR: no available project PostgreSQL port in ${min}-${max}" >&2
+    return 1
   }
   local pg_port
-  pg_port=$(find_available_pg_port)
-  if [[ "$pg_port" != "5432" ]]; then
-    echo "端口 5432 已被占用，改用端口 $pg_port"
-  fi
+  pg_port=$(find_available_pg_port) || return 1
+  echo "Project PostgreSQL port: $pg_port"
   start_pg_with_retry() {
     local max_attempts=5
     local attempt=1
@@ -1196,7 +1213,11 @@ install_pgsql_linux() {
   update_pg_port_conf() {
     [[ -f "$pgsql_data/postgresql.conf" ]] || return
     grep -qE "^\s*port\s*=\s*$pg_port" "$pgsql_data/postgresql.conf" 2>/dev/null && return
-    sed -i.bak -E "s/^#?(port\s*=\s*)[0-9]+/\1$pg_port/" "$pgsql_data/postgresql.conf" 2>/dev/null || true
+    if grep -qE "^\s*#?\s*port\s*=" "$pgsql_data/postgresql.conf" 2>/dev/null; then
+      sed -i.bak -E "s/^#?\s*(port\s*=\s*)[0-9]+/\1$pg_port/" "$pgsql_data/postgresql.conf" 2>/dev/null || true
+    else
+      printf '\nport = %s\n' "$pg_port" >> "$pgsql_data/postgresql.conf"
+    fi
   }
   if [[ -f "$pgsql_data/PG_VERSION" ]]; then
     update_pg_port_conf
@@ -1215,24 +1236,53 @@ install_pgsql_linux() {
 
   echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
   echo "  重启后需手动启动: pg_ctl -D $pgsql_data -l $pgsql_data/logfile start ${pg_ctl_opts[*]}"
-  if [[ "$pg_port" != "5432" ]]; then
-    if [[ -f "$ROOT/weline.env" ]]; then
-      if grep -qE '^DB_PORT=' "$ROOT/weline.env" 2>/dev/null; then
-        sed -i.bak -E "s/^DB_PORT=.*/DB_PORT=$pg_port/" "$ROOT/weline.env"
-      else
-        echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
-      fi
+  if [[ -f "$ROOT/weline.env" ]]; then
+    if grep -qE '^DB_PORT=' "$ROOT/weline.env" 2>/dev/null; then
+      sed -i.bak -E "s/^DB_PORT=.*/DB_PORT=$pg_port/" "$ROOT/weline.env"
     else
       echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
     fi
-    echo "  已写入 DB_PORT=$pg_port 到 weline.env（供 run.php 连接数据库）"
+  else
+    echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
   fi
+  echo "  已写入 DB_PORT=$pg_port 到 weline.env（供 run.php 连接数据库）"
   set -e
+}
+
+resolve_installer_php_bin() {
+  for candidate in "$SERVER_DIR/php/bin/php" "$SERVER_DIR/php/php" "$SERVER_DIR/php/bin/php.exe" "$SERVER_DIR/php/php.exe"; do
+    [[ -x "$candidate" ]] && { echo "$candidate"; return 0; }
+  done
+  command -v php 2>/dev/null || true
+}
+
+env_php_pgsql_management_status() {
+  local owner_cli="$ROOT/setup/server_installer/pgsql_owner_cli.php"
+  [[ -f "$owner_cli" ]] || return 0
+  local php_bin
+  php_bin="$(resolve_installer_php_bin)"
+  [[ -n "$php_bin" ]] || return 0
+  "$php_bin" "$owner_cli" server-can-manage
+  local rc=$?
+  if [[ "$rc" -eq 2 ]]; then
+    return 2
+  fi
+  return "$rc"
 }
 
 # ---- PostgreSQL ----（Linux：apt/dnf 自动安装并软链；Mac：Homebrew；初始化由 run.php Step 5b 完成）
 install_pgsql() {
   local dest="$SERVER_DIR/pgsql"
+  env_php_pgsql_management_status
+  local manage_rc=$?
+  if [[ "$manage_rc" -eq 2 ]]; then
+    echo "env.php is authoritative for another database target; skipping local PostgreSQL install/start."
+    return 0
+  fi
+  if [[ "$manage_rc" -ne 0 ]]; then
+    echo "ERROR: env.php PostgreSQL ownership check failed; local PostgreSQL install/start is not safe." >&2
+    return "$manage_rc"
+  fi
   if [[ -f "$dest/bin/psql" ]] || [[ -f "$dest/bin/postgres" ]]; then
     echo "PostgreSQL already present at $dest."
     add_to_path "$dest/bin"
@@ -1291,8 +1341,21 @@ for c in "${COMPONENTS[@]}"; do
   esac
 done
 
+echo "========== Composer =========="
+composer_phar="$SERVER_DIR/composer.phar"
+if [[ -f "$composer_phar" ]] && [[ "$(wc -c < "$composer_phar" 2>/dev/null || echo 0)" -ge 500000 ]]; then
+  echo "composer.phar already present at $composer_phar."
+else
+  if [[ -f "$composer_phar" ]]; then
+    echo "composer.phar at $composer_phar is invalid or too small; run.php will replace it."
+  else
+    echo "composer.phar not at $composer_phar; run.php will download it."
+  fi
+fi
+
 # 安装后：将 php、pgsql、项目 bin（w 命令）写入环境变量（置前，优先于系统 php）
 # Linux 同时写 /etc/profile.d/weline-path.sh，确保登录 shell 使用项目 php
+[[ -d "$SERVER_DIR" ]] && add_to_path "$SERVER_DIR"
 [[ -d "$SERVER_DIR/php/bin" ]] && add_to_path "$SERVER_DIR/php/bin"
 [[ -d "$SERVER_DIR/pgsql/bin" ]] && add_to_path "$SERVER_DIR/pgsql/bin"
 add_to_path "$ROOT/bin"
@@ -1502,11 +1565,18 @@ fix_project_ownership
 
 # root 阶段已在重执行前设置 safe.directory，此处无需重复
 echo ""
-RUN_ARGS=""
-[[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
-[[ "$AUTO_UPGRADE" == true ]] && RUN_ARGS="$RUN_ARGS -y"
+RUN_ARGS=()
+[[ "$FORCE_INSTALL" == true ]] && RUN_ARGS+=("-f")
+[[ "$AUTO_UPGRADE" == true ]] && RUN_ARGS+=("-y")
+[[ -n "$ENV_FILE_ARG" ]] && RUN_ARGS+=("--env-file" "$ENV_FILE_ARG")
 # 已通过 root→weline 重执行，此处始终由 weline 执行
-(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
+if [[ -f "$ROOT/setup/server_installer/bootstrap_php_ini.php" ]] && [[ -x "$PHP_EXE" || -f "$PHP_EXE" ]]; then
+  echo "Pre-configuring php.ini (opcache file_cache for Windows ASLR)..."
+  "$PHP_EXE" -d opcache.enable=0 -d opcache.enable_cli=0 "$ROOT/setup/server_installer/bootstrap_php_ini.php" || {
+    echo "WARNING: bootstrap_php_ini failed; run.php may hit Opcache ASLR fatal on Windows." >&2
+  }
+fi
+(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php "${RUN_ARGS[@]}") || exit 1
 echo ""
 cd "$ROOT"
 

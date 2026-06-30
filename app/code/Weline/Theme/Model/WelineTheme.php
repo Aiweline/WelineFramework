@@ -121,6 +121,11 @@ class WelineTheme extends Model
     public function getPath(): string
     {
         $path = (string)$this->getData(self::schema_fields_PATH);
+        $moduleDefaultPath = $this->resolveModuleDefaultThemePath();
+        if ($moduleDefaultPath !== null) {
+            return $moduleDefaultPath;
+        }
+
         if ($path !== '') {
             $path = str_replace(['/', '\\'], DS, $path);
             if ($this->isAbsoluteThemePath($path)) {
@@ -130,6 +135,26 @@ class WelineTheme extends Model
             return rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . DS . trim($path, DS) . DS;
         }
         return App::Env('theme')['path'] ?? '';
+    }
+
+    private function resolveModuleDefaultThemePath(): ?string
+    {
+        if ((string)$this->getData(self::schema_fields_MODULE_NAME) !== 'Weline_Theme') {
+            return null;
+        }
+
+        $module = Env::getInstance()->getModuleInfo('Weline_Theme');
+        $basePath = (string)($module['base_path'] ?? '');
+        if ($basePath === '') {
+            return null;
+        }
+
+        $themePath = rtrim($basePath, '/\\') . DS . 'view' . DS . 'theme';
+        if (!is_dir($themePath)) {
+            return null;
+        }
+
+        return rtrim($themePath, DS) . DS;
     }
 
     private function isAbsoluteThemePath(string $path): bool

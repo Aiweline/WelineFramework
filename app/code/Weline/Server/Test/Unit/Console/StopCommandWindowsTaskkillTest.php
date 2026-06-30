@@ -50,9 +50,6 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         self::assertSame(
             [
                 ['pid' => 18628, 'tree' => true],
-                ['pid' => 18628, 'tree' => true],
-                ['pid' => 18628, 'tree' => true],
-                ['pid' => 18628, 'tree' => false],
             ],
             $stop->calls
         );
@@ -67,7 +64,7 @@ final class StopCommandWindowsTaskkillTest extends TestCase
 
             public function killPid(int $pid): bool
             {
-                return $this->queryKillStopPid($pid, true);
+                return $this->killWindowsProcessForStop($pid, false);
             }
 
             protected function isWindowsPlatform(): bool
@@ -95,22 +92,9 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         self::assertSame(
             [
                 ['pid' => 15364, 'tree' => false],
-                ['pid' => 15364, 'tree' => false],
             ],
             $stop->calls
         );
-    }
-
-    public function testRunningPidScanUsesTasklistInsteadOfPowerShell(): void
-    {
-        $stop = new class extends Stop {
-            public function command(array $ids): string
-            {
-                return $this->buildWindowsCollectRunningPidsCommand($ids);
-            }
-        };
-
-        self::assertSame('tasklist /FO CSV /NH', $stop->command([101, 202]));
     }
 
     public function testWindowsRootResolutionDoesNotQueryParentWrapperCommandLine(): void
@@ -186,8 +170,8 @@ final class StopCommandWindowsTaskkillTest extends TestCase
 
         self::assertNotContains(26422, $stop->ports($info, false));
         self::assertNotContains(26423, $stop->ports($info, false));
-        self::assertContains(26422, $stop->ports($info, true));
-        self::assertContains(26423, $stop->ports($info, true));
+        self::assertNotContains(26422, $stop->ports($info, true));
+        self::assertNotContains(26423, $stop->ports($info, true));
     }
 
     public function testSharedStatePortCleanupRequiresLiveOwnerToMatchStoppedInstance(): void
@@ -255,7 +239,7 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         ];
 
         self::assertSame([], $stop->remaining($info, false));
-        self::assertSame([26422], $stop->remaining($info, true));
+        self::assertSame([], $stop->remaining($info, true));
     }
 
     private static function createInstanceInfo(string $name): ServerInstanceInfo

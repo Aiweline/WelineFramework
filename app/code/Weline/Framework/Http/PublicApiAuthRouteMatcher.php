@@ -13,11 +13,20 @@ class PublicApiAuthRouteMatcher
         'api/rest/v1/auth/token-info',
         'api/rest/v1/auth/logout',
         'api/rest/v1/auth/me',
+        'api/rest/v1/apps/token',
+        'api/rest/v1/apps/refresh',
+        'api/rest/v1/apps/revoke',
         'api/rest/v1/backend/auth/login',
         'api/rest/v1/backend/auth/refresh',
         'api/rest/v1/backend/auth/logout',
         'api/rest/v1/backend/auth/me',
         'api/rest/v1/backend/auth/token-info',
+        'multipass/rest/v1/identity/authorize',
+        'multipass/rest/v1/identity/token',
+        'multipass/rest/v1/identity/refresh',
+        'multipass/rest/v1/identity/revoke',
+        'multipass/rest/v1/identity/userinfo',
+        'multipass/rest/v1/identity/bind',
         'api/weshop/rest/v1/auth/token',
         'api/weshop/rest/v1/auth/challenge/verify',
         'api/weshop/rest/v1/auth/login',
@@ -45,6 +54,13 @@ class PublicApiAuthRouteMatcher
     ];
 
     private const DEMO_PATH_PATTERNS = [
+        'dev/tool/rest/v1/trace',
+        'dev/tool/rest/v1/panel',
+        'dev/tool/rest/v1/routes',
+        'dev/tool/rest/v1/document/modules',
+        'dev/tool/rest/v1/document/search',
+        'dev/tool/rest/v1/document/detail',
+        'dev/tool/rest/v1/document/catalogs',
         'datatable/rest/v1/demo-table',
         'datatable/rest/v1/demo-table/data',
         'datatable/rest/v1/demo-table/fields',
@@ -74,6 +90,11 @@ class PublicApiAuthRouteMatcher
         'api/rest/v1/weshop/invoice/list',
     ];
 
+    private const WORKER_QUERY_BIN_PATH_PATTERNS = [
+        'api/framework/query-bin',
+        'framework/query-bin',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -94,6 +115,10 @@ class PublicApiAuthRouteMatcher
 
     public function matches(Request $request): bool
     {
+        if ($this->matchesWorkerQueryBinRoute($request)) {
+            return true;
+        }
+
         $controller = (string) $request->getController();
         $action = (string) $request->getAction();
         $controllerClass = (string) ($request->getRouterData('controller') ?? '');
@@ -124,6 +149,35 @@ class PublicApiAuthRouteMatcher
 
         foreach ($paths as $path) {
             if ($this->matchesPath((string) $path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesWorkerQueryBinRoute(Request $request): bool
+    {
+        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+        if (
+            $controllerClass !== ''
+            && class_exists($controllerClass)
+            && (
+                $controllerClass === \Weline\Framework\Controller\Api\QueryBin::class
+                || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\QueryBin::class)
+            )
+        ) {
+            return true;
+        }
+
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path, self::WORKER_QUERY_BIN_PATH_PATTERNS)) {
                 return true;
             }
         }
@@ -174,6 +228,13 @@ class PublicApiAuthRouteMatcher
     private function matchesPublicFrontendController(string $controllerClass, string $action): bool
     {
         if ($controllerClass === '' || $action === '' || !class_exists($controllerClass)) {
+            return false;
+        }
+
+        if (
+            $controllerClass === \Weline\Framework\Controller\Api\QueryBin::class
+            || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\QueryBin::class)
+        ) {
             return false;
         }
 

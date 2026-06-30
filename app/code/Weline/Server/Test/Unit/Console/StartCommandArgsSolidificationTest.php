@@ -27,6 +27,54 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertTrue((bool)($config['no_ssl'] ?? false));
     }
 
+    public function testStartupCertificateFilesReenableHttpsForReusablePublicHostCertificate(): void
+    {
+        $certDir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-start-cert-' . \str_replace('.', '', \uniqid('', true)) . DIRECTORY_SEPARATOR;
+        \mkdir($certDir, 0777, true);
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+        \file_put_contents($certPath, 'unit-cert');
+        \file_put_contents($keyPath, 'unit-key');
+
+        try {
+            $sslService = $this->createMock(SslCertificateService::class);
+            $sslService->expects($this->once())
+                ->method('getCertificateDir')
+                ->with('pre.example.com')
+                ->willReturn($certDir);
+            $sslService->expects($this->once())
+                ->method('canReuseConfiguredCertificate')
+                ->with($certPath, $keyPath)
+                ->willReturn(true);
+            $sslService->expects($this->once())
+                ->method('certificateMatchesHost')
+                ->with($certPath, 'pre.example.com')
+                ->willReturn(true);
+            $sslService->expects($this->once())
+                ->method('syncCertificateRecordFromFiles')
+                ->with('pre.example.com', $certPath, $keyPath, 0, true, '', false);
+            $sslService->expects($this->once())
+                ->method('regenerateCertificateMap')
+                ->with(false);
+            $sslService->expects($this->once())
+                ->method('parseCertificate')
+                ->with($certPath)
+                ->willReturn(['issuer' => 'Unit CA', 'expires_at' => '2026-12-31 00:00:00']);
+
+            $result = $this->createProbe()->useStartupCertificateFiles($sslService, 'pre.example.com', 'pre.example.com');
+
+            self::assertIsArray($result);
+            self::assertTrue((bool)($result['success'] ?? false));
+            self::assertTrue((bool)($result['ssl_enabled'] ?? false));
+            self::assertSame($certPath, $result['cert_path'] ?? null);
+            self::assertSame($keyPath, $result['key_path'] ?? null);
+        } finally {
+            @\unlink($certPath);
+            @\unlink($keyPath);
+            @\rmdir($certDir);
+        }
+    }
+
     public function testNoDaemonRunsForegroundUnlessRestartRequested(): void
     {
         $start = $this->createProbe();
@@ -205,6 +253,14 @@ final class StartConfigProbe extends Start
     public function resolveListenHost(string $host): string
     {
         return $this->resolveServerListenHost($host);
+    }
+
+    public function useStartupCertificateFiles(
+        SslCertificateService $sslService,
+        string $domain,
+        string $syncDomain
+    ): ?array {
+        return $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
     }
 
     protected function getDefaultHost(): string

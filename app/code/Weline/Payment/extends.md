@@ -1,386 +1,89 @@
 # Weline_Payment 模块扩展文档
 
-## 概述
+## 扩展边界
 
-Weline_Payment 模块提供了支付提供商扩展点，允许其他模块实现自定义支付提供商来接入支付系统。本文档介绍如何开发支付提供商扩展。
+`Weline_Payment` 提供统一支付内核。支付方式通过 `ProviderInterface` 接入，业务对象通过 `PayableResolverInterface` 接入。
 
-## 快速开始
+Provider 模块最小交付物：
 
-### 1. 创建扩展目录
+- `extends/module/Weline_Payment/PaymentProvider/{Provider}.php`
+- checkout phtml，用于前台特殊展示、动态字段或跳转提示
+- `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml`
 
-在您的模块中创建以下目录结构：
+模块只写配置 phtml；scope 选择、继承来源、普通 key/value 保存、校验、审计和缓存失效由 `Weline_SystemConfig` 管理。支付方式复杂对象通过 `Weline_Payment` 的 adapter 和业务表管理。
 
+## Provider
+
+Provider 必须实现 `Weline\Payment\Interface\ProviderInterface`。核心动作包括：
+
+- `checkAvailability(AvailabilityRequest $request)`
+- `createPayment(PaymentRequest $request)`
+- `resumePayment(ResumeRequest $request)`
+- `authorize(AuthorizeRequest $request)`
+- `capture(CaptureRequest $request)`
+- `void(VoidRequest $request)`
+- `refund(RefundRequest $request)`
+- `query(QueryRequest $request)`
+- `verifyCallback(CallbackRequest $request)`
+- `parseCallback(CallbackRequest $request)`
+- `testConnection(TestConnectionRequest $request)`
+
+Provider 不保存全局配置状态，不暴露运行期配置注入方法。运行时配置由请求 DTO 的 context 提供；Provider capability 是硬上限，后台配置只能收窄，不能扩大 Provider 未声明能力。
+
+## PayableResolver
+
+`Weline_Payment` 内置默认 `payment_default`，只用于简单一次性支付。正式业务模块建议提供独立 `payable_type`，例如：
+
+- `weline_order`
+- `weshop_order`
+- `app_market_order`
+- `a2a_trade_order`
+- `a2a_escrow_case`
+
+Resolver 负责解析业务对象、生成金额快照、判断支付和退款权限，并在支付、部分支付、退款、过期、风控审核后通知业务模块处理自己的状态。支付内核不直接发货、发权益、改订单或释放 A2A 托管。
+
+## Config phtml
+
+Provider 配置模板放在：
+
+```text
+app/code/Vendor/Module/extends/module/Weline_SystemConfig/Config/backend/{code}.phtml
 ```
-app/code/Vendor/ModuleName/
-└── extends/
-    └── module/
-        └── Weline_Payment/
-            └── PaymentProvider/
-                └── YourProvider.php
-```
 
-### 2. 实现支付提供商接口
+模板示例：
 
-创建实现 `PaymentProviderInterface` 接口的类：
-
-```php
+```phtml
 <?php
-declare(strict_types=1);
+/**
+ * @meta.title {default="Your Provider",description="Your Provider 配置模板标题"}
+ * @meta.description {default="Configure Your Provider."}
+ * @config.area {backend}
+ * @config.sort {80}
+ * @config.acl {Weline_Payment::payment_method}
+ */
+?>
 
-namespace Vendor\ModuleName\Extends\Weline_Payment\PaymentProvider;
-
-use Weline\Payment\Interface\PaymentProviderInterface;
-use Weline\Payment\Model\PaymentResult;
-
-class YourProvider implements PaymentProviderInterface
-{
-    private array $config = [];
-
-    public function getCode(): string
-    {
-        return 'your_provider';
-    }
-
-    public function getName(): string
-    {
-        return '您的支付提供商';
-    }
-
-    public function getDescription(): string
-    {
-        return '支付提供商描述';
-    }
-
-    public function getIconUrl(): ?string
-    {
-        return '/static/images/payment/your-provider.png';
-    }
-
-    public function createPayment(array $orderData): PaymentResult
-    {
-        try {
-            // 调用支付API创建订单
-            $paymentUrl = $this->callPaymentApi($orderData);
-            
-            return PaymentResult::success([
-                'payment_url' => $paymentUrl,
-                'transaction_no' => $orderData['transaction_no'] ?? '',
-            ]);
-        } catch (\Exception $e) {
-            return PaymentResult::failed($e->getMessage());
-        }
-    }
-
-    public function handleCallback(array $callbackData): PaymentResult
-    {
-        $transactionNo = $callbackData['transaction_no'] ?? '';
-        $status = $callbackData['status'] ?? '';
-        
-        if ($status === 'success') {
-            return PaymentResult::success([
-                'transaction_no' => $transactionNo,
-            ]);
-        }
-        
-        return PaymentResult::failed('支付失败');
-    }
-
-    public function queryPaymentStatus(string $transactionNo): PaymentResult
-    {
-        try {
-            $status = $this->queryStatusFromApi($transactionNo);
-            
-            if ($status === 'success') {
-                return PaymentResult::success([
-                    'transaction_no' => $transactionNo,
-                    'status' => 'success',
-                ]);
-            }
-            
-            return PaymentResult::pending([
-                'transaction_no' => $transactionNo,
-                'status' => $status,
-            ]);
-        } catch (\Exception $e) {
-            return PaymentResult::failed($e->getMessage());
-        }
-    }
-
-    public function refund(string $transactionNo, float $amount, string $reason = ''): PaymentResult
-    {
-        try {
-            $result = $this->callRefundApi($transactionNo, $amount, $reason);
-            
-            if ($result['success']) {
-                return PaymentResult::success([
-                    'refund_no' => $result['refund_no'],
-                ]);
-            }
-            
-            return PaymentResult::failed($result['message'] ?? '退款失败');
-        } catch (\Exception $e) {
-            return PaymentResult::failed($e->getMessage());
-        }
-    }
-
-    public function verifySignature(array $data, string $signature): bool
-    {
-        $signString = $this->buildSignString($data);
-        $calculatedSign = $this->calculateSignature($signString);
-        
-        return $calculatedSign === $signature;
-    }
-
-    public function getConfigFields(): array
-    {
-        return [
-            'app_id' => [
-                'label' => '应用ID',
-                'type' => 'text',
-                'required' => true,
-                'description' => '支付提供商分配的应用ID',
-            ],
-            'app_secret' => [
-                'label' => '应用密钥',
-                'type' => 'password',
-                'required' => true,
-                'description' => '支付提供商分配的应用密钥',
-            ],
-        ];
-    }
-
-    public function setConfig(array $config): void
-    {
-        $this->config = $config;
-    }
-
-    public function getConfig(): array
-    {
-        return $this->config;
-    }
-
-    public function supportsCurrency(string $currency): bool
-    {
-        return in_array($currency, ['CNY', 'USD', 'EUR']);
-    }
-
-    public function supportsAmount(float $amount): bool
-    {
-        return $amount >= 0.01 && $amount <= 100000.00;
-    }
-
-    public function getSupportedDiscountActions(): ?array
-    {
-        return ['discount_fixed_amount', 'discount_percentage'];
-    }
-
-    public function supportsDiscountAction(string $actionCode): bool
-    {
-        $supported = $this->getSupportedDiscountActions();
-        if ($supported === null) {
-            return false;
-        }
-        if (empty($supported)) {
-            return true;
-        }
-        return in_array($actionCode, $supported, true);
-    }
-
-    // 私有辅助方法
-    private function callPaymentApi(array $orderData): string
-    {
-        // 实现支付API调用
-        return '';
-    }
-
-    private function queryStatusFromApi(string $transactionNo): string
-    {
-        // 实现状态查询
-        return '';
-    }
-
-    private function callRefundApi(string $transactionNo, float $amount, string $reason): array
-    {
-        // 实现退款API调用
-        return [];
-    }
-
-    private function buildSignString(array $data): string
-    {
-        // 实现签名字符串构建
-        return '';
-    }
-
-    private function calculateSignature(string $signString): string
-    {
-        // 实现签名计算
-        return '';
-    }
-}
+<w:config:group code="your_provider" label="Your Provider" sort="10">
+    <w:config:field key="payment/method/your_provider/enabled" type="switch" value-type="bool" default="0" scope="global,website,store" label="启用" />
+    <w:config:field key="payment/method/your_provider/api_key" type="secret" value-type="encrypted" scope="global,website,store" required="true" label="API Key" />
+</w:config:group>
 ```
 
-### 3. 注册模块
+普通字段 key 必须使用 `payment/method/{method_code}/{field}` 前缀；运行时配置由 `Weline_SystemConfig` 解析 scope 后交给 `Weline_Payment`，Provider 模块不自己保存普通配置。
 
-确保您的模块已正确注册，并且依赖 `Weline_Payment` 模块。
+特殊授权页、回调辅助页、Provider SDK 封装、外部 API 差异由 Provider 模块自己的 controller 或 adapter 承担，最终支付状态必须回写 `Weline_Payment`。
 
-### 4. 运行升级
+## 资产支付与折扣
 
-运行以下命令来扫描和注册支付提供商：
+- 信用、积分、W币默认不启用。
+- 同一资产在同一 Payable 上只能作为 `payment` 或 `discount` 一种角色。
+- 资产动作按 `reserve -> commit -> release/refund` 处理。
+- 金额使用 `amount_minor` 整数最小单位。
 
-```bash
-php bin/w setup:upgrade
-```
+## 验证
 
-## 详细说明
-
-### PaymentProvider 扩展点
-
-**路径**: `extends/module/Weline_Payment/PaymentProvider`
-
-**接口**: `Weline\Payment\Interface\PaymentProviderInterface`
-
-**用途**: 扩展支付提供商，允许其他支付供应商开发支付模块，实现此接口来接入支付系统。
-
-**要求**:
-- 必须实现 `PaymentProviderInterface` 接口
-- 必须实现所有接口方法
-- 允许多个实现
-
-#### 核心方法说明
-
-- **createPayment()**: 创建支付订单，返回支付URL或表单
-- **handleCallback()**: 处理支付回调，验证签名并更新订单状态
-- **queryPaymentStatus()**: 查询支付状态
-- **refund()**: 处理退款
-- **verifySignature()**: 验证签名，确保回调安全性
-
-## 配置字段类型
-
-### text
-
-文本输入框
-
-```php
-'app_id' => [
-    'label' => '应用ID',
-    'type' => 'text',
-    'required' => true,
-    'default' => '',
-    'description' => '字段说明',
-]
-```
-
-### password
-
-密码输入框
-
-```php
-'app_secret' => [
-    'label' => '应用密钥',
-    'type' => 'password',
-    'required' => true,
-]
-```
-
-### select
-
-下拉选择框
-
-```php
-'environment' => [
-    'label' => '环境',
-    'type' => 'select',
-    'required' => true,
-    'options' => [
-        'sandbox' => '沙箱环境',
-        'production' => '生产环境',
-    ],
-    'default' => 'sandbox',
-]
-```
-
-## 支付结果处理
-
-### 创建支付订单
-
-```php
-return PaymentResult::success([
-    'payment_url' => 'https://payment.example.com/pay?order_id=xxx', // 跳转URL
-    'payment_form' => '<form>...</form>', // 支付表单HTML
-    'qr_code' => 'https://payment.example.com/qr.png', // 二维码URL
-    'transaction_no' => 'PAY123456789', // 交易号
-]);
-```
-
-### 处理回调
-
-```php
-public function handleCallback(array $callbackData): PaymentResult
-{
-    // 验证签名
-    if (!$this->verifySignature($callbackData, $callbackData['signature'])) {
-        return PaymentResult::failed('签名验证失败');
-    }
-
-    // 处理成功
-    return PaymentResult::success([
-        'transaction_no' => $callbackData['transaction_no'],
-    ]);
-}
-```
-
-## 优惠方式支持
-
-支付提供商可以实现 `getSupportedDiscountActions()` 方法来声明支持的优惠方式：
-
-```php
-public function getSupportedDiscountActions(): ?array
-{
-    // 声明支持的优惠方式
-    return ['discount_fixed_amount', 'discount_percentage', 'free_shipping'];
-    
-    // 支持所有优惠方式
-    // return [];
-    
-    // 不支持任何优惠方式
-    // return null;
-}
-```
-
-## 最佳实践
-
-1. **安全性**: 始终验证签名，确保回调数据的安全性
-2. **错误处理**: 妥善处理异常情况，返回明确的错误信息
-3. **日志记录**: 记录重要的支付、退款操作日志，便于问题排查
-4. **配置验证**: 在创建支付前验证配置是否完整
-5. **金额验证**: 验证支付金额是否在支持范围内
-6. **货币支持**: 检查货币是否支持
-
-## 常见问题
-
-### Q: 支付提供商没有被扫描到？
-
-A: 请确认：
-1. 类实现了 `PaymentProviderInterface` 接口
-2. 文件位于 `extends/module/Weline_Payment/PaymentProvider/` 目录
-3. 文件正确声明了命名空间
-4. 运行了 `setup:upgrade` 命令
-
-### Q: 如何测试支付提供商？
-
-A: 建议：
-1. 使用沙箱环境进行测试
-2. 在配置中添加 `is_sandbox` 选项
-3. 使用测试账号和测试金额
-
-### Q: 如何处理异步回调？
-
-A: 在 `handleCallback()` 方法中处理异步回调，确保：
-1. 验证签名
-2. 更新交易状态
-3. 触发相关事件
-4. 返回正确的响应
-
-## 相关文档
-
-详细开发指南请参考：`doc/extends.md`
+- Provider 文件 `php -l` 通过。
+- Config phtml `php -l` 通过。
+- Provider scanner 能发现支付方式。
+- 后台连接测试能调用 `testConnection()`。
+- fake checkout 能展示可用支付方式、不可用原因和条款交互。

@@ -15,7 +15,5 @@ Register::register(
     __DIR__,
     '1.0.0',
     '<a href="https://bbs.aiweline.com">前端模块</a>',
-    [
-        'Weline_Theme'
-    ]
+    []
 );

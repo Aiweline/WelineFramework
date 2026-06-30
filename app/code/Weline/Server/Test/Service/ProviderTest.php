@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Provider\DispatcherProvider;
 use Weline\Server\Service\Provider\HttpRedirectProvider;
+use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 
@@ -29,7 +30,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: true,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 4,
@@ -72,6 +73,41 @@ class ProviderTest extends TestCase
         $this->assertStringStartsWith('weline-wls-worker-test-instance', $command->getProcessName());
         $this->assertContains('--wls-loop-driver=event', $command->arguments);
         $this->assertContains('--memory-limit=512M', $command->arguments);
+        $this->assertContains('--worker-count=4', $command->arguments);
+    }
+
+    public function testLinuxDirectSslWorkerBuildCommandUsesDeferredSsl(): void
+    {
+        $provider = new WorkerProvider();
+        $context = new ServiceContext(
+            instanceName: 'direct-instance',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '0.0.0.0',
+            mainPort: 9981,
+            sslEnabled: true,
+            sslCert: '/path/to/cert.pem',
+            sslKey: '/path/to/key.pem',
+            mode: 'linux-direct',
+            daemon: false,
+            debug: true,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 4,
+                    'worker_base_port' => 10443,
+                ],
+            ],
+        );
+
+        $command = $provider->buildCommand(1, $context);
+
+        $this->assertStringContainsString('worker_ssl.php', $command->script);
+        $this->assertContains('0.0.0.0', $command->arguments);
+        $this->assertContains('9981', $command->arguments);
+        $this->assertContains('--reuseport', $command->arguments);
+        $this->assertContains('--defer-ssl', $command->arguments);
     }
 
     public function testWorkerProviderPort(): void
@@ -100,7 +136,7 @@ class ProviderTest extends TestCase
         $command = $provider->buildCommand(0, $this->context);
 
         $this->assertStringContainsString('dispatcher.php', $command->script);
-        $this->assertContains('127.0.0.1', $command->arguments);
+        $this->assertContains('0.0.0.0', $command->arguments);
         $this->assertContains('443', $command->arguments);
         $this->assertContains('10443', $command->arguments);
         $this->assertContains('4', $command->arguments);
@@ -152,7 +188,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: true,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'session' => [
@@ -183,7 +219,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 1,
@@ -210,7 +246,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: true,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [
                 'wls' => [
                     'worker_count' => 1,
@@ -222,6 +258,51 @@ class ProviderTest extends TestCase
         );
 
         $this->assertFalse($provider->isEnabled($context));
+    }
+
+    public function testSharedRuntimeDisablesLocalSessionAndMemoryProviders(): void
+    {
+        $context = new ServiceContext(
+            instanceName: 'shared-consumer',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'multi',
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 2,
+                    'shared_state' => [
+                        'runtime' => [
+                            'session' => [
+                                'host' => '127.0.0.1',
+                                'port' => 26422,
+                                'token_file_name' => 'session_server.token',
+                                'shared_service' => true,
+                                'reuse_existing' => true,
+                            ],
+                            'memory' => [
+                                'host' => '127.0.0.1',
+                                'port' => 26423,
+                                'token_file_name' => 'memory_server.token',
+                                'shared_service' => true,
+                                'created_now' => true,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $this->assertFalse((new SessionServerProvider())->isEnabled($context));
+        $this->assertFalse((new MemoryServerProvider())->isEnabled($context));
     }
 
     public function testHttpRedirectProviderBasic(): void
@@ -261,7 +342,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             httpRedirectPort: 0,
         );
@@ -284,7 +365,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
             httpRedirectPort: 9080,
         );
@@ -311,7 +392,7 @@ class ProviderTest extends TestCase
             mode: 'multi',
             daemon: false,
             debug: false,
-            frontend: false,
+            windowMode: false,
             envConfig: [],
         );
 

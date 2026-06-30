@@ -309,7 +309,7 @@
                         <strong>🔷 <?= __('我们的验证器') ?></strong>
                         <small><?= __('完全自主开发') ?></small>
                         <br>
-                        <a href="javascript:void(0)" onclick="showAuthenticatorAppModal()" style="font-size: 12px; color: #007bff; cursor: pointer;"><?= __('打开应用') ?></a>
+                        <button type="button" data-twofa-action="show-authenticator-app-modal" style="font-size: 12px; color: #007bff; cursor: pointer; background: none; border: none; padding: 0;"><?= __('打开应用') ?></button>
                     </div>
                     <div class="app-option">
                         <strong>🔴 <?= __('Google Authenticator') ?></strong>
@@ -355,10 +355,10 @@
                 
                 <div class="secret-box">
                     <p style="color: #666; margin-bottom: 10px;"><?= __('点击密钥可复制') ?></p>
-                    <div class="secret-text" onclick="copySecret()" id="secretText">
+                    <div class="secret-text" id="secretText" data-twofa-action="copy-secret" role="button" tabindex="0">
                         <?= $formatted_secret ?>
                     </div>
-                    <button class="copy-btn" onclick="copySecret()">📋 <?= __('复制密钥') ?></button>
+                    <button class="copy-btn" type="button" data-twofa-action="copy-secret">📋 <?= __('复制密钥') ?></button>
                 </div>
             </div>
 
@@ -376,10 +376,10 @@
                 </div>
                 
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button class="copy-btn" onclick="copyBackupCodes()">
+                    <button class="copy-btn" type="button" data-twofa-action="copy-backup-codes">
                         📋 <?= __('复制所有备份码') ?>
                     </button>
-                    <button class="copy-btn" onclick="downloadBackupCodes()" style="background: #28a745;">
+                    <button class="copy-btn" type="button" data-twofa-action="download-backup-codes" style="background: #28a745;">
                         💾 <?= __('下载保存') ?>
                     </button>
                 </div>
@@ -410,7 +410,7 @@
                 
                 <div>
                     <a href="/two-factor-auth/frontend" class="btn btn-secondary"><?= __('取消') ?></a>
-                    <button class="btn btn-primary" onclick="enableTwoFactor()"><?= __('确认启用') ?></button>
+                    <button class="btn btn-primary" type="button" data-twofa-action="enable-two-factor"><?= __('确认启用') ?></button>
                 </div>
             </div>
         </div>
@@ -424,6 +424,37 @@
     <!-- SweetAlert2 JS -->
     <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
+        document.addEventListener('click', function(e) {
+            const trigger = e.target.closest('[data-twofa-action]');
+            if (!trigger) {
+                return;
+            }
+
+            const action = trigger.getAttribute('data-twofa-action');
+            if (action === 'copy-secret') {
+                copySecret();
+            } else if (action === 'copy-backup-codes') {
+                copyBackupCodes();
+            } else if (action === 'download-backup-codes') {
+                downloadBackupCodes();
+            } else if (action === 'enable-two-factor') {
+                enableTwoFactor();
+            } else if (action === 'show-authenticator-app-modal') {
+                showAuthenticatorAppModal();
+            } else if (action === 'close-authenticator-app-modal') {
+                closeAuthenticatorAppModal();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            const trigger = e.target.closest('[data-twofa-action]');
+            if (!trigger || (e.key !== 'Enter' && e.key !== ' ')) {
+                return;
+            }
+            e.preventDefault();
+            trigger.click();
+        });
+
         // 复制密钥
         function copySecret() {
             const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
@@ -656,10 +687,10 @@
                     </div>
                     ${installInstructions}
                     <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
-                        <button onclick="closeAuthenticatorAppModal()" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
+                        <button type="button" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
                             <?= __('取消') ?>
                         </button>
-                        <a href="/twofa-app/" target="_blank" onclick="closeAuthenticatorAppModal()" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
+                        <a href="/twofa-app/" target="_blank" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
                             <?= __('打开验证器') ?>
                         </a>
                     </div>

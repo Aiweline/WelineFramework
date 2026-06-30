@@ -10,6 +10,64 @@ namespace Weline\ElFinderFileManager\Service;
  */
 class ConnectorOptionsBuilder
 {
+    private const SAFE_UPLOAD_MIMES = [
+        'image/bmp',
+        'image/gif',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/x-icon',
+        'text/plain',
+    ];
+
+    private const DENIED_EXTENSIONS = [
+        'asp',
+        'aspx',
+        'bat',
+        'cgi',
+        'cmd',
+        'com',
+        'css',
+        'exe',
+        'hta',
+        'htm',
+        'html',
+        'js',
+        'jsp',
+        'phtml',
+        'phar',
+        'php',
+        'php3',
+        'php4',
+        'php5',
+        'php7',
+        'php8',
+        'pl',
+        'ps1',
+        'py',
+        'shtml',
+        'sh',
+        'svg',
+        'svgz',
+        'xht',
+        'xhtml',
+        'xml',
+    ];
+
+    private const DISABLED_COMMANDS = [
+        'archive',
+        'chmod',
+        'edit',
+        'editor',
+        'extract',
+        'mkfile',
+        'netmount',
+        'put',
+        'resize',
+        'url',
+        'zipdl',
+    ];
+
     /**
      * 构建 elFinder 的 $opts 数组。
      *
@@ -28,6 +86,7 @@ class ConnectorOptionsBuilder
         string $local = ''
     ): array {
         $startPath = $this->normalizeStartPath($startPath);
+        $mimes = $this->filterAllowedMimes($mimes);
         $this->ensureVolumeDirs($rootPath);
 
         $accessControl = function ($attr, $path, $data, $volume, $isDir, $relpath) {
@@ -53,6 +112,9 @@ class ConnectorOptionsBuilder
                     'uploadDeny' => ['all'],
                     'uploadAllow' => $mimes,
                     'uploadOrder' => ['deny', 'allow'],
+                    'disabled' => self::DISABLED_COMMANDS,
+                    'copyOverwrite' => false,
+                    'acceptedName' => [$this, 'isAcceptedName'],
                     'accessControl' => $accessControl,
                 ],
             ],
@@ -71,7 +133,72 @@ class ConnectorOptionsBuilder
         if ($startPath === '' || $startPath === null || $startPath === 'undefined') {
             return null;
         }
+
+        $startPath = str_replace('\\', '/', trim($startPath));
+        if ($startPath === '' || str_contains($startPath, "\0") || str_starts_with($startPath, '/')) {
+            return null;
+        }
+
+        foreach (explode('/', $startPath) as $segment) {
+            if ($segment === '..' || $segment === '.') {
+                return null;
+            }
+        }
+
         return $startPath;
+    }
+
+    public function isAcceptedName(string $name): bool
+    {
+        $name = trim($name);
+        if ($name === '' || str_contains($name, "\0") || str_contains($name, '/') || str_contains($name, '\\')) {
+            return false;
+        }
+
+        if ($name[0] === '.' || !preg_match('/^[^\\/:*?"<>|]+$/', $name)) {
+            return false;
+        }
+
+        $segments = explode('.', strtolower($name));
+        array_shift($segments);
+        foreach ($segments as $extension) {
+            if (in_array($extension, self::DENIED_EXTENSIONS, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function isDisabledCommand(string $command): bool
+    {
+        return in_array($command, self::DISABLED_COMMANDS, true);
+    }
+
+    private function filterAllowedMimes(array $mimes): array
+    {
+        $allowed = [];
+        foreach ($mimes as $mime) {
+            $mime = strtolower(trim((string)$mime));
+            if ($mime === '' || $mime === 'image/svg+xml') {
+                continue;
+            }
+
+            if ($mime === 'image') {
+                foreach (self::SAFE_UPLOAD_MIMES as $safeMime) {
+                    if (str_starts_with($safeMime, 'image/')) {
+                        $allowed[] = $safeMime;
+                    }
+                }
+                continue;
+            }
+
+            if (in_array($mime, self::SAFE_UPLOAD_MIMES, true)) {
+                $allowed[] = $mime;
+            }
+        }
+
+        return $allowed ? array_values(array_unique($allowed)) : self::SAFE_UPLOAD_MIMES;
     }
 
     private function ensureVolumeDirs(string $rootPath): void

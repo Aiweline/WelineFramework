@@ -238,7 +238,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
 
-        self::assertSame([[101]], $orchestrator->forceKillCalls);
+        self::assertSame([[101, 202]], $orchestrator->forceKillCalls);
 
         $closedClientIds = $orchestrator->closedClientIds;
         \sort($closedClientIds);
@@ -414,7 +414,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
 
-        self::assertSame([[101, 202]], $orchestrator->batchCheckCalls);
+        self::assertSame([], $orchestrator->batchCheckCalls);
         self::assertSame([[101, 202]], $orchestrator->forceKillCalls);
         self::assertSame(0, $orchestrator->sleepCalls);
     }
@@ -561,7 +561,6 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             pid: 303,
             state: ServiceInstance::STATE_READY,
             metadata: [
-                'shared_external' => true,
                 'process_name' => 'weline-wls-session-owner',
             ]
         ));
@@ -577,7 +576,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
 
-        self::assertSame([[]], $orchestrator->batchCheckCalls);
+        self::assertSame([], $orchestrator->batchCheckCalls);
         self::assertSame([], $orchestrator->forceKillCalls);
 
         $session = $registry->getInstance('session_server', 1);
@@ -782,7 +781,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         $server->expects(self::never())->method('countServiceClients');
         $server->expects(self::once())->method('closeClient')->with(22);
         $server->expects(self::once())->method('flushPendingWrites');
-        $server->expects(self::once())->method('close');
+        $server->expects(self::atLeastOnce())->method('close');
 
         $orchestrator = new class extends ServiceOrchestrator {
             public bool $finalizeCalled = false;

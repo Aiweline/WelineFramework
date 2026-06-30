@@ -12,7 +12,7 @@
  *   Weline.declare('account', true); // 声明并立即加载
  *   Weline.declare('search', true, 'path', null, { loadOrder: 'last' }); // 声明并延迟立即加载（DOMContentLoaded后）
  *   Weline.load('api'); // 立即加载模块
- *   Weline.Api.request(url, options); // 使用模块（自动按需加载）
+ *   const CartApi = await Weline.Api.resource('cart'); // 通过 worker 调用站内前端 API
  *   Weline.Theme.switch('dark'); // 主题切换
  * 
  * 延迟立即加载：
@@ -38,9 +38,18 @@
         baseUrl: window.location.origin,
         currentLang: 'zh_Hans_CN',
         currentCurrency: 'CNY',
+        defaultLang: 'zh_Hans_CN',
+        defaultCurrency: 'CNY',
+        availableCurrencies: [],
+        htmlDir: 'ltr',
+        textDirection: 'ltr',
+        isRtl: false,
         debug: false,
         modulesBaseUrl: '',
         modulesConfigUrl: '',
+        allowedRemoteModuleOrigins: [],
+        allowDevRemoteModuleScripts: false,
+        assetVersion: 'dev',
         modulesConfig: null,
         api: {},
         account: {},
@@ -54,6 +63,77 @@
     };
 
     const runtimeConfig = {};
+
+    function isSafeCssVariableName(varName) {
+        return typeof varName === 'string' && /^--[A-Za-z0-9_-]+$/.test(varName.trim());
+    }
+
+    function isSafeCssVariableValue(value) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return false;
+        }
+
+        const normalizedValue = String(value).trim();
+        if (!normalizedValue || normalizedValue.length > 1024) {
+            return false;
+        }
+
+        if (/[\x00-\x1F\x7F]/.test(normalizedValue)) {
+            return false;
+        }
+
+        if (/[;{}<>\\]/.test(normalizedValue)) {
+            return false;
+        }
+
+        return !(/\/\*|\*\/|@import\b|url\s*\(|expression\s*\(|javascript\s*:|data\s*:/i.test(normalizedValue));
+    }
+
+    function getAllowedRemoteModuleOrigins() {
+        const origins = runtimeConfig.allowedRemoteModuleOrigins || runtimeConfig.remoteModuleScriptOrigins || [];
+        const list = Array.isArray(origins) ? origins : [origins];
+        return list
+            .map(origin => {
+                try {
+                    return new URL(String(origin), window.location.href).origin;
+                } catch (error) {
+                    return '';
+                }
+            })
+            .filter(Boolean);
+    }
+
+    function normalizeModuleScriptUrl(url) {
+        if (typeof url !== 'string' || !url.trim()) {
+            return '';
+        }
+
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(url.trim(), window.location.href);
+        } catch (error) {
+            return '';
+        }
+
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return '';
+        }
+
+        if (parsedUrl.origin === window.location.origin) {
+            return parsedUrl.href;
+        }
+
+        const allowedOrigins = getAllowedRemoteModuleOrigins();
+        if (allowedOrigins.includes(parsedUrl.origin)) {
+            return parsedUrl.href;
+        }
+
+        if (isDev && runtimeConfig.allowDevRemoteModuleScripts === true) {
+            return parsedUrl.href;
+        }
+
+        return '';
+    }
 
     function deepMerge(target, source) {
         if (!source || typeof source !== 'object') {
@@ -113,14 +193,19 @@
             applyEnv(config);
         }
         deepMerge(runtimeConfig, config);
+        applyTextDirection(runtimeConfig);
     }
 
     deepMerge(runtimeConfig, defaultConfig);
     mergeConfig(consumeBootstrapConfig());
 
+    const canonicalUrlLocalStorageKeys = {
+        currency: 'weline_user_currency',
+        locale: 'weline_user_lang'
+    };
     const urlLocalStorageKeys = {
-        currency: ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'],
-        locale: ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG']
+        currency: [canonicalUrlLocalStorageKeys.currency, 'api_doc_currency', 'WELINE_USER_CURRENCY'],
+        locale: [canonicalUrlLocalStorageKeys.locale, 'api_doc_locale', 'WELINE_USER_LANG']
     };
 
     const localePattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/;
@@ -133,8 +218,67 @@
         }
     }
 
-    function isValidCurrency(value) {
-        return /^[A-Z]{3}$/.test((value || '').toUpperCase());
+    function readCookieValue(key) {
+        if (!key) {
+            return '';
+        }
+        if (typeof window.getCookie === 'function') {
+            const value = window.getCookie(key);
+            if (value) {
+                return value;
+            }
+        }
+        const match = document.cookie.match('(?:^|; )' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
+        return match ? decodeURIComponent(match[1]) : '';
+    }
+
+    function writeCookieValue(key, value, expiry = 365, options = {}) {
+        if (!key) {
+            return;
+        }
+        const normalizedOptions = Object.assign({ path: '/' }, options || {});
+        if (typeof window.setCookie === 'function') {
+            window.setCookie(key, value, expiry, normalizedOptions);
+            return;
+        }
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+        Object.keys(normalizedOptions).forEach((optionKey) => {
+            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        });
+        document.cookie = cookieString;
+    }
+
+    function writeCanonicalLocalStorage(type, value) {
+        const canonicalKey = canonicalUrlLocalStorageKeys[type];
+        const keys = urlLocalStorageKeys[type] || [];
+        if (!canonicalKey || value === undefined || value === null) {
+            return;
+        }
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            localStorage.setItem(canonicalKey, value);
+            keys.forEach((key) => {
+                if (key && key !== canonicalKey) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+    }
+
+    function writeLanguagePreference(lang, expiry = 365) {
+        writeCanonicalLocalStorage('locale', lang);
+        writeCookieValue('WELINE_USER_LANG', lang, expiry);
+    }
+
+    function writeCurrencyPreference(currency, expiry = 365) {
+        writeCanonicalLocalStorage('currency', currency);
+        writeCookieValue('WELINE_USER_CURRENCY', currency, expiry);
     }
 
     function isValidLocale(value) {
@@ -146,6 +290,146 @@
             return '';
         }
         return value.replace(/^\/+|\/+$/g, '');
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(item => addSupportedCurrencyCode(codes, item));
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(key => {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(code => addSupportedCurrencyCode(codes, code));
+    }
+
+    function getSupportedCurrencyCodes(config = runtimeConfig) {
+        const codes = Object.create(null);
+        const site = window.site || {};
+        [
+            config.availableCurrencies,
+            config.supportedCurrencies,
+            config.currencyCodes,
+            config.currencies,
+            config.site && config.site.availableCurrencies,
+            config.site && config.site.supportedCurrencies,
+            config.site && config.site.currencyCodes,
+            config.site && config.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(source => collectSupportedCurrencyCodes(codes, source));
+
+        document.querySelectorAll('[data-currency-switcher] [data-currency], [data-currency-switcher] [data-currency-option], [data-currency-switcher] .currency-option').forEach(option => {
+            addSupportedCurrencyCode(codes, option.getAttribute('data-currency') || option.getAttribute('data-currency-option') || option.dataset.currency);
+        });
+
+        addSupportedCurrencyCode(codes, config.defaultCurrency || (config.site && (config.site.defaultCurrency || config.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isValidCurrency(value, config = runtimeConfig) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes(config)[code];
+    }
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function normalizeTextDirection(value) {
+        return String(value || '').toLowerCase() === 'rtl' ? 'rtl' : 'ltr';
+    }
+
+    function applyTextDirection(config = runtimeConfig) {
+        const direction = normalizeTextDirection(config.htmlDir || config.textDirection || config.i18n?.direction);
+        const root = document.documentElement;
+        root.setAttribute('dir', direction);
+        root.setAttribute('data-dir', direction);
+        root.classList.toggle('is-rtl', direction === 'rtl');
+        root.classList.toggle('is-ltr', direction !== 'rtl');
+        runtimeConfig.htmlDir = direction;
+        runtimeConfig.textDirection = direction;
+        runtimeConfig.isRtl = direction === 'rtl';
+        if (!runtimeConfig.i18n || typeof runtimeConfig.i18n !== 'object') {
+            runtimeConfig.i18n = {};
+        }
+        runtimeConfig.i18n.direction = direction;
+    }
+
+    function sameLang(a, b) {
+        const left = normalizeLangCode(a).toLowerCase();
+        const right = normalizeLangCode(b).toLowerCase();
+        return left !== '' && right !== '' && left === right;
+    }
+
+    function resolveDefaultCurrency(config = runtimeConfig) {
+        return normalizeCurrencyCode(config.defaultCurrency || config.site?.defaultCurrency || config.site?.default_currency || 'CNY');
+    }
+
+    function resolveDefaultLang(config = runtimeConfig) {
+        return normalizeLangCode(config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN');
+    }
+
+    function shouldOutputCurrency(currency, config = runtimeConfig) {
+        currency = normalizeCurrencyCode(currency);
+        return isValidCurrency(currency, config) && currency !== resolveDefaultCurrency(config);
+    }
+
+    function shouldOutputLang(lang, config = runtimeConfig) {
+        lang = normalizeLangCode(lang);
+        return lang !== '' && !sameLang(lang, resolveDefaultLang(config));
+    }
+
+    function buildLocalizedFrontendPath(pathOnly, currency, lang) {
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
+        const config = window.__WelineThemeConfig || runtimeConfig || {};
+        const filteredParts = pathParts.filter(part => !isValidCurrency(part, config) && !langPattern.test(part));
+        const outputParts = [];
+        const targetCurrency = normalizeCurrencyCode(currency);
+        const targetLang = normalizeLangCode(lang);
+
+        if (shouldOutputCurrency(targetCurrency, config)) {
+            outputParts.push(targetCurrency);
+        }
+        if (shouldOutputLang(targetLang, config)) {
+            outputParts.push(targetLang);
+        }
+        if (filteredParts.length > 0) {
+            outputParts.push(...filteredParts);
+        }
+
+        return '/' + outputParts.join('/');
     }
 
     function getUrlConfig() {
@@ -364,9 +648,9 @@
          * @returns {string} 实际URL
          */
         static resolve(modulePath) {
-            // 已经是完整URL，直接返回
+            // 完整 URL 只做规范化；真正加载前会统一校验 same-origin / 白名单。
             if (modulePath.startsWith('http://') || modulePath.startsWith('https://')) {
-                return modulePath;
+                return normalizeModuleScriptUrl(modulePath);
             }
 
             // 已经是绝对路径，直接返回
@@ -478,7 +762,17 @@
                 // 异步加载模块配置文件（不阻塞）
                 const script = document.createElement('script');
                 // 自动获取模块配置 URL
-                const modulesConfigUrl = this.getModulesConfigUrl();
+                const modulesConfigUrl = normalizeModuleScriptUrl(this.getModulesConfigUrl());
+                if (!modulesConfigUrl) {
+                    this.config = { modules: {}, moduleAliases: {} };
+                    this.loaded = true;
+                    this.loading = null;
+                    if (isDev) {
+                        console.warn('[Weline] 模块配置脚本被拒绝：仅允许相对路径、同源 URL 或显式白名单远程源');
+                    }
+                    resolve(this.config);
+                    return;
+                }
                 script.src = modulesConfigUrl;
                 script.async = true; // 异步加载，不阻塞
 
@@ -550,16 +844,45 @@
             throw new Error('[Weline.ModuleLoader] modulesBaseUrl 未配置，请在 Frontend 模块的 head 模板中配置 modulesBaseUrl');
         }
 
-        loadScript(url) {
+        getDevAssetVersion() {
+            return encodeURIComponent(String(
+                runtimeConfig.assetVersion ||
+                runtimeConfig.deployVersion ||
+                runtimeConfig.deploy_version ||
+                'dev'
+            ));
+        }
+
+        getScriptUrl(url) {
+            if (!isDev) {
+                return url;
+            }
+            if (url.indexOf('_weline_dev=') !== -1) {
+                return url;
+            }
+            const separator = url.indexOf('?') === -1 ? '?' : '&';
+            return `${url}${separator}_weline_dev=${this.getDevAssetVersion()}`;
+        }
+
+        loadScript(url, forceFresh = false) {
             return new Promise((resolve, reject) => {
-                const existingScript = document.querySelector(`script[src="${url}"]`);
-                if (existingScript) {
+                const safeUrl = normalizeModuleScriptUrl(url);
+                if (!safeUrl) {
+                    reject(new Error(`[Weline] 脚本加载被拒绝: ${url}`));
+                    return;
+                }
+
+                const scriptUrl = this.getScriptUrl(safeUrl);
+                const existingScript = Array.prototype.some.call(document.scripts, function (script) {
+                    return script.src === safeUrl || script.src === scriptUrl;
+                });
+                if (existingScript && !forceFresh) {
                     resolve();
                     return;
                 }
 
                 const script = document.createElement('script');
-                script.src = url;
+                script.src = scriptUrl;
                 script.async = true;
                 script.crossOrigin = 'anonymous';
 
@@ -570,7 +893,21 @@
             });
         }
 
-        async loadWithFallback(paths, globalVarName = null) {
+        isGlobalModuleReady(globalVarName, requireFullGlobal = false) {
+            if (!globalVarName || !window[globalVarName]) {
+                return false;
+            }
+            if (requireFullGlobal && window[globalVarName].__full !== true) {
+                return false;
+            }
+            if (requireFullGlobal && globalVarName === 'WelineApiModule') {
+                const requiredMethods = ['request', 'get', 'post', 'call', 'graph', 'stream', 'resource'];
+                return requiredMethods.every(method => typeof window[globalVarName][method] === 'function');
+            }
+            return true;
+        }
+
+        async loadWithFallback(paths, globalVarName = null, requireFullGlobal = false) {
             if (!paths || paths.length === 0) {
                 throw new Error('[Weline] 没有可用的路径');
             }
@@ -578,10 +915,11 @@
             let lastError = null;
             for (const path of paths) {
                 try {
-                    await this.loadScript(path);
+                    const forceFresh = !!(globalVarName && window[globalVarName] && !this.isGlobalModuleReady(globalVarName, requireFullGlobal));
+                    await this.loadScript(path, forceFresh);
                     if (globalVarName) {
                         await new Promise(resolve => setTimeout(resolve, 50));
-                        if (window[globalVarName]) {
+                        if (this.isGlobalModuleReady(globalVarName, requireFullGlobal)) {
                             return;
                         }
                     } else {
@@ -637,21 +975,29 @@
                         globalVarName = moduleConfig?.globalVar || this.getGlobalVarName(moduleName);
                     }
 
+                    const requiresFullGlobal = globalVarName === 'WelineApiModule'
+                        || globalVarName === 'WelineAccountModule'
+                        || globalVarName === 'WelineTokenStorage';
+
                     // 检查是否已加载
-                    if (globalVarName && window[globalVarName] && window[globalVarName].__full !== false) {
-                        const module = window[globalVarName];
+                    const existingModule = globalVarName ? window[globalVarName] : null;
+                    const isLoaderProxy = globalVarName
+                        && typeof moduleDeclarer !== 'undefined'
+                        && moduleDeclarer.isProxyGlobal(globalVarName, existingModule);
+                    if (globalVarName && existingModule && !isLoaderProxy && (!requiresFullGlobal || existingModule.__full === true)) {
+                        const module = existingModule;
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
                         return module;
                     }
 
                     // 加载脚本
-                    await this.loadWithFallback(paths, globalVarName);
+                    await this.loadWithFallback(paths, globalVarName, requiresFullGlobal);
 
                     // 验证加载结果
                     if (globalVarName) {
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        if (window[globalVarName]) {
+                        if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                             const module = window[globalVarName];
                             this.loadedModules.set(moduleName, module);
                             this.loadingModules.delete(moduleName);
@@ -721,6 +1067,7 @@
         constructor() {
             this.declaredModules = new Map();
             this.proxies = new Map();
+            this.proxyGlobals = new Map();
         }
 
         /**
@@ -781,19 +1128,27 @@
 
             let loadingPromise = null;
             let loaded = false;
+            const getRealGlobal = () => {
+                const value = window[globalVarName];
+                return value === proxy ? null : value;
+            };
 
             const proxy = new Proxy({}, {
                 get: (target, prop) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'object' && window[globalVarName] !== null) {
-                        const realObj = window[globalVarName];
+                    const realObj = getRealGlobal();
+                    if (realObj && typeof realObj === 'object') {
                         if (realObj && typeof realObj[prop] !== 'undefined') {
                             return realObj[prop];
                         }
                     }
 
+                    if (prop === '__full') {
+                        return false;
+                    }
+
                     if (loadingPromise) {
                         return loadingPromise.then(() => {
-                            const realObj = window[globalVarName];
+                            const realObj = getRealGlobal();
                             return realObj ? realObj[prop] : undefined;
                         });
                     }
@@ -804,7 +1159,7 @@
 
                     loadingPromise = this.loadOnDemand(moduleName).then(() => {
                         loaded = true;
-                        const realObj = window[globalVarName];
+                        const realObj = getRealGlobal();
                         if (realObj) {
                             Object.assign(target, realObj);
                             return realObj[prop];
@@ -821,43 +1176,50 @@
                     return loadingPromise;
                 },
                 set: (target, prop, value) => {
-                    if (window[globalVarName]) {
-                        window[globalVarName][prop] = value;
+                    const realObj = getRealGlobal();
+                    if (realObj) {
+                        realObj[prop] = value;
                         return true;
                     }
                     target[prop] = value;
                     return true;
                 },
                 has: (target, prop) => {
-                    if (window[globalVarName]) {
-                        return prop in window[globalVarName];
+                    const realObj = getRealGlobal();
+                    if (realObj) {
+                        return prop in realObj;
                     }
                     return prop in target;
                 },
                 ownKeys: (target) => {
-                    if (window[globalVarName]) {
-                        return Object.keys(window[globalVarName]);
+                    const realObj = getRealGlobal();
+                    if (realObj) {
+                        return Object.keys(realObj);
                     }
                     return Object.keys(target);
                 },
                 construct: (target, args) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                        return new window[globalVarName](...args);
+                    const realObj = getRealGlobal();
+                    if (realObj && typeof realObj === 'function') {
+                        return new realObj(...args);
                     }
                     return this.loadOnDemand(moduleName).then(() => {
-                        if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                            return new window[globalVarName](...args);
+                        const loadedGlobal = getRealGlobal();
+                        if (loadedGlobal && typeof loadedGlobal === 'function') {
+                            return new loadedGlobal(...args);
                         }
                         throw new Error(`[Weline] ${globalVarName} 不是一个构造函数`);
                     });
                 },
                 apply: (target, thisArg, args) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                        return window[globalVarName].apply(thisArg, args);
+                    const realObj = getRealGlobal();
+                    if (realObj && typeof realObj === 'function') {
+                        return realObj.apply(thisArg, args);
                     }
                     return this.loadOnDemand(moduleName).then(() => {
-                        if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                            return window[globalVarName].apply(thisArg, args);
+                        const loadedGlobal = getRealGlobal();
+                        if (loadedGlobal && typeof loadedGlobal === 'function') {
+                            return loadedGlobal.apply(thisArg, args);
                         }
                         throw new Error(`[Weline] ${globalVarName} 不是一个函数`);
                     });
@@ -865,7 +1227,12 @@
             });
 
             this.proxies.set(globalVarName, proxy);
+            this.proxyGlobals.set(globalVarName, proxy);
             return proxy;
+        }
+
+        isProxyGlobal(globalVarName, value) {
+            return this.proxyGlobals.get(globalVarName) === value;
         }
 
         async setupProxies() {
@@ -932,6 +1299,367 @@
             });
         });
     }
+
+    const ThemeNotice = (function () {
+        let styleInjected = false;
+        let toastRegion = null;
+        let activeDialog = null;
+
+        const defaults = {
+            duration: 3600,
+            position: 'top-right',
+            confirmText: '确认',
+            cancelText: '取消',
+            closeText: '关闭',
+        };
+
+        function mergeOptions(options) {
+            return Object.assign({}, defaults, runtimeConfig.theme?.notice || {}, options || {});
+        }
+
+        function injectStyle() {
+            if (styleInjected) {
+                return;
+            }
+            styleInjected = true;
+
+            const style = document.createElement('style');
+            style.id = 'weline-theme-notice-style';
+            style.textContent = `
+                .weline-notice-region {
+                    position: fixed;
+                    z-index: var(--z-index-toast, 100000);
+                    display: grid;
+                    gap: var(--spacing-sm, 0.75rem);
+                    width: min(26rem, calc(100vw - 2rem));
+                    pointer-events: none;
+                }
+                .weline-notice-region--top-right {
+                    top: var(--spacing-lg, 1.5rem);
+                    right: var(--spacing-lg, 1.5rem);
+                }
+                .weline-notice-toast {
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
+                    gap: var(--spacing-sm, 0.75rem);
+                    align-items: flex-start;
+                    padding: var(--spacing-md, 1rem);
+                    border: var(--border-card, 1px solid var(--color-border-default));
+                    border-left: var(--border-width-thick, 3px) var(--border-style-solid, solid) var(--notice-accent);
+                    border-radius: var(--border-radius-xl, 12px);
+                    background: var(--color-bg-primary);
+                    color: var(--color-text-primary);
+                    box-shadow: var(--shadow-dropdown, var(--shadow-lg));
+                    pointer-events: auto;
+                    transform: translateY(-0.5rem);
+                    opacity: 0;
+                    transition: opacity 0.18s ease, transform 0.18s ease;
+                }
+                .weline-notice-toast.is-visible {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+                .weline-notice-toast--success { --notice-accent: var(--color-success); }
+                .weline-notice-toast--error { --notice-accent: var(--color-error); }
+                .weline-notice-toast--warning { --notice-accent: var(--color-warning); }
+                .weline-notice-toast--info { --notice-accent: var(--color-info); }
+                .weline-notice-toast__mark {
+                    width: 0.8rem;
+                    height: 0.8rem;
+                    margin-top: 0.25rem;
+                    border-radius: var(--border-radius-full, 9999px);
+                    background: var(--notice-accent);
+                    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--notice-accent) 16%, transparent);
+                }
+                .weline-notice-toast__content {
+                    display: grid;
+                    gap: var(--spacing-xs, 0.35rem);
+                    min-width: 0;
+                }
+                .weline-notice-toast__title {
+                    margin: 0;
+                    font-size: var(--font-size-sm, 0.95rem);
+                    font-weight: var(--font-weight-semibold, 600);
+                    color: var(--color-text-primary);
+                }
+                .weline-notice-toast__message {
+                    margin: 0;
+                    font-size: var(--font-size-sm, 0.9rem);
+                    line-height: var(--line-height-normal, 1.5);
+                    color: var(--color-text-secondary);
+                }
+                .weline-notice-toast__close,
+                .weline-notice-dialog__close {
+                    border: 0;
+                    background: transparent;
+                    color: var(--color-text-tertiary);
+                    font: inherit;
+                    line-height: 1;
+                    cursor: pointer;
+                }
+                .weline-notice-toast__close:hover,
+                .weline-notice-dialog__close:hover {
+                    color: var(--color-text-primary);
+                }
+                .weline-notice-overlay {
+                    position: fixed;
+                    inset: 0;
+                    z-index: var(--z-index-modal, 100001);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: var(--spacing-lg, 1.5rem);
+                    background: color-mix(in srgb, var(--color-text-primary) 42%, transparent);
+                }
+                .weline-notice-dialog {
+                    width: min(28rem, 100%);
+                    border: var(--border-card, 1px solid var(--color-border-default));
+                    border-radius: var(--border-radius-2xl, 16px);
+                    background: var(--color-bg-primary);
+                    color: var(--color-text-primary);
+                    box-shadow: var(--shadow-modal, var(--shadow-xl));
+                    overflow: hidden;
+                    transform: translateY(0.5rem) scale(0.98);
+                    opacity: 0;
+                    transition: opacity 0.18s ease, transform 0.18s ease;
+                }
+                .weline-notice-overlay.is-visible .weline-notice-dialog {
+                    transform: translateY(0) scale(1);
+                    opacity: 1;
+                }
+                .weline-notice-dialog__header {
+                    display: flex;
+                    gap: var(--spacing-md, 1rem);
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    padding: var(--spacing-lg, 1.5rem) var(--spacing-lg, 1.5rem) var(--spacing-sm, 0.75rem);
+                }
+                .weline-notice-dialog__title {
+                    margin: 0;
+                    color: var(--color-text-primary);
+                    font-size: var(--font-size-lg, 1.2rem);
+                    font-weight: var(--font-weight-bold, 700);
+                }
+                .weline-notice-dialog__body {
+                    padding: 0 var(--spacing-lg, 1.5rem) var(--spacing-lg, 1.5rem);
+                    color: var(--color-text-secondary);
+                    line-height: var(--line-height-relaxed, 1.7);
+                }
+                .weline-notice-dialog__actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--spacing-sm, 0.75rem);
+                    justify-content: flex-end;
+                    padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+                    border-top: var(--border-width-thin, 1px) var(--border-style-solid, solid) var(--color-border-light);
+                    background: var(--color-bg-secondary);
+                }
+                .weline-notice-dialog__button {
+                    min-height: 2.6rem;
+                    padding: 0 var(--spacing-lg, 1.5rem);
+                    border-radius: var(--border-radius-lg, 8px);
+                    border: var(--border-button, 1px solid var(--color-primary-border));
+                    background: var(--color-bg-primary);
+                    color: var(--color-text-primary);
+                    font: inherit;
+                    font-weight: var(--font-weight-semibold, 600);
+                    cursor: pointer;
+                }
+                .weline-notice-dialog__button--primary {
+                    background: var(--color-primary);
+                    border-color: var(--color-primary-border);
+                    color: var(--color-text-dark);
+                }
+                .weline-notice-dialog__button--danger {
+                    background: var(--color-error);
+                    border-color: var(--color-error);
+                    color: var(--color-text-light);
+                }
+                .weline-notice-dialog__button:hover {
+                    box-shadow: var(--shadow-button, var(--shadow-sm));
+                }
+                @media (max-width: 640px) {
+                    .weline-notice-region {
+                        top: var(--spacing-md, 1rem);
+                        right: var(--spacing-md, 1rem);
+                        left: var(--spacing-md, 1rem);
+                        width: auto;
+                    }
+                    .weline-notice-dialog__actions {
+                        display: grid;
+                    }
+                    .weline-notice-dialog__button {
+                        width: 100%;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function ensureToastRegion(options) {
+            injectStyle();
+            if (toastRegion && document.body.contains(toastRegion)) {
+                return toastRegion;
+            }
+            toastRegion = document.createElement('div');
+            toastRegion.className = 'weline-notice-region weline-notice-region--' + (options.position || 'top-right');
+            toastRegion.setAttribute('data-theme-notice-region', '');
+            toastRegion.setAttribute('aria-live', 'polite');
+            toastRegion.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(toastRegion);
+            return toastRegion;
+        }
+
+        function normalizeType(type) {
+            if (type === 'danger') {
+                return 'error';
+            }
+            return ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
+        }
+
+        function show(options) {
+            options = mergeOptions(typeof options === 'string' ? { message: options } : options);
+            const type = normalizeType(options.type);
+            const region = ensureToastRegion(options);
+            const toast = document.createElement('div');
+            toast.className = 'weline-notice-toast weline-notice-toast--' + type;
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+            const closeText = options.closeText || defaults.closeText;
+            toast.innerHTML = [
+                '<span class="weline-notice-toast__mark" aria-hidden="true"></span>',
+                '<div class="weline-notice-toast__content">',
+                options.title ? '<strong class="weline-notice-toast__title"></strong>' : '',
+                '<p class="weline-notice-toast__message"></p>',
+                '</div>',
+                '<button type="button" class="weline-notice-toast__close" aria-label="' + closeText + '">&times;</button>'
+            ].join('');
+
+            if (options.title) {
+                toast.querySelector('.weline-notice-toast__title').textContent = options.title;
+            }
+            toast.querySelector('.weline-notice-toast__message').textContent = options.message || '';
+            toast.querySelector('.weline-notice-toast__close').addEventListener('click', function () {
+                closeToast(toast);
+            });
+
+            region.appendChild(toast);
+            requestAnimationFrame(function () {
+                toast.classList.add('is-visible');
+            });
+
+            if (options.duration !== 0) {
+                setTimeout(function () {
+                    closeToast(toast);
+                }, Number(options.duration) || defaults.duration);
+            }
+            return toast;
+        }
+
+        function closeToast(toast) {
+            if (!toast || !toast.parentNode) {
+                return;
+            }
+            toast.classList.remove('is-visible');
+            setTimeout(function () {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 180);
+        }
+
+        function closeDialog(result) {
+            if (!activeDialog) {
+                return;
+            }
+            const dialog = activeDialog;
+            activeDialog = null;
+            dialog.overlay.classList.remove('is-visible');
+            document.removeEventListener('keydown', dialog.onKeydown);
+            setTimeout(function () {
+                if (dialog.overlay.parentNode) {
+                    dialog.overlay.remove();
+                }
+                dialog.resolve(result);
+            }, 180);
+        }
+
+        function confirm(options) {
+            options = mergeOptions(options);
+            injectStyle();
+            if (activeDialog) {
+                closeDialog(false);
+            }
+
+            return new Promise(function (resolve) {
+                const overlay = document.createElement('div');
+                overlay.className = 'weline-notice-overlay';
+                overlay.setAttribute('data-theme-notice-confirm', '');
+                overlay.innerHTML = [
+                    '<section class="weline-notice-dialog" role="dialog" aria-modal="true" aria-labelledby="weline-notice-dialog-title">',
+                    '<header class="weline-notice-dialog__header">',
+                    '<h2 class="weline-notice-dialog__title" id="weline-notice-dialog-title"></h2>',
+                    '<button type="button" class="weline-notice-dialog__close" data-notice-cancel aria-label="' + (options.closeText || defaults.closeText) + '">&times;</button>',
+                    '</header>',
+                    '<div class="weline-notice-dialog__body"></div>',
+                    '<footer class="weline-notice-dialog__actions">',
+                    '<button type="button" class="weline-notice-dialog__button" data-notice-cancel></button>',
+                    '<button type="button" class="weline-notice-dialog__button weline-notice-dialog__button--danger" data-notice-confirm></button>',
+                    '</footer>',
+                    '</section>'
+                ].join('');
+
+                overlay.querySelector('.weline-notice-dialog__title').textContent = options.title || '';
+                overlay.querySelector('.weline-notice-dialog__body').textContent = options.message || '';
+                overlay.querySelector('[data-notice-confirm]').textContent = options.confirmText || defaults.confirmText;
+                overlay.querySelector('.weline-notice-dialog__actions [data-notice-cancel]').textContent = options.cancelText || defaults.cancelText;
+
+                const onKeydown = function (event) {
+                    if (event.key === 'Escape') {
+                        closeDialog(false);
+                    }
+                };
+
+                activeDialog = { overlay, resolve, onKeydown };
+                overlay.addEventListener('click', function (event) {
+                    if (event.target === overlay || event.target.closest('[data-notice-cancel]')) {
+                        closeDialog(false);
+                        return;
+                    }
+                    if (event.target.closest('[data-notice-confirm]')) {
+                        closeDialog(true);
+                    }
+                });
+                document.addEventListener('keydown', onKeydown);
+                document.body.appendChild(overlay);
+                requestAnimationFrame(function () {
+                    overlay.classList.add('is-visible');
+                    const confirmButton = overlay.querySelector('[data-notice-confirm]');
+                    if (confirmButton) {
+                        confirmButton.focus();
+                    }
+                });
+            });
+        }
+
+        return {
+            show: show,
+            success: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'success', message: message }));
+            },
+            error: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'error', message: message }));
+            },
+            warning: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'warning', message: message }));
+            },
+            info: function (message, options) {
+                return show(Object.assign({}, options || {}, { type: 'info', message: message }));
+            },
+            confirm: confirm,
+            close: closeDialog
+        };
+    })();
 
     /**
      * Weline 主对象（轻量级，只包含基础功能）
@@ -1119,9 +1847,28 @@
          * Api 模块代理（按需加载）
          */
         Api: {
-            request: async (url, options) => {
+            request: async () => {
+                throw new Error('[Weline.Api] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().');
+            },
+            call: async (provider, operation, params = {}, options = {}) => {
                 const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.request(url, options);
+                return ApiModule.call(provider, operation, params, options);
+            },
+            graph: async (graph, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.graph(graph, options);
+            },
+            stream: async (channel, params = {}, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.stream(channel, params, options);
+            },
+            upload: async (provider, operation, formData, options = {}) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.upload(provider, operation, formData, options);
+            },
+            resource: async (provider, optionalMap) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.resource(provider, optionalMap);
             },
             markCartActive: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');
@@ -1147,26 +1894,22 @@
 
         Query: {
             request: async (provider, operation, params = {}, options = {}) => {
-                const area = options.area || 'frontend';
-                const queryConfig = runtimeConfig.query || {};
-                const frontendUrl = queryConfig.frontendUrl || '/api/framework/query';
-                const backendUrl = queryConfig.backendUrl || '/api_admin/framework/query';
-                const endpoint = area === 'backend' ? backendUrl : frontendUrl;
-                const response = await Weline.Api.request(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        provider: provider,
-                        operation: operation,
-                        params: params
-                    })
-                });
-                if (!response || response.code !== 200) {
-                    throw new Error((response && response.msg) ? response.msg : __('查询失败'));
+                if ((options.area || 'frontend') !== 'frontend') {
+                    throw new Error('[Weline.Query] browser backend query is disabled; use backend code or External API.');
                 }
-                return response.data;
+                return Weline.Api.call(provider, operation, params, options);
+            },
+            help: async (provider = null, params = {}, options = {}) => {
+                if (provider == null || provider === '') {
+                    return Weline.Api.call('query_help', 'providers', params, options);
+                }
+                if (typeof provider === 'string' && !params.operation) {
+                    return Weline.Api.call('query_help', 'provider', { provider, ...params }, options);
+                }
+                if (params.provider && params.operation) {
+                    return Weline.Api.call('query_help', 'operation', params, options);
+                }
+                return Weline.Api.call('query_help', 'provider', { provider, ...params }, options);
             }
         },
 
@@ -1232,7 +1975,7 @@
                         return window.WelineI18n.switchLang(lang);
                     }
                     // 降级：使用基本 URL 参数切换
-                    localStorage.setItem('weline_user_lang', lang);
+                    writeLanguagePreference(lang);
                     const url = new URL(window.location.href);
                     url.searchParams.set('lang', lang);
                     window.location.href = url.toString();
@@ -1275,7 +2018,7 @@
                     return window.WelineCurrency.switchCurrency(currency);
                 }
                 // 降级：使用基本 URL 参数切换
-                localStorage.setItem('weline_user_currency', currency);
+                writeCurrencyPreference(currency);
                 const url = new URL(window.location.href);
                 url.searchParams.set('currency', currency);
                 window.location.href = url.toString();
@@ -1440,7 +2183,9 @@
             bootstrap: function (config) {
                 mergeConfig(config);
                 return this;
-            }
+            },
+
+            Notice: ThemeNotice
         },
 
         /**
@@ -1452,7 +2197,12 @@
                     .getPropertyValue(varName).trim();
             },
             setVariable: function (varName, value) {
-                document.documentElement.style.setProperty(varName, value);
+                if (!isSafeCssVariableName(varName) || !isSafeCssVariableValue(value)) {
+                    return false;
+                }
+
+                document.documentElement.style.setProperty(varName.trim(), String(value).trim());
+                return true;
             }
         },
 
@@ -1564,8 +2314,79 @@
         });
     })();
 
+    function installPixelValueBridge() {
+        if (window.__WelinePixelValueBridgeInstalled) {
+            return;
+        }
+        window.__WelinePixelValueBridgeInstalled = true;
+
+        document.addEventListener('click', function (event) {
+            const target = event.target && event.target.nodeType === 1 ? event.target : null;
+            if (!target || !target.getElementsByClassName) {
+                return;
+            }
+
+            let node = target;
+            let eventName = '';
+            while (node && node !== document) {
+                const pixelClass = Array.from(node.classList || []).find(className => {
+                    return className.indexOf('weline-pixel::') === 0 && className.indexOf(':value') === -1;
+                });
+                if (pixelClass) {
+                    eventName = pixelClass.replace('weline-pixel::', '');
+                    break;
+                }
+                node = node.parentElement;
+            }
+            if (!eventName) {
+                return;
+            }
+
+            const valueClassName = 'weline-pixel::' + eventName + ':value';
+            if (target.getElementsByClassName(valueClassName).length > 0) {
+                return;
+            }
+
+            const containerSelector = '[data-pixel-value], .product-actions, .product-info, .product-info-section, .product-card, .product-main, .product-detail, .product-detail-view, .cart-item, .cart-summary, .cart-summary-card, .mini-cart-drawer__footer, .checkout-summary, .weshop-checkout-summary, .weshop-checkout-card';
+            let container = (node && node.closest)
+                ? (node.closest(containerSelector) || (node.parentElement && node.parentElement.closest(containerSelector)))
+                : null;
+            let valueSource = null;
+            while (!valueSource && container) {
+                valueSource = container.querySelector('[data-pixel-value], .product-price-box .price-amount, .price-current, .cart-item-price, .summary-total, [data-summary-total], [data-mini-cart-subtotal], [data-weshop-summary-grand-total]');
+                container = !valueSource && container.parentElement && container.parentElement.closest
+                    ? container.parentElement.closest(containerSelector)
+                    : null;
+            }
+            if (!valueSource) {
+                return;
+            }
+
+            const value = valueSource.getAttribute('data-pixel-value') || valueSource.textContent || '';
+            if (!String(value).trim()) {
+                return;
+            }
+
+            const valueElement = document.createElement('span');
+            valueElement.className = valueClassName;
+            valueElement.setAttribute('data-pixel-value', String(value).trim());
+            valueElement.textContent = String(value).trim();
+            valueElement.hidden = true;
+            target.appendChild(valueElement);
+        }, true);
+    }
+
+    installPixelValueBridge();
+
     window.Weline = Weline;
+    if (window.WelineApiModule && window.WelineApiModule.__full === true) {
+        window.Weline.Api = window.WelineApiModule;
+    }
+    window.Theme = Weline.Theme;
     window.w_query = function (provider, operation, params = {}, options = {}) {
+        if (operation == null || operation === '') {
+            return Weline.Query.help(provider, params, options);
+        }
         return Weline.Query.request(provider, operation, params, options);
     };
     window.w_providerQuery = window.w_query;
@@ -2090,12 +2911,9 @@
          * 获取当前语言代码
          */
         function getCurrentLang() {
-            // 从 Cookie 获取
-            if (typeof window.getCookie === 'function') {
-                const cookieLang = window.getCookie('WELINE_USER_LANG');
-                if (cookieLang) {
-                    return cookieLang;
-                }
+            const cookieLang = readCookieValue('WELINE_USER_LANG');
+            if (cookieLang) {
+                return cookieLang;
             }
 
             // 从 URL 参数获取
@@ -2114,7 +2932,7 @@
             }
 
             // 从配置获取
-            const config = window.__WelineThemeConfig || {};
+            const config = window.__WelineThemeConfig || runtimeConfig || {};
             return config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || 'zh_Hans_CN';
         }
 
@@ -2147,25 +2965,67 @@
             const currentLang = getCurrentLang();
             const langDisplay = getLangDisplay(currentLang);
 
-            // 更新 current-language 元素
-            const currentLangElements = document.querySelectorAll('[data-i18n-switcher] .current-language');
-            currentLangElements.forEach(el => {
-                el.textContent = langDisplay;
-            });
-
-            // 更新 active 状态
             const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
             languageSwitchers.forEach(languageSwitcher => {
+                let displayName = langDisplay;
+                let activeOption = null;
+
                 const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
                 languageOptions.forEach(option => {
                     const langCode = option.getAttribute('data-lang') || option.dataset.lang;
-                    if (langCode === currentLang) {
+                    if (sameLang(langCode, currentLang)) {
+                        activeOption = option;
                         option.classList.add('active');
+                        const nameEl = option.querySelector('.weline-choice-name');
+                        displayName = nameEl
+                            ? String(nameEl.textContent || '').trim()
+                            : langDisplay;
                     } else {
                         option.classList.remove('active');
                     }
                 });
+
+                const currentLangElements = languageSwitcher.querySelectorAll('.current-language');
+                currentLangElements.forEach(el => {
+                    el.textContent = displayName;
+                });
+
+                if (activeOption) {
+                    const optionFlag = activeOption.querySelector('.weline-choice-flag');
+                    const currentFlag = languageSwitcher.querySelector('.weline-choice-current-flag');
+                    if (optionFlag && currentFlag) {
+                        currentFlag.innerHTML = optionFlag.innerHTML;
+                    }
+                }
             });
+        }
+
+        function isIgnorableLanguageQueryParam(key) {
+            const normalized = String(key || '').trim().toLowerCase();
+            if (!normalized) {
+                return false;
+            }
+            if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(normalized)) {
+                return true;
+            }
+            return normalized.startsWith('utm_') || normalized.startsWith('mtm_') || normalized.startsWith('pk_');
+        }
+
+        function sanitizeLanguageSearch(search) {
+            const raw = typeof search === 'string' ? search : '';
+            if (!raw) {
+                return '';
+            }
+
+            const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+            Array.from(params.keys()).forEach(key => {
+                if (isIgnorableLanguageQueryParam(key)) {
+                    params.delete(key);
+                }
+            });
+
+            const query = params.toString();
+            return query ? '?' + query : '';
         }
 
         /**
@@ -2177,20 +3037,22 @@
                 return;
             }
 
-            const currentPath = window.location.pathname + window.location.search;
+            const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
             const config = window.__WelineThemeConfig || {};
 
             // 获取当前货币（用于保持货币）
             let currentCurrency = '';
             const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isValidCurrency(part, config)) {
                     currentCurrency = part;
                     break;
                 }
             }
             if (!currentCurrency) {
-                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+                currentCurrency = isValidCurrency(config.currentCurrency, config)
+                    ? normalizeCurrencyCode(config.currentCurrency)
+                    : resolveDefaultCurrency(config);
             }
 
             languageSwitchers.forEach(languageSwitcher => {
@@ -2213,12 +3075,8 @@
                         langUrl = window.inject_path(pathOnly, langCode, 'lang') + (search ? '?' + search : '');
                     } else {
                         // 降级方案：手动构建路径格式的 URL（需要手动保持货币）
-                        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                        const currencyPattern = /^[A-Z]{3}$/;
-                        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-                        const cleanPath = '/' + filteredParts.join('/');
                         const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
-                        langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
+                        langUrl = buildLocalizedFrontendPath(currentPath.split('?')[0], currentCurrency, langCode) + (search ? '?' + search : '');
                     }
 
                     if (langUrl) {
@@ -2246,52 +3104,41 @@
 
             // 次优先使用 urlWithLang 函数
             if (typeof window.urlWithLang === 'function') {
-                const currentPath = window.location.pathname + window.location.search;
+                const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
                 const langUrl = window.urlWithLang(currentPath, lang);
-                localStorage.setItem('weline_user_lang', lang);
-                if (typeof window.setCookie === 'function') {
-                    window.setCookie('WELINE_USER_LANG', lang, 365);
-                }
+                writeLanguagePreference(lang);
                 window.location.href = langUrl;
                 return;
             }
 
             // 降级方案：使用 inject_path
             if (typeof window.inject_path === 'function') {
-                const langUrl = window.inject_path(window.location.pathname, lang, 'lang') + window.location.search;
-                localStorage.setItem('weline_user_lang', lang);
-                if (typeof window.setCookie === 'function') {
-                    window.setCookie('WELINE_USER_LANG', lang, 365);
-                }
+                const langUrl = window.inject_path(window.location.pathname, lang, 'lang') + sanitizeLanguageSearch(window.location.search || '');
+                writeLanguagePreference(lang);
                 window.location.href = langUrl;
                 return;
             }
 
             // 最后的降级方案：手动构建 URL
             let currentPath = window.location.pathname;
+            const config = window.__WelineThemeConfig || runtimeConfig || {};
             const pathParts = currentPath.split('/').filter(Boolean);
             let currentCurrency = '';
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isValidCurrency(part, config)) {
                     currentCurrency = part;
                     break;
                 }
             }
             if (!currentCurrency) {
-                const config = window.__WelineThemeConfig || {};
-                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+                currentCurrency = isValidCurrency(config.currentCurrency, config)
+                    ? normalizeCurrencyCode(config.currentCurrency)
+                    : resolveDefaultCurrency(config);
             }
 
-            const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-            const currencyPattern = /^[A-Z]{3}$/;
-            const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-            const cleanPath = '/' + filteredParts.join('/');
-            const langUrl = '/' + currentCurrency + '/' + lang + cleanPath + window.location.search;
+            const langUrl = buildLocalizedFrontendPath(currentPath, currentCurrency, lang) + sanitizeLanguageSearch(window.location.search || '');
 
-            localStorage.setItem('weline_user_lang', lang);
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_LANG', lang, 365);
-            }
+            writeLanguagePreference(lang);
             window.location.href = langUrl;
         }
 
@@ -2355,32 +3202,32 @@
          * 获取当前货币代码
          */
         function getCurrentCurrency() {
-            // 从 Cookie 获取
-            if (typeof window.getCookie === 'function') {
-                const cookieCurrency = window.getCookie('WELINE_USER_CURRENCY');
-                if (cookieCurrency) {
-                    return cookieCurrency.toUpperCase();
-                }
+            const config = window.__WelineThemeConfig || runtimeConfig || {};
+            const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
+            if (isValidCurrency(cookieCurrency, config)) {
+                return cookieCurrency.toUpperCase();
             }
 
             // 从 URL 参数获取
             const urlParams = new URLSearchParams(window.location.search);
             const urlCurrency = urlParams.get('currency');
-            if (urlCurrency) {
+            if (isValidCurrency(urlCurrency, config)) {
                 return urlCurrency.toUpperCase();
             }
 
             // 从 URL 路径获取（如 /CNY/...）
             const pathParts = window.location.pathname.split('/').filter(Boolean);
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isValidCurrency(part, config)) {
                     return part.toUpperCase();
                 }
             }
 
             // 从配置获取
-            const config = window.__WelineThemeConfig || {};
-            return (config.currentCurrency || (window.site && window.site.currency) || 'CNY').toUpperCase();
+            const fallbackCurrency = isValidCurrency(config.currentCurrency, config)
+                ? config.currentCurrency
+                : (config.defaultCurrency || 'CNY');
+            return fallbackCurrency.toUpperCase();
         }
 
         /**
@@ -2413,13 +3260,41 @@
         /**
          * 更新货币切换器链接
          */
+        function isIgnorableCurrencyQueryParam(key) {
+            const normalized = String(key || '').trim().toLowerCase();
+            if (!normalized) {
+                return false;
+            }
+            if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(normalized)) {
+                return true;
+            }
+            return normalized.startsWith('utm_') || normalized.startsWith('mtm_') || normalized.startsWith('pk_');
+        }
+
+        function sanitizeLanguageSearch(search) {
+            const raw = typeof search === 'string' ? search : '';
+            if (!raw) {
+                return '';
+            }
+
+            const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+            Array.from(params.keys()).forEach(key => {
+                if (isIgnorableCurrencyQueryParam(key)) {
+                    params.delete(key);
+                }
+            });
+
+            const query = params.toString();
+            return query ? '?' + query : '';
+        }
+
         function updateCurrencySwitcherLinks() {
             const currencySwitchers = document.querySelectorAll('[data-currency-switcher]');
             if (currencySwitchers.length === 0) {
                 return;
             }
 
-            const currentPath = window.location.pathname + window.location.search;
+            const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
             const config = window.__WelineThemeConfig || {};
 
             // 获取当前语言（用于保持语言）
@@ -2455,12 +3330,8 @@
                         currencyUrl = window.inject_path(pathOnly, currencyCode, 'currency') + (search ? '?' + search : '');
                     } else {
                         // 降级方案：手动构建路径格式的 URL（需要手动保持语言）
-                        const currencyPattern = /^[A-Z]{3}$/;
-                        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-                        const cleanPath = '/' + filteredParts.join('/');
                         const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
-                        currencyUrl = '/' + currencyCode + '/' + currentLang + cleanPath + (search ? '?' + search : '');
+                        currencyUrl = buildLocalizedFrontendPath(currentPath.split('?')[0], currencyCode, currentLang) + (search ? '?' + search : '');
                     }
 
                     if (currencyUrl) {
@@ -2490,23 +3361,17 @@
 
             // 次优先使用 urlWithCurrency 函数
             if (typeof window.urlWithCurrency === 'function') {
-                const currentPath = window.location.pathname + window.location.search;
+                const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
                 const currencyUrl = window.urlWithCurrency(currentPath, currency);
-                localStorage.setItem('weline_user_currency', currency);
-                if (typeof window.setCookie === 'function') {
-                    window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-                }
+                writeCurrencyPreference(currency);
                 window.location.href = currencyUrl;
                 return;
             }
 
             // 降级方案：使用 inject_path
             if (typeof window.inject_path === 'function') {
-                const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + window.location.search;
-                localStorage.setItem('weline_user_currency', currency);
-                if (typeof window.setCookie === 'function') {
-                    window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-                }
+                const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + sanitizeLanguageSearch(window.location.search || '');
+                writeCurrencyPreference(currency);
                 window.location.href = currencyUrl;
                 return;
             }
@@ -2526,16 +3391,9 @@
                 currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
             }
 
-            const currencyPattern = /^[A-Z]{3}$/;
-            const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-            const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-            const cleanPath = '/' + filteredParts.join('/');
-            const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + window.location.search;
+            const currencyUrl = buildLocalizedFrontendPath(currentPath, currency, currentLang) + sanitizeLanguageSearch(window.location.search || '');
 
-            localStorage.setItem('weline_user_currency', currency);
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-            }
+            writeCurrencyPreference(currency);
             window.location.href = currencyUrl;
         }
 

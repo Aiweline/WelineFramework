@@ -49,7 +49,7 @@ class DomainPool extends BaseController
     public function index(): string
     {
         try {
-            $search = $this->request->getGet('search', '');
+            $search = trim((string) $this->request->getGet('search', ''));
             $limit = (int) $this->request->getGet('limit', 50);
             $grouped = $this->request->getGet('grouped', 'true') === 'true';
             $siteReadyOnly = $this->request->getGet('site_ready', 'true') === 'true';
@@ -129,6 +129,36 @@ class DomainPool extends BaseController
                     $domains = array_slice($domains, 0, $limit);
                 }
             }
+            
+            // 编辑页需要把当前已绑定的 pool_id 合并进结果，避免首屏 limit 截断导致无法回填。
+            if (!empty($forceIncludePoolIds) && $search === '') {
+                $forceModel = clone $this->domainPoolModel;
+                $forcedDomains = $forceModel->clearQuery()
+                    ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE)
+                    ->where(DomainPoolModel::schema_fields_ID, $forceIncludePoolIds, 'IN')
+                    ->select()
+                    ->fetchArray();
+                $mergedByPoolId = [];
+                foreach (array_merge($forcedDomains, $domains) as $domain) {
+                    $poolId = (int)($domain[DomainPoolModel::schema_fields_ID] ?? 0);
+                    if ($poolId > 0) {
+                        $mergedByPoolId[$poolId] = $domain;
+                    }
+                }
+                $domains = array_values($mergedByPoolId);
+            }
+            usort($domains, static function (array $a, array $b): int {
+                $aRoot = (string)($a[DomainPoolModel::schema_fields_ROOT_DOMAIN] ?? $a[DomainPoolModel::schema_fields_DOMAIN] ?? '');
+                $bRoot = (string)($b[DomainPoolModel::schema_fields_ROOT_DOMAIN] ?? $b[DomainPoolModel::schema_fields_DOMAIN] ?? '');
+                $rootCmp = strcasecmp($aRoot, $bRoot);
+                if ($rootCmp !== 0) {
+                    return $rootCmp;
+                }
+                return strcasecmp(
+                    (string)($a[DomainPoolModel::schema_fields_DOMAIN] ?? ''),
+                    (string)($b[DomainPoolModel::schema_fields_DOMAIN] ?? '')
+                );
+            });
             
             // 是否按根域名分组
             if ($grouped) {

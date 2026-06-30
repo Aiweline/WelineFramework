@@ -21,11 +21,15 @@ $dismissible = $this->getData('dismissible') ?? false;
 $icon = $this->getData('icon') ?? '';
 $class = $this->getData('class') ?? '';
 $allowHtml = $this->getData('html') ?? false;
+$alertId = trim((string) ($this->getData('id') ?? ''));
+
+// Theme uses danger for error-state alerts.
+$themeAlertModifier = ($type === 'error') ? 'danger' : $type;
 
 // 构建CSS类
-$alertClass = 'alert alert-' . htmlspecialchars($type);
+$alertClass = 'w-alert w-alert-' . htmlspecialchars((string) $themeAlertModifier);
 if ($dismissible) {
-    $alertClass .= ' alert-dismissible fade show';
+    $alertClass .= ' w-alert-dismissible fade show';
 }
 if ($class) {
     $alertClass .= ' ' . htmlspecialchars($class);
@@ -35,25 +39,25 @@ if ($class) {
 if (!$icon) {
     switch ($type) {
         case 'success':
-            $icon = 'fa-check-circle';
+            $icon = 'ri-checkbox-circle-line';
             break;
         case 'error':
         case 'danger':
-            $icon = 'fa-exclamation-circle';
+            $icon = 'ri-error-warning-line';
             break;
         case 'warning':
-            $icon = 'fa-exclamation-triangle';
+            $icon = 'ri-alert-line';
             break;
         case 'info':
         default:
-            $icon = 'fa-info-circle';
+            $icon = 'ri-information-line';
             break;
     }
 }
 ?>
-<div class="<?= $alertClass ?>" role="alert">
+<div class="<?= $alertClass ?>" role="alert"<?= $alertId !== '' ? ' id="' . htmlspecialchars($alertId, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
     <?php if ($icon): ?>
-        <i class="fa <?= htmlspecialchars($icon) ?> me-2"></i>
+        <i class="<?= htmlspecialchars($icon) ?> me-2"></i>
     <?php endif; ?>
     
     <?php if ($title): ?>
@@ -61,16 +65,16 @@ if (!$icon) {
     <?php endif; ?>
     
     <?php if ($allowHtml): ?>
-        <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
+        <?= $message ?>
     <?php else: ?>
-        <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
+        <?= htmlspecialchars((string) $message, ENT_QUOTES, 'UTF-8') ?>
     <?php endif; ?>
     
     <?php if ($dismissible): ?>
         <button type="button" 
-                class="btn-close" 
+                class="w-btn-close"
                 data-bs-dismiss="alert" 
-                aria-label="<?= htmlspecialchars(__('Close'), ENT_QUOTES, 'UTF-8') ?>">
+                aria-label="<?= htmlspecialchars(__('关闭'), ENT_QUOTES, 'UTF-8') ?>">
         </button>
     <?php endif; ?>
 </div>

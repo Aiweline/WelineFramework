@@ -64,6 +64,57 @@ final class ProcesserBatchKillProcessTreesTest extends TestCase
         ], $method->invoke(null, [$pid]));
     }
 
+    public function testKillByProcessNamePrefixesSkipsReusedPidWhenCommandLineDoesNotMatch(): void
+    {
+        $pid = 987654321;
+        $pname = '--name=weline-wls-worker-default-punit-1';
+        $pidFile = Processer::getPidFile($pname, $pid);
+        $nameIndex = Processer::readNameIndex();
+        $pidIndex = Processer::readPidIndex();
+
+        $driver = $this->createMock(ProcessDriverInterface::class);
+        $driver->method('batchGetProcessInfo')
+            ->with([$pid])
+            ->willReturn([
+                $pid => [
+                    'pid' => $pid,
+                    'exists' => true,
+                    'is_zombie' => false,
+                    'name' => 'svchost.exe',
+                    'command' => '',
+                    'memory' => '',
+                    'cpu' => '',
+                    'start_time' => '',
+                ],
+            ]);
+        $driver->method('getProcessCommandLine')
+            ->with($pid)
+            ->willReturn('C:\\Windows\\System32\\svchost.exe -k netsvcs');
+
+        try {
+            Processer::writeNameIndex([
+                $pname => [
+                    [
+                        'pid' => $pid,
+                        'jsonPath' => $pidFile,
+                    ],
+                ],
+            ]);
+            Processer::writePidIndex([
+                $pid => [
+                    'pname' => $pname,
+                    'jsonPath' => $pidFile,
+                ],
+            ]);
+            $this->replaceProcessDriver($driver);
+
+            self::assertSame(0, Processer::killByProcessNamePrefixes(['weline-wls-worker-default-']));
+        } finally {
+            Processer::writeNameIndex($nameIndex);
+            Processer::writePidIndex($pidIndex);
+        }
+    }
+
     public function testPrepareProcessLogFileForWriteRecoversReadOnlyLog(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {

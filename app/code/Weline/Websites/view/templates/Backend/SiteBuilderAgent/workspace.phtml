@@ -10,6 +10,13 @@ $scope = \is_array($scope) ? $scope : [];
 $scope_preview = (string)($this->getData('scope_preview') ?? '{}');
 $accounts = $this->getData('accounts');
 $accounts = \is_array($accounts) ? $accounts : [];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 $registrarSelectOptions = [];
 foreach ($accounts as $account) {
     $accountId = (int)($account['account_id'] ?? 0);
@@ -25,7 +32,7 @@ foreach ($accounts as $account) {
         'meta' => (string)($account['registrar_code'] ?? ''),
     ];
 }
-$registrarSelectOptionsJson = \json_encode($registrarSelectOptions, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+$registrarSelectOptionsJson = \json_encode($registrarSelectOptions, $jsonForScriptFlags | JSON_THROW_ON_ERROR);
 $messages = $this->getData('messages');
 $messages = \is_array($messages) ? $messages : [];
 $events = $this->getData('events');
@@ -97,6 +104,20 @@ $allPageTypes = [
     'blog_post',
     'custom_page',
 ];
+$pageTypeLabels = [
+    'home_page' => (string)__('首页'),
+    'about_page' => (string)__('关于我们'),
+    'contact_page' => (string)__('联系我们'),
+    'privacy_policy' => (string)__('隐私政策'),
+    'terms_of_service' => (string)__('服务条款'),
+    'refund_policy' => (string)__('退款政策'),
+    'shipping_policy' => (string)__('配送政策'),
+    'cookie_policy' => (string)__('Cookie政策'),
+    'blog_list' => (string)__('博客列表'),
+    'blog_category' => (string)__('博客分类'),
+    'blog_post' => (string)__('博客文章'),
+    'custom_page' => (string)__('自定义页面'),
+];
 $selectedPageTypes = $scope['page_types'] ?? [];
 if (!\is_array($selectedPageTypes) || $selectedPageTypes === []) {
     $selectedPageTypes = $allPageTypes;
@@ -109,7 +130,7 @@ $pageTypeLayouts = $scope['page_type_layouts'] ?? [];
 $pageTypeLayouts = \is_array($pageTypeLayouts) ? $pageTypeLayouts : [];
 $activeLayoutPageType = (string)($selectedPageTypes[0] ?? 'home_page');
 $activeLayoutPayload = $pageTypeLayouts[$activeLayoutPageType] ?? [];
-$activeLayoutPayloadJson = \json_encode($activeLayoutPayload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+$activeLayoutPayloadJson = \json_encode($activeLayoutPayload, $jsonForScriptFlags | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
 $componentDraftCode = (string)($scope['virtual_component_code'] ?? 'content/ai-generated-section');
 $componentDraftName = (string)($scope['virtual_component_name'] ?? 'AI Generated Section');
 $rawComponentDraftTemplate = (string)($scope['virtual_component_template'] ?? '');
@@ -176,7 +197,7 @@ if ($currentGuide === null && $stage_guides !== []) {
 $currentGuidePatchJson = '{}';
 if (\is_array($currentGuide)) {
     try {
-        $currentGuidePatchJson = (string)\json_encode($currentGuide['recommendation_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $currentGuidePatchJson = (string)\json_encode($currentGuide['recommendation_patch'] ?? [], $jsonForScriptFlags | JSON_THROW_ON_ERROR);
     } catch (\JsonException) {
         $currentGuidePatchJson = '{}';
     }
@@ -632,7 +653,7 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
                             $toolType = (string)($tool['type'] ?? 'link');
                             $toolTarget = (string)($tool['target'] ?? '_self');
                             $toolPatchJson = '{}';
-                            try { $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR); } catch (\JsonException) {}
+                            try { $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], $jsonForScriptFlags | JSON_THROW_ON_ERROR); } catch (\JsonException) {}
                             ?>
                             <div class="wb-tool">
                                 <div><strong><?= htmlspecialchars((string)($tool['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><p class="mb-0 text-muted small"><?= htmlspecialchars((string)($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p></div>
@@ -654,7 +675,7 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
                                 $toolType = (string)($tool['type'] ?? 'link');
                                 $toolTarget = (string)($tool['target'] ?? '_self');
                                 $toolPatchJson = '{}';
-                                try { $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR); } catch (\JsonException) {}
+                                try { $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], $jsonForScriptFlags | JSON_THROW_ON_ERROR); } catch (\JsonException) {}
                                 ?>
                                 <div class="wb-tool">
                                     <div><strong><?= htmlspecialchars((string)($tool['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><p class="mb-0 text-muted small"><?= htmlspecialchars((string)($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p></div>
@@ -679,7 +700,7 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
             <summary class="wb-summary-link"><lang>查看最近事件</lang></summary>
             <div class="card border-0 shadow-sm mt-3">
                 <div class="card-body p-4">
-                    <?php if ($events === []) { ?><div class="wb-empty"><lang>暂无事件。</lang></div><?php } else { ?><div class="wb-list"><?php foreach ($events as $event) { ?><div class="wb-event"><div class="wb-head"><strong><?= htmlspecialchars((string)($event['event_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($event['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span></div><div class="wb-code"><?= htmlspecialchars((string)\json_encode($event['payload'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></div></div><?php } ?></div><?php } ?>
+                    <?php if ($events === []) { ?><div class="wb-empty"><lang>暂无事件。</lang></div><?php } else { ?><div class="wb-list"><?php foreach ($events as $event) { ?><div class="wb-event"><div class="wb-head"><strong><?= htmlspecialchars((string)($event['event_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($event['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span></div><div class="wb-code"><?= htmlspecialchars((string)\json_encode($event['payload'] ?? [], $jsonForScriptFlags), ENT_QUOTES, 'UTF-8') ?></div></div><?php } ?></div><?php } ?>
                 </div>
             </div>
         </details>
@@ -1165,22 +1186,22 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
     console.log('[PageBuilder] JavaScript 开始执行');
 
-    var publicId = <?= json_encode($publicId, JSON_THROW_ON_ERROR) ?>;
-    var providerCode = <?= json_encode((string)($provider_context['code'] ?? ''), JSON_THROW_ON_ERROR) ?>;
-    var providerNativeUrl = <?= json_encode($provider_native_url, JSON_THROW_ON_ERROR) ?>;
-    var currentStageCode = <?= json_encode($current_stage, JSON_THROW_ON_ERROR) ?>;
-    var mergeScopeUrl = <?= json_encode($merge_scope_url, JSON_THROW_ON_ERROR) ?>;
-    var replaceScopeUrl = <?= json_encode($replace_scope_url, JSON_THROW_ON_ERROR) ?>;
-    var setStageUrl = <?= json_encode($set_stage_url, JSON_THROW_ON_ERROR) ?>;
-    var appendMessageUrl = <?= json_encode($append_message_url, JSON_THROW_ON_ERROR) ?>;
-    var deleteSessionUrl = <?= json_encode($delete_session_url, JSON_THROW_ON_ERROR) ?>;
-    var startDomainPurchaseUrl = <?= json_encode($start_domain_purchase_url, JSON_THROW_ON_ERROR) ?>;
-    var domainPurchaseSseBaseUrl = <?= json_encode($domain_purchase_sse_url, JSON_THROW_ON_ERROR) ?>;
-    var generateVirtualThemeSseBaseUrl = <?= json_encode($generate_virtual_theme_sse_url, JSON_THROW_ON_ERROR) ?>;
-    var saveVirtualThemeUrl = <?= json_encode($save_virtual_theme_url, JSON_THROW_ON_ERROR) ?>;
-    var savePageTypeLayoutUrl = <?= json_encode($save_page_type_layout_url, JSON_THROW_ON_ERROR) ?>;
-    var saveVirtualComponentUrl = <?= json_encode($save_virtual_component_url, JSON_THROW_ON_ERROR) ?>;
-    var streamBaseUrlRaw = <?= json_encode($site_builder_sse_url, JSON_THROW_ON_ERROR) ?>;
+    var publicId = <?= json_encode($publicId, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var providerCode = <?= json_encode((string)($provider_context['code'] ?? ''), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var providerNativeUrl = <?= json_encode($provider_native_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var currentStageCode = <?= json_encode($current_stage, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var mergeScopeUrl = <?= json_encode($merge_scope_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var replaceScopeUrl = <?= json_encode($replace_scope_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var setStageUrl = <?= json_encode($set_stage_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var appendMessageUrl = <?= json_encode($append_message_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var deleteSessionUrl = <?= json_encode($delete_session_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var startDomainPurchaseUrl = <?= json_encode($start_domain_purchase_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var domainPurchaseSseBaseUrl = <?= json_encode($domain_purchase_sse_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var generateVirtualThemeSseBaseUrl = <?= json_encode($generate_virtual_theme_sse_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var saveVirtualThemeUrl = <?= json_encode($save_virtual_theme_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var savePageTypeLayoutUrl = <?= json_encode($save_page_type_layout_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var saveVirtualComponentUrl = <?= json_encode($save_virtual_component_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var streamBaseUrlRaw = <?= json_encode($site_builder_sse_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = streamBaseUrlRaw;
     try {
         if (streamBaseUrlRaw && String(streamBaseUrlRaw).indexOf('://') >= 0) {
@@ -1192,77 +1213,79 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     }
     var workspaceRegistrarOptions = <?= $registrarSelectOptionsJson ?>;
     var lastEventId = <?= (int)$last_event_id ?>;
-    var domainPurchaseState = <?= json_encode($domain_purchase_state, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;
+    var domainPurchaseState = <?= json_encode($domain_purchase_state, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
     var pageQuery = new URLSearchParams(window.location.search || '');
     var autoStartDomainPurchase = pageQuery.get('auto_start_domain_purchase') === '1';
     var virtualThemeAutoGenerated = <?= $virtualThemeAutoGenerated ? 'true' : 'false' ?>;
     var virtualThemeSeedEmpty = <?= $virtualThemeSeedEmpty ? 'true' : 'false' ?>;
-    var initialDomainEventIds = <?= json_encode(array_values(array_map(static fn(array $event): int => (int)($event['event_id'] ?? 0), $domainEvents)), JSON_THROW_ON_ERROR) ?>;
+    var initialDomainEventIds = <?= json_encode(array_values(array_map(static fn(array $event): int => (int)($event['event_id'] ?? 0), $domainEvents)), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
     var languageUtils = window.WelineLanguageSelectUtils || null;
     var messages = {
-        applyRecommendationFailed: <?= json_encode((string)__('Failed to apply recommendation'), JSON_THROW_ON_ERROR) ?>,
-        stageUpdateFailed: <?= json_encode((string)__('Failed to update stage'), JSON_THROW_ON_ERROR) ?>,
-        summarySaved: <?= json_encode((string)__('Summary saved'), JSON_THROW_ON_ERROR) ?>,
-        summarySaveFailed: <?= json_encode((string)__('Failed to save summary'), JSON_THROW_ON_ERROR) ?>,
-        recommendationApplied: <?= json_encode((string)__('AI recommendation applied'), JSON_THROW_ON_ERROR) ?>,
-        recommendationDataBroken: <?= json_encode((string)__('Recommendation data is invalid'), JSON_THROW_ON_ERROR) ?>,
-        returnedToPreviousStage: <?= json_encode((string)__('Returned to previous stage'), JSON_THROW_ON_ERROR) ?>,
-        stageUpdated: <?= json_encode((string)__('Stage updated'), JSON_THROW_ON_ERROR) ?>,
-        networkError: <?= json_encode((string)__('Network error'), JSON_THROW_ON_ERROR) ?>,
-        messageRequired: <?= json_encode((string)__('Please enter a note first'), JSON_THROW_ON_ERROR) ?>,
-        noteSaved: <?= json_encode((string)__('Note saved to workspace'), JSON_THROW_ON_ERROR) ?>,
-        noteSaveFailed: <?= json_encode((string)__('Failed to save note'), JSON_THROW_ON_ERROR) ?>,
-        scopeReplaced: <?= json_encode((string)__('Scope replaced'), JSON_THROW_ON_ERROR) ?>,
-        scopeReplaceFailed: <?= json_encode((string)__('Failed to replace scope'), JSON_THROW_ON_ERROR) ?>,
-        patchMerged: <?= json_encode((string)__('Patch merged into scope'), JSON_THROW_ON_ERROR) ?>,
-        patchMergeFailed: <?= json_encode((string)__('Failed to merge patch'), JSON_THROW_ON_ERROR) ?>,
-        toolPatchBroken: <?= json_encode((string)__('Tool scope patch is invalid'), JSON_THROW_ON_ERROR) ?>,
-        toolApplied: <?= json_encode((string)__('Provider tool applied'), JSON_THROW_ON_ERROR) ?>,
-        toolApplyFailed: <?= json_encode((string)__('Failed to apply provider tool'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseQueued: <?= json_encode((string)__('域名购买已排队'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseQueueFailed: <?= json_encode((string)__('域名购买排队失败'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseAutoQueued: <?= json_encode((string)__('已自动开始域名购买，进度会持续刷新，你可以继续后续虚拟主题步骤。'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseRunning: <?= json_encode((string)__('购买进行中'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseCompleted: <?= json_encode((string)__('已完成'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseRetry: <?= json_encode((string)__('重新执行'), JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseButton: <?= json_encode((string)__('购买域名'), JSON_THROW_ON_ERROR) ?>,
-        streamReconnect: <?= json_encode((string)__('重新连接事件流'), JSON_THROW_ON_ERROR) ?>,
-        streamConnected: <?= json_encode((string)__('事件流已连接'), JSON_THROW_ON_ERROR) ?>,
-        streamDisconnected: <?= json_encode((string)__('事件流已断开，正在重连...'), JSON_THROW_ON_ERROR) ?>,
-        streamSessionMissing: <?= json_encode((string)__('无法解析当前工作区会话，请刷新页面后重试。'), JSON_THROW_ON_ERROR) ?>,
-        domainLogEmpty: <?= json_encode((string)__('暂无域名购买日志。'), JSON_THROW_ON_ERROR) ?>,
-        domainStatusIdle: <?= json_encode((string)__('待启动'), JSON_THROW_ON_ERROR) ?>,
-        domainStatusQueued: <?= json_encode((string)__('已排队'), JSON_THROW_ON_ERROR) ?>,
-        domainStatusRunning: <?= json_encode((string)__('进行中'), JSON_THROW_ON_ERROR) ?>,
-        domainStatusFailed: <?= json_encode((string)__('失败'), JSON_THROW_ON_ERROR) ?>,
-        domainStagePurchase: <?= json_encode((string)__('购买域名'), JSON_THROW_ON_ERROR) ?>,
-        domainStageDns: <?= json_encode((string)__('切换 DNS'), JSON_THROW_ON_ERROR) ?>,
-        domainStageResolve: <?= json_encode((string)__('等待解析'), JSON_THROW_ON_ERROR) ?>,
-        domainStageVerify: <?= json_encode((string)__('访问验证'), JSON_THROW_ON_ERROR) ?>,
-        domainStageCdn: <?= json_encode((string)__('切换 CDN'), JSON_THROW_ON_ERROR) ?>,
-        domainStageSsl: <?= json_encode((string)__('申请 HTTPS'), JSON_THROW_ON_ERROR) ?>,
-        domainStageCompleted: <?= json_encode((string)__('域名完备'), JSON_THROW_ON_ERROR) ?>,
-        domainStageFailed: <?= json_encode((string)__('流程失败'), JSON_THROW_ON_ERROR) ?>,
-        domainStageUpdated: <?= json_encode((string)__('阶段更新'), JSON_THROW_ON_ERROR) ?>,
-        domainStartPending: <?= json_encode((string)__('准备启动域名购买'), JSON_THROW_ON_ERROR) ?>,
-        domainOrderPending: <?= json_encode((string)__('等待生成'), JSON_THROW_ON_ERROR) ?>,
-        domainPending: <?= json_encode((string)__('待确认'), JSON_THROW_ON_ERROR) ?>,
-        domainLogSummary: <?= json_encode((string)__('展开域名阶段日志'), JSON_THROW_ON_ERROR) ?>,
-        domainLogSummaryWithCount: <?= json_encode((string)__('展开域名阶段日志（%{count}）'), JSON_THROW_ON_ERROR) ?>
-        ,virtualThemeSaved: <?= json_encode((string)__('虚拟主题已保存到数据库'), JSON_THROW_ON_ERROR) ?>
-        ,virtualThemeSaveFailed: <?= json_encode((string)__('保存虚拟主题失败'), JSON_THROW_ON_ERROR) ?>
-        ,pageLayoutSaved: <?= json_encode((string)__('页面布局已保存'), JSON_THROW_ON_ERROR) ?>
-        ,pageLayoutSaveFailed: <?= json_encode((string)__('保存页面布局失败'), JSON_THROW_ON_ERROR) ?>
-        ,virtualComponentSaved: <?= json_encode((string)__('AI 组件已保存并发布'), JSON_THROW_ON_ERROR) ?>
-        ,virtualComponentSaveFailed: <?= json_encode((string)__('保存 AI 组件失败'), JSON_THROW_ON_ERROR) ?>
-        ,virtualThemeAiStart: <?= json_encode((string)__('正在自动生成虚拟主题...'), JSON_THROW_ON_ERROR) ?>
-        ,virtualThemeAiDone: <?= json_encode((string)__('虚拟主题自动生成完成'), JSON_THROW_ON_ERROR) ?>
-        ,virtualThemeAiFailed: <?= json_encode((string)__('虚拟主题自动生成失败'), JSON_THROW_ON_ERROR) ?>
-        ,workspaceBusy: <?= json_encode((string)__('AI 正在处理，请等待完成后再操作。'), JSON_THROW_ON_ERROR) ?>
-        ,planCompleteModalTitle: <?= json_encode((string)__('AI 规划完成'), JSON_THROW_ON_ERROR) ?>
-        ,planCompleteModalDesc: <?= json_encode((string)__('请选择要生成的页面类型（默认全部选中），确认后开始生成虚拟主题。'), JSON_THROW_ON_ERROR) ?>
-        ,planCompleteConfirm: <?= json_encode((string)__('确认并开始生成虚拟主题'), JSON_THROW_ON_ERROR) ?>
-        ,planCompleteCancel: <?= json_encode((string)__('取消'), JSON_THROW_ON_ERROR) ?>
+        applyRecommendationFailed: <?= json_encode((string)__('Failed to apply recommendation'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        stageUpdateFailed: <?= json_encode((string)__('Failed to update stage'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        summarySaved: <?= json_encode((string)__('Summary saved'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        summarySaveFailed: <?= json_encode((string)__('Failed to save summary'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendationApplied: <?= json_encode((string)__('AI recommendation applied'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendationDataBroken: <?= json_encode((string)__('Recommendation data is invalid'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        returnedToPreviousStage: <?= json_encode((string)__('Returned to previous stage'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        stageUpdated: <?= json_encode((string)__('Stage updated'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        networkError: <?= json_encode((string)__('Network error'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        messageRequired: <?= json_encode((string)__('Please enter a note first'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        noteSaved: <?= json_encode((string)__('Note saved to workspace'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        noteSaveFailed: <?= json_encode((string)__('Failed to save note'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        scopeReplaced: <?= json_encode((string)__('Scope replaced'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        scopeReplaceFailed: <?= json_encode((string)__('Failed to replace scope'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        patchMerged: <?= json_encode((string)__('Patch merged into scope'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        patchMergeFailed: <?= json_encode((string)__('Failed to merge patch'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        toolPatchBroken: <?= json_encode((string)__('Tool scope patch is invalid'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        toolApplied: <?= json_encode((string)__('Provider tool applied'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        toolApplyFailed: <?= json_encode((string)__('Failed to apply provider tool'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseQueued: <?= json_encode((string)__('域名购买已排队'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseQueueFailed: <?= json_encode((string)__('域名购买排队失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseAutoQueued: <?= json_encode((string)__('已自动开始域名购买，进度会持续刷新，你可以继续后续虚拟主题步骤。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseRunning: <?= json_encode((string)__('购买进行中'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseCompleted: <?= json_encode((string)__('已完成'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseRetry: <?= json_encode((string)__('重新执行'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseButton: <?= json_encode((string)__('购买域名'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        streamReconnect: <?= json_encode((string)__('重新连接事件流'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        streamConnected: <?= json_encode((string)__('事件流已连接'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        streamDisconnected: <?= json_encode((string)__('事件流已断开，正在重连...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        streamSessionMissing: <?= json_encode((string)__('无法解析当前工作区会话，请刷新页面后重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainLogEmpty: <?= json_encode((string)__('暂无域名购买日志。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStatusIdle: <?= json_encode((string)__('待启动'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStatusQueued: <?= json_encode((string)__('已排队'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStatusRunning: <?= json_encode((string)__('进行中'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStatusFailed: <?= json_encode((string)__('失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStagePurchase: <?= json_encode((string)__('购买域名'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageDns: <?= json_encode((string)__('切换 DNS'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageResolve: <?= json_encode((string)__('等待解析'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageVerify: <?= json_encode((string)__('访问验证'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageCdn: <?= json_encode((string)__('切换 CDN'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageSsl: <?= json_encode((string)__('申请 HTTPS'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageCompleted: <?= json_encode((string)__('域名完备'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageFailed: <?= json_encode((string)__('流程失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStageUpdated: <?= json_encode((string)__('阶段更新'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainStartPending: <?= json_encode((string)__('准备启动域名购买'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainOrderPending: <?= json_encode((string)__('等待生成'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainPending: <?= json_encode((string)__('待确认'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainLogSummary: <?= json_encode((string)__('展开域名阶段日志'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainLogSummaryWithCount: <?= json_encode((string)__('展开域名阶段日志（%{count}）'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualThemeSaved: <?= json_encode((string)__('虚拟主题已保存到数据库'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualThemeSaveFailed: <?= json_encode((string)__('保存虚拟主题失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,pageLayoutSaved: <?= json_encode((string)__('页面布局已保存'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,pageLayoutSaveFailed: <?= json_encode((string)__('保存页面布局失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualComponentSaved: <?= json_encode((string)__('AI 组件已保存并发布'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualComponentSaveFailed: <?= json_encode((string)__('保存 AI 组件失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualThemeAiStart: <?= json_encode((string)__('正在自动生成虚拟主题...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualThemeAiDone: <?= json_encode((string)__('虚拟主题自动生成完成'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,virtualThemeAiFailed: <?= json_encode((string)__('虚拟主题自动生成失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,workspaceBusy: <?= json_encode((string)__('AI 正在处理，请等待完成后再操作。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,planCompleteModalTitle: <?= json_encode((string)__('AI 规划完成'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,planCompleteModalDesc: <?= json_encode((string)__('请选择要生成的页面类型（默认全部选中），确认后开始生成虚拟主题。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,planCompleteConfirm: <?= json_encode((string)__('确认并开始生成虚拟主题'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,planCompleteCancel: <?= json_encode((string)__('取消'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,pageTypeRequired: <?= json_encode((string)__('请至少选择一个页面类型'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
+        ,confirmUnavailable: <?= json_encode((string)__('确认组件不可用，请刷新页面后重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
     };
 
     function escapeHtml(value) {
@@ -1504,9 +1527,9 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }
     }
 
-    messages.deleteSessionConfirm = <?= json_encode((string)__('确定删除这条最近会话吗？'), JSON_THROW_ON_ERROR) ?>;
-    messages.deleteSessionSuccess = <?= json_encode((string)__('最近会话已删除'), JSON_THROW_ON_ERROR) ?>;
-    messages.deleteSessionFailed = <?= json_encode((string)__('删除最近会话失败'), JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionConfirm = <?= json_encode((string)__('确定删除这条最近会话吗？'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionSuccess = <?= json_encode((string)__('最近会话已删除'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionFailed = <?= json_encode((string)__('删除最近会话失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
 
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
@@ -1516,6 +1539,18 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         if (window.BackendToast && typeof window.BackendToast.info === 'function') {
             window.BackendToast.info(message);
         }
+    }
+
+    function confirmAction(message, onConfirm) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(message).then(function (confirmed) {
+                if (confirmed) {
+                    onConfirm();
+                }
+            });
+            return;
+        }
+        toast('error', messages.confirmUnavailable);
     }
 
     function toSameOriginRequestPath(rawUrl) {
@@ -1572,18 +1607,17 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             toast('error', messages.deleteSessionFailed);
             return;
         }
-        if (!window.confirm(messages.deleteSessionConfirm)) {
-            return;
-        }
-        postForm(deleteSessionUrl, { public_id: publicId }).then(function (data) {
-            if (data && data.success) {
-                removeRecentSessionCard(publicId);
-                toast('success', data.message || messages.deleteSessionSuccess);
-                return;
-            }
-            toast('error', (data && data.message) ? data.message : messages.deleteSessionFailed);
-        }).catch(function () {
-            toast('error', messages.networkError);
+        confirmAction(messages.deleteSessionConfirm, function () {
+            postForm(deleteSessionUrl, { public_id: publicId }).then(function (data) {
+                if (data && data.success) {
+                    removeRecentSessionCard(publicId);
+                    toast('success', data.message || messages.deleteSessionSuccess);
+                    return;
+                }
+                toast('error', (data && data.message) ? data.message : messages.deleteSessionFailed);
+            }).catch(function () {
+                toast('error', messages.networkError);
+            });
         });
     }
 
@@ -2976,15 +3010,16 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     // }
 
     // ========== 可视化主题编辑器 ==========
-    var nextStep = <?= json_encode($this->getData('next_step') ?? '', JSON_UNESCAPED_UNICODE) ?>;
+    var nextStep = <?= json_encode($this->getData('next_step') ?? '', $jsonForScriptFlags) ?>;
     var autoShowPageTypeSelector = <?= $this->getData('auto_show_page_type_selector') ? 'true' : 'false' ?>;
     var virtualThemeAutoGenerated = <?= !empty($scope['virtual_theme_auto_generated']) ? 'true' : 'false' ?>;
 
     // 定义所有页面类型（从 PHP 传递到 JavaScript）
-    var allPageTypes = <?= json_encode($allPageTypes, JSON_UNESCAPED_UNICODE) ?>;
+    var allPageTypes = <?= json_encode($allPageTypes, $jsonForScriptFlags) ?>;
+    var pageTypeLabels = <?= json_encode($pageTypeLabels, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
 
     // 页面类型生成状态管理
-    var generatedPageTypes = <?= json_encode($scope['generated_page_types'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    var generatedPageTypes = <?= json_encode($scope['generated_page_types'] ?? [], $jsonForScriptFlags) ?>;
     var pageTypeStates = {};
     allPageTypes.forEach(function(pageType) {
         pageTypeStates[pageType] = {
@@ -3059,21 +3094,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     }
 
     function getPageTypeLabel(pageType) {
-        var labels = {
-            'home_page': '<?= __('首页') ?>',
-            'about_page': '<?= __('关于我们') ?>',
-            'contact_page': '<?= __('联系我们') ?>',
-            'privacy_policy': '<?= __('隐私政策') ?>',
-            'terms_of_service': '<?= __('服务条款') ?>',
-            'refund_policy': '<?= __('退款政策') ?>',
-            'shipping_policy': '<?= __('配送政策') ?>',
-            'cookie_policy': '<?= __('Cookie政策') ?>',
-            'blog_list': '<?= __('博客列表') ?>',
-            'blog_category': '<?= __('博客分类') ?>',
-            'blog_post': '<?= __('博客文章') ?>',
-            'custom_page': '<?= __('自定义页面') ?>'
-        };
-        return labels[pageType] || pageType;
+        return pageTypeLabels[pageType] || pageType;
     }
 
     // ========== 页面类型确认弹窗控制 ==========
@@ -3153,9 +3174,9 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
                 if (selectedTypes.length === 0) {
                     if (typeof FrontendToast !== 'undefined') {
-                        FrontendToast.warning('<?= __('请至少选择一个页面类型') ?>');
+                        FrontendToast.warning(messages.pageTypeRequired);
                     } else {
-                        alert('<?= __('请至少选择一个页面类型') ?>');
+                        toast('error', messages.pageTypeRequired);
                     }
                     return;
                 }
@@ -3404,6 +3425,32 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         iframeLoadRetries = 0; // 重置重试计数
     };
 
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-site-builder-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        var action = trigger.getAttribute('data-site-builder-action');
+        if (action === 'start-progressive-generation') {
+            startProgressiveGeneration();
+        } else if (action === 'show-page-type-selector') {
+            showPageTypeSelectorModal();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var frame = document.getElementById('visualEditorFrame');
+        if (!frame) {
+            return;
+        }
+        frame.addEventListener('load', function() {
+            if (window.visualEditorFrameLoaded) {
+                window.visualEditorFrameLoaded();
+            }
+        });
+    });
+
     function showVisualEditor(url) {
         if (!visualEditorFrame || !visualEditorContainer) return;
 
@@ -3617,7 +3664,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
-                <button type="button" class="btn btn-primary" onclick="startProgressiveGeneration()"><lang>确认生成</lang></button>
+                <button type="button" class="btn btn-primary" data-site-builder-action="start-progressive-generation"><lang>确认生成</lang></button>
             </div>
         </div>
     </div>
@@ -3629,7 +3676,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         <div class="d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
                 <h5 class="mb-0"><lang>可视化编辑器</lang></h5>
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showPageTypeSelectorModal()" title="<?= __('新增页面类型') ?>">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-site-builder-action="show-page-type-selector" title="<?= __('新增页面类型') ?>">
                     <i class="mdi mdi-plus"></i> <lang>新增页面类型</lang>
                 </button>
             </div>
@@ -3639,6 +3686,6 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         </div>
     </div>
     <div class="card-body p-0">
-        <iframe id="visualEditorFrame" style="width:100%; height:800px; border:none;" onload="if(window.visualEditorFrameLoaded) window.visualEditorFrameLoaded();"></iframe>
+        <iframe id="visualEditorFrame" style="width:100%; height:800px; border:none;"></iframe>
     </div>
 </div>

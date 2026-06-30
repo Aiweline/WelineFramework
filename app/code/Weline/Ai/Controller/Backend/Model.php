@@ -16,6 +16,8 @@ namespace Weline\Ai\Controller\Backend;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\ModelCollector;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
+use Weline\Ai\Service\Provider\ProviderConnectionTestInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Service\Provider\ModelSyncService;
 use Weline\Ai\Model\Provider\Account;
@@ -430,12 +432,17 @@ class Model extends BackendController
 
             if ($searchFilter !== '') {
                 $needle = mb_strtolower($searchFilter);
-                $allFilteredRows = array_values(array_filter($allFilteredRows, static function (array $row) use ($needle): bool {
+                $searchAccountMap = $this->buildProviderAccountDisplayMap($allFilteredRows);
+                $allFilteredRows = array_values(array_filter($allFilteredRows, static function (array $row) use ($needle, $searchAccountMap): bool {
+                    $providerConfig = $row[AiModel::schema_fields_PROVIDER_CONFIG] ?? $row['provider_config'] ?? null;
+                    $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+                    $accountId = is_array($providerData) ? (int)($providerData['account_id'] ?? 0) : 0;
                     $haystacks = [
                         (string)($row['name'] ?? ''),
                         (string)($row['model_code'] ?? ''),
                         (string)($row['supplier'] ?? ''),
                         (string)($row['vendor'] ?? ''),
+                        $accountId > 0 ? (string)($searchAccountMap[$accountId]['account_name'] ?? '') : '',
                     ];
                     foreach ($haystacks as $text) {
                         if ($text !== '' && str_contains(mb_strtolower($text), $needle)) {
@@ -451,17 +458,23 @@ class Model extends BackendController
             $page = min($page, $totalPages);
             $offset = ($page - 1) * $pageSize;
             $modelData = array_slice($allFilteredRows, $offset, $pageSize);
+            $providerAccountMap = $this->buildProviderAccountDisplayMap($modelData);
 
             $models = [];
             foreach ($modelData as $data) {
                 // 检查配置状态
                 $config = $data['config'] ?? '';
                 $providerConfig = $data['provider_config'] ?? '';
+                $providerData = !empty($providerConfig)
+                    ? (is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig)
+                    : [];
+                if (!is_array($providerData)) {
+                    $providerData = [];
+                }
                 $hasApiKey = false;
                 
                 // 检查是否有API密钥
                 if (!empty($providerConfig)) {
-                    $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
                     $hasApiKey = !empty($providerData['api_key']);
                 }
                 if (!$hasApiKey && !empty($config)) {
@@ -485,12 +498,18 @@ class Model extends BackendController
                 $isCustomSupplier = ($supplier !== '' && !isset($supportedProviders[$supplier]));
                 $isCustomModel = $isCustomSupplier || $modelSource === AiModel::SOURCE_LOCAL;
                 $priceCurrency = (string)($supportedProviders[$supplier]['price_currency'] ?? 'USD');
+                $providerAccountId = (int)($providerData['account_id'] ?? 0);
+                $providerAccountName = $providerAccountId > 0 ? (string)($providerAccountMap[$providerAccountId]['account_name'] ?? '') : '';
+                $providerAccountStatus = $providerAccountId > 0 ? (string)($providerAccountMap[$providerAccountId]['connection_status'] ?? '') : '';
 
                 $models[] = [
                     'id' => $data['id'] ?? '',
                     // 显示供应商：优先使用配置中的vendor，退回到数据库字段supplier
                     'vendor' => $data['vendor'] ?? ($data['supplier'] ?? ''),
                     'supplier' => $supplier,
+                    'provider_account_id' => $providerAccountId,
+                    'provider_account_name' => $providerAccountName,
+                    'provider_account_status' => $providerAccountStatus,
                     'name' => $data['name'] ?? '',
                     'model_code' => $data['model_code'] ?? '',
                     'primary_modality' => AiModel::normalizePrimaryModality((string)($data['primary_modality'] ?? '')),
@@ -586,6 +605,45 @@ class Model extends BackendController
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array{account_name:string,connection_status:string}>
+     */
+    private function buildProviderAccountDisplayMap(array $rows): array
+    {
+        $accountIds = [];
+        foreach ($rows as $row) {
+            $providerConfig = $row[AiModel::schema_fields_PROVIDER_CONFIG] ?? $row['provider_config'] ?? null;
+            $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+            if (!is_array($providerData)) {
+                continue;
+            }
+            $accountId = (int)($providerData['account_id'] ?? 0);
+            if ($accountId > 0) {
+                $accountIds[$accountId] = true;
+            }
+        }
+
+        if ($accountIds === []) {
+            return [];
+        }
+
+        $map = [];
+        foreach (array_keys($accountIds) as $accountId) {
+            /** @var Account $account */
+            $account = ObjectManager::getInstance(Account::class)->clear()->load((int)$accountId);
+            if (!$account->getId()) {
+                continue;
+            }
+            $map[(int)$accountId] = [
+                'account_name' => (string)($account->getData(Account::schema_fields_ACCOUNT_NAME) ?: ('#' . $accountId)),
+                'connection_status' => (string)$account->getData(Account::schema_fields_CONNECTION_STATUS),
+            ];
+        }
+
+        return $map;
     }
 
     /**
@@ -908,7 +966,8 @@ class Model extends BackendController
                     'message' => '',
                     'response' => '',
                     'duration' => 0,
-                    'account_name' => ''
+                    'account_name' => '',
+                    'errors' => []
                 ]
             ];
 
@@ -921,6 +980,7 @@ class Model extends BackendController
                     $results['self_config']['success'] = true;
                     $results['self_config']['message'] = __('自配置测试成功');
                     $results['self_config']['response'] = $selfRes['response'] ?? '';
+                    $results['self_config']['images'] = is_array($selfRes['images'] ?? null) ? $selfRes['images'] : [];
                     $results['self_config']['duration'] = $selfRes['duration'] ?? 0;
 
                     // 保存自配置测试成功状态
@@ -986,6 +1046,7 @@ class Model extends BackendController
                 $results['provider_account']['tested'] = true;
                 $testedAccount = null;
                 $testSuccess = false;
+                $providerAccountErrors = [];
                 
                 // 遍历所有激活的账户进行测试
                 foreach ($accounts as $accountData) {
@@ -994,13 +1055,23 @@ class Model extends BackendController
                     $testAccount->load($accountData['id']);
                     
                     if (!$testAccount->getId()) {
+                        $providerAccountErrors[] = [
+                            'account_id' => (int)($accountData['id'] ?? 0),
+                            'account_name' => (string)($accountData['account_name'] ?? ''),
+                            'message' => __('账户不存在或加载失败'),
+                        ];
                         continue;
                     }
                     
                     try {
                         // 调用账户服务测试连接（这会更新账户的连接状态）
                         $startTime = microtime(true);
-                        $testResult = $accountService->testConnection($testAccount);
+                        $testProviderModelCode = trim((string)($testModel->getProviderConfig()['provider_model_code'] ?? $testModel->getProviderConfig()['model'] ?? $modelCode));
+                        $testResult = $accountService->testConnection($testAccount, $testProviderModelCode, [
+                            'primary_modality' => (string)$testModel->getData(AiModel::schema_fields_PRIMARY_MODALITY),
+                            'capabilities' => $testModel->getCapabilities(),
+                            'provider_config' => $testModel->getProviderConfig(),
+                        ]);
                         $duration = round((microtime(true) - $startTime) * 1000, 2);
                         
                         if ($testResult['success']) {
@@ -1008,12 +1079,15 @@ class Model extends BackendController
                             $testedAccount = $testAccount;
                             $results['provider_account']['success'] = true;
                             $results['provider_account']['message'] = __('供应商账户测试成功');
-                            $results['provider_account']['response'] = $testResult['message'] ?? __('连接成功');
+                            // 注意：AccountService::testConnection 会返回真实的测试输出到 response 字段。
+                            // 之前这里误用 message（固定“连接测试成功”），会导致非文生图/非图片模态只看到“连通了”。
+                            $results['provider_account']['response'] = $testResult['response'] ?? $testResult['content'] ?? ($testResult['message'] ?? __('连接成功'));
                             $results['provider_account']['duration'] = $duration;
                             $results['provider_account']['account_name'] = $testAccount->getData('account_name');
                             $results['provider_account']['account_id'] = $testAccount->getId();
                             $results['provider_account']['connection_status'] = $testAccount->getData(Account::schema_fields_CONNECTION_STATUS);
                             $results['provider_account']['trace'] = $testResult['trace'] ?? [];
+                            $results['provider_account']['images'] = is_array($testResult['images'] ?? null) ? $testResult['images'] : [];
                             
                             // 保存供应商测试成功状态
                             if (!$testOnly) {
@@ -1027,8 +1101,22 @@ class Model extends BackendController
                             
                             // 找到可用的账户后，跳出循环
                             break;
+                        } else {
+                            $providerAccountErrors[] = [
+                                'account_id' => (int)$testAccount->getId(),
+                                'account_name' => (string)($testAccount->getData('account_name') ?: ''),
+                                'message' => (string)($testResult['message'] ?? __('连接测试失败')),
+                            ];
+                            Env::log('ai_model.log', sprintf('[testConnection] account_id=%s provider_test_returned_failed: %s',
+                                $testAccount->getId(), (string)($testResult['message'] ?? '')
+                            ));
                         }
                     } catch (\Exception $e) {
+                        $providerAccountErrors[] = [
+                            'account_id' => (int)$testAccount->getId(),
+                            'account_name' => (string)($testAccount->getData('account_name') ?: ''),
+                            'message' => $e->getMessage(),
+                        ];
                         // 继续测试下一个账户
                         Env::log('ai_model.log', sprintf('[testConnection] account_id=%s test_failed: %s', 
                             $testAccount->getId(), $e->getMessage()
@@ -1040,7 +1128,20 @@ class Model extends BackendController
                 // 如果所有账户测试都失败
                 if (!$testSuccess) {
                     $results['provider_account']['success'] = false;
+                    $results['provider_account']['errors'] = $providerAccountErrors;
                     $results['provider_account']['message'] = __('所有供应商账户测试均失败');
+                    if (!empty($providerAccountErrors)) {
+                        $detailParts = [];
+                        foreach ($providerAccountErrors as $providerAccountError) {
+                            $accountLabel = (string)($providerAccountError['account_name'] ?? '');
+                            if ($accountLabel === '') {
+                                $accountId = (int)($providerAccountError['account_id'] ?? 0);
+                                $accountLabel = $accountId > 0 ? ('account_id=' . $accountId) : 'unknown account';
+                            }
+                            $detailParts[] = $accountLabel . ': ' . (string)($providerAccountError['message'] ?? '');
+                        }
+                        $results['provider_account']['message'] .= "\n" . implode("\n", $detailParts);
+                    }
                     if (!isset($results['provider_account']['trace'])) {
                         $results['provider_account']['trace'] = [];
                     }
@@ -1060,6 +1161,11 @@ class Model extends BackendController
                 $results['provider_account']['tested'] = false;
                 $results['provider_account']['success'] = false;
                 $results['provider_account']['message'] = __('没有可用的 %{provider} 供应商账户', ['provider' => $providerCode]);
+                $results['provider_account']['errors'] = [[
+                    'account_id' => 0,
+                    'account_name' => '',
+                    'message' => __('没有可用的 %{provider} 供应商账户', ['provider' => $providerCode]),
+                ]];
             }
 
             // 计算整体连通性（任一成功视为成功）
@@ -1113,10 +1219,6 @@ class Model extends BackendController
             throw new \Exception(__('模型自配置不完整'));
         }
 
-        if ((string)$model->getData(AiModel::schema_fields_PRIMARY_MODALITY) === AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE) {
-            return $this->testImageModelSelfConfig($model);
-        }
-        
         // 创建临时模型用于测试
         
         // 获取对应的Provider
@@ -1131,6 +1233,20 @@ class Model extends BackendController
             throw new \Exception(__('无法创建供应商实例'));
         }
         
+        if ($provider instanceof ProviderConnectionTestInterface) {
+            $providerResult = $provider->testConnection($model, [
+                'temperature' => 0,
+                'test_mode' => true,
+                'timeout' => $model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE) ? 30 : 12,
+            ]);
+            return [
+                'success' => true,
+                'response' => (string)($providerResult['response'] ?? $providerResult['content'] ?? ''),
+                'images' => is_array($providerResult['images'] ?? null) ? $providerResult['images'] : [],
+                'duration' => (float)($providerResult['duration'] ?? 0),
+            ];
+        }
+
         $startTime = microtime(true);
         $result = $provider->generate($model, $prompt, ['temperature' => 0, 'test_mode' => true, 'timeout' => 12]);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
@@ -1149,6 +1265,31 @@ class Model extends BackendController
     private function testImageModelSelfConfig(AiModel $model): array
     {
         $started = microtime(true);
+        $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+        $accountService = ObjectManager::getInstance(AccountService::class);
+        if ($providerCode === '') {
+            $providerCode = $accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+        }
+        $provider = $accountService->getProviderInstance($providerCode);
+        if ($provider instanceof ImageGenerationProviderInterface) {
+            $modelCode = (string)$model->getData(AiModel::schema_fields_MODEL_CODE);
+            $result = $provider->generateImage($model, 'Create a simple 1:1 test image with the word OK on a clean background.', [
+                'test_mode' => true,
+                'timeout' => 30,
+                'response_modalities' => ['TEXT', 'IMAGE'],
+            ]);
+            $images = is_array($result['images'] ?? null) ? $result['images'] : [];
+            if (empty($images)) {
+                throw new \Exception(__('文生图模型测试未返回图片'));
+            }
+            return [
+                'success' => true,
+                'response' => 'image generated: ' . $modelCode,
+                'images' => $images,
+                'duration' => round((microtime(true) - $started) * 1000, 2),
+            ];
+        }
+
         $providerConfig = $model->getProviderConfig();
         $config = array_replace($model->getConfig(), $providerConfig);
         $apiKey = trim((string)($config['api_key'] ?? ''));
@@ -1665,6 +1806,27 @@ class Model extends BackendController
             // 处理提供商配置JSON
             $providerConfig = $this->buildIncomingProviderConfigData($data, $providerModelCode, $config);
             $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $this->encodeJsonConfig($providerConfig));
+
+            $boundAccountId = isset($providerConfig['account_id']) ? (int)$providerConfig['account_id'] : 0;
+            $hasSelfConfig = $this->hasApiCredential($providerConfig) || $this->hasApiCredential($config);
+            $saveSupplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            $hasAvailableProviderAccount = false;
+            if ($boundAccountId <= 0 && !$hasSelfConfig && $saveSupplierCode !== '') {
+                /** @var AccountService $saveAccService */
+                $saveAccService = ObjectManager::getInstance(AccountService::class);
+                $hasAvailableProviderAccount = (bool)$saveAccService->getAvailableAccount($saveSupplierCode);
+                if (!$hasAvailableProviderAccount) {
+                    $hasAvailableProviderAccount = (bool)$saveAccService->getActiveAccountForSync($saveSupplierCode);
+                }
+            }
+            if ($boundAccountId <= 0 && !$hasSelfConfig && !$hasAvailableProviderAccount) {
+                $msg = __('模型必须选择一个供应商账户，或者在自配置模式填写 API Key / api_key_env。');
+                if ($isAjax) {
+                    return $this->jsonResponse(['success' => false, 'message' => $msg]);
+                }
+                $this->getMessageManager()->addError($msg);
+                return $this->redirect('*/backend/model/edit', ['id' => $id]);
+            }
 
             // 保存前校验：供应商必须支持映射后的供应商模型 code
             $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);

@@ -1,0 +1,356 @@
+<?php
+/**
+ * 支付统计驾驶舱（内容模板）
+ * 由布局系统自动包裹 HTML 框架
+ */
+
+$dashboard = $dashboard ?? [];
+$summary = $dashboard['summary'] ?? [];
+$transactions = $dashboard['transactions'] ?? [];
+$intents = $dashboard['intents'] ?? [];
+$attempts = $dashboard['attempts'] ?? [];
+$sources = $dashboard['sources'] ?? [];
+$gaps = $dashboard['gaps'] ?? [];
+
+$escape = static function (mixed $value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
+$countValue = static function (mixed $value): string {
+    return number_format((int)$value);
+};
+$rateValue = static function (mixed $value): string {
+    return number_format((float)$value, 2) . '%';
+};
+$amountList = static function (array $amounts) use ($escape): string {
+    if ($amounts === []) {
+        return '-';
+    }
+
+    $items = [];
+    foreach ($amounts as $currency => $amount) {
+        $items[] = $escape($currency) . ' ' . number_format((float)$amount, 2);
+    }
+
+    return implode('<br>', $items);
+};
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box">
+            <h4 class="page-title">
+                <i class="mdi mdi-view-dashboard-outline me-2"></i><?= __('支付统计驾驶舱') ?>
+            </h4>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted mb-1"><?= __('失败率') ?></p>
+                        <h3 class="mb-0"><?= $rateValue($summary['failure_rate'] ?? 0) ?></h3>
+                    </div>
+                    <span class="badge bg-danger"><?= $countValue($summary['failure_count'] ?? 0) ?></span>
+                </div>
+                <p class="text-muted mt-2 mb-0"><?= __('优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径') ?></p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted mb-1"><?= __('未完成支付') ?></p>
+                        <h3 class="mb-0"><?= $countValue($summary['incomplete_count'] ?? 0) ?></h3>
+                    </div>
+                    <span class="badge bg-warning text-dark"><?= __('待处理') ?></span>
+                </div>
+                <p class="text-muted mt-2 mb-0"><?= __('pending、processing、requires action 等非终态支付') ?></p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted mb-1"><?= __('退款入口') ?></p>
+                        <h3 class="mb-0"><?= $countValue($summary['refund_count'] ?? 0) ?></h3>
+                    </div>
+                    <span class="badge bg-secondary"><?= __('退款') ?></span>
+                </div>
+                <p class="text-muted mt-2 mb-0"><?= __('当前只识别交易和 intent 的退款状态') ?></p>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted mb-1"><?= __('对账异常') ?></p>
+                        <h3 class="mb-0"><?= __('待接入') ?></h3>
+                    </div>
+                    <span class="badge bg-info"><?= __('缺口') ?></span>
+                </div>
+                <p class="text-muted mt-2 mb-0"><?= __('需要 ledger checksum 与 reconciliation difference 模型') ?></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-credit-card-outline me-2"></i><?= __('按支付方式统计') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th><?= __('支付方式代码') ?></th>
+                                <th class="text-end"><?= __('数量') ?></th>
+                                <th><?= __('入口') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php $methodRows = $attempts['by_method'] ?? $transactions['by_method'] ?? []; ?>
+                            <?php if (empty($methodRows)): ?>
+                                <tr><td colspan="3" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach (array_slice($methodRows, 0, 10) as $row): ?>
+                                    <tr>
+                                        <td><?= $escape($row['key'] ?? '') ?></td>
+                                        <td class="text-end"><?= $countValue($row['count'] ?? 0) ?></td>
+                                        <td>
+                                            <a class="btn btn-sm btn-outline-primary" href="<?= $this->getUrl('*/backend/transaction/index', ['method_code' => $row['key'] ?? '']) ?>">
+                                                <?= __('交易') ?>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-currency-usd me-2"></i><?= __('按币种统计') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th><?= __('币种') ?></th>
+                                <th class="text-end"><?= __('数量') ?></th>
+                                <th class="text-end"><?= __('金额') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php $currencyRows = $transactions['by_currency'] ?? []; ?>
+                            <?php if (empty($currencyRows)): ?>
+                                <tr><td colspan="3" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach (array_slice($currencyRows, 0, 10) as $row): ?>
+                                    <tr>
+                                        <td><?= $escape($row['key'] ?? '') ?></td>
+                                        <td class="text-end"><?= $countValue($row['count'] ?? 0) ?></td>
+                                        <td class="text-end"><?= number_format((float)(($transactions['amount_by_currency'][$row['key']] ?? 0)), 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-source-branch me-2"></i><?= __('按 scope 统计') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th><?= __('Scope 代码') ?></th>
+                                <th class="text-end"><?= __('数量') ?></th>
+                                <th><?= __('来源') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php $scopeRows = $intents['by_scope'] ?? $attempts['by_scope'] ?? []; ?>
+                            <?php if (empty($scopeRows)): ?>
+                                <tr><td colspan="3" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach (array_slice($scopeRows, 0, 10) as $row): ?>
+                                    <tr>
+                                        <td><?= $escape($row['key'] ?? '') ?></td>
+                                        <td class="text-end"><?= $countValue($row['count'] ?? 0) ?></td>
+                                        <td><span class="badge bg-light text-dark"><?= __('只读统计') ?></span></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-format-list-bulleted me-2"></i><?= __('按状态统计') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th><?= __('状态') ?></th>
+                                <th class="text-end"><?= __('交易') ?></th>
+                                <th class="text-end"><?= __('Intent 数量') ?></th>
+                                <th class="text-end"><?= __('Attempt 数量') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $statusKeys = [];
+                            foreach ([$transactions['by_status'] ?? [], $intents['by_status'] ?? [], $attempts['by_status'] ?? []] as $statusRows) {
+                                foreach ($statusRows as $row) {
+                                    $statusKeys[$row['key']] = true;
+                                }
+                            }
+                            ?>
+                            <?php if (empty($statusKeys)): ?>
+                                <tr><td colspan="4" class="text-center text-muted"><?= __('暂无统计数据') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach (array_keys($statusKeys) as $statusKey): ?>
+                                    <tr>
+                                        <td>
+                                            <a href="<?= $this->getUrl('*/backend/transaction/index', ['status' => $statusKey]) ?>">
+                                                <?= $escape($statusKey) ?>
+                                            </a>
+                                        </td>
+                                        <td class="text-end"><?= $countValue(array_column($transactions['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
+                                        <td class="text-end"><?= $countValue(array_column($intents['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
+                                        <td class="text-end"><?= $countValue(array_column($attempts['by_status'] ?? [], 'count', 'key')[$statusKey] ?? 0) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-alert-circle-outline me-2"></i><?= __('需求缺口') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <?php if (empty($gaps)): ?>
+                    <div class="alert alert-success mb-0"><?= __('暂无阻塞缺口') ?></div>
+                <?php else: ?>
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($gaps as $gap): ?>
+                            <div class="list-group-item px-0">
+                                <div class="fw-semibold"><?= $escape($gap['title'] ?? '') ?></div>
+                                <div class="text-muted"><?= $escape($gap['detail'] ?? '') ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-database-search-outline me-2"></i><?= __('数据源状态') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th><?= __('数据源') ?></th>
+                                <th class="text-end"><?= __('读取行数') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('说明') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($sources as $source): ?>
+                                <tr>
+                                    <td><?= $escape($source['label'] ?? '') ?></td>
+                                    <td class="text-end"><?= $countValue($source['count'] ?? 0) ?></td>
+                                    <td>
+                                        <?php if (!empty($source['error'])): ?>
+                                            <span class="badge bg-danger"><?= __('不可用') ?></span>
+                                        <?php elseif (!empty($source['limited'])): ?>
+                                            <span class="badge bg-warning text-dark"><?= __('已截断') ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success"><?= __('可用') ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($source['error'])): ?>
+                                            <?= $escape($source['error']) ?>
+                                        <?php elseif (!empty($source['limited'])): ?>
+                                            <?= __('达到页面读取上限 %{1} 行，后续应迁移到 analytics snapshot 聚合表。', [$dashboard['sample_limit'] ?? 1000]) ?>
+                                        <?php else: ?>
+                                            <?= __('只读读取成功') ?>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted mt-3 mb-0">
+                    <?= __('生成时间') ?>: <?= $escape($dashboard['generated_at'] ?? '') ?>.
+                    <?= __('交易成功金额') ?>: <?= $amountList($transactions['success_amount_by_currency'] ?? []) ?>.
+                    <?= __('退款金额') ?>: <?= $amountList($transactions['refund_amount_by_currency'] ?? []) ?>.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>

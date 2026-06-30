@@ -1,45 +1,106 @@
 <?php
 /**
- * 客服服务模块 - 前端Hook实现
- * Hook名称：Weline_Theme::frontend::layouts::base::body-end
- * 在页面底部注入客服聊天组件
- * 
- * @hook-priority 100      Hook优先级：100（framework位置默认优先级）
- * @hook-sort-order 1      Hook排序顺序：1（默认值）
- * @hook-solo false        Hook独享：false（不独占）
+ * @hook-priority 200
+ * @hook-sort-order 1
+ * @hook-solo false
  */
+
+use Weline\CustomerService\Service\WidgetTranslationService;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
-// 获取当前客户会话
-$session = SessionFactory::getInstance()->createFrontendSession();
-$isLoggedIn = $session->isLoggedIn();
-$customerId = $isLoggedIn ? $session->getLoginID() : null;
-
-// 获取前端URL
-/** @var \Weline\Framework\Http\Url $urlBuilder */
-$urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
-$chatUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/chat');
-$bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
-$requestPath = strtolower((string) ($this->request->getPathInfo() ?: \w_env_request_uri()));
+$requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
+$requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
+$requestPath = strtolower((string)(is_string($requestPathParsed) && $requestPathParsed !== '' ? $requestPathParsed : $requestPathRaw));
+$isAccountRoute = $requestPath === '/customer/account'
+    || $requestPath === 'customer/account'
+    || str_contains($requestPath, '/customer/account/');
 $isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
     || (string)$this->request->getGet('preview', '') === '1'
     || str_contains($requestPath, 'workspace-preview');
-$disableCustomerServiceWidget = $isWorkspacePreview;
-$showGuestBindPrompt = !$isLoggedIn
-    && !$disableCustomerServiceWidget
-    && !str_contains($requestPath, 'customer/account/login')
-    && !str_contains($requestPath, 'customer/account/register')
-    && !str_contains($requestPath, 'customer/account/forgot-password')
-    && !str_contains($requestPath, 'customer/account/challenge')
-    && !str_contains($requestPath, 'customer/account/logout');
+if ($isAccountRoute || $isWorkspacePreview) {
+    return;
+}
+
+$session = SessionFactory::getInstance()->createFrontendSession();
+$isLoggedIn = $session->isLoggedIn();
+$customerId = $isLoggedIn ? $session->getUserId() : null;
+
+/** @var \Weline\Framework\Http\Url $urlBuilder */
+$urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+$normalizeDefaultLocaleUrl = static function (string $url): string {
+    $defaultCurrency = strtoupper(trim((string)(\w_env('website.currency', '') ?: Env::get('currency', 'CNY') ?: 'CNY')));
+    $defaultLanguage = trim((string)(\w_env('website.language', '') ?: Env::get('locale', Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN'));
+    $languageEquals = static function (string $left, string $right): bool {
+        return strcasecmp(str_replace('-', '_', trim($left)), str_replace('-', '_', trim($right))) === 0;
+    };
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return $url;
+    }
+
+    $path = (string)($parts['path'] ?? '');
+    $segments = array_values(array_filter(explode('/', trim($path, '/')), static function ($segment) {
+        return $segment !== '';
+    }));
+
+    $localeSegments = [];
+    while ($segments !== []) {
+        $segment = (string)$segments[0];
+        $upperSegment = strtoupper($segment);
+        $isCurrencySegment = State::isAllowedCurrencyCode($upperSegment);
+        $isLanguageSegment = (bool)preg_match('/^[a-z]{2}_[a-z0-9]+(?:_[a-z0-9]+)?$/i', $segment);
+        if (!$isCurrencySegment && !$isLanguageSegment) {
+            break;
+        }
+
+        array_shift($segments);
+        if ($isCurrencySegment && $upperSegment === $defaultCurrency) {
+            continue;
+        }
+        if ($isLanguageSegment && $languageEquals($segment, $defaultLanguage)) {
+            continue;
+        }
+        $localeSegments[] = $segment;
+    }
+
+    $normalizedPath = '/' . implode('/', array_merge($localeSegments, $segments));
+    if ($normalizedPath === '/') {
+        $normalizedPath = '/';
+    }
+
+    $scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
+    $authority = (string)($parts['host'] ?? '');
+    if ($authority !== '' && isset($parts['port'])) {
+        $authority .= ':' . $parts['port'];
+    }
+    $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+    $fragment = isset($parts['fragment']) && $parts['fragment'] !== '' ? '#' . $parts['fragment'] : '';
+
+    return $scheme . $authority . $normalizedPath . $query . $fragment;
+};
+$chatUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/chat'));
+$bindUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/bind'));
+
+$showGuestBindPrompt = !$isLoggedIn;
+
+/** @var WidgetTranslationService $widgetTranslationService */
+$widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
+$supportedLocales = $widgetTranslationService->getSupportedLocales();
+$currentLocale = State::getLangLocal() ?: 'zh_Hans_CN';
+$widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales([
+    $currentLocale,
+    'zh_Hans_CN',
+]);
+
+$customerServiceAssetVersion = '20260619-security-hardening';
 ?>
-<!-- 客服服务组件 -->
-<?php if ($disableCustomerServiceWidget) { return; } ?>
-<link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)">
+<link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)?v=<?= $customerServiceAssetVersion ?>">
 <div id="customer-service-widget" class="customer-service-widget" data-editor-interactive>
-    <!-- 悬浮聊天按钮 -->
-    <div id="cs-chat-button" class="cs-chat-button" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.toggleChat(); else console.warn('[CustomerService] Widget not loaded yet')">
+    <div id="cs-chat-button" class="cs-chat-button" data-cs-toggle-chat>
         <svg class="cs-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
@@ -47,55 +108,42 @@ $showGuestBindPrompt = !$isLoggedIn
         <span id="cs-status-dot" class="cs-status-dot cs-status-offline"></span>
         <span class="cs-badge" id="cs-unread-badge" style="display: none;">0</span>
     </div>
-    
-    <!-- 聊天窗口 -->
+
     <div id="cs-chat-window" class="cs-chat-window" style="display: none;">
         <div class="cs-chat-header">
             <div class="cs-chat-title">
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
                 </svg>
-                <span><?= __('客服服务') ?></span>
+                <span id="cs-title-text"><?= __('客服服务') ?></span>
                 <span id="cs-status-label" class="cs-status-label"><?= __('检测中...') ?></span>
             </div>
             <div class="cs-chat-actions">
-                <!-- 设置按钮 -->
-                <button class="cs-btn-icon" id="cs-settings-btn" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.toggleSettings()" title="<?= __('设置') ?>">
+                <button type="button" class="cs-btn-icon" id="cs-settings-btn" data-cs-toggle-settings title="<?= __('设置') ?>">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
                     </svg>
                 </button>
-                <button class="cs-btn-icon" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.toggleChat()" title="<?= __('收起') ?>">
+                <button type="button" class="cs-btn-icon" id="cs-minimize-btn" data-cs-toggle-chat title="<?= __('收起') ?>">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M6 19h12v2H6z"/>
                     </svg>
                 </button>
             </div>
         </div>
-        
-        <!-- 设置面板 -->
+
         <div class="cs-settings-panel" id="cs-settings-panel" style="display: none;">
             <div class="cs-settings-item">
                 <label>
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
                     </svg>
-                    <?= __('我的语言') ?>
+                    <span id="cs-locale-label-text"><?= __('我的语言') ?></span>
                 </label>
-                <select id="cs-locale-select" onchange="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.changeLanguage(this.value)">
-                    <option value="zh_Hans_CN"><?= __('简体中文') ?></option>
-                    <option value="zh_Hant_TW"><?= __('繁體中文') ?></option>
-                    <option value="en_US">English</option>
-                    <option value="ja_JP">日本語</option>
-                    <option value="ko_KR">한국어</option>
-                    <option value="fr_FR">Français</option>
-                    <option value="de_DE">Deutsch</option>
-                    <option value="es_ES">Español</option>
-                    <option value="pt_BR">Português</option>
-                    <option value="ru_RU">Русский</option>
-                    <option value="ar_SA">العربية</option>
-                    <option value="th_TH">ไทย</option>
-                    <option value="vi_VN">Tiếng Việt</option>
+                <select id="cs-locale-select">
+                    <?php foreach ($supportedLocales as $locale): ?>
+                        <option value="<?= htmlspecialchars((string)$locale['code']) ?>"><?= htmlspecialchars((string)$locale['nativeLabel']) ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="cs-settings-item">
@@ -103,32 +151,31 @@ $showGuestBindPrompt = !$isLoggedIn
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                     </svg>
-                    <?= __('显示模式') ?>
+                    <span id="cs-display-mode-label-text"><?= __('显示模式') ?></span>
                 </label>
-                <select id="cs-display-mode" onchange="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.changeDisplayMode(this.value)">
+                <select id="cs-display-mode">
                     <option value="translated"><?= __('仅显示译文') ?></option>
                     <option value="both"><?= __('原文+译文') ?></option>
                     <option value="original"><?= __('仅显示原文') ?></option>
                 </select>
             </div>
         </div>
-        
+
         <div class="cs-chat-body" id="cs-chat-messages">
             <div class="cs-welcome-message">
-                <p><?= __('欢迎使用客服服务！') ?></p>
-                <p><?= __('请输入您的问题，我们的客服将尽快为您解答。') ?></p>
+                <p id="cs-welcome-title"><?= __('欢迎使用客服服务！') ?></p>
+                <p id="cs-welcome-copy"><?= __('请输入您的问题，我们的客服将尽快为您解答。') ?></p>
             </div>
         </div>
-        
+
         <div class="cs-chat-footer">
             <div class="cs-input-area">
-                <textarea 
-                    id="cs-message-input" 
-                    class="cs-message-input" 
+                <textarea
+                    id="cs-message-input"
+                    class="cs-message-input"
                     placeholder="<?= __('输入消息...') ?>"
-                    rows="2"
-                    onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.sendMessage();}"></textarea>
-                <button class="cs-send-button" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.sendMessage()">
+                    rows="2"></textarea>
+                <button type="button" class="cs-send-button" data-cs-send-message>
                     <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                     </svg>
@@ -138,91 +185,136 @@ $showGuestBindPrompt = !$isLoggedIn
     </div>
 </div>
 
-<!-- 邮件绑定弹窗 -->
+<?php
+$bindModalHtml = <<<'BIND_MODAL_HTML'
 <div id="cs-bind-modal" class="cs-modal" style="display: none;" data-editor-interactive>
     <div class="cs-modal-content">
         <div class="cs-modal-header">
-            <h3><?= __('绑定邮箱') ?></h3>
-            <button class="cs-modal-close" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.closeBindModal()">
+            <h3>{{title}}</h3>
+            <button type="button" class="cs-modal-close" data-cs-bind-close>
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                 </svg>
             </button>
         </div>
         <div class="cs-modal-body">
-            <p><?= __('绑定邮箱后，您可以收到客服回复的邮件通知。') ?></p>
+            <p class="cs-modal-copy">{{copy}}</p>
+            <p class="cs-modal-note">{{note}}</p>
             <div class="cs-form-group">
-                <label><?= __('邮箱地址') ?></label>
-                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="<?= __('请输入您的邮箱') ?>">
+                <label>{{email_label}}</label>
+                <input type="email" id="cs-bind-email" class="cs-form-input" placeholder="{{email_placeholder}}">
             </div>
         </div>
         <div class="cs-modal-footer">
-            <button class="cs-btn cs-btn-secondary" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.closeBindModal()">
-                <?= __('取消') ?>
+            <button type="button" class="cs-btn cs-btn-secondary" data-cs-bind-close>
+                {{later}}
             </button>
-            <button class="cs-btn cs-btn-primary" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.sendBindEmail()">
-                <?= __('发送验证邮件') ?>
+            <button type="button" class="cs-btn cs-btn-primary" data-cs-bind-send>
+                {{send}}
             </button>
         </div>
     </div>
 </div>
+BIND_MODAL_HTML;
+$bindModalHtml = strtr($bindModalHtml, [
+    '{{title}}' => __('接收客服回复与优惠通知'),
+    '{{copy}}' => __('留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。'),
+    '{{note}}' => __('仅用于本次客服咨询相关通知，不是简报订阅。'),
+    '{{email_label}}' => __('接收通知的邮箱'),
+    '{{email_placeholder}}' => __('请输入用于接收客服通知的邮箱'),
+    '{{later}}' => __('稍后再说'),
+    '{{send}}' => __('发送验证邮件'),
+]);
+?>
+<script type="application/json" id="cs-bind-modal-template">
+<?= json_encode($bindModalHtml, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+</script>
 
 <script>
-// 初始化客服组件的配置（必须在外部脚本加载前定义）
 var customerServiceConfig = {
     chatUrl: '<?= htmlspecialchars($chatUrl) ?>',
     bindUrl: '<?= htmlspecialchars($bindUrl) ?>',
     customerId: <?= $customerId ? (int)$customerId : 'null' ?>,
     isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>,
-    showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>
+    showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>,
+    supportedLocales: <?= json_encode($supportedLocales, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+    widgetTranslations: <?= json_encode($widgetTranslations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 };
 
-// 初始化客服组件（等待脚本加载完成）
 function initCustomerServiceWidget() {
-    // 确保 CustomerServiceWidget 已加载
     if (typeof CustomerServiceWidget === 'undefined') {
-        // 如果未加载，延迟重试
         setTimeout(initCustomerServiceWidget, 100);
         return;
     }
-    
-    // 初始化
+
     try {
         CustomerServiceWidget.init(customerServiceConfig);
-        
-        // 检查是否需要显示绑定提示
-        <?php if ($showGuestBindPrompt): ?>
-        setTimeout(function() {
-            if (
-                typeof CustomerServiceWidget !== 'undefined'
-                && typeof CustomerServiceWidget.showBindPrompt === 'function'
-                && customerServiceConfig.showGuestBindPrompt
-            ) {
-                CustomerServiceWidget.showBindPrompt();
-            }
-        }, 5000); // 5秒后提示
-        <?php endif; ?>
     } catch (error) {
-        console.error('[CustomerService] 初始化失败:', error);
+        console.error('[CustomerService] 初始化失败', error);
     }
 }
 </script>
-<script src="@static(Weline_CustomerService::js/customer-service.js)" onload="initCustomerServiceWidget()"></script>
 <script>
-// 备用初始化：如果 onload 未触发，使用 DOMContentLoaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof CustomerServiceWidget !== 'undefined' && typeof initCustomerServiceWidget === 'function') {
-            initCustomerServiceWidget();
-        }
-    });
-} else {
-    // DOM 已加载，延迟检查脚本是否已加载
-    setTimeout(function() {
-        if (typeof CustomerServiceWidget !== 'undefined' && typeof initCustomerServiceWidget === 'function') {
-            initCustomerServiceWidget();
-        }
-    }, 100);
-}
-</script>
+(function () {
+    'use strict';
 
+    var customerServiceScriptUrl = '@static(Weline_CustomerService::js/customer-service.js)?v=<?= $customerServiceAssetVersion ?>';
+    var customerServiceScriptLoading = false;
+    var customerServiceOpenAfterLoad = false;
+
+    function loadCustomerServiceWidget(openAfterLoad) {
+        customerServiceOpenAfterLoad = customerServiceOpenAfterLoad || Boolean(openAfterLoad);
+        if (typeof CustomerServiceWidget !== 'undefined') {
+            initCustomerServiceWidget();
+            if (customerServiceOpenAfterLoad && typeof CustomerServiceWidget.toggleChat === 'function') {
+                customerServiceOpenAfterLoad = false;
+                CustomerServiceWidget.toggleChat();
+            }
+            return;
+        }
+        if (customerServiceScriptLoading) {
+            return;
+        }
+        customerServiceScriptLoading = true;
+        var script = document.createElement('script');
+        script.src = customerServiceScriptUrl;
+        script.onload = function () {
+            initCustomerServiceWidget();
+            if (customerServiceOpenAfterLoad && typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.toggleChat === 'function') {
+                customerServiceOpenAfterLoad = false;
+                CustomerServiceWidget.toggleChat();
+            }
+        };
+        document.head.appendChild(script);
+    }
+
+    function scheduleCustomerServiceWidget() {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(function () {
+                loadCustomerServiceWidget(false);
+            }, { timeout: 6000 });
+            return;
+        }
+        setTimeout(function () {
+            loadCustomerServiceWidget(false);
+        }, 3000);
+    }
+
+    window.__WelineLoadCustomerServiceWidget = loadCustomerServiceWidget;
+    var customerServiceChatButton = document.querySelector('[data-cs-toggle-chat]');
+    if (customerServiceChatButton) {
+        customerServiceChatButton.addEventListener('click', function (event) {
+            if (typeof CustomerServiceWidget === 'undefined') {
+                event.preventDefault();
+                loadCustomerServiceWidget(true);
+            }
+        }, true);
+    }
+
+    if (document.readyState === 'complete') {
+        scheduleCustomerServiceWidget();
+    } else {
+        window.addEventListener('load', scheduleCustomerServiceWidget, { once: true });
+    }
+})();
+</script>

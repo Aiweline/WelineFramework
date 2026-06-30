@@ -57,18 +57,18 @@ class Test extends FrontendController
 
     private function renderPage(string $page, string $title): string
     {
-        $frontendApiBase = rtrim((string) w_url('', [], 'frontend_api'), '/');
-        $frontendApiHost = $this->resolveApiHost($frontendApiBase);
-        $frontendApiArea = trim((string) parse_url($frontendApiBase, PHP_URL_PATH), '/');
+        $workerBase = rtrim((string) w_url('', [], 'frontend_api'), '/');
+        $workerHost = $this->resolveApiHost($workerBase);
+        $workerArea = trim((string) parse_url($workerBase, PHP_URL_PATH), '/');
 
         return $this->template(
             self::TEMPLATE_BASE . $page . '.phtml',
             [
                 'page_title' => $title,
                 'page_key' => $page,
-                'frontend_api_host' => $frontendApiHost,
-                'frontend_api_area' => $frontendApiArea,
-                'frontend_api_bootstrap' => $this->buildFrontendApiBootstrap($frontendApiHost, $frontendApiArea),
+                'worker_host' => $workerHost,
+                'worker_area' => $workerArea,
+                'worker_bootstrap' => $this->buildFrontendApiBootstrap($workerHost, $workerArea),
                 'demo_links' => [
                     'index' => '/datatable/test',
                     'basic' => '/datatable/test/basic',
@@ -354,41 +354,25 @@ class Test extends FrontendController
             window.site.api_area = apiArea;
         }
 
-        if (typeof window.api !== 'function') {
-            window.api = function (path, params) {
-                var target = String(path || '').replace(/^\/+/, '');
-                var url = String(window.site.api_host || window.location.origin).replace(/\/+$/, '');
-                var area = String(window.site.api_area || '').replace(/^\/+|\/+$/g, '');
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
 
-                if (area) {
-                    url += '/' + area;
-                }
-                if (target) {
-                    url += '/' + target;
-                }
-
-                if (params && typeof params === 'object') {
-                    var searchParams = new URLSearchParams();
-                    Object.keys(params).forEach(function (key) {
-                        var value = params[key];
-                        if (value === null || value === undefined) {
-                            return;
-                        }
-                        searchParams.append(key, value);
-                    });
-
-                    var query = searchParams.toString();
-                    if (query) {
-                        url += (url.indexOf('?') === -1 ? '?' : '&') + query;
-                    }
-                }
-
-                return url;
-            };
-        }
-
-        if (typeof window.frontend_api !== 'function') {
-            window.frontend_api = window.api;
+        if (!document.getElementById('weline-theme-js')) {
+            var themeScript = document.createElement('script');
+            themeScript.id = 'weline-theme-js';
+            themeScript.src = '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2';
+            themeScript.async = false;
+            themeScript.defer = false;
+            document.head.appendChild(themeScript);
         }
 
         var patchDataTableManager = function () {

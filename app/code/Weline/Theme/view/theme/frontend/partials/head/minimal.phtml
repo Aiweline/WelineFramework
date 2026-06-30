@@ -1,0 +1,182 @@
+<?php
+/**
+ * Minimal frontend head partial for account-style layouts.
+ *
+ * Keeps global runtime configuration and theme assets, while avoiding the
+ * heavier storefront-only inline style/bootstrap block from head/default.
+ */
+$themeData = $this->getData('theme') ?? [];
+$frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+
+$area = $themeData['area'] ?? 'frontend';
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null;
+?>
+<base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
+<w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
+<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+</w:hook>
+<w:geo slot="head"/>
+<theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css')) ?>" type="text/css">
+<?php
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    try {
+        $layoutAssetsEnabled = (bool)\Weline\Framework\App\Env::getInstance()
+            ->getConfig('theme.layout_assets.enabled', false);
+
+        if ($layoutAssetsEnabled) {
+            $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+            $assetsManager->ensureLayoutCssGenerated($area, $layoutType, $layoutOption, $theme);
+            $cssPath = $assetsManager->getGeneratedCssPath($area, $layoutType, $layoutOption, $theme);
+            $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
+            $inlineLayoutCss = '';
+
+            if (is_file($cssPath)) {
+                $cssSize = filesize($cssPath);
+                if ($cssSize !== false && $cssSize > 0 && $cssSize <= 16384) {
+                    $inlineLayoutCss = (string)file_get_contents($cssPath);
+                    $inlineLayoutCss = preg_match('/<\?(?:php|=|\s)/i', $inlineLayoutCss)
+                        ? ''
+                        : str_replace('</style', '<\\/style', $inlineLayoutCss);
+                }
+            }
+            ?>
+<?php if ($inlineLayoutCss !== ''): ?>
+<style data-no-extract="true" data-layout-critical="true">
+<?= $inlineLayoutCss ?>
+</style>
+<?php endif; ?>
+<link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
+<?php
+        } else {
+            $cssVariableInjector = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\CssVariableInjector::class);
+            $themeVariablesCss = $cssVariableInjector->generateCssVariables($area, $theme);
+            if ($themeVariablesCss !== '' && !preg_match('/<\?(?:php|=|\s)/i', $themeVariablesCss)) {
+                $themeVariablesCss = str_replace('</style', '<\\/style', $themeVariablesCss);
+                ?>
+<style data-no-extract="true" data-theme-variables="true">
+<?= $themeVariablesCss ?>
+</style>
+<?php
+            }
+        }
+    } catch (\Throwable) {
+    }
+}
+
+$isDev = defined('DEV') && DEV;
+$baseUrl = $this->request->getBaseUrl();
+$modulesConfigUrl = $isDev
+    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+    : '/static/Weline/Frontend/base/weline.modules.js';
+$modulesBaseUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api'
+    : '/static/Weline/Frontend/js/weline-api';
+$frontendQueryBinUrl = \Weline\Framework\App\Env::getFrontendQueryBinPath();
+$siteName = $this->getData('site_name') ?? __('Weline Framework');
+$currentLang = \w_env('user.lang', 'zh_Hans_CN');
+$htmlDir = (string)($this->getData('htmlDir') ?: 'ltr');
+$htmlDir = $htmlDir === 'rtl' ? 'rtl' : 'ltr';
+$currentCurrency = \w_env('user.currency', 'CNY');
+$defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$availableCurrencies = [];
+try {
+    if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        foreach (\Weline\Websites\Data\WebsiteData::getCurrencyCodes() as $currencyCode) {
+            $currencyCode = strtoupper(trim((string)$currencyCode));
+            if ($currencyCode !== '') {
+                $availableCurrencies[] = $currencyCode;
+            }
+        }
+    }
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
+$availableCurrencies[] = $defaultCurrency;
+$availableCurrencies = array_values(array_unique($availableCurrencies));
+$currentCurrency = strtoupper(trim((string)$currentCurrency));
+if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
+    $currentCurrency = $defaultCurrency;
+}
+$themeConfigPayload = [
+    'env' => [
+        'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+        'DEV' => DEV,
+        'PROD' => !DEV,
+    ],
+    'baseUrl' => $baseUrl,
+    'modulesConfigUrl' => $modulesConfigUrl,
+    'modulesBaseUrl' => $modulesBaseUrl,
+    'assetVersion' => '20260606-language-flag',
+    'deployVersion' => ($__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
+    'workerBuildId' => ($__dv !== null && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
+    'api' => [
+        'workerUrl' => $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+            : '/static/Weline/Frontend/js/weline-api-worker.js',
+        'endpoint' => $frontendQueryBinUrl,
+        'queryBinUrl' => $frontendQueryBinUrl,
+    ],
+    'currentLang' => $currentLang,
+    'currentCurrency' => $currentCurrency,
+    'defaultLang' => $defaultLang,
+    'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
+    'htmlDir' => $htmlDir,
+    'textDirection' => $htmlDir,
+    'isRtl' => $htmlDir === 'rtl',
+    'debug' => DEV,
+    'i18n' => [
+        'currentLang' => $currentLang,
+        'defaultLang' => $defaultLang,
+        'direction' => $htmlDir,
+    ],
+    'site' => [
+        'name' => $siteName,
+    ],
+    'theme' => [
+        'area' => $area,
+        'colorMode' => $welineThemeColorMode,
+        'layoutType' => $layoutType,
+        'layoutOption' => $layoutOption,
+    ],
+];
+$jsonEncodeFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, $jsonEncodeFlags));
+$this->setData('envConfig', $themeConfigPayload['env']);
+?>
+<script data-no-extract="true">
+    (function() {
+        if (!window.__WelineThemeConfig) {
+            window.__WelineThemeConfig = {};
+        }
+        const themeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
+        Object.assign(window.__WelineThemeConfig, themeConfig);
+        if (themeConfig.api) {
+            window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, themeConfig.api);
+        }
+        const textDirection = themeConfig.htmlDir === 'rtl' || themeConfig.textDirection === 'rtl' ? 'rtl' : 'ltr';
+        document.documentElement.setAttribute('dir', textDirection);
+        document.documentElement.setAttribute('data-dir', textDirection);
+        document.documentElement.classList.toggle('is-rtl', textDirection === 'rtl');
+        document.documentElement.classList.toggle('is-ltr', textDirection !== 'rtl');
+        if (window.__WelineThemeConfig.modulesConfigUrl) {
+            window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        }
+    })();
+</script>
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260606-language-flag"></script>
+<w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

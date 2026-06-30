@@ -1,0 +1,399 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $modules
+ * @var array $tree
+ * @var string $selected_module
+ * @var string $selected_area
+ * @var string $search
+ * @var string $scope
+ * @var string $locale
+ * @var array $fallback_scopes
+ * @var string $post_url
+ */
+$modules = $modules ?? [];
+$tree = $tree ?? ['modules' => []];
+$selectedModule = (string)($selected_module ?? '');
+$selectedArea = (string)($selected_area ?? 'backend');
+$search = (string)($search ?? '');
+$scope = (string)($scope ?? 'default.default.default');
+$locale = (string)($locale ?? 'default');
+$fallbackScopes = $fallback_scopes ?? [];
+$postUrl = (string)($post_url ?? '');
+if ($postUrl === '') {
+    $postUrl = (string)$this->getBackendUrl('weline_systemconfig/backend/config');
+}
+$moduleRows = $tree['modules'] ?? [];
+$totalTemplates = 0;
+$totalFields = 0;
+$totalAdapters = 0;
+foreach ($moduleRows as $moduleRow) {
+    $totalTemplates += (int)($moduleRow['template_count'] ?? 0);
+    $totalFields += (int)($moduleRow['field_count'] ?? 0);
+    $totalAdapters += (int)($moduleRow['adapter_count'] ?? 0);
+}
+$parseOptions = static function (string $options): array {
+    $options = trim($options);
+    if ($options === '' || str_starts_with($options, '$')) {
+        return [];
+    }
+    $result = [];
+    foreach (array_filter(array_map('trim', preg_split('/[,;]/', $options) ?: [])) as $option) {
+        if (str_contains($option, ':')) {
+            [$value, $label] = explode(':', $option, 2);
+            $result[trim($value)] = trim($label);
+        } else {
+            $result[$option] = $option;
+        }
+    }
+    return $result;
+};
+$configUrl = static function (array $params = []) use ($postUrl): string {
+    $query = http_build_query($params);
+    $url = $postUrl . ($query !== '' ? '?' . $query : '');
+    return htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+};
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>统一配置中心</lang></h4>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>模块</lang></label>
+                        <select name="module" class="form-select">
+                            <option value=""><lang>全部模块</lang></option>
+                            <?php foreach ($modules as $module): ?>
+                                <?php $moduleName = (string)($module['module'] ?? ''); ?>
+                                <option value="<?= htmlspecialchars($moduleName) ?>" <?= $selectedModule === $moduleName ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($moduleName) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><lang>区域</lang></label>
+                        <select name="area" class="form-select">
+                            <option value="backend" <?= $selectedArea === 'backend' ? 'selected' : '' ?>><lang>后台</lang></option>
+                            <option value="frontend" <?= $selectedArea === 'frontend' ? 'selected' : '' ?>><lang>前台</lang></option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><lang>Scope</lang></label>
+                        <input name="scope" class="form-control" value="<?= htmlspecialchars($scope) ?>" placeholder="default.default.default">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><lang>Locale</lang></label>
+                        <input name="locale" class="form-control" value="<?= htmlspecialchars($locale) ?>" placeholder="default">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><lang>搜索</lang></label>
+                        <input name="search" class="form-control" value="<?= htmlspecialchars($search) ?>" placeholder="<?= __('配置或字段') ?>">
+                    </div>
+                    <div class="col-md-1 d-grid">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="mdi mdi-magnify"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><lang>模块</lang></h5>
+                <div class="list-group list-group-flush">
+                    <a class="list-group-item list-group-item-action <?= $selectedModule === '' ? 'active' : '' ?>"
+                       href="<?= $configUrl(['area' => $selectedArea, 'scope' => $scope, 'locale' => $locale, 'search' => $search]) ?>">
+                        <span><lang>全部模块</lang></span>
+                    </a>
+                    <?php foreach ($modules as $module): ?>
+                        <?php $moduleName = (string)($module['module'] ?? ''); ?>
+                        <a class="list-group-item list-group-item-action <?= $selectedModule === $moduleName ? 'active' : '' ?>"
+                           href="<?= $configUrl(['module' => $moduleName, 'area' => $selectedArea, 'scope' => $scope, 'locale' => $locale, 'search' => $search]) ?>">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><?= htmlspecialchars($moduleName) ?></span>
+                                <span class="badge bg-secondary"><?= (int)($module['template_count'] ?? 0) ?></span>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><lang>当前 Scope</lang></h5>
+                <div class="text-muted small mb-2"><?= htmlspecialchars($scope) ?></div>
+                <ol class="mb-0 ps-3">
+                    <?php foreach ($fallbackScopes as $fallbackScope): ?>
+                        <li><code><?= htmlspecialchars((string)$fallbackScope) ?></code></li>
+                    <?php endforeach; ?>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="text-muted"><lang>模板</lang></div>
+                        <div class="h3 mb-0"><?= $totalTemplates ?></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="text-muted"><lang>字段</lang></div>
+                        <div class="h3 mb-0"><?= $totalFields ?></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="text-muted"><lang>适配入口</lang></div>
+                        <div class="h3 mb-0"><?= $totalAdapters ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php if (empty($moduleRows)): ?>
+            <div class="card">
+                <div class="card-body text-center text-muted py-5">
+                    <i class="mdi mdi-file-search-outline font-size-24 d-block mb-2"></i>
+                    <lang>没有找到配置模板</lang>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <?php foreach ($moduleRows as $moduleRow): ?>
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title mb-1"><?= htmlspecialchars((string)($moduleRow['module'] ?? '')) ?></h5>
+                            <div class="text-muted small">
+                                <?= (int)($moduleRow['template_count'] ?? 0) ?> <lang>模板</lang> /
+                                <?= (int)($moduleRow['field_count'] ?? 0) ?> <lang>字段</lang> /
+                                <?= (int)($moduleRow['adapter_count'] ?? 0) ?> <lang>适配入口</lang>
+                            </div>
+                        </div>
+                    </div>
+
+                    <?php foreach (($moduleRow['areas'] ?? []) as $areaRow): ?>
+                        <div class="mb-3">
+                            <div class="fw-semibold mb-2"><?= htmlspecialchars((string)($areaRow['area'] ?? '')) ?></div>
+                            <?php foreach (($areaRow['templates'] ?? []) as $template): ?>
+                                <div class="border rounded p-3 mb-3">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                                        <div>
+                                            <h6 class="mb-1"><?= htmlspecialchars((string)($template['title'] ?? $template['code'] ?? '')) ?></h6>
+                                            <div class="text-muted small"><?= htmlspecialchars((string)($template['description'] ?? '')) ?></div>
+                                        </div>
+                                        <code><?= htmlspecialchars((string)($template['code'] ?? '')) ?></code>
+                                    </div>
+
+                                    <form method="post" action="<?= htmlspecialchars($postUrl) ?>">
+                                        <input type="hidden" name="form_action" value="save">
+                                        <input type="hidden" name="module" value="<?= htmlspecialchars((string)($moduleRow['module'] ?? '')) ?>">
+                                        <input type="hidden" name="area" value="<?= htmlspecialchars((string)($areaRow['area'] ?? $selectedArea)) ?>">
+                                        <input type="hidden" name="code" value="<?= htmlspecialchars((string)($template['code'] ?? '')) ?>">
+                                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                                        <input type="hidden" name="locale" value="<?= htmlspecialchars($locale) ?>">
+                                        <input type="hidden" name="search" value="<?= htmlspecialchars($search) ?>">
+
+                                    <?php foreach (($template['groups'] ?? []) as $group): ?>
+                                        <?php
+                                        $groupCode = (string)($group['code'] ?? '');
+                                        $fields = array_values(array_filter($template['fields'] ?? [], static fn($field) => (string)($field['group'] ?? '') === $groupCode));
+                                        $adapters = array_values(array_filter($template['adapters'] ?? [], static fn($adapter) => (string)($adapter['group'] ?? '') === $groupCode));
+                                        ?>
+                                        <div class="mt-3">
+                                            <div class="fw-semibold"><?= htmlspecialchars((string)($group['label'] ?? $groupCode)) ?></div>
+                                            <?php if (!empty($group['description'])): ?>
+                                                <div class="text-muted small mb-2"><?= htmlspecialchars((string)$group['description']) ?></div>
+                                            <?php endif; ?>
+
+                                            <?php if (!empty($fields)): ?>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm align-middle mb-2">
+                                                        <thead>
+                                                        <tr>
+                                                            <th><lang>字段</lang></th>
+                                                            <th><lang>当前值</lang></th>
+                                                            <th><lang>保存值</lang></th>
+                                                            <th><lang>Scope</lang></th>
+                                                            <th><lang>继承</lang></th>
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        <?php foreach ($fields as $field): ?>
+                                                            <?php
+                                                            $fieldKey = (string)($field['key'] ?? '');
+                                                            $fieldType = (string)($field['type'] ?? 'text');
+                                                            $effectiveValue = (string)($field['effective_value'] ?? ($field['default'] ?? ''));
+                                                            $baseVersion = (int)($field['base_version'] ?? 0);
+                                                            $source = is_array($field['effective_source'] ?? null) ? $field['effective_source'] : null;
+                                                            $options = $parseOptions((string)($field['options'] ?? ''));
+                                                            ?>
+                                                            <tr>
+                                                                <td>
+                                                                    <div><?= htmlspecialchars((string)($field['label'] ?? $fieldKey)) ?></div>
+                                                                    <code><?= htmlspecialchars($fieldKey) ?></code>
+                                                                    <input type="hidden" name="base_versions[<?= htmlspecialchars($fieldKey) ?>]" value="<?= $baseVersion ?>">
+                                                                </td>
+                                                                <td>
+                                                                    <div><code><?= htmlspecialchars($effectiveValue) ?></code></div>
+                                                                    <?php if ($source): ?>
+                                                                        <div class="text-muted small">
+                                                                            <?= htmlspecialchars((string)($source['scope'] ?? '')) ?>
+                                                                            /
+                                                                            v<?= (int)($source['version'] ?? 0) ?>
+                                                                        </div>
+                                                                    <?php else: ?>
+                                                                        <div class="text-muted small"><lang>默认值</lang></div>
+                                                                    <?php endif; ?>
+                                                                </td>
+                                                                <td>
+                                                                    <?php if ($fieldType === 'select' && $options !== []): ?>
+                                                                        <select class="form-select form-select-sm" name="values[<?= htmlspecialchars($fieldKey) ?>]">
+                                                                            <?php foreach ($options as $optionValue => $optionLabel): ?>
+                                                                                <option value="<?= htmlspecialchars((string)$optionValue) ?>" <?= (string)$optionValue === $effectiveValue ? 'selected' : '' ?>>
+                                                                                    <?= htmlspecialchars((string)$optionLabel) ?>
+                                                                                </option>
+                                                                            <?php endforeach; ?>
+                                                                        </select>
+                                                                    <?php elseif (in_array($fieldType, ['switch', 'checkbox', 'boolean'], true)): ?>
+                                                                        <input type="hidden" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="0">
+                                                                        <div class="form-check form-switch">
+                                                                            <input class="form-check-input" type="checkbox" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="1" <?= in_array($effectiveValue, ['1', 'true', 'on', 'yes'], true) ? 'checked' : '' ?>>
+                                                                        </div>
+                                                                    <?php elseif ($fieldType === 'textarea'): ?>
+                                                                        <textarea class="form-control form-control-sm" name="values[<?= htmlspecialchars($fieldKey) ?>]" rows="2"><?= htmlspecialchars($effectiveValue) ?></textarea>
+                                                                    <?php else: ?>
+                                                                        <input class="form-control form-control-sm" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="<?= htmlspecialchars($effectiveValue) ?>">
+                                                                    <?php endif; ?>
+                                                                    <?php if (!empty($field['description'])): ?>
+                                                                        <div class="text-muted small mt-1"><?= htmlspecialchars((string)$field['description']) ?></div>
+                                                                    <?php endif; ?>
+                                                                </td>
+                                                                <td>
+                                                                    <?= htmlspecialchars((string)($field['scope'] ?? 'global')) ?>
+                                                                    <div class="text-muted small"><?= htmlspecialchars($fieldType) ?> / <?= htmlspecialchars((string)($field['value-type'] ?? 'string')) ?></div>
+                                                                </td>
+                                                                <td>
+                                                                    <div class="form-check">
+                                                                        <input class="form-check-input" type="checkbox" name="inherit_keys[]" value="<?= htmlspecialchars($fieldKey) ?>">
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <?php foreach ($adapters as $adapter): ?>
+                                                <div class="alert alert-secondary py-2 mb-2">
+                                                    <i class="mdi mdi-open-in-new me-1"></i>
+                                                    <strong><?= htmlspecialchars((string)($adapter['label'] ?? $adapter['code'] ?? '')) ?></strong>
+                                                    <span class="text-muted ms-2"><?= htmlspecialchars((string)($adapter['description'] ?? '')) ?></span>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+
+                                        <?php if (!empty($template['fields'])): ?>
+                                            <div class="d-flex gap-2 justify-content-end mt-3">
+                                                <input class="form-control form-control-sm w-auto" name="reason" placeholder="<?= __('保存原因') ?>">
+                                                <button class="btn btn-primary btn-sm" type="submit">
+                                                    <i class="mdi mdi-content-save-outline me-1"></i><lang>保存配置</lang>
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <?php if (!empty($moduleRow['versions'])): ?>
+                        <div class="border rounded p-3 mt-3">
+                            <div class="fw-semibold mb-2"><lang>最近版本</lang></div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th><lang>操作</lang></th>
+                                        <th><lang>状态</lang></th>
+                                        <th><lang>时间</lang></th>
+                                        <th><lang>回滚</lang></th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($moduleRow['versions'] as $version): ?>
+                                        <?php
+                                        $precheck = is_array($version['rollback_precheck'] ?? null) ? $version['rollback_precheck'] : [];
+                                        $rollbackable = !empty($precheck['rollbackable']);
+                                        ?>
+                                        <tr>
+                                            <td><code><?= (int)($version['version_id'] ?? 0) ?></code></td>
+                                            <td><?= htmlspecialchars((string)($version['operation'] ?? '')) ?></td>
+                                            <td><?= htmlspecialchars((string)($version['status'] ?? '')) ?></td>
+                                            <td><?= htmlspecialchars((string)($version['created_at'] ?? '')) ?></td>
+                                            <td>
+                                                <?php if ($rollbackable): ?>
+                                                    <form method="post" action="<?= htmlspecialchars($postUrl) ?>" class="d-inline">
+                                                        <input type="hidden" name="form_action" value="rollback">
+                                                        <input type="hidden" name="version_id" value="<?= (int)($version['version_id'] ?? 0) ?>">
+                                                        <input type="hidden" name="module" value="<?= htmlspecialchars((string)($precheck['module'] ?? $moduleRow['module'] ?? '')) ?>">
+                                                        <input type="hidden" name="area" value="<?= htmlspecialchars((string)($precheck['area'] ?? $selectedArea)) ?>">
+                                                        <input type="hidden" name="code" value="<?= htmlspecialchars((string)($precheck['template_code'] ?? '')) ?>">
+                                                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                                                        <input type="hidden" name="locale" value="<?= htmlspecialchars($locale) ?>">
+                                                        <input type="hidden" name="search" value="<?= htmlspecialchars($search) ?>">
+                                                        <button class="btn btn-outline-warning btn-sm" type="submit">
+                                                            <i class="mdi mdi-restore me-1"></i><lang>回滚</lang>
+                                                        </button>
+                                                    </form>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary"><lang>不可回滚</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>

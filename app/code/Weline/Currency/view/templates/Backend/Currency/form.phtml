@@ -10,6 +10,8 @@
  */
 $currency = $currency ?? \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
 $isEdit = $currency->getId() > 0;
+$currencyLocales = is_array($currency_locales ?? null) ? $currency_locales : [];
+$currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_names : [];
 ?>
 <!-- 页面标题 -->
 <div class='row'>
@@ -20,7 +22,7 @@ $isEdit = $currency->getId() > 0;
             </h4>
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统</lang></a></li>
+                    <li class='breadcrumb-item'><span><lang>系统</lang></span></li>
                     <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
                     <li class='breadcrumb-item active'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></li>
                 </ol>
@@ -64,6 +66,40 @@ $isEdit = $currency->getId() > 0;
                             </div>
                         </div>
                     </div>
+
+                    <?php if (!empty($currencyLocales)): ?>
+                        <div class='mb-4'>
+                            <div class='d-flex align-items-center justify-content-between mb-2'>
+                                <label class='form-label mb-0'><lang>货币多语言名称</lang></label>
+                                <span class='text-muted small'><lang>留空时前台回退使用基础名称</lang></span>
+                            </div>
+                            <div class='row'>
+                                <?php foreach ($currencyLocales as $locale): ?>
+                                    <?php
+                                    $localeCode = (string)($locale['code'] ?? '');
+                                    if ($localeCode === '') {
+                                        continue;
+                                    }
+                                    $localeName = (string)($locale['name'] ?? $localeCode);
+                                    $localValue = (string)($currencyLocalNames[$localeCode] ?? '');
+                                    ?>
+                                    <div class='col-md-6'>
+                                        <div class='mb-3'>
+                                            <label class='form-label'>
+                                                <?= htmlspecialchars($localeName, ENT_QUOTES, 'UTF-8') ?>
+                                                <code><?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?></code>
+                                            </label>
+                                            <input type='text'
+                                                   class='form-control'
+                                                   name='local_names[<?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?>]'
+                                                   value='<?= htmlspecialchars($localValue, ENT_QUOTES, 'UTF-8') ?>'
+                                                   placeholder='<?= htmlspecialchars($currency->getName(), ENT_QUOTES, 'UTF-8') ?>'>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
                     <div class='row'>
                         <div class='col-md-6'>
@@ -157,8 +193,8 @@ $isEdit = $currency->getId() > 0;
                         <div class='alert alert-info' id='formatPreview'>
                             <lang>输入金额后显示预览</lang>
                         </div>
-                        <input type='number' class='form-control' id='previewAmount' 
-                               value='1234.56' step='0.01' oninput='WelineCurrencyForm.updatePreview()'>
+                        <input type='number' class='form-control' id='previewAmount'
+                               value='1234.56' step='0.01'>
                     </div>
 
                     <div class='mb-3'>
@@ -205,6 +241,11 @@ $isEdit = $currency->getId() > 0;
                 input.addEventListener('change', WelineCurrencyForm.updatePreview);
             }
         });
+
+        var previewAmount = document.getElementById('previewAmount');
+        if (previewAmount) {
+            previewAmount.addEventListener('input', WelineCurrencyForm.updatePreview);
+        }
     });
 })();
 </script>

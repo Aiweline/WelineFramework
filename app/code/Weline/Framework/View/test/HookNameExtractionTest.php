@@ -224,6 +224,41 @@ class HookNameExtractionTest extends TestCore
      * 这是导致 "header-cartcart" 错误的实际场景
      * 关键验证：hook 名称提取时不应该将后续内容中的 "cart" 混入
      */
+    public function testMultilineHookFallbackWithPhpDoesNotEmitStandaloneElse()
+    {
+        $content = <<<'TPL'
+<w:hook>
+    Missing_Module::frontend::partials::header::categories-before-unit
+    <else/>
+    <div class="header-categories">
+    <?php if (!empty($navItems)): ?>
+        <nav>ok</nav>
+    <?php endif; ?>
+    </div>
+</w:hook>
+TPL;
+
+        $parsed = $this->taglib->tagReplace($this->template, $content);
+
+        $this->assertStringNotContainsString(
+            'Missing_Module::frontend::partials::header::categories-before-unit',
+            $parsed,
+            'Multiline hook fallback must not leak the hook name into the compiled fallback'
+        );
+        $this->assertStringNotContainsString(
+            '<?php else: ?>',
+            $parsed,
+            'The hook delimiter must not be compiled as a standalone PHP else'
+        );
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'weline-hook-');
+        $this->assertIsString($tmpFile);
+        file_put_contents($tmpFile, $parsed);
+        exec(PHP_BINARY . ' -l ' . escapeshellarg($tmpFile), $output, $exitCode);
+        @unlink($tmpFile);
+        $this->assertSame(0, $exitCode, implode("\n", $output));
+    }
+
     public function testHookNameExtractionRealWorldCase1()
     {
         // 测试用例10: 实际场景 - header-cart（这是导致 "header-cartcart" 错误的场景）

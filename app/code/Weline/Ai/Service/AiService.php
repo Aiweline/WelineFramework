@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiUsageLog;
 use Weline\Ai\Model\Provider\Account;
@@ -23,8 +24,13 @@ use Weline\Ai\Service\AgentScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
+use Weline\Ai\Service\Provider\ImageGenerationResponseNormalizer;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
+use Weline\Ai\Service\Skill\AdapterSkillResolver;
+use Weline\Ai\Service\Style\AdapterStyleResolver;
+use Weline\Ai\Service\Style\StyleService;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
@@ -53,6 +59,16 @@ class AiService
      * 服务模式：PHP服务模式
      */
     public const MODE_PHP = 'php';
+
+    private const IDENTITY_ASSET_PROMPT_SUFFIX = "Generate one production-ready brand identity asset for a website logo or icon.\n"
+        . "The image must contain only the logo/icon subject.\n"
+        . "Do not render brand names, site names, initials, monograms, readable letters, pseudo text, slogans, labels, watermarks, UI text, or paragraph text.\n"
+        . "Do not render a photo scene, wall mockup, app tile, screenshot, browser frame, poster, card background, decorative background, gradient background, room background, product scene, or full illustration scene.\n"
+        . "The subject must be centered, clear, compact, and recognizable at small sizes.\n"
+        . "Prefer a transparent PNG with real alpha background when the selected model supports it.\n"
+        . "If real transparent PNG output is not supported by this model, generate the logo/icon on a clean, simple, high-contrast, removable background with the subject fully separated from the background.\n"
+        . "Do not fail the image request only because native transparent background is unavailable. Return the best clean isolated logo/icon image so the application can normalize it locally.\n"
+        . "Output must be suitable for automatic background removal, cropping, transparent padding, and final PNG normalization.";
 
     /**
      * @var AiModel
@@ -237,8 +253,7 @@ class AiService
     /**
      * Run independent AI subtasks and return a settled result map.
      *
-     * This dev branch does not yet carry the Fiber runner used by the feature
-     * branch, so keep the contract stable with sequential execution.
+     * Uses the local Fiber runner when multiple cooperative tasks are requested.
      *
      * @param array<string|int, callable(array<string,mixed>, string|int):mixed> $tasks
      * @param array<string, mixed> $options
@@ -246,7 +261,7 @@ class AiService
      */
     public function supportsCooperativeConcurrency(int $concurrency): bool
     {
-        return false;
+        return $concurrency > 1 && \class_exists(\Fiber::class);
     }
 
     public function runCooperativeSessionTasksSettled(array $tasks, array $options = []): array
@@ -257,8 +272,42 @@ class AiService
 
         $baseSessionId = \trim((string)($options['session_id'] ?? ''));
         $baseParams = \is_array($options['params'] ?? null) ? $options['params'] : [];
+        $concurrency = \max(1, (int)($options['concurrency'] ?? 1));
         $settled = [];
 
+        // Concurrent via FiberTaskRunner when concurrency > 1
+        if ($concurrency > 1) {
+            $wrapped = [];
+            foreach ($tasks as $taskKey => $task) {
+                if (!\is_callable($task)) {
+                    throw new \InvalidArgumentException('Cooperative AI task must be callable.');
+                }
+                $childParams = $this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, (string)$taskKey, $options);
+                $wrapped[$taskKey] = static function () use ($task, $childParams, $taskKey): mixed {
+                    return $task($childParams, $taskKey);
+                };
+            }
+            $runner = new \Weline\Framework\Php\FiberTaskRunner(defaultConcurrency: $concurrency);
+            foreach ($runner->runEvents($wrapped) as $taskKey => $event) {
+                if (($event['status'] ?? '') === 'fulfilled') {
+                    $settled[$taskKey] = [
+                        'status' => 'fulfilled',
+                        'result' => $event['result'] ?? null,
+                    ];
+                } else {
+                    $settled[$taskKey] = [
+                        'status' => 'rejected',
+                        'error' => ($event['error'] ?? null) instanceof \Throwable
+                            ? $event['error']
+                            : new \RuntimeException('Cooperative AI task failed without an exception payload.'),
+                    ];
+                }
+            }
+
+            return $settled;
+        }
+
+        // Sequential fallback
         foreach ($tasks as $taskKey => $task) {
             if (!\is_callable($task)) {
                 throw new \InvalidArgumentException('Cooperative AI task must be callable.');
@@ -368,6 +417,8 @@ class AiService
             }
         }
 
+        $params['admin_user_id'] = $userId;
+
         // 4. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
@@ -378,6 +429,8 @@ class AiService
 
         // 6. 调用AI模型API
         $params['resolved_config'] = $resolvedConfig;
+        $params['scenario_code'] = $scenarioCode;
+        $params['locale'] = $locale;
         $response = $this->callModelApi($model, $adaptedPrompt, $params);
 
         // 7. 场景适配器后处理
@@ -406,6 +459,9 @@ class AiService
     ): array {
         $model = $this->selectModel($modelCode, $scenarioCode, AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE);
         if (!$model) {
+            if ($modelCode === null && $scenarioCode !== null && \trim($scenarioCode) !== '') {
+                throw new Exception('Scenario adapter "' . $scenarioCode . '" must bind an active text2image model. Image generation will not fallback to global/default models.');
+            }
             throw new Exception('未配置可用的 text2image 模型，图片生成不会回退到 text2text 模型');
         }
 
@@ -424,14 +480,39 @@ class AiService
         $this->applyResolvedConfigToModel($model, $resolvedConfig);
         $params['resolved_config'] = $resolvedConfig;
 
+        $intent = $this->prepareImageIdentityAssetIntent($prompt, $params, $model, $resolvedConfig);
+        $prompt = $intent['prompt'];
+        $params = $intent['params'];
+        $semanticMetadata = $intent['metadata'];
+
         $provider = $this->providerFactory->getProvider($model);
         if (!$provider instanceof ImageGenerationProviderInterface) {
             throw new Exception(__('模型 "%{1}" 的供应商未实现图片生成接口', [$model->getModelCode()]));
         }
 
-        return $this->normalizeImageGenerationResult(
-            $provider->generateImage($model, $prompt, $params),
-            $model
+        try {
+            $providerResult = $provider->generateImage($model, $prompt, $params);
+        } catch (\Throwable $throwable) {
+            if (
+                !empty($semanticMetadata['requested_transparent_background'])
+                && !empty($semanticMetadata['native_transparent_background'])
+                && $this->isNativeTransparencyUnsupportedError($throwable->getMessage())
+            ) {
+                $fallbackParams = $this->removeNativeTransparencyRequestParams(
+                    $params,
+                    $this->resolveTransparentBackgroundParameter($params, $params['resolved_config'] ?? [])
+                );
+                $semanticMetadata['native_transparent_background'] = false;
+                $semanticMetadata['native_transparency_error'] = $throwable->getMessage();
+                $providerResult = $provider->generateImage($model, $prompt, $fallbackParams);
+            } else {
+                throw $throwable;
+            }
+        }
+
+        return $this->applyImageGenerationSemanticMetadata(
+            $this->normalizeImageGenerationResult($providerResult, $model),
+            $semanticMetadata
         );
     }
 
@@ -517,6 +598,8 @@ class AiService
             throw new Exception($reason);
         }
 
+        $params['admin_user_id'] = $params['admin_user_id'] ?? null;
+
         // 2. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
@@ -586,6 +669,9 @@ class AiService
                         ->find()
                         ->fetch();
                 }
+                if ($primaryModality !== AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT && !$modelCode) {
+                    return ($model && $model->getId() && $model->supportsPrimaryModality($primaryModality)) ? $model : null;
+                }
             }
         }
 
@@ -613,10 +699,9 @@ class AiService
         // 5. 如果找不到默认模型，使用任意一个已激活的默认标记模型
         if (!$model || !$model->getId()) {
             $query = $this->aiModel->reset()
-                ->where(AiModel::schema_fields_IS_ACTIVE, 1);
-            if ($primaryModality !== AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT) {
-                $query->where(AiModel::schema_fields_PRIMARY_MODALITY, $primaryModality);
-            } else {
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->where(AiModel::schema_fields_PRIMARY_MODALITY, $primaryModality);
+            if ($primaryModality === AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT) {
                 $query->where(AiModel::schema_fields_IS_DEFAULT, 1);
             }
             $model = $query->find()->fetch();
@@ -675,30 +760,273 @@ class AiService
      */
     private function normalizeImageGenerationResult(array $result, AiModel $model): array
     {
-        $images = is_array($result['images'] ?? null) ? $result['images'] : [];
-        $normalizedImages = [];
-        foreach ($images as $image) {
-            if (!is_array($image)) {
-                continue;
-            }
-            $normalized = [];
-            foreach (['url', 'b64_json', 'mime_type', 'revised_prompt'] as $key) {
-                if (isset($image[$key]) && is_scalar($image[$key]) && trim((string)$image[$key]) !== '') {
-                    $normalized[$key] = (string)$image[$key];
-                }
-            }
-            if ($normalized !== []) {
-                $normalizedImages[] = $normalized;
+        return ImageGenerationResponseNormalizer::normalize($result, (string)$model->getModelCode());
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     * @return array{prompt:string,params:array<string,mixed>,metadata:array<string,mixed>}
+     */
+    private function prepareImageIdentityAssetIntent(string $prompt, array $params, AiModel $model, array $resolvedConfig): array
+    {
+        $requestedTransparent = $this->isTruthy($params['identity_transparent_png_required'] ?? null)
+            || $this->isTruthy($params['transparent_png_required'] ?? null)
+            || $this->isTruthy($params['requested_transparent_background'] ?? null);
+        $identityAsset = $requestedTransparent || $this->isTruthy($params['identity_asset'] ?? null);
+
+        if (!$identityAsset) {
+            return [
+                'prompt' => $prompt,
+                'params' => $params,
+                'metadata' => [],
+            ];
+        }
+
+        $role = $this->resolveIdentityAssetRole($params);
+        $nativeTransparency = $requestedTransparent
+            && $this->modelSupportsNativeTransparentBackground($model, $params, $resolvedConfig);
+
+        $hadOutputFormat = array_key_exists('output_format', $params);
+
+        $params['identity_asset'] = true;
+        $params['identity_asset_role'] = $role;
+        $params['requested_transparent_background'] = $requestedTransparent;
+
+        if ($requestedTransparent && $nativeTransparency) {
+            $backgroundParam = $this->resolveTransparentBackgroundParameter($params, $resolvedConfig);
+            $params[$backgroundParam] = $this->resolveTransparentBackgroundValue($params, $resolvedConfig);
+            $params['output_format'] = 'png';
+        } elseif ($requestedTransparent) {
+            $params = $this->removeNativeTransparencyRequestParams(
+                $params,
+                $this->resolveTransparentBackgroundParameter($params, $resolvedConfig)
+            );
+            if (!$hadOutputFormat) {
+                unset($params['output_format']);
             }
         }
 
         return [
-            'images' => $normalizedImages,
-            'usage' => is_array($result['usage'] ?? null) ? $result['usage'] : [],
-            'model' => (string)($result['model'] ?? $model->getModelCode()),
-            'finish_reason' => (string)($result['finish_reason'] ?? 'stop'),
-            'raw' => $result['raw'] ?? null,
+            'prompt' => $this->appendIdentityAssetPromptRules($prompt),
+            'params' => $params,
+            'metadata' => [
+                'requested_transparent_background' => $requestedTransparent,
+                'native_transparent_background' => $nativeTransparency,
+                'output_format' => 'png',
+                'identity_asset' => true,
+                'identity_asset_role' => $role,
+                'native_transparency_error' => '',
+            ],
         ];
+    }
+
+    private function appendIdentityAssetPromptRules(string $prompt): string
+    {
+        if (str_contains($prompt, 'Generate one production-ready brand identity asset for a website logo or icon.')) {
+            return $prompt;
+        }
+
+        return rtrim($prompt) . "\n\n" . self::IDENTITY_ASSET_PROMPT_SUFFIX;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function resolveIdentityAssetRole(array $params): string
+    {
+        foreach (['identity_asset_role', 'asset_role', 'image_role', 'role', 'usage', 'purpose', 'slot', 'target', 'path', 'file_name'] as $key) {
+            if (!isset($params[$key]) || !is_scalar($params[$key])) {
+                continue;
+            }
+            $value = strtolower(trim((string)$params[$key]));
+            if ($value === '') {
+                continue;
+            }
+            if (str_contains($value, 'favicon') || str_contains($value, 'icon')) {
+                return 'icon';
+            }
+            if (str_contains($value, 'logo')) {
+                return 'logo';
+            }
+        }
+
+        return 'logo';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function modelSupportsNativeTransparentBackground(AiModel $model, array $params, array $resolvedConfig): bool
+    {
+        foreach ([
+            $params['supports_transparent_background'] ?? null,
+            $params['native_transparent_background_supported'] ?? null,
+            $resolvedConfig['supports_transparent_background'] ?? null,
+            $resolvedConfig['native_transparent_background_supported'] ?? null,
+        ] as $value) {
+            if ($value !== null) {
+                return $this->isTruthy($value);
+            }
+        }
+
+        $capabilities = $model->getCapabilities();
+        foreach (['transparent_background', 'native_transparent_background', 'alpha_background'] as $capability) {
+            if (array_key_exists($capability, $capabilities)) {
+                return $this->isTruthy($capabilities[$capability]);
+            }
+            if (in_array($capability, $capabilities, true)) {
+                return true;
+            }
+        }
+
+        $vendorModel = $this->getVendorModelMetadata($model);
+        $vendorCapabilities = is_array($vendorModel['capabilities'] ?? null) ? $vendorModel['capabilities'] : [];
+        foreach (['transparent_background', 'native_transparent_background', 'alpha_background'] as $capability) {
+            if (array_key_exists($capability, $vendorCapabilities)) {
+                return $this->isTruthy($vendorCapabilities[$capability]);
+            }
+            if (in_array($capability, $vendorCapabilities, true)) {
+                return true;
+            }
+        }
+        $vendorConfig = is_array($vendorModel['config'] ?? null) ? $vendorModel['config'] : [];
+        foreach (['supports_transparent_background', 'native_transparent_background_supported'] as $key) {
+            if (array_key_exists($key, $vendorConfig)) {
+                return $this->isTruthy($vendorConfig[$key]);
+            }
+        }
+
+        $supplier = strtolower(trim($model->getSupplier()));
+        $modelCode = strtolower(trim($model->getModelCode()));
+        return $supplier === 'openai' && str_starts_with($modelCode, 'gpt-image-1');
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function getVendorModelMetadata(AiModel $model): array
+    {
+        $supplier = strtolower(trim($model->getSupplier()));
+        if ($supplier === '') {
+            return [];
+        }
+
+        try {
+            foreach (VendorConfigManager::getProviderModels($supplier) as $modelMeta) {
+                if (!is_array($modelMeta)) {
+                    continue;
+                }
+                if ((string)($modelMeta['code'] ?? '') === $model->getModelCode()) {
+                    return $modelMeta;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function resolveTransparentBackgroundParameter(array $params, array $resolvedConfig): string
+    {
+        $param = trim((string)($params['transparent_background_parameter'] ?? $resolvedConfig['transparent_background_parameter'] ?? 'background'));
+        return $param !== '' ? $param : 'background';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function resolveTransparentBackgroundValue(array $params, array $resolvedConfig): string
+    {
+        $value = trim((string)($params['transparent_background_value'] ?? $resolvedConfig['transparent_background_value'] ?? 'transparent'));
+        return $value !== '' ? $value : 'transparent';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function removeNativeTransparencyRequestParams(array $params, ?string $backgroundParam = null): array
+    {
+        foreach (array_filter(['background', 'transparent_background', 'transparentBackground', $backgroundParam]) as $key) {
+            $params[$key] = '';
+        }
+        return $params;
+    }
+
+    private function isNativeTransparencyUnsupportedError(string $message): bool
+    {
+        $normalized = strtolower(trim($message));
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach ([
+            'transparent background unsupported',
+            'invalid background parameter',
+            'unsupported parameter',
+            'model does not support transparency',
+            'does not support transparency',
+            'does not support transparent',
+            'background is not supported',
+            'unrecognized request argument supplied: background',
+            'unknown parameter: background',
+        ] as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return str_contains($normalized, 'background')
+            && (
+                str_contains($normalized, 'unsupported')
+                || str_contains($normalized, 'not support')
+                || str_contains($normalized, 'invalid')
+                || str_contains($normalized, 'unknown parameter')
+            );
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     * @param array<string,mixed> $metadata
+     * @return array<string,mixed>
+     */
+    private function applyImageGenerationSemanticMetadata(array $result, array $metadata): array
+    {
+        if ($metadata === []) {
+            return $result;
+        }
+
+        foreach ($metadata as $key => $value) {
+            $result[$key] = $value;
+        }
+
+        $existing = is_array($result['metadata'] ?? null) ? $result['metadata'] : [];
+        $result['metadata'] = array_merge($existing, $metadata);
+
+        return $result;
+    }
+
+    private function isTruthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (float)$value !== 0.0;
+        }
+        if (!is_scalar($value)) {
+            return false;
+        }
+
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'y', 'on', 'required'], true);
     }
 
     /**
@@ -861,7 +1189,238 @@ class AiService
             throw new Exception('参数验证失败: ' . implode(', ', $validationErrors));
         }
 
+        $prompt = $this->injectAdapterSkills($prompt, $scenarioCode, $params);
+        $prompt = $this->injectAdapterStyles($prompt, $scenarioCode, $params);
+
         return $adapter->adaptPrompt($prompt, $params);
+    }
+
+    private function injectAdapterSkills(string $prompt, string $scenarioCode, array $params): string
+    {
+        if (!empty($params['disable_skill_prompt_injection'])) {
+            return $prompt;
+        }
+        if (\str_contains($prompt, 'AI ADAPTER SKILL CAPABILITY')
+            || \str_contains($prompt, 'AI BUILDER SKILL CAPABILITY')) {
+            return $prompt;
+        }
+
+        /** @var AdapterSkillResolver $resolver */
+        $resolver = ObjectManager::getInstance(AdapterSkillResolver::class);
+        $resolved = $resolver->resolveSkillBindings($scenarioCode, $this->extractTemporarySkillCodes($params));
+        if (empty($resolved['items'])) {
+            $this->logSkillStyleTrace('skill_injection.skipped', [
+                'scenario' => $scenarioCode,
+                'reason' => 'no_resolved_items',
+            ]);
+            return $prompt;
+        }
+
+        $guide = $resolver->buildPromptGuideText($resolved['items']);
+        if ($guide === '') {
+            $this->logSkillStyleTrace('skill_injection.skipped', [
+                'scenario' => $scenarioCode,
+                'reason' => 'empty_guide',
+                'codes' => $resolved['codes'] ?? [],
+            ]);
+            return $prompt;
+        }
+
+        $this->logSkillStyleTrace('skill_injection.applied', [
+            'scenario' => $scenarioCode,
+            'codes' => $resolved['codes'] ?? [],
+            'bindings' => \array_map(static function (array $item): array {
+                return [
+                    'code' => (string)($item['code'] ?? ''),
+                    'binding_source' => (string)($item['binding_source'] ?? ''),
+                    'locked' => !empty($item['locked']) ? 1 : 0,
+                    'manual' => !empty($item['manual']) ? 1 : 0,
+                    'temporary' => !empty($item['temporary']) ? 1 : 0,
+                ];
+            }, $resolved['items']),
+            'guide_chars' => \strlen($guide),
+            'prompt_chars_before' => \strlen($prompt),
+        ]);
+
+        $prompt = \ltrim($prompt);
+        return $prompt === '' ? $guide : $guide . "\n\n" . $prompt;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractTemporarySkillCodes(array $params): array
+    {
+        $candidates = [
+            $params['temporary_skill_codes'] ?? null,
+            $params['selected_skill_codes'] ?? null,
+            $params['skill_codes'] ?? null,
+            $params['scope']['selected_skill_codes'] ?? null,
+            $params['contract_context']['selected_skill_codes'] ?? null,
+        ];
+        $codes = [];
+        foreach ($candidates as $candidate) {
+            if (\is_string($candidate)) {
+                $decoded = \json_decode($candidate, true);
+                $candidate = \is_array($decoded) ? $decoded : \preg_split('/[\s,;]+/', $candidate);
+            }
+            if (!\is_array($candidate)) {
+                continue;
+            }
+            foreach ($candidate as $item) {
+                if (!\is_scalar($item)) {
+                    continue;
+                }
+                $code = \trim((string)$item);
+                if ($code !== '' && !\in_array($code, $codes, true)) {
+                    $codes[] = $code;
+                }
+            }
+        }
+
+        return $codes;
+    }
+
+    private function injectAdapterStyles(string $prompt, string $scenarioCode, array $params): string
+    {
+        if (!empty($params['disable_style_prompt_injection'])) {
+            return $prompt;
+        }
+        if (\str_contains($prompt, 'AI STYLE CONTRACT')
+            || \str_contains($prompt, 'CTX_AI_STYLE')
+            || \str_contains($prompt, 'AI ADAPTER STYLE CAPABILITY')) {
+            return $prompt;
+        }
+
+        $styleService = ObjectManager::getInstance(StyleService::class);
+        if ($this->extractStyleMode($params, $styleService) === StyleService::MODE_NONE) {
+            return $prompt;
+        }
+
+        $snapshotSource = 'snapshot';
+        $snapshot = $styleService->normalizeSnapshot($this->extractStyleSnapshot($params));
+        if ($snapshot === []) {
+            /** @var AdapterStyleResolver $resolver */
+            $resolver = ObjectManager::getInstance(AdapterStyleResolver::class);
+            $adminId = \max(0, (int)($params['admin_user_id'] ?? $params['admin_id'] ?? $params['user_id'] ?? 0));
+            $resolved = $resolver->resolvePreferredStyle(
+                $scenarioCode,
+                $this->extractStyleTitle($params),
+                $this->extractStyleBrief($params, $prompt),
+                $adminId
+            );
+            if (empty($resolved['matched']) || !\is_array($resolved['item'] ?? null)) {
+                $this->logSkillStyleTrace('style_injection.skipped', [
+                    'scenario' => $scenarioCode,
+                    'reason' => 'no_matched_style',
+                    'mode' => $this->extractStyleMode($params, $styleService),
+                    'match_reason' => (string)($resolved['reason'] ?? ''),
+                ]);
+                return $prompt;
+            }
+            $snapshot = $styleService->buildSnapshot($resolved['item'], (string)($resolved['reason'] ?? ''));
+            $snapshotSource = (string)($resolved['source'] ?? 'resolved');
+        }
+
+        $guide = \trim($styleService->buildStageThreePromptAddon([
+            'design_direction_snapshot' => $snapshot,
+        ]));
+        if ($guide === '') {
+            $this->logSkillStyleTrace('style_injection.skipped', [
+                'scenario' => $scenarioCode,
+                'reason' => 'empty_guide',
+                'style_code' => (string)($snapshot['code'] ?? ''),
+            ]);
+            return $prompt;
+        }
+
+        $this->logSkillStyleTrace('style_injection.applied', [
+            'scenario' => $scenarioCode,
+            'source' => $snapshotSource,
+            'style_code' => (string)($snapshot['code'] ?? ''),
+            'style_name' => (string)($snapshot['name'] ?? ''),
+            'style_version' => (int)($snapshot['version'] ?? 0),
+            'style_hash' => (string)($snapshot['hash'] ?? ''),
+            'guide_chars' => \strlen($guide),
+            'prompt_chars_before' => \strlen($prompt),
+        ]);
+
+        $prompt = \ltrim($prompt);
+        return $prompt === '' ? $guide : $guide . "\n\n" . $prompt;
+    }
+
+    private function extractStyleMode(array $params, StyleService $styleService): string
+    {
+        foreach ([
+            $params['design_direction_mode'] ?? null,
+            $params['style_mode'] ?? null,
+            $params['scope']['design_direction_mode'] ?? null,
+            $params['contract_context']['design_direction_mode'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return $styleService->normalizeMode((string)$candidate);
+            }
+        }
+
+        return StyleService::MODE_AUTO;
+    }
+
+    private function extractStyleTitle(array $params): string
+    {
+        foreach ([
+            $params['site_title'] ?? null,
+            $params['title'] ?? null,
+            $params['scope']['site_title'] ?? null,
+            $params['contract_context']['site_title'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return \trim((string)$candidate);
+            }
+        }
+
+        return '';
+    }
+
+    private function extractStyleBrief(array $params, string $prompt): string
+    {
+        foreach ([
+            $params['brief_description'] ?? null,
+            $params['user_description'] ?? null,
+            $params['brief'] ?? null,
+            $params['scope']['brief_description'] ?? null,
+            $params['scope']['user_description'] ?? null,
+            $params['contract_context']['brief_description'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return \trim((string)$candidate);
+            }
+        }
+
+        return \function_exists('mb_substr') ? \mb_substr($prompt, 0, 4000) : \substr($prompt, 0, 4000);
+    }
+
+    private function extractStyleSnapshot(array $params): mixed
+    {
+        foreach ([
+            $params['design_direction_snapshot'] ?? null,
+            $params['style_snapshot'] ?? null,
+            $params['scope']['design_direction_snapshot'] ?? null,
+            $params['contract_context']['design_direction_snapshot'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function logSkillStyleTrace(string $event, array $context = []): void
+    {
+        SkillStyleTrace::log($event, $context);
     }
 
     /**
@@ -916,7 +1475,7 @@ class AiService
         $usage = [];
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+            $providerCode = $this->accountService->getProviderByModel($model);
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -927,22 +1486,34 @@ class AiService
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
-            // 测试模式放宽筛选：仅要求激活；非测试模式要求激活+连通成功+余额>0
+            // 测试模式放宽筛选：仅要求激活；PageBuilder 等后台任务可显式允许零余额账户。
             $isTestMode = (bool)($params['test_mode'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode) {
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? ($params['resolved_config']['allow_zero_balance_provider'] ?? false));
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {
                 if ((int)($acc['is_active'] ?? 0) !== 1) {
                     return false;
                 }
                 if ($isTestMode) {
                     return true;
                 }
-                return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
+                if (($acc['connection_status'] ?? '') !== 'success') {
+                    return false;
+                }
+                return $allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0;
             }));
             if (empty($candidateAccounts)) {
                 $message = $isTestMode 
                     ? __("没有满足条件的%{provider}供应商账户（需激活）", ['provider' => $providerCode])
-                    : __("没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）", ['provider' => $providerCode]);
-                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]));
+                    : ($allowZeroBalanceProvider
+                        ? __("没有满足条件的%{provider}供应商账户（需激活、连通成功）", ['provider' => $providerCode])
+                        : __("没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）", ['provider' => $providerCode]));
+                throw new AiBillingException(
+                    ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]),
+                    $allowZeroBalanceProvider || $isTestMode
+                        ? AiBillingException::CODE_PROVIDER_UNAVAILABLE
+                        : AiBillingException::CODE_INSUFFICIENT_BALANCE,
+                    402
+                );
             }
             usort($candidateAccounts, function ($a, $b) {
                 $d1 = (int)($a['is_default'] ?? 0);
@@ -981,7 +1552,8 @@ class AiService
                     $account = $accModel; // 成功的账户
                     $requestTime = (int)((microtime(true) - $startTime) * 1000);
                     $this->accountService->recordUsage($account, $model, $usage, [
-                        'request_type' => 'chat',
+                        'request_type' => $params['request_type'] ?? 'chat',
+                        'request_id' => $params['request_id'] ?? null,
                         'user_id' => $params['user_id'] ?? null,
                         'user_name' => $params['user_name'] ?? null,
                         'request_time' => $requestTime,
@@ -1026,7 +1598,8 @@ class AiService
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
                 $this->accountService->recordUsage($account, $model, $usage, [
-                    'request_type' => 'chat',
+                    'request_type' => $params['request_type'] ?? 'chat',
+                    'request_id' => $params['request_id'] ?? null,
                     'user_id' => $params['user_id'] ?? null,
                     'user_name' => $params['user_name'] ?? null,
                     'request_time' => $requestTime,
@@ -1037,7 +1610,7 @@ class AiService
             
             // 记录错误
             w_log_error("AI API调用失败: " . $e->getMessage());
-            throw new Exception("AI生成失败: " . $e->getMessage());
+            throw $this->wrapAiBillingExceptionIfNeeded($e, "AI生成失败: " . $e->getMessage());
         }
     }
 
@@ -1066,13 +1639,16 @@ class AiService
         
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+            $providerCode = $this->accountService->getProviderByModel($model);
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
             
             // 2. 获取可用的供应商账户
-            $account = $this->accountService->getAvailableAccount($providerCode);
+            $account = $this->accountService->getAvailableAccount(
+                $providerCode,
+                (bool)($params['allow_zero_balance_provider'] ?? ($params['resolved_config']['allow_zero_balance_provider'] ?? false))
+            );
             if (!$account) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
@@ -1179,21 +1755,25 @@ class AiService
     private function logUsage(AiModel $model, array $usage, array $params = []): void
     {
         try {
+            $promptTokens = (int)($usage['prompt_tokens'] ?? 0);
+            $completionTokens = (int)($usage['completion_tokens'] ?? 0);
+            $totalTokens = (int)($usage['total_tokens'] ?? ($promptTokens + $completionTokens));
+            $inputCost = $promptTokens * (float)$model->getData('token_price_input') / 1000;
+            $outputCost = $completionTokens * (float)$model->getData('token_price_output') / 1000;
+
             $this->usageLog->reset();
             $this->usageLog->setData([
-                'model_code' => $model->getModelCode(),
-                'vendor' => $model->getVendor(),
-                'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
-                'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                'total_tokens' => $usage['total_tokens'] ?? 0,
-                'input_cost' => ($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') / 1000,
-                'output_cost' => ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output') / 1000,
-                'total_cost' => (($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') + 
-                               ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output')) / 1000,
-                'scenario_code' => $params['scenario_code'] ?? null,
-                'locale' => $params['locale'] ?? null,
-                'user_id' => $params['user_id'] ?? 0,
-                'created_time' => time(),
+                AiUsageLog::schema_fields_MODEL_CODE => $model->getModelCode(),
+                AiUsageLog::schema_fields_REQUEST_DATA => json_encode([
+                    'vendor' => $model->getVendor(),
+                    'scenario_code' => $params['scenario_code'] ?? null,
+                    'locale' => $params['locale'] ?? null,
+                    'user_id' => $params['user_id'] ?? 0,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                AiUsageLog::schema_fields_TOTAL_TOKENS => $totalTokens,
+                AiUsageLog::schema_fields_TOTAL_COST => $inputCost + $outputCost,
+                AiUsageLog::schema_fields_STATUS => AiUsageLog::STATUS_SUCCESS,
+                AiUsageLog::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
             ]);
             $this->usageLog->save();
         } catch (\Exception $e) {
@@ -1393,17 +1973,22 @@ class AiService
         /** @var AiUsageLog $usageLog */
         $usageLog = ObjectManager::getInstance(AiUsageLog::class);
         $usageLog->setData([
-            'model_id' => $model->getId(),
-            'model_code' => $model->getModelCode(),
-            'user_id' => $userId,
-            'is_backend' => $isBackend ? 1 : 0,
-            'input_tokens' => $inputTokens,
-            'output_tokens' => $outputTokens,
-            'total_tokens' => $inputTokens + $outputTokens,
-            'cost' => $cost,
-            'prompt_length' => strlen($prompt),
-            'response_length' => strlen($response),
-            'created_at' => date('Y-m-d H:i:s')
+            AiUsageLog::schema_fields_MODEL_CODE => $model->getModelCode(),
+            AiUsageLog::schema_fields_REQUEST_DATA => json_encode([
+                'model_id' => $model->getId(),
+                'user_id' => $userId,
+                'is_backend' => $isBackend ? 1 : 0,
+                'input_tokens' => $inputTokens,
+                'prompt_length' => strlen($prompt),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            AiUsageLog::schema_fields_RESPONSE_DATA => json_encode([
+                'output_tokens' => $outputTokens,
+                'response_length' => strlen($response),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            AiUsageLog::schema_fields_TOTAL_TOKENS => $inputTokens + $outputTokens,
+            AiUsageLog::schema_fields_TOTAL_COST => $cost,
+            AiUsageLog::schema_fields_STATUS => AiUsageLog::STATUS_SUCCESS,
+            AiUsageLog::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
         ]);
         $usageLog->save();
     }
@@ -1445,7 +2030,7 @@ class AiService
         }
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
-        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+        $providerCode = $this->accountService->getProviderByModel($model);
         Env::log('ai_agent_debug.log', sprintf(
             '[executeAgent] modelCode=%s, providerCode=%s',
             $model->getData(AiModel::schema_fields_MODEL_CODE),
@@ -1453,10 +2038,12 @@ class AiService
         ), 'DEBUG');
         
         if ($providerCode) {
-            $account = $this->accountService->getAvailableAccount($providerCode);
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
+            $account = $this->accountService->getAvailableAccount($providerCode, $allowZeroBalanceProvider);
             Env::log('ai_agent_debug.log', sprintf(
-                '[executeAgent] getAvailableAccount(%s) = %s',
+                '[executeAgent] getAvailableAccount(%s, allowZeroBalance=%s) = %s',
                 $providerCode,
+                $allowZeroBalanceProvider ? 'true' : 'false',
                 $account ? 'ID=' . $account->getId() : 'null'
             ), 'DEBUG');
             
@@ -1638,5 +2225,18 @@ class AiService
             $isBackend,
             $model  // 传递已注入账户配置的模型实例
         );
+    }
+
+    private function wrapAiBillingExceptionIfNeeded(\Throwable $throwable, string $message): \Throwable
+    {
+        if ($throwable instanceof AiBillingException) {
+            return $throwable;
+        }
+        $billingCode = AiBillingException::classifyMessageToCode($message);
+        if ($billingCode === '') {
+            return new Exception($message, (int)$throwable->getCode(), $throwable);
+        }
+
+        return new AiBillingException($message, $billingCode, 402, $throwable);
     }
 }

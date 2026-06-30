@@ -127,6 +127,41 @@ const EavManager = (function() {
                 deleteNode(state.selectedNode);
             }
         });
+
+        $(document)
+            .off('click.eavManagerAction', '[data-eav-action]')
+            .on('click.eavManagerAction', '[data-eav-action]', function(event) {
+                const action = this.getAttribute('data-eav-action');
+                const nodeId = this.getAttribute('data-node-id');
+
+                switch (action) {
+                    case 'select-node':
+                        selectNode(this);
+                        break;
+                    case 'toggle-node':
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleNode(event, nodeId);
+                        break;
+                    case 'retry-load-children':
+                        event.preventDefault();
+                        event.stopPropagation();
+                        retryLoadChildren(nodeId);
+                        break;
+                    case 'reset-form':
+                        event.preventDefault();
+                        resetForm();
+                        break;
+                    case 'remove-option':
+                        event.preventDefault();
+                        removeOption(this);
+                        break;
+                    case 'add-option':
+                        event.preventDefault();
+                        addOption();
+                        break;
+                }
+            });
     }
 
     /**
@@ -212,7 +247,7 @@ const EavManager = (function() {
         
         // 恢复选中状态
         if (selectedNodeId) {
-            const $selectedNode = container.find(`[data-id="${selectedNodeId}"]`);
+            const $selectedNode = findTreeElementById(selectedNodeId);
             if ($selectedNode.length) {
                 $selectedNode.addClass('active');
             }
@@ -228,15 +263,18 @@ const EavManager = (function() {
         const isSelected = state.selectedNode && state.selectedNode.id === node.id;
         const isLoading = state.loadingNodes.has(node.id);
         const hasChildren = node.lazy || (node.children && node.children.length > 0);
+        const nodeId = escapeAttr(node.id);
+        const nodeType = escapeAttr(node.type);
+        const nodeNodeId = escapeAttr(node.nodeId);
 
         let html = `
             <div class="tree-node-wrapper" data-level="${level}">
-                <div class="tree-node node-${node.type} ${isSelected ? 'active' : ''}" 
-                     data-id="${node.id}" 
-                     data-type="${node.type}"
-                     data-node-id="${node.nodeId}"
-                     onclick="EavManager.selectNode(this)">
-                    <span class="tree-node-toggle ${!hasChildren ? 'empty' : ''}" onclick="EavManager.toggleNode(event, '${node.id}')">
+                <div class="tree-node node-${nodeType} ${isSelected ? 'active' : ''}"
+                     data-id="${nodeId}"
+                     data-type="${nodeType}"
+                     data-node-id="${nodeNodeId}"
+                     data-eav-action="select-node">
+                    <span class="tree-node-toggle ${!hasChildren ? 'empty' : ''}" data-eav-action="toggle-node" data-node-id="${nodeId}">
                         <i class="mdi ${isExpanded ? 'mdi-chevron-down' : 'mdi-chevron-right'}"></i>
                     </span>
                     <i class="tree-node-icon mdi ${typeConfig.icon}"></i>
@@ -244,7 +282,7 @@ const EavManager = (function() {
                     <span class="tree-node-code">(${escapeHtml(node.code)})</span>
                     ${node.isSystem ? '<span class="badge bg-secondary tree-node-badge">系统</span>' : ''}
                 </div>
-                <div class="tree-children ${isExpanded ? 'expanded' : ''}" data-parent="${node.id}">
+                <div class="tree-children ${isExpanded ? 'expanded' : ''}" data-parent="${nodeId}">
         `;
 
         if (isExpanded) {
@@ -255,7 +293,7 @@ const EavManager = (function() {
                 // 加载失败
                 html += `<div class="tree-loading text-danger">
                     <i class="mdi mdi-alert-circle me-1"></i>加载失败 
-                    <a href="#" onclick="EavManager.retryLoadChildren('${node.id}'); return false;" class="ms-2">重试</a>
+                    <a href="#" data-eav-action="retry-load-children" data-node-id="${nodeId}" class="ms-2">重试</a>
                 </div>`;
             } else if (node.children && node.children.length > 0) {
                 // 有子节点
@@ -426,7 +464,7 @@ const EavManager = (function() {
         
         // 更新DOM选中状态
         $('.tree-node').removeClass('active');
-        const $el = $(config.treeContainer).find(`[data-id="${nodeId}"]`);
+        const $el = findTreeElementById(nodeId);
         if ($el.length) {
             $el.addClass('active');
         }
@@ -509,7 +547,7 @@ const EavManager = (function() {
      */
     function restoreSelectedAndDetail(selectedNodeId) {
         setTimeout(function() {
-            const $node = $(config.treeContainer).find('[data-id="' + selectedNodeId + '"]');
+            const $node = findTreeElementById(selectedNodeId);
             if ($node.length) {
                 $node.addClass('active');
                 state.selectedNode = findNode(selectedNodeId);
@@ -663,23 +701,23 @@ const EavManager = (function() {
         // 更严格的系统实体判断：支持数字1、字符串"1"、布尔值true
         const isSystem = data.is_system == 1 || data.is_system === '1' || data.is_system === true || data.isSystem === true;
         return `
-            <form id="entity-form" data-id="${data.eav_entity_id}">
+            <form id="entity-form" data-id="${escapeAttr(data.eav_entity_id)}">
                 <div class="form-section">
                     <div class="form-section-title">基本信息</div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">实体代码 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="code" value="${escapeHtml(data.code)}" ${isSystem ? 'readonly' : ''} required style="${isSystem ? 'background-color: #e9ecef; cursor: not-allowed;' : ''}">
+                            <input type="text" class="form-control" name="code" value="${escapeAttr(data.code)}" ${isSystem ? 'readonly' : ''} required style="${isSystem ? 'background-color: #e9ecef; cursor: not-allowed;' : ''}">
                             ${isSystem ? '<small class="text-muted">系统实体代码不可修改</small>' : ''}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">实体名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="name" value="${escapeHtml(data.name || '')}" required>
+                            <input type="text" class="form-control" name="name" value="${escapeAttr(data.name || '')}" required>
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">实体类 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="class" value="${escapeHtml(data.class || '')}" ${isSystem ? 'readonly' : ''} required style="${isSystem ? 'background-color: #e9ecef; cursor: not-allowed;' : ''}">
+                        <input type="text" class="form-control" name="class" value="${escapeAttr(data.class || '')}" ${isSystem ? 'readonly' : ''} required style="${isSystem ? 'background-color: #e9ecef; cursor: not-allowed;' : ''}">
                         ${isSystem ? '<small class="text-muted">系统实体的实体类不可修改</small>' : '<small class="text-muted">完整的PHP类名，如: WeShop\\Product\\Model\\Product</small>'}
                     </div>
                     <div class="row">
@@ -692,7 +730,7 @@ const EavManager = (function() {
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">主键字段长度</label>
-                            <input type="number" class="form-control" name="eav_entity_id_field_length" value="${data.eav_entity_id_field_length || 11}">
+                            <input type="number" class="form-control" name="eav_entity_id_field_length" value="${escapeAttr(data.eav_entity_id_field_length || 11)}">
                         </div>
                     </div>
                 </div>
@@ -700,7 +738,7 @@ const EavManager = (function() {
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-content-save me-1"></i> 保存
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="EavManager.resetForm()">
+                    <button type="button" class="btn btn-outline-secondary" data-eav-action="reset-form">
                         <i class="mdi mdi-refresh me-1"></i> 重置
                     </button>
                 </div>
@@ -713,18 +751,18 @@ const EavManager = (function() {
      */
     function renderSetForm(data) {
         return `
-            <form id="set-form" data-id="${data.set_id}">
-                <input type="hidden" name="eav_entity_id" value="${data.eav_entity_id}">
+            <form id="set-form" data-id="${escapeAttr(data.set_id)}">
+                <input type="hidden" name="eav_entity_id" value="${escapeAttr(data.eav_entity_id)}">
                 <div class="form-section">
                     <div class="form-section-title">基本信息</div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性集代码 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="code" value="${escapeHtml(data.code)}" required>
+                            <input type="text" class="form-control" name="code" value="${escapeAttr(data.code)}" required>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性集名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="name" value="${escapeHtml(data.name || '')}" required>
+                            <input type="text" class="form-control" name="name" value="${escapeAttr(data.name || '')}" required>
                         </div>
                     </div>
                 </div>
@@ -732,7 +770,7 @@ const EavManager = (function() {
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-content-save me-1"></i> 保存
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="EavManager.resetForm()">
+                    <button type="button" class="btn btn-outline-secondary" data-eav-action="reset-form">
                         <i class="mdi mdi-refresh me-1"></i> 重置
                     </button>
                 </div>
@@ -745,19 +783,19 @@ const EavManager = (function() {
      */
     function renderGroupForm(data) {
         return `
-            <form id="group-form" data-id="${data.group_id}">
-                <input type="hidden" name="eav_entity_id" value="${data.eav_entity_id}">
-                <input type="hidden" name="set_id" value="${data.set_id}">
+            <form id="group-form" data-id="${escapeAttr(data.group_id)}">
+                <input type="hidden" name="eav_entity_id" value="${escapeAttr(data.eav_entity_id)}">
+                <input type="hidden" name="set_id" value="${escapeAttr(data.set_id)}">
                 <div class="form-section">
                     <div class="form-section-title">基本信息</div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性组代码 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="code" value="${escapeHtml(data.code)}" required>
+                            <input type="text" class="form-control" name="code" value="${escapeAttr(data.code)}" required>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性组名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="name" value="${escapeHtml(data.name || '')}" required>
+                            <input type="text" class="form-control" name="name" value="${escapeAttr(data.name || '')}" required>
                         </div>
                     </div>
                 </div>
@@ -765,7 +803,7 @@ const EavManager = (function() {
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-content-save me-1"></i> 保存
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="EavManager.resetForm()">
+                    <button type="button" class="btn btn-outline-secondary" data-eav-action="reset-form">
                         <i class="mdi mdi-refresh me-1"></i> 重置
                     </button>
                 </div>
@@ -779,33 +817,33 @@ const EavManager = (function() {
     function renderAttributeForm(data) {
         const isSystem = data.is_system == 1;
         return `
-            <form id="attribute-form" data-id="${data.attribute_id}">
-                <input type="hidden" name="eav_entity_id" value="${data.eav_entity_id}">
-                <input type="hidden" name="set_id" value="${data.set_id}">
-                <input type="hidden" name="group_id" value="${data.group_id}">
-                <input type="hidden" name="type_id" value="${data.type_id}">
+            <form id="attribute-form" data-id="${escapeAttr(data.attribute_id)}">
+                <input type="hidden" name="eav_entity_id" value="${escapeAttr(data.eav_entity_id)}">
+                <input type="hidden" name="set_id" value="${escapeAttr(data.set_id)}">
+                <input type="hidden" name="group_id" value="${escapeAttr(data.group_id)}">
+                <input type="hidden" name="type_id" value="${escapeAttr(data.type_id)}">
                 
                 <div class="form-section">
                     <div class="form-section-title">基本信息</div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性代码 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="code" value="${escapeHtml(data.code)}" ${isSystem ? 'readonly' : ''} required>
+                            <input type="text" class="form-control" name="code" value="${escapeAttr(data.code)}" ${isSystem ? 'readonly' : ''} required>
                             ${isSystem ? '<small class="text-muted">系统属性代码不可修改</small>' : ''}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="name" value="${escapeHtml(data.name || '')}" required>
+                            <input type="text" class="form-control" name="name" value="${escapeAttr(data.name || '')}" required>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">属性类型</label>
-                            <input type="text" class="form-control" value="${escapeHtml(data.type_name || '')}" readonly>
+                            <input type="text" class="form-control" value="${escapeAttr(data.type_name || '')}" readonly>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">前端元素</label>
-                            <input type="text" class="form-control" value="${escapeHtml(data.element || '')}" readonly>
+                            <input type="text" class="form-control" value="${escapeAttr(data.element || '')}" readonly>
                         </div>
                     </div>
                 </div>
@@ -877,7 +915,7 @@ const EavManager = (function() {
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-content-save me-1"></i> 保存
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="EavManager.resetForm()">
+                    <button type="button" class="btn btn-outline-secondary" data-eav-action="reset-form">
                         <i class="mdi mdi-refresh me-1"></i> 重置
                     </button>
                 </div>
@@ -892,12 +930,12 @@ const EavManager = (function() {
         let optionsHtml = '';
         options.forEach((opt, index) => {
             optionsHtml += `
-                <tr data-option-id="${opt.option_id || ''}">
-                    <td><input type="text" class="form-control form-control-sm" name="options[${index}][code]" value="${escapeHtml(opt.code || '')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="options[${index}][value]" value="${escapeHtml(opt.value || '')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="options[${index}][swatch_color]" value="${escapeHtml(opt.swatch_color || '')}"></td>
+                <tr data-option-id="${escapeAttr(opt.option_id || '')}">
+                    <td><input type="text" class="form-control form-control-sm" name="options[${index}][code]" value="${escapeAttr(opt.code || '')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="options[${index}][value]" value="${escapeAttr(opt.value || '')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="options[${index}][swatch_color]" value="${escapeAttr(opt.swatch_color || '')}"></td>
                     <td>
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="EavManager.removeOption(this)">
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-eav-action="remove-option">
                             <i class="mdi mdi-delete"></i>
                         </button>
                     </td>
@@ -909,7 +947,7 @@ const EavManager = (function() {
             <div class="form-section">
                 <div class="form-section-title d-flex justify-content-between align-items-center">
                     <span>属性选项</span>
-                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="EavManager.addOption()">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-eav-action="add-option">
                         <i class="mdi mdi-plus"></i> 添加选项
                     </button>
                 </div>
@@ -1131,7 +1169,7 @@ const EavManager = (function() {
                 <td><input type="text" class="form-control form-control-sm" name="options[${index}][value]" value=""></td>
                 <td><input type="text" class="form-control form-control-sm" name="options[${index}][swatch_color]" value=""></td>
                 <td>
-                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="EavManager.removeOption(this)">
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-eav-action="remove-option">
                         <i class="mdi mdi-delete"></i>
                     </button>
                 </td>
@@ -1192,6 +1230,25 @@ const EavManager = (function() {
         return fields[type] || 'id';
     }
 
+    function findTreeElementById(nodeId) {
+        return $(config.treeContainer).find('.tree-node').filter(function() {
+            return this.getAttribute('data-id') === String(nodeId);
+        });
+    }
+
+    function escapeAttr(value) {
+        if (value === null || value === undefined) return '';
+        return String(value).replace(/[&<>"']/g, function(ch) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[ch];
+        });
+    }
+
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -1211,7 +1268,7 @@ const EavManager = (function() {
                 timerProgressBar: true
             });
         } else {
-            alert(message);
+            console[type === 'error' ? 'error' : 'log'](message);
         }
     }
 

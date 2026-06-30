@@ -10,6 +10,8 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeContext;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
@@ -100,6 +102,11 @@ class DetectWebsite implements ObserverInterface
         $data->setData('default_language', $site->getDefaultLanguage());
         $data->setData('default_timezone', $site->getDefaultTimezone());
 
+        RequestContext::setWelineWebsiteId((int)$site->getWebsiteId());
+        RequestContext::setWelineWebsiteCode($site->getCode());
+        RequestContext::setWelineWebsiteUrl((string)$websiteUrl);
+        ScopeContext::setWebsiteCode($site->getCode());
+
         date_default_timezone_set($site->getDefaultTimezone());
         WebsiteData::setWebsite($site);
     }
@@ -114,6 +121,16 @@ class DetectWebsite implements ObserverInterface
         $host2WithoutWww = preg_replace('/^www\./', '', $host2);
 
         return $host1WithoutWww === $host2WithoutWww;
+    }
+
+    private function isReservedProjectHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
+        }
+
+        return LocalDomainPolicy::isStandardProjectHost($host);
     }
 
     /**
@@ -135,6 +152,9 @@ class DetectWebsite implements ObserverInterface
         $scheme = (($parsed['scheme'] ?? '') === 'http') ? 'http' : 'https';
         $host = \strtolower(\trim((string)($parsed['host'] ?? '')));
         if ($host === '') {
+            return;
+        }
+        if ($this->isReservedProjectHost($host)) {
             return;
         }
 
@@ -174,6 +194,9 @@ class DetectWebsite implements ObserverInterface
         $parsedRequestUrl = \parse_url($requestUrl);
         $requestScheme = (($parsedRequestUrl['scheme'] ?? '') === 'http') ? 'http' : 'https';
         $requestHost = \strtolower(\trim((string)($parsedRequestUrl['host'] ?? '')));
+        if ($this->isReservedProjectHost($requestHost)) {
+            return null;
+        }
         $requestPort = isset($parsedRequestUrl['port']) ? ':' . $parsedRequestUrl['port'] : '';
         $requestPath = Url::parse_url($requestUrl, 'path') ?: '/';
         $requestPath = '/' . \trim((string)$requestPath, '/');
@@ -248,6 +271,9 @@ class DetectWebsite implements ObserverInterface
                 if ($domain === '') {
                     continue;
                 }
+                if ($this->isReservedProjectHost($domain)) {
+                    continue;
+                }
 
                 $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''), '/');
                 $baseUrl = $scheme . '://' . $domain . $port;
@@ -287,6 +313,9 @@ class DetectWebsite implements ObserverInterface
         }
 
         $hostNorm = \strtolower(\trim($currentHost));
+        if ($this->isReservedProjectHost($hostNorm)) {
+            return null;
+        }
         $candidates = [];
 
         foreach ($domainRows as $domainRow) {
@@ -376,16 +405,12 @@ class DetectWebsite implements ObserverInterface
         $currentHost = \parse_url($requestUrl, PHP_URL_HOST);
         if (\is_string($currentHost) && $currentHost !== '') {
             $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
-            if ($matchedSite === null) {
-                $this->invalidateDetectionCachesForRetry($requestUrl);
-                $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
-            }
-            if ($matchedSite === null) {
-                $matchedSite = $this->findSiteByWebsiteDomainDirect($requestUrl, $currentHost, $websiteModel);
-            }
         }
         if ($matchedSite === null) {
             $matchedSite = $this->findSiteByWebsiteUrl($requestUrl, $websiteModel);
+        }
+        if ($matchedSite === null && \is_string($currentHost) && $currentHost !== '') {
+            $matchedSite = $this->findSiteByWebsiteDomainDirect($requestUrl, $currentHost, $websiteModel);
         }
 
         $cachedValue = $matchedSite ?? false;
@@ -393,26 +418,6 @@ class DetectWebsite implements ObserverInterface
         $this->setProcessValueCache($processKey, $cachedValue);
 
         return $matchedSite;
-    }
-
-    private function invalidateDetectionCachesForRetry(string $requestUrl): void
-    {
-        foreach ([
-            self::REQUEST_CACHE_PREFIX . 'website_rows',
-            self::REQUEST_CACHE_PREFIX . 'website_domains',
-            self::REQUEST_CACHE_PREFIX . 'expanded_sites',
-            self::REQUEST_CACHE_PREFIX . 'website_rows_by_id',
-            self::REQUEST_CACHE_PREFIX . 'match.' . sha1($requestUrl),
-        ] as $requestKey) {
-            RequestContext::remove($requestKey);
-        }
-
-        self::clearProcessCache();
-
-        try {
-            $this->getCache()->clear();
-        } catch (\Throwable) {
-        }
     }
 
     /**
@@ -424,6 +429,9 @@ class DetectWebsite implements ObserverInterface
     {
         $hostNorm = \strtolower(\trim($currentHost));
         if ($hostNorm === '') {
+            return null;
+        }
+        if ($this->isReservedProjectHost($hostNorm)) {
             return null;
         }
 
@@ -447,35 +455,62 @@ class DetectWebsite implements ObserverInterface
         $baseDomainModel = w_obj(WebsiteDomain::class);
         foreach (\array_values(\array_unique($candidateHosts)) as $candidateHost) {
             /** @var WebsiteDomain $domainModel */
-            $domainModel = clone $baseDomainModel;
-            $domainModel->clearData()->clearQuery()->loadByDomain($candidateHost);
-            if ($domainModel->getDomainId() <= 0 || $domainModel->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
+            $domainQuery = clone $baseDomainModel;
+            $domainQuery->clearData()->clearQuery()
+                ->where(WebsiteDomain::schema_fields_DOMAIN, $candidateHost)
+                ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                ->select()
+                ->fetch();
+            $domainItems = [];
+            foreach ($domainQuery->getItems() ?: [] as $item) {
+                if ($item instanceof WebsiteDomain) {
+                    $domainItems[] = $item;
+                }
+            }
+            if ($domainItems === []) {
                 continue;
             }
+            \usort($domainItems, static function (WebsiteDomain $left, WebsiteDomain $right): int {
+                $leftPath = \trim((string)$left->getSubPath());
+                $rightPath = \trim((string)$right->getSubPath());
+                if ($leftPath === '/') {
+                    $leftPath = '';
+                }
+                if ($rightPath === '/') {
+                    $rightPath = '';
+                }
+                $lengthCompare = \strlen($rightPath) <=> \strlen($leftPath);
+                if ($lengthCompare !== 0) {
+                    return $lengthCompare;
+                }
+                return ((int)$right->isPrimary()) <=> ((int)$left->isPrimary());
+            });
 
-            $subPath = \trim($domainModel->getSubPath());
-            if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
-                $subPath = '/' . $subPath;
-            }
-            if ($subPath !== '' && $subPath !== '/' && !\str_starts_with($path, $subPath) && $path !== $subPath) {
-                continue;
-            }
+            foreach ($domainItems as $domainModel) {
+                $subPath = \trim($domainModel->getSubPath());
+                if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
+                    $subPath = '/' . $subPath;
+                }
+                if ($subPath !== '' && $subPath !== '/' && !\str_starts_with($path, $subPath) && $path !== $subPath) {
+                    continue;
+                }
 
-            /** @var Website $website */
-            $website = clone $websiteModel;
-            $website->clearData()->clearQuery()->load($domainModel->getWebsiteId());
-            if ($website->getWebsiteId() <= 0) {
-                continue;
-            }
+                /** @var Website $website */
+                $website = clone $websiteModel;
+                $website->clearData()->clearQuery()->load($domainModel->getWebsiteId());
+                if ($website->getWebsiteId() <= 0) {
+                    continue;
+                }
 
-            $matchedBaseUrl = $requestScheme . '://' . $hostNorm . $requestPort;
-            if ($subPath !== '' && $subPath !== '/') {
-                $matchedBaseUrl .= $subPath;
-            }
+                $matchedBaseUrl = $requestScheme . '://' . $hostNorm . $requestPort;
+                if ($subPath !== '' && $subPath !== '/') {
+                    $matchedBaseUrl .= $subPath;
+                }
 
-            $data = $website->getData();
-            $data['url'] = $matchedBaseUrl;
-            return $data;
+                $data = $website->getData();
+                $data['url'] = $matchedBaseUrl;
+                return $data;
+            }
         }
 
         return null;
@@ -504,7 +539,13 @@ class DetectWebsite implements ObserverInterface
             function () use ($websiteModel): array {
                 try {
                     $rows = [];
-                    foreach ($websiteModel->reset()->clearQuery()->select()->fetchIterator() as $row) {
+                    /** @var Website $query */
+                    $query = clone $websiteModel;
+                    $query->clearData()->clearQuery()->select()->fetch();
+                    foreach ($query->getItems() as $row) {
+                        if (\is_object($row) && \method_exists($row, 'getData')) {
+                            $row = $row->getData();
+                        }
                         if (\is_array($row)) {
                             $rows[] = $row;
                         }
@@ -536,12 +577,16 @@ class DetectWebsite implements ObserverInterface
                     /** @var WebsiteDomain $domainModel */
                     $domainModel = w_obj(WebsiteDomain::class);
                     $rows = [];
-                    foreach (
-                        $domainModel->clearQuery()
-                            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
-                            ->select()
-                            ->fetchIterator() as $row
-                    ) {
+                    /** @var WebsiteDomain $query */
+                    $query = clone $domainModel;
+                    $query->clearData()->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                        ->select()
+                        ->fetch();
+                    foreach ($query->getItems() as $row) {
+                        if (\is_object($row) && \method_exists($row, 'getData')) {
+                            $row = $row->getData();
+                        }
                         if (\is_array($row)) {
                             $rows[] = $row;
                         }

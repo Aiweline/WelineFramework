@@ -24,9 +24,10 @@
 <body class="<?= htmlspecialchars($meta['class'] ?? '') ?>">
     <w:hook>Weline_Theme::backend::layouts::minimal::body-start</w:hook>
     
-    <main class="backend-main-content backend-main-content--minimal" id="main-content">
-        <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
-    </main>
+    <?php
+    $layoutMainClass = 'backend-main-content backend-main-content--minimal';
+    echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+    ?>
     
     <w:hook>Weline_Theme::backend::layouts::minimal::body-end</w:hook>
 </body>

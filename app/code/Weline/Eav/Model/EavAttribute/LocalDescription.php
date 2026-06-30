@@ -14,13 +14,20 @@ namespace Weline\Eav\Model\EavAttribute;
 
 
 use Weline\Eav\Model\EavAttribute;
+use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\I18n\LocalModel;
 
 class LocalDescription extends LocalModel
 {
-    public const fields_ID          = EavAttribute::schema_fields_ID;
+    public const fields_ID = self::schema_fields_ID;
+
+    #[Col(type: 'varchar', length: 20, nullable: false, primaryKey: true, comment: '语言代码')]
+    public const schema_fields_local_code = 'local_code';
+
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '本地化属性名称')]
+    public const schema_fields_name = EavAttribute::schema_fields_name;
 
 //    public function setup(ModelSetup $setup, Context $context): void
 //    {

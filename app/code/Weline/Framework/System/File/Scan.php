@@ -56,18 +56,30 @@ class Scan
      * 排除的目录列表（不扫描这些目录）
      */
     private const EXCLUDE_DIRS = [
-        'node_modules',
-        'vendor',
-        '.git',
-        '.svn',
-        '.hg',
-        '.idea',
-        '.vscode',
-        '__pycache__',
-        '.pytest_cache',
-        'dist',
-        'build',
-        '.cache',
+        'node_modules' => true,
+        'vendor' => true,
+        '.git' => true,
+        '.svn' => true,
+        '.hg' => true,
+        '.idea' => true,
+        '.vscode' => true,
+        '__pycache__' => true,
+        '.pytest_cache' => true,
+        'generated' => true,
+        'var' => true,
+        'pub' => true,
+        'coverage' => true,
+        'tmp' => true,
+        'temp' => true,
+        'log' => true,
+        'logs' => true,
+        'wasm' => true,
+        'browser-extension' => true,
+        'browser-extension-backup' => true,
+        'weline-browser-mcp' => true,
+        'dist' => true,
+        'build' => true,
+        '.cache' => true,
     ];
 
     public function scanDirTree(string $dirPath, int $level = 0): array
@@ -76,6 +88,7 @@ class Scan
         $dirPath = rtrim($dirPath, DS);
         $rootRealPath = @realpath($dirPath);
         if ($rootRealPath !== false && isset($this->visitedRealPaths[$rootRealPath])) {
+            $this->keepLevel -= 1;
             return $this->dirs;
         }
         if ($rootRealPath !== false) {
@@ -95,16 +108,13 @@ class Scan
                     }
                     if (is_dir($filename)) {
                         // 排除特定目录（如 node_modules）
-                        if (in_array($file, self::EXCLUDE_DIRS, true)) {
+                        if ($this->shouldSkipScanDirectory($file)) {
                             continue;
                         }
                         // 防止符号链接循环导致无限递归
                         $realPath = @realpath($filename);
                         if ($realPath !== false && isset($this->visitedRealPaths[$realPath])) {
                             continue;
-                        }
-                        if ($realPath !== false) {
-                            $this->visitedRealPaths[$realPath] = true;
                         }
                         // 目录层级：是否扫描
                         if ($level) {
@@ -132,7 +142,9 @@ class Scan
                     }
                 }
             }
+            closedir($file_handler);
         }
+        $this->keepLevel -= 1;
 
         return $this->dirs;
     }
@@ -156,7 +168,8 @@ class Scan
         if (!is_dir(rtrim($dirPath, DS))) {
             return [];
         }
-        if ($this->dirs = (scandir($dirPath)) ? scandir($dirPath) : []) {
+        $scanned = scandir($dirPath);
+        if ($this->dirs = $scanned !== false ? $scanned : []) {
             // 排除"."".."
             array_shift($this->dirs);
             array_shift($this->dirs);
@@ -237,12 +250,15 @@ class Scan
         if ($depth === 0) {
             $this->globFileVisited = [];
         }
-        $list = glob($pattern_dir);
+        $list = glob($pattern_dir, GLOB_NOSORT);
         if ($list === false) {
             return $files;
         }
         foreach ($list as $file) {
             if (is_dir($file)) {
+                if ($this->shouldSkipScanDirectory(basename($file))) {
+                    continue;
+                }
                 $realPath = @realpath($file);
                 if ($realPath !== false && isset($this->globFileVisited[$realPath])) {
                     continue;
@@ -271,6 +287,11 @@ class Scan
             }
         }
         return $files;
+    }
+
+    private function shouldSkipScanDirectory(string $name): bool
+    {
+        return isset(self::EXCLUDE_DIRS[strtolower($name)]);
     }
 
     function getClassNameFromFile($filePath, $composerPath = '')

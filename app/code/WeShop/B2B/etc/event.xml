@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<events xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
-        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Event::etc/xsd/event.xsd">
-    <event name="WeShop_Order::cancelled">
-        <observer name="WeShop_B2B::order_cancelled_release_credit"
-                  instance="WeShop\B2B\Observer\OrderCancelledReleaseCredit"/>
-    </event>
-</events>

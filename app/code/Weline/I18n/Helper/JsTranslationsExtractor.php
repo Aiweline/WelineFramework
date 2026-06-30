@@ -40,39 +40,39 @@ class JsTranslationsExtractor
                 return $modules;
             }
             
-            // 使用正则表达式提取模块配置
-            // 匹配格式：moduleName: { paths: [...], globalVar: "..." }
-            if (preg_match_all('/Object\.assign\(window\.WelineModulesConfig\.modules,\s*\{([^}]+)\}\)/s', $content, $assignMatches)) {
-                foreach ($assignMatches[1] as $assignContent) {
-                    // 提取每个模块的定义（支持多行）
-                    if (preg_match_all('/(\w+):\s*\{([^}]+)\}/s', $assignContent, $moduleMatches, PREG_SET_ORDER)) {
-                        foreach ($moduleMatches as $moduleMatch) {
-                            $moduleName = $moduleMatch[1];
-                            $moduleConfig = $moduleMatch[2];
-                            
-                            $moduleData = [
-                                'paths' => [],
-                                'globalVar' => null,
-                            ];
-                            
-                            // 提取 paths 数组（支持多行）
-                            if (preg_match('/paths:\s*\[([^\]]+)\]/s', $moduleConfig, $pathsMatch)) {
-                                $pathsStr = $pathsMatch[1];
-                                // 提取所有路径（支持单引号、双引号）
-                                if (preg_match_all('/["\']([^"\']+)["\']/', $pathsStr, $pathMatches)) {
-                                    $moduleData['paths'] = $pathMatches[1];
-                                }
-                            }
-                            
-                            // 提取 globalVar
-                            if (preg_match('/globalVar:\s*["\']([^"\']+)["\']/', $moduleConfig, $globalVarMatch)) {
-                                $moduleData['globalVar'] = $globalVarMatch[1];
-                            }
-                            
-                            if (!empty($moduleData['paths'])) {
-                                $modules[$moduleName] = $moduleData;
+            foreach (self::extractModuleAssignBlocks($content) as $assignContent) {
+                foreach (self::extractModuleDefinitions($assignContent) as $moduleName => $moduleConfig) {
+                    if ($moduleNames && !in_array($moduleName, $moduleNames, true)) {
+                        continue;
+                    }
+
+                    $moduleData = [
+                        'paths' => [],
+                        'globalVar' => null,
+                    ];
+
+                    // 提取 origin_paths / paths 数组（支持多行）
+                    foreach (['origin_paths', 'paths'] as $pathKey) {
+                        if (!preg_match('/' . $pathKey . ':\s*\[([^\]]+)\]/s', $moduleConfig, $pathsMatch)) {
+                            continue;
+                        }
+                        if (!preg_match_all('/["\']([^"\']+)["\']/', $pathsMatch[1], $pathMatches)) {
+                            continue;
+                        }
+                        foreach ($pathMatches[1] as $path) {
+                            if (!in_array($path, $moduleData['paths'], true)) {
+                                $moduleData['paths'][] = $path;
                             }
                         }
+                    }
+
+                    // 提取 globalVar
+                    if (preg_match('/globalVar:\s*["\']([^"\']+)["\']/', $moduleConfig, $globalVarMatch)) {
+                        $moduleData['globalVar'] = $globalVarMatch[1];
+                    }
+
+                    if (!empty($moduleData['paths'])) {
+                        $modules[$moduleName] = $moduleData;
                     }
                 }
             }
@@ -81,6 +81,127 @@ class JsTranslationsExtractor
         }
         
         return $modules;
+    }
+
+    private static function extractModuleAssignBlocks(string $content): array
+    {
+        $blocks = [];
+        $needle = 'Object.assign(window.WelineModulesConfig.modules,';
+        $offset = 0;
+
+        while (($assignPos = strpos($content, $needle, $offset)) !== false) {
+            $bracePos = strpos($content, '{', $assignPos + strlen($needle));
+            if ($bracePos === false) {
+                break;
+            }
+
+            $endPos = self::findMatchingBrace($content, $bracePos);
+            if ($endPos === null) {
+                $offset = $bracePos + 1;
+                continue;
+            }
+
+            $blocks[] = substr($content, $bracePos + 1, $endPos - $bracePos - 1);
+            $offset = $endPos + 1;
+        }
+
+        return $blocks;
+    }
+
+    private static function extractModuleDefinitions(string $assignContent): array
+    {
+        $modules = [];
+        $offset = 0;
+
+        while (preg_match('/([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*\{/', $assignContent, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $moduleName = $matches[1][0];
+            $moduleStart = $matches[0][1] + strlen($matches[0][0]) - 1;
+            $moduleEnd = self::findMatchingBrace($assignContent, $moduleStart);
+            if ($moduleEnd === null) {
+                break;
+            }
+
+            $modules[$moduleName] = substr($assignContent, $moduleStart + 1, $moduleEnd - $moduleStart - 1);
+            $offset = $moduleEnd + 1;
+        }
+
+        return $modules;
+    }
+
+    private static function findMatchingBrace(string $content, int $openBracePos): ?int
+    {
+        $length = strlen($content);
+        $depth = 0;
+        $quote = null;
+        $escaped = false;
+        $lineComment = false;
+        $blockComment = false;
+
+        for ($i = $openBracePos; $i < $length; $i++) {
+            $char = $content[$i];
+            $next = $content[$i + 1] ?? '';
+
+            if ($lineComment) {
+                if ($char === "\n" || $char === "\r") {
+                    $lineComment = false;
+                }
+                continue;
+            }
+
+            if ($blockComment) {
+                if ($char === '*' && $next === '/') {
+                    $blockComment = false;
+                    $i++;
+                }
+                continue;
+            }
+
+            if ($quote !== null) {
+                if ($escaped) {
+                    $escaped = false;
+                    continue;
+                }
+                if ($char === '\\') {
+                    $escaped = true;
+                    continue;
+                }
+                if ($char === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ($char === '/' && $next === '/') {
+                $lineComment = true;
+                $i++;
+                continue;
+            }
+
+            if ($char === '/' && $next === '*') {
+                $blockComment = true;
+                $i++;
+                continue;
+            }
+
+            if ($char === '"' || $char === "'" || $char === '`') {
+                $quote = $char;
+                continue;
+            }
+
+            if ($char === '{') {
+                $depth++;
+                continue;
+            }
+
+            if ($char === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return null;
     }
     
     /**
@@ -91,16 +212,67 @@ class JsTranslationsExtractor
      */
     public static function resolveModulePath(string $modulePath): ?string
     {
+        $modulePath = trim(str_replace('\\', '/', $modulePath));
+        if ($modulePath === '') {
+            return null;
+        }
+
         // 如果是完整URL（CDN资源），跳过
-        if (strpos($modulePath, 'http://') === 0 || strpos($modulePath, 'https://') === 0) {
+        if (preg_match('#^https?://#i', $modulePath)) {
             return null;
         }
-        
-        // 只解析 Vendor_Module::path/to/file.js 格式
+
+        $projectRoot = defined('BP') ? BP : getcwd();
+        $normalized = ltrim($modulePath, '/');
+        $directCandidates = [
+            $modulePath,
+            $projectRoot . DS . str_replace('/', DS, $normalized),
+        ];
+        foreach ($directCandidates as $candidate) {
+            if (is_file($candidate)) {
+                return realpath($candidate) ?: $candidate;
+            }
+        }
+
+        // 解析 Vendor_Module::path/to/file.js 格式
         if (strpos($modulePath, '::') !== false) {
+            [$moduleName, $relativePath] = explode('::', $modulePath, 2);
+            $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+            $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+            $basePath = rtrim((string)($moduleInfo['base_path'] ?? ''), '/\\');
+            if ($basePath === '') {
+                return null;
+            }
+
+            $moduleCandidates = [];
+            if (str_starts_with($relativePath, 'view/')) {
+                $moduleCandidates[] = $basePath . DS . str_replace('/', DS, $relativePath);
+            } else {
+                $moduleCandidates[] = $basePath . DS . 'view' . DS . 'statics' . DS . str_replace('/', DS, $relativePath);
+                $moduleCandidates[] = $basePath . DS . str_replace('/', DS, $relativePath);
+            }
+
+            foreach ($moduleCandidates as $candidate) {
+                if (is_file($candidate)) {
+                    return realpath($candidate) ?: $candidate;
+                }
+            }
+
             return null;
         }
-        
+
+        // 解析开发模式静态 URL：/Vendor/Module/view/statics/path.js
+        if (preg_match('#^([^/]+)/([^/]+)/view/statics/(.+)$#', $normalized, $matches)) {
+            $moduleInfo = Env::getInstance()->getModuleInfo($matches[1] . '_' . $matches[2]);
+            $basePath = rtrim((string)($moduleInfo['base_path'] ?? ''), '/\\');
+            if ($basePath !== '') {
+                $candidate = $basePath . DS . 'view' . DS . 'statics' . DS . str_replace('/', DS, $matches[3]);
+                if (is_file($candidate)) {
+                    return realpath($candidate) ?: $candidate;
+                }
+            }
+        }
+
         return null;
     }
     

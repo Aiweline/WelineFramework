@@ -207,6 +207,7 @@ small.text-muted {
         'unnamedCategory': '<?=__('未命名分类')?>',
         'confirm': '<?=__('确认')?>',
         'confirmDeleteQuestion': '<?=__('确认删除吗？')?>',
+        'confirmDialogUnavailable': <?=json_encode((string)__('确认组件不可用，删除操作已取消，请刷新页面重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)?>,
         'deleteRequestFailed': '<?=__('删除请求失败')?>',
         'categoryTree': '<?=__('分类树')?>',
         'categoryInfo': '<?=__('分类信息')?>',
@@ -313,7 +314,39 @@ small.text-muted {
             e.preventDefault();
             saveCatalog();
         });
+
+        $(document).on('click', '[data-catalog-action="clear-edit"]', function(e) {
+            e.preventDefault();
+            clearCatalogEditForm();
+        });
+
+        $(document).on('click', '[data-catalog-action="delete"]', function(e) {
+            e.preventDefault();
+            var button = this;
+            var catalogId = button.dataset ? button.dataset.catalogId : button.getAttribute('data-catalog-id');
+            var catalogName = button.dataset ? button.dataset.catalogName : button.getAttribute('data-catalog-name');
+
+            if (!catalogId) {
+                showNotification(i18n.nodeDataFormatErrorShort, 'error');
+                return;
+            }
+
+            handleDeleteCatalog(catalogId, catalogName || i18n.unnamedCategory);
+        });
     });
+
+    function escapeHtml(value) {
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function escapeHtmlAttribute(value) {
+        return escapeHtml(value);
+    }
     
     function hasSystemChild(catalogId) {
         if (!catalogTree || !catalogTree.jstree) {
@@ -623,24 +656,26 @@ small.text-muted {
     function renderCatalogEditForm(catalog) {
         var isSystem = catalog.is_system == 1;
         var isReadonly = isSystem;
+        var catalogId = catalog.id ? String(catalog.id) : '';
+        var catalogName = catalog.name || '';
         
         var html = '<form id="catalog-edit-form">' +
-            '<input type="hidden" name="id" id="catalog_id" value="' + (catalog.id ? String(catalog.id) : '') + '">' +
-            '<input type="hidden" name="pid" id="catalog_pid" value="' + (catalog.pid ? String(catalog.pid) : '0') + '">' +
+            '<input type="hidden" name="id" id="catalog_id" value="' + escapeHtmlAttribute(catalogId) + '">' +
+            '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(catalog.pid ? String(catalog.pid) : '0') + '">' +
             '<div class="mb-3"><label for="catalog_name" class="form-label">' + i18n.categoryName + ' <span class="text-danger">*</span></label>' +
-            '<input type="text" class="form-control" id="catalog_name" name="name" value="' + (catalog.name || '').replace(/"/g, '&quot;') + '" required placeholder="' + i18n.pleaseEnterCategoryName + '"' + (isReadonly ? ' readonly' : '') + '>' +
+            '<input type="text" class="form-control" id="catalog_name" name="name" value="' + escapeHtmlAttribute(catalogName) + '" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '"' + (isReadonly ? ' readonly' : '') + '>' +
             (isReadonly ? '<small class="text-muted"><i class="mdi mdi-information-outline me-1"></i>' + i18n.systemCategoryCannotEditName + '</small>' : '') + '</div>' +
             '<div class="mb-3"><label for="catalog_description" class="form-label">' + i18n.categoryDescription + '</label>' +
-            '<textarea class="form-control" id="catalog_description" name="description" rows="3" placeholder="' + i18n.pleaseEnterCategoryDescription + '"' + (isReadonly ? ' readonly' : '') + '>' + (catalog.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '</textarea></div>' +
+            '<textarea class="form-control" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '"' + (isReadonly ? ' readonly' : '') + '>' + escapeHtml(catalog.description || '') + '</textarea></div>' +
             '<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="catalog_is_active" name="is_active" value="1"' + (catalog.is_active == 1 ? ' checked' : '') + (isReadonly ? ' disabled' : '') + '><label class="form-check-label" for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
-            '<div class="mb-3"><label class="form-label">' + i18n.category + '</label><div class="form-control-plaintext"><span class="badge bg-info">' + (catalog.parent_name || i18n.topLevelCategory) + '</span></div></div>' +
-            '<div class="mb-3"><label class="form-label">' + i18n.level + '</label><div class="form-control-plaintext"><span class="badge bg-secondary">' + (catalog.level || 1) + '</span></div></div>' +
+            '<div class="mb-3"><label class="form-label">' + i18n.category + '</label><div class="form-control-plaintext"><span class="badge bg-info">' + escapeHtml(catalog.parent_name || i18n.topLevelCategory) + '</span></div></div>' +
+            '<div class="mb-3"><label class="form-label">' + i18n.level + '</label><div class="form-control-plaintext"><span class="badge bg-secondary">' + escapeHtml(catalog.level || 1) + '</span></div></div>' +
             (isSystem ? '<div class="alert alert-info"><i class="mdi mdi-information-outline me-2"></i>' + i18n.systemCategoryCannotEdit + '</div>' : '') +
             '<div class="d-flex justify-content-between align-items-center"><div>' +
-            (!isSystem && catalog.id ? '<button type="button" class="btn btn-danger btn-delete-catalog" onclick="handleDeleteCatalog(' + catalog.id + ', \'' + (catalog.name || '').replace(/'/g, "\\'") + '\')" data-catalog-id="' + catalog.id + '" data-catalog-name="' + (catalog.name || '').replace(/"/g, '&quot;') + '"><i class="mdi mdi-delete"></i> ' + i18n.delete + '</button>' : '') +
-            '</div><div class="d-flex gap-2"><button type="button" class="btn btn-secondary" onclick="clearCatalogEditForm()">' + i18n.cancel + '</button><button type="submit" class="btn btn-primary"' + (isReadonly ? ' disabled' : '') + '>' + i18n.save + '</button></div></div></form>';
+            (!isSystem && catalogId ? '<button type="button" class="btn btn-danger btn-delete-catalog" data-catalog-action="delete" data-catalog-id="' + escapeHtmlAttribute(catalogId) + '" data-catalog-name="' + escapeHtmlAttribute(catalogName) + '"><i class="mdi mdi-delete"></i> ' + i18n.delete + '</button>' : '') +
+            '</div><div class="d-flex gap-2"><button type="button" class="btn btn-secondary" data-catalog-action="clear-edit">' + i18n.cancel + '</button><button type="submit" class="btn btn-primary"' + (isReadonly ? ' disabled' : '') + '>' + i18n.save + '</button></div></div></form>';
         
-        $('#catalog-edit-title').html('<i class="mdi mdi-folder-edit me-2"></i>' + i18n.editCategory + ': ' + (catalog.name || ''));
+        $('#catalog-edit-title').html('<i class="mdi mdi-folder-edit me-2"></i>' + i18n.editCategory + ': ' + escapeHtml(catalogName));
         $('#catalog-edit-container').html(html);
     }
     
@@ -657,14 +692,14 @@ small.text-muted {
         
         var html = '<form id="catalog-edit-form">' +
             '<input type="hidden" name="id" id="catalog_id" value="">' +
-            '<input type="hidden" name="pid" id="catalog_pid" value="' + (parentId || '0') + '">' +
+            '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(parentId || '0') + '">' +
             '<div class="mb-3"><label for="catalog_name" class="form-label">' + i18n.categoryName + ' <span class="text-danger">*</span></label>' +
-            '<input type="text" class="form-control" id="catalog_name" name="name" required placeholder="' + i18n.pleaseEnterCategoryName + '"></div>' +
+            '<input type="text" class="form-control" id="catalog_name" name="name" required placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryName) + '"></div>' +
             '<div class="mb-3"><label for="catalog_description" class="form-label">' + i18n.categoryDescription + '</label>' +
-            '<textarea class="form-control" id="catalog_description" name="description" rows="3" placeholder="' + i18n.pleaseEnterCategoryDescription + '"></textarea></div>' +
+            '<textarea class="form-control" id="catalog_description" name="description" rows="3" placeholder="' + escapeHtmlAttribute(i18n.pleaseEnterCategoryDescription) + '"></textarea></div>' +
             '<div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="catalog_is_active" name="is_active" value="1" checked><label class="form-check-label" for="catalog_is_active">' + i18n.enableCategory + '</label></div></div>' +
-            '<div class="mb-3"><label class="form-label">' + i18n.category + '</label><div class="form-control-plaintext"><span class="badge bg-info">' + parentName + '</span></div></div>' +
-            '<div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-secondary" onclick="clearCatalogEditForm()">' + i18n.cancel + '</button><button type="submit" class="btn btn-primary">' + i18n.save + '</button></div></form>';
+            '<div class="mb-3"><label class="form-label">' + i18n.category + '</label><div class="form-control-plaintext"><span class="badge bg-info">' + escapeHtml(parentName) + '</span></div></div>' +
+            '<div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-secondary" data-catalog-action="clear-edit">' + i18n.cancel + '</button><button type="submit" class="btn btn-primary">' + i18n.save + '</button></div></form>';
         
         $('#catalog-edit-title').html('<i class="mdi mdi-folder-plus me-2"></i>' + (parentId ? i18n.addSubCategory : i18n.addTopLevelCategory));
         $('#catalog-edit-container').html(html);
@@ -741,6 +776,45 @@ small.text-muted {
             }
         });
     }
+
+    function getCatalogConfirmDialog() {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm;
+        }
+        if (window.AdminConfirm && typeof window.AdminConfirm.show === 'function') {
+            return window.AdminConfirm;
+        }
+        return null;
+    }
+
+    function buildDeleteCategoryMessage(categoryName) {
+        var displayName = categoryName || i18n.unnamedCategory;
+        return i18n.confirmDeleteCategory + ' "' + displayName + '"\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2;
+    }
+
+    function requestDeleteCategoryApproval(categoryName, onApproved) {
+        var confirmDialog = getCatalogConfirmDialog();
+        if (!confirmDialog) {
+            showNotification(i18n.confirmDialogUnavailable, 'warning');
+            return;
+        }
+
+        try {
+            Promise.resolve(confirmDialog.show(buildDeleteCategoryMessage(categoryName), {
+                title: i18n.confirmDeleteQuestion,
+                type: 'danger',
+                confirmText: i18n.delete,
+                cancelText: i18n.cancel
+            })).then(function(approved) {
+                if (approved) {
+                    onApproved();
+                }
+            });
+        } catch (e) {
+            console.error('确认组件调用失败:', e);
+            showNotification(i18n.confirmDialogUnavailable, 'warning');
+        }
+    }
     
     function handleDeleteNode(nodeId) {
         try {
@@ -799,17 +873,9 @@ small.text-muted {
                 return;
             }
             
-            if (typeof AdminConfirm !== 'undefined') {
-                AdminConfirm.show(i18n.confirmDeleteCategory + '"' + (nodeData.name || i18n.unnamedCategory) + '"吗？\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2).then(function(confirmed) {
-                    if (confirmed) {
-                        performDelete(nodeData.id);
-                    }
-                });
-            } else {
-                if (confirm(i18n.confirmDeleteCategory + '"' + (nodeData.name || i18n.unnamedCategory) + '"吗？\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2)) {
-                    performDelete(nodeData.id);
-                }
-            }
+            requestDeleteCategoryApproval(nodeData.name, function() {
+                performDelete(nodeData.id);
+            });
         } catch(e) {
             console.error('删除节点失败:', e);
             showNotification(i18n.deleteNodeFailed + ' ' + e.message, 'error');
@@ -845,17 +911,9 @@ small.text-muted {
             }
         }
         
-        if (typeof AdminConfirm !== 'undefined') {
-            AdminConfirm.show(i18n.confirmDeleteCategory + ' "' + (catalogName || i18n.unnamedCategory) + '"吗？\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2).then(function(confirmed) {
-                if (confirmed) {
-                    performDelete(catalogId);
-                }
-            });
-        } else {
-            if (confirm(i18n.confirmDeleteCategory + ' "' + (catalogName || i18n.unnamedCategory) + '"吗？\n\n' + i18n.deleteWarning + '\n' + i18n.deleteWarning2)) {
-                performDelete(catalogId);
-            }
-        }
+        requestDeleteCategoryApproval(catalogName, function() {
+            performDelete(catalogId);
+        });
     }
     
     window.handleDeleteCatalog = handleDeleteCatalog;

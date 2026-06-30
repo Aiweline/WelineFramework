@@ -65,10 +65,8 @@ final class FileCache implements CacheInterface
         $dir = dirname($filePath);
 
         // 确保目录存在
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-                return false;
-            }
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            return false;
         }
 
         // 删除旧版本缓存

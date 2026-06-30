@@ -6,6 +6,8 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Contract\ServiceInstance;
@@ -19,17 +21,13 @@ use Weline\Server\Service\Contract\ServiceInstance;
  *
  * SOLID 原则：
  * - 单一职责：只负责实例信息的管理
- * - 开闭原则：新增服务类型无需修改此类（通过 services 数组扩展）
+ * - 开闭原则：运行拓扑由 Master registry 扩展，本类只保存 Master endpoint/config
  * - 依赖倒置：命令依赖此接口而非具体字段名
  */
 class ServerInstanceManager
 {
     /** 实例信息存储相对路径（相对 VAR_DIR） */
     public const INSTANCE_SUBDIR = 'server' . \DIRECTORY_SEPARATOR . 'instances' . \DIRECTORY_SEPARATOR;
-
-    private const INSTANCE_RECORDS_KEY = 'instance_records';
-    private const CURRENT_SNAPSHOT_KEY = 'current_snapshot';
-    private const CURRENT_SERVICES_INPUT_KEY = '__current_services_input';
 
     /** 服务角色显示名称映射 */
     private const ROLE_DISPLAY_NAMES = [
@@ -41,18 +39,6 @@ class ServerInstanceManager
         'memory_server' => 'Memory Service',
         'memory_cache' => 'Memory Cache Service',
         'memory_session' => 'Memory Session Service',
-    ];
-
-    /** 服务角色优先级映射（用于旧格式回填） */
-    private const ROLE_PRIORITIES = [
-        'session_server' => 10,
-        'worker' => 20,
-        'dispatcher' => 30,
-        'redirect' => 40,
-        'maintenance' => 50,
-        'memory_server' => 12,
-        'memory_cache' => 15,
-        'memory_session' => 16,
     ];
 
     /**
@@ -86,12 +72,22 @@ class ServerInstanceManager
      */
     public function getInstanceInfo(string $name, bool $validateStale = true): ?ServerInstanceInfo
     {
+        return $this->getInstanceInfoUsingIpcTimeout($name, $validateStale, 1.5);
+    }
+
+    public function getInstanceInfoWithIpcTimeout(string $name, bool $validateStale, float $ipcTimeout): ?ServerInstanceInfo
+    {
+        return $this->getInstanceInfoUsingIpcTimeout($name, $validateStale, $ipcTimeout);
+    }
+
+    private function getInstanceInfoUsingIpcTimeout(string $name, bool $validateStale, float $ipcTimeout): ?ServerInstanceInfo
+    {
         $rawData = $this->getRawInstanceData($name);
         if ($rawData === null) {
             return null;
         }
 
-        $info = $this->buildInstanceInfo($name, $rawData);
+        $info = $this->buildInstanceInfo($name, $rawData, $ipcTimeout);
         if ($validateStale && $this->isStaleInstanceRecord($name, $rawData, $info)) {
             $this->cleanupStaleInstanceArtifacts($name, $rawData);
             return null;
@@ -292,11 +288,105 @@ class ServerInstanceManager
     }
 
     /**
+     * 清理当前没有运行中 Master/服务的 endpoint 记录。
+     *
+     * server:clean 的语义是“没运行就删”，不依赖 lifecycle_state 必须先被标记为 stopped。
+     *
+     * @return string[] 已清理的实例名称列表
+     */
+    public function cleanupInactiveInstances(): array
+    {
+        $cleanedNames = [];
+        $touchedPids = [];
+
+        foreach ($this->listRawInstanceNames() as $name) {
+            $rawData = $this->getRawInstanceData($name);
+            if ($rawData === null) {
+                continue;
+            }
+
+            if ($this->isStartLockHeld($name)) {
+                continue;
+            }
+
+            if (!$this->shouldPurgeStoppedInstanceRecord($rawData)) {
+                $status = $this->getMasterIpcStatusResult($name, 0.5);
+                if ($status['success'] && (bool)($status['data']['running'] ?? false)) {
+                    continue;
+                }
+            }
+
+            foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
+                $touchedPids[$pid] = true;
+            }
+            $this->purgeInactiveInstanceArtifacts($name, $rawData);
+            $cleanedNames[] = $name;
+        }
+
+        if ($touchedPids !== []) {
+            Processer::cleanupStalePidFilesForPids(\array_map('intval', \array_keys($touchedPids)));
+        }
+
+        return $cleanedNames;
+    }
+
+    private function shouldPurgeStoppedInstanceRecord(array $rawData): bool
+    {
+        $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
+        return \in_array($lifecycleState, ['stopped', 'stale_cleanup', 'master_exited'], true);
+    }
+
+    /**
+     * 人工清场：删除停机实例的全部本地记录文件。
+     */
+    private function purgeInactiveInstanceArtifacts(string $name, array $rawData): void
+    {
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
+            Processer::removePidFile($processName);
+        }
+
+        $pidFile = $this->getPidFile($name);
+        if (\is_file($pidFile)) {
+            @\unlink($pidFile);
+        }
+
+        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        if (\is_file($lockFile)) {
+            @\unlink($lockFile);
+        }
+
+        $exceptionFile = MasterProcess::getServiceExceptionFile($name);
+        if (\is_file($exceptionFile)) {
+            @\unlink($exceptionFile);
+        }
+
+        $instanceFile = $this->getInstanceFile($name);
+        if (\is_file($instanceFile)) {
+            @\unlink($instanceFile);
+        }
+
+        $instanceLockFile = $instanceFile . '.lock';
+        if (\is_file($instanceLockFile)) {
+            @\unlink($instanceLockFile);
+        }
+
+        $resurrectLockFile = $this->getInstanceDir() . $name . '.resurrect.lock';
+        if (\is_file($resurrectLockFile)) {
+            @\unlink($resurrectLockFile);
+        }
+    }
+
+    /**
      * 根据端口查找正在运行的实例
      */
     public function findRunningInstanceNameByPort(int $port): ?string
     {
         foreach ($this->getAllInstanceInfo() as $name => $info) {
+            $status = $this->getMasterIpcStatus($name);
+            if ($status === null || !((bool)($status['running'] ?? false))) {
+                continue;
+            }
+
             if ($info->port === $port) {
                 return $name;
             }
@@ -305,10 +395,8 @@ class ServerInstanceManager
                 return $name;
             }
 
-            foreach ($info->services as $service) {
-                if ($service->port !== null && (int)$service->port === $port && $service->isRunning()) {
-                    return $name;
-                }
+            if (\in_array($port, $this->collectRunningPortsFromServices((array)($status['services'] ?? []), 'worker'), true)) {
+                return $name;
             }
         }
 
@@ -322,157 +410,115 @@ class ServerInstanceManager
      */
     public function updateServices(string $name, array $services): void
     {
-        $file = $this->getInstanceFile($name);
-        if (!\is_file($file)) {
-            return;
-        }
-
-        $content = @\file_get_contents($file);
-        if ($content === false) {
-            return;
-        }
-
-        $data = \json_decode($content, true);
-        if (!\is_array($data)) {
-            $data = [];
-        }
-
-        // 构建 services 数组（按角色分组）
-        $currentServicesData = ['services' => []];
-        foreach ($services as $service) {
-            $this->mergeServiceRecord($data, $service);
-            $this->mergeServiceRecord($currentServicesData, $service);
-        }
-        $data[self::CURRENT_SERVICES_INPUT_KEY] = $currentServicesData['services'];
-        $data['services_updated_at'] = \date('Y-m-d H:i:s');
-
-        // 同时更新便于直接访问的旧字段（向后兼容）
-        $this->updateLegacyFields($data, $services);
-
-        $this->atomicUpdateJson($file, fn(array $existing): array => $this->mergeInstanceRecordData($existing, $data));
+        // Runtime service topology belongs to Master registry and IPC status only.
+        // The instance file is only a Master endpoint/config record.
     }
 
     private function mergeInstanceRecordData(array $existing, array $data): array
     {
-        $services = \is_array($existing['services'] ?? null) ? $existing['services'] : [];
-        $dataServices = \is_array($data['services'] ?? null) ? $data['services'] : [];
-        $hasCurrentServicesInput = \array_key_exists(self::CURRENT_SERVICES_INPUT_KEY, $data);
-        $currentServices = $hasCurrentServicesInput && \is_array($data[self::CURRENT_SERVICES_INPUT_KEY])
-            ? $data[self::CURRENT_SERVICES_INPUT_KEY]
-            : $dataServices;
-        unset($data[self::CURRENT_SERVICES_INPUT_KEY]);
-        $records = \is_array($existing[self::INSTANCE_RECORDS_KEY] ?? null)
-            ? $existing[self::INSTANCE_RECORDS_KEY]
-            : [];
-
-        $merged = \array_merge($existing, $data);
-        if ($services !== [] || $dataServices !== []) {
-            $merged['services'] = $this->mergeServiceTables($services, $dataServices);
-        }
-        unset(
-            $merged['stopped_reason'],
-            $merged['stopped_at'],
-            $merged['stopped_timestamp'],
-            $merged['master_exited_at'],
-            $merged['master_exited_timestamp']
-        );
+        $merged = $this->filterEndpointRecord(\array_merge($existing, $data));
         $merged['lifecycle_state'] = (string)($data['startup_phase'] ?? 'starting');
-        $merged[self::INSTANCE_RECORDS_KEY] = $this->appendInstanceRuntimeRecord($records, $data);
-
-        $snapshotData = $merged;
-        if ($hasCurrentServicesInput) {
-            // updateServices() receives the orchestrator's live registry view.
-            // Keep the append-only service history, but do not let old slots
-            // inflate the startup-ready barrier or current status snapshot.
-            $snapshotData['services'] = $currentServices;
-        }
-        $merged[self::CURRENT_SNAPSHOT_KEY] = $this->buildCurrentSnapshot($snapshotData);
-
-        return $merged;
-    }
-
-    private function mergeServiceTables(array $existing, array $incoming): array
-    {
-        $merged = $existing;
-        foreach ($incoming as $role => $roleData) {
-            if (!\is_array($roleData)) {
-                continue;
-            }
-            if (!isset($merged[$role]) || !\is_array($merged[$role])) {
-                $merged[$role] = [
-                    'display_name' => (string)($roleData['display_name'] ?? $this->getDisplayName((string)$role)),
-                    'instances' => [],
-                ];
-            }
-            if (!isset($merged[$role]['instances']) || !\is_array($merged[$role]['instances'])) {
-                $merged[$role]['instances'] = [];
-            }
-            if (isset($roleData['display_name'])) {
-                $merged[$role]['display_name'] = $roleData['display_name'];
-            }
-
-            foreach (($roleData['instances'] ?? []) as $record) {
-                if (!\is_array($record)) {
-                    continue;
-                }
-                $key = $this->getServiceRecordIdentity($record);
-                $replaced = false;
-                foreach ($merged[$role]['instances'] as $i => $existingRecord) {
-                    if (!\is_array($existingRecord)) {
-                        continue;
-                    }
-                    if ($this->getServiceRecordIdentity($existingRecord) === $key) {
-                        $merged[$role]['instances'][$i] = $record;
-                        $replaced = true;
-                        break;
-                    }
-                }
-                if (!$replaced) {
-                    $merged[$role]['instances'][] = $record;
-                }
-            }
-        }
 
         return $merged;
     }
 
     /**
-     * 更新实例的 Master PID（Orchestrator 启动完成后调用，供 server:status 等正确显示）
+     * Instance JSON is limited to startup configuration and Master endpoint
+     * metadata. Worker/dispatcher/service topology is excluded by default.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
      */
-    private function buildCurrentSnapshot(array $data): array
+    private function filterEndpointRecord(array $data): array
     {
-        $snapshot = $this->buildInstanceRuntimeRecord($data);
-        unset($snapshot['recorded_at'], $snapshot['recorded_timestamp']);
+        $allowedFields = [
+            'schema_version',
+            'name',
+            'instance_name',
+            'pid',
+            'launcher_pid',
+            'master_pid',
+            'master_enabled',
+            'master_started_at',
+            'master_mode',
+            'orchestrator_mode',
+            'control_plane_mode',
+            'supervisor_enabled',
+            'supervisor_channel',
+            'supervisor_endpoint',
+            'control_port',
+            'control_token',
+            'control_token_created_at',
+            'epoch',
+            'master_epoch',
+            'host',
+            'public_host',
+            'port',
+            'main_port',
+            'count',
+            'daemon',
+            'ssl_enabled',
+            'ssl_cert',
+            'ssl_key',
+            'dispatcher_enabled',
+            'dispatcher_port',
+            'worker_port',
+            'worker_base_port',
+            'worker_memory_limit',
+            'dispatcher_memory_limit',
+            'session_server_port',
+            'session_server_token_file_name',
+            'memory_server_port',
+            'memory_server_token_file_name',
+            'shared_state',
+            'gateway',
+            'orchestrator_runtime_options',
+            'http_redirect_port',
+            'started_by',
+            'started_at',
+            'started_timestamp',
+            'php_version',
+            'os',
+            'window_mode',
+            'frontend',
+            'enable_log',
+            'runtime_state',
+            'last_verified_at',
+            'startup_phase',
+            'lifecycle_state',
+            'stopped_reason',
+            'stopped_at',
+            'stopped_timestamp',
+            'server_ready_at',
+            'server_ready_service_count',
+            'startup_event_seq',
+            'startup_events',
+            'startup_failure_reason',
+            'startup_failure_at',
+            'startup_failure_timestamp',
+            'startup_failure_pending',
+            'startup_failure_class',
+            'startup_failure_code',
+            'startup_failure_context',
+            'startup_failure_diagnostics',
+            'master_exited_pid',
+            'retained_pids',
+            'retained_pid_count',
+            'retained_at',
+            'retained_timestamp',
+            'slot_generations',
+            'slot_generations_updated_at',
+            'updated_at',
+        ];
 
-        $snapshot['lifecycle_state'] = (string)($data['lifecycle_state'] ?? $data['startup_phase'] ?? '');
-        foreach (['stopped_reason', 'stopped_at', 'stopped_timestamp', 'updated_at'] as $field) {
+        $filtered = [];
+        foreach ($allowedFields as $field) {
             if (\array_key_exists($field, $data)) {
-                $snapshot[$field] = $data[$field];
+                $filtered[$field] = $data[$field];
             }
         }
 
-        $services = $data['services'] ?? [];
-        if (\is_array($services) && $services !== []) {
-            $snapshot['services'] = $this->buildCurrentServiceTable($services);
-        }
-
-        return $snapshot;
-    }
-
-    private function buildCurrentServiceTable(array $services): array
-    {
-        $current = [];
-        foreach ($services as $role => $roleData) {
-            if (!\is_array($roleData)) {
-                continue;
-            }
-            $current[$role] = [
-                'display_name' => (string)($roleData['display_name'] ?? $this->getDisplayName((string)$role)),
-                'instances' => $this->selectConsensusServiceRecords($roleData['instances'] ?? []),
-            ];
-        }
-
-        return $current;
+        return $filtered;
     }
 
     public function updateMasterPid(string $instanceName, int $masterPid): void
@@ -484,11 +530,7 @@ class ServerInstanceManager
         $this->atomicUpdateJson($file, function (array $data) use ($masterPid): array {
             $data['master_pid'] = $masterPid;
             $data['pid'] = $masterPid;
-            $records = \is_array($data[self::INSTANCE_RECORDS_KEY] ?? null)
-                ? $data[self::INSTANCE_RECORDS_KEY]
-                : [];
-            $data[self::INSTANCE_RECORDS_KEY] = $this->appendInstanceRuntimeRecord($records, $data);
-            return $data;
+            return $this->filterEndpointRecord($data);
         });
     }
 
@@ -497,93 +539,8 @@ class ServerInstanceManager
      */
     public function registerService(string $instanceName, ServiceInfo $service): void
     {
-        $file = $this->getInstanceFile($instanceName);
-        if (!\is_file($file)) {
-            return;
-        }
-
-        $this->atomicUpdateJson($file, function (array $data) use ($service): array {
-            $role = $service->role;
-            if (!isset($data['services'])) {
-                $data['services'] = [];
-            }
-            if (!isset($data['services'][$role])) {
-                $data['services'][$role] = [
-                    'display_name' => $service->displayName,
-                    'instances' => [],
-                ];
-            }
-
-            // 查找并更新已存在的实例，或添加新实例
-            $this->mergeServiceRecord($data, $service);
-
-            $data['services_updated_at'] = \date('Y-m-d H:i:s');
-
-            // 更新旧字段
-            $this->updateSingleLegacyField($data, $service);
-
-            return $data;
-        });
-    }
-
-    /**
-     * 删除实例文件
-     */
-    private function mergeServiceRecord(array &$data, ServiceInfo $service): void
-    {
-        $role = $service->role;
-        if (!isset($data['services']) || !\is_array($data['services'])) {
-            $data['services'] = [];
-        }
-        if (!isset($data['services'][$role]) || !\is_array($data['services'][$role])) {
-            $data['services'][$role] = [
-                'display_name' => $service->displayName,
-                'instances' => [],
-            ];
-        }
-        if (!isset($data['services'][$role]['instances']) || !\is_array($data['services'][$role]['instances'])) {
-            $data['services'][$role]['instances'] = [];
-        }
-        $data['services'][$role]['display_name'] = $service->displayName;
-
-        $record = $service->toArray();
-        $record['recorded_at'] = \date('Y-m-d H:i:s');
-        $record['recorded_timestamp'] = \time();
-        $recordKey = $this->getServiceRecordIdentity($record);
-
-        foreach ($data['services'][$role]['instances'] as $i => $existing) {
-            if (!\is_array($existing)) {
-                continue;
-            }
-            if ($this->getServiceRecordIdentity($existing) === $recordKey) {
-                $data['services'][$role]['instances'][$i] = $record;
-                return;
-            }
-        }
-
-        $data['services'][$role]['instances'][] = $record;
-    }
-
-    private function getServiceRecordIdentity(array $record): string
-    {
-        $role = (string)($record['role'] ?? '');
-        $instanceId = (int)($record['instance_id'] ?? 0);
-        $launchId = (string)($record['launch_id'] ?? '');
-        if ($launchId === '' && \is_array($record['metadata'] ?? null)) {
-            $launchId = (string)($record['metadata']['launch_id'] ?? '');
-        }
-        if ($launchId !== '') {
-            return $role . ':' . $instanceId . ':launch:' . $launchId;
-        }
-
-        foreach (['pid', 'root_pid', 'launcher_pid'] as $field) {
-            $pid = (int)($record[$field] ?? 0);
-            if ($pid > 0) {
-                return $role . ':' . $instanceId . ':pid:' . $pid;
-            }
-        }
-
-        return $role . ':' . $instanceId . ':epoch:' . (int)($record['epoch'] ?? 0);
+        // Child processes must report to Master IPC. They no longer mutate the
+        // instance endpoint file.
     }
 
     public function deleteInstance(string $name): bool
@@ -615,24 +572,7 @@ class ServerInstanceManager
             $data['stopped_timestamp'] = $now;
             $data['updated_at'] = $now;
 
-            foreach (($data['services'] ?? []) as $role => $roleData) {
-                if (!\is_array($roleData) || !\is_array($roleData['instances'] ?? null)) {
-                    continue;
-                }
-                foreach ($roleData['instances'] as $i => $record) {
-                    if (!\is_array($record)) {
-                        continue;
-                    }
-                    $record['state'] = ServiceInstance::STATE_STOPPED;
-                    $record['stopped_reason'] = $reason;
-                    $record['stopped_at'] = $at;
-                    $record['stopped_timestamp'] = $now;
-                    $data['services'][$role]['instances'][$i] = $record;
-                }
-            }
-            $data[self::CURRENT_SNAPSHOT_KEY] = $this->buildCurrentSnapshot($data);
-
-            return $data;
+            return $this->filterEndpointRecord($data);
         });
     }
 
@@ -654,7 +594,7 @@ class ServerInstanceManager
         $exitTimestamp = \time();
         $exitAt = \date('Y-m-d H:i:s', $exitTimestamp);
 
-        $this->atomicUpdateJson($file, static function (array $data) use ($masterPid, $exitTimestamp, $exitAt): array {
+        $this->atomicUpdateJson($file, function (array $data) use ($masterPid, $exitTimestamp, $exitAt): array {
             $data['pid'] = 0;
             $data['master_pid'] = 0;
             $data['master_enabled'] = false;
@@ -665,7 +605,7 @@ class ServerInstanceManager
             $data['master_exited_timestamp'] = $exitTimestamp;
             $data['updated_at'] = $exitTimestamp;
 
-            return $data;
+            return $this->filterEndpointRecord($data);
         });
 
         $rawData = $this->getRawInstanceData($name);
@@ -679,7 +619,7 @@ class ServerInstanceManager
             return false;
         }
 
-        $this->atomicUpdateJson($file, static function (array $data) use ($runningPids, $exitTimestamp, $exitAt): array {
+        $this->atomicUpdateJson($file, function (array $data) use ($runningPids, $exitTimestamp, $exitAt): array {
             $data['lifecycle_state'] = 'master_exited_children_retained';
             $data['retained_pids'] = $runningPids;
             $data['retained_pid_count'] = \count($runningPids);
@@ -687,7 +627,7 @@ class ServerInstanceManager
             $data['retained_timestamp'] = $exitTimestamp;
             $data['updated_at'] = $exitTimestamp;
 
-            return $data;
+            return $this->filterEndpointRecord($data);
         });
 
         return true;
@@ -716,14 +656,6 @@ class ServerInstanceManager
     public function getDisplayName(string $role): string
     {
         return self::ROLE_DISPLAY_NAMES[$role] ?? \ucwords(\str_replace('_', ' ', $role));
-    }
-
-    /**
-     * 获取服务角色优先级
-     */
-    public function getRolePriority(string $role): int
-    {
-        return self::ROLE_PRIORITIES[$role] ?? 99;
     }
 
     /**
@@ -771,13 +703,7 @@ class ServerInstanceManager
             return true;
         }
 
-        foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
-            if ($pid > 0 && Processer::processExists($pid)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->collectRunningTrackedPids($name, $rawData) !== [];
     }
 
     /**
@@ -796,19 +722,71 @@ class ServerInstanceManager
             }
         }
 
-        $running = [];
+        $candidatePids = [];
         foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
             $pid = (int) $pid;
             if ($pid <= 0 || isset($ignored[$pid])) {
                 continue;
             }
 
-            if (Processer::processExists($pid)) {
+            $candidatePids[$pid] = true;
+        }
+
+        if ($candidatePids === []) {
+            return [];
+        }
+
+        $processInfo = Processer::batchGetProcessInfo(\array_map('intval', \array_keys($candidatePids)));
+        $running = [];
+        foreach (\array_keys($candidatePids) as $pid) {
+            $pid = (int) $pid;
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if (!(bool)($info['exists'] ?? false) || (bool)($info['is_zombie'] ?? false)) {
+                continue;
+            }
+            if ($this->isTrackedProcessIdentityForInstance($name, $rawData, $pid)) {
                 $running[$pid] = true;
             }
         }
 
         return \array_map('intval', \array_keys($running));
+    }
+
+    private function isTrackedProcessIdentityForInstance(string $name, array $rawData, int $pid): bool
+    {
+        $allowedPnames = [];
+        $allowedProcessNames = [];
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $pname) {
+            $allowedPnames[$pname] = true;
+            try {
+                $processName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : Processer::getTaskName($pname);
+            } catch (\Throwable) {
+                $processName = '';
+            }
+            if ($processName !== '') {
+                $allowedProcessNames[$processName] = true;
+            }
+        }
+
+        $record = Processer::getProcessRecordByPid($pid);
+        $indexedPname = Processer::getNameByPid($pid);
+        $recordPname = (string)($record['pname'] ?? '');
+        foreach ([$recordPname, $indexedPname] as $pname) {
+            if ($pname !== '' && isset($allowedPnames[$pname])) {
+                return true;
+            }
+            if (\str_starts_with($pname, '--name=')) {
+                $processName = \substr($pname, 7);
+                if ($processName !== '' && isset($allowedProcessNames[$processName])) {
+                    return true;
+                }
+            }
+        }
+
+        $recordProcessName = (string)($record['process_name'] ?? $record['task_name'] ?? '');
+        return $recordProcessName !== '' && isset($allowedProcessNames[$recordProcessName]);
     }
 
     /**
@@ -819,71 +797,17 @@ class ServerInstanceManager
     private function collectTrackedPids(string $name, array $rawData): array
     {
         $pids = [];
-        $ignoredPids = $this->collectSharedExternalTrackedPids($rawData);
 
-        foreach (['pid', 'launcher_pid', 'master_pid', 'dispatcher_pid', 'redirect_pid', 'session_server_pid'] as $field) {
+        foreach (['pid', 'launcher_pid', 'master_pid'] as $field) {
             $pid = (int) ($rawData[$field] ?? 0);
-            if ($pid > 0 && !isset($ignoredPids[$pid])) {
-                $pids[$pid] = true;
-            }
-        }
-
-        foreach (($rawData['worker_pids'] ?? []) as $pid) {
-            $pid = (int) $pid;
             if ($pid > 0) {
                 $pids[$pid] = true;
-            }
-        }
-
-        foreach (($rawData['services'] ?? []) as $roleData) {
-            if (!\is_array($roleData)) {
-                continue;
-            }
-
-            foreach (($roleData['instances'] ?? []) as $instanceData) {
-                if (!\is_array($instanceData)) {
-                    continue;
-                }
-                if ($this->isSharedExternalServiceRecord($instanceData)) {
-                    continue;
-                }
-
-                foreach ($this->collectServiceRecordTrackedPids($instanceData) as $pid) {
-                    $pids[$pid] = true;
-                }
             }
         }
 
         foreach ($this->collectIndexedPidsByInstance($name, $rawData) as $pid) {
             if ($pid > 0) {
                 $pids[$pid] = true;
-            }
-        }
-
-        return \array_map('intval', \array_keys($pids));
-    }
-
-    /**
-     * @return int[]
-     */
-    private function collectServiceRecordTrackedPids(array $instanceData): array
-    {
-        $pids = [];
-
-        foreach (['pid', 'root_pid', 'launcher_pid'] as $field) {
-            $pid = (int) ($instanceData[$field] ?? 0);
-            if ($pid > 0) {
-                $pids[$pid] = true;
-            }
-        }
-
-        $metadata = $instanceData['metadata'] ?? null;
-        if (\is_array($metadata)) {
-            foreach (['service_pid', 'root_pid', 'launcher_pid'] as $field) {
-                $pid = (int) ($metadata[$field] ?? 0);
-                if ($pid > 0) {
-                    $pids[$pid] = true;
-                }
             }
         }
 
@@ -968,37 +892,16 @@ class ServerInstanceManager
             '--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', $name),
             '--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
             '--name=' . MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
-            '--name=weline-wls-dispatcher-' . $name,
-            '--name=weline-wls-session-' . $name,
-            '--name=weline-wls-memory-' . $name,
-            '--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
         ];
-
-        foreach (($rawData['services'] ?? []) as $roleData) {
-            if (!\is_array($roleData)) {
-                continue;
-            }
-
-            foreach (($roleData['instances'] ?? []) as $instanceData) {
-                if (!\is_array($instanceData)) {
-                    continue;
-                }
-                if ($this->isSharedExternalServiceRecord($instanceData)) {
-                    continue;
-                }
-
-                $processName = (string) ($instanceData['metadata']['process_name'] ?? '');
-                if ($processName !== '') {
-                    $names[] = '--name=' . $processName;
-                }
-            }
-        }
 
         $count = (int) ($rawData['count'] ?? 0);
         for ($i = 1; $i <= $count; $i++) {
             $names[] = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $name, $i);
-            $names[] = '--name=weline-wls-worker-' . $name . '-' . $i;
-            $names[] = '--name=weline-master-' . $name . '-worker-' . $i;
+        }
+
+        $maintenancePrefix = MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-';
+        foreach (Processer::getProcessNamesByPrefix($maintenancePrefix) as $processName) {
+            $names[] = $processName;
         }
 
         return \array_values(\array_unique(\array_filter($names)));
@@ -1009,6 +912,7 @@ class ServerInstanceManager
      */
     private function cleanupStaleInstanceArtifacts(string $name, array $rawData): void
     {
+        $trackedPids = $this->collectTrackedPids($name, $rawData);
         foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
             Processer::removePidFile($processName);
         }
@@ -1029,7 +933,7 @@ class ServerInstanceManager
         }
 
         $this->markInstanceRecordStopped($this->getInstanceFile($name), 'stale_cleanup');
-        Processer::cleanupStalePidFiles();
+        Processer::cleanupStalePidFilesForPids($trackedPids);
     }
 
     /**
@@ -1059,15 +963,13 @@ class ServerInstanceManager
     /**
      * 从原始数据构建 ServerInstanceInfo 对象
      */
-    private function buildInstanceInfo(string $name, array $rawData): ServerInstanceInfo
+    private function buildInstanceInfo(string $name, array $rawData, float $ipcTimeout = 1.5): ServerInstanceInfo
     {
-        $hasCurrentSnapshot = \is_array($rawData[self::CURRENT_SNAPSHOT_KEY] ?? null);
-        if ($hasCurrentSnapshot) {
-            $rawData = \array_replace($rawData, $rawData[self::CURRENT_SNAPSHOT_KEY]);
-        }
-        $runtimeData = $hasCurrentSnapshot ? $rawData : $this->resolveConsensusInstanceRuntimeData($rawData);
-        $services = $this->parseServices($rawData);
-        $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData, $services);
+        $runtimeData = $rawData;
+        $ipcStatus = $ipcTimeout > 0.0 ? $this->getMasterIpcStatus($name, $ipcTimeout) : null;
+        $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData);
+        $services = $ipcStatus === null ? [] : $this->buildServiceInfoListFromIpcStatus($ipcStatus);
+        $services = $this->mergeSharedStateServiceInfo($services, $runtimeData);
 
         return new ServerInstanceInfo(
             name: $name,
@@ -1082,336 +984,143 @@ class ServerInstanceManager
             httpRedirectPort: $httpRedirectPort,
             startedAt: (string) ($runtimeData['started_at'] ?? ''),
             startedTimestamp: (int) ($runtimeData['started_timestamp'] ?? 0),
-            services: $services,
+            services: ServerInstanceInfo::sortServicesByPriority($services),
+            controlToken: (string) ($runtimeData['control_token'] ?? ''),
+            startupFailureReason: (string) ($runtimeData['startup_failure_reason'] ?? ''),
+            startupFailureCode: (string) ($runtimeData['startup_failure_code'] ?? ''),
+            startupFailureClass: (string) ($runtimeData['startup_failure_class'] ?? ''),
+            startupFailureContext: \is_array($runtimeData['startup_failure_context'] ?? null)
+                ? $runtimeData['startup_failure_context']
+                : [],
+            startupFailureDiagnostics: \is_array($runtimeData['startup_failure_diagnostics'] ?? null)
+                ? \array_values($runtimeData['startup_failure_diagnostics'])
+                : [],
         );
     }
 
-    private function resolveConsensusInstanceRuntimeData(array $rawData): array
-    {
-        $records = $rawData[self::INSTANCE_RECORDS_KEY] ?? [];
-        if (!\is_array($records) || $records === []) {
-            return $rawData;
-        }
-
-        for ($i = \count($records) - 1; $i >= 0; $i--) {
-            $record = $records[$i] ?? null;
-            if (!\is_array($record)) {
-                continue;
-            }
-            if ($this->isRuntimeRecordReachable($record)) {
-                return \array_replace($rawData, $record);
-            }
-        }
-
-        $latest = \end($records);
-        return \is_array($latest) ? \array_replace($rawData, $latest) : $rawData;
-    }
-
-    private function isRuntimeRecordReachable(array $record): bool
-    {
-        $masterPid = (int)($record['master_pid'] ?? $record['pid'] ?? 0);
-        if ($masterPid > 0 && Processer::processExists($masterPid)) {
-            return true;
-        }
-
-        $controlPort = (int)($record['control_port'] ?? 0);
-        return $controlPort > 0 && Processer::isPortInUse($controlPort);
-    }
-
     /**
-     * 解析服务列表
-     *
-     * 优先使用 services 字段（新格式），否则从旧字段构建
-     *
-     * @return ServiceInfo[]
+     * @param list<ServiceInfo> $services
+     * @return list<ServiceInfo>
      */
-    private function parseServices(array $rawData): array
+    private function mergeSharedStateServiceInfo(array $services, array $runtimeData): array
     {
-        $services = [];
-
-        // 优先使用新格式的 services 字段
-        if (!empty($rawData['services']) && \is_array($rawData['services'])) {
-            foreach ($rawData['services'] as $role => $roleData) {
-                $displayName = $roleData['display_name'] ?? $this->getDisplayName($role);
-                $instances = $roleData['instances'] ?? [];
-                foreach ($this->selectConsensusServiceRecords($instances) as $instData) {
-                    $instData['role'] = $role;
-                    $instData['display_name'] = $displayName;
-                    if (!isset($instData['priority'])) {
-                        $instData['priority'] = $this->getRolePriority($role);
-                    }
-                    $services[] = ServiceInfo::fromArray($instData);
-                }
-            }
-        } else {
-            // 从旧字段构建（向后兼容）
-            $services = $this->buildServicesFromLegacyFields($rawData);
+        $sharedState = \is_array($runtimeData['shared_state'] ?? null) ? $runtimeData['shared_state'] : [];
+        if ($sharedState === []) {
+            return $services;
         }
 
-        return ServerInstanceInfo::sortServicesByPriority($services);
-    }
+        $roleMap = [
+            'session' => ControlMessage::ROLE_SESSION_SERVER,
+            'memory' => ControlMessage::ROLE_MEMORY_SERVER,
+        ];
 
-    /**
-     * 从旧字段构建服务列表（向后兼容）
-     *
-     * Pick one current record per logical service slot, trying the newest live record first.
-     *
-     * @param mixed $instances
-     * @return array<int, array<string, mixed>>
-     */
-    private function selectConsensusServiceRecords(mixed $instances): array
-    {
-        if (!\is_array($instances)) {
-            return [];
-        }
-
-        $groups = [];
-        foreach ($instances as $record) {
-            if (!\is_array($record)) {
-                continue;
-            }
-            $instanceId = (int)($record['instance_id'] ?? 0);
-            $groups[$instanceId][] = $record;
-        }
-
-        $selected = [];
-        foreach ($groups as $records) {
-            if (\count($records) === 1) {
-                $selected[] = $records[0];
+        foreach ($roleMap as $runtimeKey => $role) {
+            if ($this->hasServiceRole($services, $role)) {
                 continue;
             }
 
-            $fallback = null;
-            for ($i = \count($records) - 1; $i >= 0; $i--) {
-                $record = $records[$i];
-                $fallback ??= $record;
-                if ($this->isServiceRecordReachable($record)) {
-                    $selected[] = $record;
-                    continue 2;
-                }
+            $runtime = \is_array($sharedState[$runtimeKey] ?? null) ? $sharedState[$runtimeKey] : [];
+            if ($runtime === []) {
+                continue;
             }
-            if ($fallback !== null) {
-                $selected[] = $fallback;
+
+            $service = $this->buildSharedStateServiceInfo($role, $runtime);
+            if ($service !== null) {
+                $services[] = $service;
             }
-        }
-
-        return $selected;
-    }
-
-    private function isServiceRecordReachable(array $record): bool
-    {
-        $state = (string)($record['state'] ?? '');
-        if (\in_array($state, [ServiceInstance::STATE_STOPPED, ServiceInstance::STATE_FAILED], true)) {
-            return false;
-        }
-
-        $trackedPids = $this->collectServiceRecordTrackedPids($record);
-        foreach ($trackedPids as $pid) {
-            if ($pid > 0 && Processer::processExists($pid)) {
-                return true;
-            }
-        }
-        if ($trackedPids !== []) {
-            return false;
-        }
-
-        $port = (int)($record['port'] ?? 0);
-        return $port > 0 && Processer::isPortUsedByWeline($port);
-    }
-
-    private function buildServicesFromLegacyFields(array $rawData): array
-    {
-        $services = [];
-        $workerCount = (int) ($rawData['count'] ?? 0);
-
-        // Session Server
-        $sessionServerPort = $this->getSessionServerPort();
-        $sessionServerPid = (int) ($rawData['session_server_pid'] ?? 0);
-        $services[] = new ServiceInfo(
-            role: 'session_server',
-            displayName: 'Session Server',
-            instanceId: 1,
-            pid: $sessionServerPid,
-            port: $sessionServerPort,
-            state: $this->guessState($sessionServerPid, $sessionServerPort),
-            priority: $this->getRolePriority('session_server'),
-        );
-
-        // Workers
-        $workerPids = $rawData['worker_pids'] ?? [];
-        $workerPorts = $rawData['worker_ports'] ?? [];
-        $workerBasePort = (int) ($rawData['worker_port'] ?? $rawData['port'] ?? 0);
-
-        for ($i = 0; $i < $workerCount; $i++) {
-            $pid = (int) ($workerPids[$i] ?? 0);
-            $port = (int) ($workerPorts[$i] ?? ($workerBasePort + $i));
-            $services[] = new ServiceInfo(
-                role: 'worker',
-                displayName: 'HTTP Worker',
-                instanceId: $i + 1,
-                pid: $pid,
-                port: $port,
-                state: $this->guessState($pid, $port),
-                priority: $this->getRolePriority('worker'),
-            );
-        }
-
-        // Dispatcher
-        if (!empty($rawData['dispatcher_enabled'])) {
-            $dispatcherPid = (int) ($rawData['dispatcher_pid'] ?? 0);
-            $dispatcherPort = (int) ($rawData['dispatcher_port'] ?? $rawData['port'] ?? 0);
-            $services[] = new ServiceInfo(
-                role: 'dispatcher',
-                displayName: 'Dispatcher',
-                instanceId: 1,
-                pid: $dispatcherPid,
-                port: $dispatcherPort,
-                state: $this->guessState($dispatcherPid, $dispatcherPort),
-                priority: $this->getRolePriority('dispatcher'),
-            );
-        }
-
-        // HTTP Redirect
-        $redirectPort = $this->resolveHttpRedirectPort($rawData);
-        if ($redirectPort > 0) {
-            $redirectPid = (int) ($rawData['redirect_pid'] ?? 0);
-            $services[] = new ServiceInfo(
-                role: 'redirect',
-                displayName: 'HTTP Redirect',
-                instanceId: 1,
-                pid: $redirectPid,
-                port: $redirectPort,
-                state: $this->guessState($redirectPid, $redirectPort),
-                priority: $this->getRolePriority('redirect'),
-            );
         }
 
         return $services;
     }
 
     /**
-     * 根据 PID/端口猜测服务状态
+     * @param list<ServiceInfo> $services
      */
-    private function guessState(int $pid, ?int $port): string
+    private function hasServiceRole(array $services, string $role): bool
     {
-        if ($pid > 0 && Processer::processExists($pid)) {
-            return ServiceInstance::STATE_READY;
-        }
-        // 仅在缺失 PID 时，才用端口作为弱信号推断“可能运行中”。
-        // 否则会把“其他实例占用同端口”误判为当前实例在线。
-        if ($pid <= 0 && $port !== null && $port > 0 && Processer::isPortInUse($port)) {
-            return ServiceInstance::STATE_READY;
-        }
-        return ServiceInstance::STATE_STOPPED;
-    }
-
-    /**
-     * 获取 Session Server 端口（从 env 配置）
-     */
-    private function getSessionServerPort(): int
-    {
-        static $port = null;
-        if ($port === null) {
-            $envConfig = Env::getInstance()->getConfig();
-            // 默认端口 19970 + 项目偏移量，确保多项目不冲突
-            $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
-            $port = (int) ($envConfig['session']['server_port'] ?? $defaultPort);
-        }
-        return $port;
-    }
-
-    /**
-     * 更新旧字段（向后兼容）
-     *
-     * @param ServiceInfo[] $services
-     */
-    private function updateLegacyFields(array &$data, array $services): void
-    {
-        $workerPids = [];
-        $workerPorts = [];
-        $hasRedirectService = false;
-
         foreach ($services as $service) {
-            switch ($service->role) {
-                case 'session_server':
-                    $data['session_server_pid'] = $service->pid;
-                    $data['session_server_port'] = $service->port;
-                    break;
-
-                case 'worker':
-                    if ($service->pid > 0) {
-                        $workerPids[] = $service->pid;
-                    }
-                    if ($service->port !== null && $service->port > 0) {
-                        $workerPorts[] = $service->port;
-                    }
-                    break;
-
-                case 'dispatcher':
-                    $data['dispatcher_pid'] = $service->pid;
-                    $data['dispatcher_port'] = $service->port;
-                    break;
-
-                case 'redirect':
-                    $hasRedirectService = true;
-                    $data['redirect_pid'] = $service->pid;
-                    $data['http_redirect_port'] = (int) ($service->port ?? 0);
-                    break;
+            if ($service->role === $role) {
+                return true;
             }
         }
 
-        if (!empty($workerPids)) {
-            $data['worker_pids'] = $workerPids;
-        }
-        if (!empty($workerPorts)) {
-            $data['worker_ports'] = $workerPorts;
-        }
-        if (!$hasRedirectService) {
-            $data['redirect_pid'] = 0;
-            $data['http_redirect_port'] = 0;
-        }
+        return false;
     }
 
-    /**
-     * 更新单个服务的旧字段
-     */
-    private function updateSingleLegacyField(array &$data, ServiceInfo $service): void
+    private function buildSharedStateServiceInfo(string $role, array $runtime): ?ServiceInfo
     {
-        switch ($service->role) {
-            case 'session_server':
-                $data['session_server_pid'] = $service->pid;
-                $data['session_server_port'] = $service->port;
-                break;
+        $port = (int) ($runtime['port'] ?? 0);
+        $pid = (int) ($runtime['pid'] ?? 0);
+        $healthy = $runtime['healthy'] ?? null;
 
-            case 'dispatcher':
-                $data['dispatcher_pid'] = $service->pid;
-                $data['dispatcher_port'] = $service->port;
-                break;
-
-            case 'redirect':
-                $data['redirect_pid'] = $service->pid;
-                $data['http_redirect_port'] = (int) ($service->port ?? 0);
-                break;
+        if ($port <= 0 && $pid <= 0) {
+            return null;
         }
+
+        $state = $healthy === false
+            ? ServiceInstance::STATE_STOPPED
+            : (($pid > 0 || $healthy === true) ? ServiceInstance::STATE_READY : ServiceInstance::STATE_STOPPED);
+
+        $displayName = self::ROLE_DISPLAY_NAMES[$role] ?? \ucwords(\str_replace('_', ' ', $role));
+
+        return new ServiceInfo(
+            role: $role,
+            displayName: $displayName,
+            instanceId: 1,
+            pid: $pid,
+            port: $port > 0 ? $port : null,
+            state: $state,
+            priority: $role === ControlMessage::ROLE_SESSION_SERVER ? 10 : 12,
+            metadata: [
+                'shared_service' => true,
+                'process_name' => (string) ($runtime['process_name'] ?? ''),
+                'instance_name' => (string) ($runtime['instance_name'] ?? $runtime['service_instance_name'] ?? ''),
+                'token_file_name' => (string) ($runtime['token_file_name'] ?? ''),
+                'reuse_existing' => (bool) ($runtime['reuse_existing'] ?? false),
+                'created_now' => (bool) ($runtime['created_now'] ?? false),
+            ],
+            rootPid: $pid,
+            launcherPid: $pid,
+        );
     }
 
     /**
-     * @param ServiceInfo[] $services
+     * @return list<ServiceInfo>
      */
-    private function resolveHttpRedirectPort(array $rawData, array $services = []): int
+    private function buildServiceInfoListFromIpcStatus(array $status): array
+    {
+        $services = [];
+        $roles = \is_array($status['services'] ?? null) ? $status['services'] : [];
+
+        foreach ($roles as $role => $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+
+            $instances = \is_array($roleData['instances'] ?? null) ? $roleData['instances'] : [];
+            $displayName = (string)($roleData['display_name'] ?? self::ROLE_DISPLAY_NAMES[(string)$role] ?? (string)$role);
+            $priority = (int)($roleData['priority'] ?? 99);
+
+            foreach ($instances as $instance) {
+                if (!\is_array($instance)) {
+                    continue;
+                }
+
+                $instance['role'] = (string)($instance['role'] ?? $role);
+                $instance['display_name'] = (string)($instance['display_name'] ?? $displayName);
+                $instance['priority'] = (int)($instance['priority'] ?? $priority);
+                $services[] = ServiceInfo::fromArray($instance);
+            }
+        }
+
+        return $services;
+    }
+
+    private function resolveHttpRedirectPort(array $rawData): int
     {
         $httpRedirectPort = (int) ($rawData['http_redirect_port'] ?? 0);
         if ($httpRedirectPort > 0) {
             return $httpRedirectPort;
-        }
-
-        foreach ($services as $service) {
-            if ($service->role !== 'redirect') {
-                continue;
-            }
-            if ($service->port !== null && $service->port > 0) {
-                return (int) $service->port;
-            }
         }
 
         $mainPort = (int) ($rawData['port'] ?? 0);
@@ -1424,39 +1133,11 @@ class ServerInstanceManager
     }
 
     /**
-     * 原子写入 JSON 文件
-     */
-    private function atomicWriteJson(string $file, array $data): bool
-    {
-        $dir = \dirname($file);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        $tmpFile = $file . '.tmp.' . \getmypid();
-        $json = \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        if ($json === false) {
-            return false;
-        }
-
-        if (@\file_put_contents($tmpFile, $json) === false) {
-            return false;
-        }
-
-        if (@\rename($tmpFile, $file) === false) {
-            @\unlink($tmpFile);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
      * 原子更新 JSON 文件
      */
     private function atomicUpdateJson(string $file, callable $updater): bool
     {
-        return self::atomicUpdateJsonStatic($file, $updater);
+        return self::updateJsonFileAtomically($file, $updater);
     }
 
     // ========================================================================
@@ -1520,12 +1201,8 @@ class ServerInstanceManager
      */
     public function isInstanceRunning(string $name): bool
     {
-        $info = $this->getPersistedInstanceInfo($name);
-        if ($info === null) {
-            return false;
-        }
-        $stats = $this->collectRuntimeStatsForInstance($info, false);
-        return $stats['instance_running'];
+        $status = $this->getMasterIpcStatus($name);
+        return $status !== null && (bool)($status['running'] ?? false);
     }
 
     /**
@@ -1534,7 +1211,9 @@ class ServerInstanceManager
     public function isInstanceIpcControllable(string $name): bool
     {
         $info = $this->getPersistedInstanceInfo($name);
-        if ($info === null || $info->controlPort <= 0) {
+        $controlPort = $info?->controlPort ?? 0;
+
+        if ($controlPort <= 0) {
             return false;
         }
 
@@ -1542,26 +1221,23 @@ class ServerInstanceManager
         // `php bin/w server:start` 进程，而不是带 `--name=weline-wls-master-*`
         // 的受管子进程。此时严格的 Master 身份校验会误判，但真正决定
         // IPC 可控性的仍是控制端口是否可达。
-        if (Processer::isPortInUse($info->controlPort)) {
-            return true;
-        }
-
-        return $info->isMasterRunning();
+        return Processer::isPortInUse($controlPort);
     }
 
     /**
      * 统计实例中真正运行的 Worker 数量
      *
-     * 使用实时校验（PID/端口），避免实例 JSON 中 state=READY 但进程已退出时仍误判为「有 Worker」，
+     * 使用实时 IPC 校验，避免 endpoint 停止态或陈旧文件被误判为「有 Worker」，
      * 导致 server:reload 等命令跳过发送控制指令。
      */
     public function countRunningWorkers(string $name): int
     {
-        $info = $this->getPersistedInstanceInfo($name);
-        if ($info === null) {
+        $status = $this->getMasterIpcStatus($name);
+        if ($status === null) {
             return 0;
         }
-        return $this->collectRuntimeStatsForInstance($info, true)['workers'];
+
+        return $this->countRunningRoleFromIpcStatus($status, 'worker');
     }
 
     /**
@@ -1572,8 +1248,9 @@ class ServerInstanceManager
      */
     public function hasRunningWorkers(): bool
     {
-        foreach ($this->getAllPersistedInstanceInfo() as $info) {
-            if ($this->collectRuntimeStatsForInstance($info, false)['workers'] > 0) {
+        foreach ($this->listPersistedInstanceNames() as $name) {
+            $status = $this->getMasterIpcStatus($name);
+            if ($status !== null && $this->countRunningRoleFromIpcStatus($status, 'worker') > 0) {
                 return true;
             }
         }
@@ -1595,7 +1272,12 @@ class ServerInstanceManager
         $ports = [];
 
         foreach ($this->getAllPersistedInstanceInfo() as $info) {
-            $runtimeStats = $this->collectRuntimeStatsForInstance($info, false);
+            $status = $this->getMasterIpcStatus($info->name);
+            if ($status === null || !((bool)($status['running'] ?? false))) {
+                continue;
+            }
+
+            $runtimeStats = $this->collectRuntimeStatsFromIpcStatus($status);
             if ($runtimeStats['instance_running']) {
                 $instances++;
             }
@@ -1612,6 +1294,94 @@ class ServerInstanceManager
         ];
     }
 
+    /**
+     * @return array{success:bool,message:string,data:array}
+     */
+    public function getMasterIpcStatusResult(string $name, float $timeout = 1.5): array
+    {
+        $status = (new IpcControlGateway())->getStatus($name, $timeout);
+        return [
+            'success' => (bool)($status['success'] ?? false),
+            'message' => (string)($status['message'] ?? ''),
+            'data' => \is_array($status['data'] ?? null) ? $status['data'] : [],
+        ];
+    }
+
+    private function getMasterIpcStatus(string $name, float $timeout = 1.5): ?array
+    {
+        $status = $this->getMasterIpcStatusResult($name, $timeout);
+        if (!$status['success'] || $status['data'] === []) {
+            return null;
+        }
+
+        return $status['data'];
+    }
+
+    /**
+     * @return array{instance_running: bool, workers: int, dispatchers: int, ports: int[]}
+     */
+    private function collectRuntimeStatsFromIpcStatus(array $status): array
+    {
+        $services = \is_array($status['services'] ?? null) ? $status['services'] : [];
+
+        return [
+            'instance_running' => (bool)($status['running'] ?? false),
+            'workers' => $this->countRunningRoleFromServices($services, 'worker'),
+            'desired_workers' => (int)($status['desired_state']['worker'] ?? 0),
+            'dispatchers' => $this->countRunningRoleFromServices($services, 'dispatcher'),
+            'ports' => $this->collectRunningPortsFromServices($services, 'worker'),
+        ];
+    }
+
+    private function countRunningRoleFromIpcStatus(array $status, string $role): int
+    {
+        $services = \is_array($status['services'] ?? null) ? $status['services'] : [];
+        return $this->countRunningRoleFromServices($services, $role);
+    }
+
+    private function countRunningRoleFromServices(array $services, string $role): int
+    {
+        $instances = \is_array($services[$role]['instances'] ?? null) ? $services[$role]['instances'] : [];
+        $count = 0;
+        foreach ($instances as $instance) {
+            if (\is_array($instance) && $this->isIpcServiceStateRunning((string)($instance['state'] ?? ''))) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return int[]
+     */
+    private function collectRunningPortsFromServices(array $services, string $role): array
+    {
+        $instances = \is_array($services[$role]['instances'] ?? null) ? $services[$role]['instances'] : [];
+        $ports = [];
+        foreach ($instances as $instance) {
+            if (!\is_array($instance) || !$this->isIpcServiceStateRunning((string)($instance['state'] ?? ''))) {
+                continue;
+            }
+            $port = (int)($instance['port'] ?? 0);
+            if ($port > 0) {
+                $ports[] = $port;
+            }
+        }
+
+        return $ports;
+    }
+
+    private function isIpcServiceStateRunning(string $state): bool
+    {
+        return \in_array($state, [
+            ServiceInstance::STATE_STARTING,
+            ServiceInstance::STATE_REGISTERED,
+            ServiceInstance::STATE_READY,
+            ServiceInstance::STATE_DRAINING,
+        ], true);
+    }
+
     public function getPersistedInstanceInfo(string $name): ?ServerInstanceInfo
     {
         $rawData = $this->getRawInstanceData($name);
@@ -1619,7 +1389,7 @@ class ServerInstanceManager
             return null;
         }
 
-        return $this->buildInstanceInfo($name, $rawData);
+        return $this->buildInstanceInfo($name, $rawData, 0.0);
     }
 
     /**
@@ -1643,88 +1413,41 @@ class ServerInstanceManager
      */
     public function getRuntimeStatsForInstance(ServerInstanceInfo $info, bool $realtime = false): array
     {
-        return $this->collectRuntimeStatsForInstance($info, $realtime);
-    }
-
-    /**
-     * @return array{instance_running: bool, workers: int, dispatchers: int, ports: int[]}
-     */
-    private function collectRuntimeStatsForInstance(ServerInstanceInfo $info, bool $realtime): array
-    {
-        $workers = 0;
-        $dispatchers = 0;
-        $ports = [];
-        $hasActiveService = false;
-
-        foreach ($info->services as $service) {
-            if ($this->isSharedExternalServiceInfo($service)) {
-                continue;
-            }
-
-            $isRunning = $realtime ? $service->isRunning() : $service->isExpectedRunningState();
-            if (!$isRunning) {
-                continue;
-            }
-
-            $hasActiveService = true;
-
-            if ($service->role === 'worker') {
-                $workers++;
-                if ($service->port !== null) {
-                    $ports[] = $service->port;
-                }
-                continue;
-            }
-
-            if ($service->role === 'dispatcher') {
-                $dispatchers++;
-            }
+        unset($realtime);
+        $status = $this->getMasterIpcStatus($info->name);
+        if ($status !== null && (bool)($status['running'] ?? false)) {
+            return $this->collectRuntimeStatsFromIpcStatus($status);
         }
 
-        $masterRunning = $realtime ? $info->isMasterRunning() : $info->masterPid > 0;
-
         return [
-            'instance_running' => $hasActiveService || $masterRunning,
-            'workers' => $workers,
-            'dispatchers' => $dispatchers,
-            'ports' => $ports,
+            'instance_running' => false,
+            'workers' => 0,
+            'dispatchers' => 0,
+            'ports' => [],
         ];
     }
 
     /**
-     * @return array<int, true>
+     * @return array{instance_running: bool, workers: int, dispatchers: int, ports: int[], ipc_success: bool, ipc_message: string}
      */
-    private function collectSharedExternalTrackedPids(array $rawData): array
+    public function probeRuntimeStatsForInstance(ServerInstanceInfo $info, float $timeout = 6.0): array
     {
-        $pids = [];
-
-        foreach (($rawData['services'] ?? []) as $roleData) {
-            if (!\is_array($roleData)) {
-                continue;
-            }
-
-            foreach (($roleData['instances'] ?? []) as $instanceData) {
-                if (!\is_array($instanceData) || !$this->isSharedExternalServiceRecord($instanceData)) {
-                    continue;
-                }
-
-                foreach ($this->collectServiceRecordTrackedPids($instanceData) as $pid) {
-                    $pids[$pid] = true;
-                }
-            }
+        $result = $this->getMasterIpcStatusResult($info->name, $timeout);
+        if ($result['success'] && (bool)($result['data']['running'] ?? false)) {
+            return $this->collectRuntimeStatsFromIpcStatus($result['data']) + [
+                'ipc_success' => true,
+                'ipc_message' => $result['message'],
+            ];
         }
 
-        return $pids;
-    }
-
-    private function isSharedExternalServiceRecord(array $instanceData): bool
-    {
-        return (bool) ($instanceData['metadata']['shared_external'] ?? false);
-    }
-
-    private function isSharedExternalServiceInfo(ServiceInfo $service): bool
-    {
-        return (bool) ($service->metadata['shared_external'] ?? false);
+        return [
+            'instance_running' => false,
+            'workers' => 0,
+            'dispatchers' => 0,
+            'ports' => [],
+            'ipc_success' => false,
+            'ipc_message' => $result['message'],
+        ];
     }
 
     // ========================================================================
@@ -1757,91 +1480,6 @@ class ServerInstanceManager
         ], $info);
 
         $this->atomicUpdateJson($file, fn(array $existing): array => $this->mergeInstanceRecordData($existing, $data));
-    }
-
-    /**
-     * 获取实例 PID 文件路径
-     */
-    /**
-     * @param array<int, mixed> $records
-     * @param array<string, mixed> $data
-     * @return array<int, array<string, mixed>>
-     */
-    private function appendInstanceRuntimeRecord(array $records, array $data): array
-    {
-        $record = $this->buildInstanceRuntimeRecord($data);
-        $recordKey = $this->getInstanceRuntimeRecordIdentity($record);
-        $normalized = [];
-
-        foreach ($records as $existing) {
-            if (!\is_array($existing)) {
-                continue;
-            }
-            if ($this->getInstanceRuntimeRecordIdentity($existing) === $recordKey) {
-                $normalized[] = $record;
-                $record = [];
-                continue;
-            }
-            $normalized[] = $existing;
-        }
-
-        if ($record !== []) {
-            $normalized[] = $record;
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     * @return array<string, mixed>
-     */
-    private function buildInstanceRuntimeRecord(array $data): array
-    {
-        $now = \time();
-        $fields = [
-            'name',
-            'pid',
-            'launcher_pid',
-            'master_pid',
-            'control_port',
-            'host',
-            'port',
-            'count',
-            'daemon',
-            'ssl_enabled',
-            'dispatcher_enabled',
-            'dispatcher_port',
-            'worker_port',
-            'worker_base_port',
-            'http_redirect_port',
-            'started_at',
-            'started_timestamp',
-            'master_started_at',
-            'startup_phase',
-            'instance_name',
-            'control_plane_mode',
-            'supervisor_enabled',
-        ];
-        $record = [];
-        foreach ($fields as $field) {
-            if (\array_key_exists($field, $data)) {
-                $record[$field] = $data[$field];
-            }
-        }
-        $record['recorded_at'] = \date('Y-m-d H:i:s', $now);
-        $record['recorded_timestamp'] = $now;
-
-        return $record;
-    }
-
-    private function getInstanceRuntimeRecordIdentity(array $record): string
-    {
-        $started = (string)($record['started_timestamp'] ?? $record['started_at'] ?? '');
-        $masterPid = (int)($record['master_pid'] ?? $record['pid'] ?? 0);
-        $controlPort = (int)($record['control_port'] ?? 0);
-
-        return $started . ':' . $masterPid . ':' . $controlPort;
     }
 
     public function getPidFile(string $name): string
@@ -2001,7 +1639,7 @@ class ServerInstanceManager
     /**
      * 静态原子更新 JSON 文件（带排他锁）
      */
-    public static function atomicUpdateJsonStatic(string $file, callable $modifier, int $timeout = 5): bool
+    public static function updateJsonFileAtomically(string $file, callable $modifier, int $timeout = 5): bool
     {
         $dir = \dirname($file);
         if (!\is_dir($dir)) {

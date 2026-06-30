@@ -6,11 +6,16 @@ $customer = (array) ($this->getData('customer') ?? []);
 $recentOrders = (array) ($this->getData('recent_orders') ?? []);
 $orderCount = (int) ($this->getData('order_count') ?? 0);
 $unpaidCount = (int) ($this->getData('unpaid_count') ?? 0);
+$rmaCount = (int) ($this->getData('rma_count') ?? 0);
+$rmaList = (array) ($this->getData('rma_list') ?? []);
 $quickLinks = (array) ($this->getData('quick_links') ?? []);
+$compareCount = (int) ($this->getData('compare_count') ?? 0);
+$comparePreview = (array) ($this->getData('compare_preview') ?? []);
 $wishlistCount = (int) ($this->getData('wishlist_count') ?? 0);
 $wishlistPreview = (array) ($this->getData('wishlist_preview') ?? []);
 $recentlyViewedCount = (int) ($this->getData('recently_viewed_count') ?? 0);
 $recentlyViewed = (array) ($this->getData('recently_viewed') ?? []);
+$subscriptionCount = (int) ($this->getData('subscription_count') ?? 0);
 $recommendations = (array) ($this->getData('recommendations') ?? []);
 
 $fullName = trim(((string) ($customer['firstname'] ?? '')) . ' ' . ((string) ($customer['lastname'] ?? '')));
@@ -19,6 +24,8 @@ if ($fullName === '') {
 }
 
 $memberSince = trim((string) ($customer['created_at'] ?? ''));
+$ordersSectionUrl = '/customer/account/index#orders';
+$returnsSectionUrl = '/customer/account/index#returns';
 ?>
 <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
@@ -31,10 +38,10 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                 </p>
 
                 <div class="mt-8 flex flex-wrap gap-3 text-sm">
-                    <a href="<?= $this->getUrl('weshop/order/list') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                    <a href="<?= htmlspecialchars($ordersSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
                         <?= __('View Orders') ?>
                     </a>
-                    <a href="<?= $this->getUrl('rma') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                    <a href="<?= htmlspecialchars($returnsSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
                         <?= __('Returns Center') ?>
                     </a>
                     <a href="<?= $this->getUrl('weshop/customer/account/logout') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
@@ -45,7 +52,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                 <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary-light dark:text-text-secondary-dark">
                     <a href="<?= $this->getUrl('compare') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('Compare') ?></a>
                     <a href="<?= $this->getUrl('recently-viewed') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('Recently Viewed') ?></a>
-                    <a href="<?= $this->getUrl('rma') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('RMA') ?></a>
+                    <a href="<?= htmlspecialchars($returnsSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('RMA') ?></a>
                 </div>
             </div>
 
@@ -79,9 +86,19 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
             <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Latest orders shown in your dashboard summary.') ?></p>
         </article>
         <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Returns & Exchanges') ?></p>
+            <p class="mt-3 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $rmaCount ?></p>
+            <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('After-sales requests linked to this customer account.') ?></p>
+        </article>
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
             <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Saved Shortcuts') ?></p>
             <p class="mt-3 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= count($quickLinks) ?></p>
             <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Quick navigation into the most-used customer workflows.') ?></p>
+        </article>
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Compare Shortlist') ?></p>
+            <p class="mt-3 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $compareCount ?></p>
+            <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Products currently saved for side-by-side comparison.') ?></p>
         </article>
         <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
             <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Wishlist Items') ?></p>
@@ -92,6 +109,11 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
             <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Recently Viewed') ?></p>
             <p class="mt-3 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $recentlyViewedCount ?></p>
             <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Products you inspected most recently across the storefront.') ?></p>
+        </article>
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Active Subscriptions') ?></p>
+            <p class="mt-3 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $subscriptionCount ?></p>
+            <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Recurring plans and replenishment programs linked to this account.') ?></p>
         </article>
     </section>
 
@@ -155,6 +177,36 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
     </section>
 
     <section class="grid gap-6 xl:grid-cols-3">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Compare Before Checkout') ?></p>
+                    <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Compare List') ?></h2>
+                </div>
+                <a href="<?= $this->getUrl('compare') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Open Compare') ?></a>
+            </div>
+
+            <?php if ($comparePreview): ?>
+                <div class="mt-6 space-y-4">
+                    <?php foreach ($comparePreview as $product): ?>
+                        <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="group flex items-center gap-4 rounded-2xl border border-border-light bg-background-light p-3 transition hover:border-primary dark:border-border-dark dark:bg-background-dark">
+                            <div class="h-16 w-16 overflow-hidden rounded-2xl bg-surface-light dark:bg-surface-dark">
+                                <img src="<?= $product['image'] ?? '' ?>" alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>" class="h-full w-full object-cover">
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate font-semibold text-text-primary-light group-hover:text-primary dark:text-text-primary-dark"><?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?></p>
+                                <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></p>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-5 py-8 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+                    <?= __('Add products from listing and detail pages to build a side-by-side shortlist before you place the next order.') ?>
+                </div>
+            <?php endif; ?>
+        </article>
+
         <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
             <div class="flex items-center justify-between gap-4">
                 <div>
@@ -249,44 +301,93 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
         <w:hook name="WeShop_Customer::frontend::account::discovery::cards"/>
     </section>
 
-    <section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Order Snapshot') ?></p>
-                <h2 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recent Orders') ?></h2>
-            </div>
-            <a href="<?= $this->getUrl('weshop/order/list') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View All Orders') ?></a>
-        </div>
-
-        <?php if ($recentOrders): ?>
-            <div class="mt-6 overflow-hidden rounded-3xl border border-border-light dark:border-border-dark">
-                <div class="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr] gap-4 bg-background-light px-5 py-4 text-sm font-semibold text-text-secondary-light dark:bg-background-dark dark:text-text-secondary-dark">
-                    <div><?= __('Order') ?></div>
-                    <div><?= __('Status') ?></div>
-                    <div><?= __('Total') ?></div>
-                    <div><?= __('Created At') ?></div>
+    <section class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Order Center') ?></p>
+                    <h2 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('My Orders') ?></h2>
                 </div>
-                <?php foreach ($recentOrders as $order): ?>
-                    <div class="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr] gap-4 border-t border-border-light px-5 py-4 text-sm text-text-primary-light dark:border-border-dark dark:text-text-primary-dark">
-                        <div class="font-semibold">#<?= htmlspecialchars((string) ($order['increment_id'] ?? $order['order_id'] ?? ''), ENT_QUOTES) ?></div>
-                        <div><?= htmlspecialchars((string) ($order['status'] ?? __('Unknown')), ENT_QUOTES) ?></div>
-                        <div><?= htmlspecialchars((string) ($order['total'] ?? '0.00'), ENT_QUOTES) ?></div>
-                        <div><?= htmlspecialchars((string) ($order['created_at'] ?? ''), ENT_QUOTES) ?></div>
+                <a href="<?= htmlspecialchars($ordersSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View All Orders') ?></a>
+            </div>
+
+            <?php if ($recentOrders): ?>
+                <div class="mt-6 overflow-hidden rounded-3xl border border-border-light dark:border-border-dark">
+                    <div class="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr_0.8fr] gap-4 bg-background-light px-5 py-4 text-sm font-semibold text-text-secondary-light dark:bg-background-dark dark:text-text-secondary-dark">
+                        <div><?= __('Order') ?></div>
+                        <div><?= __('Status') ?></div>
+                        <div><?= __('Total') ?></div>
+                        <div><?= __('Created At') ?></div>
+                        <div><?= __('Action') ?></div>
                     </div>
-                <?php endforeach; ?>
+                    <?php foreach ($recentOrders as $order): ?>
+                        <?php $orderId = (int) ($order['order_id'] ?? 0); ?>
+                        <div class="grid grid-cols-[1.1fr_0.8fr_0.8fr_1fr_0.8fr] gap-4 border-t border-border-light px-5 py-4 text-sm text-text-primary-light dark:border-border-dark dark:text-text-primary-dark">
+                            <div class="font-semibold">#<?= htmlspecialchars((string) ($order['increment_id'] ?? $orderId), ENT_QUOTES) ?></div>
+                            <div><?= htmlspecialchars((string) ($order['status'] ?? __('Unknown')), ENT_QUOTES) ?></div>
+                            <div><?= $this->formatPrice((float) ($order['total'] ?? 0)) ?></div>
+                            <div><?= htmlspecialchars((string) ($order['created_at'] ?? ''), ENT_QUOTES) ?></div>
+                            <div class="flex flex-col gap-1">
+                                <?php $orderDetailUrl = '/customer/account/index?order_page=1&order_page_size=10&return_anchor=' . rawurlencode('order-card-' . $orderId) . '#orders'; ?>
+                                <?php $orderReturnUrl = '/customer/account/index?order_id=' . $orderId . '#returns'; ?>
+                                <a href="<?= htmlspecialchars($orderDetailUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-semibold text-primary hover:underline"><?= __('Details') ?></a>
+                                <a href="<?= htmlspecialchars($orderReturnUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-semibold text-primary hover:underline"><?= __('Return') ?></a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
+                    <span class="material-symbols-outlined text-5xl text-primary">package_2</span>
+                    <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No orders yet') ?></h3>
+                    <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('Once this customer places an order, the latest activity will appear here for quick follow-up, repeat purchases, and after-sales requests.') ?>
+                    </p>
+                    <a href="<?= $this->getUrl('catalog/category') ?>" class="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Start Shopping') ?>
+                    </a>
+                </div>
+            <?php endif; ?>
+        </article>
+
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('After-Sales Center') ?></p>
+                    <h2 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Returns & Exchanges') ?></h2>
+                </div>
+                <a href="<?= htmlspecialchars($returnsSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Manage Requests') ?></a>
             </div>
-        <?php else: ?>
-            <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
-                <span class="material-symbols-outlined text-5xl text-primary">package_2</span>
-                <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No orders yet') ?></h3>
-                <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Once this customer places an order, the latest activity will appear here for quick follow-up and repeat purchases.') ?>
-                </p>
-                <a href="<?= $this->getUrl('catalog/category') ?>" class="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
-                    <?= __('Start Shopping') ?>
-                </a>
-            </div>
-        <?php endif; ?>
+
+            <?php if ($rmaList): ?>
+                <div class="mt-6 space-y-3">
+                    <?php foreach ($rmaList as $rma): ?>
+                        <?php $rmaOrderId = (int) ($rma['order_id'] ?? 0); ?>
+                        <a href="<?= htmlspecialchars('/customer/account/index?order_id=' . $rmaOrderId . '#returns', ENT_QUOTES, 'UTF-8') ?>" class="block rounded-2xl border border-border-light bg-background-light p-4 transition hover:border-primary hover:shadow-sm dark:border-border-dark dark:bg-background-dark">
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="font-semibold text-text-primary-light dark:text-text-primary-dark">#<?= htmlspecialchars((string) ($rma['rma_id'] ?? ''), ENT_QUOTES) ?></span>
+                                <span class="text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($rma['status'] ?? __('Pending')), ENT_QUOTES) ?></span>
+                            </div>
+                            <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                                <?= __('Order') ?> #<?= $rmaOrderId ?> · <?= htmlspecialchars((string) ($rma['reason'] ?? ''), ENT_QUOTES) ?>
+                            </p>
+                            <p class="mt-1 text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($rma['created_at'] ?? ''), ENT_QUOTES) ?></p>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-8 dark:border-border-dark dark:bg-background-dark">
+                    <span class="material-symbols-outlined text-5xl text-primary">assignment_return</span>
+                    <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No return requests') ?></h3>
+                    <p class="mt-2 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('When an order needs a return or exchange, start from the order row or open the returns center to submit and track requests.') ?>
+                    </p>
+                    <a href="<?= htmlspecialchars($returnsSectionUrl, ENT_QUOTES, 'UTF-8') ?>" class="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Open Returns Center') ?>
+                    </a>
+                </div>
+            <?php endif; ?>
+        </article>
     </section>
 
     <w:hook name="WeShop_Customer::frontend::account::orders::cards"/>

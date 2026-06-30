@@ -25,7 +25,8 @@ class FileAdapter implements CacheAdapterInterface
         $this->identity = $identity;
         $basePath = $config['path'] ?? BP . 'var' . DS . 'cache' . DS;
         
-        if (IS_WIN) {
+        $isWin = \defined('IS_WIN') ? (bool) \constant('IS_WIN') : (\PHP_OS_FAMILY === 'Windows');
+        if ($isWin) {
             $basePath = str_replace('/', DS, $basePath);
         } else {
             $basePath = str_replace('\\', DS, $basePath);

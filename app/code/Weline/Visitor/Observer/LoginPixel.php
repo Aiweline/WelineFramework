@@ -30,9 +30,7 @@ class LoginPixel implements ObserverInterface
                 return;
             }
 
-            $websiteId = isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== ''
-                ? (int)$_SERVER['WELINE_WEBSITE_ID']
-                : 0;
+            $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
 
             $pixelData = [
                 'url' => $this->resolveRequestUri($request),
@@ -40,8 +38,8 @@ class LoginPixel implements ObserverInterface
                 'name' => 'login',
                 'eventName' => 'login',
                 'value' => 0,
-                'userLang' => $_SERVER['WELINE_USER_LANG'] ?? 'zh-CN',
-                'currency' => $_SERVER['WELINE_USER_CURRENCY'] ?? 'RMB',
+                'userLang' => \Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', 'zh-CN'),
+                'currency' => \Weline\Framework\Env\WelineEnv::server('WELINE_USER_CURRENCY', 'RMB'),
                 'websiteId' => $websiteId,
                 'siteId' => $websiteId,
                 'referer' => method_exists($request, 'getReferer') ? (string)$request->getReferer() : '',
@@ -110,8 +108,8 @@ class LoginPixel implements ObserverInterface
     {
         $baseUrl = \Weline\Framework\App\Env::getInstance()->getBaseUrl();
         if (empty($baseUrl)) {
-            $scheme = $_SERVER['REQUEST_SCHEME'] ?? 'http';
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $scheme = \Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', 'http');
+            $host = \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', 'localhost');
             $baseUrl = $scheme . '://' . $host;
         }
         $pixelUrl = rtrim($baseUrl, '/') . '/visitor/rest/v1/pixel';

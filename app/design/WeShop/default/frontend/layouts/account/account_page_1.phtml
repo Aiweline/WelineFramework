@@ -5,6 +5,10 @@
  * This keeps WeShop account pages working without editing Theme modules.
  */
 $meta = $this->getData('meta') ?? [];
+/* theme.frontend.layouts.account 可能全局关闭顶栏；与前台首页一致保留 header/footer */
+$meta['showHeader'] = true;
+$meta['showFooter'] = true;
+$this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
 <html class="light" lang="<?= $this->getLocale() ?>">
@@ -12,8 +16,10 @@ $meta = $this->getData('meta') ?? [];
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <div class="relative flex min-h-screen w-full flex-col">
         <div class="layout-container flex h-full grow flex-col">
@@ -22,6 +28,9 @@ $meta = $this->getData('meta') ?? [];
             </if>
             <main class="flex-1">
                 <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <div class="wf-system-messages mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+                    <template>Weline_Component::message.phtml</template>
+                </div>
                 <?= $this->getChildHtml('content') ?>
                 <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
             </main>
@@ -31,5 +40,6 @@ $meta = $this->getData('meta') ?? [];
         </div>
     </div>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
