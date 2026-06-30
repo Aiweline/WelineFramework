@@ -114,10 +114,14 @@ final class RuntimeCapabilityDetector
         }
 
         if (PHP_OS_FAMILY === 'Windows' && !empty($functions['shell_exec'])) {
-            $cmd = 'powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory" 2>NUL';
-            $bytes = @\shell_exec($cmd);
-            if (\is_string($bytes) && \trim($bytes) !== '' && \ctype_digit(\trim($bytes))) {
-                return (int) \floor(((int) \trim($bytes)) / 1048576);
+            $powershell = $this->resolveWindowsCommandPath('powershell');
+            if ($powershell !== null) {
+                $cmd = $this->quoteWindowsCommand($powershell)
+                    . ' -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory" 2>NUL';
+                $bytes = @\shell_exec($cmd);
+                if (\is_string($bytes) && \trim($bytes) !== '' && \ctype_digit(\trim($bytes))) {
+                    return (int) \floor(((int) \trim($bytes)) / 1048576);
+                }
             }
         }
 
@@ -152,12 +156,69 @@ final class RuntimeCapabilityDetector
         $output = [];
         $exitCode = 1;
         if (PHP_OS_FAMILY === 'Windows') {
-            @\exec('where ' . \escapeshellarg($command) . ' 2>NUL', $output, $exitCode);
+            return $this->resolveWindowsCommandPath($command) !== null;
         } else {
             @\exec('command -v ' . \escapeshellarg($command) . ' 2>/dev/null', $output, $exitCode);
         }
 
         return $exitCode === 0 && $output !== [];
+    }
+
+    private function quoteWindowsCommand(string $path): string
+    {
+        return '"' . \str_replace('"', '\"', $path) . '"';
+    }
+
+    private function resolveWindowsCommandPath(string $command): ?string
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return null;
+        }
+
+        $command = \trim($command);
+        if ($command === '') {
+            return null;
+        }
+
+        if (\str_contains($command, '\\') || \str_contains($command, '/')) {
+            return \is_file($command) ? $command : null;
+        }
+
+        $names = [$command];
+        if (!\str_ends_with(\strtolower($command), '.exe')) {
+            $names[] = $command . '.exe';
+        }
+        $names = \array_values(\array_unique($names));
+
+        $systemRoot = \rtrim((string) (\getenv('SystemRoot') ?: \getenv('windir') ?: 'C:\\Windows'), '\\/');
+        $directories = [
+            $systemRoot . '\\System32',
+            $systemRoot . '\\Sysnative',
+            $systemRoot . '\\SysWOW64',
+            $systemRoot . '\\System32\\WindowsPowerShell\\v1.0',
+            $systemRoot . '\\System32\\wbem',
+        ];
+
+        $path = (string) \getenv('PATH');
+        if ($path !== '') {
+            foreach (\explode(PATH_SEPARATOR, $path) as $directory) {
+                $directory = \trim($directory, " \t\n\r\0\x0B\"'");
+                if ($directory !== '') {
+                    $directories[] = $directory;
+                }
+            }
+        }
+
+        foreach (\array_unique($directories) as $directory) {
+            foreach ($names as $name) {
+                $candidate = \rtrim($directory, '\\/') . '\\' . $name;
+                if (\is_file($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

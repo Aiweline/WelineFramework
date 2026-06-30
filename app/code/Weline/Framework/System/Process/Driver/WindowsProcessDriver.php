@@ -296,10 +296,67 @@ class WindowsProcessDriver extends AbstractProcessDriver
             return null;
         }
 
+        $resolvedProgram = $this->resolveWindowsCommandPath((string) $argv[0]);
+        if ($resolvedProgram !== null) {
+            $argv[0] = $resolvedProgram;
+        }
+
         return [
             'argv' => $argv,
             'merge_stderr' => $mergeStderr,
         ];
+    }
+
+    private function resolveWindowsCommandPath(string $command): ?string
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return null;
+        }
+
+        $command = \trim($command);
+        if ($command === '') {
+            return null;
+        }
+
+        if (\str_contains($command, '\\') || \str_contains($command, '/')) {
+            return \is_file($command) ? $command : null;
+        }
+
+        $names = [$command];
+        if (!\str_ends_with(\strtolower($command), '.exe')) {
+            $names[] = $command . '.exe';
+        }
+        $names = \array_values(\array_unique($names));
+
+        $systemRoot = \rtrim((string) (\getenv('SystemRoot') ?: \getenv('windir') ?: 'C:\\Windows'), '\\/');
+        $directories = [
+            $systemRoot . '\\System32',
+            $systemRoot . '\\Sysnative',
+            $systemRoot . '\\SysWOW64',
+            $systemRoot . '\\System32\\WindowsPowerShell\\v1.0',
+            $systemRoot . '\\System32\\wbem',
+        ];
+
+        $path = (string) \getenv('PATH');
+        if ($path !== '') {
+            foreach (\explode(PATH_SEPARATOR, $path) as $directory) {
+                $directory = \trim($directory, " \t\n\r\0\x0B\"'");
+                if ($directory !== '') {
+                    $directories[] = $directory;
+                }
+            }
+        }
+
+        foreach (\array_unique($directories) as $directory) {
+            foreach ($names as $name) {
+                $candidate = \rtrim($directory, '\\/') . '\\' . $name;
+                if (\is_file($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1397,7 +1454,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             
             if (!empty($missingPids)) {
                 $pidFilter = \implode(',', $missingPids);
-                $ps = "powershell -NoProfile -Command \"Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { \$_.ProcessId -in @({$pidFilter}) } | Select-Object ProcessId,Name,CommandLine,WorkingSetSize | ConvertTo-Json -Compress\"";
+                $ps = "powershell -NoProfile -Command \"Get-Process -Id {$pidFilter} -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,WorkingSet64 | ConvertTo-Json -Compress\"";
                 $out = [];
                 $code = 0;
                 $this->executeCommand($ps, $out, $code);
@@ -1412,12 +1469,11 @@ class WindowsProcessDriver extends AbstractProcessDriver
                         }
                         
                         foreach ($data as $proc) {
-                            $pid = (int) ($proc['ProcessId'] ?? 0);
+                            $pid = (int) ($proc['Id'] ?? 0);
                             if ($pid > 0 && isset($result[$pid])) {
                                 $result[$pid]['exists'] = true;
-                                $result[$pid]['name'] = (string) ($proc['Name'] ?? '');
-                                $result[$pid]['command'] = (string) ($proc['CommandLine'] ?? '');
-                                $ws = (int) ($proc['WorkingSetSize'] ?? 0);
+                                $result[$pid]['name'] = (string) ($proc['ProcessName'] ?? '');
+                                $ws = (int) ($proc['WorkingSet64'] ?? 0);
                                 if ($ws > 0) {
                                     $result[$pid]['memory'] = \round($ws / 1024 / 1024, 2) . ' MB';
                                 }
