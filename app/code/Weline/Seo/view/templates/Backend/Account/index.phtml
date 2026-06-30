@@ -5,11 +5,16 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Seo\Service\PlatformVisual;
+
 /** @var array $accounts */
 $accounts = $accounts ?? [];
 $scope = $scope ?? '';
 $module = $module ?? '';
 $isAjax = $is_ajax ?? false;
+/** @var PlatformVisual $platformVisual */
+$platformVisual = ObjectManager::getInstance(PlatformVisual::class);
 
 // 平台颜色映射
 $platformColors = [
@@ -18,6 +23,34 @@ $platformColors = [
     'baidu' => '#2932E1',
     'yandex' => '#FF0000',
     'naver' => '#03C75A',
+    'seznam' => '#CC0000',
+    'yep' => '#111827',
+    'internetarchive' => '#333333',
+    'amazonbot' => '#FF9900',
+    'yahoo' => '#6001D2',
+    'duckduckgo' => '#DE5833',
+    '360' => '#19B955',
+    'sogou' => '#FF7A00',
+    'shenma' => '#2F80ED',
+    'toutiao' => '#F04142',
+    'brave' => '#FB542B',
+    'qwant' => '#5C97FF',
+    'ecosia' => '#008009',
+    'startpage' => '#6573FF',
+    'swisscows' => '#D71920',
+    'mojeek' => '#7D4BC6',
+    'petal' => '#CF0A2C',
+    'daum' => '#1A73E8',
+    'coccoc' => '#00A651',
+    'mailru' => '#005FF9',
+    'rambler' => '#315EFB',
+    'you' => '#7B61FF',
+    'kagi' => '#FFB319',
+    'aol' => '#111111',
+    'ask' => '#D9362A',
+    'quark' => '#08A6FF',
+    'metager' => '#FF8000',
+    'gibiru' => '#2E7D32',
 ];
 
 // 辅助函数：获取平台颜色
@@ -26,6 +59,7 @@ function getPlatformColor($platform, $colors) {
     return $colors[$platform] ?? '#6c757d';
 }
 ?>
+<?php if (!$isAjax): ?>
 <!-- 消息提示 -->
                 <div class='row'>
                     <div class='col-12'>
@@ -43,9 +77,9 @@ function getPlatformColor($platform, $colors) {
                             </h4>
                             <div class='page-title-right'>
                                 <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                    <li class='breadcrumb-item'><span>
                                             <lang>SEO管理</lang>
-                                        </a></li>
+                                        </span></li>
                                     <li class='breadcrumb-item active'>
                                         <lang>账户管理</lang>
                                     </li>
@@ -59,7 +93,12 @@ function getPlatformColor($platform, $colors) {
                 <div class="row mb-3">
                     <div class="col-12 d-flex justify-content-between align-items-center">
                         <h4 class="mb-0"><lang>SEO账户列表</lang></h4>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#seoAccountOffcanvas" onclick="loadSeoAccountForm(0)">
+                        <button type="button"
+                                class="btn btn-primary"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#seoAccountOffcanvas"
+                                data-seo-account-action="load-form"
+                                data-account-id="0">
                             <i class="mdi mdi-plus-circle-outline me-1"></i>
                             <lang>新增账户</lang>
                         </button>
@@ -95,6 +134,8 @@ function getPlatformColor($platform, $colors) {
                                         $boundCount = (int)($account['bound_websites_count'] ?? 0);
                                         $stats = $account['stats'] ?? null;
                                         $hasStats = $stats && ($stats['indexed_pages'] > 0 || $stats['clicks'] > 0 || $stats['impressions'] > 0);
+                                        $platformCode = (string)($account['platform'] ?? $account['provider'] ?? '');
+                                        $platformColor = getPlatformColor($platformCode, $platformColors);
                                     ?>
                                         <tr>
                                             <td>
@@ -111,8 +152,11 @@ function getPlatformColor($platform, $colors) {
                                                 <small class="text-muted"><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></small>
                                             </td>
                                             <td>
-                                                <span class="badge" style="background-color: <?= getPlatformColor($account['platform'] ?? $account['provider'] ?? '', $platformColors) ?>;">
-                                                    <?= htmlspecialchars((string)($account['platform'] ?? $account['provider'] ?? ''), ENT_QUOTES) ?>
+                                                <span class="d-inline-flex align-items-center gap-2">
+                                                    <?= $platformVisual->renderIcon($platformCode, $platformCode, $platformColor, 26) ?>
+                                                    <span class="badge" style="background-color: <?= htmlspecialchars($platformColor, ENT_QUOTES) ?>;">
+                                                        <?= htmlspecialchars($platformCode, ENT_QUOTES) ?>
+                                                    </span>
                                                 </span>
                                             </td>
                                             <td>
@@ -158,7 +202,8 @@ function getPlatformColor($platform, $colors) {
                                                 <div class="btn-group">
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-primary"
-                                                            onclick="loadSeoAccountForm(<?= $accountId ?>)"
+                                                            data-seo-account-action="load-form"
+                                                            data-account-id="<?= $accountId ?>"
                                                             data-bs-toggle="offcanvas" 
                                                             data-bs-target="#seoAccountOffcanvas"
                                                             title="<?= __('编辑') ?>">
@@ -166,7 +211,8 @@ function getPlatformColor($platform, $colors) {
                                                     </button>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-success"
-                                                            onclick="loadWebsiteBindingForm(<?= $accountId ?>)"
+                                                            data-seo-account-action="load-website-binding"
+                                                            data-account-id="<?= $accountId ?>"
                                                             data-bs-toggle="offcanvas" 
                                                             data-bs-target="#websiteBindingOffcanvas"
                                                             title="<?= __('绑定站点') ?>">
@@ -178,7 +224,8 @@ function getPlatformColor($platform, $colors) {
                                                     <?php if ($boundCount > 0): ?>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-info"
-                                                            onclick="syncAccountStats(<?= $accountId ?>)"
+                                                            data-seo-account-action="sync-stats"
+                                                            data-account-id="<?= $accountId ?>"
                                                             title="<?= __('同步统计数据') ?>">
                                                         <i class="mdi mdi-sync"></i>
                                                     </button>
@@ -241,5 +288,36 @@ function getPlatformColor($platform, $colors) {
                         </div>
                     </div>
                 </div>
+<script>
+(function () {
+    'use strict';
 
-<?php if (!$isAjax): ?>
+    if (window.__seoAccountListActionsBound) {
+        return;
+    }
+    window.__seoAccountListActionsBound = true;
+
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('[data-seo-account-action]');
+        if (!trigger) {
+            return;
+        }
+
+        var accountId = Number.parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0;
+        var action = trigger.getAttribute('data-seo-account-action');
+
+        if (action === 'load-form' && typeof window.loadSeoAccountForm === 'function') {
+            window.loadSeoAccountForm(accountId);
+            return;
+        }
+        if (action === 'load-website-binding' && typeof window.loadWebsiteBindingForm === 'function') {
+            window.loadWebsiteBindingForm(accountId);
+            return;
+        }
+        if (action === 'sync-stats' && typeof window.syncAccountStats === 'function') {
+            event.preventDefault();
+            window.syncAccountStats(accountId);
+        }
+    });
+})();
+</script>

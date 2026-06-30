@@ -9,20 +9,35 @@ use Weline\Server\Service\StaticRequestBypassDecider;
 
 class StaticRequestBypassDeciderTest extends TestCase
 {
-    public function testThemeModuleRequestIsDeferredToFramework(): void
+    public function testThemeModuleStaticRequestStaysOnWlsFastPath(): void
     {
-        self::assertTrue(
+        self::assertFalse(
             StaticRequestBypassDecider::shouldDeferToFramework(
                 'Weline/Theme/view/theme/frontend/variables/_colors.css'
             )
         );
+        self::assertFalse(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'Weline/Theme/view/theme/backend/assets/css/theme.css'
+            )
+        );
     }
 
-    public function testPublishedThemeStaticRequestIsDeferredToFramework(): void
+    public function testPublishedThemePreviewStaticRequestIsDeferredToFramework(): void
     {
         self::assertTrue(
             StaticRequestBypassDecider::shouldDeferToFramework(
                 'static/__preview/token_pv_6_demo/WeShop/motor/Weline/Theme/view/theme/frontend/assets/css/theme.css'
+            )
+        );
+    }
+
+    public function testThemeStaticRequestWithExplicitPreviewQueryIsDeferredToFramework(): void
+    {
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'Weline/Theme/view/theme/frontend/assets/css/theme.css',
+                '/Weline/Theme/view/theme/frontend/assets/css/theme.css?preview_theme=12'
             )
         );
     }

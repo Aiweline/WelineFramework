@@ -48,6 +48,24 @@ class AclNode implements \ArrayAccess
         return (string) ($this->data[Acl::schema_fields_METHOD] ?? '');
     }
 
+    public function getAccessMode(): string
+    {
+        return Acl::normalizeAccessMode(
+            (string)($this->data[Acl::schema_fields_ACCESS_MODE] ?? ''),
+            $this->getMethod()
+        );
+    }
+
+    public function getScopeGroup(): string
+    {
+        return (string)($this->data[Acl::schema_fields_SCOPE_GROUP] ?? '');
+    }
+
+    public function isApiExposable(): bool
+    {
+        return (bool)($this->data[Acl::schema_fields_API_EXPOSABLE] ?? false);
+    }
+
     public function getDocument(): string
     {
         return (string) ($this->data[Acl::schema_fields_DOCUMENT] ?? '');

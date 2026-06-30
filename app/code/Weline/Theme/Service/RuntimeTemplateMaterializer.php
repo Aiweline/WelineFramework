@@ -12,6 +12,9 @@ class RuntimeTemplateMaterializer
     /** @var array L1 memory cache: hash => compiled_path */
     private array $compiledCache = [];
 
+    /** @var array<string, string> Worker L1 cache shared by materializer instances */
+    private static array $workerCompiledCache = [];
+
     public function __construct(
         private readonly Template $template,
     ) {
@@ -29,7 +32,11 @@ class RuntimeTemplateMaterializer
         $hash = md5($templateContent);
 
         // L1: Check memory cache first
+        if (isset(self::$workerCompiledCache[$hash]) && is_file(self::$workerCompiledCache[$hash])) {
+            return self::$workerCompiledCache[$hash];
+        }
         if (isset($this->compiledCache[$hash]) && is_file($this->compiledCache[$hash])) {
+            self::$workerCompiledCache[$hash] = $this->compiledCache[$hash];
             return $this->compiledCache[$hash];
         }
 
@@ -47,6 +54,7 @@ class RuntimeTemplateMaterializer
                 // Verify hash matches
                 if (preg_match('/^\<\?php \/\* hash:([a-f0-9]+) \*\//', $content, $matches)) {
                     if ($matches[1] === $hash) {
+                        self::$workerCompiledCache[$hash] = $compiledPath;
                         $this->compiledCache[$hash] = $compiledPath;
                         return $compiledPath;
                     }
@@ -61,6 +69,7 @@ class RuntimeTemplateMaterializer
         $hashHeader = "<?php /* hash:{$hash} */ ?>\n";
         file_put_contents($compiledPath, $hashHeader . $compiled);
 
+        self::$workerCompiledCache[$hash] = $compiledPath;
         $this->compiledCache[$hash] = $compiledPath;
 
         return $compiledPath;
@@ -87,7 +96,11 @@ class RuntimeTemplateMaterializer
         $hash = md5($filePath . '|' . $content);
 
         // L1: Check memory cache
+        if (isset(self::$workerCompiledCache[$hash]) && is_file(self::$workerCompiledCache[$hash])) {
+            return self::$workerCompiledCache[$hash];
+        }
         if (isset($this->compiledCache[$hash]) && is_file($this->compiledCache[$hash])) {
+            self::$workerCompiledCache[$hash] = $this->compiledCache[$hash];
             return $this->compiledCache[$hash];
         }
 
@@ -96,6 +109,7 @@ class RuntimeTemplateMaterializer
             $cacheManager = TemplateCacheManager::getInstance();
             $cachedFile = $cacheManager->getCachedFile($filePath, DEV);
             if ($cachedFile !== null && is_file($cachedFile)) {
+                self::$workerCompiledCache[$hash] = $cachedFile;
                 $this->compiledCache[$hash] = $cachedFile;
                 return $cachedFile;
             }
@@ -125,6 +139,7 @@ class RuntimeTemplateMaterializer
             }
         }
 
+        self::$workerCompiledCache[$hash] = $compiledPath;
         $this->compiledCache[$hash] = $compiledPath;
 
         return $compiledPath;

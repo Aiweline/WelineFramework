@@ -983,7 +983,7 @@ HTML;
         <input type="file" id="field-{$name}" name="{$name}" class="w-file-input" {$accept} {$multiple} {$controlAttrs} style="display: none;">
 
         <div class="w-file-selector">
-            <button type="button" class="w-btn w-btn-outline-primary w-file-btn" onclick="DataTableFormManager.triggerFileSelect('field-{$name}')">
+            <button type="button" class="w-btn w-btn-outline-primary w-file-btn" data-datatable-form-action="trigger-file-select" data-field-id="field-{$name}">
                 <i class="fas fa-upload"></i> 选择文件
             </button>
             <span class="w-file-info">支持格式：{$options}，最大：{$maxSize}</span>
@@ -1026,7 +1026,7 @@ HTML;
         <input type="file" id="field-{$name}" name="{$name}" class="w-image-input" accept="{$accept}" {$multiple} {$controlAttrs} style="display: none;">
 
         <div class="w-image-preview" id="w-image-preview-field-{$name}">
-            <div class="w-image-placeholder" onclick="DataTableFormManager.triggerFileSelect('field-{$name}')">
+            <div class="w-image-placeholder" data-datatable-form-action="trigger-file-select" data-field-id="field-{$name}">
                 <i class="fas fa-image"></i>
                 <div class="w-placeholder-text">点击选择图片</div>
                 <div class="w-placeholder-info">支持格式：JPG、PNG、GIF，最大：{$maxSize}</div>
@@ -1034,10 +1034,10 @@ HTML;
         </div>
 
         <div class="w-image-actions" style="display: none;">
-            <button type="button" class="w-btn w-btn-sm w-btn-outline-primary" onclick="DataTableFormManager.triggerFileSelect('field-{$name}')">
+            <button type="button" class="w-btn w-btn-sm w-btn-outline-primary" data-datatable-form-action="trigger-file-select" data-field-id="field-{$name}">
                 <i class="fas fa-edit"></i> 更换
             </button>
-            <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" onclick="DataTableFormManager.clearImageField('field-{$name}')">
+            <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" data-datatable-form-action="clear-image-field" data-field-id="field-{$name}">
                 <i class="fas fa-trash"></i> 删除
             </button>
         </div>

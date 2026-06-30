@@ -103,7 +103,7 @@ class OptimizationGuideService
         ];
         
         // 3. OPCache
-        $hasOpcache = \extension_loaded('opcache');
+        $hasOpcache = $this->hasOpcacheLoaded();
         $opcacheEnabled = $hasOpcache && \ini_get('opcache.enable_cli');
         $optimizations['opcache'] = [
             'name' => __('OPCache 扩展'),
@@ -470,7 +470,7 @@ CONFIG,
      */
     protected function getOpcacheInstallGuide(): array
     {
-        $installed = \extension_loaded('opcache');
+        $installed = $this->hasOpcacheLoaded();
         $cliEnabled = $installed && \ini_get('opcache.enable_cli');
         
         $steps = [];
@@ -522,6 +522,11 @@ INI,
             'cli_enabled' => $cliEnabled,
             'steps' => $steps,
         ];
+    }
+
+    private function hasOpcacheLoaded(): bool
+    {
+        return \extension_loaded('Zend OPcache') || \function_exists('opcache_get_status');
     }
     
     /**

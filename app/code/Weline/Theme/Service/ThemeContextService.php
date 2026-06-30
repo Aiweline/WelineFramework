@@ -179,7 +179,7 @@ class ThemeContextService
     {
         $theme = $this->newThemeModel();
         try {
-            $theme->load($this->getActivationField($area), 1);
+            $theme->getActiveTheme($this->normalizeActivationArea($area));
         } catch (\Throwable) {
             return null;
         }
@@ -223,8 +223,20 @@ class ThemeContextService
     {
         $theme->setData($this->getActivationField($area), 1);
         $theme->save();
+        $this->clearActivationRuntimeCaches($theme, $area);
 
         return $theme;
+    }
+
+    private function clearActivationRuntimeCaches(WelineTheme $theme, ?string $area): void
+    {
+        try {
+            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
+                (int)$theme->getId(),
+                'theme_context_activate_' . ($this->normalizeActivationArea($area) ?? self::AREA_GLOBAL)
+            );
+        } catch (\Throwable) {
+        }
     }
 
     public function themeSupportsArea(WelineTheme $theme, string $area): bool

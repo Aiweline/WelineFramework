@@ -103,7 +103,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
                 </option>
                 <?php endforeach; ?>
             </select>
-            <button type="button" class="btn-save" onclick="applyPalette()"><lang>应用色盘</lang></button>
+            <button type="button" class="btn-save" data-variables-action="apply-palette"><lang>应用色盘</lang></button>
         </div>
         
         <form id="variables-form">
@@ -140,7 +140,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             <?php endforeach; ?>
             
             <div style="margin-top: 20px;">
-                <button type="button" class="btn-save" onclick="saveVariables()"><lang>保存配置</lang></button>
+                <button type="button" class="btn-save" data-variables-action="save"><lang>保存配置</lang></button>
             </div>
         </form>
     </div>
@@ -150,6 +150,23 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
     <!-- SweetAlert2 JS -->
     <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
+        document.addEventListener('click', function(event) {
+            const actionButton = event.target.closest('[data-variables-action]');
+            if (!actionButton) {
+                return;
+            }
+
+            const action = actionButton.getAttribute('data-variables-action');
+            if (action === 'apply-palette') {
+                applyPalette();
+                return;
+            }
+
+            if (action === 'save') {
+                saveVariables();
+            }
+        });
+
         function saveVariables() {
             const form = document.getElementById('variables-form');
             const formData = new FormData(form);

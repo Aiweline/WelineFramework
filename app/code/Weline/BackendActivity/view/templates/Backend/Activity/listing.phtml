@@ -83,7 +83,7 @@
                                     <td @if{log.fail_total=>'class="text-danger"'}>{{log.backend_activity_log_id}}</td>
                                     <td class='co-name d-flex gap-1'>
                                         {{log.request_id}}
-                                        <a href="javascript:;" class="copy weline-activity-copy-btn" data-copy-text="{{log.request_id}}">复制</a>
+                                        <button type="button" class="copy weline-activity-copy-btn btn btn-link p-0" data-copy-text="{{log.request_id}}">复制</button>
                                     </td>
                                     <td>{{log.username}}</td>
                                     <td>{{log.name}}</td>

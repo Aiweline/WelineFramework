@@ -16,28 +16,152 @@
 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 -->
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+    <style>
+        body.account-logout-layout {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .account-logout-content {
+            min-height: 48vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-spacing-lg) calc(var(--weline-layout-spacing-3xl) * 1.125);
+        }
+
+        .logout-container {
+            width: min(720px, 100%);
+        }
+
+        .account-logout__empty-state {
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
+            padding: var(--weline-layout-spacing-3xl);
+            text-align: center;
+            box-shadow: var(--weline-theme-shadow-md);
+        }
+
+        .account-logout__icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto var(--weline-layout-spacing-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--weline-layout-radius-full);
+            background: var(--weline-theme-primary-subtle);
+            color: var(--weline-layout-link-color);
+            font-size: var(--weline-layout-font-size-3xl);
+        }
+
+        .account-logout__empty-state h1 {
+            margin: 0;
+            font-size: var(--weline-layout-font-size-3xl);
+            line-height: var(--weline-layout-line-height-tight);
+        }
+
+        .account-logout__empty-state p {
+            margin: var(--weline-layout-spacing-sm) auto 0;
+            max-width: 520px;
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
+        }
+
+        .account-logout__actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--weline-layout-spacing-sm);
+            justify-content: center;
+            margin-top: var(--weline-layout-spacing-lg);
+        }
+
+        .account-logout__button {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 var(--weline-layout-spacing-lg);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-strong);
+            border-radius: var(--weline-layout-radius-md);
+            text-decoration: none;
+            font-weight: var(--weline-layout-font-weight-bold);
+            color: var(--weline-layout-text-primary);
+            background: var(--weline-layout-surface-primary);
+        }
+
+        .account-logout__button--primary {
+            color: var(--weline-theme-on-primary);
+            border-color: var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+        }
+
+        @media (max-width: 640px) {
+            .account-logout-content {
+                padding: 40px 14px 56px;
+            }
+
+            .account-logout__empty-state {
+                padding: 28px 20px;
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
 </head>
-<body>
-    @template(Weline_Frontend::templates/public/header.phtml)
+<body class="account-logout-layout">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
     <main class="account-logout-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-logout-content" data-layout="account_logout_content">
-        <div class="logout-container">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-account-content,layout-account-logout-content,layout-default-content,content,account-logout,account-content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="account-logout__content-root-slot">
+            <w:slot id="account-logout-content"
+                name="退出登录内容"
+                accept="layout-account-logout-content,layout-account-content,account-logout,account-content,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="logout-container">
             <if condition="meta.content">
                 {{meta.content}}
                 <elseif condition="content"/>
                 {{content}}
                 <elseif condition="meta.contentTemplate"/>
                 <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                <else/>
+                <div class="account-logout__empty-state">
+                    <div class="account-logout__icon" aria-hidden="true"><i class="ri-logout-circle-line"></i></div>
+                    <h1><?= __('您已退出登录') ?></h1>
+                    <p><?= __('当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。') ?></p>
+                    <div class="account-logout__actions">
+                        <a class="account-logout__button account-logout__button--primary" href="/"><?= __('返回首页') ?></a>
+                        <a class="account-logout__button" href="/customer/account/login"><?= __('重新登录') ?></a>
+                    </div>
+                </div>
             </if>
-        </div>
+            </w:slot>
+        </w:slot>
     </main>
     
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

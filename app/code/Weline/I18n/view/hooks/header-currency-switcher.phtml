@@ -1,44 +1,116 @@
 <?php
 /**
- * 
- * @hook-priority 50   Hook优先级：50（默认值）
- * @hook-sort-order 0  Hook排序顺序：0（默认值）
- * @hook-solo false    Hook独享：false（不独占）
+ *
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
  */
 
 use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Currency\Service\CurrencyLocalDescriptionService;
 
 /** @var \Weline\Framework\View\Template $this */
 
-// 获取当前货币
 $currentCurrency = State::getCurrency();
-
-// 构建货币数据
 $i18nCurrencies = [];
+$selectorPageSize = 50;
+$currentLocale = trim(State::getLang());
+if ($currentLocale === '') {
+    $currentLocale = 'zh_Hans_CN';
+}
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$normalizeSearchText = static function (array $tokens): string {
+    $normalized = [];
+    foreach ($tokens as $token) {
+        $token = trim(strip_tags((string)$token));
+        if ($token === '') {
+            continue;
+        }
+        $key = function_exists('mb_strtolower') ? mb_strtolower($token, 'UTF-8') : strtolower($token);
+        $normalized[$key] = $token;
+    }
 
-// 尝试从 Currency 模块获取货币列表
-// 使用 try-catch 避免数据库错误影响页面渲染
+    return implode(' ', array_values($normalized));
+};
+$aliasDisplayLocales = [];
+foreach ([$currentLocale, 'zh_Hans_CN', 'en_US', 'es_ES', 'fr_FR', 'de_DE', 'ja_JP', 'ko_KR', 'pt_BR'] as $displayLocale) {
+    $displayLocale = trim((string)$displayLocale);
+    if ($displayLocale !== '') {
+        $aliasDisplayLocales[strtolower($displayLocale)] = $displayLocale;
+    }
+}
+
+$normalizeCurrencyName = static function (string $currencyCode, string $currencyName): string {
+    $currencyCode = strtoupper(trim($currencyCode));
+    $currencyName = trim($currencyName);
+
+    if ($currencyCode !== '' && ($currencyName === '' || strtoupper($currencyName) === $currencyCode)) {
+        return match ($currencyCode) {
+            'CNY' => '人民币',
+            'USD' => '美元',
+            'EUR' => '欧元',
+            'GBP' => '英镑',
+            default => $currencyName !== '' ? $currencyName : $currencyCode,
+        };
+    }
+
+    return $currencyName;
+};
+$intlCurrencyName = static function (string $currencyCode, string $localeCode): string {
+    if (!class_exists(\Symfony\Component\Intl\Currencies::class)) {
+        return '';
+    }
+
+    try {
+        return \Symfony\Component\Intl\Currencies::getName($currencyCode, $localeCode);
+    } catch (\Throwable) {
+        return '';
+    }
+};
+$intlCurrencySymbol = static function (string $currencyCode, string $localeCode = ''): string {
+    if (!class_exists(\Symfony\Component\Intl\Currencies::class)) {
+        return '';
+    }
+
+    try {
+        if ($localeCode !== '') {
+            return \Symfony\Component\Intl\Currencies::getSymbol($currencyCode, $localeCode);
+        }
+
+        return \Symfony\Component\Intl\Currencies::getSymbol($currencyCode);
+    } catch (\Throwable) {
+        return '';
+    }
+};
+$currencyLocalDescriptionService = null;
+if (class_exists(CurrencyLocalDescriptionService::class)) {
+    try {
+        $currencyLocalDescriptionService = ObjectManager::getInstance(CurrencyLocalDescriptionService::class);
+    } catch (\Throwable) {
+        $currencyLocalDescriptionService = null;
+    }
+}
+
 if (class_exists(\Weline\Currency\Data\CurrencyData::class)) {
     try {
         $currencies = \Weline\Currency\Data\CurrencyData::getCurrencies();
         if (is_array($currencies) && !empty($currencies)) {
             foreach ($currencies as $currency) {
-                // 确保 currency 是数组格式
                 if (is_array($currency)) {
+                    $currencyCode = strtoupper((string)($currency['code'] ?? ''));
                     $i18nCurrencies[] = [
-                        'code' => $currency['code'] ?? '',
-                        'name' => $currency['name'] ?? $currency['code'] ?? '',
+                        'code' => $currencyCode,
+                        'name' => $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode)),
                         'symbol' => $currency['symbol'] ?? '',
                         'format' => $currency['format'] ?? '',
                     ];
                 } elseif (is_object($currency)) {
-                    // 如果是对象，尝试获取属性
+                    $currencyCode = strtoupper((string)($currency->getCode() ?? $currency->getData('code') ?? ''));
                     $i18nCurrencies[] = [
-                        'code' => $currency->getCode() ?? $currency->getData('code') ?? '',
-                        'name' => $currency->getName() ?? $currency->getData('name') ?? $currency->getCode() ?? '',
+                        'code' => $currencyCode,
+                        'name' => $normalizeCurrencyName($currencyCode, (string)($currency->getName() ?? $currency->getData('name') ?? $currencyCode)),
                         'symbol' => $currency->getSymbol() ?? $currency->getData('symbol') ?? '',
                         'format' => $currency->getFormat() ?? $currency->getData('format') ?? '',
                     ];
@@ -46,39 +118,30 @@ if (class_exists(\Weline\Currency\Data\CurrencyData::class)) {
             }
         }
     } catch (\Throwable $e) {
-        // Currency 模块不可用或查询失败，使用默认列表
-        // 静默处理错误，不影响页面渲染
     }
 }
 
-// 如果没有可用货币，使用默认列表
 if (empty($i18nCurrencies)) {
     $i18nCurrencies = [
-        ['code' => 'CNY', 'name' => 'CNY (¥)', 'symbol' => '¥', 'format' => ''],
-        ['code' => 'USD', 'name' => 'USD ($)', 'symbol' => '$', 'format' => ''],
-        ['code' => 'EUR', 'name' => 'EUR (€)', 'symbol' => '€', 'format' => ''],
-        ['code' => 'GBP', 'name' => 'GBP (£)', 'symbol' => '£', 'format' => ''],
+        ['code' => 'CNY', 'name' => '人民币', 'symbol' => '¥', 'format' => ''],
+        ['code' => 'USD', 'name' => '美元', 'symbol' => '$', 'format' => ''],
+        ['code' => 'EUR', 'name' => '欧元', 'symbol' => '€', 'format' => ''],
+        ['code' => 'GBP', 'name' => '英镑', 'symbol' => '£', 'format' => ''],
     ];
 }
 
-// 准备 event 数据
 $eventData = [
     'currentCurrency' => $currentCurrency,
-    'currencies' => $i18nCurrencies, // I18n 模块的数据
+    'currencies' => $i18nCurrencies,
     'template' => $this,
     'request' => $this->request,
 ];
 
-// 触发 event: Weline_I18n::header-currency-switcher-data
 /** @var EventsManager $eventsManager */
 $eventsManager = ObjectManager::getInstance(EventsManager::class);
 $eventsManager->dispatch('Weline_I18n::header-currency-switcher-data', $eventData);
-
-// 获取 event 对象（如果 event 被监听，数据可能已被修改）
 $event = $eventsManager->getEventData('Weline_I18n::header-currency-switcher-data');
 
-// 检查 event 是否被监听并修改了数据
-// Event 对象通过 getData() 方法获取数据，如果 event 被监听并修改，数据会更新
 if ($event) {
     $eventDataResult = $event->getData('data');
     if (is_array($eventDataResult)) {
@@ -93,40 +156,121 @@ if ($event) {
     $eventCurrentCurrency = null;
 }
 
-// 如果 event 返回了数据，使用 event 的数据，否则使用 I18n 的数据
 $currencies = $eventCurrencies ?? $i18nCurrencies;
 $displayCurrentCurrency = $eventCurrentCurrency ?? $currentCurrency;
+$normalizedCurrencies = [];
+$seenCurrencyCodes = [];
+foreach ($currencies as $currency) {
+    if (!is_array($currency)) {
+        continue;
+    }
 
-// 渲染货币切换器
-// 注意：URL 链接由前端 currency.js 模块动态生成（通过 updateCurrencySwitcherLinks()）
-// 使用 data-currency-switcher 属性标记，供 JavaScript 识别和初始化
+    $currencyCode = strtoupper(trim((string)($currency['code'] ?? '')));
+    if ($currencyCode === '') {
+        continue;
+    }
+
+    if (isset($seenCurrencyCodes[$currencyCode])) {
+        continue;
+    }
+    $seenCurrencyCodes[$currencyCode] = true;
+
+    $currencySymbol = trim((string)($currency['symbol'] ?? $currency['icon'] ?? ''));
+    if ($currencySymbol === '') {
+        $currencySymbol = $intlCurrencySymbol($currencyCode, $currentLocale);
+    }
+
+    $currencyName = $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode));
+    $aliases = [$currencyCode, $currencySymbol, $currencyName, (string)($currency['format'] ?? '')];
+
+    foreach ($aliasDisplayLocales as $displayLocale) {
+        $aliases[] = $intlCurrencyName($currencyCode, $displayLocale);
+        $aliases[] = $intlCurrencySymbol($currencyCode, $displayLocale);
+    }
+
+    if ($currencyLocalDescriptionService instanceof CurrencyLocalDescriptionService) {
+        try {
+            foreach ($currencyLocalDescriptionService->getLocalNames((int)($currency['currency_id'] ?? 0)) as $localName) {
+                $aliases[] = $localName;
+            }
+        } catch (\Throwable) {
+        }
+    }
+
+    $normalizedCurrencies[] = [
+        'code' => $currencyCode,
+        'name' => $currencyName,
+        'symbol' => $currencySymbol,
+        'search' => $normalizeSearchText($aliases),
+    ];
+}
+
+$currentCurrencies = [];
+$otherCurrencies = [];
+foreach ($normalizedCurrencies as $currency) {
+    if ((string)$currency['code'] === strtoupper((string)$displayCurrentCurrency)) {
+        $currentCurrencies[] = $currency;
+        continue;
+    }
+    $otherCurrencies[] = $currency;
+}
+
+$currencies = array_merge($currentCurrencies, $otherCurrencies);
+$currentCurrencySymbol = '';
+foreach ($currencies as $currency) {
+    if ((string)$currency['code'] === strtoupper((string)$displayCurrentCurrency)) {
+        $currentCurrencySymbol = (string)($currency['symbol'] ?? '');
+        break;
+    }
+}
 ?>
-<div class="currency-switcher" data-currency-switcher="true" role="button" tabindex="0" aria-label="<?= __('切换货币') ?>">
+<div class="currency-switcher weline-choice-switcher" data-currency-switcher="true" data-weline-choice-switcher="currency" data-choice-page-size="<?= $selectorPageSize ?>" role="button" tabindex="0" aria-haspopup="menu" aria-label="<?= __('切换货币') ?>">
     <span class="action-line-1"><?= __('货币') ?></span>
     <span class="action-line-2">
         <i class="fas fa-dollar-sign" aria-hidden="true"></i>
-        <span class="current-currency"><?= htmlspecialchars($displayCurrentCurrency) ?></span>
+        <span class="current-currency"><?= $escape($displayCurrentCurrency) ?></span>
+        <?php if ($currentCurrencySymbol !== ''): ?>
+            <span class="current-currency-symbol"><?= $escape($currentCurrencySymbol) ?></span>
+        <?php endif; ?>
         <i class="fas fa-chevron-down" aria-hidden="true"></i>
     </span>
-    <div class="currency-options" role="menu" aria-label="<?= __('货币选项') ?>">
-        <?php foreach ($currencies as $currency): ?>
+    <div class="currency-options weline-choice-panel" data-weline-choice-panel role="menu" aria-label="<?= __('货币选项') ?>">
+        <div class="weline-choice-search">
+            <input type="search" data-choice-search placeholder="<?= $escape(__('搜索货币、货币码、符号或翻译')) ?>" autocomplete="off" aria-label="<?= $escape(__('搜索货币')) ?>">
+        </div>
+        <div class="weline-choice-items" data-choice-items>
+        <?php foreach ($currencies as $index => $currency): ?>
             <?php
             $currencyCode = strtoupper($currency['code'] ?? '');
-            $currencyName = $currency['name'] ?? $currencyCode;
-            $currencySymbol = $currency['symbol'] ?? '';
+            $currencyName = (string)($currency['name'] ?? $currencyCode);
+            $currencySymbol = (string)($currency['symbol'] ?? '');
             $isCurrent = ($currencyCode === strtoupper($displayCurrentCurrency));
-            
-            // URL 由前端 currency.js 模块动态生成（使用框架推荐的路径格式）
-            // 这里只生成基本的链接结构，href 会在前端通过 updateCurrencySwitcherLinks() 更新
             ?>
-            <a href="#" 
-               class="currency-option <?= $isCurrent ? 'active' : '' ?>" 
+            <a href="#"
+               class="currency-option weline-choice-option <?= $isCurrent ? 'active' : '' ?>"
                data-currency-option="true"
-               data-currency="<?= htmlspecialchars($currencyCode) ?>" 
-               role="menuitem">
-                <span><?= htmlspecialchars($currencyName) ?></span>
+               data-choice-option="true"
+               data-currency="<?= $escape($currencyCode) ?>"
+               data-search="<?= $escape($currency['search'] ?? $currencyCode) ?>"
+               role="menuitem"
+               <?= $index >= $selectorPageSize ? 'hidden' : '' ?>>
+                <span class="weline-choice-symbol" aria-hidden="true"><?= $escape($currencySymbol !== '' ? $currencySymbol : $currencyCode) ?></span>
+                <span class="weline-choice-text">
+                    <span class="weline-choice-name"><?= $escape($currencyName) ?></span>
+                    <span class="weline-choice-meta"><?= $escape($currencyCode) ?></span>
+                </span>
                 <i class="fas fa-check" aria-hidden="true"></i>
             </a>
         <?php endforeach; ?>
+        </div>
+        <div class="weline-choice-empty" data-choice-empty hidden><?= $escape(\Weline\Theme\Helper\WidgetI18n::label('无匹配货币')) ?></div>
+        <button type="button" class="weline-choice-more" data-choice-more <?= count($currencies) <= $selectorPageSize ? 'hidden' : '' ?>><?= $escape(__('加载更多')) ?></button>
     </div>
 </div>
+<?php
+$assetsFlagKey = '__weline_i18n_header_choice_assets_rendered';
+if (!$this->getData($assetsFlagKey)) {
+    $this->setData($assetsFlagKey, true);
+    echo $this->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
+}
+?>

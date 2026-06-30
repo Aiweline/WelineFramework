@@ -54,6 +54,17 @@
 设置语言失败：%{1},"Échec de la définition de la langue : %{1}"
 客服消息翻译,"Traduction des messages de service client"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"Le module de service client demande une traduction via cet événement."
+"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Session and message content are required.","Session and message content are required."
+"Session ID is required.","Session ID is required."
+"Language code is required.","Language code is required."
+"Language updated.","Language updated."
+"Please enter a valid email address.","Please enter a valid email address."
+"Session token is required.","Session token is required."
+"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
+"Verification email has been sent.","Verification email has been sent."
+"Customer Service Query","Customer Service Query"
+"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","Service client - Vérification de l'email"
 客服系统,"Système de service client"
 客服服务,"Service client"
@@ -61,8 +72,6 @@
 设置,Paramètres
 收起,Réduire
 我的语言,"Ma langue"
-简体中文,"Chinois simplifié"
-繁體中文,"Chinois traditionnel"
 显示模式,"Mode d'affichage"
 仅显示译文,"Traduction uniquement"
 原文+译文,"Original + Traduction"
@@ -70,11 +79,12 @@
 欢迎使用客服服务！,"Bienvenue au service client !"
 请输入您的问题，我们的客服将尽快为您解答。,"Veuillez saisir votre question"
 输入消息...,"Tapez un message..."
-绑定邮箱,"Lier l'email"
-绑定邮箱后，您可以收到客服回复的邮件通知。,"Liez votre email pour recevoir des notifications"
-邮箱地址,"Adresse email"
-请输入您的邮箱,"Veuillez saisir votre email"
-取消,Annuler
+接收客服回复与优惠通知,接收客服回复与优惠通知
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
+仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
+接收通知的邮箱,接收通知的邮箱
+请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
+稍后再说,稍后再说
 发送验证邮件,"Envoyer l'email de vérification"
 等待中,"En attente"
 暂无消息,"Aucun message"
@@ -86,9 +96,13 @@
 发送失败,"Échec de l'envoi"
 发送失败，请稍后重试,发送失败，请稍后重试
 确定要接单此会话吗？,"Accepter cette session ?"
+确认接单,确认接单
+取消,Annuler
 分配失败,"Échec de l'assignation"
 分配失败，请稍后重试,分配失败，请稍后重试
 确定要关闭此会话吗？,"Fermer cette session ?"
+确认关闭,确认关闭
+关闭,Fermer
 请选择一个会话开始聊天,"Sélectionnez une session pour discuter"
 关闭失败,"Échec de la fermeture"
 关闭失败，请稍后重试,关闭失败，请稍后重试
@@ -103,9 +117,11 @@
 分钟,minutes
 最长,"Le plus long"
 秒,secondes
-客服在线,"En ligne"
+欢迎使用客服服务,欢迎使用客服服务
+客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","Service IA"
-客服离线,"Hors ligne"
+鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
 请输入有效的邮箱地址,"Veuillez saisir une adresse email valide"
 会话未初始化，请刷新页面重试,"Session non initialisée"
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
@@ -155,6 +171,7 @@ ID,ID
 启用客服服务,"Activer le service"
 启用,启用
 默认客服语言,"Langue par défaut de l'agent"
+简体中文,"Chinois simplifié"
 English,English
 默认客户语言,"Langue par défaut du client"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","Activez la réponse automatique IA lorsqu'aucun agent n'est en ligne"
@@ -188,7 +205,6 @@ English,English
 客服语言,"Langue de l'agent"
 创建时间,"Créé le"
 查看,Voir
-关闭,Fermer
 返回列表,Retour
 会话信息,"Informations de la session"
 客服ID,"ID de l'agent"

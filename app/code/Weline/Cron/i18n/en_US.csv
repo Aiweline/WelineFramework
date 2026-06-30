@@ -1,133 +1,134 @@
 ﻿"系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
-"系统定时任务：%{1} ,未安装！","系统定时任务：%{1} ,未安装！"
-系统-其他定时任务：,系统-其他定时任务：
+"系统定时任务：%{1} ,未安装！","System scheduled task: %{1} , not installed!"
+系统-其他定时任务：,"System - Other scheduled tasks:"
 "检测到 crontab 命令不可用，正在尝试自动安装依赖...","Crontab command not found"
 "crontab 依赖已安装 ✔","Crontab dependency installed ✔"
-系统-定时计划任务：,系统-定时计划任务：
-"新增 %{1} 条调度任务","新增 %{1} 条调度任务"
-"已移除 %{1} 条已无物理文件的任务记录","已移除 %{1} 条已无物理文件的任务记录"
-调度任务收集完成！,调度任务收集完成！
-收集注册调度任务,收集注册调度任务
+系统-定时计划任务：,"System - Scheduled plan tasks:"
+"新增 %{1} 条调度任务","Add %{1} Scheduled Tasks"
+"已移除 %{1} 条已无物理文件的任务记录","Removed %{1} task records with no physical files"
+调度任务收集完成！,"Scheduled task collection complete!"
+收集注册调度任务,"Collect and Register Scheduled Tasks"
 代码,Code
-指执行的任务不存在！,指执行的任务不存在！
-"【后台手动运行】%{1} 开始执行…","【后台手动运行】%{1} 开始执行…"
-"【摘要】任务未返回简短摘要（若上方无其它行，可能本轮无待处理项；详情见 var/log）","【摘要】任务未返回简短摘要（若上方无其它行，可能本轮无待处理项；详情见 var/log）"
-"没有要执行的任务：%{1} , 参数：","没有要执行的任务：%{1} , 参数："
-任务进度：页(%{1}=>%{2})/目(%{3}/%{4}),任务进度：页(%{1}=>%{2})/目(%{3}/%{4})
-进程已存在，请检查进程状态！进程名：%{1},进程已存在，请检查进程状态！进程名：%{1}
-"%{1} 程序ID:%{2} 正在运行中，当前强制执行正在杀死进程中...","%{1} 程序ID:%{2} 正在运行中，当前强制执行正在杀死进程中..."
-"%{1} 程序ID:%{2} 杀死失败！程序不会强制执行，请手动杀死进程后重试!","%{1} 程序ID:%{2} 杀死失败！程序不会强制执行，请手动杀死进程后重试!"
-"%{1} 程序ID:%{2} 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行","%{1} 程序ID:%{2} 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行"
-"%{1} 程序ID:%{2} 已运行完毕!","%{1} 程序ID:%{2} 已运行完毕!"
-进程创建失败！请检查进程状态！,进程创建失败！请检查进程状态！
-"未发现带 CronTestHelp 或可测 test() 的 Cron 类。","未发现带 CronTestHelp 或可测 test() 的 Cron 类。"
-"请指定 --task=<执行名或测试 id>，或 --list 查看列表","请指定 --task=<执行名或测试 id>，或 --list 查看列表"
-"缺少 --task","缺少 --task"
-未找到任务：%{1},未找到任务：%{1}
-任务不存在,任务不存在
-"该类未实现 test()：%{1}","该类未实现 test()：%{1}"
-"无 test()","无 test()"
-调度：,调度：
-（无输出）,（无输出）
-"任务 id","任务 id"
-模组,模组
-说明,说明
-"【无 test】执行请 cron:task:run -f。","【无 test】执行请 cron:task:run -f。"
-列出可测任务（含说明）,列出可测任务（含说明）
-"execute_name 或测试 id","execute_name 或测试 id"
-仅打印该任务的测试说明,仅打印该任务的测试说明
-其它参数,其它参数
-秒,秒
-分,分
-小时,小时
-天,天
-锁定任务：%{1},锁定任务：%{1}
-锁定任务失败：%{1},锁定任务失败：%{1}
-解锁任务：%{1},解锁任务：%{1}
-解锁任务失败：%{1},解锁任务失败：%{1}
-"参数 execute_name 不能为空","参数 execute_name 不能为空"
+指执行的任务不存在！,"The specified task does not exist!"
+"【后台手动运行】%{1} 开始执行…","[Manual operation in the background] %{1} starts execution..."
+"【摘要】任务未返回简短摘要（若上方无其它行，可能本轮无待处理项；详情见 var/log）","[Abstract] The task did not return a short summary (if there are no other lines above, there may be no pending items this round; see var/log for details)"
+"没有要执行的任务：%{1} , 参数：","No tasks to execute: %{1} , parameters:"
+任务进度：页(%{1}=>%{2})/目(%{3}/%{4}),"Task progress: page(%{1}=>%{2})/target(%{3}/%{4})"
+进程已存在，请检查进程状态！进程名：%{1},"Process already exists, please check the process status! Process name: %{1}"
+"%{1} 程序ID:%{2} 正在运行中，当前强制执行正在杀死进程中...","%{1} Program ID: %{2} is running, and the current force execution is killing the process..."
+"%{1} 程序ID:%{2} 杀死失败！程序不会强制执行，请手动杀死进程后重试!","%{1} Program ID: %{2} Kill failed! The program will not be forced to execute, please kill the process manually and try again!"
+"%{1} 程序ID:%{2} 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行","%{1} Program ID: %{2} is running. If you want to force execution, please kill the process manually and try again! Or use the configuration item '-f' to force execution."
+"%{1} 程序ID:%{2} 已运行完毕!","%{1} Program ID:%{2} Completed!"
+进程创建失败！请检查进程状态！,"Process creation failed! Please check the process status!"
+"未发现带 CronTestHelp 或可测 test() 的 Cron 类。","No Cron class with CronTestHelp or a testable test() method found."
+"请指定 --task=<执行名或测试 id>，或 --list 查看列表","Please specify --task=<Execution name or test ID>, or --list to view the list"
+"缺少 --task","Missing --task"
+未找到任务：%{1},"Task not found: %{1}"
+任务不存在,"Task does not exist"
+"该类未实现 test()：%{1}","This class does not implement test(): %{1}"
+"无 test()","No test()"
+调度：,Schedule:
+（无输出）,"(No output)"
+"任务 id","Task id"
+模组,Module
+说明,Description
+"【无 test】执行请 cron:task:run -f。","[No test] Please execute cron:task:run -f."
+列出可测任务（含说明）,"List Testable Tasks (With Descriptions)"
+"execute_name 或测试 id","execute_name or test id"
+仅打印该任务的测试说明,"Only print the test description for this task"
+其它参数,"Other parameters"
+秒,second
+分,Minute
+小时,Hour
+天,Day(s)
+锁定任务：%{1},"Lock task: %{1}"
+锁定任务失败：%{1},"Failed to lock task: %{1}"
+解锁任务：%{1},"Unlock Task: %{1}"
+解锁任务失败：%{1},"Unlock Task Failed: %{1}"
+"参数 execute_name 不能为空","Parameter execute_name cannot be empty"
 "本任务未在 #[CronTestHelp] 中配置 manual_help。「后缀」会写入 WELINE_CRON_MANUAL_ARGS，是否生效取决于 execute() 是否解析；留空同定时。","This task has no #[CronTestHelp] manual_help. Suffix sets WELINE_CRON_MANUAL_ARGS; only effective if execute() reads it. Empty = scheduled behavior."
-调度说明,调度说明
-手动参数,手动参数
-测试说明,测试说明
-示例,示例
-"可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。","可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。"
-"CSRF 验证失败","CSRF 验证失败"
-执行名不能为空,执行名不能为空
-请求失败,请求失败
-读取失败,读取失败
-系统定时任务安装成功：%{1},系统定时任务安装成功：%{1}
-系统定时任务安装失败：%{1},系统定时任务安装失败：%{1}
-系统定时任务已存在：%{1},系统定时任务已存在：%{1}
-"系统计划任务：%{1} ,成功运行!","系统计划任务：%{1} ,成功运行!"
-系统定时任务已移除：%{1},系统定时任务已移除：%{1}
-"系统计划任务：%{1} ,成功移除!","系统计划任务：%{1} ,成功移除!"
-"未找到 CLI 入口：%{1}","未找到 CLI 入口：%{1}"
-无法设置手动运行环境变量,无法设置手动运行环境变量
-开始执行：%{1},开始执行：%{1}
-无法启动子进程,无法启动子进程
-"proc_open 失败","proc_open 失败"
-进程退出码：%{1},进程退出码：%{1}
-执行完成,执行完成
-执行结束（非零退出码）,执行结束（非零退出码）
-"参数 execute_name 无效","参数 execute_name 无效"
-"参数 file 无效","参数 file 无效"
-日志文件不存在,日志文件不存在
-未知错误,未知错误
-调度输出日志（实时）,调度输出日志（实时）
-日志流已结束,日志流已结束
-全部,全部
-待执行,待执行
-运行中,运行中
-成功,成功
-已锁定,已锁定
-失败,失败
-全部模块,全部模块
-全部状态,全部状态
-遗漏,遗漏
-共,共
-条,条
+调度说明,"Scheduling instructions."
+手动参数,"Manual parameters"
+测试说明,"Test Description"
+示例,Example
+"可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。","Optional ""suffix"" will be written to the subprocess environment variable WELINE_CRON_MANUAL_ARGS; the task can read it via getenv in execute(). Leave blank to match the scheduled dispatch."
+"CSRF 验证失败","CSRF validation failed"
+执行名不能为空,"Execution name cannot be empty"
+请求失败,"Request failed"
+读取失败,"Read failed."
+系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2},系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2}
+系统定时任务安装成功：%{1},"System scheduled task installation succeeded: %{1}"
+系统定时任务安装失败：%{1},"System scheduled task installation failed: %{1}"
+系统定时任务已存在：%{1},"System scheduled task already exists: %{1}"
+"系统计划任务：%{1} ,成功运行!","Scheduled task: %{1} , successfully executed!"
+系统定时任务已移除：%{1},"System scheduled task has been removed: %{1}"
+"系统计划任务：%{1} ,成功移除!","Scheduled task: %{1} , successfully removed!"
+"未找到 CLI 入口：%{1}","CLI entry not found: %{1}"
+无法设置手动运行环境变量,"Unable to set manual runtime environment variables"
+开始执行：%{1},"Start executing: %{1}"
+无法启动子进程,"Unable to start child process"
+"proc_open 失败","proc_open failed"
+进程退出码：%{1},"Process exit code: %{1}"
+执行完成,"Execution completed"
+执行结束（非零退出码）,"Execution ended (non-zero exit code)"
+"参数 execute_name 无效","Invalid parameter execute_name"
+"参数 file 无效","Invalid parameter file"
+日志文件不存在,"Log file does not exist"
+未知错误,"Unknown error"
+调度输出日志（实时）,"Scheduling output log (real-time)"
+日志流已结束,"Log stream ended"
+全部,All
+待执行,"To execute"
+运行中,Running
+成功,Success
+已锁定,Locked
+失败,Failed
+全部模块,"All Modules"
+全部状态,"All Statuses"
+遗漏,Missing
+共,Total
+条,items
 ID,ID
-任务信息,任务信息
-执行频率,执行频率
-状态,状态
-运行时间,运行时间
+任务信息,"Task info"
+执行频率,"Execution frequency"
+状态,Status
+运行时间,Runtime
 操作,Operation
-运行,运行
-日志,日志
-解锁,解锁
-分钟,分钟
-任务描述,任务描述
-无,无
-暂无定时任务,暂无定时任务
-手动运行,手动运行
-帮助说明,帮助说明
-加载中,加载中
-后缀,后缀
-可选,可选
-写入,写入
-开始执行,开始执行
-关闭,关闭
-调度运行日志,调度运行日志
-选择记录,选择记录
-点击展开或收起任务描述,点击展开或收起任务描述
-执行名,执行名
-任务超时未执行,任务超时未执行
-上次运行,上次运行
-下次运行,下次运行
-真实执行（SSE）,真实执行（SSE）
-调度运行日志（历史与实时）,调度运行日志（历史与实时）
-锁定,锁定
-留空则与定时调度一致,留空则与定时调度一致
-输出,输出
-加载失败,加载失败
-执行名缺失或格式无效，请刷新列表后重试,执行名缺失或格式无效，请刷新列表后重试
-执行名缺失或格式无效，请重新点击列表中的「运行」按钮,执行名缺失或格式无效，请重新点击列表中的「运行」按钮
-历史日志内容,历史日志内容
-"【已截断】仅显示前 2MB","【已截断】仅显示前 2MB"
-（空）,（空）
-"实时尾随 var/cron 下当前日志；任务结束后自动结束流","实时尾随 var/cron 下当前日志；任务结束后自动结束流"
-"历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history","历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history"
-"当前运行中（SSE 实时）","当前运行中（SSE 实时）"
-当前日志文件（实时尾随至空闲）,当前日志文件（实时尾随至空闲）
-暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。,暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。
+运行,Run
+日志,Logs
+解锁,Unlock
+分钟,Minutes
+任务描述,"Task description"
+无,None
+暂无定时任务,"No scheduled tasks"
+手动运行,"Manual run"
+帮助说明,"Help description"
+加载中,Loading
+后缀,Suffix
+可选,Optional
+写入,Write
+开始执行,"Start execution"
+关闭,Close
+调度运行日志,"Scheduling run log."
+选择记录,"Select Record"
+点击展开或收起任务描述,"Click to expand or collapse the task description."
+执行名,"Execution name"
+任务超时未执行,"Task timed out without execution"
+上次运行,"last run"
+下次运行,"next run"
+真实执行（SSE）,"Real execution (SSE)"
+调度运行日志（历史与实时）,"Scheduling run log (historical and real-time)"
+锁定,Lock
+留空则与定时调度一致,"Leave blank to be consistent with the scheduled schedule"
+输出,Output
+加载失败,"Failed to load"
+执行名缺失或格式无效，请刷新列表后重试,"Execution name missing or invalid format, please refresh the list and try again"
+执行名缺失或格式无效，请重新点击列表中的「运行」按钮,"Execution name missing or invalid format, please click the ""Run"" button in the list again"
+历史日志内容,"Historical Log Content"
+"【已截断】仅显示前 2MB","[Truncated] Only the first 2MB shown"
+（空）,(Empty)
+"实时尾随 var/cron 下当前日志；任务结束后自动结束流","Real-Time Tail of Current Logs Under var/cron; Stream Ends Automatically When Task Completes"
+"历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history","History Archive: Task history is saved to var/cron/history after each normal completion or before a new round starts"
+"当前运行中（SSE 实时）","Currently running (SSE real-time)"
+当前日志文件（实时尾随至空闲）,"Current log file (real-time tailing until idle)."
+暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。,"No logs. Tasks will be automatically archived here after being run by the system scheduler; current log files can also be generated during runtime."

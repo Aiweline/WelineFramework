@@ -62,7 +62,7 @@ class Config extends BackendController
     public function save(): string
     {
         if (!$this->request->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
+            return $this->fetchJson($this->error('无效的请求方法', '', 405));
         }
 
         try {
@@ -81,27 +81,9 @@ class Config extends BackendController
             $cache = ObjectManager::getInstance(Clear::class);
             $cache->execute(['-f']);
 
-            return $this->jsonResponse(true, __('保存成功'));
+            return $this->fetchJson($this->success('保存成功'));
         } catch (\Exception $e) {
-            return $this->jsonResponse(false, __('保存失败：%{1}', $e->getMessage()));
+            return $this->fetchJson($this->error(__('保存失败：%{1}', $e->getMessage()), '', 500));
         }
-    }
-
-    /**
-     * JSON响应
-     * 
-     * @param bool $success
-     * @param string $message
-     * @param array $data
-     * @return string
-     */
-    private function jsonResponse(bool $success, string $message, array $data = []): string
-    {
-        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode([
-            'success' => $success,
-            'message' => $message,
-            'data' => $data,
-        ], JSON_UNESCAPED_UNICODE);
     }
 }

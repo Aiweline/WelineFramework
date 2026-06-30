@@ -68,3 +68,24 @@ public function execute(\Weline\Framework\Event\Event $event): void
 - 不建议在观察者中执行耗时操作，建议使用队列异步处理
 - 确保观察者逻辑不会影响主流程性能
 
+## Extension payload convention
+
+Website edit form extension modules should write fields under `extensions[{module_code}]`.
+`Weline_Websites` passes the raw post data through `post_data` and does not parse SEO/GEO fields itself.
+
+Example:
+
+```php
+[
+    'website_id' => 1,
+    'website' => $websiteData,
+    'post_data' => [
+        'extensions' => [
+            'seo' => ['robots_enabled' => '1'],
+            'geo' => ['llms_enabled' => '1'],
+        ],
+    ],
+    'address_list' => [],
+    'action' => 'add|edit|quick_save',
+]
+```

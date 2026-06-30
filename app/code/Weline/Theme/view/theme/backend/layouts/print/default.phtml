@@ -24,15 +24,30 @@
 <body class="<?= htmlspecialchars($meta['class'] ?? '') ?>">
     <w:hook>Weline_Theme::backend::layouts::print::body-start</w:hook>
     
-    <div class="backend-layout-print">
-        <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
-    </div>
+    <?php
+    $layoutMainClass = 'backend-layout-print';
+    $layoutShowPageHeader = false;
+    $layoutShowMessages = false;
+    echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+    ?>
     <div class="no-print" style="text-align: center; margin-top: 20px;">
-        <button onclick="window.print()" class="backend-print-btn">
+        <button type="button" data-backend-print-page class="backend-print-btn">
             <i class="ri-printer-line"></i>
             <lang>打印</lang>
         </button>
     </div>
+    <script>
+    (function () {
+        document.addEventListener('click', function (event) {
+            const printButton = event.target.closest('[data-backend-print-page]');
+            if (!printButton) {
+                return;
+            }
+
+            window.print();
+        });
+    })();
+    </script>
     
     <w:hook>Weline_Theme::backend::layouts::print::body-end</w:hook>
 </body>

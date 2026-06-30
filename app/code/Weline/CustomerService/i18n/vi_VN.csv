@@ -54,6 +54,17 @@
 设置语言失败：%{1},"Đặt ngôn ngữ thất bại: %{1}"
 客服消息翻译,"Dịch tin nhắn dịch vụ khách hàng"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"Mô-đun dịch vụ khách hàng yêu cầu dịch vụ dịch thuật thông qua sự kiện này. Dữ liệu sự kiện bao gồm văn bản cần dịch"
+"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Session and message content are required.","Session and message content are required."
+"Session ID is required.","Session ID is required."
+"Language code is required.","Language code is required."
+"Language updated.","Language updated."
+"Please enter a valid email address.","Please enter a valid email address."
+"Session token is required.","Session token is required."
+"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
+"Verification email has been sent.","Verification email has been sent."
+"Customer Service Query","Customer Service Query"
+"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","Dịch vụ khách hàng - Xác minh liên kết email"
 客服系统,"Hệ thống dịch vụ khách hàng"
 客服服务,"Dịch vụ khách hàng"
@@ -61,8 +72,6 @@
 设置,"Cài đặt"
 收起,"Thu gọn"
 我的语言,"Ngôn ngữ của tôi"
-简体中文,"Trung giản thể"
-繁體中文,"Trung phồn thể"
 显示模式,"Chế độ hiển thị"
 仅显示译文,"Chỉ hiển thị bản dịch"
 原文+译文,"Nguyên bản + bản dịch"
@@ -70,11 +79,12 @@
 欢迎使用客服服务！,"Chào mừng đến với dịch vụ khách hàng!"
 请输入您的问题，我们的客服将尽快为您解答。,"Vui lòng nhập câu hỏi của bạn"
 输入消息...,"Nhập tin nhắn..."
-绑定邮箱,"Liên kết email"
-绑定邮箱后，您可以收到客服回复的邮件通知。,"Sau khi liên kết email"
-邮箱地址,"Địa chỉ email"
-请输入您的邮箱,"Vui lòng nhập email của bạn"
-取消,Hủy
+接收客服回复与优惠通知,接收客服回复与优惠通知
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
+仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
+接收通知的邮箱,接收通知的邮箱
+请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
+稍后再说,稍后再说
 发送验证邮件,"Gửi email xác minh"
 等待中,"Đang chờ"
 暂无消息,"Không có tin nhắn"
@@ -86,9 +96,13 @@
 发送失败,"Gửi thất bại"
 发送失败，请稍后重试,发送失败，请稍后重试
 确定要接单此会话吗？,"Bạn có chắc chắn muốn chấp nhận phiên này không?"
+确认接单,确认接单
+取消,Hủy
 分配失败,"Phân công thất bại"
 分配失败，请稍后重试,分配失败，请稍后重试
 确定要关闭此会话吗？,"Bạn có chắc chắn muốn đóng phiên này không?"
+确认关闭,确认关闭
+关闭,Đóng
 请选择一个会话开始聊天,"Vui lòng chọn một phiên để bắt đầu chat"
 关闭失败,"Đóng thất bại"
 关闭失败，请稍后重试,关闭失败，请稍后重试
@@ -103,9 +117,11 @@
 分钟,phút
 最长,"Dài nhất"
 秒,giây
-客服在线,"Dịch vụ khách hàng trực tuyến"
+欢迎使用客服服务,欢迎使用客服服务
+客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","Dịch vụ khách hàng AI"
-客服离线,"Dịch vụ khách hàng ngoại tuyến"
+鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
 请输入有效的邮箱地址,"Vui lòng nhập địa chỉ email hợp lệ"
 会话未初始化，请刷新页面重试,"Phiên chưa được khởi tạo"
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
@@ -155,6 +171,7 @@ ID,ID
 启用客服服务,"Bật dịch vụ khách hàng"
 启用,Bật
 默认客服语言,"Ngôn ngữ đại lý mặc định"
+简体中文,"Trung giản thể"
 English,English
 默认客户语言,"Ngôn ngữ khách hàng mặc định"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","Khi không có đại lý dịch vụ khách hàng trực tuyến"
@@ -188,7 +205,6 @@ English,English
 客服语言,"Ngôn ngữ đại lý"
 创建时间,"Thời gian tạo"
 查看,Xem
-关闭,Đóng
 返回列表,"Quay lại danh sách"
 会话信息,"Thông tin phiên"
 客服ID,"ID đại lý"

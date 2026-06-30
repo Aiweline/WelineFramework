@@ -103,7 +103,20 @@ class WebsiteCurrency extends Model
                 $this->insert($data)->fetch();
             }
         }
-        
+
+        $this->clearWebsiteCurrencyCaches();
+
         return $this;
+    }
+
+    private function clearWebsiteCurrencyCaches(): void
+    {
+        try {
+            w_cache('website')->clear();
+            w_cache('currency')->clear();
+            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
+            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
+        } catch (\Throwable) {
+        }
     }
 }

@@ -13,6 +13,9 @@ $websites = $websites ?? [];
 $providers = $providers ?? [];
 $moduleSitemaps = $module_sitemaps ?? [];
 $websiteStats = $website_stats ?? [];
+$escapeAttr = static function ($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
 
 // 获取前台根 URL（后台上下文中需要使用 getBaseHost 获取纯域名）
 $request = $this->getRequest();
@@ -34,9 +37,9 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                             </h4>
                             <div class='page-title-right'>
                                 <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                    <li class='breadcrumb-item'><span>
                                             <lang>SEO管理</lang>
-                                        </a></li>
+                                        </span></li>
                                     <li class='breadcrumb-item active'>
                                         <lang>Sitemap管理</lang>
                                     </li>
@@ -45,6 +48,64 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                         </div>
                     </div>
                 </div>
+<script>
+(function () {
+    'use strict';
+
+    if (window.__seoSitemapActionsBound) {
+        return;
+    }
+    window.__seoSitemapActionsBound = true;
+
+    document.addEventListener('click', function (event) {
+        var actionTrigger = event.target.closest('[data-seo-sitemap-action]');
+        if (actionTrigger) {
+            var action = actionTrigger.getAttribute('data-seo-sitemap-action');
+
+            if (action === 'copy-url') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof window.copyToClipboard === 'function') {
+                    window.copyToClipboard(actionTrigger.getAttribute('data-copy-url') || '');
+                }
+                return;
+            }
+
+            if (action === 'generate' && typeof window.generateSitemap === 'function') {
+                event.preventDefault();
+                window.generateSitemap();
+                return;
+            }
+
+            if (action === 'generate-provider' && typeof window.generateByProvider === 'function') {
+                event.preventDefault();
+                window.generateByProvider(actionTrigger.getAttribute('data-provider-module') || '');
+                return;
+            }
+
+            if (action === 'generate-all' && typeof window.generateByAllProviders === 'function') {
+                event.preventDefault();
+                window.generateByAllProviders();
+                return;
+            }
+        }
+
+        var toggleTrigger = event.target.closest('[data-seo-sitemap-toggle]');
+        if (!toggleTrigger) {
+            return;
+        }
+
+        var toggleType = toggleTrigger.getAttribute('data-seo-sitemap-toggle');
+        if (toggleType === 'website' && typeof window.toggleWebsite === 'function') {
+            window.toggleWebsite(toggleTrigger);
+            return;
+        }
+        if (toggleType === 'scope' && typeof window.toggleScope === 'function') {
+            window.toggleScope(toggleTrigger);
+        }
+    });
+})();
+</script>
 
                 <!-- 消息提示区域 -->
                 <div class='row'>
@@ -86,14 +147,14 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                 <div class="step-card" style="background: #fff; border-left: 4px solid #764ba2; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                                                     <div class="step-number" style="width: 32px; height: 32px; background: #764ba2; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">2</div>
                                                     <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>平台适配器生成</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml</lang></p>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml</lang></p>
                                                 </div>
                                                 
                                                 <!-- 步骤 3 -->
                                                 <div class="step-card" style="background: #fff; border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                                                     <div class="step-number" style="width: 32px; height: 32px; background: #28a745; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">3</div>
                                                     <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>自动提交</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议</lang></p>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap</lang></p>
                                                 </div>
                                             </div>
                                         </div>
@@ -152,8 +213,10 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
 │   ├── bing/                            # Bing 平台目录
 │   │   ├── sitemap.xml                  # Bing 平台索引
 │   │   └── ...
-│   └── baidu/                           # Baidu 平台目录
-│       ├── sitemap.xml                  # Baidu 平台索引（10MB 限制）
+│   ├── baidu/                           # Baidu 平台目录
+│   │   ├── sitemap.xml                  # Baidu 平台索引（10MB 限制）
+│   │   └── ...
+│   └── yandex/                          # 其他已绑定平台目录
 │       └── ...
 └── shop_us/                             # 其他站点
     └── ...</code></pre>
@@ -181,19 +244,31 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                             <td style="padding: 10px;"><span class="badge" style="background: #4285f4;">Google</span></td>
                                                             <td style="padding: 10px;">50,000</td>
                                                             <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">Ping URL + IndexNow</td>
+                                                            <td style="padding: 10px;">Search Console API</td>
                                                         </tr>
                                                         <tr>
                                                             <td style="padding: 10px;"><span class="badge" style="background: #008373;">Bing</span></td>
                                                             <td style="padding: 10px;">50,000</td>
                                                             <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">IndexNow API</td>
+                                                            <td style="padding: 10px;">Webmaster API / IndexNow</td>
                                                         </tr>
                                                         <tr>
                                                             <td style="padding: 10px;"><span class="badge" style="background: #2932e1;">Baidu</span></td>
                                                             <td style="padding: 10px;">50,000</td>
                                                             <td style="padding: 10px;">10 MB ⚠️</td>
-                                                            <td style="padding: 10px;">Ping URL + API</td>
+                                                            <td style="padding: 10px;">Baidu LinkSubmit API</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #111827;">IndexNow</span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">50 MB</td>
+                                                            <td style="padding: 10px;">IndexNow</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #6c757d;"><lang>长尾平台</lang></span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">50 MB</td>
+                                                            <td style="padding: 10px;"><lang>Sitemap 生成 / 手动或自然发现</lang></td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -288,7 +363,7 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <button type="button" class="btn btn-primary w-100" id="generateBtn" onclick="generateSitemap()">
+                                <button type="button" class="btn btn-primary w-100" id="generateBtn" data-seo-sitemap-action="generate">
                                     <i class="mdi mdi-refresh me-2"></i><lang>生成Sitemap</lang>
                                 </button>
                                 <p class="text-muted mt-2 mb-0" style="font-size: 12px;">
@@ -325,15 +400,16 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                             <?= htmlspecialchars($provider['description']) ?>
                                         </div>
                                         <div class="provider-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                    onclick="generateByProvider('<?= htmlspecialchars($provider['module']) ?>')">
+                                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                                    data-seo-sitemap-action="generate-provider"
+                                                    data-provider-module="<?= $escapeAttr($provider['module'] ?? '') ?>">
                                                 <i class="mdi mdi-refresh me-1"></i><lang>生成</lang>
                                             </button>
                                         </div>
                                     </div>
                                     <?php endforeach; ?>
                                     
-                                    <button type="button" class="btn btn-success w-100 mt-3" onclick="generateByAllProviders()">
+                                    <button type="button" class="btn btn-success w-100 mt-3" data-seo-sitemap-action="generate-all">
                                         <i class="mdi mdi-refresh-auto me-2"></i><lang>调用所有生成器</lang>
                                     </button>
                                 <?php else: ?>
@@ -363,11 +439,11 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                     <?php foreach ($moduleSitemaps as $websiteCode => $websiteData): ?>
                                     <?php $siteUrl = rtrim($websiteData['website_url'] ?? $frontendBaseUrl, '/'); ?>
                                     <div class="website-node" 
-                                         data-website-name="<?= htmlspecialchars(strtolower($websiteData['website_name'])) ?>" 
-                                         data-website-code="<?= htmlspecialchars(strtolower($websiteCode)) ?>" 
-                                         data-website-domain="<?= htmlspecialchars(strtolower($websiteData['website_domain'] ?? '')) ?>">
+                                         data-website-name="<?= $escapeAttr(strtolower((string)($websiteData['website_name'] ?? ''))) ?>"
+                                         data-website-code="<?= $escapeAttr(strtolower((string)$websiteCode)) ?>"
+                                         data-website-domain="<?= $escapeAttr(strtolower((string)($websiteData['website_domain'] ?? ''))) ?>">
                                         <!-- 站点头部 -->
-                                        <div class="website-header module-header" onclick="toggleWebsite(this)" data-bs-toggle="collapse" data-bs-target="#module-files-<?= htmlspecialchars($websiteCode) ?>">
+                                        <div class="website-header module-header" data-seo-sitemap-toggle="website" data-bs-toggle="collapse" data-bs-target="#module-files-<?= $escapeAttr($websiteCode) ?>">
                                             <div class="website-info">
                                                 <i class="mdi mdi-web website-icon"></i>
                                                 <div>
@@ -389,15 +465,16 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                             <?php if (!empty($websiteData['platforms'])): ?>
                                             <?php foreach ($websiteData['platforms'] as $platformCode => $platformData): ?>
                                             <?php $color = $platformData['platform_color'] ?? '#6c757d'; ?>
-                                            <div class="platform-group" style="border-left: 4px solid <?= $color ?>; margin-left: 15px; margin-top: 10px; border-radius: 4px; overflow: hidden;">
+                                            <?php $colorAttr = $escapeAttr($color); ?>
+                                            <div class="platform-group" style="border-left: 4px solid <?= $colorAttr ?>; margin-left: 15px; margin-top: 10px; border-radius: 4px; overflow: hidden;">
                                                 <!-- 平台头部 -->
-                                                <div class="file-item" style="background: <?= $color ?>15; cursor: pointer;" onclick="toggleScope(this)" data-bs-toggle="collapse" data-bs-target="#platform-<?= htmlspecialchars($websiteCode) ?>-<?= htmlspecialchars($platformCode) ?>">
+                                                <div class="file-item" style="background: <?= $colorAttr ?>15; cursor: pointer;" data-seo-sitemap-toggle="scope" data-bs-toggle="collapse" data-bs-target="#platform-<?= $escapeAttr($websiteCode) ?>-<?= $escapeAttr($platformCode) ?>">
                                                     <div class="file-info" style="flex: 1;">
-                                                        <i class="mdi mdi-cloud-outline file-icon" style="color: <?= $color ?>; font-size: 24px;"></i>
+                                                        <i class="mdi mdi-cloud-outline file-icon" style="color: <?= $colorAttr ?>; font-size: 24px;"></i>
                                                         <div class="file-details" style="flex: 1;">
                                                             <span class="file-name d-flex align-items-center flex-wrap gap-1">
-                                                                <strong style="color: <?= $color ?>;"><?= htmlspecialchars($platformData['platform_name']) ?></strong>
-                                                                <span class="badge ms-2" style="background: <?= $color ?>; color: #fff;"><?= $platformData['module_count'] ?? 0 ?> <lang>个模块</lang></span>
+                                                                <strong style="color: <?= $colorAttr ?>;"><?= htmlspecialchars($platformData['platform_name']) ?></strong>
+                                                                <span class="badge ms-2" style="background: <?= $colorAttr ?>; color: #fff;"><?= $platformData['module_count'] ?? 0 ?> <lang>个模块</lang></span>
                                                                 <span class="badge bg-secondary ms-1"><?= $platformData['file_count'] ?? 0 ?> <lang>个文件</lang></span>
                                                                 <?php 
                                                                 // 显示 SEO 账户信息
@@ -427,7 +504,11 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                     </div>
                                                     <div class="d-flex align-items-center gap-2">
                                                         <?php if (!empty($platformData['index'])): ?>
-                                                        <button type="button" class="btn btn-sm" style="background: <?= $color ?>; color: #fff;" onclick="event.stopPropagation(); copyToClipboard('<?= $siteUrl . $platformData['index']['url'] ?>')">
+                                                        <button type="button"
+                                                                class="btn btn-sm"
+                                                                style="background: <?= $colorAttr ?>; color: #fff;"
+                                                                data-seo-sitemap-action="copy-url"
+                                                                data-copy-url="<?= $escapeAttr($siteUrl . $platformData['index']['url']) ?>">
                                                             <i class="mdi mdi-content-copy me-1"></i><lang>复制提交URL</lang>
                                                         </button>
                                                         <?php endif; ?>
@@ -436,17 +517,17 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                 </div>
                                                 
                                                 <!-- 平台内容 -->
-                                                <div class="collapse" id="platform-<?= htmlspecialchars($websiteCode) ?>-<?= htmlspecialchars($platformCode) ?>">
+                                                <div class="collapse" id="platform-<?= $escapeAttr($websiteCode) ?>-<?= $escapeAttr($platformCode) ?>">
                                                     <!-- 平台总索引 sitemap.xml -->
                                                     <?php if (!empty($platformData['index'])): ?>
                                                     <?php $platformIndex = $platformData['index']; ?>
-                                                    <div class="file-item" style="margin-left: 20px; background: <?= $color ?>20;">
+                                                    <div class="file-item" style="margin-left: 20px; background: <?= $colorAttr ?>20;">
                                                         <div class="file-info">
-                                                            <i class="mdi mdi-file-tree file-icon" style="color: <?= $color ?>;"></i>
+                                                            <i class="mdi mdi-file-tree file-icon" style="color: <?= $colorAttr ?>;"></i>
                                                             <div class="file-details">
                                                                 <span class="file-name">
                                                                     <strong><?= htmlspecialchars($platformIndex['name']) ?></strong>
-                                                                    <span class="badge ms-2" style="background: <?= $color ?>; color: #fff;"><lang>平台总索引</lang></span>
+                                                                    <span class="badge ms-2" style="background: <?= $colorAttr ?>; color: #fff;"><lang>平台总索引</lang></span>
                                                                 </span>
                                                                 <div class="file-meta">
                                                                     <span><i class="mdi mdi-harddisk"></i> <?= $platformIndex['size_formatted'] ?></span>
@@ -455,10 +536,15 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                             </div>
                                                         </div>
                                                         <div class="file-actions">
-                                                            <button type="button" class="btn btn-sm me-1" style="background: rgba(<?= hexdec(substr($color, 1, 2)) ?>, <?= hexdec(substr($color, 3, 2)) ?>, <?= hexdec(substr($color, 5, 2)) ?>, 0.3); color: <?= $color ?>; border: 1px solid <?= $color ?>;" onclick="copyToClipboard('<?= htmlspecialchars($siteUrl . $platformIndex['url'], ENT_QUOTES) ?>')" title="<?= __('复制地址') ?>">
+                                                            <button type="button"
+                                                                    class="btn btn-sm me-1"
+                                                                    style="background: rgba(<?= hexdec(substr($color, 1, 2)) ?>, <?= hexdec(substr($color, 3, 2)) ?>, <?= hexdec(substr($color, 5, 2)) ?>, 0.3); color: <?= $colorAttr ?>; border: 1px solid <?= $colorAttr ?>;"
+                                                                    data-seo-sitemap-action="copy-url"
+                                                                    data-copy-url="<?= $escapeAttr($siteUrl . $platformIndex['url']) ?>"
+                                                                    title="<?= __('复制地址') ?>">
                                                                 <i class="mdi mdi-content-copy"></i>
                                                             </button>
-                                                            <a href="<?= htmlspecialchars($siteUrl . $platformIndex['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="background: <?= $color ?>; color: #fff;" title="<?= __('打开查看') ?>">
+                                                            <a href="<?= $escapeAttr($siteUrl . $platformIndex['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="background: <?= $colorAttr ?>; color: #fff;" title="<?= __('打开查看') ?>">
                                                                 <i class="mdi mdi-open-in-new me-1"></i><lang>查看</lang>
                                                             </a>
                                                         </div>
@@ -487,10 +573,15 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                                 </div>
                                                             </div>
                                                             <div class="file-actions">
-                                                                <button type="button" class="btn btn-outline-secondary btn-sm me-1" style="padding: 3px 10px;" onclick="copyToClipboard('<?= htmlspecialchars($siteUrl . $file['url'], ENT_QUOTES) ?>')" title="<?= __('复制地址') ?>">
+                                                                <button type="button"
+                                                                        class="btn btn-outline-secondary btn-sm me-1"
+                                                                        style="padding: 3px 10px;"
+                                                                        data-seo-sitemap-action="copy-url"
+                                                                        data-copy-url="<?= $escapeAttr($siteUrl . $file['url']) ?>"
+                                                                        title="<?= __('复制地址') ?>">
                                                                     <i class="mdi mdi-content-copy"></i>
                                                                 </button>
-                                                                <a href="<?= htmlspecialchars($siteUrl . $file['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm" style="padding: 3px 10px;" title="<?= __('打开查看') ?>">
+                                                                <a href="<?= $escapeAttr($siteUrl . $file['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm" style="padding: 3px 10px;" title="<?= __('打开查看') ?>">
                                                                     <i class="mdi mdi-open-in-new"></i>
                                                                 </a>
                                                             </div>

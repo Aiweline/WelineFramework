@@ -81,18 +81,27 @@ function renderWidget($template, array $widget, array $children = []): string {
         }
         
         $html = $template->fetchHtml($widgetTemplate, $config);
-        
+
         // 包装部件，添加编辑属性
+        $widgetModule = htmlspecialchars((string)($widget['widget_module'] ?? ''));
+        $widgetName = htmlspecialchars((string)($widget['meta']['name'] ?? $widget['widget_code'] ?? ''));
+        $widgetType = htmlspecialchars((string)($widget['widget_type'] ?? ''));
         return sprintf(
-            '<div class="preview-widget" data-layout-id="%d" data-widget-code="%s" data-config=\'%s\'>%s</div>',
+            '<div class="preview-widget" data-layout-id="%d" data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s" data-config=\'%s\'>%s</div>',
             $layoutId,
             htmlspecialchars((string)($widgetCode ?? '')),
+            $widgetName,
+            $widgetModule,
+            $widgetType,
             htmlspecialchars(json_encode($config)),
             $html
         );
     } catch (\Exception $e) {
+        $widgetModule = htmlspecialchars((string)($widget['widget_module'] ?? ''));
+        $widgetName = htmlspecialchars((string)($widget['meta']['name'] ?? $widget['widget_code'] ?? ''));
+        $widgetType = htmlspecialchars((string)($widget['widget_type'] ?? ''));
         return sprintf(
-            '<div class="preview-widget widget-error" data-layout-id="%d" data-widget-code="%s">
+            '<div class="preview-widget widget-error" data-layout-id="%d" data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s">
                 <div class="widget-error-content">
                     <i class="ri-error-warning-line"></i>
                     <span>渲染错误: %s</span>
@@ -100,6 +109,9 @@ function renderWidget($template, array $widget, array $children = []): string {
             </div>',
             $layoutId,
             htmlspecialchars((string)($widgetCode ?? '')),
+            $widgetName,
+            $widgetModule,
+            $widgetType,
             htmlspecialchars((string)($e->getMessage() ?? ''))
         );
     }
@@ -114,9 +126,11 @@ function renderWidgetPlaceholder(array $widget): string {
     $name = (string)($widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件');
     $layoutId = (int)($widget['layout_id'] ?? 0);
     $widgetCode = (string)($widget['widget_code'] ?? '');
-    
+    $widgetModule = (string)($widget['widget_module'] ?? '');
+    $widgetType = (string)($widget['widget_type'] ?? '');
+
     return sprintf(
-        '<div class="preview-widget widget-placeholder" data-layout-id="%d" data-widget-code="%s">
+        '<div class="preview-widget widget-placeholder" data-layout-id="%d" data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s">
             <div class="placeholder-content">
                 <i class="ri-widget-line"></i>
                 <span>%s</span>
@@ -124,6 +138,9 @@ function renderWidgetPlaceholder(array $widget): string {
         </div>',
         $layoutId,
         htmlspecialchars((string)($widgetCode ?? '')),
+        htmlspecialchars((string)($name ?? '')),
+        htmlspecialchars((string)($widgetModule ?? '')),
+        htmlspecialchars((string)($widgetType ?? '')),
         htmlspecialchars((string)($name ?? ''))
     );
 }
@@ -210,6 +227,12 @@ function renderAreaPlaceholder(string $area, string $label): string {
             outline: 2px solid #007bff;
             outline-offset: 2px;
         }
+
+        .preview-widget.selected {
+            outline: 2px solid #635bff;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(99, 91, 255, 0.18);
+        }
         
         .preview-widget::after {
             content: attr(data-widget-code);
@@ -226,7 +249,8 @@ function renderAreaPlaceholder(string $area, string $label): string {
             pointer-events: none;
         }
         
-        .preview-widget:hover::after {
+        .preview-widget:hover::after,
+        .preview-widget.selected::after {
             opacity: 1;
         }
         
@@ -433,6 +457,9 @@ function renderAreaPlaceholder(string $area, string $label): string {
             e.stopPropagation();
             const layoutId = this.dataset.layoutId;
             const widgetCode = this.dataset.widgetCode;
+            const widgetName = this.dataset.widgetName;
+            const widgetModule = this.dataset.widgetModule;
+            const widgetType = this.dataset.widgetType;
             const config = this.dataset.config;
             
             // 通知父窗口（编辑器）
@@ -441,6 +468,9 @@ function renderAreaPlaceholder(string $area, string $label): string {
                     type: 'widget-selected',
                     layoutId: layoutId,
                     widgetCode: widgetCode,
+                    widgetName: widgetName,
+                    widgetModule: widgetModule,
+                    widgetType: widgetType,
                     config: config
                 }, '*');
             }

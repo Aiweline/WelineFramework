@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Session\Test;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Session\Auth\AuthenticatedSession;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\SessionInterface;
@@ -109,6 +110,17 @@ class SessionFactoryTest extends TestCase
         
         $this->assertInstanceOf(AuthenticatedSessionInterface::class, $session);
         $this->assertEquals('api', $session->getArea());
+    }
+
+    public function testRestBackendSessionUsesBackendCredentialKeys(): void
+    {
+        $session = $this->factory->createAuthenticatedSession('rest_backend');
+
+        $this->assertInstanceOf(AuthenticatedSession::class, $session);
+        $this->assertEquals('rest_backend', $session->getArea());
+        $this->assertSame('WF_BACKEND_USER', $session->getAreaConfig()->getLoginKey());
+        $this->assertSame('WF_BACKEND_USER_ID', $session->getAreaConfig()->getLoginIdKey());
+        $this->assertSame('WF_BACKEND_USER_MODEL', $session->getAreaConfig()->getUserModelKey());
     }
 
     public function testResetRequestInstances(): void

@@ -3,6 +3,81 @@
  * 完全原生实现，不依赖任何第三方库
  */
 
+document.addEventListener('click', function (event) {
+    const trigger = event.target.closest('[data-twofa-action]');
+    if (!trigger) {
+        return;
+    }
+
+    if (trigger.getAttribute('data-stop-propagation') === 'true') {
+        event.stopPropagation();
+    }
+
+    const action = trigger.getAttribute('data-twofa-action');
+    if (action === 'show-add-modal') {
+        showAddModal();
+    } else if (action === 'export-accounts') {
+        exportAccounts();
+    } else if (action === 'close-add-modal') {
+        closeAddModal();
+    } else if (action === 'switch-tab') {
+        switchTab(trigger.getAttribute('data-tab'));
+    } else if (action === 'trigger-file-input') {
+        if (event.target.matches('input[type="file"]')) {
+            return;
+        }
+        const input = document.getElementById(trigger.getAttribute('data-target-input'));
+        if (input) {
+            input.click();
+        }
+    } else if (action === 'start-camera-scanning') {
+        startCameraScanning();
+    } else if (action === 'stop-camera-scanning') {
+        stopCameraScanning();
+    } else if (action === 'add-account') {
+        addAccount();
+    } else if (action === 'import-accounts') {
+        importAccounts();
+    } else if (action === 'close-edit-confirm-modal') {
+        closeEditConfirmModal(trigger.getAttribute('data-abandon') === 'true');
+    } else if (action === 'copy-recovery-codes') {
+        copyRecoveryCodes();
+    } else if (action === 'save-edited-account') {
+        saveEditedAccount();
+    } else if (action === 'delete-account') {
+        deleteAccount(Number(trigger.getAttribute('data-account-id')));
+    } else if (action === 'copy-code') {
+        copyCode(trigger.getAttribute('data-code') || '');
+    } else if (action === 'close-generated-modal') {
+        const modal = trigger.closest('.modal');
+        if (modal) {
+            modal.remove();
+        }
+    } else if (action === 'export-format') {
+        doExport(trigger.getAttribute('data-format'), Number(trigger.getAttribute('data-account-count') || 0));
+    } else if (action === 'go-backend-login') {
+        window.location.href = '/backend/admin/login';
+    }
+});
+
+document.addEventListener('keydown', function (event) {
+    const trigger = event.target.closest('[data-twofa-action]');
+    if (!trigger || (event.key !== 'Enter' && event.key !== ' ')) {
+        return;
+    }
+    event.preventDefault();
+    trigger.click();
+});
+
+document.addEventListener('change', function (event) {
+    const action = event.target.getAttribute('data-twofa-change');
+    if (action === 'handle-qr-image-upload') {
+        handleQRImageUpload(event);
+    } else if (action === 'handle-file-select') {
+        handleFileSelect(event);
+    }
+});
+
 class TwoFactorAuthApp {
     constructor() {
         this.base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -225,14 +300,14 @@ async function displayAccounts() {
                             <div class="account-name">${escapeHtml(account.account)}</div>
                             ${account.note ? `<div class="account-note" style="font-size: 12px; color: #888; margin-top: 4px;">📝 ${escapeHtml(account.note)}</div>` : ''}
                         </div>
-                        <button class="delete-btn" onclick="deleteAccount(${account.id})">删除</button>
+                        <button class="delete-btn" type="button" data-twofa-action="delete-account" data-account-id="${account.id}">删除</button>
                     </div>
                     <div class="code-container">
                         <div class="code-with-copy" style="display: flex; align-items: center; gap: 10px;">
-                            <div class="code" onclick="copyCode('${code}')" title="${__('点击复制')}" style="cursor: pointer;">
+                            <div class="code" data-twofa-action="copy-code" data-code="${code}" title="${__('点击复制')}" style="cursor: pointer;" role="button" tabindex="0">
                                 ${code}
                             </div>
-                            <button class="copy-icon-btn" onclick="copyCode('${code}'); event.stopPropagation();" 
+                            <button class="copy-icon-btn" type="button" data-twofa-action="copy-code" data-code="${code}" data-stop-propagation="true"
                                     title="${__('复制验证码')}"
                                     style="background: transparent; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 5px; transition: all 0.2s;">
                                 📋
@@ -559,8 +634,26 @@ function copyRecoveryCodes() {
 /**
  * 删除账户
  */
-function deleteAccount(accountId) {
-    if (confirm(__('确定要删除这个账户吗？'))) {
+function confirmTwoFactorAction(message) {
+    const themeNotice = window.Weline && window.Weline.Theme && window.Weline.Theme.Notice
+        ? window.Weline.Theme.Notice
+        : null;
+
+    if (themeNotice && typeof themeNotice.confirm === 'function') {
+        return themeNotice.confirm({
+            title: __('确认操作'),
+            message: message,
+            confirmText: __('确认'),
+            cancelText: __('取消')
+        });
+    }
+
+    console.warn('[Weline TwoFactorAuth] Confirmation component is unavailable; action cancelled.');
+    return Promise.resolve(false);
+}
+
+async function deleteAccount(accountId) {
+    if (await confirmTwoFactorAction(__('确定要删除这个账户吗？'))) {
         app.deleteAccount(accountId);
         displayAccounts();
         showToast(__('✓ 账户已删除'));
@@ -1095,11 +1188,11 @@ function showExportModal(accounts) {
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.innerHTML = `
-        <div class="modal-overlay" onclick="this.parentElement.remove()"></div>
+        <div class="modal-overlay" data-twofa-action="close-generated-modal"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <h2>选择导出格式</h2>
-                <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+                <button class="close-btn" type="button" data-twofa-action="close-generated-modal">×</button>
             </div>
             <div class="modal-body">
                 <p style="color: #666; margin-bottom: 20px;">
@@ -1107,7 +1200,7 @@ function showExportModal(accounts) {
                 </p>
                 
                 <div class="export-formats">
-                    <div class="export-format-item" onclick="doExport('weline', ${accounts.length})">
+                    <div class="export-format-item" data-twofa-action="export-format" data-format="weline" data-account-count="${accounts.length}" role="button" tabindex="0">
                         <div class="format-icon">📱</div>
                         <div class="format-info">
                             <strong>Weline验证器</strong>
@@ -1116,7 +1209,7 @@ function showExportModal(accounts) {
                         <div class="format-badge">推荐</div>
                     </div>
                     
-                    <div class="export-format-item" onclick="doExport('aegis', ${accounts.length})">
+                    <div class="export-format-item" data-twofa-action="export-format" data-format="aegis" data-account-count="${accounts.length}" role="button" tabindex="0">
                         <div class="format-icon">🛡️</div>
                         <div class="format-info">
                             <strong>Aegis Authenticator</strong>
@@ -1124,7 +1217,7 @@ function showExportModal(accounts) {
                         </div>
                     </div>
                     
-                    <div class="export-format-item" onclick="doExport('andotp', ${accounts.length})">
+                    <div class="export-format-item" data-twofa-action="export-format" data-format="andotp" data-account-count="${accounts.length}" role="button" tabindex="0">
                         <div class="format-icon">🤖</div>
                         <div class="format-info">
                             <strong>andOTP</strong>
@@ -1132,7 +1225,7 @@ function showExportModal(accounts) {
                         </div>
                     </div>
                     
-                    <div class="export-format-item" onclick="doExport('2fas', ${accounts.length})">
+                    <div class="export-format-item" data-twofa-action="export-format" data-format="2fas" data-account-count="${accounts.length}" role="button" tabindex="0">
                         <div class="format-icon">🔐</div>
                         <div class="format-info">
                             <strong>2FAS Authenticator</strong>
@@ -1140,7 +1233,7 @@ function showExportModal(accounts) {
                         </div>
                     </div>
                     
-                    <div class="export-format-item" onclick="doExport('uri_list', ${accounts.length})">
+                    <div class="export-format-item" data-twofa-action="export-format" data-format="uri_list" data-account-count="${accounts.length}" role="button" tabindex="0">
                         <div class="format-icon">📄</div>
                         <div class="format-info">
                             <strong>URI列表（通用）</strong>
@@ -1516,7 +1609,7 @@ function showLoginWarning() {
                             margin-bottom: 24px; font-family: monospace; font-size: 14px; color: #333;">
                     ${__('后台菜单')} → ${__('工具')} → ${__('双因素认证器')}
                 </div>
-                <button onclick="window.location.href='/backend/admin/login'" 
+                <button type="button" data-twofa-action="go-backend-login"
                         style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                                color: white; border: none; padding: 14px 32px; 
                                border-radius: 8px; font-size: 16px; cursor: pointer; 

@@ -336,6 +336,7 @@ class StateManager
         
         // 4. 清理请求级实例
         self::$requestScopedInstances = [];
+        \Weline\Framework\Manager\ObjectManager::clearCurrentRequestScope();
         
         // 5. 重置 HeaderCollector
         if (!$skipHeaderCollectorReset && \class_exists(\Weline\Framework\Http\HeaderCollector::class, false)) {
@@ -347,10 +348,17 @@ class StateManager
      * WLS 新请求入口基线：在 {@see WlsRuntime::handle} 中 emulate 之后调用，与 {@see WlsConcurrency::callbackNamesOmittableWithPeerFibers}
      * 所列 reset 回调语义对齐，避免「仅依赖请求结束 reset」时在多 Fiber 交错下串用 OM 单例。
      *
-     * 刻意不包含：session 相关、sse_context、request_context、DB 清理、Request 注册（由入口后续逻辑与 finally 负责）。
+     * 入口会清理 Session 请求级实例，确保鉴权从当前请求 Cookie 重新读取；request_context、sse_context、DB 清理由 finally 负责。
      */
     public static function runWlsPersistentRequestEntryBaseline(): void
     {
+        if (\class_exists(\Weline\Framework\Session\SessionFactory::class, false)) {
+            \Weline\Framework\Session\SessionFactory::getInstance()->resetRequestInstances();
+        }
+        if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
+            \Weline\Framework\Session\Session::resetRequestState();
+        }
+
         \Weline\Framework\Manager\ResultManager::resetRequestState();
 
         \Weline\Framework\View\Template::resetInstance();
@@ -397,6 +405,9 @@ class StateManager
         if (\class_exists(\Weline\Theme\Service\PreviewTokenService::class, false)) {
             \Weline\Theme\Service\PreviewTokenService::resetRequestState();
         }
+        if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+            \Weline\Websites\Data\WebsiteData::resetRequestState();
+        }
         if (\class_exists(\Weline\Admin\Service\MenuRenderService::class, false)) {
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Admin\Service\MenuRenderService::class);
         }
@@ -408,11 +419,14 @@ class StateManager
         }
         if (\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
             try {
-                $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                if (\method_exists($eventsManager, 'resetRequestState')) {
-                    $eventsManager->resetRequestState();
-                } elseif (\method_exists($eventsManager, 'clearObserverCache')) {
-                    $eventsManager->clearObserverCache();
+                $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+                $eventsManager = $instances[\Weline\Framework\Event\EventsManager::class] ?? null;
+                if ($eventsManager) {
+                    if (\method_exists($eventsManager, 'resetRequestState')) {
+                        $eventsManager->resetRequestState();
+                    } elseif (\method_exists($eventsManager, 'clearObserverCache')) {
+                        $eventsManager->clearObserverCache();
+                    }
                 }
             } catch (\Throwable) {
             }
@@ -539,11 +553,9 @@ class StateManager
         // WLS 下必须显式重置，否则上个请求的路由缓存会泄漏到下个请求。
         self::registerResetCallback('process_url_cache_static', function () {
             try {
-                $ref = new \ReflectionClass(\Weline\Framework\Router\Cache\ProcessUrlCache::class);
-                if ($ref->hasProperty('staticCache')) {
-                    $prop = $ref->getProperty('staticCache');
-                    $prop->setAccessible(true);
-                    $prop->setValue(null, null);
+                $processUrlCacheClass = 'Weline\\Framework\\Router\\Cache\\ProcessUrlCache';
+                if (\class_exists($processUrlCacheClass, false) && \method_exists($processUrlCacheClass, 'resetRequestState')) {
+                    $processUrlCacheClass::resetRequestState();
                 }
             } catch (\Throwable $e) {
                 // 忽略反射错误
@@ -578,6 +590,12 @@ class StateManager
         self::registerResetCallback('sse_context', function () {
             if (\class_exists(\Weline\Framework\Http\Sse\SseContext::class, false)) {
                 \Weline\Framework\Http\Sse\SseContext::reset();
+            }
+        });
+
+        self::registerResetCallback('website_data_request_state', function () {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+                \Weline\Websites\Data\WebsiteData::resetRequestState();
             }
         });
         
@@ -620,6 +638,7 @@ class StateManager
         // 重置 static 变量 + 清除实例，确保下个请求重新创建 State 并正确判断 backend/frontend。
         self::registerStaticReset(\Weline\Framework\App\State::class, 'is_backend', false);
         self::registerStaticReset(\Weline\Framework\App\State::class, 'langLocalCache', null);
+        self::registerStaticReset(\Weline\Framework\App\State::class, 'pathLocalizationCache', null);
         self::registerResetCallback('state_instance', function () {
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
         });

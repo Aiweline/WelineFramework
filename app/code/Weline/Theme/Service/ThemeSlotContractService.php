@@ -177,7 +177,7 @@ class ThemeSlotContractService
 ">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <strong style="color: #9a3412;">默认 slot 缺失</strong>
-        <button onclick="this.parentElement.parentElement.remove()" style="
+        <button type="button" data-theme-slot-warning-dismiss style="
             background: none;
             border: none;
             font-size: 18px;
@@ -192,6 +192,16 @@ class ThemeSlotContractService
         {$warningItems}
     </ul>
 </div>
+<script>
+document.addEventListener('click', function(event) {
+    if (event.target.closest('[data-theme-slot-warning-dismiss]')) {
+        const panel = document.getElementById('theme-slot-contract-warning');
+        if (panel) {
+            panel.remove();
+        }
+    }
+});
+</script>
 HTML;
     }
 
@@ -213,9 +223,13 @@ HTML;
                 'id' => $slotId,
                 'name' => (string)($slot['name'] ?? $slotId),
                 'accept' => $this->normalizeAccept($slot['accept'] ?? []),
+                'reject' => $this->normalizeAccept($slot['reject'] ?? $meta['reject'] ?? []),
                 'exclusive' => (bool)($slot['exclusive'] ?? false),
                 'multiple' => (bool)($slot['multiple'] ?? true),
                 'position' => (string)($slot['position'] ?? $meta['position'] ?? ''),
+                'max' => $slot['max'] ?? $meta['max'] ?? null,
+                'min' => $slot['min'] ?? $meta['min'] ?? null,
+                'required' => (bool)($slot['required'] ?? $meta['required'] ?? false),
             ];
         }
 

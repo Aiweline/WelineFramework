@@ -50,7 +50,8 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
         <p class="text-muted"><?= __('该部件暂无可配置参数') ?></p>
     <?php else: ?>
         <?php foreach ($params as $key => $param): 
-            $type = (string)($param['type'] ?? 'string');
+            $semanticType = (string)($param['type'] ?? 'string');
+            $type = (string)($param['ui_type'] ?? $param['input'] ?? $semanticType);
             $label = (string)($param['label'] ?? $key);
             $default = $param['default'] ?? '';
             $value = $config[$key] ?? $default;
@@ -93,17 +94,21 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                            placeholder="<?= htmlspecialchars($placeholder) ?>"
                            <?= $required ? 'required' : '' ?>>
                 
-                <?php elseif ($type === 'boolean'): ?>
-                    <div class="form-check">
-                        <input type="checkbox" 
-                               class="form-check-input" 
-                               id="config_<?= $key ?>" 
-                               name="<?= $key ?>"
-                               value="1"
-                               <?= $value ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="config_<?= $key ?>"><?= __('启用') ?></label>
-                    </div>
-                
+                <?php elseif (in_array($semanticType, ['bool', 'boolean'], true)): ?>
+                    <?php
+                    $boolValue = ($value === true || $value === 1 || $value === '1' || $value === 'true' || $value === 'on') ? '1' : '0';
+                    $boolOptions = !empty($options) ? $options : [
+                        '1' => str_starts_with(strtolower((string)$key), 'show') ? __('显示') : __('是'),
+                        '0' => str_starts_with(strtolower((string)$key), 'show') ? __('隐藏') : __('否'),
+                    ];
+                    ?>
+                    <select class="form-control" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
+                        <?php foreach ($boolOptions as $optValue => $optLabel): ?>
+                            <option value="<?= htmlspecialchars((string)$optValue) ?>" <?= (string)$boolValue === (string)$optValue ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)$optLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 <?php elseif ($type === 'select'): ?>
                     <select class="form-control" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
                         <option value=""><?= __('-- 请选择 --') ?></option>

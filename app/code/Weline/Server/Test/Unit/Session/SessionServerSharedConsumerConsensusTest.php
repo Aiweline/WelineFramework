@@ -11,6 +11,8 @@ use Weline\Server\Session\Server\SessionServer;
 
 final class SessionServerSharedConsumerConsensusTest extends TestCase
 {
+    private const ROLE = 'session_server_unit_consensus';
+
     public function testHelloRegistersConsumerAndShutdownOnlyReleasesLease(): void
     {
         $tokenFileName = 'session-server-hello-' . \str_replace('.', '-', (string) \microtime(true)) . '.token';
@@ -20,14 +22,14 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
 
         $registry = new SharedStateServiceRegistry();
-        $registry->removeRecord('session_server');
+        $registry->removeRecord(self::ROLE);
 
         $server = new SessionServer([
             'port' => 0,
             'persist_path' => $persistPath,
             'token_file_name' => $tokenFileName,
             'shared_consumer_lease_ttl_sec' => 5,
-            'role' => 'session_server',
+            'role' => self::ROLE,
         ]);
 
         try {
@@ -40,22 +42,22 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             $server->tick(50000);
             $server->tick(50000);
 
-            \fwrite($socket, SessionProtocol::buildHello('instance-a', 'instance-a', 'session_server'));
+            \fwrite($socket, SessionProtocol::buildHello('instance-a', 'instance-a', self::ROLE));
             $server->tick(50000);
             $server->tick(50000);
 
-            self::assertArrayHasKey('instance-a', $registry->getConsumers('session_server'));
+            self::assertArrayHasKey('instance-a', $registry->getConsumers(self::ROLE));
             self::assertTrue($server->isRunning());
 
             \fwrite($socket, SessionProtocol::buildShutdown('instance-a'));
             $server->tick(50000);
             $server->tick(50000);
 
-            self::assertArrayNotHasKey('instance-a', $registry->getConsumers('session_server'));
+            self::assertArrayNotHasKey('instance-a', $registry->getConsumers(self::ROLE));
             self::assertTrue($server->isRunning());
         } finally {
             $server->stop();
-            $registry->removeRecord('session_server');
+            $registry->removeRecord(self::ROLE);
             $tokenPath = BP . 'var/session/' . $tokenFileName;
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
@@ -75,7 +77,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
 
         $registry = new SharedStateServiceRegistry();
-        $registry->removeRecord('session_server');
+        $registry->removeRecord(self::ROLE);
 
         $server = new SessionServer([
             'port' => 0,
@@ -85,7 +87,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             'empty_token_exit_grace_sec' => 1,
             'startup_consumer_grace_sec' => 3,
             'empty_token_check_interval_sec' => 0.1,
-            'role' => 'session_server',
+            'role' => self::ROLE,
         ]);
 
         try {
@@ -104,12 +106,12 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             $server->tick(50000);
             $server->tick(50000);
 
-            \fwrite($socket, SessionProtocol::buildHello('instance-startup', 'instance-startup', 'session_server'));
+            \fwrite($socket, SessionProtocol::buildHello('instance-startup', 'instance-startup', self::ROLE));
             $server->tick(50000);
             $server->tick(50000);
 
-            self::assertArrayHasKey('instance-startup', $registry->getConsumers('session_server'));
-            self::assertArrayNotHasKey('shutdown_due_at', $registry->getRecord('session_server'));
+            self::assertArrayHasKey('instance-startup', $registry->getConsumers(self::ROLE));
+            self::assertArrayNotHasKey('shutdown_due_at', $registry->getRecord(self::ROLE));
             self::assertFalse($server->isSharedConsumerIdleWindowOpen());
 
             \usleep(2200000);
@@ -117,7 +119,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             self::assertTrue($server->isRunning());
         } finally {
             $server->stop();
-            $registry->removeRecord('session_server');
+            $registry->removeRecord(self::ROLE);
             $tokenPath = BP . 'var/session/' . $tokenFileName;
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
@@ -137,8 +139,8 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
 
         $registry = new SharedStateServiceRegistry();
-        $registry->removeRecord('session_server');
-        $registry->touchConsumer('session_server', 'instance-pre');
+        $registry->removeRecord(self::ROLE);
+        $registry->touchConsumer(self::ROLE, 'instance-pre');
 
         $server = new SessionServer([
             'port' => 0,
@@ -147,20 +149,20 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             'shared_consumer_lease_ttl_sec' => 5,
             'empty_token_exit_grace_sec' => 1,
             'startup_consumer_grace_sec' => 1,
-            'role' => 'session_server',
+            'role' => self::ROLE,
         ]);
 
         try {
             self::assertTrue($server->start('127.0.0.1', 0));
 
-            self::assertArrayHasKey('instance-pre', $registry->getConsumers('session_server'));
-            self::assertArrayNotHasKey('shutdown_due_at', $registry->getRecord('session_server'));
+            self::assertArrayHasKey('instance-pre', $registry->getConsumers(self::ROLE));
+            self::assertArrayNotHasKey('shutdown_due_at', $registry->getRecord(self::ROLE));
             self::assertTrue($server->hasActiveConsumers());
             self::assertFalse($server->isSharedConsumerIdleWindowOpen());
             self::assertTrue($server->isRunning());
         } finally {
             $server->stop();
-            $registry->removeRecord('session_server');
+            $registry->removeRecord(self::ROLE);
             $tokenPath = BP . 'var/session/' . $tokenFileName;
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
@@ -180,7 +182,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
 
         $registry = new SharedStateServiceRegistry();
-        $registry->removeRecord('session_server');
+        $registry->removeRecord(self::ROLE);
 
         $server = new SessionServer([
             'port' => 0,
@@ -189,7 +191,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             'shared_consumer_lease_ttl_sec' => 1,
             'empty_token_exit_grace_sec' => 1,
             'empty_token_check_interval_sec' => 0.1,
-            'role' => 'session_server',
+            'role' => self::ROLE,
         ]);
 
         try {
@@ -202,7 +204,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             $server->tick(50000);
             $server->tick(50000);
 
-            \fwrite($socket, SessionProtocol::buildHello('instance-b', 'instance-b', 'session_server'));
+            \fwrite($socket, SessionProtocol::buildHello('instance-b', 'instance-b', self::ROLE));
             $server->tick(50000);
             $server->tick(50000);
 
@@ -218,7 +220,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             self::assertFalse($server->isRunning());
         } finally {
             $server->stop();
-            $registry->removeRecord('session_server');
+            $registry->removeRecord(self::ROLE);
             $tokenPath = BP . 'var/session/' . $tokenFileName;
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
@@ -238,7 +240,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
 
         $registry = new SharedStateServiceRegistry();
-        $registry->removeRecord('session_server');
+        $registry->removeRecord(self::ROLE);
 
         $server = new SessionServer([
             'port' => 0,
@@ -247,7 +249,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             'shared_consumer_lease_ttl_sec' => 10,
             'empty_token_exit_grace_sec' => 1,
             'empty_token_check_interval_sec' => 120.0,
-            'role' => 'session_server',
+            'role' => self::ROLE,
         ]);
 
         try {
@@ -260,7 +262,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             $server->tick(50000);
             $server->tick(50000);
 
-            \fwrite($socket, SessionProtocol::buildHello('instance-c', 'instance-c', 'session_server'));
+            \fwrite($socket, SessionProtocol::buildHello('instance-c', 'instance-c', self::ROLE));
             $server->tick(50000);
             $server->tick(50000);
 
@@ -274,7 +276,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             self::assertFalse($server->isRunning());
         } finally {
             $server->stop();
-            $registry->removeRecord('session_server');
+            $registry->removeRecord(self::ROLE);
             $tokenPath = BP . 'var/session/' . $tokenFileName;
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
@@ -294,7 +296,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
 
         $registry = new SharedStateServiceRegistry();
-        $registry->removeRecord('session_server');
+        $registry->removeRecord(self::ROLE);
 
         $server = new SessionServer([
             'port' => 0,
@@ -303,7 +305,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             'shared_consumer_lease_ttl_sec' => 10,
             'empty_token_exit_grace_sec' => 1,
             'empty_token_check_interval_sec' => 120.0,
-            'role' => 'session_server',
+            'role' => self::ROLE,
         ]);
 
         try {
@@ -316,21 +318,21 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             $server->tick(50000);
             $server->tick(50000);
 
-            \fwrite($socket, SessionProtocol::buildHello('instance-d', 'instance-d', 'session_server'));
+            \fwrite($socket, SessionProtocol::buildHello('instance-d', 'instance-d', self::ROLE));
             $server->tick(50000);
             $server->tick(50000);
 
             \fwrite($socket, SessionProtocol::buildShutdown('instance-d'));
             $server->tick(50000);
             $server->tick(50000);
-            self::assertArrayNotHasKey('instance-d', $registry->getConsumers('session_server'));
+            self::assertArrayNotHasKey('instance-d', $registry->getConsumers(self::ROLE));
 
-            \fwrite($socket, SessionProtocol::buildHello('instance-e', 'instance-e', 'session_server'));
+            \fwrite($socket, SessionProtocol::buildHello('instance-e', 'instance-e', self::ROLE));
             $server->tick(50000);
             $server->tick(50000);
 
-            self::assertArrayHasKey('instance-e', $registry->getConsumers('session_server'));
-            self::assertArrayNotHasKey('shutdown_due_at', $registry->getRecord('session_server'));
+            self::assertArrayHasKey('instance-e', $registry->getConsumers(self::ROLE));
+            self::assertArrayNotHasKey('shutdown_due_at', $registry->getRecord(self::ROLE));
 
             \sleep(2);
             $server->tick(50000);
@@ -338,7 +340,7 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             self::assertTrue($server->isRunning());
         } finally {
             $server->stop();
-            $registry->removeRecord('session_server');
+            $registry->removeRecord(self::ROLE);
             $tokenPath = BP . 'var/session/' . $tokenFileName;
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);

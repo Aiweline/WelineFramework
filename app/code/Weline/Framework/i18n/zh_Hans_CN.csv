@@ -16,77 +16,6 @@ end,end
 "读取模块列表失败：%{1}。请检查文件权限，并确认 Web 与 CLI 运行用户一致。","读取模块列表失败：%{1}。请检查文件权限，并确认 Web 与 CLI 运行用户一致。"
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
 系统错误：%{1},系统错误：%{1}
-"MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例","MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例"
-"MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}","MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}"
-模块缓存清理中...,模块缓存清理中...
-模块缓存,模块缓存
-框架缓存清理中...,框架缓存清理中...
-框架缓存,框架缓存
-没有任何类型的缓存需要清理！,没有任何类型的缓存需要清理！
-"WLS 缓存清理命令已发送","WLS 缓存清理命令已发送"
-"WLS 缓存清理命令发送失败：%{1}","WLS 缓存清理命令发送失败：%{1}"
-未知错误,未知错误
-"%{1} 清理完成","%{1} 清理完成"
-"📊 缓存类: %{1} 个","📊 缓存类: %{1} 个"
-"📁 缓存文件: %{1} 个","📁 缓存文件: %{1} 个"
-"💾 缓存项: %{1} 个","💾 缓存项: %{1} 个"
-"🗂️  释放空间: %{1}","🗂️  释放空间: %{1}"
-"%{1} 无需清理","%{1} 无需清理"
-缓存清理完成！,缓存清理完成！
-"📊 总计缓存类: %{1} 个","📊 总计缓存类: %{1} 个"
-"📁 总计缓存文件: %{1} 个","📁 总计缓存文件: %{1} 个"
-"💾 总计缓存项: %{1} 个","💾 总计缓存项: %{1} 个"
-"🗂️  总计释放空间: %{1}","🗂️  总计释放空间: %{1}"
-所有缓存都是最新的，无需清理,所有缓存都是最新的，无需清理
-"缓存目录不存在: %{1}","缓存目录不存在: %{1}"
-没有找到需要清理的缓存目录,没有找到需要清理的缓存目录
-过期缓存清理中...,过期缓存清理中...
-"清理 %{1} 缓存失败: %{2}","清理 %{1} 缓存失败: %{2}"
-过期缓存清理完成！,过期缓存清理完成！
-"📁 清理文件: %{1} 个","📁 清理文件: %{1} 个"
-"📊 处理目录: %{1} 个","📊 处理目录: %{1} 个"
-没有发现过期的缓存文件,没有发现过期的缓存文件
-"清理过程中出现 %{1} 个错误:","清理过程中出现 %{1} 个错误:"
-缓存刷新。清理掉过期的缓存文件。,缓存刷新。清理掉过期的缓存文件。
-缓存已清理！,缓存已清理！
-不存在的缓存标识：,不存在的缓存标识：
-缓存状态总览,缓存状态总览
-"📱 模块缓存","📱 模块缓存"
-"🔧 框架缓存","🔧 框架缓存"
-"📊 总体统计","📊 总体统计"
-"📁 缓存目录位置: %{1}","📁 缓存目录位置: %{1}"
-总缓存数,总缓存数
-已启用,已启用
-已禁用,已禁用
-总占用空间,总占用空间
-指定缓存状态,指定缓存状态
-未找到的缓存标识:,未找到的缓存标识:
-标识,标识
-状态,状态
-占用空间,占用空间
-可清理,可清理
-描述,描述
-启用,启用
-禁用,禁用
-缓存标识,缓存标识
-可清理空间,可清理空间
-文件数量,文件数量
-"缓存状态。[enable/disable]:开启/关闭 [identify...]:缓存识别名","缓存状态。[enable/disable]:开启/关闭 [identify...]:缓存识别名"
-"执行 CacheWarmerRegistry 中所有可用的预热器","执行 CacheWarmerRegistry 中所有可用的预热器"
-选项:,选项:
-示例:,示例:
-开始执行缓存预热...,开始执行缓存预热...
-"预热汇总：total=%{1} ran=%{2} skipped=%{3} warmed=%{4} duration=%{5}ms","预热汇总：total=%{1} ran=%{2} skipped=%{3} warmed=%{4} duration=%{5}ms"
-"预热中出现 %{1} 个错误","预热中出现 %{1} 个错误"
-预热完成,预热完成
-"尚未注册任何 CacheWarmer","尚未注册任何 CacheWarmer"
-已注册预热器：,已注册预热器：
-开始清理拓展全页缓存：,开始清理拓展全页缓存：
-模块,模块
-不存在！,不存在！
-"已清理 %{1} 个模块的模板缓存","已清理 %{1} 个模块的模板缓存"
-没有需要清理的模板缓存,没有需要清理的模板缓存
-清理完成：%{1},清理完成：%{1}
 "framework.view.block.class_not_found %{1}","framework.view.block.class_not_found %{1}"
 调试输出,调试输出
 调用栈信息,调用栈信息
@@ -132,6 +61,7 @@ SQL调试输出,SQL调试输出
 命令,命令
 简述,简述
 获取命令帮助信息失败,获取命令帮助信息失败
+描述,描述
 使用方法,使用方法
 选项,选项
 参数,参数
@@ -157,6 +87,11 @@ SQL调试输出,SQL调试输出
 未开启代码美化工具。,未开启代码美化工具。
 成功关闭随机静态文件版本号！,成功关闭随机静态文件版本号！
 成功开启随机静态文件版本号！,成功开启随机静态文件版本号！
+"已注册的 QueryProvider（%{1} 个）","已注册的 QueryProvider（%{1} 个）"
+Provider：%{1}（%{2}）,Provider：%{1}（%{2}）
+名称：%{1},名称：%{1}
+说明：%{1},说明：%{1}
+Operation：%{1}.%{2},Operation：%{1}.%{2}
 "Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}","Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}"
 开始预编译反射元数据与编译型工厂...,开始预编译反射元数据与编译型工厂...
 没有找到活跃的模块,没有找到活跃的模块
@@ -188,6 +123,7 @@ SQL调试输出,SQL调试输出
 "只编译 weline.modules.js","只编译 weline.modules.js"
 "只编译 less","只编译 less"
 使用别名,使用别名
+"Frontend JSON query is deprecated. Use the Weline frontend worker API.","Frontend JSON query is deprecated. Use the Weline frontend worker API."
 查询成功,查询成功
 查询失败：%{1},查询失败：%{1}
 未知,未知
@@ -380,16 +316,6 @@ SQL调试输出,SQL调试输出
 "恢复分块表数据失败: %{1}","恢复分块表数据失败: %{1}"
 "表 %{1} 数据量较大 (%{2} 行)，使用分批备份","表 %{1} 数据量较大 (%{2} 行)，使用分批备份"
 "智能备份失败: %{1}","智能备份失败: %{1}"
-"Create New User","Create New User"
-"i18n 占位符功能测试","i18n 占位符功能测试"
-"User %{1} has %{2} messages","User %{1} has %{2} messages"
-"%{1} + %{2} = %{3}","%{1} + %{2} = %{3}"
-"User %{name} has %{count} messages","User %{name} has %{count} messages"
-"%{name}，你好！我 %{age} 岁了","%{name}，你好！我 %{age} 岁了"
-"Field %{field} must be at least %{min} characters","Field %{field} must be at least %{min} characters"
-"Showing page %{current} of %{total} (%{per_page} per page)","Showing page %{current} of %{total} (%{per_page} per page)"
-"Hello %{1}","Hello %{1}"
-"Name: %{name}, Value: %{value}","Name: %{name}, Value: %{value}"
 "========== 环境依赖检测 ==========","========== 环境依赖检测 =========="
 正在收集环境需求...,正在收集环境需求...
 正在检测环境...,正在检测环境...
@@ -601,9 +527,6 @@ SQL调试输出,SQL调试输出
 "%{1} 事件Event未指定name属性：<event name=""eventName"">...</event>","%{1} 事件Event未指定name属性：<event name=""eventName"">...</event>"
 "%{1} 事件Event的_value格式错误或缺少observer节点","%{1} 事件Event的_value格式错误或缺少observer节点"
 "%{1} 观察者Observer没有设置name/instance属性：<observer name=""..."" instance=""...""/>","%{1} 观察者Observer没有设置name/instance属性：<observer name=""..."" instance=""...""/>"
-清理完毕！,清理完毕！
-清除系统事件缓存！,清除系统事件缓存！
-刷新系统事件缓存！,刷新系统事件缓存！
 错误的缓存处理参数！-c：清除缓存，-f：刷新缓存！,错误的缓存处理参数！-c：清除缓存，-f：刷新缓存！
 缓存已清除！,缓存已清除！
 未知的参数：%{1},未知的参数：%{1}
@@ -622,16 +545,22 @@ SQL调试输出,SQL调试输出
 "✖ 事件注册表重建失败：事件名冲突","✖ 事件注册表重建失败：事件名冲突"
 重建失败：%{1},重建失败：%{1}
 观察者必须继承于：,观察者必须继承于：
+"事件 %{1} 跳过无效观察者配置。","事件 %{1} 跳过无效观察者配置。"
+"事件 %{1} 跳过缺少 instance 的观察者配置。","事件 %{1} 跳过缺少 instance 的观察者配置。"
+"事件 %{1} 跳过不存在的观察者类：%{2}","事件 %{1} 跳过不存在的观察者类：%{2}"
 "Event Name: %{1}","Event Name: %{1}"
 "Class Name","Class Name"
 "Start Time","Start Time"
 "End Time","End Time"
 Duration,Duration
+事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）,事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）
 "收集模块观察者失败: %{1}","收集模块观察者失败: %{1}"
 应用运行前,应用运行前
 应用运行前，你可以在这里做一些初始化操作。,应用运行前，你可以在这里做一些初始化操作。
 应用运行后,应用运行后
 应用运行后，你可以在这里做一些后续操作。,应用运行后，你可以在这里做一些后续操作。
+"WLS worker bootstrap after","WLS worker bootstrap after"
+"Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches.","Triggered once after each WLS worker has loaded framework registries. Observers must only warm request-independent runtime caches."
 请求遥测数据已采集,请求遥测数据已采集
 "在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。","在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。"
 URL解析后,URL解析后
@@ -831,6 +760,9 @@ ACL分发,ACL分发
 "✓ 扩展注册表已重建完成。","✓ 扩展注册表已重建完成。"
 位置：generated/extends.php,位置：generated/extends.php
 "✖ 写入扩展注册表失败。","✖ 写入扩展注册表失败。"
+"query_help 不支持的操作：%{1}","query_help 不支持的操作：%{1}"
+"query_help provider 操作需要参数 provider 或 module","query_help provider 操作需要参数 provider 或 module"
+"query_help operation 操作需要参数 provider 与 operation","query_help operation 操作需要参数 provider 与 operation"
 "Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。","Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。"
 "Git 仓库工作目录，默认为项目根目录 BP","Git 仓库工作目录，默认为项目根目录 BP"
 "remove 子命令：指定要重写的分支/标签/ref（可多次传入），例如 --ref=master --ref=refs/remotes/origin/dev","remove 子命令：指定要重写的分支/标签/ref（可多次传入），例如 --ref=master --ref=refs/remotes/origin/dev"
@@ -978,6 +910,7 @@ HTTP响应时间:,HTTP响应时间:
 操作成功！,操作成功！
 警告！,警告！
 提示！,提示！
+Close,Close
 "接口工厂类: %{1} 不存在！","接口工厂类: %{1} 不存在！"
 "Factory工厂类: %{1} 不存在！","Factory工厂类: %{1} 不存在！"
 "不支持静态类实例化：%{1}。静态类应直接使用，无需通过 ObjectManager 实例化。","不支持静态类实例化：%{1}。静态类应直接使用，无需通过 ObjectManager 实例化。"
@@ -1017,6 +950,8 @@ dev=true,dev=true
 注册表已更新完成。,注册表已更新完成。
 已根据禁用模块更新后台菜单状态。,已根据禁用模块更新后台菜单状态。
 菜单更新失败：%{1}，请手动执行后台菜单收集命令,菜单更新失败：%{1}，请手动执行后台菜单收集命令
+不存在的模块：,不存在的模块：
+"Marketplace Meta 校验失败：","Marketplace Meta 校验失败："
 错误：此命令只能在开发模式下运行！,错误：此命令只能在开发模式下运行！
 当前部署模式：%{1},当前部署模式：%{1}
 请使用以下命令切换到开发模式：,请使用以下命令切换到开发模式：
@@ -1131,6 +1066,7 @@ dev=true,dev=true
 "模块 %{1} 备份成功","模块 %{1} 备份成功"
 备份路径：%{1},备份路径：%{1}
 "模块 %{1} 备份失败：%{2}","模块 %{1} 备份失败：%{2}"
+未知错误,未知错误
 正在更新系统注册表（Extends、事件、Hook、插件等）...,正在更新系统注册表（Extends、事件、Hook、插件等）...
 "✓ 系统注册表已更新完成。","✓ 系统注册表已更新完成。"
 正在更新标签注册表...,正在更新标签注册表...
@@ -1186,9 +1122,6 @@ dev=true,dev=true
 "%{1} 拦截器Plugin未指定name属性：<plugin name=""pluginName"">...</plugin>","%{1} 拦截器Plugin未指定name属性：<plugin name=""pluginName"">...</plugin>"
 "%{1} 拦截器Plugin未指定class属性：<plugin class=""pluginClass"">...</plugin>","%{1} 拦截器Plugin未指定class属性：<plugin class=""pluginClass"">...</plugin>"
 "%{1} 拦截器Interceptor没有设置name/instance属性：<interceptor name=""..."" instance=""...""/>","%{1} 拦截器Interceptor没有设置name/instance属性：<interceptor name=""..."" instance=""...""/>"
-拦截器缓存清理成功！,拦截器缓存清理成功！
-插件缓存未就绪，跳过清理。,插件缓存未就绪，跳过清理。
-插件缓存清理！,插件缓存清理！
 增量编译模块：%{1}...,增量编译模块：%{1}...
 增量编译结束...,增量编译结束...
 编译开始...,编译开始...
@@ -1196,9 +1129,11 @@ dev=true,dev=true
 清除编译缓存...,清除编译缓存...
 编译结束...,编译结束...
 "请指定操作：enable/disable 或 0/1","请指定操作：enable/disable 或 0/1"
+启用,启用
 关闭,关闭
 当前插件缓存状态：,当前插件缓存状态：
 插件缓存,插件缓存
+状态,状态
 没有找到插件缓存配置,没有找到插件缓存配置
 "插件缓存状态设置：enable/disable 或 0/1","插件缓存状态设置：enable/disable 或 0/1"
 无法动态代理final类:%{1},无法动态代理final类:%{1}
@@ -1298,25 +1233,22 @@ HTTP方法,HTTP方法
 ─────────────────────────────────────────────────────────────,─────────────────────────────────────────────────────────────
 系统更新已停止,系统更新已停止
 "请修复上述 %{1} 个规则违反后，重新运行系统更新命令","请修复上述 %{1} 个规则违反后，重新运行系统更新命令"
-测试类不应放在业务代码目录下,测试类不应放在业务代码目录下
-"测试类（继承自 PHPUnit\Framework\TestCase 或 Weline\Framework\UnitTest\TestCore，或类名包含 Test）不应放在业务代码目录（Model、Controller、Block、Helper、Observer、Plugin、Console、View、Taglib、Api）下。测试类应放在专门的测试目录（如 Test、UnitTest、Tests、tests）下。","测试类（继承自 PHPUnit\Framework\TestCase 或 Weline\Framework\UnitTest\TestCore，或类名包含 Test）不应放在业务代码目录（Model、Controller、Block、Helper、Observer、Plugin、Console、View、Taglib、Api）下。测试类应放在专门的测试目录（如 Test、UnitTest、Tests、tests）下。"
-检测到测试类位置约束违反，请修复后重试。,检测到测试类位置约束违反，请修复后重试。
-"发现 %{1} 处测试类位置约束违反：","发现 %{1} 处测试类位置约束违反："
-"模块：%{1}（%{2} 处违反）","模块：%{1}（%{2} 处违反）"
-"[%{1}] 测试类 %{2} 不应放在业务代码目录 %{3} 下","[%{1}] 测试类 %{2} 不应放在业务代码目录 %{3} 下"
-文件位置：%{1},文件位置：%{1}
-"修复建议：将测试文件移动到专门的测试目录（如 Test、UnitTest、Tests、tests）下","修复建议：将测试文件移动到专门的测试目录（如 Test、UnitTest、Tests、tests）下"
 "SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
 "当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"
 "SSE 请求处理失败，请稍后重试。","SSE 请求处理失败，请稍后重试。"
 "SSE 请求被终止。","SSE 请求被终止。"
 "SSE 请求失败。","SSE 请求失败。"
 "参数 provider 不能为空","参数 provider 不能为空"
-"参数 operation 不能为空","参数 operation 不能为空"
 查询被拒绝,查询被拒绝
-"introspect 参数 what 必须为 providers、operations 或 operation，当前：%{1}","introspect 参数 what 必须为 providers、operations 或 operation，当前：%{1}"
-"introspect what=operations 时，参数 provider 必填","introspect what=operations 时，参数 provider 必填"
+"该 operation 未暴露给前端：%{1}.%{2}","该 operation 未暴露给前端：%{1}.%{2}"
+"introspect 参数 what 必须为 providers、operations、operation、provider 或 modules，当前：%{1}","introspect 参数 what 必须为 providers、operations、operation、provider 或 modules，当前：%{1}"
+"introspect what=provider 时，参数 provider 或 module 必填","introspect what=provider 时，参数 provider 或 module 必填"
 "未找到 provider：%{1}","未找到 provider：%{1}"
+"模块 %{1} 对应多个 provider，请指定其一：%{2}","模块 %{1} 对应多个 provider，请指定其一：%{2}"
+"未找到 provider 或模块：%{1}。相似项：%{2}","未找到 provider 或模块：%{1}。相似项：%{2}"
+"未找到 provider 或模块：%{1}","未找到 provider 或模块：%{1}"
+"该 provider 没有暴露给前端的 operation：%{1}","该 provider 没有暴露给前端的 operation：%{1}"
+"introspect what=operations 时，参数 provider 必填","introspect what=operations 时，参数 provider 必填"
 "introspect what=operation 时，参数 provider 和 operation 必填","introspect what=operation 时，参数 provider 和 operation 必填"
 "provider %{1} 中未找到 operation：%{2}","provider %{1} 中未找到 operation：%{2}"
 "缺少 operation 参数","缺少 operation 参数"
@@ -1352,13 +1284,16 @@ HTTP方法,HTTP方法
 "- PSR-4 映射缓存: %{1} 个命名空间","- PSR-4 映射缓存: %{1} 个命名空间"
 "后台优化任务失败: %{1}","后台优化任务失败: %{1}"
 后台执行优化缓存生成（类映射、PSR-4、反射编译）,后台执行优化缓存生成（类映射、PSR-4、反射编译）
+跳过类映射缓存生成,跳过类映射缓存生成
 跳过反射元数据编译,跳过反射元数据编译
 手动执行,手动执行
+跳过类映射,跳过类映射
 跳过反射编译,跳过反射编译
 "已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}","已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}"
 "清理异常卸载模块 ACL/菜单残留失败：%{1}","清理异常卸载模块 ACL/菜单残留失败：%{1}"
 "已从 modules.php 中移除以下异常卸载的模块：%{1}","已从 modules.php 中移除以下异常卸载的模块：%{1}"
 "从 modules.php 移除异常模块时失败：%{1}","从 modules.php 移除异常模块时失败：%{1}"
+检测到以下模块源目录已不存在，将在刷新注册表前移除：%{1},检测到以下模块源目录已不存在，将在刷新注册表前移除：%{1}
 "正在检查 composer 命令...","正在检查 composer 命令..."
 "未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。","未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。"
 "找到 composer 命令: %{1}","找到 composer 命令: %{1}"
@@ -1380,6 +1315,7 @@ HTTP方法,HTTP方法
 获取升级锁失败：%{1},获取升级锁失败：%{1}
 已启用延迟注册表更新模式（批量优化）,已启用延迟注册表更新模式（批量优化）
 正在准备系统环境...,正在准备系统环境...
+"已跳过 composer dump-autoload（快速更新模式）","已跳过 composer dump-autoload（快速更新模式）"
 已跳过环境依赖检测,已跳过环境依赖检测
 正在检测环境依赖...,正在检测环境依赖...
 "✓ 环境依赖检测通过","✓ 环境依赖检测通过"
@@ -1438,6 +1374,7 @@ HTTP方法,HTTP方法
 标签注册表收集时发生错误：%{1}，但将继续执行。,标签注册表收集时发生错误：%{1}，但将继续执行。
 注册表已在本次升级中收集过，跳过重复收集,注册表已在本次升级中收集过，跳过重复收集
 检测到模块安装或升级，正在重新收集所有注册表信息...,检测到模块安装或升级，正在重新收集所有注册表信息...
+检测到新部署模块，先写入模块注册表：%{1},检测到新部署模块，先写入模块注册表：%{1}
 "指定模块升级模式：仅升级 %{1}","指定模块升级模式：仅升级 %{1}"
 "未知阶段 code：%{1}。可选：%{2}","未知阶段 code：%{1}。可选：%{2}"
 仅运行指定阶段：%{1},仅运行指定阶段：%{1}
@@ -1529,10 +1466,12 @@ HTTP方法,HTTP方法
 "跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）","跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）"
 禁用后台优化任务，改为同步执行（等待缓存生成完成）,禁用后台优化任务，改为同步执行（等待缓存生成完成）
 "同上，--skip-background-optimize 的简写","同上，--skip-background-optimize 的简写"
-"跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒","跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒"
+"跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新","跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新"
+"仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段","仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段"
 "仅运行 schema_diff 阶段（测试声明式表）","仅运行 schema_diff 阶段（测试声明式表）"
 "仅运行 framework_db_bootstrap 阶段","仅运行 framework_db_bootstrap 阶段"
 "跳过 classmap 生成（未新增/删除文件时）","跳过 classmap 生成（未新增/删除文件时）"
+"跳过 composer dump-autoload","跳过 composer dump-autoload"
 "跳过反射编译（加快 s:up）","跳过反射编译（加快 s:up）"
 同步执行优化（等待完成）,同步执行优化（等待完成）
 "env.php 中数据库配置有效，直接执行安装...","env.php 中数据库配置有效，直接执行安装..."
@@ -1688,8 +1627,6 @@ HTTP方法,HTTP方法
 "文件读取异常，重试第 %{1} 次: %{2} - %{3}","文件读取异常，重试第 %{1} 次: %{2} - %{3}"
 "文件读取最终失败: %{1} - %{2}","文件读取最终失败: %{1} - %{2}"
 进程名不能为空,进程名不能为空
-"回滚失败: %{1}","回滚失败: %{1}"
-"升级失败: %{1}","升级失败: %{1}"
 "offset_type 不存在, 请选择","offset_type 不存在, 请选择"
 天,天
 周,周
@@ -1930,12 +1867,6 @@ env.php中的服务器信息:,env.php中的服务器信息:
 "PID: %{1}","PID: %{1}"
 "状态: %{1}","状态: %{1}"
 "PHPUnit报告服务器已停止 (PID: %{1})","PHPUnit报告服务器已停止 (PID: %{1})"
-"Pest 测试框架未安装！","Pest 测试框架未安装！"
-请运行以下命令安装:,请运行以下命令安装:
-"composer require --dev pestphp/pest","composer require --dev pestphp/pest"
-"开始运行 Pest 测试...","开始运行 Pest 测试..."
-"测试框架: Pest PHP","测试框架: Pest PHP"
-"运行 Pest PHP 测试","运行 Pest PHP 测试"
 "Pest 测试框架初始化失败: %{1}","Pest 测试框架初始化失败: %{1}"
 "请先定义项目根目录常量 BP","请先定义项目根目录常量 BP"
 "Pest 测试框架未安装，请运行: composer require --dev pestphp/pest","Pest 测试框架未安装，请运行: composer require --dev pestphp/pest"
@@ -1943,9 +1874,6 @@ env.php中的服务器信息:,env.php中的服务器信息:
 错误的%{1}参数格式，正确格式应该是:%{2},错误的%{1}参数格式，正确格式应该是:%{2}
 参数链%{1}没有%{2}参数，确保参数调用链正常！正确格式应该是:%{3},参数链%{1}没有%{2}参数，确保参数调用链正常！正确格式应该是:%{3}
 KEY,KEY
-Hello,Hello
-"Hello World","Hello World"
-hello,hello
 搜索商品...,搜索商品...
 "<js> 标签路径不能为空，示例：%{1}","<js> 标签路径不能为空，示例：%{1}"
 "<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确","<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确"
@@ -1962,6 +1890,9 @@ hello,hello
 无法创建缓存锁文件：%{1},无法创建缓存锁文件：%{1}
 写入编译缓存失败：%{1},写入编译缓存失败：%{1}
 写入元数据缓存失败：%{1},写入元数据缓存失败：%{1}
+"Failed to write template manifest temp file: %{1}","Failed to write template manifest temp file: %{1}"
+"Failed to write template manifest file: %{1}","Failed to write template manifest file: %{1}"
+"Failed to hash template source file: %{1}","Failed to hash template source file: %{1}"
 已安装,已安装
 安装失败,安装失败
 已跳过,已跳过
@@ -2007,6 +1938,8 @@ hello,hello
 安装中...,安装中...
 请求失败,请求失败
 "确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。","确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+操作失败,操作失败
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 资源不存在：%{1}，模组：%{2},资源不存在：%{1}，模组：%{2}
 资源不存在：%{1},资源不存在：%{1}

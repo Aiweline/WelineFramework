@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeResourceCatalog;
 
 class LayoutPathResolver
 {
@@ -18,21 +19,66 @@ class LayoutPathResolver
 
     public static function resolveLayoutTemplate(string $layoutPath, WelineTheme $theme, string $area): ?string
     {
-        $defaultPath = self::getDefaultLayoutPath($layoutPath, $area);
-        if (!$defaultPath || !is_file($defaultPath)) {
-            return null;
+        $resolved = self::resolveLayoutTemplateOnce($layoutPath, $theme, $area);
+        if ($resolved !== null) {
+            return $resolved;
         }
 
-        try {
-            /** @var ThemePathResolver $themePathResolver */
-            $themePathResolver = ObjectManager::getInstance(ThemePathResolver::class);
-            $resolvedPath = $themePathResolver->resolveThemeFile($defaultPath, $theme);
-            if (is_file($resolvedPath)) {
-                return self::toWelineThemeModulePath($layoutPath);
+        // 例如 account.dashboard：若未命中 dashboard.phtml，则回退 account.default（模块内仍有完整页面骨架）
+        $normalized = str_replace('\\', '/', $layoutPath);
+        if (preg_match('#^theme/([^/]+)/layouts/([^/]+)/(.+)\.phtml$#', $normalized, $m)) {
+            $areaFromPath = $m[1];
+            $group = $m[2];
+            $optionBase = $m[3];
+            if ($optionBase !== '' && $optionBase !== 'default') {
+                $fallbackPath = 'theme' . DS . $areaFromPath . DS . 'layouts' . DS . $group . DS . 'default.phtml';
+
+                return self::resolveLayoutTemplateOnce($fallbackPath, $theme, $area);
             }
-        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    /**
+     * 解析单层布局路径；先允许当前主题/父主题提供布局，继承链无可用文件时再回退 Weline_Theme 模块默认文件。
+     */
+    private static function resolveLayoutTemplateOnce(string $layoutPath, WelineTheme $theme, string $area): ?string
+    {
+        $defaultPath = self::getDefaultLayoutPath($layoutPath, $area);
+        if ($defaultPath && is_file($defaultPath)) {
+            try {
+                /** @var ThemePathResolver $themePathResolver */
+                $themePathResolver = ObjectManager::getInstance(ThemePathResolver::class);
+                $resolvedPath = $themePathResolver->resolveThemeFile($defaultPath, $theme);
+                if (is_file($resolvedPath)) {
+                    return self::toWelineThemeModulePath($layoutPath);
+                }
+            } catch (\Throwable) {
+                if (is_file($defaultPath)) {
+                    return self::toWelineThemeModulePath($layoutPath);
+                }
+            }
+
             if (is_file($defaultPath)) {
                 return self::toWelineThemeModulePath($layoutPath);
+            }
+        }
+
+        $moduleContributedPath = self::resolveModuleContributedLayout($layoutPath, $theme, $area);
+        if ($moduleContributedPath !== null) {
+            return $moduleContributedPath;
+        }
+
+        if ($defaultPath) {
+            try {
+                /** @var ThemePathResolver $themePathResolver */
+                $themePathResolver = ObjectManager::getInstance(ThemePathResolver::class);
+                $resolvedPath = $themePathResolver->resolveThemeFile($defaultPath, $theme);
+                if (is_file($resolvedPath)) {
+                    return self::toWelineThemeModulePath($layoutPath);
+                }
+            } catch (\Throwable) {
             }
         }
 
@@ -70,7 +116,6 @@ class LayoutPathResolver
         }
 
         [$moduleCode, $relativePath] = explode('::', $modulePath, 2);
-        $relativePathForFile = str_replace('/', DS, $relativePath);
 
         if ($moduleCode === 'Weline_Theme') {
             $defaultPath = self::getDefaultLayoutPath($relativePath, $area);
@@ -91,21 +136,22 @@ class LayoutPathResolver
             return is_file($defaultPath) ? $defaultPath : null;
         }
 
-        $themePath = $theme->getPath();
-        if (empty($themePath)) {
+        $moduleDefaultPath = self::getModuleThemeFilePath($moduleCode, $relativePath);
+        if (!$moduleDefaultPath) {
             return null;
         }
 
-        if (strpos($relativePath, 'theme/') === 0) {
-            $relativePath = substr($relativePath, 6);
+        try {
+            /** @var ThemePathResolver $themePathResolver */
+            $themePathResolver = ObjectManager::getInstance(ThemePathResolver::class);
+            $resolvedPath = $themePathResolver->resolveThemeFile($moduleDefaultPath, $theme);
+            if (is_file($resolvedPath)) {
+                return $resolvedPath;
+            }
+        } catch (\Throwable) {
         }
 
-        $fullPath = rtrim($themePath, DS) . DS . 'view' . DS . str_replace('/', DS, $relativePath);
-        if (is_file($fullPath)) {
-            return $fullPath;
-        }
-
-        return null;
+        return is_file($moduleDefaultPath) ? $moduleDefaultPath : null;
     }
 
     public static function getCompiledLayoutPath(string $modulePath, string $lang): string
@@ -159,5 +205,72 @@ class LayoutPathResolver
     private static function toWelineThemeModulePath(string $layoutPath): string
     {
         return 'Weline_Theme::' . str_replace('\\', '/', $layoutPath);
+    }
+
+    private static function resolveModuleContributedLayout(string $layoutPath, WelineTheme $theme, string $area): ?string
+    {
+        $layoutInfo = self::parseLayoutPath($layoutPath, $area);
+        if ($layoutInfo === null) {
+            return null;
+        }
+
+        try {
+            /** @var ThemeResourceCatalog $resourceCatalog */
+            $resourceCatalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
+            $resource = $resourceCatalog->getLayoutResource(
+                $layoutInfo['area'],
+                $theme,
+                $layoutInfo['type'],
+                $layoutInfo['option']
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!is_array($resource) || ($resource['layer_type'] ?? '') !== 'module') {
+            return null;
+        }
+
+        $moduleName = (string)($resource['module_name'] ?? '');
+        $relativePath = str_replace('\\', '/', (string)($resource['relative_path'] ?? ''));
+        if ($moduleName === '' || $relativePath === '') {
+            return null;
+        }
+
+        return $moduleName . '::theme/' . $layoutInfo['area'] . '/layouts/' . ltrim($relativePath, '/');
+    }
+
+    private static function parseLayoutPath(string $layoutPath, string $fallbackArea): ?array
+    {
+        $normalized = str_replace('\\', '/', $layoutPath);
+        if (!preg_match('#^theme/([^/]+)/layouts/([^/]+)/(.+)\.phtml$#', $normalized, $matches)) {
+            return null;
+        }
+
+        return [
+            'area' => $matches[1] !== '' ? $matches[1] : $fallbackArea,
+            'type' => $matches[2],
+            'option' => $matches[3] === '' ? 'default' : $matches[3],
+        ];
+    }
+
+    private static function getModuleThemeFilePath(string $moduleCode, string $relativePath): ?string
+    {
+        $modules = Env::getInstance()->getModuleList();
+        $basePath = $modules[$moduleCode]['base_path'] ?? '';
+        if (!is_string($basePath) || $basePath === '') {
+            return null;
+        }
+
+        $relativePath = str_replace(['/', '\\'], DS, trim($relativePath, '/\\'));
+        if (stripos($relativePath, 'view' . DS . 'theme' . DS) === 0) {
+            return rtrim($basePath, DS) . DS . $relativePath;
+        }
+
+        if (stripos($relativePath, 'theme' . DS) === 0) {
+            return rtrim($basePath, DS) . DS . 'view' . DS . $relativePath;
+        }
+
+        return rtrim($basePath, DS) . DS . 'view' . DS . 'theme' . DS . $relativePath;
     }
 }

@@ -225,7 +225,7 @@ abstract class QueryAst implements QueryInterface
 
     public function concat_like(string $fields, string $like_word): QueryInterface
     {
-        return $this->where("CONCAT({$fields}) like '{$like_word}'");
+        return $this->where("CONCAT({$fields})", $like_word, 'LIKE');
     }
 
     public function concat(string $fields, string $alias_field): QueryInterface

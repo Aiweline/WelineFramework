@@ -8,7 +8,6 @@ use PHPUnit\Framework\TestCase;
 use Weline\Customer\Controller\Account\Login;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
-use Weline\Framework\Session\SessionInterface;
 use Weline\Framework\View\Template;
 
 class LoginViewRoutingTest extends TestCase
@@ -24,21 +23,21 @@ class LoginViewRoutingTest extends TestCase
             ->method('isLoggedIn')
             ->willReturn(false);
         $assignCalls = 0;
-        $controller->expects($this->exactly(4))
+        $controller->expects($this->exactly(3))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Login {
                 if ($assignCalls === 0) {
                     TestCase::assertSame('redirect_url', $key);
-                    TestCase::assertSame('https://example.com/return', $value);
+                    TestCase::assertSame('customer/catalog', $value);
                 } elseif ($assignCalls === 1) {
                     TestCase::assertSame('title', $key);
                     TestCase::assertNotSame('', (string) $value);
                 } elseif ($assignCalls === 2) {
-                    TestCase::assertSame('error_message', $key);
-                    TestCase::assertNull($value);
-                } elseif ($assignCalls === 3) {
-                    TestCase::assertSame('success_message', $key);
-                    TestCase::assertNull($value);
+                    TestCase::assertSame('meta', $key);
+                    TestCase::assertSame([
+                        'showHeader' => false,
+                        'showFooter' => false,
+                    ], $value);
                 }
                 $assignCalls++;
                 return $controller;
@@ -51,23 +50,23 @@ class LoginViewRoutingTest extends TestCase
             ->method('redirect');
 
         $request = $this->createMock(Request::class);
+        // 与 Login::normalizeRedirectTarget 一致：站外绝对 URL 会被拒绝，测站内相对路径
         $request->method('getParam')
-            ->willReturnMap([
-                ['referer', null],
-                ['redirect_url', 'https://example.com/return'],
-                ['redirect', ''],
-            ]);
+            ->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+                return match ($key) {
+                    'referer' => null,
+                    'redirect_url' => '',
+                    'redirect' => '',
+                    default => $default,
+                };
+            });
         $request->method('getReferer')
-            ->willReturn('https://example.com/return');
-
-        $rawSession = $this->createMock(SessionInterface::class);
-        $rawSession->expects($this->once())
-            ->method('set')
-            ->with('login_referer', 'https://example.com/return');
+            ->willReturn('customer/catalog');
 
         $authSession = $this->createMock(AuthenticatedSessionInterface::class);
-        $authSession->method('getSession')
-            ->willReturn($rawSession);
+        $authSession->expects($this->once())
+            ->method('set')
+            ->with('login_referer', 'customer/catalog');
 
         $this->setProtectedProperty($controller, 'request', $request);
         $this->setProtectedProperty($controller, 'session', $authSession);
@@ -83,7 +82,49 @@ class LoginViewRoutingTest extends TestCase
 
         $controller = new Login($this->createMock(Template::class));
 
-        $this->assertSame('account_auth', $property->getValue($controller));
+        $this->assertSame('account.auth', $property->getValue($controller));
+    }
+
+    public function testRefererValidationAcceptsGenericInternalPathsOnly(): void
+    {
+        $controller = new Login($this->createMock(Template::class));
+        $method = new \ReflectionMethod(Login::class, 'isValidReferer');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($controller, '/catalog/product/view?id=10'));
+        $this->assertTrue($method->invoke($controller, 'catalog/product/view?id=10'));
+        $this->assertTrue($method->invoke($controller, 'checkout/cart'));
+
+        $this->assertFalse($method->invoke($controller, ''));
+        $this->assertFalse($method->invoke($controller, '//evil.example/path'));
+        $this->assertFalse($method->invoke($controller, 'https://evil.example/path'));
+        $this->assertFalse($method->invoke($controller, 'customer:catalog'));
+        $this->assertFalse($method->invoke($controller, 'catalog\\product'));
+        $this->assertFalse($method->invoke($controller, '?redirect=/catalog'));
+    }
+
+    public function testNormalizeRedirectTargetDecodesEncodedInternalPath(): void
+    {
+        $controller = new Login($this->createMock(Template::class));
+        $method = new \ReflectionMethod(Login::class, 'normalizeRedirectTarget');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            'customer/account',
+            $method->invoke($controller, 'customer%2Faccount')
+        );
+    }
+
+    public function testFormatClientRedirectDecodesEncodedInternalPath(): void
+    {
+        $controller = new Login($this->createMock(Template::class));
+        $method = new \ReflectionMethod(Login::class, 'formatClientRedirect');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            '/customer/account',
+            $method->invoke($controller, 'customer%2Faccount')
+        );
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

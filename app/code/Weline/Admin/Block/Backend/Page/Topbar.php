@@ -15,6 +15,7 @@ use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Config;
+use Weline\Backend\Service\BackendWarmupContext;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -28,18 +29,19 @@ class Topbar extends \Weline\Framework\View\Block
     private Config $config;
     private AuthenticatedSessionInterface $session;
     private ?BackendUser $user = null;
+    private ?string $userCacheKey = null;
 
     public function __construct(Config $config, array $data = [])
     {
         $this->config = $config;
         $this->session = SessionFactory::getInstance()->createBackendSession();
         parent::__construct($data);
-        $this->getUser();
     }
 
     public function __init()
     {
         parent::__init();
+        $this->session = SessionFactory::getInstance()->createBackendSession();
         // 使用默认宽高24x18，autoSize=true使SVG自适应按钮大小
         $languages = $this->getI18n()->getLocalesWithFlagsDisplaySelf(Cookie::getLangLocal(), 24, 18, true, true);
         $websiteId = (int)($this->request->getData('website_id') ?? 0);
@@ -160,9 +162,33 @@ class Topbar extends \Weline\Framework\View\Block
 
     public function getUser(): BackendUser|AbstractModel
     {
-        if (empty($this->user)) {
-            $this->user = $this->session->getLoginUser();
+        if (\class_exists(BackendWarmupContext::class)) {
+            $warmupUser = BackendWarmupContext::currentUser();
+            if ($warmupUser instanceof BackendUser) {
+                $this->user = $warmupUser;
+                $this->userCacheKey = 'warmup:' . (int)$warmupUser->getId() . '|' . (string)$warmupUser->getUsername();
+                return $this->user;
+            }
         }
+
+        $this->session = SessionFactory::getInstance()->createBackendSession();
+        $cacheKey = (string)($this->session->getUserId() ?? 0) . '|' . (string)($this->session->getUsername() ?? '');
+        if ($this->user instanceof BackendUser && $this->userCacheKey === $cacheKey) {
+            return $this->user;
+        }
+
+        $user = $this->session->getLoginUser();
+        if ($user instanceof BackendUser) {
+            $this->user = $user;
+        } else {
+            /** @var BackendUser $fallback */
+            $fallback = ObjectManager::make(BackendUser::class);
+            $fallback->setData('username', 'Guest');
+            $fallback->setData('email', '');
+            $this->user = $fallback;
+        }
+        $this->userCacheKey = $cacheKey;
+
         return $this->user;
     }
 }

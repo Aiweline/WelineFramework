@@ -1,0 +1,41 @@
+# Keep GitNexus focused on source, tests, and durable docs.
+
+# Weline CLI entrypoints are source, even though GitNexus ignores "bin" by default.
+!bin/
+!bin/**
+
+# Dependencies, generated code, runtime state, and local tooling archives.
+vendor/
+var/
+tmp/
+data/
+generated/
+dev/
+extend/server/
+extend/*.phar
+app/code/Weline/AutoLeadAgent/
+app/code/Aiweline/
+app/code/WeShop/
+app/code/WelineTools/
+app/code/Agent/
+app/code/Weline/BackendThemeUpzet/
+app/code/Weline/ThemeFancy/
+app/code/Weline/Theme/
+tests/
+**/test/
+**/Test/
+app/design/
+
+# Frontend source/templates are part of the code graph.
+# Keep module view files, but skip framework tpl directories across modules.
+!app/code/**/view/
+!app/code/**/view/**
+
+**/view/tpl/
+**/view/tpl/**
+**/tpl/
+**/tpl/**
+
+pub/static/
+pub/media/
+pub/theme_previews/

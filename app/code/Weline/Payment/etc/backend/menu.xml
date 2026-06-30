@@ -5,11 +5,11 @@
     
     <!-- 支付方式管理 - 归入业务运营 > 支付管理 -->
     <menu source="Weline_Payment::payment_method" name="payment_method" title="支付方式" 
-          action="weline_payment/backend/method" parent="Weline_Backend::payment_group"
+          action="payment/backend/method" parent="Weline_Backend::payment_group"
           icon="mdi mdi-credit-card-outline" order="10"/>
     
     <!-- 交易记录管理 -->
     <menu source="Weline_Payment::payment_transaction" name="payment_transaction" title="交易记录" 
-          action="weline_payment/backend/transaction" parent="Weline_Backend::payment_group"
+          action="payment/backend/transaction" parent="Weline_Backend::payment_group"
           icon="mdi mdi-cash-multiple" order="20"/>
 </menus>

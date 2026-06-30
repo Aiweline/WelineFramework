@@ -16,6 +16,11 @@
  * @var bool $show_manage_link 是否显示管理链接
  * @var bool $has_accounts 是否有账户
  */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Seo\Service\PlatformVisual;
+
+/** @var PlatformVisual $platformVisual */
+$platformVisual = ObjectManager::getInstance(PlatformVisual::class);
 ?>
 <div id="<?= htmlspecialchars($widget_id, ENT_QUOTES) ?>" class="seo-account-widget card">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -69,7 +74,11 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <code><?= htmlspecialchars((string)($account['provider'] ?? ''), ENT_QUOTES) ?></code>
+                            <?php $platformCode = (string)($account['platform'] ?? $account['provider'] ?? ''); ?>
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <?= $platformVisual->renderIcon($platformCode, $platformCode, null, 24) ?>
+                                <code><?= htmlspecialchars((string)($account['provider'] ?? ''), ENT_QUOTES) ?></code>
+                            </span>
                         </td>
                         <td class="text-center">
                             <?php if ((int)($account['is_active'] ?? 0) === 1): ?>

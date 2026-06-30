@@ -1,5 +1,12 @@
 # DeveloperWorkspace 模块更新日志
 
+## [Unreleased]
+
+### Fixed
+
+- 请求链路面板在 `RequestLifecycleTrace` 达到 `wls.debug.request_trace_max_spans` 上限后，不再清空已采集 trace 并返回“链路已过期”。
+- 超上限后改为保留前 `N` 条阶段数据并停止继续记录，面板会明确提示“仅展示前 N 条阶段数据”。
+
 ## [v1.1.0] - 2025-10-26
 
 ### 🎉 新功能

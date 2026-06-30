@@ -161,7 +161,7 @@ class TranslationService
         
         // 准备适配器参数
         $targetLanguage = $this->getLanguageName($targetLocale);
-        $sourceLanguage = $sourceLocale === 'auto' ? '自动检测' : $this->getLanguageName($sourceLocale);
+        $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         $adapterStrategy = $strategy === self::STRATEGY_HIGH_FIDELITY ? 'professional' : 'standard';
         
         // 构建批量翻译提示词
@@ -172,7 +172,7 @@ class TranslationService
             $response = $this->aiService->generate(
                 $batchPrompt,
                 $modelCode,
-                'translation',
+                null,
                 null,
                 [
                     'target_language' => $targetLanguage,
@@ -238,25 +238,13 @@ class TranslationService
         string $sourceLanguage,
         string $strategy
     ): string {
-        $textList = '';
-        foreach ($texts as $index => $text) {
-            $num = $index + 1;
-            $textList .= "{$num}. {$text}\n";
-        }
-        
-        if ($sourceLanguage === '自动检测') {
-            $prompt = "请将以下文本列表翻译成{$targetLanguage}，要求：\n";
-        } else {
-            $prompt = "请将以下{$sourceLanguage}文本列表翻译成{$targetLanguage}，要求：\n";
-        }
-        
-        $prompt .= "1. 保持原文的顺序和编号\n";
-        $prompt .= "2. 每行翻译结果格式为：编号. 翻译内容\n";
-        $prompt .= "3. 只返回翻译结果，不要包含其他说明\n";
-        $prompt .= "4. 如果某条文本无法翻译，保持原文不变\n\n";
-        $prompt .= "原文列表：\n{$textList}\n翻译结果：\n";
-        
-        return $prompt;
+        $payload = json_encode(array_values($texts), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return "Translate this JSON array from {$sourceLanguage} to {$targetLanguage}.\n"
+            . "Return only a valid JSON array of translated strings in the same order and with the same item count.\n"
+            . "Preserve placeholders such as %{1}, %{name}, HTML tags, and template tokens exactly.\n"
+            . "Strategy: {$strategy}.\n"
+            . "Input JSON:\n{$payload}";
     }
     
     /**
@@ -268,6 +256,18 @@ class TranslationService
      */
     private function parseBatchTranslationResponse(string $response, int $expectedCount): array
     {
+        $json = trim($response);
+        if (str_starts_with($json, '```')) {
+            $json = preg_replace('/^```(?:json)?\s*/i', '', $json) ?? $json;
+            $json = preg_replace('/\s*```$/', '', $json) ?? $json;
+            $json = trim($json);
+        }
+
+        $decoded = json_decode($json, true);
+        if (is_array($decoded) && array_is_list($decoded) && count($decoded) === $expectedCount) {
+            return array_map(static fn($item): string => trim((string)$item), $decoded);
+        }
+
         $translations = [];
         $lines = explode("\n", trim($response));
         
@@ -297,12 +297,11 @@ class TranslationService
             $translations = array_values($translations);
         }
         
-        // 确保返回的数量正确
-        while (count($translations) < $expectedCount) {
-            $translations[] = '';
+        if (count($translations) !== $expectedCount) {
+            return [];
         }
-        
-        return array_slice($translations, 0, $expectedCount);
+
+        return array_map(static fn($item): string => trim((string)$item), $translations);
     }
 
     /**
@@ -329,7 +328,7 @@ class TranslationService
         // 注意：$targetLocale 已经被 validateAndGetLocale 标准化了（如 ja-JP）
         // 但 getLanguageName 需要处理标准化后的格式
         $targetLanguage = $this->getLanguageName($targetLocale);
-        $sourceLanguage = $sourceLocale === 'auto' ? '自动检测' : $this->getLanguageName($sourceLocale);
+        $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         
         // 检查语言名称是否正确获取
         if (empty($targetLanguage) || $targetLanguage === $targetLocale) {
@@ -379,7 +378,7 @@ class TranslationService
         string $strategy
     ): string {
         $targetLanguage = $this->getLanguageName($targetLocale);
-        $sourceLanguage = $sourceLocale === 'auto' ? '自动检测' : $this->getLanguageName($sourceLocale);
+        $sourceLanguage = $sourceLocale === 'auto' ? 'auto-detected language' : $this->getLanguageName($sourceLocale);
         
         if ($strategy === self::STRATEGY_HIGH_FIDELITY) {
             return "请将以下文本从{$sourceLanguage}翻译成{$targetLanguage}，要求：\n" .
@@ -428,15 +427,15 @@ class TranslationService
         $normalized = str_replace('_', '-', $localeCode);
         
         $languageNames = [
-            'zh-CN' => '中文',
-            'zh-Hans-CN' => '中文',
-            'en-US' => '英文',
-            'ja-JP' => '日文',
-            'ko-KR' => '韩文',
-            'fr-FR' => '法文',
-            'de-DE' => '德文',
-            'es-ES' => '西班牙文',
-            'ru-RU' => '俄文'
+            'zh-CN' => 'Chinese',
+            'zh-Hans-CN' => 'Chinese',
+            'en-US' => 'English',
+            'ja-JP' => 'Japanese',
+            'ko-KR' => 'Korean',
+            'fr-FR' => 'French',
+            'de-DE' => 'German',
+            'es-ES' => 'Spanish',
+            'ru-RU' => 'Russian'
         ];
         
         // 先尝试完整匹配
@@ -449,14 +448,14 @@ class TranslationService
         $langCode = strtolower($parts[0] ?? '');
         
         $langMap = [
-            'zh' => '中文',
-            'en' => '英文',
-            'ja' => '日文',
-            'ko' => '韩文',
-            'fr' => '法文',
-            'de' => '德文',
-            'es' => '西班牙文',
-            'ru' => '俄文'
+            'zh' => 'Chinese',
+            'en' => 'English',
+            'ja' => 'Japanese',
+            'ko' => 'Korean',
+            'fr' => 'French',
+            'de' => 'German',
+            'es' => 'Spanish',
+            'ru' => 'Russian'
         ];
         
         return $langMap[$langCode] ?? $localeCode;
@@ -495,11 +494,7 @@ class TranslationService
      */
     public function clearTranslationCache(?string $pattern = null): bool
     {
-        if ($pattern) {
-            return $this->cache->deleteByPattern('ai_translation_' . $pattern);
-        } else {
-            return $this->cache->deleteByPattern('ai_translation_*');
-        }
+        return $this->cache->clear();
     }
 
     /**

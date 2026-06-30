@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service;
 
-use Weline\Api\Service\ApiDocService;
 use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\Framework\Api\Validator\ApiSpecValidator;
@@ -24,7 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class ApiDocImporter
 {
-    private ApiDocService $apiDocService;
+    private ApiDocCollector $apiDocCollector;
     private ApiSpecValidator $validator;
     private Document $documentModel;
     private Catalog $catalogModel;
@@ -35,12 +34,12 @@ class ApiDocImporter
     private $progressCallback = null;
     
     public function __construct(
-        ApiDocService $apiDocService,
+        ApiDocCollector $apiDocCollector,
         ApiSpecValidator $validator,
         Document $documentModel,
         Catalog $catalogModel
     ) {
-        $this->apiDocService = $apiDocService;
+        $this->apiDocCollector = $apiDocCollector;
         $this->validator = $validator;
         $this->documentModel = $documentModel;
         $this->catalogModel = $catalogModel;
@@ -97,7 +96,7 @@ class ApiDocImporter
         
         // 生成所有API文档
         $this->progress(__('正在生成API文档...'), 'info');
-        $allApis = $this->apiDocService->generateAll($force);
+        $allApis = $this->apiDocCollector->generateAll($force);
         
         // 按模块组织并导入
         foreach ($allApis as $moduleName => $apis) {
@@ -246,6 +245,19 @@ class ApiDocImporter
         $content .= "- **类**: `" . ($api['class'] ?? '') . "`\n";
         $content .= "- **方法**: `" . ($api['method'] ?? '') . "`\n";
         $content .= "- **路由**: `" . ($api['route']['method'] ?? '') . " " . ($api['route']['path'] ?? '') . "`\n\n";
+
+        if (($api['frontend_worker'] ?? false) === true) {
+            $worker = $api['worker'] ?? [];
+            $content .= "## Frontend Worker API\n\n";
+            $content .= "- **调用方式**: `Weline.Api.resource()` / `Weline.Api.graph()` / `Weline.Api.stream()`\n";
+            $content .= "- **Provider**: `" . ($worker['provider'] ?? '') . "`\n";
+            $content .= "- **Operation**: `" . ($worker['operation'] ?? '') . "`\n";
+            $content .= "- **Mode**: `" . ($worker['mode'] ?? '') . "`\n";
+            $content .= "- **Graph**: `" . (($worker['graph'] ?? false) ? 'true' : 'false') . "`\n";
+            $content .= "- **Cost**: `" . ($worker['cost'] ?? 1) . "`\n";
+            $content .= "- **Cache TTL**: `" . ($worker['cache_ttl'] ?? 0) . "`\n\n";
+            $content .= "`/api/framework/query-bin` 是协议实现细节，业务前端不得手写该 URL，也不得改回 direct `fetch()`。\n\n";
+        }
         
         // 参数
         if (!empty($api['parameters'])) {
@@ -271,6 +283,43 @@ class ApiDocImporter
         if (!empty($api['example'])) {
             $content .= "## 示例\n\n";
             $example = $api['example'];
+
+            $sdkExampleLabels = [
+                'package' => '包名',
+                'download' => '下载位置',
+                'install' => '安装命令',
+                'docs' => '文档',
+                'content_type' => 'Content-Type',
+                'protocol' => '协议',
+                'derived_path' => '推导路径',
+            ];
+            $sdkExampleLines = [];
+            foreach ($sdkExampleLabels as $key => $label) {
+                if (!isset($example[$key]) || $example[$key] === '') {
+                    continue;
+                }
+                $sdkExampleLines[] = '- **' . $label . '**: `' . (string)$example[$key] . '`';
+            }
+            if (!empty($sdkExampleLines)) {
+                $content .= "**SDK / 协议信息**:\n\n";
+                $content .= implode("\n", $sdkExampleLines) . "\n\n";
+            }
+
+            if (($example['frontend_worker'] ?? false) !== true && !empty($example['code'])) {
+                $codeLanguage = str_starts_with((string)($example['package'] ?? ''), '@') ? 'js' : 'php';
+                $content .= "**示例代码**:\n\n";
+                $content .= "```{$codeLanguage}\n";
+                $content .= (string)$example['code'] . "\n";
+                $content .= "```\n\n";
+            }
+
+            if (($example['frontend_worker'] ?? false) === true) {
+                $content .= "**前端调用**:\n\n";
+                $content .= "```js\n";
+                $content .= (string)($example['code'] ?? '') . "\n";
+                $content .= "```\n\n";
+                return $content;
+            }
             
             if (!empty($example['method']) && !empty($example['path'])) {
                 $content .= "**请求**:\n\n";
@@ -321,8 +370,11 @@ class ApiDocImporter
             $catalog->setName('API文档')
                 ->setDescription('自动导入的API接口文档')
                 ->setIsSystem(true)
+                ->setPid(0)
                 ->setSortOrder(0)
                 ->save();
+        } elseif ($catalog->getPid() === null || $catalog->getPid() === '') {
+            $catalog->setPid(0)->save();
         }
         
         return $catalog;
@@ -372,7 +424,7 @@ class ApiDocImporter
         if (!$catalog->getId()) {
             $catalog->setName($displayName)
                 ->setDescription("模块 {$displayName} 的API文档")
-                ->setParentId((string)$parentCatalog->getId())
+                ->setPid((int)$parentCatalog->getId())
                 ->setIsSystem(true)
                 ->setSortOrder($sortOrder)
                 ->save();
@@ -397,7 +449,7 @@ class ApiDocImporter
         if (!$catalog->getId()) {
             $catalog->setName($version)
                 ->setDescription("API版本 {$version}")
-                ->setParentId((string)$parentCatalog->getId())
+                ->setPid((int)$parentCatalog->getId())
                 ->setIsSystem(true)
                 ->setSortOrder(0)
                 ->save();
@@ -424,7 +476,7 @@ class ApiDocImporter
         if (!$catalog->getId()) {
             $catalog->setName($category)
                 ->setDescription("API类 {$shortClassName}")
-                ->setParentId((string)$parentCatalog->getId())
+                ->setPid((int)$parentCatalog->getId())
                 ->setIsSystem(true)
                 ->setSortOrder(0)
                 ->save();

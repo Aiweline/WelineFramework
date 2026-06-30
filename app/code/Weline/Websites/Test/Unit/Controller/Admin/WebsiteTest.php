@@ -74,7 +74,18 @@ class WebsiteTest extends TestCore
         $reflection = new \ReflectionClass(Website::class);
         $sourceCode = file_get_contents($reflection->getFileName());
 
-        $this->assertStringContainsString('/component/offcanvas/success', $sourceCode);
+        $this->assertStringContainsString('component/backend/offcanvas/getSuccess', $sourceCode);
+    }
+
+    public function testWebsiteSaveRedirectsUseBackendOffcanvasResultPages(): void
+    {
+        $reflection = new \ReflectionClass(Website::class);
+        $sourceCode = file_get_contents($reflection->getFileName());
+
+        $this->assertStringContainsString('component/backend/offcanvas/getSuccess', $sourceCode);
+        $this->assertStringContainsString('component/backend/offcanvas/getError', $sourceCode);
+        $this->assertStringNotContainsString('/component/offcanvas/success', $sourceCode);
+        $this->assertStringNotContainsString('/component/offcanvas/error', $sourceCode);
     }
 
     public function testAddValidatesNewWebsiteId(): void
@@ -120,6 +131,57 @@ class WebsiteTest extends TestCore
         $this->assertArrayHasKey('target-button-text', $defaultData);
         $this->assertArrayHasKey('submit-button-text', $defaultData);
         $this->assertArrayHasKey('title', $defaultData);
+    }
+
+    public function testSearchAjaxUsesFrameworkJsonWithoutTerminatingWorker(): void
+    {
+        $searchAjaxCode = $this->getMethodSource(Website::class, 'searchAjax');
+
+        $this->assertStringContainsString('return $this->fetchJson($payload)', $searchAjaxCode);
+        $this->assertStringContainsString("template('Weline_Websites::templates/Admin/Website/table.phtml')", $searchAjaxCode);
+        $this->assertStringNotContainsString('exit;', $searchAjaxCode);
+        $this->assertStringNotContainsString('echo json_encode', $searchAjaxCode);
+        $this->assertStringNotContainsString('header(', $searchAjaxCode);
+    }
+
+    public function testWebsiteSearchBuildsOrConditionAcrossFields(): void
+    {
+        $method = new \ReflectionMethod(Website::class, 'applyWebsiteSearch');
+        $method->setAccessible(true);
+
+        $websiteModel = ObjectManager::getInstance(WebsiteModel::class, [], false);
+        $method->invoke($this->controller, $websiteModel, 'OpsFlow');
+        $websiteModel->select();
+
+        $sql = $websiteModel->getQuery()->getSql(false);
+        $this->assertMatchesRegularExpression('/name.*LIKE.*OR.*code.*LIKE.*OR.*url.*LIKE/s', $sql);
+    }
+
+    public function testAjaxSearchResetsToFirstPage(): void
+    {
+        $templatePath = BP . 'app/code/Weline/Websites/view/templates/Admin/Website/index.phtml';
+        $this->assertFileExists($templatePath);
+
+        $templateContent = file_get_contents($templatePath);
+
+        $this->assertStringContainsString("params.append('page', '1')", $templateContent);
+        $this->assertStringContainsString("params.append('pageSize', pageSize)", $templateContent);
+    }
+
+    private function getMethodSource(string $className, string $methodName): string
+    {
+        $method = new \ReflectionMethod($className, $methodName);
+        $fileName = $method->getFileName();
+        $this->assertIsString($fileName);
+
+        $lines = file($fileName);
+        $this->assertIsArray($lines);
+
+        return implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
     }
 
     private function prepareBackendRequest(): void

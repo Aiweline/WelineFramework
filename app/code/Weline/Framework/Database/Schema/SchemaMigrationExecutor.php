@@ -104,8 +104,17 @@ final class SchemaMigrationExecutor
                         try {
                             $connector->query($sql)->fetch();
                         } catch (\Throwable $e) {
-                            if ($this->shouldHealDuplicateUniqueIndex($op, $e)) {
-                                $this->dedupeDocumentCatalogNamePid($connector, $op->tableName);
+                            if ($this->shouldHealDocumentCatalogNamePidDuplicate($op, $e)) {
+                                $this->dedupeDocumentCatalogNamePid(
+                                    $connector,
+                                    $op->tableName,
+                                    $this->shouldCoalesceDocumentCatalogPidDuringDedupe($op),
+                                );
+                                $connector->query($sql)->fetch();
+                                continue;
+                            }
+                            if ($this->shouldHealDocumentModuleFileDuplicate($op, $e)) {
+                                $this->dedupeDocumentModuleFile($connector, $op->tableName);
                                 $connector->query($sql)->fetch();
                                 continue;
                             }
@@ -321,13 +330,14 @@ final class SchemaMigrationExecutor
             }
         }
         $hasCompositePk = count($pkColumns) > 1;
+        $isSqlite = $connector->getConfigProvider()->getDbType() === 'sqlite';
 
         foreach ($payload->columns as $col) {
             $opts = [];
             if ($col->primaryKey && !$hasCompositePk) {
                 $opts[] = 'PRIMARY KEY';
             }
-            if ($col->autoIncrement) {
+            if ($col->autoIncrement && !($isSqlite && $hasCompositePk)) {
                 $opts[] = 'AUTO_INCREMENT';
             }
             if (!$col->nullable && !$col->primaryKey) {
@@ -414,15 +424,23 @@ final class SchemaMigrationExecutor
         ];
     }
 
-    private function shouldHealDuplicateUniqueIndex(SchemaDiffOp $op, \Throwable $e): bool
+    private function shouldHealDocumentCatalogNamePidDuplicate(SchemaDiffOp $op, \Throwable $e): bool
     {
         if (!\str_contains($op->tableName, 'developer_workspace_document_catalog')) {
             return false;
         }
-        if ($op->kind !== SchemaDiffOp::KIND_ADD_INDEX || !$op->payload instanceof IndexDefinition) {
-            return false;
-        }
-        if ($op->payload->name !== 'idx_unique_name_pid') {
+        if ($op->kind === SchemaDiffOp::KIND_ADD_INDEX && $op->payload instanceof IndexDefinition) {
+            if ($op->payload->name !== 'idx_unique_name_pid') {
+                return false;
+            }
+        } elseif (
+            $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
+            && $op->payload instanceof ColumnDefinition
+        ) {
+            if ($op->payload->name !== 'pid') {
+                return false;
+            }
+        } else {
             return false;
         }
 
@@ -432,15 +450,84 @@ final class SchemaMigrationExecutor
             || \str_contains($message, 'could not create unique index');
     }
 
-    private function dedupeDocumentCatalogNamePid(ConnectorInterface $connector, string $tableName): int
+    private function shouldHealDocumentModuleFileDuplicate(SchemaDiffOp $op, \Throwable $e): bool
+    {
+        if (!\str_contains($op->tableName, 'developer_workspace_document')) {
+            return false;
+        }
+        if (\str_contains($op->tableName, 'developer_workspace_document_catalog')) {
+            return false;
+        }
+        if ($op->kind !== SchemaDiffOp::KIND_ADD_INDEX || !$op->payload instanceof IndexDefinition) {
+            return false;
+        }
+        if ($op->payload->name !== 'idx_module_file_unique') {
+            return false;
+        }
+
+        $message = \strtolower($e->getMessage());
+        return \str_contains($message, 'unique violation')
+            || \str_contains($message, 'duplicate')
+            || \str_contains($message, 'could not create unique index');
+    }
+
+    private function shouldCoalesceDocumentCatalogPidDuringDedupe(SchemaDiffOp $op): bool
+    {
+        return $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
+            && $op->payload instanceof ColumnDefinition
+            && $op->payload->name === 'pid';
+    }
+
+    private function dedupeDocumentCatalogNamePid(
+        ConnectorInterface $connector,
+        string $tableName,
+        bool $coalescePid = false,
+    ): int
     {
         $table = $connector->quoteTable($tableName);
+        $partitionPid = $coalescePid ? 'COALESCE(pid, 0)' : 'pid';
+        $orderBy = $coalescePid
+            ? 'CASE WHEN pid IS NULL THEN 1 ELSE 0 END ASC, id ASC'
+            : 'id ASC';
         $sql = "DELETE FROM {$table} AS t
                 USING (
-                    SELECT id, ROW_NUMBER() OVER (PARTITION BY name, pid ORDER BY id ASC) AS rn
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY name, {$partitionPid}
+                        ORDER BY {$orderBy}
+                    ) AS rn
                     FROM {$table}
                 ) AS d
                 WHERE t.id = d.id AND d.rn > 1";
+        $result = $connector->query($sql)->fetch();
+        if (\is_array($result) && isset($result['affected_rows'])) {
+            return (int) $result['affected_rows'];
+        }
+        if (\is_array($result) && isset($result[0]['affected_rows'])) {
+            return (int) $result[0]['affected_rows'];
+        }
+
+        return -1;
+    }
+
+    private function dedupeDocumentModuleFile(ConnectorInterface $connector, string $tableName): int
+    {
+        $table = $connector->quoteTable($tableName);
+        $id = $connector->quoteIdentifier('id');
+        $moduleName = $connector->quoteIdentifier('module_name');
+        $filePath = $connector->quoteIdentifier('file_path');
+        $sql = "DELETE FROM {$table}
+                WHERE {$id} IN (
+                    SELECT {$id}
+                    FROM (
+                        SELECT {$id}, ROW_NUMBER() OVER (
+                            PARTITION BY {$moduleName}, {$filePath}
+                            ORDER BY {$id} ASC
+                        ) AS rn
+                        FROM {$table}
+                        WHERE {$moduleName} IS NOT NULL AND {$filePath} IS NOT NULL
+                    ) AS d
+                    WHERE d.rn > 1
+                )";
         $result = $connector->query($sql)->fetch();
         if (\is_array($result) && isset($result['affected_rows'])) {
             return (int) $result['affected_rows'];

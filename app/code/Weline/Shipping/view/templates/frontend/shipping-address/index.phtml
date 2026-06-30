@@ -2,6 +2,15 @@
 /**@var \Weline\Framework\View\Template $this */
 $addresses = $this->getData('addresses') ?? [];
 $frontendUrl = $this->getUrl('');
+$dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$dialogMessages = [
+    'confirmTitle' => (string)__('确认操作'),
+    'confirmButton' => (string)__('确定'),
+    'cancelButton' => (string)__('取消'),
+    'operationFailed' => (string)__('操作失败'),
+    'setDefault' => (string)__('确定要设置为默认地址吗？'),
+    'deleteAddress' => (string)__('确定要删除此地址吗？'),
+];
 ?>
 <div class="shipping-address-list">
     <div class="page-header mb-4">
@@ -58,36 +67,135 @@ $frontendUrl = $this->getUrl('');
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var shippingAddressApiPromise = null;
+    const shippingAddressMessages = <?= json_encode($dialogMessages, $dialogJsonFlags) ?>;
+
+    function getShippingAddressApi() {
+        if (!shippingAddressApiPromise) {
+            shippingAddressApiPromise = window.Weline && window.Weline.Api
+                ? window.Weline.Api.resource('shippingAddress')
+                : Promise.reject(new Error('Weline.Api is unavailable.'));
+        }
+        return shippingAddressApiPromise;
+    }
+
+    function showOperationError(message) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: shippingAddressMessages.operationFailed,
+                text: message,
+                confirmButtonText: shippingAddressMessages.confirmButton
+            });
+        } else {
+            console.error(message);
+        }
+    }
+
+    function showInlineChoice(message) {
+        return new Promise(function(resolve) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:1055;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+            const dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = 'width:min(420px,100%);background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.25);padding:24px;';
+
+            const title = document.createElement('h4');
+            title.textContent = shippingAddressMessages.confirmTitle;
+            title.style.cssText = 'margin:0 0 12px;font-size:18px;';
+
+            const body = document.createElement('p');
+            body.textContent = message;
+            body.style.cssText = 'margin:0 0 20px;color:#475569;';
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+            const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.className = 'btn btn-secondary';
+            cancelButton.textContent = shippingAddressMessages.cancelButton;
+
+            const confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
+            confirmButton.className = 'btn btn-primary';
+            confirmButton.textContent = shippingAddressMessages.confirmButton;
+
+            function close(value) {
+                document.removeEventListener('keydown', onKeydown);
+                overlay.remove();
+                resolve(value);
+            }
+
+            function onKeydown(event) {
+                if (event.key === 'Escape') {
+                    close(false);
+                }
+            }
+
+            cancelButton.addEventListener('click', function() { close(false); });
+            confirmButton.addEventListener('click', function() { close(true); });
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    close(false);
+                }
+            });
+
+            actions.append(cancelButton, confirmButton);
+            dialog.append(title, body, actions);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            document.addEventListener('keydown', onKeydown);
+            confirmButton.focus();
+        });
+    }
+
+    function showShippingAddressChoice(message) {
+        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+            return Swal.fire({
+                icon: 'warning',
+                title: shippingAddressMessages.confirmTitle,
+                text: message,
+                showCancelButton: true,
+                confirmButtonText: shippingAddressMessages.confirmButton,
+                cancelButtonText: shippingAddressMessages.cancelButton
+            }).then(function(result) {
+                return !!(result && result.isConfirmed);
+            });
+        }
+
+        return showInlineChoice(message);
+    }
+
+    function shippingAction(operation, id) {
+        return getShippingAddressApi().then(function (ShippingAddressApi) {
+            return ShippingAddressApi[operation]({ id: id }, {
+                onError: function (_status, error) {
+                    showOperationError(error && error.message ? error.message : shippingAddressMessages.operationFailed);
+                }
+            });
+        }).then(function (data) {
+            if (data.success) {
+                location.reload();
+                return;
+            }
+            showOperationError(data.message || shippingAddressMessages.operationFailed);
+        }).catch(function (error) {
+            showOperationError(error && error.message ? error.message : shippingAddressMessages.operationFailed);
+        });
+    }
+
     // 设置默认地址
     document.querySelectorAll('.set-default-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('<?= __('确定要设置为默认地址吗？') ?>')) {
-                return;
-            }
-            const id = this.getAttribute('data-id');
-            fetch('<?= $frontendUrl ?>shipping/address/setDefault', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'id=' + id
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('操作失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(data.message);
-                    }
+            showShippingAddressChoice(shippingAddressMessages.setDefault).then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
+                const id = btn.getAttribute('data-id');
+                shippingAction('setDefault', id);
             });
         });
     });
@@ -95,33 +203,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 删除地址
     document.querySelectorAll('.delete-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('<?= __('确定要删除此地址吗？') ?>')) {
-                return;
-            }
-            const id = this.getAttribute('data-id');
-            fetch('<?= $frontendUrl ?>shipping/address/delete', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'id=' + id
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('操作失败') ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(data.message);
-                    }
+            showShippingAddressChoice(shippingAddressMessages.deleteAddress).then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
+                const id = btn.getAttribute('data-id');
+                shippingAction('delete', id);
             });
         });
     });

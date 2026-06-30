@@ -1,8 +1,8 @@
-﻿开始重建指定索引：%{1},开始重建指定索引：%{1}
-"索引器 %{1} 找不到","索引器 %{1} 找不到"
-开始重建索引：%{1},开始重建索引：%{1}
-索引模型：%{1},索引模型：%{1}
-索引重建完成：%{1},索引重建完成：%{1}
-索引模型不存在,索引模型不存在
-重建索引：%{1},重建索引：%{1}
-所有索引重建完成,所有索引重建完成
+﻿开始重建指定索引：%{1},"Starting rebuild of specified index: %{1}"
+"索引器 %{1} 找不到","Indexer %{1} not found"
+开始重建索引：%{1},"Starting index rebuild: %{1}"
+索引模型：%{1},"Index model: %{1}"
+索引重建完成：%{1},"Index rebuild complete: %{1}"
+索引模型不存在,"Index model does not exist"
+重建索引：%{1},"Rebuilding index: %{1}"
+所有索引重建完成,"All indexes rebuilt successfully"

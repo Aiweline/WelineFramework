@@ -13,6 +13,7 @@ namespace Weline\Shipping\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\ShippingAddressService;
 
 /**
@@ -23,11 +24,13 @@ class ShippingAddress extends FrontendController
     protected ?string $layoutType = 'account.dashboard';
     
     private ShippingAddressService $service;
+    private AddressFormatter $addressFormatter;
 
     public function __construct(
         ObjectManager $objectManager
     ) {
         $this->service = $objectManager->getInstance(ShippingAddressService::class);
+        $this->addressFormatter = $objectManager->getInstance(AddressFormatter::class);
     }
 
     /**
@@ -83,18 +86,18 @@ class ShippingAddress extends FrontendController
                 $message = __('创建成功');
             }
             
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => true,
                     'message' => $message,
-                    'data' => $address->getData()
+                    'data' => $this->addressFormatter->toPayload($address->getData())
                 ]);
             }
             
             $this->getMessageManager()->addSuccess($message);
             $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => $e->getMessage()
@@ -114,7 +117,7 @@ class ShippingAddress extends FrontendController
         $id = $this->request->getPost('id');
         
         if (!$id) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => __('参数错误')
@@ -128,7 +131,7 @@ class ShippingAddress extends FrontendController
         try {
             $this->service->delete((int)$id);
             
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => true,
                     'message' => __('删除成功')
@@ -138,7 +141,7 @@ class ShippingAddress extends FrontendController
             $this->getMessageManager()->addSuccess(__('删除成功'));
             $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => $e->getMessage()
@@ -158,7 +161,7 @@ class ShippingAddress extends FrontendController
         $id = $this->request->getPost('id');
         
         if (!$id) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => __('参数错误')
@@ -172,7 +175,7 @@ class ShippingAddress extends FrontendController
         try {
             $this->service->setDefault((int)$id);
             
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => true,
                     'message' => __('设置成功')
@@ -182,7 +185,7 @@ class ShippingAddress extends FrontendController
             $this->getMessageManager()->addSuccess(__('设置成功'));
             $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
+            if ($this->wantsJson()) {
                 return $this->json([
                     'success' => false,
                     'message' => $e->getMessage()
@@ -201,6 +204,16 @@ class ShippingAddress extends FrontendController
     {
         header('Content-Type: application/json');
         return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function wantsJson(): bool
+    {
+        if ($this->request->isAjax()) {
+            return true;
+        }
+
+        $accept = (string)($_SERVER['HTTP_ACCEPT'] ?? '');
+        return str_contains($accept, 'application/json');
     }
 }
 

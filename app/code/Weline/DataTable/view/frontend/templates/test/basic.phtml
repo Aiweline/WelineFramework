@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $page_title ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
+    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
     <?= $this->getChildHtml('head') ?>
 </head>
 <body>
@@ -16,7 +16,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <h1 class="h3 mb-0"><?= $page_title ?></h1>
                     <a href="/datatable/test" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left me-1"></i>返回测试首页
+                        <i class="mdi mdi-arrow-left me-1"></i>返回测试首页
                     </a>
                 </div>
             </div>
@@ -26,7 +26,7 @@
         <div class="row mb-4">
             <div class="col-12">
                 <div class="alert alert-info">
-                    <h6><i class="fas fa-info-circle me-2"></i>测试说明</h6>
+                    <h6><i class="mdi mdi-information me-2"></i>测试说明</h6>
                     <p class="mb-0">
                         本页面测试DataTable的基础功能，包括自动字段生成、分页、排序、筛选等核心功能。
                         请确保已初始化测试数据。
@@ -41,7 +41,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-table me-2"></i>测试用例1：最简单的用法
+                            <i class="mdi mdi-table me-2"></i>测试用例1：最简单的用法
                         </h5>
                         <small class="text-muted">只需指定model和scope，自动生成所有字段</small>
                     </div>
@@ -64,7 +64,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-list me-2"></i>测试用例2：带分页的表格
+                            <i class="mdi mdi-format-list-bulleted me-2"></i>测试用例2：带分页的表格
                         </h5>
                         <small class="text-muted">设置页面大小和分页显示</small>
                     </div>
@@ -95,7 +95,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-columns me-2"></i>测试用例3：自定义表头
+                            <i class="mdi mdi-view-column me-2"></i>测试用例3：自定义表头
                         </h5>
                         <small class="text-muted">手动配置显示字段和属性</small>
                     </div>
@@ -132,7 +132,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-filter me-2"></i>测试用例4：带筛选器的表格
+                            <i class="mdi mdi-filter me-2"></i>测试用例4：带筛选器的表格
                         </h5>
                         <small class="text-muted">添加筛选功能</small>
                     </div>
@@ -167,7 +167,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-box me-2"></i>测试用例5：产品表格测试
+                            <i class="mdi mdi-package-variant-closed me-2"></i>测试用例5：产品表格测试
                         </h5>
                         <small class="text-muted">测试不同模型的表格显示</small>
                     </div>
@@ -202,23 +202,23 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-check-circle me-2"></i>测试结果
+                            <i class="mdi mdi-check-circle me-2"></i>测试结果
                         </h5>
                     </div>
                     <div class="card-body">
                         <div id="test-results">
                             <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
+                                <i class="mdi mdi-information me-2"></i>
                                 请检查上述表格是否正常显示，功能是否正常工作。
                             </div>
                         </div>
                         
                         <div class="mt-3">
-                            <button class="btn btn-success" onclick="runBasicTests()">
-                                <i class="fas fa-play me-1"></i>运行自动化测试
+                            <button class="btn btn-success" data-datatable-basic-action="run-basic-tests">
+                                <i class="mdi mdi-play me-1"></i>运行自动化测试
                             </button>
-                            <button class="btn btn-info ms-2" onclick="checkTableFeatures()">
-                                <i class="fas fa-search me-1"></i>检查表格功能
+                            <button class="btn btn-info ms-2" data-datatable-basic-action="check-table-features">
+                                <i class="mdi mdi-magnify me-1"></i>检查表格功能
                             </button>
                         </div>
                     </div>
@@ -227,12 +227,24 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="@static(Weline_Frontend::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
     <script>
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, function (character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[character];
+            });
+        }
         // 运行基础功能测试
         function runBasicTests() {
             const resultsDiv = document.getElementById('test-results');
-            resultsDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>正在运行测试...</div>';
+            resultsDiv.innerHTML = '<div class="alert alert-info"><i class="mdi mdi-loading mdi-spin me-2"></i>正在运行测试...</div>';
             
             const tests = [
                 { name: '表格渲染', test: () => document.querySelectorAll('.datatable-container').length > 0 },
@@ -250,12 +262,12 @@
                     const passed = test.test();
                     if (passed) {
                         passedTests++;
-                        results.push(`<li class="text-success"><i class="fas fa-check me-2"></i>${test.name}: 通过</li>`);
+                        results.push(`<li class="text-success"><i class="mdi mdi-check me-2"></i>${escapeHtml(test.name)}: 通过</li>`);
                     } else {
-                        results.push(`<li class="text-danger"><i class="fas fa-times me-2"></i>${test.name}: 失败</li>`);
+                        results.push(`<li class="text-danger"><i class="mdi mdi-close me-2"></i>${escapeHtml(test.name)}: 失败</li>`);
                     }
                 } catch (error) {
-                    results.push(`<li class="text-warning"><i class="fas fa-exclamation-triangle me-2"></i>${test.name}: 错误 - ${error.message}</li>`);
+                    results.push(`<li class="text-warning"><i class="mdi mdi-alert me-2"></i>${escapeHtml(test.name)}: 错误 - ${escapeHtml(error.message)}</li>`);
                 }
             });
             
@@ -264,7 +276,7 @@
             
             resultsDiv.innerHTML = `
                 <div class="${alertClass}">
-                    <h6><i class="fas fa-chart-bar me-2"></i>测试完成 - 通过率: ${successRate}% (${passedTests}/${tests.length})</h6>
+                    <h6><i class="mdi mdi-chart-bar me-2"></i>测试完成 - 通过率: ${successRate}% (${passedTests}/${tests.length})</h6>
                     <ul class="mb-0">${results.join('')}</ul>
                 </div>
             `;
@@ -285,9 +297,9 @@
             
             resultsDiv.innerHTML = `
                 <div class="alert alert-success">
-                    <h6><i class="fas fa-list-check me-2"></i>功能检查清单</h6>
+                    <h6><i class="mdi mdi-format-list-checks me-2"></i>功能检查清单</h6>
                     <ul class="mb-0">
-                        ${features.map(feature => `<li>${feature}</li>`).join('')}
+                        ${features.map(feature => `<li>${escapeHtml(feature)}</li>`).join('')}
                     </ul>
                     <hr>
                     <small class="text-muted">请手动验证上述功能是否正常工作</small>
@@ -296,6 +308,22 @@
         }
         
         // 页面加载完成后自动运行测试
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-datatable-basic-action]');
+            if (!trigger) {
+                return;
+            }
+            event.preventDefault();
+            switch (trigger.getAttribute('data-datatable-basic-action')) {
+                case 'run-basic-tests':
+                    runBasicTests();
+                    break;
+                case 'check-table-features':
+                    checkTableFeatures();
+                    break;
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 runBasicTests();

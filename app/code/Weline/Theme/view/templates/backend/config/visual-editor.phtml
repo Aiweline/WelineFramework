@@ -32,6 +32,13 @@ if (is_object($theme)) {
     }
 }
 $hasTheme = $themeIdValue > 0;
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <!DOCTYPE html>
 <html lang="<?= \Weline\Framework\App\Env::getInstance()->getLocale() ?>">
@@ -336,46 +343,46 @@ $hasTheme = $themeIdValue > 0;
 <!-- Data Passing -->
 <script>
     window.ThemeEditorConfig = {
-        themeId: '<?= $themeIdValue ?>',
-        area: '<?= $area ?>',
-        scope: '<?= $scope ?>',
-        locale: '<?= $currentLocale ?>',
-        availableLocales: <?= json_encode($locales) ?>,
+        themeId: <?= json_encode($themeIdValue, $jsonForScriptFlags) ?>,
+        area: <?= json_encode($area, $jsonForScriptFlags) ?>,
+        scope: <?= json_encode($scope, $jsonForScriptFlags) ?>,
+        locale: <?= json_encode($currentLocale, $jsonForScriptFlags) ?>,
+        availableLocales: <?= json_encode($locales, $jsonForScriptFlags) ?>,
         urls: {
-            options: '<?= $optionsUrl ?>',
-            saveSelection: '<?= $saveSelectionUrl ?>',
-            fileParams: '<?= $fileParamsUrl ?>',
-            saveFileParams: '<?= $saveFileParamsUrl ?>',
-            publishPreviewScope: '<?= $publishPreviewScopeUrl ?>',
-            discardPreviewScope: '<?= $discardPreviewScopeUrl ?>',
-            upload: '<?= $this->getUrl('theme/backend/config/layout/upload') ?>',
-            syncThemeMode: '<?= $this->getUrl('theme/backend/config/themeConfig/syncThemeMode') ?>'
+            options: <?= json_encode($optionsUrl, $jsonForScriptFlags) ?>,
+            saveSelection: <?= json_encode($saveSelectionUrl, $jsonForScriptFlags) ?>,
+            fileParams: <?= json_encode($fileParamsUrl, $jsonForScriptFlags) ?>,
+            saveFileParams: <?= json_encode($saveFileParamsUrl, $jsonForScriptFlags) ?>,
+            publishPreviewScope: <?= json_encode($publishPreviewScopeUrl, $jsonForScriptFlags) ?>,
+            discardPreviewScope: <?= json_encode($discardPreviewScopeUrl, $jsonForScriptFlags) ?>,
+            upload: <?= json_encode($this->getUrl('theme/backend/config/layout/upload'), $jsonForScriptFlags) ?>,
+            syncThemeMode: <?= json_encode($this->getUrl('theme/backend/config/themeConfig/syncThemeMode'), $jsonForScriptFlags) ?>
         },
         translations: {
-            loading: '<?= __('Loading...') ?>',
-            saveSuccess: '<?= __('Saved successfully') ?>',
-            saveFailed: '<?= __('Save failed') ?>',
-            publishSuccess: '<?= __('Preview config published to formal scope') ?>',
-            publishFailed: '<?= __('Publish failed') ?>',
-            publishProgress: '<?= __('Publishing...') ?>',
-            discardSuccess: '<?= __('Preview config discarded') ?>',
-            discardFailed: '<?= __('Discard failed') ?>',
-            discardProgress: '<?= __('Discarding...') ?>',
-            discardConfirm: '<?= __('Discard current preview configuration changes?') ?>',
-            resetSuccess: '<?= __('Reset to default') ?>',
-            resetFailed: '<?= __('Reset failed') ?>',
-            resetError: '<?= __('Reset error') ?>',
-            saveProgress: '<?= __('Saving...') ?>',
-            selectLayout: '<?= __('Select layout') ?>',
-            selectLayoutBeforeSave: '<?= __('Please select a layout before saving parameters') ?>',
-            recentColors: '<?= __('Recent colors') ?>',
-            copySuccess: '<?= __('Copied') ?>',
-            copyColorValue: '<?= __('Copy color value') ?>',
-            noColorSettings: '<?= __('No color settings available') ?>',
-            switchingLocale: '<?= __('Switching language...') ?>',
-            initFailed: '<?= __('Initialization failed') ?>'
+            loading: <?= json_encode((string)__('Loading...'), $jsonForScriptFlags) ?>,
+            saveSuccess: <?= json_encode((string)__('Saved successfully'), $jsonForScriptFlags) ?>,
+            saveFailed: <?= json_encode((string)__('Save failed'), $jsonForScriptFlags) ?>,
+            publishSuccess: <?= json_encode((string)__('Preview config published to formal scope'), $jsonForScriptFlags) ?>,
+            publishFailed: <?= json_encode((string)__('Publish failed'), $jsonForScriptFlags) ?>,
+            publishProgress: <?= json_encode((string)__('Publishing...'), $jsonForScriptFlags) ?>,
+            discardSuccess: <?= json_encode((string)__('Preview config discarded'), $jsonForScriptFlags) ?>,
+            discardFailed: <?= json_encode((string)__('Discard failed'), $jsonForScriptFlags) ?>,
+            discardProgress: <?= json_encode((string)__('Discarding...'), $jsonForScriptFlags) ?>,
+            discardConfirm: <?= json_encode((string)__('Discard current preview configuration changes?'), $jsonForScriptFlags) ?>,
+            resetSuccess: <?= json_encode((string)__('Reset to default'), $jsonForScriptFlags) ?>,
+            resetFailed: <?= json_encode((string)__('Reset failed'), $jsonForScriptFlags) ?>,
+            resetError: <?= json_encode((string)__('Reset error'), $jsonForScriptFlags) ?>,
+            saveProgress: <?= json_encode((string)__('Saving...'), $jsonForScriptFlags) ?>,
+            selectLayout: <?= json_encode((string)__('Select layout'), $jsonForScriptFlags) ?>,
+            selectLayoutBeforeSave: <?= json_encode((string)__('Please select a layout before saving parameters'), $jsonForScriptFlags) ?>,
+            recentColors: <?= json_encode((string)__('Recent colors'), $jsonForScriptFlags) ?>,
+            copySuccess: <?= json_encode((string)__('Copied'), $jsonForScriptFlags) ?>,
+            copyColorValue: <?= json_encode((string)__('Copy color value'), $jsonForScriptFlags) ?>,
+            noColorSettings: <?= json_encode((string)__('No color settings available'), $jsonForScriptFlags) ?>,
+            switchingLocale: <?= json_encode((string)__('Switching language...'), $jsonForScriptFlags) ?>,
+            initFailed: <?= json_encode((string)__('Initialization failed'), $jsonForScriptFlags) ?>
         },
-        themeMode: '<?= $themeMode ?? 'light' ?>'
+        themeMode: <?= json_encode((string)($themeMode ?? 'light'), $jsonForScriptFlags) ?>
     };
     // Workaround for frontend JS dependency
     <?php
@@ -386,7 +393,7 @@ $hasTheme = $themeIdValue > 0;
         $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
     }
     ?>
-    window.modulesConfigUrl = '<?= $modulesConfigUrl ?>';
+    window.modulesConfigUrl = <?= json_encode($modulesConfigUrl, $jsonForScriptFlags) ?>;
 </script>
 
 <script src="@static(Weline_Theme::js/visual-editor.js)"></script>

@@ -2,150 +2,171 @@
 
 ## 简介
 
-Weline_Deploy 模块提供了基于 Git 的自动部署功能，可以从远程仓库拉取代码并更新项目。
+Weline_Deploy 模块提供了基于 Git 的自动部署、发布系统与版本探测功能。
 
 ## 功能特性
 
-- ✅ 从 Git 仓库自动拉取代码
-- ✅ 支持多个分支部署
-- ✅ 部署前自动备份
-- ✅ 强制更新模式（丢弃本地修改）
-- ✅ CNC清理和维护
-- ✅ 配置文件管理
+- Git 仓库自动拉取代码（`deploy:build`）
+- 完整发布流水线：Git + 后置命令 + 版本戳 + reload（`deploy:release`）
+- 分支发布（版本 = commit 短 SHA）与 Tag 发布（版本 = tag 名）
+- Webhook 自动触发部署（支持 Gitee / GitHub / 通用平台）
+- 运行时版本探测（`GET <随机 Webhook 路径>/version`）
+- 发布历史记录与后台管理界面
+- CI 门禁等待版本生效（`deploy:release:wait`）
+- 部署前自动备份、强制更新模式
+- Cloudflare 缓存清理
 
 ## 安装
 
-1. 模块已包含在项目中，无需额外安装
-2. 运行命令更新命令列表：
+模块已包含在项目中，首次使用更新命令列表：
+
 ```bash
 php bin/w command:upgrade
 ```
 
-## 使用指南
+## 快速开始
 
-### 1. 配置环境文件
+### 1. 后台配置
 
-在项目根目录创建 `.env` 文件（从 `.env.sample` 复制）：
+进入 `系统管理 > 系统维护 > 部署配置`，填写项目仓库和 Webhook 信息。
+
+### 2. 配置 Webhook 访问密码
+
+生成密钥并写入后台，同时输出 curl 测试命令：
 
 ```bash
-cp .env.sample .env
+php bin/w deploy:webhook:setup --base-url=https://你的域名
 ```
 
-编辑 `.env` 文件，配置以下必需信息：
+刷新（轮换）访问密码（须同步更新 Git 平台 Secret）：
 
-```env
-# Git 仓库配置
-GIT_REPO_URL=https://github.com/your-username/your-repo.git
-GIT_BRANCH=main
-GIT_USERNAME=your_username
-GIT_TOKEN=your_access_token
-
-# 部署配置
-BACKUP_BEFORE_DEPLOY=true
-```
-
-### 2. 执行部署
-
-#### 基本部署
 ```bash
+php bin/w deploy:webhook:setup --force -y --base-url=https://你的域名
+```
+
+在 Git 平台添加 Webhook：URL 使用命令输出的 `https://你的域名/~wh~...` 随机地址，Secret/密码与后台「Webhook 密钥」一致。
+
+详见 [`doc/webhook-secret.md`](doc/webhook-secret.md) 与 [`doc/backend-config.md`](doc/backend-config.md)。
+
+### 3. 执行发布
+
+```bash
+# 完整发布（推荐）
+php bin/w deploy:release
+
+# 仅 Git 拉取（轻量，不含版本戳）
 php bin/w deploy:build
 ```
 
-#### 指定分支部署
+## 命令参考
+
+| 命令 | 说明 |
+|------|------|
+| `php bin/w deploy:build` | 仅 Git 拉取代码 |
+| `php bin/w deploy:build -b develop` | 指定分支拉取 |
+| `php bin/w deploy:build --force` | 强制拉取（丢弃本地修改） |
+| `php bin/w deploy:release` | 完整发布：Git + 后置命令 + 版本戳 + reload |
+| `php bin/w deploy:release -r refs/tags/v1.0.0` | Tag 发布 |
+| `php bin/w deploy:release:status` | 查看当前部署版本 |
+| `php bin/w deploy:release:wait --expect=v1.0.0` | CI 门禁：等待版本生效 |
+| `php bin/w deploy:webhook:setup --base-url=https://域名` | 生成/查看 Webhook 访问密码、随机公网路径并输出 curl |
+| `php bin/w deploy:webhook:setup --force -y --url=...` | 刷新访问密码并覆盖后台配置 |
+
+## 版本策略
+
+| 场景 | deploy_version 来源 |
+|------|---------------------|
+| 分支 push | Git commit 短 SHA（如 `a3f5c2d`） |
+| Tag push | tag 名（如 `v2.4.1`） |
+
+## 触发模式
+
+后台配置「部署触发方式」决定 Webhook 何时触发部署：
+
+| 模式 | 含义 |
+|------|------|
+| `仅分支 Push` | 只有分支推送触发，tag 推送忽略 |
+| `仅 Tag Push` | 只有 tag 推送触发，分支推送忽略 |
+| `分支 + Tag 都生效` | 两者都触发（需明确选择） |
+
+默认模式为 `仅 Tag Push`，分支 push 会返回 `trigger_mode_tag_only`，只有明确选择分支模式或“两者都生效”时才响应分支发布。
+
+## 版本探测
+
 ```bash
-php bin/w deploy:build -b develop
+# 最小信息（无 token）
+curl -s 'https://你的域名/~wh~.../version'
+
+# 详细信息（需配置「发布探测 Token」）
+curl -s 'https://你的域名/~wh~.../version?token=xxx'
+
+# 健康检查（含版本）
+curl -s 'https://你的域名/~wh~...?health=1'
 ```
 
-#### 强制更新（丢弃本地修改）
-```bash
-php bin/w deploy:build --force
-```
-
-#### 禁用备份
-```bash
-php bin/w deploy:build --no-backup
-```
-
-### 3. 查看帮助信息
-```bash
-php bin/w deploy:build --help
-```
-
-## 配置说明
-
-### Git 配置
-
-| 配置项 | 说明 | 是否必需 |
-|--------|------|---------|
-| GIT_REPO_URL | Git 仓库地址 | 是 |
-| GIT_BRANCH | 分支名称（默认：main） | 否 |
-| GIT_USERNAME | Git 用户名 | 否 |
-| GIT_TOKEN | Git 访问令牌或密码 | 否 |
-
-### 部署配置
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| DEPLOY_METHOD | 部署方法 | git |
-| BACKUP_BEFORE_DEPLOY | 部署前是否备份 | true |
-| CLEAN_BEFORE_DEPLOY | 部署前是否清理 | false |
-
-## 工作流程
-
-部署命令会执行以下步骤：
-
-1. **读取配置** - 从 `.env` 文件读取配置
-2. **验证配置** - 检查必需配置项是否存在
-3. **备份项目** - 备份当前项目（可选）
-4. **Git 操作** - 拉取远程代码
-5. **清理维护** - 清理缓存等临时文件
-
-## 安全提示
-
-1. ✅ 不要在代码中硬编码访问令牌
-2. ✅ 使用 `.gitignore` 排除 `.env` 文件
-3. ✅ 定期更新访问令牌
-4. ✅ 在生产环境禁用自动备份
-
-## 故障排查
-
-### 问题：无法读取 .env 文件
-
-**解决方案**：确保项目根目录存在 `.env` 文件，并且配置了正确的权限。
-
-### 问题：Git 拉取失败
-
-**解决方案**：
-- 检查 Git 仓库地址是否正确
-- 检查网络连接
-- 验证访问令牌是否有效
-- 如果有本地修改冲突，使用 `--force` 参数
-
-### 问题：备份失败
-
-**解决方案**：
-- 确保系统安装了 tar 或 zip 工具
-- 检查备份目录权限
-
-## 开发
-
-### 目录结构
+## 目录结构
 
 ```
 app/code/Weline/Deploy/
-├── register.php           # 模块注册文件
-├── composer.json          # 模块依赖
-├── Console/               # 命令行工具
+├── register.php                          # 模块注册
+├── composer.json                         # 模块依赖
+├── README.md                             # 模块概览（本文件）
+├── 使用说明.md                            # 详细使用说明
+├── doc/                                  # 文档目录
+│   ├── README.md                         # 文档索引
+│   ├── backend-config.md                 # 后台配置指南
+│   ├── webhook-secret.md                 # Webhook 访问密码与轮换
+│   ├── github-webhook.md                 # GitHub Webhook 配置
+│   └── gitee-webhook.md                  # Gitee Webhook 配置
+├── Console/
 │   └── Deploy/
-│       └── Build.php      # 部署命令
-└── README.md             # 本文档
+│       ├── Build.php                     # deploy:build 命令
+│       └── Release/
+│           ├── Release.php               # deploy:release 命令
+│           ├── Status.php                # deploy:release:status
+│           └── Wait.php                  # deploy:release:wait
+├── Controller/
+│   ├── Webhook.php                       # Webhook 入口（前端）
+│   ├── Version.php                       # 版本探测端点
+│   ├── Api/Webhook.php                   # Webhook 入口（REST）
+│   └── Backend/
+│       ├── Config.php                    # 后台配置页
+│       └── Release.php                   # 后台发布历史页
+├── Model/
+│   └── DeployRelease.php                 # 发布历史 ORM 模型
+├── Observer/
+│   └── ReleaseAfter.php                  # 发布完成后事件观察者
+├── Service/
+│   ├── DeployConfigService.php           # 配置服务
+│   ├── DeployOrchestratorService.php     # 统一部署编排
+│   ├── DeployReleaseRuntimeService.php   # 运行时版本戳
+│   ├── DeployReleaseHistoryService.php   # 发布历史 CRUD
+│   ├── DeployGitMetadataService.php      # Git 元数据读取
+│   └── DeployWebhookRefResolver.php      # Webhook ref 解析
+├── Setup/
+│   └── Install.php                       # 建表脚本
+├── etc/
+│   ├── env.php                           # 路由配置
+│   ├── event.xml                         # 事件声明
+│   └── backend/menu.xml                  # 后台菜单
+├── i18n/
+│   ├── zh_Hans_CN.csv                    # 中文翻译
+│   └── en_US.csv                         # 英文翻译
+└── view/templates/Backend/
+    ├── Config/index.phtml                # 后台配置模板
+    └── Release/index.phtml               # 发布历史模板
 ```
 
-### 贡献
+## 文档
 
-欢迎提交 Issue 和 Pull Request！
+| 文档 | 说明 |
+|------|------|
+| [`doc/webhook-secret.md`](doc/webhook-secret.md) | Webhook 访问密码：`deploy:webhook:setup` 生成与轮换 |
+| [`doc/backend-config.md`](doc/backend-config.md) | 后台配置、Nginx + WLS、触发模式、Cloudflare |
+| [`doc/github-webhook.md`](doc/github-webhook.md) | GitHub Webhook 填表步骤 |
+| [`doc/gitee-webhook.md`](doc/gitee-webhook.md) | Gitee Webhook 填表步骤 |
+| [`使用说明.md`](使用说明.md) | 详细使用说明与故障排查 |
 
 ## 许可证
 
 MIT License
-

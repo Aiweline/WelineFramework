@@ -34,6 +34,48 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesApiAppTokenRoutes(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        foreach (['token', 'refresh', 'revoke'] as $action) {
+            $this->assertTrue($matcher->matches($this->createRequestMock(
+                'api/rest/v1/apps/' . $action,
+                'Apps',
+                'post' . ucfirst($action),
+                'Weline\\Api\\Api\\Rest\\V1\\Apps'
+            )), $action);
+        }
+    }
+
+    public function testMatchesMultipassIdentityRoutesWithFrontendApiPrefix(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api123/multipass/rest/v1/identity/authorize',
+            'Identity',
+            'getAuthorize',
+            'Weline\\Multipass\\Api\\Rest\\V1\\Identity'
+        )));
+
+        foreach (['token', 'refresh', 'revoke', 'bind'] as $action) {
+            $this->assertTrue($matcher->matches($this->createRequestMock(
+                'api123/multipass/rest/v1/identity/' . $action,
+                'Identity',
+                'post' . ucfirst($action),
+                'Weline\\Multipass\\Api\\Rest\\V1\\Identity'
+            )), $action);
+        }
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api123/multipass/rest/v1/identity/userinfo',
+            'Identity',
+            'getUserinfo',
+            'Weline\\Multipass\\Api\\Rest\\V1\\Identity'
+        )));
+    }
+
     public function testMatchesWeShopContractChallengeVerifyRoute(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();

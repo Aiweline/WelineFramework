@@ -61,6 +61,48 @@ class LayoutPathResolverTest extends TestCore
         );
     }
 
+    public function testResolveLayoutTemplateAllowsThemeOnlyLayoutType(): void
+    {
+        $theme = $this->loadTheme(11);
+
+        if (!$theme->getId()) {
+            $this->markTestSkipped('Theme 11 not found.');
+        }
+
+        $layoutModulePath = LayoutPathResolver::resolveLayoutTemplate(
+            'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            $theme,
+            'frontend'
+        );
+
+        $this->assertSame('Weline_Theme::theme/frontend/layouts/review/default.phtml', $layoutModulePath);
+        $this->assertSame(
+            BP . 'app' . DS . 'design' . DS . 'WeShop' . DS . 'motor' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            LayoutPathResolver::getLayoutFilePath((string)$layoutModulePath, $theme, 'frontend')
+        );
+    }
+
+    public function testResolveLayoutTemplateFindsDefaultReviewLayout(): void
+    {
+        $theme = $this->loadTheme(6);
+
+        if (!$theme->getId()) {
+            $this->markTestSkipped('Theme 6 not found.');
+        }
+
+        $layoutModulePath = LayoutPathResolver::resolveLayoutTemplate(
+            'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            $theme,
+            'frontend'
+        );
+
+        $this->assertSame('Weline_Theme::theme/frontend/layouts/review/default.phtml', $layoutModulePath);
+        $this->assertSame(
+            BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'layouts' . DS . 'review' . DS . 'default.phtml',
+            LayoutPathResolver::getLayoutFilePath((string)$layoutModulePath, $theme, 'frontend')
+        );
+    }
+
     public function testPreviewContentRendererBuildsHomepageFragments(): void
     {
         $theme = $this->loadTheme(11);

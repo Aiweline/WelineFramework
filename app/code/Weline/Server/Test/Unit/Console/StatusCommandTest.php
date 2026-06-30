@@ -21,7 +21,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 
 final class StatusCommandTest extends TestCase
 {
-    public function testFilterActiveInstancesIgnoresSharedExternalSidecarsForStoppedInstances(): void
+    public function testFilterActiveInstancesIgnoresSharedStateDependenciesForStoppedInstances(): void
     {
         $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
             public function getRawInstanceData(string $name): ?array
@@ -78,8 +78,7 @@ final class StatusCommandTest extends TestCase
                 instanceId: 1,
                 pid: 2001,
                 port: 19971,
-                state: ServiceInstance::STATE_READY,
-                metadata: ['shared_external' => true]
+                state: ServiceInstance::STATE_READY
             ),
         ]);
 
@@ -91,7 +90,7 @@ final class StatusCommandTest extends TestCase
             ]
         );
 
-        self::assertSame(['default'], \array_keys($active));
+        self::assertSame([], \array_keys($active));
     }
 
     public function testFilterActiveInstancesKeepsStoppedMetadataWhenManagedServicePidStillExists(): void
@@ -148,7 +147,7 @@ final class StatusCommandTest extends TestCase
             [1001 => ['pid' => 1001, 'exists' => true]]
         );
 
-        self::assertSame(['default'], \array_keys($active));
+        self::assertSame([], \array_keys($active));
     }
 
     public function testGetServiceStatsAlwaysExcludesSharedStateDependenciesFromInstanceCounts(): void
@@ -158,9 +157,9 @@ final class StatusCommandTest extends TestCase
              * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
              * @return array{total: int, running: int, stopped: int}
              */
-            public function stats(ServerInstanceInfo $info, array $processInfoMap, bool $includeSharedExternal = true): array
+            public function stats(ServerInstanceInfo $info, array $processInfoMap): array
             {
-                return $this->getServiceStats($info, $processInfoMap, $includeSharedExternal);
+                return $this->getServiceStats($info, $processInfoMap);
             }
         };
 
@@ -179,8 +178,7 @@ final class StatusCommandTest extends TestCase
                 instanceId: 1,
                 pid: 2001,
                 port: 19970,
-                state: ServiceInstance::STATE_READY,
-                metadata: ['shared_external' => true]
+                state: ServiceInstance::STATE_READY
             ),
         ]);
 
@@ -195,7 +193,7 @@ final class StatusCommandTest extends TestCase
         );
         self::assertSame(
             ['total' => 1, 'running' => 1, 'stopped' => 0],
-            $status->stats($info, $processInfoMap, false)
+            $status->stats($info, $processInfoMap)
         );
     }
 
@@ -227,8 +225,7 @@ final class StatusCommandTest extends TestCase
                 instanceId: 1,
                 pid: 2001,
                 port: 19970,
-                state: ServiceInstance::STATE_READY,
-                metadata: ['shared_external' => true]
+                state: ServiceInstance::STATE_READY
             ),
         ];
 
@@ -244,7 +241,7 @@ final class StatusCommandTest extends TestCase
     public function testShowInstanceStatusUsesFastLookupAndLeavesLivenessToBatchProbe(): void
     {
         $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
-            /** @var array<int, array{name: string, validateStale: bool}> */
+            /** @var array<int, array{name: string, validateStale: bool, ipcTimeout?: float}> */
             public array $calls = [];
 
             public function getInstanceInfo(string $name, bool $validateStale = true): ?ServerInstanceInfo
@@ -252,6 +249,17 @@ final class StatusCommandTest extends TestCase
                 $this->calls[] = [
                     'name' => $name,
                     'validateStale' => $validateStale,
+                ];
+
+                return null;
+            }
+
+            public function getInstanceInfoWithIpcTimeout(string $name, bool $validateStale, float $ipcTimeout): ?ServerInstanceInfo
+            {
+                $this->calls[] = [
+                    'name' => $name,
+                    'validateStale' => $validateStale,
+                    'ipcTimeout' => $ipcTimeout,
                 ];
 
                 return null;
@@ -290,7 +298,7 @@ final class StatusCommandTest extends TestCase
         }
 
         self::assertSame(
-            [['name' => 'test', 'validateStale' => false]],
+            [['name' => 'test', 'validateStale' => false, 'ipcTimeout' => 0.5]],
             $manager->calls
         );
         self::assertTrue($status->showAllCalled);
@@ -323,6 +331,106 @@ final class StatusCommandTest extends TestCase
             4321 => ['pid' => 4321, 'exists' => true],
             999999 => ['pid' => 999999, 'exists' => false],
         ]));
+    }
+
+    public function testServiceRunningTrustsIpcStateWhenProcessProbeIsDisabled(): void
+    {
+        $status = new class extends Status {
+            /**
+             * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
+             */
+            public function running(ServiceInfo $service, array $processInfoMap): bool
+            {
+                return $this->isServiceRunning($service, $processInfoMap);
+            }
+        };
+
+        $ready = new ServiceInfo(
+            role: 'worker',
+            displayName: 'HTTP Worker',
+            instanceId: 1,
+            pid: 4321,
+            port: 9527,
+            state: ServiceInstance::STATE_READY,
+        );
+        $stopped = new ServiceInfo(
+            role: 'worker',
+            displayName: 'HTTP Worker',
+            instanceId: 1,
+            pid: 4321,
+            port: 9527,
+            state: ServiceInstance::STATE_STOPPED,
+        );
+
+        self::assertTrue($status->running($ready, []));
+        self::assertFalse($status->running($stopped, []));
+    }
+
+    public function testStatusTestCurlTargetUsesLoopbackForWildcardBindHost(): void
+    {
+        $status = new class extends Status {
+            public function target(ServerInstanceInfo $info): string
+            {
+                return $this->buildTestCurlTarget($info);
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            name: 'default',
+            masterPid: 0,
+            controlPort: 19999,
+            host: '0.0.0.0',
+            port: 9981,
+            sslEnabled: true,
+            dispatcherEnabled: false,
+            workerCount: 4,
+            workerBasePort: 9981,
+            httpRedirectPort: 0,
+            startedAt: '2026-05-25 00:00:00',
+            startedTimestamp: 1779667200,
+            services: [],
+        );
+
+        self::assertSame('-k https://127.0.0.1:9981', $status->target($info));
+    }
+
+    public function testMasterRuntimeStateFallsBackToManagedPidWhenIpcIsUnavailable(): void
+    {
+        $status = new class extends Status {
+            /**
+             * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
+             * @return array{running: bool, ipc_ok: bool, source: string, message: string}
+             */
+            public function state(ServerInstanceInfo $info, array $processInfoMap): array
+            {
+                return $this->resolveMasterRuntimeState($info, $processInfoMap);
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            name: 'default',
+            masterPid: 1234,
+            controlPort: 0,
+            host: '127.0.0.1',
+            port: 9981,
+            sslEnabled: false,
+            dispatcherEnabled: false,
+            workerCount: 1,
+            workerBasePort: 19982,
+            httpRedirectPort: 0,
+            startedAt: '2026-05-25 00:00:00',
+            startedTimestamp: 1779667200,
+            services: [],
+        );
+
+        $state = $status->state($info, [
+            1234 => ['pid' => 1234, 'exists' => true],
+        ]);
+
+        self::assertTrue($state['running']);
+        self::assertFalse($state['ipc_ok']);
+        self::assertSame('pid', $state['source']);
+        self::assertNotSame('', $state['message']);
     }
 
     /**

@@ -363,10 +363,10 @@
                 
                 <div class="secret-box">
                     <p style="color: #666; margin-bottom: 10px;"><lang>点击密钥可复制</lang></p>
-                    <div class="secret-text" onclick="copySecret()" id="secretText">
+                    <div class="secret-text" id="secretText" data-twofa-action="copy-secret" role="button" tabindex="0">
                         <?= $formatted_secret ?>
                     </div>
-                    <button class="copy-btn" onclick="copySecret()">📋 <lang>复制密钥</lang></button>
+                    <button class="copy-btn" type="button" data-twofa-action="copy-secret">📋 <lang>复制密钥</lang></button>
                 </div>
             </div>
 
@@ -384,10 +384,10 @@
                 </div>
                 
                 <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
-                    <button class="copy-btn" onclick="copyBackupCodes()">
+                    <button class="copy-btn" type="button" data-twofa-action="copy-backup-codes">
                         📋 <lang>复制所有备份码</lang>
                     </button>
-                    <button class="copy-btn" onclick="downloadBackupCodes()" style="background: #28a745;">
+                    <button class="copy-btn" type="button" data-twofa-action="download-backup-codes" style="background: #28a745;">
                         💾 <lang>下载保存</lang>
                     </button>
                 </div>
@@ -418,7 +418,7 @@
                 
                 <div>
                     <a href="/two-factor-auth/frontend" class="btn btn-secondary"><lang>取消</lang></a>
-                    <button class="btn btn-primary" onclick="enableTwoFactor()"><lang>确认启用</lang></button>
+                    <button class="btn btn-primary" type="button" data-twofa-action="enable-two-factor"><lang>确认启用</lang></button>
                 </div>
             </div>
         </div>
@@ -433,6 +433,33 @@
     <!-- SweetAlert2 JS -->
     <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
+        document.addEventListener('click', function(e) {
+            const trigger = e.target.closest('[data-twofa-action]');
+            if (!trigger) {
+                return;
+            }
+
+            const action = trigger.getAttribute('data-twofa-action');
+            if (action === 'copy-secret') {
+                copySecret();
+            } else if (action === 'copy-backup-codes') {
+                copyBackupCodes();
+            } else if (action === 'download-backup-codes') {
+                downloadBackupCodes();
+            } else if (action === 'enable-two-factor') {
+                enableTwoFactor();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            const trigger = e.target.closest('[data-twofa-action]');
+            if (!trigger || (e.key !== 'Enter' && e.key !== ' ')) {
+                return;
+            }
+            e.preventDefault();
+            trigger.click();
+        });
+
         // PWA 安装功能
         let deferredPrompt;
         
@@ -676,15 +703,13 @@ ${translations.finalNote}`;
 
             try {
                 const referer = document.getElementById('referer').value;
-                const response = await fetch('/two-factor-auth/frontend/setup/enable', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `secret=${encodeURIComponent(secret)}&code=${code}&backup_codes=${encodeURIComponent(backupCodes)}&referer=${encodeURIComponent(referer)}`
-                });
-
-                const result = await response.json();
+                const TwoFactorApi = await Weline.Api.resource('twoFactor');
+                const result = await TwoFactorApi.enable({
+                    secret: secret,
+                    code: code,
+                    backup_codes: backupCodes,
+                    referer: referer
+                }, {silent: true});
                 
                 if (result.success) {
                     if (typeof Swal !== 'undefined') {

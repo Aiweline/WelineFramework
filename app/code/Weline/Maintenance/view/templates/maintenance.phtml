@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= $title ?? '网站维护' ?></title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title><?= $title ?? __('网站维护') ?></title>
     <style>
         :root {
             --primary: #6366f1;
@@ -145,6 +148,14 @@
             background: linear-gradient(90deg, var(--primary) 0%, #8b5cf6 100%);
             border-radius: 3px;
             animation: progress 2s ease-in-out infinite;
+        }
+
+        .recovery-notice {
+            color: #c7d2fe;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: -20px auto 36px;
+            max-width: 560px;
         }
         
         @keyframes progress {
@@ -312,13 +323,13 @@
             color: var(--primary);
         }
         
-        .maintenance-language-switcher .language-option .fas.fa-check {
+        .maintenance-language-switcher .language-option .mdi.mdi-check {
             float: right;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
         
-        .maintenance-language-switcher .language-option.active .fas.fa-check {
+        .maintenance-language-switcher .language-option.active .mdi.mdi-check {
             opacity: 1;
         }
         
@@ -345,8 +356,7 @@
             }
         }
     </style>
-    <!-- Font Awesome图标库 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet" type="text/css">
     <!-- 加载i18n.js以支持语言切换 -->
     <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
 </head>
@@ -358,7 +368,13 @@
                 <?php
                 // 尝试渲染hook
                 if (isset($template) && $template instanceof \Weline\Framework\View\Template) {
-                    $hookContent = $template->getHook('header-language-switcher');
+                    ob_start();
+                    $returnedHookContent = $template->getHook('header-language-switcher');
+                    $printedHookContent = ob_get_clean();
+                    $hookContent = (string)$printedHookContent . (string)$returnedHookContent;
+                    if (!str_contains($hookContent, 'WelineHeaderChoiceSelector')) {
+                        $hookContent .= (string)$template->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
+                    }
                     if (!empty(trim($hookContent))) {
                         echo $hookContent;
                     } else {
@@ -371,22 +387,22 @@
                         ?>
                         <div class="language-switcher" role="button" tabindex="0">
                             <span class="action-line-2">
-                                <i class="fas fa-globe" aria-hidden="true"></i>
+                                <i class="mdi mdi-web" aria-hidden="true"></i>
                                 <span class="current-language"><?= $langDisplay ?></span>
-                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                                <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
                             </span>
                             <div class="language-options" role="menu">
                                 <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
                                     <span>简体中文</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <i class="mdi mdi-check" aria-hidden="true"></i>
                                 </a>
                                 <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
                                     <span>English</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <i class="mdi mdi-check" aria-hidden="true"></i>
                                 </a>
                                 <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
                                     <span>繁體中文</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <i class="mdi mdi-check" aria-hidden="true"></i>
                                 </a>
                             </div>
                         </div>
@@ -402,22 +418,22 @@
                     ?>
                     <div class="language-switcher" role="button" tabindex="0">
                         <span class="action-line-2">
-                            <i class="fas fa-globe" aria-hidden="true"></i>
+                            <i class="mdi mdi-web" aria-hidden="true"></i>
                             <span class="current-language"><?= $langDisplay ?></span>
-                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
                         </span>
                         <div class="language-options" role="menu">
                             <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
                                 <span>简体中文</span>
-                                <i class="fas fa-check" aria-hidden="true"></i>
+                                <i class="mdi mdi-check" aria-hidden="true"></i>
                             </a>
                             <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
                                 <span>English</span>
-                                <i class="fas fa-check" aria-hidden="true"></i>
+                                <i class="mdi mdi-check" aria-hidden="true"></i>
                             </a>
                             <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
                                 <span>繁體中文</span>
-                                <i class="fas fa-check" aria-hidden="true"></i>
+                                <i class="mdi mdi-check" aria-hidden="true"></i>
                             </a>
                         </div>
                     </div>
@@ -435,40 +451,121 @@
                 <?php endif; ?>
             </div>
             
-            <h1><?= $heading ?? '系统升级维护中' ?></h1>
-            <p class="subtitle"><?= $message1 ?? '网站正在维护中...' ?><br><?= $message2 ?? '请稍等片刻' ?></p>
+            <h1><?= $heading ?? __('系统升级维护中') ?></h1>
+            <p class="subtitle"><?= $message1 ?? __('网站正在维护中...') ?><br><?= $message2 ?? __('请稍等片刻') ?></p>
             
             <div class="progress-container">
                 <div class="progress">
                     <div class="progress-bar"></div>
                 </div>
             </div>
+            <p class="recovery-notice" aria-live="polite"><?= $recoveryNotice ?? __('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。') ?></p>
             
             <div class="info-cards">
                 <div class="card">
                     <div class="card-icon">🤔</div>
-                    <h3><?= $whyTitle ?? '为什么网站会处于维护模式？' ?></h3>
-                    <p><?= $whyContent ?? '网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。' ?></p>
+                    <h3><?= $whyTitle ?? __('为什么网站会处于维护模式？') ?></h3>
+                    <p><?= $whyContent ?? __('网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。') ?></p>
                 </div>
                 
                 <div class="card">
                     <div class="card-icon">⏱️</div>
-                    <h3><?= $howLongTitle ?? '多久能够恢复？' ?></h3>
-                    <p><?= $howLongContent ?? '大部分的网站升级活动都只有几分钟甚至几秒钟的时间。' ?></p>
+                    <h3><?= $howLongTitle ?? __('多久能够恢复？') ?></h3>
+                    <p><?= $howLongContent ?? __('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。') ?></p>
                 </div>
                 
                 <div class="card">
                     <div class="card-icon">💬</div>
-                    <h3><?= $helpTitle ?? '需要帮助吗？' ?></h3>
-                    <p><?= $helpContent ?? '如果你长期看到这个页面，对网站存在疑惑，请联系：' ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
+                    <h3><?= $helpTitle ?? __('需要帮助吗？') ?></h3>
+                    <p><?= $helpContent ?? __('如果你长期看到这个页面，对网站存在疑惑，请联系：') ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
                 </div>
             </div>
             
             <a href="/" class="back-btn">
                 <span>←</span>
-                <span><?= $backHome ?? '返回首页' ?></span>
+                <span><?= $backHome ?? __('返回首页') ?></span>
             </a>
         </div>
     </div>
+    <script>
+        (function () {
+            var initialDelay = 5000;
+            var maxDelay = 30000;
+            var jitter = 1500;
+            var timer = 0;
+
+            if (!window.fetch || !window.URL) {
+                return;
+            }
+
+            function getProbeUrl() {
+                var url = new URL(window.location.href);
+                if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
+                    url = new URL('/', window.location.origin);
+                }
+                url.hash = '';
+                url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+                return url.toString();
+            }
+
+            function schedule(delay) {
+                if (timer) {
+                    window.clearTimeout(timer);
+                }
+                timer = window.setTimeout(function () {
+                    timer = 0;
+                    check();
+                }, delay + Math.floor(Math.random() * jitter));
+            }
+
+            function probe(method) {
+                return window.fetch(getProbeUrl(), {
+                    method: method,
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    redirect: 'follow',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                        'X-Maintenance-Recovery-Check': '1'
+                    }
+                });
+            }
+
+            function handleResponse(response) {
+                if (response.status === 200) {
+                    window.location.reload();
+                    return;
+                }
+                schedule(response.status === 503 ? initialDelay : maxDelay);
+            }
+
+            function check() {
+                if (document.hidden) {
+                    return;
+                }
+
+                probe('HEAD').then(function (response) {
+                    if (response.status === 405 || response.status === 501) {
+                        return probe('GET').then(handleResponse);
+                    }
+                    handleResponse(response);
+                }).catch(function () {
+                    schedule(maxDelay);
+                });
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) {
+                    if (timer) {
+                        window.clearTimeout(timer);
+                        timer = 0;
+                    }
+                    return;
+                }
+                schedule(0);
+            });
+            schedule(initialDelay);
+        })();
+    </script>
 </body>
 </html>

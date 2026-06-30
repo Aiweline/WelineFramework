@@ -6,6 +6,13 @@
  * @var array $providers 渠道配置列表
  */
 $providers = $this->getData('providers') ?? [];
+$dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$confirmMessages = [
+    'confirmTitle' => (string)__('确认操作'),
+    'confirmButton' => (string)__('确定'),
+    'cancelButton' => (string)__('取消'),
+    'deleteProvider' => (string)__('确定要删除此渠道配置吗？'),
+];
 ?>
 <div class="translation-service-config-page">
     <div class="page-header mb-4">
@@ -71,7 +78,7 @@ $providers = $this->getData('providers') ?? [];
                                             </button>
                                             <a href="<?= $this->getBackendUrl('*/backend/config/delete', ['id' => $provider->getId()]) ?>" 
                                                class="btn btn-outline-danger"
-                                               onclick="return confirm('<?= __('确定要删除此渠道配置吗？') ?>')">
+                                               data-translation-config-confirm="deleteProvider">
                                                 <i class="mdi mdi-delete"></i> <?= __('删除') ?>
                                             </a>
                                         </div>
@@ -92,6 +99,102 @@ $providers = $this->getData('providers') ?? [];
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const translationConfigMessages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
+
+    function showLocalChoice(message) {
+        return new Promise(function(resolve) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:1055;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+            const dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = 'width:min(420px,100%);background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.25);padding:24px;';
+
+            const title = document.createElement('h4');
+            title.textContent = translationConfigMessages.confirmTitle;
+            title.style.cssText = 'margin:0 0 12px;font-size:18px;';
+
+            const body = document.createElement('p');
+            body.textContent = message;
+            body.style.cssText = 'margin:0 0 20px;color:#475569;';
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+            const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.className = 'btn btn-secondary';
+            cancelButton.textContent = translationConfigMessages.cancelButton;
+
+            const confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
+            confirmButton.className = 'btn btn-primary';
+            confirmButton.textContent = translationConfigMessages.confirmButton;
+
+            function close(value) {
+                document.removeEventListener('keydown', onKeydown);
+                overlay.remove();
+                resolve(value);
+            }
+
+            function onKeydown(event) {
+                if (event.key === 'Escape') {
+                    close(false);
+                }
+            }
+
+            cancelButton.addEventListener('click', function() { close(false); });
+            confirmButton.addEventListener('click', function() { close(true); });
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    close(false);
+                }
+            });
+
+            actions.append(cancelButton, confirmButton);
+            dialog.append(title, body, actions);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            document.addEventListener('keydown', onKeydown);
+            confirmButton.focus();
+        });
+    }
+
+    function showTranslationConfigChoice(message) {
+        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+            return Swal.fire({
+                icon: 'warning',
+                title: translationConfigMessages.confirmTitle,
+                text: message,
+                showCancelButton: true,
+                confirmButtonText: translationConfigMessages.confirmButton,
+                cancelButtonText: translationConfigMessages.cancelButton
+            }).then(function(result) {
+                return !!(result && result.isConfirmed);
+            });
+        }
+
+        return showLocalChoice(message);
+    }
+
+    document.querySelectorAll('[data-translation-config-confirm]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            const key = link.getAttribute('data-translation-config-confirm');
+            const message = translationConfigMessages[key];
+            if (!message) {
+                return;
+            }
+
+            event.preventDefault();
+            showTranslationConfigChoice(message).then(function(confirmed) {
+                if (confirmed) {
+                    window.location.href = link.href;
+                }
+            });
+        });
+    });
+
     // 测试连接
     document.querySelectorAll('.test-connection-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {

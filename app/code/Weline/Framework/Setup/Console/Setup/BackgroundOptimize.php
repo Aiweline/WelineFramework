@@ -35,9 +35,15 @@ class BackgroundOptimize extends CommandAbstract
         
         try {
             // 1. 生成类映射缓存
-            $this->log($logFile, '[1/3] 生成类映射缓存...');
-            $classCount = $this->generateClassmapCache();
-            $this->log($logFile, "      完成，共 {$classCount} 个类");
+            $skipClassmap = isset($args['skip-classmap']);
+            if ($skipClassmap) {
+                $classCount = 0;
+                $this->log($logFile, '[1/3] 跳过类映射缓存（--skip-classmap）');
+            } else {
+                $this->log($logFile, '[1/3] 生成类映射缓存...');
+                $classCount = $this->generateClassmapCache();
+                $this->log($logFile, "      完成，共 {$classCount} 个类");
+            }
             
             // 2. 生成 PSR-4 映射缓存
             $this->log($logFile, '[2/3] 生成 PSR-4 映射缓存...');
@@ -284,12 +290,14 @@ class BackgroundOptimize extends CommandAbstract
             __('在后台执行优化缓存生成任务，由 setup:upgrade 自动调用。' . 
                '也可手动执行来重新生成优化缓存。'),
             [
+                '--skip-classmap' => __('跳过类映射缓存生成'),
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据编译'),
                 '-h, --help' => __('显示帮助信息'),
             ],
             [],
             [
                 __('手动执行') => 'php bin/w setup:background-optimize',
+                __('跳过类映射') => 'php bin/w setup:background-optimize --skip-classmap',
                 __('跳过反射编译') => 'php bin/w setup:background-optimize --skip-reflection-compile',
             ]
         );

@@ -5,7 +5,7 @@
     .dt-demo-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
 </style>
 
-<?= $frontend_api_bootstrap ?? '' ?>
+<?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-performance-page">
     <div class="dt-demo-top">
@@ -23,7 +23,7 @@
     </div>
 
     <div class="dt-demo-actions">
-        <button type="button" class="btn btn-outline-primary" data-testid="performance-reload" onclick="reloadPerformanceTable()"><?= __('Reload Table') ?></button>
+        <button type="button" class="btn btn-outline-primary" data-testid="performance-reload" data-datatable-performance-action="reload"><?= __('Reload Table') ?></button>
     </div>
 
     <w:d-table id="demo-performance-table"
@@ -35,9 +35,7 @@
                show-pagination="true"
                show-toolbar="true"
                show-config="true"
-               allow-frontend="true"
-               api-url="datatable/rest/v1/demo-table"
-               field-api-url="datatable/rest/v1/demo-form/fields">
+               allow-frontend="true">
     </w:d-table>
 </div>
 
@@ -52,4 +50,15 @@
             window.DataTableManager.loadData(instance);
         }
     }
+
+    document.addEventListener('click', function(event) {
+        const trigger = event.target.closest('[data-datatable-performance-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        if (trigger.getAttribute('data-datatable-performance-action') === 'reload') {
+            reloadPerformanceTable();
+        }
+    });
 </script>

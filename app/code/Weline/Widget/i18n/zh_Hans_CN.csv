@@ -26,6 +26,10 @@
 页面内容不能为空,页面内容不能为空
 部件管理,部件管理
 "获取部件详情失败: %{1}","获取部件详情失败: %{1}"
+"Widget 生成智能体","Widget 生成智能体"
+"根据 slot 协议生成普通 Widget registry JSON","根据 slot 协议生成普通 Widget registry JSON"
+"AI Widget 生成调用失败：%{1}","AI Widget 生成调用失败：%{1}"
+"AI Widget 生成结果为空","AI Widget 生成结果为空"
 "Widget 查询器不支持的 operation：%{1}","Widget 查询器不支持的 operation：%{1}"
 "Widget 部件查询","Widget 部件查询"
 提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力,提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力
@@ -53,7 +57,23 @@
 "获取部件预览 HTML","获取部件预览 HTML"
 部件配置,部件配置
 "获取已注册的 ParamType 类型名列表","获取已注册的 ParamType 类型名列表"
+"根据目标 slot 协议生成 AI Widget 并保存为普通 Widget","根据目标 slot 协议生成 AI Widget 并保存为普通 Widget"
+生成要求,生成要求
+生成上下文,生成上下文
+放置目标,放置目标
+期望部件类型,期望部件类型
+模型代码,模型代码
+请先填写生成要求,请先填写生成要求
+"AI Widget 生成失败","AI Widget 生成失败"
+选择的部件类型不受支持：%{1},选择的部件类型不受支持：%{1}
+"AI 返回内容为空","AI 返回内容为空"
+"AI 返回的 Widget JSON 无法解析","AI 返回的 Widget JSON 无法解析"
+"AI 生成的 Widget 类型不受支持：%{1}","AI 生成的 Widget 类型不受支持：%{1}"
+"AI 生成结果缺少 template_content","AI 生成结果缺少 template_content"
+"AI 生成了不支持的参数类型：%{1}","AI 生成了不支持的参数类型：%{1}"
+"AI 生成模板包含不允许的逻辑：%{1}","AI 生成模板包含不允许的逻辑：%{1}"
 删除,删除
+鍒犻櫎,鍒犻櫎
 基本信息,基本信息
 样式设置,样式设置
 链接配置,链接配置
@@ -81,6 +101,7 @@ FAQ部件,FAQ部件
 编辑多语言,编辑多语言
 多语言,多语言
 多语言配置,多语言配置
+AI翻译,AI翻译
 保存多语言,保存多语言
 添加项目,添加项目
 暂无项目，点击下方按钮添加,暂无项目，点击下方按钮添加
@@ -116,13 +137,16 @@ FAQ部件,FAQ部件
 测试,测试
 在新窗口打开,在新窗口打开
 快捷链接:,快捷链接:
+确认组件不可用，操作已取消,确认组件不可用，操作已取消
 解析部件参数失败,解析部件参数失败
 预览失败,预览失败
 确定要删除这个部件吗？,确定要删除这个部件吗？
+确认删除,确认删除
+取消,取消
 选择一个部件进行配置,选择一个部件进行配置
 请填写页面标题和标识,请填写页面标题和标识
-未知错误,未知错误
-保存失败,保存失败
+"Page preview","Page preview"
+"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
 保存,保存
 页面标题,页面标题
 页面标识,页面标识

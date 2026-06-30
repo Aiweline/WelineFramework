@@ -18,11 +18,6 @@ final class SharedStateServiceManagerTest extends TestCase
             public array $runtimeFiles = [];
             public array $launchCalls = [];
 
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
-            }
-
             protected function readRuntimeFile(string $role): array
             {
                 return $this->runtimeFiles[$role] ?? [];
@@ -99,16 +94,15 @@ final class SharedStateServiceManagerTest extends TestCase
     public function testEnsureShortCircuitsHealthyProbeBeforeSlowInspection(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            public array $runtimeFiles = [
-                ControlMessage::ROLE_MEMORY_SERVER => [
-                    'pid' => 21144,
-                    'started_at' => '2026-03-27T01:55:49+00:00',
-                ],
-            ];
+            public array $runtimeFiles = [];
 
-            protected function withRoleLock(string $role, callable $callback): mixed
+            public function __construct()
             {
-                return $callback();
+                $this->runtimeFiles[ControlMessage::ROLE_MEMORY_SERVER] = [
+                    'port' => 19971,
+                    'pid' => (int) \getmypid(),
+                    'started_at' => '2026-03-27T01:55:49+00:00',
+                ];
             }
 
             protected function readRuntimeFile(string $role): array
@@ -153,14 +147,86 @@ final class SharedStateServiceManagerTest extends TestCase
         $runtime = $manager->ensure(ControlMessage::ROLE_MEMORY_SERVER, [], self::memoryPortEnv());
 
         self::assertTrue((bool) ($runtime['reuse_existing'] ?? false));
-        self::assertSame(21144, $runtime['pid'] ?? null);
+        self::assertSame((int) \getmypid(), $runtime['pid'] ?? null);
         self::assertSame(19971, $runtime['port'] ?? null);
         self::assertSame('memory_server.token', $runtime['token_file_name'] ?? null);
+    }
+
+    public function testEnsureRuntimeReusesHealthySharedServicesDirectly(): void
+    {
+        $registry = new class extends SharedStateServiceRegistry {
+            public function getRecord(string $role): array
+            {
+                return [];
+            }
+
+            public function getConsumers(string $role): array
+            {
+                return [];
+            }
+        };
+
+        $manager = new class($registry) extends SharedStateServiceManager {
+            public function __construct(private readonly SharedStateServiceRegistry $registry)
+            {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function probeDefinition(array $definition): array
+            {
+                return [
+                    'healthy' => true,
+                    'runtime' => [
+                        'host' => '127.0.0.1',
+                        'port' => (int) $definition['port'],
+                        'token_file_name' => (string) $definition['token_file_name'],
+                        'pid' => (string) $definition['role'] === ControlMessage::ROLE_MEMORY_SERVER ? 9876 : 4321,
+                        'process_name' => (string) $definition['process_name'],
+                        'instance_name' => (string) $definition['service_instance_name'],
+                        'service_instance_name' => (string) $definition['service_instance_name'],
+                    ],
+                ];
+            }
+
+            protected function ensureSharedProcessLogVisible(array $runtime, string $requesterInstanceName): void
+            {
+            }
+        };
+
+        $runtime = $manager->ensureRuntime('consumer-a', [], self::sessionPortEnv());
+
+        self::assertTrue((bool) ($runtime['session']['reuse_existing'] ?? false));
+        self::assertTrue((bool) ($runtime['session']['shared_service'] ?? false));
+        self::assertSame(19970, $runtime['session']['port'] ?? null);
+        self::assertSame('session_server.token', $runtime['session']['token_file_name'] ?? null);
+        self::assertTrue((bool) ($runtime['memory']['reuse_existing'] ?? false));
+        self::assertTrue((bool) ($runtime['memory']['shared_service'] ?? false));
+        self::assertSame(19971, $runtime['memory']['port'] ?? null);
+        self::assertSame('memory_server.token', $runtime['memory']['token_file_name'] ?? null);
     }
 
     public function testStatusUsesProtocolProbeWithoutPortInspection(): void
     {
         $manager = new class extends SharedStateServiceManager {
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return new class extends SharedStateServiceRegistry {
+                    public function getRecord(string $role): array
+                    {
+                        return [];
+                    }
+
+                    public function getConsumers(string $role): array
+                    {
+                        return [];
+                    }
+                };
+            }
+
             protected function readRuntimeFile(string $role): array
             {
                 return [];
@@ -199,11 +265,6 @@ final class SharedStateServiceManagerTest extends TestCase
             public array $runtimeFiles = [];
             public array $launchCalls = [];
             public array $stopCalls = [];
-
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
-            }
 
             protected function readRuntimeFile(string $role): array
             {
@@ -312,11 +373,6 @@ final class SharedStateServiceManagerTest extends TestCase
     public function testEnsureFailsWhenPortIsOccupiedByUnexpectedProcess(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
-            }
-
             protected function loadEnvConfig(): array
             {
                 return [
@@ -364,11 +420,6 @@ final class SharedStateServiceManagerTest extends TestCase
 
             public function __construct(private readonly string $scope)
             {
-            }
-
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
             }
 
             protected function readRuntimeFile(string $role): array
@@ -454,6 +505,83 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame('session_server.token', $resolved);
     }
 
+    public function testSharedServicePortPrefersCanonicalProjectPortBeforeStaleRuntimePort(): void
+    {
+        $scope = MasterProcess::getProjectScopeToken();
+        $manager = new class($scope) extends SharedStateServiceManager {
+            public function __construct(private readonly string $scope)
+            {
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return [
+                    'port' => 20970,
+                    'token_file_name' => 'session_server.20970.token',
+                ];
+            }
+
+            protected function probePortInUse(int $port): bool
+            {
+                return true;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                return [
+                    'reusable' => true,
+                    'pid' => 4321,
+                    'port' => (int) $definition['port'],
+                    'role' => (string) $definition['role'],
+                    'token_file_name' => $expectedTokenFileName,
+                    'process_name' => 'weline-wls-session-' . $this->scope . '-shared-' . (int) $definition['port'],
+                    'instance_name' => 'shared-session-' . $this->scope . '-' . (int) $definition['port'],
+                ];
+            }
+        };
+
+        $resolved = (int) $this->invokePrivateMethod(
+            $manager,
+            'resolveSharedServicePort',
+            ControlMessage::ROLE_SESSION_SERVER,
+            19970,
+            'session_server.token',
+            false
+        );
+
+        self::assertSame(19970, $resolved);
+    }
+
+    public function testReusablePortUsesProtocolPingBeforeSlowPortInspection(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            protected function probeSharedPortWithToken(int $port, string $tokenFileName): bool
+            {
+                return $port === 19970 && $tokenFileName === 'session_server.token';
+            }
+
+            protected function probePortInUse(int $port): bool
+            {
+                TestCase::fail('protocol-confirmed shared port must not require OS port inspection');
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                TestCase::fail('protocol-confirmed shared port must not require process inspection');
+            }
+        };
+
+        $reusable = (bool) $this->invokePrivateMethod(
+            $manager,
+            'isPortCandidateReusable',
+            ControlMessage::ROLE_SESSION_SERVER,
+            19970,
+            'session_server.token'
+        );
+
+        self::assertTrue($reusable);
+    }
+
     public function testImplicitSharedMemoryTokenRebasesToResolvedNonDefaultPort(): void
     {
         $manager = new SharedStateServiceManager();
@@ -481,11 +609,6 @@ final class SharedStateServiceManagerTest extends TestCase
         $env = self::sessionPortEnv();
         $registry = new class extends SharedStateServiceRegistry {
             public array $records = [];
-
-            public function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
-            }
 
             public function getRecord(string $role): array
             {
@@ -520,11 +643,6 @@ final class SharedStateServiceManagerTest extends TestCase
             protected function createRegistry(): SharedStateServiceRegistry
             {
                 return $this->registry;
-            }
-
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
             }
 
             protected function readRuntimeFile(string $role): array
@@ -580,11 +698,6 @@ final class SharedStateServiceManagerTest extends TestCase
         $registry = new class extends SharedStateServiceRegistry {
             public array $records = [];
 
-            public function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
-            }
-
             public function getRecord(string $role): array
             {
                 return $this->records[$role] ?? [];
@@ -627,11 +740,6 @@ final class SharedStateServiceManagerTest extends TestCase
             protected function createRegistry(): SharedStateServiceRegistry
             {
                 return $this->registry;
-            }
-
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
             }
 
             protected function readRuntimeFile(string $role): array
@@ -679,11 +787,6 @@ final class SharedStateServiceManagerTest extends TestCase
         $registry = new class extends SharedStateServiceRegistry {
             public array $records = [];
 
-            public function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
-            }
-
             public function getRecord(string $role): array
             {
                 return $this->records[$role] ?? [];
@@ -727,11 +830,6 @@ final class SharedStateServiceManagerTest extends TestCase
             protected function createRegistry(): SharedStateServiceRegistry
             {
                 return $this->registry;
-            }
-
-            protected function withRoleLock(string $role, callable $callback): mixed
-            {
-                return $callback();
             }
 
             protected function readRuntimeFile(string $role): array

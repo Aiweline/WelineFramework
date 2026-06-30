@@ -58,6 +58,10 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
             $rule = $rule->getData();
         }
         $type = $data->getData('type');
+
+        if (!empty($rule['module']) || self::shouldBypassModuleRouters((string)$path, $this->request)) {
+            return;
+        }
         
         // 使用静态缓存，避免每次事件分发都重新读取模块路由
         if (self::$cachedModuleRouters === null) {
@@ -111,5 +115,87 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
     {
         self::$cachedModuleRouters = null;
         self::$staticCacheInstance = null;
+    }
+
+    private static function shouldBypassModuleRouters(string $path, ?Request $request = null): bool
+    {
+        if ($request !== null && ($request->isApiFrontend() || $request->isApiBackend())) {
+            return true;
+        }
+
+        $originUri = (string)($request?->getServer('WELINE_ORIGIN_REQUEST_URI') ?? '');
+        if ($originUri !== '' && self::shouldBypassNormalizedPath(self::normalizeBypassPath($originUri))) {
+            return true;
+        }
+
+        $normalized = self::normalizeBypassPath($path);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return self::shouldBypassNormalizedPath($normalized);
+    }
+
+    private static function shouldBypassNormalizedPath(string $normalized): bool
+    {
+        if ($normalized === '') {
+            return false;
+        }
+
+        if (preg_match('#^api\d*(?:/|$)#', $normalized)) {
+            return true;
+        }
+
+        if (
+            $normalized === 'static'
+            || str_starts_with($normalized, 'static/')
+            || $normalized === 'pub/static'
+            || str_starts_with($normalized, 'pub/static/')
+        ) {
+            return true;
+        }
+
+        foreach ([
+            'customer',
+            'customer/account',
+            'checkout',
+            'cart',
+            'wishlist',
+            'search',
+            'weshop/product',
+            'weshop/catalog',
+            'weshop/blog',
+            'product/view',
+            'product/frontend/product',
+            'catalog/category/view',
+            'catalog/frontend/category',
+            'blog/frontend',
+        ] as $reservedPrefix) {
+            if ($normalized === $reservedPrefix || str_starts_with($normalized, $reservedPrefix . '/')) {
+                return true;
+            }
+        }
+
+        return (bool)preg_match(
+            '#\.(?:js|css|mjs|map|jpg|jpeg|png|gif|svg|ico|webp|avif|woff|woff2|ttf|eot)$#i',
+            $normalized
+        );
+    }
+
+    private static function normalizeBypassPath(string $path): string
+    {
+        $path = trim(str_replace('\\', '/', $path));
+        if ($path === '') {
+            return '';
+        }
+
+        if (str_contains($path, '://')) {
+            $parsedPath = parse_url($path, PHP_URL_PATH);
+            $path = is_string($parsedPath) ? $parsedPath : '';
+        } elseif (str_contains($path, '?')) {
+            $path = explode('?', $path, 2)[0];
+        }
+
+        return strtolower(trim($path, '/'));
     }
 }

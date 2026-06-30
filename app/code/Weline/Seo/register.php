@@ -20,7 +20,6 @@ Register::register(
     [
         'Weline_Ai',
         'Weline_Backend',
-        'Weline_Websites',
         'WeShop_Store',
     ]
 );

@@ -4,13 +4,49 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Controller;
 
+use Weline\Backend\Block\ThemeConfig;
+use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Service\BackendWarmupContext;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\App\State;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Service\ThemeContextService;
 
 class BaseController extends BackendController
 {
+    private const ADMIN_FULL_PAGE_CACHE_NS = 'weline_admin_runtime';
+    private const ADMIN_FULL_PAGE_CACHE_TTL = 600;
+    private const ADMIN_FULL_PAGE_CACHE_MAX_ITEMS = 32;
+
+    /**
+     * @var array<string, array{expires_at: float, html: string}>
+     */
+    private static array $adminFullPageCache = [];
+    private static ?MemoryStateFacade $adminRuntimeCache = null;
+    private static bool $adminRuntimeCacheResolved = false;
+    private static string $lastAdminRuntimeCacheGetStatus = 'none';
+
+    public static function clearRuntimeFullPageCache(): void
+    {
+        self::$adminFullPageCache = [];
+        $cache = self::adminRuntimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->clearNamespace(self::ADMIN_FULL_PAGE_CACHE_NS);
+        } catch (\Throwable) {
+            self::$adminRuntimeCache = null;
+            self::$adminRuntimeCacheResolved = true;
+        }
+    }
+
     public function __init()
     {
         parent::__init();
@@ -20,8 +56,21 @@ class BaseController extends BackendController
 
     protected function fetch(string $fileName = '', array $data = []): mixed
     {
+        $adminFullPageCacheKey = $this->canUseAdminFullPageCache($fileName)
+            ? $this->buildAdminFullPageCacheKey($fileName)
+            : null;
+        if ($adminFullPageCacheKey !== null) {
+            $cached = $this->getAdminFullPageCache($adminFullPageCacheKey);
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
         $content = parent::fetch($fileName, $data);
         if (!$this->shouldWrapBackendContent($content)) {
+            if ($adminFullPageCacheKey !== null && $this->isCacheableAdminFullPageHtml($content)) {
+                $this->rememberAdminFullPageCache($adminFullPageCacheKey, (string)$content);
+            }
             return $content;
         }
 
@@ -35,10 +84,15 @@ class BaseController extends BackendController
         $template->setData('layout', null);
         $template->setData('contentTemplate', '');
 
-        return $template->fetch($layoutPath, [
+        $fullHtml = $template->fetch($layoutPath, [
             'content' => (string)$content,
             'contentTemplate' => '',
         ]);
+        if ($adminFullPageCacheKey !== null && \is_string($fullHtml) && $fullHtml !== '') {
+            $this->rememberAdminFullPageCache($adminFullPageCacheKey, $fullHtml);
+        }
+
+        return $fullHtml;
     }
 
     protected function fetchBase(string $fileName = '', array $data = []): mixed
@@ -87,6 +141,17 @@ class BaseController extends BackendController
             && stripos($trimmed, '<html') === false;
     }
 
+    private function isCacheableAdminFullPageHtml(mixed $content): bool
+    {
+        if (!\is_string($content) || \trim($content) === '') {
+            return false;
+        }
+
+        $trimmed = \ltrim($content);
+        return \str_starts_with($trimmed, '<!DOCTYPE html>')
+            || \stripos($trimmed, '<html') !== false;
+    }
+
     private function isAjaxLikeRequest(): bool
     {
         $requestedWith = strtolower((string)$this->request->getServer('HTTP_X_REQUESTED_WITH'));
@@ -129,5 +194,283 @@ class BaseController extends BackendController
             $theme,
             'backend'
         );
+    }
+
+    private function canUseAdminFullPageCache(string $fileName): bool
+    {
+        if (!$this instanceof Index) {
+            return false;
+        }
+
+        if ($fileName !== '') {
+            return false;
+        }
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
+            return false;
+        }
+
+        $method = \strtoupper((string)$this->request->getMethod());
+        if (!\in_array($method, ['GET', 'HEAD'], true)) {
+            return false;
+        }
+
+        if ($this->isAjaxLikeRequest()) {
+            return false;
+        }
+
+        $query = \method_exists($this->request, 'getQuery') ? $this->request->getQuery() : [];
+        if (\is_array($query) && $query !== []) {
+            return false;
+        }
+
+        return $this->resolveAdminFullPageCacheUserId() > 0;
+    }
+
+    private function resolveAdminFullPageCacheUserId(): int
+    {
+        if (\class_exists(BackendWarmupContext::class)) {
+            $warmupUserId = BackendWarmupContext::currentUserId();
+            if ($warmupUserId > 0) {
+                return $warmupUserId;
+            }
+        }
+
+        try {
+            if (isset($this->session)) {
+                $userId = (int)($this->session->getUserId() ?? 0);
+                if ($userId > 0) {
+                    return $userId;
+                }
+
+                $user = $this->session->getLoginUser();
+                if (\is_object($user) && \method_exists($user, 'getId')) {
+                    return \max(0, (int)$user->getId());
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            /** @var BackendUserConfig $userConfig */
+            $userConfig = ObjectManager::getInstance(BackendUserConfig::class);
+            return $userConfig->getCurrentUserId();
+        } catch (\Throwable) {
+        }
+
+        return 0;
+    }
+
+    private function buildAdminFullPageCacheKey(string $fileName): string
+    {
+        $host = \strtolower(\trim((string)($this->request->getServer('HTTP_HOST') ?? '')));
+        $uri = (string)(\function_exists('w_env_request_uri') ? \w_env_request_uri() : ($this->request->getUri() ?? ''));
+        $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $routePath = \trim((string)$this->request->getRouteUrlPath(), '/');
+        $requestScope = KeyBuilder::requestScopeHash([
+            'scope' => 'admin_full_page',
+            'file' => $fileName,
+            'route' => $routePath,
+            'path' => $path,
+        ], ['full_request_uri' => false]);
+
+        return \sha1((string)\json_encode([
+            'v' => 4,
+            'controller' => static::class,
+            'file' => $fileName,
+            'route' => $routePath,
+            'path' => $path,
+            'host' => $host,
+            'area' => (string)($this->request->getServer('WELINE_AREA') ?? ''),
+            'area_route' => (string)($this->request->getServer('WELINE_AREA_ROUTE') ?? ''),
+            'backend_prefix' => (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''),
+            'rest_backend_prefix' => (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?? ''),
+            'website_id' => (string)($this->request->getServer('WELINE_WEBSITE_ID') ?? ''),
+            'website_code' => (string)($this->request->getServer('WELINE_WEBSITE_CODE') ?? ''),
+            'website_url' => (string)($this->request->getServer('WELINE_WEBSITE_URL') ?? ''),
+            'user_id' => $this->resolveAdminFullPageCacheUserId(),
+            'lang' => State::getLang(),
+            'lang_local' => State::getLangLocal(),
+            'currency' => State::getCurrency(),
+            'theme_config_hash' => $this->resolveAdminThemeConfigHash(),
+            'request_scope' => $requestScope,
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function resolveAdminThemeConfigHash(): string
+    {
+        try {
+            $userId = $this->resolveAdminFullPageCacheUserId();
+            if ($userId <= 0) {
+                return '';
+            }
+
+            /** @var BackendUserConfig $configModel */
+            $configModel = ObjectManager::getInstance(BackendUserConfig::class);
+            $row = $configModel->clear()
+                ->where(BackendUserConfig::schema_fields_user_id, $userId)
+                ->where(BackendUserConfig::schema_fields_key, ThemeConfig::theme_Session_Config)
+                ->find()
+                ->fetchArray();
+            $rawConfig = (string)($row[BackendUserConfig::schema_fields_value] ?? '');
+            if ($rawConfig === '') {
+                return '';
+            }
+
+            $decoded = \json_decode($rawConfig, true);
+            if (\is_array($decoded)) {
+                return \sha1((string)\json_encode(
+                    $decoded,
+                    \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE
+                ));
+            }
+
+            return \sha1($rawConfig);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function getAdminFullPageCache(string $key): ?string
+    {
+        $now = \microtime(true);
+        if (isset(self::$adminFullPageCache[$key])) {
+            $cached = self::$adminFullPageCache[$key];
+            if (($cached['expires_at'] ?? 0.0) >= $now && ($cached['html'] ?? '') !== '') {
+                $this->setAdminCacheHeaders('local');
+                return (string)$cached['html'];
+            }
+            unset(self::$adminFullPageCache[$key]);
+        }
+
+        $runtimeStart = \microtime(true);
+        $runtimeCached = $this->adminRuntimeCacheGet('admin.view.' . $key);
+        $runtimeDurationMs = (\microtime(true) - $runtimeStart) * 1000;
+        $this->setPerfHeader('X-WLS-Admin-View-Cache-Get-Ms', \sprintf('%.2f', $runtimeDurationMs));
+        if (\is_string($runtimeCached) && $runtimeCached !== '') {
+            self::$adminFullPageCache[$key] = [
+                'expires_at' => $now + $this->adminFullPageCacheTtl(),
+                'html' => $runtimeCached,
+            ];
+            $this->trimAdminFullPageLocalCache();
+            $this->setAdminCacheHeaders('shared');
+            return $runtimeCached;
+        }
+
+        $this->setAdminCacheHeaders('miss:' . self::$lastAdminRuntimeCacheGetStatus);
+        return null;
+    }
+
+    private function rememberAdminFullPageCache(string $key, string $html): void
+    {
+        $ttl = $this->adminFullPageCacheTtl();
+        self::$adminFullPageCache[$key] = [
+            'expires_at' => \microtime(true) + $ttl,
+            'html' => $html,
+        ];
+        $this->trimAdminFullPageLocalCache();
+        $this->adminRuntimeCacheSet('admin.view.' . $key, $html, $ttl);
+        $this->setPerfHeader('X-WLS-Admin-View-Cache-Full-Html', 'stored');
+        $this->setAdminCacheHeaders('stored');
+    }
+
+    private function trimAdminFullPageLocalCache(): void
+    {
+        if (\count(self::$adminFullPageCache) <= self::ADMIN_FULL_PAGE_CACHE_MAX_ITEMS) {
+            return;
+        }
+
+        \uasort(
+            self::$adminFullPageCache,
+            static fn (array $a, array $b): int => ((float)($b['expires_at'] ?? 0.0)) <=> ((float)($a['expires_at'] ?? 0.0))
+        );
+        self::$adminFullPageCache = \array_slice(self::$adminFullPageCache, 0, self::ADMIN_FULL_PAGE_CACHE_MAX_ITEMS, true);
+    }
+
+    private function adminRuntimeCacheGet(string $key): mixed
+    {
+        $cache = self::adminRuntimeCache();
+        if ($cache === null) {
+            self::$lastAdminRuntimeCacheGetStatus = 'unavailable';
+            return null;
+        }
+
+        try {
+            $value = $cache->get(self::ADMIN_FULL_PAGE_CACHE_NS, $key);
+            self::$lastAdminRuntimeCacheGetStatus = $value === null ? 'empty' : 'value';
+            return $value;
+        } catch (\Throwable $throwable) {
+            self::$lastAdminRuntimeCacheGetStatus = 'error:' . $throwable::class;
+            self::$adminRuntimeCache = null;
+            self::$adminRuntimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function adminRuntimeCacheSet(string $key, string $html, int $ttl): void
+    {
+        $cache = self::adminRuntimeCache();
+        if ($cache === null) {
+            $this->setPerfHeader('X-WLS-Admin-View-Cache-Store', 'unavailable');
+            return;
+        }
+
+        try {
+            $stored = $cache->set(self::ADMIN_FULL_PAGE_CACHE_NS, $key, $html, \max(1, $ttl));
+            $this->setPerfHeader('X-WLS-Admin-View-Cache-Store', $stored ? 'ok' : 'fail');
+        } catch (\Throwable $throwable) {
+            $this->setPerfHeader('X-WLS-Admin-View-Cache-Store', 'error:' . $throwable::class);
+            self::$adminRuntimeCache = null;
+            self::$adminRuntimeCacheResolved = true;
+        }
+    }
+
+    private function setAdminCacheHeaders(string $status): void
+    {
+        $this->setPerfHeader('X-WLS-Admin-View-Cache', $status);
+        $this->setPerfHeader('X-WLS-Controller-Cache', $status);
+    }
+
+    private function setPerfHeader(string $name, string $value): void
+    {
+        try {
+            $this->request->getResponse()->setHeader($name, $value);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function adminFullPageCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('backend.admin_view_ttl', self::ADMIN_FULL_PAGE_CACHE_TTL, 1, 600);
+    }
+
+    private static function adminRuntimeCache(): ?MemoryStateFacade
+    {
+        if (self::$adminRuntimeCacheResolved) {
+            return self::$adminRuntimeCache;
+        }
+        self::$adminRuntimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$adminRuntimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'weline_admin_full_page',
+                'connect_timeout' => 0.04,
+                'timeout' => 0.08,
+                'acquire_timeout' => 0.04,
+            ]));
+        } catch (\Throwable) {
+            self::$adminRuntimeCache = null;
+        }
+
+        return self::$adminRuntimeCache;
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 }

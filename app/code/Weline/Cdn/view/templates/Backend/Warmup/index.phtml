@@ -13,6 +13,19 @@ $totalPages = (int)$this->getData('totalPages');
 $search = $this->getData('search') ?: '';
 $status = $this->getData('status') ?: '';
 $statistics = $this->getData('statistics') ?: [];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT;
+$jsonForScript = static function (mixed $value) use ($jsonForScriptFlags): string {
+    $json = json_encode((string)$value, $jsonForScriptFlags);
+    return is_string($json) ? $json : '""';
+};
+$escapeAttr = static function (mixed $value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
 ?>
 
 <!-- 消息提示 -->
@@ -61,7 +74,7 @@ $statistics = $this->getData('statistics') ?: [];
 <!-- 操作栏 -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <button type="button" class="btn btn-success" onclick="window.CdnWarmupManager.executeWarmup()">
+        <button type="button" class="btn btn-success" data-cdn-warmup-action="execute">
             <i class="mdi mdi-play"></i> <?= __('执行预热') ?>
         </button>
     </div>
@@ -153,12 +166,15 @@ $statistics = $this->getData('statistics') ?: [];
                                 <td>
                                     <div class="btn-group btn-group-sm">
                                         <button type="button" class="btn btn-<?= $url->getData('enabled') ? 'warning' : 'success' ?>" 
-                                                onclick="window.CdnWarmupManager.toggleEnable(<?= $url->getData('warmup_url_id') ?>, <?= $url->getData('enabled') ? 0 : 1 ?>)">
+                                                data-cdn-warmup-action="toggle-enable"
+                                                data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>"
+                                                data-enabled="<?= $url->getData('enabled') ? '0' : '1' ?>">
                                             <i class="mdi mdi-<?= $url->getData('enabled') ? 'close' : 'check' ?>"></i> 
                                             <?= $url->getData('enabled') ? __('禁用') : __('启用') ?>
                                         </button>
                                         <button type="button" class="btn btn-danger" 
-                                                onclick="window.CdnWarmupManager.deleteUrl(<?= $url->getData('warmup_url_id') ?>)">
+                                                data-cdn-warmup-action="delete"
+                                                data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>">
                                             <i class="mdi mdi-delete"></i> <?= __('删除') ?>
                                         </button>
                                     </div>
@@ -210,9 +226,46 @@ $statistics = $this->getData('statistics') ?: [];
 (function() {
     'use strict';
     
-    var executeUrl = '<?= $this->getBackendUrl('*/backend/warmup/execute') ?>';
-    var toggleEnableUrl = '<?= $this->getBackendUrl('*/backend/warmup/toggleEnable') ?>';
-    var deleteUrl = '<?= $this->getBackendUrl('*/backend/warmup/delete') ?>';
+    var executeUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/warmup/execute')) ?>;
+    var toggleEnableUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/warmup/toggleEnable')) ?>;
+    var deleteUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/warmup/delete')) ?>;
+
+    function confirmAction(message, onConfirm) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(message).then(function(confirmed) {
+                if (confirmed) {
+                    onConfirm();
+                }
+            });
+            return;
+        }
+        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+            window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
+        }
+    }
+
+    document.addEventListener('click', function(event) {
+        var target = event.target instanceof Element
+            ? event.target.closest('[data-cdn-warmup-action]')
+            : null;
+        if (!target) {
+            return;
+        }
+
+        if (target.dataset.cdnWarmupAction === 'execute') {
+            window.CdnWarmupManager.executeWarmup();
+            return;
+        }
+
+        if (target.dataset.cdnWarmupAction === 'toggle-enable') {
+            window.CdnWarmupManager.toggleEnable(target.dataset.urlId || '', target.dataset.enabled || '0');
+            return;
+        }
+
+        if (target.dataset.cdnWarmupAction === 'delete') {
+            window.CdnWarmupManager.deleteUrl(target.dataset.urlId || '');
+        }
+    });
     
     window.CdnWarmupManager = {
         executeWarmup: function() {
@@ -262,7 +315,7 @@ $statistics = $this->getData('statistics') ?: [];
             window.Weline.Api.request(toggleEnableUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'id=' + id + '&enabled=' + enabled
+                body: new URLSearchParams({ id: id, enabled: enabled }).toString()
             })
             .then(function(response) {
                 var data = response.data;
@@ -286,32 +339,31 @@ $statistics = $this->getData('statistics') ?: [];
         },
         
         deleteUrl: function(id) {
-            if (!confirm('<?= __('确定要删除此URL吗？') ?>')) {
-                return;
-            }
-            window.Weline.Api.request(deleteUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'id=' + id
-            })
-            .then(function(response) {
-                var data = response.data;
-                if (response.ok && data && data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: data.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(function() { location.reload(); });
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('删除失败') ?>',
-                        text: data.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                }
+            confirmAction('<?= __('确定要删除此URL吗？') ?>', function() {
+                window.Weline.Api.request(deleteUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ id: id }).toString()
+                })
+                .then(function(response) {
+                    var data = response.data;
+                    if (response.ok && data && data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: data.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(function() { location.reload(); });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('删除失败') ?>',
+                            text: data.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    }
+                });
             });
         }
     };

@@ -2,44 +2,65 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
-/**
- * Weline_Seo 模块扩展规约
- * 
- * 本文件定义了 Weline_Seo 模块提供的扩展点，其他模块可以通过这些扩展点来扩展 SEO 功能
- */
 return [
-    'type' => 'module', // module 或 theme
-    'documentation' => 'doc/扩展规约说明.md', // 文档文件路径（相对于模块根目录）
+    'type' => 'module',
+    'documentation' => 'doc/扩展规约说明.md',
     'extends' => [
         'FeedProvider' => [
             'path' => 'extends/module/Weline_Seo/FeedProvider',
             'interface' => 'Weline\Seo\Interface\FeedProviderInterface',
-            'description' => 'SEO Feed 提供扩展点，允许其他模块向 SEO 模块上报 SEO 信息',
-            'required' => true, // 是否必须实现接口
-            'multiple' => true  // 是否允许多个实现
+            'description' => 'SEO feed provider extension point.',
+            'required' => true,
+            'multiple' => true,
         ],
         'SitemapProvider' => [
             'path' => 'extends/module/Weline_Seo/SitemapProvider',
             'interface' => 'Weline\Seo\Interface\SitemapProviderInterface',
-            'description' => 'Sitemap 提供扩展点（旧版），允许其他模块生成 Sitemap 并向 SEO 模块上报 URL',
+            'description' => 'Legacy sitemap provider extension point.',
             'required' => false,
-            'multiple' => true
+            'multiple' => true,
         ],
         'SitemapUrlProvider' => [
             'path' => 'extends/module/Weline_Seo/SitemapUrlProvider',
             'interface' => 'Weline\Seo\Interface\SitemapUrlProviderInterface',
-            'description' => 'Sitemap URL 提供扩展点（新架构），允许其他模块提供 URL 数据，由 SEO 模块统一生成平台分组的 Sitemap',
+            'description' => 'Sitemap URL provider extension point.',
             'required' => false,
-            'multiple' => true
-        ]
-        // 可以定义多个扩展点目录
-    ]
+            'multiple' => true,
+        ],
+        'SitemapAdapter' => [
+            'path' => 'extends/module/Weline_Seo/SitemapAdapter',
+            'interface' => 'Weline\Seo\Interface\SitemapPlatformAdapterInterface',
+            'description' => 'Search engine sitemap/catalog/IndexNow platform adapter extension point.',
+            'required' => false,
+            'multiple' => true,
+        ],
+        'SearchEngineAdapter' => [
+            'path' => 'extends/module/Weline_Seo/SearchEngineAdapter',
+            'interface' => 'Weline\Seo\Interface\SearchEngineAdapterInterface',
+            'description' => 'Search engine URL push adapter extension point.',
+            'required' => false,
+            'multiple' => true,
+        ],
+        'SeoProfileProvider' => [
+            'path' => 'extends/module/Weline_Seo/SeoProfileProvider',
+            'interface' => 'Weline\Seo\Interface\SeoProfileProviderInterface',
+            'description' => 'SEO/GEO profile provider for page-type facts, robots policy, sitemap metadata, and schema graph data.',
+            'required' => false,
+            'multiple' => true,
+        ],
+        'SeoSlotProvider' => [
+            'path' => 'extends/module/Weline_Seo/SeoSlotProvider',
+            'interface' => 'Weline\Seo\Interface\SeoSlotProviderInterface',
+            'description' => 'Structured SEO tag custom slot provider.',
+            'required' => false,
+            'multiple' => true,
+        ],
+        'SeoStructureNodeBuilder' => [
+            'path' => 'extends/module/Weline_Seo/SeoStructureNodeBuilder',
+            'interface' => 'Weline\Seo\Structure\SeoStructureNodeBuilderInterface',
+            'description' => 'SEO structured data node builder for schema.org graph nodes.',
+            'required' => false,
+            'multiple' => true,
+        ],
+    ],
 ];
-

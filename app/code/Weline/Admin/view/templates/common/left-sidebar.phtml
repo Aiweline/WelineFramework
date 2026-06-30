@@ -13,6 +13,7 @@ if ($dataLayout !== 'horizontal'):
     // 使用服务类获取菜单数据
     /**@var \Weline\Admin\Service\MenuRenderService $menuRenderService */
     $menuRenderService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Service\MenuRenderService::class);
+    $adminPhrase = static fn(string $phrase): string => $menuRenderService->translateMenuTitle($phrase, 'Weline_Admin::left-sidebar');
     
     // 获取常用菜单数据
     $frequentMenusData = $menuRenderService->getFrequentMenus(20, 7);
@@ -41,7 +42,7 @@ if ($dataLayout !== 'horizontal'):
                                 <button type="button" 
                                         class="menu-tab-btn search-tab-btn active" 
                                         id="search-menu-tab"
-                                        title="<?php echo __('搜索菜单'); ?>">
+                                        title="<?php echo $adminPhrase('搜索菜单'); ?>">
                                     <i class="mdi mdi-magnify" id="search-tab-icon"></i>
                                 </button>
                                 <!-- 搜索输入框（展开后显示） -->
@@ -49,7 +50,7 @@ if ($dataLayout !== 'horizontal'):
                                     <input type="text" 
                                            id="menu-search-input" 
                                            class="form-control form-control-sm search-tab-input" 
-                                           placeholder="<?php echo __('搜索菜单...'); ?>"
+                                           placeholder="<?php echo $adminPhrase('搜索菜单...'); ?>"
                                            autocomplete="off">
                                     <i class="mdi mdi-magnify search-tab-close" id="search-tab-close-icon"></i>
                                 </div>
@@ -62,7 +63,7 @@ if ($dataLayout !== 'horizontal'):
                             <button type="button" 
                                     class="menu-tab-btn" 
                                     id="frequent-menu-tab"
-                                    title="<?php echo __('常用菜单'); ?>">
+                                    title="<?php echo $adminPhrase('常用菜单'); ?>">
                                 <i class="mdi mdi-star-outline"></i>
                             </button>
                             <?php
@@ -78,7 +79,7 @@ if ($dataLayout !== 'horizontal'):
                             <div class="search-results-header px-3 py-2" id="search-results-header">
                                 <h6 class="mb-0 text-muted fw-semibold">
                                     <i class="mdi mdi-magnify me-1"></i>
-                                    <span id="search-results-text"><?php echo __('搜索结果'); ?></span>
+                                    <span id="search-results-text"><?php echo $adminPhrase('搜索结果'); ?></span>
                                 </h6>
                             </div>
                             <!-- 搜索结果列表 -->
@@ -104,9 +105,9 @@ if ($dataLayout !== 'horizontal'):
                 <ul class="metismenu list-unstyled" id="side-menu">
                     <!-- 搜索菜单项（以菜单形式实现，折叠状态下hover展开） -->
                     <li class="menu-search-item" id="menu-search-item" data-source="menu-search">
-                        <a href="javascript: void(0);" class="has-arrow waves-effect" id="menu-search-link">
+                        <a href="#" role="button" class="has-arrow waves-effect" id="menu-search-link">
                             <i class="mdi mdi-magnify"></i>
-                            <span><?php echo __('搜索菜单'); ?></span>
+                            <span><?php echo $adminPhrase('搜索菜单'); ?></span>
                         </a>
                         <ul class="sub-menu menu-search-submenu" aria-expanded="false" id="menu-search-submenu">
                             <li>
@@ -116,7 +117,7 @@ if ($dataLayout !== 'horizontal'):
                                         <input type="text" 
                                                id="menu-search-input-menu" 
                                                class="form-control form-control-sm" 
-                                               placeholder="<?php echo __('搜索菜单...'); ?>"
+                                               placeholder="<?php echo $adminPhrase('搜索菜单...'); ?>"
                                                autocomplete="off">
                                     </div>
                                     <!-- 搜索结果容器 -->
@@ -124,7 +125,7 @@ if ($dataLayout !== 'horizontal'):
                                         <div class="search-results-header px-3 py-2">
                                             <h6 class="mb-0 text-muted fw-semibold">
                                                 <i class="mdi mdi-magnify me-1"></i>
-                                                <span id="search-results-text-menu"><?php echo __('搜索结果'); ?></span>
+                                                <span id="search-results-text-menu"><?php echo $adminPhrase('搜索结果'); ?></span>
                                             </h6>
                                         </div>
                                         <!-- 搜索结果列表 -->
@@ -140,7 +141,7 @@ if ($dataLayout !== 'horizontal'):
                     if ($hasFrequentMenus):
                     ?>
                     <li class="menu-frequent-item" id="menu-frequent-item" data-source="menu-frequent">
-                        <a href="javascript: void(0);" class="has-arrow waves-effect" id="menu-frequent-link">
+                        <a href="#" role="button" class="has-arrow waves-effect" id="menu-frequent-link">
                             <i class="mdi mdi-star-outline"></i>
                             <span><?php echo __('常用菜单'); ?></span>
                         </a>
@@ -1668,6 +1669,56 @@ if ($dataLayout !== 'horizontal'):
         }
 
         function calculatePathMatchScore(currentPath, menuPath) {
+            function isSupportedCurrencySegment(segment) {
+                var code = String(segment || '').trim().toUpperCase();
+                if (!/^[A-Z]{3}$/.test(code)) {
+                    return false;
+                }
+                var cfg = window.__WelineThemeConfig || {};
+                var site = window.site || {};
+                var welineConfig = (window.Weline && window.Weline.config) || {};
+                var supported = {};
+                [
+                    cfg.availableCurrencies,
+                    cfg.supportedCurrencies,
+                    cfg.currencyCodes,
+                    cfg.currencies,
+                    site.availableCurrencies,
+                    site.supportedCurrencies,
+                    site.currencyCodes,
+                    site.currencies,
+                    welineConfig.availableCurrencies,
+                    welineConfig.supportedCurrencies,
+                    welineConfig.currencyCodes,
+                    welineConfig.currencies,
+                    cfg.defaultCurrency,
+                    site.defaultCurrency,
+                    site.default_currency
+                ].forEach(function(source) {
+                    if (Array.isArray(source)) {
+                        source.forEach(function(entry) {
+                            if (entry && typeof entry === 'object') {
+                                entry = entry.code || entry.currency || entry.currency_code || entry.value || '';
+                            }
+                            var item = String(entry || '').trim().toUpperCase();
+                            if (/^[A-Z]{3}$/.test(item)) {
+                                supported[item] = true;
+                            }
+                        });
+                        return;
+                    }
+                    var item = String(source || '').trim().toUpperCase();
+                    if (/^[A-Z]{3}$/.test(item)) {
+                        supported[item] = true;
+                    }
+                });
+                return supported[code] === true;
+            }
+
+            function isLocaleSegment(segment) {
+                return /^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/i.test(String(segment || ''));
+            }
+
             function getPathname(url) {
                 var path;
                 try {
@@ -1685,8 +1736,8 @@ if ($dataLayout !== 'horizontal'):
                 }
                 if (
                     segments.length > 2
-                    && /^[A-Z]{3}$/.test(segments[0])
-                    && /^[a-z]{2}_[A-Za-z]+_[A-Z]{2}$/.test(segments[1])
+                    && isSupportedCurrencySegment(segments[0])
+                    && isLocaleSegment(segments[1])
                 ) {
                     segments = segments.slice(2);
                 }
@@ -1733,8 +1784,9 @@ if ($dataLayout !== 'horizontal'):
             $mainMenu.find('ul.sub-menu').removeClass('mm-show').attr('aria-expanded', 'false');
 
             $mainMenuLinks.each(function() {
+                var menuHref = this.getAttribute('href') || '';
                 var menuUrl = this.href;
-                if (!menuUrl || menuUrl === '#' || menuUrl.indexOf('javascript:') === 0) return;
+                if (!menuUrl || !menuHref || menuHref === '#' || menuHref.charAt(0) === '#') return;
 
                 var score = calculatePathMatchScore(pageUrl, menuUrl);
                 if (score === Number.MAX_SAFE_INTEGER) {
@@ -2139,7 +2191,7 @@ if ($dataLayout !== 'horizontal'):
                 e.preventDefault();
                 var $link = items[idx].$item.find('a').first();
                 var href = $link.attr('href');
-                if (href && href !== 'javascript: void(0);') window.location.href = href;
+                if (href && href !== '#' && href.charAt(0) !== '#') window.location.href = href;
                 else $link.trigger('click');
             }
         }

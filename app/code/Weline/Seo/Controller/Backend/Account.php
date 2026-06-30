@@ -16,6 +16,10 @@ use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoAccount;
+use Weline\Seo\Model\SeoWebsiteAccount;
+use Weline\Seo\Model\SeoWebsiteStats;
+use Weline\Seo\Service\SeoPlatformCapabilityService;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapAdapterRegistry;
 
 /**
@@ -34,6 +38,16 @@ class Account extends BackendController
     private function getAccountModel(): SeoAccount
     {
         return ObjectManager::getInstance(SeoAccount::class);
+    }
+
+    private function getWebsiteDirectory(): SeoWebsiteDirectory
+    {
+        return ObjectManager::getInstance(SeoWebsiteDirectory::class);
+    }
+
+    private function getPlatformCapabilityService(): SeoPlatformCapabilityService
+    {
+        return ObjectManager::getInstance(SeoPlatformCapabilityService::class);
     }
 
     #[AclAttribute('Weline_Seo::seo_account_index', '查看SEO账户列表', 'mdi-view-list', '查看SEO账户列表')]
@@ -163,7 +177,7 @@ class Account extends BackendController
                   || $this->request->getGet('lightweight') === '1';
 
         // 获取所有可用的平台适配器
-        $platforms = $this->adapterRegistry->getPlatformInfo();
+        $platforms = $this->getPlatformCapabilityService()->getCapabilities();
         
         $this->assign('account', $account);
         $this->assign('scope', $scope);
@@ -214,6 +228,24 @@ class Account extends BackendController
                 ]);
             }
 
+            $platformAdapter = $this->adapterRegistry->getAdapter($platform);
+            if (!$platformAdapter) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('平台未注册：%{1}', $platform),
+                ]);
+            }
+
+            $enableCronPushUrls = (int)($data['enable_cron_push_urls'] ?? 0);
+            $enableCronSitemap = (int)($data['enable_cron_sitemap'] ?? 0);
+            $platformCapability = $this->getPlatformCapabilityService()->getCapability($platform) ?? [];
+            if (empty($platformCapability['supports_url_push'])) {
+                $enableCronPushUrls = 0;
+            }
+            if (empty($platformCapability['supports_sitemap_submit'])) {
+                $enableCronSitemap = 0;
+            }
+
             $scope = trim((string)($data['scope'] ?? ''));
 
             $account->setData(SeoAccount::schema_fields_NAME, $name)
@@ -222,8 +254,8 @@ class Account extends BackendController
                 ->setData(SeoAccount::schema_fields_SCOPE, $scope)
                 ->setData(SeoAccount::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
                 ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_ACTIVE))
-                ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, (int)($data['enable_cron_push_urls'] ?? 1))
-                ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, (int)($data['enable_cron_sitemap'] ?? 0));
+                ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, $enableCronPushUrls)
+                ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, $enableCronSitemap);
 
             $configJson = (string)($data['config_json'] ?? '');
             if ($configJson !== '') {
@@ -260,9 +292,7 @@ class Account extends BackendController
         
         try {
             // 获取所有站点
-            /** @var \Weline\Websites\Model\Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $websites = $websiteModel->reset()->select()->fetchArray();
+            $websites = $this->getWebsiteDirectory()->listWebsites();
             
             // 格式化站点数据
             $formattedWebsites = [];
@@ -270,7 +300,8 @@ class Account extends BackendController
                 $formattedWebsites[] = [
                     'website_id' => (int)($website['website_id'] ?? 0),
                     'name' => (string)($website['name'] ?? ''),
-                    'domain' => (string)($website['domain'] ?? ''),
+                    'domain' => (string)($website['domain'] ?? parse_url((string)($website['url'] ?? ''), PHP_URL_HOST) ?: ''),
+                    'url' => (string)($website['url'] ?? ''),
                     'is_default' => (int)($website['is_default'] ?? 0) === 1,
                 ];
             }
@@ -298,6 +329,7 @@ class Account extends BackendController
                         'crawl_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY] ?? 'weekly',
                         'priority' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_PRIORITY] ?? '0.50',
                         'is_auto_submit' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 1,
+                        'enable_url_push' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ENABLE_URL_PUSH] ?? 1,
                     ];
                 }
             }
@@ -487,6 +519,7 @@ class Account extends BackendController
                 \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY => $config['crawl_frequency'] ?? 'weekly',
                 \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_PRIORITY => $config['priority'] ?? '0.50',
                 \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT => (int)($config['is_auto_submit'] ?? 1),
+                \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ENABLE_URL_PUSH => (int)($config['enable_url_push'] ?? 1),
             ])->save();
             
             return $this->jsonResponse([
@@ -651,9 +684,6 @@ class Account extends BackendController
                 ]);
             }
             
-            /** @var \Weline\Websites\Model\Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            
             /** @var \Weline\Seo\Model\SeoWebsiteStats $statsModel */
             $statsModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteStats::class);
             
@@ -667,12 +697,12 @@ class Account extends BackendController
                     continue;
                 }
                 
-                $website = $websiteModel->reset()->load($websiteId);
-                if (!$website->getId()) {
+                $website = $this->getWebsiteDirectory()->getWebsiteById($websiteId);
+                if (!$website) {
                     continue;
                 }
                 
-                $siteUrl = $website->getData('url') ?: '';
+                $siteUrl = (string)($website['url'] ?? '');
                 if (empty($siteUrl)) {
                     continue;
                 }
@@ -685,7 +715,7 @@ class Account extends BackendController
                     $statsRecord->updateStats($result['data']);
                     $syncedCount++;
                 } else {
-                    $errors[] = $website->getData('name') . ': ' . ($result['message'] ?? __('未知错误'));
+                    $errors[] = (string)($website['name'] ?? ('website_' . $websiteId)) . ': ' . ($result['message'] ?? __('未知错误'));
                 }
             }
             

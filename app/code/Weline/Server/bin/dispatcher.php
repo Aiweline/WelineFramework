@@ -64,14 +64,14 @@ if ($workerCount <= 0) {
 // 解析 --name、--frontend、--control-port 参数
 $processName = '';
 $isFrontend = false;
-$controlPort = 0;  // 初始化为 0，会在下方从实例文件发现
+$controlPort = 0;  // 0 means use Master endpoint bootstrap if no argument is passed.
 $masterPid = 0;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
-    } elseif ($arg === '--frontend' || $arg === '-frontend') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win') {
         $isFrontend = true;
     } elseif (\str_starts_with($arg, '--control-port=')) {
         $controlPort = (int)\substr($arg, 15);
@@ -99,7 +99,7 @@ if (!\defined('DS')) {
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
-// ========== 主端口尽早 listen（先于 resolveControlPort / WlsRuntime）==========
+// ========== 主端口尽早 listen（先于控制面解析）==========
 if (!\function_exists('wlsDispatcherIsIpBindAddress')) {
     function wlsDispatcherIsIpBindAddress(string $host): bool
     {
@@ -205,9 +205,8 @@ if (@\socket_listen($socket, 1024) === false) {
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 30 秒）
+// IPC control port. Prefer the explicit Master-provided argument; the endpoint
+// file is only a bootstrap pointer when the argument is absent.
 if ($controlPort <= 0) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
 }
@@ -228,6 +227,9 @@ $_wlsDevMode = ($_wlsEnvConfig['deploy'] ?? '') === 'dev';
 if (!\defined('WLS_DEV_MODE')) {
     \define('WLS_DEV_MODE', $_wlsDevMode);
 }
+$_SERVER['WLS_PROCESS_ROLE'] = 'dispatcher';
+$_ENV['WLS_PROCESS_ROLE'] = 'dispatcher';
+@\putenv('WLS_PROCESS_ROLE=dispatcher');
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
@@ -263,19 +265,28 @@ if (\function_exists('pcntl_signal') && \defined('SIGPIPE')) {
     \pcntl_signal(SIGPIPE, SIG_IGN);
 }
 
-// 使用 WlsRuntime 完整初始化框架
-$runtimeError = null;
-try {
-    $runtime = new \Weline\Framework\Runtime\WlsRuntime();
-    $runtime->bootstrap();
-} catch (\Throwable $e) {
-    $runtimeError = $e->getMessage();
-    WlsLogger::getInstance()->error("框架初始化失败: " . $e->getMessage());
+$dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
+    $socket,
+    '127.0.0.1',
+    $workerBasePort,
+    $workerCount,
+    $instanceName,
+    $processName,
+    $port
+);
+$dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
+if ($masterPid > 0) {
+    $dispatcher->setMasterPid($masterPid);
+}
+if ($controlPort > 0 || $supervisorEnabled) {
+    $dispatcher->connectIpc($controlPort, false);
 }
 
 // 读取 env 配置
 $envConfig = $_wlsEnvConfig;
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
+$dispatcherAlreadyBootstrapped = isset($dispatcher);
+if (!$dispatcherAlreadyBootstrapped) {
 
 // ========== 启动 Dispatcher（主端口已在上方 listen）==========
 $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
@@ -289,9 +300,160 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
 );
 
 // 配置
+}
 $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 $startupProtectionConfig = \is_array($wlsConfig['startup_protection'] ?? null) ? $wlsConfig['startup_protection'] : [];
 $dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
+$warmupHosts = [];
+$addWarmupHost = static function (string $candidate) use (&$warmupHosts, $port): void {
+    $candidate = \trim($candidate);
+    if ($candidate === '' || $candidate === '0.0.0.0' || $candidate === '::') {
+        return;
+    }
+    if (\str_contains($candidate, '://')) {
+        $parsedHost = \parse_url($candidate, PHP_URL_HOST);
+        $candidate = \is_string($parsedHost) ? $parsedHost : '';
+    }
+    $candidate = \preg_replace('/[\/\s]+.*$/', '', $candidate) ?? '';
+    $candidate = \trim($candidate, '[] ');
+    if ($candidate === '') {
+        return;
+    }
+    $hostHeader = \in_array($port, [80, 443], true) || \str_contains($candidate, ':')
+        ? $candidate
+        : $candidate . ':' . $port;
+    $warmupHosts[$hostHeader] = $hostHeader;
+};
+$configuredWarmupHosts = $dispatcherConfig['homepage_warmup_hosts']
+    ?? $wlsConfig['homepage_warmup_hosts']
+    ?? [];
+if (\is_string($configuredWarmupHosts)) {
+    $decodedWarmupHosts = \json_decode($configuredWarmupHosts, true);
+    $configuredWarmupHosts = \is_array($decodedWarmupHosts)
+        ? $decodedWarmupHosts
+        : (\preg_split('/[,\s]+/', $configuredWarmupHosts, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+}
+if (\is_array($configuredWarmupHosts)) {
+    foreach ($configuredWarmupHosts as $configuredWarmupHost) {
+        if (\is_scalar($configuredWarmupHost)) {
+            $addWarmupHost((string)$configuredWarmupHost);
+        }
+    }
+}
+foreach ([
+    $wlsConfig['host'] ?? null,
+    $envConfig['server']['host'] ?? null,
+    $requestedHost ?? null,
+    $host ?? null,
+] as $detectedWarmupHost) {
+    if (\is_scalar($detectedWarmupHost)) {
+        $addWarmupHost((string)$detectedWarmupHost);
+    }
+}
+$includeLoopbackWarmupHosts = (bool)(
+    $dispatcherConfig['include_loopback_homepage_warmup_hosts']
+    ?? $wlsConfig['include_loopback_homepage_warmup_hosts']
+    ?? true
+);
+if ($includeLoopbackWarmupHosts || $warmupHosts === []) {
+    $addWarmupHost('127.0.0.1');
+}
+if ($warmupHosts === []) {
+    $addWarmupHost('localhost');
+}
+if (!\function_exists('wlsDispatcherNormalizeWarmupPaths')) {
+    /**
+     * @return list<string>
+     */
+    function wlsDispatcherNormalizeWarmupPaths(mixed $paths): array
+    {
+        if (\is_string($paths)) {
+            $decoded = \json_decode($paths, true);
+            $paths = \is_array($decoded) ? $decoded : (\preg_split('/[,\s]+/', $paths) ?: []);
+        }
+        if (!\is_array($paths)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($paths as $path) {
+            if (!\is_scalar($path)) {
+                continue;
+            }
+            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
+            if ($path === '') {
+                continue;
+            }
+            if ($path[0] !== '/') {
+                $path = '/' . $path;
+            }
+            $normalized[$path] = $path;
+        }
+
+        return \array_values($normalized);
+    }
+}
+if (!\function_exists('wlsDispatcherApplyWarmupPathObservers')) {
+    /**
+     * @param list<string> $paths
+     * @param list<string> $hosts
+     * @return list<string>
+     */
+    function wlsDispatcherApplyWarmupPathObservers(array $paths, string $instanceName, int $port, array $hosts): array
+    {
+        $eventName = 'Weline_Server::dispatcher::warmup_paths';
+
+        try {
+            $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $data = new \Weline\Framework\DataObject\DataObject([
+                'paths' => $paths,
+                'instance_name' => $instanceName,
+                'port' => $port,
+                'hosts' => $hosts,
+            ]);
+
+            $events = $eventsManager->scanEvents();
+            $observers = \is_array($events[$eventName] ?? null) ? $events[$eventName] : [];
+            if ($observers === []) {
+                $eventsManager->dispatch($eventName, $data);
+            } else {
+                $event = new \Weline\Framework\Event\Event([
+                    'data' => &$data,
+                    'observers' => $observers,
+                ]);
+                $event->setName($eventName)->dispatch();
+            }
+
+            $eventPaths = wlsDispatcherNormalizeWarmupPaths($data->getData('paths'));
+            return $eventPaths !== [] ? $eventPaths : $paths;
+        } catch (\Throwable $e) {
+            if (\class_exists(WlsLogger::class, false)) {
+                WlsLogger::getInstance()->warning('Dispatcher warmup path observers failed: ' . $e->getMessage());
+            }
+            return $paths;
+        }
+    }
+}
+$homepageWarmupPaths = $dispatcherConfig['homepage_warmup_paths']
+    ?? $wlsConfig['homepage_warmup_paths']
+    ?? ['/'];
+$homepageWarmupPaths = wlsDispatcherNormalizeWarmupPaths($homepageWarmupPaths);
+$homepageWarmupVariants = $dispatcherConfig['homepage_warmup_variants']
+    ?? $wlsConfig['homepage_warmup_variants']
+    ?? [];
+$warmupPathObserversEnabled = (bool)(
+    $dispatcherConfig['warmup_path_observers_enabled']
+    ?? $wlsConfig['dispatcher_warmup_path_observers_enabled']
+    ?? true
+);
+if ($warmupPathObserversEnabled) {
+    $homepageWarmupPaths = wlsDispatcherApplyWarmupPathObservers(
+        $homepageWarmupPaths,
+        $instanceName,
+        $port,
+        \array_values($warmupHosts)
+    );
+}
 $dispatcher->configure([
     'sni_routing_enabled' => true,
     'learning_mode_enabled' => true,
@@ -302,8 +464,22 @@ $dispatcher->configure([
     'startup_protection_window_sec' => (float)($startupProtectionConfig['window_sec'] ?? 45.0),
     'startup_protection_ready_ratio' => (float)($startupProtectionConfig['ready_ratio'] ?? 0.0),
     'startup_protection_min_ready' => (int)($startupProtectionConfig['min_ready'] ?? 1),
-    'spin_wait_max_seconds' => (float)($dispatcherConfig['spin_wait_max_seconds'] ?? 3.0),
-    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? false),
+    'spin_wait_max_seconds' => (float)($dispatcherConfig['spin_wait_max_seconds'] ?? 0.0),
+    'max_handle_new_connection_spin_budget_sec' => (float)($dispatcherConfig['max_handle_new_connection_spin_budget_sec'] ?? 0.0),
+    'backend_route_wait_timeout_sec' => (float)($dispatcherConfig['backend_route_wait_timeout_sec'] ?? 0.0),
+    'worker_health_connect_timeout_sec' => (float)($dispatcherConfig['worker_health_connect_timeout_sec'] ?? 2.0),
+    'worker_health_response_timeout_sec' => (float)($dispatcherConfig['worker_health_response_timeout_sec'] ?? 2.0),
+    'worker_health_audit_enabled' => (bool)($dispatcherConfig['worker_health_audit_enabled'] ?? false),
+    'fast_tls_path_enabled' => (bool)($dispatcherConfig['fast_tls_path_enabled'] ?? true),
+    'max_accept_per_loop' => (int)($dispatcherConfig['max_accept_per_loop'] ?? 64),
+    'worker_connect_select_timeout_sec' => (float)($dispatcherConfig['worker_connect_select_timeout_sec'] ?? 0.02),
+    'worker_busy_penalty_after_ms' => (float)($dispatcherConfig['worker_busy_penalty_after_ms'] ?? 120),
+    'ssl_backend_preconnect_per_worker' => (int)($dispatcherConfig['ssl_backend_preconnect_per_worker'] ?? 0),
+    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? true),
+    'homepage_warmup_hosts' => \array_values($warmupHosts),
+    'homepage_warmup_paths' => $homepageWarmupPaths,
+    'homepage_warmup_variants' => $homepageWarmupVariants,
+    'homepage_warmup_route_gate_targets' => (int)($dispatcherConfig['homepage_warmup_route_gate_targets'] ?? $wlsConfig['homepage_warmup_route_gate_targets'] ?? 16),
     'cache' => [
         'default_ttl' => 3600,
         'connection_ttl' => 120,
@@ -321,7 +497,13 @@ WlsLogger::info_("Dispatcher 启动，监听 tcp://{$host}:{$port}，预计 Work
 $dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
 
 if ($controlPort > 0 || $supervisorEnabled) {
-    $dispatcher->connectIpc($controlPort);
+    if ($dispatcherAlreadyBootstrapped) {
+        if (!$dispatcher->sendIpcReady()) {
+            $dispatcher->connectIpc($controlPort);
+        }
+    } else {
+        $dispatcher->connectIpc($controlPort);
+    }
 }
 
 // 传入 Master PID 用于孤儿检测

@@ -3307,7 +3307,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         if (!empty($assertionMessages)) {
             $html .= '
                 <div class="accordion-item">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div class="accordion-header" data-report-action="toggle-accordion">
                         <span class="accordion-title">📋 断言统计</span>
                         <span class="accordion-icon">▼</span>
                     </div>
@@ -3327,7 +3327,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $defaultExpanded = $hasErrors ? 'active' : '';
             $html .= '
                 <div class="accordion-item">
-                    <div class="accordion-header ' . $defaultExpanded . '" onclick="toggleAccordion(this)">
+                    <div class="accordion-header ' . $defaultExpanded . '" data-report-action="toggle-accordion">
                         <span class="accordion-title">❌ 失败详情 (' . count($failureMessages) . ')</span>
                         <span class="accordion-icon">▼</span>
                     </div>
@@ -3347,7 +3347,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $defaultExpanded = $hasErrors ? 'active' : '';
             $html .= '
                 <div class="accordion-item">
-                    <div class="accordion-header ' . $defaultExpanded . '" onclick="toggleAccordion(this)">
+                    <div class="accordion-header ' . $defaultExpanded . '" data-report-action="toggle-accordion">
                         <span class="accordion-title">⚠️ 错误详情 (' . count($errorMessages) . ')</span>
                         <span class="accordion-icon">▼</span>
                     </div>
@@ -3376,20 +3376,20 @@ class Run implements \Weline\Framework\Console\CommandInterface
             
             $html .= '
                 <div class="accordion-item">
-                    <div class="accordion-header active" onclick="toggleAccordion(this)">
+                    <div class="accordion-header active" data-report-action="toggle-accordion">
                         <span class="accordion-title">📁 ' . __('测试文件详情') . ' (' . count($testFiles) . ' ' . __('个文件') . ', ' . count($moduleGroups) . ' ' . __('个模块') . ')</span>
                         <span class="accordion-icon">▼</span>
                     </div>
                     <div class="accordion-content active">
                         <div class="test-files-controls">
                             <div class="search-box">
-                                <input type="text" id="testSearch" placeholder="' . __('搜索测试文件或方法...') . '" onkeyup="filterTests()">
+                                <input type="text" id="testSearch" placeholder="' . __('搜索测试文件或方法...') . '" data-report-action="search-tests">
                                 <span class="search-icon">🔍</span>
                             </div>
                             <div class="filter-buttons">
-                                <button class="filter-btn active" onclick="filterByStatus(\'all\')">' . __('全部') . '</button>
-                                <button class="filter-btn" onclick="filterByStatus(\'success\')">✅ ' . __('通过') . '</button>
-                                <button class="filter-btn" onclick="filterByStatus(\'failed\')">❌ ' . __('失败') . '</button>
+                                <button type="button" class="filter-btn active" data-report-action="filter-status" data-status-filter="all">' . __('全部') . '</button>
+                                <button type="button" class="filter-btn" data-report-action="filter-status" data-status-filter="success">✅ ' . __('通过') . '</button>
+                                <button type="button" class="filter-btn" data-report-action="filter-status" data-status-filter="failed">❌ ' . __('失败') . '</button>
                             </div>
                         </div>
                         <div class="test-files-list">';
@@ -3414,7 +3414,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 
                 $html .= '
                             <div class="module-group" data-module="' . htmlspecialchars($moduleName) . '">
-                                <div class="module-header" onclick="toggleAccordion(this)">
+                                <div class="module-header" data-report-action="toggle-accordion">
                                     <div class="module-info">
                                         <span class="module-name">📦 ' . htmlspecialchars($moduleName) . '</span>
                                         <span class="module-stats">' . count($moduleFiles) . ' ' . __('个文件') . ', ' . $totalMethods . ' ' . __('个方法') . '</span>
@@ -3447,7 +3447,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     
                     $html .= '
                                     <div class="test-file ' . $fileStatusClass . '" data-file="' . htmlspecialchars($file['name']) . '">
-                                        <div class="file-header" onclick="toggleAccordion(this)">
+                                        <div class="file-header" data-report-action="toggle-accordion">
                                             <div class="file-info">
                                                 <span class="file-name">' . htmlspecialchars($file['name']) . '</span>
                                                 <span class="file-class">' . htmlspecialchars($file['class']) . '</span>
@@ -3550,12 +3550,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         
         // 状态过滤功能
-        function filterByStatus(status) {
+        function filterByStatus(status, activeButton) {
             // 更新按钮状态
             document.querySelectorAll(".filter-btn").forEach(btn => {
                 btn.classList.remove("active");
             });
-            event.target.classList.add("active");
+            if (activeButton) {
+                activeButton.classList.add("active");
+            }
             
             const moduleGroups = document.querySelectorAll(".module-group");
             
@@ -3593,6 +3595,27 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         // 页面加载完成后的初始化
         document.addEventListener("DOMContentLoaded", function() {
+            document.addEventListener("click", function(event) {
+                const accordionHeader = event.target.closest("[data-report-action=\"toggle-accordion\"]");
+                if (accordionHeader) {
+                    event.preventDefault();
+                    toggleAccordion(accordionHeader);
+                    return;
+                }
+
+                const filterButton = event.target.closest("[data-report-action=\"filter-status\"]");
+                if (filterButton) {
+                    event.preventDefault();
+                    filterByStatus(filterButton.getAttribute("data-status-filter") || "all", filterButton);
+                }
+            });
+
+            document.addEventListener("input", function(event) {
+                if (event.target && event.target.matches("[data-report-action=\"search-tests\"]")) {
+                    filterTests();
+                }
+            });
+
             // 如果有错误，确保错误面板默认展开
             const errorHeaders = document.querySelectorAll(".accordion-header.active");
             errorHeaders.forEach(header => {

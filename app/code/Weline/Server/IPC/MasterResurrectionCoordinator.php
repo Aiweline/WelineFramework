@@ -10,7 +10,7 @@ declare(strict_types=1);
  *
  * 不负责：
  *   - 决定当前进程的复活优先级（由 Master ACK 时下发给 ControlClient）
- *   - 决定控制端口（由 InstanceInfoGateway / resolveControlPort 提供）
+ *   - 决定控制端口（由启动参数或 Master endpoint bootstrap 提供）
  *
  * @author Aiweline
  */

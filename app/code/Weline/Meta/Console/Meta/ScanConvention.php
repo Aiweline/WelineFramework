@@ -19,6 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Meta\Model\Meta;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
 
 class ScanConvention extends CommandAbstract
 {
@@ -599,7 +600,9 @@ class ScanConvention extends CommandAbstract
         }
         
             if (!empty($params)) {
-                $setting['param'] = $params;
+                /** @var ParamDefinitionNormalizer $normalizer */
+                $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+                $setting['param'] = $normalizer->normalizeDefinitions($this->flattenParamDefinitions($params));
         }
         
         // 收集 @preview.login 标记
@@ -650,6 +653,36 @@ class ScanConvention extends CommandAbstract
     /**
      * 解析属性字符串为数组
      */
+    private function flattenParamDefinitions(array $params, string $prefix = ''): array
+    {
+        $flat = [];
+
+        foreach ($params as $key => $value) {
+            $paramName = $prefix === '' ? (string)$key : $prefix . '.' . (string)$key;
+            if (!is_array($value)) {
+                $flat[$paramName] = ['default' => $value];
+                continue;
+            }
+
+            $hasScalarAttribute = false;
+            foreach ($value as $childValue) {
+                if (!is_array($childValue)) {
+                    $hasScalarAttribute = true;
+                    break;
+                }
+            }
+
+            if ($hasScalarAttribute) {
+                $flat[$paramName] = $value;
+                continue;
+            }
+
+            $flat += $this->flattenParamDefinitions($value, $paramName);
+        }
+
+        return $flat;
+    }
+
     protected function parseAttributes(string $attributesStr): array
     {
         $attributes = [];

@@ -22,10 +22,14 @@ use Weline\Shipping\Model\ShippingAddress;
 class ShippingAddressService
 {
     private ObjectManager $objectManager;
+    private AddressFormatter $addressFormatter;
+    private AddressValidationService $addressValidationService;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->objectManager = $objectManager;
+        $this->addressFormatter = $objectManager->getInstance(AddressFormatter::class);
+        $this->addressValidationService = $objectManager->getInstance(AddressValidationService::class);
     }
 
     /**
@@ -93,6 +97,7 @@ class ShippingAddressService
      */
     public function create(array $data): ShippingAddress
     {
+        $data = $this->addressFormatter->normalize($data);
         $this->validate($data);
         
         $model = $this->getModel()->reset();
@@ -122,6 +127,7 @@ class ShippingAddressService
             throw new \Exception(__('地址不存在'));
         }
         
+        $data = $this->addressFormatter->normalize($data);
         $this->validate($data, $id);
         
         // 如果设置为默认，取消其他默认地址
@@ -129,8 +135,8 @@ class ShippingAddressService
             $this->clearDefault($id);
         }
         
-        $model->setData($data);
-        $model->save();
+        $this->updateAddressRow($model, $data);
+        $model->setData(array_merge($model->getData(), $data));
         return $model;
     }
 
@@ -148,7 +154,8 @@ class ShippingAddressService
             throw new \Exception(__('地址不存在'));
         }
         
-        return $model->delete();
+        $model->delete()->fetch();
+        return true;
     }
 
     /**
@@ -238,8 +245,100 @@ class ShippingAddressService
      * @return void
      * @throws \Exception
      */
+    private function updateAddressRow(ShippingAddress $model, array $data): void
+    {
+        $data = $this->preparePersistenceData($data, [
+            ShippingAddress::schema_fields_NAME,
+            ShippingAddress::schema_fields_CONTACT_NAME,
+            ShippingAddress::schema_fields_CONTACT_PHONE,
+            ShippingAddress::schema_fields_COUNTRY,
+            ShippingAddress::schema_fields_COUNTRY_CODE,
+            ShippingAddress::schema_fields_PROVINCE,
+            ShippingAddress::schema_fields_PROVINCE_CODE,
+            ShippingAddress::schema_fields_PROVINCE_REGION_ID,
+            ShippingAddress::schema_fields_CITY,
+            ShippingAddress::schema_fields_CITY_CODE,
+            ShippingAddress::schema_fields_CITY_REGION_ID,
+            ShippingAddress::schema_fields_DISTRICT,
+            ShippingAddress::schema_fields_DISTRICT_CODE,
+            ShippingAddress::schema_fields_DISTRICT_REGION_ID,
+            ShippingAddress::schema_fields_STREET,
+            ShippingAddress::schema_fields_POSTAL_CODE,
+            ShippingAddress::schema_fields_IS_DEFAULT,
+            ShippingAddress::schema_fields_IS_ENABLED,
+        ]);
+
+        if (!$data) {
+            return;
+        }
+
+        $connector = $model->getConnection()->getConnector();
+        $connector->create();
+        $sets = [];
+        $params = [':id' => (int)$model->getId()];
+        foreach ($data as $field => $value) {
+            $param = ':v_' . $field;
+            $sets[] = '"' . $field . '" = ' . $param;
+            $params[$param] = $value;
+        }
+
+        $sql = 'UPDATE ' . $model->getTable() . ' SET ' . implode(', ', $sets) . ' WHERE "' . ShippingAddress::schema_fields_ID . '" = :id';
+        $stmt = $connector->getLink()->prepare($sql);
+        foreach ($params as $param => $value) {
+            if ($value === null) {
+                $stmt->bindValue($param, null, \PDO::PARAM_NULL);
+            } elseif (is_int($value)) {
+                $stmt->bindValue($param, $value, \PDO::PARAM_INT);
+            } else {
+                $stmt->bindValue($param, (string)$value);
+            }
+        }
+        $stmt->execute();
+    }
+
+    private function preparePersistenceData(array $data, array $allowedFields): array
+    {
+        $allowed = array_flip($allowedFields);
+        $result = [];
+        foreach ($data as $field => $value) {
+            if (!isset($allowed[$field])) {
+                continue;
+            }
+            $result[$field] = $this->normalizePersistenceValue((string)$field, $value);
+        }
+
+        return $result;
+    }
+
+    private function normalizePersistenceValue(string $field, mixed $value): mixed
+    {
+        $integerFields = [
+            ShippingAddress::schema_fields_PROVINCE_REGION_ID => true,
+            ShippingAddress::schema_fields_CITY_REGION_ID => true,
+            ShippingAddress::schema_fields_DISTRICT_REGION_ID => true,
+            ShippingAddress::schema_fields_IS_DEFAULT => true,
+            ShippingAddress::schema_fields_IS_ENABLED => true,
+        ];
+
+        if (isset($integerFields[$field])) {
+            if ($value === '' || $value === null) {
+                return null;
+            }
+            return (int)$value;
+        }
+
+        return $value === null ? null : (string)$value;
+    }
+
     private function validate(array $data, ?int $id = null): void
     {
+        if (empty($data[ShippingAddress::schema_fields_NAME])) {
+            throw new \Exception(__('地址名称不能为空'));
+        }
+
+        $this->addressValidationService->validate($data);
+        return;
+
         $required = [
             ShippingAddress::schema_fields_NAME => __('地址名称'),
             ShippingAddress::schema_fields_CONTACT_NAME => __('联系人姓名'),

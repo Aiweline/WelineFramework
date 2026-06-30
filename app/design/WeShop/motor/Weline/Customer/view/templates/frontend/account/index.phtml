@@ -2,16 +2,36 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Customer\Model\Customer $user */
 $this->setData('title', __('个人中心'));
-$avatar = $user->getAvatar();
-$username = $user->getUsername();
-$email = $user->getEmail();
-$avatarInitial = strtoupper(mb_substr($username, 0, 1));
-$loginIp = (string) ($user->getLoginIp() ?: __('未知'));
-$sessionId = (string) ($user->getSessionId() ?: __('未知'));
+$user = $user ?? $this->getData('user');
+if (!$user instanceof \Weline\Customer\Model\Customer) {
+    try {
+        $sessionUser = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession()->getUser();
+        if ($sessionUser instanceof \Weline\Customer\Model\Customer) {
+            $user = $sessionUser;
+        }
+    } catch (\Throwable) {
+    }
+}
+$avatar = is_object($user) && method_exists($user, 'getAvatar') ? (string)($user->getAvatar() ?? '') : '';
+$username = is_object($user) && method_exists($user, 'getUsername') ? (string)($user->getUsername() ?? '') : '';
+$email = is_object($user) && method_exists($user, 'getEmail') ? (string)($user->getEmail() ?? '') : '';
+if ($username === '' && $email !== '') {
+    $username = $email;
+}
+$avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?';
+$loginIp = is_object($user) && method_exists($user, 'getLoginIp') ? (string)($user->getLoginIp() ?: __('未知')) : (string)__('未知');
+$sessionId = is_object($user) && method_exists($user, 'getSessionId') ? (string)($user->getSessionId() ?: __('未知')) : (string)__('未知');
+$userId = is_object($user) && method_exists($user, 'getId') ? (int)$user->getId() : 0;
 $emailStatus = $email ? __('已绑定') : __('待完善');
+$accountIndexPathJs = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
+if (!is_string($accountIndexPathJs) || $accountIndexPathJs === '') {
+    $accountIndexPathJs = '/customer/account/index';
+}
+$accountIndexPathJs = rtrim($accountIndexPathJs, '/');
+$accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/sidebar-content');
 ?>
 <section class="motor-account-index">
-    <section class="motor-account-section" id="overview-section">
+    <section class="motor-account-section" id="overview-section" data-account-section="overview">
         <div class="motor-account-hero">
             <div class="motor-account-hero__panel">
                 <div class="motor-account-eyebrow">
@@ -41,7 +61,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
             <aside class="motor-account-summary-card">
                 <div class="motor-account-summary-card__avatar">
                     <?php if ($avatar): ?>
-                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" class="motor-account-avatar-image" data-fallback-target=".motor-account-summary-card__avatar-fallback" data-fallback-display="flex">
                         <div class="motor-account-summary-card__avatar-fallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
                     <?php else: ?>
                         <div class="motor-account-summary-card__avatar-fallback"><?= htmlspecialchars($avatarInitial) ?></div>
@@ -60,7 +80,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
                         <strong><lang>暂未绑定邮箱</lang></strong>
                     <?php endif; ?>
                     <br>
-                    <lang>账户 ID：</lang><?= (int) $user->getId() ?>
+                    <lang>账户 ID：</lang><?= $userId ?>
                 </div>
             </aside>
         </div>
@@ -68,7 +88,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         <div class="motor-account-stat-grid">
             <article class="motor-account-stat">
                 <div class="motor-account-stat__label"><lang>账户 ID</lang></div>
-                <div class="motor-account-stat__value"><?= (int) $user->getId() ?></div>
+                <div class="motor-account-stat__value"><?= $userId ?></div>
                 <div class="motor-account-stat__meta"><lang>用于区分你的唯一账户档案</lang></div>
             </article>
 
@@ -118,7 +138,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         </div>
     </section>
 
-    <section class="motor-account-section" id="profile-section" hidden>
+    <section class="motor-account-section" id="profile-section" data-account-section="profile" hidden>
         <div class="motor-account-grid">
             <article class="motor-account-card">
                 <header class="motor-account-card__header">
@@ -158,7 +178,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
                                     <span class="motor-account-form__label-hint"><lang>用于标识唯一账户</lang></span>
                                 </label>
                                 <div class="motor-account-form__input-wrap">
-                                    <input class="motor-account-form__input" type="text" id="account_id" value="<?= (int) $user->getId() ?>" disabled>
+                                    <input class="motor-account-form__input" type="text" id="account_id" value="<?= $userId ?>" disabled>
                                     <i class="motor-account-form__input-icon fa fa-id-badge"></i>
                                 </div>
                                 <div class="motor-account-form__hint"><lang>这个编号会跟随你的账户长期保留。</lang></div>
@@ -219,10 +239,10 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
                     <div class="motor-account-profile-preview">
                         <div class="motor-account-profile-preview__avatar">
                             <?php if ($avatar): ?>
-                                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="motor-account-avatar-image" data-fallback-target="#avatarFallback" data-fallback-display="flex">
                                 <div class="motor-account-profile-preview__fallback" id="avatarFallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
                             <?php else: ?>
-                                <img src="" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" hidden>
+                                <img src="" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="motor-account-avatar-image" data-fallback-target="#avatarFallback" data-fallback-display="flex" hidden>
                                 <div class="motor-account-profile-preview__fallback" id="avatarFallback"><?= htmlspecialchars($avatarInitial) ?></div>
                             <?php endif; ?>
                         </div>
@@ -243,7 +263,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         </div>
     </section>
 
-    <section class="motor-account-section" id="security-section" hidden>
+    <section class="motor-account-section" id="security-section" data-account-section="security" hidden>
         <div class="motor-account-grid">
             <article class="motor-account-card">
                 <header class="motor-account-card__header">
@@ -337,7 +357,7 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         </div>
     </section>
 
-    <section class="motor-account-section" id="login-info-section" hidden>
+    <section class="motor-account-section" id="login-info-section" data-account-section="login-info" hidden>
         <div class="motor-account-info-grid">
             <article class="motor-account-info-card">
                 <div class="motor-account-info-card__label"><lang>最近登录 IP</lang></div>
@@ -375,15 +395,18 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
             </div>
         </article>
     </section>
+    <div class="motor-account-section-mount"
+         data-account-sidebar-content-mount
+         data-account-sidebar-content-url="<?= htmlspecialchars((string)$accountSidebarContentUrlJs, ENT_QUOTES, 'UTF-8') ?>"></div>
 </section>
 
 <script>
 (function() {
     'use strict';
 
-    var navLinks = Array.prototype.slice.call(document.querySelectorAll('.motor-account-sidebar__link[data-section]'));
+    var navLinks = Array.prototype.slice.call(document.querySelectorAll('[data-account-nav-link][data-section]'));
     var actionButtons = Array.prototype.slice.call(document.querySelectorAll('[data-target-section]'));
-    var sections = Array.prototype.slice.call(document.querySelectorAll('.motor-account-section'));
+    var sections = Array.prototype.slice.call(document.querySelectorAll('[data-account-section]'));
     var profileForm = document.getElementById('profileForm');
     var securityForm = document.getElementById('securityForm');
     var avatarInput = document.getElementById('avatar');
@@ -391,23 +414,182 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
     var avatarFallback = document.getElementById('avatarFallback');
     var profileSubmit = document.getElementById('profileSubmit');
     var securitySubmit = document.getElementById('securitySubmit');
+    /** 与侧栏 href 同源，禁止仅用 #section 调用 replaceState（否则地址栏易变成 /#xxx） */
+    var accountSectionUrlBase = <?= json_encode($accountIndexPathJs, JSON_UNESCAPED_UNICODE) ?>;
     var showPasswordText = <?= json_encode((string) __('显示密码'), JSON_UNESCAPED_UNICODE) ?>;
     var hidePasswordText = <?= json_encode((string) __('隐藏密码'), JSON_UNESCAPED_UNICODE) ?>;
     var updateFailedText = <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
+    var securityUpdateFailedText = <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
 
-    function decodeHtmlEntities(message) {
-        var decoded = String(message || '');
-        var helper = document.createElement('textarea');
+    var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
+    var loadedSidebarSections = Object.create(null);
+    var sidebarContentLoading = Object.create(null);
+    var loadedSidebarScripts = Object.create(null);
 
-        for (var i = 0; i < 3; i++) {
-            helper.innerHTML = decoded;
-            if (!helper.value || helper.value === decoded) {
-                break;
-            }
-            decoded = helper.value;
+    function refreshAccountSections() {
+        sections = Array.prototype.slice.call(document.querySelectorAll('[data-account-section]'));
+    }
+
+    function isSafeSidebarAssetUrl(rawValue, extension) {
+        var value = String(rawValue || '').trim();
+        var compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+        if (
+            compactValue.indexOf('javascript:') === 0 ||
+            compactValue.indexOf('vbscript:') === 0 ||
+            compactValue.indexOf('data:') === 0 ||
+            compactValue.indexOf('//') === 0
+        ) {
+            return false;
         }
 
-        return decoded;
+        try {
+            var url = new URL(value, window.location.href);
+            return url.origin === window.location.origin && url.pathname.toLowerCase().indexOf(extension, url.pathname.length - extension.length) !== -1;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function loadTrustedSidebarScripts(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        Array.prototype.slice.call(template.content.querySelectorAll('script[src]')).forEach(function(scriptNode) {
+            var src = scriptNode.getAttribute('src') || '';
+            if (!isSafeSidebarAssetUrl(src, '.js') || loadedSidebarScripts[src]) {
+                return;
+            }
+
+            loadedSidebarScripts[src] = true;
+            var script = document.createElement('script');
+            script.src = src;
+            script.defer = true;
+            document.head.appendChild(script);
+        });
+    }
+
+    function sanitizeSidebarHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        template.content.querySelectorAll('script, style, meta, iframe, frame, frameset, object, embed, base').forEach(function(node) {
+            node.remove();
+        });
+        template.content.querySelectorAll('link').forEach(function(node) {
+            var rel = String(node.getAttribute('rel') || '').toLowerCase();
+            var href = node.getAttribute('href') || '';
+            if (rel !== 'stylesheet' || !isSafeSidebarAssetUrl(href, '.css')) {
+                node.remove();
+            }
+        });
+
+        template.content.querySelectorAll('*').forEach(function(node) {
+            Array.prototype.slice.call(node.attributes).forEach(function(attribute) {
+                var name = String(attribute.name || '').toLowerCase();
+                var compactValue = String(attribute.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                if (name.indexOf('on') === 0 || name === 'srcdoc' || name === 'style') {
+                    node.removeAttribute(attribute.name);
+                    return;
+                }
+
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction' || name === 'poster') && (
+                    compactValue.indexOf('javascript:') === 0 ||
+                    compactValue.indexOf('vbscript:') === 0 ||
+                    (compactValue.indexOf('data:') === 0 && compactValue.indexOf('data:image/') !== 0)
+                )) {
+                    node.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
+    }
+
+    function buildSidebarContentUrl(sectionName) {
+        var baseUrl = sidebarContentMount ? (sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '') : '';
+        if (!baseUrl || !sectionName) {
+            return '';
+        }
+
+        var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+        return baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
+    }
+
+    function loadSidebarContent(sectionName) {
+        if (!sidebarContentMount || !sectionName) {
+            return Promise.resolve(true);
+        }
+
+        if (loadedSidebarSections[sectionName]) {
+            return Promise.resolve(true);
+        }
+
+        if (sidebarContentLoading[sectionName]) {
+            return sidebarContentLoading[sectionName];
+        }
+
+        var url = buildSidebarContentUrl(sectionName);
+        if (!url) {
+            loadedSidebarSections[sectionName] = true;
+            return Promise.resolve(false);
+        }
+
+        sidebarContentLoading[sectionName] = fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function(response) {
+            if (!response.ok) {
+                throw new Error('Account sections request failed: ' + response.status);
+            }
+            return response.json();
+        }).then(function(payload) {
+            if (!payload || payload.success === false) {
+                if (payload && payload.redirect) {
+                    window.location.href = payload.redirect;
+                }
+                return false;
+            }
+
+            if (payload.html) {
+                loadTrustedSidebarScripts(payload.html);
+                sidebarContentMount.insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html));
+            }
+            loadedSidebarSections[sectionName] = true;
+            refreshAccountSections();
+            window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
+                detail: { section: sectionName, length: payload.length || 0 }
+            }));
+            return true;
+        }).catch(function(error) {
+            console.error(error);
+            return false;
+        }).finally(function() {
+            delete sidebarContentLoading[sectionName];
+        });
+
+        return sidebarContentLoading[sectionName];
+    }
+
+    function decodeHtmlEntities(message) {
+        var s = String(message || '');
+        if (s.indexOf('&') === -1) {
+            return s;
+        }
+        var div = document.createElement('div');
+        var prev;
+        for (var i = 0; i < 5; i++) {
+            prev = s;
+            div.innerHTML = s;
+            s = div.textContent || div.innerText || '';
+            if (s === prev || s.indexOf('&') === -1) {
+                break;
+            }
+        }
+        return s;
     }
 
     function setMessage(element, message) {
@@ -439,32 +621,227 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         button.disabled = loading;
     }
 
-    function request(url, options) {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-            return window.Weline.Api.request(url, options);
+    var accountApiPromise = null;
+
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+        }
+        return accountApiPromise;
+    }
+
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function(value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        return payload;
+    }
+
+    function parseQueryString(queryString) {
+        var normalized = String(queryString || '').replace(/^[?#]/, '');
+        var query = {};
+        if (!normalized) {
+            return query;
         }
 
-        return fetch(url, options).then(function(response) {
-            return response.json().then(function(data) {
-                return { ok: response.ok, data: data };
+        try {
+            var parsed = new URLSearchParams(normalized);
+            parsed.forEach(function (value, key) {
+                query[String(key)] = String(value);
             });
+        } catch (error) {}
+
+        return query;
+    }
+
+    function parseHash(inputHash) {
+        var rawHash = String(inputHash || '');
+        if (!rawHash) {
+            return { section: '', query: {} };
+        }
+
+        var trimmed = rawHash.replace(/^.*#/, '');
+        if (!trimmed) {
+            return { section: '', query: {} };
+        }
+
+        var section = trimmed;
+        var query = {};
+        var splitAt = trimmed.indexOf('?');
+
+        if (splitAt !== -1) {
+            section = trimmed.substring(0, splitAt);
+            var queryString = trimmed.substring(splitAt + 1);
+            if (queryString) {
+                try {
+                    var parsed = new URLSearchParams(queryString);
+                    parsed.forEach(function (value, key) {
+                        query[String(key)] = String(value);
+                    });
+                } catch (error) {}
+            }
+        }
+
+        return {
+            section: section,
+            query: query
+        };
+    }
+
+    function parseAccountState() {
+        var hashState = parseHash(window.location.hash || '');
+        var searchQuery = parseQueryString(window.location.search || '');
+        var mergedQuery = {};
+
+        Object.keys(searchQuery).forEach(function (key) {
+            mergedQuery[key] = searchQuery[key];
+        });
+        Object.keys(hashState.query).forEach(function (key) {
+            if (!(key in mergedQuery)) {
+                mergedQuery[key] = hashState.query[key];
+            }
+        });
+
+        return {
+            section: hashState.section,
+            query: mergedQuery
+        };
+    }
+
+    function getNavTarget(link) {
+        var targetId = link.getAttribute('data-section') || '';
+        var query = parseQueryString(window.location.search || '');
+
+        try {
+            var targetUrl = new URL(link.getAttribute('href') || '', window.location.origin);
+            var hashInfo = parseHash(targetUrl.hash || '');
+            if (hashInfo.section) {
+                targetId = hashInfo.section;
+            }
+
+            Object.assign(query, parseQueryString(targetUrl.search || ''), hashInfo.query || {});
+        } catch (error) {
+            var fallbackHashInfo = parseHash(link.getAttribute('href') || '');
+            if (fallbackHashInfo.section) {
+                targetId = fallbackHashInfo.section;
+            }
+            Object.assign(query, fallbackHashInfo.query || {});
+        }
+
+        return {
+            section: targetId,
+            query: query
+        };
+    }
+
+    function hasNavSection(section) {
+        if (!section) {
+            return false;
+        }
+
+        return !!(
+            document.querySelector('[data-account-section="' + section + '"]')
+            || document.getElementById(section + '-section')
+        );
+    }
+
+    function updateHash(section, query) {
+        if (window.history && typeof window.history.replaceState === 'function') {
+            var nextUrl = new URL(window.location.href);
+            nextUrl.pathname = accountSectionUrlBase;
+            if (query && typeof query === 'object') {
+                Object.keys(query).forEach(function (key) {
+                    var value = query[key];
+                    if (value === '' || value === null || value === undefined) {
+                        nextUrl.searchParams.delete(key);
+                        return;
+                    }
+
+                    nextUrl.searchParams.set(key, String(value));
+                });
+            }
+            nextUrl.hash = '#' + section;
+            window.history.replaceState(null, '', nextUrl.pathname + nextUrl.search + nextUrl.hash);
+        }
+    }
+
+    function applyReturnAnchor(query) {
+        if (!query || !query.return_anchor) {
+            return;
+        }
+
+        var anchor = document.getElementById(String(query.return_anchor));
+        if (anchor && typeof anchor.scrollIntoView === 'function') {
+            anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function request(operation, payload) {
+        return getAccountApi().then(function(AccountApi) {
+            return AccountApi[operation](payload, {
+                silent: true
+            });
+        }).then(function(data) {
+            return { ok: data && data.success !== false, data: data };
         });
     }
 
-    function showSection(sectionName, shouldScroll) {
-        var targetId = sectionName + '-section';
-
-        sections.forEach(function(section) {
-            section.hidden = section.id !== targetId;
-        });
-
+    function setActiveNavLink(sectionName) {
         navLinks.forEach(function(link) {
             var isActive = link.getAttribute('data-section') === sectionName;
-            link.classList.toggle('motor-account-sidebar__link--active', isActive);
+            link.classList.toggle('is-active', isActive);
+            if (link.classList.contains('motor-account-sidebar__link')) {
+                link.classList.toggle('motor-account-sidebar__link--active', isActive);
+            }
+        });
+    }
+
+    function showSection(sectionName, shouldScroll, query) {
+        sectionName = sectionName || 'overview';
+
+        if (!hasNavSection(sectionName) && sidebarContentMount && !loadedSidebarSections[sectionName]) {
+            return loadSidebarContent(sectionName).then(function() {
+                return showSection(sectionName, shouldScroll, query);
+            });
+        }
+
+        if (!hasNavSection(sectionName)) {
+            sectionName = 'overview';
+        }
+
+        var targetId = sectionName + '-section';
+        var targetSection = document.querySelector('[data-account-section="' + sectionName + '"]');
+        if (!targetSection) {
+            targetSection = document.getElementById(targetId);
+        }
+
+        sections.forEach(function(section) {
+            var isTarget = section === targetSection;
+            section.hidden = !isTarget;
+            section.classList.toggle('d-none', !isTarget);
         });
 
+        setActiveNavLink(sectionName);
         if (window.history && typeof window.history.replaceState === 'function') {
-            window.history.replaceState(null, '', '#' + sectionName);
+            updateHash(sectionName, query);
+        }
+
+        if (sectionName === 'orders') {
+            applyReturnAnchor(query);
+            window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
         }
 
         if (shouldScroll) {
@@ -475,10 +852,25 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         }
     }
 
+    function syncFromHash() {
+        var parsed = parseAccountState();
+        var targetId = parsed.section || 'overview';
+        if (!hasNavSection(targetId)) {
+            if (!sidebarContentMount || loadedSidebarSections[targetId]) {
+                targetId = 'overview';
+            }
+        }
+
+        showSection(targetId, false, parsed.query);
+        applyReturnAnchor(parsed.query);
+    }
+
     navLinks.forEach(function(link) {
         link.addEventListener('click', function(event) {
             event.preventDefault();
-            showSection(link.getAttribute('data-section'), true);
+            var navTarget = getNavTarget(link);
+            showSection(navTarget.section, true, navTarget.query);
+            updateHash(navTarget.section, navTarget.query);
         });
     });
 
@@ -488,11 +880,27 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         });
     });
 
-    var initialSection = (window.location.hash || '#overview').replace('#', '');
-    if (!document.getElementById(initialSection + '-section')) {
-        initialSection = 'overview';
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+
+    function showAccountImageFallback(image) {
+        if (!image) {
+            return;
+        }
+
+        var targetSelector = image.getAttribute('data-fallback-target') || '';
+        var fallback = targetSelector ? document.querySelector(targetSelector) : null;
+        image.style.display = 'none';
+        if (fallback) {
+            fallback.style.display = image.getAttribute('data-fallback-display') || 'flex';
+        }
     }
-    showSection(initialSection, false);
+
+    document.querySelectorAll('.motor-account-index img[data-fallback-target]').forEach(function(image) {
+        image.addEventListener('error', function() {
+            showAccountImageFallback(image);
+        });
+    });
 
     function updateAvatarPreview() {
         if (!avatarPreview || !avatarFallback) {
@@ -502,12 +910,14 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
         var url = avatarInput ? avatarInput.value.trim() : '';
         if (!url) {
             avatarPreview.hidden = true;
+            avatarPreview.style.display = 'none';
             avatarPreview.removeAttribute('src');
             avatarFallback.style.display = 'flex';
             return;
         }
 
         avatarPreview.hidden = false;
+        avatarPreview.style.display = '';
         avatarPreview.src = url;
         avatarFallback.style.display = 'none';
     }
@@ -553,12 +963,8 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
             clearMessagePair(successMsg, errorMsg);
             setButtonLoading(profileSubmit, true);
 
-            var serialized = new URLSearchParams(new FormData(profileForm)).toString();
-            request('/customer/account/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: serialized
-            })
+            var serialized = formDataToObject(new FormData(profileForm));
+            request('updateProfile', serialized)
             .then(function(response) {
                 var data = response.data || {};
                 if (response.ok && data.success) {
@@ -609,12 +1015,8 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
 
             setButtonLoading(securitySubmit, true);
 
-            var serialized = new URLSearchParams(new FormData(securityForm)).toString();
-            request('/customer/account/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: serialized
-            })
+            var serialized = formDataToObject(new FormData(securityForm));
+            request('updatePassword', serialized)
             .then(function(response) {
                 var data = response.data || {};
                 if (response.ok && data.success) {
@@ -623,10 +1025,10 @@ $emailStatus = $email ? __('已绑定') : __('待完善');
                     return;
                 }
 
-                setMessage(errorMsg, data.message || updateFailedText);
+                setMessage(errorMsg, data.message || securityUpdateFailedText);
             })
             .catch(function(error) {
-                setMessage(errorMsg, (error && error.message) || updateFailedText);
+                setMessage(errorMsg, (error && error.message) || securityUpdateFailedText);
             })
             .finally(function() {
                 setButtonLoading(securitySubmit, false);

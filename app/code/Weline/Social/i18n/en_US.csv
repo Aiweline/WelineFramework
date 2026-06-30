@@ -1,0 +1,183 @@
+﻿融媒体管理,"Social Media Management"
+"浏览器 fake 模式一键发布验证","Browser fake mode one-click publish verification"
+暂无站点，无法验证站点社媒账户关系。,"No website is available, so the website-social account relation cannot be verified."
+"Fake 浏览器发布草稿","Fake browser publish draft"
+"Fake 浏览器发布批次","Fake browser publish batch"
+"Weline Social Fake Smoke","Weline Social Fake Smoke"
+"Weline Social 查询器不支持的操作：%{1}","Unsupported Weline Social query operation: %{1}"
+融媒体管理查询,"Social media management query"
+"提供 Weline_Social 平台、账户、AI 创意和发布批次操作。","Provides Weline_Social platform, account, AI creative, and publish batch operations."
+列出平台注册表。,"List platform registry."
+获取单个平台定义。,"Get one platform definition."
+列出已连接账户。,"List connected accounts."
+获取社媒账户详情。,"Get social account details."
+列出可展示的社媒账户。,"List displayable social accounts."
+生成平台授权地址。,"Generate platform authorization URL."
+保存官方凭据账户。,"Save official credential account."
+检测账户凭据。,"Test account credentials."
+禁用社媒账户。,"Disable social account."
+列出可配置社媒默认账户的站点。,"List websites that can configure default social accounts."
+列出可配置社媒默认账户的两级范围。,列出可配置社媒默认账户的两级范围。
+列出站点与社媒账户关系。,"List website and social account relations."
+列出范围与社媒账户关系。,列出范围与社媒账户关系。
+保存站点默认社媒账户。,"Save website default social accounts."
+保存范围默认社媒账户。,保存范围默认社媒账户。
+获取单个站点默认社媒账户。,"Get default social accounts for one website."
+获取单个范围默认社媒账户。,获取单个范围默认社媒账户。
+按范围、站点或全部站解析默认发布账户。,按范围、站点或全部站解析默认发布账户。
+生成融媒体创意。,"Generate social creative."
+创建一键多平台发布批次。,"Create one-click multi-platform publish batch."
+获取发布批次状态。,"Get publish batch status."
+未知社媒平台：%{1},"Unknown social platform: %{1}"
+授权地址已生成。,"Authorization URL generated."
+该平台当前不支持自动授权地址生成。,"This platform does not currently support automatic authorization URL generation."
+该平台尚未实现授权回调处理。,"This platform has not implemented authorization callback handling."
+"该平台已有官方文档记录，但当前 Provider 尚未实现实发 API。","This platform has official documentation recorded, but this provider has not implemented live publish API yet."
+缺少必填凭据：%{1},"Missing required credentials: %{1}"
+凭据字段完整，尚未执行远端连通性检测。,"Credential fields are complete; remote connectivity has not been checked."
+"Fake Token 不能为空。","Fake Token is required."
+"Fake 模式凭据已通过本地检测。","Fake mode credentials passed local validation."
+"Fake 发布已完成，可用于浏览器冒烟验证。","Fake publish completed for browser smoke verification."
+社媒发布队列,"Social publish queue"
+"按 SocialPublishTarget 执行单个平台发布。","Executes one platform publish by SocialPublishTarget."
+"缺少 target_id。","target_id is required."
+社媒发布完成,"Social publish completed"
+账户名称不能为空。,"Account name is required."
+"启用社媒账户部件时必须填写公开主页 URL。","Public profile URL is required when enabling the social account widget."
+账户已保存为仅展示模式，未启用发布。,"Account saved as display-only; publishing is not enabled."
+该平台未提供配置检测器。,该平台未提供配置检测器。
+账户不存在。,"Account does not exist."
+平台未提供配置检测器。,"The platform does not provide a config tester."
+账户已禁用。,"Account disabled."
+"公开主页 URL 格式不正确。","Public profile URL format is invalid."
+"公开主页 URL 只允许 http 或 https。","Public profile URL only allows http or https."
+"发布 Weline_Social fake 模式浏览器验证内容。","Publish Weline_Social fake browser verification content."
+融媒体创意草稿,"Social creative draft"
+请为以下平台生成一份统一融媒体发布创意，并输出适合多平台复用的中文稿件：%{1}。需求：%{2},"Generate a unified social media creative for these platforms and output reusable Chinese copy: %{1}. Requirement: %{2}"
+"Weline_Social fake 模式发布验证：%{1}","Weline_Social fake mode publish verification: %{1}"
+"Social platform provider with empty code was skipped: %{1}","Social platform provider with empty code was skipped: %{1}"
+"Duplicate social platform provider code: %{1}","Duplicate social platform provider code: %{1}"
+"Social platform provider load failed: %{1} - %{2}","Social platform provider load failed: %{1} - %{2}"
+"Social platform definition missing %{1}: %{2}","Social platform definition missing %{1}: %{2}"
+创意草稿不存在。,"Creative draft does not exist."
+请选择发布账户，或先为当前范围配置默认社媒账户。,请选择发布账户，或先为当前范围配置默认社媒账户。
+没有可用的发布账户。,"No usable publish accounts."
+账户未启用发布或凭据未通过检测。,"The account is not publish-enabled or credentials did not pass validation."
+发布目标不存在。,"Publish target does not exist."
+发布账户不存在。,"Publish account does not exist."
+"平台 Provider 不存在：%{1}","Platform Provider does not exist: %{1}"
+发布失败,"Publish failed"
+"社媒发布目标 #%{1}","Social publish target #%{1}"
+站点默认,站点默认
+站点,Websites
+一级范围,一级范围
+二级范围,二级范围
+站点默认社媒账户已保存。,"Website default social accounts saved."
+范围默认社媒账户已保存。,范围默认社媒账户已保存。
+暂不支持的社媒配置范围：%{1},暂不支持的社媒配置范围：%{1}
+请选择一级范围。,请选择一级范围。
+站点不存在。,"Website does not exist."
+"站点 #%{1}","站点 #%{1}"
+"%{1} #%{2}","%{1} #%{2}"
+营销管理,Marketing
+"平台 Provider","Platform Providers"
+已连接账户,"Connected Accounts"
+可发布账户,"Publishable Accounts"
+发布批次,"Publish batch"
+当前配置范围,当前配置范围
+先选择一级范围和二级范围，再添加平台账户或配置默认发布账户。当前版本一级范围为站点，二级范围预留店铺等子范围。,先选择一级范围和二级范围，再添加平台账户或配置默认发布账户。当前版本一级范围为站点，二级范围预留店铺等子范围。
+"Scope 优先","Scope 优先"
+一级范围类型,一级范围类型
+正在配置,正在配置
+未选择范围,未选择范围
+暂无可配置范围，无法按范围配置社媒账户。,暂无可配置范围，无法按范围配置社媒账户。
+平台库,"Platform Library"
+账户管理,"Account Management"
+范围社媒,范围社媒
+"AI 创意","AI Creative"
+一键发布,"One-click Publish"
+发布记录,"Publish Records"
+"内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。","Built-in and extension platforms are unified in the Provider registry. Icons resolve automatically from platform code as SVG."
+"运行 fake 浏览器验证","Run fake browser smoke"
+添加到当前范围,添加到当前范围
+新增或编辑账户,"Add or Edit Account"
+从平台库添加时，保存后会自动绑定到当前配置范围。,从平台库添加时，保存后会自动绑定到当前配置范围。
+平台,Platform
+账户名称,"Account Name"
+"公开主页 URL","Public Profile URL"
+授权方式,"Authorization Mode"
+排序,"Sort Order"
+显示在社媒账户部件,"Show in social account widget"
+启用发布能力,"Enable publishing"
+官方凭据,"Official Credentials"
+编辑时留空将保留已加密凭据,"Leave blank while editing to keep encrypted credentials"
+保存账户,"Save Account"
+清空表单,"Clear Form"
+账户列表,"Account List"
+账户,Account
+展示,Display
+发布,Publish
+检测,Test
+操作,Actions
+"暂无账户。可先新增仅展示账户，或运行 fake 浏览器验证创建本地账户。","No accounts yet. Add a display-only account or run fake browser smoke to create a local account."
+已启用,Enabled
+未启用,Disabled
+编辑,Edit
+禁用,Disable
+为当前一级/二级范围配置默认社媒账户，发布时按当前范围自动勾选可发布账户。,为当前一级/二级范围配置默认社媒账户，发布时按当前范围自动勾选可发布账户。
+不在这里保存任何凭据,"No credentials are saved here"
+当前范围,当前范围
+默认社媒账户,"Default social accounts"
+可发布,Publishable
+仅关系配置,"Relation only"
+暂无账户。,"No accounts."
+保存范围默认社媒,保存范围默认社媒
+生成融媒体创意,"Generate Social Creative"
+创意标题,"Creative Title"
+输入产品、活动、受众和发布目标,"Enter product, campaign, audience, and publishing goal"
+"调用 Weline_Ai 生成","Use Weline_Ai"
+生成创意草稿,"Generate Creative Draft"
+最近草稿,"Recent Drafts"
+暂无创意草稿。,"No creative drafts."
+"草稿 ID","Draft ID"
+发布范围,发布范围
+全部站发布,"Publish all websites"
+发布账户,"Publish Accounts"
+暂无可发布账户。,"No publishable accounts."
+创建发布批次,"Create Publish Batch"
+默认按当前范围配置的社媒账户发布内容。,默认按当前范围配置的社媒账户发布内容。
+暂无发布批次。,"No publish batches."
+扩展与平台族,"Extensions and Platform Families"
+后台查询接口尚未就绪。,"Backend query API is not ready."
+正在保存账户...,"Saving account..."
+账户保存完成。,"Account saved."
+正在保存范围默认社媒...,正在保存范围默认社媒...
+范围默认社媒已保存。,范围默认社媒已保存。
+正在解析范围默认社媒...,正在解析范围默认社媒...
+正在检测账户...,"Testing account..."
+正在处理...,Processing...
+正在绑定到当前范围...,正在绑定到当前范围...
+保存后会自动绑定到当前范围：,保存后会自动绑定到当前范围：
+当前范围：,当前范围：
+已选择平台，保存账户后会加入当前范围。,已选择平台，保存账户后会加入当前范围。
+创意草稿已生成。,"Creative draft generated."
+发布批次已创建。,"Publish batch created."
+请选择发布账户。,"Select publish accounts."
+请选择一级范围和二级范围。,请选择一级范围和二级范围。
+"请填写草稿 ID。","Enter a draft ID."
+仅展示,"Display only"
+必填,Required
+可选,Optional
+"Fake 验证通过","Fake verification passed"
+"Fake 验证失败","Fake verification failed"
+"Weline_Social Fake 模式","Weline_Social Fake Mode"
+"该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。","This page only verifies the fake account and website default social relation, without creating a publish batch."
+"该页面只调用 fake_browser Provider，不访问任何外部社媒平台。","This page only calls the fake_browser Provider and does not access external social platforms."
+站点社媒关系,"Website social relation"
+已打通,Connected
+未打通,"Not connected"
+默认发布账户,"Default publish accounts"
+创意草稿,"Creative Drafts"
+目标结果,"Target result"
+社媒账户部件,"Social Account Widget"
+社媒账户,"Social Accounts"

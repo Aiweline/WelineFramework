@@ -6,7 +6,7 @@
                 <i class="mdi mdi-format-list-bulleted"></i>
             </div>
             <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number">{{stats.all}}</div>
+                <div class="weline-queue-stat-number"><?= (int)($stats['all'] ?? 0) ?></div>
                 <div class="weline-queue-stat-label"><lang>全部</lang></div>
             </div>
         </a>
@@ -17,7 +17,7 @@
                 <i class="mdi mdi-clock-outline"></i>
             </div>
             <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number">{{stats.pending}}</div>
+                <div class="weline-queue-stat-number"><?= (int)($stats['pending'] ?? 0) ?></div>
                 <div class="weline-queue-stat-label"><lang>等待中</lang></div>
             </div>
         </a>
@@ -28,7 +28,7 @@
                 <i class="mdi mdi-play-circle-outline"></i>
             </div>
             <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number">{{stats.running}}</div>
+                <div class="weline-queue-stat-number"><?= (int)($stats['running'] ?? 0) ?></div>
                 <div class="weline-queue-stat-label"><lang>运行中</lang></div>
             </div>
         </a>
@@ -39,7 +39,7 @@
                 <i class="mdi mdi-check-circle-outline"></i>
             </div>
             <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number">{{stats.done}}</div>
+                <div class="weline-queue-stat-number"><?= (int)($stats['done'] ?? 0) ?></div>
                 <div class="weline-queue-stat-label"><lang>已完成</lang></div>
             </div>
         </a>
@@ -50,7 +50,7 @@
                 <i class="mdi mdi-alert-circle-outline"></i>
             </div>
             <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number">{{stats.error}}</div>
+                <div class="weline-queue-stat-number"><?= (int)($stats['error'] ?? 0) ?></div>
                 <div class="weline-queue-stat-label"><lang>出错</lang></div>
             </div>
         </a>
@@ -61,7 +61,7 @@
                 <i class="mdi mdi-pause-circle-outline"></i>
             </div>
             <div class="weline-queue-stat-content">
-                <div class="weline-queue-stat-number">{{stats.stop}}</div>
+                <div class="weline-queue-stat-number"><?= (int)($stats['stop'] ?? 0) ?></div>
                 <div class="weline-queue-stat-label"><lang>已暂停</lang></div>
             </div>
         </a>

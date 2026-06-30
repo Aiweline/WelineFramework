@@ -40,7 +40,17 @@ class UserTwoFactor extends Model
      */
     public function getByUserId(int $userId): ?self
     {
-        return $this->where(self::schema_fields_USER_ID, $userId)->find()->fetch();
+        $record = $this->where(self::schema_fields_USER_ID, $userId)->find()->fetch();
+        if (!$record instanceof self) {
+            return null;
+        }
+
+        $recordId = $record->getData(self::schema_fields_ID);
+        if (empty($recordId)) {
+            return null;
+        }
+
+        return $record;
     }
 
     /**
