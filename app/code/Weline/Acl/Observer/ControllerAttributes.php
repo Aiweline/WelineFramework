@@ -166,6 +166,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     ->setIsEnable($data->getData('is_enable') ?: true)
                     ->setIsBackend($data->getData('is_backend') ?: false)
                     ->setType($type);
+                $this->applyAccessMetadataDefaults($acl);
                 
                 // 控制器 #[Acl] 仅负责 pc 接口权限，type 固定为 pc
                 // type='menus' 仅由 MenuCollector（menu.xml）写入；侧栏菜单必须以 menu.xml 为准
@@ -190,7 +191,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 if (!isset($this->pending_class_level_acls[$module])) {
                     $this->pending_class_level_acls[$module] = [];
                 }
-                $aclData = $acl->getData();
+                $aclData = $this->normalizeAclDataForPersistence($acl->getData());
                 // 补全表中有默认值的字段，避免插入时缺列
                 if (!isset($aclData[\Weline\Acl\Model\Acl::schema_fields_ORDER])) {
                     $aclData[\Weline\Acl\Model\Acl::schema_fields_ORDER] = 0;
@@ -451,6 +452,61 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             ->setClass($data->getData('class'))
             ->setMethod($requestMethod)
             ->setType($type);
+        $this->applyAccessMetadataDefaults($acl);
+    }
+
+    private function applyAccessMetadataDefaults($acl): void
+    {
+        $acl->setAccessMode(Acl::normalizeAccessMode($acl->getAccessMode(), $acl->getMethod()));
+        $acl->setScopeGroup(trim((string)$acl->getScopeGroup()));
+        $acl->setApiExposable($acl->getApiExposable());
+    }
+
+    private function normalizeAclDataForPersistence(array $aclData): array
+    {
+        if (array_key_exists(Acl::schema_fields_ACL_ID, $aclData)
+            && ($aclData[Acl::schema_fields_ACL_ID] === '' || $aclData[Acl::schema_fields_ACL_ID] === null)
+        ) {
+            unset($aclData[Acl::schema_fields_ACL_ID]);
+        }
+
+        $aclData[Acl::schema_fields_ORDER] = $this->normalizeIntegerValue(
+            $aclData[Acl::schema_fields_ORDER] ?? 0,
+            0
+        );
+
+        $flagDefaults = [
+            Acl::schema_fields_IS_ENABLE => 1,
+            Acl::schema_fields_IS_BACKEND => 0,
+            Acl::schema_fields_API_EXPOSABLE => 0,
+        ];
+        foreach ($flagDefaults as $field => $default) {
+            if (array_key_exists($field, $aclData)) {
+                $aclData[$field] = $this->normalizeIntegerValue($aclData[$field], $default);
+            }
+        }
+
+        return $aclData;
+    }
+
+    private function normalizeIntegerValue(mixed $value, int $default): int
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        if (is_numeric($value)) {
+            return (int)$value;
+        }
+
+        $booleanValue = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($booleanValue !== null) {
+            return $booleanValue ? 1 : 0;
+        }
+
+        return $default;
     }
 
     /**
@@ -485,7 +541,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             if (!isset($this->pending_method_level_acls[$module])) {
                 $this->pending_method_level_acls[$module] = [];
             }
-            $methodAclData = $acl->getData();
+            $methodAclData = $this->normalizeAclDataForPersistence($acl->getData());
             if (!isset($methodAclData[\Weline\Acl\Model\Acl::schema_fields_ORDER])) {
                 $methodAclData[\Weline\Acl\Model\Acl::schema_fields_ORDER] = 0;
             }

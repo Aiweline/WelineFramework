@@ -60,7 +60,7 @@ trait TraitLocalModel
      */
     public function getConfigValue(string $path)
     {
-        $config = $this->getData(self::schema_fields_config);
+        $config = $this->getData(LocalModelInterface::fields_config);
         if (empty($config)) {
             return null;
         }
@@ -93,7 +93,7 @@ trait TraitLocalModel
      */
     public function setConfigValue(string $path, $value)
     {
-        $config = $this->getData(self::schema_fields_config);
+        $config = $this->getData(LocalModelInterface::fields_config);
         $data = [];
         
         if (!empty($config)) {
@@ -117,7 +117,7 @@ trait TraitLocalModel
             }
         }
         
-        $this->setData(self::schema_fields_config, json_encode($data, JSON_UNESCAPED_UNICODE));
+        $this->setData(LocalModelInterface::fields_config, json_encode($data, JSON_UNESCAPED_UNICODE));
         return $this;
     }
     
@@ -128,7 +128,7 @@ trait TraitLocalModel
      */
     public function getConfig(): array
     {
-        $config = $this->getData(self::schema_fields_config);
+        $config = $this->getData(LocalModelInterface::fields_config);
         if (empty($config)) {
             return [];
         }
@@ -145,7 +145,7 @@ trait TraitLocalModel
      */
     public function setConfig(array $config)
     {
-        $this->setData(self::schema_fields_config, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(LocalModelInterface::fields_config, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 }

@@ -64,6 +64,7 @@ class Create extends AbstractTable implements CreateInterface
         // 处理 AUTO_INCREMENT (PostgreSQL 使用 SERIAL)
         // 声明式 Schema 中 #[Col(type: 'int')] 传入的是 int，与 TableInterface::column_type_INTEGER（'integer'）不一致，须同时识别
         if (str_contains(strtolower($options), 'auto_increment')) {
+            $hasExplicitPrimaryKey = (bool) preg_match('/\bprimary\s+key\b/i', $options);
             $options = preg_replace('/\bauto_increment\b/i', '', $options);
             $options = trim($options);
             if (in_array($type, [
@@ -86,7 +87,7 @@ class Create extends AbstractTable implements CreateInterface
                 }
                 $options = preg_replace('/\bprimary\s+key\b/i', '', $options);
                 $options = trim($options);
-                if (!preg_match('/\bprimary\s+key\b/i', $options)) {
+                if ($hasExplicitPrimaryKey) {
                     $options = ($options ? $options . ' ' : '') . 'PRIMARY KEY';
                 }
             }

@@ -23,21 +23,21 @@
 ?>
 <?php
 $meta = $this->getData('meta') ?? [];
-// 兼容旧的 title/content/class 参数
 $title = $meta['title'] ?? $this->getData('title') ?? __('分类');
 $content = $meta['content'] ?? $this->getData('content') ?? '';
 $class = $meta['class'] ?? $this->getData('class') ?? '';
-// 兼容配置方式：支持通过 meta.filter_sidebar 或 filter_sidebar 变量传入筛选内容
 $filter_sidebar = $meta['filter_sidebar'] ?? $this->getData('filter_sidebar') ?? '';
 
-// 设置 showHeader 和 showFooter 的默认值
 $showHeader = $meta['showHeader'] ?? $this->getData('showHeader') ?? true;
 $showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
-$filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
+$filterDrawerTitle = \Weline\Theme\Helper\WidgetI18n::label(
+    (string)($meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? '筛选条件')
+);
 $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
+$pagination = $this->request->getData('pagination') ?? $this->getData('pagination') ?? '';
+$paginationData = $this->request->getData('pagination_data') ?? $this->getData('pagination_data') ?? [];
 
-// 将默认值赋值到 meta 数组，以便模板条件可以正确读取
 $meta['showHeader'] = $showHeader;
 $meta['showFooter'] = $showFooter;
 $meta['showFilters'] = $showFilters;
@@ -45,11 +45,10 @@ $meta['filterDrawerTitle'] = $filterDrawerTitle;
 $meta['gridColumns'] = $gridColumns;
 $this->assign('meta', $meta);
 
-// 设置页面标题
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no">
@@ -57,8 +56,10 @@ $this->assign('title', $title);
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     
     <div class="weline-page-wrapper">
@@ -81,6 +82,13 @@ $this->assign('title', $title);
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::category::content-before</w:hook>
 
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-category-content,layout-default-content,content,category-content,category-filter,category-grid,product-grid,pagination,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="category-layout__content-root-slot">
             <main class="category-layout__main <?= htmlspecialchars($class ?? '') ?>" id="category-layout-main" data-layout="category" data-columns="<?= (int)$gridColumns ?>">
                 <w:hook>Weline_Theme::frontend::layouts::category::main-before</w:hook>
 
@@ -108,15 +116,21 @@ $this->assign('title', $title);
                                 </button>
                             </div>
                             <div class="category-layout__sidebar-content">
-                                <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
-                                <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
-                                <if condition="meta.filter_sidebar">
-                                    {{meta.filter_sidebar}}
-                                <elseif condition="filter_sidebar"/>
-                                    {{filter_sidebar}}
-                                </if>
-                                <w:widget type="sidebar" name="category-filters"/>
-                                <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
+                                <w:slot id="category-filters"
+                                        name="分类筛选区"
+                                        accept="layout-category-filters,category-filters,attribute-filter,price-filter,category-filter,rating-filter"
+                                        multiple="true"
+                                        position="sidebar">
+                                    <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
+                                    <if condition="meta.filter_sidebar">
+                                        {{meta.filter_sidebar}}
+                                    <elseif condition="filter_sidebar"/>
+                                        {{filter_sidebar}}
+                                    </if>
+                                    <w:widget type="sidebar" name="category-filters"/>
+                                    <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
+                                </w:slot>
                             </div>
                         </aside>
                     </if>
@@ -128,11 +142,13 @@ $this->assign('title', $title);
                     <section class="category-layout__content">
                         <w:slot id="category-products"
                                 name="分类产品区域"
-                                accept="product-grid,product-list-view,category-children"
+                                accept="layout-category-products,product-grid,product-list-view,category-children"
                                 multiple="true"
                                 position="content"
                                 class="category-layout__products">
-                            <w:hook>WeShop_Catalog::frontend::layouts::category::products-content<else/>
+                            <w:hook>
+                                WeShop_Catalog::frontend::layouts::category::products-content
+                                <else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
                                 <elseif condition="content"/>
@@ -149,11 +165,66 @@ $this->assign('title', $title);
                                 </if>
                             </w:hook>
                         </w:slot>
+                        <?php if ($pagination || ((int)($paginationData['pages'] ?? 0)) > 1): ?>
+                            <w:slot id="category-pagination"
+                                    name="分类分页区"
+                                    accept="layout-category-pagination,pagination,load-more"
+                                    exclusive="true"
+                                    multiple="false"
+                                    position="content"
+                                    wrapper="div"
+                                    class="category-layout__pagination"
+                                    >
+                            <div data-category-pagination>
+                                <?php if ($pagination): ?>
+                                    <?= $pagination ?>
+                                <?php else: ?>
+                                    <?php
+                                    $currentPage = max(1, (int)($paginationData['page'] ?? 1));
+                                    $totalPages = max(1, (int)($paginationData['pages'] ?? 1));
+                                    $prevUrl = (string)($paginationData['prev_url'] ?? '');
+                                    $nextUrl = (string)($paginationData['next_url'] ?? '');
+                                    ?>
+                                    <nav class="category-pagination" aria-label="<?= htmlspecialchars((string)__('Pagination'), ENT_QUOTES, 'UTF-8') ?>">
+                                        <a
+                                            href="<?= htmlspecialchars($prevUrl !== '' ? $prevUrl : '#', ENT_QUOTES, 'UTF-8') ?>"
+                                            class="category-pagination__link <?= $prevUrl !== '' ? '' : 'is-disabled' ?>"
+                                            aria-disabled="<?= $prevUrl !== '' ? 'false' : 'true' ?>"
+                                        >
+                                            <?= __('Previous') ?>
+                                        </a>
+                                        <span class="category-pagination__status">
+                                            <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                                        </span>
+                                        <a
+                                            href="<?= htmlspecialchars($nextUrl !== '' ? $nextUrl : '#', ENT_QUOTES, 'UTF-8') ?>"
+                                            class="category-pagination__link <?= $nextUrl !== '' ? '' : 'is-disabled' ?>"
+                                            aria-disabled="<?= $nextUrl !== '' ? 'false' : 'true' ?>"
+                                        >
+                                            <?= __('Next') ?>
+                                        </a>
+                                    </nav>
+                                <?php endif; ?>
+                            </div>
+                            </w:slot>
+                        <?php endif; ?>
                     </section>
                 </div>
 
                 <w:hook>Weline_Theme::frontend::layouts::category::main-after</w:hook>
             </main>
+
+            <w:slot id="category-recommendations"
+                    name="分类推荐区"
+                    accept="layout-category-recommendations,featured-products,bestsellers,new-arrivals,category-grid,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="category-layout__recommendations">
+                <w:hook>Weline_Theme::frontend::layouts::category::recommendations</w:hook>
+            </w:slot>
+
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::category::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -188,21 +259,22 @@ $this->assign('title', $title);
 
     .category-layout__container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
         display: grid;
         grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
         gap: var(--spacing-6, 1.5rem);
         align-items: flex-start;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
     }
 
     /* ---- 筛选侧边栏 ---- */
     .category-layout__sidebar {
         background-color: var(--color-bg-primary);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-lg, 12px);
-        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+        box-shadow: var(--weline-theme-shadow-sm);
         position: sticky;
         top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
         max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
@@ -215,7 +287,7 @@ $this->assign('title', $title);
         align-items: center;
         justify-content: space-between;
         padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
-        border-bottom: 1px solid var(--color-border-light);
+        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         background-color: var(--color-bg-primary);
         position: sticky;
         top: 0;
@@ -260,19 +332,19 @@ $this->assign('title', $title);
         gap: var(--spacing-2, 0.5rem);
         padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
         background-color: var(--color-bg-primary);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-full, 9999px);
         cursor: pointer;
         color: var(--color-text-primary);
         font-size: var(--font-size-sm, 0.875rem);
         font-weight: var(--font-weight-medium, 500);
-        box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+        box-shadow: var(--weline-theme-shadow-md);
         transition: all 0.2s ease;
     }
 
     .category-layout__filter-toggle:hover {
         background-color: var(--color-bg-secondary);
-        box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+        box-shadow: var(--weline-theme-shadow-lg);
     }
 
     .category-layout__filter-toggle[aria-expanded="true"] {
@@ -294,7 +366,7 @@ $this->assign('title', $title);
         background-color: var(--color-error);
         color: var(--color-text-light);
         border-radius: var(--radius-full, 9999px);
-        font-size: 0.7rem;
+        font-size: var(--weline-layout-font-size-xs);
         font-weight: var(--font-weight-semibold, 600);
         display: inline-flex;
         align-items: center;
@@ -305,7 +377,7 @@ $this->assign('title', $title);
     .category-layout__overlay {
         position: fixed;
         inset: 0;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: color-mix(in srgb, var(--weline-theme-text) 50%, transparent);
         z-index: var(--z-index-overlay, 998);
         opacity: 0;
         visibility: hidden;
@@ -322,8 +394,60 @@ $this->assign('title', $title);
         min-width: 0;
     }
 
+    .category-layout__pagination {
+        display: flex;
+        justify-content: center;
+        margin-top: var(--spacing-6, 2rem);
+    }
+
+    .category-pagination {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-4, 1rem);
+        padding: 0.75rem 1rem;
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
+        border-radius: var(--radius-lg, 12px);
+        background: var(--color-bg-primary);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+
+    .category-pagination__link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 5rem;
+        padding: 0.5rem 0.9rem;
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
+        border-radius: var(--weline-layout-radius-full);
+        color: var(--color-text-primary);
+        font-size: var(--font-size-sm, 0.875rem);
+        font-weight: var(--font-weight-semibold, 600);
+        text-decoration: none;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .category-pagination__link:hover {
+        border-color: var(--weline-theme-primary);
+        color: var(--weline-theme-primary);
+    }
+
+    .category-pagination__link.is-disabled {
+        pointer-events: none;
+        opacity: 0.45;
+    }
+
+    .category-pagination__status {
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm, 0.875rem);
+        white-space: nowrap;
+    }
+
     .category-layout__products {
         width: 100%;
+    }
+
+    .category-layout__products > * + * {
+        margin-top: var(--spacing-8, 2.75rem);
     }
 
     /* ---- 占位符 ---- */
@@ -395,7 +519,7 @@ $this->assign('title', $title);
         border-radius: var(--radius-full, 9999px);
         background-color: var(--color-accent-light);
         color: var(--color-accent);
-        border: 1px solid var(--color-accent-medium);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-accent-medium);
         font-size: var(--font-size-xs, 0.75rem);
         font-weight: var(--font-weight-medium, 500);
         transition: all 0.2s ease;
@@ -422,7 +546,7 @@ $this->assign('title', $title);
     .category-filter-group {
         padding-top: var(--spacing-3, 0.75rem);
         margin-top: var(--spacing-3, 0.75rem);
-        border-top: 1px solid var(--color-border-light);
+        border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
     }
 
     .category-filter-group-title {
@@ -493,9 +617,9 @@ $this->assign('title', $title);
             width: min(85%, 360px);
             height: 100vh;
             max-height: 100vh;
-            border-radius: 0;
+            border-radius: var(--border-radius-none);
             border: none;
-            border-right: 1px solid var(--color-border-light);
+            border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
             z-index: var(--z-index-drawer, 999);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
@@ -532,6 +656,10 @@ $this->assign('title', $title);
             gap: var(--spacing-3, 0.75rem);
         }
 
+        .category-layout__products > * + * {
+            margin-top: var(--spacing-6, 1.75rem);
+        }
+
         .category-layout__filter-toggle {
             bottom: var(--spacing-5, 1.25rem);
             right: var(--spacing-3, 0.75rem);
@@ -548,6 +676,10 @@ $this->assign('title', $title);
             gap: var(--spacing-2, 0.5rem);
         }
 
+        .category-layout__products > * + * {
+            margin-top: var(--spacing-5, 1.25rem);
+        }
+
         .category-layout__filter-toggle {
             bottom: var(--spacing-4, 1rem);
             right: var(--spacing-2, 0.5rem);
@@ -559,92 +691,8 @@ $this->assign('title', $title);
         }
     }
     </style>
-    <script>
-    (function() {
-        'use strict';
 
-        // 移动端筛选抽屉功能
-        const filterToggle = document.querySelector('[data-filter-toggle]');
-        const filterSidebar = document.querySelector('[data-sidebar]');
-        const filterOverlay = document.querySelector('[data-overlay]');
-        const filterClose = document.querySelector('[data-sidebar-close]');
-        const filterBadge = document.getElementById('filter-count-badge');
 
-        function updateFilterBadge() {
-            if (!filterBadge) return;
-            const activeFilters = document.querySelectorAll('.filter-chip.is-active');
-            const count = activeFilters.length;
-            if (count > 0) {
-                filterBadge.textContent = count;
-                filterBadge.removeAttribute('hidden');
-            } else {
-                filterBadge.setAttribute('hidden', '');
-            }
-        }
-
-        function openSidebar() {
-            if (!filterSidebar || !filterOverlay) return;
-            filterSidebar.classList.add('is-open');
-            filterOverlay.classList.add('is-visible');
-            filterToggle?.setAttribute('aria-expanded', 'true');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeSidebar() {
-            if (!filterSidebar || !filterOverlay) return;
-            filterSidebar.classList.remove('is-open');
-            filterOverlay.classList.remove('is-visible');
-            filterToggle?.setAttribute('aria-expanded', 'false');
-            document.body.style.overflow = '';
-        }
-
-        filterToggle?.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (filterSidebar?.classList.contains('is-open')) {
-                closeSidebar();
-            } else {
-                openSidebar();
-            }
-        });
-
-        filterClose?.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeSidebar();
-        });
-
-        filterOverlay?.addEventListener('click', function(e) {
-            e.preventDefault();
-            closeSidebar();
-        });
-
-        filterSidebar?.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && filterSidebar?.classList.contains('is-open')) {
-                closeSidebar();
-            }
-        });
-
-        document.addEventListener('DOMContentLoaded', function() {
-            updateFilterBadge();
-            const observer = new MutationObserver(updateFilterBadge);
-            const filterContainer = document.querySelector('.category-filter-applied');
-            if (filterContainer) {
-                observer.observe(filterContainer, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: ['class']
-                });
-            }
-        });
-
-        setTimeout(updateFilterBadge, 100);
-    })();
-    </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

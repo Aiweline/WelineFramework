@@ -1,84 +1,397 @@
 <?php
 /**
  * 支付方式选择组件
- * 
- * 用于在结账界面展示可用的支付方式
+ *
+ * 用于在结账界面展示可用的支付方式。
  */
+$esc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$json = static fn(mixed $value): string => json_encode(
+    $value,
+    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+) ?: '{}';
+
+/** @var \Weline\Payment\Block\PaymentMethod $block */
+$block = $this->getBlock(\Weline\Payment\Block\PaymentMethod::class);
+$methodManager = $block->getMethodManager();
+$isFakeMode = (bool)$this->getData('payment_fake_mode');
+$methods = $isFakeMode ? $block->getAvailableMethods(['fake_mode' => true]) : $block->getAvailableMethods();
+$fakeScenarioPayload = [];
+$fakeUnavailableItems = [];
+
+if ($isFakeMode) {
+    $fakeUnavailableItems = [
+        [
+            'code' => 'credit_asset',
+            'title' => (string)__('Credit Asset'),
+            'description' => (string)__('Requires exchange ratio and payable permission before checkout.'),
+            'reason' => (string)__('This asset is not enabled for payment.'),
+            'mode' => (string)__('Payment method'),
+        ],
+        [
+            'code' => 'reward_points',
+            'title' => (string)__('Reward Points'),
+            'description' => (string)__('Can be configured as discount, payment, or both.'),
+            'reason' => (string)__('Current currency is not supported.'),
+            'mode' => (string)__('Discount or payment'),
+        ],
+        [
+            'code' => 'w_coin',
+            'title' => (string)__('W Coin'),
+            'description' => (string)__('Can partially deduct payable amount when enabled.'),
+            'reason' => (string)__('Current customer country is not supported.'),
+            'mode' => (string)__('Payment method'),
+        ],
+    ];
+
+    foreach ($methods as $method) {
+        if (!$method instanceof \Weline\Payment\Model\PaymentMethod) {
+            continue;
+        }
+
+        $methodCode = (string)$method->getData('code');
+        $provider = $methodManager->getProviderInstance($method, ['fake_mode' => true]);
+        if (!$provider instanceof \Weline\Payment\Interface\ProviderInterface) {
+            $fakeScenarioPayload[$methodCode] = [
+                'available' => false,
+                'requires_terms' => true,
+                'disabled_reason' => (string)__('Payment provider is not ready.'),
+                'results' => [],
+            ];
+            continue;
+        }
+
+        $metadata = $methodManager->getProviderMetadata($method, $provider);
+        $runtimeConfig = $methodManager->getRuntimeConfig($method, [
+            'fake_mode' => true,
+            'scope' => 'default.default.default',
+            'environment' => 'sandbox',
+        ]);
+        $amountMinor = 128800;
+        $currencyCode = 'CNY';
+        $intentCode = 'FAKE-INTENT-' . strtoupper($methodCode);
+        $attemptCode = 'FAKE-ATTEMPT-' . strtoupper($methodCode);
+        $context = [
+            'fake_mode' => true,
+            'runtime_config' => $runtimeConfig,
+        ];
+        $availability = $provider->checkAvailability(\Weline\Payment\Api\Data\AvailabilityRequest::fromArray([
+            'payable_type' => 'fake_checkout',
+            'payable_id' => 'browser-verification',
+            'method_code' => $methodCode,
+            'scope' => 'default.default.default',
+            'amount_minor' => $amountMinor,
+            'currency_code' => $currencyCode,
+            'country_code' => 'CN',
+            'language_code' => 'zh_Hans_CN',
+            'context' => $context,
+        ]));
+        $baseRequest = [
+            'intent_code' => $intentCode,
+            'attempt_code' => $attemptCode,
+            'payable_type' => 'fake_checkout',
+            'payable_id' => 'browser-verification',
+            'method_code' => $methodCode,
+            'provider_code' => (string)($metadata['provider_code'] ?? ''),
+            'scope' => 'default.default.default',
+            'amount_minor' => $amountMinor,
+            'currency_code' => $currencyCode,
+            'idempotency_key' => 'fake-checkout-' . $methodCode,
+            'return_url' => '#fake-paid',
+            'cancel_url' => '#fake-cancelled',
+            'failure_url' => '#fake-failed',
+            'context' => $context,
+        ];
+
+        $paidResult = $provider->createPayment(\Weline\Payment\Api\Data\PaymentRequest::fromArray($baseRequest + [
+            'dynamic_form_values' => ['fake_result' => 'paid'],
+        ]));
+        $failedResult = $provider->createPayment(\Weline\Payment\Api\Data\PaymentRequest::fromArray($baseRequest + [
+            'dynamic_form_values' => ['fake_result' => 'failed'],
+        ]));
+        $cancelledResult = $provider->createPayment(\Weline\Payment\Api\Data\PaymentRequest::fromArray($baseRequest + [
+            'dynamic_form_values' => ['fake_result' => 'cancelled'],
+        ]));
+        $refundResult = $provider->refund(\Weline\Payment\Api\Data\RefundRequest::fromArray($baseRequest + [
+            'refund_code' => 'FAKE-REFUND-' . strtoupper($methodCode),
+            'transaction_code' => $paidResult->getProviderReference(),
+            'provider_reference' => $paidResult->getProviderReference(),
+            'reason_code' => 'browser_verification',
+        ]));
+
+        $fakeScenarioPayload[$methodCode] = [
+            'available' => $availability->isAvailable(),
+            'requires_terms' => $availability->requiresTerms(),
+            'disabled_reason' => $availability->getDisabledReasonText() ?: '',
+            'amount' => '1,288.00 ' . $currencyCode,
+            'method_label' => (string)$method->getData('name'),
+            'results' => [
+                'paid' => [
+                    'title' => (string)__('支付成功'),
+                    'status' => $paidResult->getStatus(),
+                    'reference' => $paidResult->getProviderReference(),
+                    'message' => (string)__('支付订单创建成功'),
+                ],
+                'failed' => [
+                    'title' => (string)__('支付失败'),
+                    'status' => $failedResult->getStatus(),
+                    'reference' => $failedResult->getProviderReference(),
+                    'message' => (string)__('支付未完成，请重试'),
+                ],
+                'cancelled' => [
+                    'title' => (string)__('取消'),
+                    'status' => $cancelledResult->getData('action_type') ?: $cancelledResult->getStatus(),
+                    'reference' => $cancelledResult->getProviderReference(),
+                    'message' => (string)__('取消'),
+                ],
+                'refunded' => [
+                    'title' => (string)__('已退款'),
+                    'status' => $refundResult->getStatus(),
+                    'reference' => $refundResult->getProviderReference(),
+                    'message' => (string)__('已退款'),
+                ],
+            ],
+        ];
+    }
+}
 ?>
-<div class="payment-methods">
-    <h3><?= __('选择支付方式') ?></h3>
-    
+<div class="payment-methods<?= $isFakeMode ? ' payment-methods--fake' : '' ?>"
+     data-fake-mode="<?= $isFakeMode ? '1' : '0' ?>"
+     data-fake-scenarios='<?= $esc($json($fakeScenarioPayload)) ?>'
+     data-message-select="<?= $esc(__('Select a payment method to continue.')) ?>"
+     data-message-terms="<?= $esc(__('Please agree to the payment terms before continuing.')) ?>"
+     data-label-selected="<?= $esc(__('Selected payment method:')) ?>"
+     data-label-status="<?= $esc(__('状态')) ?>"
+     data-label-reference="<?= $esc(__('交易号')) ?>"
+     data-label-amount="<?= $esc(__('支付金额')) ?>">
+    <div class="payment-methods__head">
+        <h3><?= __('支付方式') ?></h3>
+        <?php if ($isFakeMode): ?>
+            <p><?= __('Used by browser verification only.') ?></p>
+        <?php endif; ?>
+    </div>
+
     <w:hook>Weline_Payment::frontend::checkout::payment-methods-before</w:hook>
-    
+
     <div class="payment-methods-list">
-        <?php
-        /** @var \Weline\Payment\Block\PaymentMethod $block */
-        $block = $this->getBlock(\Weline\Payment\Block\PaymentMethod::class);
-        $methods = $block->getAvailableMethods();
-        
-        if (empty($methods)): ?>
-            <div class="alert alert-info">
-                <?= __('暂无可用的支付方式') ?>
+        <?php if (empty($methods)): ?>
+            <div class="payment-methods__notice" role="status">
+                <?= __('No payment method is available for the current payable object.') ?>
             </div>
         <?php else: ?>
-            <div class="row">
+            <div class="payment-methods__grid">
                 <?php foreach ($methods as $method): ?>
                     <?php
-                    $provider = $block->getMethodManager()->getProviderInstance($method);
-                    $iconUrl = $provider ? $provider->getIconUrl() : null;
+                    $metadata = $method instanceof \Weline\Payment\Model\PaymentMethod
+                        ? $methodManager->getProviderMetadata($method)
+                        : [];
+                    $display = is_array($metadata['display_metadata'] ?? null) ? $metadata['display_metadata'] : [];
+                    $methodCode = (string)($method instanceof \Weline\Payment\Model\PaymentMethod ? $method->getData('code') : '');
+                    $methodName = (string)($method instanceof \Weline\Payment\Model\PaymentMethod ? $method->getData('name') : '');
+                    $safeMethodId = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $methodCode) ?: 'payment-method';
+                    $iconUrl = (string)($display['icon_url'] ?? $display['icon'] ?? '');
+                    $description = (string)($display['description'] ?? '');
+                    $fakeAvailability = is_array($fakeScenarioPayload[$methodCode] ?? null) ? $fakeScenarioPayload[$methodCode] : [];
+                    $isAvailable = !$isFakeMode || !empty($fakeAvailability['available']);
                     ?>
-                    <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="payment-method-card card">
-                            <div class="card-body">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" 
-                                           name="payment_method" 
-                                           id="payment_method_<?= htmlspecialchars($method->getData('code')) ?>" 
-                                           value="<?= htmlspecialchars($method->getData('code')) ?>">
-                                    <label class="form-check-label" for="payment_method_<?= htmlspecialchars($method->getData('code')) ?>">
-                                        <?php if ($iconUrl): ?>
-                                            <img src="<?= htmlspecialchars($iconUrl) ?>" 
-                                                 alt="<?= htmlspecialchars($method->getData('name')) ?>" 
-                                                 class="payment-method-icon">
-                                        <?php endif; ?>
-                                        <span class="payment-method-name"><?= htmlspecialchars($method->getData('name')) ?></span>
-                                    </label>
-                                </div>
-                                <?php if ($provider && $provider->getDescription()): ?>
-                                    <p class="payment-method-description text-muted small mt-2">
-                                        <?= htmlspecialchars($provider->getDescription()) ?>
-                                    </p>
+                    <label class="payment-method-card<?= $isAvailable ? '' : ' payment-method-card--disabled' ?>"
+                           for="payment_method_<?= $esc($safeMethodId) ?>"
+                           data-method-card="<?= $esc($methodCode) ?>">
+                        <span class="payment-method-card__choice">
+                            <input class="payment-method-card__input"
+                                   type="radio"
+                                   name="payment_method"
+                                   id="payment_method_<?= $esc($safeMethodId) ?>"
+                                   value="<?= $esc($methodCode) ?>"
+                                   <?= $isAvailable ? '' : 'disabled' ?>>
+                            <span class="payment-method-card__body">
+                                <span class="payment-method-card__title-row">
+                                    <?php if ($iconUrl !== ''): ?>
+                                        <img src="<?= $esc($iconUrl) ?>"
+                                             alt="<?= $esc($methodName) ?>"
+                                             class="payment-method-icon">
+                                    <?php endif; ?>
+                                    <span class="payment-method-name"><?= $esc($methodName) ?></span>
+                                    <?php if ($isFakeMode): ?>
+                                        <span class="payment-method-card__badge"><?= __('支付待处理') ?></span>
+                                    <?php endif; ?>
+                                </span>
+                                <?php if ($description !== ''): ?>
+                                    <span class="payment-method-description"><?= $esc(__($description)) ?></span>
                                 <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
+                                <?php if (!$isAvailable): ?>
+                                    <span class="payment-method-card__reason">
+                                        <?= $esc($fakeAvailability['disabled_reason'] ?? __('支付方式当前不可用')) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </span>
+                        </span>
+                    </label>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
     </div>
-    
+
+    <?php if ($isFakeMode): ?>
+        <div class="payment-methods__terms">
+            <label class="payment-methods__terms-label">
+                <input type="checkbox" class="payment-methods__terms-input" data-payment-terms>
+                <span><?= __('I agree to the payment terms.') ?></span>
+            </label>
+            <div class="payment-methods__feedback" data-payment-feedback aria-live="polite"></div>
+        </div>
+
+        <div class="payment-methods__actions" aria-label="<?= $esc(__('支付状态')) ?>">
+            <button type="button" class="payment-methods__action payment-methods__action--primary" data-fake-action="paid">
+                <?= __('支付成功') ?>
+            </button>
+            <button type="button" class="payment-methods__action" data-fake-action="failed">
+                <?= __('支付失败') ?>
+            </button>
+            <button type="button" class="payment-methods__action" data-fake-action="cancelled">
+                <?= __('取消') ?>
+            </button>
+            <button type="button" class="payment-methods__action" data-fake-action="refunded">
+                <?= __('已退款') ?>
+            </button>
+        </div>
+
+        <section class="payment-methods__result" data-payment-result hidden>
+            <div class="payment-methods__result-status" data-payment-result-title></div>
+            <dl class="payment-methods__result-list">
+                <div>
+                    <dt><?= __('支付方式') ?></dt>
+                    <dd data-payment-result-method></dd>
+                </div>
+                <div>
+                    <dt><?= __('支付状态') ?></dt>
+                    <dd data-payment-result-status></dd>
+                </div>
+                <div>
+                    <dt><?= __('交易号') ?></dt>
+                    <dd data-payment-result-reference></dd>
+                </div>
+                <div>
+                    <dt><?= __('支付金额') ?></dt>
+                    <dd data-payment-result-amount></dd>
+                </div>
+            </dl>
+            <p data-payment-result-message></p>
+        </section>
+
+        <section class="payment-methods__more">
+            <h4><?= __('More') ?></h4>
+            <div class="payment-methods__asset-grid">
+                <?php foreach ($fakeUnavailableItems as $item): ?>
+                    <article class="payment-methods__asset" aria-disabled="true">
+                        <div>
+                            <strong><?= $esc($item['title']) ?></strong>
+                            <span><?= $esc($item['mode']) ?></span>
+                        </div>
+                        <p><?= $esc($item['description']) ?></p>
+                        <em><?= $esc($item['reason']) ?></em>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
     <w:hook>Weline_Payment::frontend::checkout::payment-methods-after</w:hook>
-    
+
     <w:hook>Weline_Payment::frontend::checkout::payment-form-before</w:hook>
-    
-    <div class="payment-form" id="payment-form" style="display: none;">
-        <!-- 支付表单将在这里动态加载 -->
-    </div>
-    
+
+    <div class="payment-form" id="payment-form" hidden></div>
+
     <w:hook>Weline_Payment::frontend::checkout::payment-form-after</w:hook>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const paymentMethods = document.querySelectorAll('input[name="payment_method"]');
-    const paymentForm = document.getElementById('payment-form');
-    
+    const root = document.querySelector('.payment-methods');
+    if (!root) {
+        return;
+    }
+
+    const paymentMethods = root.querySelectorAll('input[name="payment_method"]');
+    const paymentForm = root.querySelector('#payment-form');
+    const isFakeMode = root.dataset.fakeMode === '1';
+
     paymentMethods.forEach(function(radio) {
         radio.addEventListener('change', function() {
-            if (this.checked) {
-                const methodCode = this.value;
-                // TODO: 加载支付表单或跳转到支付页面
-                console.log('选择的支付方式:', methodCode);
+            if (paymentForm) {
+                paymentForm.hidden = !this.checked;
+            }
+        });
+    });
+
+    if (!isFakeMode) {
+        return;
+    }
+
+    let scenarios = {};
+    try {
+        scenarios = JSON.parse(root.dataset.fakeScenarios || '{}');
+    } catch (error) {
+        scenarios = {};
+    }
+
+    const terms = root.querySelector('[data-payment-terms]');
+    const feedback = root.querySelector('[data-payment-feedback]');
+    const result = root.querySelector('[data-payment-result]');
+    const resultTitle = root.querySelector('[data-payment-result-title]');
+    const resultMethod = root.querySelector('[data-payment-result-method]');
+    const resultStatus = root.querySelector('[data-payment-result-status]');
+    const resultReference = root.querySelector('[data-payment-result-reference]');
+    const resultAmount = root.querySelector('[data-payment-result-amount]');
+    const resultMessage = root.querySelector('[data-payment-result-message]');
+
+    const setFeedback = function(message) {
+        if (feedback) {
+            feedback.textContent = message || '';
+        }
+    };
+
+    root.querySelectorAll('[data-fake-action]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const selected = root.querySelector('input[name="payment_method"]:checked');
+            if (!selected) {
+                setFeedback(root.dataset.messageSelect || '');
+                return;
+            }
+            if (terms && !terms.checked) {
+                setFeedback(root.dataset.messageTerms || '');
+                return;
+            }
+
+            const scenario = scenarios[selected.value] || {};
+            const action = button.dataset.fakeAction || 'paid';
+            const entry = (scenario.results || {})[action];
+            if (!entry) {
+                setFeedback(scenario.disabled_reason || '');
+                return;
+            }
+
+            setFeedback('');
+            if (result) {
+                result.hidden = false;
+                result.dataset.status = action;
+            }
+            if (resultTitle) {
+                resultTitle.textContent = entry.title || '';
+            }
+            if (resultMethod) {
+                resultMethod.textContent = scenario.method_label || selected.value;
+            }
+            if (resultStatus) {
+                resultStatus.textContent = entry.status || '';
+            }
+            if (resultReference) {
+                resultReference.textContent = entry.reference || '';
+            }
+            if (resultAmount) {
+                resultAmount.textContent = scenario.amount || '';
+            }
+            if (resultMessage) {
+                resultMessage.textContent = entry.message || '';
             }
         });
     });
@@ -86,25 +399,262 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-.payment-method-card {
-    cursor: pointer;
-    transition: all 0.3s ease;
+.payment-methods {
+    display: grid;
+    gap: 16px;
 }
 
-.payment-method-card:hover {
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    transform: translateY(-2px);
+.payment-methods__head {
+    display: grid;
+    gap: 4px;
+}
+
+.payment-methods__head h3,
+.payment-methods__head p,
+.payment-methods__more h4,
+.payment-methods__result p {
+    margin: 0;
+}
+
+.payment-methods__head h3 {
+    color: #111827;
+    font-size: 20px;
+    line-height: 1.3;
+}
+
+.payment-methods__head p,
+.payment-method-description,
+.payment-methods__asset p,
+.payment-methods__asset em {
+    color: #4b5563;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.payment-methods__grid,
+.payment-methods__asset-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.payment-method-card,
+.payment-methods__asset,
+.payment-methods__result {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.payment-method-card {
+    cursor: pointer;
+    display: block;
+    min-height: 112px;
+    padding: 14px;
+    transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.payment-method-card:hover,
+.payment-method-card:focus-within {
+    border-color: #059669;
+    box-shadow: 0 8px 24px rgba(5, 150, 105, 0.14);
+}
+
+.payment-method-card--disabled {
+    background: #f9fafb;
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.payment-method-card__choice,
+.payment-method-card__body,
+.payment-method-card__title-row {
+    display: flex;
+    gap: 10px;
+}
+
+.payment-method-card__body {
+    flex: 1;
+    flex-direction: column;
+}
+
+.payment-method-card__title-row {
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.payment-method-card__input {
+    margin-top: 3px;
 }
 
 .payment-method-icon {
-    max-width: 40px;
-    max-height: 40px;
-    margin-right: 10px;
-    vertical-align: middle;
+    max-height: 32px;
+    max-width: 48px;
 }
 
 .payment-method-name {
-    font-weight: 500;
+    color: #111827;
+    font-weight: 600;
+}
+
+.payment-method-card__badge,
+.payment-method-card__reason,
+.payment-methods__asset span {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 12px;
+    line-height: 1;
+    padding: 5px 8px;
+}
+
+.payment-method-card__badge {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.payment-method-card__reason {
+    align-self: flex-start;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.payment-methods__terms,
+.payment-methods__actions,
+.payment-methods__more {
+    display: grid;
+    gap: 10px;
+}
+
+.payment-methods__terms-label {
+    align-items: center;
+    color: #111827;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+}
+
+.payment-methods__feedback {
+    color: #b45309;
+    min-height: 20px;
+}
+
+.payment-methods__actions {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.payment-methods__action {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #111827;
+    cursor: pointer;
+    font-weight: 600;
+    min-height: 40px;
+    padding: 8px 12px;
+    transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.payment-methods__action:hover,
+.payment-methods__action:focus {
+    border-color: #059669;
+    color: #047857;
+}
+
+.payment-methods__action--primary {
+    background: #059669;
+    border-color: #059669;
+    color: #ffffff;
+}
+
+.payment-methods__action--primary:hover,
+.payment-methods__action--primary:focus {
+    background: #047857;
+    color: #ffffff;
+}
+
+.payment-methods__result {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+}
+
+.payment-methods__result[hidden] {
+    display: none;
+}
+
+.payment-methods__result-status {
+    color: #047857;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.payment-methods__result[data-status="failed"] .payment-methods__result-status,
+.payment-methods__result[data-status="cancelled"] .payment-methods__result-status {
+    color: #b91c1c;
+}
+
+.payment-methods__result-list {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    margin: 0;
+}
+
+.payment-methods__result-list div,
+.payment-methods__asset {
+    display: grid;
+    gap: 6px;
+}
+
+.payment-methods__result-list dt {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.payment-methods__result-list dd {
+    color: #111827;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.payment-methods__asset {
+    padding: 14px;
+}
+
+.payment-methods__asset div {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.payment-methods__asset strong {
+    color: #111827;
+}
+
+.payment-methods__asset span {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.payment-methods__asset em {
+    color: #b45309;
+    font-style: normal;
+}
+
+.payment-methods__notice {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    color: #1d4ed8;
+    padding: 12px;
+}
+
+@media (max-width: 520px) {
+    .payment-method-card {
+        min-height: 0;
+    }
 }
 </style>
-

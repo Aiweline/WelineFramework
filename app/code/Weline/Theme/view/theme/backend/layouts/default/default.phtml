@@ -84,18 +84,16 @@ $extraClass = $meta['class'] ?? '';
         <div class="main-content">
             <div class="page-content">
                 <div class="container-fluid">
-                    <!-- 消息提示 -->
-                    <div class="row">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                    
+                    <!-- 消息提示：由 layout 统一输出，并在页面标题行渲染后移动到标题/面包屑下方。 -->
                     <w:hook>Weline_Theme::backend::layouts::base::content-before</w:hook>
                     <w:hook>Weline_Theme::backend::layouts::default::content-before</w:hook>
                     
                     <!-- 页面主内容 -->
-                    <main class="backend-main-content <?= htmlspecialchars($extraClass) ?>" id="main-content" data-layout="main_content">
-                        <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
-                    </main>
+                    <?php
+                    $layoutMainClass = trim('backend-main-content ' . (string)$extraClass);
+                    $layoutMainAttributes = 'data-layout="main_content"';
+                    echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+                    ?>
                     
                     <w:hook>Weline_Theme::backend::layouts::default::content-after</w:hook>
                     <w:hook>Weline_Theme::backend::layouts::base::content-after</w:hook>
@@ -110,7 +108,7 @@ $extraClass = $meta['class'] ?? '';
                 <div class="container-fluid">
                     <div class="row">
                         <div class="col-sm-6">
-                            <script>document.write(new Date().getFullYear())</script> © Weline.
+                            <?= date('Y') ?> &copy; Weline.
                         </div>
                         <div class="col-sm-6">
                             <div class="text-sm-end d-none d-sm-block">

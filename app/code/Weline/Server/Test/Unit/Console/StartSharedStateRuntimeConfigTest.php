@@ -95,16 +95,67 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
                 ];
             }
         };
+        $manager = new class extends SharedStateServiceManager {
+            public bool $called = false;
+            public array $lastConfig = [];
+            public bool $lastForceRestart = false;
+
+            public function ensureRuntime(
+                string $requesterInstanceName,
+                array $config,
+                array $envConfig = [],
+                bool $frontend = false,
+                bool $forceRestart = false
+            ): array {
+                unset($requesterInstanceName, $envConfig, $frontend);
+                $this->called = true;
+                $this->lastConfig = $config;
+                $this->lastForceRestart = $forceRestart;
+
+                return [
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => 19970,
+                        'token_file_name' => 'session_server.shared.token',
+                        'reuse_existing' => true,
+                        'shared_service' => true,
+                        'pid' => 4321,
+                        'process_name' => 'weline-wls-session-shared-19970',
+                        'instance_name' => 'shared-session-19970',
+                        'independent' => true,
+                    ],
+                    'memory' => [
+                        'host' => '127.0.0.1',
+                        'port' => 19971,
+                        'token_file_name' => 'memory_server.shared.token',
+                        'reuse_existing' => false,
+                        'created_now' => true,
+                        'shared_service' => true,
+                        'pid' => 9876,
+                        'process_name' => 'weline-wls-memory-shared-19971',
+                        'instance_name' => 'shared-memory-19971',
+                        'independent' => true,
+                    ],
+                ];
+            }
+        };
 
         $start = new class extends Start {
             public SharedStateRuntimeResolver $resolver;
+            public SharedStateServiceManager $manager;
 
             protected function createSharedStateRuntimeResolver(): SharedStateRuntimeResolver
             {
                 return $this->resolver;
             }
+
+            protected function createSharedStateServiceManager(): SharedStateServiceManager
+            {
+                return $this->manager;
+            }
         };
         $start->resolver = $resolver;
+        $start->manager = $manager;
 
         $runtime = $this->invokeProtected(
             $start,
@@ -118,13 +169,21 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
         );
 
         self::assertTrue($resolver->called);
+        self::assertTrue($manager->called);
+        self::assertTrue($manager->lastForceRestart);
+        self::assertSame(19970, $manager->lastConfig['session_server_port']);
+        self::assertSame('session_server.shared.token', $manager->lastConfig['session_server_token_file_name']);
+        self::assertSame(19971, $manager->lastConfig['memory_server_port']);
+        self::assertSame('memory_server.shared.token', $manager->lastConfig['memory_server_token_file_name']);
         self::assertSame(19970, $runtime['session']['port']);
         self::assertSame('session_server.shared.token', $runtime['session']['token_file_name']);
         self::assertTrue((bool) ($runtime['session']['reuse_existing'] ?? false));
+        self::assertTrue((bool) ($runtime['session']['shared_service'] ?? false));
         self::assertSame(4321, $runtime['session']['pid']);
         self::assertSame('weline-wls-session-shared-19970', $runtime['session']['process_name']);
         self::assertSame('shared-session-19970', $runtime['session']['instance_name']);
         self::assertTrue((bool) ($runtime['memory']['created_now'] ?? false));
+        self::assertTrue((bool) ($runtime['memory']['shared_service'] ?? false));
         self::assertSame('shared-memory-19971', $runtime['memory']['instance_name']);
     }
 
@@ -151,16 +210,54 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
                 ];
             }
         };
+        $manager = new class extends SharedStateServiceManager {
+            public bool $called = false;
+
+            public function ensureRuntime(
+                string $requesterInstanceName,
+                array $config,
+                array $envConfig = [],
+                bool $frontend = false,
+                bool $forceRestart = false
+            ): array {
+                unset($requesterInstanceName, $envConfig, $frontend, $forceRestart);
+                $this->called = true;
+
+                return [
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => (int)$config['session_server_port'],
+                        'token_file_name' => (string)$config['session_server_token_file_name'],
+                        'shared_service' => true,
+                        'reuse_existing' => true,
+                    ],
+                    'memory' => [
+                        'host' => '127.0.0.1',
+                        'port' => (int)$config['memory_server_port'],
+                        'token_file_name' => (string)$config['memory_server_token_file_name'],
+                        'shared_service' => true,
+                        'reuse_existing' => true,
+                    ],
+                ];
+            }
+        };
 
         $start = new class extends Start {
             public SharedStateRuntimeResolver $resolver;
+            public SharedStateServiceManager $manager;
 
             protected function createSharedStateRuntimeResolver(): SharedStateRuntimeResolver
             {
                 return $this->resolver;
             }
+
+            protected function createSharedStateServiceManager(): SharedStateServiceManager
+            {
+                return $this->manager;
+            }
         };
         $start->resolver = $resolver;
+        $start->manager = $manager;
 
         $runtime = $this->invokeProtected(
             $start,
@@ -174,8 +271,11 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
         );
 
         self::assertTrue($resolver->called);
+        self::assertTrue($manager->called);
         self::assertSame(19970, $runtime['session']['port']);
         self::assertSame(19971, $runtime['memory']['port']);
+        self::assertTrue((bool) ($runtime['session']['shared_service'] ?? false));
+        self::assertTrue((bool) ($runtime['memory']['shared_service'] ?? false));
     }
 
     public function testSavedConfigStripsRuntimeOnlySharedStateKeys(): void
@@ -201,40 +301,6 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
                 'port' => 9982,
             ],
             $filtered
-        );
-    }
-
-    public function testSharedStateRuntimeSkipsPortReleaseForEnsuredServices(): void
-    {
-        $start = new Start();
-
-        self::assertTrue(
-            (bool) $this->invokeProtected(
-                $start,
-                'shouldSkipSharedStatePortReleaseCheck',
-                ['reuse_existing' => true]
-            )
-        );
-        self::assertTrue(
-            (bool) $this->invokeProtected(
-                $start,
-                'shouldSkipSharedStatePortReleaseCheck',
-                ['created_now' => true]
-            )
-        );
-        self::assertTrue(
-            (bool) $this->invokeProtected(
-                $start,
-                'shouldSkipSharedStatePortReleaseCheck',
-                ['shared_service' => true]
-            )
-        );
-        self::assertFalse(
-            (bool) $this->invokeProtected(
-                $start,
-                'shouldSkipSharedStatePortReleaseCheck',
-                []
-            )
         );
     }
 

@@ -32,6 +32,10 @@ class MemoryServerProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
+        if ($this->isSharedStateRuntimeManaged($context, 'memory')) {
+            return false;
+        }
+
         $m = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
         return (bool) ($m['enabled'] ?? true);
     }
@@ -86,8 +90,8 @@ class MemoryServerProvider extends AbstractServiceProvider
             '--token-file-name=' . $tokenFileName,
         ];
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         return new ServiceCommand(

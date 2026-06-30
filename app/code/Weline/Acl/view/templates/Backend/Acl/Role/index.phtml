@@ -38,9 +38,9 @@
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
                     <li class='breadcrumb-item'>
-                        <a href='javascript: void(0);'>
+                        <span>
                             <lang>系统配置</lang>
-                        </a>
+                        </span>
                     </li>
                     <li class='breadcrumb-item'>
                         <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
@@ -201,6 +201,42 @@
         }
         return offcanvas;
     }
+
+    function normalizeApiResult(res) {
+        if (typeof res === 'string') {
+            try {
+                return JSON.parse(res);
+            } catch (e) {
+                return {success: false, message: res};
+            }
+        }
+        if (!res || typeof res !== 'object') {
+            return res;
+        }
+        if (Object.prototype.hasOwnProperty.call(res, 'success') ||
+            Object.prototype.hasOwnProperty.call(res, 'code') ||
+            Object.prototype.hasOwnProperty.call(res, 'msg') ||
+            Object.prototype.hasOwnProperty.call(res, 'message')) {
+            return res;
+        }
+        if (Object.prototype.hasOwnProperty.call(res, 'data')) {
+            return normalizeApiResult(res.data);
+        }
+        return res;
+    }
+
+    function apiErrorMessage(error, fallback) {
+        var response = error && error.response ? error.response : null;
+        var data = response && response.data !== undefined ? normalizeApiResult(response.data) : null;
+
+        if (data && typeof data === 'object') {
+            return data.msg || data.message || (data.error && data.error.message) || fallback;
+        }
+        if (typeof data === 'string' && data.trim()) {
+            return data;
+        }
+        return (error && error.message) || fallback;
+    }
     
     var submitting = false;
     form.addEventListener('submit', function(event) {
@@ -232,13 +268,8 @@
         var roleOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(data) };
         window.Weline.Api.request(roleUrl, roleOpts)
         .then(function(res) {
-            if (!res || res.ok === false) {
-                throw new Error('HTTP <?= __('错误') ?>: ' + (res && res.status || 500));
-            }
-            return (res && res.data) !== undefined ? res.data : res;
-        })
-        .then(function(result) {
-            if (result.success) {
+            var result = normalizeApiResult(res);
+            if (result && result.success) {
                 BackendToast.success(result.message || '<?= __('角色创建成功！') ?>');
                 var oc = getOffcanvas();
                 if (oc) oc.hide();
@@ -253,7 +284,7 @@
         })
         .catch(function(error) {
             console.error('Error:', error);
-            BackendToast.error('<?= __('请求失败：') ?>' + error.message);
+            BackendToast.error(apiErrorMessage(error, '<?= __('角色创建失败，请检查输入后重试') ?>'));
         })
         .finally(function() {
             submitting = false;

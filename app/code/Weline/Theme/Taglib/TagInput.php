@@ -184,6 +184,16 @@ if (disabled) {
 let tags = [];
 let activeIndex = -1;
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(text ?? '')));
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 // 防抖函数
 const debounce = (fn, delay) => {
     let timer = null;
@@ -239,7 +249,7 @@ function removeTag(index) {
 function renderTags() {
     tagsContainer.innerHTML = tags.map((tag, idx) => {
         return '<span class="w-tag-input-tag">' +
-            '<span class="w-tag-input-tag-text" title="' + tag + '">' + tag + '</span>' +
+            '<span class="w-tag-input-tag-text" title="' + escapeAttr(tag) + '">' + escapeHtml(tag) + '</span>' +
             '<span class="w-tag-input-tag-remove" data-index="' + idx + '" title="{$t_remove}">&times;</span>' +
             '</span>';
     }).join('');
@@ -257,7 +267,7 @@ function renderTags() {
 function updateHiddenFields() {
     const name = fieldName.endsWith('[]') ? fieldName : fieldName + '[]';
     hiddenContainer.innerHTML = tags.map(tag => {
-        return '<input type="hidden" name="' + name + '" value="' + tag.replace(/"/g, '&quot;') + '">';
+        return '<input type="hidden" name="' + escapeAttr(name) + '" value="' + escapeAttr(tag) + '">';
     }).join('');
     
     // 触发change事件
@@ -287,8 +297,8 @@ function showSuggestions(items) {
     }
     
     suggestionsContainer.innerHTML = items.slice(0, 10).map((item, idx) => {
-        const text = typeof item === 'string' ? item : (item.label || item.name || item.value || '');
-        return '<div class="w-tag-input-suggestion" data-value="' + text + '" data-index="' + idx + '">' + text + '</div>';
+        const text = String(typeof item === 'string' ? item : (item.label || item.name || item.value || ''));
+        return '<div class="w-tag-input-suggestion" data-value="' + escapeAttr(text) + '" data-index="' + idx + '">' + escapeHtml(text) + '</div>';
     }).join('');
     
     suggestionsContainer.style.display = 'block';

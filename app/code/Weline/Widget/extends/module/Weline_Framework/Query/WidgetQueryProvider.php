@@ -5,6 +5,7 @@ namespace Weline\Widget\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Service\ThemePlaceableRegistry;
+use Weline\Widget\Service\AiWidgetGenerationService;
 use Weline\Widget\Service\WidgetConfigService;
 use Weline\Widget\Service\WidgetListService;
 use Weline\Widget\Service\WidgetPreviewService;
@@ -16,6 +17,7 @@ class WidgetQueryProvider implements QueryProviderInterface
         private readonly WidgetConfigService $configService,
         private readonly WidgetPreviewService $previewService,
         private readonly ThemePlaceableRegistry $placeableRegistry,
+        private readonly AiWidgetGenerationService $aiWidgetGenerationService,
     ) {
     }
 
@@ -56,6 +58,7 @@ class WidgetQueryProvider implements QueryProviderInterface
             ),
             'preview' => $this->renderPreview($params),
             'getRegisteredTypes' => $this->configService->getRegisteredTypes(),
+            'generateAiWidget' => $this->aiWidgetGenerationService->generate($params),
             default => throw new \InvalidArgumentException((string)__('Widget 查询器不支持的 operation：%{1}', $operation)),
         };
     }
@@ -162,6 +165,19 @@ class WidgetQueryProvider implements QueryProviderInterface
                     'name' => 'getRegisteredTypes',
                     'description' => __('获取已注册的 ParamType 类型名列表'),
                     'params' => [],
+                ],
+                [
+                    'name' => 'generateAiWidget',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'description' => __('根据目标 slot 协议生成 AI Widget 并保存为普通 Widget'),
+                    'params' => [
+                        ['name' => 'prompt', 'type' => 'string', 'required' => true, 'description' => __('生成要求')],
+                        ['name' => 'generation_context', 'type' => 'array', 'required' => true, 'description' => __('生成上下文')],
+                        ['name' => 'placement_target', 'type' => 'array', 'required' => true, 'description' => __('放置目标')],
+                        ['name' => 'desired_type', 'type' => 'string', 'required' => false, 'description' => __('期望部件类型')],
+                        ['name' => 'model_code', 'type' => 'string|null', 'required' => false, 'description' => __('模型代码')],
+                    ],
                 ],
             ],
         ];

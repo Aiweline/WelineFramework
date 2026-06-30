@@ -1,11 +1,13 @@
 ---
 name: queue
-description: WelineFramework queue diagnostics and operations guide. Use when working on Weline\Queue, PageBuilder queue/SSE flows, queue CLI commands, queue registration, queue_id/biz_key lookups, w_query('queue', ...) CRUD/stat queries, or failures involving queue:collect, queue:run, QueueInterface, AiSitePlanQueue, AiSiteTaskPlanQueue, or AiSiteBuildQueue.
+description: WelineFramework queue diagnostics and operations guide. Use when working on Weline\Queue, queue CLI commands, queue registration, queue_id/biz_key lookups, w_query('queue', ...) CRUD/stat queries, or failures involving queue:collect, queue:run, QueueInterface, and framework queue rows.
 ---
 
 # Queue
 
-Use this skill for WelineFramework queue inspection, repair, and operation. Prefer the framework query provider and queue CLI over direct database poking unless source-level diagnosis requires model internals.
+Use this skill for WelineFramework queue inspection, repair, and operation in this source repository. Prefer the framework query provider and queue CLI over direct database poking unless source-level diagnosis requires model internals.
+
+GuoLaiRen vendor queue knowledge, including PageBuilder queues, has moved with `app/code/GuoLaiRen` to `E:\公司\远程\src\weline`. If a task mentions GuoLaiRen queues, switch to the target repository and use its GuoLaiRen, PageBuilder, and queue skills there.
 
 ## First Pass
 
@@ -15,14 +17,8 @@ Use this skill for WelineFramework queue inspection, repair, and operation. Pref
    - `app/code/Weline/Queue/Console/Queue/Run.php`
    - `app/code/Weline/Queue/Console/Queue/Type/Listing.php`
    - `app/code/Weline/Queue/Model/Queue.php`
-2. For PageBuilder queue work, also inspect:
-   - `app/code/GuoLaiRen/PageBuilder/Queue/AiSitePlanQueue.php`
-   - `app/code/GuoLaiRen/PageBuilder/Queue/AiSiteTaskPlanQueue.php`
-   - `app/code/GuoLaiRen/PageBuilder/Queue/AiSiteBuildQueue.php`
-   - `app/code/GuoLaiRen/PageBuilder/Http/Sse/QueueDbWriter.php`
-3. Use `w_query('queue', ...)` for runtime queue reads and business-level writes. Direct DB reads can miss framework casting, EAV/model behavior, event dispatching, and current query-provider semantics.
-4. Preserve side-effect boundaries. `stats`, `get`, `getByBizKey`, `list`, `getTypeIdByClass`, and `queue:type:listing` are diagnostic. `create`, `update`, `delete`, `queue:collect`, and `queue:run` change state or execute work.
-5. PageBuilder queue execution is system-scheduler owned. Controllers, SSE endpoints, observers, recovery helpers, and browser-triggered flows must create or update queue rows only; they must not call `queue:run`, spawn PHP queue workers, call `Weline\Cron\Helper\Process::create`, or otherwise self-dispatch queues. Violating this can run long AI work inside the wrong worker/request lifecycle and cause OOM.
+2. Use `w_query('queue', ...)` for runtime queue reads and business-level writes. Direct DB reads can miss framework casting, EAV/model behavior, event dispatching, and current query-provider semantics.
+3. Preserve side-effect boundaries. `stats`, `get`, `getByBizKey`, `list`, `getTypeIdByClass`, and `queue:type:listing` are diagnostic. `create`, `update`, `delete`, `queue:collect`, and `queue:run` change state or execute work.
 
 ## Queue CLI
 
@@ -36,8 +32,8 @@ Collect queue types from modules into `weline_queue_type`. Run this after adding
 
 ```powershell
 php bin/w queue:type:listing
-php bin/w queue:type:listing PageBuilder
-php bin/w queue:type:listing AiSitePlanQueue
+php bin/w queue:type:listing ExampleQueue
+php bin/w queue:type:listing Vendor_Module
 ```
 
 List registered queue types. Extra arguments are search terms matched against name, module, and class.
@@ -48,16 +44,13 @@ php bin/w queue:run --id=77 -f
 php bin/w queue:run --id=77 --force
 ```
 
-Run one queue item by `weline_queue.queue_id`. `--id` is the queue primary key, not a PageBuilder `session_id`.
-
-Do not use `queue:run` as the normal PageBuilder test path. PageBuilder plan/task/build queues are expected to be picked up by the system scheduler, usually within about one minute. In PageBuilder workflows, create or reset the queue to `pending` and observe it through `w_query`, SSE, or polling instead of starting it manually.
+Run one queue item by `weline_queue.queue_id`.
 
 Use `-f/--force` only when intentionally taking over or rebuilding the same queue item. Current behavior:
 
 - If the same queue is marked `running`, force mode terminates the old same-ID process before continuing.
 - It injects `_force_rebuild=1` into queue content when content is JSON.
 - It clears previous `result` and `process` so new logs are readable.
-- PageBuilder plan/task/build queues use force mode to change execution tokens and avoid `duplicate_stream` short-circuit behavior.
 
 Do not cite `queue:status` as a real command unless the current source contains a command class for it.
 
@@ -78,25 +71,25 @@ php -r "require __DIR__ . '/app/bootstrap.php'; print_r(w_query('queue', 'get', 
 Find latest queue by business key:
 
 ```powershell
-php -r "require __DIR__ . '/app/bootstrap.php'; print_r(w_query('queue', 'getByBizKey', ['biz_key' => 'site:abc:plan']));"
+php -r "require __DIR__ . '/app/bootstrap.php'; print_r(w_query('queue', 'getByBizKey', ['biz_key' => 'example:1']));"
 ```
 
-List recent PageBuilder queues without dumping huge AI stream logs:
+List recent queues without dumping huge stream logs:
 
 ```powershell
-php -r "require __DIR__ . '/app/bootstrap.php'; $r=w_query('queue','list',['module'=>'GuoLaiRen_PageBuilder','page_size'=>10]); foreach($r['items'] as $it){ $row=is_object($it)&&method_exists($it,'getData')?$it->getData():$it; echo json_encode(['queue_id'=>$row['queue_id']??null,'status'=>$row['status']??null,'name'=>$row['name']??null,'biz_key'=>$row['biz_key']??null], JSON_UNESCAPED_UNICODE), PHP_EOL; }"
+php -r "require __DIR__ . '/app/bootstrap.php'; $r=w_query('queue','list',['page_size'=>10]); foreach($r['items'] as $it){ $row=is_object($it)&&method_exists($it,'getData')?$it->getData():$it; echo json_encode(['queue_id'=>$row['queue_id']??null,'status'=>$row['status']??null,'module'=>$row['module']??null,'name'=>$row['name']??null,'biz_key'=>$row['biz_key']??null], JSON_UNESCAPED_UNICODE), PHP_EOL; }"
 ```
 
 Filter by status or search text:
 
 ```powershell
-php -r "require __DIR__ . '/app/bootstrap.php'; $r=w_query('queue','list',['status'=>'error','q'=>'第一阶段','page_size'=>20]); foreach($r['items'] as $it){ $row=is_object($it)&&method_exists($it,'getData')?$it->getData():$it; echo ($row['queue_id']??'') . ' ' . ($row['status']??'') . ' ' . ($row['name']??'') . PHP_EOL; }"
+php -r "require __DIR__ . '/app/bootstrap.php'; $r=w_query('queue','list',['status'=>'error','q'=>'example','page_size'=>20]); foreach($r['items'] as $it){ $row=is_object($it)&&method_exists($it,'getData')?$it->getData():$it; echo ($row['queue_id']??'') . ' ' . ($row['status']??'') . ' ' . ($row['name']??'') . PHP_EOL; }"
 ```
 
 Resolve a type id by class:
 
 ```powershell
-php -r "require __DIR__ . '/app/bootstrap.php'; var_export(w_query('queue','getTypeIdByClass',['class'=>'GuoLaiRen\\PageBuilder\\Queue\\AiSitePlanQueue']));"
+php -r "require __DIR__ . '/app/bootstrap.php'; var_export(w_query('queue','getTypeIdByClass',['class'=>'Vendor\\Module\\Queue\\ExampleQueue']));"
 ```
 
 Create a queue through the provider:
@@ -134,34 +127,6 @@ Use `force => true` only when the queue is running and deletion is explicitly in
 
 Valid statuses are `pending`, `running`, `done`, `error`, and `stop`.
 
-## PageBuilder Queue Notes
-
-Registered PageBuilder queue implementations:
-
-- `GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue`: stage-one plan generation.
-- `GuoLaiRen\PageBuilder\Queue\AiSiteTaskPlanQueue`: stage-two task-plan generation.
-- `GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue`: site build execution.
-
-`GuoLaiRen\PageBuilder\Queue\AiSiteAgentForQueue` is a static helper/factory, not a `QueueInterface` implementation. Do not treat every class under `Queue/` as executable queue type.
-
-PageBuilder queues write lifecycle/progress logs into `weline_queue.result` and sometimes `process` through `w_query('queue', 'update', ...)` and `QueueDbWriter`. When diagnosing SSE or background progress, inspect the queue row and the session scope together; SSE should display telemetry, not become a separate execution engine.
-
-For PageBuilder reruns, prefer scheduler-safe recovery:
-
-1. Find the real `queue_id` with `w_query('queue','list', ...)` or `getByBizKey`.
-2. Inspect the queue row and logs.
-3. If the queue should retry, update or recreate the row as `pending`, `pid=0`, `finished=0`, with an operator-visible `process` such as `等待系统定时任务调度，通常约 1 分钟内开始执行。`.
-4. Wait at least one scheduler interval, usually about one minute, then re-read the queue row and session scope.
-5. Do not run `php bin/w queue:run --id=<queue_id>` or `-f` for PageBuilder normal flow validation unless the user explicitly asks for a manual scheduler bypass. If such a bypass is requested, call out that it is not the production path and can mask controller/SSE dispatch bugs.
-
-When fixing PageBuilder code, treat direct queue execution as a bug:
-
-- Start endpoints such as `post-start-plan`, `post-start-task-plan`, and `post-start-build` should create the queue row and return queue metadata only. They must not start, probe, heal, reset, or otherwise manage queue execution.
-- Block-level AI operations follow the same rule: refine, rebuild, create, delete, regenerate, or multi-block partial rebuild must enqueue work with explicit scope metadata such as `stage`, `page_key` / `page_type`, `block_key`, `task_key`, `bucket`, `target_scope`, and operation details. The queue may target a single block or a small set of blocks, but execution still belongs to the system scheduler.
-- SSE observers should wait, poll, and display `pending` / `running` / `done` / `error`; while `pending`, `queued`, or `running` with `pid<=0`, they should tell the user the system scheduler will usually dispatch within about one minute and that the current progress window can be closed while they continue other work.
-- Controller/SSE recovery paths must not self-heal queue execution. If an operator or backend recovery flow intentionally retries work, it should create or update the queue row/state and then wait for the system scheduler; it still must not launch a worker from the request lifecycle.
-- Queue classes may execute work only when invoked by the framework queue runner/system scheduler.
-
 ## Validation
 
 After queue registration or QueueInterface filtering changes:
@@ -169,7 +134,7 @@ After queue registration or QueueInterface filtering changes:
 ```powershell
 php -l app/code/Weline/Queue/Helper/Helper.php
 php bin/w queue:collect
-php bin/w queue:type:listing PageBuilder
+php bin/w queue:type:listing
 ```
 
 After command behavior changes:
@@ -179,5 +144,3 @@ php bin/w queue:run --help
 php bin/w queue:collect --help
 php bin/w queue:type:listing --help
 ```
-
-For PageBuilder queue fixes, add or run targeted PageBuilder unit/integration tests when available, then verify with `w_query('queue','stats')` or a focused `list` query. Avoid notification-capable unrelated queue flows unless the user explicitly asks.

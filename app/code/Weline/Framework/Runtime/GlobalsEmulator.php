@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 
@@ -69,14 +70,36 @@ class GlobalsEmulator
             'SERVER_SOFTWARE',
             'SERVER_PROTOCOL',
             'SERVER_ADMIN',
+            'WLS_INSTANCE',
+            'WLS_INSTANCE_NAME',
+            'WLS_WORKER_ID',
+            'WLS_PORT',
+            'WLS_REQUEST_COUNT',
+            'WLS_PROCESS_TAG',
             'argc',
             'argv',
+        ];
+        $requestScopedKeys = [
+            'WLS_INTERNAL_WARMUP',
+            'WLS_INTERNAL_DYNAMIC_WARMUP',
+            'WLS_INTERNAL_BACKEND_WARMUP',
+            'WLS_INTERNAL_BACKEND_WARMUP_USER_ID',
+            'WLS_FPC_BYPASS',
         ];
 
         $server = [];
         foreach ($keepKeys as $key) {
-            if (isset($_SERVER[$key])) {
+            $requestValue = \method_exists($request, 'getServer') ? $request->getServer($key) : null;
+            if ($requestValue !== null && $requestValue !== '') {
+                $server[$key] = $requestValue;
+            } elseif (isset($_SERVER[$key])) {
                 $server[$key] = $_SERVER[$key];
+            }
+        }
+        foreach ($requestScopedKeys as $key) {
+            $requestValue = \method_exists($request, 'getServer') ? $request->getServer($key) : null;
+            if ($requestValue !== null && $requestValue !== '') {
+                $server[$key] = $requestValue;
             }
         }
 
@@ -110,6 +133,7 @@ class GlobalsEmulator
         $server['WELINE_AREA_ROUTE'] = '';
         $server['WELINE_WEBSITE_URL'] = '';
         $server['WELINE_URL_PARSED'] = false;
+        $this->applyCookieRouteVariant($server);
 
         foreach ($request->getHeaders() as $name => $value) {
             $serverKey = 'HTTP_' . \strtoupper(\str_replace('-', '_', (string)$name));
@@ -127,6 +151,19 @@ class GlobalsEmulator
         );
 
         return $server;
+    }
+
+    private function applyCookieRouteVariant(array &$server): void
+    {
+        $lang = (string)($_COOKIE['WELINE_USER_LANG'] ?? $_COOKIE['WELINE-WEBSITE-LANG'] ?? '');
+        if ($lang !== '') {
+            $server['WELINE_USER_LANG'] = \str_replace('-', '_', \trim($lang));
+        }
+
+        $currency = \strtoupper(\trim((string)($_COOKIE['WELINE_USER_CURRENCY'] ?? $_COOKIE['WELINE_WEBSITE_CURRENCY'] ?? '')));
+        if ($currency !== '' && State::isAllowedCurrencyCode($currency)) {
+            $server['WELINE_USER_CURRENCY'] = $currency;
+        }
     }
 
     public function reset(): void
@@ -151,6 +188,12 @@ class GlobalsEmulator
             'SERVER_SOFTWARE',
             'SERVER_PROTOCOL',
             'SERVER_ADMIN',
+            'WLS_INSTANCE',
+            'WLS_INSTANCE_NAME',
+            'WLS_WORKER_ID',
+            'WLS_PORT',
+            'WLS_REQUEST_COUNT',
+            'WLS_PROCESS_TAG',
             'argc',
             'argv',
         ];

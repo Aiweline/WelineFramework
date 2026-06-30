@@ -6,11 +6,9 @@ namespace Weline\Seo\Cron;
 
 use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Seo\Model\SeoAccount;
-use Weline\Seo\Model\SeoWebsiteAccount;
 use Weline\Seo\Model\SeoWebsiteStats;
-use Weline\Seo\Service\SitemapAdapterRegistry;
-use Weline\Websites\Model\Website;
+use Weline\Seo\Service\SeoWebsiteAccountBindingService;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 
 /**
  * SEO 统计数据同步任务
@@ -47,23 +45,15 @@ class StatsSync implements CronTaskInterface
     public function execute(): string
     {
         try {
-            /** @var SitemapAdapterRegistry $adapterRegistry */
-            $adapterRegistry = ObjectManager::getInstance(SitemapAdapterRegistry::class);
-            
-            /** @var SeoWebsiteAccount $websiteAccountModel */
-            $websiteAccountModel = ObjectManager::getInstance(SeoWebsiteAccount::class);
-            
-            /** @var SeoAccount $seoAccountModel */
-            $seoAccountModel = ObjectManager::getInstance(SeoAccount::class);
-            
-            /** @var Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(Website::class);
-            
+            /** @var SeoWebsiteAccountBindingService $bindingService */
+            $bindingService = ObjectManager::getInstance(SeoWebsiteAccountBindingService::class);
+            /** @var SeoWebsiteDirectory $websiteDirectory */
+            $websiteDirectory = ObjectManager::getInstance(SeoWebsiteDirectory::class);
             /** @var SeoWebsiteStats $statsModel */
             $statsModel = ObjectManager::getInstance(SeoWebsiteStats::class);
             
             // 获取所有站点-账户绑定关系
-            $allBindings = $websiteAccountModel->reset()->select()->fetchArray();
+            $allBindings = $bindingService->getStatsAccounts();
             
             if (empty($allBindings)) {
                 return '没有站点-账户绑定关系，跳过统计同步';
@@ -74,43 +64,36 @@ class StatsSync implements CronTaskInterface
             $skippedCount = 0;
             $messages = [];
             
-            foreach ($allBindings as $binding) {
-                $websiteId = (int)($binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
-                $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
+            foreach ($allBindings as $bindingInfo) {
+                $websiteId = (int)($bindingInfo['website_id'] ?? 0);
+                $accountId = (int)($bindingInfo['account_id'] ?? 0);
                 
                 if ($websiteId <= 0 || $accountId <= 0) {
                     continue;
                 }
-                
-                // 加载账户信息
-                $account = $seoAccountModel->reset()->load($accountId);
-                if (!$account->getId() || !$account->isActive()) {
-                    $skippedCount++;
-                    continue;
-                }
-                
+
                 // 获取平台代码
-                $platform = $account->getPlatform();
+                $platform = (string)($bindingInfo['platform_code'] ?? '');
                 if (empty($platform)) {
                     $skippedCount++;
                     continue;
                 }
                 
                 // 获取适配器
-                $adapter = $adapterRegistry->getAdapter($platform);
-                if (!$adapter || !$adapter->supportsStats()) {
+                $adapter = $bindingInfo['adapter'] ?? null;
+                if ($adapter === null || !$adapter->supportsStats()) {
                     $skippedCount++;
                     continue;
                 }
                 
                 // 加载站点信息
-                $website = $websiteModel->reset()->load($websiteId);
-                if (!$website->getId()) {
+                $website = $websiteDirectory->getWebsiteById($websiteId);
+                if ($website === null) {
                     $skippedCount++;
                     continue;
                 }
                 
-                $siteUrl = $website->getData('url') ?: '';
+                $siteUrl = (string)($website['url'] ?? '');
                 if (empty($siteUrl)) {
                     $skippedCount++;
                     continue;
@@ -118,7 +101,7 @@ class StatsSync implements CronTaskInterface
                 
                 // 获取账户配置
                 $accountConfig = [
-                    'config' => $account->getConfigArray(),
+                    'config' => (array)($bindingInfo['account_config'] ?? []),
                 ];
                 
                 // 调用适配器获取统计数据
@@ -135,8 +118,8 @@ class StatsSync implements CronTaskInterface
                         $messages[] = sprintf(
                             '[%s] %s (%s): 索引 %d, 点击 %d, 展示 %d',
                             $platform,
-                            $website->getData('name'),
-                            $account->getData('name'),
+                            (string)($website['name'] ?? ''),
+                            (string)($bindingInfo['account']['name'] ?? ''),
                             $result['data']['indexed_pages'] ?? 0,
                             $result['data']['clicks'] ?? 0,
                             $result['data']['impressions'] ?? 0
@@ -146,7 +129,7 @@ class StatsSync implements CronTaskInterface
                         $messages[] = sprintf(
                             '[%s] %s: 获取失败 - %s',
                             $platform,
-                            $website->getData('name'),
+                            (string)($website['name'] ?? ''),
                             $result['message'] ?? '未知错误'
                         );
                     }
@@ -155,7 +138,7 @@ class StatsSync implements CronTaskInterface
                     $messages[] = sprintf(
                         '[%s] %s: 异常 - %s',
                         $platform,
-                        $website->getData('name'),
+                        (string)($website['name'] ?? ''),
                         $e->getMessage()
                     );
                 }

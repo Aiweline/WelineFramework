@@ -24,6 +24,16 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_w_api_user_user_agent_restriction_enabled', columns: ['user_agent_restriction_enabled'], comment: 'UA限制')]
 class ApiUser extends Model
 {
+    public const DEFAULT_TOKEN_EXPIRE_TIME = 604800;
+    public const DEFAULT_REFRESH_TOKEN_EXPIRE_TIME = 2592000;
+    public const DEFAULT_IS_ENABLED = 1;
+    public const DEFAULT_IS_DELETED = 0;
+    public const DEFAULT_IP_WHITELIST_ENABLED = 0;
+    public const DEFAULT_ALLOWED_IPS = '';
+    public const DEFAULT_USER_AGENT_RESTRICTION_ENABLED = 0;
+    public const DEFAULT_ALLOWED_USER_AGENTS = '';
+    public const DEFAULT_IS_SANDBOX = 0;
+
     public const fields_ID = 'user_id';
     public string $table = 'm_api_user';
     /** 主键列名，避免 Schema 解析时把父类 id 一并建表导致 PostgreSQL 报 multiple primary keys */
@@ -41,24 +51,28 @@ class ApiUser extends Model
     public const schema_fields_api_key = 'api_key';
     #[Col(type: 'varchar', length: 255, nullable: false, comment: 'API Secret')]
     public const schema_fields_api_secret = 'api_secret';
-    #[Col(type: 'integer', length: 11, nullable: false, comment: '访问令牌有效期')]
+    #[Col(type: 'integer', length: 11, nullable: false, default: 604800, comment: '访问令牌有效期')]
     public const schema_fields_token_expire_time = 'token_expire_time';
-    #[Col(type: 'integer', length: 11, nullable: false, comment: '刷新令牌有效期')]
+    #[Col(type: 'integer', length: 11, nullable: false, default: 2592000, comment: '刷新令牌有效期')]
     public const schema_fields_refresh_token_expire_time = 'refresh_token_expire_time';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: 1, comment: '是否启用')]
     public const schema_fields_is_enabled = 'is_enabled';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否删除')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: 0, comment: '是否删除')]
     public const schema_fields_is_deleted = 'is_deleted';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用IP白名单')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: 0, comment: '是否启用IP白名单')]
     public const schema_fields_ip_whitelist_enabled = 'ip_whitelist_enabled';
-    #[Col(type: 'varchar', length: 255, nullable: false, comment: '允许的IP地址列表')]
+    #[Col(type: 'varchar', length: 255, nullable: false, default: '', comment: '允许的IP地址列表')]
     public const schema_fields_allowed_ips = 'allowed_ips';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用用户代理限制')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: 0, comment: '是否启用用户代理限制')]
     public const schema_fields_user_agent_restriction_enabled = 'user_agent_restriction_enabled';
-    #[Col(type: 'varchar', length: 255, nullable: false, comment: '允许的用户代理列表')]
+    #[Col(type: 'varchar', length: 255, nullable: false, default: '', comment: '允许的用户代理列表')]
     public const schema_fields_allowed_user_agents = 'allowed_user_agents';
-    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否沙盒账户')]
+    #[Col(type: 'integer', length: 1, nullable: false, default: 0, comment: '是否沙盒账户')]
     public const schema_fields_is_sandbox = 'is_sandbox';
+    #[Col(type: 'datetime', nullable: false, comment: 'Created at')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col(type: 'datetime', nullable: false, comment: 'Updated at')]
+    public const schema_fields_updated_at = 'updated_at';
 
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'username', 'email', 'api_key'];
@@ -435,19 +449,40 @@ class ApiUser extends Model
      */
     public function save_before()
     {
+        foreach ($this->defaultBootstrapValues() as $field => $default) {
+            if ($this->getData($field) === null) {
+                $this->setData($field, $default);
+            }
+        }
+
         // 如果是新用户且没有API Key，自动生成
         if (!$this->getId() && empty($this->getApiKey())) {
             $this->autoGenerateApiCredentials();
         }
         
         // 设置更新时间
-        $this->setData('updated_at', date('Y-m-d H:i:s'));
+        $this->setData(self::schema_fields_updated_at, date('Y-m-d H:i:s'));
         
         // 如果是新用户，设置创建时间
         if (!$this->getId()) {
-            $this->setData('created_at', date('Y-m-d H:i:s'));
+            $this->setData(self::schema_fields_created_at, date('Y-m-d H:i:s'));
         }
         
         parent::save_before();
+    }
+
+    private function defaultBootstrapValues(): array
+    {
+        return [
+            self::schema_fields_token_expire_time => self::DEFAULT_TOKEN_EXPIRE_TIME,
+            self::schema_fields_refresh_token_expire_time => self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME,
+            self::schema_fields_is_enabled => self::DEFAULT_IS_ENABLED,
+            self::schema_fields_is_deleted => self::DEFAULT_IS_DELETED,
+            self::schema_fields_ip_whitelist_enabled => self::DEFAULT_IP_WHITELIST_ENABLED,
+            self::schema_fields_allowed_ips => self::DEFAULT_ALLOWED_IPS,
+            self::schema_fields_user_agent_restriction_enabled => self::DEFAULT_USER_AGENT_RESTRICTION_ENABLED,
+            self::schema_fields_allowed_user_agents => self::DEFAULT_ALLOWED_USER_AGENTS,
+            self::schema_fields_is_sandbox => self::DEFAULT_IS_SANDBOX,
+        ];
     }
 }

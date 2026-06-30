@@ -5,20 +5,18 @@ declare(strict_types=1);
 namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locals;
 
-/**
- * I18n 模块查询器
- *
- * 提供已安装语言列表等查询能力，供主题编辑器等模块通过 Weline_I18n::query 调用。
- */
 class I18nQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly I18n $i18n,
-        private readonly Locals $localsModel
+        private readonly Locals $localsModel,
+        private readonly Dictionary $dictionary
     ) {
     }
 
@@ -33,14 +31,13 @@ class I18nQueryProvider implements QueryProviderInterface
             'getInstalledLocales' => $this->getInstalledLocales($params),
             'getLocaleByCode' => $this->getLocaleByCode($params),
             'getLocaleName' => $this->getLocaleName($params),
-            default => throw new \InvalidArgumentException((string)__('I18n 查询器不支持的 operation：%{1}', $operation)),
+            'getTranslations' => $this->getTranslations($params),
+            'collect' => $this->collect($params),
+            default => throw new \InvalidArgumentException((string)__('Unsupported i18n operation: %{1}', $operation)),
         };
     }
 
     /**
-     * 获取已安装语言列表（含 SVG 国旗）
-     *
-     * @param array $params display_locale_code, width, height, installed
      * @return list<array{code: string, name: string, flag: string}>
      */
     private function getInstalledLocales(array $params): array
@@ -55,25 +52,18 @@ class I18nQueryProvider implements QueryProviderInterface
         $list = [];
         foreach ($raw as $code => $info) {
             $list[] = [
-                'code' => $code,
-                'name' => $info['name'] ?? $code,
-                'flag' => $info['flag'] ?? '',
+                'code' => (string)$code,
+                'name' => (string)($info['name'] ?? $code),
+                'flag' => (string)($info['flag'] ?? ''),
             ];
         }
         return $list;
     }
 
-    /**
-     * 根据语言代码获取 Locale 信息
-     *
-     * @param array $params code, target_code (可选)
-     * @return array|null {code, name, ...} 或 null
-     */
     private function getLocaleByCode(array $params): ?array
     {
         $code = (string)($params['code'] ?? '');
         $targetCode = (string)($params['target_code'] ?? $code);
-
         if ($code === '') {
             return null;
         }
@@ -98,11 +88,6 @@ class I18nQueryProvider implements QueryProviderInterface
         ];
     }
 
-    /**
-     * 根据语言代码获取显示名称
-     *
-     * @param array $params code, display_locale_code (可选)
-     */
     private function getLocaleName(array $params): string
     {
         $code = (string)($params['code'] ?? '');
@@ -113,36 +98,173 @@ class I18nQueryProvider implements QueryProviderInterface
         return $this->i18n->getLocaleName($code, $displayLocale);
     }
 
+    private function getTranslations(array $params): array
+    {
+        $words = $params['words'] ?? [];
+        if (!\is_array($words)) {
+            $words = [];
+        }
+
+        $allWords = Parser::getWords();
+        $translations = [];
+        foreach ($words as $word) {
+            if (!\is_string($word) || $word === '') {
+                continue;
+            }
+            $translations[$word] = isset($allWords[$word]) && \is_string($allWords[$word])
+                ? $allWords[$word]
+                : $word;
+        }
+
+        return [
+            'dictionary' => $translations,
+            'translations' => $translations,
+        ];
+    }
+
+    private function collect(array $params): array
+    {
+        $words = $params['words'] ?? [];
+        if (!\is_array($words) || $words === []) {
+            return [
+                'success' => true,
+                'message' => (string)__('No frontend translation words to collect.'),
+                'count' => 0,
+            ];
+        }
+
+        $module = (string)($params['module'] ?? 'Weline_I18n');
+        if ($module === '') {
+            $module = 'Weline_I18n';
+        }
+
+        $collectData = [];
+        foreach ($words as $key => $_word) {
+            if (!\is_string($key) || $key === '') {
+                continue;
+            }
+            $collectData[] = [
+                Dictionary::schema_fields_WORD => $key,
+                Dictionary::schema_fields_IS_BACKEND => 0,
+                Dictionary::schema_fields_MODULE => \substr($module, 0, 255),
+            ];
+        }
+
+        if ($collectData === []) {
+            return [
+                'success' => true,
+                'message' => (string)__('No frontend translation words to collect.'),
+                'count' => 0,
+            ];
+        }
+
+        $created = 0;
+        try {
+            foreach ($collectData as $row) {
+                $dictionary = clone $this->dictionary;
+                $dictionary->clear()
+                    ->load(Dictionary::schema_fields_WORD, $row[Dictionary::schema_fields_WORD]);
+
+                if ($dictionary->getId()) {
+                    continue;
+                }
+
+                $dictionary->getQuery()
+                    ->clearQuery()
+                    ->insert($row, [], '', true)
+                    ->fetch();
+                $created++;
+            }
+        } catch (\Throwable $exception) {
+            w_log_error('Frontend worker i18n collect failed: ' . $exception->getMessage(), [], 'i18n');
+            throw $exception;
+        }
+
+        return [
+            'success' => true,
+            'message' => (string)__('Collected frontend translation words.'),
+            'count' => \count($collectData),
+            'created' => $created,
+        ];
+    }
+
     public function getDescriptor(): array
     {
         return [
             'provider' => 'i18n',
-            'name' => __('I18n 国际化查询'),
-            'description' => __('提供已安装语言列表等查询能力'),
+            'name' => __('I18n query provider'),
+            'description' => __('Provides locale and frontend translation operations.'),
             'module' => 'Weline_I18n',
             'operations' => [
                 [
                     'name' => 'getInstalledLocales',
-                    'description' => __('获取已安装语言列表（含名称与 SVG 国旗）'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 60,
+                    'description' => __('Get installed locales.'),
                     'params' => [
-                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'description' => __('显示名称所用语言代码，默认当前语言')],
-                        ['name' => 'width', 'type' => 'int', 'required' => false, 'description' => __('国旗宽度，默认 20')],
-                        ['name' => 'height', 'type' => 'int', 'required' => false, 'description' => __('国旗高度，默认 15')],
-                        ['name' => 'installed', 'type' => 'bool', 'required' => false, 'description' => __('仅已安装语言，默认 true')],
+                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                        ['name' => 'width', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
+                        ['name' => 'height', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
+                        ['name' => 'installed', 'type' => 'bool', 'required' => false],
                     ],
+                    'returns' => ['type' => 'array'],
                 ],
                 [
                     'name' => 'getLocaleByCode',
-                    'description' => __('根据语言代码获取 Locale 信息'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 60,
+                    'description' => __('Get locale by code.'),
                     'params' => [
-                        ['name' => 'code', 'type' => 'string', 'required' => true],
-                        ['name' => 'target_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'code', 'type' => 'string', 'required' => true, 'max_length' => 32],
+                        ['name' => 'target_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
+                    'returns' => ['type' => 'array'],
                 ],
                 [
                     'name' => 'getLocaleName',
-                    'description' => __('根据语言代码获取显示名称'),
-                    'params' => [['name' => 'code', 'type' => 'string', 'required' => true]],
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 60,
+                    'description' => __('Get locale display name.'),
+                    'params' => [
+                        ['name' => 'code', 'type' => 'string', 'required' => true, 'max_length' => 32],
+                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                    ],
+                    'returns' => ['type' => 'string'],
+                ],
+                [
+                    'name' => 'getTranslations',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'cache_ttl' => 60,
+                    'description' => __('Get frontend translation dictionary.'),
+                    'params' => [
+                        ['name' => 'words', 'type' => 'list', 'required' => false, 'max_items' => 200],
+                    ],
+                    'returns' => ['type' => 'array'],
+                ],
+                [
+                    'name' => 'collect',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'description' => __('Collect frontend translation words.'),
+                    'params' => [
+                        ['name' => 'words', 'type' => 'map', 'required' => true, 'max_items' => 200],
+                        ['name' => 'module', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                    ],
+                    'returns' => ['type' => 'array'],
                 ],
             ],
         ];

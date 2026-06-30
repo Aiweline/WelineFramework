@@ -13,7 +13,8 @@ namespace Weline\Currency\Data;
 
 use Weline\Currency\Helper\CurrencyFormatter;
 use Weline\Currency\Model\Currency;
-use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Currency\Model\Currency\LocalDescription;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -35,7 +36,8 @@ class CurrencyData
      */
     public static function getCurrencies(): array
     {
-        $cacheKey = 'all_currencies';
+        $localeCode = self::getLocaleCode();
+        $cacheKey = 'all_currencies_' . $localeCode;
         $cache = w_cache('currency');
         
         $cached = $cache->get($cacheKey);
@@ -47,9 +49,15 @@ class CurrencyData
         $currencyModel = ObjectManager::getInstance(Currency::class);
         
         $currencies = $currencyModel->clear()
-            ->where(Currency::schema_fields_STATUS, true)
+            ->loadLocalDescription($localeCode, LocalDescription::class)
+            ->where('main_table.' . Currency::schema_fields_STATUS, true)
             ->select()
             ->fetchArray();
+
+        foreach ($currencies as &$currency) {
+            $currency = self::applyLocalDescription($currency);
+        }
+        unset($currency);
         
         $cache->set($cacheKey, $currencies, self::CACHE_TTL);
         
@@ -64,7 +72,8 @@ class CurrencyData
      */
     public static function getCurrency(string $currencyCode): ?array
     {
-        $cacheKey = 'currency_' . strtoupper($currencyCode);
+        $localeCode = self::getLocaleCode();
+        $cacheKey = 'currency_' . strtoupper($currencyCode) . '_' . $localeCode;
         $cache = w_cache('currency');
         
         $cached = $cache->get($cacheKey);
@@ -76,7 +85,8 @@ class CurrencyData
         $currencyModel = ObjectManager::getInstance(Currency::class);
         
         $currency = $currencyModel->clear()
-            ->where(Currency::schema_fields_CODE, strtoupper($currencyCode))
+            ->loadLocalDescription($localeCode, LocalDescription::class)
+            ->where('main_table.' . Currency::schema_fields_CODE, strtoupper($currencyCode))
             ->find()
             ->fetch();
         
@@ -84,7 +94,7 @@ class CurrencyData
             return null;
         }
         
-        $data = $currency->getData();
+        $data = self::applyLocalDescription($currency->getData());
         $cache->set($cacheKey, $data, self::CACHE_TTL);
         
         return $data;
@@ -110,6 +120,23 @@ class CurrencyData
     public static function clearCache(): void
     {
         w_cache('currency')->clear();
+    }
+
+    private static function getLocaleCode(): string
+    {
+        $localeCode = trim(State::getLang());
+
+        return $localeCode !== '' ? $localeCode : 'zh_Hans_CN';
+    }
+
+    private static function applyLocalDescription(array $currency): array
+    {
+        $localName = trim((string)($currency['local_name'] ?? ''));
+        if ($localName !== '') {
+            $currency[Currency::schema_fields_NAME] = $localName;
+        }
+
+        return $currency;
     }
 }
 

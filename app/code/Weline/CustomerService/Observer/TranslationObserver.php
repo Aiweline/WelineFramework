@@ -35,7 +35,7 @@ class TranslationObserver implements ObserverInterface
      * @param Event $event
      * @return void
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         $data = $event->getData('data');
         

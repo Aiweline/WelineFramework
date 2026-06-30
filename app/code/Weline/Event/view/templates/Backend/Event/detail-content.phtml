@@ -13,7 +13,7 @@ $eventName = $this->getData('event_name') ?? '';
             <h2><?= htmlspecialchars($event['name'] ?? $eventName) ?></h2>
             <div class="event-code">
                 <code id="event-code-value"><?= htmlspecialchars($eventName) ?></code>
-                <button type="button" class="btn-copy" onclick="copyEventName()" title="复制事件名">
+                <button type="button" class="btn-copy" data-event-copy="1" title="复制事件名">
                     <i class="mdi mdi-content-copy"></i>
                 </button>
             </div>
@@ -519,6 +519,13 @@ code {
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-event-copy]');
+    if (!trigger) return;
+    event.preventDefault();
+    copyEventName();
+});
+
 function copyEventName() {
     const eventCode = document.getElementById('event-code-value');
     if (!eventCode) return;

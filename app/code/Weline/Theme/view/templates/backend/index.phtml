@@ -29,7 +29,7 @@ foreach ($themes as $themeItem) {
             <h4 class="mb-sm-0"><?= __('主题管理') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                    <li class="breadcrumb-item"><button type="button" class="btn btn-link p-0 border-0 align-baseline text-decoration-none breadcrumb-static-button" aria-disabled="true"><?= __('系统') ?></button></li>
                     <li class="breadcrumb-item active"><?= __('主题管理') ?></li>
                 </ol>
             </div>
@@ -84,9 +84,17 @@ foreach ($themes as $themeItem) {
                     </a>
                 </li>
             </ul>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="batchGeneratePreviews">
-                <i class="mdi mdi-camera-plus"></i> <?= __('批量生成预览图') ?>
-            </button>
+            <div class="weline-theme-manage__toolbar">
+                <button type="button"
+                        class="btn btn-sm btn-primary"
+                        id="openAiVirtualThemeModal"
+                        data-theme-id="<?= (int)($active_frontend_id ?: 0) ?>">
+                    <i class="mdi mdi-auto-fix"></i> <?= __('AI创建虚拟主题') ?>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="batchGeneratePreviews">
+                    <i class="mdi mdi-camera-plus"></i> <?= __('批量生成预览图') ?>
+                </button>
+            </div>
         </div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -134,7 +142,7 @@ foreach ($themes as $themeItem) {
                             <img src="<?= $hasPreview ? $previewImageSrc : '' ?>"
                                  alt="<?= __('主题预览') ?>"
                                  class="theme-preview-image<?= $hasPreview ? '' : ' d-none' ?>"
-                                 onerror="this.classList.add('d-none');var p=this.parentNode.querySelector('.theme-preview-placeholder');if(p){p.classList.remove('d-none');}">
+                                 data-fallback-target=".theme-preview-placeholder">
                             <div class="theme-preview-placeholder<?= $hasPreview ? ' d-none' : '' ?>">
                                 <i class="mdi mdi-image-outline theme-icon-placeholder"></i>
                                 <span class="text-muted small"><?= __('暂无预览图') ?></span>
@@ -195,6 +203,81 @@ foreach ($themes as $themeItem) {
             </div>
         </div>
     <?php endif; ?>
+</div>
+
+<!-- AI创建虚拟主题弹窗 -->
+<div class="modal fade" id="aiVirtualThemeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content theme-preview-modal ai-virtual-theme-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiVirtualThemeTitle"><?= __('AI创建虚拟主题') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="ai-virtual-theme-form">
+                    <div class="ai-virtual-theme-field">
+                        <label class="form-label" for="aiVirtualThemeBaseTheme"><?= __('参照主题') ?></label>
+                        <select class="form-select" id="aiVirtualThemeBaseTheme">
+                            <?php foreach ($themes as $themeOption):
+                                if (empty($themeOption['has_frontend'])) {
+                                    continue;
+                                }
+                                $optionThemeId = (int)($themeOption['id'] ?? 0);
+                                $optionThemeName = (string)($themeOption['name'] ?? '');
+                                $optionModuleName = (string)($themeOption['module_name'] ?? '');
+                            ?>
+                                <option value="<?= $optionThemeId ?>" <?= $optionThemeId === (int)($active_frontend_id ?: 0) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($optionThemeName . ($optionModuleName ? ' / ' . $optionModuleName : '')) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="ai-virtual-theme-scope">
+                        <i class="mdi mdi-auto-fix"></i>
+                        <span>
+                            <strong><?= __('固定调用 Theme AI 适配器') ?></strong>
+                            <small><?= __('自动对标参照主题全部默认布局类型生成虚拟主题草稿，不需要选择页面类型。') ?></small>
+                        </span>
+                    </div>
+                    <div class="ai-virtual-theme-field">
+                        <label class="form-label" for="aiVirtualThemeInstructions"><?= __('生成方向') ?></label>
+                        <textarea class="form-control" id="aiVirtualThemeInstructions" rows="3" placeholder="<?= __('例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。') ?>"></textarea>
+                    </div>
+                    <div class="ai-virtual-theme-grid">
+                        <div class="ai-virtual-theme-field">
+                            <label class="form-label"><?= __('技能') ?></label>
+                            <div class="ai-virtual-theme-choice-list" id="aiVirtualThemeSkills">
+                                <span class="text-muted small"><?= __('正在加载...') ?></span>
+                            </div>
+                        </div>
+                        <div class="ai-virtual-theme-field">
+                            <label class="form-label"><?= __('方向') ?></label>
+                            <div class="ai-virtual-theme-choice-list" id="aiVirtualThemeStyles">
+                                <label class="ai-virtual-theme-choice">
+                                    <input type="radio" name="ai_virtual_theme_style" value="" checked>
+                                    <span>
+                                        <strong><?= __('自动匹配') ?></strong>
+                                        <small><?= __('由 Theme AI 根据当前指令选择方向') ?></small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-light border mt-3 mb-0" id="aiVirtualThemeStatus">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= __('AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。') ?>
+                </div>
+                <div class="mt-3" id="aiVirtualThemeResult" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="createAiVirtualTheme">
+                    <i class="mdi mdi-auto-fix"></i> <?= __('创建虚拟主题') ?>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- 批量生成预览图弹窗 -->
@@ -693,6 +776,34 @@ foreach ($themes as $themeItem) {
         }
     }
 
+    function showThemePreviewPlaceholder(image, placeholder) {
+        if (!image) {
+            return;
+        }
+
+        const targetSelector = image.getAttribute('data-fallback-target') || '.theme-preview-placeholder';
+        const target = placeholder || (image.parentNode ? image.parentNode.querySelector(targetSelector) : null);
+        image.classList.add('d-none');
+        if (target) {
+            target.classList.remove('d-none');
+        }
+    }
+
+    function bindThemePreviewImageFallback(image, placeholder) {
+        if (!image || image.dataset.fallbackBound === '1') {
+            return;
+        }
+
+        image.dataset.fallbackBound = '1';
+        image.addEventListener('error', function() {
+            showThemePreviewPlaceholder(image, placeholder);
+        });
+    }
+
+    document.querySelectorAll('.theme-preview-image[data-fallback-target]').forEach(function(image) {
+        bindThemePreviewImageFallback(image);
+    });
+
     function updateThemeCardPreview(card, imageUrl) {
         if (!card || !imageUrl) {
             return;
@@ -706,13 +817,11 @@ foreach ($themes as $themeItem) {
             image = document.createElement('img');
             image.alt = '<?= __('主题预览') ?>';
             image.className = 'theme-preview-image';
-            image.onerror = function() {
-                this.classList.add('d-none');
-                if (placeholder) {
-                    placeholder.classList.remove('d-none');
-                }
-            };
+            image.setAttribute('data-fallback-target', '.theme-preview-placeholder');
+            bindThemePreviewImageFallback(image, placeholder);
             preview.insertBefore(image, preview.firstChild);
+        } else {
+            bindThemePreviewImageFallback(image, placeholder);
         }
 
         if (image) {
@@ -893,8 +1002,12 @@ foreach ($themes as $themeItem) {
     const ACTIVATE_URL = '<?= $url->getBackendUrl('theme/backend/index/postActivate') ?>';
     const GENERATE_PREVIEW_URL = '<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>';
     const BATCH_GENERATE_URL = '<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviews') ?>';
+    const AI_CATALOG_URL = '<?= $url->getBackendUrl('theme/backend/virtual-theme/ai-catalog') ?>';
+    const AI_CREATE_DRAFT_URL = '<?= $url->getBackendUrl('theme/backend/virtual-theme/create-draft') ?>';
+    const THEME_EDITOR_URL = '<?= $url->getBackendUrl('theme/backend/theme-editor') ?>';
     const batchGenerateModalElement = document.getElementById('batchGenerateModal');
     const singleGenerateModalElement = document.getElementById('singleGenerateModal');
+    const aiVirtualThemeModalElement = document.getElementById('aiVirtualThemeModal');
 
     function createModalAdapter(element) {
         if (!element) {
@@ -933,6 +1046,8 @@ foreach ($themes as $themeItem) {
 
     const batchGenerateModal = createModalAdapter(batchGenerateModalElement);
     const singleGenerateModal = createModalAdapter(singleGenerateModalElement);
+    const aiVirtualThemeModal = createModalAdapter(aiVirtualThemeModalElement);
+    let aiVirtualThemeCatalogPromise = null;
 
     function escapeHtml(text) {
         if (!text) {
@@ -971,6 +1086,278 @@ foreach ($themes as $themeItem) {
             result.code === 200 ||
             result.code === '200'
         );
+    }
+
+    function normalizeAiCatalogItems(items) {
+        if (items && typeof items === 'object' && !Array.isArray(items) && Array.isArray(items.items)) {
+            items = items.items;
+        }
+
+        if (!Array.isArray(items)) {
+            return [];
+        }
+
+        return items.map(function(item) {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+
+            return {
+                code: String(item.code || item.value || ''),
+                name: String(item.name || item.label || item.code || item.value || ''),
+                description: String(item.description || item.summary || item.name || item.label || ''),
+                locked: !!item.locked,
+                manual: !!item.manual,
+                readonly: !!item.readonly
+            };
+        }).filter(function(item) {
+            return item && item.code;
+        });
+    }
+
+    function renderAiVirtualThemeSkills(items) {
+        if (!items.length) {
+            return '<span class="text-muted small"><?= __('暂无可选技能') ?></span>';
+        }
+
+        return items.map(function(item) {
+            const checked = item.locked || item.manual ? 'checked' : '';
+            const disabled = item.readonly && !item.locked && !item.manual ? 'disabled' : '';
+            return '<label class="ai-virtual-theme-choice">' +
+                '<input type="checkbox" name="ai_virtual_theme_skill" value="' + escapeHtml(item.code) + '" ' + checked + ' ' + disabled + '>' +
+                '<span><strong>' + escapeHtml(item.name || item.code) + '</strong><small>' + escapeHtml(item.description || item.code) + '</small></span>' +
+                '</label>';
+        }).join('');
+    }
+
+    function renderAiVirtualThemeStyles(items) {
+        const auto = '<label class="ai-virtual-theme-choice">' +
+            '<input type="radio" name="ai_virtual_theme_style" value="" checked>' +
+            '<span><strong><?= __('自动匹配') ?></strong><small><?= __('由 Theme AI 根据当前指令选择方向') ?></small></span>' +
+            '</label>';
+
+        if (!items.length) {
+            return auto;
+        }
+
+        return auto + items.map(function(item) {
+            return '<label class="ai-virtual-theme-choice">' +
+                '<input type="radio" name="ai_virtual_theme_style" value="' + escapeHtml(item.code) + '">' +
+                '<span><strong>' + escapeHtml(item.name || item.code) + '</strong><small>' + escapeHtml(item.description || item.code) + '</small></span>' +
+                '</label>';
+        }).join('');
+    }
+
+    function readCheckedValues(root, selector) {
+        if (!root) {
+            return [];
+        }
+
+        return Array.from(root.querySelectorAll(selector))
+            .filter(function(input) {
+                return input.checked && !input.disabled;
+            })
+            .map(function(input) {
+                return String(input.value || '').trim();
+            })
+            .filter(Boolean);
+    }
+
+    function setAiVirtualThemeStatus(type, message) {
+        const status = document.getElementById('aiVirtualThemeStatus');
+        if (!status) {
+            return;
+        }
+
+        const classType = type === 'danger' || type === 'success' || type === 'warning' || type === 'info'
+            ? type
+            : 'light';
+        status.className = 'alert alert-' + classType + ' border mt-3 mb-0';
+        status.innerHTML = '<i class="mdi mdi-information-outline me-1"></i>' + escapeHtml(message);
+    }
+
+    function setAiVirtualThemeBusy(busy) {
+        const button = document.getElementById('createAiVirtualTheme');
+        if (!button) {
+            return;
+        }
+
+        button.disabled = !!busy;
+        button.innerHTML = busy
+            ? '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span><?= __('正在创建') ?>'
+            : '<i class="mdi mdi-auto-fix"></i> <?= __('创建虚拟主题') ?>';
+    }
+
+    async function loadAiVirtualThemeCatalog() {
+        if (!aiVirtualThemeCatalogPromise) {
+            aiVirtualThemeCatalogPromise = fetch(AI_CATALOG_URL, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            }).then(function(response) {
+                return response.json();
+            }).then(function(result) {
+                if (!isSuccessResponse(result)) {
+                    throw new Error(result?.message || '<?= __('AI目录加载失败') ?>');
+                }
+
+                const data = result.data || result;
+                return {
+                    skills: normalizeAiCatalogItems(data.skills || []),
+                    styles: normalizeAiCatalogItems(data.styles || data.directions || [])
+                };
+            });
+        }
+
+        return aiVirtualThemeCatalogPromise;
+    }
+
+    async function renderAiVirtualThemeCatalog() {
+        const skillsEl = document.getElementById('aiVirtualThemeSkills');
+        const stylesEl = document.getElementById('aiVirtualThemeStyles');
+        if (!skillsEl || !stylesEl) {
+            return;
+        }
+
+        skillsEl.innerHTML = '<span class="text-muted small"><?= __('正在加载...') ?></span>';
+        try {
+            const catalog = await loadAiVirtualThemeCatalog();
+            skillsEl.innerHTML = renderAiVirtualThemeSkills(catalog.skills);
+            stylesEl.innerHTML = renderAiVirtualThemeStyles(catalog.styles);
+        } catch (error) {
+            skillsEl.innerHTML = '<span class="text-danger small">' + escapeHtml(error.message || '<?= __('AI目录加载失败') ?>') + '</span>';
+            stylesEl.innerHTML = renderAiVirtualThemeStyles([]);
+        }
+    }
+
+    function buildThemeEditorUrl(themeId, layoutType, layoutOption) {
+        const url = new URL(THEME_EDITOR_URL, window.location.origin);
+        url.searchParams.set('theme_id', String(themeId));
+        url.searchParams.set('page_type', layoutType || 'homepage');
+        url.searchParams.set('layout_type', layoutType || 'homepage');
+        url.searchParams.set('layout_option', layoutOption || 'default');
+        return url.toString();
+    }
+
+    function openAiVirtualThemeDialog(themeId, themeName) {
+        if (!aiVirtualThemeModalElement || !aiVirtualThemeModal) {
+            return;
+        }
+
+        const select = document.getElementById('aiVirtualThemeBaseTheme');
+        const title = document.getElementById('aiVirtualThemeTitle');
+        const result = document.getElementById('aiVirtualThemeResult');
+        const instructions = document.getElementById('aiVirtualThemeInstructions');
+
+        if (select && themeId) {
+            select.value = String(themeId);
+        }
+        if (title) {
+            title.innerText = themeName
+                ? '<?= __('AI创建虚拟主题') ?> - ' + themeName
+                : '<?= __('AI创建虚拟主题') ?>';
+        }
+        if (instructions) {
+            instructions.value = '';
+        }
+        if (result) {
+            result.style.display = 'none';
+            result.innerHTML = '';
+        }
+
+        setAiVirtualThemeStatus('light', '<?= __('AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。') ?>');
+        renderAiVirtualThemeCatalog();
+        aiVirtualThemeModal.show();
+        window.setTimeout(function() {
+            instructions?.focus();
+        }, 180);
+    }
+
+    async function createAiVirtualThemeDraft() {
+        const modal = aiVirtualThemeModalElement;
+        const select = document.getElementById('aiVirtualThemeBaseTheme');
+        const instructions = document.getElementById('aiVirtualThemeInstructions');
+        const resultEl = document.getElementById('aiVirtualThemeResult');
+        const themeId = select ? Number(select.value || 0) : 0;
+
+        if (!themeId) {
+            setAiVirtualThemeStatus('warning', '<?= __('请选择参照主题') ?>');
+            return;
+        }
+
+        setAiVirtualThemeBusy(true);
+        setAiVirtualThemeStatus('info', '<?= __('正在按参照主题全部布局类型创建虚拟主题草稿...') ?>');
+        if (resultEl) {
+            resultEl.style.display = 'none';
+            resultEl.innerHTML = '';
+        }
+
+        try {
+            const payload = {
+                form_key: CSRF_TOKEN,
+                theme_id: themeId,
+                area: 'frontend',
+                page_type: 'all',
+                layout_type: 'all',
+                layout_option: 'all',
+                all_layout_types: true,
+                request_id: 'theme-manage-ai-create-' + themeId + '-' + Date.now(),
+                instructions: instructions ? instructions.value : '',
+                selected_skill_codes: readCheckedValues(modal, 'input[name="ai_virtual_theme_skill"]'),
+                selected_style_codes: readCheckedValues(modal, 'input[name="ai_virtual_theme_style"]'),
+                use_ai: 1
+            };
+
+            const response = await fetch(AI_CREATE_DRAFT_URL, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (!isSuccessResponse(result)) {
+                throw new Error(result?.message || '<?= __('虚拟主题创建失败') ?>');
+            }
+
+            const data = result.data || result;
+            const layoutOption = data.layout_option || 'default';
+            const layoutTypes = Array.isArray(data.layout_types) ? data.layout_types : [];
+            const previewLayoutType = layoutTypes.indexOf('homepage') !== -1
+                ? 'homepage'
+                : (layoutTypes[0] || 'homepage');
+            const createdCount = Number(data.created_count || (Array.isArray(data.results) ? data.results.length : 0));
+            const editorUrl = buildThemeEditorUrl(themeId, previewLayoutType, layoutOption);
+            setAiVirtualThemeStatus('success', result.message || '<?= __('虚拟主题草稿已创建') ?>');
+            if (resultEl) {
+                resultEl.style.display = 'block';
+                resultEl.innerHTML =
+                    '<div class="alert alert-success mb-0">' +
+                    '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2">' +
+                    '<span><i class="mdi mdi-check-circle me-1"></i>' + escapeHtml('<?= __('已创建虚拟主题草稿') ?>') +
+                    ' <code>' + escapeHtml(layoutOption) + '</code>' +
+                    (createdCount > 0 ? ' <small class="text-muted ms-1"><?= __('已覆盖布局类型') ?> ' + createdCount + '</small>' : '') +
+                    '</span>' +
+                    '<a class="btn btn-sm btn-primary" href="' + escapeHtml(editorUrl) + '">' +
+                    '<i class="mdi mdi-palette-swatch"></i> <?= __('打开可视化编辑') ?></a>' +
+                    '</div>' +
+                    '</div>';
+            }
+            showToast('success', '<?= __('虚拟主题草稿已创建') ?>');
+        } catch (error) {
+            const message = error.message || '<?= __('虚拟主题创建失败') ?>';
+            setAiVirtualThemeStatus('danger', message);
+            if (resultEl) {
+                resultEl.style.display = 'block';
+                resultEl.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(message) + '</div>';
+            }
+        } finally {
+            setAiVirtualThemeBusy(false);
+        }
     }
 
     function findThemeCard(themeId, area) {
@@ -1044,6 +1431,34 @@ foreach ($themes as $themeItem) {
         }
     }
 
+    function showThemePreviewPlaceholder(image, placeholder) {
+        if (!image) {
+            return;
+        }
+
+        const targetSelector = image.getAttribute('data-fallback-target') || '.theme-preview-placeholder';
+        const target = placeholder || (image.parentNode ? image.parentNode.querySelector(targetSelector) : null);
+        image.classList.add('d-none');
+        if (target) {
+            target.classList.remove('d-none');
+        }
+    }
+
+    function bindThemePreviewImageFallback(image, placeholder) {
+        if (!image || image.dataset.fallbackBound === '1') {
+            return;
+        }
+
+        image.dataset.fallbackBound = '1';
+        image.addEventListener('error', function() {
+            showThemePreviewPlaceholder(image, placeholder);
+        });
+    }
+
+    document.querySelectorAll('.theme-preview-image[data-fallback-target]').forEach(function(image) {
+        bindThemePreviewImageFallback(image);
+    });
+
     function updateThemeCardPreview(card, imageUrl) {
         if (!card || !imageUrl) {
             return;
@@ -1057,13 +1472,11 @@ foreach ($themes as $themeItem) {
             image = document.createElement('img');
             image.alt = '<?= __('主题预览') ?>';
             image.className = 'theme-preview-image';
-            image.onerror = function() {
-                this.classList.add('d-none');
-                if (placeholder) {
-                    placeholder.classList.remove('d-none');
-                }
-            };
+            image.setAttribute('data-fallback-target', '.theme-preview-placeholder');
+            bindThemePreviewImageFallback(image, placeholder);
             preview.insertBefore(image, preview.firstChild);
+        } else {
+            bindThemePreviewImageFallback(image, placeholder);
         }
 
         if (image) {
@@ -1279,6 +1692,15 @@ foreach ($themes as $themeItem) {
         runBatchPreviewGeneration();
     });
 
+    document.getElementById('openAiVirtualThemeModal')?.addEventListener('click', function() {
+        const themeId = this.dataset.themeId || document.getElementById('aiVirtualThemeBaseTheme')?.value || '';
+        openAiVirtualThemeDialog(themeId, '');
+    });
+
+    document.getElementById('createAiVirtualTheme')?.addEventListener('click', function() {
+        createAiVirtualThemeDraft();
+    });
+
     document.querySelectorAll('.activate-btn').forEach(function(button) {
         button.addEventListener('click', function() {
             if (this.disabled) {
@@ -1387,6 +1809,14 @@ foreach ($themes as $themeItem) {
 
 .weline-theme-manage__tabbar .btn {
     flex-shrink: 0;
+}
+
+.weline-theme-manage__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .weline-theme-manage__tabs.nav-tabs .nav-link {
@@ -1647,6 +2077,83 @@ foreach ($themes as $themeItem) {
     min-height: 168px;
 }
 
+.ai-virtual-theme-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ai-virtual-theme-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.ai-virtual-theme-field {
+    min-width: 0;
+}
+
+.ai-virtual-theme-choice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 180px;
+    overflow: auto;
+    padding: 2px;
+}
+
+.ai-virtual-theme-choice,
+.ai-virtual-theme-scope {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: color-mix(in srgb, var(--backend-color-card-bg, #ffffff) 92%, var(--backend-color-bg-secondary, #f8fbff) 8%);
+}
+
+.ai-virtual-theme-choice {
+    cursor: pointer;
+}
+
+.ai-virtual-theme-choice:hover {
+    border-color: color-mix(in srgb, var(--backend-color-primary, #405189) 35%, var(--backend-color-border-default, #dee2e6) 65%);
+}
+
+.ai-virtual-theme-choice input {
+    margin-top: 3px;
+    flex: 0 0 auto;
+}
+
+.ai-virtual-theme-scope > i {
+    color: var(--backend-color-primary, #405189);
+    font-size: 17px;
+    line-height: 1.25;
+}
+
+.ai-virtual-theme-choice span,
+.ai-virtual-theme-scope span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ai-virtual-theme-choice strong,
+.ai-virtual-theme-scope strong {
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 13px;
+    line-height: 1.25;
+}
+
+.ai-virtual-theme-choice small,
+.ai-virtual-theme-scope small {
+    color: var(--backend-color-text-secondary, #6c757d);
+    line-height: 1.35;
+}
+
 #singleGenerateModal .modal-body .text-center.py-3 {
     display: flex;
     flex-direction: column;
@@ -1670,6 +2177,10 @@ foreach ($themes as $themeItem) {
         width: 100%;
     }
 
+    .weline-theme-manage__toolbar {
+        width: 100%;
+    }
+
     .weline-theme-manage .themes-grid {
         gap: 12px;
     }
@@ -1684,6 +2195,10 @@ foreach ($themes as $themeItem) {
     }
     .weline-theme-manage .theme-name {
         font-size: 16px;
+    }
+
+    .ai-virtual-theme-grid {
+        grid-template-columns: 1fr;
     }
 }
 </style>

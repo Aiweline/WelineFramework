@@ -1,0 +1,336 @@
+:root {
+    --weline-admin-bg: #f5f7f6;
+    --weline-admin-surface: var(--backend-color-card-bg, #ffffff);
+    --weline-admin-surface-soft: #f9fbfa;
+    --weline-admin-line: var(--backend-color-border-default, #d9e2df);
+    --weline-admin-ink: var(--backend-color-text-primary, #14213d);
+    --weline-admin-muted: var(--backend-color-text-secondary, #5c6b7a);
+    --weline-admin-primary: var(--backend-color-primary, #008060);
+    --weline-admin-primary-dark: #005a46;
+    --weline-admin-accent: #2c6ecb;
+    --weline-admin-warning: #b7791f;
+    --weline-admin-shadow: 0 10px 28px rgba(20, 33, 61, 0.08);
+}
+
+[data-theme-mode="dark"],
+[data-layout-mode="dark"],
+[data-bs-theme="dark"] {
+    --weline-admin-bg: var(--backend-color-bg-body, #0b1220);
+    --weline-admin-surface: var(--backend-color-card-bg, rgba(15, 23, 42, 0.92));
+    --weline-admin-surface-soft: var(--backend-color-bg-secondary, #172033);
+    --weline-admin-line: var(--backend-color-border-default, #263340);
+    --weline-admin-ink: var(--backend-color-text-primary, #eef3f7);
+    --weline-admin-muted: var(--backend-color-text-secondary, #a8b3bf);
+    --weline-admin-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    --backend-theme-surface: var(--weline-admin-surface);
+    --backend-theme-surface-subtle: var(--weline-admin-surface-soft);
+    --backend-theme-border-color: var(--weline-admin-line);
+    --backend-theme-text: var(--weline-admin-ink);
+    --backend-theme-text-secondary: var(--weline-admin-muted);
+    --backend-component-card-bg: var(--weline-admin-surface);
+    --backend-component-card-border: var(--weline-admin-line);
+    --backend-component-text-primary: var(--weline-admin-ink);
+    --backend-component-text-secondary: var(--weline-admin-muted);
+    --bs-card-bg: var(--weline-admin-surface);
+    --bs-card-color: var(--weline-admin-ink);
+    --bs-card-border-color: var(--weline-admin-line);
+}
+
+body {
+    background: var(--weline-admin-bg);
+    color: var(--weline-admin-ink);
+    letter-spacing: 0;
+}
+
+.main-content,
+.page-content,
+.content-page {
+    background: var(--weline-admin-bg);
+}
+
+.page-content > .container-fluid,
+.main-content > .container-fluid,
+.container-fluid.page-content {
+    max-width: 1480px;
+}
+
+.page-title-box {
+    margin-bottom: 20px;
+    padding: 18px 20px;
+    border: 1px solid var(--weline-admin-line);
+    border-radius: 8px;
+    background: var(--weline-admin-surface);
+    box-shadow: 0 1px 0 rgba(20, 33, 61, 0.03);
+}
+
+.page-title-box h4,
+.card-title,
+.card h1,
+.card h2,
+.card h3,
+.card h4,
+.card h5 {
+    color: var(--weline-admin-ink);
+    letter-spacing: 0;
+}
+
+.breadcrumb,
+.text-muted,
+.card-subtitle,
+.small {
+    color: var(--weline-admin-muted) !important;
+}
+
+.card {
+    border: 1px solid var(--weline-admin-line);
+    border-radius: 8px;
+    background: var(--weline-admin-surface);
+    color: var(--weline-admin-ink);
+    box-shadow: 0 1px 0 rgba(20, 33, 61, 0.04);
+    overflow: hidden;
+}
+
+.card:hover {
+    box-shadow: var(--weline-admin-shadow);
+}
+
+.card-header,
+.card-footer {
+    border-color: var(--weline-admin-line);
+    background: var(--weline-admin-surface-soft);
+}
+
+#page-topbar .header-item {
+    border-radius: 6px;
+}
+
+[data-theme-mode="dark"] #page-topbar .header-item,
+[data-layout-mode="dark"] #page-topbar .header-item,
+[data-bs-theme="dark"] #page-topbar .header-item {
+    background: var(--backend-topbar-surface, rgba(15, 23, 42, 0.78));
+    color: var(--backend-topbar-muted, var(--weline-admin-ink));
+}
+
+[data-theme-mode="dark"] #page-topbar .header-item:hover,
+[data-layout-mode="dark"] #page-topbar .header-item:hover,
+[data-bs-theme="dark"] #page-topbar .header-item:hover {
+    background: var(--backend-topbar-surface-hover, rgba(30, 41, 59, 0.74));
+    color: var(--backend-topbar-text, #ffffff);
+}
+
+.card-body {
+    padding: 20px;
+}
+
+.btn {
+    border-radius: 6px;
+    font-weight: 650;
+    letter-spacing: 0;
+    transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.btn-primary,
+.btn-success {
+    border-color: var(--weline-admin-primary);
+    background: var(--weline-admin-primary);
+    box-shadow: 0 8px 18px rgba(0, 128, 96, 0.18);
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-success:hover,
+.btn-success:focus {
+    border-color: var(--weline-admin-primary-dark);
+    background: var(--weline-admin-primary-dark);
+}
+
+.btn-outline-primary {
+    border-color: #9bcabd;
+    color: var(--weline-admin-primary-dark);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    border-color: var(--weline-admin-primary);
+    background: #e8f5f0;
+    color: var(--weline-admin-primary-dark);
+}
+
+.btn-outline-secondary,
+.btn-soft-secondary {
+    border-color: var(--weline-admin-line);
+    background: var(--weline-admin-surface);
+    color: var(--weline-admin-ink);
+}
+
+.btn-sm {
+    min-height: 32px;
+    padding-inline: 12px;
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-color: var(--weline-admin-line);
+    border-radius: 6px;
+    background-color: var(--weline-admin-surface);
+    color: var(--weline-admin-ink);
+}
+
+.form-control:focus,
+.form-select:focus,
+.btn:focus-visible,
+a:focus-visible,
+button:focus-visible {
+    border-color: var(--weline-admin-primary);
+    box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.16);
+    outline: none;
+}
+
+.alert {
+    border-radius: 8px;
+    border-width: 1px;
+}
+
+.badge {
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.table {
+    color: var(--weline-admin-ink);
+    border-color: var(--weline-admin-line);
+}
+
+.table > :not(caption) > * > * {
+    padding: 0.85rem 1rem;
+    border-bottom-color: var(--weline-admin-line);
+}
+
+.table thead th {
+    border-bottom: 1px solid var(--weline-admin-line);
+    background: var(--weline-admin-surface-soft);
+    color: var(--weline-admin-muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.table tbody tr:hover > * {
+    background: rgba(0, 128, 96, 0.045);
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    --bs-table-accent-bg: rgba(20, 33, 61, 0.018);
+}
+
+.avatar-title,
+.rounded-circle.avatar-title {
+    box-shadow: inset 0 0 0 1px rgba(20, 33, 61, 0.05);
+}
+
+.dashboard-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border: 1px solid var(--weline-admin-line);
+    border-radius: 8px;
+    background: var(--weline-admin-surface);
+}
+
+.dashboard-tab {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--weline-admin-muted);
+    font-weight: 750;
+}
+
+.dashboard-tab.active,
+.dashboard-tab:hover {
+    border-color: #b8d9cf;
+    background: #e8f5f0;
+    color: var(--weline-admin-primary-dark);
+}
+
+#appstore-search-form {
+    padding: 4px;
+}
+
+#appstore-search-form .form-label {
+    font-weight: 750;
+}
+
+.appstore-module-card .card {
+    min-height: 100%;
+    border-top: 4px solid #d8eee6;
+}
+
+.appstore-module-card .card-body {
+    gap: 10px;
+}
+
+.appstore-module-card h2 {
+    color: var(--weline-admin-ink);
+    line-height: 1.3;
+}
+
+.appstore-module-card .badge.bg-success,
+.appstore-module-card .text-bg-light {
+    border: 1px solid #b8d9cf;
+    background: #e8f5f0 !important;
+    color: var(--weline-admin-primary-dark) !important;
+}
+
+.appstore-module-card form {
+    margin: 0;
+}
+
+.appstore-module-card .btn {
+    min-height: 38px;
+}
+
+.left-side-menu,
+.vertical-menu,
+#sidebar-menu {
+    letter-spacing: 0;
+}
+
+#sidebar-menu ul li a {
+    border-radius: 6px;
+    transition: background-color 160ms ease, color 160ms ease;
+}
+
+#sidebar-menu ul li a:hover,
+#sidebar-menu ul li.mm-active > a,
+#sidebar-menu ul li a.active {
+    background: rgba(0, 128, 96, 0.1);
+    color: var(--weline-admin-primary-dark);
+}
+
+@media (max-width: 768px) {
+    .page-title-box {
+        padding: 14px;
+    }
+
+    .card-body {
+        padding: 16px;
+    }
+
+    .table-responsive {
+        border: 1px solid var(--weline-admin-line);
+        border-radius: 8px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card,
+    .btn,
+    .dashboard-tab,
+    #sidebar-menu ul li a {
+        transition: none;
+    }
+}

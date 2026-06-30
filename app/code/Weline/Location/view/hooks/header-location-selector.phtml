@@ -1,0 +1,530 @@
+<?php
+/**
+ * Header delivery location selector hook.
+ *
+ * @hook-priority 100
+ * @hook-sort-order 1
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+$jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$currentLocation = null;
+$locationFromCookie = \w_env_cookie('weline_delivery_location');
+if ($locationFromCookie) {
+    $currentLocation = json_decode($locationFromCookie, true);
+}
+
+$locationFromUrl = $this->request->getParam('delivery_location');
+if ($locationFromUrl) {
+    $decodedLocation = json_decode(base64_decode((string)$locationFromUrl), true);
+    if (is_array($decodedLocation)) {
+        $currentLocation = $decodedLocation;
+    }
+}
+
+$locationData = [
+    'country' => $currentLocation['country'] ?? __('China'),
+    'province' => $currentLocation['province'] ?? '',
+    'city' => $currentLocation['city'] ?? '',
+    'district' => $currentLocation['district'] ?? '',
+    'full_address' => $currentLocation['full_address'] ?? __('Deliver to'),
+];
+
+$displayText = $locationData['full_address'];
+if (empty($displayText) || $displayText === __('Deliver to')) {
+    $displayText = $locationData['city']
+        ?: ($locationData['province'] ?: ($locationData['country'] ?: __('Deliver to')));
+}
+?>
+<div class="geo-location-selector" data-geo-location-selector>
+    <a href="#" class="location-link" title="<?= __('Select delivery address') ?>" data-action="select-location">
+        <i class="fas fa-map-marker-alt"></i>
+        <div class="location-text">
+            <span class="location-line-1"><?= __('Deliver to') ?></span>
+            <span class="location-line-2" data-location-display><?= htmlspecialchars((string)$displayText, ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
+        <i class="fas fa-chevron-down"></i>
+    </a>
+    <div class="location-selector-dropdown" hidden>
+        <div class="location-selector-header">
+            <h3><?= __('Select delivery address') ?></h3>
+        </div>
+        <div class="location-selector-content">
+            <button type="button" class="location-option" data-action="auto-detect">
+                <i class="fas fa-crosshairs"></i>
+                <span><?= __('Auto detect') ?></span>
+            </button>
+            <button type="button" class="location-option" data-action="manual-select">
+                <i class="fas fa-map-marked-alt"></i>
+                <span><?= __('Manual select') ?></span>
+            </button>
+        </div>
+        <div class="location-manual-form" data-location-manual-form hidden>
+            <label class="location-manual-label" for="weline-delivery-address-input">
+                <?= __('Enter delivery address, format: Province/City/District') ?>
+            </label>
+            <input
+                type="text"
+                class="location-manual-input"
+                id="weline-delivery-address-input"
+                data-location-manual-input
+                placeholder="<?= __('Province/City/District') ?>"
+                autocomplete="shipping street-address"
+            >
+            <div class="location-manual-actions">
+                <button type="button" class="location-action-primary" data-action="save-manual-location"><?= __('Save') ?></button>
+                <button type="button" class="location-action-secondary" data-action="cancel-manual-location"><?= __('Cancel') ?></button>
+            </div>
+        </div>
+        <p class="location-selector-message" data-location-message role="status" aria-live="polite" hidden></p>
+        <div class="location-selector-footer">
+            <button type="button" class="btn-close" data-action="close-selector"><?= __('Close') ?></button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var texts = {
+        apiUnavailable: <?= json_encode((string)__('Weline API is not available.'), $jsonForScriptFlags) ?>,
+        geoUnavailable: <?= json_encode((string)__('Geo module is not available.'), $jsonForScriptFlags) ?>,
+        addressLookupFailed: <?= json_encode((string)__('Address lookup failed.'), $jsonForScriptFlags) ?>,
+        locationDetectionFailed: <?= json_encode((string)__('Location detection failed.'), $jsonForScriptFlags) ?>,
+        locating: <?= json_encode((string)__('Locating...'), $jsonForScriptFlags) ?>,
+        manualRequired: <?= json_encode((string)__('Please enter a delivery address.'), $jsonForScriptFlags) ?>,
+        manualSaved: <?= json_encode((string)__('Delivery address saved.'), $jsonForScriptFlags) ?>,
+        countryChina: <?= json_encode((string)__('China'), $jsonForScriptFlags) ?>,
+        deliverTo: <?= json_encode((string)__('Deliver to'), $jsonForScriptFlags) ?>
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLocationSelector);
+    } else {
+        initLocationSelector();
+    }
+
+    function getApi(provider) {
+        if (!window.Weline || !window.Weline.Api) {
+            return Promise.reject(new Error(texts.apiUnavailable));
+        }
+
+        return Promise.resolve(window.Weline.Api.resource(provider));
+    }
+
+    function initLocationSelector() {
+        var selector = document.querySelector('[data-geo-location-selector]');
+        if (!selector) {
+            return;
+        }
+
+        var link = selector.querySelector('[data-action="select-location"]');
+        var dropdown = selector.querySelector('.location-selector-dropdown');
+        var display = selector.querySelector('[data-location-display]');
+        var autoDetect = selector.querySelector('[data-action="auto-detect"]');
+        var manualSelect = selector.querySelector('[data-action="manual-select"]');
+        var manualForm = selector.querySelector('[data-location-manual-form]');
+        var manualInput = selector.querySelector('[data-location-manual-input]');
+        var saveManual = selector.querySelector('[data-action="save-manual-location"]');
+        var cancelManual = selector.querySelector('[data-action="cancel-manual-location"]');
+        var closeBtn = selector.querySelector('[data-action="close-selector"]');
+        var messageNode = selector.querySelector('[data-location-message]');
+
+        if (!link || !dropdown || !display) {
+            return;
+        }
+
+        function showLocationMessage(message, type) {
+            if (messageNode) {
+                messageNode.textContent = message || '';
+                messageNode.className = 'location-selector-message ' + (type || 'info');
+                messageNode.hidden = !message;
+                messageNode.setAttribute('role', type === 'error' ? 'alert' : 'status');
+            }
+
+            if (
+                message
+                && window.Weline
+                && window.Weline.Toast
+                && typeof window.Weline.Toast.show === 'function'
+            ) {
+                window.Weline.Toast.show({message: message, type: type || 'info'});
+            }
+        }
+
+        function clearLocationMessage() {
+            showLocationMessage('', 'info');
+        }
+
+        function closeSelector() {
+            dropdown.hidden = true;
+            if (manualForm) {
+                manualForm.hidden = true;
+            }
+            clearLocationMessage();
+        }
+
+        link.addEventListener('click', function (event) {
+            event.preventDefault();
+            dropdown.hidden = !dropdown.hidden;
+            if (!dropdown.hidden) {
+                clearLocationMessage();
+            }
+        });
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () {
+                closeSelector();
+            });
+        }
+
+        document.addEventListener('click', function (event) {
+            if (!selector.contains(event.target)) {
+                closeSelector();
+            }
+        });
+
+        if (autoDetect) {
+            autoDetect.addEventListener('click', async function () {
+                var originalHtml = autoDetect.innerHTML;
+                try {
+                    clearLocationMessage();
+                    autoDetect.classList.add('loading');
+                    autoDetect.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span></span>';
+                    autoDetect.querySelector('span').textContent = texts.locating;
+
+                    if (typeof WelineLocation === 'undefined') {
+                        if (typeof Weline !== 'undefined' && Weline.load) {
+                            await Weline.load('geo');
+                        } else {
+                            throw new Error(texts.geoUnavailable);
+                        }
+                    }
+
+                    var position = await WelineLocation.getLocation();
+                    var LocationApi = await getApi('location');
+                    var geoResult = await LocationApi.address({
+                        latitude: Number(position.latitude),
+                        longitude: Number(position.longitude)
+                    }, {silent: true});
+
+                    if (!geoResult || geoResult.code !== 200 || !geoResult.data) {
+                        throw new Error((geoResult && (geoResult.msg || geoResult.message)) || texts.addressLookupFailed);
+                    }
+
+                    saveLocationToStorage(geoResult.data);
+                    updateLocationDisplay(geoResult.data);
+                    await updateShippingInfo(geoResult.data);
+                    closeSelector();
+                } catch (error) {
+                    showLocationMessage(error.message || texts.locationDetectionFailed, 'error');
+                } finally {
+                    autoDetect.classList.remove('loading');
+                    autoDetect.innerHTML = originalHtml;
+                }
+            });
+        }
+
+        if (manualSelect) {
+            manualSelect.addEventListener('click', function () {
+                clearLocationMessage();
+                if (manualForm) {
+                    manualForm.hidden = false;
+                }
+                if (manualInput) {
+                    manualInput.focus();
+                }
+            });
+        }
+
+        if (cancelManual) {
+            cancelManual.addEventListener('click', function () {
+                if (manualForm) {
+                    manualForm.hidden = true;
+                }
+                clearLocationMessage();
+            });
+        }
+
+        if (saveManual && manualInput) {
+            saveManual.addEventListener('click', async function () {
+                var selectedAddress = (manualInput.value || '').trim();
+                if (!selectedAddress) {
+                    showLocationMessage(texts.manualRequired, 'warning');
+                    return;
+                }
+
+                var addressParts = selectedAddress.split('/');
+                var addressData = {
+                    country: texts.countryChina,
+                    countryCode: 'CN',
+                    province: addressParts[0] || '',
+                    city: addressParts[1] || '',
+                    district: addressParts[2] || '',
+                    street: '',
+                    full_address: selectedAddress
+                };
+
+                saveLocationToStorage(addressData);
+                updateLocationDisplay(addressData);
+                await updateShippingInfo(addressData);
+                showLocationMessage(texts.manualSaved, 'success');
+                closeSelector();
+            });
+        }
+
+        function saveLocationToStorage(addressData) {
+            if (window.WelineShipping && window.WelineShipping.Location) {
+                window.WelineShipping.Location.save(addressData);
+                return;
+            }
+
+            try {
+                var cookieValue = JSON.stringify(addressData);
+                var expires = new Date();
+                expires.setTime(expires.getTime() + 30 * 24 * 60 * 60 * 1000);
+                document.cookie = 'weline_delivery_location=' + encodeURIComponent(cookieValue) + ';expires=' + expires.toUTCString() + ';path=/';
+                localStorage.setItem('weline_delivery_location', cookieValue);
+            } catch (error) {
+                console.error('Failed to save location:', error);
+            }
+        }
+
+        async function updateShippingInfo(addressData) {
+            try {
+                if (window.WelineShipping && window.WelineShipping.Location) {
+                    await window.WelineShipping.Location.fetchShippingInfo(addressData);
+                    return;
+                }
+
+                var ShippingInfoApi = await getApi('shippingInfo');
+                var shippingResult = await ShippingInfoApi.getByLocation({
+                    country_code: addressData.countryCode || 'CN',
+                    province: addressData.province || '',
+                    city: addressData.city || '',
+                    district: addressData.district || ''
+                }, {silent: true});
+
+                if (
+                    shippingResult
+                    && shippingResult.code === 200
+                    && window.WelineShipping
+                    && window.WelineShipping.IndexedDB
+                ) {
+                    await window.WelineShipping.IndexedDB.saveShippingInfo(addressData, shippingResult.data);
+                }
+            } catch (error) {
+                console.error('Failed to update shipping info:', error);
+            }
+        }
+
+        function updateLocationDisplay(addressData) {
+            display.textContent = addressData.city
+                || addressData.province
+                || addressData.country
+                || texts.deliverTo;
+        }
+    }
+})();
+</script>
+
+<style>
+.geo-location-selector {
+    position: relative;
+    display: inline-block;
+}
+
+.geo-location-selector .location-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.geo-location-selector .location-link:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.geo-location-selector .location-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.geo-location-selector .location-line-1 {
+    font-size: 12px;
+    color: #666;
+}
+
+.geo-location-selector .location-line-2 {
+    font-size: 14px;
+    font-weight: 600;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.geo-location-selector .location-selector-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    min-width: 280px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    padding: 16px;
+}
+
+.geo-location-selector .location-selector-dropdown[hidden] {
+    display: none;
+}
+
+.geo-location-selector .location-selector-header h3 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #111;
+}
+
+.geo-location-selector .location-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s ease;
+}
+
+.geo-location-selector .location-option:hover {
+    background: #e9ecef;
+}
+
+.geo-location-selector .location-option.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.geo-location-selector .location-manual-form {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 6px;
+}
+
+.geo-location-selector .location-manual-form[hidden] {
+    display: none;
+}
+
+.geo-location-selector .location-manual-label {
+    font-size: 12px;
+    color: #555;
+}
+
+.geo-location-selector .location-manual-input {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font: inherit;
+}
+
+.geo-location-selector .location-manual-input:focus {
+    outline: 2px solid rgba(13, 110, 253, 0.2);
+    border-color: #86b7fe;
+}
+
+.geo-location-selector .location-manual-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.geo-location-selector .location-action-primary,
+.geo-location-selector .location-action-secondary {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+}
+
+.geo-location-selector .location-action-primary {
+    border-color: #0d6efd;
+    background: #0d6efd;
+    color: #fff;
+}
+
+.geo-location-selector .location-action-secondary {
+    background: #fff;
+    color: #111;
+}
+
+.geo-location-selector .location-selector-message {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: #eef5ff;
+    color: #084298;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.geo-location-selector .location-selector-message[hidden] {
+    display: none;
+}
+
+.geo-location-selector .location-selector-message.error {
+    background: #f8d7da;
+    color: #842029;
+}
+
+.geo-location-selector .location-selector-message.warning {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.geo-location-selector .location-selector-message.success {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.geo-location-selector .location-selector-footer {
+    margin-top: 12px;
+    text-align: right;
+}
+
+.geo-location-selector .btn-close {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .geo-location-selector .location-selector-dropdown {
+        left: auto;
+        right: 0;
+        min-width: 260px;
+    }
+}
+</style>

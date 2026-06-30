@@ -50,6 +50,7 @@ class SseTerminal implements TaglibInterface
             'class' => false,        // 额外CSS类
             'style' => false,        // 内联样式
             'max-stream-chars' => false, // 流式 chunk 单块最大字符数，超出截断尾部保留，防 DOM/内存拖垮浏览器，0 表示不限制
+            'max-dom-lines' => false, // 终端默认保留 DOM 行数，默认 200，0 表示不限制
             'show-thinking-toggle' => false, // 是否显示「思考输出」切换按钮（默认 true）
             'thinking-default' => false,     // 思考输出默认值，'on'|'off'（默认 'on'，关闭时新到 thinking 事件不渲染）
             'thinking-storage-key' => false, // 持久化 key，默认 weline_sse_terminal_thinking_{id}
@@ -66,10 +67,10 @@ class SseTerminal implements TaglibInterface
             $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
             $eventsList = $eventsAttr !== ''
                 ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
-                : ['start', 'progress', 'chunk', 'total', 'done', 'error', 'info', 'warning', 'success', 'debug', 'thinking', 'reasoning'];
-            // 用户显式传 events 时也强制确保 thinking/reasoning 在列表内（除非显式排除），便于面板开关一致工作。
+                : ['start', 'progress', 'chunk', 'total', 'done', 'failed', 'error', 'close', 'info', 'warning', 'success', 'debug', 'thinking', 'reasoning'];
+            // 用户显式传 events 时也强制确保终止事件和 thinking/reasoning 在列表内，保证清理和面板开关一致工作。
             if ($eventsAttr !== '') {
-                foreach (['thinking', 'reasoning'] as $reqEvent) {
+                foreach (['done', 'failed', 'error', 'close', 'thinking', 'reasoning'] as $reqEvent) {
                     if (!\in_array($reqEvent, $eventsList, true)) {
                         $eventsList[] = $reqEvent;
                     }
@@ -85,6 +86,10 @@ class SseTerminal implements TaglibInterface
             $maxStreamChars = isset($attributes['max-stream-chars']) ? (int) $attributes['max-stream-chars'] : 400000;
             if ($maxStreamChars < 0) {
                 $maxStreamChars = 0;
+            }
+            $maxDomLines = isset($attributes['max-dom-lines']) ? (int) $attributes['max-dom-lines'] : 200;
+            if ($maxDomLines < 0) {
+                $maxDomLines = 0;
             }
             $showThinkingToggle = !isset($attributes['show-thinking-toggle']) || $attributes['show-thinking-toggle'] !== 'false';
             $thinkingDefault = isset($attributes['thinking-default'])
@@ -224,6 +229,7 @@ class SseTerminal implements TaglibInterface
             $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
             $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
             $html[] = 'var maxStreamChars = ' . $maxStreamChars . ';';
+            $html[] = 'var maxDomLines = ' . $maxDomLines . ';';
             $html[] = 'var urlNotConfiguredText = ' . json_encode($t_url_not_configured, JSON_UNESCAPED_UNICODE) . ';';
             $html[] = 'var thinkingShowToggle = ' . ($showThinkingToggle ? 'true' : 'false') . ';';
             $html[] = 'var thinkingDefaultEnabled = ' . ($thinkingDefault === 'on' ? 'true' : 'false') . ';';
@@ -302,6 +308,7 @@ window.WelineSseTerminal[id] = {
     stop: stop,
     clear: clear,
     log: log,
+    writeChunk: function(text) { appendChunk(typeof text === 'string' ? text : String(text || '')); },
     setUrl: function(url) { currentUrl = url; },
     getUrl: function() { return currentUrl; },
     isRunning: function() { return isRunning; },
@@ -322,6 +329,66 @@ function formatTime() {
 }
 
 var streamingLine = null;
+
+function pruneTerminalLines() {
+    if (!maxDomLines || maxDomLines <= 0 || !content) {
+        return;
+    }
+    while (content.children.length > maxDomLines) {
+        var first = content.firstElementChild;
+        if (!first) {
+            break;
+        }
+        if (first === streamingLine) {
+            streamingLine = null;
+        }
+        if (first === thinkingStreamingLine) {
+            thinkingStreamingLine = null;
+        }
+        content.removeChild(first);
+    }
+}
+
+function isDangerousStyle(value) {
+    var css = String(value || '').replace(/[\u0000-\u001f\u007f]+/g, '').toLowerCase();
+    return css.indexOf('@import') >= 0
+        || css.indexOf('expression(') >= 0
+        || /url\s*\(\s*['"]?\s*(?:javascript:|vbscript:|data:)/i.test(css);
+}
+
+function isDangerousUri(value) {
+    var url = String(value || '').replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (!url) return false;
+    if (url.indexOf('javascript:') === 0 || url.indexOf('vbscript:') === 0) return true;
+    if (url.indexOf('data:') === 0 && !/^data:image\/(?:png|gif|jpe?g|webp|bmp);base64,/i.test(url)) return true;
+    var match = url.match(/^([a-z][a-z0-9+.-]*):/i);
+    return !!(match && ['http', 'https', 'mailto', 'tel', 'ftp'].indexOf(match[1]) === -1);
+}
+
+function sanitizeTerminalHtml(html) {
+    var template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    template.content.querySelectorAll('script,style,link,meta,object,embed,iframe,frame,frameset,base,form,input,button,textarea,select,option').forEach(function(el) {
+        el.remove();
+    });
+    template.content.querySelectorAll('*').forEach(function(el) {
+        Array.prototype.slice.call(el.attributes).forEach(function(attr) {
+            var name = attr.name.toLowerCase();
+            if (name.indexOf('on') === 0 || name === 'srcdoc') {
+                el.removeAttribute(attr.name);
+                return;
+            }
+            if (['href', 'src', 'xlink:href', 'action', 'formaction', 'poster'].indexOf(name) >= 0 && isDangerousUri(attr.value)) {
+                el.removeAttribute(attr.name);
+                return;
+            }
+            if (name === 'style' && isDangerousStyle(attr.value)) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return template.innerHTML;
+}
 
 function log(text, type) {
     type = type || 'info';
@@ -349,7 +416,7 @@ function log(text, type) {
         var textEl = document.createElement('span');
         textEl.className = 'weline-sse-terminal-text';
         if (allowHtml && typeof lineText === 'string' && lineText.indexOf('<') >= 0) {
-            textEl.innerHTML = lineText;
+            textEl.innerHTML = sanitizeTerminalHtml(lineText);
         } else {
             textEl.textContent = lineText;
         }
@@ -357,6 +424,7 @@ function log(text, type) {
         
         content.appendChild(line);
     }
+    pruneTerminalLines();
     
     if (autoScroll) {
         body.scrollTop = body.scrollHeight;
@@ -386,6 +454,7 @@ function appendThinkingChunkDom(s) {
         textEl0.className = 'weline-sse-terminal-text';
         thinkingStreamingLine.appendChild(textEl0);
         content.appendChild(thinkingStreamingLine);
+        pruneTerminalLines();
     }
     var textEls = thinkingStreamingLine.querySelectorAll('.weline-sse-terminal-text');
     var textEl = textEls.length > 0 ? textEls[textEls.length - 1] : thinkingStreamingLine.lastChild;
@@ -401,6 +470,17 @@ function appendThinkingChunkDom(s) {
 
 var chunkRafPending = '';
 var chunkRafScheduled = false;
+var chunkRafId = null;
+var chunkRafGeneration = 0;
+function clearChunkRaf() {
+    chunkRafGeneration++;
+    chunkRafPending = '';
+    chunkRafScheduled = false;
+    if (chunkRafId !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(chunkRafId);
+    }
+    chunkRafId = null;
+}
 function appendChunkDom(s) {
     if (!s) return;
     if (!streamingLine) {
@@ -416,6 +496,7 @@ function appendChunkDom(s) {
         textEl0.className = 'weline-sse-terminal-text';
         streamingLine.appendChild(textEl0);
         content.appendChild(streamingLine);
+        pruneTerminalLines();
     }
     var textEl = streamingLine.querySelector('.weline-sse-terminal-text') || streamingLine.lastChild;
     if (textEl) {
@@ -427,8 +508,12 @@ function appendChunkDom(s) {
     }
     if (autoScroll) body.scrollTop = body.scrollHeight;
 }
-function flushChunkRaf() {
+function flushChunkRaf(generation) {
+    if (generation !== chunkRafGeneration) {
+        return;
+    }
     chunkRafScheduled = false;
+    chunkRafId = null;
     var batch = chunkRafPending;
     chunkRafPending = '';
     if (batch) appendChunkDom(batch);
@@ -439,7 +524,10 @@ function appendChunk(text) {
     chunkRafPending += s;
     if (!chunkRafScheduled) {
         chunkRafScheduled = true;
-        requestAnimationFrame(flushChunkRaf);
+        var generation = chunkRafGeneration;
+        chunkRafId = requestAnimationFrame(function() {
+            flushChunkRaf(generation);
+        });
     }
 }
 
@@ -472,7 +560,7 @@ function setStatus(status, text) {
 }
 
 function dispatchSseEvent(eventName, data, rawEvent) {
-    var shouldFinalizeStream = eventName === 'done';
+    var shouldFinalizeStream = eventName === 'done' || eventName === 'failed' || eventName === 'error' || eventName === 'close';
     if (shouldFinalizeStream) {
         terminalCompleted = true;
     }
@@ -534,7 +622,7 @@ function dispatchSseEvent(eventName, data, rawEvent) {
     } finally {
         // done is terminal. Always close EventSource, even if consumer callbacks throw.
         if (shouldFinalizeStream) {
-            stop({ internal: true });
+            stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });
         }
     }
 }
@@ -694,9 +782,9 @@ function start(url, options) {
                 log(e.data || eventName, eventName);
                 if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
             } finally {
-                if (eventName === 'done' && eventSource === source && sourceSeq === eventSourceSeq) {
+                if ((eventName === 'done' || eventName === 'failed' || eventName === 'error' || eventName === 'close') && eventSource === source && sourceSeq === eventSourceSeq) {
                     terminalCompleted = true;
-                    stop({ internal: true });
+                    stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });
                 }
             }
         });
@@ -719,6 +807,9 @@ function stop(options) {
         eventSource = null;
         closingSource.close();
     }
+    streamingLine = null;
+    thinkingStreamingLine = null;
+    clearChunkRaf();
     isRunning = false;
     
     if (btnToggle) {
@@ -739,8 +830,7 @@ function clear() {
     progressContainer.style.display = 'none';
     streamingLine = null;
     thinkingStreamingLine = null;
-    chunkRafPending = '';
-    chunkRafScheduled = false;
+    clearChunkRaf();
 }
 
 // 绑定按钮事件

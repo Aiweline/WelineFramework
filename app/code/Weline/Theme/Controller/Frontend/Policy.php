@@ -33,7 +33,11 @@ class Policy extends FrontendController
      */
     public function index()
     {
-        $this->renderPolicyLayout('default');
+        if ((string)$this->request->getParam('theme_public_route', '') !== '') {
+            return $this->renderPublicThemeLayout();
+        }
+
+        return $this->renderPolicyLayout('default');
     }
     
     /**
@@ -52,7 +56,30 @@ class Policy extends FrontendController
         $layout = $method;
         
         // 验证并渲染布局
-        $this->renderPolicyLayout($layout);
+        return $this->renderPolicyLayout($layout);
+    }
+
+    private function renderPublicThemeLayout(): string
+    {
+        $layoutType = $this->sanitizeLayoutName((string)$this->request->getParam('layout_type', 'default'));
+        $layoutOption = $this->sanitizeLayoutName((string)$this->request->getParam('layout_option', 'default'));
+
+        if (!$this->publicLayoutExists($layoutType, $layoutOption)) {
+            $layoutType = 'default';
+            $layoutOption = 'default';
+        }
+
+        $this->layoutType = $layoutType . '.' . $layoutOption;
+        $this->request->setGet('layout_type', $layoutType);
+        $this->request->setGet('page_type', $layoutType);
+        $this->request->setGet('layout_option', $layoutOption);
+
+        $title = trim((string)$this->request->getParam('theme_page_title', ''));
+        if ($title !== '') {
+            $this->assign('title', __($title));
+        }
+
+        return $this->renderThroughThemeLayout();
     }
     
     /**
@@ -60,7 +87,7 @@ class Policy extends FrontendController
      * 
      * @param string $layout 布局名称
      */
-    private function renderPolicyLayout(string $layout): void
+    private function renderPolicyLayout(string $layout): string
     {
         // 验证布局名称，防止路径遍历攻击
         $layout = $this->sanitizeLayoutName($layout);
@@ -83,12 +110,12 @@ class Policy extends FrontendController
         $title = $titles[$layout] ?? $titles['default'];
         $this->assign('title', $title);
         
-        // 设置布局文件路径
-        // 布局文件路径：Weline_Theme::theme/frontend/layouts/policy/{布局}.phtml
-        $layoutPath = "Weline_Theme::theme/frontend/layouts/policy/{$layout}.phtml";
-        
-        // 渲染布局
-        $this->fetch($layoutPath);
+        $this->layoutType = 'policy.' . $layout;
+        $this->request->setGet('page_type', 'policy');
+        $this->request->setGet('layout_type', 'policy');
+        $this->request->setGet('layout_option', $layout);
+
+        return $this->renderThroughThemeLayout();
     }
     
     /**
@@ -129,5 +156,39 @@ class Policy extends FrontendController
         ];
         
         return in_array($layout, $allowedLayouts, true);
+    }
+
+    private function renderThroughThemeLayout(): string
+    {
+        return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+    }
+
+    private function publicLayoutExists(string $layoutType, string $layoutOption): bool
+    {
+        $allowedLayouts = [
+            'account' => ['default'],
+            'account_auth' => ['default'],
+            'account_logout' => ['default'],
+            'account_orders' => ['default'],
+            'account_profile' => ['default'],
+            'activity' => ['default'],
+            'cart' => ['default', 'empty'],
+            'category' => ['default', 'list'],
+            'checkout' => ['default', 'one-page'],
+            'checkout_failer' => ['default'],
+            'checkout_success' => ['default'],
+            'cms_page' => ['default'],
+            'contact' => ['default'],
+            'default' => ['default'],
+            'policy' => ['default', 'cookie', 'privacy', 'term-condition', 'refund', 'disclaimer'],
+            'product' => ['default'],
+            'product_list' => ['default'],
+            'review' => ['default'],
+            'rma' => ['default'],
+            'search' => ['default'],
+        ];
+
+        return isset($allowedLayouts[$layoutType])
+            && in_array($layoutOption, $allowedLayouts[$layoutType], true);
     }
 }

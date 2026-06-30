@@ -1,64 +1,869 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$isLoggedIn = false;
+$displayName = '';
+try {
+    $frontendSession = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession();
+    $isLoggedIn = $frontendSession->isLoggedIn();
+    $user = $frontendSession->getUser();
+    if (is_object($user) && method_exists($user, 'getUsername')) {
+        $displayName = (string)($user->getUsername() ?? '');
+    }
+    if ($displayName === '' && is_object($user) && method_exists($user, 'getEmail')) {
+        $displayName = (string)$user->getEmail();
+    }
+} catch (\Throwable) {
+}
+
+$escape = static fn(string $text): string => htmlspecialchars((string)__($text), ENT_QUOTES, 'UTF-8');
+$escapeRaw = static fn(string $text): string => htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+$path = static function (string $path): string {
+    return '/' . ltrim($path, '/');
+};
+
+$backendPrefix = 'admin';
+$restFrontendPrefix = 'api';
+try {
+    $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: $backendPrefix;
+    $restFrontendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: $restFrontendPrefix;
+} catch (\Throwable) {
+}
+
+$docsUrl = $path('dev/tool/docs');
+$apiDocsUrl = $path('dev/tool/docs/api');
+$backendUrl = $path($backendPrefix);
+$apiEndpoint = $path(trim($restFrontendPrefix, '/') . '/framework/query-bin');
+$loginUrl = $path('customer/account/login');
+$registerUrl = $path('customer/account/register');
+$accountUrl = $path('customer/account');
+$identityUrl = $path('customer/account/index#identity-bridge');
+
+$quickLinks = [
+    ['label' => '开发文档', 'desc' => '浏览模块文档、架构说明和快速开始指南。', 'href' => $docsUrl, 'tone' => 'blue'],
+    ['label' => 'API 文档', 'desc' => '查看 QueryProvider、Graph 和 REST API 的在线说明。', 'href' => $apiDocsUrl, 'tone' => 'red'],
+    ['label' => '后台入口', 'desc' => '进入后台管理、系统配置、主题和开发工具。', 'href' => $backendUrl, 'tone' => 'green'],
+    ['label' => '快速教程', 'desc' => '按首页步骤完成安装、升级、启动和路由验证。', 'href' => '#quick-start', 'tone' => 'dark'],
+];
+
+$features = [
+    ['title' => '模块化工程', 'desc' => '模块独立注册、升级、事件、模型、模板和静态资源，适合长期扩展。'],
+    ['title' => '自动路由', 'desc' => 'Controller 自动发现，后台、前台、REST 区域前缀可以按环境独立配置。'],
+    ['title' => 'ORM 与模型迁移', 'desc' => '模型属性描述表结构、索引和字段，升级命令负责同步数据库结构。'],
+    ['title' => 'WLS 常驻运行时', 'desc' => '内置常驻服务、HTTPS、本地证书、会话服务和滚动重载，开发体验更接近生产。'],
+    ['title' => 'QueryProvider API', 'desc' => '前端通过 Weline.Api 访问站内 Provider、Graph 和 Stream，避免手写业务接口地址。'],
+    ['title' => '多语言与多站点', 'desc' => '语言、币种、站点、主题和配置都有明确作用域，适合国际化业务。'],
+    ['title' => '事件与 Hook', 'desc' => '框架级事件、模块 Hook 和扩展点让业务能力可以组合，不需要硬改核心。'],
+    ['title' => '开发工具链', 'desc' => '文档中心、API 文档、命令行、HTTP 请求调试和缓存工具覆盖常见开发闭环。'],
+];
+
+$steps = [
+    ['num' => '01', 'title' => '安装或升级项目', 'command' => 'php bin/w setup:upgrade', 'desc' => '同步模块、模型、路由、事件和配置，让当前环境进入可运行状态。'],
+    ['num' => '02', 'title' => '启动本地 WLS', 'command' => 'php bin/w server:start', 'desc' => '启动框架内置 HTTPS 服务，默认首页可通过 https://127.0.0.1/ 访问。'],
+    ['num' => '03', 'title' => '导入开发文档', 'command' => 'php bin/w doc:import', 'desc' => '扫描各模块 doc 目录，生成可搜索的开发文档中心。'],
+    ['num' => '04', 'title' => '检查首页路由', 'command' => 'php bin/w http:request /', 'desc' => '用框架命令验证前台首页可达，再进入浏览器做真实冒烟。'],
+];
+
+$capabilities = [
+    ['label' => '前台默认页', 'value' => 'https://127.0.0.1/'],
+    ['label' => 'API 运行入口', 'value' => $apiEndpoint],
+    ['label' => '文档中心', 'value' => $docsUrl],
+    ['label' => 'API 文档', 'value' => $apiDocsUrl],
+];
+
+$seoTitle = 'WelineFramework 默认首页';
+$seoDescription = 'WelineFramework 默认首页提供开发文档、API 文档、后台入口、WLS 常驻运行时和模块化开发快速入口。';
+$seoKeywords = [
+    'WelineFramework',
+    'Weline',
+    'WLS',
+    'PHP framework',
+    'QueryProvider',
+    __('模块化开发'),
+    __('多语言多站点'),
+];
+$seoRobots = 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1';
+$seoCanonicalUrl = '';
+try {
+    $fullRequestUri = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
+    if ($fullRequestUri !== '' && preg_match('/^https?:\/\//i', $fullRequestUri)) {
+        $parts = parse_url($fullRequestUri);
+        if (is_array($parts) && !empty($parts['host'])) {
+            $scheme = (string)($parts['scheme'] ?? 'https');
+            $host = (string)$parts['host'];
+            $port = isset($parts['port']) ? ':' . (string)$parts['port'] : '';
+            $seoCanonicalUrl = $scheme . '://' . $host . $port . '/';
+        }
+    }
+    if ($seoCanonicalUrl === '' && isset($this->request)) {
+        $scheme = (string)($this->request->getServer('REQUEST_SCHEME') ?: 'http');
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
+        if ($host !== '') {
+            $seoCanonicalUrl = $scheme . '://' . $host . '/';
+        }
+    }
+} catch (\Throwable) {
+}
+$this->setData('meta_title', __($seoTitle));
+$this->setData('meta_description', __($seoDescription));
+$this->setData('description', __($seoDescription));
+$this->setData('meta_keywords', $seoKeywords);
+$this->setData('robots', $seoRobots);
+if ($seoCanonicalUrl !== '') {
+    $this->setData('canonical_url', $seoCanonicalUrl);
+}
+$seoContext = [
+    'title' => __($seoTitle),
+    'description' => __($seoDescription),
+    'keywords' => $seoKeywords,
+    'robots' => $seoRobots,
+    'page_type' => 'home_page',
+    'site_name' => 'Weline Framework',
+];
+if ($seoCanonicalUrl !== '') {
+    $seoContext['canonical_url'] = $seoCanonicalUrl;
+}
+$this->setData('seo', $seoContext);
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>欢迎使用WelineFramework</title>
+    <w:hook>seo::head</w:hook>
     <style>
+        :root {
+            --wf-bg: #f7f8fb;
+            --wf-surface: #ffffff;
+            --wf-surface-soft: #eef2f7;
+            --wf-text: #111827;
+            --wf-muted: #4b5563;
+            --wf-border: #d9e1ec;
+            --wf-blue: #2563eb;
+            --wf-red: #c71d23;
+            --wf-green: #14804a;
+            --wf-ink: #101828;
+            --wf-brand-bg: #101828;
+            --wf-brand-text: #ffffff;
+            --wf-primary-bg: #101828;
+            --wf-primary-bg-hover: #243044;
+            --wf-primary-text: #ffffff;
+            --wf-secondary-bg: #ffffff;
+            --wf-secondary-bg-hover: #eff6ff;
+            --wf-secondary-text: #101828;
+            --wf-secondary-text-hover: #1d4ed8;
+            --wf-code-bg: #111827;
+            --wf-code-text: #e5e7eb;
+            --wf-shadow: 0 18px 48px rgba(15, 23, 42, 0.10);
+            --wf-radius: 8px;
+            --wf-radius-sm: 6px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
-            font-family: 'Arial', sans-serif;
-            background-color: #0d1117;
-            color: #fff;
-            text-align: center;
-            margin-top: 100px;
-        }
-
-        h1 {
-            font-size: 3em;
-            margin-bottom: 0.5em;
-        }
-
-        p {
-            font-size: 1.2em;
-            margin-bottom: 1em;
+            margin: 0;
+            min-width: 320px;
+            background:
+                linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0) 32rem),
+                var(--wf-bg);
+            color: var(--wf-text);
+            font-family: "IBM Plex Sans", "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+            line-height: 1.6;
         }
 
         a {
-            color: #61dafb;
+            color: inherit;
             text-decoration: none;
         }
 
-        a:hover {
-            text-decoration: underline;
+        a:focus-visible,
+        button:focus-visible {
+            outline: 3px solid rgba(37, 99, 235, 0.34);
+            outline-offset: 3px;
         }
 
-        .github, .gitee {
-            display: inline-block;
-            margin: 0 1em;
+        .wf-home {
+            overflow: hidden;
         }
 
-        .github img, .gitee img {
-            width: 50px;
-            height: 50px;
-            vertical-align: middle;
-            margin-right: 0.5em;
+        .wf-home__shell {
+            width: min(1180px, calc(100% - 40px));
+            margin: 0 auto;
+        }
+
+        .wf-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            min-height: 76px;
+        }
+
+        .wf-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 800;
+            color: var(--wf-ink);
+        }
+
+        .wf-brand__mark {
+            display: grid;
+            place-items: center;
+            width: 38px;
+            height: 38px;
+            border-radius: var(--wf-radius-sm);
+            background: var(--wf-brand-bg);
+            color: var(--wf-brand-text);
+            font-family: Consolas, "JetBrains Mono", monospace;
+            font-weight: 800;
+        }
+
+        .wf-nav__links {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .wf-nav__links a,
+        .wf-btn {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-radius: var(--wf-radius-sm);
+            padding: 0 14px;
+            border: 1px solid transparent;
+            font-size: 0.94rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .wf-nav__links a {
+            color: var(--wf-muted);
+        }
+
+        .wf-nav__links a:hover {
+            color: var(--wf-blue);
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .wf-btn {
+            background: var(--wf-primary-bg);
+            color: var(--wf-primary-text);
+            box-shadow: 0 10px 24px rgba(16, 24, 40, 0.18);
+        }
+
+        .wf-btn:hover {
+            background: var(--wf-primary-bg-hover);
+        }
+
+        .wf-btn--secondary {
+            background: var(--wf-secondary-bg);
+            color: var(--wf-secondary-text);
+            border-color: var(--wf-border);
+            box-shadow: none;
+        }
+
+        .wf-btn--secondary:hover {
+            border-color: rgba(37, 99, 235, 0.42);
+            background: var(--wf-secondary-bg-hover);
+            color: var(--wf-secondary-text-hover);
+        }
+
+        .wf-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.72fr);
+            align-items: center;
+            gap: 34px;
+            padding: 54px 0 28px;
+        }
+
+        .wf-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 18px;
+            padding: 6px 10px;
+            border: 1px solid rgba(199, 29, 35, 0.22);
+            border-radius: 999px;
+            color: var(--wf-red);
+            background: rgba(199, 29, 35, 0.06);
+            font-size: 0.88rem;
+            font-weight: 800;
+        }
+
+        .wf-kicker::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--wf-red);
+        }
+
+        .wf-hero h1 {
+            margin: 0;
+            max-width: 820px;
+            color: var(--wf-ink);
+            font-size: 3.45rem;
+            line-height: 1.08;
+            letter-spacing: 0;
+        }
+
+        .wf-hero__lead {
+            max-width: 720px;
+            margin: 20px 0 0;
+            color: var(--wf-muted);
+            font-size: 1.1rem;
+        }
+
+        .wf-hero__actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .wf-hero__note {
+            margin-top: 22px;
+            color: var(--wf-muted);
+            font-size: 0.94rem;
+        }
+
+        .wf-status {
+            border: 1px solid var(--wf-border);
+            border-radius: var(--wf-radius);
+            background: rgba(255, 255, 255, 0.84);
+            box-shadow: var(--wf-shadow);
+            padding: 20px;
+        }
+
+        .wf-status__title {
+            margin: 0 0 14px;
+            color: var(--wf-ink);
+            font-size: 1rem;
+            font-weight: 800;
+        }
+
+        .wf-status__grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .wf-status__item {
+            display: grid;
+            gap: 3px;
+            padding: 12px;
+            border: 1px solid var(--wf-border);
+            border-radius: var(--wf-radius-sm);
+            background: #ffffff;
+        }
+
+        .wf-status__label {
+            color: var(--wf-muted);
+            font-size: 0.78rem;
+            font-weight: 800;
+        }
+
+        .wf-status__value {
+            overflow-wrap: anywhere;
+            color: var(--wf-ink);
+            font-family: Consolas, "JetBrains Mono", monospace;
+            font-size: 0.92rem;
+            font-weight: 700;
+        }
+
+        .wf-section {
+            padding: 42px 0;
+        }
+
+        .wf-section__header {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 22px;
+        }
+
+        .wf-section__eyebrow {
+            color: var(--wf-red);
+            font-size: 0.82rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .wf-section h2 {
+            margin: 0;
+            color: var(--wf-ink);
+            font-size: 2rem;
+            line-height: 1.18;
+            letter-spacing: 0;
+        }
+
+        .wf-section__desc {
+            max-width: 760px;
+            margin: 0;
+            color: var(--wf-muted);
+        }
+
+        .wf-card-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .wf-link-card,
+        .wf-feature-card,
+        .wf-step,
+        .wf-account {
+            border: 1px solid var(--wf-border);
+            border-radius: var(--wf-radius);
+            background: var(--wf-surface);
+        }
+
+        .wf-link-card {
+            display: grid;
+            align-content: space-between;
+            min-height: 180px;
+            padding: 18px;
+            transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+        }
+
+        .wf-link-card:hover {
+            border-color: rgba(37, 99, 235, 0.42);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+            transform: translateY(-2px);
+        }
+
+        .wf-link-card__tone {
+            width: 42px;
+            height: 6px;
+            border-radius: 999px;
+            background: var(--wf-blue);
+        }
+
+        .wf-link-card__tone--red {
+            background: var(--wf-red);
+        }
+
+        .wf-link-card__tone--green {
+            background: var(--wf-green);
+        }
+
+        .wf-link-card__tone--dark {
+            background: var(--wf-ink);
+        }
+
+        .wf-link-card h3,
+        .wf-feature-card h3,
+        .wf-step h3,
+        .wf-account h2 {
+            margin: 14px 0 8px;
+            color: var(--wf-ink);
+            font-size: 1.04rem;
+            line-height: 1.3;
+        }
+
+        .wf-link-card p,
+        .wf-feature-card p,
+        .wf-step p,
+        .wf-account p {
+            margin: 0;
+            color: var(--wf-muted);
+            font-size: 0.94rem;
+        }
+
+        .wf-link-card__cta {
+            margin-top: 18px;
+            color: var(--wf-blue);
+            font-weight: 800;
+        }
+
+        .wf-feature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .wf-feature-card {
+            padding: 18px;
+            min-height: 190px;
+        }
+
+        .wf-feature-card__index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 26px;
+            padding: 0 8px;
+            border-radius: 999px;
+            background: var(--wf-surface-soft);
+            color: var(--wf-muted);
+            font-family: Consolas, "JetBrains Mono", monospace;
+            font-size: 0.8rem;
+            font-weight: 800;
+        }
+
+        .wf-steps {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .wf-step {
+            padding: 18px;
+            min-height: 238px;
+        }
+
+        .wf-step__num {
+            color: var(--wf-red);
+            font-family: Consolas, "JetBrains Mono", monospace;
+            font-size: 0.9rem;
+            font-weight: 900;
+        }
+
+        .wf-code {
+            display: block;
+            width: 100%;
+            margin: 14px 0;
+            padding: 10px 12px;
+            overflow-x: auto;
+            border-radius: var(--wf-radius-sm);
+            background: var(--wf-code-bg);
+            color: var(--wf-code-text);
+            font-family: Consolas, "JetBrains Mono", monospace;
+            font-size: 0.88rem;
+            white-space: nowrap;
+        }
+
+        .wf-account {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 18px;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(20, 128, 74, 0.10), rgba(37, 99, 235, 0.08)), #ffffff;
+        }
+
+        .wf-account__actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .wf-repos {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 24px 0 56px;
+        }
+
+        .wf-repos__links {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .wf-repo-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 44px;
+            padding: 6px 12px 6px 6px;
+            border: 1px solid var(--wf-border);
+            border-radius: var(--wf-radius-sm);
+            background: #ffffff;
+            color: var(--wf-ink);
+            font-weight: 800;
+            transition: border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .wf-repo-link:hover {
+            border-color: rgba(37, 99, 235, 0.42);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .wf-repo-logo {
+            display: block;
+            flex: 0 0 34px;
+            width: 34px;
+            height: 34px;
+        }
+
+        .wf-muted {
+            color: var(--wf-muted);
+        }
+
+        @media (max-width: 980px) {
+            .wf-hero {
+                grid-template-columns: 1fr;
+                padding-top: 34px;
+            }
+
+            .wf-card-grid,
+            .wf-feature-grid,
+            .wf-steps {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .wf-home__shell {
+                width: min(100% - 24px, 1180px);
+            }
+
+            .wf-nav {
+                align-items: flex-start;
+                flex-direction: column;
+                padding: 14px 0 4px;
+            }
+
+            .wf-nav__links {
+                justify-content: flex-start;
+            }
+
+            .wf-hero h1 {
+                font-size: 2.35rem;
+            }
+
+            .wf-hero__actions,
+            .wf-account,
+            .wf-account__actions {
+                align-items: stretch;
+                grid-template-columns: 1fr;
+                flex-direction: column;
+            }
+
+            .wf-card-grid,
+            .wf-feature-grid,
+            .wf-steps {
+                grid-template-columns: 1fr;
+            }
+
+            .wf-section {
+                padding: 32px 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+
+            *,
+            *::before,
+            *::after {
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --wf-bg: #0f172a;
+                --wf-surface: #111827;
+                --wf-surface-soft: #1f2937;
+                --wf-text: #e5e7eb;
+                --wf-muted: #cbd5e1;
+                --wf-border: #334155;
+                --wf-blue: #60a5fa;
+                --wf-red: #f87171;
+                --wf-green: #34d399;
+                --wf-ink: #f8fafc;
+                --wf-brand-bg: #2563eb;
+                --wf-brand-text: #ffffff;
+                --wf-primary-bg: #2563eb;
+                --wf-primary-bg-hover: #1d4ed8;
+                --wf-primary-text: #ffffff;
+                --wf-secondary-bg: #1f2937;
+                --wf-secondary-bg-hover: #273244;
+                --wf-secondary-text: #e5e7eb;
+                --wf-secondary-text-hover: #ffffff;
+                --wf-code-bg: #020617;
+                --wf-code-text: #f8fafc;
+                --wf-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+            }
+
+            body {
+                background:
+                    linear-gradient(180deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0) 30rem),
+                    var(--wf-bg);
+            }
+
+            .wf-status,
+            .wf-status__item,
+            .wf-link-card,
+            .wf-feature-card,
+            .wf-step,
+            .wf-repo-link {
+                background: var(--wf-surface);
+            }
+
+            .wf-account {
+                background: linear-gradient(135deg, rgba(20, 128, 74, 0.18), rgba(37, 99, 235, 0.16)), var(--wf-surface);
+            }
+
+            .wf-btn {
+                box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
+            }
         }
     </style>
 </head>
 <body>
-<h1>欢迎使用WelineFramework</h1>
-<p>感谢您选择WelineFramework，一个强大的Web开发框架。</p>
-<div class="github">
-    <a href="https://github.com/Aiweline/WelineFramework" target="_blank">
-        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
-        GitHub
-    </a>
+<div class="wf-home">
+    <header class="wf-home__shell wf-nav" aria-label="<?= $escape('首页导航') ?>">
+        <a class="wf-brand" href="#top" aria-label="<?= $escape('WelineFramework 首页') ?>">
+            <span class="wf-brand__mark" aria-hidden="true">W</span>
+            <span>WelineFramework</span>
+        </a>
+        <nav class="wf-nav__links" aria-label="<?= $escape('快捷入口') ?>">
+            <a href="<?= $escapeRaw($docsUrl) ?>"><?= $escape('文档') ?></a>
+            <a href="<?= $escapeRaw($apiDocsUrl) ?>"><?= $escape('API') ?></a>
+            <a href="#quick-start"><?= $escape('快速开发') ?></a>
+            <a href="#advantages"><?= $escape('优势') ?></a>
+            <a href="<?= $escapeRaw($backendUrl) ?>"><?= $escape('后台') ?></a>
+        </nav>
+    </header>
+
+    <main id="top">
+        <section class="wf-home__shell wf-hero" aria-labelledby="wf-home-title">
+            <div>
+                <p class="wf-kicker"><?= $escape('默认前端已经就绪') ?></p>
+                <h1 id="wf-home-title"><?= $escape('欢迎使用 WelineFramework') ?></h1>
+                <p class="wf-hero__lead"><?= $escape('这是框架安装后的默认官网首页。你可以从这里进入开发文档、API 文档、后台管理和快速开发教程，开始构建模块、主题、接口与业务系统。') ?></p>
+                <div class="wf-hero__actions">
+                    <a class="wf-btn" href="<?= $escapeRaw($docsUrl) ?>"><?= $escape('查看开发文档') ?></a>
+                    <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($apiDocsUrl) ?>"><?= $escape('查看 API 文档') ?></a>
+                    <a class="wf-btn wf-btn--secondary" href="#quick-start"><?= $escape('快速开始') ?></a>
+                </div>
+                <p class="wf-hero__note"><?= $escape('本地默认访问地址：') ?><strong>https://127.0.0.1/</strong></p>
+            </div>
+
+            <aside class="wf-status" aria-label="<?= $escape('当前开发入口') ?>">
+                <h2 class="wf-status__title"><?= $escape('当前开发入口') ?></h2>
+                <div class="wf-status__grid">
+                    <?php foreach ($capabilities as $capability): ?>
+                        <div class="wf-status__item">
+                            <span class="wf-status__label"><?= $escape($capability['label']) ?></span>
+                            <span class="wf-status__value"><?= $escapeRaw($capability['value']) ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </aside>
+        </section>
+
+        <section class="wf-home__shell wf-section" aria-labelledby="wf-links-title">
+            <div class="wf-section__header">
+                <span class="wf-section__eyebrow"><?= $escape('从这里开始') ?></span>
+                <h2 id="wf-links-title"><?= $escape('常用入口') ?></h2>
+                <p class="wf-section__desc"><?= $escape('默认首页先把最常用的开发入口摆出来，新项目不需要猜路由，也不需要翻命令历史。') ?></p>
+            </div>
+            <div class="wf-card-grid">
+                <?php foreach ($quickLinks as $link): ?>
+                    <a class="wf-link-card" href="<?= $escapeRaw($link['href']) ?>">
+                        <span class="wf-link-card__tone wf-link-card__tone--<?= $escapeRaw($link['tone']) ?>" aria-hidden="true"></span>
+                        <div>
+                            <h3><?= $escape($link['label']) ?></h3>
+                            <p><?= $escape($link['desc']) ?></p>
+                        </div>
+                        <span class="wf-link-card__cta"><?= $escape('打开') ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <section class="wf-home__shell wf-section" id="quick-start" aria-labelledby="wf-quick-title">
+            <div class="wf-section__header">
+                <span class="wf-section__eyebrow"><?= $escape('快速开发') ?></span>
+                <h2 id="wf-quick-title"><?= $escape('快速开发教程') ?></h2>
+                <p class="wf-section__desc"><?= $escape('按照这四步可以完成新项目的基础开发闭环：升级、启动、导入文档、验证首页。') ?></p>
+            </div>
+            <div class="wf-steps">
+                <?php foreach ($steps as $step): ?>
+                    <article class="wf-step">
+                        <span class="wf-step__num"><?= $escapeRaw($step['num']) ?></span>
+                        <h3><?= $escape($step['title']) ?></h3>
+                        <code class="wf-code"><?= $escapeRaw($step['command']) ?></code>
+                        <p><?= $escape($step['desc']) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <section class="wf-home__shell wf-section" id="advantages" aria-labelledby="wf-advantages-title">
+            <div class="wf-section__header">
+                <span class="wf-section__eyebrow"><?= $escape('框架优势') ?></span>
+                <h2 id="wf-advantages-title"><?= $escape('框架优势') ?></h2>
+                <p class="wf-section__desc"><?= $escape('WelineFramework 面向真实业务项目，核心能力围绕模块化、运行时、API、数据模型、多语言和开发效率组织。') ?></p>
+            </div>
+            <div class="wf-feature-grid">
+                <?php foreach ($features as $index => $feature): ?>
+                    <article class="wf-feature-card">
+                        <span class="wf-feature-card__index"><?= $escapeRaw(str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                        <h3><?= $escape($feature['title']) ?></h3>
+                        <p><?= $escape($feature['desc']) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <section class="wf-home__shell wf-section" aria-label="<?= $escape('官网账户') ?>">
+            <div class="wf-account">
+                <div>
+                    <?php if ($isLoggedIn): ?>
+                        <h2><?= $escape('已登录官网账号') ?><?= $displayName !== '' ? '，' . $escapeRaw($displayName) : '' ?></h2>
+                        <p><?= $escape('你可以进入个人中心管理资料、安全设置以及 App、Skill、BBS、A2A 等站点的通信授权。') ?></p>
+                    <?php else: ?>
+                        <h2><?= $escape('官网登录与互通授权') ?></h2>
+                        <p><?= $escape('登录前端账号后，可通过官网授权 App、Skill、BBS、A2A 等可信站点通信登录。') ?></p>
+                    <?php endif; ?>
+                </div>
+                <div class="wf-account__actions">
+                    <?php if ($isLoggedIn): ?>
+                        <a class="wf-btn" href="<?= $escapeRaw($accountUrl) ?>"><?= $escape('个人中心') ?></a>
+                        <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($identityUrl) ?>"><?= $escape('授权应用') ?></a>
+                    <?php else: ?>
+                        <a class="wf-btn" href="<?= $escapeRaw($loginUrl) ?>"><?= $escape('登录官网账号') ?></a>
+                        <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($registerUrl) ?>"><?= $escape('注册账号') ?></a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="wf-home__shell wf-repos">
+        <span class="wf-muted"><?= $escape('源码、Issue 与社区协作入口') ?></span>
+        <div class="wf-repos__links">
+            <a class="wf-repo-link" href="https://github.com/Aiweline/WelineFramework" target="_blank" rel="noopener">
+                <svg class="wf-repo-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="24" height="24" rx="4" fill="#ffffff"/>
+                    <path fill="#181717" d="M12 2.3a9.7 9.7 0 0 0-3.07 18.9c.48.09.66-.21.66-.46v-1.7c-2.69.58-3.26-1.15-3.26-1.15-.44-1.12-1.08-1.42-1.08-1.42-.88-.6.07-.59.07-.59.97.07 1.48 1 1.48 1 .87 1.48 2.28 1.05 2.84.8.09-.63.34-1.05.62-1.29-2.15-.24-4.41-1.07-4.41-4.78 0-1.06.38-1.92 1-2.6-.1-.25-.43-1.23.09-2.56 0 0 .81-.26 2.67.99a9.2 9.2 0 0 1 4.86 0c1.85-1.25 2.66-.99 2.66-.99.53 1.33.2 2.31.1 2.56.62.68 1 1.54 1 2.6 0 3.72-2.27 4.53-4.43 4.77.35.3.67.9.67 1.82v2.7c0 .25.17.55.67.45A9.7 9.7 0 0 0 12 2.3Z"/>
+                </svg>
+                GitHub
+            </a>
+            <a class="wf-repo-link" href="https://gitee.com/aiweline/WelineFramework" target="_blank" rel="noopener">
+                <svg class="wf-repo-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#C71D23" d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12a12 12 0 0 0 12-12A12 12 0 0 0 12 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.59.59 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296Z"/>
+                </svg>
+                Gitee
+            </a>
+        </div>
+    </footer>
 </div>
-<div class="gitee">
-    <a href="https://gitee.com/aiweline/WelineFramework" target="_blank">
-        <img src="https://gitee.com/assets/logo-en.svg" alt="Gitee">
-        Gitee
-    </a>
-</div>
+<w:hook>seo::footer</w:hook>
 </body>
 </html>

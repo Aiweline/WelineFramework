@@ -38,7 +38,15 @@ class ConnectorService
     public function execute(Request $request, array $opts): array
     {
         $rootPath = $this->normalizeRootPath($opts);
-        $rootReal = \realpath($rootPath) ?: $rootPath;
+        if (!\is_dir($rootPath) && !@\mkdir($rootPath, 0755, true)) {
+            return ['error' => 'Invalid path'];
+        }
+
+        $rootReal = \realpath($rootPath);
+        if ($rootReal === false) {
+            return ['error' => 'Invalid path'];
+        }
+        $rootReal = $this->normalizeAbsolutePath($rootReal);
 
         $src = $this->parseSource($request);
         $cmd = $src['cmd'] ?? 'open';
@@ -125,7 +133,7 @@ class ConnectorService
         $path = $opts['rootPath']
             ?? ($opts['roots'][0]['path'] ?? (PUB . 'media' . \DIRECTORY_SEPARATOR));
 
-        return \rtrim($path, "/\\") . \DIRECTORY_SEPARATOR;
+        return \rtrim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path), \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
     }
 
     private function encodeHash(string $relativePath): string
@@ -153,7 +161,7 @@ class ConnectorService
         if ($decoded === '/') {
             return '';
         }
-        return \trim(str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $decoded), \DIRECTORY_SEPARATOR);
+        return \trim(\str_replace('\\', '/', $decoded), '/');
     }
 
     /**
@@ -162,15 +170,16 @@ class ConnectorService
     private function resolvePath(string $hash, string $rootPath, string $rootReal): array
     {
         $relative = $hash === '' ? '' : ($this->decodeHash($hash) ?? '');
-        $relative = \trim($relative, "/\\");
-        $abs = $rootPath . $relative;
-        $real = \realpath($abs) ?: $abs;
+        $relative = $this->normalizeRelativePath($relative);
+        $abs = $this->joinRootPath($rootPath, $relative);
+        $real = \realpath($abs);
+        $checked = $real !== false ? $this->normalizeAbsolutePath($real) : $this->assertWriteTargetInRoot($abs, $rootReal);
 
-        if (!\str_starts_with($real, $rootReal)) {
+        if (!$this->isPathInsideRoot($checked, $rootReal)) {
             throw new \RuntimeException('Invalid path');
         }
 
-        return [$relative, $real];
+        return [$relative, $real !== false ? $checked : $abs];
     }
 
     private function buildFileInfo(string $relative, string $rootPath, string $rootReal): array
@@ -372,8 +381,14 @@ class ConnectorService
         
         // 如果指定了 path 参数（初始路径），优先使用它
         if ($pathParam !== '' && $targetHash === '') {
-            $pathParam = \trim(str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $pathParam), \DIRECTORY_SEPARATOR);
-            $abs = $rootPath . $pathParam;
+            try {
+                $pathParam = $this->normalizeRelativePath((string) $pathParam);
+                $abs = $this->joinRootPath($rootPath, $pathParam);
+                $this->assertWriteTargetInRoot($abs, $rootReal);
+            } catch (\Throwable) {
+                $pathParam = '';
+                $abs = $rootPath;
+            }
             
             // 如果目录不存在，尝试创建
             if (!\is_dir($abs)) {
@@ -426,14 +441,19 @@ class ConnectorService
     private function handleMkdir(array $src, string $rootPath, string $rootReal): array
     {
         $target = (string) ($src['target'] ?? '');
-        $name   = \trim((string) ($src['name'] ?? ''));
-        if ($name === '') {
+        $name   = $this->sanitizeLeafName((string) ($src['name'] ?? ''));
+        if ($name === null) {
             return ['error' => 'Folder name is required'];
         }
 
         [$relative, $abs] = $this->resolvePath($target, $rootPath, $rootReal);
         $dirRel = \trim(($relative === '' ? '' : $relative . '/') . $name, '/');
-        $dirAbs = $rootPath . $dirRel;
+        $dirAbs = $this->joinRootPath($rootPath, $dirRel);
+        try {
+            $this->assertWriteTargetInRoot($dirAbs, $rootReal);
+        } catch (\Throwable) {
+            return ['error' => 'Invalid path'];
+        }
 
         if (\is_dir($dirAbs)) {
             return ['error' => 'Folder already exists'];
@@ -449,8 +469,8 @@ class ConnectorService
     private function handleRename(array $src, string $rootPath, string $rootReal): array
     {
         $target = (string) ($src['target'] ?? '');
-        $name   = \trim((string) ($src['name'] ?? ''));
-        if ($name === '') {
+        $name   = $this->sanitizeLeafName((string) ($src['name'] ?? ''));
+        if ($name === null) {
             return ['error' => 'New name is required'];
         }
 
@@ -461,7 +481,12 @@ class ConnectorService
 
         $dirRel = \trim(\dirname($relative), '/.');
         $newRel = \trim(($dirRel === '' ? '' : $dirRel . '/') . $name, '/');
-        $newAbs = $rootPath . $newRel;
+        $newAbs = $this->joinRootPath($rootPath, $newRel);
+        try {
+            $this->assertWriteTargetInRoot($newAbs, $rootReal);
+        } catch (\Throwable) {
+            return ['error' => 'Invalid path'];
+        }
 
         if (!@\rename($abs, $newAbs)) {
             return ['error' => 'Failed to rename'];
@@ -529,11 +554,14 @@ class ConnectorService
                 if ($tmp === '' || $error !== \UPLOAD_ERR_OK || !\file_exists($tmp)) {
                     continue;
                 }
-                $cleanName = \basename((string) $name);
+                $cleanName = $this->sanitizeLeafName((string) $name);
+                if ($cleanName === null) {
+                    continue;
+                }
                 $rel = \trim(($relative === '' ? '' : $relative . '/') . $cleanName, '/');
                 $rel = \str_replace('\\', '/', $rel);
                 $dest = $rootPath . \str_replace('/', \DIRECTORY_SEPARATOR, $rel);
-                if ($this->ensureParentDir($dest) && $this->moveUploadedFile($tmp, $dest)) {
+                if ($this->ensureParentDir($dest, $rootReal) && $this->moveUploadedFile($tmp, $dest)) {
                     $added[] = $this->buildFileInfo($rel, $rootPath, $rootReal);
                 }
             }
@@ -542,11 +570,14 @@ class ConnectorService
             $name = $files['name'] ?? '';
             $error = $files['error'] ?? \UPLOAD_ERR_NO_FILE;
             if ($tmp !== '' && $error === \UPLOAD_ERR_OK && \file_exists($tmp)) {
-                $cleanName = \basename((string) $name);
+                $cleanName = $this->sanitizeLeafName((string) $name);
+                if ($cleanName === null) {
+                    return ['error' => 'Upload failed'];
+                }
                 $rel = \trim(($relative === '' ? '' : $relative . '/') . $cleanName, '/');
                 $rel = \str_replace('\\', '/', $rel);
                 $dest = $rootPath . \str_replace('/', \DIRECTORY_SEPARATOR, $rel);
-                if ($this->ensureParentDir($dest) && $this->moveUploadedFile($tmp, $dest)) {
+                if ($this->ensureParentDir($dest, $rootReal) && $this->moveUploadedFile($tmp, $dest)) {
                     $added[] = $this->buildFileInfo($rel, $rootPath, $rootReal);
                 }
             }
@@ -560,10 +591,111 @@ class ConnectorService
     }
 
     /** 确保目标文件的父目录存在（Linux 下路径一致） */
-    private function ensureParentDir(string $filePath): bool
+    private function ensureParentDir(string $filePath, string $rootReal): bool
     {
+        try {
+            $this->assertWriteTargetInRoot($filePath, $rootReal);
+        } catch (\Throwable) {
+            return false;
+        }
+
         $dir = \dirname($filePath);
         return \is_dir($dir) || @\mkdir($dir, 0755, true);
+    }
+
+    private function normalizeRelativePath(string $relative): string
+    {
+        $relative = \trim(\str_replace('\\', '/', $relative), '/');
+        if ($relative === '') {
+            return '';
+        }
+        if (\preg_match('/[\x00-\x1F\x7F]/', $relative)) {
+            throw new \RuntimeException('Invalid path');
+        }
+
+        $segments = [];
+        foreach (\explode('/', $relative) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                throw new \RuntimeException('Invalid path');
+            }
+            $segments[] = $segment;
+        }
+
+        return \implode('/', $segments);
+    }
+
+    private function sanitizeLeafName(string $name): ?string
+    {
+        $name = \trim($name);
+        if ($name === '' || $name === '.' || $name === '..') {
+            return null;
+        }
+        if (\str_contains($name, '/') || \str_contains($name, '\\') || \preg_match('/[\x00-\x1F\x7F]/', $name)) {
+            return null;
+        }
+        if (\basename($name) !== $name) {
+            return null;
+        }
+
+        return $name;
+    }
+
+    private function joinRootPath(string $rootPath, string $relative): string
+    {
+        return \rtrim($rootPath, DIRECTORY_SEPARATOR) . ($relative === '' ? '' : DIRECTORY_SEPARATOR . \str_replace('/', DIRECTORY_SEPARATOR, $relative));
+    }
+
+    private function assertWriteTargetInRoot(string $targetPath, string $rootReal): string
+    {
+        $real = \realpath($targetPath);
+        if ($real !== false) {
+            $real = $this->normalizeAbsolutePath($real);
+            if (!$this->isPathInsideRoot($real, $rootReal)) {
+                throw new \RuntimeException('Invalid path');
+            }
+            return $real;
+        }
+
+        $parent = \dirname($targetPath);
+        while (!\file_exists($parent)) {
+            $next = \dirname($parent);
+            if ($next === $parent) {
+                throw new \RuntimeException('Invalid path');
+            }
+            $parent = $next;
+        }
+
+        $parentReal = \realpath($parent);
+        if ($parentReal === false) {
+            throw new \RuntimeException('Invalid path');
+        }
+        $parentReal = $this->normalizeAbsolutePath($parentReal);
+        if (!$this->isPathInsideRoot($parentReal, $rootReal)) {
+            throw new \RuntimeException('Invalid path');
+        }
+
+        return $this->normalizeAbsolutePath($targetPath);
+    }
+
+    private function normalizeAbsolutePath(string $path): string
+    {
+        $path = \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        while (\str_contains($path, DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR)) {
+            $path = \str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $path);
+        }
+        return \rtrim($path, DIRECTORY_SEPARATOR);
+    }
+
+    private function isPathInsideRoot(string $path, string $rootReal): bool
+    {
+        $path = $this->normalizeAbsolutePath($path);
+        $root = $this->normalizeAbsolutePath($rootReal);
+        if (IS_WIN) {
+            $path = \strtolower($path);
+            $root = \strtolower($root);
+        }
+
+        return $path === $root || \str_starts_with($path, $root . DIRECTORY_SEPARATOR);
     }
 
     /**

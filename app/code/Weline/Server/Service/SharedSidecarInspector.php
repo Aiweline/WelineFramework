@@ -62,7 +62,7 @@ final class SharedSidecarInspector
         }
 
         $indexedResult = $this->inspectIndexedPortOccupant($port, $expectedRole, $defaultTokenFileName, $result);
-        if ($indexedResult['reusable'] || ($indexedResult['in_use'] && $indexedResult['pid'] > 0)) {
+        if ($indexedResult['reusable']) {
             return $indexedResult;
         }
 

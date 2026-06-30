@@ -135,7 +135,26 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
 
         return in_array('*', $definition->pageLayouts, true)
             || in_array($pageType, $definition->pageLayouts, true)
-            || in_array('default', $definition->pageLayouts, true);
+            || in_array('default', $definition->pageLayouts, true)
+            || $this->matchesLayoutSupportCode($definition, $pageType);
+    }
+
+    private function matchesLayoutSupportCode(ThemeComponentDefinition $definition, string $pageType): bool
+    {
+        $layout = strtolower(trim($pageType));
+        if ($layout === '') {
+            return false;
+        }
+
+        $layoutCode = 'layout-' . $layout;
+        $layoutPrefix = $layoutCode . '-';
+        foreach ($this->collectWidgetSupportCodes($definition->toWidgetArray()) as $code) {
+            if ($code === $layoutCode || str_starts_with($code, $layoutPrefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function matchesSlotFilter(array $widget, ?array $filterOptions): bool
@@ -154,6 +173,13 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
             return true;
         }
 
+        $acceptCodes = $this->normalizeCodeList($filterOptions['accept'] ?? $filterOptions['accept_codes'] ?? []);
+        $rejectCodes = $this->normalizeCodeList($filterOptions['reject'] ?? $filterOptions['reject_codes'] ?? []);
+        $widgetCodes = $this->collectWidgetSupportCodes($widget);
+        if ($rejectCodes !== [] && array_intersect($rejectCodes, $widgetCodes) !== []) {
+            return false;
+        }
+
         $widgetExclusive = (bool)($widget['exclusive'] ?? false);
         $widgetSlot = $widget['slot'] ?? null;
         $widgetPositions = $widget['position'] ?? [];
@@ -166,28 +192,149 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
         $isExclusiveArea = $area ? in_array($area, self::EXCLUSIVE_AREAS, true) : false;
 
         if ($isSubSlot) {
-            return $widgetSlot === $slotId || in_array($slotId, $widgetPositions, true);
+            if ($acceptCodes !== []) {
+                return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
+            }
+            return in_array((string)$slotId, $widgetCodes, true)
+                || $widgetSlot === $slotId
+                || in_array($slotId, $widgetPositions, true);
         }
 
         if ($isExclusiveArea && ($area === $slotId || $slotId === null)) {
             if ($showExclusiveOnly) {
-                return $widgetExclusive;
+                return $widgetExclusive && $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
             }
-            return in_array($area, $widgetPositions, true) || in_array('*', $widgetPositions, true);
+            return (in_array($area, $widgetPositions, true) || in_array('*', $widgetPositions, true))
+                && $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
         }
 
         if ($area === 'content' || $slotId === 'content') {
             if ($widgetType === 'header' || $widgetType === 'footer') {
                 return false;
             }
-            return in_array('content', $widgetPositions, true) || in_array('*', $widgetPositions, true);
+            return (in_array('content', $widgetPositions, true) || in_array('*', $widgetPositions, true))
+                && $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
         }
 
         if ($area) {
-            return in_array($area, $widgetPositions, true) || in_array('*', $widgetPositions, true);
+            return (in_array($area, $widgetPositions, true) || in_array('*', $widgetPositions, true))
+                && $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
         }
 
-        return true;
+        return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
+    }
+
+    private function matchesSlotCodeProtocol(array $acceptCodes, array $widgetCodes): bool
+    {
+        if ($acceptCodes === [] || in_array('*', $acceptCodes, true)) {
+            return true;
+        }
+
+        $expandedAccept = $this->expandAcceptCodeList($acceptCodes);
+
+        return array_intersect($expandedAccept, $widgetCodes) !== [];
+    }
+
+    /**
+     * 布局变体 accept 与通用 layout 码互通，例如：
+     * layout-homepage-minimal-content 亦接受部件 supports 中的 layout-homepage-content。
+     *
+     * @return list<string>
+     */
+    private function expandAcceptCodeList(array $acceptCodes): array
+    {
+        $expanded = [];
+        foreach ($acceptCodes as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code === '') {
+                continue;
+            }
+            foreach ($this->expandAcceptAliases($code) as $alias) {
+                $expanded[$alias] = $alias;
+            }
+        }
+
+        return array_values($expanded);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function expandAcceptAliases(string $acceptCode): array
+    {
+        $aliases = [$acceptCode];
+        if (preg_match('#^layout-([^-]+)-([^-]+)-(.+)$#', $acceptCode, $matches) === 1) {
+            $aliases[] = 'layout-' . $matches[1] . '-' . $matches[3];
+        }
+
+        return array_values(array_unique($aliases));
+    }
+
+    private function collectWidgetSupportCodes(array $widget): array
+    {
+        $codes = [
+            $widget['code'] ?? null,
+            $widget['type'] ?? null,
+            $widget['slot'] ?? null,
+        ];
+
+        $supports = $widget['supports'] ?? [];
+        if (!is_array($supports)) {
+            $supports = [$supports];
+        }
+        foreach ($supports as $supportCode) {
+            $codes[] = $supportCode;
+        }
+
+        $positions = $widget['position'] ?? [];
+        if (!is_array($positions)) {
+            $positions = [$positions];
+        }
+        foreach ($positions as $position) {
+            $codes[] = $position;
+        }
+
+        $slots = $widget['slots'] ?? [];
+        if (is_array($slots)) {
+            foreach ($slots as $key => $slotConfig) {
+                $codes[] = $key;
+                if (is_array($slotConfig)) {
+                    $codes[] = $slotConfig['id'] ?? null;
+                    $codes[] = $slotConfig['code'] ?? null;
+                }
+            }
+        }
+
+        return $this->normalizeCodeList($codes);
+    }
+
+    private function normalizeCodeList(mixed $value): array
+    {
+        $items = [];
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    foreach ($item as $nested) {
+                        $items[] = $nested;
+                    }
+                    continue;
+                }
+                $items[] = $item;
+            }
+        } else {
+            $items = explode(',', (string)$value);
+        }
+
+        $codes = [];
+        foreach ($items as $item) {
+            $code = strtolower(trim((string)$item));
+            if ($code === '') {
+                continue;
+            }
+            $codes[$code] = $code;
+        }
+
+        return array_values($codes);
     }
 
     private function convertSchemaToParams(array $schema): array

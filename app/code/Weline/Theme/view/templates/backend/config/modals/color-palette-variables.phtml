@@ -9,6 +9,13 @@
 <?php
 $themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
 $saveUrl = $this->getUrl('theme/backend/config/layout/saveColorPaletteVariables');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 $variables = $palette['variables'] ?? [];
 // 按分类分组
 $groupedVariables = [];
@@ -154,7 +161,7 @@ foreach ($variables as $varName => $var) {
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
-    const saveUrl = <?= json_encode($saveUrl) ?>;
+    const saveUrl = <?= json_encode($saveUrl, $jsonForScriptFlags) ?>;
     const modal = document.getElementById('colorPaletteVariablesModal');
     if (!modal) return;
     

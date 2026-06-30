@@ -16,7 +16,7 @@ Register::register(
     __DIR__,
     '1.0.6',
     '<a href="https://bbs.aiweline.com">官网</a>提供主题功能的模块。',
-    ['Weline_Meta', 'Weline_Widget']
+    ['Weline_Meta', 'Weline_Widget', 'Weline_Seo']
 );
 
 // 注册默认主题 - 确保系统始终有一个可用的基础主题

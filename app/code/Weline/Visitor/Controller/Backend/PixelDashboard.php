@@ -5,9 +5,9 @@ namespace Weline\Visitor\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Manager\Message;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Visitor\Model\Pixel;
+use Weline\Visitor\Service\PixelStatisticsService;
 
 /**
  * 像素统计面板控制器
@@ -17,7 +17,7 @@ use Weline\Visitor\Model\Pixel;
  * - 实时数据监控
  * - 站点统计
  */
-#[Acl('Weline_Backend::pixel_dashboard', '像素统计面板', 'mdi-chart-line', '像素统计面板', 'Weline_Backend::dashboard')]
+#[Acl('Weline_Visitor::pixel_dashboard', '像素统计', 'mdi-chart-line', '像素统计', 'Weline_Backend::dashboard')]
 class PixelDashboard extends BackendController
 {
     /**
@@ -29,80 +29,14 @@ class PixelDashboard extends BackendController
     public function index(): string
     {
         try {
-            /** @var Pixel $pixelModel */
-            $pixelModel = ObjectManager::getInstance(Pixel::class);
-            
-            // 获取所有站点ID
-            $websiteIds = Pixel::getAllWebsiteIds();
-            
-            // 获取统计数据
-            $stats = [];
-            $websiteStats = [];
-            $totalValue = 0;
-            $allEvents = [];
-            
-            foreach ($websiteIds as $websiteId) {
-                $summary = Pixel::getWebsiteSummary($websiteId);
-                $websiteStats[$websiteId] = $summary;
-                
-                // 累计统计
-                $stats['total_count'] = ($stats['total_count'] ?? 0) + $summary['total_count'];
-                $stats['un_deal_count'] = ($stats['un_deal_count'] ?? 0) + $summary['un_deal_count'];
-                $stats['dealed_count'] = ($stats['dealed_count'] ?? 0) + $summary['dealed_count'];
-                
-                // 累计总价值
-                $pixels = Pixel::getPixelsByWebsiteId($websiteId);
-                foreach ($pixels as $pixel) {
-                    $totalValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
-                }
-                
-                // 收集所有事件
-                foreach ($summary['event_list'] ?? [] as $event) {
-                    if (!isset($allEvents[$event])) {
-                        $allEvents[$event] = 0;
-                    }
-                    $allEvents[$event] += $summary['events'][$event] ?? 0;
-                }
-            }
-            
-            // 按事件数量排序，获取Top 10
-            arsort($allEvents);
-            $topEvents = array_slice($allEvents, 0, 10, true);
-            
-            // 获取最近7天的趋势数据
-            $trends = $this->getTrends(7, null);
-            
-            // 获取最近24小时的实时数据（用于显示当前状态）
-            $realtimeData = [];
-            if (!empty($websiteIds)) {
-                try {
-                    $firstWebsiteId = $websiteIds[0];
-                    $realtimeData = Pixel::getDashboardData($firstWebsiteId, 10, 24);
-                } catch (\Exception $e) {
-                    // 忽略实时数据获取错误
-                }
-            }
-            
-            $stats['total_value'] = $totalValue;
-            $stats['event_types'] = count($allEvents);
-            
-            $this->assign('stats', $stats);
-            $this->assign('website_stats', $websiteStats);
-            $this->assign('website_ids', $websiteIds);
-            $this->assign('trends', $trends);
-            $this->assign('top_events', $topEvents);
-            $this->assign('realtime_data', $realtimeData);
+            $dashboard = PixelStatisticsService::getEventListeningDashboard($this->getDashboardRequestFilters());
+            $this->assignDashboardData($dashboard);
             
             return $this->fetch();
             
         } catch (\Exception $e) {
-            Message::error(__('加载像素统计失败：%{1}', $e->getMessage()));
-            $this->assign('stats', ['total_count' => 0, 'un_deal_count' => 0, 'dealed_count' => 0, 'total_value' => 0, 'event_types' => 0]);
-            $this->assign('website_stats', []);
-            $this->assign('website_ids', []);
-            $this->assign('trends', []);
-            $this->assign('top_events', []);
-            $this->assign('realtime_data', []);
+            MessageManager::error((string)__('加载像素统计失败：%{1}', [$e->getMessage()]));
+            $this->assignDashboardData($this->getEmptyDashboardData());
             return $this->fetch();
         }
     }
@@ -116,35 +50,20 @@ class PixelDashboard extends BackendController
     public function detail(): string
     {
         try {
-            $websiteId = (int)($this->request->getParam('websiteId') ?? $this->request->getGet('websiteId') ?? 0);
-            
-            if ($websiteId <= 0) {
-                Message::error(__('站点ID无效'));
+            $websiteIdRaw = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
+            if ($websiteIdRaw === null || $websiteIdRaw === '' || $websiteIdRaw === 'all' || !is_numeric($websiteIdRaw) || (int)$websiteIdRaw < 0) {
+                MessageManager::error((string)__('站点ID无效'));
                 return $this->redirect('*/pixel_dashboard/index');
             }
-            
-            // 获取站点统计摘要
-            $summary = Pixel::getWebsiteSummary($websiteId);
-            
-            // 获取最近30天的商业价值数据
-            $businessValue = Pixel::getBusinessValueByPeriod($websiteId, 'daily', null, null);
-            
-            // 获取最近7天的每日对比数据
-            $dailyComparison = Pixel::getDailyComparisonData($websiteId, 7);
-            
-            // 获取实时大屏数据
-            $dashboardData = Pixel::getDashboardData($websiteId, 10, 24);
-            
-            $this->assign('website_id', $websiteId);
-            $this->assign('summary', $summary);
-            $this->assign('business_value', $businessValue);
-            $this->assign('daily_comparison', $dailyComparison);
-            $this->assign('dashboard_data', $dashboardData);
-            
-            return $this->fetch();
+
+            $websiteId = (int)$websiteIdRaw;
+            $filters = $this->getDashboardRequestFilters();
+            $filters['websiteId'] = (string)$websiteId;
+            $filters = array_filter($filters, static fn($value): bool => $value !== null && $value !== '');
+            return $this->redirect('*/pixel_dashboard/index', $filters);
             
         } catch (\Exception $e) {
-            Message::error(__('加载站点详情失败：%{1}', $e->getMessage()));
+            MessageManager::error((string)__('加载站点详情失败：%{1}', [$e->getMessage()]));
             return $this->redirect('*/pixel_dashboard/index');
         }
     }
@@ -154,6 +73,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Visitor::pixel_dashboard_realtime', '查看像素实时数据', 'mdi-chart-line', '查看像素实时数据')]
     public function getRealtimeData(): string
     {
         try {
@@ -179,6 +99,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Visitor::pixel_dashboard_business_value', '查看像素商业价值', 'mdi-chart-line', '查看像素商业价值')]
     public function getBusinessValue(): string
     {
         try {
@@ -206,6 +127,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Visitor::pixel_dashboard_daily_comparison', '查看像素每日对比', 'mdi-chart-line', '查看像素每日对比')]
     public function getDailyComparison(): string
     {
         try {
@@ -226,6 +148,7 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Visitor::pixel_dashboard_event_stats', '查看像素事件统计', 'mdi-chart-line', '查看像素事件统计')]
     public function getEventStats(): string
     {
         try {
@@ -299,26 +222,29 @@ class PixelDashboard extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Visitor::pixel_dashboard_export', '导出像素数据', 'mdi-download', '导出像素数据')]
     public function export(): string
     {
         try {
-            $websiteId = (int)($this->request->getParam('websiteId') ?? $this->request->getGet('websiteId') ?? 0);
-            $startDate = $this->request->getParam('startDate') ?? $this->request->getGet('startDate');
-            $endDate = $this->request->getParam('endDate') ?? $this->request->getGet('endDate');
+            $filters = PixelStatisticsService::normalizeDashboardFilters($this->getDashboardRequestFilters());
+            $websiteId = $filters['website_id'];
+            $startDate = $filters['start_date'];
+            $endDate = $filters['end_date'];
+            $event = $filters['event'];
             $format = $this->request->getParam('format') ?? $this->request->getGet('format') ?? 'csv';
             
             $model = w_obj(Pixel::class)->reset();
             
-            if ($websiteId > 0) {
+            if ($websiteId !== null) {
                 $model->where(Pixel::schema_fields_WEBSITE_ID, $websiteId);
             }
-            
-            if ($startDate) {
-                $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
+
+            if ($event !== null) {
+                $model->where(Pixel::schema_fields_EVENT, $event);
             }
-            if ($endDate) {
-                $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
-            }
+
+            $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
+            $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
             
             // 限制导出数量
             $limit = 10000;
@@ -330,7 +256,7 @@ class PixelDashboard extends BackendController
             
             // CSV格式
             header('Content-Type: text/csv; charset=UTF-8');
-            $filename = 'pixel_data_' . date('Y-m-d') . ($websiteId > 0 ? '_site_' . $websiteId : '') . '.csv';
+            $filename = 'pixel_data_' . date('Y-m-d') . ($websiteId !== null ? '_site_' . $websiteId : '') . ($event !== null ? '_event_' . preg_replace('/[^a-zA-Z0-9_-]+/', '_', $event) : '') . '.csv';
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             
             $output = fopen('php://output', 'w');
@@ -367,60 +293,75 @@ class PixelDashboard extends BackendController
             return $this->error(__('导出数据失败：%{1}', [$e->getMessage()]), '', 500);
         }
     }
-    
+
     /**
-     * 获取趋势数据（支持自定义时间范围）
-     * 
-     * @param int|null $days 天数，默认7天
-     * @param int|null $websiteId 站点ID，null表示所有站点
-     * @return array
+     * @return array<string, mixed>
      */
-    private function getTrends(?int $days = null, ?int $websiteId = null): array
+    private function getDashboardRequestFilters(): array
     {
-        $days = $days ?? 7;
-        $trends = [];
-        $endDate = date('Y-m-d H:i:s');
-        $startDate = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-        
-        $websiteIds = $websiteId !== null ? [$websiteId] : Pixel::getAllWebsiteIds();
-        
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $date = date('Y-m-d', strtotime("-{$i} days"));
-            $dayStart = $date . ' 00:00:00';
-            $dayEnd = $date . ' 23:59:59';
-            
-            $dayCount = 0;
-            $dayValue = 0;
-            
-            foreach ($websiteIds as $siteId) {
-                $dayStats = Pixel::getWebsiteStatsByDateRange($siteId, $dayStart, $dayEnd);
-                $dayCount += $dayStats['total_count'] ?? 0;
-                
-                // 计算当天的总价值
-                $pixels = Pixel::getPixelsByWebsiteId($siteId, [
-                    Pixel::schema_fields_CREATED_AT => [
-                        'operator' => '>=',
-                        'value' => $dayStart
-                    ]
-                ]);
-                
-                $pixels = array_filter($pixels, function($pixel) use ($dayEnd) {
-                    return ($pixel[Pixel::schema_fields_CREATED_AT] ?? '') <= $dayEnd;
-                });
-                
-                foreach ($pixels as $pixel) {
-                    $dayValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
-                }
-            }
-            
-            $trends[] = [
-                'date' => $date,
-                'count' => $dayCount,
-                'value' => $dayValue
-            ];
-        }
-        
-        return $trends;
+        return [
+            'websiteId' => $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId'),
+            'event' => $this->request->getParam('event') ?? $this->request->getGet('event'),
+            'range' => $this->request->getParam('range') ?? $this->request->getGet('range'),
+            'startDate' => $this->request->getParam('startDate') ?? $this->request->getGet('startDate'),
+            'endDate' => $this->request->getParam('endDate') ?? $this->request->getGet('endDate'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dashboard
+     * @return void
+     */
+    private function assignDashboardData(array $dashboard): void
+    {
+        $this->assign('dashboard', $dashboard);
+        $this->assign('filters', $dashboard['filters'] ?? []);
+        $this->assign('website_options', $dashboard['website_options'] ?? []);
+        $this->assign('event_options', $dashboard['event_options'] ?? []);
+        $this->assign('summary', $dashboard['summary'] ?? []);
+        $this->assign('trend', $dashboard['trend'] ?? []);
+        $this->assign('event_rows', $dashboard['event_rows'] ?? []);
+        $this->assign('site_rows', $dashboard['site_rows'] ?? []);
+        $this->assign('source_rows', $dashboard['source_rows'] ?? []);
+        $this->assign('realtime_rows', $dashboard['realtime_rows'] ?? []);
+        $this->assign('recent_events', $dashboard['recent_events'] ?? []);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getEmptyDashboardData(): array
+    {
+        $filters = PixelStatisticsService::normalizeDashboardFilters([]);
+        return [
+            'filters' => $filters,
+            'website_options' => [],
+            'event_options' => [],
+            'summary' => [
+                'total_events' => 0,
+                'active_sites' => 0,
+                'event_types' => 0,
+                'active_users' => 0,
+                'total_value' => 0.0,
+                'avg_value' => 0.0,
+                'un_deal_count' => 0,
+                'dealed_count' => 0,
+                'value_event_count' => 0,
+                'previous_total_events' => 0,
+                'event_change' => 0.0,
+                'events_per_user' => 0.0,
+                'value_event_rate' => 0.0,
+                'processed_rate' => 0.0,
+                'first_seen' => null,
+                'last_seen' => null,
+            ],
+            'trend' => [],
+            'event_rows' => [],
+            'site_rows' => [],
+            'source_rows' => [],
+            'realtime_rows' => [],
+            'recent_events' => [],
+        ];
     }
 }
 

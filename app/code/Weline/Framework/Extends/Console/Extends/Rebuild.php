@@ -7,6 +7,7 @@ namespace Weline\Framework\Extends\Console\Extends;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Extends\ExtendsRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 class Rebuild extends CommandAbstract
 {
@@ -23,6 +24,9 @@ class Rebuild extends CommandAbstract
                     ? __('开始增量重建模块 %{1} 的扩展注册表...', [implode(', ', $moduleNames)])
                     : __('开始重建扩展注册表...')
             );
+
+            RegistryProgress::enable(true);
+            RegistryProgress::section('Extends rebuild command');
 
             /** @var ExtendsRegistry $registry */
             $registry = ObjectManager::getInstance(ExtendsRegistry::class);

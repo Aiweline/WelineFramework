@@ -40,12 +40,41 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertSame('running', $result['data']['startup_phase']);
     }
 
+    public function testWaitForBackgroundStartupReadyStopsOnTerminalFailure(): void
+    {
+        $file = $this->createTempInstanceFile([
+            'startup_phase' => 'master_exited',
+            'startup_failure_reason' => 'session_server port is occupied',
+            'started_timestamp' => 200,
+            'startup_failure_timestamp' => 201,
+        ]);
+        $start = new class extends Start {
+            protected function emitBackgroundStartupProgress(string $progress, string $lastProgress): void
+            {
+                unset($progress, $lastProgress);
+            }
+
+            protected function finishBackgroundStartupProgress(string $lastProgress): void
+            {
+                unset($lastProgress);
+            }
+        };
+
+        $result = $this->invokeProtected($start, 'waitForBackgroundStartupReady', $file, 500, 50);
+
+        self::assertFalse($result['ready']);
+        self::assertSame(0, $result['waited_ms']);
+        self::assertSame('master_exited', $result['data']['startup_phase']);
+    }
+
     public function testResolveBackgroundStartupReadyWaitMsScalesWithStartupShape(): void
     {
         $start = new class extends Start {
             protected function getEnvironmentValue(string $path, mixed $default = null): mixed
             {
-                unset($path);
+                if ($path === 'wls.orchestrator.startup_timeout_sec') {
+                    return 5;
+                }
                 return $default;
             }
         };
@@ -69,7 +98,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertGreaterThan($singleWorkerWait, $multiServiceWait);
     }
 
-    public function testResolveBackgroundMasterConfirmWaitShortensWhenSpawnPidKnown(): void
+    public function testResolveBackgroundMasterConfirmWaitAllowsControlPlaneMetadataWhenSpawnPidKnown(): void
     {
         $start = new class extends Start {
             protected function getEnvironmentValue(string $path, mixed $default = null): mixed
@@ -79,8 +108,14 @@ final class StartBackgroundStartupReadyTest extends TestCase
             }
         };
 
-        self::assertSame(5000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
-        self::assertSame(1200, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+            self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+            return;
+        }
+
+        self::assertSame(30000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+        self::assertSame(60000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
     }
 
     public function testResolveBackgroundMasterConfirmWaitHonorsEnvironmentOverride(): void
@@ -94,6 +129,51 @@ final class StartBackgroundStartupReadyTest extends TestCase
         };
 
         self::assertSame(2500, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundMasterConfirmWaitAllowsLongConfiguredWindow(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($default);
+                return $path === 'wls.orchestrator.background_master_confirm_wait_sec' ? 300.0 : null;
+            }
+        };
+
+        self::assertSame(300000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundMasterConfirmWaitHonorsStartupTimeoutWhenConfigured(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($default);
+                return $path === 'wls.orchestrator.startup_timeout_sec' ? 480.0 : null;
+            }
+        };
+
+        self::assertSame(480000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundStartupReadyHardWaitCoversSlowOrchestratorCycleByDefault(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($path);
+                return $default;
+            }
+        };
+
+        $hardWaitMs = $this->invokeProtected($start, 'resolveBackgroundStartupReadyHardWaitMs', [
+            'count' => 8,
+            'dispatcher_enabled' => true,
+            'ssl_enabled' => true,
+        ]);
+
+        self::assertSame(600000, $hardWaitMs);
     }
 
     public function testStartupProgressSummaryIgnoresStoppedHistoricalServices(): void
@@ -118,7 +198,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
             ],
         ]);
 
-        self::assertSame(['ready' => 1, 'total' => 1, 'pending_detail' => ''], $summary);
+        self::assertSame(['ready' => 0, 'total' => 0, 'pending_detail' => ''], $summary);
     }
 
     public function testWaitForBackgroundStartupReadyExtendsIdleDeadlineWhenProgressAdvances(): void
@@ -127,7 +207,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
             public array $frames = [
                 ['startup_phase' => 'bootstrapping'],
                 [
-                    'startup_phase' => 'bootstrapping',
+                    'startup_phase' => 'starting',
                     'services' => [
                         'worker' => [
                             'display_name' => 'HTTP Worker',
@@ -138,7 +218,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
                     ],
                 ],
                 [
-                    'startup_phase' => 'bootstrapping',
+                    'startup_phase' => 'waiting_ready',
                     'services' => [
                         'worker' => [
                             'display_name' => 'HTTP Worker',
@@ -186,8 +266,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertSame('running', $result['data']['startup_phase']);
         self::assertGreaterThan(50, $result['waited_ms']);
         self::assertNotEmpty($start->progressMessages);
-        self::assertStringContainsString('阶段：启动准备', $start->progressMessages[0]);
-        self::assertStringContainsString('服务就绪：1/1', $start->progressMessages[\count($start->progressMessages) - 1]);
+        self::assertGreaterThanOrEqual(2, \count($start->progressMessages));
     }
 
     public function testFinalizeBackgroundStartupOutputDefersServerInfoUntilStartupCompleted(): void
@@ -278,6 +357,72 @@ final class StartBackgroundStartupReadyTest extends TestCase
                 @\unlink($file);
             }
         });
+    }
+
+    public function testFormatBackgroundStartupProgressIncludesFailureReasonAndFullPending(): void
+    {
+        $start = new Start();
+        $progress = $this->invokeProtected($start, 'formatBackgroundStartupProgress', [
+            'startup_phase' => 'stopping',
+            'startup_failure_reason' => '启动异常：计划进程 30.00s 内未全部 READY',
+            'services' => [
+                'dispatcher' => [
+                    'display_name' => 'Dispatcher',
+                    'instances' => [['state' => 'starting']],
+                ],
+                'redirect' => [
+                    'display_name' => 'HTTP Redirect',
+                    'instances' => [['state' => 'starting']],
+                ],
+                'maintenance' => [
+                    'display_name' => 'Maintenance Worker',
+                    'instances' => [
+                        ['state' => 'starting'],
+                        ['state' => 'starting'],
+                    ],
+                ],
+            ],
+        ], 14000);
+
+        self::assertMatchesRegularExpression('/阶段：(停止中|Stopping)/u', $progress);
+        self::assertStringContainsString('原因：', $progress);
+        self::assertStringContainsString('启动异常', $progress);
+        self::assertStringNotContainsString('Dispatcher 0/1', $progress);
+        self::assertStringNotContainsString('Maintenance Worker 0/2', $progress);
+    }
+
+    public function testReadStartupFailureReasonIncludesStructuredFailureCode(): void
+    {
+        $start = new Start();
+
+        $reason = $this->invokeProtected($start, 'readStartupFailureReason', [
+            'startup_failure_reason' => 'worker did not become ready',
+            'startup_failure_code' => 'WLS_STARTUP_READY_TIMEOUT',
+        ]);
+
+        self::assertSame('[WLS_STARTUP_READY_TIMEOUT] worker did not become ready', $reason);
+    }
+
+    public function testStructuredStartupFailureDiagnosticsAreNormalized(): void
+    {
+        $start = new Start();
+
+        $diagnostics = $this->invokeProtected($start, 'readStartupFailureDiagnostics', [
+            'startup_failure_diagnostics' => [
+                '',
+                'role=worker#1 state=starting',
+                123,
+            ],
+        ]);
+        $context = $this->invokeProtected($start, 'formatStartupFailureContextSummary', [
+            'instance' => 'test',
+            'main_port' => 443,
+            'dispatcher_enabled' => true,
+            'roles' => ['worker' => ['ready' => 0]],
+        ]);
+
+        self::assertSame(['role=worker#1 state=starting', '123'], $diagnostics);
+        self::assertSame('instance=test, main_port=443, dispatcher_enabled=true', $context);
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

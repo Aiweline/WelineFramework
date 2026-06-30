@@ -20,10 +20,17 @@ return [
     'extends' => [
         'PaymentProvider' => [
             'path' => 'extends/module/Weline_Payment/PaymentProvider',
-            'interface' => 'Weline\Payment\Interface\PaymentProviderInterface',
+            'interface' => 'Weline\Payment\Interface\ProviderInterface',
             'description' => '支付提供商扩展点，用于扩展支付功能。其他支付供应商可以开发支付模块，实现此接口来接入支付系统。',
             'required' => true, // 是否必须实现接口
             'multiple' => true  // 是否允许多个实现
+        ],
+        'PayableResolver' => [
+            'path' => 'extends/module/Weline_Payment/PayableResolver',
+            'interface' => 'Weline\Payment\Interface\PayableResolverInterface',
+            'description' => '可支付对象解析扩展点，用于订单、商城、应用市场、A2A 等业务对象接入统一支付内核。',
+            'required' => true,
+            'multiple' => true
         ]
     ]
 ];

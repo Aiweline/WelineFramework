@@ -5,4 +5,7 @@
     <plugin name="Weline_Frontend::start_page_plugin" class="Weline\Framework\Http\Request">
         <interceptor name="Weline_Frontend::start_page_plugin" instance="Weline\Frontend\Plugin\StarPage" disabled="false" sort="2"/>
     </plugin>
+    <plugin name="Weline_Frontend::start_page_plugin_wls" class="Weline\Framework\Http\WlsRequest">
+        <interceptor name="Weline_Frontend::start_page_plugin_wls" instance="Weline\Frontend\Plugin\StarPage" disabled="false" sort="2"/>
+    </plugin>
 </config>

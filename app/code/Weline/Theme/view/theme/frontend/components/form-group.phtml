@@ -21,17 +21,17 @@ $required = $this->getData('required') ?? false;
 $class = $this->getData('class') ?? '';
 
 // 构建CSS类
-$formGroupClass = 'form-group';
+$formGroupClass = 'w-form-group';
 if ($class) {
     $formGroupClass .= ' ' . htmlspecialchars($class);
 }
 ?>
 <div class="<?= $formGroupClass ?>">
     <?php if ($label): ?>
-        <label class="form-label">
+        <label class="w-form-label">
             <?= htmlspecialchars($label) ?>
             <?php if ($required): ?>
-                <span class="text-danger">*</span>
+                <span class="w-text-danger">*</span>
             <?php endif; ?>
         </label>
     <?php endif; ?>
@@ -39,11 +39,11 @@ if ($class) {
     {{input}}
     
     <?php if ($help && !$error): ?>
-        <small class="form-text"><?= htmlspecialchars($help) ?></small>
+        <small class="w-form-text"><?= htmlspecialchars($help) ?></small>
     <?php endif; ?>
     
     <?php if ($error): ?>
-        <div class="invalid-feedback"><?= htmlspecialchars($error) ?></div>
+        <div class="w-invalid-feedback"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 </div>
 

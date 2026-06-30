@@ -20,7 +20,7 @@ if (!function_exists('register_shutdown_function')) {
             echo $_error['message'];
             echo '</pre>';
             echo '<b style="color: red">提示：尝试到项目目录' . dirname(__DIR__) . DIRECTORY_SEPARATOR . '下执行 composer update 更新本地依赖包。</b></br></br>';
-            echo '<b style="color: red">如果没有安装composer请执行php composer.phar update更新本地依赖包。</b></br></br>';
+            echo '<b style="color: red">如果没有安装 Composer，请重新运行 bin/install，或执行 php extend/server/composer.phar install 更新本地依赖包。</b></br></br>';
         }
     }
     register_shutdown_function('cache_shutdown_error');

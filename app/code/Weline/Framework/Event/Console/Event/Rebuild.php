@@ -15,6 +15,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Event\EventRegistry;
 use Weline\Framework\Event\EventData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 class Rebuild extends CommandAbstract
 {
@@ -31,6 +32,9 @@ class Rebuild extends CommandAbstract
                     ? __('开始增量重建模块 %{1} 的事件注册表...', [implode(', ', $moduleNames)])
                     : __('开始重建事件注册表...')
             );
+
+            RegistryProgress::enable(true);
+            RegistryProgress::section('Event rebuild command');
 
             /** @var EventRegistry $registry */
             $registry = ObjectManager::getInstance(EventRegistry::class);

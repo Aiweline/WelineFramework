@@ -19,6 +19,13 @@ $typeLabel = $notification['type_label'] ?? __('信息');
 $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
 $listUrl = $this->getBackendUrl('system/backend/notification');
 $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
 <div class="row">
@@ -419,10 +426,10 @@ $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
 <script>
 (function() {
     'use strict';
-    var prevUrl = <?= $prevId ? json_encode($detailUrlBase . '?id=' . (int)$prevId) : 'null' ?>;
-    var nextUrl = <?= $nextId ? json_encode($detailUrlBase . '?id=' . (int)$nextId) : 'null' ?>;
-    var markTopicReadUrl = <?= json_encode($this->getBackendUrl('system/backend/notification/markTopicRead')) ?>;
-    var confirmMsgTemplate = <?= json_encode(__('确定要将「%{name}」类的所有通知标记为已读吗？')) ?>;
+    var prevUrl = <?= $prevId ? json_encode($detailUrlBase . '?id=' . (int)$prevId, $jsonForScriptFlags) : 'null' ?>;
+    var nextUrl = <?= $nextId ? json_encode($detailUrlBase . '?id=' . (int)$nextId, $jsonForScriptFlags) : 'null' ?>;
+    var markTopicReadUrl = <?= json_encode($this->getBackendUrl('system/backend/notification/markTopicRead'), $jsonForScriptFlags) ?>;
+    var confirmMsgTemplate = <?= json_encode((string)__('确定要将「%{name}」类的所有通知标记为已读吗？'), $jsonForScriptFlags) ?>;
 
     document.addEventListener('keydown', function(e) {
         if (/input|textarea|select/i.test(document.activeElement && document.activeElement.tagName || '')) {

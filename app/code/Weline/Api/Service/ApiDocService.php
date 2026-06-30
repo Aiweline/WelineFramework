@@ -15,6 +15,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
+use Weline\Framework\Service\Query\QueryProviderRegistry;
 
 /**
  * API文档生成服务
@@ -25,11 +26,42 @@ class ApiDocService
 {
     private CachePoolInterface $cache;
     private Handle $moduleHandle;
+    private QueryProviderRegistry $queryProviderRegistry;
     
     public function __construct()
     {
         $this->cache = w_cache('api_doc');
         $this->moduleHandle = ObjectManager::getInstance(Handle::class);
+        $this->queryProviderRegistry = ObjectManager::getInstance(QueryProviderRegistry::class);
+    }
+
+    private function getReflectionTypeName(?\ReflectionType $type): string
+    {
+        if ($type === null) {
+            return 'mixed';
+        }
+
+        if ($type instanceof \ReflectionNamedType) {
+            return $type->getName();
+        }
+
+        if ($type instanceof \ReflectionUnionType) {
+            $names = [];
+            foreach ($type->getTypes() as $childType) {
+                $names[] = $this->getReflectionTypeName($childType);
+            }
+            return implode('|', $names);
+        }
+
+        if ($type instanceof \ReflectionIntersectionType) {
+            $names = [];
+            foreach ($type->getTypes() as $childType) {
+                $names[] = $this->getReflectionTypeName($childType);
+            }
+            return implode('&', $names);
+        }
+
+        return (string)$type;
     }
     
     /**
@@ -45,7 +77,7 @@ class ApiDocService
         // 检查缓存
         if (!$force) {
             $cached = $this->cache->get($cacheKey);
-            if ($cached !== false) {
+            if (is_array($cached)) {
                 return $cached;
             }
         }
@@ -59,7 +91,12 @@ class ApiDocService
                 $apis[$moduleName] = $moduleApis;
             }
         }
-        
+
+        $frontendWorkerApis = $this->generateFrontendWorkerApis();
+        if (!empty($frontendWorkerApis)) {
+            $apis['Frontend Worker API'] = $frontendWorkerApis;
+        }
+
         // 缓存结果（开发环境1小时，生产环境24小时）
         $cacheTime = (defined('DEV') && DEV) ? 3600 : 86400;
         $this->cache->set($cacheKey, $apis, $cacheTime);
@@ -82,7 +119,6 @@ class ApiDocService
         $apiDirs = [
             $modulePath . '/Api',           // 标准API目录
             $modulePath . '/Controller/Api', // Controller下的Api子目录
-            $modulePath . '/Controller',     // Controller目录（可能包含API控制器）
         ];
         
         foreach ($apiDirs as $apiDir) {
@@ -303,6 +339,45 @@ class ApiDocService
         }
         return 'v1'; // 默认版本
     }
+
+    /**
+     * Build the REST controller path from namespace segments after the version.
+     *
+     * Route registration keeps nested API namespaces in the URL, for example
+     * Api\Rest\V1\Backend\Auth -> backend/auth. The docs must mirror that
+     * shape so generated examples resolve to registered routes.
+     */
+    private function extractControllerPathFromNamespace(string $className, string $version): string
+    {
+        $segments = explode('\\', trim($className, '\\'));
+        $versionSegment = strtolower($version);
+        $versionIndex = null;
+
+        foreach ($segments as $index => $segment) {
+            if (strtolower($segment) === $versionSegment && strtolower((string)($segments[$index - 1] ?? '')) === 'rest') {
+                $versionIndex = $index;
+                break;
+            }
+        }
+
+        $controllerSegments = $versionIndex === null
+            ? [end($segments) ?: $className]
+            : array_slice($segments, $versionIndex + 1);
+
+        if ($controllerSegments === []) {
+            $controllerSegments = [end($segments) ?: $className];
+        }
+
+        return implode('/', array_map([$this, 'toRoutePathSegment'], $controllerSegments));
+    }
+
+    private function toRoutePathSegment(string $segment): string
+    {
+        $segment = preg_replace('/([a-z0-9])([A-Z])/', '$1-$2', $segment) ?? $segment;
+        $segment = preg_replace('/([A-Z]+)([A-Z][a-z])/', '$1-$2', $segment) ?? $segment;
+
+        return strtolower(trim($segment, '-'));
+    }
     
     /**
      * 提取路由信息
@@ -334,15 +409,11 @@ class ApiDocService
         
         // 构建路由路径
         $version = $this->extractVersionFromNamespace($reflection->getName());
-        $className = $reflection->getShortName();
         $methodName = $method->getName();
-        
-        // 转换为kebab-case（控制器名）
-        $controllerPath = strtolower(preg_replace('/([A-Z])/', '-$1', $className));
-        $controllerPath = trim($controllerPath, '-');
+        $controllerPath = $this->extractControllerPathFromNamespace($reflection->getName(), $version);
         
         // 转换为kebab-case（方法名）
-        $methodPath = strtolower(preg_replace('/([A-Z])/', '-$1', $methodName));
+        $methodPath = $this->toRoutePathSegment($methodName);
         // 移除HTTP方法前缀（如 get-, post-, put-, delete-）
         $methodPath = preg_replace('/^(get|post|put|delete|patch)-/', '', $methodPath);
         $methodPath = trim($methodPath, '-');
@@ -387,7 +458,7 @@ class ApiDocService
             $paramName = $param->getName();
             $paramInfo = [
                 'name' => $paramName,
-                'type' => $param->getType() ? $param->getType()->getName() : 'mixed',
+                'type' => $this->getReflectionTypeName($param->getType()),
                 'required' => !$param->isOptional(),
                 'source' => 'method_signature', // 参数来源：方法签名
             ];
@@ -713,6 +784,252 @@ class ApiDocService
         }
         
         return !empty($acl) ? $acl : null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function generateFrontendWorkerApis(): array
+    {
+        $apis = [];
+        foreach ($this->queryProviderRegistry->getAllDescriptors() as $providerDescriptor) {
+            $provider = (string)($providerDescriptor['provider'] ?? '');
+            if ($provider === '') {
+                continue;
+            }
+
+            foreach (($providerDescriptor['operations'] ?? []) as $operationDescriptor) {
+                if (!\is_array($operationDescriptor) || ($operationDescriptor['frontend'] ?? false) !== true) {
+                    continue;
+                }
+
+                $operation = (string)($operationDescriptor['name'] ?? '');
+                if ($operation === '') {
+                    continue;
+                }
+
+                $apis[] = [
+                    'module' => (string)($providerDescriptor['module'] ?? 'Frontend Worker API'),
+                    'version' => 'worker-v1',
+                    'class' => 'FrontendWorker\\' . $provider,
+                    'method' => $provider . '.' . $operation,
+                    'route' => [
+                        'method' => 'WORKER',
+                        'path' => 'Weline.Api.resource("' . $provider . '").' . $operation . '(params)',
+                        'is_backend' => false,
+                        'browser_direct' => false,
+                        'implementation' => '/api/framework/query-bin',
+                    ],
+                    'document' => [
+                        'summary' => (string)($operationDescriptor['summary'] ?? $operationDescriptor['description'] ?? ($provider . '.' . $operation)),
+                        'description' => (string)($operationDescriptor['description'] ?? ''),
+                        'tags' => ['Frontend Worker API', $provider],
+                        'category' => 'Frontend Worker API',
+                        'deprecated' => false,
+                    ],
+                    'parameters' => $this->normalizeFrontendWorkerParameters($operationDescriptor['params'] ?? []),
+                    'responses' => [
+                        '200' => [
+                            'description' => 'Worker returns a Weline binary response decoded by Weline.Api.',
+                            'type' => (string)($operationDescriptor['returns']['type'] ?? 'mixed'),
+                        ],
+                    ],
+                    'example' => [
+                        'frontend_worker' => true,
+                        'provider' => $provider,
+                        'operation' => $operation,
+                        'mode' => (string)($operationDescriptor['mode'] ?? ''),
+                        'graph' => (bool)($operationDescriptor['graph'] ?? false),
+                        'cost' => (int)($operationDescriptor['cost'] ?? 1),
+                        'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
+                        'auth' => (string)($operationDescriptor['auth'] ?? ''),
+                        'sample_params' => $this->buildFrontendWorkerSampleParams($operationDescriptor['params'] ?? [], [
+                            'provider' => $provider,
+                            'operation' => $operation,
+                            'module' => (string)($providerDescriptor['module'] ?? ''),
+                        ]),
+                        'code' => $this->buildFrontendWorkerExampleCode($provider, $operation, $operationDescriptor['params'] ?? [], [
+                            'provider' => $provider,
+                            'operation' => $operation,
+                            'module' => (string)($providerDescriptor['module'] ?? ''),
+                        ]),
+                    ],
+                    'frontend_worker' => true,
+                    'worker' => [
+                        'provider' => $provider,
+                        'operation' => $operation,
+                        'mode' => (string)($operationDescriptor['mode'] ?? ''),
+                        'graph' => (bool)($operationDescriptor['graph'] ?? false),
+                        'cost' => (int)($operationDescriptor['cost'] ?? 1),
+                        'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
+                        'auth' => (string)($operationDescriptor['auth'] ?? ''),
+                    ],
+                ];
+            }
+        }
+
+        return $apis;
+    }
+
+    /**
+     * @param mixed $paramsDescriptor
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildFrontendWorkerExampleCode(string $provider, string $operation, mixed $paramsDescriptor, array $sampleContext = []): string
+    {
+        $sampleParams = $this->buildFrontendWorkerSampleParams($paramsDescriptor, $sampleContext ?: [
+            'provider' => $provider,
+            'operation' => $operation,
+        ]);
+        $jsonFlags = \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT;
+        $payload = \json_encode($sampleParams, $jsonFlags);
+        if (!\is_string($payload) || $payload === '[]') {
+            $payload = '{}';
+        }
+
+        $providerLiteral = \json_encode($provider, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        $operationAccessor = \preg_match('/^[A-Za-z_$][A-Za-z0-9_$]*$/', $operation) === 1
+            ? '.' . $operation
+            : '[' . \json_encode($operation, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . ']';
+
+        return "const Api = await Weline.Api.resource({$providerLiteral});\nawait Api{$operationAccessor}({$payload});";
+    }
+
+    /**
+     * @param mixed $paramsDescriptor
+     * @return array<string, mixed>
+     */
+    private function buildFrontendWorkerSampleParams(mixed $paramsDescriptor, array $sampleContext = []): array
+    {
+        if (!\is_array($paramsDescriptor)) {
+            return [];
+        }
+
+        $params = [];
+        foreach ($paramsDescriptor as $key => $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $name = \is_string($key) ? $key : (string)($rule['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $params[$name] = $this->sampleFrontendWorkerParamValue($name, $rule, $sampleContext);
+        }
+
+        return $params;
+    }
+
+    /**
+     * @param array<string, mixed> $rule
+     */
+    private function sampleFrontendWorkerParamValue(string $name, array $rule, array $sampleContext = []): mixed
+    {
+        if (\array_key_exists('example', $rule)) {
+            return $rule['example'];
+        }
+        if (\array_key_exists('default', $rule)) {
+            return $rule['default'];
+        }
+
+        $lowerName = \strtolower($name);
+        if ($lowerName === 'provider') {
+            return (string)($sampleContext['provider'] ?? 'query_help');
+        }
+        if ($lowerName === 'operation') {
+            return (string)($sampleContext['operation'] ?? 'providers');
+        }
+        if ($lowerName === 'module') {
+            $module = (string)($sampleContext['module'] ?? '');
+            return ($module !== '' && $module !== 'Frontend Worker API') ? $module : 'Weline_Framework';
+        }
+        if (\str_contains($lowerName, 'email')) {
+            return 'customer@example.com';
+        }
+        if (\str_contains($lowerName, 'password')) {
+            return 'password123';
+        }
+        if ($lowerName === 'username' || $lowerName === 'login') {
+            return 'customer@example.com';
+        }
+        if ($lowerName === 'firstname' || $lowerName === 'first_name') {
+            return 'Jane';
+        }
+        if ($lowerName === 'lastname' || $lowerName === 'last_name') {
+            return 'Doe';
+        }
+        if ($lowerName === 'agree_terms') {
+            return true;
+        }
+        if ($lowerName === 'remember_duration') {
+            return 2592000;
+        }
+        if (\str_contains($lowerName, 'challenge_token')) {
+            return 'challenge-token';
+        }
+        if ($lowerName === 'token' || \str_ends_with($lowerName, '_token')) {
+            return 'token-value';
+        }
+        if ($lowerName === 'code') {
+            return '123456';
+        }
+
+        $type = \strtolower((string)($rule['type'] ?? 'mixed'));
+        return match ($type) {
+            'int', 'integer' => isset($rule['min']) ? (int)$rule['min'] : 1,
+            'float', 'double', 'number' => isset($rule['min']) ? (float)$rule['min'] : 1.0,
+            'bool', 'boolean' => true,
+            'list' => [],
+            'map', 'object' => ['key' => 'value'],
+            'array' => [],
+            default => 'value',
+        };
+    }
+
+    /**
+     * @param mixed $paramsDescriptor
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeFrontendWorkerParameters(mixed $paramsDescriptor): array
+    {
+        if (!\is_array($paramsDescriptor)) {
+            return [];
+        }
+
+        $params = [];
+        foreach ($paramsDescriptor as $key => $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $name = \is_string($key) ? $key : (string)($rule['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            $descriptionParts = [];
+            if (isset($rule['min'])) {
+                $descriptionParts[] = 'min=' . (string)$rule['min'];
+            }
+            if (isset($rule['max'])) {
+                $descriptionParts[] = 'max=' . (string)$rule['max'];
+            }
+            if (isset($rule['max_items'])) {
+                $descriptionParts[] = 'max_items=' . (string)$rule['max_items'];
+            }
+            if (isset($rule['max_length'])) {
+                $descriptionParts[] = 'max_length=' . (string)$rule['max_length'];
+            }
+
+            $params[] = [
+                'name' => $name,
+                'type' => (string)($rule['type'] ?? 'mixed'),
+                'required' => (bool)($rule['required'] ?? false),
+                'description' => (string)($rule['description'] ?? \implode(', ', $descriptionParts)),
+                'source' => 'worker_params',
+            ];
+        }
+
+        return $params;
     }
 }
 

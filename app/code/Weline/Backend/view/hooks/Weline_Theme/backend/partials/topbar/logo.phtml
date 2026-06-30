@@ -15,17 +15,17 @@ $logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend') ?: '';
 $logoSm = $backendConfig->getConfig('logo_sm', 'Weline_Backend') ?: '';
 
 if ($logoDark === '') {
-    $logoDark = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png') ?: '';
+    $logoDark = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png') ?: '/Weline/Backend/view/statics/img/logo.png';
 } else {
     $logoDark = ImageHelper::pathToMediaUrl($logoDark, 70, 70);
 }
 if ($logoLight === '') {
-    $logoLight = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png') ?: '';
+    $logoLight = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png') ?: $logoDark;
 } else {
     $logoLight = ImageHelper::pathToMediaUrl($logoLight, 70, 70);
 }
 if ($logoSm === '') {
-    $logoSm = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-sm.png') ?: '';
+    $logoSm = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-sm.png') ?: $logoDark;
 } else {
     $logoSm = ImageHelper::pathToMediaUrl($logoSm, 50, 50);
 }

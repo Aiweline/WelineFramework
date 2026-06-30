@@ -17,6 +17,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\I18n\Model\I18n;
 
 /**
@@ -53,7 +54,10 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
             
             // 收集语言包（不使用缓存，确保最新）
             // 这会自动注册并激活对应的 locale 和国家
-            $this->i18n->convertToLanguageFile(false);
+            RegistryProgress::run(function (): void {
+                RegistryProgress::section('setup:upgrade i18n dictionary collect');
+                $this->i18n->convertToLanguageFile(false);
+            });
             
             // 清理翻译缓存，确保新翻译生效
             try {

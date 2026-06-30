@@ -36,6 +36,10 @@ class SessionServerProvider extends AbstractServiceProvider
      */
     public function isEnabled(ServiceContext $context): bool
     {
+        if ($this->isSharedStateRuntimeManaged($context, 'session')) {
+            return false;
+        }
+
         $ss = ($context->envConfig['wls'] ?? [])['session_server'] ?? [];
         $force = $ss['enabled'] ?? null;
         if ($force !== null) {
@@ -92,8 +96,8 @@ class SessionServerProvider extends AbstractServiceProvider
             '--token-file-name=' . $tokenFileName,
         ];
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         return new ServiceCommand(

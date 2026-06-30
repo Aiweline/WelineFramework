@@ -17,6 +17,7 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Model\PaymentMethodAttributeEntity;
 use Weline\Payment\Model\PaymentTransaction;
 
 class Install implements InstallInterface
@@ -32,6 +33,13 @@ class Install implements InstallInterface
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($paymentMethod);
         $paymentMethod->setup($modelSetup, $context);
+
+        // 安装支付方式 EAV 值表，不重建支付方式主表
+        /** @var PaymentMethodAttributeEntity $paymentMethodAttributeEntity */
+        $paymentMethodAttributeEntity = ObjectManager::getInstance(PaymentMethodAttributeEntity::class);
+        $modelSetup = ObjectManager::make(ModelSetup::class);
+        $modelSetup->putModel($paymentMethodAttributeEntity);
+        $paymentMethodAttributeEntity->setup($modelSetup, $context);
         
         // 安装支付交易表
         /** @var PaymentTransaction $paymentTransaction */

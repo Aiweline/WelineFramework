@@ -88,10 +88,10 @@ $widgetId = 'mini-cart-' . uniqid();
         
         <div class="cart-actions">
             <?php if ($showViewCartButton): ?>
-                <a href="/cart" class="btn btn-outline"><?= __('查看购物车') ?></a>
+                <a href="/cart" class="w-btn w-btn-outline"><?= __('查看购物车') ?></a>
             <?php endif; ?>
             <?php if ($showCheckoutButton): ?>
-                <a href="/checkout" class="btn btn-primary"><?= __('去结算') ?></a>
+                <a href="/checkout" class="w-btn w-btn-primary"><?= __('去结算') ?></a>
             <?php endif; ?>
         </div>
     <?php endif; ?>
@@ -257,7 +257,7 @@ $widgetId = 'mini-cart-' . uniqid();
     margin-top: 15px;
 }
 
-.widget-mini-cart .cart-actions .btn {
+.widget-mini-cart .cart-actions .w-btn {
     flex: 1;
     padding: 10px 15px;
     text-align: center;
@@ -268,24 +268,24 @@ $widgetId = 'mini-cart-' . uniqid();
     transition: all 0.3s;
 }
 
-.widget-mini-cart .btn-outline {
+.widget-mini-cart .w-btn-outline {
     border: 1px solid #ddd;
     color: #333;
     background: #fff;
 }
 
-.widget-mini-cart .btn-outline:hover {
+.widget-mini-cart .w-btn-outline:hover {
     border-color: var(--primary-color, #007bff);
     color: var(--primary-color, #007bff);
 }
 
-.widget-mini-cart .btn-primary {
+.widget-mini-cart .w-btn-primary {
     background: var(--primary-color, #007bff);
     color: #fff;
     border: none;
 }
 
-.widget-mini-cart .btn-primary:hover {
+.widget-mini-cart .w-btn-primary:hover {
     background: var(--primary-dark, #0056b3);
 }
 </style>

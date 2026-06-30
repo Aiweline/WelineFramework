@@ -10,5 +10,7 @@
         
         <menu source="Weline_CacheManager::system_cache" name="system_cache" title="缓存管理" action="*/system/cache"
               icon="mdi mdi-database-cog-outline" order="10"/>
+        <menu source="Weline_CacheManager::cache_policy" name="cache_policy" title="缓存策略" action="*/system/cache-policy"
+              icon="mdi mdi-tune-variant" order="20"/>
     </menu>
 </menus>

@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites>
-    <testsuite name="WeShop_Analytics">
-        <directory suffix="Test.php">Unit</directory>
-    </testsuite>
-</testsuites>

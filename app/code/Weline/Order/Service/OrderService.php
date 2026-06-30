@@ -224,12 +224,13 @@ class OrderService
         $order = $this->stateMachine->transition($orderId, Order::STATUS_CANCELLED, $reason);
         
         // 触发订单取消事件
-        $this->eventsManager->dispatch('Weline_Order::order_cancelled', [
+        $eventData = [
             'order' => $order,
             'order_id' => $orderId,
             'reason' => $reason,
-        ]);
-        
+        ];
+        $this->eventsManager->dispatch('Weline_Order::order_cancelled', $eventData);
+
         return $order;
     }
     

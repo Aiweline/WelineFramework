@@ -6,6 +6,7 @@ use Weline\Server\Model\ReverseProxy;
 
 $proxies = $this->getData('proxies') ?? [];
 $stats = $this->getData('stats') ?? ['total' => 0, 'active' => 0, 'inactive' => 0];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 ?>
 
 <div class="container-fluid">
@@ -50,10 +51,10 @@ $stats = $this->getData('stats') ?? ['total' => 0, 'active' => 0, 'inactive' => 
             <a href="<?php echo $this->getUrl('*/backend/reverse-proxy/edit'); ?>" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> <lang>新建规则</lang>
             </a>
-            <button type="button" class="btn btn-success" onclick="applyConfig()">
+            <button type="button" class="btn btn-success" data-reverse-proxy-action="apply">
                 <i class="bi bi-check-circle"></i> <lang>应用配置</lang>
             </button>
-            <button type="button" class="btn btn-secondary" onclick="location.reload()">
+            <button type="button" class="btn btn-secondary" data-reverse-proxy-action="reload-page">
                 <i class="bi bi-arrow-clockwise"></i> <lang>刷新</lang>
             </button>
         </div>
@@ -108,13 +109,23 @@ $stats = $this->getData('stats') ?? ['total' => 0, 'active' => 0, 'inactive' => 
                                             <a href="<?php echo $this->getUrl('*/backend/reverse-proxy/edit', ['proxy_id' => $proxy[ReverseProxy::schema_fields_ID]]); ?>" class="btn btn-sm btn-primary">
                                                 <i class="bi bi-pencil"></i> <lang>编辑</lang>
                                             </a>
-                                            <button type="button" class="btn btn-sm btn-info" onclick="testConnection(<?php echo $proxy[ReverseProxy::schema_fields_ID]; ?>, '<?php echo htmlspecialchars($proxy[ReverseProxy::schema_fields_BACKEND_HOST]); ?>', <?php echo $proxy[ReverseProxy::schema_fields_BACKEND_PORT]; ?>, <?php echo $proxy[ReverseProxy::schema_fields_BACKEND_SSL] ? 'true' : 'false'; ?>)">
+                                            <button type="button" class="btn btn-sm btn-info"
+                                                    data-reverse-proxy-action="test-connection"
+                                                    data-proxy-id="<?php echo (int)$proxy[ReverseProxy::schema_fields_ID]; ?>"
+                                                    data-backend-host="<?php echo htmlspecialchars((string)$proxy[ReverseProxy::schema_fields_BACKEND_HOST], ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-backend-port="<?php echo (int)$proxy[ReverseProxy::schema_fields_BACKEND_PORT]; ?>"
+                                                    data-backend-ssl="<?php echo $proxy[ReverseProxy::schema_fields_BACKEND_SSL] ? '1' : '0'; ?>">
                                                 <i class="bi bi-plug"></i> <lang>测试</lang>
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-warning" onclick="toggleStatus(<?php echo $proxy[ReverseProxy::schema_fields_ID]; ?>, '<?php echo $proxy[ReverseProxy::schema_fields_STATUS] === ReverseProxy::STATUS_ACTIVE ? ReverseProxy::STATUS_INACTIVE : ReverseProxy::STATUS_ACTIVE; ?>')">
+                                            <button type="button" class="btn btn-sm btn-warning"
+                                                    data-reverse-proxy-action="toggle-status"
+                                                    data-proxy-id="<?php echo (int)$proxy[ReverseProxy::schema_fields_ID]; ?>"
+                                                    data-status="<?php echo htmlspecialchars($proxy[ReverseProxy::schema_fields_STATUS] === ReverseProxy::STATUS_ACTIVE ? ReverseProxy::STATUS_INACTIVE : ReverseProxy::STATUS_ACTIVE, ENT_QUOTES, 'UTF-8'); ?>">
                                                 <i class="bi bi-toggle-on"></i> <?php echo $proxy[ReverseProxy::schema_fields_STATUS] === ReverseProxy::STATUS_ACTIVE ? '<lang>禁用</lang>' : '<lang>启用</lang>'; ?>
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-danger" onclick="deleteProxy(<?php echo $proxy[ReverseProxy::schema_fields_ID]; ?>)">
+                                            <button type="button" class="btn btn-sm btn-danger"
+                                                    data-reverse-proxy-action="delete"
+                                                    data-proxy-id="<?php echo (int)$proxy[ReverseProxy::schema_fields_ID]; ?>">
                                                 <i class="bi bi-trash"></i> <lang>删除</lang>
                                             </button>
                                         </td>
@@ -130,77 +141,145 @@ $stats = $this->getData('stats') ?? ['total' => 0, 'active' => 0, 'inactive' => 
 </div>
 
 <script>
-function applyConfig() {
-    if (!confirm('<?php echo __('确定要应用配置到 Gateway 吗？'); ?>')) {
+const reverseProxyUrls = <?= json_encode([
+    'apply' => $this->getUrl('*/backend/reverse-proxy/apply'),
+    'toggleStatus' => $this->getUrl('*/backend/reverse-proxy/toggle-status'),
+    'delete' => $this->getUrl('*/backend/reverse-proxy/delete'),
+    'testConnection' => $this->getUrl('*/backend/reverse-proxy/test-connection'),
+], $jsonForScriptFlags) ?>;
+const reverseProxyMessages = <?= json_encode([
+    'applyConfirm' => (string)__('确定要应用配置到 Gateway 吗？'),
+    'deleteConfirm' => (string)__('确定要删除此规则吗？'),
+    'applyFailed' => (string)__('应用失败'),
+    'requestFailed' => (string)__('请求失败'),
+    'operationFailed' => (string)__('操作失败'),
+    'deleteFailed' => (string)__('删除失败'),
+    'connectionSuccess' => (string)__('连接成功'),
+    'connectionFailed' => (string)__('连接失败'),
+    'confirmUnavailable' => (string)__('确认组件不可用，请刷新页面后重试'),
+], $jsonForScriptFlags) ?>;
+
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-reverse-proxy-action]');
+    if (!trigger) {
         return;
     }
 
-    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/apply'); ?>', {
+    const action = trigger.dataset.reverseProxyAction;
+    if (action === 'apply') {
+        applyConfig();
+        return;
+    }
+    if (action === 'reload-page') {
+        location.reload();
+        return;
+    }
+    if (action === 'test-connection') {
+        testConnection(
+            Number(trigger.dataset.proxyId || 0),
+            trigger.dataset.backendHost || '',
+            Number(trigger.dataset.backendPort || 0),
+            trigger.dataset.backendSsl === '1'
+        );
+        return;
+    }
+    if (action === 'toggle-status') {
+        toggleStatus(Number(trigger.dataset.proxyId || 0), trigger.dataset.status || '');
+        return;
+    }
+    if (action === 'delete') {
+        deleteProxy(Number(trigger.dataset.proxyId || 0));
+    }
+});
+
+function showReverseProxyToast(type, message) {
+    const text = String(message || reverseProxyMessages.operationFailed);
+    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+        window.BackendToast[type](text);
+        return;
+    }
+
+    const logger = type === 'error' ? 'error' : 'log';
+    if (window.console && typeof window.console[logger] === 'function') {
+        window.console[logger](text);
+    }
+}
+
+function confirmReverseProxyAction(message) {
+    if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+        return window.BackendConfirm.show(message);
+    }
+
+    showReverseProxyToast('error', reverseProxyMessages.confirmUnavailable);
+    return Promise.resolve(false);
+}
+
+function requestReverseProxy(url, body) {
+    return fetch(url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({})
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            location.reload();
-        } else {
-            alert('<?php echo __('应用失败'); ?>: ' + data.message);
+        body: JSON.stringify(body || {})
+    }).then(res => res.json());
+}
+
+function applyConfig() {
+    confirmReverseProxyAction(reverseProxyMessages.applyConfirm).then(confirmed => {
+        if (!confirmed) {
+            return;
         }
+
+        requestReverseProxy(reverseProxyUrls.apply, {})
+            .then(data => {
+                if (data.success) {
+                    showReverseProxyToast('success', data.message);
+                    location.reload();
+                } else {
+                    showReverseProxyToast('error', reverseProxyMessages.applyFailed + ': ' + (data.message || reverseProxyMessages.operationFailed));
+                }
+            })
+            .catch(err => showReverseProxyToast('error', reverseProxyMessages.requestFailed + ': ' + err));
     })
-    .catch(err => alert('<?php echo __('请求失败'); ?>: ' + err));
 }
 
 function toggleStatus(proxyId, status) {
-    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/toggle-status'); ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({proxy_id: proxyId, status: status})
-    })
-    .then(res => res.json())
+    requestReverseProxy(reverseProxyUrls.toggleStatus, {proxy_id: proxyId, status: status})
     .then(data => {
         if (data.success) {
             location.reload();
         } else {
-            alert('<?php echo __('操作失败'); ?>: ' + data.message);
+            showReverseProxyToast('error', reverseProxyMessages.operationFailed + ': ' + (data.message || reverseProxyMessages.operationFailed));
         }
-    });
+    })
+    .catch(err => showReverseProxyToast('error', reverseProxyMessages.requestFailed + ': ' + err));
 }
 
 function deleteProxy(proxyId) {
-    if (!confirm('<?php echo __('确定要删除此规则吗？'); ?>')) {
-        return;
-    }
-
-    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/delete'); ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({proxy_id: proxyId})
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            alert('<?php echo __('删除失败'); ?>: ' + data.message);
+    confirmReverseProxyAction(reverseProxyMessages.deleteConfirm).then(confirmed => {
+        if (!confirmed) {
+            return;
         }
-    });
+
+        requestReverseProxy(reverseProxyUrls.delete, {proxy_id: proxyId})
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    showReverseProxyToast('error', reverseProxyMessages.deleteFailed + ': ' + (data.message || reverseProxyMessages.operationFailed));
+                }
+            })
+            .catch(err => showReverseProxyToast('error', reverseProxyMessages.requestFailed + ': ' + err));
+    })
 }
 
 function testConnection(proxyId, host, port, ssl) {
-    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/test-connection'); ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backend_host: host, backend_port: port, backend_ssl: ssl})
-    })
-    .then(res => res.json())
+    requestReverseProxy(reverseProxyUrls.testConnection, {backend_host: host, backend_port: port, backend_ssl: ssl})
     .then(data => {
         if (data.success) {
-            alert('<?php echo __('连接成功'); ?> (' + data.latency_ms + 'ms)');
+            showReverseProxyToast('success', reverseProxyMessages.connectionSuccess + ' (' + data.latency_ms + 'ms)');
         } else {
-            alert('<?php echo __('连接失败'); ?>: ' + data.message);
+            showReverseProxyToast('error', reverseProxyMessages.connectionFailed + ': ' + (data.message || reverseProxyMessages.operationFailed));
         }
-    });
+    })
+    .catch(err => showReverseProxyToast('error', reverseProxyMessages.requestFailed + ': ' + err));
 }
 </script>

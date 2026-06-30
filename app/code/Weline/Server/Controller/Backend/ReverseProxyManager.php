@@ -243,15 +243,14 @@ class ReverseProxyManager extends BaseController
             }
 
             // 通过 IPC 发送到 Master
-            $result = $this->ipcGateway->sendCommand('proxy_apply', [
-                'routes' => $routesData,
-            ]);
+            $result = $this->ipcGateway->proxyApply($this->resolveControlInstance(), $routesData);
 
             if ($result['success'] ?? false) {
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('配置已应用，共 %{1} 条规则', [count($routes)]),
-                    'applied_count' => count($routes),
+                    'applied_count' => count($routesData),
+                    'gateway_count' => (int)($result['data']['gateways'] ?? 0),
                 ]);
             } else {
                 return $this->fetchJson([
@@ -267,6 +266,28 @@ class ReverseProxyManager extends BaseController
     /**
      * 测试后端连接
      */
+    private function resolveControlInstance(): string
+    {
+        $candidates = [
+            $this->request->getPost('instance', ''),
+            $_SERVER['WLS_INSTANCE'] ?? null,
+            $_SERVER['WLS_INSTANCE_NAME'] ?? null,
+            $_ENV['WLS_INSTANCE'] ?? null,
+            $_ENV['WLS_INSTANCE_NAME'] ?? null,
+            \getenv('WLS_INSTANCE') ?: null,
+            \getenv('WLS_INSTANCE_NAME') ?: null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = \trim((string)$candidate);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return 'default';
+    }
+
     public function postTestConnection(): string
     {
         $backendHost = trim((string) $this->request->getPost('backend_host'));

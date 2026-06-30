@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Observer;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -42,6 +44,8 @@ class ControllerFetchFileAfter implements ObserverInterface
         $layoutType = (string)$eventData->getData('layoutType');
         $contentTemplate = (string)$eventData->getData('contentTemplate');
         $layoutTemplate = (string)($eventData->getData('layoutTemplate') ?: $eventData->getData('fileName'));
+        $fileName = (string)$eventData->getData('fileName');
+        $layoutOption = (string)($eventData->getData('layoutOption') ?? '');
         if ($layoutType === '' || $contentTemplate === '' || $layoutTemplate === '') {
             return;
         }
@@ -51,18 +55,188 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         try {
             $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
+            $fastAuthHtml = $this->renderFastAccountAuthLayout($template, $layoutTemplate, $contentHtml);
+            if ($fastAuthHtml !== null) {
+                $eventData->setData('content', $fastAuthHtml);
+                $eventData->setData('fileName', $layoutTemplate);
+                return;
+            }
+
+            $this->restoreAccountRenderSnapshot($template, $eventData, $layoutTemplate, $contentTemplate);
             [$renderedHtml, $finalLayoutTemplate] = $this->renderLayoutChain(
                 $template,
                 $layoutTemplate,
                 $contentTemplate,
                 $contentHtml
             );
+            if ($this->isAccountLayoutTemplate($finalLayoutTemplate, $contentTemplate)
+                && !$this->htmlHasAccountSidebar($renderedHtml)
+                && $this->snapshotHasAccountSidebar($eventData)
+            ) {
+                $this->restoreAccountRenderSnapshot($template, $eventData, $finalLayoutTemplate, $contentTemplate);
+                [$renderedHtml, $finalLayoutTemplate] = $this->renderLayoutChain(
+                    $template,
+                    $finalLayoutTemplate,
+                    $contentTemplate,
+                    $contentHtml
+                );
+                try {
+                    ObjectManager::getInstance(Request::class)->getResponse()->setHeader('X-Weline-Account-Sidebar-Restored', '1');
+                } catch (\Throwable) {
+                }
+            }
 
+            $this->logAccountSidebarDebug('controller_fetch_after_final', [
+                'layout_template' => $finalLayoutTemplate,
+                'content_template' => $contentTemplate,
+                'content_len' => \strlen($renderedHtml),
+                'has_account_sidebar' => $this->htmlHasAccountSidebar($renderedHtml),
+            ]);
             $eventData->setData('content', $renderedHtml);
             $eventData->setData('fileName', $finalLayoutTemplate);
-        } catch (\Throwable) {
-            // Keep original event content when wrapping fails.
+        } catch (\Throwable $e) {
+            $this->reportLayoutWrapFailure(
+                $layoutType,
+                $layoutOption,
+                $contentTemplate,
+                $layoutTemplate,
+                $fileName,
+                $e
+            );
+            // deploy≠dev 时保留原始 event content；deploy=dev 时由 reportLayoutWrapFailure 重新抛出
         }
+    }
+
+    /**
+     * 布局包装失败时写日志、响应头；deploy=dev 时抛出以便本地立刻发现。
+     */
+    private function reportLayoutWrapFailure(
+        string $layoutType,
+        string $layoutOption,
+        string $contentTemplate,
+        string $layoutTemplate,
+        string $fileName,
+        \Throwable $e
+    ): void {
+        $uri = '';
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            $uri = (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+            if ($this->shouldEmitLayoutWrapResponseHeaders()) {
+                $response = $request->getResponse();
+                $response->setHeader('X-Weline-Layout-Wrap-Failed', '1');
+                $response->setHeader('X-Weline-Layout-Type', $layoutType);
+                if ($layoutOption !== '') {
+                    $response->setHeader('X-Weline-Layout-Option', $layoutOption);
+                }
+                $response->setHeader('X-Weline-Layout-Template', $layoutTemplate);
+                $response->setHeader('X-Weline-Content-Template', $contentTemplate);
+                $response->setHeader('X-Weline-File-Name', $fileName);
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            Env::getInstance()->getLogger()?->error('[Theme Layout Wrap Failed]', [
+                'uri' => $uri,
+                'layoutType' => $layoutType,
+                'layoutOption' => $layoutOption,
+                'contentTemplate' => $contentTemplate,
+                'layoutTemplate' => $layoutTemplate,
+                'fileName' => $fileName,
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        } catch (\Throwable) {
+        }
+
+        if ($this->shouldRethrowLayoutWrapFailure()) {
+            throw $e;
+        }
+    }
+
+    private function shouldRethrowLayoutWrapFailure(): bool
+    {
+        if (defined('ENV_TEST') && constant('ENV_TEST')) {
+            return false;
+        }
+        try {
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** deploy=dev 或 dev.theme_layout_wrap_response_headers=true（PHPUnit 永不输出） */
+    private function shouldEmitLayoutWrapResponseHeaders(): bool
+    {
+        if (defined('ENV_TEST') && constant('ENV_TEST')) {
+            return false;
+        }
+        try {
+            if (Env::getInstance()->getConfig('dev.theme_layout_wrap_response_headers', false)) {
+                return true;
+            }
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 将控制器 assign 到 Template 根上的变量并入 meta，便于布局层 {{meta.xxx}} 与根变量同源。
+     */
+    private function mergeTemplateRootAssignsIntoMeta(Template $template, array $metaData): array
+    {
+        $skip = [
+            'meta',
+            'theme',
+            'colors',
+            'layout',
+            'child_html',
+            'content',
+            'contentTemplate',
+            'layoutTemplate',
+            'fileName',
+            'contentRenderKey',
+            'controller',
+            'request',
+            'req',
+            'session',
+            'scope',
+            'workspace_state',
+            'domain_purchase_state',
+            'registrar_accounts',
+            'recommended_domain_list',
+            'eventsManager',
+            'viewCache',
+            'taglib',
+            'compile_dir',
+            'template_dir',
+            'statics_dir',
+            'view_dir',
+        ];
+        try {
+            $all = $template->getData('');
+            if (!is_array($all)) {
+                return $metaData;
+            }
+            foreach ($all as $key => $value) {
+                if (!is_string($key) || str_starts_with($key, '__')) {
+                    continue;
+                }
+                if (in_array($key, $skip, true)) {
+                    continue;
+                }
+                if ($value instanceof Request || $value instanceof PcController) {
+                    continue;
+                }
+                $metaData[$key] = $value;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $metaData;
     }
 
     private function renderContentTemplate(Template $template, string $contentTemplate, string $fallbackContent): string
@@ -80,6 +254,300 @@ class ControllerFetchFileAfter implements ObserverInterface
         }
 
         return $fallbackContent;
+    }
+
+    private function renderFastAccountAuthLayout(Template $template, string $layoutTemplate, string $contentHtml): ?string
+    {
+        $normalizedLayout = \str_replace('\\', '/', $layoutTemplate);
+        if (!\str_contains($normalizedLayout, 'Weline_Theme::theme/frontend/layouts/account/auth.phtml')
+            && !\str_contains($normalizedLayout, 'Weline_Theme::theme/frontend/layouts/account_auth/default.phtml')
+        ) {
+            return null;
+        }
+
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceStart = $traceEnabled ? \microtime(true) : 0.0;
+
+        try {
+            $meta = $template->getData('meta');
+            if (!\is_array($meta)) {
+                $meta = [];
+            }
+            $locale = (string)($template->getData('locale') ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
+            $lang = \str_replace('_', '-', $locale);
+            $title = (string)($template->getData('title') ?: ($meta['title'] ?? 'Weline Framework'));
+            $description = (string)($meta['description'] ?? '');
+
+            $langEsc = \htmlspecialchars($lang, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $localeEsc = \htmlspecialchars($locale, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $titleEsc = \htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $descriptionHtml = $description !== ''
+                ? '    <meta name="description" content="' . \htmlspecialchars($description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . "\n"
+                : '';
+            $runtimeHeadHtml = $this->buildFastAccountAuthRuntimeHeadHtml($template);
+
+            return <<<HTML
+<!DOCTYPE html>
+<html lang="{$langEsc}" data-local="{$localeEsc}" data-lang="{$localeEsc}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{$titleEsc}</title>
+{$descriptionHtml}    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235b4cf5'/%3E%3Cpath d='M18 20h28L36 44H22l6-14h8l-2 5h4l5-12H20z' fill='white'/%3E%3C/svg%3E">
+    <style data-auth-theme-vars>
+        :root {
+            --color-primary: #5b4cf5;
+            --color-primary-dark: #4436d9;
+            --color-primary-border: #493ee0;
+            --color-text-primary: #111827;
+            --color-text-secondary: #64748b;
+            --color-text-tertiary: #94a3b8;
+            --color-text-light: #fff;
+            --color-bg-primary: #fff;
+            --color-bg-secondary: #f8fafc;
+            --color-border-default: #d1d5db;
+            --color-border-focus: #5b4cf5;
+            --color-border-light: #e5e7eb;
+            --color-link: #0f62ba;
+            --color-link-hover: #4436d9;
+            --color-success: #22c55e;
+            --color-accent-light: rgba(59, 130, 246, .12);
+            --spacing-xs: .25rem;
+            --spacing-sm: .5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --spacing-xl: 2rem;
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-md: 0 12px 32px rgba(15, 23, 42, .12);
+            --font-size-sm: .875rem;
+            --font-size-base: 1rem;
+            --font-size-xl: 1.5rem;
+            --font-size-xxl: 1.875rem;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --auth-input-height: 44px;
+            --auth-input-padding-y: .75rem;
+            --auth-input-radius: 8px;
+            --auth-input-border-width: 2px;
+        }
+        body.account-auth-layout {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+            font-family: "Segoe UI", sans-serif;
+            color: var(--color-text-primary);
+        }
+        .weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            box-sizing: border-box;
+        }
+        .weline-main-content,
+        .auth-container {
+            width: 100%;
+        }
+    </style>
+{$runtimeHeadHtml}
+</head>
+<body class="account-auth-layout">
+    <div class="weline-page-wrapper">
+        <div class="weline-main-content">
+            <main class="account-auth-content" id="account-auth-content" data-layout="account_auth_content">
+                <div class="auth-container">
+                    {$contentHtml}
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+HTML;
+        } finally {
+            if ($traceEnabled) {
+                RequestLifecycleTrace::recordSpan(
+                    'theme::ControllerFetchFileAfter::fastAccountAuthLayout',
+                    (\microtime(true) - $traceStart) * 1000,
+                    'theme'
+                );
+            }
+        }
+    }
+
+    private function buildFastAccountAuthRuntimeHeadHtml(Template $template): string
+    {
+        $isDev = defined('DEV') && DEV;
+        $themeAssetVersion = '20260609-auth-api-runtime';
+        $modulesConfigUrl = $isDev
+            ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+            : '/static/Weline/Frontend/base/weline.modules.js';
+        $modulesBaseUrl = $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api'
+            : '/static/Weline/Frontend/js/weline-api';
+        $apiWorkerUrl = $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+            : '/static/Weline/Frontend/js/weline-api-worker.js';
+        $welineScriptUrl = $isDev
+            ? '/Weline/Frontend/view/statics/js/weline.js?v=' . $themeAssetVersion
+            : '/static/Weline/Frontend/js/weline.js?v=' . $themeAssetVersion;
+        $themeScriptUrl = $isDev
+            ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion
+            : '/static/Weline/Theme/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion;
+        $queryBinUrl = $this->resolveFrontendQueryBinUrl();
+
+        $currentLang = $this->envString('user.lang', 'zh_Hans_CN');
+        $currentCurrency = $this->envString('user.currency', 'CNY');
+        $defaultLang = $this->envString('website.language', '');
+        if ($defaultLang === '') {
+            try {
+                $defaultLang = (string)(Env::get('locale', Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN');
+            } catch (\Throwable) {
+                $defaultLang = 'zh_Hans_CN';
+            }
+        }
+        $defaultCurrency = $this->envString('website.currency', '');
+        if ($defaultCurrency === '') {
+            try {
+                $defaultCurrency = (string)(Env::get('currency', 'CNY') ?: 'CNY');
+            } catch (\Throwable) {
+                $defaultCurrency = 'CNY';
+            }
+        }
+
+        $themeConfigPayload = [
+            'env' => [
+                'WELINE_ENV' => $isDev ? 'DEV' : 'PROD',
+                'DEV' => $isDev,
+                'PROD' => !$isDev,
+            ],
+            'baseUrl' => $this->resolveTemplateBaseUrl($template),
+            'modulesConfigUrl' => $modulesConfigUrl,
+            'modulesBaseUrl' => $modulesBaseUrl,
+            'assetVersion' => $themeAssetVersion,
+            'deployVersion' => $this->resolveDeployVersion(),
+            'workerBuildId' => $this->resolveWorkerBuildId(),
+            'api' => [
+                'workerUrl' => $apiWorkerUrl,
+                'endpoint' => $queryBinUrl,
+                'queryBinUrl' => $queryBinUrl,
+                'locale' => $currentLang,
+                'currency' => $currentCurrency,
+            ],
+            'currentLang' => $currentLang,
+            'currentCurrency' => $currentCurrency,
+            'defaultLang' => $defaultLang,
+            'defaultCurrency' => $defaultCurrency,
+            'debug' => $isDev,
+            'theme' => [
+                'area' => 'frontend',
+                'layoutType' => 'account.auth',
+                'layoutOption' => null,
+            ],
+        ];
+
+        $workerUrlJson = $this->jsonEncodeForScript($apiWorkerUrl);
+        $queryBinUrlJson = $this->jsonEncodeForScript($queryBinUrl);
+        $configJson = $this->jsonEncodeForScript($themeConfigPayload);
+        $welineScriptUrlEsc = \htmlspecialchars($welineScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $themeScriptUrlEsc = \htmlspecialchars($themeScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<HTML
+    <script data-no-extract="true" data-auth-runtime-config>
+        (function() {
+            window.WelineApiConfig = window.WelineApiConfig || {};
+            window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || {$workerUrlJson};
+            window.WelineApiConfig.endpoint = window.WelineApiConfig.endpoint || window.WelineApiConfig.queryBinUrl || {$queryBinUrlJson};
+            window.WelineApiConfig.queryBinUrl = window.WelineApiConfig.queryBinUrl || {$queryBinUrlJson};
+            window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
+            window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
+
+            if (!window.__WelineThemeConfig) {
+                window.__WelineThemeConfig = {};
+            }
+
+            Object.assign(window.__WelineThemeConfig, {$configJson});
+
+            if (window.__WelineThemeConfig.modulesConfigUrl) {
+                window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+            }
+        })();
+    </script>
+    <script src="{$welineScriptUrlEsc}"></script>
+    <script src="{$themeScriptUrlEsc}"></script>
+HTML;
+    }
+
+    private function resolveFrontendQueryBinUrl(): string
+    {
+        return Env::getFrontendQueryBinPath();
+    }
+
+    private function resolveTemplateBaseUrl(Template $template): string
+    {
+        try {
+            return (string)$template->getRequest()->getBaseUrl();
+        } catch (\Throwable) {
+        }
+
+        try {
+            return (string)ObjectManager::getInstance(Request::class)->getBaseUrl();
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function resolveDeployVersion(): string
+    {
+        $file = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        if (!is_file($file)) {
+            return 'dev';
+        }
+        try {
+            $data = json_decode((string)file_get_contents($file), true);
+            return is_array($data) && !empty($data['deploy_version']) ? (string)$data['deploy_version'] : 'dev';
+        } catch (\Throwable) {
+            return 'dev';
+        }
+    }
+
+    private function resolveWorkerBuildId(): string
+    {
+        $file = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        if (!is_file($file)) {
+            return 'dev';
+        }
+        try {
+            $data = json_decode((string)file_get_contents($file), true);
+            return is_array($data) && !empty($data['worker_build_id']) ? (string)$data['worker_build_id'] : 'dev';
+        } catch (\Throwable) {
+            return 'dev';
+        }
+    }
+
+    private function envString(string $key, string $default = ''): string
+    {
+        try {
+            if (\function_exists('w_env')) {
+                return (string)(\w_env($key, $default) ?: $default);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $default;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function jsonEncodeForScript($value): string
+    {
+        $encoded = \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+
+        return \is_string($encoded) ? $encoded : 'null';
     }
 
     /**
@@ -102,9 +570,11 @@ class ControllerFetchFileAfter implements ObserverInterface
         $currentContentTemplate = $contentTemplate;
         $currentContentHtml = $contentHtml;
         $renderedHtml = $contentHtml;
+        $layoutProfiles = [];
 
         try {
             for ($depth = 0; $depth < self::MAX_LAYOUT_WRAP_DEPTH; $depth++) {
+                $layoutDepthStart = \microtime(true);
                 $contentRenderKey = $this->primeTemplateData(
                     $template,
                     $currentLayoutTemplate,
@@ -121,11 +591,60 @@ class ControllerFetchFileAfter implements ObserverInterface
                 if ($traceEnabled) {
                     RequestLifecycleTrace::pushCurrentParent($layoutFetchSpan);
                 }
+                $layoutFetchWallStart = \microtime(true);
                 try {
                     $renderedHtml = (string)$template->fetch(
                         $currentLayoutTemplate,
                         $this->buildLayoutFetchData($currentLayoutTemplate, $currentContentHtml, $contentRenderKey)
                     );
+                    $layoutProfiles[] = [
+                        'depth' => $depth,
+                        'layout' => $currentLayoutTemplate,
+                        'content' => $currentContentTemplate,
+                        'fetch_ms' => \round((\microtime(true) - $layoutFetchWallStart) * 1000, 2),
+                        'total_ms' => \round((\microtime(true) - $layoutDepthStart) * 1000, 2),
+                        'bytes' => \strlen($renderedHtml),
+                    ];
+                    if ($this->isAccountLayoutTemplate($currentLayoutTemplate, $currentContentTemplate)) {
+                        $meta = $template->getData('meta');
+                        $metaSidebar = \is_array($meta) ? ($meta['sidebar'] ?? null) : null;
+                        $rootSidebar = $template->getData('sidebar');
+                        $hasAccountSidebar = $this->htmlHasAccountSidebar($renderedHtml);
+                        RequestLifecycleTrace::recordSpan(
+                            'theme::accountLayout::afterFetch',
+                            0.0,
+                            'theme',
+                            $layoutFetchSpan,
+                            [
+                                'rendered_len' => \strlen($renderedHtml),
+                                'has_account_sidebar' => $hasAccountSidebar,
+                                'meta_sidebar_len' => \is_string($metaSidebar) ? \strlen(\trim($metaSidebar)) : 0,
+                                'root_sidebar_len' => \is_string($rootSidebar) ? \strlen(\trim($rootSidebar)) : 0,
+                                'template_id' => \spl_object_id($template),
+                            ]
+                        );
+                        if (!$hasAccountSidebar && \function_exists('w_log_warning')) {
+                            \w_log_warning('[AccountSidebar] account layout rendered without sidebar', [
+                                'uri' => $this->currentUri(),
+                                'layout_template' => $currentLayoutTemplate,
+                                'content_template' => $currentContentTemplate,
+                                'rendered_len' => \strlen($renderedHtml),
+                                'meta_sidebar_len' => \is_string($metaSidebar) ? \strlen(\trim($metaSidebar)) : 0,
+                                'root_sidebar_len' => \is_string($rootSidebar) ? \strlen(\trim($rootSidebar)) : 0,
+                                'meta_keys' => \is_array($meta) ? \array_keys($meta) : [],
+                                'template_id' => \spl_object_id($template),
+                            ], 'account_sidebar');
+                        }
+                        $this->logAccountSidebarDebug('layout_after_fetch', [
+                            'layout_template' => $currentLayoutTemplate,
+                            'content_template' => $currentContentTemplate,
+                            'rendered_len' => \strlen($renderedHtml),
+                            'has_account_sidebar' => $hasAccountSidebar,
+                            'meta_sidebar_len' => \is_string($metaSidebar) ? \strlen(\trim($metaSidebar)) : 0,
+                            'root_sidebar_len' => \is_string($rootSidebar) ? \strlen(\trim($rootSidebar)) : 0,
+                            'template_id' => \spl_object_id($template),
+                        ]);
+                    }
                 } finally {
                     if ($traceEnabled) {
                         RequestLifecycleTrace::popCurrentParent();
@@ -139,11 +658,13 @@ class ControllerFetchFileAfter implements ObserverInterface
 
                 $nextLayout = trim((string)$template->getData('layout'));
                 if ($nextLayout === '') {
+                    $this->logLayoutProfiles($layoutProfiles, $contentTemplate, $renderedHtml);
                     return [$renderedHtml, $currentLayoutTemplate];
                 }
 
                 $nextLayoutTemplate = $this->resolveNextLayoutTemplate($currentLayoutTemplate, $nextLayout);
                 if ($nextLayoutTemplate === '' || $nextLayoutTemplate === $currentLayoutTemplate) {
+                    $this->logLayoutProfiles($layoutProfiles, $contentTemplate, $renderedHtml);
                     return [$renderedHtml, $currentLayoutTemplate];
                 }
 
@@ -153,6 +674,7 @@ class ControllerFetchFileAfter implements ObserverInterface
                 $currentLayoutTemplate = $nextLayoutTemplate;
             }
 
+            $this->logLayoutProfiles($layoutProfiles, $contentTemplate, $renderedHtml);
             return [$renderedHtml, $currentLayoutTemplate];
         } finally {
             if ($traceEnabled) {
@@ -164,6 +686,38 @@ class ControllerFetchFileAfter implements ObserverInterface
                 );
             }
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $layoutProfiles
+     */
+    private function logLayoutProfiles(array $layoutProfiles, string $contentTemplate, string $renderedHtml): void
+    {
+        if ($layoutProfiles === []) {
+            return;
+        }
+
+        $totalMs = 0.0;
+        foreach ($layoutProfiles as $profile) {
+            $totalMs += (float)($profile['total_ms'] ?? 0);
+        }
+
+        $uri = $this->currentUri();
+        if (
+            $totalMs < 20.0
+            && !\str_contains($uri, 'customer/account')
+            && !\str_contains($contentTemplate, 'account')
+        ) {
+            return;
+        }
+
+        \error_log('[LayoutPerf] chain ' . \json_encode([
+            'uri' => $uri,
+            'content_template' => $contentTemplate,
+            'total_ms' => \round($totalMs, 2),
+            'bytes' => \strlen($renderedHtml),
+            'layouts' => $layoutProfiles,
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
     }
 
     private function primeTemplateData(
@@ -188,6 +742,8 @@ class ControllerFetchFileAfter implements ObserverInterface
             unset($metaData['contentRenderKey']);
             $metaData['content'] = $contentHtml;
         }
+        $metaData = $this->mergeTemplateRootAssignsIntoMeta($template, $metaData);
+        $metaData = $this->ensureAccountSidebarMeta($template, $layoutTemplate, $contentTemplate, $metaData, $contentHtml);
         $template->setData('meta', $metaData);
 
         $childHtml = $template->getData('child_html');
@@ -213,6 +769,197 @@ class ControllerFetchFileAfter implements ObserverInterface
         $template->setData('contentTemplate', $contentTemplate);
 
         return $contentRenderKey;
+    }
+
+    /**
+     * Account layouts read sidebar from meta. Keep the controller's root assign
+     * and meta assign in sync before layout rendering, and log the rare empty
+     * state with enough request context to identify the producer.
+     *
+     * @param array<string, mixed> $metaData
+     * @return array<string, mixed>
+     */
+    private function ensureAccountSidebarMeta(
+        Template $template,
+        string $layoutTemplate,
+        string $contentTemplate,
+        array $metaData,
+        string $contentHtml
+    ): array {
+        if (!$this->isAccountLayoutTemplate($layoutTemplate, $contentTemplate)) {
+            return $metaData;
+        }
+
+        $metaSidebar = $metaData['sidebar'] ?? null;
+        $metaSidebarLength = \is_string($metaSidebar) ? \strlen(\trim($metaSidebar)) : 0;
+        $rootSidebar = $template->getData('sidebar');
+        $rootSidebarLength = \is_string($rootSidebar) ? \strlen(\trim($rootSidebar)) : 0;
+        if ($metaSidebarLength === 0 && $rootSidebarLength > 0) {
+            $metaData['sidebar'] = $rootSidebar;
+            $metaSidebarLength = $rootSidebarLength;
+        }
+
+        RequestLifecycleTrace::recordSpan('theme::accountLayout::primeSidebar', 0.0, 'theme', null, [
+            'meta_sidebar_len' => $metaSidebarLength,
+            'root_sidebar_len' => $rootSidebarLength,
+            'content_len' => \strlen($contentHtml),
+            'template_id' => \spl_object_id($template),
+        ]);
+        $this->logAccountSidebarDebug('prime_sidebar', [
+            'layout_template' => $layoutTemplate,
+            'content_template' => $contentTemplate,
+            'meta_sidebar_len' => $metaSidebarLength,
+            'root_sidebar_len' => $rootSidebarLength,
+            'content_len' => \strlen($contentHtml),
+            'template_id' => \spl_object_id($template),
+            'meta_keys' => \array_keys($metaData),
+        ]);
+
+        if ($metaSidebarLength === 0 && \function_exists('w_log_warning')) {
+            try {
+                $request = ObjectManager::getInstance(Request::class);
+                \w_log_warning('[AccountSidebar] layout meta sidebar missing before render', [
+                    'uri' => (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? ''),
+                    'lang' => (string)($request->getServer('WELINE_USER_LANG') ?? ''),
+                    'layout_template' => $layoutTemplate,
+                    'content_template' => $contentTemplate,
+                    'template_id' => \spl_object_id($template),
+                    'root_sidebar_len' => $rootSidebarLength,
+                    'meta_keys' => \array_keys($metaData),
+                ], 'account_sidebar');
+            } catch (\Throwable) {
+            }
+        }
+
+        return $metaData;
+    }
+
+    private function restoreAccountRenderSnapshot(
+        Template $template,
+        DataObject $eventData,
+        string $layoutTemplate,
+        string $contentTemplate
+    ): void {
+        if (!$this->isAccountLayoutTemplate($layoutTemplate, $contentTemplate)) {
+            return;
+        }
+
+        $snapshot = $eventData->getData('templateSnapshot');
+        if (!\is_array($snapshot) || $snapshot === []) {
+            return;
+        }
+
+        $meta = $template->getData('meta');
+        if (!\is_array($meta)) {
+            $meta = [];
+        }
+
+        $rootSidebar = $template->getData('sidebar');
+        $rootSidebarLength = \is_string($rootSidebar) ? \strlen(\trim($rootSidebar)) : 0;
+        $metaSidebar = $meta['sidebar'] ?? null;
+        $metaSidebarLength = \is_string($metaSidebar) ? \strlen(\trim($metaSidebar)) : 0;
+        $snapshotSidebar = $snapshot['sidebar'] ?? ($snapshot['meta_sidebar'] ?? null);
+        if (\is_string($snapshotSidebar) && \trim($snapshotSidebar) !== '' && ($rootSidebarLength === 0 || $metaSidebarLength === 0)) {
+            if ($rootSidebarLength === 0) {
+                $template->setData('sidebar', $snapshotSidebar);
+            }
+            if ($metaSidebarLength === 0) {
+                $meta['sidebar'] = $snapshotSidebar;
+            }
+        }
+
+        if (isset($snapshot['meta']) && \is_array($snapshot['meta'])) {
+            foreach (['showHeader', 'showFooter', 'sidebarCollapsed'] as $key) {
+                if (!\array_key_exists($key, $meta) && \array_key_exists($key, $snapshot['meta'])) {
+                    $meta[$key] = $snapshot['meta'][$key];
+                }
+            }
+        }
+
+        $title = \trim((string)($meta['title'] ?? ''));
+        $snapshotTitle = (string)($snapshot['meta_title'] ?? ($snapshot['title'] ?? ''));
+        if ($title === '' && \trim($snapshotTitle) !== '') {
+            $meta['title'] = $snapshotTitle;
+        }
+
+        $template->setData('meta', $meta);
+    }
+
+    private function snapshotHasAccountSidebar(DataObject $eventData): bool
+    {
+        $snapshot = $eventData->getData('templateSnapshot');
+        if (!\is_array($snapshot)) {
+            return false;
+        }
+
+        foreach (['sidebar', 'meta_sidebar'] as $key) {
+            $value = $snapshot[$key] ?? null;
+            if (\is_string($value) && \trim($value) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isAccountLayoutTemplate(string $layoutTemplate, string $contentTemplate = ''): bool
+    {
+        $normalized = \str_replace('\\', '/', $layoutTemplate);
+        $normalizedContent = \str_replace('\\', '/', $contentTemplate);
+        return \str_contains($normalized, 'Weline_Theme::theme/frontend/layouts/account/')
+            || \str_contains($normalized, '/Weline/Theme/view/theme/frontend/layouts/account/')
+            || \str_contains($normalizedContent, 'Weline_Customer::templates/frontend/account/');
+    }
+
+    private function htmlHasAccountSidebar(string $html): bool
+    {
+        return \str_contains($html, 'class="account-sidebar')
+            || \str_contains($html, "class='account-sidebar");
+    }
+
+    private function currentUri(): string
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            return (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function shouldDebugAccountSidebar(): bool
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            return (string)$request->getGet('debug_sidebar', '') === '1';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Debug-only trace for WLS account sidebar disappearance. Enabled with
+     * `debug_sidebar=1` so normal requests do not get noisy logs.
+     */
+    private function logAccountSidebarDebug(string $stage, array $context = []): void
+    {
+        if (!$this->shouldDebugAccountSidebar()) {
+            return;
+        }
+
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            $context += [
+                'request_id' => (string)(\Weline\Framework\Runtime\RequestContext::getId() ?? ''),
+                'uri' => (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? ''),
+                'lang' => (string)\Weline\Framework\App\State::getLang(),
+                'lang_local' => (string)\Weline\Framework\App\State::getLangLocal(),
+                'currency' => (string)\Weline\Framework\App\State::getCurrency(),
+            ];
+        } catch (\Throwable) {
+        }
+
+        \error_log('[AccountSidebarTrace] ' . $stage . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
     }
 
     private function buildLayoutFetchData(string $layoutTemplate, string $contentHtml, string $contentRenderKey): array

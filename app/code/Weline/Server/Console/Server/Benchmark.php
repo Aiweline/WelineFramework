@@ -280,6 +280,8 @@ class Benchmark extends CommandAbstract
     {
         $results = [];
         $errors = 0;
+        $errorDetails = [];
+        $statusCodes = [];
         $workerHits = [];
         $startTime = \microtime(true);
         
@@ -403,6 +405,7 @@ class Benchmark extends CommandAbstract
                     
                     if ($info['result'] === CURLE_OK) {
                         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        $statusCodes[(string)$httpCode] = ($statusCodes[(string)$httpCode] ?? 0) + 1;
                         if ($httpCode >= 200 && $httpCode < 400) {
                             $results[] = $elapsed;
                             $headers = $this->parseResponseHeaders($headerBuffers[$key] ?? '');
@@ -412,9 +415,15 @@ class Benchmark extends CommandAbstract
                             }
                         } else {
                             $errors++;
+                            $detail = 'http:' . (string)$httpCode;
+                            $errorDetails[$detail] = ($errorDetails[$detail] ?? 0) + 1;
                         }
                     } else {
                         $errors++;
+                        $errno = \curl_errno($ch);
+                        $message = \curl_error($ch);
+                        $detail = 'curl:' . (string)$errno . ':' . ($message !== '' ? $message : \curl_strerror($errno));
+                        $errorDetails[$detail] = ($errorDetails[$detail] ?? 0) + 1;
                     }
                     
                     $completed++;
@@ -465,7 +474,17 @@ class Benchmark extends CommandAbstract
         $totalTime = $endTime - $startTime;
         
         // 生成报告
-        $this->generateReport($results, $errors, $totalTime, $totalRequests, $workerHits, $workerBalanceThreshold);
+        $this->generateReport(
+            $results,
+            $errors,
+            $totalTime,
+            $totalRequests,
+            $url,
+            $workerHits,
+            $workerBalanceThreshold,
+            $errorDetails,
+            $statusCodes
+        );
     }
     
     /**
@@ -476,8 +495,11 @@ class Benchmark extends CommandAbstract
         int $errors,
         float $totalTime,
         int $totalRequests,
+        string $targetUrl,
         array $workerHits = [],
-        float $workerBalanceThreshold = 1.5
+        float $workerBalanceThreshold = 1.5,
+        array $errorDetails = [],
+        array $statusCodes = []
     ): void
     {
         $successCount = \count($results);
@@ -500,6 +522,9 @@ class Benchmark extends CommandAbstract
         
         $qps = $totalTime > 0 ? $successCount / $totalTime : 0;
         $errorRate = $totalCompleted > 0 ? ($errors / $totalCompleted) * 100 : 0;
+        if (!empty($errorDetails)) {
+            \arsort($errorDetails);
+        }
         
         echo "\n";
         $this->printer->setup(__('压测结果报告'));
@@ -568,6 +593,7 @@ class Benchmark extends CommandAbstract
         
         // 保存报告
         $report = [
+            'target_url' => $targetUrl,
             'total_requests' => $totalCompleted,
             'success_count' => $successCount,
             'error_count' => $errors,
@@ -584,17 +610,54 @@ class Benchmark extends CommandAbstract
             ],
             'worker_hits' => $workerHits,
             'worker_balance' => $workerBalance,
+            'status_codes' => $statusCodes,
+            'error_details' => $errorDetails,
         ];
         
         $reportDir = BP . 'var/log/wls';
         if (!\is_dir($reportDir)) {
             @\mkdir($reportDir, 0755, true);
         }
-        $reportFile = $reportDir . '/benchmark_report_' . \date('Ymd_His') . '.json';
+        $reportFile = $this->buildReportFilePath($reportDir, $targetUrl);
         \file_put_contents($reportFile, \json_encode($report, JSON_PRETTY_PRINT));
         $this->printer->note(__('报告已保存：%{1}', [$reportFile]));
     }
     
+    protected function buildReportFilePath(string $reportDir, string $targetUrl, ?float $now = null): string
+    {
+        $now ??= \microtime(true);
+        $seconds = (int)$now;
+        $micros = (int)\round(($now - $seconds) * 1000000);
+        if ($micros >= 1000000) {
+            $seconds++;
+            $micros = 0;
+        }
+
+        $path = \parse_url($targetUrl, \PHP_URL_PATH);
+        $pathSlug = \is_string($path) ? \trim($path, '/') : '';
+        $pathSlug = \preg_replace('/[^A-Za-z0-9]+/', '-', $pathSlug) ?? '';
+        $pathSlug = \strtolower(\trim($pathSlug, '-')) ?: 'root';
+
+        $baseFile = \rtrim($reportDir, '/\\')
+            . '/benchmark_report_'
+            . \date('Ymd_His', $seconds)
+            . '_'
+            . \str_pad((string)$micros, 6, '0', \STR_PAD_LEFT)
+            . '_'
+            . $pathSlug
+            . '_pid'
+            . (string)\getmypid();
+
+        $reportFile = $baseFile . '.json';
+        $suffix = 1;
+        while (\is_file($reportFile)) {
+            $reportFile = $baseFile . '_' . (string)$suffix . '.json';
+            $suffix++;
+        }
+
+        return $reportFile;
+    }
+
     /**
      * @inheritDoc
      */

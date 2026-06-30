@@ -133,9 +133,20 @@ html[data-bs-theme="dark"] .i18n-admin-page {
     border: 1px solid var(--i18n-border);
 }
 
+.i18n-admin-alert {
+    background:
+        linear-gradient(135deg, var(--i18n-primary-soft), transparent 55%),
+        var(--i18n-surface-muted);
+    color: var(--i18n-text);
+}
+
 .i18n-admin-note strong {
     display: block;
     margin-bottom: 0.2rem;
+}
+
+.i18n-admin-card-header {
+    background: linear-gradient(180deg, var(--i18n-surface-strong), var(--i18n-surface-muted));
 }
 
 .i18n-admin-selection {
@@ -199,6 +210,14 @@ html[data-bs-theme="dark"] .i18n-admin-page {
     color: var(--i18n-text);
 }
 
+.i18n-admin-readonly {
+    background: linear-gradient(180deg, var(--i18n-surface-strong), var(--i18n-surface-muted)) !important;
+}
+
+.i18n-admin-readonly code {
+    color: var(--i18n-text-muted);
+}
+
 .i18n-admin-form .form-control::placeholder {
     color: var(--i18n-text-muted);
 }
@@ -231,6 +250,12 @@ html[data-bs-theme="dark"] .i18n-admin-page {
     background: transparent;
     color: var(--i18n-text);
     border-color: var(--i18n-border);
+}
+
+.i18n-admin-badge-neutral {
+    background: var(--i18n-surface-muted);
+    color: var(--i18n-text);
+    border: 1px solid var(--i18n-border);
 }
 
 .i18n-admin-progress {

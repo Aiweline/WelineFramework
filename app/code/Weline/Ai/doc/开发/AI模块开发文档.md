@@ -115,6 +115,23 @@ php bin/w ai:default-model:manage --action=validate
 | `locale` | string | 目标语言代码 | 无 |
 | `params` | array | 场景适配器参数 | [] |
 
+### 图片生成品牌身份资产参数
+
+文生图请求的 `params.identity_transparent_png_required=true` 或 `params.transparent_png_required=true` 会被识别为品牌身份资产生成请求，适用于网站 header、favicon、品牌识别位的 logo/icon。AI 服务层会追加 logo/icon 专用提示词约束，要求主体居中、无文字、无场景背景、适合小尺寸识别和后续透明 PNG 规范化。
+
+返回结果会在顶层和 `metadata` 中保留以下语义字段，供 PageBuilder 判断和本地后处理：
+
+| 字段 | 说明 |
+|------|------|
+| `requested_transparent_background` | 调用方是否请求透明背景 |
+| `native_transparent_background` | 当前供应商/模型是否按原生透明背景参数生成 |
+| `output_format` | 目标输出格式，品牌身份资产固定为 `png` |
+| `identity_asset` | 是否为品牌身份资产 |
+| `identity_asset_role` | `logo` 或 `icon`，默认 `logo`，可通过 `identity_asset_role`、`asset_role`、`usage` 等参数推断 |
+| `native_transparency_error` | 原生透明参数失败时保留的真实供应商错误文本，成功或未尝试时为空 |
+
+当模型明确支持原生透明背景时，适配层会传供应商对应的透明背景参数（OpenAI `gpt-image-1` 使用 `background=transparent` 并要求 `output_format=png`）。当供应商或模型不支持、能力未知，或原生透明参数返回不支持错误时，适配层不会继续硬传透明背景参数，而是生成干净、主体明确、背景简单、便于本地抠图的 logo/icon 图像，并让 PageBuilder 负责最终 alpha 校验和本地透明化处理。
+
 ### 场景适配器参数
 
 #### 翻译适配器 (translation)

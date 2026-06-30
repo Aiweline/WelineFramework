@@ -22,6 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_website', columns: ['website_id'])]
 #[Index(name: 'idx_account', columns: ['account_id'])]
 #[Index(name: 'idx_auto_submit', columns: ['is_auto_submit'])]
+#[Index(name: 'idx_enable_url_push', columns: ['enable_url_push'])]
 class SeoWebsiteAccount extends Model
 {
 
@@ -36,6 +37,8 @@ class SeoWebsiteAccount extends Model
     public const schema_fields_ACCOUNT_ID = 'account_id';
     #[Col('int', 1, nullable: false, default: 1, comment: '是否自动提交sitemap')]
     public const schema_fields_IS_AUTO_SUBMIT = 'is_auto_submit';
+    #[Col('int', 1, nullable: false, default: 1, comment: '是否允许URL rewrite定时推送')]
+    public const schema_fields_ENABLE_URL_PUSH = 'enable_url_push';
     #[Col('varchar', 20, nullable: false, default: 'daily', comment: 'Sitemap生成频率')]
     public const schema_fields_SITEMAP_FREQUENCY = 'sitemap_frequency';
     #[Col('varchar', 20, nullable: false, default: 'weekly', comment: '抓取频率')]
@@ -110,6 +113,11 @@ class SeoWebsiteAccount extends Model
         return (int)$this->getData(self::schema_fields_IS_AUTO_SUBMIT) === 1;
     }
 
+    public function isUrlPushEnabled(): bool
+    {
+        return (int)$this->getData(self::schema_fields_ENABLE_URL_PUSH) === 1;
+    }
+
     /**
      * 根据站点ID获取所有绑定信息（支持多个平台）
      * 
@@ -157,6 +165,7 @@ class SeoWebsiteAccount extends Model
         // 准备数据（使用默认值）
         $data = [
             self::schema_fields_IS_AUTO_SUBMIT => isset($config['is_auto_submit']) ? ($config['is_auto_submit'] ? 1 : 0) : 1,
+            self::schema_fields_ENABLE_URL_PUSH => isset($config['enable_url_push']) ? ($config['enable_url_push'] ? 1 : 0) : 1,
             self::schema_fields_SITEMAP_FREQUENCY => $config['sitemap_frequency'] ?? self::DEFAULT_SITEMAP_FREQUENCY,
             self::schema_fields_CRAWL_FREQUENCY => $config['crawl_frequency'] ?? self::DEFAULT_CRAWL_FREQUENCY,
             self::schema_fields_PRIORITY => $config['priority'] ?? self::DEFAULT_PRIORITY,
@@ -208,6 +217,20 @@ class SeoWebsiteAccount extends Model
      * @param int $websiteId
      * @return string[] 平台代码数组 ['google', 'bing', ...]
      */
+    public function unbindWebsite(int $websiteId): bool
+    {
+        if ($websiteId <= 0) {
+            return false;
+        }
+
+        $this->reset()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+
+        return true;
+    }
+
     public function getWebsitePlatforms(int $websiteId): array
     {
         $bindings = $this->getByWebsiteId($websiteId);

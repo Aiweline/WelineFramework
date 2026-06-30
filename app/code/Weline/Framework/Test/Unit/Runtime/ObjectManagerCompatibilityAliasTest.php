@@ -24,6 +24,15 @@ final class ObjectManagerCompatibilityAliasTest extends TestCase
 
         self::assertInstanceOf(ObjectManagerGetAliasFixture::class, $instance);
     }
+
+    public function testNonSharedInstanceIsNotStoredAsSharedInstance(): void
+    {
+        $nonShared = ObjectManager::getInstance(ObjectManagerGetAliasFixture::class, [], false);
+        $shared = ObjectManager::getInstance(ObjectManagerGetAliasFixture::class);
+
+        self::assertNotSame($nonShared, $shared);
+        self::assertSame($shared, ObjectManager::getInstance(ObjectManagerGetAliasFixture::class));
+    }
 }
 
 final class ObjectManagerGetAliasFixture

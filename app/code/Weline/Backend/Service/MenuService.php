@@ -12,9 +12,16 @@ use Weline\Framework\Manager\ObjectManager;
 
 class MenuService implements MenuServiceInterface
 {
+    private const MENU_TREE_CACHE_TTL = 120.0;
+
     private ResourceTreeServiceInterface $resourceTreeService;
     private AclServiceInterface $aclService;
     private Role $roleModel;
+
+    /**
+     * @var array<string, array{expires: float, data: array}>
+     */
+    private static array $menuTreeCache = [];
 
     public function __construct(
         ResourceTreeServiceInterface $resourceTreeService,
@@ -31,12 +38,20 @@ class MenuService implements MenuServiceInterface
         if ($roleId <= 0) {
             return [];
         }
+        $cacheKey = 'role:' . $roleId;
+        $now = microtime(true);
+        if (isset(self::$menuTreeCache[$cacheKey]) && self::$menuTreeCache[$cacheKey]['expires'] >= $now) {
+            return self::$menuTreeCache[$cacheKey]['data'];
+        }
         /** @var Role $role */
         $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
         if (!$role->getId()) {
+            self::$menuTreeCache[$cacheKey] = ['expires' => $now + self::MENU_TREE_CACHE_TTL, 'data' => []];
             return [];
         }
-        return $this->resourceTreeService->getBackendMenuTree($role);
+        $tree = $this->resourceTreeService->getBackendMenuTree($role);
+        self::$menuTreeCache[$cacheKey] = ['expires' => $now + self::MENU_TREE_CACHE_TTL, 'data' => $tree];
+        return $tree;
     }
 
     public function getMenuTreeByUserId(int $userId): array
@@ -44,16 +59,25 @@ class MenuService implements MenuServiceInterface
         if ($userId <= 0) {
             return [];
         }
+        $cacheKey = 'user:' . $userId;
+        $now = microtime(true);
+        if (isset(self::$menuTreeCache[$cacheKey]) && self::$menuTreeCache[$cacheKey]['expires'] >= $now) {
+            return self::$menuTreeCache[$cacheKey]['data'];
+        }
         /** @var BackendUser $user */
         $user = ObjectManager::getInstance(BackendUser::class, [], false)->load($userId);
         if (!$user->getId()) {
+            self::$menuTreeCache[$cacheKey] = ['expires' => $now + self::MENU_TREE_CACHE_TTL, 'data' => []];
             return [];
         }
         $role = $user->getRoleModel();
         if (!$role->getId()) {
+            self::$menuTreeCache[$cacheKey] = ['expires' => $now + self::MENU_TREE_CACHE_TTL, 'data' => []];
             return [];
         }
-        return $this->resourceTreeService->getBackendMenuTree($role);
+        $tree = $this->getMenuTreeByRoleId((int)$role->getId());
+        self::$menuTreeCache[$cacheKey] = ['expires' => $now + self::MENU_TREE_CACHE_TTL, 'data' => $tree];
+        return $tree;
     }
 
     public function hasMenuEntry(int $roleId): bool

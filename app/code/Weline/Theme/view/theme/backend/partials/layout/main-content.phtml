@@ -1,0 +1,109 @@
+<?php
+/**
+ * Backend layout chrome for business content.
+ *
+ * Layouts own page title, breadcrumbs, and system messages. Business templates
+ * should only render business-specific content.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$meta = $meta ?? ($this->getData('meta') ?? []);
+$layoutBool = static function (mixed $value, bool $default = true): bool {
+    if ($value === null || $value === '') {
+        return $default;
+    }
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_numeric($value)) {
+        return (int)$value !== 0;
+    }
+
+    return !in_array(strtolower(trim((string)$value)), ['0', 'false', 'no', 'off'], true);
+};
+
+$layoutMainId = trim((string)($layoutMainId ?? 'main-content'));
+$layoutMainId = $layoutMainId !== '' ? $layoutMainId : 'main-content';
+$layoutMainClass = trim((string)($layoutMainClass ?? 'backend-main-content'));
+$layoutMainClass = $layoutMainClass !== '' ? $layoutMainClass : 'backend-main-content';
+$layoutMainAttributes = trim((string)($layoutMainAttributes ?? ''));
+$layoutShowPageHeader = $layoutBool($layoutShowPageHeader ?? ($meta['showPageHeader'] ?? true), true);
+$layoutShowMessages = $layoutBool($layoutShowMessages ?? ($meta['showMessages'] ?? true), true);
+
+$layoutContentHtml = $layoutContentHtml ?? (string)$this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml');
+$hasContentPageTitle = stripos((string)$layoutContentHtml, 'page-title-box') !== false;
+$fallbackPageTitle = trim((string)($layoutTitle ?? $title ?? $this->getData('title') ?? ($meta['title'] ?? '')));
+$pageHeader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\BackendPageHeaderResolver::class)
+    ->resolve($fallbackPageTitle);
+$pageTitle = (string)($pageHeader['title'] ?? '');
+$breadcrumbs = (array)($pageHeader['breadcrumbs'] ?? []);
+?>
+<main class="<?= htmlspecialchars($layoutMainClass, ENT_QUOTES, 'UTF-8') ?>" id="<?= htmlspecialchars($layoutMainId, ENT_QUOTES, 'UTF-8') ?>"<?= $layoutMainAttributes !== '' ? ' ' . $layoutMainAttributes : '' ?>>
+    <?php if ($layoutShowPageHeader && !$hasContentPageTitle && $pageTitle !== ''): ?>
+        <div class="row" data-backend-layout-page-header>
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></h4>
+                    <div class="page-title-right">
+                        <?php if (!empty($breadcrumbs)): ?>
+                            <ol class="breadcrumb m-0">
+                                <?php foreach ($breadcrumbs as $breadcrumb): ?>
+                                    <li class="breadcrumb-item <?= !empty($breadcrumb['active']) ? 'active' : '' ?>">
+                                        <?php if (empty($breadcrumb['active']) && !empty($breadcrumb['url'])): ?>
+                                            <a href="<?= htmlspecialchars((string)$breadcrumb['url'], ENT_QUOTES, 'UTF-8') ?>">
+                                                <?= htmlspecialchars((string)$breadcrumb['title'], ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars((string)$breadcrumb['title'], ENT_QUOTES, 'UTF-8') ?>
+                                        <?php endif; ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ol>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($layoutShowMessages): ?>
+        <div class="row wf-system-messages" data-backend-system-messages>
+            <div class="col-12">
+                <template>Weline_Component::message.phtml</template>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?= $layoutContentHtml ?>
+</main>
+
+<?php if ($layoutShowMessages): ?>
+    <script>
+        (function () {
+            function placeBackendMessages() {
+                var messages = document.querySelector('[data-backend-system-messages]');
+                var main = document.getElementById(<?= json_encode($layoutMainId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+                if (!messages || !main) {
+                    return;
+                }
+
+                var titleBox = main.querySelector('.page-title-box');
+                if (!titleBox) {
+                    return;
+                }
+
+                var titleRow = titleBox.closest('.row') || titleBox;
+                if (titleRow.nextElementSibling !== messages) {
+                    titleRow.insertAdjacentElement('afterend', messages);
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', placeBackendMessages);
+            } else {
+                placeBackendMessages();
+            }
+        })();
+    </script>
+<?php endif; ?>

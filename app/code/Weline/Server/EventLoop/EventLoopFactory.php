@@ -15,7 +15,11 @@ final class EventLoopFactory
     public static function create(string $driver): array
     {
         $normalized = self::normalizeDriver($driver);
-        if ($normalized === self::DRIVER_EVENT) {
+        if ($normalized === self::DRIVER_EVENT && !self::isEventAvailable()) {
+            throw new \RuntimeException('event loop requested but PHP event extension is not available');
+        }
+
+        if ($normalized === self::DRIVER_EVENT || ($normalized === self::DRIVER_AUTO && self::isEventAvailable())) {
             return [
                 'loop' => new EventExtLoop(),
                 'requested' => $normalized,
@@ -23,7 +27,6 @@ final class EventLoopFactory
             ];
         }
 
-        // AUTO 模式优先稳定性：默认 select，event 仅在显式 driver=event 时启用。
         return [
             'loop' => new SelectEventLoop(),
             'requested' => $normalized,
@@ -40,5 +43,11 @@ final class EventLoopFactory
             default => self::DRIVER_AUTO,
         };
     }
-}
 
+    public static function isEventAvailable(): bool
+    {
+        return \extension_loaded('event')
+            && \class_exists(\EventBase::class)
+            && \class_exists(\Event::class);
+    }
+}

@@ -88,6 +88,7 @@ class AiModel extends Model
     public const PRIMARY_MODALITY_TEXT_TO_TEXT = 'text2text';
     public const PRIMARY_MODALITY_TEXT_TO_IMAGE = 'text2image';
     public const PRIMARY_MODALITY_TEXT_TO_VIDEO = 'text2video';
+    public const PRIMARY_MODALITY_EMBEDDING = 'embedding';
     public const CAPABILITY_VISION = 'vision';
     public const CAPABILITY_IMAGE_OUTPUT = 'image_output';
     public const CAPABILITY_VIDEO_OUTPUT = 'video_output';
@@ -223,6 +224,7 @@ class AiModel extends Model
             self::PRIMARY_MODALITY_TEXT_TO_TEXT,
             self::PRIMARY_MODALITY_TEXT_TO_IMAGE,
             self::PRIMARY_MODALITY_TEXT_TO_VIDEO,
+            self::PRIMARY_MODALITY_EMBEDDING,
         ];
     }
     public function isActive(): bool

@@ -19,6 +19,7 @@
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend">
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::backend::layouts::fullscreen::head-after</w:hook>
@@ -33,9 +34,10 @@
     </if>
     
     <div class="backend-layout-fullscreen <?= htmlspecialchars($meta['class'] ?? '') ?>">
-        <main class="backend-main-content" id="main-content">
-            <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
-        </main>
+        <?php
+        $layoutMainClass = 'backend-main-content';
+        echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+        ?>
     </div>
     
     <if condition="meta.showFooter">
@@ -44,7 +46,12 @@
         <w:hook>Weline_Theme::backend::layouts::base::footer-after</w:hook>
     </if>
     
+    <w:hook>Weline_Theme::backend::layouts::base::scripts-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="scripts" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::scripts-after</w:hook>
+
     <w:hook>Weline_Theme::backend::layouts::fullscreen::body-end</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::base::body-end</w:hook>
 </body>
 </html>
 

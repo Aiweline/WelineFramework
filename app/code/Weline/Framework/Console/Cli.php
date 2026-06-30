@@ -67,12 +67,29 @@ class Cli extends CliAbstract
         // 触发命令执行完成事件（传规范命令名，便于观察者按前缀匹配，如 setup: 而非别名 s:up）
         $canonicalCommand = $this->getCanonicalCommandName($command, $command_class['class']);
         $this->dispatchCommandExecutedEvent($canonicalCommand, $args);
-        $skipFooter = $canonicalCommand === 'cron:test'
-            && (\in_array('--list', $this->argv, true) || \in_array('-l', $this->argv, true));
+        $skipFooter = ($canonicalCommand === 'cron:test'
+                && (\in_array('--list', $this->argv, true) || \in_array('-l', $this->argv, true)))
+            || $this->isJsonOutputCommand($args);
         if (!$skipFooter) {
             $this->printer->printing("\n");
             $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
         }
+    }
+
+    private function isJsonOutputCommand(array $args): bool
+    {
+        if (isset($args['json']) || isset($args['j'])) {
+            return true;
+        }
+
+        foreach (['format', 'f'] as $key) {
+            $value = $args[$key] ?? null;
+            if (\is_string($value) && \strtolower($value) === 'json') {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
@@ -515,7 +532,12 @@ class Cli extends CliAbstract
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
             } catch (Exception $exception) {
                 $this->printer->error($exception->getMessage());
-                exit();
+                exit(1);
+            }
+            $commands = Env::getCommands();
+            if (empty($commands)) {
+                $this->printer->error('Command registry update failed; please run: php bin/w command:upgrade');
+                exit(1);
             }
 //            exit($this->printer->error('命令系统异常！请完整执行（不能简写）更新模块命令后重试：php bin/w command:upgrade'));
         }

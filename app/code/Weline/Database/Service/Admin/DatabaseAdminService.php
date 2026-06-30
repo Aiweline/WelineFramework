@@ -16,7 +16,7 @@ class DatabaseAdminService
 
     public function listDatabases(): array
     {
-        return match ($this->dbType()) {
+        $databases = match ($this->dbType()) {
             'pgsql' => array_map(
                 static fn(array $row): string => (string) ($row['n'] ?? ''),
                 $this->queryRows(
@@ -34,6 +34,8 @@ class DatabaseAdminService
                 $this->queryRows('SHOW DATABASES')
             ),
         };
+
+        return $this->ensureDefaultDatabase($databases);
     }
 
     public function listTables(string $database): array
@@ -70,19 +72,7 @@ class DatabaseAdminService
         $qualified = $database . '.' . $table;
 
         if ($this->dbType() === 'pgsql') {
-            $views = $this->queryRows(
-                'SELECT table_name AS name FROM information_schema.views WHERE table_schema = '
-                . $this->quoteValue($database) . ' ORDER BY table_name'
-            );
-
-            return [
-                'columns' => $connector->getTableColumns($qualified),
-                'indexes' => $connector->getTableIndexes($qualified),
-                'foreign_keys' => $connector->getTableForeignKeys($qualified),
-                'status' => [],
-                'create_sql' => $connector->getCreateTableSql($qualified),
-                'views' => $views,
-            ];
+            return $this->getPgsqlTableMeta($database, $table);
         }
 
         if ($this->dbType() === 'sqlite') {
@@ -117,6 +107,107 @@ class DatabaseAdminService
             'foreign_keys' => $connector->getTableForeignKeys($qualified),
             'views' => $views,
         ];
+    }
+
+    private function getPgsqlTableMeta(string $schema, string $table): array
+    {
+        $schemaSql = $this->quoteValue($schema);
+        $tableSql = $this->quoteValue($table);
+        $comments = [];
+        foreach ($this->queryRows(
+            'SELECT a.attname AS name, col_description(c.oid, a.attnum) AS comment '
+            . 'FROM pg_class c '
+            . 'JOIN pg_namespace n ON n.oid = c.relnamespace '
+            . 'JOIN pg_attribute a ON a.attrelid = c.oid '
+            . 'WHERE n.nspname = ' . $schemaSql . ' AND c.relname = ' . $tableSql
+            . ' AND a.attnum > 0 AND NOT a.attisdropped'
+        ) as $row) {
+            $comments[(string)($row['name'] ?? '')] = (string)($row['comment'] ?? '');
+        }
+
+        $columns = array_map(function (array $row) use ($comments): array {
+            $name = (string)($row['name'] ?? '');
+            return [
+                'name' => $name,
+                'type' => (string)($row['type'] ?? ''),
+                'length' => $row['character_maximum_length'] ?? $row['numeric_precision'] ?? null,
+                'nullable' => strtoupper((string)($row['is_nullable'] ?? 'YES')) !== 'NO',
+                'default' => $row['column_default'] ?? null,
+                'comment' => $comments[$name] ?? '',
+            ];
+        }, $this->queryRows(
+            'SELECT column_name AS name, data_type AS type, character_maximum_length, numeric_precision, '
+            . 'is_nullable, column_default '
+            . 'FROM information_schema.columns '
+            . 'WHERE table_schema = ' . $schemaSql . ' AND table_name = ' . $tableSql . ' '
+            . 'ORDER BY ordinal_position'
+        ));
+
+        $indexes = $this->queryRows(
+            'SELECT indexname AS name, indexdef AS definition '
+            . 'FROM pg_indexes '
+            . 'WHERE schemaname = ' . $schemaSql . ' AND tablename = ' . $tableSql . ' '
+            . 'ORDER BY indexname'
+        );
+
+        $foreignKeys = $this->queryRows(
+            'SELECT tc.constraint_name AS name, kcu.column_name, '
+            . 'ccu.table_schema AS ref_schema, ccu.table_name AS ref_table, ccu.column_name AS ref_column '
+            . 'FROM information_schema.table_constraints tc '
+            . 'JOIN information_schema.key_column_usage kcu '
+            . 'ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema '
+            . 'JOIN information_schema.constraint_column_usage ccu '
+            . 'ON ccu.constraint_name = tc.constraint_name AND ccu.constraint_schema = tc.table_schema '
+            . "WHERE tc.constraint_type = 'FOREIGN KEY' "
+            . 'AND tc.table_schema = ' . $schemaSql . ' AND tc.table_name = ' . $tableSql . ' '
+            . 'ORDER BY tc.constraint_name, kcu.ordinal_position'
+        );
+
+        $views = $this->queryRows(
+            'SELECT table_name AS name FROM information_schema.views WHERE table_schema = '
+            . $schemaSql . ' ORDER BY table_name'
+        );
+
+        return [
+            'columns' => $columns,
+            'indexes' => $indexes,
+            'foreign_keys' => $foreignKeys,
+            'status' => [],
+            'create_sql' => $this->buildPgsqlCreateSql($schema, $table, $columns),
+            'views' => $views,
+        ];
+    }
+
+    private function buildPgsqlCreateSql(string $schema, string $table, array $columns): string
+    {
+        if ($columns === []) {
+            return '';
+        }
+
+        $lines = [];
+        foreach ($columns as $column) {
+            $type = (string)($column['type'] ?? '');
+            $length = $column['length'] ?? null;
+            if ($length !== null && $length !== '' && in_array($type, ['character varying', 'character', 'varchar', 'char'], true)) {
+                $type .= '(' . (int)$length . ')';
+            }
+            $line = '    ' . $this->quotePgsqlIdentifier((string)($column['name'] ?? '')) . ' ' . $type;
+            if (($column['default'] ?? null) !== null) {
+                $line .= ' DEFAULT ' . (string)$column['default'];
+            }
+            if (($column['nullable'] ?? true) === false) {
+                $line .= ' NOT NULL';
+            }
+            $lines[] = $line;
+        }
+
+        return 'CREATE TABLE ' . $this->quotePgsqlIdentifier($schema) . '.' . $this->quotePgsqlIdentifier($table)
+            . " (\n" . implode(",\n", $lines) . "\n);";
+    }
+
+    private function quotePgsqlIdentifier(string $identifier): string
+    {
+        return '"' . str_replace('"', '""', $identifier) . '"';
     }
 
     public function getRows(
@@ -358,6 +449,33 @@ class DatabaseAdminService
     private function dbType(): string
     {
         return strtolower($this->connector()->getConfigProvider()->getDbType());
+    }
+
+    private function ensureDefaultDatabase(array $databases): array
+    {
+        $databases = array_values(array_filter(
+            array_map(static fn(mixed $database): string => (string) $database, $databases),
+            static fn(string $database): bool => $database !== ''
+        ));
+        $defaultDatabase = $this->defaultDatabaseName();
+        if ($defaultDatabase !== '' && !in_array($defaultDatabase, $databases, true)) {
+            array_unshift($databases, $defaultDatabase);
+        }
+
+        return array_values(array_unique($databases));
+    }
+
+    private function defaultDatabaseName(): string
+    {
+        if ($this->dbType() === 'pgsql') {
+            return 'public';
+        }
+
+        if ($this->dbType() === 'sqlite') {
+            return (string) ($this->connector()->getConfigProvider()->getDatabase() ?: 'main');
+        }
+
+        return (string) $this->connector()->getConfigProvider()->getDatabase();
     }
 
     private function queryRows(string $sql): array

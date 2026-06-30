@@ -291,12 +291,13 @@ class TwoFactorAuthHelper
     public static function getQRCodeUrl(string $otpAuthUri, int $size = 250): string
     {
         try {
-            // 使用 endroid/qr-code 库生成SVG格式的二维码
-            $qrCode = \Endroid\QrCode\QrCode::create($otpAuthUri)
-                ->setSize($size)
-                ->setMargin(10);
-            
-            // 生成SVG格式的二维码
+            // 使用 endroid/qr-code 库生成 SVG 格式的二维码（6.x，PHP 8.4 显式可空签名）
+            $qrCode = new \Endroid\QrCode\QrCode(
+                data: $otpAuthUri,
+                size: $size,
+                margin: 10,
+            );
+
             $writer = new \Endroid\QrCode\Writer\SvgWriter();
             $result = $writer->write($qrCode);
             

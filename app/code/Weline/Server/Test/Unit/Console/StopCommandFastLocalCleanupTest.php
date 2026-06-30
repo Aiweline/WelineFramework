@@ -52,9 +52,9 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         $candidates = $stop->candidates($info);
 
         self::assertContains(111, $candidates);
-        self::assertContains(222, $candidates);
-        self::assertContains(333, $candidates);
-        self::assertContains(444, $candidates);
+        self::assertNotContains(222, $candidates);
+        self::assertNotContains(333, $candidates);
+        self::assertNotContains(444, $candidates);
     }
 
     public function testFastLocalDoesNotCollectOtherInstanceSharedPortOccupants(): void
@@ -122,8 +122,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
         $candidates = $stop->candidates($info);
 
-        self::assertContains(222, $candidates);
-        self::assertContains(333, $candidates);
+        self::assertSame([111], $candidates);
         self::assertNotContains(999, $candidates);
         self::assertSame(0, $stop->sharedPortInspections);
     }
@@ -246,13 +245,6 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 unset($info);
 
                 return [];
-            }
-
-            protected function hasKnownRecoverablePortsInUse(string $name, ServerInstanceInfo $info): bool
-            {
-                unset($name, $info, $includeSharedState);
-
-                return true;
             }
 
             protected function releaseSharedStateConsumersForInstance(string $instanceName): void
@@ -419,13 +411,6 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return [];
             }
 
-            protected function hasKnownRecoverablePortsInUse(string $name, ServerInstanceInfo $info): bool
-            {
-                unset($name, $info, $includeSharedState);
-
-                return false;
-            }
-
             protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
             {
                 unset($name, $info, $includeSharedState);
@@ -471,7 +456,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(
             [
                 'show',
-                'ipc:default:force',
+                'kill',
                 'residual',
                 'release:default',
                 'pid:default',
@@ -628,7 +613,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         }
 
         self::assertSame(['default'], $manager->deleted);
-        self::assertSame(['show', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
+        self::assertSame(['show', 'kill', 'residual', 'release:default', 'pid:default', 'unlock:default'], $stop->calls);
     }
 
     public function testDirectForceStopCandidateKillDoesNotRunPrefixBatchTwice(): void
@@ -826,7 +811,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         }
 
         self::assertSame([], $manager->deleted);
-        self::assertSame(['show', 'ipc:default:force', 'residual:default'], $stop->calls);
+        self::assertSame(['show', 'kill', 'residual:default'], $stop->calls);
     }
 
     public function testGracefulStopRunsConcurrentResidualCleanupAfterIpcDrain(): void
@@ -963,7 +948,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
         self::assertSame(['default'], $manager->deleted);
         self::assertSame(
-            ['show', 'ipc', 'residual:default', 'release:default', 'pid:default', 'unlock:default'],
+            ['show', 'residual:default', 'release:default', 'pid:default', 'unlock:default'],
             $stop->calls
         );
     }

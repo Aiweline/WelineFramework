@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\AppStore\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\AppStore\Model\AppStoreInstalledModule;
@@ -57,19 +56,14 @@ class License extends BackendController
                 return $this->jsonResponse(false, __('获取授权令牌失败，请重新绑定账户'));
             }
 
-            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
-            if (!is_string($platformUrl) || $platformUrl === '') {
-                $platformUrl = 'https://app.aiweline.com';
-            }
-
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                $platformUrl . '/api/v1/platform/license/activate',
+                $accountService->getPlatformApiUrl('/api/v1/platform/license/activate'),
                 [
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
-                        'domain' => $domain ?: (string)\w_env('server.http_host', ''),
+                        'domain' => $domain ?: $accountService->getCurrentDomain(),
                     ],
                 ]
             );
@@ -122,19 +116,14 @@ class License extends BackendController
                 return $this->jsonResponse(false, __('获取授权令牌失败，请重新绑定账户'));
             }
 
-            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
-            if (!is_string($platformUrl) || $platformUrl === '') {
-                $platformUrl = 'https://app.aiweline.com';
-            }
-
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                $platformUrl . '/api/v1/platform/license/validate',
+                $accountService->getPlatformApiUrl('/api/v1/platform/license/validate'),
                 [
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
-                        'domain' => (string)\w_env('server.http_host', ''),
+                        'domain' => $accountService->getCurrentDomain(),
                     ],
                 ]
             );
@@ -168,14 +157,9 @@ class License extends BackendController
                 return $this->jsonResponse(false, __('获取授权令牌失败，请重新绑定账户'));
             }
 
-            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
-            if (!is_string($platformUrl) || $platformUrl === '') {
-                $platformUrl = 'https://app.aiweline.com';
-            }
-
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                $platformUrl . '/api/v1/platform/license/renew',
+                $accountService->getPlatformApiUrl('/api/v1/platform/license/renew'),
                 [
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [

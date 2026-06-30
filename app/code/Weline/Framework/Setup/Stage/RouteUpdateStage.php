@@ -263,6 +263,7 @@ class RouteUpdateStage extends AbstractStage
 
             // 增量模式：路由在注册过程中已经按文件即时写入，这里不再做全量 flush
             if ($isPartial) {
+                \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
                 $this->committed = true;
                 $this->clearErrors();
                 return;
@@ -276,6 +277,7 @@ class RouteUpdateStage extends AbstractStage
             
             // 一次性写入所有路由文件
             $this->routerHelper->flushBatchRouters();
+            \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
 
             $this->committed = true;
             $this->clearErrors();
