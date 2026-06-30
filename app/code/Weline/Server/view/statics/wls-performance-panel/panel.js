@@ -20,12 +20,12 @@
   };
 
   var tabs = [
-    ["overview", "Overview"],
-    ["requests", "Requests"],
-    ["waterfall", "Waterfall"],
-    ["services", "Services"],
-    ["workers", "Workers"],
-    ["logs", "Logs"]
+    ["overview", "概览"],
+    ["requests", "请求"],
+    ["waterfall", "瀑布图"],
+    ["services", "服务"],
+    ["workers", "工作进程"],
+    ["logs", "日志"]
   ];
 
   function escapeHtml(value) {
@@ -69,7 +69,7 @@
     node.hidden = true;
     node.setAttribute("role", "dialog");
     node.setAttribute("aria-modal", "true");
-    node.setAttribute("aria-label", "WLS performance panel");
+    node.setAttribute("aria-label", "WLS 性能面板");
     document.body.appendChild(node);
     node.addEventListener("click", onClick);
     document.addEventListener("keydown", onKeydown);
@@ -112,7 +112,7 @@
           resolve(window.WelineApiModule);
           return;
         }
-        reject(new Error("Weline.Api.resource is unavailable."));
+        reject(new Error("Weline.Api.resource 不可用。"));
       }
 
       window.Weline = window.Weline || {};
@@ -128,7 +128,7 @@
         }
         existingScript.addEventListener("load", finish, { once: true });
         existingScript.addEventListener("error", function () {
-          reject(new Error("Failed to load Weline.Api script."));
+          reject(new Error("Weline.Api 脚本加载失败。"));
         }, { once: true });
         return;
       }
@@ -142,7 +142,7 @@
         finish();
       }, { once: true });
       existingScript.addEventListener("error", function () {
-        reject(new Error("Failed to load Weline.Api script."));
+          reject(new Error("Weline.Api 脚本加载失败。"));
       }, { once: true });
       (document.head || document.documentElement).appendChild(existingScript);
     });
@@ -172,7 +172,7 @@
   function callOnce(operation, params) {
     return serverApi().then(function (api) {
       if (!api || typeof api[operation] !== "function") {
-        throw new Error("Server API operation is unavailable: " + operation);
+        throw new Error("Server API 操作不可用：" + operation);
       }
       return api[operation](params || {});
     });
@@ -352,16 +352,16 @@
   }
 
   function renderHeader() {
-    var requestId = state.requestId ? "Request " + state.requestId : "No request selected";
+    var requestId = state.requestId ? "请求 " + state.requestId : "未选择请求";
     return (
       '<header class="wls-panel__header">' +
-      '<div class="wls-panel__title"><strong>WLS Performance</strong><span>' +
+      '<div class="wls-panel__title"><strong>WLS 性能</strong><span>' +
       escapeHtml(requestId) +
       "</span></div>" +
       '<div class="wls-panel__actions">' +
-      '<button type="button" data-action="refresh">Refresh</button>' +
-      '<button type="button" data-action="clear">Clear</button>' +
-      '<button type="button" class="wls-panel__close" data-action="close" aria-label="Close">x</button>' +
+      '<button type="button" data-action="refresh">刷新</button>' +
+      '<button type="button" data-action="clear">清空</button>' +
+      '<button type="button" class="wls-panel__close" data-action="close" aria-label="关闭">x</button>' +
       "</div>" +
       "</header>"
     );
@@ -392,7 +392,7 @@
       return '<div class="wls-error">' + escapeHtml(state.error) + "</div>";
     }
     if (state.isLoading && !state.summary && !state.requests.length) {
-      return '<div class="wls-loading">Loading WLS performance data...</div>';
+      return '<div class="wls-loading">正在加载 WLS 性能数据...</div>';
     }
     if (state.activeTab === "overview") {
       return renderOverview();
@@ -435,38 +435,42 @@
     return (
       '<div class="wls-grid">' +
       '<div class="wls-grid wls-grid--metrics">' +
-      metric("Requests", numberText(s.request_count), "last 5 minutes") +
-      metric("Average", ms(s.avg_ms), "all captured requests") +
-      metric("P95", ms(s.p95_ms), "tail latency") +
-      metric("P99", ms(s.p99_ms), "worst tail") +
-      metric("FPC hits", numberText(s.fpc_hit_count), "short-term buffer") +
-      metric("Errors", numberText(s.error_count), "HTTP 5xx") +
+      metric("请求数", numberText(s.request_count), "最近 5 分钟") +
+      metric("平均耗时", ms(s.avg_ms), "已采集请求") +
+      metric("P95", ms(s.p95_ms), "尾部延迟") +
+      metric("P99", ms(s.p99_ms), "最慢尾部") +
+      metric("FPC 命中", numberText(s.fpc_hit_count), "短期缓冲") +
+      metric("错误数", numberText(s.error_count), "HTTP 5xx") +
       "</div>" +
       '<div class="wls-grid wls-grid--two">' +
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Current request</div></div>' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">当前请求</div></div>' +
       renderKeyValues({
-        total: ms(detail.total_ms || timing.total_ms || 0),
-        uri: (detail.request && detail.request.uri) || "",
-        worker: [runtime.worker_id || "", runtime.worker_port || ""].filter(Boolean).join(" / "),
-        session: ms(timing.session_start_ms || 0),
-        router: ms(timing.router_start_ms || timing.router_start_call_ms || 0),
-        fpc: detail.fpc && detail.fpc.hit ? "hit " + (detail.fpc.source || "") : "miss"
+        "总耗时": ms(detail.total_ms || timing.total_ms || 0),
+        URI: (detail.request && detail.request.uri) || "",
+        "工作进程": [runtime.worker_id || "", runtime.worker_port || ""].filter(Boolean).join(" / "),
+        "会话": ms(timing.session_start_ms || 0),
+        "路由": ms(timing.router_start_ms || timing.router_start_call_ms || 0),
+        FPC: fpcText(detail.fpc && detail.fpc.hit, detail.fpc && detail.fpc.source)
       }) +
       "</section>" +
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Slowest request</div></div>' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">最慢请求</div></div>' +
       renderKeyValues({
-        total: ms(slowest.total_ms || 0),
-        uri: slowest.uri || "",
-        worker: [slowest.worker_id || "", slowest.worker_port || ""].filter(Boolean).join(" / "),
-        fpc: slowest.fpc_hit ? "hit " + (slowest.fpc_source || "") : "miss",
-        db: ms(slowest.db_ms || 0),
-        template: ms(slowest.template_ms || 0)
+        "总耗时": ms(slowest.total_ms || 0),
+        URI: slowest.uri || "",
+        "工作进程": [slowest.worker_id || "", slowest.worker_port || ""].filter(Boolean).join(" / "),
+        FPC: fpcText(slowest.fpc_hit, slowest.fpc_source),
+        DB: ms(slowest.db_ms || 0),
+        模板: ms(slowest.template_ms || 0)
       }) +
       "</section>" +
       "</div>" +
       renderCategoryTotals(s.category_totals || {}) +
       "</div>"
     );
+  }
+
+  function fpcText(hit, source) {
+    return hit ? "命中 " + (source || "") : "未命中";
   }
 
   function renderKeyValues(values) {
@@ -487,7 +491,7 @@
       return "";
     }
     return (
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Component totals</div></div>' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">组件耗时汇总</div></div>' +
       '<div class="wls-grid wls-grid--metrics">' +
       keys
         .sort(function (a, b) {
@@ -495,7 +499,7 @@
         })
         .slice(0, 12)
         .map(function (key) {
-          return metric(key, ms(totals[key]), "aggregated span time");
+          return metric(key, ms(totals[key]), "聚合 Span 耗时");
         })
         .join("") +
       "</div></section>"
@@ -504,14 +508,14 @@
 
   function renderRequests() {
     if (!state.requests.length) {
-      return '<div class="wls-empty">No requests captured yet. Load a page in DEV mode, then type wls again.</div>';
+      return '<div class="wls-empty">还没有采集到请求。在 DEV 模式加载一个页面后，再输入 wls 打开面板。</div>';
     }
     return (
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Recent requests</div><span class="wls-pill">' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">最近请求</div><span class="wls-pill">' +
       state.requests.length +
-      " rows</span></div>" +
+      " 行</span></div>" +
       '<div class="wls-table-wrap"><table class="wls-table"><thead><tr>' +
-      "<th>URI</th><th>Status</th><th>Total</th><th>Worker</th><th>FPC</th><th>Session</th><th>DB</th><th>Template</th>" +
+      "<th>URI</th><th>状态</th><th>总耗时</th><th>工作进程</th><th>FPC</th><th>会话</th><th>DB</th><th>模板</th>" +
       "</tr></thead><tbody>" +
       state.requests.map(renderRequestRow).join("") +
       "</tbody></table></div></section>"
@@ -540,7 +544,7 @@
       "</td><td>" +
       escapeHtml([row.worker_id || "", row.worker_port || ""].filter(Boolean).join(" / ") || "-") +
       "</td><td>" +
-      escapeHtml(row.fpc_hit ? "hit " + (row.fpc_source || "") : "miss") +
+      escapeHtml(fpcText(row.fpc_hit, row.fpc_source)) +
       "</td><td>" +
       escapeHtml(ms(row.session_ms)) +
       "</td><td>" +
@@ -564,15 +568,15 @@
   function renderWaterfall() {
     var spans = selectedSpans();
     if (!spans.length) {
-      return '<div class="wls-empty">No spans for the selected request yet.</div>';
+      return '<div class="wls-empty">当前请求还没有 Span 数据。</div>';
     }
     var max = spans.reduce(function (carry, span) {
       return Math.max(carry, Number(span.duration_ms || 0));
     }, 1);
     return (
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Waterfall by duration</div><span class="wls-pill">' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">按耗时排序的瀑布图</div><span class="wls-pill">' +
       spans.length +
-      " spans</span></div>" +
+      " 个 Span</span></div>" +
       '<div class="wls-waterfall">' +
       spans
         .slice(0, 160)
@@ -598,7 +602,7 @@
     var services = (state.services && state.services.services) || {};
     var keys = Object.keys(services);
     if (!keys.length) {
-      return '<div class="wls-empty">No SessionServer or MemoryServer samples yet.</div>';
+      return '<div class="wls-empty">还没有 SessionServer 或 MemoryServer 采样。</div>';
     }
     return (
       '<div class="wls-grid wls-grid--two">' +
@@ -610,13 +614,13 @@
             escapeHtml(key) +
             '</div><span class="wls-pill">' +
             escapeHtml(numberText(item.sample_count)) +
-            " samples</span></div>" +
+            " 个样本</span></div>" +
             renderKeyValues({
-              last: ms(item.last_ms),
-              max: ms(item.max_ms),
-              span: item.last_span || "-",
-              request: item.last_request_id || "-",
-              seen: item.last_seen_at ? new Date(Number(item.last_seen_at) * 1000).toLocaleString() : "-"
+              "最近耗时": ms(item.last_ms),
+              "最大耗时": ms(item.max_ms),
+              Span: item.last_span || "-",
+              请求: item.last_request_id || "-",
+              "最后出现": item.last_seen_at ? new Date(Number(item.last_seen_at) * 1000).toLocaleString() : "-"
             }) +
             "</section>"
           );
@@ -629,7 +633,7 @@
   function renderWorkers() {
     var workers = {};
     state.requests.forEach(function (row) {
-      var key = [row.worker_id || "unknown", row.worker_port || "", row.pid || ""].join(":");
+      var key = [row.worker_id || "未知", row.worker_port || "", row.pid || ""].join(":");
       if (!workers[key]) {
         workers[key] = {
           key: key,
@@ -655,16 +659,16 @@
       return workers[key];
     });
     if (!rows.length) {
-      return '<div class="wls-empty">No worker samples yet.</div>';
+      return '<div class="wls-empty">还没有工作进程采样。</div>';
     }
     return (
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Workers</div></div>' +
-      '<div class="wls-table-wrap"><table class="wls-table"><thead><tr><th>Worker</th><th>PID</th><th>Requests</th><th>Slow</th><th>Errors</th><th>Average</th></tr></thead><tbody>' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">工作进程</div></div>' +
+      '<div class="wls-table-wrap"><table class="wls-table"><thead><tr><th>工作进程</th><th>PID</th><th>请求数</th><th>慢请求</th><th>错误</th><th>平均耗时</th></tr></thead><tbody>' +
       rows
         .map(function (row) {
           return (
             "<tr><td>" +
-            escapeHtml([row.worker_id || "unknown", row.worker_port || ""].filter(Boolean).join(" / ")) +
+            escapeHtml([row.worker_id || "未知", row.worker_port || ""].filter(Boolean).join(" / ")) +
             "</td><td>" +
             escapeHtml(row.pid || "-") +
             "</td><td>" +
@@ -693,7 +697,7 @@
       category_totals: (detail.trace && detail.trace.category_totals) || {}
     };
     return (
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">Timing snapshot</div></div>' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">耗时快照</div></div>' +
       '<pre class="wls-code">' +
       escapeHtml(JSON.stringify(payload, null, 2)) +
       "</pre></section>"

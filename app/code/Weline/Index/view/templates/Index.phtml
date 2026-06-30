@@ -69,13 +69,67 @@ $capabilities = [
     ['label' => '文档中心', 'value' => $docsUrl],
     ['label' => 'API 文档', 'value' => $apiDocsUrl],
 ];
+
+$seoTitle = 'WelineFramework 默认首页';
+$seoDescription = 'WelineFramework 默认首页提供开发文档、API 文档、后台入口、WLS 常驻运行时和模块化开发快速入口。';
+$seoKeywords = [
+    'WelineFramework',
+    'Weline',
+    'WLS',
+    'PHP framework',
+    'QueryProvider',
+    __('模块化开发'),
+    __('多语言多站点'),
+];
+$seoRobots = 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1';
+$seoCanonicalUrl = '';
+try {
+    $fullRequestUri = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
+    if ($fullRequestUri !== '' && preg_match('/^https?:\/\//i', $fullRequestUri)) {
+        $parts = parse_url($fullRequestUri);
+        if (is_array($parts) && !empty($parts['host'])) {
+            $scheme = (string)($parts['scheme'] ?? 'https');
+            $host = (string)$parts['host'];
+            $port = isset($parts['port']) ? ':' . (string)$parts['port'] : '';
+            $seoCanonicalUrl = $scheme . '://' . $host . $port . '/';
+        }
+    }
+    if ($seoCanonicalUrl === '' && isset($this->request)) {
+        $scheme = (string)($this->request->getServer('REQUEST_SCHEME') ?: 'http');
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
+        if ($host !== '') {
+            $seoCanonicalUrl = $scheme . '://' . $host . '/';
+        }
+    }
+} catch (\Throwable) {
+}
+$this->setData('meta_title', __($seoTitle));
+$this->setData('meta_description', __($seoDescription));
+$this->setData('description', __($seoDescription));
+$this->setData('meta_keywords', $seoKeywords);
+$this->setData('robots', $seoRobots);
+if ($seoCanonicalUrl !== '') {
+    $this->setData('canonical_url', $seoCanonicalUrl);
+}
+$seoContext = [
+    'title' => __($seoTitle),
+    'description' => __($seoDescription),
+    'keywords' => $seoKeywords,
+    'robots' => $seoRobots,
+    'page_type' => 'home_page',
+    'site_name' => 'Weline Framework',
+];
+if ($seoCanonicalUrl !== '') {
+    $seoContext['canonical_url'] = $seoCanonicalUrl;
+}
+$this->setData('seo', $seoContext);
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $escape('WelineFramework 默认首页') ?></title>
+    <w:hook>seo::head</w:hook>
     <style>
         :root {
             --wf-bg: #f7f8fb;
