@@ -688,8 +688,9 @@ class Taglib
      */
     public function clearCache(): void
     {
-        $this->cache?->flush();
-        $this->tagRegistry?->clearCache();
+        $this->getCache()->flush();
+        $this->getTagRegistry()->clearCache();
+        $this->stageResolver?->clearCache();
         self::clearStaticCaches();
     }
 
