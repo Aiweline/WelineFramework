@@ -19,6 +19,8 @@ use Weline\Framework\Console\Console\Command\Upgrade;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Framework\View\Taglib;
+use Weline\Framework\View\TemplateCacheManager;
 
 class Clear implements \Weline\Framework\Console\CommandInterface
 {
@@ -76,6 +78,29 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('已清理 %{1} 个模块的模板缓存', [$clearedCount]));
         } elseif ($silent && $clearedCount === 0) {
             $this->printing->note(__('没有需要清理的模板缓存'));
+        }
+
+        $this->clearViewCompileCaches();
+    }
+
+    /**
+     * 清理模板编译相关缓存，覆盖 view/tpl 之外的增强模板缓存和 Taglib 文件缓存。
+     */
+    private function clearViewCompileCaches(): void
+    {
+        try {
+            $taglib = ObjectManager::getInstance(Taglib::class);
+            if ($taglib instanceof Taglib) {
+                $taglib->clearCache();
+            }
+        } catch (\Throwable) {
+            // View may be unavailable in stripped CLI contexts.
+        }
+
+        try {
+            TemplateCacheManager::getInstance()->clearAll();
+        } catch (\Throwable) {
+            // Enhanced template cache clear is best-effort during template cache clear.
         }
     }
 

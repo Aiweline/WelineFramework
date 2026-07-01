@@ -17,6 +17,8 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\View\Taglib;
+use Weline\Framework\View\TemplateCacheManager;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 
 class Clear implements \Weline\Framework\Console\CommandInterface
@@ -88,21 +90,34 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             }
         }
         
-        // 同时清理模板标签库编译缓存，确保模板变更或标签逻辑修复后能重新编译
-        try {
-            $taglib = ObjectManager::getInstance(\Weline\Framework\View\Taglib::class);
-            if (method_exists($taglib, 'clearCache')) {
-                $taglib->clearCache();
-            }
-        } catch (\Throwable $e) {
-            // 忽略（如 View 未加载）
-        }
+        $this->clearViewCompileCaches();
         
         // 显示总体统计
         $this->printOverallSummary($totalStats);
 
         // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
         $this->sendWlsCacheClearCommand();
+    }
+
+    /**
+     * 清理模板编译相关缓存，避免源码已更新但继续读取旧编译产物。
+     */
+    private function clearViewCompileCaches(): void
+    {
+        try {
+            $taglib = ObjectManager::getInstance(Taglib::class);
+            if ($taglib instanceof Taglib) {
+                $taglib->clearCache();
+            }
+        } catch (\Throwable) {
+            // View may be unavailable in stripped CLI contexts.
+        }
+
+        try {
+            TemplateCacheManager::getInstance()->clearAll();
+        } catch (\Throwable) {
+            // Enhanced template cache clear is best-effort during global cache clear.
+        }
     }
 
     /**

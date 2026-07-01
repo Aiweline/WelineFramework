@@ -432,6 +432,7 @@ class TemplateCacheManager
                 $this->removeDirectory($file);
             }
         }
+        @unlink($this->manifestFile);
 
         // Reset manifest
         $this->manifest = [];
