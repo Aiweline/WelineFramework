@@ -787,10 +787,16 @@ class Template extends DataObject
             }
         }
 
-        // Factor 3: Try TemplateCacheManager as an auxiliary positive signal
+        // Factor 3: Mtime fallback (for backward compatibility and dev rapid iteration)
+        // Check the active per-locale compiled file before consulting the auxiliary cache.
+        if ($compiledMtime < $templateMtime) {
+            return $rememberFreshness(true);
+        }
+
+        // Factor 4: Try TemplateCacheManager as an auxiliary positive signal
         // only after the active compiled file has proven it has no embedded
-        // hash. This keeps legacy compiled files fast while preserving
-        // correctness for modern hash-tagged compiled templates.
+        // hash and is not older than the source template. This keeps legacy
+        // compiled files fast without masking stale view/tpl output.
         try {
             $cacheManager = TemplateCacheManager::getInstance();
             $cachedFile = $cacheManager->getCachedFile($templateFile, $isDev);
@@ -799,12 +805,6 @@ class Template extends DataObject
             }
         } catch (\Throwable) {
             // CacheManager unavailable, fall through to mtime check
-        }
-
-        // Factor 4: Mtime fallback (for backward compatibility and dev rapid iteration)
-        // In dev mode, mtime check allows quick turnaround for file changes
-        if (filemtime($compiledFile) < filemtime($templateFile)) {
-            return $rememberFreshness(true);
         }
 
         // Factor 5: Production mode - content hash is authoritative
