@@ -3606,9 +3606,55 @@
     );
   }
 
+  function renderIssueAuditBlock(report) {
+    var issueChecks = (report.checks || []).filter(function (check) {
+      return check.group === "issues" && (check.level === "fail" || check.level === "warn" || check.level === "info");
+    });
+    var activeIssues = issueChecks.filter(function (check) { return check.level === "fail" || check.level === "warn"; });
+    var titleSuffix = activeIssues.length ? " · " + activeIssues.length + " 个需处理" : " · 未发现阻断";
+    var body = "";
+    if (!issueChecks.length) {
+      body = '<p class="weline-seo-panel__issue-ok">当前未发现 Semrush 风格页面 Issue。</p>';
+    } else {
+      body =
+        '<div class="weline-seo-panel__issue-list">' +
+        issueChecks
+          .map(function (check) {
+            return (
+              '<article class="weline-seo-panel__issue-card weline-seo-panel__issue-card--' +
+              escapeHtml(check.level) +
+              '">' +
+              '<div class="weline-seo-panel__issue-head">' +
+              '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+              escapeHtml(check.level) +
+              '">' +
+              escapeHtml(formatCheckLevel(check.level)) +
+              "</span><strong>" +
+              escapeHtml(check.label) +
+              "</strong></div>" +
+              (check.detail ? '<p class="weline-seo-panel__hint">' + escapeHtml(check.detail) + "</p>" : "") +
+              '<p class="weline-seo-panel__issue-fix"><b>建议</b> ' +
+              escapeHtml(actionFixHint(check)) +
+              "</p></article>"
+            );
+          })
+          .join("") +
+        "</div>";
+    }
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__section--issues"><h3>Issue 审计' +
+      escapeHtml(titleSuffix) +
+      "</h3>" +
+      '<p class="weline-seo-panel__hint">这里收敛非结构性站点问题：混合内容、语言 URL 对齐、静态资源压缩/minify、图片尺寸和外链安全。</p>' +
+      body +
+      "</section>"
+    );
+  }
+
   function renderSeoTab(report) {
     return (
       renderSummary(report.seoSummary) +
+      renderIssueAuditBlock(report) +
       '<section class="weline-seo-panel__section"><h3>页面快照</h3><dl class="weline-seo-panel__grid">' +
       '<div class="weline-seo-panel__field"><dt>Title</dt><dd>' +
       escapeHtml(report.snapshot.title) +
