@@ -2517,10 +2517,11 @@
   }
 
   function auditSiteIssueStandards(context, add) {
-    var pageIsHttps = window.location.protocol === "https:" || /^https:\/\//i.test(context.canonical || "");
+    var actualPageHttps = window.location.protocol === "https:";
+    var pageIsHttps = actualPageHttps || /^https:\/\//i.test(context.canonical || "");
     var urlItems = collectUrlAttributesForIssues();
     var httpItems = urlItems.filter(function (item) {
-      return /^http:\/\//i.test(item.raw) || /^http:\/\//i.test(item.href);
+      return /^http:\/\//i.test(item.raw) || (actualPageHttps && /^http:\/\//i.test(item.href));
     });
     var httpResources = httpItems.filter(function (item) { return item.kind !== "anchor" && item.kind !== "form"; });
     var httpForms = httpItems.filter(function (item) { return item.kind === "form"; });
@@ -3608,10 +3609,9 @@
 
   function renderIssueAuditBlock(report) {
     var issueChecks = (report.checks || []).filter(function (check) {
-      return check.group === "issues" && (check.level === "fail" || check.level === "warn" || check.level === "info");
+      return check.group === "issues" && (check.level === "fail" || check.level === "warn");
     });
-    var activeIssues = issueChecks.filter(function (check) { return check.level === "fail" || check.level === "warn"; });
-    var titleSuffix = activeIssues.length ? " · " + activeIssues.length + " 个需处理" : " · 未发现阻断";
+    var titleSuffix = issueChecks.length ? " · " + issueChecks.length + " 个需处理" : " · 未发现阻断";
     var body = "";
     if (!issueChecks.length) {
       body = '<p class="weline-seo-panel__issue-ok">当前未发现 Semrush 风格页面 Issue。</p>';
