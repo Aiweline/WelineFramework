@@ -35,6 +35,7 @@
 
   var SEO_CHECK_GROUPS = [
     { id: "technical", title: "技术 SEO" },
+    { id: "issues", title: "Issue 审计" },
     { id: "head", title: "Head 元数据" },
     { id: "url", title: "URL 与多语言" },
     { id: "content", title: "页面内容" },
@@ -2065,9 +2066,34 @@
     });
   }
 
+  function hreflangKnownCodeMap(links) {
+    var map = {};
+    links.forEach(function (link) {
+      if (link.normalized && link.normalized !== "x-default") {
+        map[link.normalized.toLowerCase()] = true;
+      }
+    });
+    return map;
+  }
+
+  function languageSegmentFromUrl(url, knownCodes) {
+    try {
+      var parsed = new URL(url, window.location.href);
+      var first = parsed.pathname.split("/").filter(Boolean)[0] || "";
+      if (!first) return "";
+      var normalized = canonicalizeLanguageCode(first);
+      if (knownCodes[normalized.toLowerCase()]) return normalized;
+      if (first.indexOf("-") !== -1 && validLanguageCode(first)) return normalized;
+    } catch (_error) {
+      return "";
+    }
+    return "";
+  }
+
   function buildMultilingualDiagnostics(context) {
     var links = collectHreflangLinks();
     var expectedLang = canonicalizeLanguageCode(context.lang);
+    var defaultLang = canonicalizeLanguageCode(context.defaultLang || inferDefaultLanguage());
     var htmlLang = document.documentElement.lang || "";
     var normalizedHtmlLang = canonicalizeLanguageCode(htmlLang);
     var canonical = normalizeCanonicalUrl(context.canonical || "");
@@ -2075,8 +2101,10 @@
     var duplicateCodes = [];
     var invalidCodes = [];
     var nonAbsolute = [];
+    var urlLanguageMismatches = [];
     var xDefaultCount = 0;
     var selfLink = null;
+    var knownCodes = hreflangKnownCodeMap(links);
 
     links.forEach(function (link) {
       if (link.normalized === "x-default") xDefaultCount += 1;
@@ -2088,6 +2116,21 @@
       }
       if (link.normalized && link.normalized !== "x-default" && link.normalized === expectedLang) {
         selfLink = link;
+      }
+      if (link.normalized && link.normalized !== "x-default" && link.href) {
+        try {
+          var parsed = new URL(link.href, window.location.href);
+          var siteHost = inferSiteDomain() || window.location.hostname;
+          var sameSite = !siteHost || parsed.hostname === siteHost || parsed.hostname === window.location.hostname;
+          var pathLang = languageSegmentFromUrl(link.href, knownCodes);
+          if (sameSite && link.normalized !== defaultLang && pathLang !== link.normalized) {
+            urlLanguageMismatches.push(link.normalized + " -> " + parsed.pathname + (pathLang ? " (" + pathLang + ")" : " (missing lang path)"));
+          } else if (sameSite && pathLang && pathLang !== link.normalized) {
+            urlLanguageMismatches.push(link.normalized + " -> " + parsed.pathname + " (" + pathLang + ")");
+          }
+        } catch (_error) {
+          urlLanguageMismatches.push(link.normalized + " -> invalid URL");
+        }
       }
     });
 
@@ -2106,6 +2149,7 @@
       htmlLang: htmlLang,
       normalizedHtmlLang: normalizedHtmlLang,
       expectedLang: expectedLang,
+      defaultLang: defaultLang,
       htmlLangValid: validLanguageCode(htmlLang),
       htmlLangMatches: normalizedHtmlLang === expectedLang,
       hreflangLinks: links,
@@ -2113,6 +2157,7 @@
       invalidCodes: invalidCodes,
       duplicateCodes: duplicateCodes,
       nonAbsolute: nonAbsolute,
+      urlLanguageMismatches: urlLanguageMismatches,
       xDefaultCount: xDefaultCount,
       hasSelfAlternate: Boolean(selfLink),
       selfHrefMismatch: selfHrefMismatch,
@@ -2163,6 +2208,17 @@
       add("fail", "hreflang absolute URL", "Non-absolute hreflang href for: " + diagnostics.nonAbsolute.join(", ") + ".", "url");
     } else {
       add("pass", "hreflang absolute URL", "All hreflang href values are fully-qualified URLs.", "url");
+    }
+
+    if (diagnostics.urlLanguageMismatches && diagnostics.urlLanguageMismatches.length) {
+      add(
+        "warn",
+        "hreflang URL language parity",
+        "hreflang URL language does not match code: " + diagnostics.urlLanguageMismatches.slice(0, 6).join("; ") + ".",
+        "url"
+      );
+    } else {
+      add("pass", "hreflang URL language parity", "hreflang code and same-site URL language segment are aligned.", "url");
     }
 
     if (diagnostics.xDefaultCount === 1) {
@@ -2626,7 +2682,7 @@
     }
 
     var hreflangCodes = collectHreflangCodes();
-    var multilingual = buildMultilingualDiagnostics({ lang: lang, canonical: canonical });
+    var multilingual = buildMultilingualDiagnostics({ lang: lang, canonical: canonical, defaultLang: defaultLang });
     var jsonLdValidation = validatePageJsonLd({ seoType: seoType, jsonTypes: jsonTypes });
 
     if (seoType === "home" && metaContent('meta[property="og:type"]') !== "website") {
