@@ -80,18 +80,13 @@ class ResponseRedirectBefore implements ObserverInterface
         try {
             $path = $this->request->getRouteUrlPath($url);
             
-            // 只处理GET请求
-            if (!$this->request->isGet()) {
+            // 只处理浏览器页面导航请求，避免 AJAX/API 请求污染登录后的回跳地址。
+            if (!$this->request->isDocumentNavigationRequest()) {
                 return;
             }
             
             // 只处理登录页面的302重定向
             if ($path !== 'admin/login' || $code !== 302) {
-                return;
-            }
-            
-            // 跳过AJAX和iframe请求
-            if ($this->request->isAjax() || $this->request->isIframe()) {
                 return;
             }
             
@@ -102,6 +97,9 @@ class ResponseRedirectBefore implements ObserverInterface
             // 检查当前路径是否在白名单中
             $currentPath = trim($this->request->getRouteUrlPath(), '/');
             if (!in_array($currentPath, $whiteUrls)) {
+                if (!$this->getReturnUrlService()->shouldCaptureCurrentRequestReturnUrl($this->request, $this->getCurrentRequestUrl())) {
+                    return;
+                }
                 $refererUrl = $this->getReturnUrlService()->normalizeCandidateUrl($this->getCurrentRequestUrl());
                 if ($refererUrl === null) {
                     return;
@@ -324,12 +322,15 @@ class ResponseRedirectBefore implements ObserverInterface
 
     private function withBackendLoginReturnUrl(string $loginUrl): string
     {
-        if (!$this->request->isGet() || $this->request->isAjax() || $this->request->isIframe()) {
+        if (!$this->request->isDocumentNavigationRequest()) {
             return $loginUrl;
         }
 
         $currentRequestUrl = $this->getCurrentRequestUrl();
         if ($currentRequestUrl === '') {
+            return $loginUrl;
+        }
+        if (!$this->getReturnUrlService()->shouldCaptureCurrentRequestReturnUrl($this->request, $currentRequestUrl)) {
             return $loginUrl;
         }
 

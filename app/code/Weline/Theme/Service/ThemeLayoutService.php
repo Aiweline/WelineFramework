@@ -16,6 +16,8 @@ use Weline\Theme\Model\WelineTheme;
  */
 class ThemeLayoutService
 {
+    private const WIDGET_I18N_INSTANCE_KEY = \Weline\Theme\Helper\ThemeData::WIDGET_I18N_INSTANCE_CONFIG_KEY;
+
     private ThemeLayout $themeLayout;
     private WelineTheme $welineTheme;
     private ThemePlaceableRegistryInterface $placeableRegistry;
@@ -62,6 +64,41 @@ class ThemeLayoutService
             ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
             ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
             ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id']);
+    }
+
+    /**
+     * 删除某个布局 identify 下的布局行。
+     *
+     * WLS 长驻进程里 ThemeLayout 是可复用模型对象，链式 delete 在复杂查询后容易受模型状态影响。
+     * 这里先按条件取主键，再逐行删除，保证 save/publish 的“全量替换”语义稳定。
+     *
+     * @param array<string,mixed>|null $identity null 表示不限制 layout identity
+     */
+    private function deleteLayoutRows(int $themeId, string $pageType, string $status, ?array $identity = null): int
+    {
+        $query = $this->themeLayout->clearQuery()->clearData()
+            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayout::schema_fields_STATUS, $status);
+        if ($identity !== null) {
+            $query = $this->applyLayoutIdentityFilters($query, $this->normalizeLayoutIdentity($identity));
+        }
+        $rows = $query->select()->fetchArray();
+
+        $layoutIds = [];
+        foreach ((array)$rows as $row) {
+            $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
+            if ($layoutId > 0) {
+                $layoutIds[$layoutId] = true;
+            }
+        }
+
+        foreach (array_keys($layoutIds) as $layoutId) {
+            $this->themeLayout->clearQuery()->clearData()->load($layoutId)->delete();
+        }
+        $this->themeLayout->clearQuery()->clearData();
+
+        return count($layoutIds);
     }
 
     /**
@@ -114,6 +151,8 @@ class ThemeLayoutService
                     $config = $layout[ThemeLayout::schema_fields_CONFIG] ?? '{}';
                     $groupedLayout[$area]['widgets'][] = [
                         'layout_id' => $layout[ThemeLayout::schema_fields_ID] ?? 0,
+                        'area' => $area,
+                        'page_type' => $layout[ThemeLayout::schema_fields_PAGE_TYPE] ?? $pageType,
                         'widget_code' => $layout[ThemeLayout::schema_fields_WIDGET_CODE] ?? '',
                         'widget_module' => $layout[ThemeLayout::schema_fields_WIDGET_MODULE] ?? '',
                         'widget_type' => $layout[ThemeLayout::schema_fields_WIDGET_TYPE] ?? '',
@@ -178,19 +217,23 @@ class ThemeLayoutService
             $areaData['slots'] = [];
             
             foreach ($areaData['widgets'] as &$widget) {
+                $registryArea = $this->resolveWidgetRegistryArea($pageType, (string)$area, $widget);
                 // 添加部件元信息
                 $definition = $this->placeableRegistry->find(
                     (string)($widget['widget_module'] ?? ''),
                     (string)($widget['widget_type'] ?? ''),
                     (string)($widget['widget_code'] ?? ''),
                     null,
-                    (string)$area
+                    $registryArea
                 );
                 if ($definition) {
                     $widget['meta'] = $definition->toWidgetArray();
                 }
                 $widgetKey = $widget['widget_module'] . '/' . $widget['widget_type'] . '/' . $widget['widget_code'];
-                if (!isset($widget['meta']) && isset($widgetRegistry[$widgetKey])) {
+                if (!isset($widget['meta'])
+                    && isset($widgetRegistry[$widgetKey])
+                    && \is_array($widgetRegistry[$widgetKey])
+                    && $this->widgetMetaMatchesArea($widgetRegistry[$widgetKey], $registryArea)) {
                     $widget['meta'] = $widgetRegistry[$widgetKey];
                 } elseif (!isset($widget['meta'])) {
                     // 尝试其他匹配方式（注册表是嵌套结构：type -> code -> widget_data）
@@ -205,7 +248,8 @@ class ThemeLayoutService
                             }
                             if (isset($meta['code']) && isset($meta['module'])
                                 && $meta['code'] === $widget['widget_code'] 
-                                && $meta['module'] === $widget['widget_module']) {
+                                && $meta['module'] === $widget['widget_module']
+                                && $this->widgetMetaMatchesArea($meta, $registryArea)) {
                                 $widget['meta'] = $meta;
                                 $found = true;
                                 break 2;
@@ -227,6 +271,23 @@ class ThemeLayoutService
         }
 
         return $layout;
+    }
+
+    private function resolveWidgetRegistryArea(string $pageType, string $layoutArea, array $widget): string
+    {
+        if ($pageType === ThemeLayout::PAGE_TYPE_DASHBOARD
+            || (string)($widget['page_type'] ?? '') === ThemeLayout::PAGE_TYPE_DASHBOARD
+            || (string)($widget['target_type'] ?? '') === 'website') {
+            return 'backend';
+        }
+
+        return $layoutArea === 'backend' ? 'backend' : 'frontend';
+    }
+
+    private function widgetMetaMatchesArea(array $meta, string $area): bool
+    {
+        $widgetArea = (string)($meta['area'] ?? 'frontend');
+        return $widgetArea === '' || $widgetArea === $area;
     }
 
     /**
@@ -289,10 +350,15 @@ class ThemeLayoutService
         if ($layoutId) {
             // 更新现有部件
             $this->themeLayout->clearQuery()->load($layoutId);
+            $existingConfig = $this->themeLayout->getWidgetConfig();
         } else {
             // 新建部件 —— WLS 单例下必须彻底清除模型数据（包括主键），否则 save() 会执行 UPDATE 覆盖旧记录
             $this->themeLayout->clearQuery()->clearData();
+            $existingConfig = [];
         }
+
+        $config = is_array($data['config'] ?? null) ? $data['config'] : [];
+        $config = $this->withWidgetI18nInstance($config, $existingConfig);
 
         $this->themeLayout
             ->setThemeId((int)$data['theme_id'])
@@ -306,7 +372,7 @@ class ThemeLayoutService
             ->setWidgetCode($data['widget_code'])
             ->setWidgetModule($data['widget_module'])
             ->setWidgetType($data['widget_type'] ?? '')
-            ->setWidgetConfig($data['config'] ?? [])
+            ->setWidgetConfig($config)
             ->setSortOrder($sortOrder)
             ->setIsActive((bool)($data['is_active'] ?? true))
             ->setStatus($status)
@@ -384,12 +450,14 @@ class ThemeLayoutService
             
             // 如果按 slotId 没找到，尝试按 area = slotId 查找（兼容旧数据）
             if ($slotId && (!is_array($existingWidgets) || count($existingWidgets) === 0)) {
-                $existingWidgets = $this->themeLayout->reset()
+                $fallbackQuery = $this->themeLayout->reset()
                     ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
                     ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
                     ->where(ThemeLayout::schema_fields_STATUS, $status)
-                    ->where(ThemeLayout::schema_fields_AREA, $slotId)  // 旧数据可能把 slotId 存在 area 字段
-                    ->select()->fetch();
+                    ->where(ThemeLayout::schema_fields_AREA, $slotId); // 旧数据可能把 slotId 存在 area 字段
+                $existingWidgets = $this->applyLayoutIdentityFilters($fallbackQuery, $identity)
+                    ->select()
+                    ->fetch();
             }
 
             if (is_array($existingWidgets)) {
@@ -413,18 +481,20 @@ class ThemeLayoutService
      * 
      * @param int $themeId 主题ID
      * @param string|null $pageType 页面类型（null=所有）
+     * @param array<string,mixed> $identity layout_option/scope/target_type/target_id
      * @return int 清理的记录数
      */
-    public function cleanOrphanWidgets(int $themeId, ?string $pageType = null): int
+    public function cleanOrphanWidgets(int $themeId, ?string $pageType = null, array $identity = []): int
     {
         $cleaned = 0;
+        $identity = $this->normalizeLayoutIdentity($identity);
         
         try {
             $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
             
             foreach ($pageTypes as $type) {
                 foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
-                    $layout = $this->getLayout($themeId, $type, $status);
+                    $layout = $this->getLayout($themeId, $type, $status, $identity);
                     
                     // 按 slot_id 分组，找出独占插槽中的重复记录
                     foreach ($layout as $area => $areaData) {
@@ -467,16 +537,20 @@ class ThemeLayoutService
 
     /**
      * 批量保存布局（默认保存为草稿）
+     *
+     * @param array<string,mixed> $identity layout_option/scope/target_type/target_id
      */
-    public function saveLayout(int $themeId, string $pageType, array $layoutData, string $status = ThemeLayout::STATUS_DRAFT): bool
-    {
+    public function saveLayout(
+        int $themeId,
+        string $pageType,
+        array $layoutData,
+        string $status = ThemeLayout::STATUS_DRAFT,
+        array $identity = []
+    ): bool {
+        $identity = $this->normalizeLayoutIdentity($identity);
+
         // 先删除该页面该状态的所有布局
-        $this->themeLayout->reset()
-            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayout::schema_fields_STATUS, $status)
-            ->delete()
-            ->fetch();
+        $this->deleteLayoutRows($themeId, $pageType, $status, $identity);
 
         // 保存新布局
         foreach ($layoutData as $area => $widgets) {
@@ -484,6 +558,10 @@ class ThemeLayoutService
                 $this->saveWidget([
                     'theme_id' => $themeId,
                     'page_type' => $pageType,
+                    'layout_option' => $identity['layout_option'],
+                    'scope' => $identity['scope'],
+                    'target_type' => $identity['target_type'],
+                    'target_id' => $identity['target_id'],
                     'area' => $area,
                     'widget_code' => $widget['widget_code'],
                     'widget_module' => $widget['widget_module'],
@@ -510,8 +588,9 @@ class ThemeLayoutService
      * @param string|null $pageType 页面类型，null则发布所有页面类型
      * @return bool
      */
-    public function publishLayout(int $themeId, ?string $pageType = null): bool
+    public function publishLayout(int $themeId, ?string $pageType = null, array $identity = [], bool $allowEmpty = false): bool
     {
+        $identity = $this->normalizeLayoutIdentity($identity);
         try {
             // 获取需要发布的页面类型列表
             if ($pageType) {
@@ -522,7 +601,7 @@ class ThemeLayoutService
 
             foreach ($pageTypes as $type) {
                 // 1. 获取草稿布局
-                $draftLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_DRAFT);
+                $draftLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_DRAFT, $identity);
                 
                 // 检查草稿是否有数据
                 $hasDraftWidgets = false;
@@ -534,19 +613,14 @@ class ThemeLayoutService
                 }
                 
                 // 如果没有草稿数据，保持已发布数据不变
-                if (!$hasDraftWidgets) {
+                if (!$hasDraftWidgets && !$allowEmpty) {
                     continue;
                 }
 
                 // 2. 删除旧的已发布记录（全量替换，避免残留）
-                $this->themeLayout->reset()
-                    ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                    ->where(ThemeLayout::schema_fields_PAGE_TYPE, $type)
-                    ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_PUBLISHED)
-                    ->delete()
-                    ->fetch();
+                $this->deleteLayoutRows($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
 
-                // 3. 去重：独占插槽按 slot_id；其余按 area+slot+部件身份，避免脏草稿/快照重复发布
+                // 3. 去重：独占插槽按 slot_id；其余只去掉完全重复的脏草稿/快照记录。
                 $exclusiveSlotSeen = [];
                 $widgetIdentitySeen = [];
 
@@ -564,7 +638,9 @@ class ThemeLayoutService
                             $identityKey = $area . '::'
                                 . ($slotId ?? '') . '::'
                                 . ($widget['widget_module'] ?? '') . '::'
-                                . ($widget['widget_code'] ?? '');
+                                . ($widget['widget_code'] ?? '') . '::'
+                                . ((int)($widget['sort_order'] ?? 0)) . '::'
+                                . sha1(json_encode($widget['config'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
                             if (isset($widgetIdentitySeen[$identityKey])) {
                                 continue;
                             }
@@ -574,6 +650,10 @@ class ThemeLayoutService
                         $this->saveWidget([
                             'theme_id' => $themeId,
                             'page_type' => $type,
+                            'layout_option' => $identity['layout_option'],
+                            'scope' => $identity['scope'],
+                            'target_type' => $identity['target_type'],
+                            'target_id' => $identity['target_id'],
                             'area' => $area,
                             'widget_code' => $widget['widget_code'],
                             'widget_module' => $widget['widget_module'],
@@ -588,7 +668,7 @@ class ThemeLayoutService
                 }
             }
 
-            $this->purgePublishedLayoutCaches();
+            $this->purgePublishedLayoutCaches($themeId);
 
             return true;
         } catch (\Exception $e) {
@@ -599,14 +679,11 @@ class ThemeLayoutService
     /**
      * 发布布局后清理前端路由/FPC/共享内存中的旧版 slot 与整页缓存，避免 Worker 继续输出重复或过期部件。
      */
-    private function purgePublishedLayoutCaches(): void
+    private function purgePublishedLayoutCaches(int $themeId): void
     {
-        if (\class_exists(SlotRendererService::class)) {
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-        }
-
         try {
-            ObjectManager::getInstance(\Weline\Framework\Router\Cache\RouterCache::class . 'Factory')->flush();
+            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)
+                ->clearNonGlobalCaches($themeId > 0 ? $themeId : null, 'theme_layout_publish');
         } catch (\Throwable) {
         }
 
@@ -671,7 +748,7 @@ class ThemeLayoutService
     /**
      * 检查主题是否有草稿（未发布的修改）
      */
-    public function hasDraft(int $themeId, ?string $pageType = null): bool
+    public function hasDraft(int $themeId, ?string $pageType = null, array $identity = []): bool
     {
         try {
             $query = $this->themeLayout->reset()
@@ -680,6 +757,10 @@ class ThemeLayoutService
 
             if ($pageType) {
                 $query->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
+            }
+
+            if ($identity !== []) {
+                $query = $this->applyLayoutIdentityFilters($query, $identity);
             }
 
             // 使用 fetchArray() 替代 fetchOriginal()，与其他方法保持一致
@@ -697,18 +778,17 @@ class ThemeLayoutService
     /**
      * 撤销草稿：删除所有草稿，恢复到已发布状态
      */
-    public function discardDraft(int $themeId, ?string $pageType = null): bool
+    public function discardDraft(int $themeId, ?string $pageType = null, array $identity = []): bool
     {
         try {
-            $query = $this->themeLayout->reset()
-                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT);
-
+            $identityFilter = $identity !== [] ? $this->normalizeLayoutIdentity($identity) : null;
             if ($pageType) {
-                $query->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
+                $this->deleteLayoutRows((int)$themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identityFilter);
+            } else {
+                foreach (array_keys(ThemeLayout::getPageTypes()) as $type) {
+                    $this->deleteLayoutRows((int)$themeId, $type, ThemeLayout::STATUS_DRAFT, $identityFilter);
+                }
             }
-
-            $query->delete()->fetch();
             return true;
         } catch (\Exception $e) {
             return false;
@@ -719,19 +799,20 @@ class ThemeLayoutService
      * 初始化草稿：从已发布状态复制到草稿状态
      * 用于首次编辑时，将线上数据复制为草稿进行编辑
      */
-    public function initDraftFromPublished(int $themeId, ?string $pageType = null): bool
+    public function initDraftFromPublished(int $themeId, ?string $pageType = null, array $identity = []): bool
     {
+        $identity = $identity !== [] ? $this->normalizeLayoutIdentity($identity) : [];
         try {
             $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
 
             foreach ($pageTypes as $type) {
                 // 检查是否已有草稿
-                if ($this->hasDraft($themeId, $type)) {
+                if ($this->hasDraft($themeId, $type, $identity)) {
                     continue; // 已有草稿，跳过
                 }
 
                 // 获取已发布布局
-                $publishedLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_PUBLISHED);
+                $publishedLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
 
                 // 复制为草稿
                 foreach ($publishedLayout as $area => $areaData) {
@@ -739,6 +820,10 @@ class ThemeLayoutService
                         $this->saveWidget([
                             'theme_id' => $themeId,
                             'page_type' => $type,
+                            'layout_option' => $identity['layout_option'] ?? ($widget['layout_option'] ?? 'default'),
+                            'scope' => $identity['scope'] ?? ($widget['scope'] ?? 'default'),
+                            'target_type' => $identity['target_type'] ?? ($widget['target_type'] ?? 'global'),
+                            'target_id' => $identity['target_id'] ?? (int)($widget['target_id'] ?? 0),
                             'area' => $area,
                             'widget_code' => $widget['widget_code'],
                             'widget_module' => $widget['widget_module'],
@@ -769,8 +854,24 @@ class ThemeLayoutService
             return false;
         }
 
+        $config = $this->withWidgetI18nInstance($config, $this->themeLayout->getWidgetConfig());
         $this->themeLayout->setWidgetConfig($config)->save();
         return true;
+    }
+
+    private function withWidgetI18nInstance(array $config, array $existingConfig = []): array
+    {
+        $key = self::WIDGET_I18N_INSTANCE_KEY;
+        $instance = trim((string)($config[$key] ?? ''));
+        if ($instance === '') {
+            $instance = trim((string)($existingConfig[$key] ?? ''));
+        }
+        if ($instance === '') {
+            $instance = 'wi_' . bin2hex(random_bytes(8));
+        }
+
+        $config[$key] = $instance;
+        return $config;
     }
 
     /**
@@ -822,6 +923,7 @@ class ThemeLayoutService
             'widget_code' => $widgetCode,
             'config' => $config,
             'area' => $this->themeLayout->getArea(),
+            'slot_id' => $this->themeLayout->getSlotId(),
             'sort_order' => $this->themeLayout->getSortOrder(),
             'layout_option' => $this->themeLayout->getLayoutOption(),
             'scope' => $this->themeLayout->getScope(),
@@ -997,9 +1099,10 @@ class ThemeLayoutService
         ?WelineTheme $theme = null
     ): array
     {
-        $effectiveArea = (string)($filterOptions['area'] ?? $area);
-        if ($effectiveArea !== 'backend') {
-            $effectiveArea = 'frontend';
+        $effectiveArea = (string)($filterOptions['editor_area'] ?? $filterOptions['registry_area'] ?? $area);
+        $effectiveArea = $effectiveArea === 'backend' ? 'backend' : 'frontend';
+        if ($filterOptions !== null) {
+            $filterOptions['editor_area'] = $effectiveArea;
         }
 
         return $this->placeableRegistry->getAvailableList($pageType, $filterOptions, $theme, $effectiveArea);
@@ -1019,7 +1122,9 @@ class ThemeLayoutService
         ?string $pageType = null,
         array $acceptCodes = [],
         array $rejectCodes = [],
-        ?WelineTheme $theme = null
+        ?WelineTheme $theme = null,
+        string $editorArea = 'frontend',
+        array $libraryFilterOptions = []
     ): array
     {
         // 判断是否是子 slot
@@ -1031,12 +1136,13 @@ class ThemeLayoutService
         $isExclusiveArea = in_array($effectiveArea, self::EXCLUSIVE_AREAS);
         
         // 获取所有部件，支持 slot accept/reject 与部件 code/type/slot/position/slots 的协议交叉过滤
-        $allWidgets = $this->getAvailableWidgets($pageType, [
+        $allWidgets = $this->getAvailableWidgets($pageType, array_merge($libraryFilterOptions, [
             'slot_id' => $slotId,
             'area' => $effectiveArea,
             'accept' => $acceptCodes,
             'reject' => $rejectCodes,
-        ], 'frontend', $theme);
+            'editor_area' => $editorArea === 'backend' ? 'backend' : 'frontend',
+        ]), $editorArea, $theme);
         
         $exclusiveWidgets = [];  // 独占大部件
         $regularWidgets = [];     // 普通小部件

@@ -14,7 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Multipass\Service\IdentityBridgeService;
 
-if (!AccountSidebarContentGate::accepts('identity-bridge')) {
+if (!AccountSidebarContentGate::accepts('identity-bridge', 'multipass-developer-apps')) {
     return;
 }
 
@@ -29,14 +29,29 @@ if (!$user instanceof Customer) {
     }
 }
 
-$identityBindings = [];
-if ($user instanceof Customer && $user->getId()) {
-    $identityBindings = ObjectManager::getInstance(IdentityBridgeService::class)
-        ->listBindingsForCustomer((int)$user->getId());
-}
-
-$this->assign('identity_bindings', $identityBindings);
+$identityBridgeService = ObjectManager::getInstance(IdentityBridgeService::class);
 ?>
+<?php if (AccountSidebarContentGate::accepts('identity-bridge')): ?>
+    <?php
+    $identityBindings = [];
+    if ($user instanceof Customer && $user->getId()) {
+        $identityBindings = $identityBridgeService->listBindingsForCustomer((int)$user->getId());
+    }
+    $this->assign('identity_bindings', $identityBindings);
+    ?>
 <section class="account-hook-section account-index__section d-none" id="identity-bridge-section" data-account-section="identity-bridge" hidden>
     <?= $this->fetch('Weline_Multipass::templates/frontend/account/identity-bridge.phtml') ?>
 </section>
+<?php elseif (AccountSidebarContentGate::accepts('multipass-developer-apps')): ?>
+    <?php
+    $developerApplications = [];
+    if ($user instanceof Customer && $user->getId()) {
+        $developerApplications = $identityBridgeService->listDeveloperApplicationsForCustomer((int)$user->getId());
+    }
+    $this->assign('developer_applications', $developerApplications);
+    $this->assign('developer_application_auto_approve', $identityBridgeService->isDeveloperApplicationAutoApproveEnabled());
+    ?>
+<section class="account-hook-section account-index__section d-none" id="multipass-developer-apps-section" data-account-section="multipass-developer-apps" hidden>
+    <?= $this->fetch('Weline_Multipass::templates/frontend/account/developer-applications.phtml') ?>
+</section>
+<?php endif; ?>

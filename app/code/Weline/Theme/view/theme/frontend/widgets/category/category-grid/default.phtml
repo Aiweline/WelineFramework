@@ -22,8 +22,12 @@
  * @param image_ratio {default="square",type="select",label="图片比例",options={square:"正方形",portrait:"竖向",landscape:"横向"}}
  */
 
-$title = $this->getData('title') ?? __('热门分类');
-$subtitle = $this->getData('subtitle') ?? __('浏览我们的商品分类');
+use Weline\Theme\Helper\WidgetI18n;
+
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '热门分类';
+$subtitleSource = trim((string)($this->getData('subtitle') ?? '')) ?: '浏览我们的商品分类';
+$title = WidgetI18n::label($titleSource, '热门分类');
+$subtitle = WidgetI18n::label($subtitleSource, '浏览我们的商品分类');
 $categoryIds = $this->getData('category_ids') ?? '';
 $limit = (int)($this->getData('limit') ?? 8);
 $columns = $this->getData('columns') ?? '4';

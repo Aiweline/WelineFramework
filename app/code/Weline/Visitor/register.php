@@ -17,5 +17,6 @@ Register::register(
     '<a href="https://bbs.aiweline.com">系统组件模块: 访客统计</a>',
     [
         'Weline_Taglib',
+        'Weline_SystemConfig',
     ]
 );

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">WelineFramework</title>
+  <desc id="desc">Open Graph preview card for WelineFramework.</desc>
+  <rect width="1200" height="630" fill="#f8fafc"/>
+  <rect x="72" y="72" width="1056" height="486" rx="32" fill="#ffffff" stroke="#dbe3ee" stroke-width="2"/>
+  <rect x="112" y="116" width="96" height="96" rx="22" fill="#101828"/>
+  <text x="160" y="180" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800" fill="#ffffff">W</text>
+  <text x="240" y="160" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" fill="#111827">WelineFramework</text>
+  <text x="240" y="214" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="600" fill="#2563eb">PHP modular framework and WLS runtime</text>
+  <text x="112" y="312" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#172033">Build modules, APIs, admin tools, storefronts, and multilingual sites.</text>
+  <text x="112" y="370" font-family="Arial, Helvetica, sans-serif" font-size="25" fill="#475569">Auto routing / ORM migrations / QueryProvider API / Persistent HTTPS server</text>
+  <g transform="translate(112 440)">
+    <rect width="178" height="48" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="89" y="31" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#1d4ed8">Documents</text>
+    <rect x="198" width="154" height="48" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+    <text x="275" y="31" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#15803d">WLS</text>
+    <rect x="372" width="182" height="48" rx="10" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="463" y="31" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#c2410c">REST API</text>
+  </g>
+</svg>

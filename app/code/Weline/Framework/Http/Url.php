@@ -1488,7 +1488,7 @@ class Url implements UrlInterface
             }
 
             // Host misses must not inherit an arbitrary website context.
-            // Website/PageBuilder rewrites require an explicit Website.url or WebsiteDomain match.
+            // Website rewrites require an explicit Website.url or WebsiteDomain match.
             if (!isset($data['website'])) {
                 unset($data['website']);
                 self::$parserServer['WELINE_WEBSITE_CODE'] = '';
@@ -1555,7 +1555,7 @@ class Url implements UrlInterface
         // 诊断日志：记录区域匹配结果和调用栈
         if (
             Env::get('wls.debug.hot_path_logs', false)
-            && (str_contains($url, 'ai-site-agent') || $area === 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8' || str_contains($url, 'pagebuilder/backend'))
+            && (str_contains($url, 'ai-site-agent') || $area === 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8')
         ) {
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
             $caller = '';

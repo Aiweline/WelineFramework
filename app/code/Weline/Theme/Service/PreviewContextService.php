@@ -17,7 +17,6 @@ final class PreviewContextService
 
     public const SHELL_PREVIEW = 'preview';
     public const SHELL_THEME_EDITOR = 'theme-editor';
-    public const SHELL_PAGEBUILDER = 'pagebuilder';
 
     public const TARGET_TYPE_PATH = 'path';
     public const TARGET_TYPE_LAYOUT = 'layout';
@@ -50,6 +49,7 @@ final class PreviewContextService
             'target_type' => self::TARGET_TYPE_PATH,
             'target_value' => '/',
             'preview_token' => '',
+            'locale' => '',
         ];
     }
 
@@ -62,7 +62,7 @@ final class PreviewContextService
     public function normalizeShell(?string $shell, string $default = self::SHELL_PREVIEW): string
     {
         $shell = \trim((string)$shell);
-        return \in_array($shell, [self::SHELL_PREVIEW, self::SHELL_THEME_EDITOR, self::SHELL_PAGEBUILDER], true)
+        return \in_array($shell, [self::SHELL_PREVIEW, self::SHELL_THEME_EDITOR], true)
             ? $shell
             : $default;
     }
@@ -202,6 +202,10 @@ final class PreviewContextService
             'target_value' => (string)$context['target_value'],
         ];
 
+        if (!empty($context['locale'])) {
+            $params['locale'] = (string)$context['locale'];
+        }
+
         if (!empty($context['version_id'])) {
             $params['version_id'] = (int)$context['version_id'];
         }
@@ -252,6 +256,8 @@ final class PreviewContextService
 
         $scope = \trim((string)($normalized['scope'] ?? ''));
         $normalized['scope'] = $scope !== '' ? $scope : self::DEFAULT_SCOPE;
+
+        $normalized['locale'] = $this->normalizeLocale((string)($normalized['locale'] ?? ''));
 
         $normalized['target_type'] = $this->normalizeTargetType((string)($normalized['target_type'] ?? ''));
 
@@ -315,6 +321,7 @@ final class PreviewContextService
             'status',
             'version_id',
             'scope',
+            'locale',
             'target_type',
             'target_value',
         ] as $key) {
@@ -408,10 +415,68 @@ final class PreviewContextService
             $context['shell'] = $context['shell'] ?? self::SHELL_PREVIEW;
         }
 
+        $rawRequestThemeId = $this->getRawQueryInt('theme_id');
+        if ($rawRequestThemeId > 0) {
+            $requestThemeId = $rawRequestThemeId;
+            if ($rawFrontendThemeId <= 0 && $rawBackendThemeId <= 0 && $rawLegacyPreviewThemeId <= 0) {
+                $rawRequestArea = $this->normalizeArea(
+                    $this->getRawQueryString(
+                        'editor_area',
+                        $this->getRawQueryString('preview_area', self::AREA_FRONTEND)
+                    ) ?? self::AREA_FRONTEND
+                );
+                if ($rawRequestArea === self::AREA_BACKEND) {
+                    $context['backend_theme_id'] = $rawRequestThemeId;
+                } else {
+                    $context['frontend_theme_id'] = $rawRequestThemeId;
+                }
+                $context['editor_area'] = $context['editor_area'] ?? $rawRequestArea;
+            }
+        }
+
         $rawPreviewToken = \trim($this->getRawQueryString(PreviewTokenService::TOKEN_KEY, ''));
         if ($rawPreviewToken !== '') {
             $hasExplicitPreviewToken = true;
             $context['preview_token'] = $rawPreviewToken;
+        }
+
+        $rawLocale = $this->normalizeLocale($this->getRawQueryString('locale', '') ?? '');
+        if ($rawLocale !== '') {
+            $context['locale'] = $rawLocale;
+        }
+
+        $hasRawPreviewSelection = $this->isRawPreviewContentRequest()
+            || $rawFrontendThemeId > 0
+            || $rawBackendThemeId > 0
+            || $rawLegacyPreviewThemeId > 0
+            || $rawRequestThemeId > 0
+            || $this->getRawQueryInt('weline_theme_id') > 0
+            || $this->hasAnyRawQueryKey(['layout_type', 'page_type', 'layout_option']);
+        if ($hasRawPreviewSelection && !$hasExplicitPreviewToken) {
+            // A direct preview URL is an explicit selection. Do not let a stale
+            // browser session context carry an old preview scope or page target
+            // into this request, otherwise a valid theme_id/page_type preview can
+            // query an empty layout identity and render as a blank content area.
+            if (!$this->hasAnyRawQueryKey(['scope', 'scope_frontend', 'scope_backend'])) {
+                $context['scope'] = self::DEFAULT_SCOPE;
+            }
+            if (!$this->hasAnyRawQueryKey([
+                'target_type',
+                'target_value',
+                'theme_layout_target_type',
+                'theme_layout_target_id',
+                'theme_layout_source_target_type',
+                'theme_layout_source_target_id',
+            ])) {
+                $layoutTargetValue = $this->buildRawLayoutTargetValue();
+                if ($layoutTargetValue !== null) {
+                    $context['target_type'] = self::TARGET_TYPE_LAYOUT;
+                    $context['target_value'] = $layoutTargetValue;
+                }
+            }
+            if (!$this->hasRawQueryKey('shell') && $this->isRawPreviewContentRequest()) {
+                $context['shell'] = self::SHELL_PREVIEW;
+            }
         }
 
         $hasExplicitThemeSelection = $requestFrontendThemeId > 0
@@ -437,6 +502,47 @@ final class PreviewContextService
         }
 
         return $context;
+    }
+
+    private function isRawPreviewContentRequest(): bool
+    {
+        $path = \strtolower($this->extractRequestPath());
+
+        return \str_contains($path, '/theme/frontend/theme-preview/content')
+            || \str_contains($path, '/theme/backend/theme-preview/content');
+    }
+
+    private function hasRawQueryKey(string $key): bool
+    {
+        return $this->getRawQueryString($key, null) !== null;
+    }
+
+    /**
+     * @param string[] $keys
+     */
+    private function hasAnyRawQueryKey(array $keys): bool
+    {
+        foreach ($keys as $key) {
+            if ($this->hasRawQueryKey((string)$key)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function buildRawLayoutTargetValue(): ?string
+    {
+        $layoutType = \trim((string)($this->getRawQueryString('layout_type', '') ?: ''));
+        if ($layoutType === '') {
+            $layoutType = \trim((string)($this->getRawQueryString('page_type', '') ?: ''));
+        }
+        if ($layoutType === '') {
+            return null;
+        }
+
+        $layoutOption = \trim((string)($this->getRawQueryString('layout_option', '') ?: ''));
+        return $layoutOption !== '' ? ($layoutType . '.' . $layoutOption) : $layoutType;
     }
 
     private function getRawQueryInt(string $key, int $default = 0): int
@@ -483,8 +589,8 @@ final class PreviewContextService
     private function detectShellFromRequest(): string
     {
         $uri = \strtolower((string) (\w_env('request.uri', '') ?? ''));
-        if (\str_contains($uri, 'pagebuilder/backend/page/') || $this->request->getParam('visual_editor') === '1') {
-            return self::SHELL_PAGEBUILDER;
+        if ($this->request->getParam('visual_editor') === '1') {
+            return self::SHELL_THEME_EDITOR;
         }
         if (\str_contains($uri, 'theme-editor')) {
             return self::SHELL_THEME_EDITOR;
@@ -547,6 +653,14 @@ final class PreviewContextService
         $this->session->setData('preview_backend_theme_id', (int)$context['backend_theme_id']);
         $this->session->setData('preview_editor_area', (string)$context['editor_area']);
         $this->session->setData('preview_shell', (string)$context['shell']);
+    }
+
+    private function normalizeLocale(string $locale): string
+    {
+        $locale = \trim($locale);
+        return \preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale)
+            ? $locale
+            : '';
     }
 
     private function syncRequest(array $context): void

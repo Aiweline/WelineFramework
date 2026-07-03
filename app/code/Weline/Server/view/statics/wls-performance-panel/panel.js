@@ -1,13 +1,15 @@
 (function (window, document) {
   "use strict";
 
-  if (window.__WELINE_WLS_PANEL__) {
+  if (window.__WELINE_PANEL_WLS_AGENT__) {
     return;
   }
 
+  var WLS_PANEL_STATE_KEY = "weline-wls-performance-panel-state-v1";
+
   var state = {
     activeTab: "overview",
-    isOpen: false,
+    mountNode: null,
     isLoading: false,
     error: "",
     requestId: "",
@@ -40,10 +42,60 @@
 
   var staticFilePattern = /\.(?:css|js|mjs|map|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot|wasm|json|xml|txt|pdf)(?:$|[?#])/i;
   var slowRequestMs = 100;
-  var AGENT_CONTRACT_VERSION = "weline-wls-performance-console/v1";
-  var AGENT_COMMAND = "wls-performance-report";
-  var AGENT_REPORT_NODE_ID = "weline-wls-performance-report";
+  var AGENT_CONTRACT_VERSION = "weline-panel-wls/v1";
+  var AGENT_COMMAND = "weline-panel:wls";
+  var AGENT_REPORT_NODE_ID = "weline-panel-wls-report";
   var sensitiveKeyPattern = /(?:^authorization$|^cookie$|password|passwd|pwd|secret|access[_-]?token|refresh[_-]?token|^token$|session[_-]?(?:id|value|token|data)|^sid$|api[_-]?key|nonce)/i;
+
+  function hasOption(options, value) {
+    return options.some(function (option) {
+      return option[0] === value;
+    });
+  }
+
+  function readUiState() {
+    try {
+      if (!window.localStorage) {
+        return {};
+      }
+      var raw = window.localStorage.getItem(WLS_PANEL_STATE_KEY);
+      if (!raw) {
+        return {};
+      }
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveUiState() {
+    try {
+      if (!window.localStorage) {
+        return;
+      }
+      window.localStorage.setItem(
+        WLS_PANEL_STATE_KEY,
+        JSON.stringify({
+          activeTab: state.activeTab,
+          requestFilter: state.requestFilter,
+          updatedAt: Date.now()
+        })
+      );
+    } catch (error) {
+      // Keep diagnostics usable when localStorage is unavailable.
+    }
+  }
+
+  function restoreUiState() {
+    var saved = readUiState();
+    if (hasOption(tabs, saved.activeTab)) {
+      state.activeTab = saved.activeTab;
+    }
+    if (hasOption(requestFilters, saved.requestFilter)) {
+      state.requestFilter = saved.requestFilter;
+    }
+  }
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -71,26 +123,22 @@
   }
 
   function getConfig() {
-    return window.__WELINE_WLS_PANEL_CONFIG__ || {};
+    return window.__WELINE_PANEL_WLS_CONFIG__ || {};
   }
 
-  function root() {
-    var node = document.getElementById("weline-wls-performance-panel");
-    if (node) {
-      return node;
+  function resolveMountNode(target) {
+    if (typeof target === "string") {
+      return document.querySelector(target);
     }
+    return target && target.nodeType === 1 ? target : null;
+  }
 
-    node = document.createElement("div");
-    node.id = "weline-wls-performance-panel";
-    node.className = "wls-panel";
-    node.hidden = true;
-    node.setAttribute("role", "dialog");
-    node.setAttribute("aria-modal", "true");
-    node.setAttribute("aria-label", "WLS 性能面板");
-    document.body.appendChild(node);
+  function bindMountNode(node) {
+    if (!node || node.getAttribute("data-weline-panel-wls-bound") === "1") {
+      return;
+    }
+    node.setAttribute("data-weline-panel-wls-bound", "1");
     node.addEventListener("click", onClick);
-    document.addEventListener("keydown", onKeydown);
-    return node;
   }
 
   function readableError(error) {
@@ -139,27 +187,95 @@
 
   function parseJsonResponse(response) {
     return response.text().then(function (text) {
-      var payload;
-      var trimmed = String(text || "").trim();
-      if (!trimmed) {
-        payload = {};
-      } else {
-        try {
-          payload = JSON.parse(trimmed);
-        } catch (error) {
-          throw new Error("WLS 面板端点返回了非 JSON 响应。");
+      return parseJsonPayload(text, response.ok, response.status);
+    });
+  }
+
+  function parseJsonPayload(text, ok, status) {
+    var payload;
+    var trimmed = String(text || "").trim();
+    if (!trimmed) {
+      payload = {};
+    } else {
+      try {
+        payload = JSON.parse(trimmed);
+      } catch (error) {
+        throw new Error("WLS 面板端点返回了非 JSON 响应。");
+      }
+    }
+    if (!ok) {
+      throw new Error((payload && payload.message) || ("WLS 面板端点请求失败：" + status));
+    }
+    return payload;
+  }
+
+  function requestWithXhr(url, options) {
+    return new Promise(function (resolve, reject) {
+      if (typeof window.XMLHttpRequest !== "function") {
+        reject(new Error("WLS 面板端点暂不可用，当前浏览器缺少请求能力。"));
+        return;
+      }
+      var xhr = new window.XMLHttpRequest();
+      xhr.open(options.method || "GET", url, true);
+      xhr.withCredentials = true;
+      xhr.timeout = 15000;
+      Object.keys(options.headers || {}).forEach(function (key) {
+        xhr.setRequestHeader(key, options.headers[key]);
+      });
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) {
+          return;
         }
-      }
-      if (!response.ok) {
-        throw new Error((payload && payload.message) || ("WLS 面板端点请求失败：" + response.status));
-      }
-      return payload;
+        var status = xhr.status === 1223 ? 204 : xhr.status;
+        try {
+          resolve(parseJsonPayload(xhr.responseText || "", status >= 200 && status < 300, status));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      xhr.onerror = function () {
+        reject(new Error("WLS 面板端点暂不可用，请确认 WLS 已重载路由。"));
+      };
+      xhr.ontimeout = function () {
+        reject(new Error("WLS 面板端点请求超时，请稍后刷新。"));
+      };
+      xhr.send();
+    });
+  }
+
+  function withRequestTimeout(request) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = window.setTimeout(function () {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(new Error("WLS 面板端点请求超时，请稍后刷新。"));
+      }, 15000);
+
+      Promise.resolve(request).then(function (payload) {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(payload);
+      }).catch(function (error) {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      });
     });
   }
 
   function call(operation, params) {
     var isClear = operation === "wlsPerformanceClear";
-    return window.fetch(requestUrl(operation, isClear ? {} : (params || {})), {
+    var url = requestUrl(operation, isClear ? {} : (params || {}));
+    var options = {
       method: isClear ? "POST" : "GET",
       credentials: "same-origin",
       headers: {
@@ -168,7 +284,16 @@
         "X-Weline-Wls-Panel": "1",
         "X-WLS-FPC-Bypass": "1"
       }
-    }).then(parseJsonResponse).then(function (payload) {
+    };
+    var request;
+    try {
+      request = typeof window.XMLHttpRequest === "function"
+        ? requestWithXhr(url, options)
+        : window.fetch(url, options).then(parseJsonResponse);
+    } catch (error) {
+      request = Promise.reject(error);
+    }
+    return withRequestTimeout(request).then(function (payload) {
       if (payload && payload.success === false && operation !== "wlsPerformanceRequestDetail") {
         throw new Error(payload.message || "WLS 面板请求失败。");
       }
@@ -716,8 +841,8 @@
       },
       actions: buildActions(summary || {}, rows, detail || null, services || null),
       agentGuide: {
-        protocol: "Open the page, type wls, then run await window.__WELINE_WLS_PANEL__.publish({refresh:true}).",
-        reportSource: "window.__WELINE_WLS_PERFORMANCE_REPORT__ or script#weline-wls-performance-report",
+        protocol: "Open the page, type weline, activate WLS 服务, then run await window.WelinePanel.publish({tabs:['wls'],refresh:true,limit:80}).",
+        reportSource: "window.__WELINE_PANEL_REPORT__ or script#weline-panel-report",
         interpretationOrder: ["actions(P0->P3)", "requests.groups", "bottlenecks.slowRequests", "selectedRequest.trace.spans", "services", "workers"],
         privacy: "Sensitive URI params and span meta keys are redacted before export."
       }
@@ -729,7 +854,7 @@
   }
 
   function publishReport(report) {
-    window.__WELINE_WLS_PERFORMANCE_REPORT__ = report;
+    window.__WELINE_PANEL_WLS_REPORT__ = report;
     var node = document.getElementById(AGENT_REPORT_NODE_ID);
     if (!node) {
       node = document.createElement("script");
@@ -738,7 +863,7 @@
       document.head.appendChild(node);
     }
     node.textContent = JSON.stringify(report);
-    window.dispatchEvent(new CustomEvent("weline-wls:performance-report", { detail: report }));
+    window.dispatchEvent(new CustomEvent("weline-panel:wls-report", { detail: report }));
     return report;
   }
 
@@ -791,24 +916,31 @@
     render();
   }
 
-  function open(options) {
+  function mount(target, options) {
     var cfg = getConfig();
-    state.isOpen = true;
+    var node = resolveMountNode(target || cfg.mountSelector || "#weline-panel-wls-diagnostics");
+    if (!node) {
+      throw new Error("WLS 性能诊断挂载点不存在。");
+    }
+    state.mountNode = node;
+    state.mountNode.classList.add("wls-panel");
+    bindMountNode(state.mountNode);
     state.requestId = (options && options.requestId) || cfg.requestId || state.requestId || "";
-    root().hidden = false;
     render();
-    refresh(state.requestId);
-    setTimeout(function () {
-      var close = root().querySelector("[data-action='close']");
-      if (close && typeof close.focus === "function") {
-        close.focus();
-      }
-    }, 0);
+    return refresh(state.requestId).then(function () {
+      return api;
+    });
+  }
+
+  function open(options) {
+    return mount((options && options.container) || null, options || {});
   }
 
   function close() {
-    state.isOpen = false;
-    root().hidden = true;
+    if (state.mountNode) {
+      state.mountNode.innerHTML = "";
+    }
+    state.mountNode = null;
   }
 
   function refresh(detailRequestId) {
@@ -819,22 +951,38 @@
     return call("wlsPerformanceSummary", { window_sec: 300 })
       .then(function (summary) {
         state.summary = summary || null;
+        state.isLoading = false;
+        render();
         return call("wlsPerformanceRequests", { limit: 80 });
       })
       .then(function (requests) {
         state.requests = normalizeRequests(requests);
-        return call("wlsPerformanceServices", {});
-      })
-      .then(function (services) {
-        state.services = services || null;
         selected = detailRequestId || state.requestId || (state.requests[0] && state.requests[0].request_id) || "";
-        if (!selected) {
-          return null;
+        state.requestId = selected || state.requestId;
+        state.isLoading = false;
+        render();
+        call("wlsPerformanceServices", {})
+          .then(function (services) {
+            state.services = services || null;
+            render();
+          })
+          .catch(function (error) {
+            state.error = readableError(error);
+            render();
+          });
+        if (selected) {
+          call("wlsPerformanceRequestDetail", { request_id: selected })
+            .then(function (detail) {
+              state.detail = normalizeDetail(detail);
+              state.requestId = selected;
+              render();
+            })
+            .catch(function (error) {
+              state.error = readableError(error);
+              render();
+            });
         }
-        return call("wlsPerformanceRequestDetail", { request_id: selected }).then(function (detail) {
-          state.detail = normalizeDetail(detail);
-          state.requestId = selected;
-        });
+        return null;
       })
       .catch(function (error) {
         state.error = readableError(error);
@@ -873,6 +1021,7 @@
       .then(function (detail) {
         state.detail = normalizeDetail(detail);
         state.activeTab = "waterfall";
+        saveUiState();
       })
       .catch(function (error) {
         state.error = readableError(error);
@@ -882,29 +1031,23 @@
       });
   }
 
-  function onKeydown(event) {
-    if (event.key === "Escape" && state.isOpen) {
-      close();
-    }
-  }
-
   function onClick(event) {
     var target = event.target.closest("[data-action]");
     if (!target) {
       return;
     }
     var action = target.getAttribute("data-action");
-    if (action === "close") {
-      close();
-    } else if (action === "refresh") {
+    if (action === "refresh") {
       refresh(state.requestId);
     } else if (action === "clear") {
       clear();
     } else if (action === "tab") {
       state.activeTab = target.getAttribute("data-tab") || "overview";
+      saveUiState();
       render();
     } else if (action === "request-filter") {
       state.requestFilter = target.getAttribute("data-filter") || "all";
+      saveUiState();
       render();
     } else if (action === "detail") {
       loadDetail(target.getAttribute("data-request-id") || "");
@@ -912,12 +1055,10 @@
   }
 
   function render() {
-    if (!state.isOpen) {
+    if (!state.mountNode) {
       return;
     }
-    var node = root();
-    node.innerHTML =
-      '<div class="wls-panel__scrim" data-action="close"></div>' +
+    state.mountNode.innerHTML =
       '<section class="wls-panel__shell">' +
       renderHeader() +
       renderTabs() +
@@ -937,7 +1078,6 @@
       '<div class="wls-panel__actions">' +
       '<button type="button" data-action="refresh">刷新</button>' +
       '<button type="button" data-action="clear">清空</button>' +
-      '<button type="button" class="wls-panel__close" data-action="close" aria-label="关闭">x</button>' +
       "</div>" +
       "</header>"
     );
@@ -1018,7 +1158,7 @@
       metric("FPC 命中", numberText(s.fpc_hit_count), "短期缓冲") +
       metric("错误数", numberText(s.error_count), "HTTP 5xx") +
       "</div>" +
-      '<div class="wls-grid wls-grid--two">' +
+      '<div class="wls-grid wls-grid--cards">' +
       '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">当前请求</div></div>' +
       renderKeyValues({
         "总耗时": ms(detail.total_ms || timing.total_ms || 0),
@@ -1049,12 +1189,30 @@
     return hit ? "命中 " + (source || "") : "未命中";
   }
 
+  function normalizeValue(value) {
+    return value === undefined || value === null || value === "" ? "-" : value;
+  }
+
+  function isWideKeyValue(key, value) {
+    return key === "URI" || key === "请求" || key === "Span" || String(value).length > 46;
+  }
+
   function renderKeyValues(values) {
     return (
       '<dl class="wls-kv">' +
       Object.keys(values)
         .map(function (key) {
-          return "<dt>" + escapeHtml(key) + "</dt><dd>" + escapeHtml(values[key] || "-") + "</dd>";
+          var value = normalizeValue(values[key]);
+          var modifier = isWideKeyValue(key, value) ? " wls-kv__item--wide" : "";
+          return (
+            '<div class="wls-kv__item' +
+            modifier +
+            '"><dt>' +
+            escapeHtml(key) +
+            "</dt><dd>" +
+            escapeHtml(value) +
+            "</dd></div>"
+          );
         })
         .join("") +
       "</dl>"
@@ -1067,7 +1225,8 @@
       return "";
     }
     return (
-      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">组件耗时汇总</div></div>' +
+      '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">耗时分类汇总</div></div>' +
+      '<div class="wls-section__note">最近 5 分钟采集到的性能 Span 按类型累计，包含嵌套调用；主要用来看哪个层级最耗时。</div>' +
       '<div class="wls-grid wls-grid--metrics">' +
       keys
         .sort(function (a, b) {
@@ -1075,16 +1234,37 @@
         })
         .slice(0, 12)
         .map(function (key) {
-          return metric(key, ms(totals[key]), "聚合 Span 耗时");
+          var info = categoryInfo(key);
+          return metric(info.label, ms(totals[key]), info.hint);
         })
         .join("") +
       "</div></section>"
     );
   }
 
+  function categoryInfo(key) {
+    var map = {
+      framework: ["框架流程", "路由、调度、生命周期累计"],
+      event: ["事件分发", "事件触发累计"],
+      observer: ["事件监听器", "Observer 执行累计"],
+      wls: ["WLS 服务", "会话、缓存、服务调用累计"],
+      controller: ["控制器", "Controller 执行累计"],
+      view: ["视图渲染", "模板与视图累计"],
+      theme: ["主题渲染", "布局、Meta、主题处理累计"],
+      db: ["数据库", "查询与写入累计"],
+      developer: ["开发工具", "调试面板与开发注入累计"]
+    };
+    var normalized = String(key || "").toLowerCase();
+    var item = map[normalized];
+    if (item) {
+      return { label: item[0], hint: item[1] };
+    }
+    return { label: key, hint: "未分类 Span 累计" };
+  }
+
   function renderRequests() {
     if (!state.requests.length) {
-      return '<div class="wls-empty">还没有采集到请求。在 DEV 模式加载一个页面后，再输入 wls 打开面板。</div>';
+      return '<div class="wls-empty">还没有采集到请求。在 DEV 模式加载页面后，输入 weline 并进入 WLS 服务 tab。</div>';
     }
     var rows = filteredRequests();
     var counts = requestFilterCounts();
@@ -1225,7 +1405,7 @@
       return '<div class="wls-empty">还没有 SessionServer 或 MemoryServer 采样。</div>';
     }
     return (
-      '<div class="wls-grid wls-grid--two">' +
+      '<div class="wls-grid wls-grid--cards">' +
       keys
         .map(function (key) {
           var item = services[key] || {};
@@ -1324,7 +1504,10 @@
     );
   }
 
-  window.__WELINE_WLS_PANEL__ = {
+  restoreUiState();
+
+  var api = {
+    mount: mount,
     open: open,
     close: close,
     refresh: function (options) {
@@ -1351,5 +1534,23 @@
       });
     }
   };
-  window.__WELINE_WLS_PERFORMANCE__ = window.__WELINE_WLS_PANEL__;
+  window.__WELINE_PANEL_WLS_AGENT__ = api;
+  if (window.WelinePanel && typeof window.WelinePanel.registerReportProvider === "function") {
+    window.WelinePanel.registerReportProvider("wls", function (options) {
+      return captureReport(options || {}).then(function (report) {
+        report.contractVersion = "weline-panel-wls/v1";
+        report.command = "weline-panel:wls";
+        return report;
+      });
+    });
+  } else {
+    window.__WELINE_PANEL_REPORT_PROVIDERS__ = window.__WELINE_PANEL_REPORT_PROVIDERS__ || {};
+    window.__WELINE_PANEL_REPORT_PROVIDERS__.wls = function (options) {
+      return captureReport(options || {}).then(function (report) {
+        report.contractVersion = "weline-panel-wls/v1";
+        report.command = "weline-panel:wls";
+        return report;
+      });
+    };
+  }
 })(window, document);

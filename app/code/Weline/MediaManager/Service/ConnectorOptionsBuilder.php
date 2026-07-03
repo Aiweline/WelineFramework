@@ -89,7 +89,7 @@ class ConnectorOptionsBuilder
     }
 
     /**
-     * 若 startPath 为 pagebuilder 下目录（如 pagebuilder/pages/{handle}），则确保该目录存在
+     * 若 startPath 为业务目录，则确保该目录存在
      */
     public function ensureStartPathDir(string $rootPath, ?string $startPath): void
     {
@@ -98,9 +98,6 @@ class ConnectorOptionsBuilder
         }
         $startPath = \trim(\str_replace('\\', '/', $startPath), '/');
         if ($startPath === '' || \strpos($startPath, '..') !== false) {
-            return;
-        }
-        if (\strpos($startPath, 'pagebuilder/') !== 0) {
             return;
         }
         $full = \rtrim($rootPath, '/\\') . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, $startPath);

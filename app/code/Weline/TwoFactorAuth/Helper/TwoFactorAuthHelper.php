@@ -290,8 +290,17 @@ class TwoFactorAuthHelper
      */
     public static function getQRCodeUrl(string $otpAuthUri, int $size = 250): string
     {
+        // endroid/qr-code 6.1.x still emits PHP 8.4 nullable signature deprecations while rendering SVGs.
+        set_error_handler(static function (int $severity, string $message, string $file): bool {
+            if ($severity === E_DEPRECATED && str_contains(str_replace('\\', '/', $file), 'vendor/endroid/qr-code/')) {
+                return true;
+            }
+
+            return false;
+        });
+
         try {
-            // 使用 endroid/qr-code 库生成 SVG 格式的二维码（6.x，PHP 8.4 显式可空签名）
+            // 使用 endroid/qr-code 库生成 SVG 格式的二维码
             $qrCode = new \Endroid\QrCode\QrCode(
                 data: $otpAuthUri,
                 size: $size,
@@ -310,6 +319,8 @@ class TwoFactorAuthHelper
         } catch (\Throwable $e) {
             // 如果生成失败，抛出异常以便调试
             throw new \Exception('二维码生成失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine(), 0, $e);
+        } finally {
+            restore_error_handler();
         }
     }
     
@@ -386,4 +397,3 @@ class TwoFactorAuthHelper
         return $codes;
     }
 }
-

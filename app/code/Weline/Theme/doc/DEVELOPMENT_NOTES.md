@@ -7,6 +7,7 @@ This optimization eliminates duplicate preview requests in the theme editor by:
 1. Server-side rendering all widget library previews on page load
 2. Returning `preview_html` in save/update API responses
 3. Removing real-time preview API calls during config editing
+4. Lazily fetching `widget-preview` only when a library card has empty/placeholder/error preview HTML
 
 ### Changes Made
 
@@ -25,6 +26,7 @@ This optimization eliminates duplicate preview requests in the theme editor by:
 2. **Save-only refresh**: Preview updates only occur after successful config save
 3. **Use returned preview_html**: `saveConfigFromModal()` uses API response to update preview
 4. **Failure handling**: Failed saves keep the previous preview (T015)
+5. **Fallback library preview**: Empty/placeholder/error widget cards call `widget-preview` once, then use server defaults if live content is unavailable
 
 #### Template (index.phtml)
 
@@ -48,7 +50,8 @@ php bin/w http:request -u "theme/backend/theme-editor/update-config" -b --login 
 ### Browser Test
 
 Open browser dev tools Network tab and verify:
-- No `widget-preview` requests on page load
+- No duplicate `widget-preview` requests for cards that already have valid `preview_html`
+- Empty/placeholder/error cards may request `widget-preview` once to populate a default/live preview
 - `update-config` response includes `preview_html`
 - `save-widget` response includes `preview_html`
 

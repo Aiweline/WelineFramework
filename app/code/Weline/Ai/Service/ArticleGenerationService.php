@@ -12,11 +12,11 @@ use Weline\Framework\Manager\ObjectManager;
  * 文章生成服务
  *
  * 封装 AI 文章生成，基于 ArticleGenerationAdapter 和 AiService，
- * 供 Blog、PageBuilder 等模块调用。
+ * 供内容模块调用。
  */
 class ArticleGenerationService
 {
-    private const SCENARIO_CODE = 'pagebuilder_article_generation';
+    private const SCENARIO_CODE = null;
 
     private AiService $aiService;
     private AdapterScanner $adapterScanner;

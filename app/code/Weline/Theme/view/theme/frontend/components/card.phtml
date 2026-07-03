@@ -1,78 +1,147 @@
-<!--
-组件：Card
-
-卡片组件，用于展示结构化内容
-字段
-@meta.name {default="Card卡片组件",name="Card卡片组件",description="Card卡片组件，用于描述组件的名称"}
-@meta.description {default="卡片组件，用于展示结构化内容",name="卡片组件，用于展示结构化内容",description="卡片组件，用于展示结构化内容，用于描述组件的用途"}
-@param.title {default="",name="卡片标题",description="卡片标题，用于设置卡片标题"}
-@param.subtitle {default="",name="副标题",description="副标题，用于设置卡片副标题"}
-@param.content {default="",name="卡片内容（HTML字符串）",description="卡片内容（HTML字符串），必填参数，用于设置卡片内容"}
-@param.footer {default="",name="卡片底部内容",description="卡片底部内容，用于设置卡片底部内容"}
-@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
-@param.id {default="",name="元素ID",description="元素ID，用于设置卡片ID"}
-@param.headerActions {default=[],name="标题栏操作按钮",description="标题栏操作按钮，用于设置标题栏操作按钮"}
-@param.image {default="",name="卡片图片URL",description="卡片图片URL，用于设置卡片图片"}
-@param.imageAlt {default="",name="图片alt文本",description="图片alt文本，用于设置图片alt属性"}
--->
 <?php
-// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
-$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.card');
-foreach ($metaParams as $key => $value) {
-    if ($this->getData("meta.{$key}") === null) {
-        $this->setData("meta.{$key}", $value);
+/**
+ * 组件：Card
+ *
+ * @meta.name {default="Card 卡片",name="Card 卡片",description="可嵌套内容的卡片容器"}
+ * @meta.description {default="可嵌套内容的卡片容器",name="描述",description="组件用途"}
+ * @widget.supports {["builder-component","builder-container","builder-display"]}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*","dashboard"]}
+ * @widget.compatible {true}
+ * @widget.is_container {true}
+ * @widget.slots {"body":{"id":"card-body:{layout_id}","name":"卡片内容","accept":["builder-component","builder-form","builder-display","builder-container"],"multiple":true},"footer":{"id":"card-footer:{layout_id}","name":"卡片底部","accept":["builder-action","builder-component"],"multiple":true}}
+ * @param.title {default="数据卡片",name="标题",description="卡片标题"}
+ * @param.subtitle {default="",name="副标题",description="卡片副标题"}
+ * @param.content {default="",name="兼容内容",description="旧版 HTML 字符串内容"}
+ * @param.footer {default="",name="兼容底部",description="旧版 HTML 字符串底部"}
+ * @param.variant {default="default",name="卡片样式",description="default/soft/outline/solid"}
+ * @param.align {default="start",name="内容对齐",description="start/center/end"}
+ * @param.padding {default="",name="内边距",description="例如 24px、2rem"}
+ * @param.minHeight {default="",name="最小高度",description="例如 280px、40vh"}
+ * @param.radius {default="",name="圆角",description="例如 24px"}
+ * @param.backgroundColor {default="",name="背景色",description="支持 #fff、rgba()、var(--token)"}
+ * @param.backgroundImage {default="",name="背景图",description="背景图片 URL"}
+ * @param.textColor {default="",name="文字颜色",description="支持 #111、rgba()、var(--token)"}
+ * @param.shadow {default="md",name="阴影",description="none/sm/md/lg"}
+ * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
+ */
+if (!function_exists('weline_builder_component_safe_url')) {
+    function weline_builder_component_safe_url(mixed $url): string
+    {
+        $url = trim((string)$url);
+        if ($url === '') {
+            return '';
+        }
+        $compact = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', html_entity_decode($url, ENT_QUOTES, 'UTF-8')));
+        if (str_starts_with($compact, 'javascript:') || str_starts_with($compact, 'vbscript:') || str_starts_with($compact, 'data:')) {
+            return '';
+        }
+        return preg_match('/["\'()\\\\\r\n]/', $url) ? '' : $url;
     }
 }
-
-$title = $this->getData("meta.title") ?? '';
-$subtitle = $this->getData("meta.subtitle") ?? '';
-$content = $this->getData("meta.content") ?? '';
-$footer = $this->getData("meta.footer") ?? '';
-$class = $this->getData("meta.class") ?? '';
-$id = $this->getData("meta.id") ?? '';
-$headerActions = $this->getData("meta.headerActions") ?? [];
-$image = $this->getData("meta.image") ?? '';
-$imageAlt = $this->getData("meta.imageAlt") ?? '';
-
-// 构建CSS类
-$cardClass = 'w-card';
-if ($class) {
-    $cardClass .= ' ' . htmlspecialchars($class);
+if (!function_exists('weline_builder_component_css_length')) {
+    function weline_builder_component_css_length(mixed $value, string $fallback = ''): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return $fallback;
+        }
+        if (preg_match('/^(0|[0-9]+(?:\.[0-9]+)?(?:px|rem|em|%|vh|vw|svh|lvh|dvh))$/', $value)) {
+            return $value;
+        }
+        if (preg_match('/^clamp\([0-9a-zA-Z%.,\s+\-]+\)$/', $value)) {
+            return $value;
+        }
+        return $fallback;
+    }
 }
+if (!function_exists('weline_builder_component_css_color')) {
+    function weline_builder_component_css_color(mixed $value): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '';
+        }
+        if (preg_match('/^#[0-9a-fA-F]{3,8}$/', $value)
+            || preg_match('/^(rgba?|hsla?)\([0-9.,%\s]+\)$/i', $value)
+            || preg_match('/^var\(--[a-zA-Z0-9_-]+\)$/', $value)
+            || in_array(strtolower($value), ['transparent', 'currentcolor', 'inherit'], true)) {
+            return $value;
+        }
+        return '';
+    }
+}
+$layoutId = (string)($this->getData('layout_id') ?? $this->getData('_layout_id') ?? 'preview');
+$title = (string)($this->getData('title') ?? $this->getData('meta.title') ?? '数据卡片');
+$subtitle = (string)($this->getData('subtitle') ?? $this->getData('meta.subtitle') ?? '');
+$content = (string)($this->getData('content') ?? $this->getData('meta.content') ?? '');
+$footer = (string)($this->getData('footer') ?? $this->getData('meta.footer') ?? '');
+$variant = strtolower(trim((string)($this->getData('variant') ?? $this->getData('meta.variant') ?? 'default')));
+$align = strtolower(trim((string)($this->getData('align') ?? $this->getData('meta.align') ?? 'start')));
+$padding = weline_builder_component_css_length($this->getData('padding') ?? $this->getData('meta.padding') ?? '');
+$minHeight = weline_builder_component_css_length($this->getData('minHeight') ?? $this->getData('meta.minHeight') ?? '');
+$radius = weline_builder_component_css_length($this->getData('radius') ?? $this->getData('meta.radius') ?? '');
+$backgroundColor = weline_builder_component_css_color($this->getData('backgroundColor') ?? $this->getData('meta.backgroundColor') ?? '');
+$backgroundImage = weline_builder_component_safe_url($this->getData('backgroundImage') ?? $this->getData('meta.backgroundImage') ?? '');
+$textColor = weline_builder_component_css_color($this->getData('textColor') ?? $this->getData('meta.textColor') ?? '');
+$shadow = strtolower(trim((string)($this->getData('shadow') ?? $this->getData('meta.shadow') ?? 'md')));
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+$editorMode = (bool)($this->getData('editor_mode') ?? $this->getData('preview_mode') ?? false);
+$bodySlotId = 'card-body:' . ($layoutId !== '' ? $layoutId : 'preview');
+$footerSlotId = 'card-footer:' . ($layoutId !== '' ? $layoutId : 'preview');
+$allowedVariants = ['default', 'soft', 'outline', 'solid'];
+$allowedAlign = ['start', 'center', 'end'];
+$allowedShadow = ['none', 'sm', 'md', 'lg'];
+if (!in_array($variant, $allowedVariants, true)) {
+    $variant = 'default';
+}
+if (!in_array($align, $allowedAlign, true)) {
+    $align = 'start';
+}
+if (!in_array($shadow, $allowedShadow, true)) {
+    $shadow = 'md';
+}
+$styles = [];
+if ($padding !== '') $styles[] = '--w-builder-card-padding:' . $padding;
+if ($minHeight !== '') $styles[] = '--w-builder-min-height:' . $minHeight;
+if ($radius !== '') $styles[] = '--w-builder-radius:' . $radius;
+if ($backgroundColor !== '') $styles[] = '--w-builder-bg:' . $backgroundColor;
+if ($backgroundImage !== '') $styles[] = '--w-builder-bg-image:url("' . $backgroundImage . '")';
+if ($textColor !== '') $styles[] = '--w-builder-color:' . $textColor;
+$cardClass = trim('w-card card w-builder-card w-builder-card--' . $variant . ' w-builder-shadow-' . $shadow . ' w-builder-align-' . $align . ' ' . $class);
 ?>
-<div class="<?= $cardClass ?>" <?= $id ? 'id="' . htmlspecialchars($id) . '"' : '' ?>>
-    <?php if ($image): ?>
-        <img src="<?= htmlspecialchars($image) ?>" 
-             alt="<?= htmlspecialchars($imageAlt) ?>" 
-             class="w-card-image">
+<section class="<?= htmlspecialchars($cardClass, ENT_QUOTES, 'UTF-8') ?>"
+         style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($title !== '' || $subtitle !== ''): ?>
+        <header class="w-card-header card-header w-builder-card-header">
+            <?php if ($title !== ''): ?>
+                <h3 class="w-card-title w-builder-card-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h3>
+            <?php endif; ?>
+            <?php if ($subtitle !== ''): ?>
+                <p class="w-card-subtitle w-builder-card-subtitle"><?= htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+        </header>
     <?php endif; ?>
-    
-    <?php if ($title || $subtitle || !empty($headerActions)): ?>
-        <div class="w-card-header">
-            <?php if ($title): ?>
-                <h3 class="w-card-title"><?= htmlspecialchars($title) ?></h3>
-            <?php endif; ?>
-            <?php if ($subtitle): ?>
-                <p class="w-card-subtitle"><?= htmlspecialchars($subtitle) ?></p>
-            <?php endif; ?>
-            <?php if (!empty($headerActions)): ?>
-                <div class="w-card-actions">
-                    <?php foreach ($headerActions as $action): ?>
-                        {{action}}
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-    
-    <div class="w-card-body">
-        {{content}}
+    <div class="w-card-body card-body w-builder-card-body"
+         data-wslot="<?= htmlspecialchars($bodySlotId, ENT_QUOTES, 'UTF-8') ?>"
+         data-wslot-name="<?= htmlspecialchars(__('卡片内容'), ENT_QUOTES, 'UTF-8') ?>"
+         data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
+         data-wslot-multiple="true">
+        <?php if ($content !== ''): ?>
+            <?= $content ?>
+        <?php elseif ($editorMode): ?>
+            <div class="w-builder-slot-placeholder slot-placeholder"><?= __('拖入表单、表格、文本或按钮') ?></div>
+        <?php endif; ?>
     </div>
-    
-    <?php if ($footer): ?>
-        <div class="w-card-footer">
-            {{footer}}
-        </div>
-    <?php endif; ?>
-</div>
-
+    <div class="w-card-footer card-footer w-builder-card-footer"
+         data-wslot="<?= htmlspecialchars($footerSlotId, ENT_QUOTES, 'UTF-8') ?>"
+         data-wslot-name="<?= htmlspecialchars(__('卡片底部'), ENT_QUOTES, 'UTF-8') ?>"
+         data-wslot-accept="builder-action,builder-component"
+         data-wslot-multiple="true">
+        <?php if ($footer !== ''): ?>
+            <?= $footer ?>
+        <?php elseif ($editorMode): ?>
+            <div class="w-builder-slot-placeholder slot-placeholder compact"><?= __('拖入按钮或操作区') ?></div>
+        <?php endif; ?>
+    </div>
+</section>

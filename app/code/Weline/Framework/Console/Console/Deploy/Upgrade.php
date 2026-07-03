@@ -16,6 +16,23 @@ use Weline\Framework\View\Data\DataInterface;
 
 class Upgrade extends CommandAbstract
 {
+    private const FLAT_STATIC_RUNTIME_FILES = [
+        'Weline_Backend' => [
+            'base/weline.modules.js',
+            'backend/weline.modules.js',
+            'js/url-backend.js',
+            'js/weline-api.js',
+            'js/weline-api-worker.js',
+        ],
+        'Weline_Frontend' => [
+            'base/weline.modules.js',
+            'frontend/weline.modules.js',
+            'js/weline-api.js',
+            'js/weline-api-worker.js',
+            'js/weline.js',
+        ],
+    ];
+
     /**
      * @var System
      */
@@ -66,7 +83,48 @@ class Upgrade extends CommandAbstract
                 }
             }
         }
+        $this->publishFlatStaticRuntimeFiles($modules);
         $this->printer->success('静态文件部署完毕！');
+    }
+
+    private function publishFlatStaticRuntimeFiles(array $modules): void
+    {
+        foreach (self::FLAT_STATIC_RUNTIME_FILES as $moduleName => $relativeFiles) {
+            if (!isset($modules[$moduleName]) || empty($modules[$moduleName]['base_path'])) {
+                continue;
+            }
+
+            foreach ($relativeFiles as $relativeFile) {
+                $this->copyFlatStaticRuntimeFile($moduleName, (string)$modules[$moduleName]['base_path'], $relativeFile);
+            }
+        }
+    }
+
+    private function copyFlatStaticRuntimeFile(string $moduleName, string $moduleBasePath, string $relativeFile): void
+    {
+        $sourceFile = rtrim($moduleBasePath, '\\/') . DS
+            . DataInterface::dir . DS
+            . DataInterface::dir_type_STATICS . DS
+            . str_replace(['/', '\\'], DS, $relativeFile);
+        if (!is_file($sourceFile)) {
+            return;
+        }
+
+        $moduleParts = explode('_', $moduleName, 2);
+        if (count($moduleParts) !== 2 || $moduleParts[0] === '' || $moduleParts[1] === '') {
+            return;
+        }
+
+        $targetFile = PUB . 'static' . DS
+            . $moduleParts[0] . DS
+            . $moduleParts[1] . DS
+            . str_replace(['/', '\\'], DS, $relativeFile);
+        $targetDir = dirname($targetFile);
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+            return;
+        }
+
+        copy($sourceFile, $targetFile);
     }
 
     /**

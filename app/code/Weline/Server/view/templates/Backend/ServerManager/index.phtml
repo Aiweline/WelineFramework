@@ -125,7 +125,26 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
     border-color: var(--bs-warning-border-subtle);
 }
 .server-action-btn {
-    min-width: 36px;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .25rem;
+    padding-inline: .55rem;
+    white-space: nowrap;
+}
+.server-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    min-width: 260px;
+}
+.server-action-btn .bi:empty {
+    display: none;
+}
+.server-action-label {
+    font-size: .8125rem;
+    line-height: 1;
 }
 .weline-session-preview summary {
     cursor: pointer;
@@ -486,25 +505,29 @@ function renderContent(data) {
                     </td>
                     <td>
                         ${isRunning ? `
-                            <button class="btn btn-sm btn-warning server-action-btn" data-server-manager-action="restart-server" data-instance="${escapeHtml(name)}" title="<?= __('重启') ?>">
-                                <i class="bi bi-arrow-repeat"></i>
-                            </button>
-                            <button class="btn btn-sm btn-info server-action-btn" data-server-manager-action="reload-server" data-instance="${escapeHtml(name)}" title="<?= __('热重载') ?>">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger server-action-btn" data-server-manager-action="stop-server" data-instance="${escapeHtml(name)}" title="<?= __('停止') ?>">
-                                <i class="bi bi-stop-fill"></i>
-                            </button>
-                            <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="1" title="<?= __('启用维护模式') ?>">
-                                <i class="bi bi-shield-fill-check"></i>
-                            </button>
-                            <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="0" title="<?= __('禁用维护模式') ?>">
-                                <i class="bi bi-shield-x"></i>
-                            </button>
+                            <div class="server-action-group" aria-label="<?= __('服务器操作') ?>">
+                                <button class="btn btn-sm btn-warning server-action-btn" data-server-manager-action="restart-server" data-instance="${escapeHtml(name)}" title="<?= __('重启') ?>" aria-label="<?= __('重启') ?>">
+                                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i><span class="server-action-label"><?= __('重启') ?></span>
+                                </button>
+                                <button class="btn btn-sm btn-info server-action-btn" data-server-manager-action="reload-server" data-instance="${escapeHtml(name)}" title="<?= __('热重载') ?>" aria-label="<?= __('热重载') ?>">
+                                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i><span class="server-action-label"><?= __('热重载') ?></span>
+                                </button>
+                                <button class="btn btn-sm btn-danger server-action-btn" data-server-manager-action="stop-server" data-instance="${escapeHtml(name)}" title="<?= __('停止') ?>" aria-label="<?= __('停止') ?>">
+                                    <i class="bi bi-stop-fill" aria-hidden="true"></i><span class="server-action-label"><?= __('停止') ?></span>
+                                </button>
+                                <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="1" title="<?= __('启用维护模式') ?>" aria-label="<?= __('启用维护模式') ?>">
+                                    <i class="bi bi-shield-fill-check" aria-hidden="true"></i><span class="server-action-label"><?= __('维护') ?></span>
+                                </button>
+                                <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="0" title="<?= __('禁用维护模式') ?>" aria-label="<?= __('禁用维护模式') ?>">
+                                    <i class="bi bi-shield-x" aria-hidden="true"></i><span class="server-action-label"><?= __('退出维护') ?></span>
+                                </button>
+                            </div>
                         ` : `
-                            <button class="btn btn-sm btn-success server-action-btn" data-server-manager-action="start-server" data-instance="${escapeHtml(name)}" title="<?= __('启动') ?>">
-                                <i class="bi bi-play-fill"></i>
-                            </button>
+                            <div class="server-action-group" aria-label="<?= __('服务器操作') ?>">
+                                <button class="btn btn-sm btn-success server-action-btn" data-server-manager-action="start-server" data-instance="${escapeHtml(name)}" title="<?= __('启动') ?>" aria-label="<?= __('启动') ?>">
+                                    <i class="bi bi-play-fill" aria-hidden="true"></i><span class="server-action-label"><?= __('启动') ?></span>
+                                </button>
+                            </div>
                         `}
                     </td>
                 </tr>

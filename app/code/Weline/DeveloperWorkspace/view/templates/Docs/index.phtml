@@ -119,11 +119,69 @@ try {
             line-height: 1.6;
             transition: var(--transition);
         }
+
+        body.doc-mobile-sidebar-open,
+        body.doc-mobile-toc-open,
+        body.doc-mobile-header-open {
+            overflow: hidden;
+        }
         
         .doc-container {
             display: flex;
             height: 100vh;
             overflow: hidden;
+        }
+
+        .doc-mobile-toolbar {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+            box-shadow: var(--shadow);
+        }
+
+        .doc-mobile-toolbar-spacer {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .doc-mobile-button {
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            font-size: 18px;
+        }
+
+        .doc-mobile-button:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: var(--text-inverse);
+        }
+
+        .doc-mobile-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+            z-index: 1200;
+        }
+
+        .doc-mobile-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
         }
         
         /* 左侧分类树 */
@@ -456,6 +514,7 @@ try {
             flex-direction: column;
             overflow: hidden;
             background: var(--card-bg);
+            min-width: 0;
         }
         
         .content-header {
@@ -464,32 +523,93 @@ try {
             background: var(--card-bg);
             box-shadow: var(--shadow);
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 16px;
+        }
+
+        .content-header-main {
+            display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
+            width: 100%;
+            min-width: 0;
         }
         
         .content-header-actions {
             display: flex;
-            align-items: center;
-            gap: 10px;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px 18px;
             flex-wrap: wrap;
-            justify-content: flex-end;
             min-width: 0;
+            width: 100%;
+        }
+
+        .content-header-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .content-header-group--filters {
+            flex: 1 1 620px;
+        }
+
+        .content-header-group--actions {
+            flex: 0 1 auto;
+            justify-content: flex-end;
+        }
+
+        .doc-display-toggle {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            min-height: 48px;
+            padding: 0 14px;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            background: var(--surface-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .doc-display-toggle:hover {
+            border-color: var(--primary-color);
+            background: rgba(var(--primary-color-rgb), 0.05);
+        }
+
+        .doc-display-toggle-icon {
+            transition: transform 0.2s ease;
+        }
+
+        .content-header.filters-open .doc-display-toggle-icon {
+            transform: rotate(180deg);
         }
         
         /* 语言和货币切换器（开发文档） */
         .doc-i18n-switcher {
             display: flex;
-            gap: 20px;
+            gap: 16px;
             align-items: center;
             flex-wrap: wrap;
-            padding: 8px 20px;
-            border-right: 1px solid var(--border-color);
-            margin-right: 20px;
+            padding: 10px 14px;
             background: linear-gradient(135deg, rgba(var(--primary-color-rgb), 0.06) 0%, rgba(var(--primary-color-rgb), 0.02) 100%);
-            border-radius: 8px;
+            border: 1px solid var(--border-light);
+            border-radius: 14px;
             max-width: 100%;
+            flex: 1 1 560px;
+        }
+
+        .doc-display-panel {
+            display: flex;
+            width: 100%;
         }
         
         .doc-i18n-item {
@@ -498,6 +618,7 @@ try {
             gap: 10px;
             position: relative;
             min-width: 0;
+            flex: 1 1 220px;
         }
         
         .doc-i18n-item label {
@@ -535,6 +656,7 @@ try {
             background-repeat: no-repeat;
             background-position: right 10px center;
             background-size: 12px;
+            height: 48px;
         }
         
         .doc-i18n-select option {
@@ -567,19 +689,21 @@ try {
         }
 
         .doc-i18n-language-select {
-            width: max-content;
-            min-width: 280px;
-            max-width: min(720px, calc(100vw - 420px));
+            width: min(100%, 780px);
+            min-width: 260px;
+            max-width: 100%;
         }
 
         .doc-i18n-language-select .weline-language-select-trigger {
-            width: max-content;
+            width: 100%;
             min-width: 100%;
             max-width: 100%;
-            min-height: 39px;
+            min-height: 48px;
             border: 1.5px solid var(--input-border);
             background: var(--input-bg);
             color: var(--text-color);
+            border-radius: 12px;
+            padding-inline: 12px;
         }
 
         .doc-i18n-language-select .weline-language-select-tags,
@@ -644,18 +768,20 @@ try {
         
         .search-box {
             position: relative;
-            max-width: 600px;
+            max-width: none;
+            width: 100%;
         }
         
         .search-input {
             width: 100%;
             padding: 12px 45px 12px 15px;
             border: 2px solid var(--input-border);
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: 14px;
+            font-size: 15px;
             background: var(--input-bg);
             color: var(--text-color);
             transition: var(--transition);
+            min-height: 54px;
         }
         
         .search-input:focus {
@@ -822,6 +948,12 @@ try {
             font-size: 13px;
             transition: var(--transition);
             display: block; /* 默认显示 */
+        }
+
+        .document-toc-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .document-toc.hidden {
@@ -1226,71 +1358,288 @@ try {
         }
         
         /* 响应式 */
+        @media (max-width: 1024px) {
+            .content-header {
+                gap: 12px;
+            }
+
+            .content-header-group--filters {
+                flex: 1 1 100%;
+            }
+
+            .content-header-group--actions {
+                flex: 1 1 100%;
+                justify-content: flex-start;
+            }
+
+            .doc-display-toggle {
+                display: inline-flex;
+            }
+
+            .doc-display-panel,
+            .content-header-group--actions {
+                display: none;
+            }
+
+            .content-header.filters-open .doc-display-panel,
+            .content-header.filters-open .content-header-group--actions {
+                display: flex;
+            }
+
+            .doc-i18n-switcher {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .doc-i18n-item {
+                width: 100%;
+                flex: 1 1 auto;
+            }
+
+            .content-header-group--actions {
+                width: 100%;
+                flex-wrap: wrap;
+                padding-top: 2px;
+            }
+
+            .home-button,
+            .document-back-button,
+            .api-doc-button,
+            .theme-toggle {
+                min-width: 0;
+                flex: 1 1 calc(50% - 8px);
+                justify-content: center;
+            }
+        }
+
         @media (max-width: 768px) {
             .doc-container {
-                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
             }
-            
+
+            .doc-mobile-toolbar {
+                display: flex;
+            }
+
             .doc-sidebar {
-                width: 100%;
-                height: 300px;
-                min-width: 100%;
-                max-width: 100%;
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: min(82vw, 340px);
+                min-width: min(82vw, 340px);
+                max-width: min(82vw, 340px);
+                height: 100vh;
+                z-index: 1300;
+                transform: translateX(-100%);
+                transition: transform 0.28s ease;
+                box-shadow: var(--shadow-lg);
             }
-            
+
+            .doc-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
             .doc-sidebar.collapsed {
-                width: 100%;
-                min-width: 100%;
-                height: 60px;
+                width: min(82vw, 340px);
+                min-width: min(82vw, 340px);
+                height: 100vh;
+                transform: translateX(-100%);
             }
-            
+
             .doc-content {
-                height: calc(100vh - 300px);
+                min-height: 100vh;
+                width: 100%;
             }
-            
-            .doc-sidebar.collapsed + .doc-content {
-                height: calc(100vh - 60px);
+
+            .sidebar-header {
+                padding: 16px 18px;
             }
-            
+
             .sidebar-header h2 {
                 font-size: 16px;
             }
-            
+
             .sidebar-header p {
                 font-size: 11px;
+            }
+
+            .content-header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 1100;
+                padding: 16px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .content-header-main {
+                width: 100%;
+            }
+
+            .content-header-actions {
+                display: none;
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                justify-content: flex-start;
+                padding-top: 0;
+            }
+
+            .content-header.mobile-actions-open .content-header-actions {
+                display: flex;
+            }
+
+            .content-header-group,
+            .content-header-group--filters,
+            .content-header-group--actions {
+                width: 100%;
+                flex: 1 1 auto;
+                justify-content: flex-start;
+            }
+
+            .content-body {
+                padding: 112px 16px 20px;
+            }
+
+            .document-detail {
+                max-width: 100%;
+            }
+
+            .document-meta-detail {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .document-toc {
+                top: 0;
+                right: 0;
+                width: min(82vw, 320px);
+                max-width: min(82vw, 320px);
+                height: 100vh;
+                max-height: 100vh;
+                border-radius: 0;
+                transform: translateX(100%);
+                transition: transform 0.28s ease;
+                z-index: 1300;
+                padding: 18px 16px 22px;
+                display: block;
+            }
+
+            .document-toc.mobile-open {
+                transform: translateX(0);
+            }
+
+            .document-toc.hidden {
+                display: block;
+                transform: translateX(100%);
+            }
+
+            .document-toc-toggle {
+                right: 16px;
+                top: auto;
+                bottom: 18px;
+                transform: none;
+            }
+
+            .document-toc-toggle:hover {
+                transform: scale(1.08);
+            }
+
+            .i18n-info-bar {
+                display: none;
+                padding: 12px 16px;
+                position: fixed;
+                top: 72px;
+                left: 0;
+                right: 0;
+                z-index: 1090;
+            }
+
+            .i18n-info-bar.mobile-open {
+                display: flex;
+            }
+
+            .i18n-info-bar-content {
+                gap: 10px;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .i18n-info-separator {
+                display: none;
+            }
+
+            .doc-display-panel,
+            .doc-i18n-switcher,
+            .doc-i18n-item,
+            .doc-i18n-language-select {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .doc-i18n-switcher {
+                padding: 12px;
+                gap: 12px;
+                border-radius: 12px;
+            }
+
+            .doc-i18n-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .doc-i18n-select,
+            .doc-i18n-language-select .weline-language-select-trigger {
+                width: 100%;
+            }
+
+            .doc-i18n-language-select {
+                min-width: 0;
+            }
+
+            .home-button,
+            .document-back-button,
+            .api-doc-button,
+            .theme-toggle {
+                flex: 1 1 100%;
             }
         }
         
         /* 超小屏幕 */
         @media (max-width: 480px) {
-            .doc-sidebar {
-                width: 100%;
-                height: 250px;
-            }
-            
-            .doc-sidebar.collapsed {
-                height: 50px;
-            }
-            
-            .doc-content {
-                height: calc(100vh - 250px);
-            }
-            
-            .doc-sidebar.collapsed + .doc-content {
-                height: calc(100vh - 50px);
-            }
-            
             .sidebar-header {
-                padding: 15px;
+                padding: 14px 16px;
             }
-            
+
             .sidebar-header h2 {
                 font-size: 14px;
             }
-            
+
             .sidebar-toggle {
                 width: 28px;
                 height: 28px;
+            }
+
+            .doc-mobile-toolbar {
+                padding: 12px;
+            }
+
+            .content-header {
+                padding: 12px;
+            }
+
+            .content-body {
+                padding: 104px 12px 18px;
+            }
+
+            .search-input {
+                padding: 11px 42px 11px 14px;
             }
         }
         
@@ -1340,11 +1689,11 @@ try {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 8px 16px;
+            padding: 10px 16px;
             background: var(--brand-gradient);
             color: var(--text-inverse);
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 12px;
             font-size: 14px;
             font-weight: 500;
             transition: all 0.3s ease;
@@ -1373,7 +1722,7 @@ try {
             gap: 6px;
             padding: 10px 16px;
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 12px;
             background: var(--card-bg);
             color: var(--text-color);
             cursor: pointer;
@@ -1381,6 +1730,7 @@ try {
             transition: var(--transition);
             box-shadow: var(--shadow);
             text-decoration: none;
+            min-height: 48px;
         }
         
         .home-button:hover {
@@ -1404,13 +1754,14 @@ try {
             padding: 10px 18px;
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 12px;
             color: var(--text-color);
             font-size: 14px;
             cursor: pointer;
             transition: var(--transition);
             text-decoration: none;
             box-shadow: var(--shadow);
+            min-height: 48px;
         }
         
         .document-back-button:hover {
@@ -1433,29 +1784,20 @@ try {
         
         /* 响应式：小屏幕时调整布局 */
         @media (max-width: 768px) {
-            .content-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .content-header-actions {
-                justify-content: flex-start;
-            }
-            .doc-i18n-switcher,
-            .doc-i18n-item,
-            .doc-i18n-language-select {
-                width: 100%;
-                max-width: 100%;
-            }
-            .doc-i18n-language-select .weline-language-select-trigger {
-                width: 100%;
-            }
             .home-button,
-            .document-back-button {
-                padding: 8px 12px;
-                font-size: 12px;
+            .document-back-button,
+            .api-doc-button {
+                width: 100%;
+                justify-content: center;
+                padding: 10px 12px;
+                font-size: 13px;
             }
+
             .theme-toggle {
-                padding: 8px;
+                width: 100%;
+                justify-content: center;
+                padding: 10px 12px;
+                font-size: 16px;
             }
         }
         
@@ -1549,6 +1891,7 @@ try {
             </div>
         </div>
     </div>
+    <div class="doc-mobile-overlay" id="doc-mobile-overlay"></div>
     <div class="doc-container">
         <!-- 左侧分类树 -->
         <div class="doc-sidebar">
@@ -1571,89 +1914,113 @@ try {
         
         <!-- 右侧内容区 -->
         <div class="doc-content">
+            <div class="doc-mobile-toolbar">
+                <button class="doc-mobile-button" type="button" data-doc-toggle-sidebar title="<?= __('展开分类') ?>">
+                    <span>☰</span>
+                </button>
+                <div class="doc-mobile-toolbar-spacer"></div>
+                <button class="doc-mobile-button" type="button" data-doc-toggle-header title="<?= __('展开顶部工具') ?>">
+                    <span>≡</span>
+                </button>
+                <button class="doc-mobile-button" type="button" data-doc-toggle-toc title="<?= __('展开目录') ?>">
+                    <span>≣</span>
+                </button>
+            </div>
             <div class="content-header">
-                <div class="search-box">
-                    <input type="text" 
-                           class="search-input" 
-                           id="search-input" 
-                           placeholder="<?=__('搜索文档...')?>"
-                           autocomplete="off">
-                    <span class="search-icon">🔍</span>
+                <div class="content-header-main">
+                    <div class="search-box">
+                        <input type="text" 
+                               class="search-input" 
+                               id="search-input" 
+                               placeholder="<?=__('搜索文档...')?>"
+                               autocomplete="off">
+                        <span class="search-icon">🔍</span>
+                    </div>
                 </div>
                 <div class="content-header-actions">
-                    <!-- 语言和货币切换器 -->
-                    <div class="doc-i18n-switcher">
-                        <div class="doc-i18n-item">
-                            <label><?=__('语言')?>:</label>
-                            <?php
-                            $availableLocales = $this->getData('availableLocales') ?? [
-                                ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
-                                ['code' => 'en_US', 'name' => 'English'],
-                            ];
-                            $documentLocaleCodes = [];
-                            foreach ($availableLocales as $locale) {
-                                $localeCode = (string)($locale['code'] ?? '');
-                                if ($localeCode !== '') {
-                                    $documentLocaleCodes[] = $localeCode;
-                                }
-                            }
-                            $currentRouteLanguage = (string)($currentLanguage ?? 'zh_Hans_CN');
-                            $documentSelectorLocale = in_array($currentRouteLanguage, $documentLocaleCodes, true)
-                                ? $currentRouteLanguage
-                                : ($documentLocaleCodes[0] ?? 'zh_Hans_CN');
-                            ?>
-                            <w:i18n:language:select
-                                id="doc_locale_selector"
-                                input-id="doc-locale-select"
-                                value="documentSelectorLocale"
-                                allowed-values="documentLocaleCodes"
-                                display-locale="currentRouteLanguage"
-                                allow-empty="false"
-                                class="doc-i18n-language-select"
-                                search-placeholder="搜索文档语言..."
-                                on-change="switchDocLocaleFromSelect"
-                            />
-                        </div>
-                        <div class="doc-i18n-item">
-                            <label><?=__('货币')?>:</label>
-                            <select id="doc-currency-select" class="doc-i18n-select">
-                                <?php 
-                                $availableCurrencies = $this->getData('availableCurrencies') ?? [
-                                    ['code' => 'CNY', 'name' => '人民币'],
-                                    ['code' => 'USD', 'name' => '美元'],
-                                ];
-                                foreach ($availableCurrencies as $currency): 
-                                    $selected = ($currency['code'] === ($currentCurrency ?? 'CNY')) ? 'selected' : '';
-                                ?>
-                                    <option value="<?= htmlspecialchars($currency['code']) ?>" <?= $selected ?>>
-                                        <?= htmlspecialchars($currency['code']) ?> - <?= htmlspecialchars($currency['name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                    <div class="content-header-group content-header-group--filters">
+                        <button class="doc-display-toggle" type="button" data-doc-toggle-filters>
+                            <span><?= __('显示设置') ?></span>
+                            <span class="doc-display-toggle-icon">⌄</span>
+                        </button>
+                        <!-- 语言和货币切换器 -->
+                        <div class="doc-display-panel">
+                            <div class="doc-i18n-switcher">
+                                <div class="doc-i18n-item">
+                                    <label><?=__('语言')?>:</label>
+                                    <?php
+                                    $availableLocales = $this->getData('availableLocales') ?? [
+                                        ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
+                                        ['code' => 'en_US', 'name' => 'English'],
+                                    ];
+                                    $documentLocaleCodes = [];
+                                    foreach ($availableLocales as $locale) {
+                                        $localeCode = (string)($locale['code'] ?? '');
+                                        if ($localeCode !== '') {
+                                            $documentLocaleCodes[] = $localeCode;
+                                        }
+                                    }
+                                    $currentRouteLanguage = (string)($currentLanguage ?? 'zh_Hans_CN');
+                                    $documentSelectorLocale = in_array($currentRouteLanguage, $documentLocaleCodes, true)
+                                        ? $currentRouteLanguage
+                                        : ($documentLocaleCodes[0] ?? 'zh_Hans_CN');
+                                    ?>
+                                    <w:i18n:language:select
+                                        id="doc_locale_selector"
+                                        input-id="doc-locale-select"
+                                        value="documentSelectorLocale"
+                                        allowed-values="documentLocaleCodes"
+                                        display-locale="currentRouteLanguage"
+                                        allow-empty="false"
+                                        class="doc-i18n-language-select"
+                                        search-placeholder="搜索文档语言..."
+                                        on-change="switchDocLocaleFromSelect"
+                                    />
+                                </div>
+                                <div class="doc-i18n-item">
+                                    <label><?=__('货币')?>:</label>
+                                    <select id="doc-currency-select" class="doc-i18n-select">
+                                        <?php 
+                                        $availableCurrencies = $this->getData('availableCurrencies') ?? [
+                                            ['code' => 'CNY', 'name' => '人民币'],
+                                            ['code' => 'USD', 'name' => '美元'],
+                                        ];
+                                        foreach ($availableCurrencies as $currency): 
+                                            $selected = ($currency['code'] === ($currentCurrency ?? 'CNY')) ? 'selected' : '';
+                                        ?>
+                                            <option value="<?= htmlspecialchars($currency['code']) ?>" <?= $selected ?>>
+                                                <?= htmlspecialchars($currency['code']) ?> - <?= htmlspecialchars($currency['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <?php if ($document && $document->getId()): ?>
-                    <a href="#" class="document-back-button" data-doc-back-list id="document-back-button">
-                        <span>←</span>
-                        <span><?=__('返回文档列表')?></span>
-                    </a>
-                    <?php else: ?>
-                    <a href="#" class="document-back-button hidden" data-doc-back-list id="document-back-button">
-                        <span>←</span>
-                        <span><?=__('返回文档列表')?></span>
-                    </a>
-                    <?php endif; ?>
-                    <a href="/" class="home-button" title="返回网站首页">
-                        <span>🏠</span>
-                        <span><?=__('返回网站')?></span>
-                    </a>
-                    <a href="<?= $this->getUrl('dev/tool/docs/api') ?>" class="api-doc-button" title="查看API文档">
-                        <span>📡</span>
-                        <span><?=__('API文档')?></span>
-                    </a>
-                    <button class="theme-toggle" data-doc-toggle-theme title="切换主题">
-                        <span id="theme-icon">🌙</span>
-                    </button>
+                    <div class="content-header-group content-header-group--actions">
+                        <?php if ($document && $document->getId()): ?>
+                        <a href="#" class="document-back-button" data-doc-back-list id="document-back-button">
+                            <span>←</span>
+                            <span><?=__('返回文档列表')?></span>
+                        </a>
+                        <?php else: ?>
+                        <a href="#" class="document-back-button hidden" data-doc-back-list id="document-back-button">
+                            <span>←</span>
+                            <span><?=__('返回文档列表')?></span>
+                        </a>
+                        <?php endif; ?>
+                        <a href="/" class="home-button" title="返回网站首页">
+                            <span>🏠</span>
+                            <span><?=__('返回网站')?></span>
+                        </a>
+                        <a href="<?= $this->getUrl('dev/tool/docs/api') ?>" class="api-doc-button" title="查看API文档">
+                            <span>📡</span>
+                            <span><?=__('API文档')?></span>
+                        </a>
+                        <button class="theme-toggle" data-doc-toggle-theme title="切换主题">
+                            <span id="theme-icon">🌙</span>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="content-body" id="content-body">
@@ -1675,7 +2042,7 @@ try {
                         <button class="document-toc-toggle" data-doc-toggle-toc title="显示/隐藏目录">📑</button>
                         <div class="document-toc" id="document-toc">
                             <div class="document-toc-header">
-                                <span>目录</span>
+                                <span class="document-toc-title"><span>目录</span></span>
                                 <span class="document-toc-close" data-doc-toggle-toc>×</span>
                             </div>
                             <ul class="document-toc-list" id="document-toc-list"></ul>
@@ -1910,6 +2277,66 @@ try {
             let currentDocumentId = <?= $documentId ? (int)$documentId : 'null' ?>;
             const hasInitialDocument = <?= ($document && $document->getId()) ? 'true' : 'false' ?>;
             let catalogTree = null;
+            const MOBILE_BREAKPOINT = 768;
+
+            function isMobileViewport() {
+                return window.innerWidth <= MOBILE_BREAKPOINT;
+            }
+
+            function getMobileOverlay() {
+                return document.getElementById('doc-mobile-overlay');
+            }
+
+            function syncMobileOverlay() {
+                const overlay = getMobileOverlay();
+                if (!overlay) {
+                    return;
+                }
+
+                const shouldShow = document.body.classList.contains('doc-mobile-sidebar-open')
+                    || document.body.classList.contains('doc-mobile-toc-open')
+                    || document.body.classList.contains('doc-mobile-header-open');
+                overlay.classList.toggle('active', shouldShow);
+            }
+
+            function closeMobileSidebar() {
+                const sidebar = document.querySelector('.doc-sidebar');
+                document.body.classList.remove('doc-mobile-sidebar-open');
+                if (sidebar) {
+                    sidebar.classList.remove('mobile-open');
+                }
+                syncMobileOverlay();
+            }
+
+            function closeMobileToc() {
+                const toc = document.getElementById('document-toc');
+                document.body.classList.remove('doc-mobile-toc-open');
+                if (toc && isMobileViewport()) {
+                    toc.classList.remove('mobile-open');
+                    toc.classList.add('hidden');
+                }
+                syncMobileOverlay();
+            }
+
+            function closeMobileHeader() {
+                const header = document.querySelector('.content-header');
+                const infoBar = document.querySelector('.i18n-info-bar');
+                document.body.classList.remove('doc-mobile-header-open');
+                if (header) {
+                    header.classList.remove('mobile-actions-open');
+                    header.classList.remove('filters-open');
+                }
+                if (infoBar) {
+                    infoBar.classList.remove('mobile-open');
+                }
+                syncMobileOverlay();
+            }
+
+            function closeMobilePanels() {
+                closeMobileSidebar();
+                closeMobileToc();
+                closeMobileHeader();
+            }
             
             // 获取基础URL
             function getBaseUrl() {
@@ -2281,10 +2708,13 @@ try {
                 const toggle = document.querySelector('.document-toc-toggle');
                 if (toc) {
                     toc.classList.add('hidden');
+                    toc.classList.remove('mobile-open');
                 }
                 if (toggle) {
                     toggle.classList.remove('visible');
                 }
+                document.body.classList.remove('doc-mobile-toc-open');
+                syncMobileOverlay();
                 
                 // 保存当前文档ID，用于定位
                 const docIdToHighlight = currentDocumentId;
@@ -2354,7 +2784,7 @@ try {
                             <button class="document-toc-toggle" data-doc-toggle-toc title="显示/隐藏目录">📑</button>
                             <div class="document-toc" id="document-toc">
                                 <div class="document-toc-header">
-                                    <span>目录</span>
+                                    <span class="document-toc-title"><span>目录</span></span>
                                     <span class="document-toc-close" data-doc-toggle-toc>×</span>
                                 </div>
                                 <ul class="document-toc-list" id="document-toc-list"></ul>
@@ -2364,6 +2794,9 @@ try {
                         
                         // 生成目录导航
                         generateDocumentToc();
+                        if (isMobileViewport()) {
+                            closeMobileToc();
+                        }
                         
                         // 更新URL（不刷新页面）
                         const url = new URL(window.location);
@@ -2538,6 +2971,18 @@ try {
             }
 
             document.addEventListener('click', function(event) {
+                if (event.target.closest('[data-doc-toggle-filters]')) {
+                    event.preventDefault();
+                    toggleDisplayFilters();
+                    return;
+                }
+
+                if (event.target.closest('[data-doc-toggle-header]')) {
+                    event.preventDefault();
+                    toggleMobileHeader();
+                    return;
+                }
+
                 if (event.target.closest('[data-doc-toggle-sidebar]')) {
                     event.preventDefault();
                     toggleSidebar();
@@ -2559,6 +3004,12 @@ try {
                 if (event.target.closest('[data-doc-toggle-toc]')) {
                     event.preventDefault();
                     toggleDocumentToc();
+                    return;
+                }
+
+                if (event.target.id === 'doc-mobile-overlay') {
+                    event.preventDefault();
+                    closeMobilePanels();
                     return;
                 }
 
@@ -2780,12 +3231,21 @@ try {
                     if (isHidden) {
                         // 显示目录，隐藏按钮
                         toc.classList.remove('hidden');
+                        if (isMobileViewport()) {
+                            closeMobileSidebar();
+                            closeMobileHeader();
+                            toc.classList.add('mobile-open');
+                            document.body.classList.add('doc-mobile-toc-open');
+                        }
                         if (toggle) toggle.classList.remove('visible');
                     } else {
                         // 隐藏目录，显示按钮
                         toc.classList.add('hidden');
+                        toc.classList.remove('mobile-open');
+                        document.body.classList.remove('doc-mobile-toc-open');
                         if (toggle) toggle.classList.add('visible');
                     }
+                    syncMobileOverlay();
                 }
             };
             
@@ -3004,7 +3464,21 @@ try {
             window.toggleSidebar = function() {
                 const sidebar = document.querySelector('.doc-sidebar');
                 if (!sidebar) return;
-                
+
+                if (isMobileViewport()) {
+                    const isOpen = sidebar.classList.contains('mobile-open');
+                    if (isOpen) {
+                        closeMobileSidebar();
+                    } else {
+                        closeMobileToc();
+                        closeMobileHeader();
+                        document.body.classList.add('doc-mobile-sidebar-open');
+                        sidebar.classList.add('mobile-open');
+                    }
+                    syncMobileOverlay();
+                    return;
+                }
+
                 sidebar.classList.toggle('collapsed');
                 const toggleButton = document.querySelector('.sidebar-toggle');
                 if (toggleButton) {
@@ -3021,6 +3495,52 @@ try {
                     }
                 }
             };
+
+            window.toggleMobileHeader = function() {
+                const header = document.querySelector('.content-header');
+                const infoBar = document.querySelector('.i18n-info-bar');
+                if (!header || !isMobileViewport()) {
+                    return;
+                }
+
+                const willOpen = !header.classList.contains('mobile-actions-open');
+                if (willOpen) {
+                    closeMobileSidebar();
+                    closeMobileToc();
+                }
+
+                header.classList.toggle('mobile-actions-open', willOpen);
+                if (infoBar) {
+                    infoBar.classList.toggle('mobile-open', willOpen);
+                }
+                document.body.classList.toggle('doc-mobile-header-open', willOpen);
+                syncMobileOverlay();
+            };
+
+            function handleViewportChange() {
+                const header = document.querySelector('.content-header');
+                if (!header) {
+                    return;
+                }
+
+                if (window.innerWidth > 1024) {
+                    header.classList.remove('filters-open');
+                }
+
+                if (!isMobileViewport()) {
+                    closeMobilePanels();
+                    const toc = document.getElementById('document-toc');
+                    if (toc && toc.querySelector('.document-toc-list') && toc.querySelector('.document-toc-list').children.length > 0) {
+                        toc.classList.remove('hidden');
+                    }
+                    return;
+                }
+
+                const sidebar = document.querySelector('.doc-sidebar');
+                if (sidebar) {
+                    sidebar.classList.remove('collapsed');
+                }
+            }
             
             // 等待jQuery和jstree加载完成后再初始化
             if (typeof jQuery !== 'undefined' && typeof jQuery.fn.jstree !== 'undefined') {
@@ -3070,17 +3590,29 @@ try {
                     }, 100);
                 }
             });
+
+            window.addEventListener('resize', handleViewportChange);
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    closeMobilePanels();
+                }
+            });
+
+            handleViewportChange();
             
             // 主题切换功能
             function getCurrentThemeMode() {
-                return document.body.getAttribute('data-theme-mode')
-                    || document.body.getAttribute('data-layout-mode')
+                return document.documentElement.getAttribute('data-theme')
                     || document.body.getAttribute('data-theme')
+                    || document.body.getAttribute('data-theme-mode')
+                    || document.body.getAttribute('data-layout-mode')
                     || 'light';
             }
 
             function initTheme() {
-                updateThemeIcon(getCurrentThemeMode());
+                const savedTheme = localStorage.getItem('doc_theme_mode');
+                const initialTheme = savedTheme || getCurrentThemeMode();
+                applyTheme(initialTheme);
             }
             
             function updateThemeIcon(theme) {
@@ -3089,13 +3621,30 @@ try {
                     icon.textContent = theme === 'dark' ? '☀️' : '🌙';
                 }
             }
+
+            function applyTheme(theme) {
+                const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', normalizedTheme);
+                document.body.setAttribute('data-theme', normalizedTheme);
+                document.body.setAttribute('data-theme-mode', normalizedTheme);
+                document.body.setAttribute('data-layout-mode', normalizedTheme);
+                localStorage.setItem('doc_theme_mode', normalizedTheme);
+                updateThemeIcon(normalizedTheme);
+            }
             
             window.toggleTheme = function() {
                 const currentTheme = getCurrentThemeMode();
                 const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                document.body.setAttribute('data-theme-mode', newTheme);
-                document.body.setAttribute('data-layout-mode', newTheme);
-                updateThemeIcon(newTheme);
+                applyTheme(newTheme);
+            };
+
+            window.toggleDisplayFilters = function() {
+                const header = document.querySelector('.content-header');
+                if (!header || window.innerWidth > 1024) {
+                    return;
+                }
+
+                header.classList.toggle('filters-open');
             };
             
             // 初始化主题

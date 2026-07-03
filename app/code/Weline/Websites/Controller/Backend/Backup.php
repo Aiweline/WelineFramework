@@ -15,7 +15,7 @@ use Weline\Websites\Model\Website;
  * 功能：
  * - 支持数据库和文件备份
  */
-#[Acl('Weline_Websites::website_backup', '网站备份', 'mdi-backup-restore', '网站备份', 'Weline_Backend::website_service')]
+#[Acl('Weline_Websites::website_backup', '网站备份', 'mdi-backup-restore', '网站备份', 'Weline_Websites::website_service')]
 class Backup extends BackendController
 {
     /**
@@ -123,4 +123,3 @@ class Backup extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 }
-
