@@ -38,17 +38,9 @@ class MetaTranslation
             $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
         }
         
-        // 从I18n Dictionary获取翻译
-        /** @var Dictionary $localeDict */
-        $localeDict = ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load(Dictionary::schema_fields_MD5, $md5);
-        
-        if ($localeDict->getId()) {
-            $translation = $localeDict->getData(Dictionary::schema_fields_TRANSLATE);
-            if (!empty($translation)) {
-                return $translation;
-            }
+        $translation = self::loadTranslation($translationKey, $locale);
+        if (!empty($translation)) {
+            return $translation;
         }
         
         // 如果没有翻译，返回默认值
@@ -77,28 +69,32 @@ class MetaTranslation
             $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
         }
         
-        // 从I18n Dictionary获取翻译
-        /** @var Dictionary $localeDict */
-        $localeDict = ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load(Dictionary::schema_fields_MD5, $md5);
-        
-        $translation = '';
-        if ($localeDict->getId()) {
-            $translation = $localeDict->getData(Dictionary::schema_fields_TRANSLATE);
-        }
+        $translation = self::loadTranslation($translationKey, $locale);
         
         // 如果没有找到带scope的翻译，尝试不带scope的
         if (empty($translation) && $scope !== 'default') {
-            $md5Default = Dictionary::generateMd5('@meta::' . $metaKey, $locale);
-            $localeDict->load(Dictionary::schema_fields_MD5, $md5Default);
-            if ($localeDict->getId()) {
-                $translation = $localeDict->getData(Dictionary::schema_fields_TRANSLATE);
-            }
+            $translation = self::loadTranslation('@meta::' . $metaKey, $locale);
         }
         
         // 如果没有翻译，返回默认值
         return $translation ?: ($defaultValue ?? '');
+    }
+
+    private static function loadTranslation(string $translationKey, string $locale): string
+    {
+        /** @var Dictionary $localeDict */
+        $localeDict = clone ObjectManager::getInstance(Dictionary::class);
+        $md5 = Dictionary::generateMd5($translationKey, $locale);
+        $rows = $localeDict->clearData()->clearQuery()
+            ->where(Dictionary::schema_fields_MD5, $md5)
+            ->select()
+            ->fetchArray();
+        if (!is_array($rows) || $rows === []) {
+            return '';
+        }
+
+        $row = is_array($rows[0] ?? null) ? $rows[0] : $rows;
+        return (string)($row[Dictionary::schema_fields_TRANSLATE] ?? '');
     }
 
     /**
@@ -125,16 +121,15 @@ class MetaTranslation
 
         // 保存到I18n Dictionary
         /** @var Dictionary $localeDict */
-        $localeDict = ObjectManager::getInstance(Dictionary::class);
+        $localeDict = clone ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load(Dictionary::schema_fields_MD5, $md5);
-
-        $localeDict->setData(Dictionary::schema_fields_MD5, $md5);
-        $localeDict->setData(Dictionary::schema_fields_WORD, $translationKey);
-        $localeDict->setData(Dictionary::schema_fields_LOCALE_CODE, $locale);
-        $localeDict->setData(Dictionary::schema_fields_TRANSLATE, $value);
-
-        return $localeDict->save();
+        return (bool)$localeDict->clearData()->clearQuery()
+            ->insert([
+                Dictionary::schema_fields_MD5 => $md5,
+                Dictionary::schema_fields_WORD => $translationKey,
+                Dictionary::schema_fields_LOCALE_CODE => $locale,
+                Dictionary::schema_fields_TRANSLATE => $value,
+            ], Dictionary::schema_fields_MD5)
+            ->fetch();
     }
 }
-

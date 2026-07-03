@@ -29,6 +29,18 @@ $panelType = $panelType ?? 'frontend';
 <!-- 开发工具面板样式 -->
 <style>
     #dev-tool-panel {
+        --dev-panel-width: min(1440px, calc(100vw - 20px));
+        --dev-panel-height: min(930px, calc(100vh - 20px));
+        --dev-panel-ink: #162033;
+        --dev-panel-muted: #64748b;
+        --dev-panel-subtle: #eef3f8;
+        --dev-panel-surface: #ffffff;
+        --dev-panel-shell: #f5f7fb;
+        --dev-panel-line: #d8e1ec;
+        --dev-panel-accent: #2563eb;
+        --dev-panel-accent-soft: #eaf2ff;
+        --dev-panel-success: #12805c;
+        --dev-panel-danger: #b42318;
         position: fixed;
         top: 0;
         left: 0;
@@ -36,7 +48,12 @@ $panelType = $panelType ?? 'frontend';
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         pointer-events: none; /* 防止遮挡页面内容 */
     }
-    
+
+    #dev-tool-panel.dev-panel-compact {
+        --dev-panel-width: min(520px, calc(100vw - 20px));
+        --dev-panel-height: min(680px, calc(100vh - 20px));
+    }
+
     /* 只有实际内容（container和trigger）才可交互 */
     #dev-tool-panel .dev-tool-container,
     #dev-tool-panel .dev-tool-trigger {
@@ -56,7 +73,7 @@ $panelType = $panelType ?? 'frontend';
         position: absolute;
         width: 10px;
         height: 80px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #111827;
         border: none;
         cursor: pointer;
         display: flex;
@@ -158,7 +175,7 @@ $panelType = $panelType ?? 'frontend';
         right: -14px;
         left: auto;
         width: 14px;
-        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        background: #1f2937;
         box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
     }
     
@@ -167,7 +184,7 @@ $panelType = $panelType ?? 'frontend';
         left: -14px;
         right: auto;
         width: 14px;
-        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        background: #1f2937;
         box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
     }
 
@@ -200,37 +217,47 @@ $panelType = $panelType ?? 'frontend';
     }
 
     .dev-tool-container {
-        width: 420px;
-        height: 600px;
-        max-height: 80vh;
+        width: var(--dev-panel-width);
+        height: var(--dev-panel-height);
+        max-width: calc(100vw - 24px);
+        max-height: calc(100vh - 24px);
         background: white;
-        border: 2px solid #e0e0e0;
-        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+        border: 1px solid #d8deea;
+        box-shadow: 0 18px 70px rgba(17, 24, 39, 0.22);
         display: flex;
         flex-direction: column;
         overflow: hidden;
         position: fixed; /* 改为fixed定位，直接相对于视口 */
-        border-left: none;
-        border-radius: 0 12px 12px 0;
+        border-radius: 12px;
     }
 
     .dev-tool-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #172033 0%, #263447 54%, #245e62 100%);
         color: white;
-        padding: 12px 20px;
+        padding: 14px 18px 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         cursor: move;
         user-select: none;
         position: relative;
     }
 
+    .dev-tool-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+    }
+
     .dev-tool-header h3 {
-        margin: 0 0 8px 0;
+        margin: 0;
         font-size: 16px;
         font-weight: 600;
         display: flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
+        flex-wrap: wrap;
     }
     
     .dev-tool-header-hint {
@@ -244,31 +271,50 @@ $panelType = $panelType ?? 'frontend';
         font-style: normal;
     }
     
+    .dev-tool-window-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .dev-tool-layout-btn,
     .dev-tool-close-btn {
-        position: absolute;
-        top: 8px;
-        right: 12px;
-        width: 32px;
         height: 32px;
         background: rgba(255, 255, 255, 0.15);
         border: 1px solid rgba(255, 255, 255, 0.3);
         border-radius: 6px;
         color: white;
-        font-size: 18px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 6px;
         transition: all 0.3s ease;
         z-index: 10;
     }
+
+    .dev-tool-layout-btn {
+        min-width: 74px;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .dev-tool-close-btn {
+        width: 32px;
+        padding: 0;
+        font-size: 18px;
+    }
     
+    .dev-tool-layout-btn:hover,
     .dev-tool-close-btn:hover {
         background: rgba(255, 255, 255, 0.25);
         border-color: rgba(255, 255, 255, 0.5);
         transform: scale(1.05);
     }
     
+    .dev-tool-layout-btn:active,
     .dev-tool-close-btn:active {
         transform: scale(0.95);
     }
@@ -277,6 +323,7 @@ $panelType = $panelType ?? 'frontend';
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        margin-top: 10px;
     }
 
     .dev-tool-quick-btn {
@@ -342,7 +389,7 @@ $panelType = $panelType ?? 'frontend';
     }
 
     .dev-tool-search-area {
-        padding: 12px;
+        padding: 14px 18px;
         border-bottom: 1px solid #e0e0e0;
         background: #fafafa;
     }
@@ -402,6 +449,36 @@ $panelType = $panelType ?? 'frontend';
     .dev-tool-content {
         flex: 1;
         overflow-y: auto;
+        padding: 18px;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-header {
+        padding: 12px 16px;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-header-hint {
+        display: none;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-header-row {
+        align-items: flex-start;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-page-context {
+        order: 3;
+        flex-basis: 100%;
+        justify-content: flex-start;
+        margin-top: 8px;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-page-link {
+        max-width: 100%;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-search-area,
+    #dev-tool-panel.dev-panel-compact .dev-tool-content {
         padding: 12px;
     }
 
@@ -485,7 +562,7 @@ $panelType = $panelType ?? 'frontend';
         justify-content: space-between;
         margin-bottom: 12px;
         padding-bottom: 8px;
-        border-bottom: 2px solid #8b9a8b;
+        border-bottom: 2px solid #d8e1ec;
     }
 
     .doc-back-btn {
@@ -680,6 +757,76 @@ $panelType = $panelType ?? 'frontend';
         font-size: 13px;
     }
 
+    .dev-tool-trace-empty-card {
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 22px 24px;
+        border: 1px solid #d8e0ea;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #344256;
+        text-align: left;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    .dev-tool-trace-empty-card.is-fpc-hit {
+        border-color: #8fd5c5;
+        background: linear-gradient(180deg, #f3fffb 0%, #ffffff 58%);
+    }
+
+    .dev-tool-trace-empty-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 10px;
+        font-size: 18px;
+        font-weight: 750;
+        color: #142033;
+    }
+
+    .dev-tool-trace-empty-title i {
+        color: #0f8b72;
+    }
+
+    .dev-tool-trace-empty-desc {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #536174;
+    }
+
+    .dev-tool-trace-empty-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0 16px;
+    }
+
+    .dev-tool-trace-empty-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #edf2f7;
+        color: #3b4b60;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .dev-tool-trace-empty-card.is-fpc-hit .dev-tool-trace-empty-chip {
+        background: #dff8f0;
+        color: #08745d;
+    }
+
+    .dev-tool-trace-empty-actions {
+        margin: 0;
+        padding-left: 18px;
+        color: #3d4b5f;
+        font-size: 12px;
+        line-height: 1.75;
+    }
+
     .badge {
         display: inline-block;
         padding: 2px 6px;
@@ -715,9 +862,9 @@ $panelType = $panelType ?? 'frontend';
     .performance-section {
         margin-bottom: 20px;
         padding: 12px;
-        background: #f5f4f0;
+        background: #ffffff;
         border-radius: 6px;
-        border-left: 3px solid #8b9a8b;
+        border-left: 3px solid #2563eb;
     }
 
     .performance-section-title {
@@ -745,7 +892,7 @@ $panelType = $panelType ?? 'frontend';
 
     .performance-label {
         font-size: 13px;
-        color: #7d7870;
+        color: #64748b;
         display: flex;
         align-items: center;
         gap: 6px;
@@ -771,7 +918,7 @@ $panelType = $panelType ?? 'frontend';
     }
     .trace-toggle {
         cursor: pointer;
-        color: #7d7870;
+        color: #64748b;
         align-items: center;
         justify-content: center;
     }
@@ -889,7 +1036,7 @@ $panelType = $panelType ?? 'frontend';
     /* 展开行占满整行：全宽显示，不挤在格子里 */
     #dev-tool-panel .dev-tool-trace-db-table tr.dev-tool-db-expand-row td {
         padding: 10px 0;
-        background: #f5f4f0;
+        background: #f8fafc;
         border-top: none;
         border-bottom: 1px solid #e8e6e3;
         vertical-align: top;
@@ -945,7 +1092,7 @@ $panelType = $panelType ?? 'frontend';
         overflow: auto;
     }
     #dev-tool-panel .dev-tool-trace-db-table td.col-parent {
-        color: #7d7870;
+        color: #64748b;
         font-size: 11px;
         word-break: break-word;
         overflow-wrap: break-word;
@@ -962,9 +1109,9 @@ $panelType = $panelType ?? 'frontend';
     .api-request-item {
         padding: 8px;
         margin-bottom: 6px;
-        background: #faf9f6;
+        background: #ffffff;
         border-radius: 4px;
-        border-left: 2px solid #8b9a8b;
+        border-left: 2px solid #2563eb;
         font-size: 12px;
     }
 
@@ -979,25 +1126,1534 @@ $panelType = $panelType ?? 'frontend';
         font-size: 11px;
     }
 
+    /* Weline Panel 工作台视觉刷新 */
+    #dev-tool-panel,
+    #dev-tool-panel * {
+        box-sizing: border-box;
+        letter-spacing: 0;
+    }
+
+    #dev-tool-panel button,
+    #dev-tool-panel a,
+    #dev-tool-panel [data-dev-tool-action],
+    #dev-tool-panel [data-wls-action] {
+        cursor: pointer;
+    }
+
+    #dev-tool-panel button:focus-visible,
+    #dev-tool-panel a:focus-visible,
+    #dev-tool-panel input:focus-visible,
+    #dev-tool-panel select:focus-visible {
+        outline: 2px solid rgba(37, 99, 235, 0.55);
+        outline-offset: 2px;
+    }
+
+    .dev-tool-trigger {
+        background: #111827;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+    }
+
+    .dev-tool-trigger.pressing,
+    #dev-tool-panel.expand-right .dev-tool-trigger:hover,
+    #dev-tool-panel:not(.expand-left) .dev-tool-trigger:hover,
+    #dev-tool-panel.expand-left .dev-tool-trigger:hover {
+        background: #1f2937;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.28);
+        transform: none;
+    }
+
+    .dev-tool-trigger.drag-ready {
+        background: #12805c;
+        box-shadow: 0 0 0 4px rgba(18, 128, 92, 0.16), 0 14px 34px rgba(15, 23, 42, 0.26);
+        transform: none;
+    }
+
+    .dev-tool-container {
+        background: var(--dev-panel-shell);
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 8px;
+        box-shadow: 0 24px 90px rgba(15, 23, 42, 0.24);
+    }
+
+    .dev-tool-header {
+        background: linear-gradient(90deg, #111827 0%, #1f2937 58%, #0f766e 100%);
+        padding: 12px 16px;
+        box-shadow: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .dev-tool-header h3 {
+        color: #f8fafc;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .dev-tool-header h3 i {
+        color: #67e8f9;
+    }
+
+    .dev-tool-page-context {
+        min-width: 0;
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: #dbeafe;
+    }
+
+    .dev-tool-page-kicker {
+        flex: 0 0 auto;
+        padding: 2px 7px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.22);
+        color: rgba(226, 232, 240, 0.88);
+        font-size: 10px;
+        font-weight: 750;
+        line-height: 1.4;
+    }
+
+    .dev-tool-page-link {
+        min-width: 0;
+        max-width: min(700px, 48vw);
+        display: grid;
+        grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+        align-items: baseline;
+        gap: 8px;
+        padding: 5px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 7px;
+        background: rgba(15, 23, 42, 0.18);
+        color: #f8fafc;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .dev-tool-page-link:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.28);
+        color: #ffffff;
+        text-decoration: none;
+    }
+
+    .dev-tool-page-title,
+    .dev-tool-page-url {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dev-tool-page-title {
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .dev-tool-page-url {
+        color: #b9d9ff;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 650;
+    }
+
+    .dev-tool-header-hint {
+        display: none;
+        min-width: 0;
+        max-width: min(52vw, 720px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #dbeafe;
+        background: rgba(15, 23, 42, 0.34);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .dev-tool-header-hint.is-visible {
+        display: inline-flex !important;
+        align-items: center;
+    }
+
+    .dev-tool-window-actions {
+        gap: 6px;
+    }
+
+    .dev-tool-layout-btn,
+    .dev-tool-close-btn,
+    .dev-tool-quick-btn {
+        border-radius: 6px;
+        transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .dev-tool-layout-btn,
+    .dev-tool-close-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: #f8fafc;
+    }
+
+    .dev-tool-layout-btn:hover,
+    .dev-tool-close-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+        border-color: rgba(255, 255, 255, 0.34);
+        transform: none;
+    }
+
+    .dev-tool-layout-btn:active,
+    .dev-tool-close-btn:active {
+        transform: none;
+    }
+
+    .dev-tool-close-mark {
+        display: block;
+        font-size: 20px;
+        line-height: 1;
+        font-weight: 500;
+        transform: translateY(-1px);
+    }
+
+    .dev-tool-quick-actions {
+        margin-top: 8px;
+    }
+
+    .dev-tool-quick-btn {
+        min-height: 30px;
+        padding: 5px 10px;
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: #e5edf7;
+    }
+
+    .dev-tool-quick-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+        border-color: rgba(255, 255, 255, 0.34);
+        color: #ffffff;
+        transform: none;
+    }
+
+    .dev-tool-tabs {
+        flex: 0 0 auto;
+        gap: 6px;
+        padding: 8px 10px 0;
+        overflow-x: auto;
+        background: #e9eff6;
+        border-bottom: 1px solid var(--dev-panel-line);
+        scrollbar-width: thin;
+    }
+
+    .dev-tool-tab {
+        flex: 0 0 auto;
+        min-width: 112px;
+        min-height: 38px;
+        padding: 9px 14px;
+        border: 1px solid transparent;
+        border-bottom: none;
+        border-radius: 7px 7px 0 0;
+        background: transparent;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 650;
+        white-space: nowrap;
+    }
+
+    .dev-tool-tab:hover {
+        background: rgba(255, 255, 255, 0.58);
+        color: var(--dev-panel-ink);
+    }
+
+    .dev-tool-tab.active {
+        background: var(--dev-panel-surface);
+        border-color: var(--dev-panel-line);
+        color: var(--dev-panel-accent);
+        box-shadow: 0 -1px 0 #ffffff inset;
+    }
+
+    .dev-tool-tab.active::after {
+        left: 12px;
+        right: 12px;
+        bottom: 0;
+        height: 2px;
+        background: var(--dev-panel-accent);
+        border-radius: 999px 999px 0 0;
+    }
+
+    .dev-tool-search-area {
+        flex: 0 0 auto;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--dev-panel-line);
+        background: var(--dev-panel-surface);
+    }
+
+    .dev-tool-search-mode {
+        display: inline-flex;
+        gap: 3px;
+        padding: 3px;
+        margin-bottom: 10px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 7px;
+        background: #f8fafc;
+    }
+
+    .dev-tool-framework-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px;
+        margin-bottom: 10px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 8px;
+        background: #eef3f8;
+    }
+
+    .dev-tool-framework-tab {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 5px 12px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #475569;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .dev-tool-framework-tab:hover {
+        background: #f8fbff;
+        color: var(--dev-panel-ink);
+    }
+
+    .dev-tool-framework-tab.active {
+        background: #ffffff;
+        color: var(--dev-panel-accent);
+        border-color: #cddbf0;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+
+    .dev-tool-framework-pane {
+        display: none;
+    }
+
+    .dev-tool-framework-pane.active {
+        display: block;
+    }
+
+    .dev-tool-framework-hint {
+        padding: 8px 2px;
+        font-size: 12px;
+        color: #64748b;
+    }
+
+    .search-mode-btn {
+        flex: 0 0 auto;
+        min-height: 30px;
+        padding: 5px 11px;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: transparent;
+        color: #475569;
+        font-weight: 650;
+    }
+
+    .search-mode-btn:hover {
+        background: #eef4fb;
+        color: var(--dev-panel-ink);
+    }
+
+    .search-mode-btn.active {
+        background: #ffffff;
+        color: var(--dev-panel-accent);
+        border-color: #dbe6f5;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+
+    .dev-tool-module-select,
+    .dev-tool-search-area input[type="text"] {
+        min-height: 36px;
+        border-color: #cbd5e1;
+        border-radius: 6px;
+        color: var(--dev-panel-ink);
+        background: #ffffff;
+    }
+
+    .dev-tool-search-area input[type="text"]:focus,
+    .dev-tool-module-select:focus {
+        border-color: var(--dev-panel-accent);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        outline: none;
+    }
+
+    .dev-tool-content {
+        background: var(--dev-panel-surface);
+        color: var(--dev-panel-ink);
+        scrollbar-color: #b6c3d3 #eef3f8;
+    }
+
+    .dev-tool-content::-webkit-scrollbar-track {
+        background: #eef3f8;
+    }
+
+    .dev-tool-content::-webkit-scrollbar-thumb {
+        background: #b6c3d3;
+    }
+
+    .doc-list-item,
+    .module-group,
+    .performance-section,
+    .api-request-item {
+        border-color: var(--dev-panel-line);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: none;
+    }
+
+    .doc-list-item:hover,
+    .module-group:hover {
+        border-color: #9bb7da;
+        background: #f8fbff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .doc-list-item.active {
+        border-color: var(--dev-panel-accent);
+        background: var(--dev-panel-accent-soft);
+    }
+
+    .doc-title,
+    .doc-content-title,
+    .module-name,
+    .performance-section-title {
+        color: var(--dev-panel-ink);
+    }
+
+    .doc-meta,
+    .route-info,
+    .performance-label,
+    .api-request-time {
+        color: var(--dev-panel-muted);
+    }
+
+    .doc-module-tag,
+    .badge-primary,
+    .badge-success {
+        border-radius: 999px;
+        background: #e8eef6;
+        color: #415167 !important;
+    }
+
+    .doc-back-btn {
+        background: var(--dev-panel-accent);
+        border-radius: 6px;
+    }
+
+    .doc-back-btn:hover {
+        background: #1d4ed8;
+    }
+
+    .module-header {
+        background: #f8fafc;
+        border-bottom-color: var(--dev-panel-line);
+    }
+
+    .module-header:hover,
+    .route-item:hover {
+        background: #f3f7fc;
+    }
+
+    .module-toggle,
+    .route-path,
+    .api-request-url,
+    .doc-content-body a,
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-expand-btn {
+        color: var(--dev-panel-accent);
+    }
+
+    .performance-stats {
+        padding: 0;
+    }
+
+    .performance-section {
+        margin-bottom: 14px;
+        padding: 14px;
+        border-left: 1px solid var(--dev-panel-line);
+    }
+
+    .performance-value {
+        color: var(--dev-panel-ink);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .performance-value.fast,
+    .performance-badge.fast {
+        color: var(--dev-panel-success) !important;
+    }
+
+    .performance-value.medium,
+    .performance-badge.medium {
+        color: #9a6700 !important;
+    }
+
+    .performance-value.slow,
+    .performance-badge.slow {
+        color: var(--dev-panel-danger) !important;
+    }
+
+    .performance-badge.fast,
+    .performance-badge.medium,
+    .performance-badge.slow {
+        background: #f1f5f9;
+    }
+
+    #dev-tool-panel .dev-tool-performance-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-hero,
+    #dev-tool-panel .dev-tool-performance-panel {
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 10px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-performance-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        padding: 16px 18px;
+        background: #f8fbff;
+    }
+
+    #dev-tool-panel .dev-tool-performance-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--dev-panel-accent);
+        font-size: 12px;
+        font-weight: 750;
+    }
+
+    #dev-tool-panel .dev-tool-performance-title {
+        margin-top: 6px;
+        color: var(--dev-panel-ink);
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    #dev-tool-panel .dev-tool-performance-subtitle {
+        margin-top: 6px;
+        color: var(--dev-panel-muted);
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    #dev-tool-panel .dev-tool-performance-total {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        min-width: 190px;
+        text-align: right;
+    }
+
+    #dev-tool-panel .dev-tool-performance-total-value {
+        color: var(--dev-panel-ink);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 28px;
+        font-weight: 850;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 42px;
+        min-height: 26px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-status.fast {
+        background: #dcfce7;
+        color: var(--dev-panel-success);
+    }
+
+    #dev-tool-panel .dev-tool-performance-status.medium {
+        background: #fef3c7;
+        color: #9a6700;
+    }
+
+    #dev-tool-panel .dev-tool-performance-status.slow {
+        background: #fee2e2;
+        color: var(--dev-panel-danger);
+    }
+
+    #dev-tool-panel .dev-tool-performance-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-card {
+        min-width: 0;
+        padding: 12px 13px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-performance-card.fast {
+        border-color: #bbf7d0;
+        background: #f7fef9;
+    }
+
+    #dev-tool-panel .dev-tool-performance-card.medium {
+        border-color: #fde68a;
+        background: #fffbeb;
+    }
+
+    #dev-tool-panel .dev-tool-performance-card.slow {
+        border-color: #fecaca;
+        background: #fff7f7;
+    }
+
+    #dev-tool-panel .dev-tool-performance-card-label {
+        color: var(--dev-panel-muted);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    #dev-tool-panel .dev-tool-performance-card-value {
+        margin-top: 7px;
+        color: var(--dev-panel-ink);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 18px;
+        font-weight: 850;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-panel {
+        overflow: hidden;
+    }
+
+    #dev-tool-panel .dev-tool-performance-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 44px;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--dev-panel-line);
+        background: #f8fafc;
+    }
+
+    #dev-tool-panel .dev-tool-performance-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        color: var(--dev-panel-ink);
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    #dev-tool-panel .dev-tool-performance-panel-title i {
+        color: var(--dev-panel-accent);
+    }
+
+    #dev-tool-panel .dev-tool-performance-panel-note {
+        color: var(--dev-panel-muted);
+        font-size: 11px;
+        font-weight: 650;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-panel-body {
+        padding: 14px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-row {
+        display: grid;
+        grid-template-columns: minmax(130px, 0.32fr) minmax(180px, 1fr) minmax(92px, auto) minmax(44px, auto);
+        gap: 12px;
+        align-items: center;
+        min-height: 42px;
+        padding: 8px 10px;
+        border: 1px solid #e5edf6;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-name {
+        min-width: 0;
+        color: var(--dev-panel-ink);
+        font-size: 12px;
+        font-weight: 750;
+        overflow-wrap: break-word;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-desc {
+        margin-top: 2px;
+        color: var(--dev-panel-muted);
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-bar {
+        width: 100%;
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #edf2f7;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-bar span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: #38bdf8;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-row.fast .dev-tool-performance-stage-bar span {
+        background: var(--dev-panel-success);
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-row.medium .dev-tool-performance-stage-bar span {
+        background: #d97706;
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-row.slow .dev-tool-performance-stage-bar span {
+        background: var(--dev-panel-danger);
+    }
+
+    #dev-tool-panel .dev-tool-performance-stage-value {
+        color: var(--dev-panel-ink);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        font-weight: 850;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-metric {
+        min-width: 0;
+        padding: 10px 11px;
+        border: 1px solid #e5edf6;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-performance-metric-label {
+        color: var(--dev-panel-muted);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    #dev-tool-panel .dev-tool-performance-metric-value {
+        margin-top: 6px;
+        color: var(--dev-panel-ink);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 15px;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-resource-list,
+    #dev-tool-panel .dev-tool-performance-api-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-list-offset {
+        margin-top: 12px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-resource-row,
+    #dev-tool-panel .dev-tool-performance-api-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 9px 10px;
+        border: 1px solid #e5edf6;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-performance-row-main {
+        min-width: 0;
+    }
+
+    #dev-tool-panel .dev-tool-performance-row-title {
+        color: var(--dev-panel-ink);
+        font-size: 12px;
+        font-weight: 750;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-performance-row-meta {
+        margin-top: 3px;
+        color: var(--dev-panel-muted);
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    #dev-tool-panel .dev-tool-performance-row-side {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    #dev-tool-panel .dev-tool-performance-empty {
+        padding: 18px;
+        border: 1px dashed var(--dev-panel-line);
+        border-radius: 8px;
+        color: var(--dev-panel-muted);
+        font-size: 13px;
+        text-align: center;
+        background: #fbfdff;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-performance-hero {
+        grid-template-columns: 1fr;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-performance-total {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-performance-summary,
+    #dev-tool-panel.dev-panel-compact .dev-tool-performance-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-performance-stage-row {
+        grid-template-columns: minmax(0, 1fr) minmax(80px, auto) minmax(44px, auto);
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-performance-stage-bar {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+
+    @media (max-width: 720px) {
+        #dev-tool-panel .dev-tool-performance-hero {
+            grid-template-columns: 1fr;
+        }
+
+        #dev-tool-panel .dev-tool-performance-total {
+            align-items: flex-start;
+            text-align: left;
+        }
+
+        #dev-tool-panel .dev-tool-performance-summary,
+        #dev-tool-panel .dev-tool-performance-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        #dev-tool-panel .dev-tool-performance-stage-row {
+            grid-template-columns: minmax(0, 1fr) minmax(80px, auto) minmax(44px, auto);
+        }
+
+        #dev-tool-panel .dev-tool-performance-stage-bar {
+            grid-column: 1 / -1;
+            grid-row: 2;
+        }
+    }
+
+    @media (max-width: 460px) {
+        #dev-tool-panel .dev-tool-performance-summary,
+        #dev-tool-panel .dev-tool-performance-metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    #dev-tool-panel .dev-tool-trace-db-wrap {
+        border-color: var(--dev-panel-line);
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-trace-db-table thead {
+        background: #f1f5f9;
+        box-shadow: 0 1px 0 var(--dev-panel-line);
+    }
+
+    #dev-tool-panel .dev-tool-trace-db-table th,
+    #dev-tool-panel .dev-tool-trace-db-table td {
+        color: var(--dev-panel-ink);
+        border-color: var(--dev-panel-line);
+    }
+
+    #dev-tool-panel .dev-tool-trace-db-table td.col-parent,
+    #dev-tool-panel .dev-tool-trace-db-table td.col-duration {
+        color: var(--dev-panel-muted);
+    }
+
+    #dev-tool-panel .dev-tool-trace-db-table tr.dev-tool-db-expand-row td {
+        background: #f8fafc;
+    }
+
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-sql-block,
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-explain-result {
+        border-color: var(--dev-panel-line);
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-trace-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    #dev-tool-panel .dev-tool-trace-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 9px;
+        background: #f8fafc;
+    }
+
+    #dev-tool-panel .dev-tool-trace-toolbar-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--dev-panel-muted);
+        font-size: 11px;
+        font-weight: 650;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-trace-toolbar-meta span {
+        padding: 3px 8px;
+        border: 1px solid #dce5f1;
+        border-radius: 999px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(128px, 1fr));
+        gap: 10px;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card {
+        min-width: 0;
+        padding: 11px 12px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 7px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card.fast {
+        border-color: #b7ecd3;
+        background: linear-gradient(180deg, #f4fff9 0%, #ffffff 78%);
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card.medium {
+        border-color: #ffe3a3;
+        background: linear-gradient(180deg, #fffaf0 0%, #ffffff 78%);
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card.slow {
+        border-color: #ffc9c1;
+        background: linear-gradient(180deg, #fff5f3 0%, #ffffff 78%);
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-label {
+        margin-bottom: 7px;
+        color: var(--dev-panel-muted);
+        font-size: 11px;
+        font-weight: 750;
+        line-height: 1.2;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-value {
+        min-width: 0;
+        color: var(--dev-panel-ink);
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1.1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card.fast .dev-tool-trace-overview-value {
+        color: #157347;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card.medium .dev-tool-trace-overview-value {
+        color: #9a6700;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-card.slow .dev-tool-trace-overview-value {
+        color: #b42318;
+    }
+
+    #dev-tool-panel .dev-tool-trace-overview-note {
+        min-height: 16px;
+        margin-top: 7px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-trace-attention {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+        padding: 8px 10px;
+        border: 1px solid #ffe3a3;
+        border-radius: 8px;
+        background: #fffaf0;
+        color: #7a4a00;
+        font-size: 11px;
+        font-weight: 750;
+    }
+
+    #dev-tool-panel .dev-tool-trace-attention span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(154, 103, 0, 0.18);
+    }
+
+    #dev-tool-panel.dev-panel-compact .dev-tool-trace-overview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 980px) {
+        #dev-tool-panel .dev-tool-trace-overview {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        #dev-tool-panel .dev-tool-trace-overview {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    #dev-tool-panel .dev-tool-trace-view-tabs,
+    #dev-tool-panel .dev-tool-trace-layout-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 8px;
+        background: #eef3f8;
+    }
+
+    #dev-tool-panel .dev-tool-trace-view-tab,
+    #dev-tool-panel .dev-tool-trace-layout-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        min-width: 70px;
+        padding: 4px 11px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #475569;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    #dev-tool-panel .dev-tool-trace-layout-btn {
+        min-width: 64px;
+        font-size: 11px;
+    }
+
+    #dev-tool-panel .dev-tool-trace-view-tab:hover,
+    #dev-tool-panel .dev-tool-trace-layout-btn:hover {
+        background: #f8fbff;
+        color: var(--dev-panel-ink);
+    }
+
+    #dev-tool-panel .dev-tool-trace-view-tab.active,
+    #dev-tool-panel .dev-tool-trace-layout-btn.active {
+        border-color: #cddbf0;
+        background: #ffffff;
+        color: var(--dev-panel-accent);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+
+    #dev-tool-panel .dev-tool-trace-panel {
+        overflow: hidden;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 10px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-trace-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 46px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--dev-panel-line);
+        background: #f8fafc;
+    }
+
+    #dev-tool-panel .dev-tool-trace-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        color: var(--dev-panel-ink);
+        font-size: 13px;
+        font-weight: 750;
+    }
+
+    #dev-tool-panel .dev-tool-trace-panel-title i {
+        color: var(--dev-panel-accent);
+    }
+
+    #dev-tool-panel .dev-tool-trace-panel-body {
+        padding: 12px 14px;
+    }
+
+    #dev-tool-panel .dev-tool-trace-total {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--dev-panel-line);
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.44fr);
+        gap: 12px;
+        align-items: stretch;
+        min-height: 430px;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-map,
+    #dev-tool-panel .dev-tool-lifecycle-detail {
+        min-width: 0;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 9px;
+        background: #fbfdff;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-map {
+        position: relative;
+        overflow: auto;
+        max-height: min(620px, calc(100vh - 270px));
+        padding: 12px 12px 12px 10px;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-track {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 560px;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-track::before {
+        content: "";
+        position: absolute;
+        top: 18px;
+        bottom: 18px;
+        left: 23px;
+        width: 2px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #93c5fd, #cbd5e1);
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-node {
+        position: relative;
+        display: grid;
+        grid-template-columns: 46px minmax(0, 1fr);
+        gap: 10px;
+        width: 100%;
+        min-height: 64px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-node:focus-visible {
+        outline: 3px solid rgba(37, 99, 235, 0.28);
+        outline-offset: 2px;
+        border-radius: 10px;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-node.is-active .dev-tool-lifecycle-card {
+        border-color: #7aa7ff;
+        background: #f8fbff;
+        box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-marker {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        gap: 2px;
+        width: 46px;
+        min-height: 64px;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-seq {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        background: #2563eb;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 850;
+        box-shadow: 0 5px 14px rgba(37, 99, 235, 0.26);
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-time {
+        padding: 1px 5px;
+        border: 1px solid #d7e3f5;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #334155;
+        font-size: 10px;
+        font-weight: 760;
+        line-height: 1.4;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-card {
+        display: grid;
+        gap: 7px;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid #dce5f1;
+        border-radius: 9px;
+        background: #ffffff;
+        transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-title {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--dev-panel-ink);
+        font-size: 12px;
+        font-weight: 790;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-badge {
+        flex: 0 0 auto;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        color: #334155;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1.5;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-node[data-category="controller"] .dev-tool-lifecycle-badge { background: #dbeafe; color: #1d4ed8; }
+    #dev-tool-panel .dev-tool-lifecycle-node[data-category="event"] .dev-tool-lifecycle-badge { background: #ede9fe; color: #6d28d9; }
+    #dev-tool-panel .dev-tool-lifecycle-node[data-category="observer"] .dev-tool-lifecycle-badge { background: #fae8ff; color: #a21caf; }
+    #dev-tool-panel .dev-tool-lifecycle-node[data-category="view"] .dev-tool-lifecycle-badge { background: #dcfce7; color: #166534; }
+    #dev-tool-panel .dev-tool-lifecycle-node[data-category="db"] .dev-tool-lifecycle-badge { background: #fef3c7; color: #92400e; }
+
+    #dev-tool-panel .dev-tool-lifecycle-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-width: 0;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-chip {
+        max-width: 100%;
+        overflow: hidden;
+        padding: 2px 6px;
+        border: 1px solid #e2e8f0;
+        border-radius: 999px;
+        background: #f8fafc;
+        color: #526173;
+        font-size: 10px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        max-height: min(620px, calc(100vh - 270px));
+        overflow: auto;
+        padding: 14px;
+        background: #ffffff;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail h4 {
+        margin: 0 0 8px;
+        color: var(--dev-panel-ink);
+        font-size: 14px;
+        line-height: 1.35;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail-summary span {
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #eef4ff;
+        color: #1d4ed8;
+        font-size: 11px;
+        font-weight: 780;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail dl {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail-row {
+        display: grid;
+        gap: 3px;
+        padding: 8px 0;
+        border-top: 1px solid #edf2f7;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail dt {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 850;
+        letter-spacing: .03em;
+        text-transform: uppercase;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-detail dd {
+        margin: 0;
+        color: #172033;
+        font-family: Consolas, "JetBrains Mono", monospace;
+        font-size: 11px;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+    }
+
+    #dev-tool-panel .dev-tool-lifecycle-sql {
+        margin: 4px 0 0;
+        max-height: 180px;
+        overflow: auto;
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 7px;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-size: 11px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+    }
+
+    #dev-tool-panel .dev-tool-api-error-card {
+        max-width: 680px;
+        margin: 64px auto;
+        padding: 22px 24px;
+        border: 1px solid #f1c9c4;
+        border-radius: 10px;
+        background: #fffafa;
+        color: #162033;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    #dev-tool-panel .dev-tool-api-error-title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 0 10px;
+        color: #b42318;
+        font-size: 16px;
+        font-weight: 780;
+    }
+
+    #dev-tool-panel .dev-tool-api-error-desc {
+        margin: 0 0 14px;
+        color: #536174;
+        font-size: 13px;
+        line-height: 1.7;
+    }
+
+    #dev-tool-panel .dev-tool-api-error-meta {
+        margin: 0 0 16px;
+        padding: 8px 10px;
+        border: 1px solid #efd6d2;
+        border-radius: 7px;
+        background: #ffffff;
+        color: #6b3f3a;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        word-break: break-all;
+    }
+
+    #dev-tool-panel .dev-tool-api-error-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    #dev-tool-panel .dev-tool-api-error-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 32px;
+        padding: 6px 12px;
+        border: 1px solid #d8e1ec;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #1f3656;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    #dev-tool-panel .dev-tool-api-error-btn:hover {
+        border-color: #9bb7da;
+        color: var(--dev-panel-accent);
+        background: #f8fbff;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        #dev-tool-panel *,
+        #dev-tool-panel *::before,
+        #dev-tool-panel *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.001ms !important;
+        }
+    }
+
     /* ==================== 移动端响应式设计 ==================== */
-    
+
     /* 平板设备 (768px 及以下) */
     @media screen and (max-width: 768px) {
         .dev-tool-container {
-            width: 90vw;
-            max-width: 380px;
-            height: 70vh;
-            max-height: 500px;
+            width: calc(100vw - 24px);
+            max-width: none;
+            height: calc(100vh - 24px);
+            max-height: calc(100vh - 24px);
         }
-        
+
         .dev-tool-header h3 {
             font-size: 14px;
         }
-        
+
+        .dev-tool-header-row {
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .dev-tool-page-context {
+            order: 3;
+            flex-basis: 100%;
+            justify-content: flex-start;
+            margin-top: 8px;
+        }
+
+        .dev-tool-page-link {
+            max-width: 100%;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 2px;
+        }
+
+        .dev-tool-layout-btn,
         .dev-tool-close-btn {
             width: 34px;
             height: 34px;
             font-size: 18px;
+        }
+
+        .dev-tool-layout-btn {
+            min-width: 34px;
+            padding: 0;
+        }
+
+        .dev-tool-layout-label {
+            display: none;
         }
         
         .dev-tool-quick-btn {
@@ -1028,6 +2684,19 @@ $panelType = $panelType ?? 'frontend';
         .route-item small,
         .doc-item .doc-meta {
             font-size: 11px;
+        }
+
+        #dev-tool-panel .dev-tool-lifecycle {
+            grid-template-columns: 1fr;
+        }
+
+        #dev-tool-panel .dev-tool-lifecycle-detail {
+            position: static;
+            max-height: 260px;
+        }
+
+        #dev-tool-panel .dev-tool-lifecycle-map {
+            max-height: 420px;
         }
     }
     
@@ -1101,12 +2770,11 @@ $panelType = $panelType ?? 'frontend';
         }
         
         /* 手机端关闭按钮优化 - 更大的触摸目标 */
+        .dev-tool-layout-btn,
         .dev-tool-close-btn {
             width: 40px;
             height: 40px;
             font-size: 22px;
-            top: 8px;
-            right: 12px;
         }
         
         .dev-tool-quick-actions {
@@ -1247,8 +2915,6 @@ $panelType = $panelType ?? 'frontend';
             width: 36px;
             height: 36px;
             font-size: 20px;
-            top: 6px;
-            right: 10px;
         }
     }
     
@@ -1328,18 +2994,33 @@ $panelType = $panelType ?? 'frontend';
     </div>
     <div class="dev-tool-container">
         <!-- 头部区域 -->
-        <div class="dev-tool-header" title="双击此处收起面板">
-            <button class="dev-tool-close-btn" data-dev-tool-action="close-panel" title="关闭开发工具面板">
-                <i class="fa fa-times"></i>
-            </button>
-            <h3>
-                <i class="fa fa-code"></i>
-                开发工具
-                <span class="badge badge-<?php echo $isBackend ? 'primary' : 'success'; ?>">
-                    <?php echo $isBackend ? 'Backend' : 'Frontend'; ?>
-                </span>
-                <span class="dev-tool-header-hint">双击收起</span>
-            </h3>
+        <div class="dev-tool-header">
+            <div class="dev-tool-header-row">
+                <h3>
+                    <i class="fa fa-code"></i>
+                    Weline 面板
+                    <span class="badge badge-<?php echo $isBackend ? 'primary' : 'success'; ?>">
+                        <?php echo $isBackend ? 'Backend' : 'Frontend'; ?>
+                    </span>
+                    <span class="dev-tool-header-hint" aria-hidden="true"></span>
+                </h3>
+                <div class="dev-tool-page-context" aria-label="当前页面">
+                    <span class="dev-tool-page-kicker">当前页面</span>
+                    <a class="dev-tool-page-link" href="#" target="_blank" rel="noopener noreferrer" data-dev-tool-page-link title="打开当前页面">
+                        <span class="dev-tool-page-title" data-dev-tool-page-title>当前页面</span>
+                        <span class="dev-tool-page-url" data-dev-tool-page-url></span>
+                    </a>
+                </div>
+                <div class="dev-tool-window-actions">
+                    <button class="dev-tool-layout-btn" data-dev-tool-action="toggle-layout" title="缩小为紧凑面板" aria-label="缩小为紧凑面板">
+                        <i class="fa fa-compress"></i>
+                        <span class="dev-tool-layout-label">紧凑</span>
+                    </button>
+                    <button class="dev-tool-close-btn" data-dev-tool-action="close-panel" title="关闭开发工具面板" aria-label="关闭开发工具面板">
+                        <span class="dev-tool-close-mark" aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            </div>
             <div class="dev-tool-quick-actions">
                 <a href="/dev/tool/docs" target="_blank" class="dev-tool-quick-btn">
                     <i class="fa fa-book"></i> 完整文档
@@ -1352,34 +3033,50 @@ $panelType = $panelType ?? 'frontend';
         
         <!-- 标签页 -->
         <div class="dev-tool-tabs">
-            <button class="dev-tool-tab" data-tab="routes" data-dev-tool-action="switch-main-tab">
-                <i class="fa fa-exchange"></i> 路由
-            </button>
-            <button class="dev-tool-tab active" data-tab="docs" data-dev-tool-action="switch-main-tab">
-                <i class="fa fa-file-text"></i> 文档
-            </button>
-            <button class="dev-tool-tab" data-tab="performance" data-dev-tool-action="switch-main-tab">
+            <button class="dev-tool-tab active" data-tab="performance" data-dev-tool-action="switch-main-tab">
                 <i class="fa fa-clock-o"></i> 耗时统计
             </button>
-            <button class="dev-tool-tab" data-tab="trace" data-dev-tool-action="switch-main-tab">
-                <i class="fa fa-list-alt"></i> 请求链路
+            <button class="dev-tool-tab" data-tab="framework" data-dev-tool-action="switch-main-tab">
+                <i class="fa fa-cubes"></i> 框架
+            </button>
+            <button class="dev-tool-tab" data-tab="docs" data-dev-tool-action="switch-main-tab">
+                <i class="fa fa-file-text"></i> 文档
             </button>
             <?= $extraTabsHtml ?? '' ?>
         </div>
         
         <!-- 搜索区域 -->
         <div class="dev-tool-search-area">
-            <!-- 路由搜索 (routes tab) -->
-            <div id="route-search-area" style="display: none;">
-                <div class="dev-tool-search-mode">
-                    <button class="search-mode-btn active" data-type="<?php echo htmlspecialchars($panelType, ENT_QUOTES, 'UTF-8'); ?>" data-dev-tool-action="switch-route-tab">
-                        当前模式
+            <!-- 框架工具：路由 / 请求链路 -->
+            <div id="framework-search-area" style="display: none;">
+                <div class="dev-tool-framework-tabs" role="tablist" aria-label="框架工具">
+                    <button type="button" class="dev-tool-framework-tab active" data-framework-tab="routes" data-dev-tool-action="switch-framework-tab" role="tab" aria-selected="true">
+                        <i class="fa fa-exchange"></i> 路由
                     </button>
-                    <button class="search-mode-btn" data-type="<?php echo $isBackend ? 'frontend' : 'backend'; ?>" data-dev-tool-action="switch-route-tab">
-                        <?php echo $isBackend ? 'Frontend' : 'Backend'; ?>
+                    <button type="button" class="dev-tool-framework-tab" data-framework-tab="trace" data-dev-tool-action="switch-framework-tab" role="tab" aria-selected="false">
+                        <i class="fa fa-list-alt"></i> 请求链路
                     </button>
                 </div>
-                <input type="text" id="route-search-input" placeholder="🔍 搜索路由..." data-dev-tool-keyup-action="search-routes">
+
+                <!-- 路由搜索 (framework/routes subtab) -->
+                <div id="route-search-area" class="dev-tool-framework-pane active">
+                    <div class="dev-tool-search-mode">
+                        <button class="search-mode-btn active" data-type="<?php echo htmlspecialchars($panelType, ENT_QUOTES, 'UTF-8'); ?>" data-dev-tool-action="switch-route-tab">
+                            当前模式
+                        </button>
+                        <button class="search-mode-btn" data-type="<?php echo $isBackend ? 'frontend' : 'backend'; ?>" data-dev-tool-action="switch-route-tab">
+                            <?php echo $isBackend ? 'Frontend' : 'Backend'; ?>
+                        </button>
+                    </div>
+                    <input type="text" id="route-search-input" placeholder="搜索路由..." data-dev-tool-keyup-action="search-routes">
+                </div>
+
+                <!-- 请求链路 (framework/trace subtab) -->
+                <div id="trace-search-area" class="dev-tool-framework-pane">
+                    <div class="dev-tool-framework-hint">
+                        <i class="fa fa-info-circle"></i> 当前请求各阶段耗时（仅 DEV 且 HTML 响应）
+                    </div>
+                </div>
             </div>
             
             <!-- 文档搜索 (docs tab) -->
@@ -1395,7 +3092,7 @@ $panelType = $panelType ?? 'frontend';
                 <select id="doc-module-select" class="dev-tool-module-select" data-dev-tool-change-action="doc-module-change">
                     <option value="">加载中...</option>
                 </select>
-                <input type="text" id="doc-search-input" placeholder="🔍 搜索文档标题或内容..." data-dev-tool-keyup-action="search-docs">
+                <input type="text" id="doc-search-input" placeholder="搜索文档标题或内容..." data-dev-tool-keyup-action="search-docs">
             </div>
             
             <!-- 性能统计区域 (performance tab) -->
@@ -1404,19 +3101,15 @@ $panelType = $panelType ?? 'frontend';
                     <i class="fa fa-info-circle"></i> 实时性能监控和耗时统计
                 </div>
             </div>
-            
-            <!-- 请求链路 (trace tab) -->
-            <div id="trace-search-area" style="display: none;">
-                <div style="padding: 8px; font-size: 12px; color: #666;">
-                    <i class="fa fa-info-circle"></i> 当前请求各阶段耗时（仅 DEV 且 HTML 响应）
-                </div>
-            </div>
-            
             <!-- 扩展注册 API：必须在扩展脚本（如 WLS）之前执行，避免扩展因脚本顺序无法就绪 -->
             <script>
             window.DevToolPanelExtensionLoaders = window.DevToolPanelExtensionLoaders || {};
             window.DevToolPanelRegisterExtensionTab = function(tabId, loadContentFn) {
                 if (typeof tabId !== 'string' || typeof loadContentFn !== 'function') return;
+                if (window.DevToolPanel && typeof window.DevToolPanel.registerExtensionTab === 'function') {
+                    window.DevToolPanel.registerExtensionTab(tabId, loadContentFn);
+                    return;
+                }
                 window.DevToolPanelExtensionLoaders[tabId] = loadContentFn;
             };
             </script>
@@ -1436,11 +3129,15 @@ $panelType = $panelType ?? 'frontend';
 <!-- 开发工具面板脚本 -->
 <script>
 const DevToolPanel = (function() {
+    const PANEL_UI_VERSION = '20260701-workspace-ui-v9-performance-render';
+
     // ========== 状态管理 ==========
     const state = {
         // 面板状态
         collapsed: true,
-        activeMainTab: 'docs', // 'routes' or 'docs' or 'performance'
+        activeMainTab: 'performance',
+        frameworkTab: 'routes',
+        layoutMode: 'workspace', // workspace or compact
         
         // 路由相关
         currentRouteType: '<?php echo $panelType; ?>',
@@ -1473,8 +3170,8 @@ const DevToolPanel = (function() {
         pageLoadStartTime: performance.timing ? performance.timing.navigationStart : Date.now(),
         apiRequests: [], // 存储API请求记录
 
-        // 请求链路「编码」视图：tree=常规树形，duration=按耗时倒序平铺
-        traceCodeLayout: 'tree',
+        // 请求链路「编码」视图：graph=生命周期图，tree=常规树形，duration=按耗时倒序平铺
+        traceCodeLayout: 'graph',
         // 请求链路「DB」视图：normal=常规顺序，duration=按耗时倒序
         traceDbLayout: 'normal',
         traceLoaded: false,
@@ -1482,11 +3179,15 @@ const DevToolPanel = (function() {
         traceSummary: null,
     };
 
+    let pageContextBound = false;
+    let pageTitleObserver = null;
+
     // ========== LocalStorage 管理 ==========
     function saveState() {
         const dataToSave = {
             collapsed: state.collapsed,
             activeMainTab: state.activeMainTab,
+            frameworkTab: state.frameworkTab,
             currentRouteType: state.currentRouteType,
             routeSearchKeyword: state.routeSearchKeyword,
             docSearchMode: state.docSearchMode,
@@ -1494,12 +3195,18 @@ const DevToolPanel = (function() {
             selectedModule: state.selectedModule,
             currentDocId: state.currentDocId,
             currentDocScrollPos: state.currentDocScrollPos,
+            layoutMode: state.layoutMode,
             panelX: state.panelX,
             panelY: state.panelY,
             traceCodeLayout: state.traceCodeLayout,
             traceDbLayout: state.traceDbLayout,
+            panelUiVersion: PANEL_UI_VERSION,
         };
         localStorage.setItem('dev-panel-state', JSON.stringify(dataToSave));
+    }
+
+    function isBuiltInMainTab(tab) {
+        return ['framework', 'docs', 'performance'].indexOf(tab) !== -1;
     }
 
     function loadState() {
@@ -1507,10 +3214,154 @@ const DevToolPanel = (function() {
         if (saved) {
             try {
                 const data = JSON.parse(saved);
+                if (data.activeMainTab === 'routes' || data.activeMainTab === 'trace') {
+                    data.frameworkTab = data.activeMainTab === 'trace' ? 'trace' : 'routes';
+                    data.activeMainTab = 'framework';
+                }
                 Object.assign(state, data);
+                state.layoutMode = state.layoutMode === 'compact' ? 'compact' : 'workspace';
+                state.activeMainTab = typeof state.activeMainTab === 'string' && state.activeMainTab
+                    ? state.activeMainTab
+                    : 'performance';
+                state.frameworkTab = state.frameworkTab === 'trace' ? 'trace' : 'routes';
+                if (data.panelUiVersion !== PANEL_UI_VERSION) {
+                    state.layoutMode = 'workspace';
+                    if (state.activeMainTab === 'framework') {
+                        state.frameworkTab = 'trace';
+                    }
+                    state.traceCodeLayout = 'graph';
+                }
+                state.traceCodeLayout = ['graph', 'tree', 'duration'].indexOf(state.traceCodeLayout) !== -1
+                    ? state.traceCodeLayout
+                    : 'graph';
+                state.traceDbLayout = state.traceDbLayout === 'duration' ? 'duration' : 'normal';
             } catch (e) {
                 console.error('[DevToolPanel] Failed to load state:', e);
             }
+        }
+    }
+
+    function getPanelFallbackSize() {
+        const isCompact = state.layoutMode === 'compact';
+        const horizontalGutter = window.innerWidth <= 480 ? 0 : (isCompact ? 24 : 48);
+        const verticalGutter = window.innerWidth <= 480 ? 0 : (isCompact ? 24 : 48);
+        const availableWidth = Math.max(320, window.innerWidth - horizontalGutter);
+        const availableHeight = Math.max(320, window.innerHeight - verticalGutter);
+
+        return {
+            width: isCompact ? Math.min(520, availableWidth) : Math.min(1440, availableWidth),
+            height: isCompact ? Math.min(680, availableHeight) : Math.min(930, availableHeight),
+        };
+    }
+
+    function getPanelSize(panelEl) {
+        const fallback = getPanelFallbackSize();
+        const container = panelEl ? panelEl.querySelector('.dev-tool-container') : null;
+        const rect = container ? container.getBoundingClientRect() : null;
+
+        return {
+            width: rect && rect.width ? rect.width : fallback.width,
+            height: rect && rect.height ? rect.height : fallback.height,
+        };
+    }
+
+    function applyLayoutMode() {
+        const panel = document.getElementById('dev-tool-panel');
+        if (!panel) return;
+
+        state.layoutMode = state.layoutMode === 'compact' ? 'compact' : 'workspace';
+        const isCompact = state.layoutMode === 'compact';
+        panel.classList.toggle('dev-panel-compact', isCompact);
+
+        const button = panel.querySelector('[data-dev-tool-action="toggle-layout"]');
+        if (!button) return;
+
+        const icon = button.querySelector('i');
+        const label = button.querySelector('.dev-tool-layout-label');
+        const title = isCompact ? '切换到宽屏工作区' : '缩小为紧凑面板';
+        button.title = title;
+        button.setAttribute('aria-label', title);
+
+        if (icon) {
+            icon.className = isCompact ? 'fa fa-expand' : 'fa fa-compress';
+        }
+        if (label) {
+            label.textContent = isCompact ? '宽屏' : '紧凑';
+        }
+    }
+
+    function toggleLayoutMode() {
+        state.layoutMode = state.layoutMode === 'compact' ? 'workspace' : 'compact';
+        applyLayoutMode();
+
+        const panel = document.getElementById('dev-tool-panel');
+        if (!panel) {
+            saveState();
+            return;
+        }
+
+        requestAnimationFrame(function() {
+            correctPanelPosition(panel);
+            updateExpandDirection();
+            updateContainerPosition();
+            saveState();
+        });
+    }
+
+    function currentPageTitle() {
+        const title = String(document.title || '').trim();
+        if (title) {
+            return title;
+        }
+
+        const path = String(window.location.pathname || '').trim();
+        if (path && path !== '/') {
+            return path;
+        }
+
+        return window.location.host || '当前页面';
+    }
+
+    function updatePageContext() {
+        const panel = document.getElementById('dev-tool-panel');
+        if (!panel) {
+            return;
+        }
+
+        const link = panel.querySelector('[data-dev-tool-page-link]');
+        const titleNode = panel.querySelector('[data-dev-tool-page-title]');
+        const urlNode = panel.querySelector('[data-dev-tool-page-url]');
+        const href = window.location.href;
+        const title = currentPageTitle();
+
+        if (link) {
+            link.href = href;
+            link.title = title + '\n' + href;
+            link.setAttribute('aria-label', '打开当前页面：' + title);
+        }
+        if (titleNode) {
+            titleNode.textContent = title;
+        }
+        if (urlNode) {
+            urlNode.textContent = href;
+        }
+    }
+
+    function bindPageContext() {
+        updatePageContext();
+        if (pageContextBound) {
+            return;
+        }
+
+        pageContextBound = true;
+        window.addEventListener('hashchange', updatePageContext);
+        window.addEventListener('popstate', updatePageContext);
+        window.addEventListener('pageshow', updatePageContext);
+
+        const titleNode = document.querySelector('head > title');
+        if (titleNode && window.MutationObserver) {
+            pageTitleObserver = new MutationObserver(updatePageContext);
+            pageTitleObserver.observe(titleNode, { childList: true, characterData: true, subtree: true });
         }
     }
 
@@ -1544,8 +3395,14 @@ const DevToolPanel = (function() {
             case 'close-panel':
                 closePanel();
                 break;
+            case 'toggle-layout':
+                toggleLayoutMode();
+                break;
             case 'switch-main-tab':
                 switchMainTab(actionEl, actionEl.dataset.tab || 'docs');
+                break;
+            case 'switch-framework-tab':
+                switchFrameworkTab(actionEl, actionEl.dataset.frameworkTab || 'routes');
                 break;
             case 'switch-route-tab':
                 switchRouteTab(actionEl, actionEl.dataset.type || state.currentRouteType || 'frontend');
@@ -1569,6 +3426,9 @@ const DevToolPanel = (function() {
                 break;
             case 'back-to-doc-list':
                 backToDocList();
+                break;
+            case 'retry-doc-api':
+                retryDocApi();
                 break;
         }
     }
@@ -1618,6 +3478,8 @@ const DevToolPanel = (function() {
         // 恢复面板状态
         const panel = document.getElementById('dev-tool-panel');
         bindPanelActions(panel);
+        bindPageContext();
+        applyLayoutMode();
         if (!state.collapsed) {
             panel.classList.remove('collapsed');
         }
@@ -1644,23 +3506,13 @@ const DevToolPanel = (function() {
             }
         });
         
-        // 如果是路由标签，加载路由
-        if (!state.collapsed && state.activeMainTab === 'routes') {
-            loadRoutes(state.currentRouteType);
-        }
-        
         // 如果是性能标签，渲染性能统计
         if (!state.collapsed && state.activeMainTab === 'performance') {
             renderPerformanceStats();
         }
         
-        // 如果是请求链路标签，渲染请求链路
-        if (!state.collapsed && state.activeMainTab === 'trace') {
-            renderRequestTrace();
-        }
-        
         // 扩展标签：仅当当前为某扩展标签时才加载（由扩展通过 registerExtensionTab 注册，可能稍晚注册）
-        var extTab = state.activeMainTab && state.activeMainTab !== 'routes' && state.activeMainTab !== 'docs' && state.activeMainTab !== 'performance' && state.activeMainTab !== 'trace';
+        var extTab = state.activeMainTab && state.activeMainTab !== 'framework' && state.activeMainTab !== 'docs' && state.activeMainTab !== 'performance';
         if (extTab) {
             (function tryLoadExtension() {
                 if (window.DevToolPanelExtensionLoaders && window.DevToolPanelExtensionLoaders[state.activeMainTab]) {
@@ -1757,8 +3609,9 @@ const DevToolPanel = (function() {
         let currentY = parseInt(panelEl.style.top) || 0;
         
         // 使用container的实际尺寸
-        const width = containerRect.width || 420;
-        const height = containerRect.height || 600;
+        const panelSize = getPanelSize(panelEl);
+        const width = panelSize.width;
+        const height = panelSize.height;
         
         // 计算触发器超出container的宽度
         const triggerExtraWidth = Math.max(0, triggerRect.right - containerRect.right);
@@ -1869,8 +3722,8 @@ const DevToolPanel = (function() {
             const isMobileDevice = window.innerWidth <= 480 || ('ontouchstart' in window);
             
             header.addEventListener('mousedown', function(e) {
-                // 排除关闭按钮的点击
-                if (e.target.closest('.dev-tool-close-btn')) {
+                // 排除窗口控制按钮的点击
+                if (e.target.closest('.dev-tool-window-actions') || e.target.closest('.dev-tool-page-context')) {
                     return;
                 }
                 
@@ -1886,7 +3739,7 @@ const DevToolPanel = (function() {
             // Header双击收起
             header.addEventListener('click', function(e) {
                 // 排除关闭按钮和快捷操作区域的点击
-                if (e.target.closest('.dev-tool-close-btn') || e.target.closest('.dev-tool-quick-actions')) {
+                if (e.target.closest('.dev-tool-window-actions') || e.target.closest('.dev-tool-quick-actions') || e.target.closest('.dev-tool-page-context')) {
                     return;
                 }
                 
@@ -2080,8 +3933,9 @@ const DevToolPanel = (function() {
                 const container = panelEl.querySelector('.dev-tool-container');
                 const containerRect = container.getBoundingClientRect();
                 const tRect = trigger.getBoundingClientRect();
-                panelWidth = containerRect.width || 420;
-                panelHeight = containerRect.height || 600;
+                const panelSize = getPanelSize(panelEl);
+                panelWidth = panelSize.width;
+                panelHeight = panelSize.height;
                 triggerWidth = Math.max(0, tRect.right - containerRect.right); // 触发器超出container的部分
             }
             
@@ -2162,8 +4016,9 @@ const DevToolPanel = (function() {
         const windowHeight = window.innerHeight;
 
         // 使用container的实际尺寸
-        const width = containerRect.width || 420;
-        const height = containerRect.height || Math.min(600, windowHeight * 0.8);
+        const panelSize = getPanelSize(panelEl);
+        const width = panelSize.width;
+        const height = panelSize.height;
         
         // 获取panel当前位置
         const currentX = parseInt(panelEl.style.left) || 0;
@@ -2234,17 +4089,19 @@ const DevToolPanel = (function() {
     // ========== 检测并设置展开方向 ==========
     function updateExpandDirection() {
         const panel = document.getElementById('dev-tool-panel');
+        if (!panel) return;
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
         
         const x = parseInt(panel.style.left) || 0;
         const y = parseInt(panel.style.top) || 0;
+        const panelSize = getPanelSize(panel);
         
         // 计算到各边的距离
         const distToLeft = x;
-        const distToRight = windowWidth - x - 420; // 面板宽度420
+        const distToRight = windowWidth - x - panelSize.width;
         const distToTop = y;
-        const distToBottom = windowHeight - y - 600; // 面板高度600
+        const distToBottom = windowHeight - y - panelSize.height;
         
         // 移除所有方向class
         panel.classList.remove('expand-left', 'expand-right', 'expand-up', 'expand-down');
@@ -2268,11 +4125,17 @@ const DevToolPanel = (function() {
     function toggle() {
         state.collapsed = !state.collapsed;
         const panel = document.getElementById('dev-tool-panel');
-        panel.classList.toggle('collapsed');
+        if (!panel) return;
+        panel.classList.toggle('collapsed', state.collapsed);
         
         // 展开时更新展开方向
         if (!state.collapsed) {
-            updateExpandDirection();
+            applyLayoutMode();
+            requestAnimationFrame(function() {
+                correctPanelPosition(panel);
+                updateExpandDirection();
+                updateContainerPosition();
+            });
             switchMainTab(
                 document.querySelector('.dev-tool-tab[data-tab="' + state.activeMainTab + '"]'),
                 state.activeMainTab,
@@ -2284,54 +4147,80 @@ const DevToolPanel = (function() {
         saveState();
     }
     
-    // ========== 关闭面板（删除Cookie） ==========
+    // ========== 关闭面板 ==========
     function closePanel() {
-        // 获取Cookie名称（从PHP传递）
-        const cookieName = '<?php echo isset($devToolCookieNameJs) ? $devToolCookieNameJs : "w_dev_tool"; ?>';
-        
-        // 删除Cookie（多种路径尝试，确保删除成功）
-        // 1. 删除根路径Cookie
-        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        
-        // 2. 删除当前路径Cookie
-        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=' + window.location.pathname + ';';
-        
-        // 3. 删除可能的域名Cookie
-        const domain = window.location.hostname;
-        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=' + domain + ';';
-        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + domain + ';';
-        
-        // 4. 隐藏面板（立即生效，不等刷新）
         const panel = document.getElementById('dev-tool-panel');
         if (panel) {
-            panel.style.display = 'none';
+            state.collapsed = true;
+            panel.classList.add('collapsed');
+            saveState();
         }
-        
-        // 延迟刷新页面，给用户反馈时间
-        setTimeout(() => {
-            window.location.reload();
-        }, 300);
+    }
+
+    function switchFrameworkTab(button, tab, shouldSave = true) {
+        state.frameworkTab = tab === 'trace' ? 'trace' : 'routes';
+        if (shouldSave) saveState();
+
+        document.querySelectorAll('.dev-tool-framework-tab').forEach(function(tabButton) {
+            const isActive = tabButton.dataset.frameworkTab === state.frameworkTab;
+            tabButton.classList.toggle('active', isActive);
+            tabButton.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        if (button) {
+            button.classList.add('active');
+            button.setAttribute('aria-selected', 'true');
+        }
+
+        const routeSearchArea = document.getElementById('route-search-area');
+        const traceSearchArea = document.getElementById('trace-search-area');
+        if (routeSearchArea) {
+            routeSearchArea.classList.toggle('active', state.frameworkTab === 'routes');
+        }
+        if (traceSearchArea) {
+            traceSearchArea.classList.toggle('active', state.frameworkTab === 'trace');
+        }
+
+        if (state.collapsed || state.activeMainTab !== 'framework') {
+            return;
+        }
+
+        window._devToolExtensionRetryCount = {};
+        if (state.frameworkTab === 'trace') {
+            renderRequestTrace();
+        } else {
+            loadRoutes(state.currentRouteType);
+        }
     }
 
     function switchMainTab(button, tab, shouldSave = true) {
+        if (tab === 'routes' || tab === 'trace') {
+            state.frameworkTab = tab === 'trace' ? 'trace' : 'routes';
+            tab = 'framework';
+            button = document.querySelector('.dev-tool-tabs > .dev-tool-tab[data-tab="framework"]');
+        }
+        if (!button && tab) {
+            button = document.querySelector('.dev-tool-tabs > .dev-tool-tab[data-tab="' + String(tab).replace(/"/g, '\\"') + '"]');
+        }
         // 更新标签状态
-        document.querySelectorAll('.dev-tool-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.dev-tool-tabs > .dev-tool-tab').forEach(t => t.classList.remove('active'));
         if (button) button.classList.add('active');
         
         state.activeMainTab = tab;
         if (shouldSave) saveState();
         
         // 显示/隐藏搜索区域
+        const frameworkSearchArea = document.getElementById('framework-search-area');
         const routeSearchArea = document.getElementById('route-search-area');
         const docSearchArea = document.getElementById('doc-search-area');
         const performanceSearchArea = document.getElementById('performance-search-area');
         const traceSearchArea = document.getElementById('trace-search-area');
         
         // 隐藏所有内置搜索区域
-        routeSearchArea.style.display = 'none';
+        if (frameworkSearchArea) frameworkSearchArea.style.display = 'none';
+        if (routeSearchArea) routeSearchArea.classList.remove('active');
         docSearchArea.style.display = 'none';
         performanceSearchArea.style.display = 'none';
-        if (traceSearchArea) traceSearchArea.style.display = 'none';
+        if (traceSearchArea) traceSearchArea.classList.remove('active');
         // 隐藏所有扩展搜索区（约定 id 为 dev-tool-search-area-{tabId}）
         document.querySelectorAll('[id^="dev-tool-search-area-"]').forEach(el => { el.style.display = 'none'; });
         if (state.collapsed) {
@@ -2339,41 +4228,44 @@ const DevToolPanel = (function() {
         }
         
         // 扩展标签：若加载器尚未注册则短时重试，最多重试几次；重试前检查用户是否已切换标签，避免覆盖
-        const isExtensionTab = tab !== 'routes' && tab !== 'docs' && tab !== 'performance' && tab !== 'trace';
+        const isExtensionTab = !isBuiltInMainTab(tab);
         const extSearchArea = document.getElementById('dev-tool-search-area-' + tab);
         const extLoader = window.DevToolPanelExtensionLoaders && window.DevToolPanelExtensionLoaders[tab];
-        if (isExtensionTab && extSearchArea && !extLoader) {
+        if (isExtensionTab && !extLoader) {
             window._devToolExtensionRetryCount = window._devToolExtensionRetryCount || {};
             window._devToolExtensionRetryCount[tab] = (window._devToolExtensionRetryCount[tab] || 0) + 1;
-            const maxRetries = 5;
+            const maxRetries = 20;
             if (window._devToolExtensionRetryCount[tab] > maxRetries) {
-                extSearchArea.style.display = 'block';
+                if (extSearchArea) extSearchArea.style.display = 'block';
                 const content = document.getElementById('dev-tool-content');
                 if (content) content.innerHTML = '<div class="dev-tool-empty">扩展未就绪，请切换其他标签或刷新页面</div>';
                 return;
             }
-            extSearchArea.style.display = 'block';
+            if (extSearchArea) extSearchArea.style.display = 'block';
             const content = document.getElementById('dev-tool-content');
             if (content) content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载中...</div></div>';
             setTimeout(function() {
                 if (state.activeMainTab !== tab) return;
-                switchMainTab(button, tab, false);
+                switchMainTab(
+                    document.querySelector('.dev-tool-tabs > .dev-tool-tab[data-tab="' + String(tab).replace(/"/g, '\\"') + '"]'),
+                    tab,
+                    false
+                );
             }, 100);
             return;
         }
         
-        if (tab === 'routes') {
-            window._devToolExtensionRetryCount = {};
-            routeSearchArea.style.display = 'block';
-            loadRoutes(state.currentRouteType);
+        if (tab === 'framework') {
+            if (frameworkSearchArea) frameworkSearchArea.style.display = 'block';
+            switchFrameworkTab(
+                document.querySelector('.dev-tool-framework-tab[data-framework-tab="' + state.frameworkTab + '"]'),
+                state.frameworkTab,
+                false
+            );
         } else if (tab === 'performance') {
             window._devToolExtensionRetryCount = {};
             performanceSearchArea.style.display = 'block';
             renderPerformanceStats();
-        } else if (tab === 'trace') {
-            window._devToolExtensionRetryCount = {};
-            if (traceSearchArea) traceSearchArea.style.display = 'block';
-            renderRequestTrace();
         } else if (extLoader) {
             if (window._devToolExtensionRetryCount) window._devToolExtensionRetryCount[tab] = 0;
             if (extSearchArea) extSearchArea.style.display = 'block';
@@ -2390,6 +4282,15 @@ const DevToolPanel = (function() {
         if (typeof tabId !== 'string' || typeof loadContentFn !== 'function') return;
         window.DevToolPanelExtensionLoaders = window.DevToolPanelExtensionLoaders || {};
         window.DevToolPanelExtensionLoaders[tabId] = loadContentFn;
+        if (!state.collapsed && state.activeMainTab === tabId) {
+            setTimeout(function() {
+                switchMainTab(
+                    document.querySelector('.dev-tool-tabs > .dev-tool-tab[data-tab="' + String(tabId).replace(/"/g, '\\"') + '"]'),
+                    tabId,
+                    false
+                );
+            }, 0);
+        }
     }
 
     // ========== 路由功能 ==========
@@ -2412,7 +4313,7 @@ const DevToolPanel = (function() {
         
         const url = getDevToolApiUrl('routes', { type });
         if (!url) {
-            content.innerHTML = '<div class="dev-tool-empty">⚠️ 无法构建 API 地址（请从后台打开本页）</div>';
+            content.innerHTML = '<div class="dev-tool-empty">无法构建 API 地址（请从后台打开本页）</div>';
             return Promise.resolve();
         }
         return fetch(url)
@@ -2427,12 +4328,12 @@ const DevToolPanel = (function() {
                     state.allRouteModules = data.data || [];
                     renderRouteModules(state.allRouteModules);
                 } else {
-                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data?.msg || '加载失败') + '</div>';
+                    content.innerHTML = '<div class="dev-tool-empty">' + (data?.msg || '加载失败') + '</div>';
                 }
             })
             .catch(error => {
                 console.warn('[DevToolPanel] Failed to load routes:', error);
-                content.innerHTML = '<div class="dev-tool-empty">⚠️ 路由接口暂时不可用</div>';
+                content.innerHTML = '<div class="dev-tool-empty">路由接口暂时不可用</div>';
                 return Promise.resolve();
             });
     }
@@ -2522,14 +4423,48 @@ const DevToolPanel = (function() {
     }
 
     // ========== 文档功能 ==========
+    function getDevToolRuntimeConfig() {
+        const bootstrap = document.querySelector('[data-weline-panel-bootstrap]');
+        const loaderScript = document.getElementById('weline-panel-loader-js');
+        const attrSource = loaderScript || bootstrap;
+        const attrConfig = {};
+
+        if (attrSource) {
+            const apiBase = attrSource.getAttribute('data-api-base') || '';
+            const requestId = attrSource.getAttribute('data-request-id') || '';
+            const sessionUrl = attrSource.getAttribute('data-session-url') || '';
+
+            if (apiBase) {
+                attrConfig.apiBase = apiBase;
+            }
+            if (requestId) {
+                attrConfig.requestId = requestId;
+            }
+            if (sessionUrl) {
+                attrConfig.sessionUrl = sessionUrl;
+            }
+            if (attrSource.hasAttribute('data-token-required')) {
+                attrConfig.tokenRequired = attrSource.getAttribute('data-token-required') === '1';
+            }
+        }
+
+        return Object.assign(
+            {},
+            attrConfig,
+            window.__WELINE_DEV_TOOL__ || {},
+            window.__WELINE_PANEL_CONFIG__ || {}
+        );
+    }
+
     /**
      * 构建开发工具后端 API URL（使用 rest_backend 前缀，避免 /api/rest/ 错误导致 404）
-     * 优先 window.api，其次 window.site.api_host；无可用 base 时返回空字符串。
+     * 优先 lazy bootstrap 注入的 apiBase，其次 window.api / window.site.api_host。
      */
     function getDevToolApiUrl(path, params) {
         const cleanPath = (path || '').replace(/^\//, '');
-        const configApiBase = (window.__WELINE_DEV_TOOL__ && window.__WELINE_DEV_TOOL__.apiBase)
-            ? String(window.__WELINE_DEV_TOOL__.apiBase).replace(/^\/+|\/+$/g, '')
+        const runtimeConfig = getDevToolRuntimeConfig();
+        const configApiBase = runtimeConfig.apiBase
+            ? String(runtimeConfig.apiBase).replace(/^\/+|\/+$/g, '')
             : '';
         if (configApiBase) {
             const url = window.location.origin.replace(/\/$/, '') + '/' + configApiBase + '/' + cleanPath;
@@ -2556,22 +4491,99 @@ const DevToolPanel = (function() {
         return '';
     }
 
+    function devToolFetchJson(url) {
+        if (typeof window.fetch !== 'function') {
+            return Promise.reject(new Error('当前浏览器不支持 fetch，无法请求开发面板 API。'));
+        }
+
+        return window.fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+                'Accept': 'application/json',
+                'X-Weline-Dev-Tool': '1'
+            }
+        }).then(function(response) {
+            return response.text().then(function(text) {
+                let data = null;
+                if (text) {
+                    try {
+                        data = JSON.parse(text);
+                    } catch (error) {
+                        throw new Error('API 返回了非 JSON 响应（HTTP ' + response.status + '）。');
+                    }
+                }
+                if (!response.ok) {
+                    const message = data && data.msg ? data.msg : ('HTTP ' + response.status);
+                    throw new Error(message);
+                }
+                return data;
+            });
+        });
+    }
+
+    function docApiEndpointLabel(url) {
+        try {
+            const parsed = new URL(url, window.location.origin);
+            const marker = '/dev/tool/rest/v1/';
+            const markerIndex = parsed.pathname.indexOf(marker);
+            const path = markerIndex >= 0 ? parsed.pathname.slice(markerIndex + marker.length) : parsed.pathname;
+            return path + (parsed.search ? parsed.search : '');
+        } catch (error) {
+            return 'document API';
+        }
+    }
+
+    function normalizeDocApiErrorMessage(error) {
+        const raw = error && error.message ? String(error.message) : String(error || '');
+        if (/failed to fetch/i.test(raw)) {
+            return '文档 API 暂时不可用。通常是当前页面对应的本地服务已停止、页面来自旧服务实例，或浏览器拦截了这次同源请求。刷新页面或重启当前服务后可重试。';
+        }
+        if (/non json|非 JSON/i.test(raw)) {
+            return '文档 API 返回内容不是 JSON，可能进入了错误页面或登录页。请确认当前页面仍在开发面板允许访问的环境。';
+        }
+        return raw || '文档 API 请求失败。';
+    }
+
+    function renderDocApiError(content, title, error, url) {
+        if (!content) return;
+        const message = normalizeDocApiErrorMessage(error);
+        const endpoint = url ? docApiEndpointLabel(url) : 'document API';
+        content.innerHTML =
+            '<div class="dev-tool-api-error-card">' +
+                '<div class="dev-tool-api-error-title"><i class="fa fa-exclamation-circle"></i>' + escapeHtml(title || '文档 API 不可用') + '</div>' +
+                '<p class="dev-tool-api-error-desc">' + escapeHtml(message) + '</p>' +
+                '<div class="dev-tool-api-error-meta">' + escapeHtml(endpoint) + '</div>' +
+                '<div class="dev-tool-api-error-actions">' +
+                    '<button type="button" class="dev-tool-api-error-btn" data-dev-tool-action="retry-doc-api">' +
+                        '<i class="fa fa-refresh"></i> 重试' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function retryDocApi() {
+        state.modulesLoaded = false;
+        if (state.currentDocId) {
+            loadDocDetail(state.currentDocId);
+            return;
+        }
+        loadModules().then(function() {
+            searchDocsAPI();
+        });
+    }
+
     function loadModules() {
         if (state.modulesLoaded) {
             return Promise.resolve();
         }
         const url = getDevToolApiUrl('document/modules');
         if (!url) {
-            console.warn('[DevToolPanel] Cannot build document API URL (missing window.api / window.site.api_host)');
+            console.warn('[DevToolPanel] Cannot build document API URL (missing panel apiBase / window.api / window.site.api_host)');
             return Promise.resolve();
         }
-        return fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
+        return devToolFetchJson(url)
             .then(data => {
                 if (data && Number(data.code) === 200) {
                     state.allModules = data.data || [];
@@ -2587,6 +4599,10 @@ const DevToolPanel = (function() {
                 console.warn('[DevToolPanel] Failed to load modules:', error);
                 state.allModules = [];
                 updateModuleSelect();
+                if (state.activeMainTab === 'docs') {
+                    const content = document.getElementById('dev-tool-content');
+                    renderDocApiError(content, '文档模块加载失败', error, url);
+                }
                 // 不要阻塞初始化
                 return Promise.resolve();
             });
@@ -2680,21 +4696,20 @@ const DevToolPanel = (function() {
         if (state.docSearchSize) query.size = state.docSearchSize;
         const url = getDevToolApiUrl('document/search', query);
         if (!url) {
-            content.innerHTML = '<div class="dev-tool-empty">⚠️ 无法构建 API 地址（请从后台打开本页）</div>';
+            renderDocApiError(content, '文档搜索失败', new Error('无法构建 API 地址（请从后台打开本页）。'), '');
             return;
         }
-        fetch(url)
-            .then(response => response.json())
+        devToolFetchJson(url)
             .then(data => {
                 if (data && Number(data.code) === 200) {
                     state.docList = data.data.items || [];
                     renderDocList(state.docList);
                 } else {
-                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + escapeHtml(data && data.msg ? data.msg : '搜索失败') + '</div>';
+                    renderDocApiError(content, '文档搜索失败', new Error(data && data.msg ? data.msg : '搜索失败'), url);
                 }
             })
             .catch(error => {
-                content.innerHTML = '<div class="dev-tool-empty">❌ 搜索失败: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
+                renderDocApiError(content, '文档搜索失败', error, url);
             });
     }
 
@@ -2702,7 +4717,7 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         
         if (!docs || docs.length === 0) {
-            content.innerHTML = '<div class="dev-tool-empty">📄 暂无文档</div>';
+            content.innerHTML = '<div class="dev-tool-empty">暂无文档</div>';
             return;
         }
         
@@ -2739,20 +4754,19 @@ const DevToolPanel = (function() {
         
         const url = getDevToolApiUrl('document/detail', { id: docId });
         if (!url) {
-            content.innerHTML = '<div class="dev-tool-empty">⚠️ 无法构建 API 地址（请从后台打开本页）</div>';
+            renderDocApiError(content, '文档加载失败', new Error('无法构建 API 地址（请从后台打开本页）。'), '');
             return;
         }
-        fetch(url)
-            .then(response => response.json())
+        devToolFetchJson(url)
             .then(data => {
                 if (data && Number(data.code) === 200) {
                     renderDocContent(data.data);
                 } else {
-                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + escapeHtml(data && data.msg ? data.msg : '加载失败') + '</div>';
+                    renderDocApiError(content, '文档加载失败', new Error(data && data.msg ? data.msg : '加载失败'), url);
                 }
             })
             .catch(error => {
-                content.innerHTML = '<div class="dev-tool-empty">❌ 加载失败: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
+                renderDocApiError(content, '文档加载失败', error, url);
             });
     }
 
@@ -2934,13 +4948,23 @@ const DevToolPanel = (function() {
     }
 
     function formatTime(ms) {
-        if (ms < 1) {
-            return (ms * 1000).toFixed(2) + ' μs';
-        } else if (ms < 1000) {
-            return ms.toFixed(2) + ' ms';
-        } else {
-            return (ms / 1000).toFixed(2) + ' s';
+        ms = Number(ms);
+        if (!Number.isFinite(ms) || ms < 0) {
+            return '—';
         }
+        if (ms === 0) {
+            return '0 ms';
+        }
+        if (ms < 1) {
+            return Math.max(1, Math.round(ms * 1000)) + ' μs';
+        }
+        if (ms < 100) {
+            return ms.toFixed(2) + ' ms';
+        }
+        if (ms < 1000) {
+            return ms.toFixed(0) + ' ms';
+        }
+        return (ms / 1000).toFixed(2) + ' s';
     }
 
     function formatSqlPreview(sql, maxLen) {
@@ -2990,8 +5014,10 @@ const DevToolPanel = (function() {
     }
 
     function buildTraceTree(spans) {
-        var nodes = spans.map(function(s) {
+        var nodes = spans.map(function(s, index) {
             return {
+                seq: Number(s.seq || (index + 1)),
+                index: Number(typeof s.index === 'number' ? s.index : index),
                 name: s.name || '',
                 duration_ms: Number(s.duration_ms) || 0,
                 category: s.category || '',
@@ -3024,7 +5050,7 @@ const DevToolPanel = (function() {
             html += '<span class="trace-toggle-placeholder"></span>';
             html += '<span class="performance-label" style="font-size:11px;color:#667eea;">DB</span>';
             html += '<span style="font-size:11px;color:#5c574f;margin-right:6px;">' + escapeHtml(opToShort(operation)) + '</span>';
-            html += '<span style="font-size:11px;color:#7d7870;">' + escapeHtml(table || '—') + '</span>';
+            html += '<span style="font-size:11px;color:#64748b;">' + escapeHtml(table || '—') + '</span>';
             html += '<span class="performance-value" style="margin-left:auto;font-size:11px;">' + dur + '</span>';
             if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0" title="' + escapeAttr(operation || '') + '">▶</span>';
             html += '</div>';
@@ -3069,22 +5095,220 @@ const DevToolPanel = (function() {
 
     /** 请求链路「编码」视图：常规树 / 耗时倒序 子 Tab 的 UI 同步 */
     function syncTraceCodeLayoutUI(mode) {
+        mode = traceLayoutMode(mode);
+        var graphBtn = document.getElementById('trace-layout-graph');
         var treeBtn = document.getElementById('trace-layout-tree');
         var durBtn = document.getElementById('trace-layout-duration');
+        var graphPanel = document.getElementById('trace-code-graph-panel');
         var treePanel = document.getElementById('trace-code-tree-panel');
         var durPanel = document.getElementById('trace-code-duration-panel');
-        if (!treeBtn || !durBtn || !treePanel || !durPanel) {
+        if (!graphBtn || !treeBtn || !durBtn || !graphPanel || !treePanel || !durPanel) {
             return;
         }
-        var isTree = mode !== 'duration';
+        var isGraph = mode === 'graph';
+        var isTree = mode === 'tree';
+        graphBtn.classList.toggle('active', isGraph);
         treeBtn.classList.toggle('active', isTree);
-        durBtn.classList.toggle('active', !isTree);
-        treeBtn.style.background = isTree ? '#f7f7ff' : '#fafafa';
-        treeBtn.style.borderColor = isTree ? '#667eea' : '#ddd';
-        durBtn.style.background = !isTree ? '#f7f7ff' : '#fafafa';
-        durBtn.style.borderColor = !isTree ? '#667eea' : '#ddd';
+        durBtn.classList.toggle('active', mode === 'duration');
+        graphBtn.setAttribute('aria-selected', isGraph ? 'true' : 'false');
+        treeBtn.setAttribute('aria-selected', isTree ? 'true' : 'false');
+        durBtn.setAttribute('aria-selected', mode === 'duration' ? 'true' : 'false');
+        graphPanel.style.display = isGraph ? 'block' : 'none';
         treePanel.style.display = isTree ? 'block' : 'none';
-        durPanel.style.display = isTree ? 'none' : 'block';
+        durPanel.style.display = mode === 'duration' ? 'block' : 'none';
+    }
+
+    function traceLayoutMode(mode) {
+        return ['graph', 'tree', 'duration'].indexOf(mode) !== -1 ? mode : 'graph';
+    }
+
+    function traceCategoryLabel(category) {
+        return {
+            framework: '框架',
+            controller: '控制器',
+            event: '事件',
+            observer: '观察者',
+            view: '视图',
+            db: 'DB'
+        }[category || ''] || (category || '阶段');
+    }
+
+    function splitTraceName(name) {
+        return String(name || '').split('::').filter(function(part) { return part !== ''; });
+    }
+
+    function parseTraceLifecycleInfo(span) {
+        var meta = (span && span.meta && typeof span.meta === 'object') ? span.meta : {};
+        var name = String(span && span.name || '');
+        var category = String(span && span.category || '');
+        var parts = splitTraceName(name);
+        var parsedDb = category === 'db' ? parseDbSpanName(name) : null;
+        var info = {
+            title: name || '未命名阶段',
+            phase: parts.length > 1 ? parts.slice(1).join(' / ') : name,
+            className: String(meta.class || ''),
+            method: String(meta.method || ''),
+            file: String(meta.file || ''),
+            hook: String(meta.hook || ''),
+            eventName: '',
+            sql: String(meta.sql || ''),
+            operation: parsedDb ? String(meta.operation || parsedDb.operation || '') : '',
+            table: parsedDb ? String(meta.table || parsedDb.table || '') : '',
+            meta: meta
+        };
+
+        if (category === 'observer' && name.indexOf('observer::') === 0) {
+            info.className = info.className || parts.slice(1).join('\\');
+            info.method = info.method || 'execute';
+            info.title = parts.length > 1 ? parts[parts.length - 1] : name;
+            info.phase = 'Observer execute';
+        } else if (category === 'event' && name.indexOf('event::') === 0) {
+            info.eventName = parts.slice(1).join('::');
+            info.title = info.eventName || name;
+            info.phase = 'Event dispatch';
+        } else if (category === 'view' && name.indexOf('view::block::') === 0) {
+            info.className = info.className || parts.slice(2).join('\\');
+            info.method = info.method || 'render/fetch';
+            info.title = parts.length > 2 ? parts[parts.length - 1] : name;
+            info.phase = 'Block render';
+        } else if (category === 'view' && name.indexOf('view::hook_file::') === 0) {
+            info.title = info.hook || parts.slice(2).join('::') || name;
+            info.phase = 'Hook file render';
+        } else if (category === 'view' && name.indexOf('view::hook::') === 0) {
+            info.title = info.hook || parts.slice(2).join('::') || name;
+            info.phase = 'Hook render';
+        } else if (category === 'db') {
+            info.title = (info.operation ? info.operation.toUpperCase() : 'DB') + (info.table ? ' ' + info.table : '');
+            info.phase = 'Database query';
+        } else if (name.indexOf('controller_chain::') === 0) {
+            info.title = parts.slice(1).join(' / ') || name;
+            info.phase = 'Controller chain';
+        } else if (name.indexOf('router_start::') === 0 || name.indexOf('url_parser::') === 0) {
+            info.title = parts.join(' / ');
+            info.phase = 'Runtime sub phase';
+        }
+
+        return info;
+    }
+
+    function traceLifecycleDepths(spans) {
+        var byName = {};
+        spans.forEach(function(span) {
+            if (span && span.name) byName[String(span.name)] = span;
+        });
+        var memo = {};
+        function depthOf(span) {
+            var name = String(span && span.name || '');
+            if (!name) return 0;
+            if (typeof memo[name] === 'number') return memo[name];
+            var parent = String(span && span.parent || '');
+            if (!parent || !byName[parent] || parent === name) {
+                memo[name] = 0;
+                return 0;
+            }
+            memo[name] = Math.min(7, depthOf(byName[parent]) + 1);
+            return memo[name];
+        }
+        spans.forEach(depthOf);
+        return memo;
+    }
+
+    function renderTraceLifecycleChips(span, info) {
+        var chips = [];
+        if (span.parent) chips.push('父：' + String(span.parent));
+        if (info.className) chips.push(info.className);
+        if (info.method) chips.push(info.method + '()');
+        if (info.hook) chips.push('hook ' + info.hook);
+        if (info.file) chips.push(info.file);
+        if (info.table) chips.push('table ' + info.table);
+        return chips.slice(0, 3).map(function(chip) {
+            return '<span class="dev-tool-lifecycle-chip">' + escapeHtml(chip) + '</span>';
+        }).join('');
+    }
+
+    function renderTraceLifecycleDetail(span) {
+        var info = parseTraceLifecycleInfo(span || {});
+        var seq = Number(span && span.seq || 0);
+        var duration = Number(span && span.duration_ms || 0);
+        var dbDuration = Number(span && span.db_duration_ms || 0);
+        var rows = [
+            ['阶段', info.phase || '—'],
+            ['类', info.className || '—'],
+            ['方法', info.method ? info.method + '()' : '—'],
+            ['父阶段', span && span.parent ? String(span.parent) : '根阶段'],
+            ['原始名称', span && span.name ? String(span.name) : '—']
+        ];
+        if (info.eventName) rows.push(['事件名', info.eventName]);
+        if (info.hook) rows.push(['Hook', info.hook]);
+        if (info.file) rows.push(['文件', info.file]);
+        if (info.operation) rows.push(['DB 操作', info.operation]);
+        if (info.table) rows.push(['DB 表', info.table]);
+        if (dbDuration > 0) rows.push(['子 DB 合计', formatTime(dbDuration)]);
+
+        var meta = info.meta || {};
+        var metaKeys = Object.keys(meta).filter(function(key) {
+            return ['class', 'method', 'file', 'hook', 'sql', 'operation', 'table'].indexOf(key) === -1;
+        });
+        metaKeys.slice(0, 12).forEach(function(key) {
+            rows.push(['meta.' + key, typeof meta[key] === 'object' ? JSON.stringify(meta[key]) : String(meta[key])]);
+        });
+
+        var html = '<h4>' + escapeHtml(info.title || '请求阶段详情') + '</h4>';
+        html += '<div class="dev-tool-lifecycle-detail-summary">';
+        html += '<span>#' + escapeHtml(String(seq)) + '</span>';
+        html += '<span>' + escapeHtml(traceCategoryLabel(span && span.category || '')) + '</span>';
+        html += '<span>' + escapeHtml(formatTime(duration)) + '</span>';
+        html += '</div>';
+        html += '<dl>';
+        rows.forEach(function(row) {
+            html += '<div class="dev-tool-lifecycle-detail-row">';
+            html += '<dt>' + escapeHtml(row[0]) + '</dt>';
+            html += '<dd>' + escapeHtml(row[1]) + '</dd>';
+            html += '</div>';
+        });
+        html += '</dl>';
+        if (info.sql) {
+            html += '<pre class="dev-tool-lifecycle-sql">' + escapeHtml(info.sql) + '</pre>';
+        }
+        return html;
+    }
+
+    function renderTraceLifecycleGraph(spans) {
+        var ordered = spans.slice().sort(function(a, b) {
+            var seqA = Number(a.seq || 0);
+            var seqB = Number(b.seq || 0);
+            return seqA === seqB ? 0 : seqA - seqB;
+        });
+        var depths = traceLifecycleDepths(ordered);
+        var firstDetail = ordered.length ? renderTraceLifecycleDetail(ordered[0]) : '<h4>暂无阶段</h4>';
+        var html = '<div class="dev-tool-lifecycle">';
+        html += '<div class="dev-tool-lifecycle-map">';
+        html += '<div class="dev-tool-lifecycle-track">';
+        ordered.forEach(function(span, index) {
+            var info = parseTraceLifecycleInfo(span);
+            var depth = depths[String(span.name || '')] || 0;
+            var duration = Number(span.duration_ms || 0);
+            var timeClass = getTimeClass(duration);
+            var category = String(span.category || '');
+            html += '<button type="button" class="dev-tool-lifecycle-node' + (index === 0 ? ' is-active' : '') + '" data-trace-index="' + escapeAttr(String(index)) + '" data-category="' + escapeAttr(category) + '" style="padding-left:' + (depth * 28) + 'px">';
+            html += '<span class="dev-tool-lifecycle-marker">';
+            html += '<span class="dev-tool-lifecycle-seq">' + escapeHtml(String(span.seq || index + 1)) + '</span>';
+            html += '<span class="dev-tool-lifecycle-time ' + escapeAttr(timeClass) + '">' + escapeHtml(formatTime(duration)) + '</span>';
+            html += '</span>';
+            html += '<span class="dev-tool-lifecycle-card">';
+            html += '<span class="dev-tool-lifecycle-head">';
+            html += '<span class="dev-tool-lifecycle-title" title="' + escapeAttr(span.name || '') + '">' + escapeHtml(info.title || span.name || '未命名阶段') + '</span>';
+            html += '<span class="dev-tool-lifecycle-badge">' + escapeHtml(traceCategoryLabel(category)) + '</span>';
+            html += '</span>';
+            html += '<span class="dev-tool-lifecycle-meta">' + renderTraceLifecycleChips(span, info) + '</span>';
+            html += '</span>';
+            html += '</button>';
+        });
+        html += '</div>';
+        html += '</div>';
+        html += '<aside id="trace-lifecycle-detail" class="dev-tool-lifecycle-detail" aria-live="polite">' + firstDetail + '</aside>';
+        html += '</div>';
+        return html;
     }
 
     /** 请求链路「DB」视图：常规 / 耗时倒序 子 Tab 的 UI 同步 */
@@ -3099,12 +5323,124 @@ const DevToolPanel = (function() {
         var isNormal = mode !== 'duration';
         normalBtn.classList.toggle('active', isNormal);
         durBtn.classList.toggle('active', !isNormal);
-        normalBtn.style.background = isNormal ? '#f7f7ff' : '#fafafa';
-        normalBtn.style.borderColor = isNormal ? '#667eea' : '#ddd';
-        durBtn.style.background = !isNormal ? '#f7f7ff' : '#fafafa';
-        durBtn.style.borderColor = !isNormal ? '#667eea' : '#ddd';
+        normalBtn.setAttribute('aria-selected', isNormal ? 'true' : 'false');
+        durBtn.setAttribute('aria-selected', isNormal ? 'false' : 'true');
         normalPanel.style.display = isNormal ? 'block' : 'none';
         durPanel.style.display = isNormal ? 'none' : 'block';
+    }
+
+    function currentPageUrlForFpcProbe() {
+        try {
+            var url = new URL(window.location.href);
+            url.hash = '';
+            return url;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function probeCurrentPageFpcStatus() {
+        var url = currentPageUrlForFpcProbe();
+        if (!url || url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) {
+            return Promise.resolve({
+                checked: false,
+                hit: false,
+                error: '当前页面 URL 不支持 FPC 探测。'
+            });
+        }
+
+        return fetch(url.href, {
+            method: 'HEAD',
+            credentials: 'same-origin'
+        }).then(function(response) {
+            var fpc = (response.headers.get('X-Weline-FPC') || '').trim();
+            var hitHeader = (response.headers.get('X-Wls-Performance-Fpc-Hit') || '').trim();
+            var source = (response.headers.get('X-Wls-Performance-Fpc-Source') || '').trim();
+            var stale = (response.headers.get('X-Wls-Performance-Fpc-Stale') || '').trim();
+            var hit = hitHeader === '1' || /^(HIT|STALE)$/i.test(fpc);
+            return {
+                checked: true,
+                hit: hit,
+                status: response.status,
+                fpc: fpc,
+                source: source,
+                stale: stale === '1',
+                hitHeader: hitHeader
+            };
+        }).catch(function(error) {
+            return {
+                checked: false,
+                hit: false,
+                error: error && error.message ? error.message : 'FPC 探测失败。'
+            };
+        });
+    }
+
+    function traceEmptyChip(label, value) {
+        if (value === null || typeof value === 'undefined' || String(value) === '') {
+            return '';
+        }
+        return '<span class="dev-tool-trace-empty-chip">' +
+            escapeHtml(label) + ': ' + escapeHtml(String(value)) +
+            '</span>';
+    }
+
+    function normalizeTraceUnavailableMessage(message) {
+        var clean = String(message || '').trim();
+        if (!clean) {
+            return '当前页面没有可展示的请求链路数据。';
+        }
+        if (/^failed to fetch$/i.test(clean)) {
+            return '请求链路接口暂时不可用：Failed to fetch。';
+        }
+        return clean;
+    }
+
+    function buildTraceUnavailableHtml(message, requestId, fpcStatus) {
+        var isFpcHit = Boolean(fpcStatus && fpcStatus.hit);
+        var title = isFpcHit ? '命中 FPC，请求链路未重新执行' : '请求链路暂无数据';
+        var icon = isFpcHit ? 'fa-bolt' : 'fa-info-circle';
+        var desc = isFpcHit
+            ? '当前 HTML 由 Full Page Cache 直接返回，控制器、模板、Hook、DB 等后端阶段被缓存短路，所以本次请求不会产生新的请求链路数据。'
+            : normalizeTraceUnavailableMessage(message);
+        var html = '<div class="dev-tool-trace-empty-card' + (isFpcHit ? ' is-fpc-hit' : '') + '">';
+        html += '<h3 class="dev-tool-trace-empty-title"><i class="fa ' + icon + '"></i>' + escapeHtml(title) + '</h3>';
+        html += '<p class="dev-tool-trace-empty-desc">' + escapeHtml(desc) + '</p>';
+        html += '<div class="dev-tool-trace-empty-meta">';
+        html += traceEmptyChip('request_id', requestId || '');
+        if (fpcStatus && fpcStatus.checked) {
+            html += traceEmptyChip('FPC', fpcStatus.fpc || (isFpcHit ? 'HIT' : 'MISS/未命中'));
+            html += traceEmptyChip('source', fpcStatus.source || '');
+            html += traceEmptyChip('HTTP', fpcStatus.status || '');
+            if (fpcStatus.stale) {
+                html += traceEmptyChip('stale', '1');
+            }
+        }
+        html += '</div>';
+        html += '<ul class="dev-tool-trace-empty-actions">';
+        if (isFpcHit) {
+            html += '<li>这是预期行为：FPC 命中时后端链路没有重新跑，面板只能看到缓存结果。</li>';
+            html += '<li>要看真实链路，请追加 <code>?nocache=1</code> 或清理/关闭 frontend/router cache 后刷新。</li>';
+            html += '<li>如果想分析 FPC 构建耗时，请在缓存 miss 或缓存重建那一次请求打开面板。</li>';
+        } else {
+            html += '<li>确认当前是 DEV/DEBUG 且页面是 HTML 响应。</li>';
+            html += '<li>刷新页面后再打开请求链路；trace 默认只保留短时间窗口。</li>';
+            if (fpcStatus && fpcStatus.checked) {
+                html += '<li>已探测当前页面 FPC 响应头，未发现 FPC HIT/STALE。</li>';
+            } else if (fpcStatus && fpcStatus.error) {
+                html += '<li>FPC 探测未完成：' + escapeHtml(fpcStatus.error) + '</li>';
+            }
+        }
+        html += '</ul>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderTraceUnavailable(content, message, requestId) {
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>分析请求链路状态...</div></div>';
+        probeCurrentPageFpcStatus().then(function(fpcStatus) {
+            content.innerHTML = buildTraceUnavailableHtml(message, requestId, fpcStatus);
+        });
     }
 
     function renderRequestTrace() {
@@ -3112,6 +5448,11 @@ const DevToolPanel = (function() {
         if (!content) return;
 
         if (Array.isArray(state.traceSpans)) {
+            if (state.traceSpans.length === 0) {
+                const config = getDevToolRuntimeConfig();
+                renderTraceUnavailable(content, '当前页面无请求链路数据。', config.requestId || window.__WELINE_REQUEST_ID__ || '');
+                return;
+            }
             renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
             return;
         }
@@ -3119,14 +5460,19 @@ const DevToolPanel = (function() {
         if (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__)) {
             state.traceSpans = window.__WELINE_REQUEST_TRACE__;
             state.traceSummary = null;
+            if (state.traceSpans.length === 0) {
+                const config = getDevToolRuntimeConfig();
+                renderTraceUnavailable(content, '当前页面无请求链路数据。', config.requestId || window.__WELINE_REQUEST_ID__ || '');
+                return;
+            }
             renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
             return;
         }
 
-        const config = window.__WELINE_DEV_TOOL__ || {};
+        const config = getDevToolRuntimeConfig();
         const requestId = config.requestId || window.__WELINE_REQUEST_ID__ || '';
         if (!requestId) {
-            content.innerHTML = '<div class="dev-tool-empty">当前页面没有 request_id，请刷新页面。</div>';
+            renderTraceUnavailable(content, '当前页面没有 request_id，请刷新页面。', '');
             return;
         }
 
@@ -3151,10 +5497,14 @@ const DevToolPanel = (function() {
                 const payload = data.data || {};
                 state.traceSummary = payload.summary || null;
                 state.traceSpans = decodeCompactTracePayload(payload);
+                if (!state.traceSpans.length) {
+                    renderTraceUnavailable(content, '当前页面无请求链路数据。', requestId);
+                    return;
+                }
                 renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
             })
             .catch(function(error) {
-                content.innerHTML = '<div class="dev-tool-empty">' + escapeHtml(error.message || '请求链路不存在或已过期，请刷新页面重试') + '</div>';
+                renderTraceUnavailable(content, error.message || '请求链路不存在或已过期，请刷新页面重试', requestId);
             });
     }
 
@@ -3174,8 +5524,10 @@ const DevToolPanel = (function() {
             const nameId = Number(parts[3] || 0);
             const durationUs = Number(parts[4] || 0);
             const metaId = Number(parts[5] || 0);
+            const seq = Number(parts[0] || 0);
             const span = {
-                seq: Number(parts[0] || 0),
+                seq: seq,
+                index: seq > 0 ? seq - 1 : 0,
                 name: names[nameId] || '',
                 duration_ms: Math.round((durationUs / 1000) * 100) / 100,
                 category: categories[categoryId] || 'framework'
@@ -3202,13 +5554,210 @@ const DevToolPanel = (function() {
         return spans;
     }
 
+    function traceGetPath(source, path) {
+        if (!source || typeof source !== 'object') {
+            return undefined;
+        }
+        var current = source;
+        String(path || '').split('.').forEach(function(part) {
+            if (current === undefined || current === null || typeof current !== 'object') {
+                current = undefined;
+                return;
+            }
+            current = current[part];
+        });
+        return current;
+    }
+
+    function traceFiniteNumber(value, fallback) {
+        var number = Number(value);
+        return Number.isFinite(number) ? number : (fallback || 0);
+    }
+
+    function traceFirstNumber(summary, paths) {
+        if (!summary || typeof summary !== 'object') {
+            return null;
+        }
+        for (var i = 0; i < paths.length; i++) {
+            var value = traceGetPath(summary, paths[i]);
+            if (value === null || typeof value === 'undefined' || value === '') {
+                continue;
+            }
+            var number = Number(value);
+            if (Number.isFinite(number)) {
+                return number;
+            }
+        }
+        return null;
+    }
+
+    function traceSumDuration(spans) {
+        return spans.reduce(function(total, span) {
+            return total + Math.max(0, traceFiniteNumber(span && span.duration_ms, 0));
+        }, 0);
+    }
+
+    function traceRootTotal(spans) {
+        var roots = spans.filter(function(span) {
+            return !span || !span.parent;
+        });
+        var source = roots.length ? roots : spans;
+        return traceSumDuration(source);
+    }
+
+    function traceCategoryTotals(spans, summary) {
+        var totals = {};
+        var source = traceGetPath(summary || {}, 'category_totals')
+            || traceGetPath(summary || {}, 'trace_category_totals')
+            || traceGetPath(summary || {}, 'timing.trace_category_totals');
+        if (source && typeof source === 'object') {
+            Object.keys(source).forEach(function(key) {
+                var number = Number(source[key]);
+                if (Number.isFinite(number)) {
+                    totals[key] = number;
+                }
+            });
+        }
+        if (Object.keys(totals).length > 0) {
+            return totals;
+        }
+        spans.forEach(function(span) {
+            var category = String(span && span.category || 'framework');
+            totals[category] = (totals[category] || 0) + Math.max(0, traceFiniteNumber(span && span.duration_ms, 0));
+        });
+        return totals;
+    }
+
+    function traceSlowestSpan(spans) {
+        var nonRoot = spans.filter(function(span) {
+            return span && span.parent;
+        });
+        var source = nonRoot.length ? nonRoot : spans;
+        return source.reduce(function(slowest, span) {
+            if (!slowest) {
+                return span;
+            }
+            return traceFiniteNumber(span && span.duration_ms, 0) > traceFiniteNumber(slowest.duration_ms, 0) ? span : slowest;
+        }, null);
+    }
+
+    function traceStatusClass(status) {
+        var code = Number(status || 0);
+        if (code >= 500) return 'slow';
+        if (code >= 400) return 'medium';
+        if (code >= 200 && code < 400) return 'fast';
+        return '';
+    }
+
+    function traceRequestSummary(summary) {
+        var request = traceGetPath(summary || {}, 'request') || {};
+        var method = String(request.method || traceGetPath(summary || {}, 'method') || '');
+        var status = String(request.status || traceGetPath(summary || {}, 'status') || '');
+        var uri = String(request.uri || traceGetPath(summary || {}, 'uri') || window.location.pathname || '');
+        var host = String(request.host || traceGetPath(summary || {}, 'host') || window.location.host || '');
+        return {
+            method: method,
+            status: status,
+            uri: uri,
+            host: host
+        };
+    }
+
+    function traceRuntimeSummary(summary) {
+        var runtime = traceGetPath(summary || {}, 'runtime') || {};
+        var fpc = traceGetPath(summary || {}, 'fpc') || {};
+        var fpcHit = Boolean(fpc.hit || traceGetPath(summary || {}, 'fpc_hit'));
+        return {
+            mode: String(runtime.mode || traceGetPath(summary || {}, 'mode') || ''),
+            instance: String(runtime.instance || traceGetPath(summary || {}, 'instance') || ''),
+            workerId: String(runtime.worker_id || traceGetPath(summary || {}, 'worker_id') || ''),
+            workerPort: String(runtime.worker_port || traceGetPath(summary || {}, 'worker_port') || ''),
+            pid: String(runtime.pid || traceGetPath(summary || {}, 'pid') || ''),
+            requestCount: String(runtime.request_count || traceGetPath(summary || {}, 'request_count') || ''),
+            fpcHit: fpcHit,
+            fpcSource: String(fpc.source || traceGetPath(summary || {}, 'fpc_source') || '')
+        };
+    }
+
+    function traceOverviewCard(label, value, note, tone) {
+        var klass = tone ? ' ' + tone : '';
+        var html = '<div class="dev-tool-trace-overview-card' + klass + '">';
+        html += '<div class="dev-tool-trace-overview-label">' + escapeHtml(label) + '</div>';
+        html += '<div class="dev-tool-trace-overview-value" title="' + escapeAttr(value) + '">' + escapeHtml(value) + '</div>';
+        html += '<div class="dev-tool-trace-overview-note" title="' + escapeAttr(note) + '">' + escapeHtml(note || '') + '</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderTraceOverview(spans, summary, codeSpans, dbSpans) {
+        var totalFromSummary = traceFirstNumber(summary, ['total_ms', 'total_duration_ms', 'timing.total_ms']);
+        var totalMs = totalFromSummary !== null && totalFromSummary > 0 ? totalFromSummary : traceRootTotal(spans);
+        var categoryTotals = traceCategoryTotals(spans, summary);
+        var dbFromSummary = traceFirstNumber(summary, ['db_duration_ms', 'db_ms', 'timing.db_ms', 'category_totals.db']);
+        var dbMs = dbFromSummary !== null ? dbFromSummary : (categoryTotals.db || traceSumDuration(dbSpans));
+        var codeMs = totalMs > 0 ? Math.max(0, totalMs - dbMs) : traceSumDuration(codeSpans);
+        var dbRatio = totalMs > 0 ? Math.round((dbMs / totalMs) * 100) : 0;
+        var slowest = traceSlowestSpan(spans);
+        var slowestMs = traceFiniteNumber(slowest && slowest.duration_ms, 0);
+        var slowInfo = slowest ? parseTraceLifecycleInfo(slowest) : null;
+        var slowCount = spans.filter(function(span) {
+            return traceFiniteNumber(span && span.duration_ms, 0) >= 200;
+        }).length;
+        var request = traceRequestSummary(summary || {});
+        var runtime = traceRuntimeSummary(summary || {});
+        var requestValue = (request.method ? request.method + ' ' : '') + (request.status ? request.status : '当前页');
+        var requestNote = (request.host ? request.host : '') + (request.uri ? request.uri : '');
+        var runtimeValue = runtime.fpcHit ? 'FPC HIT' : (runtime.instance || runtime.mode || '当前进程');
+        var runtimeNote = [];
+        if (runtime.workerId) runtimeNote.push('worker ' + runtime.workerId);
+        if (runtime.workerPort) runtimeNote.push('port ' + runtime.workerPort);
+        if (runtime.pid) runtimeNote.push('pid ' + runtime.pid);
+        if (runtime.requestCount) runtimeNote.push('#' + runtime.requestCount);
+        if (runtime.fpcSource) runtimeNote.push(runtime.fpcSource);
+
+        var totalClass = getTimeClass(totalMs, 100, 500);
+        var codeClass = getTimeClass(codeMs, 80, 400);
+        var dbClass = dbRatio >= 40 || dbMs >= 200 ? 'medium' : getTimeClass(dbMs, 40, 200);
+        var slowestClass = getTimeClass(slowestMs, 100, 500);
+        var statusClass = traceStatusClass(request.status);
+        var runtimeClass = runtime.fpcHit ? 'fast' : '';
+        var requestId = traceGetPath(summary || {}, 'request_id') || window.__WELINE_REQUEST_ID__ || '';
+
+        var html = '<div class="dev-tool-trace-overview">';
+        html += traceOverviewCard('总耗时', formatTime(totalMs), 'span ' + spans.length + (requestId ? ' · request_id ' + requestId : ''), totalClass);
+        html += traceOverviewCard('编码阶段', formatTime(codeMs), codeSpans.length + ' 段 · 已扣除 DB 估算', codeClass);
+        html += traceOverviewCard('DB 耗时', formatTime(dbMs), dbSpans.length + ' 次 · ' + dbRatio + '%', dbClass);
+        html += traceOverviewCard('最慢阶段', formatTime(slowestMs), slowInfo ? (traceCategoryLabel(slowest.category) + ' · ' + slowInfo.title) : '暂无', slowestClass);
+        html += traceOverviewCard('请求状态', requestValue, requestNote || '当前页面', statusClass);
+        html += traceOverviewCard('运行时', runtimeValue, runtimeNote.join(' · ') || '无运行时摘要', runtimeClass);
+        html += '</div>';
+
+        var attention = [];
+        if (summary && summary.truncated) attention.push('链路已截断');
+        if (totalClass === 'slow') attention.push('总耗时偏高');
+        if (dbRatio >= 40 && dbSpans.length > 0) attention.push('DB 占比 ' + dbRatio + '%');
+        if (slowCount > 0) attention.push('慢阶段 ' + slowCount + ' 个');
+        if (Number(request.status || 0) >= 400) attention.push('HTTP ' + request.status);
+        if (runtime.fpcHit) attention.push('FPC 命中');
+        if (spans.length >= 300) attention.push('阶段数量偏多');
+        if (attention.length > 0) {
+            html += '<div class="dev-tool-trace-attention"><i class="fa fa-exclamation-circle"></i>';
+            attention.forEach(function(item) {
+                html += '<span>' + escapeHtml(item) + '</span>';
+            });
+            html += '</div>';
+        }
+
+        return html;
+    }
+
     function renderRequestTraceFromSpans(spans, summary) {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
         const codeSpans = spans.filter(function(s) { return (s.category || '') !== 'db'; });
         const dbSpans = spans.filter(function(s) { return (s.category || '') === 'db'; });
 
-        let html = '<div class="performance-stats">';
+        let html = '<div class="performance-stats dev-tool-trace-shell">';
         if (summary && summary.truncated) {
             const maxSpans = Number(summary.max_spans || spans.length || 0);
             html += '<div style="margin-bottom:8px;padding:8px 10px;border:1px solid #f0d98a;border-radius:6px;background:#fff8e1;color:#8a6d3b;font-size:12px;line-height:1.5;">';
@@ -3216,47 +5765,64 @@ const DevToolPanel = (function() {
             html += '</div>';
         }
 
+        html += renderTraceOverview(spans, summary || {}, codeSpans, dbSpans);
+
         // 子 Tab：编码 / DB
-        html += '<div style="display:flex;border-bottom:1px solid #eee;margin-bottom:6px;">';
-        html += '<button type="button" id="trace-subtab-code" class="dev-tool-tab dev-tool-subtab active" style="flex:1;font-size:12px;padding:4px 8px;border:none;border-bottom:2px solid #667eea;background:#f7f7ff;color:#333;cursor:pointer;">编码</button>';
-        html += '<button type="button" id="trace-subtab-db" class="dev-tool-tab dev-tool-subtab" style="flex:1;font-size:12px;padding:4px 8px;border:none;border-bottom:2px solid transparent;background:#fafafa;color:#666;cursor:pointer;">DB</button>';
+        html += '<div class="dev-tool-trace-toolbar">';
+        html += '<div class="dev-tool-trace-view-tabs" role="tablist" aria-label="请求链路视图">';
+        html += '<button type="button" id="trace-subtab-code" class="dev-tool-trace-view-tab active" role="tab" aria-selected="true">编码</button>';
+        html += '<button type="button" id="trace-subtab-db" class="dev-tool-trace-view-tab" role="tab" aria-selected="false">DB</button>';
+        html += '</div>';
+        html += '<div class="dev-tool-trace-toolbar-meta">';
+        html += '<span>编码 ' + escapeHtml(String(codeSpans.length)) + '</span>';
+        html += '<span>DB ' + escapeHtml(String(dbSpans.length)) + '</span>';
+        html += '</div>';
         html += '</div>';
 
         // 编码视图
-        html += '<div id="trace-code-view" class="performance-section">';
+        html += '<div id="trace-code-view" class="dev-tool-trace-panel">';
         if (codeSpans.length === 0) {
-            html += '<div class="performance-section-title">';
+            html += '<div class="dev-tool-trace-panel-head">';
+            html += '<div class="dev-tool-trace-panel-title">';
             html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（编码阶段）';
             html += '</div>';
+            html += '</div>';
+            html += '<div class="dev-tool-trace-panel-body">';
             html += '<div class="dev-tool-empty">当前页面无请求链路数据。</div>';
             html += '<div style="margin-top:8px;padding:8px;font-size:11px;color:#888;background:#f5f5f5;border-radius:4px;">';
             html += '请确认：<br>1) 已开启开发模式（env.php 中 system.deploy 为 dev）或开启 DEBUG；<br>';
             html += '2) 本页为 HTML 响应（WLS/CLI/FPM 均支持）。<br>刷新页面后再试。';
             html += '</div>';
+            html += '</div>';
         } else {
             var allSpans = codeSpans.concat(dbSpans);
-            html += '<div id="trace-code-layout-tabs" style="display:flex;gap:4px;margin-bottom:8px;">';
-            html += '<button type="button" id="trace-layout-tree" class="dev-tool-trace-layout-btn active" data-layout="tree" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid #667eea;background:#f7f7ff;color:#333;cursor:pointer;">常规</button>';
-            html += '<button type="button" id="trace-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid #ddd;background:#fafafa;color:#555;cursor:pointer;">耗时倒序</button>';
+            html += '<div class="dev-tool-trace-panel-head">';
+            html += '<div class="dev-tool-trace-panel-title">';
+            html += '<i class="fa fa-list-alt"></i> 请求生命周期链路';
+            html += '</div>';
+            html += '<div id="trace-code-layout-tabs" class="dev-tool-trace-layout-tabs" role="tablist" aria-label="编码链路排序">';
+            html += '<button type="button" id="trace-layout-graph" class="dev-tool-trace-layout-btn active" data-layout="graph" role="tab" aria-selected="true">生命周期图</button>';
+            html += '<button type="button" id="trace-layout-tree" class="dev-tool-trace-layout-btn" data-layout="tree" role="tab" aria-selected="false">常规</button>';
+            html += '<button type="button" id="trace-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" role="tab" aria-selected="false">耗时倒序</button>';
+            html += '</div>';
             html += '</div>';
 
-            html += '<div id="trace-code-tree-panel">';
-            html += '<div class="performance-section-title" style="margin-top:0;border-bottom:none;padding-bottom:4px;">';
-            html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（树形，发生顺序）';
+            html += '<div class="dev-tool-trace-panel-body">';
+            html += '<div id="trace-code-graph-panel">';
+            html += renderTraceLifecycleGraph(allSpans);
             html += '</div>';
+
+            html += '<div id="trace-code-tree-panel" style="display:none;">';
             var roots = buildTraceTree(allSpans);
             var totalMsRef = { value: 0 };
             roots.forEach(function(node) { html += renderTraceNode(node, 0, totalMsRef, true); });
-            html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
+            html += '<div class="performance-item dev-tool-trace-total">';
             html += '<span class="performance-label">合计（根阶段）</span>';
             html += '<span class="performance-value">' + formatTime(totalMsRef.value) + '</span>';
             html += '</div>';
             html += '</div>';
 
             html += '<div id="trace-code-duration-panel" style="display:none;">';
-            html += '<div class="performance-section-title" style="margin-top:0;border-bottom:none;padding-bottom:4px;">';
-            html += '<i class="fa fa-sort-amount-desc"></i> 按耗时倒序（含编码与 DB，平铺）';
-            html += '</div>';
             var sortedSpans = allSpans.slice().sort(function(a, b) {
                 return (Number(b.duration_ms) || 0) - (Number(a.duration_ms) || 0);
             });
@@ -3275,22 +5841,29 @@ const DevToolPanel = (function() {
                 html += '</div>';
             });
             html += '</div>';
+            html += '</div>';
         }
         html += '</div>';
 
         // DB 视图
-        html += '<div id="trace-db-view" class="performance-section" style="display:none;">';
-        html += '<div class="performance-section-title">';
+        html += '<div id="trace-db-view" class="dev-tool-trace-panel" style="display:none;">';
+        html += '<div class="dev-tool-trace-panel-head">';
+        html += '<div class="dev-tool-trace-panel-title">';
         html += '<i class="fa fa-database"></i> 数据库链路';
         html += '</div>';
         if (dbSpans.length === 0) {
+            html += '</div>';
+            html += '<div class="dev-tool-trace-panel-body">';
             html += '<div class="dev-tool-empty">当前请求未记录数据库访问。</div>';
+            html += '</div>';
         } else {
             // DB视图切换按钮
-            html += '<div id="trace-db-layout-tabs" style="display:flex;gap:4px;margin-bottom:8px;">';
-            html += '<button type="button" id="trace-db-layout-normal" class="dev-tool-trace-layout-btn active" data-layout="normal" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid #667eea;background:#f7f7ff;color:#333;cursor:pointer;">常规</button>';
-            html += '<button type="button" id="trace-db-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid #ddd;background:#fafafa;color:#555;cursor:pointer;">耗时倒序</button>';
+            html += '<div id="trace-db-layout-tabs" class="dev-tool-trace-layout-tabs" role="tablist" aria-label="数据库链路排序">';
+            html += '<button type="button" id="trace-db-layout-normal" class="dev-tool-trace-layout-btn active" data-layout="normal" role="tab" aria-selected="true">常规</button>';
+            html += '<button type="button" id="trace-db-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" role="tab" aria-selected="false">耗时倒序</button>';
             html += '</div>';
+            html += '</div>';
+            html += '<div class="dev-tool-trace-panel-body">';
 
             let totalDb = 0;
             dbSpans.forEach(function(s) { totalDb += Number(s.duration_ms || 0); });
@@ -3384,9 +5957,10 @@ const DevToolPanel = (function() {
             html += '</tbody></table></div>';
             html += '</div>'; // end duration panel
 
-            html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
+            html += '<div class="performance-item dev-tool-trace-total">';
             html += '<span class="performance-label">DB 合计</span>';
             html += '<span class="performance-value">' + formatTime(totalDb) + '</span>';
+            html += '</div>';
             html += '</div>';
         }
         html += '</div>'; // end db view
@@ -3407,6 +5981,27 @@ const DevToolPanel = (function() {
                 });
             });
 
+            var lifecycleDetail = document.getElementById('trace-lifecycle-detail');
+            if (lifecycleDetail && typeof allSpans !== 'undefined' && Array.isArray(allSpans)) {
+                var lifecycleSpans = allSpans.slice().sort(function(a, b) {
+                    return (Number(a.seq || 0) - Number(b.seq || 0));
+                });
+                container.querySelectorAll('.dev-tool-lifecycle-node').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var index = Number(btn.getAttribute('data-trace-index') || 0);
+                        var span = lifecycleSpans[index] || null;
+                        if (!span) {
+                            return;
+                        }
+                        container.querySelectorAll('.dev-tool-lifecycle-node.is-active').forEach(function(active) {
+                            active.classList.remove('is-active');
+                        });
+                        btn.classList.add('is-active');
+                        lifecycleDetail.innerHTML = renderTraceLifecycleDetail(span);
+                    });
+                });
+            }
+
             // 绑定子 Tab 切换：编码 / DB
             var codeBtn = document.getElementById('trace-subtab-code');
             var dbBtn = document.getElementById('trace-subtab-db');
@@ -3415,31 +6010,33 @@ const DevToolPanel = (function() {
             if (codeBtn && dbBtn && codeView && dbView) {
                 codeBtn.addEventListener('click', function () {
                     codeBtn.classList.add('active');
-                    codeBtn.style.borderBottomColor = '#667eea';
-                    codeBtn.style.background = '#f7f7ff';
+                    codeBtn.setAttribute('aria-selected', 'true');
                     dbBtn.classList.remove('active');
-                    dbBtn.style.borderBottomColor = 'transparent';
-                    dbBtn.style.background = '#fafafa';
+                    dbBtn.setAttribute('aria-selected', 'false');
                     codeView.style.display = 'block';
                     dbView.style.display = 'none';
-                    syncTraceCodeLayoutUI((state.traceCodeLayout === 'duration') ? 'duration' : 'tree');
+                    syncTraceCodeLayoutUI(traceLayoutMode(state.traceCodeLayout));
                 });
                 dbBtn.addEventListener('click', function () {
                     dbBtn.classList.add('active');
-                    dbBtn.style.borderBottomColor = '#667eea';
-                    dbBtn.style.background = '#f7f7ff';
+                    dbBtn.setAttribute('aria-selected', 'true');
                     codeBtn.classList.remove('active');
-                    codeBtn.style.borderBottomColor = 'transparent';
-                    codeBtn.style.background = '#fafafa';
+                    codeBtn.setAttribute('aria-selected', 'false');
                     codeView.style.display = 'none';
                     dbView.style.display = 'block';
                     syncTraceDbLayoutUI((state.traceDbLayout === 'duration') ? 'duration' : 'normal');
                 });
             }
 
+            var layoutGraphBtn = document.getElementById('trace-layout-graph');
             var layoutTreeBtn = document.getElementById('trace-layout-tree');
             var layoutDurBtn = document.getElementById('trace-layout-duration');
-            if (layoutTreeBtn && layoutDurBtn) {
+            if (layoutGraphBtn && layoutTreeBtn && layoutDurBtn) {
+                layoutGraphBtn.addEventListener('click', function () {
+                    state.traceCodeLayout = 'graph';
+                    saveState();
+                    syncTraceCodeLayoutUI('graph');
+                });
                 layoutTreeBtn.addEventListener('click', function () {
                     state.traceCodeLayout = 'tree';
                     saveState();
@@ -3450,7 +6047,7 @@ const DevToolPanel = (function() {
                     saveState();
                     syncTraceCodeLayoutUI('duration');
                 });
-                syncTraceCodeLayoutUI((state.traceCodeLayout === 'duration') ? 'duration' : 'tree');
+                syncTraceCodeLayoutUI(traceLayoutMode(state.traceCodeLayout));
             }
 
             var dbLayoutNormalBtn = document.getElementById('trace-db-layout-normal');
@@ -3583,62 +6180,168 @@ const DevToolPanel = (function() {
     function renderPerformanceStats() {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
-        
-        let html = '<div class="performance-stats">';
-        
-        // 页面加载性能
-        html += '<div class="performance-section">';
-        html += '<div class="performance-section-title">';
-        html += '<i class="fa fa-globe"></i> 页面加载性能';
-        html += '</div>';
-        
+
+        const statusText = function(timeClass) {
+            return timeClass === 'fast' ? '快' : (timeClass === 'medium' ? '中' : '慢');
+        };
+        const safeMs = function(value) {
+            value = Number(value);
+            return Number.isFinite(value) && value >= 0 ? value : 0;
+        };
+        const valueOrEmpty = function(value) {
+            return value == null || value === undefined ? '未记录' : formatTime(value);
+        };
+        const metricCard = function(label, value, timeClass) {
+            var klass = timeClass ? ' ' + timeClass : '';
+            var html = '<div class="dev-tool-performance-card' + klass + '">';
+            html += '<div class="dev-tool-performance-card-label">' + escapeHtml(label) + '</div>';
+            html += '<div class="dev-tool-performance-card-value">' + escapeHtml(String(value)) + '</div>';
+            html += '</div>';
+            return html;
+        };
+        const metricTile = function(label, value) {
+            var html = '<div class="dev-tool-performance-metric">';
+            html += '<div class="dev-tool-performance-metric-label">' + escapeHtml(label) + '</div>';
+            html += '<div class="dev-tool-performance-metric-value">' + escapeHtml(String(value)) + '</div>';
+            html += '</div>';
+            return html;
+        };
+        const resourceLabel = function(resource) {
+            try {
+                var url = new URL(resource.name, location.href);
+                var name = url.pathname.split('/').filter(Boolean).pop();
+                return name || url.hostname || resource.name;
+            } catch (e) {
+                var parts = String(resource.name || '').split('/');
+                return parts.pop() || resource.name || 'resource';
+            }
+        };
+        const resourceKind = function(resource) {
+            var type = String(resource.initiatorType || '').toUpperCase();
+            if (type) {
+                return type;
+            }
+            var name = String(resource.name || '').toLowerCase();
+            if (name.endsWith('.js')) return 'SCRIPT';
+            if (name.endsWith('.css')) return 'CSS';
+            if (name.match(/\.(jpg|jpeg|png|gif|svg|webp)$/)) return 'IMAGE';
+            if (name.match(/\.(woff|woff2|ttf|eot)$/)) return 'FONT';
+            return 'RESOURCE';
+        };
+
+        let html = '<div class="performance-stats dev-tool-performance-shell">';
+
         const timing = getPerformanceTiming();
         if (timing) {
-            const items = [
-                { label: 'WLS处理耗时', value: (function() { try { var nav = performance.getEntriesByType('navigation')[0]; var st = nav && nav.serverTiming; if (st) { var wls = st.find(function(t) { return t.name === 'wls'; }); if (wls) return wls.duration; } } catch(e) {} return null; })(), unit: 'ms', optional: true },
-                { label: 'DNS查询', value: timing.dns, unit: 'ms' },
-                { label: 'TCP连接', value: timing.tcp, unit: 'ms' },
-                { label: '请求发送', value: timing.request, unit: 'ms' },
-                { label: '响应接收', value: timing.response, unit: 'ms' },
-                { label: 'DOM解析', value: timing.domParsing, unit: 'ms' },
-                { label: 'DOMContentLoaded', value: timing.domContentLoaded, unit: 'ms' },
-                { label: '页面完全加载', value: timing.loadComplete, unit: 'ms' }
+            const wlsDuration = (function() {
+                try {
+                    var nav = performance.getEntriesByType('navigation')[0];
+                    var st = nav && nav.serverTiming;
+                    if (st) {
+                        var wls = st.find(function(t) { return t.name === 'wls'; });
+                        if (wls) return safeMs(wls.duration);
+                    }
+                } catch (e) {}
+                return null;
+            })();
+
+            const stageItems = [
+                { label: 'DNS 查询', value: safeMs(timing.dns), desc: '域名解析', fast: 40, slow: 120 },
+                { label: 'TCP 连接', value: safeMs(timing.tcp), desc: '连接建立', fast: 80, slow: 250 },
+                { label: '请求发送', value: safeMs(timing.request), desc: '请求到首包', fast: 120, slow: 500 },
+                { label: '响应接收', value: safeMs(timing.response), desc: '首包到响应结束', fast: 80, slow: 250 },
+                { label: 'DOM 解析', value: safeMs(timing.domParsing), desc: '响应结束到可交互', fast: 80, slow: 300 },
+                { label: 'DOMContentLoaded', value: safeMs(timing.domContentLoaded), desc: 'DOM Ready', fast: 1000, slow: 2500 },
+                { label: '页面完全加载', value: safeMs(timing.loadComplete), desc: 'Load Event', fast: 1500, slow: 3000 }
             ];
-            
+
             if (timing.firstPaint > 0) {
-                items.push({ label: '首次渲染 (FCP)', value: timing.firstPaint, unit: 'ms' });
+                stageItems.push({ label: '首次渲染', value: safeMs(timing.firstPaint), desc: 'First Paint', fast: 1000, slow: 2500 });
             }
             if (timing.firstContentfulPaint > 0) {
-                items.push({ label: '首次内容绘制 (FCP)', value: timing.firstContentfulPaint, unit: 'ms' });
+                stageItems.push({ label: '首次内容绘制', value: safeMs(timing.firstContentfulPaint), desc: 'FCP', fast: 1000, slow: 2500 });
             }
-            
-            items.forEach(item => {
-                if (item.optional && (item.value == null || item.value === undefined)) return;
-                const timeClass = getTimeClass(item.value);
-                html += '<div class="performance-item">';
-                html += '<span class="performance-label">' + item.label + '</span>';
-                html += '<span class="performance-value ' + timeClass + '">';
-                html += formatTime(item.value);
-                html += ' <span class="performance-badge ' + timeClass + '">' + 
-                    (timeClass === 'fast' ? '快' : timeClass === 'medium' ? '中' : '慢') + 
-                    '</span>';
-                html += '</span>';
+
+            const pageTotal = Math.max(safeMs(timing.loadComplete), safeMs(timing.domContentLoaded), safeMs(timing.firstContentfulPaint), safeMs(timing.firstPaint));
+            const networkTotal = safeMs(timing.dns) + safeMs(timing.tcp) + safeMs(timing.request) + safeMs(timing.response);
+            const fcpValue = timing.firstContentfulPaint > 0 ? safeMs(timing.firstContentfulPaint) : (timing.firstPaint > 0 ? safeMs(timing.firstPaint) : null);
+            const pageClass = getTimeClass(pageTotal, 1500, 3000);
+            const maxStage = Math.max.apply(null, stageItems.map(function(item) { return item.value; }).concat([1]));
+
+            html += '<div class="dev-tool-performance-hero">';
+            html += '<div>';
+            html += '<div class="dev-tool-performance-kicker"><i class="fa fa-tachometer"></i> 实时性能</div>';
+            html += '<div class="dev-tool-performance-title">页面加载性能</div>';
+            html += '<div class="dev-tool-performance-subtitle">按浏览器 Performance Timing 拆分网络、DOM 和渲染阶段，阶段条越长越值得优先查看。</div>';
+            html += '</div>';
+            html += '<div class="dev-tool-performance-total">';
+            html += '<div class="dev-tool-performance-total-value">' + escapeHtml(formatTime(pageTotal)) + '</div>';
+            html += '<span class="dev-tool-performance-status ' + pageClass + '">' + statusText(pageClass) + '</span>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="dev-tool-performance-summary">';
+            html += metricCard('页面完全加载', formatTime(pageTotal), pageClass);
+            html += metricCard('网络链路', formatTime(networkTotal), getTimeClass(networkTotal, 200, 700));
+            html += metricCard('DOM Ready', formatTime(safeMs(timing.domContentLoaded)), getTimeClass(safeMs(timing.domContentLoaded), 1000, 2500));
+            html += metricCard('首屏内容', valueOrEmpty(fcpValue), fcpValue == null ? '' : getTimeClass(fcpValue, 1000, 2500));
+            html += '</div>';
+
+            html += '<div class="dev-tool-performance-panel">';
+            html += '<div class="dev-tool-performance-panel-head">';
+            html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-area-chart"></i> 加载阶段</div>';
+            html += '<div class="dev-tool-performance-panel-note">按阶段耗时排序观察瓶颈</div>';
+            html += '</div>';
+            html += '<div class="dev-tool-performance-panel-body">';
+            html += '<div class="dev-tool-performance-timeline">';
+            stageItems.forEach(function(item) {
+                var timeClass = getTimeClass(item.value, item.fast, item.slow);
+                var width = maxStage > 0 ? Math.max(item.value === 0 ? 0 : 3, Math.min(100, (item.value / maxStage) * 100)) : 0;
+                html += '<div class="dev-tool-performance-stage-row ' + timeClass + '">';
+                html += '<div>';
+                html += '<div class="dev-tool-performance-stage-name">' + escapeHtml(item.label) + '</div>';
+                html += '<div class="dev-tool-performance-stage-desc">' + escapeHtml(item.desc) + '</div>';
+                html += '</div>';
+                html += '<div class="dev-tool-performance-stage-bar" aria-hidden="true"><span style="width:' + width.toFixed(2) + '%"></span></div>';
+                html += '<div class="dev-tool-performance-stage-value">' + escapeHtml(formatTime(item.value)) + '</div>';
+                html += '<span class="dev-tool-performance-status ' + timeClass + '">' + statusText(timeClass) + '</span>';
                 html += '</div>';
             });
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            if (wlsDuration != null) {
+                html += '<div class="dev-tool-performance-panel">';
+                html += '<div class="dev-tool-performance-panel-head">';
+                html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-server"></i> 服务端</div>';
+                html += '<div class="dev-tool-performance-panel-note">Server-Timing</div>';
+                html += '</div>';
+                html += '<div class="dev-tool-performance-panel-body">';
+                html += '<div class="dev-tool-performance-metrics">';
+                html += metricTile('WLS 处理耗时', formatTime(wlsDuration));
+                html += metricTile('浏览器等待首包', formatTime(safeMs(timing.request)));
+                html += metricTile('响应接收', formatTime(safeMs(timing.response)));
+                html += metricTile('页面总耗时', formatTime(pageTotal));
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
         } else {
-            html += '<div class="performance-item">';
-            html += '<span class="performance-label">性能API不可用</span>';
+            html += '<div class="dev-tool-performance-panel">';
+            html += '<div class="dev-tool-performance-panel-body">';
+            html += '<div class="dev-tool-performance-empty">性能 API 不可用，无法读取页面加载阶段。</div>';
+            html += '</div>';
             html += '</div>';
         }
-        
-        html += '</div>';
-        
+
         // 资源加载统计
-        html += '<div class="performance-section">';
-        html += '<div class="performance-section-title">';
-        html += '<i class="fa fa-cubes"></i> 资源加载统计';
+        html += '<div class="dev-tool-performance-panel">';
+        html += '<div class="dev-tool-performance-panel-head">';
+        html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-cubes"></i> 资源加载统计</div>';
+        html += '<div class="dev-tool-performance-panel-note">当前页面资源</div>';
         html += '</div>';
-        
+
         const resources = performance.getEntriesByType('resource');
         const resourceStats = {
             total: resources.length,
@@ -3664,98 +6367,90 @@ const DevToolPanel = (function() {
             }
             resourceStats.totalTime += resource.duration || 0;
         });
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">总资源数</span>';
-        html += '<span class="performance-value">' + resourceStats.total + '</span>';
+
+        html += '<div class="dev-tool-performance-panel-body">';
+        html += '<div class="dev-tool-performance-metrics">';
+        html += metricTile('总资源数', resourceStats.total);
+        html += metricTile('JS / CSS', resourceStats.js + ' / ' + resourceStats.css);
+        html += metricTile('图片 / 字体', resourceStats.img + ' / ' + resourceStats.font);
+        html += metricTile('传输大小', formatBytes(resourceStats.totalSize));
+        html += metricTile('其他资源', resourceStats.other);
+        html += metricTile('总加载时间', formatTime(resourceStats.totalTime));
         html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">JS文件</span>';
-        html += '<span class="performance-value">' + resourceStats.js + '</span>';
-        html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">CSS文件</span>';
-        html += '<span class="performance-value">' + resourceStats.css + '</span>';
-        html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">图片文件</span>';
-        html += '<span class="performance-value">' + resourceStats.img + '</span>';
-        html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">字体文件</span>';
-        html += '<span class="performance-value">' + resourceStats.font + '</span>';
-        html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">其他资源</span>';
-        html += '<span class="performance-value">' + resourceStats.other + '</span>';
-        html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">总传输大小</span>';
-        html += '<span class="performance-value">' + formatBytes(resourceStats.totalSize) + '</span>';
-        html += '</div>';
-        
-        html += '<div class="performance-item">';
-        html += '<span class="performance-label">总加载时间</span>';
-        html += '<span class="performance-value ' + getTimeClass(resourceStats.totalTime) + '">' + 
-            formatTime(resourceStats.totalTime) + '</span>';
-        html += '</div>';
-        
-        html += '</div>';
-        
-        // API请求统计
-        html += '<div class="performance-section">';
-        html += '<div class="performance-section-title">';
-        html += '<i class="fa fa-exchange"></i> API请求统计 (最近' + state.apiRequests.length + '条)';
-        html += '</div>';
-        
-        if (state.apiRequests.length === 0) {
-            html += '<div class="performance-item">';
-            html += '<span class="performance-label">暂无API请求记录</span>';
-            html += '</div>';
-        } else {
-            // 显示最近10条
-            const recentRequests = state.apiRequests.slice(-10).reverse();
-            recentRequests.forEach(req => {
-                const timeClass = getTimeClass(req.duration, 50, 200);
-                html += '<div class="api-request-item">';
-                html += '<div class="api-request-url">' + req.url + '</div>';
-                html += '<div class="api-request-time">';
-                html += '<span class="performance-value ' + timeClass + '">' + formatTime(req.duration) + '</span>';
-                html += ' · 状态: ' + (req.status || req.error || 'unknown');
-                html += ' · ' + new Date(req.timestamp).toLocaleTimeString();
+
+        const slowResources = resources.slice().sort(function(a, b) {
+            return safeMs(b.duration) - safeMs(a.duration);
+        }).slice(0, 6);
+
+        if (slowResources.length > 0) {
+            html += '<div class="dev-tool-performance-resource-list dev-tool-performance-list-offset">';
+            slowResources.forEach(function(resource) {
+                var duration = safeMs(resource.duration);
+                var timeClass = getTimeClass(duration, 100, 500);
+                html += '<div class="dev-tool-performance-resource-row">';
+                html += '<div class="dev-tool-performance-row-main">';
+                html += '<div class="dev-tool-performance-row-title" title="' + escapeAttr(resource.name || '') + '">' + escapeHtml(resourceLabel(resource)) + '</div>';
+                html += '<div class="dev-tool-performance-row-meta">' + escapeHtml(resourceKind(resource)) + ' · ' + escapeHtml(formatBytes(resource.transferSize || 0)) + '</div>';
+                html += '</div>';
+                html += '<div class="dev-tool-performance-row-side">';
+                html += '<span class="dev-tool-performance-stage-value">' + escapeHtml(formatTime(duration)) + '</span>';
+                html += '<span class="dev-tool-performance-status ' + timeClass + '">' + statusText(timeClass) + '</span>';
                 html += '</div>';
                 html += '</div>';
             });
-            
-            // 统计信息
-            const avgDuration = state.apiRequests.reduce((sum, req) => sum + req.duration, 0) / state.apiRequests.length;
-            const maxDuration = Math.max(...state.apiRequests.map(req => req.duration));
-            const minDuration = Math.min(...state.apiRequests.map(req => req.duration));
-            
-            html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8e8e8;">';
-            html += '<div class="performance-item">';
-            html += '<span class="performance-label">平均耗时</span>';
-            html += '<span class="performance-value ' + getTimeClass(avgDuration) + '">' + formatTime(avgDuration) + '</span>';
             html += '</div>';
-            html += '<div class="performance-item">';
-            html += '<span class="performance-label">最大耗时</span>';
-            html += '<span class="performance-value ' + getTimeClass(maxDuration) + '">' + formatTime(maxDuration) + '</span>';
+        } else {
+            html += '<div class="dev-tool-performance-empty dev-tool-performance-list-offset">暂无资源加载明细。</div>';
+        }
+
+        html += '</div>';
+        html += '</div>';
+
+        // API请求统计
+        html += '<div class="dev-tool-performance-panel">';
+        html += '<div class="dev-tool-performance-panel-head">';
+        html += '<div class="dev-tool-performance-panel-title"><i class="fa fa-exchange"></i> API 请求统计</div>';
+        html += '<div class="dev-tool-performance-panel-note">最近 ' + state.apiRequests.length + ' 条</div>';
+        html += '</div>';
+        html += '<div class="dev-tool-performance-panel-body">';
+
+        if (state.apiRequests.length === 0) {
+            html += '<div class="dev-tool-performance-empty">暂无 API 请求记录。</div>';
+        } else {
+            const durations = state.apiRequests.map(function(req) { return safeMs(req.duration); });
+            const avgDuration = durations.reduce(function(sum, duration) { return sum + duration; }, 0) / durations.length;
+            const maxDuration = Math.max.apply(null, durations);
+            const minDuration = Math.min.apply(null, durations);
+
+            html += '<div class="dev-tool-performance-metrics">';
+            html += metricTile('平均耗时', formatTime(avgDuration));
+            html += metricTile('最大耗时', formatTime(maxDuration));
+            html += metricTile('最小耗时', formatTime(minDuration));
+            html += metricTile('请求数量', state.apiRequests.length);
             html += '</div>';
-            html += '<div class="performance-item">';
-            html += '<span class="performance-label">最小耗时</span>';
-            html += '<span class="performance-value ' + getTimeClass(minDuration) + '">' + formatTime(minDuration) + '</span>';
-            html += '</div>';
+
+            // 显示最近10条
+            const recentRequests = state.apiRequests.slice(-10).reverse();
+            html += '<div class="dev-tool-performance-api-list dev-tool-performance-list-offset">';
+            recentRequests.forEach(req => {
+                const timeClass = getTimeClass(safeMs(req.duration), 50, 200);
+                html += '<div class="dev-tool-performance-api-row">';
+                html += '<div class="dev-tool-performance-row-main">';
+                html += '<div class="dev-tool-performance-row-title" title="' + escapeAttr(req.url || '') + '">' + escapeHtml(req.url || '') + '</div>';
+                html += '<div class="dev-tool-performance-row-meta">状态: ' + escapeHtml(String(req.status || req.error || 'unknown')) + ' · ' + escapeHtml(new Date(req.timestamp).toLocaleTimeString()) + '</div>';
+                html += '</div>';
+                html += '<div class="dev-tool-performance-row-side">';
+                html += '<span class="dev-tool-performance-stage-value">' + escapeHtml(formatTime(req.duration)) + '</span>';
+                html += '<span class="dev-tool-performance-status ' + timeClass + '">' + statusText(timeClass) + '</span>';
+                html += '</div>';
+                html += '</div>';
+            });
             html += '</div>';
         }
-        
+
         html += '</div>';
-        
+        html += '</div>';
+
         html += '</div>';
         content.innerHTML = html;
     }
@@ -3773,8 +6468,10 @@ const DevToolPanel = (function() {
         init,
         toggle,
         closePanel,
+        toggleLayoutMode,
         updateExpandDirection,
         switchMainTab,
+        switchFrameworkTab,
         switchRouteTab,
         searchRoutes,
         toggleModule,
@@ -3787,6 +6484,8 @@ const DevToolPanel = (function() {
         registerExtensionTab,
     };
 })();
+
+window.DevToolPanel = DevToolPanel;
 
 // 页面加载完成后初始化
 if (document.readyState === 'loading') {

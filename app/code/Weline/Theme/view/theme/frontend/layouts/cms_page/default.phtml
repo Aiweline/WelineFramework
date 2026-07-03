@@ -10,7 +10,10 @@
  * @meta.description {default="CMS页面默认布局，包含 header、content、footer 三大区域",name="CMS页面默认布局描述",description="简化的CMS页面布局，content区域支持自由拖放部件和容器"}
  * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
  * @param title {default="CMS页面",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param meta_title {default="",name="SEO标题",description="SEO标题，留空时使用页面标题"}
+ * @param meta_description {default="",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要"}
+ * @param canonical_url {default="",name="Canonical URL",description="Canonical URL，留空时使用CMS页面公开地址"}
+ * @param robots {default="index,follow",name="Robots",description="搜索引擎抓取策略，例如 index,follow 或 noindex,nofollow"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
@@ -73,23 +76,15 @@ $colors = $this->getData('colors') ?? [];
                         position="content"
                         class="cms-page-content-slot">
                     <w:hook name="Weline_Theme::frontend::layouts::cms_page::content">
-                        <if condition="meta.content">
+                        <div class="cms-page-default-content">
                             <div class="container">
-                                <div class="cms-content">
-                                    {{meta.content}}
+                                <div class="slot-placeholder" data-placeholder="content">
+                                    <span class="placeholder-icon" aria-hidden="true"></span>
+                                    <span class="placeholder-text"><?= __('拖拽部件或容器到此处') ?></span>
+                                    <span class="placeholder-hint"><?= __('支持富文本、Banner、图片、视频等部件') ?></span>
                                 </div>
                             </div>
-                        <else/>
-                            <div class="cms-page-default-content">
-                                <div class="container">
-                                    <div class="slot-placeholder" data-placeholder="content">
-                                        <span class="placeholder-icon">📄</span>
-                                        <span class="placeholder-text">CMS内容区域 - 拖拽部件或容器到此处</span>
-                                        <span class="placeholder-hint">支持：富文本内容、Banner、图片、视频等任意部件</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </if>
+                        </div>
                     </w:hook>
                 </w:slot>
                 
@@ -154,89 +149,6 @@ $colors = $this->getData('colors') ?? [];
         box-sizing: border-box;
     }
     
-    /* CMS内容样式 */
-    .cms-content {
-        padding: var(--weline-layout-spacing-xl, 2rem) 0;
-        font-family: inherit;
-        font-size: var(--weline-layout-font-size-base, 1rem);
-        line-height: var(--weline-layout-line-height-relaxed, 1.75);
-        color: var(--weline-layout-text-secondary);
-    }
-    
-    .cms-content h1,
-    .cms-content h2,
-    .cms-content h3,
-    .cms-content h4,
-    .cms-content h5,
-    .cms-content h6 {
-        margin: var(--weline-layout-spacing-lg, 1.5rem) 0 var(--weline-layout-spacing-sm, 0.5rem);
-        line-height: var(--weline-layout-line-height-tight, 1.25);
-        color: var(--weline-layout-text-primary);
-        font-family: var(--weline-layout-font-family-display, var(--weline-layout-font-family));
-    }
-    
-    .cms-content h1 { font-size: var(--weline-layout-font-size-4xl, 2rem); }
-    .cms-content h2 { font-size: var(--weline-layout-font-size-3xl, 1.75rem); }
-    .cms-content h3 { font-size: var(--weline-layout-font-size-2xl, 1.5rem); }
-    .cms-content h4 { font-size: var(--weline-layout-font-size-xl, 1.25rem); }
-    .cms-content h5 { font-size: var(--weline-layout-font-size-lg, 1.125rem); }
-    .cms-content h6 { font-size: var(--weline-layout-font-size-base, 1rem); }
-    
-    .cms-content p {
-        margin: 1em 0;
-    }
-    
-    .cms-content img {
-        max-width: 100%;
-        height: auto;
-        border-radius: var(--weline-layout-radius-lg, 8px);
-    }
-    
-    .cms-content a {
-        color: var(--weline-layout-link-color);
-        text-decoration: underline;
-    }
-    
-    .cms-content a:hover {
-        text-decoration: none;
-    }
-    
-    .cms-content ul,
-    .cms-content ol {
-        margin: 1em 0;
-        padding-left: 2em;
-    }
-    
-    .cms-content li {
-        margin: 0.5em 0;
-    }
-    
-    .cms-content blockquote {
-        margin: 1.5em 0;
-        padding: 1em 1.5em;
-        border-left: var(--border-width-thick) var(--weline-theme-border-style) var(--weline-theme-primary);
-        background: var(--weline-layout-surface-secondary);
-        border-radius: var(--border-radius-none) var(--weline-layout-radius-lg) var(--weline-layout-radius-lg) var(--border-radius-none);
-    }
-    
-    .cms-content table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1.5em 0;
-    }
-    
-    .cms-content th,
-    .cms-content td {
-        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
-        padding: 0.75em 1em;
-        text-align: left;
-    }
-    
-    .cms-content th {
-        background: var(--weline-layout-surface-secondary);
-        font-weight: var(--weline-layout-font-weight-semibold);
-    }
-    
     /* 编辑模式样式由 editor-mode.css 统一管理 */
     
     /* 响应式设计 */
@@ -245,9 +157,6 @@ $colors = $this->getData('colors') ?? [];
             padding: var(--weline-layout-spacing-xl, 2rem) 0;
         }
         
-        .cms-content h1 { font-size: var(--weline-layout-font-size-3xl, 1.75rem); }
-        .cms-content h2 { font-size: var(--weline-layout-font-size-2xl, 1.5rem); }
-        .cms-content h3 { font-size: var(--weline-layout-font-size-xl, 1.25rem); }
     }
     </style>
     

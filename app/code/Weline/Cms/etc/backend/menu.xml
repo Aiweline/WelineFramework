@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Cms::page" name="cms_page" title="CMS 页面"
+          action="cms/backend/page/listing" parent="Weline_Backend::cms_group"
+          icon="mdi mdi-text-box-outline" order="10"/>
+</menus>

@@ -33,16 +33,17 @@ $docsUrl = $path('dev/tool/docs');
 $apiDocsUrl = $path('dev/tool/docs/api');
 $backendUrl = $path($backendPrefix);
 $apiEndpoint = $path(trim($restFrontendPrefix, '/') . '/framework/query-bin');
+$privacyUrl = $path('theme/policy/privacy');
 $loginUrl = $path('customer/account/login');
 $registerUrl = $path('customer/account/register');
 $accountUrl = $path('customer/account');
 $identityUrl = $path('customer/account/index#identity-bridge');
 
 $quickLinks = [
-    ['label' => '开发文档', 'desc' => '浏览模块文档、架构说明和快速开始指南。', 'href' => $docsUrl, 'tone' => 'blue'],
-    ['label' => 'API 文档', 'desc' => '查看 QueryProvider、Graph 和 REST API 的在线说明。', 'href' => $apiDocsUrl, 'tone' => 'red'],
-    ['label' => '后台入口', 'desc' => '进入后台管理、系统配置、主题和开发工具。', 'href' => $backendUrl, 'tone' => 'green'],
-    ['label' => '快速教程', 'desc' => '按首页步骤完成安装、升级、启动和路由验证。', 'href' => '#quick-start', 'tone' => 'dark'],
+    ['label' => '开发文档', 'desc' => '浏览模块文档、架构说明和快速开始指南。', 'href' => $docsUrl, 'tone' => 'blue', 'event' => 'open_dev_docs'],
+    ['label' => 'API 文档', 'desc' => '查看 QueryProvider、Graph 和 REST API 的在线说明。', 'href' => $apiDocsUrl, 'tone' => 'red', 'event' => 'open_api_docs'],
+    ['label' => '后台入口', 'desc' => '进入后台管理、系统配置、主题和开发工具。', 'href' => $backendUrl, 'tone' => 'green', 'event' => 'open_backend'],
+    ['label' => '快速教程', 'desc' => '按首页步骤完成安装、升级、启动和路由验证。', 'href' => '#quick-start', 'tone' => 'dark', 'event' => 'jump_quick_start'],
 ];
 
 $features = [
@@ -54,6 +55,44 @@ $features = [
     ['title' => '多语言与多站点', 'desc' => '语言、币种、站点、主题和配置都有明确作用域，适合国际化业务。'],
     ['title' => '事件与 Hook', 'desc' => '框架级事件、模块 Hook 和扩展点让业务能力可以组合，不需要硬改核心。'],
     ['title' => '开发工具链', 'desc' => '文档中心、API 文档、命令行、HTTP 请求调试和缓存工具覆盖常见开发闭环。'],
+];
+
+$useCases = [
+    [
+        'title' => '企业后台与运营系统',
+        'desc' => 'WelineFramework 适合构建权限清晰、模块边界明确的后台系统。菜单、系统配置、数据表格、表单、消息、缓存和任务调度都可以按模块交付，后续新增业务时只扩展对应模块，不需要把所有逻辑塞进单个控制器或单个应用目录。'
+    ],
+    [
+        'title' => '多站点官网与内容页面',
+        'desc' => '框架内置多语言、多站点、主题和 SEO Head 能力，首页、产品页、帮助中心、政策页可以共享组件，又能为不同站点保留独立标题、描述、canonical、hreflang、结构化数据和静态资源策略。'
+    ],
+    [
+        'title' => 'REST API 与 QueryProvider',
+        'desc' => '前端或外部系统可以通过 QueryProvider、Graph、REST 前缀访问业务数据。接口由模块提供，权限、参数、响应格式和运行区域保持统一，适合同时服务后台、前台、小程序、自动化脚本和 AI 诊断工具。'
+    ],
+    [
+        'title' => '长期演进的业务平台',
+        'desc' => '当项目从单一页面成长为订单、客户、支付、内容、队列、报表等组合业务时，模块注册、事件 Hook、模型迁移和配置作用域可以降低改动风险。团队可以按模块分工，也可以把成熟能力沉淀为可复用扩展。'
+    ],
+];
+
+$workflowNotes = [
+    [
+        'title' => '从模型到数据库',
+        'desc' => '开发者先在模块模型中描述字段、索引和关系，再通过 setup:upgrade 同步结构。这样数据库变化和代码一起演进，减少手工 SQL 漏改，也方便在不同环境重复部署。模型说明还能沉淀到文档和诊断流程里，便于团队复查字段来源。'
+    ],
+    [
+        'title' => '从路由到页面',
+        'desc' => 'Controller、模板、布局和静态资源按模块组织。自动路由负责发现入口，主题系统负责页面表现，开发面板可以在本地快速检查当前路由、文档、请求链路和 SEO 状态，减少排查入口分散的问题。'
+    ],
+    [
+        'title' => '从本地到 WLS',
+        'desc' => 'WLS 常驻运行时用于模拟更接近生产的请求生命周期，支持 HTTPS、本地证书、会话、热重载和独立测试实例。性能诊断可以查看阶段耗时、请求链路和服务状态，帮助开发者定位慢点。'
+    ],
+    [
+        'title' => '从功能到可维护',
+        'desc' => '文档导入、API 文档、技能说明、系统配置和命令行工具让项目不只停留在能跑，还能被团队理解、复查和持续优化。新成员可以从首页进入文档，再按模块追踪具体能力，降低交接成本。'
+    ],
 ];
 
 $steps = [
@@ -70,16 +109,26 @@ $capabilities = [
     ['label' => 'API 文档', 'value' => $apiDocsUrl],
 ];
 
-$seoTitle = 'WelineFramework 默认首页';
-$seoDescription = 'WelineFramework 默认首页提供开发文档、API 文档、后台入口、WLS 常驻运行时和模块化开发快速入口。';
+$siteName = 'Weline Framework';
+$seoTitle = 'WelineFramework - PHP 模块化开发框架与 WLS 常驻运行时';
+$seoDescription = 'WelineFramework 提供 PHP 模块化开发、自动路由、ORM 模型迁移、QueryProvider API、多语言多站点与 WLS 常驻运行时，适合快速构建后台、前台和接口项目。';
+$seoImage = '/Weline/Index/view/statics/images/weline-og.svg';
+$seoImageAlt = 'WelineFramework - PHP 模块化开发框架与 WLS 常驻运行时分享图';
+$seoFaviconSvg = '/Weline/Index/view/statics/images/weline-favicon.svg';
+$seoFaviconPng = '/Weline/Frontend/view/statics/img/favicon.png';
+$seoContentCategory = 'framework';
 $seoKeywords = [
     'WelineFramework',
     'Weline',
     'WLS',
     'PHP framework',
+    'PHP modular framework',
     'QueryProvider',
+    'ORM',
+    'REST API',
     __('模块化开发'),
     __('多语言多站点'),
+    __('常驻运行时'),
 ];
 $seoRobots = 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1';
 $seoCanonicalUrl = '';
@@ -88,14 +137,14 @@ try {
     if ($fullRequestUri !== '' && preg_match('/^https?:\/\//i', $fullRequestUri)) {
         $parts = parse_url($fullRequestUri);
         if (is_array($parts) && !empty($parts['host'])) {
-            $scheme = (string)($parts['scheme'] ?? 'https');
+            $scheme = 'https';
             $host = (string)$parts['host'];
             $port = isset($parts['port']) ? ':' . (string)$parts['port'] : '';
             $seoCanonicalUrl = $scheme . '://' . $host . $port . '/';
         }
     }
     if ($seoCanonicalUrl === '' && isset($this->request)) {
-        $scheme = (string)($this->request->getServer('REQUEST_SCHEME') ?: 'http');
+        $scheme = 'https';
         $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
         if ($host !== '') {
             $seoCanonicalUrl = $scheme . '://' . $host . '/';
@@ -111,13 +160,69 @@ $this->setData('robots', $seoRobots);
 if ($seoCanonicalUrl !== '') {
     $this->setData('canonical_url', $seoCanonicalUrl);
 }
+$seoHomeUrl = $seoCanonicalUrl !== '' ? $seoCanonicalUrl : '/';
+$seoAbsoluteUrl = static function (string $url) use ($seoHomeUrl): string {
+    if ($url === '' || preg_match('/^https?:\/\//i', $url)) {
+        return $url;
+    }
+    if ($seoHomeUrl === '/' || !preg_match('/^https?:\/\//i', $seoHomeUrl)) {
+        return $url;
+    }
+    return rtrim($seoHomeUrl, '/') . '/' . ltrim($url, '/');
+};
+$seoQuickItems = array_map(static function (array $link) use ($seoAbsoluteUrl): array {
+    return [
+        'name' => (string)__($link['label']),
+        'url' => $seoAbsoluteUrl((string)$link['href']),
+        'description' => (string)__($link['desc']),
+    ];
+}, $quickLinks);
 $seoContext = [
     'title' => __($seoTitle),
     'description' => __($seoDescription),
     'keywords' => $seoKeywords,
     'robots' => $seoRobots,
-    'page_type' => 'home_page',
-    'site_name' => 'Weline Framework',
+    'page_type' => 'home',
+    'content_category' => $seoContentCategory,
+    'site_name' => $siteName,
+    'image' => $seoImage,
+    'image_alt' => __($seoImageAlt),
+    'sitemap_url' => $seoAbsoluteUrl('/sitemap.xml'),
+    'alternates' => [
+        'x-default' => $seoHomeUrl,
+        'zh-CN' => $seoHomeUrl,
+    ],
+    'site_search_enabled' => true,
+    'search_url_template' => $seoAbsoluteUrl($docsUrl . '?search={search_term_string}'),
+    'breadcrumbs' => [
+        ['name' => __('首页'), 'url' => $seoHomeUrl],
+    ],
+    'item_list' => $seoQuickItems,
+    'organization' => [
+        'name' => $siteName,
+        'url' => $seoHomeUrl,
+        'logo' => $seoAbsoluteUrl($seoImage),
+        'sameAs' => [
+            'https://github.com/Aiweline/WelineFramework',
+            'https://gitee.com/aiweline/WelineFramework',
+        ],
+    ],
+    'schema_nodes' => [
+        [
+            '@type' => 'SoftwareApplication',
+            '@id' => $seoHomeUrl . '#software',
+            'name' => 'WelineFramework',
+            'applicationCategory' => 'DeveloperApplication',
+            'operatingSystem' => 'PHP',
+            'url' => $seoHomeUrl,
+            'image' => $seoAbsoluteUrl($seoImage),
+            'description' => (string)__($seoDescription),
+            'sameAs' => [
+                'https://github.com/Aiweline/WelineFramework',
+                'https://gitee.com/aiweline/WelineFramework',
+            ],
+        ],
+    ],
 ];
 if ($seoCanonicalUrl !== '') {
     $seoContext['canonical_url'] = $seoCanonicalUrl;
@@ -129,6 +234,9 @@ $this->setData('seo', $seoContext);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="<?= $escapeRaw($seoFaviconSvg) ?>">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= $escapeRaw($seoFaviconPng) ?>">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= $escapeRaw($seoFaviconPng) ?>">
     <w:hook>seo::head</w:hook>
     <style>
         :root {
@@ -353,6 +461,22 @@ $this->setData('seo', $seoContext);
             color: var(--wf-ink);
             font-size: 1rem;
             font-weight: 800;
+        }
+
+        .wf-status__figure {
+            margin: 0 0 16px;
+            overflow: hidden;
+            border: 1px solid var(--wf-border);
+            border-radius: var(--wf-radius-sm);
+            background: #ffffff;
+        }
+
+        .wf-status__figure img {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 1200 / 630;
+            object-fit: cover;
         }
 
         .wf-status__grid {
@@ -723,19 +847,19 @@ $this->setData('seo', $seoContext);
         }
     </style>
 </head>
-<body>
+<body class="seo-home">
 <div class="wf-home">
     <header class="wf-home__shell wf-nav" aria-label="<?= $escape('首页导航') ?>">
-        <a class="wf-brand" href="#top" aria-label="<?= $escape('WelineFramework 首页') ?>">
+        <a class="wf-brand" href="#top" aria-label="<?= $escape('WelineFramework 首页') ?>" data-pixel-event="nav_home">
             <span class="wf-brand__mark" aria-hidden="true">W</span>
             <span>WelineFramework</span>
         </a>
         <nav class="wf-nav__links" aria-label="<?= $escape('快捷入口') ?>">
-            <a href="<?= $escapeRaw($docsUrl) ?>"><?= $escape('文档') ?></a>
-            <a href="<?= $escapeRaw($apiDocsUrl) ?>"><?= $escape('API') ?></a>
-            <a href="#quick-start"><?= $escape('快速开发') ?></a>
-            <a href="#advantages"><?= $escape('优势') ?></a>
-            <a href="<?= $escapeRaw($backendUrl) ?>"><?= $escape('后台') ?></a>
+            <a href="<?= $escapeRaw($docsUrl) ?>" data-pixel-event="nav_dev_docs"><?= $escape('文档') ?></a>
+            <a href="<?= $escapeRaw($apiDocsUrl) ?>" data-pixel-event="nav_api_docs"><?= $escape('API') ?></a>
+            <a href="#quick-start" data-pixel-event="nav_quick_start"><?= $escape('快速开发') ?></a>
+            <a href="#advantages" data-pixel-event="nav_advantages"><?= $escape('优势') ?></a>
+            <a href="<?= $escapeRaw($backendUrl) ?>" data-pixel-event="nav_backend"><?= $escape('后台') ?></a>
         </nav>
     </header>
 
@@ -743,17 +867,23 @@ $this->setData('seo', $seoContext);
         <section class="wf-home__shell wf-hero" aria-labelledby="wf-home-title">
             <div>
                 <p class="wf-kicker"><?= $escape('默认前端已经就绪') ?></p>
-                <h1 id="wf-home-title"><?= $escape('欢迎使用 WelineFramework') ?></h1>
+                <h1 id="wf-home-title"><?= $escape($seoTitle) ?></h1>
                 <p class="wf-hero__lead"><?= $escape('这是框架安装后的默认官网首页。你可以从这里进入开发文档、API 文档、后台管理和快速开发教程，开始构建模块、主题、接口与业务系统。') ?></p>
                 <div class="wf-hero__actions">
-                    <a class="wf-btn" href="<?= $escapeRaw($docsUrl) ?>"><?= $escape('查看开发文档') ?></a>
-                    <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($apiDocsUrl) ?>"><?= $escape('查看 API 文档') ?></a>
-                    <a class="wf-btn wf-btn--secondary" href="#quick-start"><?= $escape('快速开始') ?></a>
+                    <a class="wf-btn" href="<?= $escapeRaw($docsUrl) ?>" data-pixel-event="open_dev_docs"><?= $escape('查看开发文档') ?></a>
+                    <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($apiDocsUrl) ?>" data-pixel-event="open_api_docs"><?= $escape('查看 API 文档') ?></a>
+                    <a class="wf-btn wf-btn--secondary" href="#quick-start" data-pixel-event="jump_quick_start"><?= $escape('快速开始') ?></a>
                 </div>
                 <p class="wf-hero__note"><?= $escape('本地默认访问地址：') ?><strong>https://127.0.0.1/</strong></p>
             </div>
 
             <aside class="wf-status" aria-label="<?= $escape('当前开发入口') ?>">
+                <figure class="wf-status__figure">
+                    <img src="<?= $escapeRaw($seoImage) ?>"
+                         alt="<?= $escape('WelineFramework PHP 模块化开发框架与 WLS 常驻运行时架构概览') ?>"
+                         loading="eager"
+                         decoding="async">
+                </figure>
                 <h2 class="wf-status__title"><?= $escape('当前开发入口') ?></h2>
                 <div class="wf-status__grid">
                     <?php foreach ($capabilities as $capability): ?>
@@ -774,7 +904,7 @@ $this->setData('seo', $seoContext);
             </div>
             <div class="wf-card-grid">
                 <?php foreach ($quickLinks as $link): ?>
-                    <a class="wf-link-card" href="<?= $escapeRaw($link['href']) ?>">
+                    <a class="wf-link-card" href="<?= $escapeRaw($link['href']) ?>" data-pixel-event="<?= $escapeRaw((string)($link['event'] ?? 'open_home_entry')) ?>">
                         <span class="wf-link-card__tone wf-link-card__tone--<?= $escapeRaw($link['tone']) ?>" aria-hidden="true"></span>
                         <div>
                             <h3><?= $escape($link['label']) ?></h3>
@@ -821,6 +951,40 @@ $this->setData('seo', $seoContext);
             </div>
         </section>
 
+        <section class="wf-home__shell wf-section" aria-labelledby="wf-use-cases-title">
+            <div class="wf-section__header">
+                <span class="wf-section__eyebrow"><?= $escape('适用场景') ?></span>
+                <h2 id="wf-use-cases-title"><?= $escape('适合持续演进的 PHP 业务系统') ?></h2>
+                <p class="wf-section__desc"><?= $escape('默认首页不只是占位页，它把框架能力、开发入口和业务落地方式整理在一起，方便开发者、搜索引擎和团队成员理解这个项目能解决什么问题。') ?></p>
+            </div>
+            <div class="wf-feature-grid">
+                <?php foreach ($useCases as $index => $case): ?>
+                    <article class="wf-feature-card">
+                        <span class="wf-feature-card__index"><?= $escapeRaw('U' . str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                        <h3><?= $escape($case['title']) ?></h3>
+                        <p><?= $escape($case['desc']) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <section class="wf-home__shell wf-section" aria-labelledby="wf-workflow-title">
+            <div class="wf-section__header">
+                <span class="wf-section__eyebrow"><?= $escape('开发流程') ?></span>
+                <h2 id="wf-workflow-title"><?= $escape('从开发到诊断的完整闭环') ?></h2>
+                <p class="wf-section__desc"><?= $escape('WelineFramework 把模型、路由、模板、接口、运行时、文档和诊断工具放在同一套工程约定里，减少项目早期搭建成本，也让后期性能优化、SEO 检查和模块维护有据可查。') ?></p>
+            </div>
+            <div class="wf-feature-grid">
+                <?php foreach ($workflowNotes as $index => $note): ?>
+                    <article class="wf-feature-card">
+                        <span class="wf-feature-card__index"><?= $escapeRaw('W' . str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                        <h3><?= $escape($note['title']) ?></h3>
+                        <p><?= $escape($note['desc']) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
         <section class="wf-home__shell wf-section" aria-label="<?= $escape('官网账户') ?>">
             <div class="wf-account">
                 <div>
@@ -834,11 +998,11 @@ $this->setData('seo', $seoContext);
                 </div>
                 <div class="wf-account__actions">
                     <?php if ($isLoggedIn): ?>
-                        <a class="wf-btn" href="<?= $escapeRaw($accountUrl) ?>"><?= $escape('个人中心') ?></a>
-                        <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($identityUrl) ?>"><?= $escape('授权应用') ?></a>
+                        <a class="wf-btn" href="<?= $escapeRaw($accountUrl) ?>" data-pixel-event="open_account_center"><?= $escape('个人中心') ?></a>
+                        <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($identityUrl) ?>" data-pixel-event="open_identity_bridge"><?= $escape('授权应用') ?></a>
                     <?php else: ?>
-                        <a class="wf-btn" href="<?= $escapeRaw($loginUrl) ?>"><?= $escape('登录官网账号') ?></a>
-                        <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($registerUrl) ?>"><?= $escape('注册账号') ?></a>
+                        <a class="wf-btn" href="<?= $escapeRaw($loginUrl) ?>" data-pixel-event="open_login"><?= $escape('登录官网账号') ?></a>
+                        <a class="wf-btn wf-btn--secondary" href="<?= $escapeRaw($registerUrl) ?>" data-pixel-event="open_register"><?= $escape('注册账号') ?></a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -848,6 +1012,9 @@ $this->setData('seo', $seoContext);
     <footer class="wf-home__shell wf-repos">
         <span class="wf-muted"><?= $escape('源码、Issue 与社区协作入口') ?></span>
         <div class="wf-repos__links">
+            <a class="wf-repo-link" href="<?= $escapeRaw($privacyUrl) ?>">
+                <?= $escape('隐私政策') ?>
+            </a>
             <a class="wf-repo-link" href="https://github.com/Aiweline/WelineFramework" target="_blank" rel="noopener">
                 <svg class="wf-repo-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
                     <rect width="24" height="24" rx="4" fill="#ffffff"/>
@@ -864,6 +1031,7 @@ $this->setData('seo', $seoContext);
         </div>
     </footer>
 </div>
+<w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 <w:hook>seo::footer</w:hook>
 </body>
 </html>

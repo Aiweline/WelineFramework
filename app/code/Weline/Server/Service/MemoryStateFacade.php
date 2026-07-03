@@ -265,14 +265,17 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
      */
     private function buildServiceOptions(array $config): array
     {
+        $wlsMode = \defined('WLS_MODE') && WLS_MODE;
+
         return [
-            'connect_timeout' => (float) ($config['connect_timeout'] ?? 1.0),
-            'timeout' => (float) ($config['timeout'] ?? 2.0),
+            'connect_timeout' => (float) ($config['connect_timeout'] ?? ($wlsMode ? 0.05 : 1.0)),
+            'timeout' => (float) ($config['timeout'] ?? ($wlsMode ? 0.05 : 2.0)),
             'pool_size' => (int) ($config['pool_size'] ?? 8),
             'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 0),
-            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.2),
+            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? ($wlsMode ? 0.01 : 0.2)),
             'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
             'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
+            'fail_fast_on_cooldown' => (bool) ($config['fail_fast_on_cooldown'] ?? $wlsMode),
             'token_file_name' => (string) (
                 $config['token_file_name']
                 ?? $this->runtime['token_file_name']

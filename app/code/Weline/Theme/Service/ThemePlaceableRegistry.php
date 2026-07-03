@@ -36,11 +36,14 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
             }
 
             $widget = $definition->toWidgetArray();
+            $groupKey = $this->resolveGroupKey($definition);
+            if (!$this->matchesLibraryFilter($widget, $groupKey, $filterOptions)) {
+                continue;
+            }
             if (!$this->matchesSlotFilter($widget, $filterOptions)) {
                 continue;
             }
 
-            $groupKey = $this->resolveGroupKey($definition);
             $grouped[$groupKey] ??= [
                 'label' => $this->getGroupLabel($groupKey),
                 'widgets' => [],
@@ -115,7 +118,10 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
             'banner' => __('横幅部件'),
             'carousel' => __('轮播部件'),
             'container' => __('容器部件'),
-            'basic' => __('基础部件'),
+            'stats' => __('统计部件'),
+            'chart' => __('图表部件'),
+            'table' => __('表格部件'),
+            'basic' => __('基础组件 / HTML 搭建'),
             'legacy' => __('主题旧部件'),
         ];
 
@@ -125,11 +131,6 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
     private function matchesPageType(ThemeComponentDefinition $definition, ?string $pageType, ?array $filterOptions): bool
     {
         if ($pageType === null) {
-            return true;
-        }
-
-        $effectiveArea = $filterOptions['area'] ?? null;
-        if ($effectiveArea === 'backend') {
             return true;
         }
 
@@ -164,17 +165,32 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
         }
 
         $slotId = $filterOptions['slot_id'] ?? null;
-        $area = $filterOptions['area'] ?? null;
+        $area = $filterOptions['slot_area'] ?? ($filterOptions['area'] ?? null);
         $showExclusiveOnly = (bool)($filterOptions['show_exclusive_only'] ?? false);
-        if (!$slotId && !$area) {
-            return true;
-        }
-        if ($area === 'backend') {
-            return true;
-        }
-
         $acceptCodes = $this->normalizeCodeList($filterOptions['accept'] ?? $filterOptions['accept_codes'] ?? []);
         $rejectCodes = $this->normalizeCodeList($filterOptions['reject'] ?? $filterOptions['reject_codes'] ?? []);
+
+        // backend/frontend 是组件注册目录，不是可摆放 slot 区域。没有指定 slot 时只按 page_layouts 过滤。
+        if (($area === 'backend' || $area === 'frontend') && !$slotId) {
+            $widgetCodes = $this->collectWidgetSupportCodes($widget);
+            if ($rejectCodes !== [] && array_intersect($rejectCodes, $widgetCodes) !== []) {
+                return false;
+            }
+            return $acceptCodes === [] && $rejectCodes === []
+                ? true
+                : $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
+        }
+        if ($area === 'backend' || $area === 'frontend') {
+            $area = null;
+        }
+
+        if (!$slotId && !$area) {
+            if ($rejectCodes !== [] && array_intersect($rejectCodes, $this->collectWidgetSupportCodes($widget)) !== []) {
+                return false;
+            }
+            return $this->matchesSlotCodeProtocol($acceptCodes, $this->collectWidgetSupportCodes($widget));
+        }
+
         $widgetCodes = $this->collectWidgetSupportCodes($widget);
         if ($rejectCodes !== [] && array_intersect($rejectCodes, $widgetCodes) !== []) {
             return false;
@@ -222,6 +238,77 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
         }
 
         return $this->matchesSlotCodeProtocol($acceptCodes, $widgetCodes);
+    }
+
+    private function matchesLibraryFilter(array $widget, string $groupKey, ?array $filterOptions): bool
+    {
+        if ($filterOptions === null) {
+            return true;
+        }
+
+        $groupCodes = $this->normalizeCodeList([
+            $groupKey,
+            $widget['group_type'] ?? null,
+            $widget['type'] ?? null,
+        ]);
+        $identityCodes = $this->collectWidgetIdentityCodes($widget);
+        $supportCodes = $this->collectWidgetSupportCodes($widget);
+
+        if (!$this->matchesAllowRejectFilter(
+            $groupCodes,
+            $this->readFilterCodes($filterOptions, ['widget_allow_groups', 'allow_groups', 'widget_group_allow']),
+            $this->readFilterCodes($filterOptions, ['widget_reject_groups', 'reject_groups', 'widget_group_reject'])
+        )) {
+            return false;
+        }
+
+        if (!$this->matchesAllowRejectFilter(
+            $identityCodes,
+            $this->readFilterCodes($filterOptions, ['widget_allow_codes', 'widget_allow_widgets', 'allow_codes', 'allow_widgets']),
+            $this->readFilterCodes($filterOptions, ['widget_reject_codes', 'widget_reject_widgets', 'reject_codes', 'reject_widgets'])
+        )) {
+            return false;
+        }
+
+        return $this->matchesAllowRejectFilter(
+            $supportCodes,
+            $this->readFilterCodes($filterOptions, ['widget_allow_supports', 'widget_allow_protocols', 'allow_supports', 'allow_protocols']),
+            $this->readFilterCodes($filterOptions, ['widget_reject_supports', 'widget_reject_protocols', 'reject_supports', 'reject_protocols'])
+        );
+    }
+
+    /**
+     * @param list<string> $candidateCodes
+     * @param list<string> $allowCodes
+     * @param list<string> $rejectCodes
+     */
+    private function matchesAllowRejectFilter(array $candidateCodes, array $allowCodes, array $rejectCodes): bool
+    {
+        if ($rejectCodes !== [] && array_intersect($rejectCodes, $candidateCodes) !== []) {
+            return false;
+        }
+
+        return $allowCodes === []
+            || in_array('*', $allowCodes, true)
+            || array_intersect($allowCodes, $candidateCodes) !== [];
+    }
+
+    /**
+     * @param array<string,mixed> $filterOptions
+     * @param list<string> $keys
+     * @return list<string>
+     */
+    private function readFilterCodes(array $filterOptions, array $keys): array
+    {
+        $values = [];
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $filterOptions)) {
+                continue;
+            }
+            $values[] = $filterOptions[$key];
+        }
+
+        return $this->normalizeCodeList($values);
     }
 
     private function matchesSlotCodeProtocol(array $acceptCodes, array $widgetCodes): bool
@@ -308,6 +395,33 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
         return $this->normalizeCodeList($codes);
     }
 
+    private function collectWidgetIdentityCodes(array $widget): array
+    {
+        $code = (string)($widget['code'] ?? '');
+        $module = (string)($widget['module'] ?? '');
+        $codes = [
+            $code,
+            $widget['type'] ?? null,
+            $widget['slot'] ?? null,
+        ];
+
+        $normalizedCode = strtolower(trim(str_replace('\\', '/', $code)));
+        if ($normalizedCode !== '') {
+            $parts = array_values(array_filter(explode('/', $normalizedCode), static fn(string $part): bool => $part !== ''));
+            if ($parts !== []) {
+                $codes[] = end($parts);
+            }
+        }
+
+        if ($module !== '' && $code !== '') {
+            $moduleCode = strtolower(trim((string)$module));
+            $codes[] = $moduleCode . '::' . $normalizedCode;
+            $codes[] = str_replace('_', '-', $moduleCode) . '/' . $normalizedCode;
+        }
+
+        return $this->normalizeCodeList($codes);
+    }
+
     private function normalizeCodeList(mixed $value): array
     {
         $items = [];
@@ -350,6 +464,9 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
                 'description' => $field['description'] ?? '',
                 'default' => $field['default'] ?? null,
                 'type' => $field['type'] ?? 'text',
+                'i18n' => (bool)($field['i18n'] ?? $field['translate'] ?? $field['translatable'] ?? false),
+                'translate' => (bool)($field['translate'] ?? $field['i18n'] ?? $field['translatable'] ?? false),
+                'translatable' => (bool)($field['translatable'] ?? $field['i18n'] ?? $field['translate'] ?? false),
                 'required' => (bool)($field['required'] ?? false),
                 'options' => $field['options'] ?? [],
             ];

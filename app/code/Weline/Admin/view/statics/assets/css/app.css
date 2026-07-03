@@ -3279,7 +3279,7 @@ input[switch="dark"]:checked + label {
 }
 
 .bg-pattern {
-    background-image: url("../images/bg.webp");
+    background-image: url("../images/login-lotus-bg.png");
     background-size: cover;
     background-position: center;
 }

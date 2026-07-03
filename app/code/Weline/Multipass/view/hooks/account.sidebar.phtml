@@ -4,8 +4,8 @@
  *
  * Hook: account.sidebar
  *
- * @hook-priority 170
- * @hook-sort-order 12
+ * @hook-priority 40
+ * @hook-sort-order 99
  * @hook-solo false
  */
 $accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
@@ -26,3 +26,19 @@ $accountIndexPath = rtrim($accountIndexPath, '/');
         <i class="fa fa-angle-right"></i>
     </span>
 </a>
+
+<div class="account-hook-nav-group account-hook-nav-group--developer">
+    <div class="account-hook-nav-title"><lang>开发者</lang></div>
+    <a class="account-hook-nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#multipass-developer-apps" data-section="multipass-developer-apps" data-account-nav-parent="developer" data-account-nav-link="true">
+        <span class="account-hook-nav-link__label">
+            <i class="ri-code-box-line" aria-hidden="true"></i>
+            <span class="account-hook-nav-link__text">
+                <strong><?= __('Multipass 管理申请') ?></strong>
+                <span><?= __('申请接入网站授权登录') ?></span>
+            </span>
+        </span>
+        <span class="account-hook-nav-link__arrow" aria-hidden="true">
+            <i class="fa fa-angle-right"></i>
+        </span>
+    </a>
+</div>

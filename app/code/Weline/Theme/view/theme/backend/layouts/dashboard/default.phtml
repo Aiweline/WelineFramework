@@ -1,101 +1,507 @@
-<!--
-布局：后端 - 仪表盘布局
+<?php
+/**
+ * 布局：后端 - Dashboard 布局
+ *
+ * Dashboard 是后台 Theme 的特殊布局：复用默认后台壳，额外收紧内容区和报表画布体验。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$meta = $this->getData('meta') ?? [];
 
-后端仪表盘布局，包含侧边栏导航和主内容区
-字段
-@meta.name {default="后端仪表盘布局",name="后端仪表盘布局",description="后端仪表盘布局，用于描述布局的名称"}
-@meta.description {default="后端仪表盘布局，包含侧边栏导航和主内容区",name="后端仪表盘布局，包含侧边栏导航和主内容区",description="后端仪表盘布局，包含侧边栏导航和主内容区，用于描述布局的用途"}
-@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
-@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
-@param.sidebar {default="",name="侧边栏内容",description="侧边栏内容（导航菜单）"}
-@param.sidebarCollapsed {default=false,name="侧边栏折叠",description="侧边栏是否折叠"}
-@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
-
-参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
-模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
-页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
--->
+$isEditorMode = !empty($editor_mode ?? false) || !empty($this->getData('editor_mode'));
+$showHeader = $meta['showHeader'] ?? true;
+$showSidebar = $meta['showSidebar'] ?? !$isEditorMode;
+$showFooter = $meta['showFooter'] ?? false;
+$showRightSidebar = $meta['showRightSidebar'] ?? !$isEditorMode;
+$extraClass = $meta['class'] ?? '';
+?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend">
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend"<?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::backend::layouts::dashboard::head-after</w:hook>
+    <style>
+        .dashboard-layout-wrapper .page-content {
+            padding-bottom: 28px;
+        }
+
+        .dashboard-layout-wrapper .dashboard-container {
+            max-width: 1540px;
+        }
+
+        .dashboard-layout-wrapper .backend-dashboard-main-content {
+            min-width: 0;
+            min-height: 0 !important;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-layout-wrapper .page-title-box {
+            margin-bottom: 14px;
+        }
+
+        .dashboard-layout-wrapper {
+            --w-dashboard-surface: var(--bs-card-bg, var(--backend-color-bg-primary, #fff));
+            --w-dashboard-surface-soft: var(--bs-tertiary-bg, #f8fafc);
+            --w-dashboard-text: var(--bs-body-color, var(--backend-color-text-primary, #1f2937));
+            --w-dashboard-heading: var(--bs-heading-color, var(--w-dashboard-text));
+            --w-dashboard-muted: var(--bs-secondary-color, var(--backend-color-text-secondary, #6b7280));
+            --w-dashboard-border: var(--bs-border-color, var(--backend-color-border, #e5e7eb));
+        }
+
+        body[data-theme-mode="dark"] .dashboard-layout-wrapper,
+        body[data-layout-mode="dark"] .dashboard-layout-wrapper,
+        html[data-bs-theme="dark"] .dashboard-layout-wrapper {
+            --w-dashboard-surface: rgba(15, 23, 42, 0.92);
+            --w-dashboard-surface-soft: rgba(30, 41, 59, 0.78);
+            --w-dashboard-text: #d8e1f2;
+            --w-dashboard-heading: #f8fafc;
+            --w-dashboard-muted: #9aa7bd;
+            --w-dashboard-border: rgba(148, 163, 184, 0.34);
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap {
+            min-height: 0;
+            color: var(--w-dashboard-text);
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-layout-grid {
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            grid-auto-flow: dense;
+            gap: 14px;
+            align-items: start;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region {
+            min-width: 0;
+            border: 1px solid var(--w-dashboard-border);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 14px;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-summary {
+            grid-column: 1 / span 4;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-analysis {
+            grid-column: 5 / span 5;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-side {
+            grid-column: 10 / span 3;
+            grid-row: 1 / span 2;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-detail {
+            grid-column: 1 / span 9;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-head h2 {
+            margin: 0;
+            color: var(--w-dashboard-heading);
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-head p {
+            margin: 3px 0 0;
+            color: var(--w-dashboard-muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-region-head > span {
+            flex: 0 0 auto;
+            color: var(--w-dashboard-muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-slot {
+            min-height: 0;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-slot-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-slot-summary > .w-dashboard-region-head,
+        .dashboard-layout-wrapper .w-dashboard-slot-summary > .widget-wrapper[data-widget-code="overview_kpi"] {
+            grid-column: 1 / -1;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-slot-stack {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap .widget-wrapper {
+            min-width: 0;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap .dashboard-widget {
+            height: 100%;
+            min-width: 0;
+            border: 1px solid var(--w-dashboard-border);
+            border-radius: 8px;
+            background: var(--w-dashboard-surface);
+            padding: 14px;
+            box-sizing: border-box;
+            overflow: hidden;
+            word-break: keep-all;
+            overflow-wrap: normal;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap .dashboard-widget header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap .dashboard-widget h3 {
+            margin: 0;
+            color: var(--w-dashboard-heading);
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap .dashboard-widget header span,
+        .dashboard-layout-wrapper .w-dashboard-canvas-wrap .dashboard-widget small {
+            color: var(--w-dashboard-muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-empty {
+            min-height: 96px;
+            border: 1px dashed var(--w-dashboard-border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            background: var(--w-dashboard-surface);
+            color: var(--w-dashboard-muted);
+            text-align: center;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-empty.compact {
+            min-height: 82px;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-empty h2,
+        .dashboard-layout-wrapper .w-dashboard-empty strong {
+            margin: 0;
+            color: var(--w-dashboard-heading);
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .dashboard-layout-wrapper .w-dashboard-empty p,
+        .dashboard-layout-wrapper .w-dashboard-empty span {
+            margin: 0;
+            color: var(--w-dashboard-muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot th,
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot td {
+            border-bottom: 1px solid var(--w-dashboard-border);
+            padding: 10px 0;
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.35;
+            vertical-align: top;
+        }
+
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot th {
+            width: 32%;
+            color: var(--w-dashboard-muted);
+            font-weight: 500;
+            padding-right: 16px;
+            white-space: nowrap;
+        }
+
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot td strong {
+            display: block;
+            color: var(--w-dashboard-heading);
+            font-weight: 700;
+        }
+
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot td span {
+            display: block;
+            margin-top: 3px;
+            color: var(--w-dashboard-muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot tr:last-child th,
+        .dashboard-layout-wrapper .dashboard-widget-detail-snapshot tr:last-child td {
+            border-bottom: 0;
+        }
+
+        @media (max-width: 980px) {
+            .dashboard-layout-wrapper .w-dashboard-layout-grid {
+                grid-template-columns: repeat(8, minmax(0, 1fr));
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-summary,
+            .dashboard-layout-wrapper .w-dashboard-region-analysis,
+            .dashboard-layout-wrapper .w-dashboard-region-detail {
+                grid-column: 1 / span 5;
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-side {
+                grid-column: 6 / -1;
+                grid-row: 1 / span 3;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .dashboard-layout-wrapper .w-dashboard-layout-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-summary,
+            .dashboard-layout-wrapper .w-dashboard-region-analysis,
+            .dashboard-layout-wrapper .w-dashboard-region-side,
+            .dashboard-layout-wrapper .w-dashboard-region-detail {
+                grid-column: 1 / -1;
+                grid-row: auto;
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-summary {
+                order: 1;
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-side {
+                order: 2;
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-analysis {
+                order: 3;
+            }
+
+            .dashboard-layout-wrapper .w-dashboard-region-detail {
+                order: 4;
+            }
+        }
+    </style>
 </head>
-<body>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+    <w:hook>Weline_Theme::backend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::backend::layouts::dashboard::body-start</w:hook>
-    
-    <w:hook>Weline_Theme::backend::layouts::base::header-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="backend" type="header" default-option="default"/>
-    <w:hook>Weline_Theme::backend::layouts::base::header-after</w:hook>
-    
-    <div class="backend-dashboard <?= htmlspecialchars($meta['class'] ?? '') ?>">
-        <if condition="meta.sidebar">
-            <aside class="backend-sidebar <if condition="meta.sidebarCollapsed">collapsed</if>">
-                {{meta.sidebar}}
-            </aside>
-            <else/>
-            <w:block class="Weline\Theme\Block\Partials" area="backend" type="sidebar" default-option="default"/>
-        </if>
-        
-        <?php
-        $layoutMainClass = 'backend-main-content';
-        echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
-        ?>
+
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="loading" default-option="default"/>
+
+    <div id="layout-wrapper" class="dashboard-layout-wrapper">
+        <?php if ($showHeader): ?>
+            <w:hook>Weline_Theme::backend::layouts::base::topbar-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="backend" type="topbar" default-option="default"/>
+            <w:hook>Weline_Theme::backend::layouts::base::topbar-after</w:hook>
+        <?php endif; ?>
+
+        <w:hook>Weline_Theme::backend::layouts::base::topnav-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="topnav" default-option="default"/>
+        <w:hook>Weline_Theme::backend::layouts::base::topnav-after</w:hook>
+
+        <?php if ($showSidebar): ?>
+            <w:hook>Weline_Theme::backend::layouts::base::sidebar-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="backend" type="sidebar" default-option="left"/>
+            <w:hook>Weline_Theme::backend::layouts::base::sidebar-after</w:hook>
+        <?php endif; ?>
+
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container-fluid dashboard-container">
+                    <w:hook>Weline_Theme::backend::layouts::base::content-before</w:hook>
+                    <w:hook>Weline_Theme::backend::layouts::dashboard::content-before</w:hook>
+
+                    <?php
+                    $layoutMainClass = trim('backend-main-content backend-dashboard-main-content ' . (string)$extraClass);
+                    $layoutMainAttributes = 'data-layout="main_content" data-dashboard-layout="default"';
+                    echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml', [
+                        'layoutMainClass' => $layoutMainClass,
+                        'layoutMainAttributes' => $layoutMainAttributes,
+                        'layoutShowPageHeader' => false,
+                    ]);
+                    ?>
+
+                    <section class="w-dashboard-canvas-wrap" data-dashboard-layout-slots>
+                        <div class="w-dashboard-layout-grid">
+                            <w:slot id="dashboard-summary"
+                                    name="Dashboard Summary"
+                                    accept="dashboard-slot-summary,dashboard-stat,dashboard-kpi,builder-component,builder-display,builder-container"
+                                    position="dashboard-summary"
+                                    append="true"
+                                    multiple="true"
+                                    max="4"
+                                    class="w-dashboard-region w-dashboard-region-summary w-dashboard-slot w-dashboard-slot-summary">
+                                <div class="w-dashboard-region-head">
+                                    <div>
+                                        <h2><?= __('指标区') ?></h2>
+                                        <p><?= __('只放关键数值、KPI、状态数字。') ?></p>
+                                    </div>
+                                    <span><?= __('最多 4 个') ?></span>
+                                </div>
+                                <div class="w-dashboard-empty compact slot-placeholder">
+                                    <strong><?= __('指标区') ?></strong>
+                                    <span><?= __('拖入 KPI / 统计数字部件') ?></span>
+                                </div>
+                            </w:slot>
+
+                            <w:slot id="dashboard-analysis"
+                                    name="Dashboard Analysis"
+                                    accept="dashboard-slot-analysis,dashboard-chart,dashboard-trend,builder-component,builder-display,builder-container"
+                                    position="dashboard-analysis"
+                                    append="true"
+                                    multiple="true"
+                                    max="3"
+                                    class="w-dashboard-region w-dashboard-region-analysis w-dashboard-slot w-dashboard-slot-stack">
+                                <div class="w-dashboard-region-head">
+                                    <div>
+                                        <h2><?= __('主分析区') ?></h2>
+                                        <p><?= __('用于趋势图、核心图表和主要观察。') ?></p>
+                                    </div>
+                                </div>
+                                <div class="w-dashboard-empty slot-placeholder">
+                                    <strong><?= __('主分析区') ?></strong>
+                                    <span><?= __('拖入图表 / 趋势部件') ?></span>
+                                </div>
+                            </w:slot>
+
+                            <w:slot id="dashboard-side"
+                                    name="Dashboard Side"
+                                    accept="dashboard-slot-side,dashboard-status,dashboard-list,dashboard-stat,builder-component,builder-display,builder-container"
+                                    position="dashboard-side"
+                                    append="true"
+                                    multiple="true"
+                                    max="4"
+                                    class="w-dashboard-region w-dashboard-region-side w-dashboard-slot w-dashboard-slot-stack">
+                                <div class="w-dashboard-region-head">
+                                    <div>
+                                        <h2><?= __('侧栏洞察') ?></h2>
+                                        <p><?= __('放状态、短列表、异常提醒。') ?></p>
+                                    </div>
+                                </div>
+                                <div class="w-dashboard-empty slot-placeholder">
+                                    <strong><?= __('侧栏洞察') ?></strong>
+                                    <span><?= __('拖入状态 / 列表部件') ?></span>
+                                </div>
+                            </w:slot>
+
+                            <w:slot id="dashboard-detail"
+                                    name="Dashboard Detail"
+                                    accept="dashboard-slot-detail,dashboard-table,dashboard-list,builder-component,builder-display,builder-container,builder-form"
+                                    position="dashboard-detail"
+                                    append="true"
+                                    multiple="true"
+                                    max="6"
+                                    class="w-dashboard-region w-dashboard-region-detail w-dashboard-slot w-dashboard-slot-stack">
+                                <div class="w-dashboard-region-head">
+                                    <div>
+                                        <h2><?= __('明细区') ?></h2>
+                                        <p><?= __('放表格、排行和可展开列表。') ?></p>
+                                    </div>
+                                </div>
+                                <section class="dashboard-widget dashboard-widget-detail-snapshot slot-placeholder">
+                                    <header>
+                                        <h3><?= __('默认明细') ?></h3>
+                                        <span><?= __('Dashboard') ?></span>
+                                    </header>
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <th><?= __('视图') ?></th>
+                                                <td>
+                                                    <strong><?= __('默认概览') ?></strong>
+                                                    <span><?= __('系统共享视图') ?></span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th><?= __('布局') ?></th>
+                                                <td>
+                                                    <strong><?= __('4 个固定区域') ?></strong>
+                                                    <span><?= __('指标、分析、侧栏、明细') ?></span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th><?= __('部件') ?></th>
+                                                <td>
+                                                    <strong><?= __('后台专用') ?></strong>
+                                                    <span><?= __('由后台统计部件提供') ?></span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </section>
+                            </w:slot>
+                        </div>
+                    </section>
+
+                    <w:hook>Weline_Theme::backend::layouts::dashboard::content-after</w:hook>
+                    <w:hook>Weline_Theme::backend::layouts::base::content-after</w:hook>
+                </div>
+            </div>
+
+            <?php if ($showFooter): ?>
+                <footer class="footer">
+                    <div class="container-fluid">
+                        <div class="row">
+                            <div class="col-sm-6">
+                                <?= date('Y') ?> &copy; Weline.
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-sm-end d-none d-sm-block">
+                                    Crafted with <i class="mdi mdi-heart text-danger"></i> By <a href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+            <?php endif; ?>
+        </div>
     </div>
-    
-    <w:hook>Weline_Theme::backend::layouts::base::footer-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="default"/>
-    <w:hook>Weline_Theme::backend::layouts::base::footer-after</w:hook>
-    
+
+    <?php if ($showRightSidebar): ?>
+        <w:hook>Weline_Theme::backend::layouts::base::right-sidebar-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="right-sidebar" default-option="default"/>
+        <w:hook>Weline_Theme::backend::layouts::base::right-sidebar-after</w:hook>
+    <?php endif; ?>
+
+    <w:hook>Weline_Theme::backend::layouts::base::scripts-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="scripts" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::scripts-after</w:hook>
+
     <w:hook>Weline_Theme::backend::layouts::dashboard::body-end</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::base::body-end</w:hook>
 </body>
 </html>
-
-<style>
-/* 仪表盘布局样式 */
-body {
-    margin: 0;
-    padding: 0;
-    background-color: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
-    min-height: 100vh;
-}
-
-.backend-dashboard {
-    display: flex;
-    min-height: calc(100vh - 60px);
-}
-
-.backend-sidebar {
-    width: 250px;
-    flex-shrink: 0;
-    background: var(--backend-color-sidebar-bg, #2a3042);
-    transition: width 0.3s ease;
-}
-
-.backend-sidebar.collapsed {
-    width: 70px;
-}
-
-.backend-dashboard .backend-main-content {
-    flex: 1;
-    padding: var(--backend-spacing-lg, 24px);
-    overflow-x: hidden;
-}
-
-@media (max-width: 768px) {
-    .backend-dashboard {
-        flex-direction: column;
-    }
-    
-    .backend-sidebar {
-        width: 100%;
-    }
-    
-    .backend-sidebar.collapsed {
-        width: 100%;
-    }
-}
-</style>

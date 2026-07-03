@@ -1,0 +1,24 @@
+{
+  "name": "weline/module-cms",
+  "description": "Weline CMS page module based on Theme and Meta layout targets.",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1",
+    "weline/module-backend-activity": "*"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Cms\\": ""
+    },
+    "psr-0": {
+      "Weline\\Cms\\": ""
+    }
+  },
+  "license": "MIT"
+}

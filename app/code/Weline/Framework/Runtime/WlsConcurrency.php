@@ -73,7 +73,6 @@ final class WlsConcurrency
             'events_manager_observer_cache',
             'widget_taglib_cache',
             'view_hook_runtime_cache',
-            'pagebuilder_singletons',
             'virtual_theme_context',
             'process_url_cache_static',
         ];

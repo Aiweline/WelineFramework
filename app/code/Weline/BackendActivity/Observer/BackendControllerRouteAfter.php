@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\BackendActivity\Observer;
 
 use Weline\BackendActivity\Model\BackendActivityLog;
+use Weline\BackendActivity\Service\BusinessContextService;
 use Weline\Acl\Model\Acl;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -155,7 +156,13 @@ class BackendControllerRouteAfter implements ObserverInterface
             ->setUserAgent((string)($payload['user_agent'] ?? ''))
             ->setRequestId((string)($payload['request_id'] ?? ''))
             ->setResponseCode($responseCode)
-            ->setResponseTime($responseTime)
-            ->save();
+            ->setResponseTime($responseTime);
+
+        $businessContext = $payload['business_context'] ?? null;
+        if (is_array($businessContext)) {
+            BusinessContextService::applyToLogModel($activityLogger, $businessContext);
+        }
+
+        $activityLogger->save();
     }
 }

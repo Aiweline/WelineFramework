@@ -55,6 +55,271 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
 };
 ?>
 
+<style>
+    .weline-system-config-page {
+        --wsc-border: #e8edf5;
+        --wsc-muted: #7b8494;
+        --wsc-panel: #ffffff;
+        --wsc-soft: #f6f8fb;
+    }
+
+    .weline-system-config-page .card {
+        border: 1px solid var(--wsc-border);
+        border-radius: 14px;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+    }
+
+    .wsc-filter-form {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.4fr) minmax(130px, .7fr) minmax(220px, 1fr) minmax(150px, .75fr) minmax(220px, 1fr) 54px;
+        gap: 16px;
+        align-items: end;
+    }
+
+    .wsc-filter-action .btn {
+        width: 54px;
+        height: 42px;
+        padding: 0;
+    }
+
+    .wsc-shell {
+        --bs-gutter-x: 24px;
+        align-items: flex-start;
+    }
+
+    .wsc-sidebar {
+        position: sticky;
+        top: 92px;
+    }
+
+    .wsc-module-list {
+        max-height: 460px;
+        overflow-y: auto;
+        padding-right: 2px;
+    }
+
+    .wsc-module-list .list-group-item {
+        border-color: var(--wsc-border);
+        padding: 12px 14px;
+    }
+
+    .wsc-module-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .wsc-module-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .wsc-module-count {
+        flex: 0 0 auto;
+        min-width: 28px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eef2f7;
+        color: #475467;
+        font-weight: 700;
+        text-align: center;
+    }
+
+    .wsc-module-list .active .wsc-module-count {
+        background: rgba(255, 255, 255, 0.24);
+        color: #fff;
+    }
+
+    .wsc-scope-list code,
+    .wsc-code,
+    .wsc-field-key {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .wsc-stat-grid {
+        --bs-gutter-x: 16px;
+    }
+
+    .wsc-stat-card .card-body {
+        min-height: 106px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .wsc-stat-label {
+        color: var(--wsc-muted);
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .wsc-stat-value {
+        color: #1f2937;
+        font-size: 34px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .wsc-module-card > .card-body {
+        padding: 24px;
+    }
+
+    .wsc-template-card {
+        border: 1px solid var(--wsc-border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-bottom: 18px;
+        background: var(--wsc-panel);
+    }
+
+    .wsc-template-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+    .wsc-template-title {
+        min-width: 0;
+    }
+
+    .wsc-template-code {
+        flex: 0 0 auto;
+        display: inline-flex;
+        max-width: 40%;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #fff2f8;
+        color: #e83e8c;
+        font-size: 13px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .wsc-field-table-wrap {
+        border: 1px solid var(--wsc-border);
+        border-radius: 12px;
+        overflow: auto;
+        scrollbar-gutter: stable both-edges;
+        background: #fff;
+    }
+
+    .wsc-field-table {
+        min-width: 920px;
+        margin-bottom: 0;
+        table-layout: fixed;
+    }
+
+    .wsc-field-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        border-bottom: 2px solid #1f2937;
+        background: #eef2f7;
+        color: #667085;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .wsc-field-table tbody td {
+        padding: 16px 18px;
+        vertical-align: top;
+        border-color: var(--wsc-border);
+    }
+
+    .wsc-field-table th:nth-child(4),
+    .wsc-field-table td:nth-child(4),
+    .wsc-field-table th:nth-child(5),
+    .wsc-field-table td:nth-child(5) {
+        font-size: 12px;
+    }
+
+    .wsc-field-table tbody tr:hover {
+        background: #fbfcff;
+    }
+
+    .wsc-field-title {
+        color: #1f2937;
+        font-weight: 650;
+    }
+
+    .wsc-value-preview {
+        display: inline-block;
+        max-width: 100%;
+        padding: 2px 0;
+        color: #e83e8c;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .wsc-save-control .form-control,
+    .wsc-save-control .form-select,
+    .wsc-save-control textarea {
+        max-width: 100%;
+    }
+
+    .wsc-save-description {
+        max-width: 32rem;
+        line-height: 1.55;
+    }
+
+    .wsc-form-actions {
+        display: grid;
+        grid-template-columns: minmax(220px, 360px) auto;
+        gap: 10px;
+        justify-content: end;
+        align-items: center;
+    }
+
+    @media (max-width: 1399.98px) {
+        .wsc-filter-form {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) 54px;
+        }
+
+        .wsc-filter-search {
+            grid-column: span 2;
+        }
+    }
+
+    @media (max-width: 1199.98px) {
+        .wsc-sidebar {
+            position: static;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .wsc-filter-form {
+            grid-template-columns: 1fr;
+        }
+
+        .wsc-filter-search {
+            grid-column: auto;
+        }
+
+        .wsc-filter-action .btn {
+            width: 100%;
+        }
+
+        .wsc-template-header,
+        .wsc-form-actions {
+            grid-template-columns: 1fr;
+            display: grid;
+        }
+
+        .wsc-template-code {
+            max-width: 100%;
+        }
+    }
+</style>
+
+<div class="weline-system-config-page">
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -73,8 +338,8 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form method="get" class="row g-3 align-items-end">
-                    <div class="col-md-3">
+                <form method="get" class="wsc-filter-form">
+                    <div>
                         <label class="form-label"><lang>模块</lang></label>
                         <select name="module" class="form-select">
                             <option value=""><lang>全部模块</lang></option>
@@ -86,26 +351,26 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-2">
+                    <div>
                         <label class="form-label"><lang>区域</lang></label>
                         <select name="area" class="form-select">
                             <option value="backend" <?= $selectedArea === 'backend' ? 'selected' : '' ?>><lang>后台</lang></option>
                             <option value="frontend" <?= $selectedArea === 'frontend' ? 'selected' : '' ?>><lang>前台</lang></option>
                         </select>
                     </div>
-                    <div class="col-md-2">
+                    <div>
                         <label class="form-label"><lang>Scope</lang></label>
                         <input name="scope" class="form-control" value="<?= htmlspecialchars($scope) ?>" placeholder="default.default.default">
                     </div>
-                    <div class="col-md-2">
+                    <div>
                         <label class="form-label"><lang>Locale</lang></label>
                         <input name="locale" class="form-control" value="<?= htmlspecialchars($locale) ?>" placeholder="default">
                     </div>
-                    <div class="col-md-2">
+                    <div class="wsc-filter-search">
                         <label class="form-label"><lang>搜索</lang></label>
                         <input name="search" class="form-control" value="<?= htmlspecialchars($search) ?>" placeholder="<?= __('配置或字段') ?>">
                     </div>
-                    <div class="col-md-1 d-grid">
+                    <div class="wsc-filter-action d-grid">
                         <button class="btn btn-primary" type="submit">
                             <i class="mdi mdi-magnify"></i>
                         </button>
@@ -116,23 +381,24 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-3">
+<div class="row wsc-shell">
+    <div class="col-xxl-2 col-xl-3 col-lg-4">
+        <div class="wsc-sidebar">
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title mb-3"><lang>模块</lang></h5>
-                <div class="list-group list-group-flush">
+                <div class="list-group list-group-flush wsc-module-list">
                     <a class="list-group-item list-group-item-action <?= $selectedModule === '' ? 'active' : '' ?>"
                        href="<?= $configUrl(['area' => $selectedArea, 'scope' => $scope, 'locale' => $locale, 'search' => $search]) ?>">
-                        <span><lang>全部模块</lang></span>
+                        <span class="wsc-module-link"><span class="wsc-module-name"><lang>全部模块</lang></span></span>
                     </a>
                     <?php foreach ($modules as $module): ?>
                         <?php $moduleName = (string)($module['module'] ?? ''); ?>
                         <a class="list-group-item list-group-item-action <?= $selectedModule === $moduleName ? 'active' : '' ?>"
                            href="<?= $configUrl(['module' => $moduleName, 'area' => $selectedArea, 'scope' => $scope, 'locale' => $locale, 'search' => $search]) ?>">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span><?= htmlspecialchars($moduleName) ?></span>
-                                <span class="badge bg-secondary"><?= (int)($module['template_count'] ?? 0) ?></span>
+                            <div class="wsc-module-link">
+                                <span class="wsc-module-name" title="<?= htmlspecialchars($moduleName) ?>"><?= htmlspecialchars($moduleName) ?></span>
+                                <span class="wsc-module-count"><?= (int)($module['template_count'] ?? 0) ?></span>
                             </div>
                         </a>
                     <?php endforeach; ?>
@@ -144,38 +410,39 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
             <div class="card-body">
                 <h5 class="card-title mb-3"><lang>当前 Scope</lang></h5>
                 <div class="text-muted small mb-2"><?= htmlspecialchars($scope) ?></div>
-                <ol class="mb-0 ps-3">
+                <ol class="mb-0 ps-3 wsc-scope-list">
                     <?php foreach ($fallbackScopes as $fallbackScope): ?>
                         <li><code><?= htmlspecialchars((string)$fallbackScope) ?></code></li>
                     <?php endforeach; ?>
                 </ol>
             </div>
         </div>
+        </div>
     </div>
 
-    <div class="col-md-9">
-        <div class="row">
+    <div class="col-xxl-10 col-xl-9 col-lg-8">
+        <div class="row wsc-stat-grid">
             <div class="col-md-4">
-                <div class="card">
+                <div class="card wsc-stat-card">
                     <div class="card-body">
-                        <div class="text-muted"><lang>模板</lang></div>
-                        <div class="h3 mb-0"><?= $totalTemplates ?></div>
+                        <div class="wsc-stat-label"><lang>模板</lang></div>
+                        <div class="wsc-stat-value"><?= $totalTemplates ?></div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card">
+                <div class="card wsc-stat-card">
                     <div class="card-body">
-                        <div class="text-muted"><lang>字段</lang></div>
-                        <div class="h3 mb-0"><?= $totalFields ?></div>
+                        <div class="wsc-stat-label"><lang>字段</lang></div>
+                        <div class="wsc-stat-value"><?= $totalFields ?></div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card">
+                <div class="card wsc-stat-card">
                     <div class="card-body">
-                        <div class="text-muted"><lang>适配入口</lang></div>
-                        <div class="h3 mb-0"><?= $totalAdapters ?></div>
+                        <div class="wsc-stat-label"><lang>适配入口</lang></div>
+                        <div class="wsc-stat-value"><?= $totalAdapters ?></div>
                     </div>
                 </div>
             </div>
@@ -191,7 +458,7 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
         <?php endif; ?>
 
         <?php foreach ($moduleRows as $moduleRow): ?>
-            <div class="card">
+            <div class="card wsc-module-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
@@ -208,13 +475,13 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                         <div class="mb-3">
                             <div class="fw-semibold mb-2"><?= htmlspecialchars((string)($areaRow['area'] ?? '')) ?></div>
                             <?php foreach (($areaRow['templates'] ?? []) as $template): ?>
-                                <div class="border rounded p-3 mb-3">
-                                    <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
-                                        <div>
+                                <div class="wsc-template-card">
+                                    <div class="wsc-template-header">
+                                        <div class="wsc-template-title">
                                             <h6 class="mb-1"><?= htmlspecialchars((string)($template['title'] ?? $template['code'] ?? '')) ?></h6>
                                             <div class="text-muted small"><?= htmlspecialchars((string)($template['description'] ?? '')) ?></div>
                                         </div>
-                                        <code><?= htmlspecialchars((string)($template['code'] ?? '')) ?></code>
+                                        <code class="wsc-template-code"><?= htmlspecialchars((string)($template['code'] ?? '')) ?></code>
                                     </div>
 
                                     <form method="post" action="<?= htmlspecialchars($postUrl) ?>">
@@ -239,8 +506,15 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                             <?php endif; ?>
 
                                             <?php if (!empty($fields)): ?>
-                                                <div class="table-responsive">
-                                                    <table class="table table-sm align-middle mb-2">
+                                                <div class="wsc-field-table-wrap">
+                                                    <table class="table table-sm align-middle wsc-field-table">
+                                                        <colgroup>
+                                                            <col style="width: 30%">
+                                                            <col style="width: 18%">
+                                                            <col style="width: 34%">
+                                                            <col style="width: 12%">
+                                                            <col style="width: 6%">
+                                                        </colgroup>
                                                         <thead>
                                                         <tr>
                                                             <th><lang>字段</lang></th>
@@ -262,12 +536,12 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                                             ?>
                                                             <tr>
                                                                 <td>
-                                                                    <div><?= htmlspecialchars((string)($field['label'] ?? $fieldKey)) ?></div>
-                                                                    <code><?= htmlspecialchars($fieldKey) ?></code>
+                                                                    <div class="wsc-field-title"><?= htmlspecialchars((string)($field['label'] ?? $fieldKey)) ?></div>
+                                                                    <code class="wsc-field-key"><?= htmlspecialchars($fieldKey) ?></code>
                                                                     <input type="hidden" name="base_versions[<?= htmlspecialchars($fieldKey) ?>]" value="<?= $baseVersion ?>">
                                                                 </td>
                                                                 <td>
-                                                                    <div><code><?= htmlspecialchars($effectiveValue) ?></code></div>
+                                                                    <div><code class="wsc-value-preview"><?= htmlspecialchars($effectiveValue) ?></code></div>
                                                                     <?php if ($source): ?>
                                                                         <div class="text-muted small">
                                                                             <?= htmlspecialchars((string)($source['scope'] ?? '')) ?>
@@ -278,7 +552,7 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                                                         <div class="text-muted small"><lang>默认值</lang></div>
                                                                     <?php endif; ?>
                                                                 </td>
-                                                                <td>
+                                                                <td class="wsc-save-control">
                                                                     <?php if ($fieldType === 'select' && $options !== []): ?>
                                                                         <select class="form-select form-select-sm" name="values[<?= htmlspecialchars($fieldKey) ?>]">
                                                                             <?php foreach ($options as $optionValue => $optionLabel): ?>
@@ -298,7 +572,7 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                                                         <input class="form-control form-control-sm" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="<?= htmlspecialchars($effectiveValue) ?>">
                                                                     <?php endif; ?>
                                                                     <?php if (!empty($field['description'])): ?>
-                                                                        <div class="text-muted small mt-1"><?= htmlspecialchars((string)$field['description']) ?></div>
+                                                                        <div class="text-muted small mt-1 wsc-save-description"><?= htmlspecialchars((string)$field['description']) ?></div>
                                                                     <?php endif; ?>
                                                                 </td>
                                                                 <td>
@@ -328,8 +602,8 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                     <?php endforeach; ?>
 
                                         <?php if (!empty($template['fields'])): ?>
-                                            <div class="d-flex gap-2 justify-content-end mt-3">
-                                                <input class="form-control form-control-sm w-auto" name="reason" placeholder="<?= __('保存原因') ?>">
+                                            <div class="wsc-form-actions mt-3">
+                                                <input class="form-control form-control-sm" name="reason" placeholder="<?= __('保存原因') ?>">
                                                 <button class="btn btn-primary btn-sm" type="submit">
                                                     <i class="mdi mdi-content-save-outline me-1"></i><lang>保存配置</lang>
                                                 </button>
@@ -396,4 +670,5 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
             </div>
         <?php endforeach; ?>
     </div>
+</div>
 </div>
