@@ -1377,6 +1377,7 @@
   function issueCategory(group) {
     return {
       technical: "indexability",
+      issues: "site_audit",
       head: "head_meta",
       url: "international",
       content: "content",
@@ -1872,7 +1873,7 @@
       : 0;
     var indexabilityDetail = scoreForGroups(["technical", "url", "head"], 100);
     var understandabilityDetail = scoreForGroups(["head", "content", "schema", "structure", "social"], 100);
-    var experienceDetail = scoreForGroups(["content", "structure", "social"], 100);
+    var experienceDetail = scoreForGroups(["content", "structure", "social", "issues"], 100);
     if (!document.querySelector('meta[name="viewport"]')) {
       var viewportPenalty = Math.max(0, experienceDetail.score - 55);
       if (viewportPenalty > 0) {
@@ -2390,6 +2391,224 @@
     });
   }
 
+  function isPanelOrInspectorResource(value) {
+    return /(?:seo-inspector|dev-tool-panel|weline-panel|panel-token|codex|browser_pass)/i.test(String(value || ""));
+  }
+
+  function resolveAuditUrl(raw) {
+    if (!raw) return "";
+    if (/^(?:data|blob|javascript|mailto|tel):/i.test(raw)) return "";
+    try {
+      return new URL(raw, window.location.href).href;
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function collectUrlAttributesForIssues() {
+    var specs = [
+      ["script[src]", "src", "script"],
+      ['link[href][rel~="stylesheet"],link[href][rel~="preload"],link[href][rel~="modulepreload"],link[href][rel~="icon"],link[href][rel~="apple-touch-icon"],link[href][rel~="manifest"],link[href][rel~="sitemap"]', "href", "link"],
+      ["img[src]", "src", "image"],
+      ["source[src]", "src", "source"],
+      ["iframe[src]", "src", "iframe"],
+      ["video[src]", "src", "video"],
+      ["video[poster]", "poster", "video-poster"],
+      ["audio[src]", "src", "audio"],
+      ["embed[src]", "src", "embed"],
+      ["object[data]", "data", "object"],
+      ["form[action]", "action", "form"],
+      ["a[href]", "href", "anchor"]
+    ];
+    var items = [];
+    specs.forEach(function (spec) {
+      Array.from(document.querySelectorAll(spec[0])).forEach(function (node) {
+        if (isIgnoredSeoAuditNode(node)) return;
+        var raw = (node.getAttribute(spec[1]) || "").trim();
+        if (!raw || isPanelOrInspectorResource(raw)) return;
+        var href = resolveAuditUrl(raw);
+        if (!href) return;
+        items.push({
+          node: node,
+          attr: spec[1],
+          kind: spec[2],
+          raw: raw,
+          href: href
+        });
+      });
+    });
+    return items;
+  }
+
+  function issueSample(items, limit) {
+    return items.slice(0, limit || 5).map(function (item) {
+      return item.raw || item.href || String(item);
+    }).join("; ");
+  }
+
+  function sameHostUrl(url) {
+    try {
+      var parsed = new URL(url, window.location.href);
+      return parsed.hostname === window.location.hostname || parsed.hostname === inferSiteDomain();
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function assetPath(url) {
+    try {
+      return new URL(url, window.location.href).pathname.toLowerCase();
+    } catch (_error) {
+      return String(url || "").toLowerCase();
+    }
+  }
+
+  function assetLooksMinified(url, ext) {
+    var path = assetPath(url);
+    var file = path.split("/").pop() || path;
+    if (new RegExp("\\.min\\." + ext + "$", "i").test(file)) return true;
+    if (new RegExp("(?:^|[._-])min(?:[._-]|$)", "i").test(file)) return true;
+    if (/\.[a-f0-9]{8,}\.(?:js|css)$/i.test(file)) return true;
+    return false;
+  }
+
+  function collectStaticAssetUrls(kind) {
+    var nodes = kind === "js"
+      ? Array.from(document.querySelectorAll("script[src]"))
+      : Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]'));
+    return nodes
+      .filter(function (node) { return !isIgnoredSeoAuditNode(node); })
+      .map(function (node) { return (node.getAttribute(kind === "js" ? "src" : "href") || "").trim(); })
+      .filter(function (raw) { return raw && !isPanelOrInspectorResource(raw); })
+      .map(function (raw) { return { raw: raw, href: resolveAuditUrl(raw) || raw }; })
+      .filter(function (item) { return item.href && assetPath(item.href).endsWith("." + kind); });
+  }
+
+  function resourceUrlLabel(entry) {
+    try {
+      var url = new URL(entry.name || "", window.location.href);
+      return url.pathname.split("/").pop() || url.pathname || entry.name;
+    } catch (_error) {
+      return entry.name || "resource";
+    }
+  }
+
+  function collectResourceTimingIssues() {
+    var resources = performanceEntries("resource");
+    var issues = {
+      largeScripts: [],
+      largeStyles: [],
+      compression: []
+    };
+    resources.forEach(function (entry) {
+      if (!entry || !entry.name || isPanelOrInspectorResource(entry.name)) return;
+      var path = assetPath(entry.name);
+      var transfer = usableNumber(entry.transferSize);
+      var decoded = usableNumber(entry.decodedBodySize);
+      var size = decoded || transfer || usableNumber(entry.encodedBodySize) || 0;
+      var item = { raw: resourceUrlLabel(entry), href: entry.name, size: size, transfer: transfer, decoded: decoded };
+      if (path.endsWith(".js") && size > 260 * 1024) issues.largeScripts.push(item);
+      if (path.endsWith(".css") && size > 120 * 1024) issues.largeStyles.push(item);
+      if ((path.endsWith(".js") || path.endsWith(".css")) && decoded && transfer && decoded > 30 * 1024 && transfer / decoded > 0.88) {
+        issues.compression.push(item);
+      }
+    });
+    return issues;
+  }
+
+  function auditSiteIssueStandards(context, add) {
+    var pageIsHttps = window.location.protocol === "https:" || /^https:\/\//i.test(context.canonical || "");
+    var urlItems = collectUrlAttributesForIssues();
+    var httpItems = urlItems.filter(function (item) {
+      return /^http:\/\//i.test(item.raw) || /^http:\/\//i.test(item.href);
+    });
+    var httpResources = httpItems.filter(function (item) { return item.kind !== "anchor" && item.kind !== "form"; });
+    var httpForms = httpItems.filter(function (item) { return item.kind === "form"; });
+    var httpInternalLinks = httpItems.filter(function (item) { return item.kind === "anchor" && sameHostUrl(item.href); });
+    var protocolRelative = urlItems.filter(function (item) { return /^\/\//.test(item.raw); });
+
+    if (pageIsHttps && httpResources.length) {
+      add("fail", "mixed content resources", httpResources.length + " insecure resource URL(s): " + issueSample(httpResources, 5) + ".", "issues");
+    } else {
+      add("pass", "mixed content resources", "No http:// resource URLs detected for HTTPS canonical/page.", "issues");
+    }
+
+    if (pageIsHttps && httpForms.length) {
+      add("fail", "insecure form action", httpForms.length + " form action(s) submit to http://: " + issueSample(httpForms, 3) + ".", "issues");
+    } else {
+      add("pass", "insecure form action", "No insecure form action detected.", "issues");
+    }
+
+    if (pageIsHttps && httpInternalLinks.length) {
+      add("warn", "insecure internal links", httpInternalLinks.length + " same-site link(s) use http://: " + issueSample(httpInternalLinks, 5) + ".", "issues");
+    } else {
+      add("pass", "insecure internal links", "No same-site http:// links detected.", "issues");
+    }
+
+    if (protocolRelative.length) {
+      add("warn", "protocol-relative URLs", protocolRelative.length + " protocol-relative URL(s) found: " + issueSample(protocolRelative, 5) + ".", "issues");
+    } else {
+      add("pass", "protocol-relative URLs", "No protocol-relative // URLs detected.", "issues");
+    }
+
+    var jsAssets = collectStaticAssetUrls("js");
+    var cssAssets = collectStaticAssetUrls("css");
+    var unminifiedJs = jsAssets.filter(function (asset) { return !assetLooksMinified(asset.href, "js"); });
+    var unminifiedCss = cssAssets.filter(function (asset) { return !assetLooksMinified(asset.href, "css"); });
+    if (unminifiedJs.length) {
+      add("warn", "unminified JavaScript", unminifiedJs.length + " JS file(s) do not look minified: " + issueSample(unminifiedJs, 5) + ".", "issues");
+    } else {
+      add("pass", "unminified JavaScript", "JavaScript file names look minified or cache-built.", "issues");
+    }
+    if (unminifiedCss.length) {
+      add("warn", "unminified CSS", unminifiedCss.length + " CSS file(s) do not look minified: " + issueSample(unminifiedCss, 5) + ".", "issues");
+    } else {
+      add("pass", "unminified CSS", "CSS file names look minified or cache-built.", "issues");
+    }
+
+    var resourceIssues = collectResourceTimingIssues();
+    if (resourceIssues.largeScripts.length) {
+      add("warn", "large JavaScript resources", resourceIssues.largeScripts.length + " JS resource(s) exceed 260KB decoded/transfer size: " + issueSample(resourceIssues.largeScripts, 5) + ".", "issues");
+    } else {
+      add("pass", "large JavaScript resources", "No large JS resource detected by Resource Timing.", "issues");
+    }
+    if (resourceIssues.largeStyles.length) {
+      add("warn", "large CSS resources", resourceIssues.largeStyles.length + " CSS resource(s) exceed 120KB decoded/transfer size: " + issueSample(resourceIssues.largeStyles, 5) + ".", "issues");
+    } else {
+      add("pass", "large CSS resources", "No large CSS resource detected by Resource Timing.", "issues");
+    }
+    if (resourceIssues.compression.length) {
+      add("warn", "static compression", resourceIssues.compression.length + " JS/CSS resource(s) look weakly compressed in Resource Timing: " + issueSample(resourceIssues.compression, 5) + ".", "issues");
+    } else {
+      add("pass", "static compression", "Resource Timing did not expose obvious uncompressed JS/CSS transfer.", "issues");
+    }
+
+    var contentImages = Array.from(document.querySelectorAll("main img, .site-shell img, body img")).filter(function (img) {
+      if (isIgnoredSeoAuditNode(img)) return false;
+      var src = img.getAttribute("src") || "";
+      return src && !isDecorativeImage(img) && !isBrandChromeImage(src);
+    });
+    var missingDimensions = contentImages.filter(function (img) {
+      return !img.getAttribute("width") || !img.getAttribute("height");
+    });
+    if (missingDimensions.length) {
+      add("warn", "image dimensions", missingDimensions.length + " content image(s) missing width/height attributes.", "issues");
+    } else if (contentImages.length) {
+      add("pass", "image dimensions", "Content images include width/height attributes.", "issues");
+    }
+
+    var unsafeBlankLinks = Array.from(document.querySelectorAll('a[target="_blank"][href]')).filter(function (node) {
+      if (isIgnoredSeoAuditNode(node)) return false;
+      var rel = (node.getAttribute("rel") || "").toLowerCase();
+      return rel.indexOf("noopener") === -1 || rel.indexOf("noreferrer") === -1;
+    });
+    if (unsafeBlankLinks.length) {
+      add("warn", "external link rel", unsafeBlankLinks.length + ' target="_blank" link(s) missing noopener/noreferrer.', "issues");
+    } else {
+      add("pass", "external link rel", 'All target="_blank" links include noopener/noreferrer or none exist.', "issues");
+    }
+  }
+
   function auditSeoStandards(context, add) {
     var title = context.title;
     var description = context.description;
@@ -2526,6 +2745,7 @@
       add("pass", "FAQPage schema", "FAQPage JSON-LD present.", "schema");
     }
     auditJsonLdQuality(context, add);
+    auditSiteIssueStandards(context, add);
 
     var internalLinks = Array.from(document.querySelectorAll("a[href]")).filter(function (node) {
       if (isIgnoredSeoAuditNode(node)) return false;
@@ -2717,6 +2937,7 @@
         hreflangCodes: hreflangCodes,
         htmlForScan: pageHtmlForScan(),
         lang: lang,
+        defaultLang: defaultLang,
         siteDomain: siteDomain,
         multilingual: multilingual,
         jsonLdValidation: jsonLdValidation
@@ -2767,6 +2988,8 @@
     "hreflang duplicates": true,
     "hreflang absolute URL": true,
     "hreflang canonical parity": true,
+    "mixed content resources": true,
+    "insecure form action": true,
     "JSON-LD placement": true,
     "JSON-LD page-type contract": true,
     "JSON-LD primary type": true,
@@ -2927,6 +3150,18 @@
       "hreflang duplicates": "Keep exactly one alternate link per hreflang code.",
       "hreflang absolute URL": "Use fully-qualified absolute URLs in every hreflang href.",
       "hreflang canonical parity": "Point the current page hreflang href at the same URL as canonical.",
+      "hreflang URL language parity": "Make each same-site hreflang URL point to the path for its language, for example hi-IN -> /hi-in/....",
+      "mixed content resources": "Replace every http:// image/script/style/iframe/resource URL with https:// or a same-origin relative URL.",
+      "insecure form action": "Change form action URLs to https:// or same-origin relative endpoints.",
+      "insecure internal links": "Replace same-site http:// links with https:// canonical URLs.",
+      "protocol-relative URLs": "Use explicit https:// URLs instead of //example.com to avoid crawler and security ambiguity.",
+      "unminified JavaScript": "Use built/minified JS assets in production, preferably hashed bundles or .min.js files.",
+      "unminified CSS": "Use built/minified CSS assets in production, preferably hashed bundles or .min.css files.",
+      "large JavaScript resources": "Split, tree-shake, defer, or lazy-load large JavaScript bundles before promotion.",
+      "large CSS resources": "Remove unused CSS, split critical CSS, and ship compressed production CSS.",
+      "static compression": "Enable gzip or Brotli for JS/CSS and verify transferSize is materially smaller than decodedBodySize.",
+      "image dimensions": "Add width and height attributes to content images to reduce CLS and improve rendering predictability.",
+      "external link rel": 'Add rel="noopener noreferrer" to target="_blank" links.',
       "title/H1 alignment": "Make H1 the on-page expression of the same intent as title.",
       "internal links": "Add descriptive internal links to hub/guide/review pages.",
       "prompt leak": "Remove internal prompt/build vocabulary from visible copy and metadata.",
