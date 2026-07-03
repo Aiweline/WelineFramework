@@ -1264,6 +1264,10 @@ CNF;
             return false;
         }
 
+        if (!$this->localCaCertificateIsSignedByCurrentAuthority($certPath)) {
+            return false;
+        }
+
         $cert = $this->getParsedCertificateRaw($certPath);
         if (!$cert) {
             return false;
@@ -1286,6 +1290,34 @@ CNF;
         }
 
         return true;
+    }
+
+    protected function localCaCertificateIsSignedByCurrentAuthority(string $certPath): bool
+    {
+        $caPath = $this->getLocalCaCertPath();
+        if (!\is_file($caPath) || !\is_file($certPath)) {
+            return false;
+        }
+
+        $leafPath = \dirname($certPath) . DS . 'cert.pem';
+        if (!\is_file($leafPath)) {
+            $leafPath = $certPath;
+        }
+
+        if (\function_exists('openssl_x509_verify')) {
+            $leafPem = (string) @\file_get_contents($leafPath);
+            $caPem = (string) @\file_get_contents($caPath);
+            if ($leafPem === '' || $caPem === '') {
+                return false;
+            }
+
+            $caPublicKey = @\openssl_pkey_get_public($caPem);
+            if ($caPublicKey !== false && @\openssl_x509_verify($leafPem, $caPublicKey) === 1) {
+                return true;
+            }
+        }
+
+        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caPath, $leafPath);
     }
 
     protected function normalizeIpAddressForComparison(string $ip): string
@@ -1570,7 +1602,18 @@ CNF;
             $exitCode
         );
 
-        return $exitCode === 0 && !\preg_match('/CSSMERR_|failed|error/i', (string) $output);
+        if (\preg_match('/CSSMERR_|failed/i', (string) $output)) {
+            return false;
+        }
+
+        // macOS may return a non-zero status when Certificate Transparency
+        // metadata is unavailable for a local development root, while the
+        // actual trust result is still "No error".
+        if (\preg_match('/Cert Verify Result:\s*No error/i', (string) $output)) {
+            return true;
+        }
+
+        return $exitCode === 0 && !\preg_match('/error/i', (string) $output);
     }
 
     /**
@@ -1811,7 +1854,10 @@ CNF;
             ];
         }
 
-        if ($this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+        $installedInSystemKeychain = $this->isLocalCertificateAuthorityInstalledInMacosSystemKeychain($caCertPath);
+        $installedInLoginKeychain = $this->isLocalCertificateAuthorityInstalledInMacosLoginKeychain($caCertPath);
+        if ($this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)
+            && ($installedInSystemKeychain || $installedInLoginKeychain)) {
             return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by macOS Keychain')];
         }
 
@@ -1835,20 +1881,138 @@ CNF;
         }
 
         $loginKeychain = $this->resolveMacosLoginKeychain();
-        $loginCommand = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k '
-            . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
-        $loginExitCode = 1;
-        $loginOutput = $this->runInteractiveTrustCommand($loginCommand, $loginExitCode);
-        if ($loginExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
-            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
+        $staleLoginCaOutput = $this->removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
+            $loginKeychain,
+            $this->getCertificateSha1Fingerprint($caCertPath)
+        );
+        if ($staleLoginCaOutput !== '') {
+            $output = \trim($output . "\n" . $staleLoginCaOutput);
         }
-        $output = \trim($output . "\n" . $loginOutput);
+
+        if (!$installedInLoginKeychain) {
+            $loginCommand = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k '
+                . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+            $loginExitCode = 1;
+            $loginOutput = $this->runInteractiveTrustCommand($loginCommand, $loginExitCode);
+            if ($loginExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
+            }
+            $output = \trim($output . "\n" . $loginOutput);
+        }
+
+        if (!$this->canUseInteractivePrivilegePrompt()
+            && $this->commandExists('osascript')
+            && (string) \getenv('WLS_ENABLE_GUI_CA_TRUST_PROMPT') === '1') {
+            $systemScript = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
+                . \escapeshellarg($caCertPath);
+            $appleScript = 'do shell script ' . $this->quoteAppleScriptString($systemScript) . ' with administrator privileges';
+            $guiCommand = 'osascript -e ' . \escapeshellarg((string) $appleScript) . ' 2>&1';
+            $guiExitCode = 1;
+            $guiOutput = $this->runTrustCommand($guiCommand, $guiExitCode);
+            if ($guiExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
+            }
+            $output = \trim($output . "\n" . $guiOutput);
+        }
+
+        $hint = !$this->canUseInteractivePrivilegePrompt()
+            ? __('macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.')
+            : __('Run the command below to approve Keychain trust.');
 
         return [
             'success' => false,
             'trusted' => false,
-            'message' => __('Local CA was generated, but automatic macOS trust import failed. Run manually: %{1}. Output: %{2}', [$manual, \trim($output)]),
+            'message' => __('Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}', [$hint, $manual, \trim($output)]),
         ];
+    }
+
+    protected function quoteAppleScriptString(string $value): string
+    {
+        return '"' . \str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
+    }
+
+    protected function removeStaleLocalCertificateAuthoritiesFromMacosKeychain(string $keychainPath, string $currentFingerprint): string
+    {
+        $currentFingerprint = $this->normalizeCertificateFingerprint($currentFingerprint);
+        if ($currentFingerprint === '' || $keychainPath === '' || !$this->commandExists('security')) {
+            return '';
+        }
+
+        $output = $this->runTrustCommand(
+            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' '
+            . \escapeshellarg($keychainPath) . ' 2>&1',
+            $exitCode
+        );
+        if ($exitCode !== 0 || $output === '') {
+            return '';
+        }
+
+        $messages = [];
+        if (\preg_match_all('/SHA-1 hash:\s*([A-F0-9]+)/i', $output, $matches)) {
+            foreach ($matches[1] as $fingerprint) {
+                $fingerprint = $this->normalizeCertificateFingerprint((string) $fingerprint);
+                if ($fingerprint === '' || $fingerprint === $currentFingerprint) {
+                    continue;
+                }
+
+                $deleteOutput = $this->runTrustCommand(
+                    '/usr/bin/security delete-certificate -Z ' . \escapeshellarg($fingerprint) . ' '
+                    . \escapeshellarg($keychainPath) . ' 2>&1',
+                    $deleteExitCode
+                );
+                $messages[] = $deleteExitCode === 0
+                    ? 'Removed stale Weline Local Development CA from macOS keychain: ' . $fingerprint
+                    : 'Failed to remove stale Weline Local Development CA ' . $fingerprint . ': ' . \trim($deleteOutput);
+            }
+        }
+
+        return \implode("\n", $messages);
+    }
+
+    protected function isLocalCertificateAuthorityInstalledInMacosSystemKeychain(string $caCertPath): bool
+    {
+        $fingerprint = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($fingerprint === '' || !$this->commandExists('security')) {
+            return false;
+        }
+
+        $output = $this->runTrustCommand(
+            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA)
+            . ' /Library/Keychains/System.keychain 2>&1',
+            $exitCode
+        );
+        if ($exitCode !== 0 || $output === '') {
+            return false;
+        }
+
+        return \str_contains($this->normalizeCertificateFingerprint($output), $fingerprint);
+    }
+
+    protected function isLocalCertificateAuthorityInstalledInMacosLoginKeychain(string $caCertPath): bool
+    {
+        return $this->isLocalCertificateAuthorityInstalledInMacosKeychain(
+            $caCertPath,
+            $this->resolveMacosLoginKeychain()
+        );
+    }
+
+    protected function isLocalCertificateAuthorityInstalledInMacosKeychain(string $caCertPath, string $keychainPath): bool
+    {
+        $fingerprint = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($fingerprint === '' || $keychainPath === '' || !$this->commandExists('security')) {
+            return false;
+        }
+
+        $output = $this->runTrustCommand(
+            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' '
+            . \escapeshellarg($keychainPath) . ' 2>&1',
+            $exitCode
+        );
+        if ($exitCode !== 0 || $output === '') {
+            return false;
+        }
+
+        return \str_contains($this->normalizeCertificateFingerprint($output), $fingerprint);
     }
 
     protected function trustLocalCertificateAuthority(string $caCertPath): array
@@ -1988,7 +2152,7 @@ CNF;
                 'organizationName' => 'Weline Framework',
                 'organizationalUnitName' => 'Development',
                 'commonName' => $domain,
-                'emailAddress' => 'dev@' . $domain,
+                'emailAddress' => 'dev@' . $this->normalizeLocalCertificateEmailDomain($domain),
             ];
 
             $tCsr = \hrtime(true);
@@ -2075,6 +2239,18 @@ CNF;
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
+
+    protected function normalizeLocalCertificateEmailDomain(string $domain): string
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === ''
+            || \str_starts_with($domain, '*.')
+            || \filter_var($domain, FILTER_VALIDATE_IP)) {
+            return 'weline.localhost';
+        }
+
+        return $domain;
+    }
     
     /**
      * 获取用于自签证书的 OpenSSL 配置
@@ -2135,11 +2311,17 @@ CNF;
         // 1. 处理 IP 地址
         if (\filter_var($domain, FILTER_VALIDATE_IP)) {
             $ip[] = $domain;
-            // 127.0.0.1 同时加 localhost
-            if ($domain === '127.0.0.1') {
+            // 本地 IP 同时覆盖 localhost/loopback 变体，避免浏览器从任一入口访问时证书名不匹配。
+            if ($this->isLoopbackIp($domain)) {
                 $dns[] = 'localhost';
+                if ($domain !== '127.0.0.1') {
+                    $ip[] = '127.0.0.1';
+                }
+                if ($domain !== '::1') {
+                    $ip[] = '::1';
+                }
             }
-            return $this->sanEntriesCache[$domain] = ['dns' => $dns, 'ip' => $ip];
+            return $this->sanEntriesCache[$domain] = ['dns' => \array_unique($dns), 'ip' => \array_unique($ip)];
         }
         
         // 2. 处理域名
@@ -2157,6 +2339,9 @@ CNF;
         // 用户看到「正在为 *.weline.test 准备 SSL 证书...」后无进展。
         // 开发域默认按本机 HTTPS 使用，SAN 补全回环地址即可（与 hosts 指向 127.0.0.1 的常见约定一致）。
         if ($this->isLocalDomain($domain)) {
+            if (!\in_array('localhost', $dns, true)) {
+                $dns[] = 'localhost';
+            }
             if (!\in_array('127.0.0.1', $ip, true)) {
                 $ip[] = '127.0.0.1';
             }

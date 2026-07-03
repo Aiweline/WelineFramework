@@ -4,7 +4,7 @@ $accounts = \is_array($accounts) ? $accounts : [];
 $recentSessions = $this->getData('recent_sessions');
 $recentSessions = \is_array($recentSessions) ? $recentSessions : [];
 $selectedProviderContext = $this->getData('selected_provider_context');
-$selectedProviderContext = \is_array($selectedProviderContext) ? $selectedProviderContext : ['name' => 'PageBuilder'];
+$selectedProviderContext = \is_array($selectedProviderContext) ? $selectedProviderContext : ['name' => 'AI 建站工作台'];
 $fakeMode = (bool)($this->getData('fake_mode') ?? false);
 ?>
 <style>
@@ -15,11 +15,11 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
     <div class="sbv1-hero">
         <div class="d-flex justify-content-between gap-3 flex-wrap">
             <div>
-                <div class="sbv1-status info">PageBuilder v1</div>
+                <div class="sbv1-status info">AI 建站</div>
                 <h3 class="mt-3 mb-2">AI建站工作台</h3>
-                <p class="text-muted mb-0">先生成方案，再选域名，最后创建正式会话并进入 PageBuilder 工作区。</p>
+                <p class="text-muted mb-0">先生成方案，再选域名，最后创建正式会话并进入工作区。</p>
             </div>
-            <div class="text-muted small">当前 provider：<strong><?= htmlspecialchars((string)($selectedProviderContext['name'] ?? 'PageBuilder'), ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div class="text-muted small">当前 provider：<strong><?= htmlspecialchars((string)($selectedProviderContext['name'] ?? 'AI 建站工作台'), ENT_QUOTES, 'UTF-8') ?></strong></div>
         </div>
     </div>
 
@@ -52,7 +52,7 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
                     <?php else: ?>
                         <?php foreach (\array_slice($recentSessions, 0, 6) as $recent): ?>
                             <a class="sbv1-item text-decoration-none text-reset" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? 'PageBuilder'), ENT_QUOTES, 'UTF-8') ?></strong>
+                                <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? 'AI 建站工作台'), ENT_QUOTES, 'UTF-8') ?></strong>
                                 <div><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                                 <small class="text-muted"><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
                             </a>
@@ -133,7 +133,7 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
         </div>
         <div class="sbv1-foot d-flex justify-content-between gap-3">
             <div class="text-muted small" id="sbv1-domain-summary">尚未选择域名。</div>
-            <button type="button" class="btn btn-primary" id="sbv1-create-session">创建正式会话并进入 PageBuilder</button>
+            <button type="button" class="btn btn-primary" id="sbv1-create-session">创建正式会话并进入工作区</button>
         </div>
     </div>
 </div>
@@ -168,7 +168,7 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
     function addLog(text){var box=$('sbv1-plan-log');if(!box||!text)return;var div=document.createElement('div');div.textContent=String(text);box.appendChild(div);box.scrollTop=box.scrollHeight;}
     function renderPlan(plan){if(!plan||typeof plan!=='object')return;$('sbv1-plan-content').textContent=String(plan.plan_markdown||'');$('sbv1-plan-meta').textContent='模式：'+String(plan.build_mode||'')+' | 页面：'+(Array.isArray(plan.page_types)?plan.page_types.join('、'):'');}
     function closeSse(key){if(st[key]){try{st[key].close();}catch(_){ }st[key]=null;}}
-    function runPlan(action){var url=action==='revise'?cfg.revise:cfg.gen;var msg=action==='revise'?String(($('sbv1-revise-msg')||{}).value||'').trim():desc();if(action!=='revise'&&!msg){toast('warning','请先输入一句话需求。');return;}open('sbv1-plan-modal');setStatus('sbv1-main-status',action==='revise'?'正在修订方案':'正在生成方案','info');post(url,{provider_code:'pagebuilder',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案初始化失败');return;}st.draftId=String(d.draft_public_id||st.draftId||'');if(d.draft&&d.draft.payload&&d.draft.payload.current_plan){renderPlan(d.draft.payload.current_plan);}$('sbv1-plan-log').innerHTML='';closeSse('planSse');setStatus('sbv1-plan-stream-status','连接中','info');var s=new EventSource(String(d.stream_url||''));st.planSse=s;s.addEventListener('start',function(ev){var p=parse(ev);addLog(p.message||'已开始');setStatus('sbv1-plan-stream-status','生成中','info');});s.addEventListener('status',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('chunk',function(ev){var p=parse(ev);addLog(p.chunk||p.message||'');});s.addEventListener('warning',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('plan_completed',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}});s.addEventListener('done',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}setStatus('sbv1-plan-stream-status',p.success===false?'失败':'已完成',p.success===false?'err':'ok');closeSse('planSse');});s.addEventListener('error',function(){setStatus('sbv1-plan-stream-status','连接重试中','info');});}).catch(function(){toast('error','网络错误，请稍后重试。');});
+    function runPlan(action){var url=action==='revise'?cfg.revise:cfg.gen;var msg=action==='revise'?String(($('sbv1-revise-msg')||{}).value||'').trim():desc();if(action!=='revise'&&!msg){toast('warning','请先输入一句话需求。');return;}open('sbv1-plan-modal');setStatus('sbv1-main-status',action==='revise'?'正在修订方案':'正在生成方案','info');post(url,{provider_code:'websites_default',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案初始化失败');return;}st.draftId=String(d.draft_public_id||st.draftId||'');if(d.draft&&d.draft.payload&&d.draft.payload.current_plan){renderPlan(d.draft.payload.current_plan);}$('sbv1-plan-log').innerHTML='';closeSse('planSse');setStatus('sbv1-plan-stream-status','连接中','info');var s=new EventSource(String(d.stream_url||''));st.planSse=s;s.addEventListener('start',function(ev){var p=parse(ev);addLog(p.message||'已开始');setStatus('sbv1-plan-stream-status','生成中','info');});s.addEventListener('status',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('chunk',function(ev){var p=parse(ev);addLog(p.chunk||p.message||'');});s.addEventListener('warning',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('plan_completed',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}});s.addEventListener('done',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}setStatus('sbv1-plan-stream-status',p.success===false?'失败':'已完成',p.success===false?'err':'ok');closeSse('planSse');});s.addEventListener('error',function(){setStatus('sbv1-plan-stream-status','连接重试中','info');});}).catch(function(){toast('error','网络错误，请稍后重试。');});
     }
     function confirmPlan(){if(!st.draftId){toast('warning','请先生成方案。');return;}post(cfg.confirm,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案确认失败');return;}setStatus('sbv1-main-status','方案已确认','ok');close('sbv1-plan-modal');open('sbv1-domain-modal');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
     function renderRec(list){var box=$('sbv1-rec-list');if(!box)return;box.innerHTML='';(list||[]).forEach(function(domain){var btn=document.createElement('button');btn.type='button';btn.className='sbv1-item';btn.setAttribute('data-rec',String(domain));btn.textContent=String(domain);btn.onclick=function(){st.recDomain=String(domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});};box.appendChild(btn);});}
@@ -189,7 +189,7 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
         setStatus('sbv1-main-status',action==='revise'?'\u6b63\u5728\u4fee\u8ba2\u65b9\u6848':'\u6b63\u5728\u751f\u6210\u65b9\u6848','info');
         setStatus('sbv1-plan-stream-status','\u672a\u8fde\u63a5','');
         $('sbv1-plan-content').textContent='\u7b49\u5f85\u751f\u6210\u65b9\u6848...';
-        post(url,{provider_code:'pagebuilder',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){
+        post(url,{provider_code:'websites_default',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){
             if(!d||!d.success){
                 var initMsg=d&&d.message?d.message:'\u65b9\u6848\u521d\u59cb\u5316\u5931\u8d25';
                 setStatus('sbv1-main-status',initMsg,'err');

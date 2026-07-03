@@ -1,0 +1,597 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$page = $this->getData('page') ?: [];
+$statuses = $this->getData('statuses') ?: [];
+$websites = $this->getData('websites') ?: [];
+$layoutOptions = $this->getData('layout_options') ?: [];
+$layoutSelection = $this->getData('layout_selection') ?: [];
+$themeEditorUrl = (string)($this->getData('theme_editor_url') ?: '');
+$previewUrl = (string)($this->getData('preview_url') ?: '');
+$pageId = (int)($page['page_id'] ?? 0);
+$hasPage = $pageId > 0;
+$currentWebsiteId = (int)($page['website_id'] ?? 0);
+$currentWebsiteCode = (string)($page['website_code'] ?? 'default');
+$hasPathGroupContext = $hasPage && trim((string)($page['path_group'] ?? '')) !== '';
+$currentLayoutOption = (string)($layoutSelection['layout_option'] ?? 'default');
+$layoutOptionsPairs = [];
+foreach ($layoutOptions as $option) {
+    $value = (string)($option['value'] ?? 'default');
+    $label = (string)($option['label'] ?? $value);
+    $layoutOptionsPairs[] = str_replace([',', ':'], [' ', ' '], $value) . ':' . str_replace([',', ':'], [' ', ' '], $label);
+}
+$layoutOptionsStr = implode(',', $layoutOptionsPairs);
+$layoutPlaceholder = __('请选择或搜索布局...');
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Cms::page" order_field="order" name_field="title"></breadcrumb></h4>
+            <div class="page-title-right d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>">
+                    <i class="mdi mdi-arrow-left"></i>
+                    <?= __('返回列表') ?>
+                </a>
+                <?php if ($previewUrl !== ''): ?>
+                    <a class="btn btn-outline-primary" href="<?= htmlspecialchars($previewUrl) ?>" target="_blank" rel="noopener">
+                        <i class="mdi mdi-eye-outline"></i>
+                        <?= __('预览') ?>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="cms-page-workbench">
+    <div class="col-12">
+        <form class="cms-page-settings-bar" method="post" action="<?= $this->getBackendUrl('cms/backend/page/save') ?>">
+            <input type="hidden" name="page_id" value="<?= $pageId ?>">
+            <div class="cms-page-settings-grid <?= $hasPathGroupContext ? 'has-path-context' : 'needs-path-context' ?>">
+                <?php if ($hasPathGroupContext): ?>
+                    <div class="cms-field cms-field-context">
+                        <label class="form-label"><?= __('站点 / 一级 path') ?></label>
+                        <div class="form-control cms-context-display">
+                            <span><?= htmlspecialchars($currentWebsiteCode) ?></span>
+                            <code><?= htmlspecialchars((string)($page['path_group_alias'] ?? $page['path_group'] ?? '')) ?> / <?= htmlspecialchars((string)($page['path_group'] ?? '')) ?></code>
+                        </div>
+                        <input type="hidden" name="website_id" value="<?= $currentWebsiteId ?>">
+                        <input type="hidden" name="website_code" value="<?= htmlspecialchars($currentWebsiteCode) ?>" data-cms-website-code>
+                        <input type="hidden" name="path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? '')) ?>">
+                        <input type="hidden" name="path_group_alias" value="<?= htmlspecialchars((string)($page['path_group_alias'] ?? '')) ?>">
+                    </div>
+                <?php else: ?>
+                    <div class="cms-field cms-field-website">
+                        <label class="form-label"><?= __('站点') ?></label>
+                        <select class="form-select" name="website_id">
+                            <?php foreach ($websites as $website): ?>
+                                <?php
+                                $websiteId = (int)($website['website_id'] ?? 0);
+                                $websiteCode = (string)($website['code'] ?? 'default');
+                                $selected = $currentWebsiteId > 0
+                                    ? $currentWebsiteId === $websiteId
+                                    : $currentWebsiteCode === $websiteCode;
+                                ?>
+                                <option value="<?= $websiteId ?>" data-code="<?= htmlspecialchars($websiteCode) ?>" <?= $selected ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars((string)($website['label'] ?? $websiteCode)) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="hidden" name="website_code" value="<?= htmlspecialchars($currentWebsiteCode) ?>" data-cms-website-code>
+                    </div>
+                <?php endif; ?>
+                <div class="cms-field cms-field-title">
+                    <label class="form-label"><?= __('标题') ?></label>
+                    <input class="form-control" type="text" name="title" value="<?= htmlspecialchars((string)($page['title'] ?? '')) ?>" required>
+                </div>
+                <?php if (!$hasPathGroupContext): ?>
+                    <div class="cms-field cms-field-path">
+                        <label class="form-label"><?= __('一级 path') ?></label>
+                        <input class="form-control" type="text" name="path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? '')) ?>" required>
+                    </div>
+                    <div class="cms-field cms-field-path-alias">
+                        <label class="form-label"><?= __('path 别名') ?></label>
+                        <input class="form-control" type="text" name="path_group_alias" value="<?= htmlspecialchars((string)($page['path_group_alias'] ?? '')) ?>">
+                    </div>
+                <?php endif; ?>
+                <div class="cms-field cms-field-slug">
+                    <label class="form-label"><?= __('Slug') ?></label>
+                    <input class="form-control" type="text" name="slug" value="<?= htmlspecialchars((string)($page['slug'] ?? '')) ?>">
+                </div>
+                <div class="cms-field cms-field-scope">
+                    <label class="form-label"><?= __('范围') ?></label>
+                    <input class="form-control" type="text" name="scope" value="<?= htmlspecialchars((string)($page['scope'] ?? 'default')) ?>">
+                </div>
+                <div class="cms-field cms-field-status">
+                    <label class="form-label"><?= __('状态') ?></label>
+                    <select class="form-select" name="status">
+                        <?php foreach ($statuses as $value => $label): ?>
+                            <option value="<?= htmlspecialchars((string)$value) ?>" <?= (string)($page['status'] ?? '') === (string)$value ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="cms-field cms-field-layout">
+                    <label class="form-label"><?= __('Theme 布局') ?></label>
+                    <w:theme:search-select
+                        id="cms-layout-option"
+                        name="layout_option"
+                        options="layoutOptionsStr"
+                        value="currentLayoutOption"
+                        placeholder="layoutPlaceholder"
+                        required="true"
+                    />
+                </div>
+                <div class="cms-form-actions">
+                    <button class="btn btn-primary cms-action-button" type="submit">
+                        <i class="mdi mdi-content-save-outline"></i>
+                        <?= __('保存页面设置') ?>
+                    </button>
+                    <?php if ($themeEditorUrl !== ''): ?>
+                        <a class="btn btn-outline-primary cms-action-button" href="<?= htmlspecialchars($themeEditorUrl) ?>" target="_blank" rel="noopener">
+                            <i class="mdi mdi-open-in-new"></i>
+                            <?= __('新窗口打开编辑器') ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-12">
+        <div class="cms-theme-editor-workspace <?= $hasPage ? 'is-ready' : 'is-empty' ?>">
+            <?php if ($themeEditorUrl === ''): ?>
+                <div class="alert alert-info mb-0">
+                    <?= __('先保存页面设置，然后直接在这里进行 Theme 可视化编辑。') ?>
+                </div>
+            <?php else: ?>
+                <iframe class="cms-theme-editor-frame"
+                        src="<?= htmlspecialchars($themeEditorUrl) ?>"
+                        title="<?= htmlspecialchars((string)__('Theme 可视化编辑')) ?>"></iframe>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.cms-page-workbench {
+    --cms-edit-surface: #ffffff;
+    --cms-edit-surface-soft: #f8fafc;
+    --cms-edit-surface-raised: #ffffff;
+    --cms-edit-field: #ffffff;
+    --cms-edit-text: #172033;
+    --cms-edit-muted: #64748b;
+    --cms-edit-border: #d7deeb;
+    --cms-edit-border-strong: #c9d3e2;
+    --cms-edit-accent: #3b82f6;
+    display: grid;
+    gap: 12px;
+}
+
+.cms-page-settings-bar {
+    padding: 16px 18px;
+    border: 1px solid var(--cms-edit-border);
+    border-radius: 8px;
+    background: var(--cms-edit-surface);
+    color: var(--cms-edit-text);
+}
+
+.cms-page-settings-grid {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.15fr) minmax(260px, 1.15fr) minmax(150px, .7fr) minmax(240px, 1fr) minmax(210px, .82fr);
+    grid-template-areas:
+        "context title title layout actions"
+        "slug scope status layout actions";
+    gap: 14px;
+    align-items: end;
+}
+
+.cms-page-settings-grid > [class*="col-"] {
+    width: auto;
+    max-width: none;
+    flex: initial;
+}
+
+.cms-field {
+    min-width: 0;
+}
+
+.cms-field-context { grid-area: context; }
+.cms-field-website { grid-area: context; }
+.cms-field-title { grid-area: title; }
+.cms-field-path { grid-area: path; }
+.cms-field-path-alias { grid-area: alias; }
+.cms-field-slug { grid-area: slug; }
+.cms-field-scope { grid-area: scope; }
+.cms-field-status { grid-area: status; }
+.cms-field-layout { grid-area: layout; align-self: end; }
+
+.cms-page-settings-grid.has-path-context {
+    grid-template-areas:
+        "context title title layout actions"
+        "slug scope status layout actions";
+}
+
+.cms-page-settings-grid.needs-path-context {
+    grid-template-areas:
+        "context title title layout actions"
+        "path alias slug scope actions"
+        "status status status status actions";
+}
+
+.cms-form-actions {
+    grid-area: actions;
+    display: flex;
+    flex-direction: column;
+    justify-content: end;
+    gap: 10px;
+    align-self: stretch;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--cms-edit-border) 80%, transparent);
+    border-radius: 8px;
+    background: var(--cms-edit-surface-soft);
+}
+
+.cms-action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    width: 100%;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.cms-page-settings-bar .form-label {
+    margin-bottom: 6px;
+    color: var(--cms-edit-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.cms-page-settings-bar .form-control,
+.cms-page-settings-bar .form-select {
+    min-height: 40px;
+    border-color: var(--cms-edit-border-strong);
+    border-radius: 6px;
+    background-color: var(--cms-edit-field);
+    color: var(--cms-edit-text);
+    box-shadow: none;
+}
+
+.cms-page-settings-bar .form-control,
+.cms-page-settings-bar .form-select {
+    padding: 7px 12px;
+}
+
+.cms-page-settings-bar .form-control:focus,
+.cms-page-settings-bar .form-select:focus,
+.cms-page-settings-bar .select2-container--focus .select2-selection--single,
+.cms-page-settings-bar .select2-container--open .select2-selection--single {
+    border-color: var(--cms-edit-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent) 18%, transparent);
+}
+
+.cms-page-settings-bar .select2-container {
+    width: 100% !important;
+    display: block;
+}
+
+.cms-page-settings-bar .select2-container .select2-selection--single {
+    height: 40px;
+}
+
+.cms-page-settings-bar .select2-container .select2-selection--single .select2-selection__rendered {
+    line-height: 38px;
+    padding-left: 12px;
+    padding-right: 34px;
+    color: var(--cms-edit-text);
+}
+
+.cms-page-settings-bar .select2-container .select2-selection--single .select2-selection__arrow {
+    height: 38px;
+}
+
+.cms-page-settings-bar .w-search-select {
+    width: 100%;
+}
+
+.cms-page-settings-bar .w-search-select-trigger {
+    min-height: 40px;
+    border-color: var(--cms-edit-border-strong);
+    border-radius: 6px;
+    background: var(--cms-edit-field);
+    color: var(--cms-edit-text);
+    padding: 0 36px 0 12px;
+}
+
+.cms-page-settings-bar .w-search-select-trigger:hover,
+.cms-page-settings-bar .w-search-select-trigger:focus-within {
+    border-color: var(--cms-edit-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cms-edit-accent) 18%, transparent);
+}
+
+.cms-page-settings-bar .w-search-select-input {
+    min-width: 0;
+    color: var(--cms-edit-text);
+}
+
+.cms-page-settings-bar .w-search-select-input::placeholder {
+    color: var(--cms-edit-muted);
+}
+
+.cms-page-settings-bar .w-search-select-display {
+    left: 12px;
+    right: 36px;
+    color: var(--cms-edit-text);
+}
+
+.cms-page-settings-bar .w-search-select-arrow,
+.cms-page-settings-bar .w-search-select-clear {
+    color: var(--cms-edit-muted);
+}
+
+.cms-page-settings-bar .w-search-select-dropdown {
+    margin-top: 6px;
+    border-color: var(--cms-edit-border-strong);
+    border-radius: 6px;
+    background: var(--cms-edit-surface);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+}
+
+.cms-page-settings-bar .w-search-select-item,
+.cms-page-settings-bar .w-search-select-empty,
+.cms-page-settings-bar .w-search-select-loading {
+    color: var(--cms-edit-text);
+}
+
+.cms-page-settings-bar .w-search-select-item:hover {
+    background: var(--cms-edit-surface-soft);
+}
+
+.cms-page-settings-bar .w-search-select-item.selected {
+    background: color-mix(in srgb, var(--cms-edit-accent) 16%, var(--cms-edit-surface));
+}
+
+.cms-page-settings-bar .w-search-select-item.active {
+    background: var(--cms-edit-accent);
+    color: #fff;
+}
+
+.cms-context-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    background: var(--cms-edit-surface-soft);
+    overflow: hidden;
+}
+
+.cms-context-display span {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border: 1px solid var(--cms-edit-border);
+    border-radius: 999px;
+    background: var(--cms-edit-surface-raised);
+    color: var(--cms-edit-muted);
+    font-size: 12px;
+}
+
+.cms-context-display code {
+    min-width: 0;
+    overflow: hidden;
+    color: #e83e8c;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cms-page-settings-grid.has-path-context .cms-field-slug,
+.cms-page-settings-grid.has-path-context .cms-field-layout {
+    grid-column: auto;
+}
+
+.cms-theme-editor-workspace {
+    color: var(--cms-edit-text);
+}
+
+.cms-theme-editor-workspace {
+    min-height: calc(100vh - 188px);
+    overflow: hidden;
+    border: 1px solid var(--cms-edit-border);
+    border-radius: 8px;
+    background: var(--cms-edit-surface);
+}
+
+.cms-theme-editor-workspace.is-empty {
+    display: grid;
+    place-items: center;
+    min-height: 320px;
+    padding: 24px;
+}
+
+.cms-theme-editor-frame {
+    display: block;
+    width: 100%;
+    height: calc(100vh - 188px);
+    min-height: 800px;
+    border: 0;
+    background: #fff;
+}
+
+html[data-theme-mode="dark"] .cms-page-workbench,
+body[data-theme-mode="dark"] .cms-page-workbench,
+html[data-bs-theme="dark"] .cms-page-workbench,
+body[data-bs-theme="dark"] .cms-page-workbench,
+[data-theme-mode="dark"] .cms-page-workbench,
+[data-bs-theme="dark"] .cms-page-workbench {
+    --cms-edit-surface: #111c2d;
+    --cms-edit-surface-soft: #0e1929;
+    --cms-edit-surface-raised: #142238;
+    --cms-edit-field: #0d1727;
+    --cms-edit-text: #edf3ff;
+    --cms-edit-muted: #a9b8cd;
+    --cms-edit-border: #2b3a51;
+    --cms-edit-border-strong: #33445e;
+    --cms-edit-accent: #6b8cff;
+}
+
+html[data-theme-mode="dark"] .cms-page-settings-bar .form-control::placeholder,
+body[data-theme-mode="dark"] .cms-page-settings-bar .form-control::placeholder,
+html[data-bs-theme="dark"] .cms-page-settings-bar .form-control::placeholder,
+body[data-bs-theme="dark"] .cms-page-settings-bar .form-control::placeholder,
+[data-theme-mode="dark"] .cms-page-settings-bar .form-control::placeholder,
+[data-bs-theme="dark"] .cms-page-settings-bar .form-control::placeholder {
+    color: #708199;
+}
+
+html[data-theme-mode="dark"] .cms-page-settings-bar .select2-dropdown,
+body[data-theme-mode="dark"] .cms-page-settings-bar .select2-dropdown,
+html[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown,
+body[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown,
+[data-theme-mode="dark"] .cms-page-settings-bar .select2-dropdown,
+[data-bs-theme="dark"] .cms-page-settings-bar .select2-dropdown {
+    border-color: #33445e;
+    background: #111c2d;
+    color: #edf3ff;
+}
+
+html[data-theme-mode="dark"] .cms-page-settings-bar .select2-search__field,
+body[data-theme-mode="dark"] .cms-page-settings-bar .select2-search__field,
+html[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field,
+body[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field,
+[data-theme-mode="dark"] .cms-page-settings-bar .select2-search__field,
+[data-bs-theme="dark"] .cms-page-settings-bar .select2-search__field {
+    border-color: #33445e;
+    background: #0d1727;
+    color: #edf3ff;
+}
+
+html[data-theme-mode="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+body[data-theme-mode="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+html[data-bs-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+body[data-bs-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+[data-theme-mode="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true],
+[data-bs-theme="dark"] .cms-page-settings-bar .select2-results__option[aria-selected=true] {
+    background: #1b2940;
+    color: #edf3ff;
+}
+
+@media (max-width: 1399.98px) {
+    .cms-page-settings-grid.has-path-context {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-areas:
+            "context context context title title title"
+            "slug slug scope scope status status"
+            "layout layout layout actions actions actions";
+    }
+
+    .cms-page-settings-grid.needs-path-context {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-areas:
+            "context context context title title title"
+            "path path alias alias slug slug"
+            "scope scope status status layout layout"
+            "actions actions actions actions actions actions";
+    }
+
+    .cms-form-actions {
+        flex-direction: row;
+        align-self: end;
+    }
+
+    .cms-action-button {
+        width: auto;
+        flex: 1 1 0;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .cms-page-settings-grid.has-path-context {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "context title"
+            "slug scope"
+            "status layout"
+            "actions actions";
+    }
+
+    .cms-page-settings-grid.needs-path-context {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "context title"
+            "path alias"
+            "slug scope"
+            "status layout"
+            "actions actions";
+    }
+
+    .cms-theme-editor-workspace {
+        min-height: calc(100vh - 240px);
+    }
+
+    .cms-theme-editor-frame {
+        height: calc(100vh - 240px);
+        min-height: 720px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .cms-page-settings-bar {
+        padding: 14px;
+    }
+
+    .cms-page-settings-grid.has-path-context {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "context"
+            "title"
+            "slug"
+            "scope"
+            "status"
+            "layout"
+            "actions";
+    }
+
+    .cms-page-settings-grid.needs-path-context {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "context"
+            "title"
+            "path"
+            "alias"
+            "slug"
+            "scope"
+            "status"
+            "layout"
+            "actions";
+    }
+
+    .cms-form-actions {
+        flex-direction: column;
+    }
+
+    .cms-form-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+<script>
+(function () {
+    const select = document.querySelector('.cms-page-settings-bar select[name="website_id"]');
+    const codeInput = document.querySelector('[data-cms-website-code]');
+    if (!select || !codeInput) {
+        return;
+    }
+    const syncCode = function () {
+        const option = select.options[select.selectedIndex];
+        codeInput.value = option ? (option.getAttribute('data-code') || '') : '';
+    };
+    select.addEventListener('change', syncCode);
+    syncCode();
+})();
+</script>

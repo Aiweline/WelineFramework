@@ -1,0 +1,233 @@
+<?php
+/**
+ * @meta.title {default="访问统计配置",description="Weline_Visitor 访问统计与外部统计通道配置"}
+ * @meta.description {default="按站点 scope 配置 Weline Pixel、事件转发与过滤规则。GA4 只作为 Pixel 转发器存在。"}
+ * @config.area {backend}
+ * @config.sort {70}
+ * @config.acl {Weline_Visitor::pixel_dashboard}
+ */
+?>
+
+<w:config:group code="visitor_pixel" label="Weline Pixel" description="Weline_Visitor 内置访问行为采集，按站点维度控制是否启用。" sort="10">
+    <w:config:field
+        key="visitor/tracking/pixel_enabled"
+        label="启用 Weline Pixel"
+        description="开启后前台会加载 Weline_Visitor 像素脚本，采集页面访问、搜索、点击、转化链路和性能基础信息。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+</w:config:group>
+
+<w:config:group code="visitor_panel_security" label="访问面板门禁" description="生产环境访问 Weline 面板和读取访问/WLS 数据接口时使用。仍必须先配置 env: dev_tool.panel.enable_in_prod=true。" sort="15">
+    <w:config:field
+        key="visitor/panel/access_token_hash"
+        label="访问面板 Token Hash"
+        description="推荐配置 SHA-256、bcrypt 或 argon2 hash。生产环境输入 weline 后，面板 session 与数据接口会用此 token 校验。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        sensitive="true"
+        validation="max:255" />
+
+    <w:config:field
+        key="visitor/panel/access_token"
+        label="访问面板明文 Token"
+        description="仅用于调试或后台自动轮换后的临时写入；生产优先使用 Token Hash，避免长期保存明文。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        sensitive="true"
+        validation="max:255" />
+</w:config:group>
+
+<w:config:group code="visitor_buffer" label="采集缓冲与同意模式" description="访问事件先进入 Weline Pixel 标准事件，WLS 下可写入热缓冲后批量持久化。" sort="20">
+    <w:config:field
+        key="visitor/tracking/hot_buffer_enabled"
+        label="启用 WLS 热缓冲"
+        description="WLS 环境下先写入内存命名空间，再按间隔批量写入数据库；FPM 或内存服务不可用时自动使用同步落库。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/hot_buffer_flush_interval"
+        label="热缓冲刷新间隔"
+        description="单位秒，默认 15。仅刷新已经结束的时间桶，避免并发写入时丢数据。"
+        type="number"
+        value-type="int"
+        default="15"
+        scope="global,website"
+        validation="min:1|max:300" />
+
+    <w:config:field
+        key="visitor/tracking/hot_buffer_batch_size"
+        label="单次持久化批量"
+        description="单次最多写入的事件数量，默认 500；高并发站点可按数据库能力调整。"
+        type="number"
+        value-type="int"
+        default="500"
+        scope="global,website"
+        validation="min:1|max:5000" />
+
+    <w:config:field
+        key="visitor/tracking/hot_buffer_ttl"
+        label="热缓冲保留时间"
+        description="单位秒，默认 300。数据库异常时旧桶会保留到 TTL 到期，便于下一次 flush 重试。"
+        type="number"
+        value-type="int"
+        default="300"
+        scope="global,website"
+        validation="min:60|max:3600" />
+
+    <w:config:field
+        key="visitor/tracking/consent_mode_enabled"
+        label="启用同意模式"
+        description="开启后 Weline Pixel 事件会携带同意状态，GA4 等转发器按同意状态决定是否加载和上报。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+</w:config:group>
+
+<w:config:group code="visitor_forward_filter" label="转发过滤规则" description="命中本地访问或站点排除规则时，Pixel 仍会记录，但不会转发到 GA4 或自定义平台。" sort="30">
+    <w:config:field
+        key="visitor/tracking/exclude_local_forwarding"
+        label="本地/私网访问不转发"
+        description="默认开启。localhost、127.0.0.1、.local 与私网 IP 仍记录 Pixel，但不转发到外部统计平台。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/excluded_hosts"
+        label="排除 Host"
+        description="每行或逗号分隔一个 host，支持 *.example.com。命中后仅记录 Pixel，不做外部转发。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:5000" />
+
+    <w:config:field
+        key="visitor/tracking/excluded_path_prefixes"
+        label="排除路径前缀"
+        description="每行或逗号分隔一个路径前缀，例如 /admin-preview 或 /test。命中后仅记录 Pixel。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:5000" />
+
+    <w:config:field
+        key="visitor/tracking/excluded_query_keys"
+        label="排除 Query 参数"
+        description="每行或逗号分隔一个参数名，例如 preview、browser_pass、utm_test。URL 携带这些参数时不转发。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:5000" />
+
+    <w:config:field
+        key="visitor/tracking/excluded_referrer_hosts"
+        label="排除来源 Host"
+        description="每行或逗号分隔一个来源 host，支持 *.example.com。命中 referrer 时不转发。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:5000" />
+
+    <w:config:field
+        key="visitor/tracking/excluded_user_agent_keywords"
+        label="排除 User-Agent 关键词"
+        description="每行或逗号分隔一个关键词，用于过滤内部巡检、预览浏览器或自定义机器人流量。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:5000" />
+</w:config:group>
+
+<w:config:group code="visitor_ga4" label="事件转发与 GA4" description="GA4 作为 Weline Pixel 的一个转发器存在，由 Weline_Visitor 按站点配置转换事件。" sort="40">
+    <w:config:field
+        key="visitor/tracking/ga4_enabled"
+        label="启用 GA4"
+        description="开启且填写 Measurement ID 后，Weline Pixel 会把标准事件转换后转发到 GA4。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/ga4_measurement_id"
+        label="GA4 Measurement ID"
+        description="格式为 G-XXXXXXXXXX。该配置按站点 scope 保存，不能写入 SEO 模块。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:32" />
+
+    <w:config:field
+        key="visitor/tracking/ga4_enable_in_dev"
+        label="开发环境加载 GA4"
+        description="仅在转发过滤规则放行时有效。默认本地/私网访问会被过滤，只记录 Pixel，不加载或提交外部统计。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/ga4_auto_track_visitor_events"
+        label="同步 Visitor 转化事件"
+        description="开启后 Weline Pixel 中的 view_item、add_to_cart、begin_checkout、purchase 和带 data-pixel-event/data-cta-event/data-cta 的 CTA 会同步到 GA4。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/ga4_cta_event_name"
+        label="默认 CTA 事件名"
+        description="未显式声明 data-pixel-event、data-visitor-event 或 data-cta-event 的 CTA 元素使用该事件名。"
+        type="text"
+        value-type="string"
+        default="cta_click"
+        scope="global,website"
+        validation="max:40" />
+
+    <w:config:field
+        key="visitor/tracking/ga4_debug_mode"
+        label="启用 GA4 debug_mode"
+        description="仅用于联调，会在 gtag config 和事件参数中附带 debug_mode。生产站点不建议开启。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/custom_forwarder_js_enabled"
+        label="启用自定义转化 JS"
+        description="开启后加载下方站点级脚本，用于把 Weline Pixel 标准事件转换到其他平台。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/custom_forwarder_js"
+        label="自定义转化 JS"
+        description="脚本运行在 WelineVisitorForwarders 上下文，可监听 weline:visitor:event 并转发到其他平台。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website"
+        sensitive="true"
+        validation="max:20000" />
+</w:config:group>

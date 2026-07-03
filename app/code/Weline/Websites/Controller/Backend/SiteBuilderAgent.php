@@ -26,10 +26,9 @@ use Weline\Websites\Service\AiWorkbench\SessionService;
 use Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService;
 use Weline\Websites\Service\WebsiteAgentService;
 
-#[Acl('Weline_Websites::site_builder_agent', 'AI Site Workbench', 'mdi mdi-robot', 'Coordinate domain, website, and workspace site building', 'Weline_Backend::website_service')]
+#[Acl('Weline_Websites::site_builder_agent', 'AI Site Workbench', 'mdi mdi-robot', 'Coordinate domain, website, and workspace site building', 'Weline_Websites::website_service')]
 class SiteBuilderAgent extends BackendController
 {
-    private const PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE = 'pagebuilder_native_workspace';
     private const DEV_SIM_DOMAIN = 'weline-dev.local';
 
     #[Acl('Weline_Websites::site_builder_agent_index', 'AI Site Workbench', 'mdi mdi-robot', 'AI site workbench hub')]
@@ -37,7 +36,7 @@ class SiteBuilderAgent extends BackendController
     {
         $selectedProvider = \trim((string)$this->request->getGet('provider', ''));
         if ($selectedProvider === '') {
-            $selectedProvider = 'pagebuilder';
+            $selectedProvider = 'websites_default';
         }
 
         $fakeMode = $this->isFakeModeRequested();
@@ -94,7 +93,6 @@ class SiteBuilderAgent extends BackendController
             return $this->fetch();
         }
 
-        $session = $this->refreshPageBuilderMirrorSession($session, $adminId);
         $providerConfig = $this->getProviderWorkbenchService()->buildWorkbenchConfigForSession($session, $adminId);
         $scope = \is_array($providerConfig['scope'] ?? null) ? $providerConfig['scope'] : [];
         $currentStage = $this->normalizeJourneyStage($session->getCurrentStage());
@@ -136,9 +134,6 @@ class SiteBuilderAgent extends BackendController
         $this->assign('preview_full_url', (string)($scope['preview_full_url'] ?? $session->getPreviewUrl()));
         $this->assign('visual_preview_url', (string)($scope['visual_preview_url'] ?? ''));
         $this->assign('visual_edit_url', (string)($scope['visual_edit_url'] ?? ''));
-        $this->assign('pagebuilder_handoff_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/pagebuilder-handoff', [
-            'public_id' => $session->getPublicId(),
-        ]));
         $this->assign('provider_native_url', (string)($providerConfig['native_entry_url'] ?? ''));
         $this->assign('provider_handoff_label', (string)($providerConfig['handoff_label'] ?? ''));
         $this->assign('snapshot_artifact', $this->getArtifactService()->getOne($session->getId(), $adminId, 'workspace', 'scope_snapshot'));
@@ -161,8 +156,6 @@ class SiteBuilderAgent extends BackendController
         if ($session === null) {
             return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
         }
-
-        $session = $this->refreshPageBuilderMirrorSession($session, $adminId);
 
         return $this->fetchJson([
             'success' => true,
@@ -1221,7 +1214,7 @@ class SiteBuilderAgent extends BackendController
                     $promptLines[] = 'Use the AI style snapshot as the visual direction contract, but do not copy reference-site content or invent contact facts.';
                 }
                 $prompt = \implode("\n", $promptLines);
-                $aiRaw = (string)$ai->generate($prompt, null, 'pagebuilder_component_generation', null, [
+                $aiRaw = (string)$ai->generate($prompt, null, null, null, [
                     'disable_style_prompt_injection' => true,
                 ], $adminId, true);
                 $decoded = $this->extractFirstJsonObject($aiRaw);
@@ -1283,7 +1276,6 @@ class SiteBuilderAgent extends BackendController
             'virtual_theme_generated_at' => $this->now(),
         ]);
         $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
-        $fresh = $this->refreshPageBuilderMirrorSession($fresh, $adminId);
         $this->syncSessionStructuredFields($fresh, $adminId);
         $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $fresh;
         $this->syncSessionArtifacts($fresh, $adminId);
@@ -1388,73 +1380,6 @@ class SiteBuilderAgent extends BackendController
             'stream_token' => $streamToken,
             'stream_url' => $streamUrl,
         ]);
-    }
-
-    #[Acl('Weline_Websites::site_builder_agent_pagebuilder_handoff', 'Open PageBuilder Handoff', 'mdi mdi-arrow-right-bold-circle-outline', 'Create or resume the PageBuilder extension workspace for this AI site workbench session', 'Weline_Websites::site_builder_agent')]
-    public function getPagebuilderHandoff(): string
-    {
-        $adminId = $this->getAdminId();
-        $publicId = \trim((string)$this->request->getGet('public_id', ''));
-
-        if ($adminId <= 0 || $publicId === '') {
-            $this->redirect($this->getHubEntryUrl('pagebuilder', $this->isFakeModeRequested()));
-            return '';
-        }
-
-        $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            $this->redirect($this->getHubEntryUrl('pagebuilder', $this->isFakeModeRequested()));
-            return '';
-        }
-
-        if ($session->getProviderCode() !== 'pagebuilder') {
-            $this->redirect($this->getWorkspaceUrl($session->getPublicId()));
-            return '';
-        }
-
-        $handoff = $this->createOrResumePageBuilderHandoff($session, $adminId);
-        if ($handoff === null) {
-            $this->redirect($this->resolveProviderNativeEntryUrl($session->getProviderCode()));
-            return '';
-        }
-
-        if ($this->normalizeJourneyStage($session->getCurrentStage()) === 'prepare') {
-            $this->getSessionService()->setStage($session->getId(), $adminId, 'generate');
-        }
-
-        $this->getSessionService()->mergeScope(
-            $session->getId(),
-            $adminId,
-            [
-                'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
-                'provider_handoff_ready' => 1,
-                'pagebuilder_workspace_public_id' => $handoff['public_id'],
-                'pagebuilder_workspace_url' => $handoff['workspace_url'],
-                'pagebuilder_handoff_stage' => $handoff['stage'],
-                'pagebuilder_handoff_synced_at' => $this->now(),
-            ]
-        );
-
-        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
-        $this->syncSessionStructuredFields($fresh, $adminId);
-        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $fresh;
-        $this->syncSessionArtifacts($fresh, $adminId);
-        $this->getEventStreamService()->appendEvent(
-            $fresh->getId(),
-            $adminId,
-            $this->normalizeJourneyStage($fresh->getCurrentStage()),
-            'provider_handoff_opened',
-            [
-                'provider_code' => 'pagebuilder',
-                'native_workspace_public_id' => $handoff['public_id'],
-                'native_workspace_url' => $handoff['workspace_url'],
-                'native_stage' => $handoff['stage'],
-            ],
-            AiSiteBuilderEvent::LEVEL_INFO
-        );
-
-        $this->redirect($handoff['workspace_url']);
-        return '';
     }
 
     #[Acl('Weline_Websites::site_builder_agent_stream', 'Workspace SSE Stream', 'mdi mdi-access-point', 'Stream workspace events', 'Weline_Websites::site_builder_agent')]
@@ -1917,7 +1842,6 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderEntryUrl(Url $urlHelper, string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => $urlHelper->getBackendUrl('pagebuilder/backend/ai-site-agent/index'),
             'websites_default' => $this->getHubEntryUrl('websites_default'),
             default => $this->getHubEntryUrl($providerCode),
         };
@@ -1926,7 +1850,6 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderActionLabel(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => (string)__('打开 PageBuilder 流程'),
             'websites_default' => (string)__('打开 Websites 流程'),
             default => (string)__('打开服务商流程'),
         };
@@ -1935,7 +1858,6 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderBadge(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => (string)__('样式流程'),
             'websites_default' => (string)__('共享流程'),
             default => (string)__('服务商流程'),
         };
@@ -2160,29 +2082,6 @@ class SiteBuilderAgent extends BackendController
             $pages = $this->buildRecommendedPages($brief, $providerCode, $scope);
             $pageSummary = $pages === [] ? '' : \implode('、', \array_slice($pages, 0, 5));
 
-            if ($providerCode === 'pagebuilder') {
-                $hasDraftWebsite = (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? 0) > 0;
-                $hasVisualPreview = \trim((string)($scope['visual_preview_url'] ?? '')) !== '';
-                $styleTemplate = (string)($scope['style_template_code'] ?? $scope['pagebuilder_style_template'] ?? '');
-                return [
-                    'summary' => (string)__('AI 建议先选 PageBuilder 的 %{template} styles/ 模板，再生成默认页面和可编辑内容区域。', [
-                        'template' => $styleTemplate,
-                    ]),
-                    'items' => [
-                        (string)__('推荐 styles 模板：%{template}', ['template' => $styleTemplate]),
-                        (string)__('建议页面：%{pages}', ['pages' => $pageSummary !== '' ? $pageSummary : (string)__('首页、关于、联系页')]),
-                        (string)__('Header 和 Footer 固定，AI 只生成主体内容组件'),
-                    ],
-                    'patch' => [
-                        'journey_stage' => 'generate',
-                        'preferred_editor' => 'pagebuilder',
-                        'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
-                        'recommended_pages' => $pages,
-                        'page_types' => $pages,
-                    ],
-                ];
-            }
-
             $stylePatch = $this->resolveWebsiteAiStylePatch($scope, 'website_builder');
             $styleSnapshot = \is_array($stylePatch['design_direction_snapshot'] ?? null) ? $stylePatch['design_direction_snapshot'] : [];
             $themeDirection = $styleSnapshot !== []
@@ -2356,10 +2255,6 @@ class SiteBuilderAgent extends BackendController
             $pages[] = '案例展示';
         }
 
-        if ($providerCode === 'pagebuilder' && !$this->containsAny($haystack, ['landing', 'campaign', '活动'])) {
-            $pages[] = '落地页';
-        }
-
         return \array_values(\array_unique($pages));
     }
 
@@ -2411,255 +2306,6 @@ class SiteBuilderAgent extends BackendController
     /**
      * @param array<string, mixed> $scope
      */
-    private function resolvePageBuilderStyleTemplate(string $description, array $scope): string
-    {
-        foreach (['pagebuilder_style_template', 'style_template_code'] as $field) {
-            $value = \trim((string)($scope[$field] ?? ''));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        $haystack = \strtolower($description . ' ' . (string)($scope['site_tagline'] ?? ''));
-        if ($this->containsAny($haystack, ['finance', 'loan', 'bank', 'capital', 'payment', '金融', '支付'])) {
-            return 'fintech-hub';
-        }
-        if ($this->containsAny($haystack, ['fitness', 'gym', 'health', 'coach', '运动', '健身'])) {
-            return 'fitness-pro';
-        }
-        if ($this->containsAny($haystack, ['rummy', '棋牌', '拉米'])) {
-            return 'rummy-royal';
-        }
-        if ($this->containsAny($haystack, ['poker', '德州', '扑克'])) {
-            return 'poker-arena';
-        }
-        if ($this->containsAny($haystack, ['ludo', '飞行棋'])) {
-            return 'ludo-empire';
-        }
-        if ($this->containsAny($haystack, ['casino', 'game', 'bet', 'slot', '游戏', '娱乐'])) {
-            return 'sattaking';
-        }
-        if ($this->containsAny($haystack, ['app', 'mobile', 'download', '落地页', '下载'])) {
-            return 'tpmst';
-        }
-
-        return 'saas-starter';
-    }
-
-    /**
-     * @return array{public_id:string,workspace_url:string,stage:string}|null
-     */
-    private function createOrResumePageBuilderHandoff(AiSiteBuilderSession $session, int $adminUserId): ?array
-    {
-        $pageBuilderSessionService = $this->getPageBuilderSessionService();
-        if ($pageBuilderSessionService === null) {
-            return null;
-        }
-
-        $scope = $session->getScopeArray();
-        $handoffScope = $this->buildPageBuilderHandoffScope($session, $scope);
-        $handoffStage = $this->resolvePageBuilderHandoffStage($scope);
-        $existingPublicId = \trim((string)($scope['pagebuilder_workspace_public_id'] ?? ''));
-        $nativeSession = null;
-
-        if ($existingPublicId !== '') {
-            try {
-                $nativeSession = $pageBuilderSessionService->loadByPublicId($existingPublicId, $adminUserId);
-            } catch (\Throwable) {
-                $nativeSession = null;
-            }
-        }
-
-        try {
-            if ($nativeSession === null) {
-                $nativeSession = $pageBuilderSessionService->createSession($adminUserId, $handoffScope);
-                $pageBuilderSessionService->setStage($nativeSession->getId(), $adminUserId, $handoffStage);
-                $pageBuilderSessionService->appendEvent(
-                    $nativeSession->getId(),
-                    $adminUserId,
-                    'handoff_from_websites',
-                    [
-                        'source_public_id' => $session->getPublicId(),
-                        'source_provider_code' => $session->getProviderCode(),
-                        'stage' => $handoffStage,
-                    ]
-                );
-                $nativeSession = $pageBuilderSessionService->loadById($nativeSession->getId(), $adminUserId) ?? $nativeSession;
-            } else {
-                $pageBuilderSessionService->mergeScope($nativeSession->getId(), $adminUserId, $handoffScope);
-                if ($this->getPageBuilderStageRank((string)$nativeSession->getStage()) < $this->getPageBuilderStageRank($handoffStage)) {
-                    $pageBuilderSessionService->setStage($nativeSession->getId(), $adminUserId, $handoffStage);
-                }
-                $pageBuilderSessionService->appendEvent(
-                    $nativeSession->getId(),
-                    $adminUserId,
-                    'handoff_sync_from_websites',
-                    [
-                        'source_public_id' => $session->getPublicId(),
-                        'source_provider_code' => $session->getProviderCode(),
-                        'stage' => $handoffStage,
-                    ]
-                );
-                $nativeSession = $pageBuilderSessionService->loadById($nativeSession->getId(), $adminUserId) ?? $nativeSession;
-            }
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (!\is_object($nativeSession) || !\method_exists($nativeSession, 'getPublicId')) {
-            return null;
-        }
-
-        $nativePublicId = \trim((string)$nativeSession->getPublicId());
-        if ($nativePublicId === '') {
-            return null;
-        }
-
-        return [
-            'public_id' => $nativePublicId,
-            'workspace_url' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $nativePublicId]),
-            'stage' => \method_exists($nativeSession, 'getStage') ? (string)$nativeSession->getStage() : $handoffStage,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function buildPageBuilderHandoffScope(AiSiteBuilderSession $session, array $scope): array
-    {
-        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''));
-        $siteTitle = \trim((string)($scope['site_title'] ?? ''));
-        $siteTagline = \trim((string)($scope['site_tagline'] ?? ''));
-        $targetDomain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? $session->getSelectedDomain())));
-        $selectedPageTypes = $this->normalizeScopeStringList($scope['page_types'] ?? []);
-        $recommendedPages = $selectedPageTypes !== []
-            ? $selectedPageTypes
-            : $this->normalizeScopeStringList($scope['recommended_pages'] ?? []);
-        if ($recommendedPages === []) {
-            $recommendedPages = $this->buildRecommendedPages($brief, 'pagebuilder', $scope);
-        }
-        $siteProfileManual = \is_array($scope['site_profile_manual'] ?? null) ? $scope['site_profile_manual'] : [];
-        foreach ([
-            'site_title' => $siteTitle,
-            'site_tagline' => $siteTagline,
-            'target_domain' => $targetDomain,
-            'brief_description' => $brief,
-            'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
-        ] as $field => $value) {
-            if ($value !== '') {
-                $siteProfileManual[$field] = true;
-            }
-        }
-        $styleTemplate = '';
-        $defaultLocale = \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? ''));
-        $locales = $this->normalizeScopeStringList($scope['locales'] ?? $scope['language_codes'] ?? []);
-        if ($defaultLocale !== '' && !\in_array($defaultLocale, $locales, true)) {
-            $locales[] = $defaultLocale;
-        }
-
-        $virtualThemeNotes = \trim((string)($scope['virtual_theme_notes'] ?? ''));
-        if ($virtualThemeNotes === '') {
-            $virtualThemeNotes = (string)__('从 Websites 工作区接管，推荐 styles 模板：%{template}', ['template' => $styleTemplate]);
-        }
-
-        $contentNotes = \trim((string)($scope['content_notes'] ?? $scope['workbench_notes'] ?? ''));
-        if ($contentNotes === '' && $brief !== '') {
-            $contentNotes = $brief;
-        }
-
-        $handoffScope = [
-            'handoff_source' => 'weline_websites_workbench',
-            'handoff_workspace_public_id' => $session->getPublicId(),
-            'handoff_provider_code' => $session->getProviderCode(),
-            'site_title' => $siteTitle,
-            'site_tagline' => $siteTagline,
-            'brief_description' => $brief,
-            'user_description' => $brief !== '' ? $brief : \trim((string)($scope['user_description'] ?? '')),
-            'target_domain' => $targetDomain,
-            'default_locale' => $defaultLocale,
-            'locales' => $locales,
-            'preferred_editor' => 'pagebuilder',
-            'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
-            'page_types' => $selectedPageTypes !== [] ? $selectedPageTypes : $recommendedPages,
-            'recommended_pages' => $recommendedPages,
-            'page_types_user_customized' => $selectedPageTypes !== [] ? 1 : (int)($scope['page_types_user_customized'] ?? 0),
-            'site_profile_manual' => $siteProfileManual,
-        ];
-
-        foreach ([
-            'website_profile',
-            'draft_website_id',
-            'weline_theme_id',
-            'page_type_layouts',
-            'pagebuilder_pages_by_type',
-            'preview_page_options',
-            'preview_page_id',
-            'preview_page_type',
-            'preview_full_url',
-            'visual_preview_url',
-            'visual_edit_url',
-            'home_page_id',
-            'site_plan',
-            'page_route_contract',
-            'navigation_address_rules',
-        ] as $field) {
-            if (\array_key_exists($field, $scope)) {
-                $handoffScope[$field] = $scope[$field];
-            }
-        }
-
-        foreach (['pagebuilder_workspace_public_id', 'pagebuilder_workspace_url'] as $field) {
-            $value = \trim((string)($scope[$field] ?? ''));
-            if ($value !== '') {
-                $handoffScope[$field] = $value;
-            }
-        }
-
-        $websiteId = (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? $scope['selected_website_id'] ?? $session->getWebsiteId());
-        if ($websiteId > 0) {
-            $handoffScope['draft_website_id'] = $websiteId;
-            $handoffScope['website_id'] = $websiteId;
-            $handoffScope['selected_website_id'] = $websiteId;
-        }
-
-        return $handoffScope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function resolvePageBuilderHandoffStage(array $scope): string
-    {
-        if ((int)($scope['preview_page_id'] ?? 0) > 0) {
-            return 'visual_edit';
-        }
-
-        $pagesByType = $scope['pagebuilder_pages_by_type'] ?? [];
-        if (\is_array($pagesByType) && $pagesByType !== []) {
-            return 'visual_edit';
-        }
-
-        return 'virtual_theme';
-    }
-
-    private function getPageBuilderStageRank(string $stage): int
-    {
-        return match (\trim($stage)) {
-            'brief' => 10,
-            'domain' => 20,
-            'domain_wait' => 30,
-            'virtual_theme' => 40,
-            'page_types', 'content' => 40,
-            'visual_edit' => 70,
-            'publish' => 80,
-            default => 0,
-        };
-    }
-
-    /**
-     * @return list<string>
-     */
     private function normalizeScopeStringList(mixed $raw): array
     {
         if (\is_array($raw)) {
@@ -2686,294 +2332,6 @@ class SiteBuilderAgent extends BackendController
         return $result;
     }
 
-    private function getPageBuilderSessionService(): ?object
-    {
-        $serviceClass = \GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService::class;
-        if (!\class_exists($serviceClass)) {
-            return null;
-        }
-
-        try {
-            return ObjectManager::getInstance($serviceClass);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function refreshPageBuilderMirrorSession(AiSiteBuilderSession $session, int $adminUserId): AiSiteBuilderSession
-    {
-        if ($session->getProviderCode() !== 'pagebuilder') {
-            return $session;
-        }
-
-        $nativeState = $this->loadPageBuilderNativeWorkspaceState($session, $adminUserId);
-        if ($nativeState === null) {
-            return $session;
-        }
-
-        $changedPatch = $this->diffScopePatch($session->getScopeArray(), $this->buildPageBuilderMirrorScope($session, $nativeState));
-        if ($changedPatch !== []) {
-            $changedPatch['pagebuilder_handoff_synced_at'] = $this->now();
-            $this->getSessionService()->mergeScope($session->getId(), $adminUserId, $changedPatch);
-        }
-
-        $journeyStage = $this->resolveJourneyStage((string)($nativeState['stage'] ?? ''));
-        if ($journeyStage !== null && $this->normalizeJourneyStage($session->getCurrentStage()) !== $journeyStage) {
-            $this->getSessionService()->setStage($session->getId(), $adminUserId, $journeyStage);
-        }
-
-        $fresh = $this->getSessionService()->loadById($session->getId(), $adminUserId) ?? $session;
-        $this->syncSessionStructuredFields($fresh, $adminUserId);
-        return $this->getSessionService()->loadById($session->getId(), $adminUserId) ?? $fresh;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function loadPageBuilderNativeWorkspaceState(AiSiteBuilderSession $session, int $adminUserId): ?array
-    {
-        $scope = $session->getScopeArray();
-        $nativePublicId = \trim((string)($scope['pagebuilder_workspace_public_id'] ?? ''));
-        if ($nativePublicId === '') {
-            return null;
-        }
-
-        $pageBuilderSessionService = $this->getPageBuilderSessionService();
-        if ($pageBuilderSessionService === null || !\method_exists($pageBuilderSessionService, 'loadByPublicId')) {
-            return null;
-        }
-
-        try {
-            $nativeSession = $pageBuilderSessionService->loadByPublicId($nativePublicId, $adminUserId);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (!\is_object($nativeSession) || !\method_exists($nativeSession, 'getScopeArray')) {
-            return null;
-        }
-
-        $nativeScope = $nativeSession->getScopeArray();
-        if (!\is_array($nativeScope)) {
-            $nativeScope = [];
-        }
-
-        $compatibilityService = $this->getPageBuilderScopeCompatibilityService();
-        if ($compatibilityService !== null && \method_exists($compatibilityService, 'normalizeScope')) {
-            try {
-                $nativeScope = $compatibilityService->normalizeScope($nativeScope);
-            } catch (\Throwable) {
-            }
-        }
-
-        $websiteProfile = \is_array($nativeScope['website_profile'] ?? null) ? $nativeScope['website_profile'] : [];
-        $profileGenerationService = $this->getPageBuilderProfileGenerationService();
-        if ($profileGenerationService !== null && \method_exists($profileGenerationService, 'generate')) {
-            try {
-                $websiteProfile = $profileGenerationService->generate($nativeScope);
-            } catch (\Throwable) {
-            }
-        }
-        $nativeScope['website_profile'] = $websiteProfile;
-
-        $draftWebsiteId = \max(
-            (int)($nativeScope['draft_website_id'] ?? 0),
-            (int)($nativeScope['website_id'] ?? 0),
-            \method_exists($nativeSession, 'getWebsiteId') ? (int)$nativeSession->getWebsiteId() : 0
-        );
-        if ($draftWebsiteId > 0) {
-            $nativeScope['draft_website_id'] = $draftWebsiteId;
-            $nativeScope['website_id'] = $draftWebsiteId;
-            $nativeScope['selected_website_id'] = $draftWebsiteId;
-        }
-
-        $welineThemeId = \max(
-            (int)($nativeScope['weline_theme_id'] ?? 0),
-            \method_exists($nativeSession, 'getWelineThemeId') ? (int)$nativeSession->getWelineThemeId() : 0
-        );
-        if ($welineThemeId > 0) {
-            $nativeScope['weline_theme_id'] = $welineThemeId;
-        }
-
-        $pagesByType = \is_array($nativeScope['pagebuilder_pages_by_type'] ?? null) ? $nativeScope['pagebuilder_pages_by_type'] : [];
-        if ($compatibilityService !== null && \method_exists($compatibilityService, 'normalizePagebuilderPagesByType')) {
-            try {
-                $pagesByType = $compatibilityService->normalizePagebuilderPagesByType($pagesByType);
-            } catch (\Throwable) {
-            }
-        }
-        $nativeScope['pagebuilder_pages_by_type'] = $pagesByType;
-
-        $previewPageId = (int)($nativeScope['preview_page_id'] ?? 0);
-        $previewPageType = (string)($nativeScope['preview_page_type'] ?? '');
-        if ($compatibilityService !== null && \method_exists($compatibilityService, 'resolvePreviewSelection')) {
-            try {
-                $selection = $compatibilityService->resolvePreviewSelection($pagesByType, $previewPageId, $previewPageType);
-                $previewPageId = (int)($selection['preview_page_id'] ?? 0);
-                $previewPageType = (string)($selection['preview_page_type'] ?? '');
-            } catch (\Throwable) {
-            }
-        }
-        $nativeScope['preview_page_id'] = $previewPageId;
-        $nativeScope['preview_page_type'] = $previewPageType;
-
-        $previewPageOptions = \is_array($nativeScope['preview_page_options'] ?? null) ? $nativeScope['preview_page_options'] : [];
-        if ($compatibilityService !== null && \method_exists($compatibilityService, 'buildPreviewPageOptions')) {
-            try {
-                $previewPageOptions = $compatibilityService->buildPreviewPageOptions($pagesByType);
-            } catch (\Throwable) {
-            }
-        }
-        $nativeScope['preview_page_options'] = $previewPageOptions;
-
-        $urls = [
-            'preview_full_url' => (string)($nativeScope['preview_full_url'] ?? ''),
-            'visual_preview_url' => (string)($nativeScope['visual_preview_url'] ?? ''),
-            'visual_edit_url' => (string)($nativeScope['visual_edit_url'] ?? ''),
-        ];
-        $visualUrlService = $this->getPageBuilderVisualUrlService();
-        if ($visualUrlService !== null && \method_exists($visualUrlService, 'resolveUrls')) {
-            try {
-                $urls = $visualUrlService->resolveUrls($previewPageId, $welineThemeId);
-            } catch (\Throwable) {
-            }
-        }
-        $nativeScope = \array_replace($nativeScope, $urls);
-
-        return [
-            'public_id' => $nativePublicId,
-            'stage' => \method_exists($nativeSession, 'getStage') ? (string)$nativeSession->getStage() : 'virtual_theme',
-            'scope' => $nativeScope,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $nativeState
-     * @return array<string, mixed>
-     */
-    private function buildPageBuilderMirrorScope(AiSiteBuilderSession $session, array $nativeState): array
-    {
-        $nativeScope = \is_array($nativeState['scope'] ?? null) ? $nativeState['scope'] : [];
-        $publicId = (string)($nativeState['public_id'] ?? '');
-        $mirror = [
-            'pagebuilder_workspace_public_id' => $publicId,
-            'pagebuilder_workspace_url' => $publicId !== ''
-                ? $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $publicId])
-                : '',
-            'pagebuilder_handoff_stage' => (string)($nativeState['stage'] ?? ''),
-            'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
-            'provider_handoff_ready' => 1,
-            'website_profile' => \is_array($nativeScope['website_profile'] ?? null) ? $nativeScope['website_profile'] : [],
-            'draft_website_id' => (int)($nativeScope['draft_website_id'] ?? $nativeScope['website_id'] ?? 0),
-            'weline_theme_id' => (int)($nativeScope['weline_theme_id'] ?? 0),
-            'page_types' => $nativeScope['page_types'] ?? [],
-            'recommended_pages' => $nativeScope['recommended_pages'] ?? ($nativeScope['page_types'] ?? []),
-            'page_type_layouts' => $nativeScope['page_type_layouts'] ?? [],
-            'pagebuilder_pages_by_type' => $nativeScope['pagebuilder_pages_by_type'] ?? [],
-            'preview_page_options' => $nativeScope['preview_page_options'] ?? [],
-            'preview_page_id' => (int)($nativeScope['preview_page_id'] ?? 0),
-            'preview_page_type' => (string)($nativeScope['preview_page_type'] ?? ''),
-            'preview_full_url' => (string)($nativeScope['preview_full_url'] ?? ''),
-            'visual_preview_url' => (string)($nativeScope['visual_preview_url'] ?? ''),
-            'visual_edit_url' => (string)($nativeScope['visual_edit_url'] ?? ''),
-        ];
-
-        if ($mirror['draft_website_id'] > 0) {
-            $mirror['website_id'] = $mirror['draft_website_id'];
-            $mirror['selected_website_id'] = $mirror['draft_website_id'];
-        }
-
-        foreach ([
-            'site_title',
-            'site_tagline',
-            'brief_description',
-            'user_description',
-            'target_domain',
-            'default_locale',
-            'locales',
-            'home_page_id',
-        ] as $field) {
-            if (\array_key_exists($field, $nativeScope)) {
-                $mirror[$field] = $nativeScope[$field];
-            }
-        }
-
-        return $mirror;
-    }
-
-    /**
-     * @param array<string, mixed> $currentScope
-     * @param array<string, mixed> $patch
-     * @return array<string, mixed>
-     */
-    private function diffScopePatch(array $currentScope, array $patch): array
-    {
-        $changed = [];
-        foreach ($patch as $key => $value) {
-            if (!$this->scopeValuesEqual($currentScope[$key] ?? null, $value)) {
-                $changed[$key] = $value;
-            }
-        }
-
-        return $changed;
-    }
-
-    private function scopeValuesEqual(mixed $left, mixed $right): bool
-    {
-        if (\is_array($left) || \is_array($right)) {
-            return \json_encode($left, \JSON_UNESCAPED_UNICODE) === \json_encode($right, \JSON_UNESCAPED_UNICODE);
-        }
-
-        return $left === $right;
-    }
-
-    private function getPageBuilderScopeCompatibilityService(): ?object
-    {
-        $serviceClass = \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::class;
-        if (!\class_exists($serviceClass)) {
-            return null;
-        }
-
-        try {
-            return ObjectManager::getInstance($serviceClass);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function getPageBuilderProfileGenerationService(): ?object
-    {
-        $serviceClass = \GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService::class;
-        if (!\class_exists($serviceClass)) {
-            return null;
-        }
-
-        try {
-            return ObjectManager::getInstance($serviceClass);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function getPageBuilderVisualUrlService(): ?object
-    {
-        $serviceClass = \GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService::class;
-        if (!\class_exists($serviceClass)) {
-            return null;
-        }
-
-        try {
-            return ObjectManager::getInstance($serviceClass);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * @param list<string> $toolCodes
-     * @param list<array<string, mixed>> $providerTools
-     * @return list<array<string, mixed>>
-     */
     private function buildStageTools(string $stage, array $toolCodes, array $providerTools): array
     {
         if ($providerTools === []) {
@@ -3089,7 +2447,6 @@ class SiteBuilderAgent extends BackendController
         int $messageLimit = 120,
         int $eventLimit = 120
     ): array {
-        $session = $this->refreshPageBuilderMirrorSession($session, $adminUserId);
         $providerConfig = $this->getProviderWorkbenchService()->buildWorkbenchConfigForSession($session, $adminUserId);
         $scope = \is_array($providerConfig['scope'] ?? null) ? $providerConfig['scope'] : [];
         $providerState = \is_array($providerConfig['provider_state'] ?? null) ? $providerConfig['provider_state'] : [];
@@ -3123,7 +2480,6 @@ class SiteBuilderAgent extends BackendController
             ],
             'provider_tools' => \is_array($providerConfig['tools'] ?? null) ? $providerConfig['tools'] : [],
             'draft_website_id' => (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? 0),
-            'pagebuilder_pages_by_type' => \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [],
             'preview_page_options' => \is_array($scope['preview_page_options'] ?? null) ? $scope['preview_page_options'] : [],
             'preview_page_id' => (int)($scope['preview_page_id'] ?? 0),
             'preview_page_type' => (string)($scope['preview_page_type'] ?? ''),
@@ -3200,12 +2556,7 @@ class SiteBuilderAgent extends BackendController
         $domain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? $session->getSelectedDomain())));
         $registrarAccountId = (int)($scope['registrar_account_id'] ?? $scope['preferred_registrar_account_id'] ?? $session->getRegistrarAccountId());
         $websiteId = (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? $scope['selected_website_id'] ?? $session->getWebsiteId());
-        $previewUrl = \trim((string)(
-            ($session->getProviderCode() === 'pagebuilder'
-                ? ($scope['visual_preview_url'] ?? $scope['preview_full_url'] ?? $scope['preview_url'] ?? '')
-                : ($scope['preview_full_url'] ?? $scope['preview_url'] ?? '')
-            ) ?: $session->getPreviewUrl()
-        ));
+        $previewUrl = \trim((string)(($scope['preview_full_url'] ?? $scope['preview_url'] ?? '') ?: $session->getPreviewUrl()));
 
         if ($previewUrl === '' && $domain !== '') {
             $previewUrl = $this->buildSimulatedPreviewUrl($domain, $session->getProviderCode(), $scope);
@@ -3358,7 +2709,6 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderWorkspaceLabel(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => (string)__('AI 建站工作台 · PageBuilder 扩展'),
             'websites_default' => (string)__('AI 建站工作台'),
             default => (string)__('AI 建站工作区'),
         };
@@ -3367,7 +2717,6 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderHandoffLabel(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => (string)__('继续到 PageBuilder 工作台'),
             'websites_default' => (string)__('返回 AI 建站工作台'),
             default => (string)__('打开 provider 原生入口'),
         };
@@ -3376,7 +2725,6 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderNativeEntryUrl(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/index'),
             'websites_default' => $this->getHubEntryUrl('websites_default', $this->isFakeModeRequested()),
             default => $this->getHubEntryUrl($providerCode, $this->isFakeModeRequested()),
         };
@@ -3503,17 +2851,9 @@ class SiteBuilderAgent extends BackendController
      */
     private function buildSimulatedPreviewUrl(string $domain, string $providerCode, array $scope): string
     {
-        $scopePreviewUrl = $providerCode === 'pagebuilder'
-            ? \trim((string)($scope['visual_preview_url'] ?? $scope['preview_full_url'] ?? $scope['preview_url'] ?? ''))
-            : \trim((string)($scope['preview_full_url'] ?? $scope['preview_url'] ?? ''));
+        $scopePreviewUrl = \trim((string)($scope['preview_full_url'] ?? $scope['preview_url'] ?? ''));
         if ($scopePreviewUrl !== '') {
             return $scopePreviewUrl;
-        }
-
-        // PageBuilder 使用后台预览地址，不使用前台地址
-        if ($providerCode === 'pagebuilder') {
-            // 返回 PageBuilder 后台的页面列表地址作为兜底
-            return $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/page/index');
         }
 
         $baseUrl = $this->buildFakePreviewUrl($domain);
@@ -3834,16 +3174,10 @@ class SiteBuilderAgent extends BackendController
             // 标记页面已生成
             $this->markPageTypeGenerated($session->getId(), $adminId, $pageType);
 
-            // 生成可视化编辑 URL
-            $visualEditUrl = $this->getUrlHelper()->getBackendUrlPath('pagebuilder/backend/page/virtual-edit', [
-                'public_id' => $publicId,
-                'page_type' => $pageType,
-            ]);
-
             $sse->sendEvent('page_generated', [
                 'page_type' => $pageType,
                 'layout' => $layout,
-                'visual_edit_url' => $visualEditUrl,
+                'visual_edit_url' => '',
                 'weline_theme_id' => $welineThemeId,
             ]);
 
@@ -3857,7 +3191,6 @@ class SiteBuilderAgent extends BackendController
         ]);
 
         $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
-        $fresh = $this->refreshPageBuilderMirrorSession($fresh, $adminId);
         $this->syncSessionStructuredFields($fresh, $adminId);
         $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $fresh;
         $this->syncSessionArtifacts($fresh, $adminId);

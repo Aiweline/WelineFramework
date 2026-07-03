@@ -289,7 +289,6 @@ class Sitemap extends BackendController
      * pub/sitemaps/{website_code}/
      * ├── google/                           # 平台目录
      * │   ├── sitemap.xml                   # 平台总索引（提交给 Google）
-     * │   ├── sitemap_pagebuilder_1.xml     # 模块文件
      * │   └── sitemap_product_1.xml
      * ├── bing/
      * │   └── ...

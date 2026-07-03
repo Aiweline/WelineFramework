@@ -66,6 +66,7 @@ class ThemeLayout extends Model
     public const PAGE_TYPE_CART = 'cart';             // layouts/cart/
     public const PAGE_TYPE_CHECKOUT = 'checkout';     // layouts/checkout/
     public const PAGE_TYPE_ACCOUNT = 'account';       // layouts/account/
+    public const PAGE_TYPE_DASHBOARD = 'dashboard';   // layouts/dashboard/
     public const PAGE_TYPE_SEARCH = 'search';         // layouts/search/ (待创建)
     public const PAGE_TYPE_DEFAULT = 'default';       // layouts/default/
     // 区域常量
@@ -103,6 +104,7 @@ class ThemeLayout extends Model
             self::PAGE_TYPE_CART => __('购物车'),
             self::PAGE_TYPE_CHECKOUT => __('结算页'),
             self::PAGE_TYPE_ACCOUNT => __('账户中心'),
+            self::PAGE_TYPE_DASHBOARD => __('Dashboard'),
             self::PAGE_TYPE_SEARCH => __('搜索页'),
             self::PAGE_TYPE_DEFAULT => __('默认布局'),
         ];

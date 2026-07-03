@@ -166,7 +166,7 @@ class BackendController extends PcController
 
     private function withBackendLoginReturnUrl(string $loginUrl, string $routeUrlPath): string
     {
-        if (!$this->request->isGet() || $this->request->isAjax() || $this->request->isIframe()) {
+        if (!$this->request->isDocumentNavigationRequest()) {
             return $loginUrl;
         }
 
@@ -175,6 +175,7 @@ class BackendController extends PcController
             || $normalizedRoute === 'admin/login'
             || $normalizedRoute === 'admin/login/post'
             || $normalizedRoute === 'admin/login/logout'
+            || $this->isApiOrInterfaceRoute($normalizedRoute)
         ) {
             return $loginUrl;
         }
@@ -190,6 +191,22 @@ class BackendController extends PcController
         ];
 
         return $loginUrl . (\str_contains($loginUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function isApiOrInterfaceRoute(string $routeUrlPath): bool
+    {
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($routeUrlPath, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+
+        foreach ($segments as $segment) {
+            if (\in_array(\strtolower($segment), ['api', 'rest', 'graphql'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function normalizeBackendLoginUrlSameOrigin(string $loginUrl): string

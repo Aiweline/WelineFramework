@@ -9,6 +9,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Session\Session;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
 
 class PreviewContextServiceTest extends TestCase
@@ -145,6 +146,39 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame(PreviewContextService::SHELL_PREVIEW, $context['shell']);
     }
 
+    public function testDirectPreviewUrlResetsStoredScopeAndTargetContext(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?theme_id=1&page_type=category&layout_type=category&layout_option=default&editor_area=frontend&preview_mode=live&status=draft';
+
+        $service = $this->createService(
+            [
+                'theme_id' => 1,
+                'page_type' => 'category',
+                'layout_type' => 'category',
+                'layout_option' => 'default',
+                'editor_area' => 'frontend',
+                'preview_mode' => 'live',
+                'status' => 'draft',
+            ],
+            null,
+            [
+                'frontend_theme_id' => 1,
+                'scope' => 'preview-stale-scope',
+                'target_type' => PreviewContextService::TARGET_TYPE_PAGE,
+                'target_value' => '77',
+                'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+            ]
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(1, $context['frontend_theme_id']);
+        $this->assertSame(PreviewContextService::DEFAULT_SCOPE, $context['scope']);
+        $this->assertSame(PreviewContextService::TARGET_TYPE_LAYOUT, $context['target_type']);
+        $this->assertSame('category.default', $context['target_value']);
+        $this->assertSame(PreviewContextService::SHELL_PREVIEW, $context['shell']);
+    }
+
     public function testVirtualThemeIdIsIgnoredByThemePreviewContext(): void
     {
         $service = $this->createService(
@@ -165,17 +199,35 @@ class PreviewContextServiceTest extends TestCase
     /**
      * @param array<string, mixed> $requestParams
      * @param array<string, mixed>|null $tokenData
+     * @param array<string, mixed>|null $storedContext
      */
-    private function createService(array $requestParams, ?array $tokenData = null): PreviewContextService
+    private function createService(
+        array $requestParams,
+        ?array $tokenData = null,
+        ?array $storedContext = null
+    ): PreviewContextService
     {
         $request = $this->createMock(Request::class);
         $request->method('getParam')
             ->willReturnCallback(static function (string $key, mixed $default = null) use ($requestParams) {
                 return $requestParams[$key] ?? $default;
             });
+        $request->method('getServer')
+            ->willReturnCallback(static function (string $key, mixed $default = null) {
+                return $_SERVER[$key] ?? $default;
+            });
+        $request->method('getUrlPath')
+            ->willReturnCallback(static function () {
+                $path = \parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), \PHP_URL_PATH);
+                return \is_string($path) && $path !== '' ? $path : '/';
+            });
+        $request->method('getHeader')->willReturn(null);
 
         $session = $this->createMock(Session::class);
-        $session->method('getData')->willReturn(null);
+        $session->method('getData')
+            ->willReturnCallback(static function (string $key = '') use ($storedContext) {
+                return $key === PreviewContextService::SESSION_KEY ? $storedContext : null;
+            });
 
         $previewTokenService = $this->createMock(PreviewTokenService::class);
         $previewTokenService->method('getCurrentPreviewData')->willReturn($tokenData);
@@ -186,6 +238,7 @@ class PreviewContextServiceTest extends TestCase
             $session,
             $previewTokenService,
             $this->createMock(WelineTheme::class),
+            new PreviewRequestInspector($request),
         );
     }
 }

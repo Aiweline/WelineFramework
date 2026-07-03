@@ -39,6 +39,13 @@ final class ThemeResourceGateway
             return null;
         }
 
+        if (($resource['kind'] ?? '') === 'statics') {
+            return $this->publishModuleStaticResource($resource, $relativePath, $moduleBasePath, $theme);
+        }
+        if (($resource['kind'] ?? '') === 'flat_statics') {
+            return $this->publishFlatModuleStaticResource($resource, $relativePath, $moduleBasePath);
+        }
+
         $moduleThemeFile = rtrim($moduleBasePath, '\\/') . DIRECTORY_SEPARATOR
             . 'view' . DIRECTORY_SEPARATOR
             . 'theme' . DIRECTORY_SEPARATOR
@@ -51,7 +58,7 @@ final class ThemeResourceGateway
         }
 
         $resolvedFile = $this->directoryResolver->resolveThemeTemplatePath($moduleThemeFile, $resolvedTheme);
-        if (!is_file($resolvedFile) || $resolvedFile === $moduleThemeFile) {
+        if (!is_file($resolvedFile)) {
             return null;
         }
 
@@ -75,6 +82,65 @@ final class ThemeResourceGateway
         $publishedFile = rtrim(BP, '\\/') . DIRECTORY_SEPARATOR
             . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $publicRelativePath), '\\/');
         if (!$this->publishResolvedFile($resolvedFile, $publishedFile)) {
+            return null;
+        }
+
+        return str_replace('\\', '/', $publicRelativePath);
+    }
+
+    private function publishFlatModuleStaticResource(array $resource, string $relativePath, string $moduleBasePath): ?string
+    {
+        $sourceFile = rtrim($moduleBasePath, '\\/') . DIRECTORY_SEPARATOR
+            . 'view' . DIRECTORY_SEPARATOR
+            . 'statics' . DIRECTORY_SEPARATOR
+            . $relativePath;
+        if (!is_file($sourceFile)) {
+            return null;
+        }
+
+        $publicRelativePath = '/pub/static/'
+            . $resource['vendor']
+            . '/'
+            . $resource['module']
+            . '/'
+            . str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+
+        $publishedFile = rtrim(BP, '\\/') . DIRECTORY_SEPARATOR
+            . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $publicRelativePath), '\\/');
+        if (!$this->publishResolvedFile($sourceFile, $publishedFile)) {
+            return null;
+        }
+
+        return str_replace('\\', '/', $publicRelativePath);
+    }
+
+    private function publishModuleStaticResource(array $resource, string $relativePath, string $moduleBasePath, ?WelineTheme $theme = null): ?string
+    {
+        $sourceFile = rtrim($moduleBasePath, '\\/') . DIRECTORY_SEPARATOR
+            . 'view' . DIRECTORY_SEPARATOR
+            . 'statics' . DIRECTORY_SEPARATOR
+            . $relativePath;
+        if (!is_file($sourceFile)) {
+            return null;
+        }
+
+        $publicThemePath = $resource['public_theme_path'] ?: $this->resolvePublicThemePathForStaticRequest($theme);
+        if ($publicThemePath === '') {
+            return null;
+        }
+
+        $publicRelativePath = '/pub/static/'
+            . trim(str_replace('\\', '/', $publicThemePath), '/')
+            . '/'
+            . $resource['vendor']
+            . '/'
+            . $resource['module']
+            . '/view/statics/'
+            . str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+
+        $publishedFile = rtrim(BP, '\\/') . DIRECTORY_SEPARATOR
+            . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $publicRelativePath), '\\/');
+        if (!$this->publishResolvedFile($sourceFile, $publishedFile)) {
             return null;
         }
 
@@ -303,6 +369,7 @@ final class ThemeResourceGateway
     {
         if (preg_match('#^/([^/]+)/([^/]+)/view/theme/(frontend|backend)/(.+)$#i', $requestPath, $matches)) {
             return [
+                'kind' => 'theme',
                 'public_theme_path' => '',
                 'vendor' => (string)$matches[1],
                 'module' => (string)$matches[2],
@@ -313,11 +380,45 @@ final class ThemeResourceGateway
 
         if (preg_match('#^/(?:pub/)?static/(.+)/([^/]+)/([^/]+)/view/theme/(frontend|backend)/(.+)$#i', $requestPath, $matches)) {
             return [
+                'kind' => 'theme',
                 'public_theme_path' => trim(str_replace('\\', '/', (string)$matches[1]), '/'),
                 'vendor' => (string)$matches[2],
                 'module' => (string)$matches[3],
                 'area' => strtolower((string)$matches[4]) === 'backend' ? 'backend' : 'frontend',
                 'relative_path' => ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$matches[5]), DIRECTORY_SEPARATOR),
+            ];
+        }
+
+        if (preg_match('#^/([^/]+)/([^/]+)/view/statics/(.+)$#i', $requestPath, $matches)) {
+            return [
+                'kind' => 'statics',
+                'public_theme_path' => '',
+                'vendor' => (string)$matches[1],
+                'module' => (string)$matches[2],
+                'area' => '',
+                'relative_path' => ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$matches[3]), DIRECTORY_SEPARATOR),
+            ];
+        }
+
+        if (preg_match('#^/(?:pub/)?static/(.+)/([^/]+)/([^/]+)/view/statics/(.+)$#i', $requestPath, $matches)) {
+            return [
+                'kind' => 'statics',
+                'public_theme_path' => trim(str_replace('\\', '/', (string)$matches[1]), '/'),
+                'vendor' => (string)$matches[2],
+                'module' => (string)$matches[3],
+                'area' => '',
+                'relative_path' => ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$matches[4]), DIRECTORY_SEPARATOR),
+            ];
+        }
+
+        if (preg_match('#^/(?:pub/)?static/([^/]+)/([^/]+)/(?!view/)(.+)$#i', $requestPath, $matches)) {
+            return [
+                'kind' => 'flat_statics',
+                'public_theme_path' => '',
+                'vendor' => (string)$matches[1],
+                'module' => (string)$matches[2],
+                'area' => '',
+                'relative_path' => ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$matches[3]), DIRECTORY_SEPARATOR),
             ];
         }
 
@@ -369,6 +470,16 @@ final class ThemeResourceGateway
         }
 
         return copy($sourceFile, $targetFile);
+    }
+
+    private function resolvePublicThemePathForStaticRequest(?WelineTheme $theme = null): string
+    {
+        $resolvedTheme = $theme ?: $this->resolveTheme('frontend');
+        if ($resolvedTheme && $resolvedTheme->getId()) {
+            return $this->themeStaticNamespaceService->resolvePublicThemePath($resolvedTheme);
+        }
+
+        return '';
     }
 
     private function resolveTheme(string $area, ?WelineTheme $theme = null): ?WelineTheme

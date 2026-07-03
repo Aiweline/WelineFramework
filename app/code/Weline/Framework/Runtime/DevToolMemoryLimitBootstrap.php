@@ -3,13 +3,15 @@
 declare(strict_types=1);
 
 /**
- * 开发工具面板会话（Cookie / URL 激活）下将 memory_limit 设为「进程启动基线 × 倍数」，
+ * Weline 面板授权会话下将 memory_limit 设为「进程启动基线 × 倍数」，
  * 便于保留完整 SQL 等 trace meta。基线仅在每个 Worker 进程首次请求时从 ini 读取一次，避免跨请求重复翻倍。
  */
 
 namespace Weline\Framework\Runtime;
 
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 
 final class DevToolMemoryLimitBootstrap
 {
@@ -53,17 +55,11 @@ final class DevToolMemoryLimitBootstrap
 
     private static function isLikelyDevToolSession(): bool
     {
-        $cookieName = (string)Env::get('dev_tool.cookie_name', 'w_dev_tool');
-        if (isset($_COOKIE[$cookieName]) && (string)$_COOKIE[$cookieName] === '1') {
-            return true;
+        try {
+            return ObjectManager::getInstance(PanelAccessService::class)->canAccessPanel();
+        } catch (\Throwable) {
+            return false;
         }
-
-        $key = (string)Env::get('dev_tool.key', 'dev_tool');
-        if (isset($_GET[$key]) && (string)$_GET[$key] !== '') {
-            return true;
-        }
-
-        return false;
     }
 
     private static function multiplyFromBaseline(float $multiplier): void

@@ -130,7 +130,6 @@ class Rebuild extends CommandAbstract
         if (empty($moduleName) || !is_string($moduleName)) {
             $this->printer->error(__('错误：必须指定模块名！'));
             $this->printer->note(__('使用方法：php bin/w model:rebuild -m <模块名> -n <模型名>'));
-            $this->printer->note(__('示例：php bin/w model:rebuild -m GuoLaiRen_PageBuilder -n Page'));
             return;
         }
 
@@ -280,7 +279,7 @@ class Rebuild extends CommandAbstract
         $this->printer->note('');
         
         // 递归扫描所有 PHP 文件
-        // 模块名就是命名空间（例如：GuoLaiRen_PageBuilder -> GuoLaiRen\PageBuilder）
+        // 模块名就是命名空间。
         $namespace = str_replace('_', '\\', $module->getName()) . '\\Model';
         $models = $this->scanModels($modelPath, $namespace);
         
@@ -448,7 +447,7 @@ class Rebuild extends CommandAbstract
         if (class_exists($modelName)) {
             return $modelName;
         }
-        // 模块名就是命名空间（例如：GuoLaiRen_PageBuilder -> GuoLaiRen\PageBuilder）
+        // 模块名就是命名空间。
         $namespace = str_replace('_', '\\', $module->getName()) . '\\Model';
         
         // 移除开头和结尾的反斜杠
@@ -545,4 +544,3 @@ class Rebuild extends CommandAbstract
         );
     }
 }
-

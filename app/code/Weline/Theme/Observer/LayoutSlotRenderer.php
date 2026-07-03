@@ -116,9 +116,10 @@ class LayoutSlotRenderer implements ObserverInterface
             }
         }
 
-        // 鎻掓Ы鏇挎崲浠呭 frontend 鐢熸晥锛�
-        // backend 棰勮涓嬩粛闇€淇濈暀棰勮鎮诞缁勪欢锛屼絾涓嶈蛋 slot 渲染銆�
-        if ($area !== 'frontend') {
+        $allowBackendSlots = $area === 'backend' && $this->isBackendDashboardSlotRequest($template);
+
+        // 普通后台页面保持原有行为；Dashboard 是后台 Theme 的特殊布局，需要进入 slot 渲染链。
+        if ($area !== 'frontend' && !$allowBackendSlots) {
             $event->setData('content', $html);
             return;
         }
@@ -156,7 +157,7 @@ class LayoutSlotRenderer implements ObserverInterface
 
         $slotContractWarnings = [];
         if ($isEditorOrPreview && $shouldReportSlotContractWarnings) {
-            $slotContractWarnings = $this->collectMissingSlotWarnings($area);
+            $slotContractWarnings = $this->collectMissingSlotWarnings($area, $pageType, $this->detectLayoutOption());
             if (!empty($slotContractWarnings)) {
                 $html = $this->getThemeSlotContractService()->injectMissingSlotWarningHtml($html, $slotContractWarnings);
                 $this->getThemeSlotContractService()->notifyMissingDefaultSlots($slotContractWarnings, $area);
@@ -164,6 +165,11 @@ class LayoutSlotRenderer implements ObserverInterface
         }
 
         if (!$hasSlotMarkers) {
+            $event->setData('content', $html);
+            return;
+        }
+
+        if ($this->isThemePreviewContentRequest($template) && $this->htmlHasRenderedWidgetWrappers($html)) {
             $event->setData('content', $html);
             return;
         }
@@ -177,7 +183,7 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // 澶勭悊鎻掓Ы鏇挎崲
         $accountSidebarBefore = $this->htmlHasAccountSidebar($html);
-        $processedHtml = $this->slotRenderer->processSlots($html, $themeId, $pageType, $status);
+        $processedHtml = $this->slotRenderer->processSlots($html, $themeId, $pageType, $status, $area);
         $accountSidebarAfter = $this->htmlHasAccountSidebar($processedHtml);
         if ($this->isAccountHtml($html) || $this->isAccountHtml($processedHtml)) {
             RequestLifecycleTrace::recordSpan('theme::layoutSlotRenderer::accountHtml', 0.0, 'theme', null, [
@@ -276,7 +282,7 @@ class LayoutSlotRenderer implements ObserverInterface
             || \str_contains($html, "class='account-sidebar");
     }
 
-    private function collectMissingSlotWarnings(string $area): array
+    private function collectMissingSlotWarnings(string $area, string $layoutType = '', string $layoutOption = ''): array
     {
         try {
             $theme = $this->themeContext->resolveTheme($area, null, true);
@@ -284,13 +290,46 @@ class LayoutSlotRenderer implements ObserverInterface
                 return [];
             }
 
-            return $this->getThemeSlotContractService()->collectMissingDefaultSlots($area, $theme);
+            $warnings = $this->getThemeSlotContractService()->collectMissingDefaultSlots($area, $theme);
+            $logicalKey = $this->normalizeCurrentLayoutLogicalKey($layoutType, $layoutOption);
+            if ($logicalKey !== '') {
+                $warnings = \array_values(\array_filter(
+                    $warnings,
+                    static fn(array $warning): bool => (string)($warning['logical_key'] ?? '') === $logicalKey
+                ));
+            }
+
+            return $warnings;
         } catch (\Throwable $e) {
             if (defined('DEV') && DEV && function_exists('w_log_warning')) {
                 \w_log_warning('[Theme Slot Missing] scan failed: ' . $e->getMessage());
             }
             return [];
         }
+    }
+
+    private function detectLayoutOption(): string
+    {
+        $layoutOption = \trim((string)$this->request->getParam('layout_option', ''));
+        if ($layoutOption === '') {
+            $layoutOption = \trim((string)$this->request->getParam('layout_code', ''));
+        }
+
+        return $layoutOption !== '' ? $layoutOption : 'default';
+    }
+
+    private function normalizeCurrentLayoutLogicalKey(string $layoutType, string $layoutOption): string
+    {
+        $layoutType = \trim(\str_replace('\\', '/', $layoutType), '/ ');
+        $layoutOption = \trim(\str_replace('\\', '/', $layoutOption), '/ ');
+        if ($layoutType === '') {
+            return '';
+        }
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+
+        return 'layouts/' . $layoutType . '/' . $layoutOption;
     }
 
     private function getThemeSlotContractService(): ThemeSlotContractService
@@ -698,6 +737,60 @@ HTML;
         }
 
         return 'frontend';
+    }
+
+    private function isBackendDashboardSlotRequest(string $template): bool
+    {
+        $pageType = strtolower(trim((string)$this->request->getParam('page_type', '')));
+        $layoutType = strtolower(trim((string)$this->request->getParam('layout_type', '')));
+        $isDashboardLayoutRequest = $pageType === ThemeLayout::PAGE_TYPE_DASHBOARD
+            || $layoutType === ThemeLayout::PAGE_TYPE_DASHBOARD;
+
+        $normalizedTemplate = strtolower(str_replace('\\', '/', $template));
+        if (str_contains($normalizedTemplate, '/layouts/dashboard/')
+            || str_contains($normalizedTemplate, 'theme/backend/layouts/dashboard/')) {
+            return true;
+        }
+
+        $uri = strtolower((string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''));
+        if (str_contains($uri, 'dashboard/backend/dashboard')) {
+            return true;
+        }
+
+        if (!$isDashboardLayoutRequest) {
+            return false;
+        }
+
+        return str_contains($uri, 'theme/backend/theme-editor/layout-preview')
+            || str_contains($uri, 'theme/backend/theme-editor/compile-layout')
+            || str_contains($uri, 'theme/backend/theme-editor/get-compile-layout');
+    }
+
+    private function isThemePreviewContentTemplate(string $template): bool
+    {
+        $normalized = \strtolower(\str_replace('\\', '/', $template));
+
+        return \str_contains($normalized, 'templates/frontend/theme-preview/content.phtml')
+            || \str_contains($normalized, 'templates/backend/theme-preview/content.phtml');
+    }
+
+    private function isThemePreviewContentRequest(string $template): bool
+    {
+        if ($this->isThemePreviewContentTemplate($template)) {
+            return true;
+        }
+
+        $uri = \strtolower((string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''));
+
+        return \str_contains($uri, 'theme/frontend/theme-preview/content')
+            || \str_contains($uri, 'theme/backend/theme-preview/content');
+    }
+
+    private function htmlHasRenderedWidgetWrappers(string $html): bool
+    {
+        return \str_contains($html, 'class="widget-wrapper"')
+            || \str_contains($html, "class='widget-wrapper'")
+            || \str_contains($html, 'data-layout-id=');
     }
 
     /**

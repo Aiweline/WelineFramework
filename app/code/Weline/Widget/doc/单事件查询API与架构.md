@@ -2,7 +2,7 @@
 
 Widget 模块通过 extends 注册查询器（`WidgetQueryProvider`），实现 `QueryProviderInterface`，对外提供部件列表、配置定义、配置表单、预览等查询能力。
 
-其它模块（如 Theme、PageBuilder）通过 `w_query('widget', ...)` 或 `dispatch('Weline_Widget::query', ...)` 调用。
+其它模块通过 `w_query('widget', ...)` 或 `dispatch('Weline_Widget::query', ...)` 调用。
 
 ---
 

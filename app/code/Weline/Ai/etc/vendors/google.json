@@ -37,7 +37,7 @@
             "API密钥粘贴从 Google AI Studio 复制的 Gemini API Key。",
             "API基础URL建议留空，系统会使用默认 Gemini REST 地址；如需显式填写，可填 https://generativelanguage.googleapis.com 或 https://generativelanguage.googleapis.com/v1beta。",
             "保存后点击连接测试；测试通过后启用账户，并设为默认账户。",
-            "到 AI 模型同步 Google 模型，然后把 pagebuilder_ai_site_assets 适配器绑定到 gemini-2.5-flash-image。"
+            "到 AI 模型同步 Google 模型，然后按实际业务适配器绑定 gemini-2.5-flash-image。"
         ],
         "field_hints": {
             "provider_code": "Google",

@@ -29,7 +29,7 @@ class WidgetPreviewService
      */
     public function render(string $widgetModule, string $widgetCode, array $config = [], string $area = 'frontend'): string
     {
-        $widget = $this->findWidgetByModuleAndCode($widgetModule, $widgetCode);
+        $widget = $this->findWidgetByModuleAndCode($widgetModule, $widgetCode, $area);
         if ($widget === null) {
             return '<div class="widget-preview-placeholder">' . htmlspecialchars($widgetCode) . '</div>';
         }
@@ -61,7 +61,7 @@ class WidgetPreviewService
         }
     }
 
-    private function findWidgetByModuleAndCode(string $widgetModule, string $widgetCode): ?array
+    private function findWidgetByModuleAndCode(string $widgetModule, string $widgetCode, string $area): ?array
     {
         $registry = $this->widgetRegistry->getRegistry();
         foreach ($registry as $type => $widgets) {
@@ -73,6 +73,10 @@ class WidgetPreviewService
                     continue;
                 }
                 if (($widget['module'] ?? '') === $widgetModule && ($widget['code'] ?? '') === $widgetCode) {
+                    $widgetArea = (string)($widget['area'] ?? 'frontend');
+                    if ($widgetArea !== '' && $widgetArea !== $area) {
+                        continue;
+                    }
                     return $widget;
                 }
             }
@@ -127,7 +131,7 @@ class WidgetPreviewService
                 'em', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
                 'header', 'hr', 'i', 'img', 'input', 'ins', 'label', 'legend', 'li', 'main', 'mark',
                 'nav', 'ol', 'option', 'p', 'picture', 'pre', 'progress', 's', 'section', 'select',
-                'small', 'source', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td',
+                'small', 'source', 'span', 'strong', 'style', 'sub', 'summary', 'sup', 'table', 'tbody', 'td',
                 'textarea', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'video',
             ];
             $allowedAttr = [
@@ -136,7 +140,7 @@ class WidgetPreviewService
                 'cols', 'colspan', 'controls', 'datetime', 'dir', 'disabled', 'for', 'height', 'hidden',
                 'href', 'id', 'label', 'loading', 'max', 'maxlength', 'method', 'min', 'multiple', 'name',
                 'pattern', 'placeholder', 'poster', 'readonly', 'rel', 'required', 'role', 'rows',
-                'rowspan', 'selected', 'sizes', 'src', 'target', 'title', 'type', 'value', 'width',
+                'rowspan', 'selected', 'sizes', 'src', 'style', 'target', 'title', 'type', 'value', 'width',
             ];
             $uriAttr = ['action', 'href', 'poster', 'src'];
             $allowedInputTypes = [
@@ -165,7 +169,6 @@ class WidgetPreviewService
                     $name = strtolower($attr->name);
                     if (
                         str_starts_with($name, 'on')
-                        || $name === 'style'
                         || $name === 'srcdoc'
                         || (!in_array($name, $allowedAttr, true) && !str_starts_with($name, 'data-'))
                     ) {
@@ -186,12 +189,21 @@ class WidgetPreviewService
                     if ($name === 'rel' && strtolower($node->tagName) === 'a') {
                         $node->setAttribute('rel', 'noopener noreferrer');
                     }
+                    if ($name === 'style' && !$this->isSafePreviewCss((string)$attr->value)) {
+                        $toRemove[] = $attr->name;
+                        continue;
+                    }
                 }
                 foreach ($toRemove as $name) {
                     $node->removeAttribute($name);
                 }
                 if (strtolower($node->tagName) === 'a' && $node->getAttribute('target') === '_blank') {
                     $node->setAttribute('rel', 'noopener noreferrer');
+                }
+            }
+            foreach ($xpath->query('//body//style') as $node) {
+                if (!$this->isSafePreviewCss((string)$node->textContent)) {
+                    $node->parentNode?->removeChild($node);
                 }
             }
             $body = $xpath->query('//body')->item(0);
@@ -228,5 +240,18 @@ class WidgetPreviewService
             return true;
         }
         return in_array(strtolower((string)$scheme), ['http', 'https', 'mailto', 'tel'], true);
+    }
+
+    private function isSafePreviewCss(string $css): bool
+    {
+        $css = trim($css);
+        if ($css === '') {
+            return true;
+        }
+        if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css) === 1) {
+            return false;
+        }
+
+        return preg_match('/@import\b|expression\s*\(|behavior\s*:|-moz-binding\s*:|url\s*\(\s*[\'"]?\s*(?:javascript|vbscript):|url\s*\(\s*[\'"]?\s*data:(?!image\/(?:png|gif|jpe?g|webp|bmp|svg\+xml);base64,)/i', $css) !== 1;
     }
 }

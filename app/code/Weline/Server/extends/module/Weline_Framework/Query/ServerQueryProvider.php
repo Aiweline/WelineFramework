@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace Weline\Server\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Server\IPC\ControlMessage;
@@ -96,33 +96,10 @@ class ServerQueryProvider implements QueryProviderInterface
             'fiberStats' => $this->fiberStats($params),
             'fiberSetConfig' => $this->fiberSetConfig($params),
             'fiberReleaseIdle' => $this->fiberReleaseIdle($params),
-            'pageBuilderPageInvalidate' => $this->pageBuilderPageInvalidate($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Server 查询器不支持的操作：%{1}', $operation)
             ),
         };
-    }
-
-    /**
-     * 通过 Master 向各 Worker 广播 PageBuilder 单页失效（进程内 handle + ObjectManager）
-     *
-     * @param array<string, mixed> $params instance?, website_id, handle, is_home_page
-     */
-    private function pageBuilderPageInvalidate(array $params): array
-    {
-        $instance = (string)($params['instance'] ?? 'default');
-
-        return $this->ipcControlGateway->command(
-            $instance,
-            ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE,
-            '',
-            [
-                'website_id' => (int)($params['website_id'] ?? 0),
-                'handle' => (string)($params['handle'] ?? ''),
-                'is_home_page' => (bool)($params['is_home_page'] ?? false),
-            ],
-            4.0
-        );
     }
 
     public function getDescriptor(): array
@@ -223,16 +200,6 @@ class ServerQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 ['name' => 'fiberReleaseIdle', 'description' => __('通知各 Worker 立即释放闲置 Fiber'), 'params' => [['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')]]],
-                [
-                    'name' => 'pageBuilderPageInvalidate',
-                    'description' => __('广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）'),
-                    'params' => [
-                        ['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')],
-                        ['name' => 'website_id', 'type' => 'int', 'required' => true],
-                        ['name' => 'handle', 'type' => 'string', 'required' => false],
-                        ['name' => 'is_home_page', 'type' => 'bool', 'required' => true],
-                    ],
-                ],
                 [
                     'name' => 'attackStats',
                     'description' => __('读取 WLS 攻击统计'),
@@ -1315,19 +1282,7 @@ class ServerQueryProvider implements QueryProviderInterface
 
     private function isWlsPerformancePanelAllowed(): bool
     {
-        if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
-            return true;
-        }
-        if ((bool)Env::get('wls.debug.performance_panel', false)) {
-            return true;
-        }
-        if ((bool)Env::get('wls.performance_panel.enable_in_prod', false)) {
-            $cookieName = (string)Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
-
-            return $cookieName !== '' && Cookie::get($cookieName) === '1';
-        }
-
-        return false;
+        return ObjectManager::getInstance(PanelAccessService::class)->canAccessApi();
     }
 
     private function wlsPerformanceDenied(): array

@@ -37,7 +37,7 @@ class Website extends Model
     public const schema_fields_DEFAULT_LANGUAGE = 'default_language';
     #[Col('varchar', 60, nullable: false, comment: '默认时区')]
     public const schema_fields_DEFAULT_TIMEZONE = 'default_timezone';
-    #[Col('varchar', 100, nullable: true, default: '', comment: '业务scope标识，如page_builder、catalog等')]
+    #[Col('varchar', 100, nullable: true, default: '', comment: '业务scope标识，如catalog等')]
     public const schema_fields_SCOPE = 'scope';
 
 
@@ -210,7 +210,7 @@ class Website extends Model
     /**
      * 设置业务范围标识
      * 
-     * @param string $scope 业务范围标识，如 page_builder、catalog 等
+     * @param string $scope 业务范围标识，如 catalog 等
      * @return self
      */
     public function setScope(string $scope): self

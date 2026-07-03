@@ -17,7 +17,7 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 /** MetaConfig 模型 - 存储主题配置信息 */
 #[Table(comment: '主题配置表')]
-#[Index(name: 'uk_identify_namespace_key_scope_locale', columns: ['identify_id', 'namespace', 'config_key', 'scope', 'locale'], type: 'UNIQUE')]
+#[Index(name: 'uk_identify_meta_identify_namespace_key_scope_locale', columns: ['identify_id', 'meta_identify', 'namespace', 'config_key', 'scope', 'locale'], type: 'UNIQUE')]
 #[Index(name: 'uk_meta_namespace_key_scope_locale', columns: ['meta_id', 'namespace', 'config_key', 'scope', 'locale'], type: 'UNIQUE')]
 #[Index(name: 'idx_identify_id', columns: ['identify_id'])]
 #[Index(name: 'idx_meta_id', columns: ['meta_id'])]
@@ -27,8 +27,11 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_scope', columns: ['scope'])]
 #[Index(name: 'idx_locale', columns: ['locale'])]
 #[Index(name: 'idx_identify_namespace', columns: ['identify_id', 'namespace'])]
+#[Index(name: 'idx_identify_namespace_scope_locale', columns: ['identify_id', 'namespace', 'scope', 'locale'])]
 #[Index(name: 'idx_meta_namespace', columns: ['meta_id', 'namespace'])]
 #[Index(name: 'idx_meta_identify_namespace', columns: ['meta_identify', 'namespace'])]
+#[Index(name: 'idx_meta_identify_lookup', columns: ['meta_identify', 'namespace', 'config_key', 'scope', 'locale'])]
+#[Index(name: 'idx_namespace_meta_identify_scope', columns: ['namespace', 'meta_identify', 'scope', 'locale'])]
 #[Index(name: 'idx_namespace_key', columns: ['namespace', 'config_key'])]
 class MetaConfig extends AbstractModel
 {
@@ -62,7 +65,7 @@ class MetaConfig extends AbstractModel
     /**
      * 索引排序键（用于提升查询效率）
      */
-    public array $_index_sort_keys = ['identify_id', 'meta_id', 'meta_identify', 'namespace', 'config_key', 'scope'];
+    public array $_index_sort_keys = ['identify_id', 'meta_id', 'meta_identify', 'namespace', 'config_key', 'scope', 'locale'];
 /**
      * 获取配置值（支持语言回退）
      * 
@@ -94,14 +97,7 @@ class MetaConfig extends AbstractModel
             ->where(self::schema_fields_CONFIG_KEY, $configKey)
             ->where(self::schema_fields_SCOPE, $scope);
         
-        // 优先使用 meta_id 或 meta_identify 查询
-        if ($metaId !== null) {
-            $query->where(self::schema_fields_META_ID, $metaId);
-        } elseif ($metaIdentify !== null) {
-            $query->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
-        } elseif ($identifyId !== null) {
-            $query->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-        } else {
+        if (!$this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify)) {
             // 如果都没有提供，返回 null
             return null;
         }
@@ -122,13 +118,7 @@ class MetaConfig extends AbstractModel
                 ->where(self::schema_fields_CONFIG_KEY, $configKey)
                 ->where(self::schema_fields_SCOPE, $scope);
             
-            if ($metaId !== null) {
-                $query->where(self::schema_fields_META_ID, $metaId);
-            } elseif ($metaIdentify !== null) {
-                $query->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
-            } else {
-                $query->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-            }
+            $this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify);
             
             $query->where(self::schema_fields_LOCALE, $defaultLocale)
                 ->find()
@@ -145,13 +135,7 @@ class MetaConfig extends AbstractModel
             ->where(self::schema_fields_CONFIG_KEY, $configKey)
             ->where(self::schema_fields_SCOPE, $scope);
         
-        if ($metaId !== null) {
-            $query->where(self::schema_fields_META_ID, $metaId);
-        } elseif ($metaIdentify !== null) {
-            $query->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
-        } else {
-            $query->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-        }
+        $this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify);
         
         $query->where(self::schema_fields_LOCALE, null, 'IS NULL')
             ->find()
@@ -261,14 +245,7 @@ class MetaConfig extends AbstractModel
             $query->where(self::schema_fields_LOCALE, $locale);
         }
         
-        // 优先使用 meta_id 或 meta_identify 查询
-        if ($metaId !== null) {
-            $query->where(self::schema_fields_META_ID, $metaId);
-        } elseif ($metaIdentify !== null) {
-            $query->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
-        } elseif ($identifyId !== null) {
-            $query->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-        } else {
+        if (!$this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify)) {
             // 如果都没有提供，无法设置
             return $this;
         }
@@ -327,16 +304,7 @@ class MetaConfig extends AbstractModel
                     $retryQuery->where(self::schema_fields_LOCALE, $locale);
                 }
                 
-                // 尝试使用不同的条件组合查找
-                if ($metaId !== null) {
-                    $retryQuery->where(self::schema_fields_META_ID, $metaId);
-                }
-                if ($metaIdentify !== null) {
-                    $retryQuery->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
-                }
-                if ($identifyId !== null) {
-                    $retryQuery->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-                }
+                $this->applyIdentityFilters($retryQuery, $identifyId, $metaId, $metaIdentify);
                 
                 $retryExisting = $retryQuery->find()->fetch();
                 if ($retryExisting->getId()) {
@@ -374,14 +342,7 @@ class MetaConfig extends AbstractModel
             ->where(self::schema_fields_NAMESPACE, $namespace)
             ->where(self::schema_fields_CONFIG_KEY, $configKey);
         
-        // 优先使用 meta_id 或 meta_identify 查询
-        if ($metaId !== null) {
-            $this->where(self::schema_fields_META_ID, $metaId);
-        } elseif ($metaIdentify !== null) {
-            $this->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
-        } elseif ($identifyId !== null) {
-            $this->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-        }
+        $this->applyIdentityFilters($this, $identifyId, $metaId, $metaIdentify);
         
         if ($scope !== null) {
             $this->where(self::schema_fields_SCOPE, $scope);
@@ -395,5 +356,23 @@ class MetaConfig extends AbstractModel
         
         return $this;
     }
-}
 
+    private function applyIdentityFilters(mixed $query, mixed $identifyId, ?int $metaId = null, ?string $metaIdentify = null): bool
+    {
+        $hasIdentity = false;
+        if ($metaId !== null) {
+            $query->where(self::schema_fields_META_ID, $metaId);
+            $hasIdentity = true;
+        }
+        if ($metaIdentify !== null && trim($metaIdentify) !== '') {
+            $query->where(self::schema_fields_META_IDENTIFY, $metaIdentify);
+            $hasIdentity = true;
+        }
+        if ($identifyId !== null && trim((string)$identifyId) !== '') {
+            $query->where(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
+            $hasIdentity = true;
+        }
+
+        return $hasIdentity;
+    }
+}

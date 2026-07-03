@@ -28,7 +28,7 @@ $accountLogoutPath = parse_url($this->getFrontendUrl('customer/account/logout'),
 if (!is_string($accountLogoutPath) || $accountLogoutPath === '') {
     $accountLogoutPath = '/customer/account/logout';
 }
-$accountIndexAssetVersion = '20260527-account-mobile-wrap-1';
+$accountIndexAssetVersion = '20260701-sidebar-content-loop-guard-1';
 $accountIndexConfigJson = json_encode([
     'i18n' => [
         'saving' => (string) __('保存中...'),
@@ -645,6 +645,11 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
 
 <script>
 (function() {
+    if (window.__welineAccountIndexInitialized) {
+        return;
+    }
+    window.__welineAccountIndexInitialized = true;
+
     // Account AJAX copy is embedded as JSON to avoid escaping issues in scripts.
     var i18nAccount = {
         saving: <?= json_encode((string) __('保存中...'), JSON_UNESCAPED_UNICODE) ?>,
@@ -877,6 +882,7 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
                 if (payload && payload.redirect) {
                     window.location.href = payload.redirect;
                 }
+                loadedSidebarSections[sectionName] = true;
                 return false;
             }
 
@@ -891,6 +897,7 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
             return true;
         }).catch(function(error) {
             console.error(error);
+            loadedSidebarSections[sectionName] = true;
             return false;
         }).finally(function() {
             delete sidebarContentLoading[sectionName];
@@ -1016,7 +1023,10 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
         }
         if (!targetSection && sidebarContentMount && !loadedSidebarSections[targetId]) {
             return loadSidebarContent(targetId).then(function() {
-                showAccountSection(targetId);
+                var loadedTargetSection = document.querySelector('[data-account-section="' + targetId + '"]') || document.getElementById(targetId + '-section');
+                if (loadedTargetSection) {
+                    showAccountSection(targetId);
+                }
             });
         }
         sections.forEach(function(section) {

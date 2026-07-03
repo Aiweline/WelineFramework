@@ -5,7 +5,9 @@ namespace Weline\Multipass\Controller\Frontend;
 
 use Weline\Customer\Model\Customer;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Multipass\Model\TrustedApp;
 use Weline\Multipass\Service\IdentityClientService;
 use Weline\Multipass\Service\IdentityBridgeService;
 
@@ -66,6 +68,47 @@ class Identity extends FrontendController
         }
 
         return (string) $this->redirect($returnUrl ?: '/customer/account/index#identity-bridge');
+    }
+
+    public function postDeveloperApplication(): string
+    {
+        $customer = $this->getCurrentCustomer();
+        if (!$customer) {
+            return $this->redirectToLogin();
+        }
+
+        $returnUrl = $this->normalizeLocalReturnUrl(
+            $this->getStringParam('return_url'),
+            '/customer/account/index#multipass-developer-apps'
+        );
+
+        try {
+            [$app, $clientSecret] = $this->getIdentityBridgeService()->createDeveloperApplication(
+                $customer,
+                $this->getStringParam('name'),
+                $this->getStringParam('redirect_uri'),
+                $this->getStringParam('trusted_domain'),
+                $this->getStringParam('app_type') ?: 'custom',
+                $this->getDeveloperApplicationScopes()
+            );
+
+            if ($app->getApplicationStatus() === TrustedApp::APPLICATION_APPROVED && $app->getStatus() === TrustedApp::STATUS_ACTIVE) {
+                MessageManager::success(__('Multipass 管理申请已提交并自动通过'));
+            } else {
+                MessageManager::success(__('Multipass 管理申请已提交，请等待审核'));
+            }
+            MessageManager::warning(__('客户端 ID：%{1}', [$app->getClientId()]));
+            MessageManager::warning(__('客户端密钥：%{1}（请妥善保管，仅显示一次）', [$clientSecret]));
+            if ($app->getApplicationStatus() === TrustedApp::APPLICATION_APPROVED && $app->getStatus() === TrustedApp::STATUS_ACTIVE) {
+                MessageManager::warning(__('该应用已启用，可立即用于 Weline 授权登录'));
+            } else {
+                MessageManager::warning(__('审核通过后，该应用才能用于 Weline 授权登录'));
+            }
+        } catch (\Throwable $e) {
+            MessageManager::error(__('Multipass 管理申请提交失败：%{1}', [$e->getMessage()]));
+        }
+
+        return (string) $this->redirect($returnUrl ?: '/customer/account/index#multipass-developer-apps');
     }
 
     public function getLogin(): string
@@ -255,14 +298,27 @@ class Identity extends FrontendController
         return $redirectUri . (str_contains($redirectUri, '?') ? '&' : '?') . http_build_query($params);
     }
 
-    private function normalizeLocalReturnUrl(string $returnUrl): string
+    private function getDeveloperApplicationScopes(): array
+    {
+        $scopes = $this->getArrayParam('allowed_scopes');
+        if ($scopes === []) {
+            $scopes = $this->getScopeParam();
+        }
+
+        $allowed = ['profile.basic', 'profile.email', 'account.bind', 'appstore.account', 'community.account'];
+        $scopes = array_values(array_intersect(array_values(array_unique($scopes)), $allowed));
+
+        return $scopes !== [] ? $scopes : ['profile.basic', 'profile.email', 'account.bind'];
+    }
+
+    private function normalizeLocalReturnUrl(string $returnUrl, string $fallback = '/customer/account/index#identity-bridge'): string
     {
         $returnUrl = trim($returnUrl);
         if ($returnUrl === '' || str_starts_with($returnUrl, '//') || str_contains($returnUrl, '\\')) {
-            return '/customer/account/index#identity-bridge';
+            return $fallback;
         }
         if ((bool) preg_match('/^[a-z][a-z0-9+.-]*:/i', $returnUrl)) {
-            return '/customer/account/index#identity-bridge';
+            return $fallback;
         }
 
         return str_starts_with($returnUrl, '/') ? $returnUrl : '/' . $returnUrl;

@@ -16,6 +16,39 @@ class Pixel implements TaglibInterface
         return '';
     }
 
+    public static function trackingConfigJson(): string
+    {
+        try {
+            $config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\VisitorTrackingConfig::class)
+                ->getRuntimeConfig();
+        } catch (\Throwable $throwable) {
+            if (defined('DEV') && DEV) {
+                w_log_error('读取 Visitor 统计配置失败: ' . $throwable->getMessage());
+            }
+            $config = [
+                'module' => 'Weline_Visitor',
+                'pixel' => ['enabled' => true],
+                'ga4' => [
+                    'enabled' => false,
+                    'configured' => false,
+                    'measurementId' => '',
+                    'enableInDev' => false,
+                    'autoTrackVisitorEvents' => true,
+                    'ctaEventName' => 'cta_click',
+                    'debugMode' => false,
+                    'source' => 'Weline_Visitor default',
+                ],
+            ];
+        }
+
+        $json = json_encode(
+            $config,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+        );
+
+        return $json === false ? '{}' : $json;
+    }
+
     /**
      * @inheritDoc
      */
@@ -117,6 +150,7 @@ class Pixel implements TaglibInterface
                 $output .= '$__event->dispatch(\'Weline_Visitor::taglib_pixel\', $__data);' . "\n";
                 $output .= 'if (!$__pixel_enabled || empty($__data->getData(\'enable\'))) { return \'\'; }' . "\n";
                 $output .= '$__tp->assign(\'pixel_code\', \\Weline\\Visitor\\Taglib\\Pixel::escapeScriptBreakout($__data->getData(\'pixel_code\')));' . "\n";
+                $output .= '$__tp->assign(\'visitor_tracking_config_json\', \\Weline\\Visitor\\Taglib\\Pixel::trackingConfigJson());' . "\n";
                 $output .= '$__js = $__tp->fetch(\'Weline_Visitor::taglib/js/pixel.phtml\');' . "\n";
                 $output .= 'echo str_replace(\'{:name}\', htmlspecialchars($__pixel_name, ENT_QUOTES, \'UTF-8\'), $__js);' . "\n";
                 $output .= '?>';
@@ -152,6 +186,7 @@ class Pixel implements TaglibInterface
                 $output .= '$__event->dispatch(\'Weline_Visitor::taglib_pixel\', $__data);' . "\n";
                 $output .= 'if (!' . $enabledCheck . ' || empty($__data->getData(\'enable\'))) { return \'\'; }' . "\n";
                 $output .= '$__tp->assign(\'pixel_code\', \\Weline\\Visitor\\Taglib\\Pixel::escapeScriptBreakout($__data->getData(\'pixel_code\')));' . "\n";
+                $output .= '$__tp->assign(\'visitor_tracking_config_json\', \\Weline\\Visitor\\Taglib\\Pixel::trackingConfigJson());' . "\n";
                 $output .= '$__js = $__tp->fetch(\'Weline_Visitor::taglib/js/pixel.phtml\');' . "\n";
                 $output .= 'echo str_replace(\'{:name}\', htmlspecialchars($__pixel_name, ENT_QUOTES, \'UTF-8\'), $__js);' . "\n";
                 $output .= '?>';
@@ -173,6 +208,7 @@ class Pixel implements TaglibInterface
             }
             
             $tp->assign('pixel_code', self::escapeScriptBreakout($data->getData('pixel_code')));
+            $tp->assign('visitor_tracking_config_json', self::trackingConfigJson());
             $js = $tp->fetch('Weline_Visitor::taglib/js/pixel.phtml');
             // 确保 $name 不为 null，避免 str_replace 的弃用警告
             $name = $name ?? '';

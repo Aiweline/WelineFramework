@@ -1,7 +1,7 @@
 ---
 name: cache-usage
 description: >-
-  WelineFramework local skill adapter for cache-usage. Use when working in this repo on matching Weline, php bin/w, module, WLS, frontend, PageBuilder, ORM, testing, routing, ACL, i18n, queue, SSE, theme, template, service, cache, config, debug, docs, command, PHP 8.4, or Codex task workspace topics. Read dev/ai/skills/cache-usage/SKILL.md before acting.
+
 ---
 
 # cache-usage

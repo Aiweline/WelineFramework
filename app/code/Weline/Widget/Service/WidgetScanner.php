@@ -669,6 +669,16 @@ class WidgetScanner
                 'template' => $templatePath,
                 'block_class' => $blockClass,
                 'params' => $widgetConfig['params'] ?? [],
+                'position' => $widgetConfig['position'] ?? [],
+                'page_layouts' => $widgetConfig['page_layouts'] ?? ['*'],
+                'slot' => $widgetConfig['slot'] ?? null,
+                'slots' => $widgetConfig['slots'] ?? [],
+                'supports' => $widgetConfig['supports'] ?? [],
+                'exclusive' => !empty($widgetConfig['exclusive']),
+                'compatible' => array_key_exists('compatible', $widgetConfig) ? (bool)$widgetConfig['compatible'] : true,
+                'is_container' => !empty($widgetConfig['is_container']),
+                'icon' => $widgetConfig['icon'] ?? null,
+                'template_content' => $widgetConfig['template_content'] ?? '',
                 'dependencies' => $widgetConfig['dependencies'] ?? [],
                 'doc' => $docFileName,
                 'doc_path' => $docPath,
@@ -825,6 +835,16 @@ class WidgetScanner
                 'template' => $config['template'] ?? '',
                 'block_class' => $blockClass,
                 'params' => $config['params'] ?? [],
+                'position' => $config['position'] ?? [],
+                'page_layouts' => $config['page_layouts'] ?? ['*'],
+                'slot' => $config['slot'] ?? null,
+                'slots' => $config['slots'] ?? [],
+                'supports' => $config['supports'] ?? [],
+                'exclusive' => !empty($config['exclusive']),
+                'compatible' => array_key_exists('compatible', $config) ? (bool)$config['compatible'] : true,
+                'is_container' => !empty($config['is_container']),
+                'icon' => $config['icon'] ?? null,
+                'template_content' => $config['template_content'] ?? '',
                 'dependencies' => $config['dependencies'] ?? [],
                 'doc' => $docFileName,
                 'disabled' => !empty($config['disabled']), // 保留禁用状态
@@ -881,4 +901,3 @@ class WidgetScanner
         return in_array($type, self::ALLOWED_TYPES, true);
     }
 }
-
