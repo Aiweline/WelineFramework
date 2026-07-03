@@ -3,10 +3,89 @@ param(
     [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty()]
     [string]$Branch = 'dev',
-    [string]$CoreRepo = 'E:\WelineFramework\DEV-workspace',
+    [string]$CoreRepo = '',
     [string]$CommitMessage = '',
+    [string]$SiteCommitMessage = '',
     [string[]]$IncludePaths = @(),
-    [string[]]$Sites = @(
+    [string[]]$Sites = @(),
+    [switch]$SkipCommit,
+    [switch]$SkipPush,
+    [switch]$SkipSiteUpdate,
+    [switch]$SkipSiteCommit,
+    [switch]$SkipSitePush,
+    [switch]$SkipWlsReload,
+    [switch]$DryRun
+)
+
+$ErrorActionPreference = 'Stop'
+
+$FrameworkSitePaths = @(
+    'app/.htaccess',
+    'app/autoload.php',
+    'app/bootstrap.php',
+    'app/bootstrap_phpunit.php',
+    'app/code/.gitignore',
+    'app/code/config.php',
+    'app/code/Weline',
+    'app/etc/.gitignore',
+    'app/etc/.gitkeep',
+    'app/etc/env.sample.php',
+    'app/etc/module_dependencies.php',
+    'app/etc/modules.php',
+    'bin',
+    'dev',
+    'pub',
+    'setup'
+)
+
+$SensitiveSitePaths = @(
+    '.env',
+    'app/.env',
+    'app/etc/env.php',
+    'dev/deploy/.config'
+)
+
+function Test-FenxiangWindows {
+    return [System.IO.Path]::DirectorySeparatorChar -eq '\'
+}
+
+if (-not (Test-FenxiangWindows)) {
+    throw 'fenxiang-update.ps1 is the Windows entry. On macOS/Linux, use dev/tools/fenxiang/fenxiang-update-mac.sh.'
+}
+
+function Resolve-RepoRootFromScript {
+    if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        return $null
+    }
+
+    $repo = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+    if (Test-Path -LiteralPath (Join-Path $repo '.git')) {
+        return $repo
+    }
+
+    return $null
+}
+
+function Resolve-DefaultCoreRepo {
+    if (Test-FenxiangWindows) {
+        return 'E:\WelineFramework\DEV-workspace'
+    }
+
+    $scriptRepo = Resolve-RepoRootFromScript
+    if (-not [string]::IsNullOrWhiteSpace($scriptRepo)) {
+        return $scriptRepo
+    }
+
+    $currentRepo = (Get-Location).Path
+    if (Test-Path -LiteralPath (Join-Path $currentRepo '.git')) {
+        return $currentRepo
+    }
+
+    return '/Users/weline/Project/Official/框架'
+}
+
+function Get-WindowsDefaultSites {
+    return @(
         'E:\WelineFramework\Framework-Official\A2A',
         'E:\WelineFramework\Framework-Official\App',
         'E:\WelineFramework\Framework-Official\Bbs',
@@ -15,15 +94,8 @@ param(
         'E:\WelineFramework\Framework-Official\Tools',
         'E:\WelineFramework\Framework-Official\WeShop',
         ([string]::Concat('E:\', [char]0x516C, [char]0x53F8, '\', [char]0x8FDC, [char]0x7A0B, '\src\weline'))
-    ),
-    [switch]$SkipCommit,
-    [switch]$SkipPush,
-    [switch]$SkipSiteUpdate,
-    [switch]$SkipWlsReload,
-    [switch]$DryRun
-)
-
-$ErrorActionPreference = 'Stop'
+    )
+}
 
 function Set-FenxiangCommandPath {
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
@@ -73,7 +145,7 @@ function Set-FenxiangCommandPath {
         throw 'Unable to build a usable PATH for fenxiang commands.'
     }
 
-    $env:Path = $normalized -join ';'
+    $env:Path = $normalized -join [System.IO.Path]::PathSeparator
     Write-Host "Fenxiang command PATH normalized with $($normalized.Count) entries."
 }
 
@@ -149,18 +221,45 @@ function Get-GitOutput {
 function Resolve-SiteProjectRoot {
     param([Parameter(Mandatory = $true)][string]$SiteBase)
 
-    $rootBin = Join-Path $SiteBase 'bin\w'
+    $rootBin = Join-Path (Join-Path $SiteBase 'bin') 'w'
     if (Test-Path -LiteralPath $rootBin) {
         return $SiteBase
     }
 
     $nested = Join-Path $SiteBase 'weline'
-    $nestedBin = Join-Path $nested 'bin\w'
+    $nestedBin = Join-Path (Join-Path $nested 'bin') 'w'
     if (Test-Path -LiteralPath $nestedBin) {
         return $nested
     }
 
     return $null
+}
+
+function Resolve-DefaultSites {
+    param([Parameter(Mandatory = $true)][string]$Repo)
+
+    if (Test-FenxiangWindows) {
+        return Get-WindowsDefaultSites
+    }
+
+    $officialRoot = Split-Path -Parent $Repo
+    if (-not (Test-Path -LiteralPath $officialRoot -PathType Container)) {
+        throw "Official project directory was not found: $officialRoot"
+    }
+
+    $repoFull = [System.IO.Path]::GetFullPath($Repo).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $sites = @()
+    foreach ($candidate in (Get-ChildItem -LiteralPath $officialRoot -Directory | Sort-Object Name)) {
+        $candidateFull = [System.IO.Path]::GetFullPath($candidate.FullName).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        if ($candidateFull -eq $repoFull) {
+            continue
+        }
+        if ($null -ne (Resolve-SiteProjectRoot -SiteBase $candidate.FullName)) {
+            $sites += $candidate.FullName
+        }
+    }
+
+    return $sites
 }
 
 function Test-WelineCommandOutputFailure {
@@ -229,8 +328,129 @@ function Assert-NoSensitiveCoreChanges {
     }
 }
 
+function Get-GitStatusPaths {
+    param([Parameter(Mandatory = $true)][string]$Repo)
+
+    $status = Get-GitOutput -Repo $Repo -Arguments @('status', '--porcelain')
+    $paths = @()
+    if ([string]::IsNullOrWhiteSpace($status)) {
+        return $paths
+    }
+
+    foreach ($line in ($status -split "`n")) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -lt 4) {
+            continue
+        }
+        $path = $line.Substring(3).Trim().Trim('"')
+        if ($path.Contains(' -> ')) {
+            $path = ($path -split ' -> ')[-1].Trim().Trim('"')
+        }
+        $paths += ($path -replace '\\', '/')
+    }
+
+    return $paths
+}
+
+function Test-FrameworkSitePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    foreach ($frameworkPath in $FrameworkSitePaths) {
+        if ($Path -eq $frameworkPath -or $Path.StartsWith($frameworkPath + '/')) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Test-SensitiveSitePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ($SensitiveSitePaths -contains $Path) {
+        return $true
+    }
+    if ($Path -match '(^|/)(id_rsa|id_dsa|id_ecdsa|id_ed25519)$') {
+        return $true
+    }
+    if ($Path -match '\.(pem|key|pfx|p12)$') {
+        return $true
+    }
+    return $false
+}
+
+function Assert-SiteCleanBeforeUpdate {
+    param([Parameter(Mandatory = $true)][string]$Repo)
+
+    $status = Get-GitOutput -Repo $Repo -Arguments @('status', '--porcelain')
+    if (-not [string]::IsNullOrWhiteSpace($status)) {
+        throw "Site has local changes before core:update; refusing to mix business or manual changes: $Repo`n$status"
+    }
+}
+
+function Commit-SiteFrameworkChanges {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repo,
+        [Parameter(Mandatory = $true)][string]$Branch
+    )
+
+    $paths = Get-GitStatusPaths -Repo $Repo
+    $frameworkChanges = @()
+    $nonFrameworkChanges = @()
+    $sensitiveChanges = @()
+
+    foreach ($path in $paths) {
+        if (Test-SensitiveSitePath -Path $path) {
+            $sensitiveChanges += $path
+        } elseif (Test-FrameworkSitePath -Path $path) {
+            $frameworkChanges += $path
+        } else {
+            $nonFrameworkChanges += $path
+        }
+    }
+
+    if ($sensitiveChanges.Count -gt 0) {
+        throw "Site has sensitive/protected changes after core:update; refusing to commit: $($sensitiveChanges -join ', ')"
+    }
+    if ($nonFrameworkChanges.Count -gt 0) {
+        throw "Site has non-framework changes after core:update; refusing to commit business paths: $($nonFrameworkChanges -join ', ')"
+    }
+    if ($frameworkChanges.Count -eq 0) {
+        Write-Host "[$Repo] no framework changes to commit."
+        return
+    }
+
+    Invoke-Git -Repo $Repo -Arguments (@('add', '-A', '--') + $frameworkChanges) | Out-Null
+    Invoke-Git -Repo $Repo -Arguments @('diff', '--cached', '--check') | Out-Null
+    $message = if ([string]::IsNullOrWhiteSpace($SiteCommitMessage)) { "core: update framework core from $Branch" } else { $SiteCommitMessage }
+    Invoke-Git -Repo $Repo -Arguments @('commit', '-m', $message) | Out-Null
+
+    if ($SkipSitePush) {
+        Write-Host "[$Repo] site push skipped by -SkipSitePush."
+        return
+    }
+
+    $siteRemotes = (Get-GitOutput -Repo $Repo -Arguments @('remote')).Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+    if (-not ($siteRemotes -contains 'origin')) {
+        throw "Site repo must have remote 'origin' before pushing: $Repo"
+    }
+    Invoke-Git -Repo $Repo -Arguments @('push', 'origin', "HEAD:$Branch") | Out-Null
+    if ($siteRemotes -contains 'github') {
+        Invoke-Git -Repo $Repo -Arguments @('push', 'github', "HEAD:$Branch") | Out-Null
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($CoreRepo)) {
+    $CoreRepo = Resolve-DefaultCoreRepo
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $CoreRepo '.git'))) {
     throw "Core repo is not a git repository: $CoreRepo"
+}
+
+if ($Sites.Count -eq 0) {
+    $Sites = Resolve-DefaultSites -Repo $CoreRepo
+}
+if ($Sites.Count -eq 0) {
+    throw "No fenxiang site projects were found for core repo: $CoreRepo"
 }
 
 Set-FenxiangCommandPath -RepoRoot $CoreRepo
@@ -243,6 +463,7 @@ if ($currentBranch -ne $Branch) {
 Write-Host "Fenxiang core repo: $CoreRepo"
 Write-Host "Fenxiang branch: $Branch"
 Write-Host "Fenxiang dry-run: $DryRun"
+Write-Host "Fenxiang sites: $($Sites -join ', ')"
 
 $remotes = (Get-GitOutput -Repo $CoreRepo -Arguments @('remote')).Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
 if (-not ($remotes -contains 'origin')) {
@@ -265,9 +486,10 @@ if (-not $SkipCommit) {
         }
         Invoke-Git -Repo $CoreRepo -Arguments @('diff', '--cached', '--check') | Out-Null
         if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
-            $CommitMessage = 'core: 分项同步核心更新'
+            Invoke-Git -Repo $CoreRepo -Arguments @('commit') | Out-Null
+        } else {
+            Invoke-Git -Repo $CoreRepo -Arguments @('commit', '-m', $CommitMessage) | Out-Null
         }
-        Invoke-Git -Repo $CoreRepo -Arguments @('commit', '-m', $CommitMessage) | Out-Null
     } else {
         Write-Host 'Core repo has no local changes; commit skipped.'
     }
@@ -296,10 +518,42 @@ foreach ($site in $Sites) {
         continue
     }
 
+    if ($DryRun) {
+        Write-Host "[$projectRoot] git status --porcelain"
+    } elseif (-not $SkipSiteCommit) {
+        try {
+            Assert-SiteCleanBeforeUpdate -Repo $projectRoot
+        } catch {
+            $failures += "$projectRoot => site worktree is not clean before core:update"
+            Write-Warning $_.Exception.Message
+            continue
+        }
+    }
+
     $result = Invoke-Checked -WorkingDirectory $projectRoot -FilePath 'php' -Arguments @('bin/w', 'core:update', '-b', $Branch) -AllowFailure
     if (($result.ExitCode -ne 0) -or (Test-WelineCommandOutputFailure -Output $result.Output)) {
         $failures += "$projectRoot => core:update failed"
         continue
+    }
+
+    if (-not $SkipSiteCommit) {
+        if ($DryRun) {
+            $message = if ([string]::IsNullOrWhiteSpace($SiteCommitMessage)) { "core: update framework core from $Branch" } else { $SiteCommitMessage }
+            Write-Host "[$projectRoot] git add -A -- <framework changes only>"
+            Write-Host "[$projectRoot] git diff --cached --check"
+            Write-Host "[$projectRoot] git commit -m `"$message`""
+            if (-not $SkipSitePush) {
+                Write-Host "[$projectRoot] git push origin HEAD:$Branch"
+            }
+        } else {
+            try {
+                Commit-SiteFrameworkChanges -Repo $projectRoot -Branch $Branch
+            } catch {
+                $failures += "$projectRoot => framework commit failed"
+                Write-Warning $_.Exception.Message
+                continue
+            }
+        }
     }
 
     if (-not $SkipWlsReload) {

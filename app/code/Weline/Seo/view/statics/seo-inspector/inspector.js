@@ -8,6 +8,13 @@
     descriptionMax: 170,
     visibleTextMin: 2500
   };
+  var SEO_AUDIT_IGNORE_SELECTOR = [
+    ".weline-seo-panel",
+    "#dev-tool-panel",
+    "#weline-panel-token-dialog",
+    "[data-weline-panel-bootstrap]",
+    "[data-weline-panel-seo-bootstrap]"
+  ].join(",");
 
   var PUBLIC_COPY_LEAKS = [
     { re: /English pages stay|Hindi guides stay|public root path|clean language split/i, name: "internal language URL split copy" },
@@ -37,13 +44,137 @@
     { id: "compliance", title: "合规与泄露" }
   ];
 
-  var EXPECTED_JSONLD = {
-    home: ["WebSite", "Organization", "BreadcrumbList"],
-    article: ["Article", "BreadcrumbList"],
-    review: ["Review", "BreadcrumbList"],
-    faq: ["FAQPage", "BreadcrumbList"],
-    contact: ["ContactPage", "BreadcrumbList"],
-    legal: ["WebPage", "BreadcrumbList", "WebSite", "Organization"]
+  var JSONLD_TYPE_EQUIVALENTS = {
+    Article: [
+      "Article",
+      "NewsArticle",
+      "AnalysisNewsArticle",
+      "AskPublicNewsArticle",
+      "BackgroundNewsArticle",
+      "OpinionNewsArticle",
+      "ReportageNewsArticle",
+      "ReviewNewsArticle",
+      "BlogPosting",
+      "LiveBlogPosting",
+      "SocialMediaPosting",
+      "TechArticle"
+    ],
+    NewsArticle: [
+      "NewsArticle",
+      "AnalysisNewsArticle",
+      "AskPublicNewsArticle",
+      "BackgroundNewsArticle",
+      "OpinionNewsArticle",
+      "ReportageNewsArticle",
+      "ReviewNewsArticle"
+    ],
+    BlogPosting: ["BlogPosting", "LiveBlogPosting"],
+    WebPage: ["WebPage", "AboutPage", "ContactPage", "FAQPage", "ProfilePage", "CollectionPage"],
+    Organization: ["Organization", "LocalBusiness", "Corporation", "NGO"],
+    Review: ["Review", "CriticReview"]
+  };
+
+  var PAGE_JSONLD_RULE_ALIASES = {
+    news: "news",
+    news_article: "news",
+    blog: "blog",
+    blog_post: "blog",
+    post: "blog",
+    article: "article",
+    story: "article",
+    faq: "faq",
+    review: "review",
+    product: "product",
+    category: "collection",
+    collection: "collection",
+    contact: "contact",
+    legal: "legal",
+    privacy: "legal",
+    terms: "legal",
+    home: "home",
+    index: "home"
+  };
+
+  var ARTICLE_JSONLD_REQUIRED_FIELDS = [
+    "headline",
+    "datePublished",
+    "dateModified",
+    "author.name",
+    "image",
+    "mainEntityOfPage"
+  ];
+
+  var PAGE_JSONLD_RULES = {
+    home: {
+      label: "首页",
+      requiredTypes: ["WebSite", "Organization", "BreadcrumbList"],
+      primaryType: "WebSite",
+      requiredFields: ["name", "url"],
+      recommendedFields: ["publisher", "potentialAction"]
+    },
+    article: {
+      label: "文章页",
+      requiredTypes: ["Article", "BreadcrumbList"],
+      primaryType: "Article",
+      requiredFields: ARTICLE_JSONLD_REQUIRED_FIELDS,
+      recommendedFields: ["publisher.name", "publisher.logo", "description"]
+    },
+    news: {
+      label: "新闻页",
+      requiredTypes: ["NewsArticle", "BreadcrumbList"],
+      primaryType: "NewsArticle",
+      requiredFields: ARTICLE_JSONLD_REQUIRED_FIELDS.concat(["publisher.name", "publisher.logo"]),
+      recommendedFields: ["articleSection", "dateline", "description"]
+    },
+    blog: {
+      label: "博客页",
+      requiredTypes: ["BlogPosting", "BreadcrumbList"],
+      primaryType: "BlogPosting",
+      requiredFields: ARTICLE_JSONLD_REQUIRED_FIELDS,
+      recommendedFields: ["publisher.name", "publisher.logo", "keywords", "articleSection", "description"]
+    },
+    faq: {
+      label: "FAQ 页",
+      requiredTypes: ["FAQPage", "BreadcrumbList"],
+      primaryType: "FAQPage",
+      requiredFields: ["mainEntity"],
+      custom: "faq"
+    },
+    review: {
+      label: "评测页",
+      requiredTypes: ["Review", "BreadcrumbList"],
+      primaryType: "Review",
+      requiredFields: ["itemReviewed", "reviewRating.ratingValue", "author.name"],
+      recommendedFields: ["reviewBody", "datePublished"]
+    },
+    product: {
+      label: "产品页",
+      requiredTypes: ["Product", "BreadcrumbList"],
+      primaryType: "Product",
+      requiredFields: ["name", "image"],
+      recommendedFields: ["description", "offers.price", "offers.priceCurrency", "offers.availability", "aggregateRating.ratingValue"]
+    },
+    collection: {
+      label: "列表页",
+      requiredTypes: ["CollectionPage", "BreadcrumbList"],
+      primaryType: "CollectionPage",
+      requiredFields: ["name", "url"],
+      recommendedFields: ["mainEntity", "description"]
+    },
+    contact: {
+      label: "联系页",
+      requiredTypes: ["ContactPage", "BreadcrumbList"],
+      primaryType: "ContactPage",
+      requiredFields: ["name", "url"],
+      recommendedFields: ["mainEntity", "about", "publisher.name", "publisher.logo"]
+    },
+    legal: {
+      label: "法律/政策页",
+      requiredTypes: ["WebPage", "BreadcrumbList", "WebSite", "Organization"],
+      primaryType: "WebPage",
+      requiredFields: ["name", "url"],
+      recommendedFields: ["dateModified", "publisher.name"]
+    }
   };
 
   var REQUIRED_HEAD = [
@@ -66,12 +197,16 @@
       test: function () { return Boolean(document.querySelector('meta[name="content-category"]')); }
     },
     { name: "keywords meta", test: function () { return Boolean(document.querySelector('meta[name="keywords"]')); } },
-    { name: "article:section", test: function () { return Boolean(document.querySelector('meta[property="article:section"]')); } },
+    {
+      name: "article:section",
+      types: ["article", "blog_post", "post", "news", "news_article"],
+      test: function () { return Boolean(document.querySelector('meta[property="article:section"]')); }
+    },
     {
       name: "article:modified_time",
+      types: ["article", "blog_post", "post", "news", "news_article"],
       test: function () { return Boolean(document.querySelector('meta[property="article:modified_time"]')); }
     },
-    { name: "hreflang x-default", test: function () { return Boolean(document.querySelector('link[rel="alternate"][hreflang="x-default"]')); } },
     { name: "og:site_name", test: function () { return Boolean(document.querySelector('meta[property="og:site_name"]')); } },
     { name: "og:locale", test: function () { return Boolean(document.querySelector('meta[property="og:locale"]')); } },
     { name: "og:title", test: function () { return Boolean(document.querySelector('meta[property="og:title"]')); } },
@@ -100,6 +235,97 @@
     },
     { name: "charset", test: function () { return Boolean(document.querySelector('meta[charset="UTF-8"], meta[charset="utf-8"]')); } },
     { name: "viewport", test: function () { return Boolean(document.querySelector('meta[name="viewport"]')); } }
+  ];
+
+  var ENGINE_PROFILES = [
+    {
+      id: "google",
+      name: "Google",
+      label: "Google Search",
+      userAgents: ["Googlebot", "Googlebot-Image", "Googlebot-News"],
+      focus: ["Search Essentials", "结构化数据", "移动端", "Core Web Vitals", "AI Search 基础 SEO"]
+    },
+    {
+      id: "bing",
+      name: "Bing",
+      label: "Microsoft Bing",
+      userAgents: ["bingbot", "BingPreview"],
+      focus: ["Bing Webmaster Guidelines", "IndexNow", "结构化数据", "可见内容一致性"]
+    },
+    {
+      id: "yahoo",
+      name: "Yahoo",
+      label: "Yahoo Search",
+      userAgents: ["bingbot"],
+      focus: ["Yahoo 内容建议", "Bing 适配", "title/description 准确性", "图片 ALT"]
+    },
+    {
+      id: "yandex",
+      name: "Yandex",
+      label: "Yandex",
+      userAgents: ["YandexBot", "YandexImages"],
+      focus: ["YandexBot", "sitemap", "canonical", "description", "BreadcrumbList"]
+    },
+    {
+      id: "baidu",
+      name: "Baidu",
+      label: "Baidu",
+      userAgents: ["Baiduspider"],
+      focus: ["Baiduspider", "移动体验", "内容质量", "中文搜索反作弊", "URL 提交"]
+    },
+    {
+      id: "duckduckgo",
+      name: "DuckDuckGo",
+      label: "DuckDuckGo",
+      userAgents: ["DuckDuckBot"],
+      focus: ["Bing 适配", "DuckDuckBot 可抓取", "实体信息清晰度"]
+    },
+    {
+      id: "naver",
+      name: "Naver",
+      label: "Naver",
+      userAgents: ["Yeti"],
+      focus: ["Yeti", "absolute canonical", "移动/桌面映射", "schema.org", "title 唯一性"]
+    },
+    {
+      id: "seznam",
+      name: "Seznam",
+      label: "Seznam.cz",
+      userAgents: ["SeznamBot"],
+      focus: ["SeznamBot", "robots", "绝对 sitemap", "canonical 相似性", "结构化数据"]
+    },
+    {
+      id: "sogou",
+      name: "Sogou",
+      label: "Sogou",
+      userAgents: ["Sogou web spider", "Sogou inst spider"],
+      focus: ["Sogou spider", "robots", "meta robots", "sitemap 限制", "低质 URL 风险"]
+    },
+    {
+      id: "ecosia_qwant",
+      name: "Ecosia/Qwant",
+      label: "Ecosia / Qwant / EUSP",
+      userAgents: ["bingbot", "Googlebot"],
+      focus: ["Bing/Google 基础适配", "欧洲多语言", "实体可信度", "隐私搜索可见性"]
+    }
+  ];
+
+  var ENGINE_MATRIX_ROWS = [
+    { id: "crawlability", label: "可抓取" },
+    { id: "indexability", label: "可索引" },
+    { id: "canonical", label: "Canonical" },
+    { id: "sitemap", label: "Sitemap" },
+    { id: "structured_data", label: "结构化数据" },
+    { id: "mobile", label: "移动端" },
+    { id: "performance", label: "性能/CWV" },
+    { id: "content_spam", label: "内容/Spam 风险" },
+    { id: "engine_specific", label: "平台专项" }
+  ];
+
+  var BROWSER_MODE_LIMITATIONS = [
+    "浏览器内检测只能读取当前渲染 DOM，不能可靠确认跨域 robots.txt、HTTP headers、X-Robots-Tag、证书详情、重定向链和真实状态码。",
+    "当前模式不能证明全站 sitemap 质量、全站重复 title/description、孤岛页、点击深度、站点级索引覆盖或搜索引擎真实收录状态。",
+    "Core Web Vitals、PageSpeed、CrUX、IndexNow key、各平台站长后台状态需要服务端爬虫/API 或人工凭据验证。"
   ];
 
   function metaContent(selector) {
@@ -159,6 +385,10 @@
     var bodyClass = document.body ? document.body.className : "";
     var match = bodyClass.match(/\bseo-([a-z0-9-]+)\b/i);
     return match ? match[1] : "article";
+  }
+
+  function normalizeSeoType(value) {
+    return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   }
 
   function normalizeLangFromHreflang(code) {
@@ -281,24 +511,69 @@
       .filter(Boolean);
   }
 
+  function normalizeSchemaTypeName(type) {
+    return String(type || "")
+      .trim()
+      .replace(/^https?:\/\/schema\.org\//i, "")
+      .replace(/^schema:/i, "")
+      .split(/[\/#]/)
+      .pop();
+  }
+
+  function schemaTypeCandidates(expected) {
+    var normalized = normalizeSchemaTypeName(expected);
+    return JSONLD_TYPE_EQUIVALENTS[normalized] || [normalized];
+  }
+
+  function schemaTypeMatches(actual, expected) {
+    var normalizedActual = normalizeSchemaTypeName(actual);
+    if (!normalizedActual) return false;
+    return schemaTypeCandidates(expected).indexOf(normalizedActual) !== -1;
+  }
+
+  function jsonLdTypesInclude(types, expected) {
+    return (types || []).some(function (type) {
+      if (Array.isArray(type)) {
+        return type.some(function (entry) { return schemaTypeMatches(entry, expected); });
+      }
+      return schemaTypeMatches(type, expected);
+    });
+  }
+
   function extractJsonLdTypes() {
     var types = [];
     var scripts = document.querySelectorAll('head script[type="application/ld+json"]');
     scripts.forEach(function (script) {
       try {
         var data = JSON.parse(script.textContent || "{}");
-        if (Array.isArray(data["@graph"])) {
-          data["@graph"].forEach(function (node) {
-            if (node && node["@type"]) types.push(node["@type"]);
+        collectJsonLdNodesFromData(data).forEach(function (node) {
+          jsonLdTypeList(node).forEach(function (type) {
+            if (types.indexOf(type) === -1) types.push(type);
           });
-        } else if (data["@type"]) {
-          types.push(data["@type"]);
-        }
+        });
       } catch (_error) {
         types.push("INVALID_JSON");
       }
     });
     return types;
+  }
+
+  function collectJsonLdNodesFromData(data) {
+    var nodes = [];
+    function pushNode(node) {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(pushNode);
+        return;
+      }
+      if (typeof node !== "object") return;
+      nodes.push(node);
+      if (Array.isArray(node["@graph"])) {
+        node["@graph"].forEach(pushNode);
+      }
+    }
+    pushNode(data);
+    return nodes;
   }
 
   function collectJsonLdNodes() {
@@ -307,14 +582,7 @@
     scripts.forEach(function (script) {
       try {
         var data = JSON.parse(script.textContent || "{}");
-        if (Array.isArray(data)) {
-          data.forEach(function (item) { nodes.push(item); });
-        } else {
-          nodes.push(data);
-        }
-        if (Array.isArray(data["@graph"])) {
-          data["@graph"].forEach(function (item) { nodes.push(item); });
-        }
+        collectJsonLdNodesFromData(data).forEach(function (node) { nodes.push(node); });
       } catch (_error) {
         nodes.push({ "@type": "INVALID_JSON" });
       }
@@ -325,18 +593,227 @@
   function jsonLdTypeList(node) {
     var type = node && node["@type"];
     if (!type) return [];
-    return Array.isArray(type) ? type : [type];
+    return (Array.isArray(type) ? type : [type])
+      .map(normalizeSchemaTypeName)
+      .filter(Boolean);
   }
 
   function jsonLdNodesOfType(nodes, type) {
     return nodes.filter(function (node) {
-      return jsonLdTypeList(node).indexOf(type) !== -1;
+      return jsonLdTypeList(node).some(function (actualType) {
+        return schemaTypeMatches(actualType, type);
+      });
     });
+  }
+
+  function isMeaningfulJsonLdValue(value) {
+    if (value === null || value === undefined) return false;
+    if (Array.isArray(value)) return value.some(isMeaningfulJsonLdValue);
+    if (typeof value === "object") return Object.keys(value).length > 0;
+    return String(value).trim() !== "";
+  }
+
+  function jsonLdValuesAtPath(value, parts) {
+    if (!parts.length) return [value];
+    if (Array.isArray(value)) {
+      return value.reduce(function (list, item) {
+        return list.concat(jsonLdValuesAtPath(item, parts));
+      }, []);
+    }
+    if (!value || typeof value !== "object") return [];
+    if (!Object.prototype.hasOwnProperty.call(value, parts[0])) return [];
+    return jsonLdValuesAtPath(value[parts[0]], parts.slice(1));
+  }
+
+  function hasJsonLdPath(node, path) {
+    return String(path || "")
+      .split("|")
+      .some(function (candidate) {
+        var parts = candidate.split(".").filter(Boolean);
+        return jsonLdValuesAtPath(node, parts).some(isMeaningfulJsonLdValue);
+      });
+  }
+
+  function jsonLdRuleForSeoType(seoType) {
+    var normalized = normalizeSeoType(seoType);
+    var key = PAGE_JSONLD_RULE_ALIASES[normalized] || normalized;
+    return PAGE_JSONLD_RULES[key] || PAGE_JSONLD_RULES.article;
+  }
+
+  function formatSchemaField(path) {
+    return String(path || "").split("|")[0];
+  }
+
+  function validateFaqJsonLd(node) {
+    var questions = Array.isArray(node && node.mainEntity) ? node.mainEntity : [];
+    if (!questions.length) {
+      return {
+        level: "fail",
+        label: "FAQPage mainEntity",
+        detail: "FAQPage must include Question[] in mainEntity.",
+        group: "schema"
+      };
+    }
+    var invalid = questions.filter(function (question) {
+      var questionTypes = jsonLdTypeList(question);
+      return !questionTypes.some(function (type) { return schemaTypeMatches(type, "Question"); }) ||
+        !hasJsonLdPath(question, "name") ||
+        !hasJsonLdPath(question, "acceptedAnswer.text");
+    }).length;
+    if (invalid) {
+      return {
+        level: "fail",
+        label: "FAQPage answers",
+        detail: invalid + " FAQ item(s) missing Question.name or acceptedAnswer.text.",
+        group: "schema"
+      };
+    }
+    return {
+      level: "pass",
+      label: "FAQPage answers",
+      detail: questions.length + " FAQ question/answer item(s) are valid.",
+      group: "schema"
+    };
+  }
+
+  function validatePageJsonLd(context) {
+    var nodes = collectJsonLdNodes();
+    var types = context.jsonTypes || extractJsonLdTypes();
+    var rule = jsonLdRuleForSeoType(context.seoType);
+    var checks = [];
+    var missingTypes = [];
+    var missingFields = [];
+    var missingRecommended = [];
+
+    if (types.indexOf("INVALID_JSON") !== -1) {
+      return {
+        status: "fail",
+        pageType: context.seoType,
+        expectedType: rule.primaryType,
+        label: rule.label,
+        presentTypes: types,
+        missingTypes: rule.requiredTypes || [],
+        missingFields: [],
+        missingRecommended: [],
+        checks: [
+          {
+            level: "fail",
+            label: "JSON-LD page-type contract",
+            detail: "Cannot validate " + rule.label + " schema because JSON-LD contains invalid JSON.",
+            group: "schema"
+          }
+        ]
+      };
+    }
+
+    (rule.requiredTypes || []).forEach(function (type) {
+      if (jsonLdTypesInclude(types, type)) {
+        checks.push({
+          level: "pass",
+          label: "JSON-LD @" + type,
+          detail: rule.label + " schema type present.",
+          group: "schema"
+        });
+      } else {
+        missingTypes.push(type);
+        checks.push({
+          level: "fail",
+          label: "JSON-LD @" + type,
+          detail: "Missing " + type + " for " + rule.label + ". Current: " + (types.join(", ") || "none") + ".",
+          group: "schema"
+        });
+      }
+    });
+
+    var primary = jsonLdNodesOfType(nodes, rule.primaryType)[0] || null;
+    if (primary) {
+      (rule.requiredFields || []).forEach(function (path) {
+        if (hasJsonLdPath(primary, path)) {
+          checks.push({
+            level: "pass",
+            label: "JSON-LD field " + formatSchemaField(path),
+            detail: rule.primaryType + "." + formatSchemaField(path) + " present.",
+            group: "schema"
+          });
+        } else {
+          missingFields.push(formatSchemaField(path));
+          checks.push({
+            level: "fail",
+            label: "JSON-LD field " + formatSchemaField(path),
+            detail: rule.primaryType + " missing " + formatSchemaField(path) + " for " + rule.label + ".",
+            group: "schema"
+          });
+        }
+      });
+
+      (rule.recommendedFields || []).forEach(function (path) {
+        if (hasJsonLdPath(primary, path)) {
+          checks.push({
+            level: "pass",
+            label: "JSON-LD recommended " + formatSchemaField(path),
+            detail: rule.primaryType + "." + formatSchemaField(path) + " present.",
+            group: "schema"
+          });
+        } else {
+          missingRecommended.push(formatSchemaField(path));
+          checks.push({
+            level: "info",
+            label: "JSON-LD recommended " + formatSchemaField(path),
+            detail: rule.primaryType + " should include " + formatSchemaField(path) + " when available.",
+            group: "schema"
+          });
+        }
+      });
+
+      if (rule.custom === "faq") checks.push(validateFaqJsonLd(primary));
+    } else if (rule.primaryType) {
+      checks.push({
+        level: "fail",
+        label: "JSON-LD primary type",
+        detail: "Expected primary " + rule.primaryType + " for " + rule.label + ".",
+        group: "schema"
+      });
+    }
+
+    var hasFailChecks = checks.some(function (check) { return check.level === "fail"; });
+    var hasWarnChecks = checks.some(function (check) { return check.level === "warn"; });
+
+    return {
+      status: hasFailChecks || missingTypes.length || missingFields.length ? "fail" : hasWarnChecks ? "warn" : "pass",
+      pageType: context.seoType,
+      expectedType: rule.primaryType,
+      label: rule.label,
+      presentTypes: types,
+      missingTypes: missingTypes,
+      missingFields: missingFields,
+      missingRecommended: missingRecommended,
+      checks: checks
+    };
+  }
+
+  function stripIgnoredSeoAuditNodes(root) {
+    if (!root || !root.querySelectorAll) return root;
+    root.querySelectorAll("script, style, noscript, " + SEO_AUDIT_IGNORE_SELECTOR).forEach(function (node) {
+      node.remove();
+    });
+    return root;
+  }
+
+  function isIgnoredSeoAuditNode(node) {
+    return Boolean(node && node.closest && node.closest(SEO_AUDIT_IGNORE_SELECTOR));
+  }
+
+  function pageTextForScan() {
+    var source = document.body || document.documentElement;
+    var clone = source ? source.cloneNode(true) : null;
+    if (!clone) return "";
+    stripIgnoredSeoAuditNodes(clone);
+    return (clone.textContent || "").replace(/\s+/g, " ").trim();
   }
 
   function visibleTextLength(root) {
     var clone = root.cloneNode(true);
-    clone.querySelectorAll("script, style, .weline-seo-panel").forEach(function (node) { node.remove(); });
+    stripIgnoredSeoAuditNodes(clone);
     return (clone.textContent || "").replace(/\s+/g, " ").trim().length;
   }
 
@@ -362,743 +839,64 @@
     return false;
   }
 
-  function isChineseBrowser() {
-    var langs = [];
-    if (Array.isArray(navigator.languages) && navigator.languages.length) langs = navigator.languages.slice();
-    else if (navigator.language) langs = [navigator.language];
-    return langs.some(function (lang) {
-      return /^zh(?:[-_]|$)/i.test(String(lang || "").trim());
-    });
-  }
-
-  function detectGa4MeasurementId() {
-    if (window.__SITE_GA4__ && window.__SITE_GA4__.measurementId) return window.__SITE_GA4__.measurementId;
-    var fromBody = readBodyMeta("ga4Id");
-    if (fromBody) return fromBody;
-    var script = document.querySelector('script[src*="googletagmanager.com/gtag/js"]');
-    if (script && script.src) {
-      var match = script.src.match(/[?&]id=(G-[A-Z0-9]+)/i);
-      if (match) return match[1];
+  function shouldAuditCta(context) {
+    var contentCategory = metaContent('meta[name="content-category"]');
+    var pageContent = "";
+    try {
+      pageContent = pageHtmlForScan();
+    } catch (_error) {
+      pageContent = pageTextForScan();
     }
-    return "";
+    var haystack = [
+      context && context.seoType,
+      contentCategory,
+      context && context.title,
+      context && context.description,
+      pageContent
+    ].join(" ").toLowerCase();
+    if (["home", "product", "landing", "service", "pricing", "contact"].indexOf(normalizeSeoType(context && context.seoType)) !== -1) {
+      return true;
+    }
+    return /\bcta\b|call to action|get started|sign up|subscribe|contact us|learn more|try now|buy now|claim|book|download|立即|马上|开始|注册|登录|购买|咨询|联系|预约|提交|下载|试用|开通|查看|打开|进入/i.test(haystack);
   }
 
-  var GA4_TRACK_SELECTOR = [
-    "[data-ga-event]",
+  var CTA_SELECTOR = [
+    "[data-cta]",
+    "[data-cta-action]",
+    "[data-cta-event]",
+    "[data-pixel-event]",
+    "[data-visitor-event]",
     "[data-track]",
-    "[data-apk-action]",
-    ".apk-fab",
-    ".academy-app-promo__cta",
-    ".apk-promo-strip__cta",
-    ".club-apk-promo__cta",
+    "a[download]",
+    "button[type=\"submit\"]",
+    "a[role=\"button\"]",
+    ".cta",
+    ".wf-btn",
+    ".btn-primary",
+    ".button--primary",
     ".promo-hero__cta"
   ].join(",");
 
-  function detectApkDownloadUrl() {
-    var downloadLink = document.querySelector('a[download][href$=".apk"]');
-    if (downloadLink && downloadLink.href) return downloadLink.href;
-    var fab = document.querySelector(".apk-fab[href]");
-    if (fab && fab.href && /\.apk(?:$|[?#])/i.test(fab.href)) return fab.href;
-    var hero = document.querySelector(".promo-hero__cta[href], .academy-app-promo__cta[href]");
-    if (hero && hero.href && /\.apk(?:$|[?#])/i.test(hero.href)) return hero.href;
-    return "";
-  }
-
-  function inferGa4CtaPosition(el) {
-    var explicit = el.getAttribute("data-cta-position") || (el.dataset && el.dataset.ctaPosition) || "";
-    if (explicit) return explicit;
-    if (el.classList.contains("apk-fab")) return "contextual";
-    if (el.classList.contains("promo-hero__cta")) return "hero";
-    if (el.classList.contains("academy-app-promo__cta") || el.closest(".academy-app-promo")) return "footer";
-    if (el.classList.contains("apk-promo-strip__cta")) return "mid";
-    if (el.closest(".promo-hero")) return "hero";
-    if (el.closest("footer")) return "footer";
-    if (el.closest("main, .site-shell")) return "mid";
-    return "contextual";
-  }
-
-  function resolveGa4EventName(el) {
-    return (
-      el.getAttribute("data-ga-event") ||
-      el.getAttribute("data-track") ||
-      (el.hasAttribute("data-apk-action") ? "apk_download_click" : "") ||
-      "apk_download_click"
-    );
-  }
-
-  function inferGa4MatchType(el, apkDownloadUrl) {
-    if (el.matches("[data-ga-event]")) return "[data-ga-event]";
-    if (el.matches("[data-track]")) return "[data-track]";
-    if (el.matches("[data-apk-action]")) return "[data-apk-action]";
-    if (el.classList.contains("apk-fab")) return ".apk-fab";
-    if (el.classList.contains("academy-app-promo__cta")) return ".academy-app-promo__cta";
-    if (el.classList.contains("apk-promo-strip__cta")) return ".apk-promo-strip__cta";
-    if (el.classList.contains("club-apk-promo__cta")) return ".club-apk-promo__cta";
-    if (el.classList.contains("promo-hero__cta")) return ".promo-hero__cta";
-    if (el.matches('a[download][href$=".apk"]')) return 'a[download][href$=".apk"]';
-    if (apkDownloadUrl && el.href === apkDownloadUrl) return "site apk download href";
-    return "tracked CTA";
-  }
-
-  function buildGa4SelectorHint(el) {
-    if (el.id) return "#" + el.id;
-    if (el.getAttribute("data-ga-event")) return '[data-ga-event="' + el.getAttribute("data-ga-event") + '"]';
-    if (el.getAttribute("data-track")) return '[data-track="' + el.getAttribute("data-track") + '"]';
-    if (el.classList.contains("apk-fab")) return ".apk-fab";
-    var classes = Array.from(el.classList || []).slice(0, 2).join(".");
-    return el.tagName.toLowerCase() + (classes ? "." + classes : "");
-  }
-
-  function resolveGa4TriggerDelivery(entry) {
-    var delivery = entry && entry.delivery ? entry.delivery : {};
-    if (delivery.mode === "ga4" || delivery.submitted) {
-      return {
-        label: "Sent",
-        tone: "pass",
-        detail: "已触发并推送到 GA4（gtag event）。"
-      };
-    }
-    if (delivery.mode === "preview") {
-      return {
-        label: "Preview",
-        tone: "info",
-        detail: "已触发；仅 console/dataLayer 预览，未写入 GA4。"
-      };
-    }
-    if (delivery.mode === "no_gtag") {
-      return {
-        label: "No gtag",
-        tone: "fail",
-        detail: "已触发，但 gtag 未加载，事件未推送。"
-      };
-    }
-    var reasons = [];
-    if (delivery.blockReason === "local_host") reasons.push("本地/私网 host 门禁");
-    if (delivery.blockReason === "chinese_browser") reasons.push("zh-* locale 门禁");
-    return {
-      label: "Triggered",
-      tone: "pass",
-      detail:
-        "已在 Inspector 面板记录为已触发，未推送到 GA4" +
-        (reasons.length ? "（" + reasons.join(" · ") + "）" : "。")
-    };
-  }
-
-  function formatGa4TriggerTime(timestamp) {
-    if (!timestamp) return "just now";
-    try {
-      return new Date(timestamp).toLocaleTimeString();
-    } catch (error) {
-      return String(timestamp);
-    }
-  }
-
-  function collectGa4RecentTriggers() {
-    var runtime = window.__SITE_GA4__ || {};
-    var items = Array.isArray(runtime.recentTriggers) ? runtime.recentTriggers.slice() : [];
-    return {
-      total: items.length,
-      items: items.map(function (entry, index) {
-        var params = entry.params || {};
-        return {
-          index: index + 1,
-          id: entry.id || "",
-          eventName: entry.eventName || "apk_download_click",
-          ctaPosition: params.cta_position || "",
-          linkText: params.link_text || "",
-          linkUrl: params.link_url || "",
-          eventId: params.event_id || entry.id || "",
-          timestamp: entry.timestamp || 0,
-          timeLabel: formatGa4TriggerTime(entry.timestamp),
-          delivery: resolveGa4TriggerDelivery(entry)
-        };
-      })
-    };
-  }
-
-  function resolveGa4EventDelivery(ga4) {
-    if (ga4.eventsWillFire) {
-      return {
-        status: "will_fire",
-        label: "Will fire",
-        tone: "pass",
-        detail: "点击后会发送 gtag('event', …)。"
-      };
-    }
-    if (ga4.previewOnly) {
-      return {
-        status: "preview",
-        label: "Preview",
-        tone: "info",
-        detail: "点击后会在面板记录为已触发，并输出 console.info('[site-analytics preview]', …)。"
-      };
-    }
-    if (!ga4.eventsAllowed) {
-      var reasons = [];
-      if (ga4.localHost) reasons.push("本地/私网 host 门禁");
-      if (ga4.chineseBrowser) reasons.push("zh-* locale 门禁");
-      return {
-        status: "panel_only",
-        label: "Panel only",
-        tone: "pass",
-        detail:
-          "点击会在 Inspector 面板记录为已触发，但不会推送到 GA4" +
-          (reasons.length ? "（" + reasons.join(" · ") + "）。" : "。")
-      };
-    }
-    if (ga4.configured && !ga4.gtagRuntime) {
-      return {
-        status: "blocked",
-        label: "No gtag",
-        tone: "fail",
-        detail: "已配置 GA4 ID，但 gtag 未加载，事件无法写入 GA4。"
-      };
-    }
-    return {
-      status: "blocked",
-      label: "Blocked",
-      tone: "info",
-      detail: "当前环境不会提交 CTA 事件。"
-    };
-  }
-
-  function collectGa4PageEvents(ga4) {
-    var apkDownloadUrl = detectApkDownloadUrl();
-    var items = [];
-    var seen = new Set();
-
-    function pushElement(el) {
-      if (!el || el.closest(".weline-seo-panel")) return;
-      var signature =
-        resolveGa4EventName(el) +
-        "|" +
-        inferGa4CtaPosition(el) +
-        "|" +
-        inferGa4MatchType(el, apkDownloadUrl) +
-        "|" +
-        (el.href || "") +
-        "|" +
-        (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
-      if (seen.has(signature)) return;
-      seen.add(signature);
-
-      var delivery = resolveGa4EventDelivery(ga4);
-      items.push({
-        index: items.length + 1,
-        eventName: resolveGa4EventName(el),
-        matchType: inferGa4MatchType(el, apkDownloadUrl),
-        ctaPosition: inferGa4CtaPosition(el),
-        linkText: (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80) || "(empty label)",
-        linkUrl: el.href || apkDownloadUrl || "",
-        selectorHint: buildGa4SelectorHint(el),
-        tagName: (el.tagName || "").toLowerCase(),
-        delivery: delivery
-      });
-    }
-
-    Array.from(document.querySelectorAll(GA4_TRACK_SELECTOR)).forEach(pushElement);
-    Array.from(document.querySelectorAll('a[download][href$=".apk"]')).forEach(pushElement);
-    if (apkDownloadUrl) {
-      Array.from(document.querySelectorAll("a[href]"))
-        .filter(function (node) {
-          return node.href === apkDownloadUrl;
-        })
-        .forEach(pushElement);
-    }
-
-    var byEventName = {};
-    items.forEach(function (item) {
-      if (!byEventName[item.eventName]) {
-        byEventName[item.eventName] = {
-          eventName: item.eventName,
-          count: 0,
-          positions: {},
-          delivery: item.delivery
-        };
-      }
-      byEventName[item.eventName].count += 1;
-      byEventName[item.eventName].positions[item.ctaPosition] =
-        (byEventName[item.eventName].positions[item.ctaPosition] || 0) + 1;
+  function collectCtaElements(selector) {
+    return Array.from(document.querySelectorAll(selector || CTA_SELECTOR)).filter(function (el) {
+      if (!el || isIgnoredSeoAuditNode(el)) return false;
+      var text = (el.textContent || el.getAttribute("aria-label") || el.getAttribute("title") || "").replace(/\s+/g, " ").trim();
+      return Boolean(
+        text ||
+          el.href ||
+          el.getAttribute("data-cta") ||
+          el.getAttribute("data-cta-action") ||
+          el.getAttribute("data-cta-event") ||
+          el.getAttribute("data-pixel-event") ||
+          el.getAttribute("data-visitor-event")
+      );
     });
-
-    return {
-      total: items.length,
-      uniqueEventNames: Object.keys(byEventName).length,
-      apkDownloadUrl: apkDownloadUrl,
-      defaultEventName: "apk_download_click",
-      items: items,
-      byEventName: Object.keys(byEventName).map(function (key) {
-        return byEventName[key];
-      })
-    };
-  }
-
-  function collectGa4Status() {
-    var runtime = window.__SITE_GA4__ || {};
-    var measurementId = runtime.measurementId || detectGa4MeasurementId();
-    var configured = typeof runtime.configured === "boolean" ? runtime.configured : /^G-[A-Z0-9]+$/i.test(measurementId);
-    var enableInDev = readBodyMeta("ga4EnableInDev") === "true";
-    var localHost = runtime.blockedReasons
-      ? runtime.blockedReasons.indexOf("local_host") !== -1
-      : isLocalHost();
-    var chineseBrowser = runtime.blockedReasons
-      ? runtime.blockedReasons.indexOf("chinese_browser") !== -1
-      : isChineseBrowser();
-    var eventsAllowed = typeof runtime.eventsAllowed === "boolean" ? runtime.eventsAllowed : !localHost && !chineseBrowser;
-    var gtagScript =
-      typeof runtime.gtagScript === "boolean"
-        ? runtime.gtagScript
-        : Boolean(document.querySelector('script[src*="googletagmanager.com/gtag/js"]'));
-    var gtagRuntime = typeof runtime.gtagRuntime === "boolean" ? runtime.gtagRuntime : typeof window.gtag === "function";
-    var eventsWillFire =
-      typeof runtime.eventsWillFire === "boolean"
-        ? runtime.eventsWillFire
-        : configured && gtagRuntime && eventsAllowed;
-    var previewOnly =
-      typeof runtime.previewOnly === "boolean" ? runtime.previewOnly : !configured && eventsAllowed;
-    var browserLanguages =
-      runtime.browserLanguages && runtime.browserLanguages.length
-        ? runtime.browserLanguages.slice()
-        : Array.isArray(navigator.languages) && navigator.languages.length
-          ? navigator.languages.slice()
-          : navigator.language
-            ? [navigator.language]
-            : [];
-
-    var status = {
-      measurementId: measurementId,
-      configured: configured,
-      enableInDev: enableInDev,
-      gtagScript: gtagScript,
-      gtagRuntime: gtagRuntime,
-      eventsAllowed: eventsAllowed,
-      eventsWillFire: eventsWillFire,
-      previewOnly: previewOnly,
-      localHost: localHost,
-      chineseBrowser: chineseBrowser,
-      host: window.location.hostname || "",
-      browserLanguages: browserLanguages,
-      pageEvents: null,
-      recentTriggers: collectGa4RecentTriggers(),
-      eventPresentation: resolveGa4EventPresentation({
-        measurementId: measurementId,
-        configured: configured,
-        enableInDev: enableInDev,
-        gtagScript: gtagScript,
-        gtagRuntime: gtagRuntime,
-        eventsAllowed: eventsAllowed,
-        eventsWillFire: eventsWillFire,
-        previewOnly: previewOnly,
-        localHost: localHost,
-        chineseBrowser: chineseBrowser,
-        host: window.location.hostname || "",
-        browserLanguages: browserLanguages
-      })
-    };
-    status.pageEvents = collectGa4PageEvents(status);
-    return status;
   }
 
   function formatCheckLevel(level) {
     if (level === "info") return "tip";
+    if (level === "unknown") return "unknown";
     return level;
-  }
-
-  function resolveGa4EventPresentation(ga4) {
-    if (ga4.eventsWillFire) {
-      return {
-        label: "Will fire",
-        tone: "pass",
-        headline: "CTA 事件会正常上报。",
-        detail:
-          "当前为公网 host，浏览器 locale 非 zh-*，且 GA4/gtag 已就绪。点击 Download / Claim / FAB 会发送 gtag('event', 'apk_download_click', …)，附带 page_id、cta_position、event_id 等参数。"
-      };
-    }
-
-    if (ga4.previewOnly) {
-      return {
-        label: "Preview only",
-        tone: "info",
-        headline: "尚未配置 GA4 ID，仅本地预览。",
-        detail:
-          "当前 host 与浏览器 locale 允许调试，但 site.config.js 里还没有 analytics.ga4MeasurementId。CTA 点击会在 Inspector 面板记录为已触发，并输出 console.info('[site-analytics preview]', …)，不会写入 GA4。"
-      };
-    }
-
-    var notes = [];
-    if (ga4.localHost) {
-      notes.push(
-        "Host 门禁：" +
-          (ga4.host || "本地/私网 host") +
-          " 属于 127.0.0.1 / localhost / .local / 私网 IP。为避免污染 GA4，点击不会推送到 GA4，但 Inspector 面板仍会记录「已触发」供本地 QA。"
-      );
-    }
-    if (ga4.chineseBrowser) {
-      notes.push(
-        "Locale 门禁：浏览器语言含 zh-*（" +
-          ga4.browserLanguages.join(", ") +
-          "）。按站点策略，CTA 自定义事件不会推送到 GA4，但 Inspector 面板仍会记录「已触发」。"
-      );
-    }
-    if (ga4.configured && ga4.gtagRuntime && notes.length) {
-      notes.push("GA4 已连接，但上述门禁未通过前，CTA 自定义事件仍被抑制——这是预期行为，不是故障。");
-    } else if (ga4.configured && !ga4.gtagRuntime && ga4.localHost && !ga4.enableInDev) {
-      notes.push(
-        "Dev 策略：enableInDev=false，本地预览不注入 gtag.js；生产 export 后仍会正常加载 GA4。"
-      );
-    } else if (ga4.configured && !ga4.gtagRuntime && ga4.localHost) {
-      notes.push("本地预览未加载 gtag；切换到生产域名后会按 measurement ID 注入。");
-    }
-
-    return {
-      label: notes.length > 1 ? "Panel only" : "Panel only",
-      tone: "info",
-      headline: "CTA 不推送到 GA4，但 Inspector 面板会记录「已触发」。",
-      detail: notes.join(" ")
-    };
-  }
-
-  function auditGa4Status(ga4) {
-    var issues = [];
-    var presentation = ga4.eventPresentation || resolveGa4EventPresentation(ga4);
-
-    if (!ga4.configured) {
-      issues.push({
-        level: "info",
-        label: "GA4 measurement ID",
-        detail: "site.config.js 尚未设置 analytics.ga4MeasurementId。本地 QA 可接受；生产 export 前请填入 G-XXXXXXXX。"
-      });
-    } else {
-      issues.push({
-        level: "pass",
-        label: "GA4 measurement ID",
-        detail: "已在 site.config.js 配置 " + ga4.measurementId + "。"
-      });
-    }
-
-    if (ga4.configured && ga4.gtagScript && ga4.gtagRuntime) {
-      issues.push({
-        level: "pass",
-        label: "gtag runtime",
-        detail: "googletagmanager.com/gtag/js 已加载，window.gtag() 可用。"
-      });
-    } else if (ga4.configured && ga4.localHost && !ga4.enableInDev) {
-      issues.push({
-        level: "info",
-        label: "gtag runtime",
-        detail:
-          "已配置 measurement ID，但 enableInDev=false，本地 127.0.0.1/localhost 不注入 gtag——这是 dev 策略，不是连接失败。"
-      });
-    } else if (ga4.configured && !ga4.gtagRuntime && ga4.localHost) {
-      issues.push({
-        level: "info",
-        label: "gtag runtime",
-        detail: "本地/私网预览未加载 gtag；同一 ID 在生产域名 export 后会正常注入。"
-      });
-    } else if (ga4.configured && !ga4.gtagRuntime) {
-      issues.push({
-        level: "fail",
-        label: "gtag runtime",
-        detail: "非本地页面已配置 measurement ID，但 gtag() 缺失。请检查 GA4 snippet 是否注入到 head。"
-      });
-    } else if (!ga4.configured) {
-      issues.push({
-        level: "info",
-        label: "gtag runtime",
-        detail: "未配置 GA4 ID 前不会加载 gtag。"
-      });
-    }
-
-    if (ga4.localHost) {
-      issues.push({
-        level: "info",
-        label: "Host gate",
-        detail:
-          "当前 host " +
-          (ga4.host || "(empty)") +
-          " 命中本地/私网规则（127.0.0.1、localhost、.local、LAN）。CTA 不会推送到 GA4，但 Inspector 面板仍会记录点击为「已触发」。"
-      });
-    } else {
-      issues.push({ level: "pass", label: "Host gate", detail: "公网/生产 host — Host 门禁已放行。" });
-    }
-
-    if (ga4.chineseBrowser) {
-      issues.push({
-        level: "info",
-        label: "Locale gate",
-        detail:
-          "浏览器 locale 含 zh-*（" +
-          ga4.browserLanguages.join(", ") +
-          "）。按策略 CTA 不会推送到 GA4，但 Inspector 面板仍会记录点击为「已触发」。"
-      });
-    } else {
-      issues.push({
-        level: "pass",
-        label: "Locale gate",
-        detail: "浏览器 locale 非 zh-* — Locale 门禁已放行。"
-      });
-    }
-
-    var pageEvents = ga4.pageEvents || { total: 0, byEventName: [], items: [] };
-    if (pageEvents.total > 0) {
-      issues.push({
-        level: "pass",
-        label: "Page event targets",
-        detail:
-          "检测到 " +
-          pageEvents.total +
-          " 个可追踪 CTA，事件名：" +
-          (pageEvents.byEventName.map(function (item) { return item.eventName; }).join(", ") || pageEvents.defaultEventName) +
-          "。"
-      });
-    } else {
-      issues.push({
-        level: "warn",
-        label: "Page event targets",
-        detail: "当前页未发现 GA4 自动监听的 Download/FAB/CTA 元素。"
-      });
-    }
-
-    issues.push({
-      level: presentation.tone === "pass" ? "pass" : presentation.tone,
-      label: "CTA 事件结果",
-      detail: presentation.headline + " " + presentation.detail
-    });
-
-    return issues;
-  }
-
-  function renderGa4Checks(checks) {
-    if (!checks.length) return "";
-    return (
-      '<ul class="weline-seo-panel__checks weline-seo-panel__ga4-checks">' +
-      checks
-        .map(function (check) {
-          return (
-            '<li class="weline-seo-panel__check">' +
-            '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
-            escapeHtml(check.level) +
-            '">' +
-            escapeHtml(formatCheckLevel(check.level)) +
-            "</span>" +
-            "<div><strong>" +
-            escapeHtml(check.label) +
-            "</strong>" +
-            (check.detail ? '<p class="weline-seo-panel__hint">' + escapeHtml(check.detail) + "</p>" : "") +
-            "</div></li>"
-          );
-        })
-        .join("") +
-      "</ul>"
-    );
-  }
-
-  function renderGa4RecentTriggers(recentTriggers) {
-    var triggers = recentTriggers || { total: 0, items: [] };
-    if (!triggers.total) {
-      return (
-        '<section class="weline-seo-panel__section weline-seo-panel__ga4-triggers" data-weline-ga4-triggers="true">' +
-        "<h3>点击记录</h3>" +
-        '<p class="weline-seo-panel__hint">尚未检测到 CTA 点击。点击 Download / FAB 后，即使门禁阻止 GA4 推送，此处也会显示「已触发」。</p>' +
-        "</section>"
-      );
-    }
-
-    var rows = triggers.items
-      .map(function (item) {
-        return (
-          '<li class="weline-seo-panel__ga4-trigger">' +
-          '<div class="weline-seo-panel__ga4-trigger-head">' +
-          '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
-          escapeHtml(item.delivery.tone) +
-          '">' +
-          escapeHtml(item.delivery.label) +
-          "</span>" +
-          "<strong>" +
-          escapeHtml(item.eventName) +
-          "</strong>" +
-          '<span class="weline-seo-panel__ga4-trigger-time">' +
-          escapeHtml(item.timeLabel) +
-          "</span>" +
-          "</div>" +
-          (item.linkText
-            ? '<p class="weline-seo-panel__ga4-trigger-text">' + escapeHtml(item.linkText) + "</p>"
-            : "") +
-          '<dl class="weline-seo-panel__ga4-event-meta">' +
-          (item.ctaPosition
-            ? "<div><dt>位置</dt><dd>" + escapeHtml(item.ctaPosition) + "</dd></div>"
-            : "") +
-          (item.linkUrl ? "<div><dt>链接</dt><dd>" + escapeHtml(item.linkUrl) + "</dd></div>" : "") +
-          (item.eventId ? "<div><dt>event_id</dt><dd>" + escapeHtml(item.eventId) + "</dd></div>" : "") +
-          "<div><dt>结果</dt><dd>" + escapeHtml(item.delivery.detail) + "</dd></div>" +
-          "</dl>" +
-          "</li>"
-        );
-      })
-      .join("");
-
-    return (
-      '<section class="weline-seo-panel__section weline-seo-panel__ga4-triggers" data-weline-ga4-triggers="true">' +
-      "<h3>点击记录</h3>" +
-      '<p class="weline-seo-panel__ga4-events-intro">' +
-      escapeHtml("本页已记录 " + triggers.total + " 次 CTA 点击。门禁环境下仅面板可见，不会推送到 GA4。") +
-      "</p>" +
-      '<ul class="weline-seo-panel__ga4-trigger-list">' +
-      rows +
-      "</ul>" +
-      "</section>"
-    );
-  }
-
-  function renderGa4PageEvents(pageEvents, ga4) {
-    if (!pageEvents || !pageEvents.total) {
-      return (
-        '<section class="weline-seo-panel__section weline-seo-panel__ga4-events">' +
-        "<h3>本页事件</h3>" +
-        '<p class="weline-seo-panel__hint">未发现可追踪的 GA4 CTA 元素。请检查 .apk-fab、Download 链接或 data-ga-event 属性。</p>' +
-        "</section>"
-      );
-    }
-
-    var delivery = resolveGa4EventDelivery(ga4);
-    var summaryChips = pageEvents.byEventName
-      .map(function (group) {
-        var positions = Object.keys(group.positions)
-          .map(function (key) {
-            return key + "×" + group.positions[key];
-          })
-          .join(", ");
-        return (
-          '<div class="weline-seo-panel__ga4-event-chip">' +
-          "<span>" +
-          escapeHtml(group.eventName) +
-          "</span>" +
-          "<strong>" +
-          escapeHtml(String(group.count)) +
-          " 个触发点</strong>" +
-          '<small>' +
-          escapeHtml(positions) +
-          "</small>" +
-          "</div>"
-        );
-      })
-      .join("");
-
-    var rows = pageEvents.items
-      .map(function (item) {
-        return (
-          '<li class="weline-seo-panel__ga4-event">' +
-          '<div class="weline-seo-panel__ga4-event-head">' +
-          '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
-          escapeHtml(item.delivery.tone) +
-          '">' +
-          escapeHtml(item.delivery.label) +
-          "</span>" +
-          "<strong>" +
-          escapeHtml(item.eventName) +
-          "</strong>" +
-          '<span class="weline-seo-panel__ga4-event-pos">' +
-          escapeHtml(item.ctaPosition) +
-          "</span>" +
-          "</div>" +
-          '<p class="weline-seo-panel__ga4-event-text">' +
-          escapeHtml(item.linkText) +
-          "</p>" +
-          '<dl class="weline-seo-panel__ga4-event-meta">' +
-          "<div><dt>匹配规则</dt><dd>" +
-          escapeHtml(item.matchType) +
-          "</dd></div>" +
-          "<div><dt>元素</dt><dd>" +
-          escapeHtml(item.selectorHint) +
-          "</dd></div>" +
-          (item.linkUrl
-            ? "<div><dt>链接</dt><dd>" + escapeHtml(item.linkUrl) + "</dd></div>"
-            : "") +
-          "<div><dt>点击结果</dt><dd>" +
-          escapeHtml(item.delivery.detail) +
-          "</dd></div>" +
-          "</dl>" +
-          "</li>"
-        );
-      })
-      .join("");
-
-    return (
-      '<section class="weline-seo-panel__section weline-seo-panel__ga4-events">' +
-      "<h3>本页事件</h3>" +
-      '<p class="weline-seo-panel__ga4-events-intro">' +
-      escapeHtml(
-        "扫描到 " +
-          pageEvents.total +
-          " 个 GA4 自动监听触发点，默认事件 apk_download_click；当前环境点击结果：" +
-          delivery.label +
-          "。"
-      ) +
-      "</p>" +
-      (pageEvents.apkDownloadUrl
-        ? '<p class="weline-seo-panel__hint">APK 下载 URL：' + escapeHtml(pageEvents.apkDownloadUrl) + "</p>"
-        : "") +
-      '<div class="weline-seo-panel__ga4-event-summary">' +
-      summaryChips +
-      "</div>" +
-      '<ul class="weline-seo-panel__ga4-event-list">' +
-      rows +
-      "</ul>" +
-      "</section>"
-    );
-  }
-
-  function renderGa4Status(ga4, ga4Checks, pageEvents) {
-    function chip(label, value, tone) {
-      return (
-        '<div class="weline-seo-panel__ga4-chip weline-seo-panel__ga4-chip--' +
-        escapeHtml(tone) +
-        '"><span>' +
-        escapeHtml(label) +
-        "</span><strong>" +
-        escapeHtml(value) +
-        "</strong></div>"
-      );
-    }
-
-    var presentation = ga4.eventPresentation || resolveGa4EventPresentation(ga4);
-    var checks = ga4Checks || auditGa4Status(ga4);
-    var connectionTone = ga4.configured && ga4.gtagRuntime ? "pass" : ga4.configured ? "info" : "info";
-    if (ga4.configured && !ga4.gtagRuntime && !ga4.localHost) connectionTone = "fail";
-    if (ga4.configured && ga4.localHost && !ga4.enableInDev) connectionTone = "info";
-
-    return (
-      '<div class="weline-seo-panel__ga4-grid">' +
-      chip("GA4 ID", ga4.configured ? ga4.measurementId : "Not configured", ga4.configured ? "pass" : "info") +
-      chip("gtag", ga4.gtagRuntime ? "Loaded" : ga4.gtagScript ? "Script only" : "Not loaded", connectionTone) +
-      chip("CTA events", presentation.label, presentation.tone) +
-      "</div>" +
-      '<p class="weline-seo-panel__ga4-note">' +
-      escapeHtml(presentation.headline) +
-      " " +
-      escapeHtml(presentation.detail) +
-      "</p>" +
-      '<dl class="weline-seo-panel__grid">' +
-      '<div class="weline-seo-panel__field"><dt>Current host</dt><dd>' +
-      escapeHtml(ga4.host || "(empty)") +
-      (ga4.localHost ? " · Host 门禁开启（本地预览预期行为）" : " · Host 门禁关闭") +
-      "</dd></div>" +
-      '<div class="weline-seo-panel__field"><dt>Browser languages</dt><dd>' +
-      escapeHtml(ga4.browserLanguages.join(", ") || "unknown") +
-      (ga4.chineseBrowser ? " · Locale 门禁开启（zh 浏览器预期行为）" : " · Locale 门禁关闭") +
-      "</dd></div>" +
-      '<div class="weline-seo-panel__field"><dt>Dev gtag policy</dt><dd>' +
-      escapeHtml(
-        ga4.enableInDev
-          ? "enableInDev=true — dev 预览在已配置 ID 时可能加载 gtag。"
-          : "enableInDev=false — 本地预览即使有 measurement ID 也不注入 gtag。"
-      ) +
-      "</dd></div>" +
-      "</dl>" +
-      renderGa4RecentTriggers(ga4.recentTriggers) +
-      renderGa4PageEvents(pageEvents || ga4.pageEvents, ga4) +
-      renderGa4Checks(checks)
-    );
   }
 
   function normalizeHeadingText(node) {
@@ -1107,7 +905,7 @@
 
   function collectHeadingOutline() {
     var nodes = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6")).filter(function (node) {
-      return !node.closest(".weline-seo-panel");
+      return !isIgnoredSeoAuditNode(node);
     });
 
     var items = nodes.map(function (node, index) {
@@ -1214,6 +1012,968 @@
     };
   }
 
+  function allEngineIds() {
+    return ENGINE_PROFILES.map(function (engine) { return engine.id; });
+  }
+
+  function findCheck(raw, label) {
+    return (raw.checks || []).find(function (item) { return item.label === label; }) || null;
+  }
+
+  function hasCheckLevel(raw, label, level) {
+    var check = findCheck(raw, label);
+    return Boolean(check && check.level === level);
+  }
+
+  function hasAnyCheckLevel(raw, labels, level) {
+    return labels.some(function (label) { return hasCheckLevel(raw, label, level); });
+  }
+
+  function performanceEntries(type) {
+    if (!window.performance || typeof window.performance.getEntriesByType !== "function") return [];
+    try {
+      return window.performance.getEntriesByType(type) || [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function usableNumber(value) {
+    return typeof value === "number" && isFinite(value) && value >= 0 ? value : null;
+  }
+
+  function sumNumbers(items, getter) {
+    return items.reduce(function (sum, item) {
+      var value = usableNumber(getter(item));
+      return sum + (value === null ? 0 : value);
+    }, 0);
+  }
+
+  function collectPerformanceSignals() {
+    var perf = window.performance || null;
+    if (!perf) {
+      return {
+        available: false,
+        detail: "window.performance 不可用。"
+      };
+    }
+
+    var nav = performanceEntries("navigation")[0] || null;
+    var timing = perf.timing || null;
+    var paints = performanceEntries("paint");
+    var resources = performanceEntries("resource");
+    var lcpEntries = performanceEntries("largest-contentful-paint");
+    var clsEntries = performanceEntries("layout-shift");
+    var longTasks = performanceEntries("longtask");
+    var fcpEntry = paints.find(function (entry) { return entry.name === "first-contentful-paint"; }) || null;
+    var lcpEntry = lcpEntries.length ? lcpEntries[lcpEntries.length - 1] : null;
+
+    function fromNav(name) {
+      if (!nav) return null;
+      return usableNumber(nav[name]);
+    }
+
+    function timingDelta(end, start) {
+      if (!timing || !timing.navigationStart || !timing[end]) return null;
+      var base = timing[start] || timing.navigationStart;
+      return usableNumber(timing[end] - base);
+    }
+
+    var ttfb = null;
+    var dcl = null;
+    var load = null;
+    if (nav) {
+      var responseStart = fromNav("responseStart");
+      var requestStart = fromNav("requestStart");
+      var startTime = fromNav("startTime") || 0;
+      ttfb = responseStart === null ? null : responseStart - (requestStart === null ? startTime : requestStart);
+      dcl = fromNav("domContentLoadedEventEnd");
+      load = fromNav("loadEventEnd");
+    } else if (timing) {
+      ttfb = timingDelta("responseStart", "requestStart");
+      dcl = timingDelta("domContentLoadedEventEnd", "navigationStart");
+      load = timingDelta("loadEventEnd", "navigationStart");
+    }
+
+    var fcp = fcpEntry ? usableNumber(fcpEntry.startTime) : null;
+    var lcp = lcpEntry ? usableNumber(lcpEntry.renderTime || lcpEntry.loadTime || lcpEntry.startTime) : null;
+    var cls = clsEntries.length
+      ? clsEntries.reduce(function (sum, entry) {
+          return sum + (entry.hadRecentInput ? 0 : (usableNumber(entry.value) || 0));
+        }, 0)
+      : null;
+    var transferBytes = sumNumbers(resources, function (entry) {
+      return entry.transferSize || entry.encodedBodySize || 0;
+    });
+    var scriptCount = resources.filter(function (entry) {
+      return entry.initiatorType === "script";
+    }).length;
+    var stylesheetCount = resources.filter(function (entry) {
+      return entry.initiatorType === "link" || entry.initiatorType === "css";
+    }).length;
+    var imageCount = resources.filter(function (entry) {
+      return entry.initiatorType === "img" || entry.initiatorType === "image";
+    }).length;
+    var longTaskTotal = longTasks.length
+      ? sumNumbers(longTasks, function (entry) { return entry.duration; })
+      : null;
+
+    return {
+      available: Boolean(nav || timing || paints.length || resources.length),
+      hasNavigationTiming: Boolean(nav || timing),
+      hasPaintTiming: Boolean(paints.length),
+      hasLcp: lcp !== null,
+      hasCls: cls !== null,
+      hasLongTasks: longTaskTotal !== null,
+      ttfb: usableNumber(ttfb),
+      domContentLoaded: usableNumber(dcl),
+      load: usableNumber(load),
+      fcp: fcp,
+      lcp: lcp,
+      cls: cls,
+      longTaskTotal: longTaskTotal,
+      resourceCount: resources.length,
+      scriptCount: scriptCount,
+      stylesheetCount: stylesheetCount,
+      imageCount: imageCount,
+      transferKb: transferBytes ? Math.round(transferBytes / 1024) : null
+    };
+  }
+
+  function formatMs(value) {
+    return value === null || value === undefined ? "未捕获" : Math.round(value) + "ms";
+  }
+
+  function formatDecimal(value, digits) {
+    return value === null || value === undefined ? "未捕获" : Number(value).toFixed(digits || 2);
+  }
+
+  function performanceSummary(perf) {
+    if (!perf || !perf.available) return "浏览器 Performance Timing 不可用。";
+    var parts = [
+      "TTFB " + formatMs(perf.ttfb),
+      "FCP " + formatMs(perf.fcp),
+      "LCP " + formatMs(perf.lcp),
+      "CLS " + formatDecimal(perf.cls, 3),
+      "Load " + formatMs(perf.load),
+      "资源 " + perf.resourceCount + " 个"
+    ];
+    if (perf.transferKb !== null) parts.push("传输 " + perf.transferKb + "KB");
+    if (perf.longTaskTotal !== null) parts.push("长任务 " + formatMs(perf.longTaskTotal));
+    return parts.join("；");
+  }
+
+  function addMetricIssue(list, metric, value, warnAt, failAt, unit) {
+    if (value === null || value === undefined) return;
+    var display = unit === "score" ? formatDecimal(value, 3) : formatMs(value);
+    if (value > failAt) list.fail.push(metric + " " + display);
+    else if (value > warnAt) list.warn.push(metric + " " + display);
+  }
+
+  function buildPerformanceRow(signals) {
+    var perf = signals.performance || null;
+    if (!perf || !perf.available) {
+      return engineRow(
+        "performance",
+        "pass",
+        "info",
+        "当前页面未暴露完整 Performance Timing，但浏览器渲染层未发现可判定的阻断性能风险。",
+        "生产发布前可补跑 Lighthouse/PageSpeed Insights/CrUX；外部真实用户数据不计入当前页面 SEO 阻断。"
+      );
+    }
+
+    var issues = { fail: [], warn: [] };
+    addMetricIssue(issues, "TTFB", perf.ttfb, 800, 1800);
+    addMetricIssue(issues, "FCP", perf.fcp, 1800, 3000);
+    addMetricIssue(issues, "LCP", perf.lcp, 2500, 4000);
+    addMetricIssue(issues, "Load", perf.load, 3000, 6000);
+    addMetricIssue(issues, "CLS", perf.cls, 0.1, 0.25, "score");
+    addMetricIssue(issues, "长任务", perf.longTaskTotal, 200, 600);
+    if (perf.resourceCount > 120) issues.fail.push("资源数 " + perf.resourceCount + " 个");
+    else if (perf.resourceCount > 80) issues.warn.push("资源数 " + perf.resourceCount + " 个");
+    if (perf.transferKb !== null) {
+      if (perf.transferKb > 3000) issues.fail.push("传输 " + perf.transferKb + "KB");
+      else if (perf.transferKb > 1500) issues.warn.push("传输 " + perf.transferKb + "KB");
+    }
+
+    var missingCwv = [];
+    if (!perf.hasLcp) missingCwv.push("LCP");
+    if (!perf.hasCls) missingCwv.push("CLS");
+    missingCwv.push("INP");
+    var summary = performanceSummary(perf);
+
+    if (issues.fail.length) {
+      return engineRow(
+        "performance",
+        "fail",
+        "high",
+        "浏览器本地性能估算存在严重风险：" + issues.fail.join("；") + "。采样：" + summary + "。",
+        "优先压缩关键 JS/CSS/图片、降低阻塞资源和长任务；再用 Lighthouse/PageSpeed/CrUX 校验移动端与桌面端。",
+        "PERF_001_BROWSER_TIMING_FAIL"
+      );
+    }
+
+    if (issues.warn.length) {
+      return engineRow(
+        "performance",
+        "warn",
+        "medium",
+        "浏览器本地性能估算存在优化项：" + issues.warn.join("；") + "。采样：" + summary + "。",
+        "用 Lighthouse/PageSpeed/CrUX 补齐真实 CWV；面板内如需更准，应在首屏脚本最早阶段采集 LCP/CLS/INP。",
+        "PERF_010_CWV_EXTERNAL_REQUIRED"
+      );
+    }
+
+    if (missingCwv.length) {
+      return engineRow(
+        "performance",
+        "pass",
+        "info",
+        "本地 timing 未发现明显慢指标。未捕获的 " + missingCwv.join("/") + " 属于外部或早期 PerformanceObserver 采样缺口，不作为当前页面 SEO 阻断。采样：" + summary + "。",
+        "上线前仍建议用 Lighthouse/PageSpeed/CrUX 补齐真实 CWV。"
+      );
+    }
+
+    return engineRow(
+      "performance",
+      "pass",
+      "info",
+      "浏览器本地 timing 未发现明显性能风险。采样：" + summary + "。",
+      "上线前仍需用真实网络和 CrUX/PageSpeed 校验移动端 CWV。"
+    );
+  }
+
+  var CONTENT_SPAM_LABELS = {
+    "prompt leak": "内部提示词泄露",
+    "public copy leak": "内部文案泄露",
+    "visible text": "正文厚度",
+    "title/H1 alignment": "Title/H1 一致性",
+    "keyword stuffing": "关键词堆砌",
+    "internal links": "内链密度",
+    "content images": "内容图片",
+    "image alt": "图片 ALT",
+    "title length": "Title 长度",
+    "description length": "Description 长度",
+    "keyword relevance": "关键词相关性",
+    "empty links": "空链接"
+  };
+
+  var PLATFORM_CONTENT_SPAM_LABELS = {
+    "prompt leak": true,
+    "public copy leak": true,
+    "visible text": true,
+    "keyword stuffing": true,
+    "keyword relevance": true,
+    "empty links": true
+  };
+
+  function collectContentSpamChecks(raw) {
+    var labels = Object.keys(CONTENT_SPAM_LABELS);
+    return (raw.checks || [])
+      .filter(function (check) {
+        return labels.indexOf(check.label) !== -1 && (check.level === "fail" || check.level === "warn");
+      })
+      .sort(function (a, b) {
+        var weight = { fail: 0, warn: 1 };
+        return (weight[a.level] || 9) - (weight[b.level] || 9);
+      });
+  }
+
+  function compactCheckEvidence(checks, limit) {
+    return checks.slice(0, limit || 5).map(function (check) {
+      var label = CONTENT_SPAM_LABELS[check.label] || check.label;
+      return label + "：" + (check.detail || check.level);
+    }).join("；");
+  }
+
+  function contentSpamRecommendation(checks) {
+    var labels = checks.map(function (check) { return check.label; });
+    var hints = [];
+    if (labels.indexOf("visible text") !== -1 || labels.indexOf("content images") !== -1) {
+      hints.push("补充独特正文、真实示例、FAQ 和可解释的内容图片");
+    }
+    if (labels.indexOf("title/H1 alignment") !== -1 || labels.indexOf("title length") !== -1 || labels.indexOf("description length") !== -1) {
+      hints.push("重写 title/H1/description，让主题、搜索意图和页面正文一致");
+    }
+    if (labels.indexOf("keyword stuffing") !== -1 || labels.indexOf("keyword relevance") !== -1) {
+      hints.push("减少堆砌词，改为自然语义覆盖和可见事实");
+    }
+    if (labels.indexOf("internal links") !== -1 || labels.indexOf("empty links") !== -1) {
+      hints.push("补足描述性内链并清理空 href");
+    }
+    if (labels.indexOf("image alt") !== -1) {
+      hints.push("为内容图片补充面向用户的 ALT");
+    }
+    if (!hints.length) hints.push("人工复核原创性、专业性、搜索意图满足度和平台 spam policy");
+    return hints.join("；") + "。";
+  }
+
+  function buildContentSpamRow(raw) {
+    var checks = collectContentSpamChecks(raw);
+    var leakChecks = checks.filter(function (check) {
+      return check.level === "fail" && (check.label === "prompt leak" || check.label === "public copy leak");
+    });
+
+    if (leakChecks.length) {
+      return engineRow(
+        "content_spam",
+        "fail",
+        "critical",
+        "命中高风险内容泄露：" + compactCheckEvidence(leakChecks, 3) + "。",
+        "移除内部提示词、规划词和生成器词汇，改成面向用户的自然文案。",
+        "SPAM_003_PUBLIC_COPY_LEAK"
+      );
+    }
+
+    var platformChecks = checks.filter(function (check) {
+      return check.level === "fail" || PLATFORM_CONTENT_SPAM_LABELS[check.label];
+    });
+
+    if (platformChecks.length) {
+      return engineRow(
+        "content_spam",
+        "warn",
+        "medium",
+        "命中平台级内容/Spam 风险项：" + compactCheckEvidence(platformChecks, 6) + "。",
+        contentSpamRecommendation(platformChecks),
+        "CONTENT_002_THIN_CONTENT"
+      );
+    }
+
+    if (checks.length) {
+      return engineRow(
+        "content_spam",
+        "info",
+        "info",
+        "SEO 校验仍有普通优化项：" + compactCheckEvidence(checks, 5) + "；未达到搜索平台 Spam 风险。",
+        "在 SEO 校验 tab 修复这些展示质量项；平台矩阵只把薄内容、堆砌、空链和泄露类问题标为风险。"
+      );
+    }
+
+    return engineRow(
+      "content_spam",
+      "pass",
+      "info",
+      "浏览器可见内容未发现明显内部泄露、关键词堆砌、薄内容或空链等平台级 Spam 风险。",
+      "人工复核内容原创性、专业性、搜索意图满足度和平台 spam policy。"
+    );
+  }
+
+  function normalizeIssueKey(value) {
+    return String(value || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function issueSeverity(check) {
+    if (check.level === "fail") return CRITICAL_CHECK_LABELS[check.label] ? "critical" : "high";
+    if (check.level === "warn") return "medium";
+    if (check.level === "info") return "info";
+    return "low";
+  }
+
+  function issueCategory(group) {
+    return {
+      technical: "indexability",
+      head: "head_meta",
+      url: "international",
+      content: "content",
+      schema: "structured_data",
+      social: "media",
+      structure: "headings_ia",
+      compliance: "security"
+    }[group || "technical"] || "engine_specific";
+  }
+
+  function engineIssueCategory(rowId) {
+    return {
+      crawlability: "crawlability",
+      indexability: "indexability",
+      canonical: "indexability",
+      sitemap: "crawlability",
+      structured_data: "structured_data",
+      mobile: "mobile",
+      performance: "performance",
+      content_spam: "content",
+      engine_specific: "engine_specific"
+    }[rowId || ""] || "engine_specific";
+  }
+
+  function issueFromCheck(check, engines) {
+    return {
+      id: normalizeIssueKey((check.group || "seo") + "_" + check.label),
+      category: issueCategory(check.group),
+      title: check.label,
+      severity: issueSeverity(check),
+      engines: engines || allEngineIds(),
+      affectedUrls: [window.location.href],
+      evidence: [
+        {
+          url: window.location.href,
+          value: check.detail || check.label,
+          source: "rendered_dom"
+        }
+      ],
+      recommendation: actionFixHint(check),
+      confidence: check.level === "info" ? "medium" : "high",
+      blocking: check.level === "fail"
+    };
+  }
+
+  function engineRow(id, status, severity, detail, recommendation, issueId) {
+    return {
+      id: id,
+      label: (ENGINE_MATRIX_ROWS.find(function (row) { return row.id === id; }) || {}).label || id,
+      status: status,
+      severity: severity || (status === "fail" ? "high" : status === "warn" ? "medium" : "info"),
+      detail: detail,
+      recommendation: recommendation || "",
+      issueId: issueId || ""
+    };
+  }
+
+  function externalValidationRow(detail, recommendation) {
+    return engineRow("engine_specific", "pass", "info", detail, recommendation || "使用服务端爬虫、平台站长工具或真实用户数据补充验证。");
+  }
+
+  function collectEngineSignals(raw) {
+    var canonical = raw.snapshot.canonical || "";
+    var sitemapNode = document.querySelector('link[rel="sitemap"][href]');
+    var sitemapHref = sitemapNode ? (sitemapNode.getAttribute("href") || "") : "";
+    var robotsContent = metaContent('meta[name="robots"]');
+    var jsonTypes = raw.snapshot.jsonTypes || [];
+    var jsonNodes = collectJsonLdNodes();
+    var organization = jsonLdNodesOfType(jsonNodes, "Organization")[0] || jsonLdNodesOfType(jsonNodes, "LocalBusiness")[0] || null;
+    var website = jsonLdNodesOfType(jsonNodes, "WebSite")[0] || null;
+    var breadcrumb = jsonLdNodesOfType(jsonNodes, "BreadcrumbList")[0] || null;
+    var links = Array.from(document.querySelectorAll("a[href]")).filter(function (node) {
+      return !isIgnoredSeoAuditNode(node);
+    });
+    var privacyLink = links.find(function (node) {
+      var text = (node.textContent || "").toLowerCase();
+      var href = (node.getAttribute("href") || "").toLowerCase();
+      return text.indexOf("privacy") !== -1 ||
+        text.indexOf("隐私") !== -1 ||
+        href.indexOf("privacy") !== -1 ||
+        href.indexOf("policy") !== -1;
+    });
+    var jsRedirect = Array.from(document.querySelectorAll("script")).some(function (node) {
+      return /(?:window\.)?location\.(?:href|replace|assign)\s*=|location\.replace\s*\(/i.test(node.textContent || "");
+    });
+
+    return {
+      canonical: canonical,
+      canonicalAbsolute: /^https?:\/\//i.test(canonical),
+      canonicalHttps: /^https:\/\//i.test(canonical),
+      sitemapHref: sitemapHref,
+      sitemapRootOrAbsolute: /^(https?:\/\/|\/)/i.test(sitemapHref),
+      sitemapAbsolute: /^https?:\/\//i.test(sitemapHref),
+      robotsContent: robotsContent,
+      noindex: /noindex/i.test(robotsContent),
+      nofollow: /nofollow/i.test(robotsContent),
+      nosnippet: /nosnippet|max-snippet:0/i.test(robotsContent),
+      viewport: Boolean(document.querySelector('meta[name="viewport"]')),
+      jsonTypes: jsonTypes,
+      jsonNodes: jsonNodes,
+      jsonLdValidation: raw.snapshot.jsonLdValidation || validatePageJsonLd({
+        seoType: raw.snapshot.seoType || "unknown",
+        jsonTypes: jsonTypes
+      }),
+      organization: organization,
+      website: website,
+      breadcrumb: breadcrumb,
+      hasOrganization: Boolean(organization),
+      hasWebsite: Boolean(website),
+      hasBreadcrumb: Boolean(breadcrumb),
+      hasSearchAction: Boolean(website && website.potentialAction),
+      hasSameAs: Boolean(organization && Array.isArray(organization.sameAs) && organization.sameAs.length),
+      hasPrivacyLink: Boolean(privacyLink),
+      hreflangCount: collectHreflangCodes().length,
+      htmlLang: raw.snapshot.htmlLang || "",
+      visibleText: raw.snapshot.visibleText || 0,
+      contentImages: raw.snapshot.contentImages || 0,
+      jsRedirect: jsRedirect,
+      hashRouting: /^#\//.test(window.location.hash || ""),
+      title: raw.snapshot.title || "",
+      description: raw.snapshot.description || "",
+      seoType: raw.snapshot.seoType || "unknown",
+      performance: collectPerformanceSignals()
+    };
+  }
+
+  function buildCommonEngineRows(raw, signals) {
+    var rows = {};
+
+    if (signals.noindex || signals.jsRedirect || signals.hashRouting) {
+      rows.crawlability = engineRow(
+        "crawlability",
+        "warn",
+        "medium",
+        "当前页面存在浏览器可见的抓取风险：" + [
+          signals.noindex ? "noindex" : "",
+          signals.jsRedirect ? "JS redirect" : "",
+          signals.hashRouting ? "hash route" : ""
+        ].filter(Boolean).join("、") + "。",
+        "修复浏览器可见阻断后，再使用服务端爬虫模式按目标 User-Agent 验证 robots.txt、HTTP 状态码、重定向链和资源抓取权限。",
+        "CRAWL_001_BROWSER_VISIBLE_RISK"
+      );
+    } else {
+      rows.crawlability = engineRow(
+        "crawlability",
+        "pass",
+        "info",
+        "当前页面已成功加载并渲染，DOM 未发现 noindex、JS redirect 或 hash route 等浏览器可见抓取阻断。",
+        "服务端爬虫模式仍可补充验证 robots.txt、HTTP 状态码、重定向链和目标搜索引擎 User-Agent。"
+      );
+    }
+
+    if (signals.noindex || hasCheckLevel(raw, "indexability", "fail")) {
+      rows.indexability = engineRow(
+        "indexability",
+        "fail",
+        "critical",
+        "页面 robots meta 包含 noindex 或索引阻断项。",
+        "如果页面应收录，移除 noindex 并确认 robots/header 没有目标引擎阻断。",
+        "META_ROBOTS_001_NOINDEX"
+      );
+    } else {
+      rows.indexability = engineRow(
+        "indexability",
+        "pass",
+        "info",
+        "页面 meta robots 允许索引；HTTP header 与 robots.txt 仍需服务端验证。",
+        "服务端爬虫补查 X-Robots-Tag 和 robots.txt。"
+      );
+    }
+
+    if (!signals.canonical || hasAnyCheckLevel(raw, ["single canonical", "canonical host", "canonical path", "canonical scheme"], "fail")) {
+      rows.canonical = engineRow(
+        "canonical",
+        "fail",
+        "high",
+        "canonical 缺失、重复、非 HTTPS，或与当前规范 URL 不一致。",
+        "保留唯一 HTTPS absolute canonical，并让 og:url、hreflang 与 canonical 对齐。",
+        "CANONICAL_001_CANONICAL_INVALID"
+      );
+    } else {
+      rows.canonical = engineRow(
+        "canonical",
+        "pass",
+        "info",
+        "canonical 为唯一 HTTPS URL，浏览器 DOM 层通过。",
+        "服务端爬虫可继续验证 canonical 目标是否 200、可索引且非 redirect。"
+      );
+    }
+
+    if (!signals.sitemapHref || hasCheckLevel(raw, "sitemap discovery", "fail")) {
+      rows.sitemap = engineRow(
+        "sitemap",
+        "warn",
+        "medium",
+        "当前页面未发现 sitemap link。",
+        "在 head 或 robots.txt 中提供 sitemap，并由服务端验证 sitemap XML 可访问、可解析、URL 为 canonical。",
+        "SITEMAP_001_NOT_FOUND"
+      );
+    } else if (!signals.sitemapRootOrAbsolute) {
+      rows.sitemap = engineRow(
+        "sitemap",
+        "warn",
+        "medium",
+        "sitemap link 不是绝对或根相对 URL。",
+        "使用绝对 URL，至少使用 /sitemap.xml。",
+        "SITEMAP_002_BAD_URL"
+      );
+    } else {
+      rows.sitemap = engineRow(
+        "sitemap",
+        "pass",
+        "info",
+        "页面暴露 sitemap link：" + signals.sitemapHref + "。",
+        "服务端爬虫继续检查 XML、lastmod、redirect/noindex URL 和平台大小限制。"
+      );
+    }
+
+    if (signals.jsonTypes.indexOf("INVALID_JSON") !== -1 || hasCheckLevel(raw, "JSON-LD parse", "fail")) {
+      rows.structured_data = engineRow(
+        "structured_data",
+        "fail",
+        "high",
+        "JSON-LD 解析失败。",
+        "修复 JSON-LD 语法，并保持 schema 与可见内容一致。",
+        "SD_001_JSON_PARSE_ERROR"
+      );
+    } else if (signals.jsonLdValidation && signals.jsonLdValidation.status === "fail") {
+      rows.structured_data = engineRow(
+        "structured_data",
+        "fail",
+        "high",
+        "页面类型结构化数据不合格：" + [
+          signals.jsonLdValidation.missingTypes.length ? "缺少类型 " + signals.jsonLdValidation.missingTypes.join(", ") : "",
+          signals.jsonLdValidation.missingFields.length ? "缺少字段 " + signals.jsonLdValidation.missingFields.join(", ") : ""
+        ].filter(Boolean).join("；") + "。",
+        "按 " + signals.jsonLdValidation.label + " 补齐 " + signals.jsonLdValidation.expectedType + " JSON-LD 类型与必需字段，并保持与可见内容一致。",
+        "SD_004_PAGE_TYPE_SCHEMA_INVALID"
+      );
+    } else if (!signals.jsonTypes.length) {
+      rows.structured_data = engineRow(
+        "structured_data",
+        "warn",
+        "medium",
+        "页面未发现 JSON-LD。",
+        "按页面类型补充 WebPage、BreadcrumbList、Product、Article、FAQPage 等 schema。",
+        "SD_003_TYPE_MISSING"
+      );
+    } else if (signals.jsonLdValidation && signals.jsonLdValidation.status === "warn") {
+      rows.structured_data = engineRow(
+        "structured_data",
+        "warn",
+        "medium",
+        "页面类型结构化数据基本可读，但推荐字段不足：" + signals.jsonLdValidation.missingRecommended.join(", ") + "。",
+        "补齐推荐字段，尤其是 publisher、description、articleSection、offers 或 contactPoint 等能帮助搜索平台理解页面的属性。",
+        "SD_005_PAGE_TYPE_SCHEMA_RECOMMENDED_MISSING"
+      );
+    } else {
+      rows.structured_data = engineRow(
+        "structured_data",
+        "pass",
+        "info",
+        "已解析 schema 类型：" + signals.jsonTypes.join(", ") + "。",
+        "继续按平台规则检查 required/recommended 属性和可见内容一致性。"
+      );
+    }
+
+    if (!signals.viewport || hasCheckLevel(raw, "viewport", "fail")) {
+      rows.mobile = engineRow(
+        "mobile",
+        "fail",
+        "high",
+        "缺少移动端 viewport。",
+        "添加 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> 并做移动端溢出检查。",
+        "MOBILE_001_VIEWPORT_MISSING"
+      );
+    } else {
+      rows.mobile = engineRow(
+        "mobile",
+        "pass",
+        "info",
+        "viewport 存在；浏览器模式未比较移动/桌面 HTML 差异。",
+        "服务端或浏览器自动化补查移动端宽度、tap target、移动/桌面内容一致性。"
+      );
+    }
+
+    rows.performance = buildPerformanceRow(signals);
+    rows.content_spam = buildContentSpamRow(raw);
+
+    return rows;
+  }
+
+  function buildEngineSpecificRow(engine, rows, raw, signals) {
+    if (engine.id === "google") {
+      if (rows.indexability.status === "fail" || rows.structured_data.status === "fail" || rows.content_spam.status === "fail") {
+        return engineRow("engine_specific", "fail", "critical", "Google 基础索引、结构化数据或 spam 风险未通过。", "先修复 noindex/canonical/schema/spam，再考虑 AI Search 与 CWV。", "GOOGLE_010_SPAM_POLICY_RISK");
+      }
+      if (rows.performance.status === "fail") {
+        return engineRow("engine_specific", "warn", "medium", "Google 基础 DOM 信号可读，但性能/CWV 本地估算存在高风险。", "先修复性能/CWV 风险，再补跑 Lighthouse、PageSpeed、CrUX 和 Search Console。", "GOOGLE_020_CWV_RISK");
+      }
+      return externalValidationRow("Google 基础 DOM 信号可读；Search Console 覆盖、真实 Googlebot 渲染、CWV/INP 和 AI Search 可见性仍需外部验证。", "补跑 Lighthouse/PageSpeed/CrUX/Search Console，避免把 meta keywords 或 llms.txt 当 Google 排名保证。");
+    }
+
+    if (engine.id === "bing") {
+      if (rows.indexability.status === "fail" || rows.structured_data.status === "fail") {
+        return engineRow("engine_specific", "fail", "high", "Bing 基础索引或结构化数据存在阻断。", "修复基础 SEO 后再接入 Bing Webmaster Tools 与 IndexNow。", "BING_003_STRUCTURED_DATA_MISMATCH");
+      }
+      return externalValidationRow("Bing 基础 DOM 信号可读；IndexNow key 文件、提交记录和 bingbot 抓取未在浏览器内验证。", "配置 Bing Webmaster Tools/IndexNow，并用服务端检查 /{key}.txt、提交 payload 与 bingbot robots。");
+    }
+
+    if (engine.id === "yahoo") {
+      if (hasAnyCheckLevel(raw, ["title length", "title/H1 alignment", "description length", "image alt"], "fail")) {
+        return engineRow("engine_specific", "warn", "medium", "Yahoo 重视准确 title、description、HTML 文本和图片 ALT，当前存在相关失败项。", "让 title/description/H1/正文一致，关键文字不要只放图片里。", "YAHOO_001_TITLE_NOT_ACCURATE");
+      }
+      return engineRow("engine_specific", "pass", "info", "Yahoo 基础内容信号通过；自然结果仍需关注 Bing 适配。", "保持 Bing profile 通过，并确保 sitemap 可提交。");
+    }
+
+    if (engine.id === "yandex") {
+      if (!signals.hasBreadcrumb) {
+        return engineRow("engine_specific", "warn", "medium", "Yandex 支持 BreadcrumbList，当前页面未发现 BreadcrumbList。", "为可索引页面补充 BreadcrumbList，并确认 sitemap 使用 canonical URL。", "YANDEX_004_BREADCRUMB_JSONLD_INVALID");
+      }
+      return externalValidationRow("BreadcrumbList 已存在；YandexBot 抓取、description 全站唯一性和区域语言匹配仍未验证。", "服务端检查 YandexBot robots、sitemap canonical URL、description 去重和站长后台区域语言。");
+    }
+
+    if (engine.id === "baidu") {
+      if (rows.mobile.status === "fail" || rows.content_spam.status === "fail") {
+        return engineRow("engine_specific", "fail", "high", "Baidu 对移动体验、空短页、标题正文不符和低质采集风险敏感，当前存在相关阻断。", "优先修复移动端与内容质量，再检查 Baiduspider 可抓取和 URL 推送。", "BAIDU_002_MOBILE_UNFRIENDLY");
+      }
+      if (signals.visibleText < SEO_TEXT_LIMITS.visibleTextMin) {
+        return engineRow("engine_specific", "warn", "medium", "页面正文偏薄，中文搜索生态可能需要更明确的原创说明与落地页价值。", "补充真实功能、示例、FAQ、使用场景和可见文本。", "BAIDU_007_EMPTY_SHORT_PAGE");
+      }
+      return externalValidationRow("Baidu DOM 基础项通过；Baiduspider、移动友好真实渲染、原创/低质判定和提交接口状态需要外部验证。", "用服务端按 Baiduspider 抓取，检查百度搜索资源平台提交状态、移动适配和页面质量反馈。");
+    }
+
+    if (engine.id === "duckduckgo") {
+      if (rows.indexability.status === "fail") {
+        return engineRow("engine_specific", "fail", "high", "DuckDuckGo 仍依赖可抓取/可索引基础页面，当前存在索引阻断。", "先修复 indexability，再验证 DuckDuckBot 与 Bing 结果依赖。", "DDG_001_BLOCKED_DUCKDUCKBOT");
+      }
+      if (!signals.hasOrganization) {
+        return engineRow(
+          "engine_specific",
+          "warn",
+          "medium",
+          "品牌/实体信息较弱，隐私搜索生态可能难以理解站点实体。",
+          "补充 Organization/WebSite/sameAs，保持 Bing profile 通过，并服务端验证 DuckDuckBot 抓取。",
+          "DDG_003_ENTITY_SOURCE_WEAK"
+        );
+      }
+      return externalValidationRow(
+        "实体信息存在；DuckDuckBot 与 Bing 依赖仍需服务端验证。",
+        "保持 Bing profile 通过，并服务端验证 DuckDuckBot 抓取。"
+      );
+    }
+
+    if (engine.id === "naver") {
+      if (!signals.canonicalAbsolute || signals.jsRedirect) {
+        return engineRow("engine_specific", "fail", "high", "Naver 要求 canonical 使用 absolute URL，并不建议只靠 JS redirect。", "使用 absolute canonical 和 HTTP redirect；独立移动 URL 需一一映射。", "NAVER_002_CANONICAL_NOT_ABSOLUTE");
+      }
+      return externalValidationRow("Naver canonical/title/schema 基础信号可读；Yeti robots、移动/桌面映射和 Naver Search Advisor 状态需要服务端验证。", "服务端按 Yeti 抓取，并在 Search Advisor 检查收集/索引状态。");
+    }
+
+    if (engine.id === "seznam") {
+      if (signals.sitemapHref && !signals.sitemapAbsolute) {
+        return engineRow("engine_specific", "warn", "medium", "Seznam 对 sitemap 更偏好绝对 URL，当前页面 sitemap link 为根相对或非绝对。", "在 robots.txt 中声明绝对 sitemap URL，并检查 SeznamBot 规则。", "SEZNAM_002_SITEMAP_NOT_ABSOLUTE");
+      }
+      return externalValidationRow("Seznam 基础 DOM 信号可读；SeznamBot robots、X-Robots-Tag 差异和 canonical 相似性需服务端验证。", "服务端检查 SeznamBot、robots、canonical target 非 redirect 且内容相似。");
+    }
+
+    if (engine.id === "sogou") {
+      if (rows.content_spam.status === "fail") {
+        return engineRow("engine_specific", "fail", "high", "Sogou 对作弊/低质 URL 风险敏感，当前页面存在内容泄露或低质阻断。", "清理低质/作弊信号，sitemap 只提交重要原创详情页。", "SOGOU_006_CHEATING_OR_LOW_QUALITY");
+      }
+      return externalValidationRow("Sogou 基础 DOM 信号可读；robots 生效延迟、邀请制 sitemap、10MB/50k 限制需服务端或站长平台验证。", "检查 Sogou spider robots、sitemap 文件大小、提交 URL 质量和站长平台收录反馈。");
+    }
+
+    if (engine.id === "ecosia_qwant") {
+      if (rows.indexability.status === "fail" || rows.structured_data.status === "fail") {
+        return engineRow("engine_specific", "fail", "high", "Ecosia/Qwant/EUSP 依赖 Bing/Google 基础适配，当前基础项失败。", "先修复 Google/Bing 基础 SEO，再补多语言和实体可信度。", "EQ_001_BING_GOOGLE_BASELINE_FAIL");
+      }
+      if (!signals.hasPrivacyLink) {
+        return engineRow("engine_specific", "warn", "medium", "未发现隐私政策或可信联系入口，欧洲隐私搜索生态的信任信号偏弱。", "添加可访问的隐私政策、联系信息和组织实体 sameAs。", "EQ_004_PRIVACY_PAGE_MISSING");
+      }
+      return externalValidationRow("Bing/Google 基础项可读；EUSP 独立索引策略、区域展示和隐私搜索结果仍需外部验证。", "保持多语言 hreflang、组织实体和隐私页面清晰，并检查 Bing/Google 来源收录。");
+    }
+
+    return engineRow("engine_specific", "unknown", "info", "该平台的浏览器内专项规则尚无足够信号。", "使用服务端爬虫补充。");
+  }
+
+  function engineStatus(rows) {
+    var list = Object.keys(rows).map(function (key) { return rows[key]; });
+    if (list.some(function (row) { return row.status === "fail"; })) return "fail";
+    if (list.some(function (row) { return row.status === "warn"; })) return "warning";
+    if (list.some(function (row) { return row.status === "unknown"; })) return "unknown";
+    return "pass";
+  }
+
+  function engineScore(rows) {
+    var score = 100;
+    Object.keys(rows).forEach(function (key) {
+      var row = rows[key];
+      if (row.status === "fail") score -= row.severity === "critical" ? 36 : 28;
+      else if (row.status === "warn") score -= row.severity === "high" ? 18 : 12;
+      else if (row.status === "unknown") score -= 4;
+    });
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function engineRecommendations(rows) {
+    return Object.keys(rows)
+      .map(function (key) { return rows[key]; })
+      .filter(function (row) { return row.status !== "pass" && row.recommendation; })
+      .map(function (row) { return row.recommendation; })
+      .filter(function (value, index, list) { return list.indexOf(value) === index; })
+      .slice(0, 5);
+  }
+
+  function buildEngineMatrix(raw) {
+    var signals = collectEngineSignals(raw);
+    var matrix = {};
+    ENGINE_PROFILES.forEach(function (engine) {
+      var rows = buildCommonEngineRows(raw, signals);
+      rows.engine_specific = buildEngineSpecificRow(engine, rows, raw, signals);
+      var score = engineScore(rows);
+      var list = ENGINE_MATRIX_ROWS.map(function (row) {
+        return rows[row.id] || engineRow(row.id, "unknown", "info", "未检测。", "补充检测规则。");
+      });
+      matrix[engine.id] = {
+        id: engine.id,
+        name: engine.name,
+        label: engine.label,
+        userAgents: engine.userAgents,
+        focus: engine.focus,
+        score: score,
+        status: engineStatus(rows),
+        rows: list,
+        blockingIssues: list
+          .filter(function (row) { return row.status === "fail"; })
+          .map(function (row) { return row.issueId || row.label; }),
+        recommendations: engineRecommendations(rows)
+      };
+    });
+    return matrix;
+  }
+
+  function buildScoreBreakdown(raw, engineMatrix) {
+    var checks = raw.checks || [];
+    var fail = checks.filter(function (item) { return item.level === "fail"; });
+    var warn = checks.filter(function (item) { return item.level === "warn"; });
+    function scoreForGroups(groups, base) {
+      var scoped = checks.filter(function (item) { return groups.indexOf(item.group) !== -1; });
+      var deductions = [];
+      scoped.forEach(function (item) {
+        var points = item.level === "fail" ? 16 : item.level === "warn" ? 7 : 0;
+        if (!points) return;
+        deductions.push({
+          points: points,
+          level: item.level,
+          group: item.group || "general",
+          label: item.label || item.name || item.group || "SEO check",
+          detail: item.detail || ""
+        });
+      });
+      var score = deductions.reduce(function (value, item) {
+        return value - item.points;
+      }, base);
+      return {
+        base: base,
+        deductions: deductions,
+        score: Math.max(0, Math.min(100, score))
+      };
+    }
+
+    function engineFitDetails() {
+      return Object.keys(engineMatrix)
+        .map(function (key) { return engineMatrix[key]; })
+        .filter(function (engine) { return engine && typeof engine.score === "number" && engine.score < 100; })
+        .sort(function (a, b) { return a.score - b.score; })
+        .slice(0, 5)
+        .map(function (engine) {
+          return {
+            points: 100 - engine.score,
+            level: engine.status === "fail" ? "fail" : "warn",
+            group: "engine",
+            label: engine.name || engine.id || "Search engine",
+            detail: (engine.recommendations || [])[0] || "搜索平台适配项未满分。"
+          };
+        });
+    }
+
+    var engineScores = Object.keys(engineMatrix).map(function (key) { return engineMatrix[key].score; });
+    var engineFit = engineScores.length
+      ? Math.round(engineScores.reduce(function (sum, score) { return sum + score; }, 0) / engineScores.length)
+      : 0;
+    var indexabilityDetail = scoreForGroups(["technical", "url", "head"], 100);
+    var understandabilityDetail = scoreForGroups(["head", "content", "schema", "structure", "social"], 100);
+    var experienceDetail = scoreForGroups(["content", "structure", "social"], 100);
+    if (!document.querySelector('meta[name="viewport"]')) {
+      var viewportPenalty = Math.max(0, experienceDetail.score - 55);
+      if (viewportPenalty > 0) {
+        experienceDetail.deductions.push({
+          points: viewportPenalty,
+          level: "fail",
+          group: "experience",
+          label: "viewport meta",
+          detail: 'Missing <meta name="viewport">; mobile experience is capped at 55.'
+        });
+      }
+      experienceDetail.score = Math.min(experienceDetail.score, 55);
+    }
+    var indexability = indexabilityDetail.score;
+    var understandability = understandabilityDetail.score;
+    var experience = experienceDetail.score;
+    var total = Math.round(indexability * 0.35 + understandability * 0.3 + experience * 0.2 + engineFit * 0.15);
+    return {
+      indexability: Math.max(0, Math.min(100, indexability)),
+      understandability: Math.max(0, Math.min(100, understandability)),
+      experience: Math.max(0, Math.min(100, experience)),
+      engineFit: engineFit,
+      total: total,
+      legacyOverall: Math.max(0, Math.min(100, 100 - fail.length * 8 - warn.length * 3)),
+      details: {
+        indexability: indexabilityDetail,
+        understandability: understandabilityDetail,
+        experience: experienceDetail,
+        engineFit: {
+          base: 100,
+          deductions: engineFitDetails(),
+          score: engineFit
+        }
+      }
+    };
+  }
+
+  function buildAuditIssues(raw, engineMatrix) {
+    var issues = (raw.checks || [])
+      .filter(function (check) { return check.level === "fail" || check.level === "warn"; })
+      .map(function (check) { return issueFromCheck(check, allEngineIds()); });
+    var seen = {};
+    Object.keys(engineMatrix).forEach(function (engineId) {
+      engineMatrix[engineId].rows.forEach(function (row) {
+        if (row.status !== "fail" && row.status !== "warn") return;
+        var id = row.issueId || normalizeIssueKey(engineId + "_" + row.id);
+        var key = id + "|" + engineId;
+        if (seen[key]) return;
+        seen[key] = true;
+        issues.push({
+          id: id,
+          category: engineIssueCategory(row.id),
+          title: row.label,
+          severity: row.severity || (row.status === "fail" ? "high" : "medium"),
+          engines: [engineId],
+          affectedUrls: [window.location.href],
+          evidence: [
+            {
+              url: window.location.href,
+              value: row.detail,
+              source: row.id === "crawlability" || row.id === "performance" ? "manual" : "rendered_dom"
+            }
+          ],
+          recommendation: row.recommendation,
+          confidence: row.status === "unknown" ? "low" : "medium",
+          blocking: row.status === "fail"
+        });
+      });
+    });
+    return issues;
+  }
+
+  function buildEngineDiagnostics(raw) {
+    var matrix = buildEngineMatrix(raw);
+    var scores = buildScoreBreakdown(raw, matrix);
+    var issues = buildAuditIssues(raw, matrix);
+    return {
+      reportVersion: "seo-audit-browser/v1",
+      generatedAt: new Date().toISOString(),
+      target: {
+        startUrl: window.location.href,
+        scope: "single_page",
+        mode: "browser",
+        engines: allEngineIds(),
+        market: "global"
+      },
+      profiles: ENGINE_PROFILES,
+      rows: ENGINE_MATRIX_ROWS,
+      scores: scores,
+      counts: {
+        critical: issues.filter(function (item) { return item.severity === "critical"; }).length,
+        high: issues.filter(function (item) { return item.severity === "high"; }).length,
+        medium: issues.filter(function (item) { return item.severity === "medium"; }).length,
+        low: issues.filter(function (item) { return item.severity === "low"; }).length,
+        info: issues.filter(function (item) { return item.severity === "info"; }).length
+      },
+      issues: issues,
+      engineMatrix: matrix,
+      limitations: BROWSER_MODE_LIMITATIONS
+    };
+  }
+
   function normalizeCompareText(value) {
     return String(value || "")
       .toLowerCase()
@@ -1231,15 +1991,13 @@
 
   function pageHtmlForScan() {
     var clone = document.documentElement.cloneNode(true);
-    clone.querySelectorAll(".weline-seo-panel, script, style").forEach(function (node) {
-      node.remove();
-    });
+    stripIgnoredSeoAuditNodes(clone);
     return clone.innerHTML || "";
   }
 
   function getMainH1Text() {
     var node = Array.from(document.querySelectorAll("h1")).find(function (item) {
-      return !item.closest(".weline-seo-panel");
+      return !isIgnoredSeoAuditNode(item);
     });
     return node ? normalizeHeadingText(node) : "";
   }
@@ -1253,6 +2011,205 @@
     return codeParts[0] === langParts[0] && codeParts[1] === langParts[1];
   }
 
+  function canonicalizeLanguageCode(code) {
+    var value = String(code || "").trim();
+    if (!value) return "";
+    if (value.toLowerCase() === "x-default") return "x-default";
+    return value.replace(/_/g, "-").split("-").filter(Boolean).map(function (part, index) {
+      if (index === 0) return part.toLowerCase();
+      if (/^[a-z]{4}$/i.test(part)) {
+        return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+      }
+      if (/^[a-z]{2}$/i.test(part)) return part.toUpperCase();
+      return part.toLowerCase();
+    }).join("-");
+  }
+
+  function validLanguageCode(code) {
+    var value = String(code || "").trim();
+    if (!value) return false;
+    if (value.toLowerCase() === "x-default") return true;
+    if (value.indexOf("_") !== -1) return false;
+    var parts = value.split("-");
+    if (!/^[a-z]{2}$/i.test(parts[0])) return false;
+    for (var i = 1; i < parts.length; i++) {
+      if (/^[a-z]{4}$/i.test(parts[i])) continue;
+      if (/^[a-z]{2}$/i.test(parts[i])) continue;
+      if (/^\d{3}$/.test(parts[i])) continue;
+      if (/^[a-z0-9]{5,8}$/i.test(parts[i])) continue;
+      return false;
+    }
+    return true;
+  }
+
+  function ogLocaleFromLanguageCode(code) {
+    var canonical = canonicalizeLanguageCode(code);
+    if (!canonical || canonical === "x-default") return "";
+    var parts = canonical.split("-");
+    if (parts.length === 1) return parts[0];
+    return parts.map(function (part, index) {
+      return index === 0 ? part.toLowerCase() : part.replace(/-/g, "_");
+    }).join("_");
+  }
+
+  function collectHreflangLinks() {
+    return Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map(function (node) {
+      var rawHref = (node.getAttribute("href") || "").trim();
+      return {
+        code: (node.getAttribute("hreflang") || "").trim(),
+        normalized: canonicalizeLanguageCode(node.getAttribute("hreflang") || ""),
+        href: node.href || rawHref,
+        rawHref: rawHref,
+        absolute: /^https?:\/\//i.test(rawHref)
+      };
+    });
+  }
+
+  function buildMultilingualDiagnostics(context) {
+    var links = collectHreflangLinks();
+    var expectedLang = canonicalizeLanguageCode(context.lang);
+    var htmlLang = document.documentElement.lang || "";
+    var normalizedHtmlLang = canonicalizeLanguageCode(htmlLang);
+    var canonical = normalizeCanonicalUrl(context.canonical || "");
+    var counts = {};
+    var duplicateCodes = [];
+    var invalidCodes = [];
+    var nonAbsolute = [];
+    var xDefaultCount = 0;
+    var selfLink = null;
+
+    links.forEach(function (link) {
+      if (link.normalized === "x-default") xDefaultCount += 1;
+      if (!validLanguageCode(link.code)) invalidCodes.push(link.code || "(empty)");
+      if (!link.absolute) nonAbsolute.push(link.code || "(empty)");
+      if (link.normalized) {
+        counts[link.normalized] = (counts[link.normalized] || 0) + 1;
+        if (counts[link.normalized] === 2) duplicateCodes.push(link.normalized);
+      }
+      if (link.normalized && link.normalized !== "x-default" && link.normalized === expectedLang) {
+        selfLink = link;
+      }
+    });
+
+    var selfHrefMismatch = false;
+    if (selfLink && canonical) {
+      selfHrefMismatch = normalizeCanonicalUrl(selfLink.href) !== canonical;
+    }
+
+    var ogLocale = metaContent('meta[property="og:locale"]');
+    var ogLocaleExpected = ogLocaleFromLanguageCode(expectedLang);
+    var ogLocaleAlternates = Array.from(document.querySelectorAll('meta[property="og:locale:alternate"]'))
+      .map(function (node) { return (node.getAttribute("content") || "").trim(); })
+      .filter(Boolean);
+
+    return {
+      htmlLang: htmlLang,
+      normalizedHtmlLang: normalizedHtmlLang,
+      expectedLang: expectedLang,
+      htmlLangValid: validLanguageCode(htmlLang),
+      htmlLangMatches: normalizedHtmlLang === expectedLang,
+      hreflangLinks: links,
+      hreflangCount: links.length,
+      invalidCodes: invalidCodes,
+      duplicateCodes: duplicateCodes,
+      nonAbsolute: nonAbsolute,
+      xDefaultCount: xDefaultCount,
+      hasSelfAlternate: Boolean(selfLink),
+      selfHrefMismatch: selfHrefMismatch,
+      ogLocale: ogLocale,
+      ogLocaleExpected: ogLocaleExpected,
+      ogLocaleAlternates: ogLocaleAlternates
+    };
+  }
+
+  function auditMultilingualStandards(context, add) {
+    var diagnostics = context.multilingual || buildMultilingualDiagnostics(context);
+
+    if (!diagnostics.htmlLang) {
+      add("fail", "html lang", "Missing <html lang>.", "url");
+    } else if (!diagnostics.htmlLangValid) {
+      add("fail", "html lang format", 'Invalid language tag "' + diagnostics.htmlLang + '". Use BCP47 form such as en-IN or zh-Hans-CN.', "url");
+    } else if (!diagnostics.htmlLangMatches) {
+      add(
+        "fail",
+        "html lang mismatch",
+        'Expected "' + diagnostics.expectedLang + '", got "' + diagnostics.normalizedHtmlLang + '".',
+        "url"
+      );
+    } else {
+      add("pass", "html lang", diagnostics.normalizedHtmlLang, "url");
+    }
+
+    if (!diagnostics.hreflangCount) {
+      add("warn", "hreflang set", "No alternate hreflang links found.", "url");
+      return diagnostics;
+    }
+
+    add("pass", "hreflang set", diagnostics.hreflangCount + " hreflang link(s) found.", "url");
+
+    if (diagnostics.invalidCodes.length) {
+      add("fail", "hreflang code format", "Invalid hreflang code(s): " + diagnostics.invalidCodes.join(", ") + ".", "url");
+    } else {
+      add("pass", "hreflang code format", "All hreflang codes use language-first BCP47 form.", "url");
+    }
+
+    if (diagnostics.duplicateCodes.length) {
+      add("fail", "hreflang duplicates", "Duplicate hreflang code(s): " + diagnostics.duplicateCodes.join(", ") + ".", "url");
+    } else {
+      add("pass", "hreflang duplicates", "No duplicate hreflang codes.", "url");
+    }
+
+    if (diagnostics.nonAbsolute.length) {
+      add("fail", "hreflang absolute URL", "Non-absolute hreflang href for: " + diagnostics.nonAbsolute.join(", ") + ".", "url");
+    } else {
+      add("pass", "hreflang absolute URL", "All hreflang href values are fully-qualified URLs.", "url");
+    }
+
+    if (diagnostics.xDefaultCount === 1) {
+      add("pass", "hreflang x-default", "Exactly one x-default fallback is present.", "url");
+    } else if (diagnostics.xDefaultCount > 1) {
+      add("fail", "hreflang x-default", "Expected one x-default fallback, found " + diagnostics.xDefaultCount + ".", "url");
+    } else {
+      add("warn", "hreflang x-default", "Missing x-default fallback for unmatched languages.", "url");
+    }
+
+    if (diagnostics.hasSelfAlternate) {
+      add("pass", "hreflang self", "Current language has a self-referencing hreflang.", "url");
+    } else {
+      add("warn", "hreflang self", "Missing hreflang for current page language " + diagnostics.expectedLang + ".", "url");
+    }
+
+    if (diagnostics.selfHrefMismatch) {
+      add("fail", "hreflang canonical parity", "Self hreflang href should equal canonical URL.", "url");
+    } else if (diagnostics.hasSelfAlternate) {
+      add("pass", "hreflang canonical parity", "Self hreflang href matches canonical URL.", "url");
+    }
+
+    if (diagnostics.hreflangCount > 1) {
+      add("info", "hreflang reciprocal links", "Browser mode cannot fetch every alternate page; verify each localized URL links back to the full hreflang set.", "url");
+    }
+
+    if (diagnostics.ogLocale) {
+      if (!/^[a-z]{2}(?:_[A-Z][a-z]{3})?(?:_[A-Z]{2}|\_\d{3})?$/i.test(diagnostics.ogLocale)) {
+        add("warn", "og:locale format", 'Open Graph locale usually uses underscore form such as "' + diagnostics.ogLocaleExpected + '".', "social");
+      } else if (diagnostics.ogLocaleExpected && diagnostics.ogLocale.toLowerCase() !== diagnostics.ogLocaleExpected.toLowerCase()) {
+        add("warn", "og:locale parity", 'Expected og:locale "' + diagnostics.ogLocaleExpected + '", got "' + diagnostics.ogLocale + '".', "social");
+      } else {
+        add("pass", "og:locale parity", "og:locale matches page language.", "social");
+      }
+    }
+
+    if (diagnostics.hreflangCount > 1) {
+      if (diagnostics.ogLocaleAlternates.length) {
+        add("pass", "og:locale:alternate", diagnostics.ogLocaleAlternates.length + " alternate locale tag(s).", "social");
+      } else {
+        add("warn", "og:locale:alternate", "Multilingual page missing og:locale:alternate meta tags.", "social");
+      }
+    }
+
+    return diagnostics;
+  }
+
   function auditKeywordStandards(context, add) {
     var raw = metaContent('meta[name="keywords"]');
     var keywords = splitKeywords(raw);
@@ -1260,7 +2217,7 @@
       context.title,
       context.description,
       context.h1Text,
-      document.body ? document.body.textContent || "" : ""
+      pageTextForScan()
     ].join(" ");
 
     if (!raw || !keywords.length) {
@@ -1370,6 +2327,11 @@
       if (count >= 2) add("pass", "FAQ entities", count + " FAQ entities.", "schema");
       else add("warn", "FAQ entities", "FAQPage should include at least 2 Q&A entities.", "schema");
     }
+
+    var validation = context.jsonLdValidation || validatePageJsonLd(context);
+    (validation.checks || []).forEach(function (check) {
+      add(check.level, check.label, check.detail, check.group);
+    });
   }
 
   function auditSeoStandards(context, add) {
@@ -1379,7 +2341,6 @@
     var seoType = context.seoType;
     var jsonTypes = context.jsonTypes;
     var h1Text = context.h1Text;
-    var hreflangCodes = context.hreflangCodes;
     var htmlForScan = context.htmlForScan;
 
     if (!title) add("fail", "title content", "Title tag is empty.", "head");
@@ -1460,16 +2421,6 @@
     if (canonical && ogUrl && canonical === ogUrl) add("pass", "og:url parity", "og:url equals canonical.", "social");
     else if (canonical && ogUrl) add("fail", "og:url parity", "og:url should equal canonical URL.", "social");
 
-    var localeAlternates = document.querySelectorAll('meta[property="og:locale:alternate"]');
-    var localeLangCount = hreflangCodes.filter(function (code) { return code !== "x-default"; }).length;
-    if (localeLangCount > 1) {
-      if (localeAlternates.length) {
-        add("pass", "og:locale:alternate", localeAlternates.length + " alternate locale tag(s).", "social");
-      } else {
-        add("warn", "og:locale:alternate", "Multilingual page missing og:locale:alternate meta tags.", "social");
-      }
-    }
-
     if (twitterTitle && textsAlign(title, twitterTitle)) {
       add("pass", "twitter:title parity", "twitter:title matches page title.", "social");
     } else if (twitterTitle) {
@@ -1506,21 +2457,7 @@
       add("fail", "canonical scheme", "Canonical must be an absolute HTTPS URL.", "url");
     }
 
-    var normalizedLangCode = context.lang.toLowerCase().replace(/^([a-z]{2})-([a-z]{2})$/, function (_m, a, b) {
-      return a + "-" + b.toUpperCase();
-    });
-    var hasSelfAlternate = hreflangCodes.some(function (code) {
-      return hreflangMatchesPage(code, context.lang) || code === normalizedLangCode;
-    });
-    if (hasSelfAlternate) add("pass", "hreflang self", "Current language has a self-referencing hreflang.", "url");
-    else add("warn", "hreflang self", "Missing hreflang for current page language " + context.lang + ".", "url");
-
-    Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).forEach(function (node) {
-      var href = node.href || node.getAttribute("href") || "";
-      if (href && !/^https?:\/\//i.test(href)) {
-        add("fail", "hreflang absolute URL", 'hreflang="' + node.getAttribute("hreflang") + '" is not absolute.', "url");
-      }
-    });
+    auditMultilingualStandards(context, add);
 
     if (jsonTypes.indexOf("INVALID_JSON") !== -1) {
       add("fail", "JSON-LD parse", "One or more JSON-LD blocks failed to parse.", "schema");
@@ -1535,7 +2472,7 @@
     auditJsonLdQuality(context, add);
 
     var internalLinks = Array.from(document.querySelectorAll("a[href]")).filter(function (node) {
-      if (node.closest(".weline-seo-panel")) return false;
+      if (isIgnoredSeoAuditNode(node)) return false;
       var href = node.getAttribute("href") || "";
       return href.startsWith("/") || href.indexOf(context.siteDomain) !== -1 || href.indexOf("{{link") !== -1;
     });
@@ -1545,14 +2482,17 @@
       add("warn", "internal links", "Only " + internalLinks.length + " internal links; add descriptive in-site links.", "content");
     }
 
-    var downloadCta = document.querySelector(
-      '.apk-fab, .promo-hero__cta, .academy-app-promo__cta, [data-ga-event], [data-apk-action], a[download][href$=".apk"]'
-    );
-    if (downloadCta) add("pass", "APK download CTA", "Download/FAB CTA module detected.", "content");
-    else add("warn", "APK download CTA", "No APK download CTA module detected on page.", "content");
+    var ctaElements = collectCtaElements(CTA_SELECTOR);
+    if (ctaElements.length) {
+      add("pass", "CTA", ctaElements.length + " CTA element(s) detected.", "content");
+    } else if (shouldAuditCta(context)) {
+      add("warn", "CTA", "No primary CTA detected on this conversion-oriented page.", "content");
+    } else {
+      add("info", "CTA", "Current page is not a CTA-focused landing page; CTA check is informational.", "content");
+    }
 
     var emptyLinks = Array.from(document.querySelectorAll("a[href]")).filter(function (node) {
-      if (node.closest(".weline-seo-panel")) return false;
+      if (isIgnoredSeoAuditNode(node)) return false;
       var href = (node.getAttribute("href") || "").trim();
       return !href || href === "#";
     });
@@ -1595,7 +2535,7 @@
     var siteDomain = inferSiteDomain();
     var lang = inferLang();
     var slug = inferSlug();
-    var seoType = inferSeoTypeFromPage();
+    var seoType = normalizeSeoType(inferSeoTypeFromPage());
     var defaultLang = inferDefaultLanguage();
     var title = (document.title || "").trim();
     var description = metaContent('meta[name="description"]');
@@ -1605,7 +2545,7 @@
     var htmlLang = document.documentElement.lang || "";
     var jsonTypes = extractJsonLdTypes();
     var h1Count = Array.from(document.querySelectorAll("h1")).filter(function (node) {
-      return !node.closest(".weline-seo-panel");
+      return !isIgnoredSeoAuditNode(node);
     }).length;
     var textLength = visibleTextLength(document.body || document.documentElement);
     var images = Array.from(document.querySelectorAll("main img, .site-shell img, body img"))
@@ -1627,13 +2567,8 @@
       add("fail", "Unresolved placeholder", "Body still contains {{...}} tokens.", "technical");
     }
 
-    if (htmlLang !== lang) {
-      add("fail", "html lang mismatch", 'Expected "' + lang + '", got "' + htmlLang + '".', "url");
-    } else {
-      add("pass", "html lang", lang, "url");
-    }
-
     REQUIRED_HEAD.forEach(function (rule) {
+      if (rule.types && rule.types.indexOf(seoType) === -1) return;
       if (rule.test()) add("pass", rule.name, "Present in head.", "head");
       else add("fail", rule.name, "Missing from head.", "head");
     });
@@ -1691,16 +2626,8 @@
     }
 
     var hreflangCodes = collectHreflangCodes();
-    hreflangCodes.forEach(function (code) {
-      if (code === "x-default") return;
-      add("pass", "hreflang " + code, "Present.", "url");
-    });
-    if (!hreflangCodes.length) add("warn", "hreflang set", "No alternate hreflang links found.", "url");
-
-    (EXPECTED_JSONLD[seoType] || EXPECTED_JSONLD.article).forEach(function (type) {
-      if (jsonTypes.indexOf(type) !== -1) add("pass", "JSON-LD @" + type, "Present.", "schema");
-      else add("fail", "JSON-LD @" + type, "Missing. Current: " + (jsonTypes.join(", ") || "none") + ".", "schema");
-    });
+    var multilingual = buildMultilingualDiagnostics({ lang: lang, canonical: canonical });
+    var jsonLdValidation = validatePageJsonLd({ seoType: seoType, jsonTypes: jsonTypes });
 
     if (seoType === "home" && metaContent('meta[property="og:type"]') !== "website") {
       add("fail", "home og:type", 'Expected "website".', "schema");
@@ -1734,23 +2661,17 @@
         hreflangCodes: hreflangCodes,
         htmlForScan: pageHtmlForScan(),
         lang: lang,
-        siteDomain: siteDomain
+        siteDomain: siteDomain,
+        multilingual: multilingual,
+        jsonLdValidation: jsonLdValidation
       },
       add
     );
 
-    var ga4Status = collectGa4Status();
-    var ga4PageEvents = ga4Status.pageEvents;
-    var ga4Checks = auditGa4Status(ga4Status).map(function (item) {
-      return Object.assign({}, item, { group: "ga4" });
-    });
-
     var seoSummary = summarizeChecks(checks);
-    var ga4Summary = summarizeChecks(ga4Checks);
 
-    return {
+    var result = {
       seoSummary: seoSummary,
-      ga4Summary: ga4Summary,
       summary: seoSummary,
       snapshot: {
         title: title,
@@ -1762,28 +2683,37 @@
         pageLang: lang,
         siteDomain: siteDomain,
         jsonTypes: jsonTypes,
+        jsonLdValidation: jsonLdValidation,
+        multilingual: multilingual,
         h1Count: h1Count,
         visibleText: textLength,
         contentImages: images.length
       },
       headingOutline: headingOutline,
-      ga4Status: ga4Status,
-      ga4PageEvents: ga4PageEvents,
-      ga4Checks: ga4Checks,
       checks: checks
     };
+    result.engineDiagnostics = buildEngineDiagnostics(result);
+    return result;
   }
 
-  var AGENT_CONTRACT_VERSION = "1.0.0";
-  var AGENT_COMMAND = "weline-seo";
+  var AGENT_CONTRACT_VERSION = "weline-panel-seo/v1";
+  var AGENT_COMMAND = "weline-panel:seo";
 
   var CRITICAL_CHECK_LABELS = {
     "Unresolved placeholder": true,
     "html lang mismatch": true,
+    "html lang format": true,
     "canonical host": true,
     "canonical path": true,
     "canonical scheme": true,
+    "html lang": true,
+    "hreflang code format": true,
+    "hreflang duplicates": true,
+    "hreflang absolute URL": true,
+    "hreflang canonical parity": true,
     "JSON-LD placement": true,
+    "JSON-LD page-type contract": true,
+    "JSON-LD primary type": true,
     "indexability": true,
     "prompt leak": true,
     "public copy leak": true,
@@ -1806,7 +2736,6 @@
     var warns = raw.checks.filter(function (item) { return item.level === "warn"; });
     var infos = raw.checks.filter(function (item) { return item.level === "info"; });
     var criticalFails = fails.filter(function (item) { return CRITICAL_CHECK_LABELS[item.label]; });
-    var ga4Fails = (raw.ga4Checks || []).filter(function (item) { return item.level === "fail"; });
 
     var score = 100;
     fails.forEach(function () { score -= 8; });
@@ -1824,7 +2753,7 @@
     );
 
     var verdict = "ship";
-    if (criticalFails.length || ga4Fails.length || score < 50) verdict = "blocked";
+    if (criticalFails.length || score < 50) verdict = "blocked";
     else if (fails.length || score < 75) verdict = "fix";
     else if (warns.length || score < 90) verdict = "polish";
 
@@ -1843,17 +2772,7 @@
     var actions = fails
       .map(function (item) { return toAction(item, criticalFails.indexOf(item) !== -1 ? "P0" : "P1", "seo"); })
       .concat(warns.map(function (item) { return toAction(item, "P1", "seo"); }))
-      .concat(infos.map(function (item) { return toAction(item, "P2", "seo"); }))
-      .concat(
-        (raw.ga4Checks || [])
-          .filter(function (item) { return item.level === "fail" || item.level === "warn"; })
-          .map(function (item) { return toAction(item, item.level === "fail" ? "P1" : "P2", "ga4"); })
-      )
-      .concat(
-        (raw.ga4Checks || [])
-          .filter(function (item) { return item.level === "info"; })
-          .map(function (item) { return toAction(item, "P3", "ga4"); })
-      );
+      .concat(infos.map(function (item) { return toAction(item, "P2", "seo"); }));
 
     var groupedChecks = {};
     SEO_CHECK_GROUPS.forEach(function (group) {
@@ -1865,6 +2784,8 @@
 
     var promoteReady = verdict === "ship" || verdict === "polish";
     var h1Text = getMainH1Text();
+    var engineDiagnostics = raw.engineDiagnostics || buildEngineDiagnostics(raw);
+    var scoreBreakdown = engineDiagnostics.scores || {};
 
     return {
       contractVersion: AGENT_CONTRACT_VERSION,
@@ -1885,33 +2806,45 @@
         h1Count: raw.snapshot.h1Count,
         visibleTextChars: raw.snapshot.visibleText,
         contentImages: raw.snapshot.contentImages,
-        jsonLdTypes: raw.snapshot.jsonTypes
+        jsonLdTypes: raw.snapshot.jsonTypes,
+        jsonLdValidation: raw.snapshot.jsonLdValidation,
+        multilingual: raw.snapshot.multilingual
       },
       scores: {
-        overall: score,
+        overall: typeof scoreBreakdown.total === "number" ? scoreBreakdown.total : score,
         seo: seoScore,
-        promoteReadiness: verdict
+        promoteReadiness: verdict,
+        indexability: scoreBreakdown.indexability,
+        understandability: scoreBreakdown.understandability,
+        experience: scoreBreakdown.experience,
+        engineFit: scoreBreakdown.engineFit,
+        legacyOverall: score
       },
       summary: {
         seo: raw.seoSummary,
-        ga4: raw.ga4Summary
+        engines: {
+          target: engineDiagnostics.target,
+          counts: engineDiagnostics.counts,
+          limitations: engineDiagnostics.limitations
+        }
       },
+      engines: engineDiagnostics.profiles,
+      engineMatrix: engineDiagnostics.engineMatrix,
+      issues: engineDiagnostics.issues,
+      limitations: engineDiagnostics.limitations,
       verdict: {
         status: verdict,
         label: VERDICT_LABELS[verdict],
         promoteReady: promoteReady,
         criticalFailCount: criticalFails.length,
-        failCount: fails.length + ga4Fails.length,
+        failCount: fails.length,
         warnCount: warns.length
       },
       checks: {
         seoGrouped: groupedChecks,
         seoFlat: raw.checks,
-        ga4: raw.ga4Checks || [],
         headingOutline: raw.headingOutline
       },
-      ga4: raw.ga4Status,
-      ga4PageEvents: raw.ga4PageEvents || raw.ga4Status.pageEvents,
       actions: actions,
       monitoringGaps: recommendedMonitoringGaps(raw),
       agentGuide: buildAgentGuide(verdict, fails, warns, raw)
@@ -1930,18 +2863,34 @@
       "sitemap discovery": "Add <link rel=\"sitemap\" type=\"application/xml\" href=\"/sitemap.xml\"> in base head.",
       "visible text": "Add page-specific facts/modules until visible text reaches 2500+ chars.",
       "image alt": "Give each content image descriptive alt tied to page intent, not keyword stuffing.",
+      "html lang": "Add a valid BCP47 <html lang> value that matches the page language.",
+      "html lang format": "Use BCP47 language tags for html lang, for example en-IN or zh-Hans-CN; do not use underscores.",
+      "html lang mismatch": "Make <html lang>, body data language, canonical localized URL, and hreflang self agree.",
       "hreflang self": "Add hreflang link for current page language in head.",
+      "hreflang code format": "Use language-first BCP47 hreflang values such as en-IN, hi-IN, or zh-Hans-CN; use x-default only for fallback.",
+      "hreflang duplicates": "Keep exactly one alternate link per hreflang code.",
+      "hreflang absolute URL": "Use fully-qualified absolute URLs in every hreflang href.",
+      "hreflang canonical parity": "Point the current page hreflang href at the same URL as canonical.",
       "title/H1 alignment": "Make H1 the on-page expression of the same intent as title.",
       "internal links": "Add descriptive internal links to hub/guide/review pages.",
       "prompt leak": "Remove internal prompt/build vocabulary from visible copy and metadata.",
-      "public copy leak": "Replace internal planning phrases with reader-facing APK/card-game language.",
+      "public copy leak": "Replace internal planning phrases with reader-facing page language.",
       "JSON-LD @WebSite": "Add WebSite JSON-LD in head via @page schema or seo-jsonld block.",
       "JSON-LD @Organization": "Add Organization JSON-LD with site logo URL in head.",
       "JSON-LD @BreadcrumbList": "Add BreadcrumbList JSON-LD matching visible route hierarchy.",
-      "gtag runtime": "Ensure GA4 snippet is injected on production export; ignore local dev gate.",
-      "APK download CTA": "Add FAB + in-page promo CTA wired to {{apk_download}} and data-ga-event."
+      "JSON-LD @NewsArticle": "For news pages, emit NewsArticle JSON-LD with headline, dates, author, image, mainEntityOfPage, and publisher.",
+      "JSON-LD @BlogPosting": "For blog pages, emit BlogPosting JSON-LD with headline, dates, author, image, mainEntityOfPage, and publisher.",
+      "JSON-LD page-type contract": "Fix invalid JSON-LD before validating page-type schema.",
+      "JSON-LD primary type": "Emit the primary schema type expected by the page-type meta value.",
+      "CTA": "Add a clear primary CTA. Event wiring is owned by Weline_Visitor Pixel and should be checked in the Visitor panel."
     };
-    return hints[item.label] || "Fix the reported check in page source HTML/head, then re-run weline-seo.";
+    if (item.label && item.label.indexOf("JSON-LD field ") === 0) {
+      return "Add the missing JSON-LD field on the page-type primary schema node and keep it consistent with visible content.";
+    }
+    if (item.label && item.label.indexOf("JSON-LD recommended ") === 0) {
+      return "Add this recommended JSON-LD field when the page has reliable source data; do not invent values.";
+    }
+    return hints[item.label] || "Fix the reported check in page source HTML/head, then re-run WelinePanel SEO report.";
   }
 
   function recommendedMonitoringGaps(raw) {
@@ -1985,8 +2934,8 @@
       {
         id: "conversion-chain",
         priority: "P0",
-        reason: "Traffic without working APK CTA chain wastes promotion spend.",
-        monitor: "Verify download href resolves to APK, FAB visible on mobile, GA4 fires on prod."
+        reason: "Traffic without a working CTA chain wastes promotion spend.",
+        monitor: "Verify the primary CTA destination, mobile visibility, and Visitor Pixel event forwarding."
       }
     ];
   }
@@ -1995,7 +2944,7 @@
     var steps = [];
     if (verdict === "blocked") {
       steps.push("Fix all P0 actions first: canonical/head/schema/compliance failures.");
-      steps.push("Re-run weline-seo until verdict is fix or higher.");
+      steps.push("Re-run WelinePanel SEO report until verdict is fix or higher.");
     } else if (verdict === "fix") {
       steps.push("Clear all fail-level SEO checks before promotion.");
       steps.push("Prioritize head/canonical/schema/content thickness/image alt.");
@@ -2012,10 +2961,10 @@
 
     return {
       howToJudge:
-        "Use verdict.status as primary gate. fail=blocking SEO defect, warn=optimization debt, info=expected environment note (especially GA4 local/zh gates). Never treat info as fail.",
+        "Use verdict.status as primary gate. fail=blocking SEO defect, warn=optimization debt, info=expected environment note. Visitor Pixel forwarding is checked in the Visitor panel, not SEO.",
       promotionGate: verdict === "ship" || verdict === "polish",
       doNotPromoteIf: ["blocked", "fix"].indexOf(verdict) !== -1,
-      interpretationOrder: ["verdict", "actions(P0->P3)", "checks.seoFlat", "monitoringGaps", "ga4"],
+      interpretationOrder: ["verdict", "actions(P0->P3)", "checks.seoFlat", "monitoringGaps"],
       nextSteps: steps
     };
   }
@@ -2025,16 +2974,16 @@
   }
 
   function publishAgentReport(report) {
-    window.__WELINE_SEO_REPORT__ = report;
-    var node = document.getElementById("weline-seo-report");
+    window.__WELINE_PANEL_SEO_REPORT__ = report;
+    var node = document.getElementById("weline-panel-seo-report");
     if (!node) {
       node = document.createElement("script");
       node.type = "application/json";
-      node.id = "weline-seo-report";
+      node.id = "weline-panel-seo-report";
       document.head.appendChild(node);
     }
     node.textContent = JSON.stringify(report);
-    window.dispatchEvent(new CustomEvent("weline-seo:report", { detail: report }));
+    window.dispatchEvent(new CustomEvent("weline-panel:seo-report", { detail: report }));
     return report;
   }
 
@@ -2099,10 +3048,277 @@
     }).join("");
   }
 
+  function engineTone(status) {
+    if (status === "warning") return "warn";
+    if (status === "unknown") return "unknown";
+    return status || "info";
+  }
+
+  function engineStatusText(status) {
+    return {
+      pass: "Pass",
+      info: "Info",
+      warn: "Warning",
+      warning: "Warning",
+      fail: "Fail",
+      unknown: "Unknown"
+    }[status] || status || "Unknown";
+  }
+
+  function renderScoreCards(scores) {
+    var items = [
+      ["Indexability", scores.indexability, "indexability"],
+      ["Understandability", scores.understandability, "understandability"],
+      ["Experience", scores.experience, "experience"],
+      ["Engine Fit", scores.engineFit, "engineFit"]
+    ];
+    var details = scores.details || {};
+    return (
+      '<div class="weline-seo-panel__score-grid">' +
+      items
+        .map(function (item) {
+          var value = typeof item[1] === "number" ? item[1] : 0;
+          var tone = value >= 90 ? "pass" : value >= 75 ? "warn" : "fail";
+          var detail = details[item[2]] || null;
+          return (
+            '<div class="weline-seo-panel__score-card weline-seo-panel__score-card--' +
+            tone +
+            '"><span>' +
+            escapeHtml(item[0]) +
+            "</span><strong>" +
+            escapeHtml(String(value)) +
+            "</strong>" +
+            renderScoreDetail(detail, value) +
+            "</div>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function renderScoreDetail(detail, value) {
+    var deductions = detail && Array.isArray(detail.deductions) ? detail.deductions : [];
+    if (!deductions.length) {
+      return '<div class="weline-seo-panel__score-detail">' + (value >= 100 ? "无扣分" : "未记录扣分明细") + "</div>";
+    }
+
+    return (
+      '<ul class="weline-seo-panel__score-detail">' +
+      deductions.slice(0, 3).map(function (item) {
+        return (
+          "<li><b>-" +
+          escapeHtml(String(item.points || 0)) +
+          "</b> " +
+          escapeHtml(item.label || "SEO check") +
+          "</li>"
+        );
+      }).join("") +
+      (deductions.length > 3 ? "<li>+" + escapeHtml(String(deductions.length - 3)) + " more</li>" : "") +
+      "</ul>"
+    );
+  }
+
+  function renderEngineMatrixTable(diagnostics) {
+    var matrix = diagnostics.engineMatrix || {};
+    var engines = diagnostics.profiles || ENGINE_PROFILES;
+    var rows = diagnostics.rows || ENGINE_MATRIX_ROWS;
+    var head =
+      "<tr><th>检测项</th>" +
+      engines
+        .map(function (engine) {
+          return "<th>" + escapeHtml(engine.name) + "</th>";
+        })
+        .join("") +
+      "</tr>";
+    var body = rows
+      .map(function (row) {
+        return (
+          "<tr><th>" +
+          escapeHtml(row.label) +
+          "</th>" +
+          engines
+            .map(function (engine) {
+              var item = (matrix[engine.id] && matrix[engine.id].rows || []).find(function (entry) {
+                return entry.id === row.id;
+              }) || { status: "unknown", detail: "未检测。" };
+              return (
+                '<td><span class="weline-seo-panel__engine-dot weline-seo-panel__engine-dot--' +
+                escapeHtml(engineTone(item.status)) +
+                '" title="' +
+                escapeHtml(item.detail) +
+                '">' +
+                escapeHtml(engineStatusText(item.status)) +
+                "</span></td>"
+              );
+            })
+            .join("") +
+          "</tr>"
+        );
+      })
+      .join("");
+    return (
+      '<section class="weline-seo-panel__section"><h3>搜索引擎适配矩阵</h3>' +
+      '<div class="weline-seo-panel__engine-table-wrap"><table class="weline-seo-panel__engine-table">' +
+      "<thead>" +
+      head +
+      "</thead><tbody>" +
+      body +
+      "</tbody></table></div></section>"
+    );
+  }
+
+  function renderEngineFindings(item) {
+    var findings = (item.rows || []).filter(function (row) {
+      return row.status === "fail" || row.status === "warn" || row.status === "warning";
+    });
+    if (!findings.length) {
+      return '<p class="weline-seo-panel__engine-ok">未发现平台合规失败或警告项。</p>';
+    }
+    return (
+      '<div class="weline-seo-panel__engine-findings">' +
+      findings
+        .map(function (row) {
+          var tone = engineTone(row.status);
+          return (
+            '<div class="weline-seo-panel__engine-finding weline-seo-panel__engine-finding--' +
+            escapeHtml(tone) +
+            '">' +
+            '<div class="weline-seo-panel__engine-finding-head">' +
+            '<span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+            escapeHtml(tone) +
+            '">' +
+            escapeHtml(engineStatusText(row.status)) +
+            "</span><strong>" +
+            escapeHtml(row.label) +
+            "</strong></div>" +
+            '<dl class="weline-seo-panel__engine-finding-detail">' +
+            "<div><dt>原因</dt><dd>" +
+            escapeHtml(row.detail || "未提供具体原因。") +
+            "</dd></div>" +
+            "<div><dt>建议</dt><dd>" +
+            escapeHtml(row.recommendation || "补充服务端爬虫或平台站长工具验证。") +
+            "</dd></div>" +
+            "</dl></div>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function renderEngineCards(diagnostics) {
+    var matrix = diagnostics.engineMatrix || {};
+    var engines = diagnostics.profiles || ENGINE_PROFILES;
+    return (
+      '<section class="weline-seo-panel__section"><h3>平台结论</h3>' +
+      '<div class="weline-seo-panel__engine-cards">' +
+      engines
+        .map(function (engine) {
+          var item = matrix[engine.id] || {};
+          var recommendations = item.recommendations && item.recommendations.length
+            ? item.recommendations
+            : ["当前浏览器模式未发现平台专项阻断；建议继续用服务端爬虫补查。"];
+          return (
+            '<article class="weline-seo-panel__engine-card weline-seo-panel__engine-card--' +
+            escapeHtml(engineTone(item.status)) +
+            '">' +
+            '<div class="weline-seo-panel__engine-card-head"><div><h4>' +
+            escapeHtml(engine.name) +
+            "</h4><p>" +
+            escapeHtml(engine.label) +
+            "</p></div>" +
+            '<span class="weline-seo-panel__engine-score">' +
+            escapeHtml(String(typeof item.score === "number" ? item.score : 0)) +
+            "</span></div>" +
+            '<p class="weline-seo-panel__engine-focus">' +
+            escapeHtml((engine.focus || []).join(" · ")) +
+            "</p>" +
+            '<p><span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+            escapeHtml(engineTone(item.status)) +
+            '">' +
+            escapeHtml(engineStatusText(item.status)) +
+            "</span></p>" +
+            '<ul class="weline-seo-panel__engine-actions">' +
+            recommendations
+              .map(function (text) {
+                return "<li>" + escapeHtml(text) + "</li>";
+              })
+              .join("") +
+            "</ul>" +
+            renderEngineFindings(item) +
+            "</article>"
+          );
+        })
+        .join("") +
+      "</div></section>"
+    );
+  }
+
+  function renderLimitations(limitations) {
+    if (!limitations || !limitations.length) return "";
+    return (
+      '<section class="weline-seo-panel__section"><h3>浏览器模式限制</h3>' +
+      '<ul class="weline-seo-panel__limitations">' +
+      limitations
+        .map(function (item) {
+          return "<li>" + escapeHtml(item) + "</li>";
+        })
+        .join("") +
+      "</ul></section>"
+    );
+  }
+
+  function renderPanelTabs() {
+    return (
+      '<div class="weline-seo-panel__tabs" role="tablist" aria-label="Inspector sections">' +
+      '<button type="button" class="weline-seo-panel__tab is-active" data-weline-tab="seo" role="tab" aria-selected="true">SEO 校验</button>' +
+      '<button type="button" class="weline-seo-panel__tab" data-weline-tab="engines" role="tab" aria-selected="false">搜索平台</button>' +
+      "</div>"
+    );
+  }
+
+  function renderPageContext(report) {
+    var title = (report.snapshot && report.snapshot.title) || document.title || "未命名页面";
+    var url = window.location.href;
+    return (
+      '<div class="weline-seo-panel__page-context">' +
+      '<div class="weline-seo-panel__page-main"><span>当前页面</span><strong>' +
+      escapeHtml(title) +
+      "</strong><code>" +
+      escapeHtml(url) +
+      "</code></div>" +
+      '<div class="weline-seo-panel__page-heading"><span>H 标签</span><div class="weline-seo-panel__heading-summary weline-seo-panel__heading-summary--compact">' +
+      renderHeadingCounts((report.headingOutline && report.headingOutline.counts) || {}) +
+      "</div></div>" +
+      '<button type="button" class="weline-seo-panel__publish-btn" data-weline-seo-publish>发布 AI 报告</button>' +
+      "</div>"
+    );
+  }
+
+  function renderPanelToolbar(report) {
+    return (
+      '<div class="weline-seo-panel__topbar">' +
+      renderPageContext(report) +
+      renderPanelTabs() +
+      "</div>"
+    );
+  }
+
+  function renderEngineTab(report) {
+    var diagnostics = report.engineDiagnostics || buildEngineDiagnostics(report);
+    return (
+      renderScoreCards(diagnostics.scores || {}) +
+      renderEngineMatrixTable(diagnostics) +
+      renderEngineCards(diagnostics) +
+      renderLimitations(diagnostics.limitations)
+    );
+  }
+
   function renderSeoTab(report) {
     return (
       renderSummary(report.seoSummary) +
-      '<section class="weline-seo-panel__section"><h3>Page snapshot</h3><dl class="weline-seo-panel__grid">' +
+      '<section class="weline-seo-panel__section"><h3>页面快照</h3><dl class="weline-seo-panel__grid">' +
       '<div class="weline-seo-panel__field"><dt>Title</dt><dd>' +
       escapeHtml(report.snapshot.title) +
       "</dd></div>" +
@@ -2123,6 +3339,22 @@
       '<div class="weline-seo-panel__field"><dt>JSON-LD</dt><dd>' +
       escapeHtml(report.snapshot.jsonTypes.join(", ") || "none") +
       "</dd></div>" +
+      '<div class="weline-seo-panel__field"><dt>JSON-LD contract</dt><dd>' +
+      escapeHtml(
+        report.snapshot.jsonLdValidation
+          ? report.snapshot.jsonLdValidation.label + " · " + report.snapshot.jsonLdValidation.expectedType + " · " + report.snapshot.jsonLdValidation.status
+          : "unknown"
+      ) +
+      "</dd></div>" +
+      '<div class="weline-seo-panel__field"><dt>Multilingual</dt><dd>' +
+      escapeHtml(
+        report.snapshot.multilingual
+          ? "html=" + (report.snapshot.multilingual.normalizedHtmlLang || "missing") +
+              " · hreflang=" + report.snapshot.multilingual.hreflangCount +
+              " · x-default=" + report.snapshot.multilingual.xDefaultCount
+          : "unknown"
+      ) +
+      "</dd></div>" +
       '<div class="weline-seo-panel__field"><dt>Structure</dt><dd>H1=' +
       escapeHtml(String(report.snapshot.h1Count)) +
       " · text=" +
@@ -2131,7 +3363,7 @@
       escapeHtml(String(report.snapshot.contentImages)) +
       "</dd></div>" +
       "</dl></section>" +
-      '<section class="weline-seo-panel__section"><h3>Heading outline</h3>' +
+      '<section class="weline-seo-panel__section"><h3>H 标签目录</h3>' +
       '<div class="weline-seo-panel__heading-summary">' +
       renderHeadingCounts(report.headingOutline.counts) +
       "</div>" +
@@ -2140,13 +3372,6 @@
       '<section class="weline-seo-panel__section"><h3>SEO checks</h3>' +
       renderGroupedChecks(report.checks) +
       "</section>"
-    );
-  }
-
-  function renderGa4Tab(report) {
-    return (
-      renderSummary(report.ga4Summary) +
-      renderGa4Status(report.ga4Status, report.ga4Checks, report.ga4PageEvents)
     );
   }
 
@@ -2206,44 +3431,67 @@
     );
   }
 
-  var panelRoot = null;
-  var activePanelTab = "seo";
-  var ga4TriggerListenerBound = false;
+  var SEO_PANEL_STATE_KEY = "weline-seo-panel-state-v1";
 
-  function refreshGa4TriggerSection() {
-    if (!panelRoot || panelRoot.hidden) return;
-    var ga4Panel = panelRoot.querySelector('[data-weline-panel="ga4"]');
-    if (!ga4Panel) return;
-    var ga4Status = collectGa4Status();
-    var section = ga4Panel.querySelector("[data-weline-ga4-triggers]");
-    var html = renderGa4RecentTriggers(ga4Status.recentTriggers);
-    if (section) {
-      section.outerHTML = html;
+  function normalizePanelTab(tabId) {
+    return ["seo", "engines"].indexOf(tabId) !== -1 ? tabId : "seo";
+  }
+
+  function readPanelState() {
+    try {
+      if (!window.localStorage) return {};
+      var raw = window.localStorage.getItem(SEO_PANEL_STATE_KEY);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
     }
   }
 
-  function bindGa4TriggerListener() {
-    if (ga4TriggerListenerBound) return;
-    ga4TriggerListenerBound = true;
-    window.addEventListener("site:ga4-trigger", function () {
-      refreshGa4TriggerSection();
+  function savePanelState(patch) {
+    try {
+      if (!window.localStorage) return;
+      var current = readPanelState();
+      Object.keys(patch || {}).forEach(function (key) {
+        current[key] = patch[key];
+      });
+      current.updatedAt = Date.now();
+      window.localStorage.setItem(SEO_PANEL_STATE_KEY, JSON.stringify(current));
+    } catch (error) {
+      // Ignore storage failures so the inspector remains usable in restricted browsers.
+    }
+  }
+
+  var activePanelTab = normalizePanelTab(readPanelState().activeTab || "seo");
+
+  function panelTabScopes(root, controlsRoot) {
+    return [root, controlsRoot].filter(function (item, index, list) {
+      return item && list.indexOf(item) === index;
     });
   }
 
-  function bindPanelTabs(root) {
-    root.querySelectorAll("[data-weline-tab]").forEach(function (button) {
-      button.addEventListener("click", function () {
-        setPanelTab(root, button.getAttribute("data-weline-tab") || "seo");
+  function bindPanelTabs(root, controlsRoot) {
+    panelTabScopes(root, controlsRoot).forEach(function (scope) {
+      scope.querySelectorAll("[data-weline-tab]").forEach(function (button) {
+        if (button.__welineSeoTabBound) return;
+        button.__welineSeoTabBound = true;
+        button.addEventListener("click", function () {
+          setPanelTab(root, button.getAttribute("data-weline-tab") || "seo", controlsRoot);
+        });
       });
     });
   }
 
-  function setPanelTab(root, tabId) {
-    activePanelTab = tabId === "ga4" ? "ga4" : "seo";
-    root.querySelectorAll("[data-weline-tab]").forEach(function (button) {
-      var isActive = button.getAttribute("data-weline-tab") === activePanelTab;
-      button.classList.toggle("is-active", isActive);
-      button.setAttribute("aria-selected", isActive ? "true" : "false");
+  function setPanelTab(root, tabId, controlsRoot) {
+    activePanelTab = normalizePanelTab(tabId);
+    savePanelState({ activeTab: activePanelTab });
+    panelTabScopes(root, controlsRoot).forEach(function (scope) {
+      scope.querySelectorAll("[data-weline-tab]").forEach(function (button) {
+        var isActive = button.getAttribute("data-weline-tab") === activePanelTab;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
     });
     root.querySelectorAll("[data-weline-panel]").forEach(function (panel) {
       var isActive = panel.getAttribute("data-weline-panel") === activePanelTab;
@@ -2252,71 +3500,52 @@
     });
   }
 
-  function ensurePanel() {
-    if (panelRoot) return panelRoot;
-
-    panelRoot = document.createElement("div");
-    panelRoot.className = "weline-seo-panel";
-    panelRoot.hidden = true;
-    panelRoot.innerHTML =
-      '<div class="weline-seo-panel__dialog" role="dialog" aria-modal="true" aria-labelledby="weline-seo-panel-title">' +
-      '<div class="weline-seo-panel__header">' +
-      '<div><h2 class="weline-seo-panel__title" id="weline-seo-panel-title">SEO Inspector</h2><p class="weline-seo-panel__subtitle"></p></div>' +
-      '<button type="button" class="weline-seo-panel__close">Close</button>' +
-      "</div>" +
-      '<div class="weline-seo-panel__body"></div>' +
-      "</div>";
-
-    panelRoot.querySelector(".weline-seo-panel__close").addEventListener("click", closePanel);
-    panelRoot.addEventListener("click", function (event) {
-      if (event.target === panelRoot) closePanel();
-    });
-    document.body.appendChild(panelRoot);
-    return panelRoot;
-  }
-
-  function renderPanel(report) {
-    var root = ensurePanel();
-    root.querySelector(".weline-seo-panel__subtitle").textContent = window.location.href;
-    root.querySelector(".weline-seo-panel__body").innerHTML =
-      '<div class="weline-seo-panel__tabs" role="tablist" aria-label="Inspector sections">' +
-      '<button type="button" class="weline-seo-panel__tab is-active" data-weline-tab="seo" role="tab" aria-selected="true">SEO 校验</button>' +
-      '<button type="button" class="weline-seo-panel__tab" data-weline-tab="ga4" role="tab" aria-selected="false">GA4 监控</button>' +
-      "</div>" +
+  function renderPanelBody(report, options) {
+    options = options || {};
+    return (
+      (options.externalToolbar ? "" : renderPanelToolbar(report)) +
       '<div class="weline-seo-panel__tab-panel is-active" data-weline-panel="seo" role="tabpanel">' +
       renderSeoTab(report) +
       "</div>" +
-      '<div class="weline-seo-panel__tab-panel" data-weline-panel="ga4" role="tabpanel" hidden>' +
-      renderGa4Tab(report) +
-      "</div>";
-    bindPanelTabs(root);
-    setPanelTab(root, activePanelTab);
+      '<div class="weline-seo-panel__tab-panel" data-weline-panel="engines" role="tabpanel" hidden>' +
+      renderEngineTab(report) +
+      "</div>"
+    );
   }
 
-  function openPanel() {
-    bindGa4TriggerListener();
-    var report = auditCurrentPage();
-    renderPanel(report);
-    ensurePanel().hidden = false;
-    document.documentElement.style.overflow = "hidden";
-  }
-
-  function closePanel() {
-    if (!panelRoot) return;
-    panelRoot.hidden = true;
-    document.documentElement.style.overflow = "";
-  }
-
-  document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && panelRoot && !panelRoot.hidden) {
-      event.preventDefault();
-      closePanel();
+  function resolveContainer(container) {
+    if (typeof container === "string") {
+      return document.querySelector(container);
     }
-  });
+    return container && container.nodeType === 1 ? container : null;
+  }
+
+  function renderInto(container) {
+    var options = arguments.length > 1 && arguments[1] ? arguments[1] : {};
+    var root = resolveContainer(container);
+    if (!root) {
+      throw new Error("SEO 诊断挂载点不存在。");
+    }
+    var raw = auditCurrentPage();
+    var toolbarRoot = resolveContainer(options.toolbarContainer || null);
+    if (toolbarRoot) {
+      toolbarRoot.classList.add("weline-seo-panel__toolbar-host");
+      toolbarRoot.innerHTML = renderPanelToolbar(raw);
+    }
+    root.classList.add("weline-seo-panel", "weline-seo-panel--embedded");
+    root.innerHTML =
+      '<div class="weline-seo-panel__dialog">' +
+      '<div class="weline-seo-panel__body">' +
+      renderPanelBody(raw, { externalToolbar: Boolean(toolbarRoot) }) +
+      "</div></div>";
+    bindPanelTabs(root, toolbarRoot);
+    setPanelTab(root, activePanelTab, toolbarRoot);
+    publishAgentReport(buildAgentReport(raw));
+    return raw;
+  }
 
   window.__WELINE_SEO_INSPECTOR__ = {
-    open: openPanel,
-    close: closePanel,
+    renderInto: renderInto,
     audit: auditCurrentPage,
     report: auditAgentReport,
     publish: function () {
@@ -2325,5 +3554,4 @@
   };
 
   publishAgentReport(buildAgentReport(auditCurrentPage()));
-  bindGa4TriggerListener();
 })();

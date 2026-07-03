@@ -13,11 +13,11 @@ namespace Weline\DeveloperWorkspace\Observer;
 
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\HookInterface;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -60,34 +60,8 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
-        $enableInProd = Env::get('dev_tool.enable_in_prod', false);
-        $devToolKey = Env::get('dev_tool.key', 'dev_tool');
-        $devToolCookieName = Env::get('dev_tool.cookie_name', 'w_dev_tool');
-        $devToolSecret = Env::get('dev_tool.secret', '');
-
-        $urlParam = $this->request->getGet($devToolKey);
-        if (!empty($urlParam)) {
-            if (!empty($devToolSecret)) {
-                if ($urlParam === $devToolSecret) {
-                    Cookie::set($devToolCookieName, '1', 3600 * 24 * 30, ['path' => '/']);
-                } else {
-                    return;
-                }
-            } else {
-                Cookie::set($devToolCookieName, '1', 3600 * 24 * 30, ['path' => '/']);
-            }
-        }
-
-        $cookieValue = Cookie::get($devToolCookieName);
-        $hasCookie = !empty($cookieValue) && $cookieValue === '1';
-        $explicitDevToolRequest = !empty($urlParam)
-            || (string)$this->request->getGet('debug_sidebar', '') === '1'
-            || (string)$this->request->getGet('ai_url_debug', '') === '1';
-        if ($explicitDevToolRequest) {
-            $hasCookie = true;
-        }
-
-        if (!DEV && !$enableInProd && !$hasCookie) {
+        $panelAccess = new PanelAccessService();
+        if (!$panelAccess->shouldInjectBootstrap()) {
             return;
         }
 
@@ -98,11 +72,6 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         if ($this->request->isIframe()) {
-            return;
-        }
-
-        $allowPersistentDevToolPanel = (bool)Env::get('wls.debug.dev_tool_panel', false);
-        if (Runtime::isPersistent() && !$allowPersistentDevToolPanel && !$explicitDevToolRequest) {
             return;
         }
 
@@ -129,8 +98,7 @@ class DevToolPanelObserver implements ObserverInterface
 
             $existingRequestIds = $this->extractRequestIdsFromResult($result);
             $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false
-                || stripos($result, 'id="dev-tool-panel-loader"') !== false
-                || stripos($result, 'data-weline-dev-tool-panel-loader') !== false;
+                || stripos($result, 'data-weline-panel-bootstrap') !== false;
             if (!$panelAlreadyInjected) {
                 $panelTraceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
                 if ($panelTraceStart > 0) {
@@ -180,7 +148,7 @@ class DevToolPanelObserver implements ObserverInterface
                     $this->storeTracePayload($existingRequestId);
                 }
             }
-            if (!$this->shouldUseLazyPanel() || stripos($result, 'data-weline-dev-tool-panel-loader') === false) {
+            if (!$this->shouldUseLazyPanel() || stripos($result, 'data-weline-panel-bootstrap') === false) {
                 $result = $this->injectRequestMetaScript($result, $requestId);
             }
 
@@ -423,18 +391,20 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function shouldUseLazyPanel(): bool
     {
-        $default = Runtime::isPersistent();
-        return (bool)Env::get('dev_tool.lazy_panel', $default);
+        return true;
     }
 
     private function renderLazyPanelLoader(string $requestId): string
     {
+        $panelAccess = new PanelAccessService();
         $apiBase = \htmlspecialchars($this->resolveApiBase(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $requestId = \htmlspecialchars($requestId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $loaderSrc = '/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260519-swr-1';
+        $tokenRequired = $panelAccess->requiresTokenForUi() ? '1' : '0';
+        $sessionUrl = \htmlspecialchars('/' . $this->resolveApiBase() . '/panel/session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $loaderSrc = '/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260701-weline-panel-ui-12-visitor-tab-order';
 
         return <<<HTML
-<script data-weline-dev-tool-panel-loader="1" data-api-base="{$apiBase}" data-request-id="{$requestId}" data-src="{$loaderSrc}">(function(d,w){if(w.__WELINE_DEV_TOOL_PANEL_BOOT__)return;w.__WELINE_DEV_TOOL_PANEL_BOOT__=1;var s=d.currentScript;function l(){if(d.getElementById('weline-dev-tool-loader-js'))return;var x=d.createElement('script');x.id='weline-dev-tool-loader-js';x.src=s.getAttribute('data-src');x.defer=true;x.setAttribute('data-api-base',s.getAttribute('data-api-base')||'');x.setAttribute('data-request-id',s.getAttribute('data-request-id')||'');(d.body||d.documentElement).appendChild(x)}function q(){if('requestIdleCallback'in w){w.requestIdleCallback(l,{timeout:1500})}else{w.setTimeout(l,800)}}if(d.readyState==='complete'){q()}else{w.addEventListener('load',q,{once:true})}})(document,window);
+<script data-weline-panel-bootstrap="1" data-api-base="{$apiBase}" data-request-id="{$requestId}" data-token-required="{$tokenRequired}" data-session-url="{$sessionUrl}" data-src="{$loaderSrc}">(function(d,w){if(w.__WELINE_PANEL_BOOT__)return;w.__WELINE_PANEL_BOOT__=1;var s=d.currentScript;function l(){if(d.getElementById('weline-panel-loader-js'))return;var x=d.createElement('script');x.id='weline-panel-loader-js';x.src=s.getAttribute('data-src');x.async=false;x.setAttribute('data-api-base',s.getAttribute('data-api-base')||'');x.setAttribute('data-request-id',s.getAttribute('data-request-id')||'');x.setAttribute('data-token-required',s.getAttribute('data-token-required')||'0');x.setAttribute('data-session-url',s.getAttribute('data-session-url')||'');(d.body||d.documentElement).appendChild(x)}if(d.body||d.documentElement){l()}else{d.addEventListener('DOMContentLoaded',l,{once:true})}})(document,window);
 </script>
 HTML;
     }
@@ -523,12 +493,17 @@ HTML;
             }
 
             $isBackend = $this->request->isBackend();
-            $devToolCookieName = Env::get('dev_tool.cookie_name', 'w_dev_tool');
-            $hasCookie = !empty(Cookie::get($devToolCookieName)) && Cookie::get($devToolCookieName) === '1';
+            $panelAccess = new PanelAccessService();
+            $hasPanelSession = $panelAccess->canAccessPanel($this->request);
+            $runtimeMode = Runtime::getMode();
+            $isWlsRuntime = Runtime::isWls();
             $cacheKey = sha1(json_encode([
                 'backend' => $isBackend,
-                'cookie' => $hasCookie,
+                'session' => $hasPanelSession,
                 'base_url' => (string)$this->request->getBaseUrl(),
+                'runtime' => $runtimeMode,
+                'is_wls' => $isWlsRuntime,
+                'shell' => $this->panelShellCacheSignature($templatePath),
             ], JSON_UNESCAPED_SLASHES) ?: 'dev-tool-panel');
             $cached = self::$panelHtmlCache[$cacheKey] ?? null;
             if (is_array($cached)
@@ -562,8 +537,8 @@ HTML;
 
             ob_start();
             $panelType = $isBackend ? 'backend' : 'frontend';
-            $showCloseButton = $hasCookie;
-            $devToolCookieNameJs = $devToolCookieName;
+            $showCloseButton = true;
+            $devToolCookieNameJs = $panelAccess->cookieName();
             include $templatePath;
             $html = ob_get_clean();
 
@@ -588,6 +563,73 @@ HTML;
             $this->logToConsole('error', 'DevToolPanel Render Error: ' . $e->getMessage());
             return '';
         }
+    }
+
+    private function panelShellCacheSignature(string $templatePath): string
+    {
+        $parts = [
+            'version=20260702-weline-panel-shell-hooks-v6-wls-register-tab',
+            'template=' . $this->fileCacheSignature($templatePath),
+        ];
+
+        foreach ([
+            HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_TABS_AFTER,
+            HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_SEARCH_AREAS_AFTER,
+        ] as $hookName) {
+            $parts[] = 'hook=' . $hookName;
+            try {
+                $hookReader = ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
+                $hookReader->setPath($hookName);
+                $hookFilesWithMeta = $hookReader->getFileListWithMeta();
+                $parts[] = \json_encode($hookFilesWithMeta, JSON_UNESCAPED_SLASHES) ?: '[]';
+                foreach ($this->hookImplementationCacheSignatures($hookFilesWithMeta) as $signature) {
+                    $parts[] = $signature;
+                }
+            } catch (\Throwable $e) {
+                $parts[] = 'error=' . $e->getMessage();
+            }
+        }
+
+        return \sha1(\implode('|', $parts));
+    }
+
+    /**
+     * @param array<string, array{file?: string}> $hookFilesWithMeta
+     * @return string[]
+     */
+    private function hookImplementationCacheSignatures(array $hookFilesWithMeta): array
+    {
+        $signatures = [];
+        $env = Env::getInstance();
+        foreach ($hookFilesWithMeta as $moduleName => $meta) {
+            $relativeFile = (string)($meta['file'] ?? '');
+            if ($relativeFile === '') {
+                $signatures[] = (string)$moduleName . '=missing-relative';
+                continue;
+            }
+
+            $moduleInfo = $env->getModuleInfo((string)$moduleName);
+            $basePath = \is_array($moduleInfo) ? (string)($moduleInfo['base_path'] ?? '') : '';
+            if ($basePath === '') {
+                $signatures[] = (string)$moduleName . '=' . $relativeFile . ':missing-module';
+                continue;
+            }
+
+            $path = \rtrim($basePath, '/\\') . DS . 'view' . DS . 'hooks' . DS . \str_replace(['/', '\\'], DS, $relativeFile);
+            $signatures[] = (string)$moduleName . '=' . $relativeFile . ':' . $this->fileCacheSignature($path);
+        }
+
+        return $signatures;
+    }
+
+    private function fileCacheSignature(string $file): string
+    {
+        if (!\is_file($file)) {
+            return 'missing';
+        }
+        \clearstatcache(true, $file);
+
+        return (string)(@\filemtime($file) ?: 0) . ':' . (string)(@\filesize($file) ?: 0);
     }
 
     private function isHtmlResponse(string $output): bool

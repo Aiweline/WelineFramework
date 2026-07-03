@@ -1020,7 +1020,6 @@ final class FullPageCacheCoordinator
         }
 
         return \str_contains($path, '/workspace-preview')
-            || \str_contains($path, '/pagebuilder/backend/')
             || \str_contains($path, '/developer-workspace/');
     }
 

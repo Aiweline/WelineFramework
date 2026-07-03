@@ -56,11 +56,11 @@ For Weline Server / WLS work:
 - If `curl -k` succeeds but browser/plain curl fails, separate app reachability
   from Windows Schannel/certificate trust.
 
-## PageBuilder Boundary
 
-`app/code/GuoLaiRen/PageBuilder` is owned by
+
+
 `E:\公司\远程\src\weline`. Do not implement, restore, or deploy that
-module from this source repository. For PageBuilder work, switch to the target
+
 repository and follow its deployment skill.
 
 ## Safety Boundaries

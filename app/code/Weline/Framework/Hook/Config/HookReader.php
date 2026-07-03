@@ -78,6 +78,14 @@ class HookReader extends ModuleFileReader
             // 过滤掉禁用的模块的Hook文件，并按顺序返回
             return $this->filterAndSortHooks($data);
         }
+
+        // 优化4：开发/长驻进程中 generated/hooks.php 可能尚未重建。
+        // 运行时按当前 hook 路径扫描一次，避免新增面板扩展在 registry stale 时完全失效。
+        $data = $this->getHookFilesFromFilesystem();
+        if (!empty($data)) {
+            self::$staticFileListCache[$cache_key] = $data;
+            return $this->filterAndSortHooks($data);
+        }
         
         // 如果都没有，返回空数组
         self::$staticFileListCache[$cache_key] = [];
@@ -122,6 +130,82 @@ class HookReader extends ModuleFileReader
     private function getHookRegistry(): array
     {
         return self::getGeneratedHookRegistry();
+    }
+
+    /**
+     * Registry miss fallback for local development and long-running WLS workers.
+     *
+     * @return array<string, array{file: string, priority: int, sort_order: int, solo: bool}>
+     */
+    private function getHookFilesFromFilesystem(): array
+    {
+        $files = parent::getFileList();
+        if ($files === []) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($files as $module => $file) {
+            if (!\is_string($module) || !\is_string($file) || $file === '' || !\is_file($file)) {
+                continue;
+            }
+
+            $relativePath = $this->relativeHookPath($file);
+            if ($relativePath === '') {
+                continue;
+            }
+
+            $meta = $this->parseHookFileMeta($file);
+            $result[$module] = [
+                'file' => $relativePath,
+                'priority' => $meta['priority'],
+                'sort_order' => $meta['sort_order'],
+                'solo' => $meta['solo'],
+            ];
+        }
+
+        return $result;
+    }
+
+    private function relativeHookPath(string $file): string
+    {
+        $normalized = \str_replace('\\', '/', $file);
+        $marker = '/view/hooks/';
+        $pos = \strpos($normalized, $marker);
+        if ($pos === false) {
+            return '';
+        }
+
+        return \substr($normalized, $pos + \strlen($marker));
+    }
+
+    /**
+     * @return array{priority: int, sort_order: int, solo: bool}
+     */
+    private function parseHookFileMeta(string $file): array
+    {
+        $content = @\file_get_contents($file, false, null, 0, 4096);
+        $content = \is_string($content) ? $content : '';
+
+        $priority = 100;
+        $sortOrder = 0;
+        $solo = false;
+
+        if (\preg_match('/@hook-priority\s+(-?\d+)/i', $content, $match) === 1) {
+            $priority = (int)$match[1];
+        }
+        if (\preg_match('/@hook-sort-order\s+(-?\d+)/i', $content, $match) === 1) {
+            $sortOrder = (int)$match[1];
+        }
+        if (\preg_match('/@hook-solo\s+(true|false|1|0|yes|no)/i', $content, $match) === 1) {
+            $solo = \in_array(\strtolower($match[1]), ['true', '1', 'yes'], true);
+        }
+
+        return [
+            'priority' => $priority,
+            'sort_order' => $sortOrder,
+            'solo' => $solo,
+        ];
     }
 
     private static function getGeneratedHookRegistry(): array
@@ -336,6 +420,9 @@ class HookReader extends ModuleFileReader
             $data = self::$staticFileListCache[$cache_key];
         } else {
             $data = $this->getHookFilesFromRegistry($hookName);
+            if ($data === []) {
+                $data = $this->getHookFilesFromFilesystem();
+            }
             self::$staticFileListCache[$cache_key] = $data;
         }
         

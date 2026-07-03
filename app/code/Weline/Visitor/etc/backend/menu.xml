@@ -3,10 +3,6 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 像素统计 - 归入仪表盘 -->
-    <menu source="Weline_Visitor::pixel_dashboard" name="pixel_dashboard" title="像素统计" action="visitor/backend/pixel-dashboard"
-          parent="Weline_Backend::dashboard" icon="mdi mdi-chart-line" order="20"/>
-    
     <!-- 访问信息 - 归入开发者 > 调试工具 -->
     <menu source="Weline_Visitor::system_frontend" name="visitor_frontend" title="访问信息" action="frontend"
           is_backend="1"

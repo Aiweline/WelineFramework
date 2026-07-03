@@ -14,7 +14,7 @@
 
 ### 1. SSE 短轮询模式 ✅
 
-**文件**：`app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php`
+
 
 **修改**：
 ```php
@@ -67,7 +67,7 @@ $sse->complete(['success' => true, 'message' => __('请重新连接继续监听'
 - 修复了 **60+ 个静态变量污染**
 - 修复了 **10+ 个单例实例污染**
 - 添加了 VirtualTheme 上下文清理
-- 添加了 PageBuilder 组件缓存清理
+
 
 **效果**：
 - 状态完全隔离，不再跨请求污染
@@ -128,10 +128,10 @@ curl -k "https://weline-p11005ce4.local/" --max-time 3
 
 **日志证据**：
 ```
-[2026-04-02 02:06:37] [WorkerSSL#1:16897@default] [INFO] → GET /U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse
-[2026-04-02 02:06:37] [WorkerSSL#1:16897@default] [INFO] Worker 开始处理请求 connId=581 uri=/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse
+
+
 [2026-04-02 02:06:37] [WorkerSSL#1:16897@default] [INFO] 长链分层命中: layer=layer-3-path-fallback, protocol=sse, connId=581
-[2026-04-02 02:06:37] [WorkerSSL#1:16897@default] [INFO] 准备进入框架处理: GET /U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse
+
 ```
 
 **结论**：
@@ -194,7 +194,7 @@ wait
 let lastEventId = 0;
 
 async function connectSSE() {
-    const eventSource = await Weline.Api.stream('pagebuilder.logs', {
+
         public_id: publicId,
         last_event_id: lastEventId,
     });

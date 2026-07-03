@@ -27,7 +27,16 @@ class SlotValidator
     /**
      * 允许的 position 值
      */
-    private const VALID_POSITIONS = ['header', 'content', 'footer', 'sidebar'];
+    private const VALID_POSITIONS = [
+        'header',
+        'content',
+        'footer',
+        'sidebar',
+        'dashboard-summary',
+        'dashboard-analysis',
+        'dashboard-side',
+        'dashboard-detail',
+    ];
     
     /**
      * 验证所有属性

@@ -5,6 +5,7 @@ namespace Weline\BackendActivity\Observer;
 
 use Weline\Acl\Model\Acl;
 use Weline\BackendActivity\Model\BackendActivityLog;
+use Weline\BackendActivity\Service\BusinessContextService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -36,12 +37,14 @@ class BackendControllerInit implements ObserverInterface
             RequestContext::set('backend_activity.skip_log', true);
             RequestContext::remove('backend_activity.log_model');
             RequestContext::remove('backend_activity.deferred_payload');
+            RequestContext::remove(BusinessContextService::CONTEXT_KEY);
             return;
         }
 
         RequestContext::remove('backend_activity.skip_log');
         RequestContext::remove('backend_activity.log_model');
         RequestContext::remove('backend_activity.deferred_payload');
+        RequestContext::remove(BusinessContextService::CONTEXT_KEY);
 
         if ($this->shouldDeferReadActivityLog()) {
             RequestContext::set('backend_activity.deferred_payload', $this->buildDeferredActivityPayload());

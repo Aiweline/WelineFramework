@@ -27,7 +27,7 @@ interface AgentInterface
     /**
      * 获取智能体唯一标识码
      * 
-     * @return string 如 'pagebuilder_component'
+     * @return string 如 'theme_component'
      */
     public function getCode(): string;
 
@@ -55,7 +55,7 @@ interface AgentInterface
     /**
      * 获取支持的场景码列表
      * 
-     * @return array<string> 如 ['pagebuilder_component_generation']
+     * @return array<string> 如 ['ai_site_component_generation']
      */
     public function getScenarios(): array;
 

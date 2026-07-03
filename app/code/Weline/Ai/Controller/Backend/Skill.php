@@ -254,7 +254,7 @@ class Skill extends BackendController
             ? $this->parseCodeList($this->bodyValue('temporary_skill_codes', $this->bodyValue('selected_skill_codes', [])))
             : $this->parseCodeList($this->request->getGet('temporary_skill_codes', $this->request->getGet('selected_skill_codes', [])));
         $includeInactive = $this->truthy($fromBody ? $this->bodyValue('include_inactive', false) : $this->request->getGet('include_inactive', false));
-        $adapterCode = $adapterCode !== '' ? $adapterCode : 'pagebuilder_component_generation';
+        $adapterCode = $adapterCode !== '' ? $adapterCode : '';
 
         try {
             $catalog = $this->resolver()->buildSkillCatalog($adapterCode, $temporaryCodes, $includeInactive);
@@ -289,28 +289,6 @@ class Skill extends BackendController
             if (\function_exists('w_log_error')) {
                 w_log_error('AI skill adapter list unavailable: ' . $throwable->getMessage());
             }
-        }
-
-        foreach (['pagebuilder_plan_generation', 'pagebuilder_component_generation', 'pagebuilder_ai_site_assets'] as $code) {
-            if (isset($itemsByCode[$code])) {
-                continue;
-            }
-            try {
-                $adapter = $this->adapterScanner()->getAdapter($code);
-            } catch (\Throwable) {
-                $adapter = null;
-            }
-            if (!$adapter) {
-                continue;
-            }
-            $itemsByCode[$code] = [
-                'code' => $code,
-                'name' => (string)$adapter->getName(),
-                'description' => (string)$adapter->getDescription(),
-                'version' => (string)$adapter->getVersion(),
-                'locked_skill_codes' => $this->resolver()->getLockedSkillCodes($code),
-                'manual_skill_codes' => $this->adapterSkillRepository()->listActiveSkillCodes($code),
-            ];
         }
 
         \ksort($itemsByCode);

@@ -20,27 +20,11 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString("'queue.worker.memory_limit'", $source);
     }
 
-    public function testPageBuilderQueuesStayWithinDefaultFiveHundredTwelveMegabyteMemoryLimit(): void
-    {
-        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
-        $resolveMethodSource = $this->extractPrivateMethodSource($source, 'resolveWorkerMemoryLimit');
-
-        self::assertStringContainsString('DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS', $source);
-        self::assertStringContainsString('\\GuoLaiRen\\PageBuilder\\Queue\\AiSitePlanQueue::class => \'512M\'', $source);
-        self::assertStringContainsString('\\GuoLaiRen\\PageBuilder\\Queue\\AiSiteBuildQueue::class => \'512M\'', $source);
-        self::assertStringContainsString('\\GuoLaiRen\\PageBuilder\\Queue\\AiSiteAssetQueue::class => \'512M\'', $source);
-        self::assertStringContainsString("'queue.worker.memory_limit_by_class.' . \$queueClass", $resolveMethodSource);
-        self::assertStringContainsString('self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass]', $resolveMethodSource);
-    }
-
     public function testQueueRunCommandAppliesClassMemoryLimitWhenStartedManually(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Console/Queue/Run.php');
 
         self::assertStringContainsString('applyCliMemoryLimitForQueueClass($queueClass)', $source);
-        self::assertStringContainsString("'GuoLaiRen\\PageBuilder\\Queue\\AiSiteBuildQueue' => '512M'", $source);
-        self::assertStringContainsString("'GuoLaiRen\\PageBuilder\\Queue\\AiSitePlanQueue' => '512M'", $source);
-        self::assertStringContainsString("'GuoLaiRen\\PageBuilder\\Queue\\AiSiteAssetQueue' => '512M'", $source);
         self::assertStringContainsString('ini_set(\'memory_limit\', $target)', $source);
         self::assertStringContainsString("'queue.worker.memory_limit_by_class.' . \$queueClass", $source);
     }

@@ -9,7 +9,7 @@ The legacy snapshot below is preserved only for backward context.
 # Active Task
 
 - Updated: 2026-03-23 10:24
-- Task File: dev/ai/codex/tasks/2026-03-23/2026-03-23-0953-websites-ai-workbench-pagebuilder-bridge.md
+
 - Status: completed
 
 ## Current Goal
@@ -18,8 +18,8 @@ Close the gap between the planned `Weline_Websites` AI site-building workbench a
 
 - confirm what is already finished under `dev/ai/codex/AI工作台/`
 - make the Websites AI workbench entry more human-friendly
-- let PageBuilder's AI site-agent workspace act as an extension of the Websites workbench
-- clean up the duplicated `Weline_Websites::site_builder_agent_pagebuilder` menu entry if the unified workbench now covers that path
+
+
 
 ## Latest Progress
 
@@ -27,28 +27,28 @@ Close the gap between the planned `Weline_Websites` AI site-building workbench a
 - Routed repo skill usage through `weline-framework-skill-router`, then loaded `extension-points` and `theme-development`.
 - Confirmed the planning docs under `dev/ai/codex/AI工作台/` are not fully implemented yet:
   - Epic 1 and Epic 2 are completed
-  - Epic 3+ (controller/UI/provider integration/PageBuilder provider) are still pending
+
 - Compared current live code paths:
   - `Weline_Websites` still uses the older one-shot `SiteBuilderAgent` form + SSE flow
-  - `GuoLaiRen_PageBuilder` already has the richer session-based `AiSiteAgent` workspace
-- Confirmed `Weline_Websites::site_builder_agent_pagebuilder` exists only as a duplicated menu node in `app/code/Weline/Websites/etc/backend/menu.xml`
+
+
 
 ## Verification
 
 - `php -l` passed for all touched PHP and `.phtml` files.
 - `app/code/Weline/Websites/etc/backend/menu.xml` parses successfully after rewrite.
-- `php bin/w setup:upgrade -m GuoLaiRen_PageBuilder -m Weline_Websites --yes` completed successfully.
-- `generated/extends.php` now contains `AiSiteBuilderProvider/PageBuilderProvider.php`.
+
+
 
 ## Risks / Notes
 
 - The worktree is dirty in many unrelated files; edits must remain tightly scoped.
-- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace.phtml` and `app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentSessionService.php` already contain local modifications and must be patched carefully.
-- Avoid forcing historical PageBuilder session migration in this pass.
+
+
 
 ## Next
 
 - If we continue this initiative, the next meaningful slice is to move from entry unification into true platform-level session/workspace unification:
   - Websites-controlled session/message/event/artifact workspace
-  - deeper PageBuilder provider adaptation away from its legacy private session tables
+
   - default provider conversation/domain/theme/draft flow completion

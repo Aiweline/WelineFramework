@@ -12,8 +12,8 @@ Date: 2026-04-30
 Workers were instructed not to touch:
 
 ```text
-app/code/GuoLaiRen/PageBuilder/Queue/AiSiteAssetQueue.php
-tests/e2e/specs/backend/pagebuilder-ai-site-workbench.spec.js
+
+
 ```
 
 ## Main Thread Scope
@@ -28,8 +28,8 @@ The main thread implemented the queue/scope propagation slice for Q01-Q03:
 Syntax checks passed for the two changed PHP files:
 
 ```powershell
-php -l app\code\GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService.php
-php -l app\code\GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent.php
+
+
 ```
 
 The main thread will not edit worker-owned skill files until the skill worker result is reviewed.

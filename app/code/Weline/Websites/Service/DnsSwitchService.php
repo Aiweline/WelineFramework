@@ -24,7 +24,7 @@ use Weline\Websites\Model\DomainRegistrarAccount;
  * - 业务侧（Cron / 后台批量切换）优先 {@see executeDnsSwitchWithStandardOptions}：等同 executeDnsSwitch +
  *   {@see buildStandardSwitchOptions}（env 公网 NS 等待 + 根域已绑 CDN 时 verify_cdn）。
  * - 底层唯一完整流水线 {@see executeDnsSwitch}（同步→改 NS→等待→推送→校验→写 Domain/Pool/cutover）。
- * - PageBuilder SSE 等在 {@see buildStandardSwitchOptions} 上 {@see array_merge} 自定义项（更长等待等）；`records_to_push` 仅作 Step1 后本地仍空时的兜底。
+ * - 调用方可在 {@see buildStandardSwitchOptions} 上 {@see array_merge} 自定义项；`records_to_push` 仅作 Step1 后本地仍空时的兜底。
  * - **非完整切换**：部分旧接口仅调注册商 {@see DomainRegistrarInterface::updateNameservers} 并 save Domain，不推送记录、
  *   不写 dns_cutover_complete；需全量迁移请走上述入口（如 Admin {@see \Weline\Websites\Controller\Admin\Domain::postSwitchDnsAccount}）。
  *

@@ -176,16 +176,6 @@ final class SessionServer
         $errno = 0;
         $errstr = '';
 
-        if ($this->port > 0) {
-            Processer::clearPortCache($this->port);
-            $existingPid = Processer::getProcessIdByPort($this->port);
-            if ($existingPid > 0 && $existingPid !== \getmypid()) {
-                $this->lastBindError = "port already owned by PID {$existingPid} ({$this->host}:{$this->port})";
-                $this->log("Failed to start: {$this->lastBindError}");
-                return false;
-            }
-        }
-
         $ctx = \stream_context_create([
             'socket' => ListenSocketOptions::streamContextOptions([]),
         ]);

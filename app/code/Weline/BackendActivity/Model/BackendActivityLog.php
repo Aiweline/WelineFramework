@@ -20,6 +20,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_module', columns: ['module'], comment: '模块')]
 #[Index(name: 'idx_response_time', columns: ['response_time'], comment: '响应时间')]
 #[Index(name: 'idx_response_code', columns: ['response_code'], comment: '响应状态码')]
+#[Index(name: 'idx_business_entity', columns: ['business_module', 'business_entity_type', 'business_entity_id'], comment: '业务实体索引')]
+#[Index(name: 'idx_business_action', columns: ['business_module', 'business_action'], comment: '业务动作索引')]
 class BackendActivityLog extends Model
 {
     public const schema_primary_key = 'backend_activity_log_id';
@@ -42,6 +44,12 @@ class BackendActivityLog extends Model
     const fields_response = 'response';
     const fields_response_code = 'response_code';
     const fields_response_time = 'response_time';
+    const fields_business_module = 'business_module';
+    const fields_business_entity_type = 'business_entity_type';
+    const fields_business_entity_id = 'business_entity_id';
+    const fields_business_action = 'business_action';
+    const fields_business_title = 'business_title';
+    const fields_business_payload = 'business_payload';
 
     #[Col('int', null, false, true, true, null, '主键ID')]
     public const schema_fields_ID = 'backend_activity_log_id';
@@ -77,6 +85,18 @@ class BackendActivityLog extends Model
     public const schema_fields_response_code = 'response_code';
     #[Col('decimal', '10,4', true, false, false, null, '响应时间秒')]
     public const schema_fields_response_time = 'response_time';
+    #[Col('varchar', 100, true, false, false, null, '业务模块')]
+    public const schema_fields_business_module = 'business_module';
+    #[Col('varchar', 100, true, false, false, null, '业务实体类型')]
+    public const schema_fields_business_entity_type = 'business_entity_type';
+    #[Col('varchar', 64, true, false, false, null, '业务实体ID')]
+    public const schema_fields_business_entity_id = 'business_entity_id';
+    #[Col('varchar', 80, true, false, false, null, '业务动作')]
+    public const schema_fields_business_action = 'business_action';
+    #[Col('varchar', 255, true, false, false, null, '业务标题')]
+    public const schema_fields_business_title = 'business_title';
+    #[Col('text', null, true, false, false, null, '业务上下文 JSON')]
+    public const schema_fields_business_payload = 'business_payload';
     function setRequestId(string $requestId):static
     {
         return $this->setData(self::schema_fields_request_id, $requestId);
@@ -212,5 +232,56 @@ class BackendActivityLog extends Model
     function getResponseTime():int|float
     {
         return $this->getData(self::schema_fields_response_time);
+    }
+    function setBusinessModule(string $businessModule):static
+    {
+        return $this->setData(self::schema_fields_business_module, $businessModule);
+    }
+    function getBusinessModule():string
+    {
+        return (string)$this->getData(self::schema_fields_business_module);
+    }
+    function setBusinessEntityType(string $businessEntityType):static
+    {
+        return $this->setData(self::schema_fields_business_entity_type, $businessEntityType);
+    }
+    function getBusinessEntityType():string
+    {
+        return (string)$this->getData(self::schema_fields_business_entity_type);
+    }
+    function setBusinessEntityId(string|int $businessEntityId):static
+    {
+        return $this->setData(self::schema_fields_business_entity_id, (string)$businessEntityId);
+    }
+    function getBusinessEntityId():string
+    {
+        return (string)$this->getData(self::schema_fields_business_entity_id);
+    }
+    function setBusinessAction(string $businessAction):static
+    {
+        return $this->setData(self::schema_fields_business_action, $businessAction);
+    }
+    function getBusinessAction():string
+    {
+        return (string)$this->getData(self::schema_fields_business_action);
+    }
+    function setBusinessTitle(string $businessTitle):static
+    {
+        return $this->setData(self::schema_fields_business_title, $businessTitle);
+    }
+    function getBusinessTitle():string
+    {
+        return (string)$this->getData(self::schema_fields_business_title);
+    }
+    function setBusinessPayload(string|array|null $businessPayload):static
+    {
+        if (is_array($businessPayload)) {
+            $businessPayload = json_encode($businessPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        }
+        return $this->setData(self::schema_fields_business_payload, $businessPayload);
+    }
+    function getBusinessPayload():string
+    {
+        return (string)$this->getData(self::schema_fields_business_payload);
     }
 }

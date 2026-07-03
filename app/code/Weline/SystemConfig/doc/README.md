@@ -98,6 +98,45 @@ $moduleConfigs = $config->getGroup('your_module');
 $allConfigs = $config->getAll();
 ```
 
+`w_query('system_config', ...)` 是模块之间读取 SystemConfig 的推荐入口。默认读取保持旧行为：
+
+```php
+$enabled = w_query('system_config', 'getConfig', [
+    'module' => 'Vendor_Module',
+    'area' => 'backend',
+    'key' => 'vendor_module/general/enabled',
+    'default' => 0,
+]);
+
+$map = w_query('system_config', 'getConfigs', [
+    'module' => 'Vendor_Module',
+    'area' => 'backend',
+]);
+```
+
+需要字段元信息时显式传 `return_type`：
+
+```php
+$field = w_query('system_config', 'getConfig', [
+    'module' => 'Vendor_Module',
+    'area' => 'backend',
+    'code' => 'general',
+    'key' => 'vendor_module/general/enabled',
+    'return_type' => 'field',
+]);
+
+$fields = w_query('system_config', 'getConfigs', [
+    'module' => 'Vendor_Module',
+    'area' => 'backend',
+    'return_type' => 'fields',
+]);
+```
+
+字段对象包含 `value`、`display_value`、`label`、`description`、`type`、`value_type`、
+`default`、`group`、`scope`、`options`、`field_found`、`value_found`、`has_override`、
+`base_version`、`is_sensitive`、`source` 和 `template`。字段属性不通过
+`.value` 或 `.label` 后缀读取；配置 key 始终是完整 key。
+
 ### 配置写入
 ```php
 use Weline\SystemConfig\Helper\Config;

@@ -133,7 +133,7 @@ final class DetectWebsiteTest extends TestCase
     {
         $websiteRows = [[
             'website_id' => 268,
-            'code' => 'pagebuilder-ai-card-game',
+            'code' => 'ai-card-game',
             'url' => 'http://p11005ce4.weline.test',
             'default_currency' => 'USD',
             'default_language' => 'en_US',

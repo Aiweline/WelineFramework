@@ -120,7 +120,7 @@ function parseFrontmatter(string $content): array
 
 function buildAdapter(string $name, string $description, string $relativeSource): string
 {
-    $description = yamlBlockText("WelineFramework local skill adapter for {$name}. Use when working in this repo on matching Weline, php bin/w, module, WLS, frontend, PageBuilder, ORM, testing, routing, ACL, i18n, queue, SSE, theme, template, service, cache, config, debug, docs, command, PHP 8.4, or Codex task workspace topics. Read {$relativeSource} before acting.");
+    $description = yamlBlockText("WelineFramework local skill adapter for {$name}. Use when working in this repo on matching Weline, php bin/w, module, WLS, frontend, ORM, testing, routing, ACL, i18n, queue, SSE, theme, template, service, cache, config, debug, docs, command, PHP 8.4, or Codex task workspace topics. Read {$relativeSource} before acting.");
 
     return <<<MD
 ---

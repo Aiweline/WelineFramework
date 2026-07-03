@@ -1,0 +1,98 @@
+# CodeGraphContext ignore rules for WelineFramework.
+# Keep the graph focused on framework/business source, not dependencies,
+# runtime data, generated artifacts, AI work logs, or bundled frontend vendors.
+
+# VCS / IDE / local OS
+.git/
+.idea/
+.vscode/
+.DS_Store
+
+# Dependency trees
+vendor/
+node_modules/
+bower_components/
+jspm_packages/
+venv/
+.venv/
+env/
+.env/
+
+# Generated framework/runtime output
+generated/
+var/
+tests/var/
+pub/static/
+pub/media/
+coverage/
+logs/
+tmp/
+temp/
+dist/
+build/
+target/
+out/
+
+# Code intelligence outputs. Indexing these recursively makes CGC very slow.
+.codex/code-intelligence/
+.codegraphcontext/
+repomix-output.*
+repopack-output.*
+tags
+
+# Codex/AI operational history and generated planning archives.
+.codex/skills/
+dev/ai/archive/
+dev/ai/code_backup/
+dev/ai/codex/tasks/
+dev/ai/codex/plugins/
+dev/ai/codex/automations/
+dev/ai/codex/AI工作台/
+
+# Large frontend vendor bundles and generated/static assets.
+app/code/**/view/statics/**/assets/libs/
+app/code/**/view/statics/**/assets/vendor/
+app/code/**/view/statics/**/assets/
+app/code/**/view/statics/**/lib/
+app/code/**/view/statics/**/libs/
+app/code/**/view/statics/**/vendor/
+app/code/**/view/statics/**/build/
+app/code/**/view/statics/**/*.map
+app/code/**/view/statics/**/*.min.js
+app/code/**/view/statics/**/*.min.css
+app/code/**/view/statics/**/*bundle*.js
+app/code/**/view/statics/**/*bundle*.css
+app/code/**/view/statics/**/ckeditor.js
+app/code/**/view/statics/**/ckeditor.js.map
+app/design/**/assets/
+
+# Generated translations and documentation are useful to read directly, but not
+# useful for code relationship indexing.
+app/code/**/i18n/*.csv
+**/doc/**
+**/docs/**
+
+# Binary/media/font/archive/cache/log files.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.webp
+*.mp4
+*.mp3
+*.woff
+*.woff2
+*.ttf
+*.eot
+*.zip
+*.tar
+*.gz
+*.tgz
+*.log
+*.bak
+*.cache
+*.sqlite
+*.sqlite3
+*.db

@@ -831,13 +831,22 @@ class SharedStateServiceManager
      */
     protected function forceStopSharedService(array $record): bool
     {
+        $role = $this->normalizeRoleName((string) ($record['role'] ?? ''));
+        $host = \trim((string) ($record['host'] ?? '127.0.0.1'));
         $port = (int) ($record['port'] ?? 0);
+        $tokenFileName = \trim((string) ($record['token_file_name'] ?? $this->defaultTokenForRole($role)));
 
-        if ($port > 0) {
-            return $this->sendSharedServiceServerShutdown($record);
+        if ($host === '' || $port <= 0) {
+            return false;
         }
 
-        return false;
+        if (!$this->probeRunningSharedService(['host' => $host, 'port' => $port], $tokenFileName)
+            && !$this->probeTcpPortInUse($host, $port)
+        ) {
+            return false;
+        }
+
+        return $this->sendSharedServiceServerShutdown($record);
     }
 
     protected function sendSharedServiceConsumerShutdown(string $role, string $consumerCode, array $runtime): bool
@@ -907,7 +916,37 @@ class SharedStateServiceManager
 
     protected function isPortOccupied(int $port): bool
     {
-        return $port > 0 && (Processer::isPortUsedByWeline($port) || Processer::isPortInUse($port));
+        return $this->probePortInUse($port);
+    }
+
+    protected function probeTcpPortInUse(string $host, int $port, float $timeoutSec = 0.15): bool
+    {
+        $host = \trim($host);
+        if ($host === '' || $port <= 0) {
+            return false;
+        }
+
+        $targetHost = $host;
+        if (\strpos($host, ':') !== false && ($host[0] ?? '') !== '[') {
+            $targetHost = '[' . $host . ']';
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $socket = @\stream_socket_client(
+            'tcp://' . $targetHost . ':' . $port,
+            $errno,
+            $errstr,
+            $timeoutSec,
+            \STREAM_CLIENT_CONNECT
+        );
+        if ($socket === false) {
+            return false;
+        }
+
+        @\fclose($socket);
+
+        return true;
     }
 
     /**
@@ -1751,11 +1790,10 @@ class SharedStateServiceManager
     }
 
     /**
-     * 判定端口是否被 OS 级占用（TCP LISTEN / socket connect 成功等）。
+     * 判定共享 sidecar 端口是否有真实 TCP 监听。
      *
      * 单独提为 protected 钩子有两个意图：
-     * 1. 生产路径保持原语义 —— 委托给 `Processer::isPortInUse()`，其内部对 Windows/Linux 各有
-     *    带缓存（10s TTL）和多级兜底的实现；
+     * 1. 生产路径用短 TCP 连接确认监听，避免进程表/命令行探测把空端口误判为占用；
      * 2. 单元测试路径 —— 通过子类 override 屏蔽宿主环境/静态缓存带来的非确定性。
      *    `isPortCandidateReusable()` 是 `resolveSharedServicePort()` 在 `explicitConfigured`
      *    早抛分支前的唯一判据，若直接静态调用会让 `SharedStateServiceManagerTest` 的断言随
@@ -1763,7 +1801,7 @@ class SharedStateServiceManager
      */
     protected function probePortInUse(int $port): bool
     {
-        return Processer::isPortInUse($port);
+        return $this->probeTcpPortInUse('127.0.0.1', $port);
     }
 
     /**

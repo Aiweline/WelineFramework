@@ -1,6 +1,6 @@
 ---
 name: weline-framework-skill-router
-description: Use when a WelineFramework task is broad or ambiguous and you need to choose which repo-specific development skill to read from `dev/ai/skills`. Trigger for mixed framework tasks that may involve modules, WLS, session, frontend, routing, ACL, events, testing, or PageBuilder.
+
 ---
 
 # Weline Framework Skill Router

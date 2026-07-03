@@ -13,7 +13,10 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
+use Weline\Theme\Api\TargetPreviewPayloadProviderInterface;
+use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreparedContentStore;
+use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 /**
  * Keep layout rendering lifecycle unified for controller template fetch.
@@ -735,12 +738,21 @@ HTML;
             $metaData = [];
         }
         $metaData['contentTemplate'] = $contentTemplate;
+        $targetPreviewMeta = $this->resolveTargetPreviewMeta($template, $contentTemplate);
+        $hasTargetPreviewContent = array_key_exists('content', $targetPreviewMeta);
+        if (!empty($targetPreviewMeta) || $hasTargetPreviewContent) {
+            $metaData = array_merge($metaData, $targetPreviewMeta);
+        }
+        $preserveAssignedContentMeta = $hasTargetPreviewContent
+            || $this->shouldPreserveAssignedContentMeta($template, $contentTemplate, $metaData);
         if ($contentRenderKey !== '') {
             unset($metaData['content']);
             $metaData['contentRenderKey'] = $contentRenderKey;
         } else {
             unset($metaData['contentRenderKey']);
-            $metaData['content'] = $contentHtml;
+            if (!$preserveAssignedContentMeta) {
+                $metaData['content'] = $contentHtml;
+            }
         }
         $metaData = $this->mergeTemplateRootAssignsIntoMeta($template, $metaData);
         $metaData = $this->ensureAccountSidebarMeta($template, $layoutTemplate, $contentTemplate, $metaData, $contentHtml);
@@ -769,6 +781,154 @@ HTML;
         $template->setData('contentTemplate', $contentTemplate);
 
         return $contentRenderKey;
+    }
+
+    /**
+     * @param array<string, mixed> $metaData
+     */
+    private function shouldPreserveAssignedContentMeta(Template $template, string $contentTemplate, array $metaData): bool
+    {
+        if (!array_key_exists('content', $metaData)) {
+            return false;
+        }
+
+        $targetPreviewPayload = $template->getData('target_preview_payload');
+        if (!is_array($targetPreviewPayload) || empty($targetPreviewPayload)) {
+            return false;
+        }
+
+        return $this->isThemePreviewContentTemplate($contentTemplate);
+    }
+
+    private function isThemePreviewContentTemplate(string $contentTemplate): bool
+    {
+        $normalized = str_replace('\\', '/', strtolower($contentTemplate));
+        return str_contains($normalized, 'templates/frontend/theme-preview/content.phtml')
+            || str_contains($normalized, 'templates/backend/theme-preview/content.phtml');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveTargetPreviewMeta(Template $template, string $contentTemplate): array
+    {
+        if (!$this->isThemePreviewContentTemplate($contentTemplate)) {
+            return [];
+        }
+
+        $cachedMeta = $template->getData('target_preview_meta');
+        if (is_array($cachedMeta)) {
+            return $cachedMeta;
+        }
+
+        [$targetType, $targetId] = $this->resolvePreviewTarget();
+        if ($targetType === '' || $targetId <= 0) {
+            $template->setData('target_preview_meta', []);
+            return [];
+        }
+
+        $layoutType = trim((string)($template->getData('layoutType') ?: $this->readRequestValue('layout_type')));
+        if ($layoutType === '') {
+            $layoutType = trim((string)$this->readRequestValue('page_type'));
+        }
+        $layoutOption = trim((string)($template->getData('layoutOption') ?: $this->readRequestValue('layout_option')));
+        $layoutOption = $layoutOption !== '' ? $layoutOption : 'default';
+        $baseLayoutType = str_contains($layoutType, '.') ? explode('.', $layoutType, 2)[0] : $layoutType;
+        $scope = trim((string)$this->readRequestValue('scope'));
+        $scope = $scope !== '' ? $scope : PreviewContextService::DEFAULT_SCOPE;
+
+        try {
+            /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
+            $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+            $provider = $targetTypeRegistry->get($targetType);
+            if (!$provider instanceof TargetPreviewPayloadProviderInterface) {
+                $template->setData('target_preview_meta', []);
+                return [];
+            }
+            if (!$provider->canUseLayoutType($layoutType) && !$provider->canUseLayoutType($baseLayoutType)) {
+                $template->setData('target_preview_meta', []);
+                return [];
+            }
+
+            $payload = $provider->resolvePreviewPayload($targetId, [
+                'layout_type' => $provider->canUseLayoutType($layoutType) ? $layoutType : $baseLayoutType,
+                'layout_option' => $layoutOption,
+                'editor_area' => (string)$this->readRequestValue('editor_area') ?: PreviewContextService::AREA_FRONTEND,
+                'preview_area' => (string)$this->readRequestValue('preview_area') ?: PreviewContextService::AREA_FRONTEND,
+                'preview_mode' => (string)$this->readRequestValue('preview_mode') ?: PreviewContextService::DEFAULT_PREVIEW_MODE,
+                'status' => (string)$this->readRequestValue('status') ?: PreviewContextService::DEFAULT_STATUS,
+                'scope' => $scope,
+                'preview' => true,
+            ]);
+            $payload = is_array($payload) ? $payload : [];
+            $meta = $this->buildTargetPreviewMeta($payload);
+            $template->setData('target_preview_payload', $payload);
+            $template->setData('target_preview_meta', $meta);
+
+            return $meta;
+        } catch (\Throwable) {
+            $template->setData('target_preview_meta', []);
+            return [];
+        }
+    }
+
+    /**
+     * @return array{0:string,1:int}
+     */
+    private function resolvePreviewTarget(): array
+    {
+        $targetType = strtolower(trim((string)$this->readRequestValue('theme_layout_target_type')));
+        $targetId = (int)$this->readRequestValue('theme_layout_target_id');
+        if ($targetType !== '' && $targetId > 0) {
+            return [$targetType, $targetId];
+        }
+
+        $sourceTargetType = strtolower(trim((string)$this->readRequestValue('theme_layout_source_target_type')));
+        $sourceTargetId = (int)$this->readRequestValue('theme_layout_source_target_id');
+        if ($sourceTargetType !== '' && $sourceTargetId > 0) {
+            return [$sourceTargetType, $sourceTargetId];
+        }
+
+        return ['', 0];
+    }
+
+    private function readRequestValue(string $key): mixed
+    {
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $value = $request->getData($key);
+            if ($value !== null && $value !== '') {
+                return $value;
+            }
+
+            $value = $request->getParam($key, null);
+            if ($value !== null && $value !== '') {
+                return $value;
+            }
+
+            return $request->getGet($key, '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function buildTargetPreviewMeta(array $payload): array
+    {
+        $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
+        $content = is_array($payload['content'] ?? null) ? $payload['content'] : [];
+        if (!array_key_exists('content', $meta) && array_key_exists('html', $content)) {
+            $meta['content'] = (string)$content['html'];
+        }
+        if (!array_key_exists('title', $meta) && array_key_exists('title', $content)) {
+            $meta['title'] = (string)$content['title'];
+        }
+
+        return $meta;
     }
 
     /**

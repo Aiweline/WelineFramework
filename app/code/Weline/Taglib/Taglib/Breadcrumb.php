@@ -43,7 +43,7 @@ class Breadcrumb implements \Weline\Taglib\TaglibInterface
      */
     static function attr(): array
     {
-        return ['model' => 1, 'action_field' => 0, 'id_field' => 0, 'parent_field' => 0, 'order_field' => 0, 'name_field' => 0];
+        return ['model' => 1, 'source' => 0, 'action_field' => 0, 'id_field' => 0, 'parent_field' => 0, 'order_field' => 0, 'name_field' => 0];
     }
 
     /**
@@ -68,31 +68,46 @@ class Breadcrumb implements \Weline\Taglib\TaglibInterface
     static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            $request      = self::getRequest();
-            $path         = $request->getRouteUrlPath();
-            $model        = $attributes['model'];
-            $action_field = $attributes['action_field'] ?? 'action';
-            $field        = $attributes['id_field'] ?? '';
-            $parent_field = $attributes['parent_field'] ?? 'pid';
-            $name_field   = $attributes['name_field'] ?? 'name';
-            $order_field  = $attributes['order_field'] ?? 'position';
-            $sort         = $attributes['sort'] ?? 'ASC';
-
-            $html = '<ol class=\'breadcrumb m-0\'>';
-            /**@var \Weline\Framework\Database\Model $model */
-            $model = ObjectManager::getInstance($model);
-            $menu  = $model->reset()->where($action_field, $path)->find()->fetch();
-            if (!$menu->getId()) {
-                return '';
-            }
-            $current_html = '';
-            self::getHtml($menu, $name_field, $action_field, $current_html);;
-            $menu->getParentPaths($model, $field, $parent_field, $order_field, $sort);
-            $parent = $menu->getData('parents')[0] ?? [];
-            if ($parent) self::breadcrumb($parent, $html, $action_field, $name_field);
-            $html .= "{$current_html}</ol>";
-            return $html;
+            $attributesExport = var_export($attributes, true);
+            return "<?php echo \\Weline\\Taglib\\Taglib\\Breadcrumb::render({$attributesExport}); ?>";
         };
+    }
+
+    public static function render(array $attributes): string
+    {
+        $request      = self::getRequest();
+        $path         = $request->getRouteUrlPath();
+        $model        = (string)($attributes['model'] ?? '');
+        $source       = trim((string)($attributes['source'] ?? ''));
+        $action_field = $attributes['action_field'] ?? 'action';
+        $field        = $attributes['id_field'] ?? '';
+        $parent_field = $attributes['parent_field'] ?? 'pid';
+        $name_field   = $attributes['name_field'] ?? 'name';
+        $order_field  = $attributes['order_field'] ?? 'position';
+        $sort         = $attributes['sort'] ?? 'ASC';
+
+        if ($model === '') {
+            return '';
+        }
+
+        $html = '<ol class=\'breadcrumb m-0\'>';
+        /** @var \Weline\Framework\Database\Model $model */
+        $model = ObjectManager::getInstance($model);
+        if ($source !== '') {
+            $menu = $model->reset()->where('source', $source)->find()->fetch();
+        } else {
+            $menu = $model->reset()->where($action_field, $path)->find()->fetch();
+        }
+        if (!$menu->getId()) {
+            return '';
+        }
+        $current_html = '';
+        self::getHtml($menu, $name_field, $action_field, $current_html);
+        $menu->getParentPaths($model, $field, $parent_field, $order_field, $sort);
+        $parent = $menu->getData('parents')[0] ?? [];
+        if ($parent) self::breadcrumb($parent, $html, $action_field, $name_field);
+        $html .= "{$current_html}</ol>";
+        return $html;
     }
 
     public static function breadcrumb(Model $parent, string &$html, &$action_field, &$name_field)
@@ -189,9 +204,7 @@ DOC
      */
     static function getRequest(): Request
     {
-        if (!isset(self::$request)) {
-            self::$request = ObjectManager::getInstance(Request::class);
-        }
+        self::$request = ObjectManager::getInstance(Request::class);
         return self::$request;
     }
 }

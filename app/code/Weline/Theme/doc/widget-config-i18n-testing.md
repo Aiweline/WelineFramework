@@ -40,7 +40,7 @@ php bin/w s:up
 - ✅ 语言切换器UI（默认、简体中文、English）
 - ✅ `reloadWidgetConfigWithLocale()` - 切换语言重新加载
 - ✅ `saveWidgetConfigWithLocale()` - 保存时传递locale
-- ✅ 实时切换语言并更新表单值
+- ✅ 实时切换语言并更新表单值与可视化预览
 
 ## Phase 5: 功能验证测试
 

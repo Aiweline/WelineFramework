@@ -14,8 +14,8 @@ Do not integrate with Stage1 or Stage2 prompts yet.
 
 ## Touch Points
 
-- `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/*`
-- PageBuilder unit tests
+
+
 
 ## Implementation Steps
 

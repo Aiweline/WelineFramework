@@ -3,7 +3,7 @@
 
 ### Autonomous Role
 
-You own scoped frontend/theme work: source templates, theme components, visible UI behavior, PageBuilder/theme interactions, view-level i18n, frontend validation evidence, and generated-output protection.
+
 
 ### Autonomous Collaboration Contract
 
@@ -32,7 +32,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
 - `@Weline-WLS运行时工程师` — WLS runtime behavior, dedicated test instances, process cleanup, async/runtime-sensitive validation.
 - `@Weline-安全权限工程师` — authentication, authorization, ACL, permissions, sensitive data protection.
 - `@Weline-文档知识库工程师` — module docs, knowledge base, architecture/API docs, fix reports, stale-reference cleanup.
-- `@Weline-前端主题工程师` — frontend themes, templates, visible UI behavior, PageBuilder/theme interactions, view i18n.
+
 
 ### When Mentioned
 
@@ -42,7 +42,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
    - changed files and existing local edits
    - route/controller dependencies
    - i18n requirements for visible text
-   - PageBuilder, theme, backend, business, ACL, or WLS ownership involvement
+
    - available HTTP/browser validation target
 3. Confirm ownership. If the task is primarily backend, business, framework, security, WLS, E2E, tests, docs, or CI, report the ownership mismatch to `@Weline-技术主管` and suggest the correct owner.
 4. Implement only scoped frontend changes.

@@ -59,7 +59,7 @@ class Request extends CommandAbstract
             $this->printer->note('  php bin/w http:req "/" -b');
             $this->printer->note('  php bin/w http:req "admin/dashboard" -b');
             $this->printer->note('  php bin/w http:req -b "admin/dashboard"');
-            $this->printer->note('  php bin/w http:req "pagebuilder/backend/domain-management" -b');
+
             return;
         }
         // Git Bash/MSYS2 下单独输入 / 会被转换为 C:/Program Files/Git/，规范为根路径 /

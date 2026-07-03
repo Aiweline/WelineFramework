@@ -23,6 +23,13 @@
               icon="mdi mdi-domain"
               order="20"/>
 
+        <menu source="Weline_Websites::site_builder_agent"
+              name="site_builder_agent"
+              title="AI &#24314;&#31449;&#24037;&#20316;&#21488;"
+              action="*/backend/site-builder-agent/index"
+              icon="mdi mdi-robot"
+              order="25"/>
+
         <menu source="Weline_Websites::website_maintenance"
               name="website_maintenance"
               title="&#32593;&#31449;&#32500;&#25252;"
@@ -36,13 +43,6 @@
               action="*/backend/backup"
               icon="mdi mdi-backup-restore"
               order="40"/>
-
-        <menu source="Weline_Websites::site_builder_agent"
-              name="site_builder_agent"
-              title="&#65;&#73;&#32;&#24314;&#31449;&#24037;&#20316;&#21488;"
-              action="websites/backend/site-builder-agent/index?provider=pagebuilder&amp;"
-              icon="mdi mdi-robot"
-              order="50"/>
 
         <menu source="Weline_Websites::provisioning"
               name="websites_provisioning"

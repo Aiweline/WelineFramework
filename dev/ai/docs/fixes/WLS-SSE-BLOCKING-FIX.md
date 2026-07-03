@@ -12,7 +12,7 @@
 
 ### 根本原因
 
-在 `app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php` 的 `handleStreamSse()` 方法中：
+
 
 ```php
 // 问题代码
@@ -160,7 +160,7 @@ while (\time() < $deadline && $sse->isAlive()) {
 
 ## 相关文件
 
-- `app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php` - SSE 控制器（已修复）
+
 - `app/code/Weline/Framework/Http/Sse/SseWriter.php` - SSE 写入器
 - `app/code/Weline/Framework/Http/Sse/SseContext.php` - SSE 上下文
 

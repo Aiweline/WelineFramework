@@ -26,7 +26,7 @@ private function handleStreamSse(): void
 
     // ... 验证和初始化 ...
 
-    $sse->sendEvent('start', ['message' => __('已连接 PageBuilder 工作区事件流')]);
+
     $sse->sendEvent('snapshot', $this->buildWorkspaceState($session, $adminId, 40, true));
 
     // 关键优化：短轮询模式，立即返回，不占用 Worker
@@ -115,7 +115,7 @@ private function handleStreamSse(): void
 let lastEventId = 0;
 
 async function connectSSE() {
-    const eventSource = await Weline.Api.stream('pagebuilder.logs', {
+
         public_id: publicId,
         last_event_id: lastEventId,
     });

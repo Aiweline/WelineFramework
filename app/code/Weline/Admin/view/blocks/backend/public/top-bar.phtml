@@ -45,6 +45,50 @@ $logoSm = $resolveBackendLogo('logo_sm', 'Weline_Admin::assets/images/logo-sm.pn
 $logoDark = $resolveBackendLogo('logo_dark', 'Weline_Admin::assets/images/logo-dark.png', 70, 70);
 $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo-light.png', 70, 70);
 ?>
+<style data-no-extract="true" data-admin-topbar-dark-fix="true">
+    #page-topbar .navbar-header .header-item,
+    #page-topbar .navbar-header .dropdown .header-item,
+    #page-topbar .navbar-header .dropdown .show.header-item {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-width: 44px !important;
+        height: 44px !important;
+        margin: 0 3px !important;
+        padding: 0 14px !important;
+        border-radius: 12px !important;
+        line-height: 1 !important;
+    }
+
+    #page-topbar #vertical-menu-btn,
+    #page-topbar #theme-mode-toggle,
+    #page-topbar .navbar-header .noti-icon,
+    #page-topbar .navbar-header .weline-notif-btn {
+        width: 44px !important;
+        min-width: 44px !important;
+        padding: 0 !important;
+    }
+
+    #page-topbar .navbar-header .header-item i {
+        line-height: 1 !important;
+    }
+
+    #page-topbar .navbar-brand-box .logo img {
+        object-fit: contain !important;
+        box-sizing: border-box !important;
+    }
+
+    body[data-theme-mode="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo img,
+    body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
+        padding: 4px !important;
+        border-radius: 12px !important;
+        background: rgba(255, 255, 255, 0.92) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+    }
+</style>
 <header id="page-topbar">
     <div class="navbar-header">
         <div class="d-flex align-items-center">
@@ -94,7 +138,7 @@ $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo
                          src="<?= $this->getAvatar() ?>"
                          alt="avatar">
                     <span class="d-none d-xl-inline-block ms-1"><?= $this->getUser()->getUsername() ?></span>
-                    <i class="mdi mdi-chevron-down d-none d-xl-inline-block"></i>
+                    <i class="ri-arrow-down-s-line d-none d-xl-inline-block"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end">
                     <a class="dropdown-item text-danger" href="<?= $this->getBackendUrl('admin/login/logout') ?>">
@@ -105,7 +149,7 @@ $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo
 
             <div class="dropdown d-inline-block">
                 <button type="button" class="btn header-item noti-icon right-bar-toggle waves-effect">
-                    <i class="mdi mdi-cog"></i>
+                    <i class="ri-settings-3-line"></i>
                 </button>
             </div>
         </div>

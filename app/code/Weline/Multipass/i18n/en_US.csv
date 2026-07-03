@@ -1,31 +1,32 @@
-﻿"client_id 不能为空","client_id 不能为空"
-应用不存在或已禁用,应用不存在或已禁用
-回调地址不匹配,回调地址不匹配
-授权信息获取成功,授权信息获取成功
-请先登录后再授权,请先登录后再授权
-授权成功,授权成功
-授权码或客户端凭证无效,授权码或客户端凭证无效
-"Token 发放成功","Token 发放成功"
-"刷新 token 无效","刷新 token 无效"
-"Token 刷新成功","Token 刷新成功"
-"Token 不能为空","Token 不能为空"
-"Token 不存在或已失效","Token 不存在或已失效"
-"Token 已撤销","Token 已撤销"
-"Token 无效或已过期","Token 无效或已过期"
-用户资料获取成功,用户资料获取成功
-账号绑定成功,账号绑定成功
+﻿"Multipass 模块安装完成","Multipass 模块安装完成"
+"安装失败: %{1}","Installation failed: %{1}"
+"缺少 Multipass token","Missing Multipass token"
 缺少站点ID,"Missing site ID"
-缺少密钥,"Missing key"
-用户名或邮箱至少需要提供一个,"Username or email must be provided at least one"
 站点配置不存在,"Site Configuration Not Found"
-密钥验证失败,"Secret key verification failed"
-站点已禁用,"Site disabled"
-Token生成成功,"Token generation successful"
-Token生成失败：%{1},"Token generation failed: %{1}"
-缺少token,"Missing token"
-Token验证失败或已过期,"Token verification failed or expired"
-Token验证成功,"Token verification successful"
-Token验证失败：%{1},"Token verification failed: %{1}"
+该站点不支持前端登录,"This site does not support frontend login"
+该站点已禁用,"This site has been disabled"
+"Token 验证失败或已过期","Token verification failed or expired"
+用户数据不完整,"User data is incomplete"
+用户不存在，请先在系统中注册,"User does not exist; please register in the system first"
+登录成功,"Login successful"
+登录失败：%{1},"Login failed: %{1}"
+请先登录后再继续授权,请先登录后再继续授权
+授权应用已撤销,"Authorized app has been revoked"
+授权应用不存在或无权撤销,"Authorized app does not exist or cannot be revoked"
+"Multipass 管理申请已提交并自动通过","Multipass management application submitted and auto-approved"
+"Multipass 管理申请已提交，请等待审核","Multipass management application submitted; please wait for review"
+"客户端 ID：%{1}","Client ID: %{1}"
+客户端密钥：%{1}（请妥善保管，仅显示一次）,"Client secret: %{1} (keep it safe; shown only once)"
+"该应用已启用，可立即用于 Weline 授权登录","This app is enabled and can be used for Weline authorized login immediately"
+"审核通过后，该应用才能用于 Weline 授权登录","This app can be used for Weline authorized login only after approval"
+"Multipass 管理申请提交失败：%{1}","Failed to submit Multipass management application: %{1}"
+官网授权登录未配置,"Official authorization login is not configured"
+官网授权登录成功,"Official authorization login succeeded"
+官网授权登录失败：%{1},"Official authorization login failed: %{1}"
+"授权应用访问你的 Weline 账号","授权应用访问你的 Weline 账号"
+该站点不支持后端登录,"This site does not support backend login"
+用户不存在，请联系管理员,"User does not exist; please contact the administrator"
+用户已被禁用,"User has been disabled"
 Multipass账户管理,"Multipass account management"
 系统管理,"System Management"
 "Multipass账户管理 - 前端账户","Multipass account management - front-end account"
@@ -34,21 +35,15 @@ Multipass账户管理,"Multipass account management"
 获取失败：%{1},"Failed to get: %{1}"
 缺少用户ID,"Missing user ID"
 站点类型与用户类型不匹配,"Site type does not match user type"
+站点已禁用,"Site disabled"
 用户不存在,"User does not exist"
-用户已被禁用,"User has been disabled"
+Token生成成功,"Token generation successful"
+Token生成失败：%{1},"Token generation failed: %{1}"
 官网登录提供方,"Official login provider"
 官网登录提供方已保存,"Official login provider saved"
 保存失败：%{1},"Save failed: %{1}"
 官网登录提供方已删除,"Official login provider deleted"
 官网登录提供方不存在,"Official login provider does not exist"
-"缺少 Multipass token","Missing Multipass token"
-该站点不支持后端登录,"This site does not support backend login"
-该站点已禁用,"This site has been disabled"
-"Token 验证失败或已过期","Token verification failed or expired"
-用户数据不完整,"User data is incomplete"
-用户不存在，请联系管理员,"User does not exist; please contact the administrator"
-登录成功,"Login successful"
-登录失败：%{1},"Login failed: %{1}"
 站点管理,"Site Management"
 站点名称不能为空,"Site Name cannot be empty"
 站点URL不能为空,"Site URL cannot be empty"
@@ -66,26 +61,198 @@ Multipass账户管理,"Multipass account management"
 "互通应用已创建，请立即保存 client_secret","互通应用已创建，请立即保存 client_secret"
 "应用 ID 不能为空","应用 ID 不能为空"
 "client_secret 已轮换，请立即保存","client_secret 已轮换，请立即保存"
-请先登录后再继续授权,请先登录后再继续授权
-授权应用已撤销,"Authorized app has been revoked"
-授权应用不存在或无权撤销,"Authorized app does not exist or cannot be revoked"
-官网授权登录未配置,"Official authorization login is not configured"
-官网授权登录成功,"Official authorization login succeeded"
-官网授权登录失败：%{1},"Official authorization login failed: %{1}"
-"授权应用访问你的 Weline 账号","授权应用访问你的 Weline 账号"
-该站点不支持前端登录,"This site does not support frontend login"
-用户不存在，请先在系统中注册,"User does not exist; please register in the system first"
-应用名称不能为空,应用名称不能为空
-回调地址格式不正确,回调地址格式不正确
-可信域名不能为空,可信域名不能为空
-应用不存在,应用不存在
-用户未登录,用户未登录
-当前授权不允许绑定外部账号,当前授权不允许绑定外部账号
-外部账号标识不能为空,外部账号标识不能为空
+缺少密钥,"Missing key"
+用户名或邮箱至少需要提供一个,"Username or email must be provided at least one"
+密钥验证失败,"Secret key verification failed"
+缺少token,"Missing token"
+Token验证失败或已过期,"Token verification failed or expired"
+Token验证成功,"Token verification successful"
+Token验证失败：%{1},"Token verification failed: %{1}"
+"client_id 不能为空","client_id 不能为空"
+应用不存在或已禁用,应用不存在或已禁用
+回调地址不匹配,回调地址不匹配
+授权信息获取成功,授权信息获取成功
+请先登录后再授权,请先登录后再授权
+授权成功,授权成功
+授权码或客户端凭证无效,授权码或客户端凭证无效
+"Token 发放成功","Token 发放成功"
+"刷新 token 无效","刷新 token 无效"
+"Token 刷新成功","Token 刷新成功"
+"Token 不能为空","Token 不能为空"
+"Token 不存在或已失效","Token 不存在或已失效"
+"Token 已撤销","Token 已撤销"
+"Token 无效或已过期","Token 无效或已过期"
+用户资料获取成功,用户资料获取成功
+账号绑定成功,账号绑定成功
+已通过,Approved
+已拒绝,Rejected
+待审核,"Pending review"
+启用,启用
+删除态,删除态
+禁用,禁用
+开发者,Developer
+授权应用,"Authorized apps"
+管理通信登录与账号绑定,"Manage communication login and account bindings"
+"Multipass 管理申请","Multipass management application"
+申请接入网站授权登录,"Apply for website authorized login"
+使用官网登录,"Sign in with official account"
+未知应用,未知应用
+"Weline 账号授权","Weline 账号授权"
+"请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。","请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。"
+你还没有登录。登录后会回到这里继续确认授权。,你还没有登录。登录后会回到这里继续确认授权。
+请求授权的应用,请求授权的应用
+"当前 Weline 账号","当前 Weline 账号"
+已登录用户,已登录用户
+登录后将显示你的账号信息，并由你决定是否继续授权。,登录后将显示你的账号信息，并由你决定是否继续授权。
+应用请求的权限,应用请求的权限
 低风险,"Low risk"
-高风险,"High risk"
-中风险,"Medium risk"
-以下授权范围不可用：%{1},以下授权范围不可用：%{1}
+需确认,需确认
+取消,Cancel
+同意并继续,"Allow and continue"
+登录后继续,登录后继续
+如果你不认识这个应用或域名，请取消授权。,如果你不认识这个应用或域名，请取消授权。
+"提交你的网站回调地址后会自动生成并启用客户端，可立即把你的网站登录与 Weline 账号授权登录挂钩。","Submit your website callback URL to automatically generate and enable a client, then connect your site's login with Weline account authorization immediately."
+"提交你的网站回调地址，审核通过后即可把你的网站登录与 Weline 账号授权登录挂钩。","Submit your website callback URL. After approval, you can connect your site's login with Weline account authorization."
+自动通过,Auto-approved
+需审核,"Review required"
+我的申请,"My applications"
+已提交的网站接入申请会显示在这里。,"Submitted website integration applications appear here."
+"还没有 Multipass 管理申请","No Multipass management applications yet"
+填写下方表单后，系统会自动通过并启用你的应用。,"After you complete the form below, the system will automatically approve and enable your app."
+填写下方表单后，平台管理员会审核你的网站和回调地址。,"After you complete the form below, platform administrators will review your site and callback URL."
+"客户端 ID","Client ID"
+回调地址,回调地址
+最近更新,"Last updated"
+"申请正在审核中。审核通过并启用后，该客户端才能发起 Weline 授权登录。","The application is under review. After approval and enablement, this client can start Weline authorized login."
+申请未通过。请调整网站信息后重新提交。,"The application was rejected. Please adjust your site information and submit again."
+"申请已通过。若需要重新生成密钥，请联系管理员轮换 client_secret。","The application was approved. Contact an administrator to rotate client_secret if you need a new secret."
+提交新申请,"Submit new application"
+"回调地址必须是你的网站接收授权码的完整 HTTPS 地址。","The callback URL must be the full HTTPS address where your site receives authorization codes."
+应用名称,应用名称
+应用类型,应用类型
+网站域名,"Website domain"
+留空时会从回调地址自动提取域名。,"Leave blank to extract the domain from the callback URL automatically."
+"授权码换取 token 时会精确校验这个地址。","This exact address is checked when exchanging an authorization code for a token."
+申请授权范围,"Requested authorization scopes"
+提交后会生成客户端凭据,"Client credentials will be generated after submission"
+客户端密钥只显示一次。自动通过后凭据会立即生效，请妥善保存。,"The client secret is shown only once. Credentials become active immediately after auto-approval, so keep them safe."
+客户端密钥只显示一次。审核通过前凭据不会生效，请妥善保存。,"The client secret is shown only once. Credentials are inactive before approval, so keep them safe."
+提交申请,"Submit application"
+例如：我的社区网站,"For example: My community site"
+"example.com 或 https://example.com","example.com or https://example.com"
+基础资料,基础资料
+邮箱地址,邮箱地址
+账号绑定,账号绑定
+应用商城账号,应用商城账号
+社区账号,社区账号
+社区,社区
+自定义,自定义
+"这里展示通过 Weline 账号授权通信登录的可信应用。撤销后，该应用的 Access Token 和 Refresh Token 会立即失效。","Trusted apps authorized for communication login with your Weline account are shown here. After revocation, the app's access token and refresh token expire immediately."
+"暂无授权应用。您从 App、Skill、BBS 或 A2A 站点发起登录授权后，会在这里看到记录。","No authorized apps yet. Records will appear here after you start login authorization from App, Skill, BBS, or A2A sites."
+最近授权,"Last authorized"
+外部账号,"External account"
+撤销授权,"Revoke authorization"
+未知,Unknown
+首页,Home
+Multipass管理,Multipass管理
+审核策略,"Review policy"
+当前已开启自动通过：前台用户提交后会直接成为已通过并启用，仍可在本页管理或禁用。,"Auto-approval is enabled: frontend submissions become approved and enabled immediately, and you can still manage or disable them here."
+当前为人工审核：前台用户提交后默认待审核并禁用，需管理员通过并启用。,"Manual review is active: frontend submissions are pending and disabled by default, and an administrator must approve and enable them."
+配置审核策略,"Configure review policy"
+"请立即保存 client_secret","请立即保存 client_secret"
+该密钥只在创建或轮换时显示一次，后台不会明文保存。,该密钥只在创建或轮换时显示一次，后台不会明文保存。
+复制,复制
+可信应用列表,可信应用列表
+添加应用,添加应用
+"暂无互通应用，请先添加 App、Skill、商城或社区站点。","暂无互通应用，请先添加 App、Skill、商城或社区站点。"
+申请人,Applicant
+"Client ID","Client ID"
+可信域名,可信域名
+已绑定账号,已绑定账号
+编辑,Edit
+轮换密钥,轮换密钥
+添加互通应用,添加互通应用
+例如：App商城、bbs.a2a、Skill市场,例如：App商城、bbs.a2a、Skill市场
+"授权码换 token 时会精确校验该地址。","授权码换 token 时会精确校验该地址。"
+留空时自动从回调地址提取域名。,留空时自动从回调地址提取域名。
+授权范围,授权范围
+状态,状态
+申请状态,"Application status"
+"前台用户提交的 Multipass 管理申请会带有申请人和申请状态。","Multipass management applications submitted by frontend users include applicant and application status."
+保存,Save
+"client_secret 已复制","client_secret 已复制"
+编辑互通应用,编辑互通应用
+"确定要轮换该应用的 client_secret 吗？旧密钥会立即失效。","确定要轮换该应用的 client_secret 吗？旧密钥会立即失效。"
+密钥已轮换,密钥已轮换
+密钥轮换失败,密钥轮换失败
+请求失败,"Request failed"
+保存成功,保存成功
+保存失败,"Save Failed"
+添加官网登录提供方,"Add official login provider"
+名称,Name
+例如：Weline官网,"For example: Weline official site"
+官网授权地址,"Official authorization URL"
+官网接口地址,"Official API URL"
+"留空时默认使用官网授权地址 + /api123。","Leave blank to use official authorization URL + /api123."
+"Client Secret","Client Secret"
+本站回调地址,"This site's callback URL"
+排序,"Sort order"
+已配置提供方,"Configured providers"
+"暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。","No official login provider configured. Target sites must configure the official client_id and client_secret before starting authorization login."
+密钥,Secret
+留空保持不变,"Leave blank to keep unchanged"
+删除,Delete
+Multipass站点管理,"Multipass site management"
+站点列表,"Site List"
+添加站点,"Add Site"
+暂无站点配置，请点击右上角「添加站点」按钮创建,"No site configuration. Please click the ""Add Site"" button in the top right corner to create one."
+后端,Backend
+前端,Frontend
+已启用,Enabled
+已禁用,Disabled
+站点URL,"Site URL"
+站点名称,"Site Name"
+例如：主站、CRM系统,"e.g., Main Site, CRM System"
+例如：https://example.com,"e.g., https://example.com"
+接收Multipass登录的目标站点地址,"Target site address for receiving Multipass login"
+留空自动生成,"Leave blank to auto-generate"
+生成,Generate
+用于加密Token的密钥，需与目标站点配置一致,"Key used to encrypt tokens; must match the target site configuration"
+用户类型,"User type"
+前端用户,"Frontend User"
+后端用户,"Backend User"
+该站点用于登录哪类用户,"Which type of user does this site log in"
+启用站点,"Enable site"
+"确定要删除站点 ""%{1}"" 吗？此操作不可恢复。","Are you sure you want to delete the site ""%{1}""? This action cannot be undone."
+密钥已复制到剪贴板,"Secret key copied to clipboard"
+编辑站点,"Edit Site"
+删除失败,"Deletion failed"
+站点数据解析失败,站点数据解析失败
+后端账户,"Backend Account"
+前端账户,"Frontend Account"
+选择用户,"Select Users"
+搜索用户名或邮箱...,"Search Username or Email..."
+搜索,Search
+请输入搜索关键词查找用户,"Please enter a search keyword to find a user"
+生成登录令牌,"Generate login token"
+选择站点,"Select Site"
+请先选择用户,"Please select a user first"
+当前没有可用的,"None available"
+站点，请先到站点管理中配置,"Site, please configure it in Site Management first"
+令牌生成成功,"Token generated successfully"
+站点,Site
+用户,User
+Token,Token
+复制Token,"Copy Token"
+登录链接,"Login link"
+复制链接,"Copy link"
+打开链接,"Open link"
+获取用户列表失败,"Failed to get user list"
+未找到用户,"User not found"
+请先选择用户和站点,"Please select a user and site first"
+生成令牌失败,"Failed to generate token"
+Token已复制到剪贴板,"Token has been copied to the clipboard"
+登录链接已复制到剪贴板,"Login link copied to clipboard"
 授权提供方不存在,"Identity provider does not exist"
 授权提供方名称不能为空,"Identity provider name cannot be empty"
 官网授权地址格式不正确,"Official authorization URL format is invalid"
@@ -107,129 +274,15 @@ Multipass账户管理,"Multipass account management"
 授权提供方已禁用,"Identity provider is disabled"
 授权提供方配置不完整,"Identity provider configuration is incomplete"
 "HTTP 请求失败","HTTP request failed"
-"Multipass 模块安装完成","Multipass module installation completed"
-"安装失败: %{1}","Installation failed: %{1}"
-授权应用,"Authorized apps"
-管理通信登录与账号绑定,"Manage communication login and account bindings"
-使用官网登录,"Sign in with official account"
-首页,Home
-后端账户,"Backend Account"
-前端账户,"Frontend Account"
-选择用户,"Select Users"
-搜索用户名或邮箱...,"Search Username or Email..."
-搜索,Search
-请输入搜索关键词查找用户,"Please enter a search keyword to find a user"
-生成登录令牌,"Generate login token"
-选择站点,"Select Site"
-请先选择用户,"Please select a user first"
-当前没有可用的,"None available"
-前端,Frontend
-后端,Backend
-站点，请先到站点管理中配置,"Site, please configure it in Site Management first"
-令牌生成成功,"Token generated successfully"
-站点,Site
-用户,User
-Token,Token
-复制Token,"Copy Token"
-登录链接,"Login link"
-复制链接,"Copy link"
-打开链接,"Open link"
-获取用户列表失败,"Failed to get user list"
-请求失败,"Request failed"
-未找到用户,"User not found"
-请先选择用户和站点,"Please select a user and site first"
-生成令牌失败,"Failed to generate token"
-Token已复制到剪贴板,"Token has been copied to the clipboard"
-登录链接已复制到剪贴板,"Login link copied to clipboard"
-Multipass管理,Multipass管理
-添加官网登录提供方,"Add official login provider"
-名称,Name
-例如：Weline官网,"For example: Weline official site"
-官网授权地址,"Official authorization URL"
-官网接口地址,"Official API URL"
-"留空时默认使用官网授权地址 + /api123。","Leave blank to use official authorization URL + /api123."
-"Client ID","Client ID"
-"Client Secret","Client Secret"
-本站回调地址,"This site's callback URL"
-授权范围,授权范围
-状态,状态
-启用,启用
-禁用,禁用
-排序,"Sort order"
-保存,Save
-已配置提供方,"Configured providers"
-"暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。","No official login provider configured. Target sites must configure the official client_id and client_secret before starting authorization login."
-密钥,Secret
-留空保持不变,"Leave blank to keep unchanged"
-删除,Delete
-Multipass站点管理,"Multipass site management"
-站点列表,"Site List"
-添加站点,"Add Site"
-暂无站点配置，请点击右上角「添加站点」按钮创建,"No site configuration. Please click the ""Add Site"" button in the top right corner to create one."
-已启用,Enabled
-已禁用,Disabled
-站点URL,"Site URL"
-编辑,Edit
-站点名称,"Site Name"
-例如：主站、CRM系统,"e.g., Main Site, CRM System"
-例如：https://example.com,"e.g., https://example.com"
-接收Multipass登录的目标站点地址,"Target site address for receiving Multipass login"
-留空自动生成,"Leave blank to auto-generate"
-生成,Generate
-用于加密Token的密钥，需与目标站点配置一致,"Key used to encrypt tokens; must match the target site configuration"
-用户类型,"User type"
-前端用户,"Frontend User"
-后端用户,"Backend User"
-该站点用于登录哪类用户,"Which type of user does this site log in"
-启用站点,"Enable site"
-"确定要删除站点 ""%{1}"" 吗？此操作不可恢复。","Are you sure you want to delete the site ""%{1}""? This action cannot be undone."
-密钥已复制到剪贴板,"Secret key copied to clipboard"
-编辑站点,"Edit Site"
-删除失败,"Deletion failed"
-站点数据解析失败,站点数据解析失败
-保存失败,"Save Failed"
-"请立即保存 client_secret","请立即保存 client_secret"
-该密钥只在创建或轮换时显示一次，后台不会明文保存。,该密钥只在创建或轮换时显示一次，后台不会明文保存。
-复制,复制
-可信应用列表,可信应用列表
-添加应用,添加应用
-"暂无互通应用，请先添加 App、Skill、商城或社区站点。","暂无互通应用，请先添加 App、Skill、商城或社区站点。"
-可信域名,可信域名
-回调地址,回调地址
-已绑定账号,已绑定账号
-轮换密钥,轮换密钥
-添加互通应用,添加互通应用
-应用名称,应用名称
-例如：App商城、bbs.a2a、Skill市场,例如：App商城、bbs.a2a、Skill市场
-应用类型,应用类型
-社区,社区
-自定义,自定义
-"授权码换 token 时会精确校验该地址。","授权码换 token 时会精确校验该地址。"
-留空时自动从回调地址提取域名。,留空时自动从回调地址提取域名。
-删除态,删除态
-"client_secret 已复制","client_secret 已复制"
-编辑互通应用,编辑互通应用
-"确定要轮换该应用的 client_secret 吗？旧密钥会立即失效。","确定要轮换该应用的 client_secret 吗？旧密钥会立即失效。"
-密钥已轮换,密钥已轮换
-密钥轮换失败,密钥轮换失败
-保存成功,保存成功
-"这里展示通过 Weline 账号授权通信登录的可信应用。撤销后，该应用的 Access Token 和 Refresh Token 会立即失效。","Trusted apps authorized for communication login with your Weline account are shown here. After revocation, the app's access token and refresh token expire immediately."
-"暂无授权应用。您从 App、Skill、BBS 或 A2A 站点发起登录授权后，会在这里看到记录。","No authorized apps yet. Records will appear here after you start login authorization from App, Skill, BBS, or A2A sites."
-最近授权,"Last authorized"
-外部账号,"External account"
-撤销授权,"Revoke authorization"
-未知,Unknown
-未知应用,未知应用
-"Weline 账号授权","Weline 账号授权"
-"请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。","请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。"
-你还没有登录。登录后会回到这里继续确认授权。,你还没有登录。登录后会回到这里继续确认授权。
-请求授权的应用,请求授权的应用
-"当前 Weline 账号","当前 Weline 账号"
-已登录用户,已登录用户
-登录后将显示你的账号信息，并由你决定是否继续授权。,登录后将显示你的账号信息，并由你决定是否继续授权。
-应用请求的权限,应用请求的权限
-需确认,需确认
-取消,Cancel
-同意并继续,"Allow and continue"
-登录后继续,登录后继续
-如果你不认识这个应用或域名，请取消授权。,如果你不认识这个应用或域名，请取消授权。
+应用名称不能为空,应用名称不能为空
+回调地址格式不正确,回调地址格式不正确
+可信域名不能为空,可信域名不能为空
+应用不存在,应用不存在
+用户未登录,用户未登录
+"回调地址必须使用 HTTPS","The callback URL must use HTTPS"
+当前授权不允许绑定外部账号,当前授权不允许绑定外部账号
+外部账号标识不能为空,外部账号标识不能为空
+高风险,"High risk"
+中风险,"Medium risk"
+以下授权范围不可用：%{1},以下授权范围不可用：%{1}
+"该回调地址已经提交过 Multipass 管理申请","A Multipass management application has already been submitted for this callback URL"

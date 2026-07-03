@@ -3,7 +3,7 @@
 本文件给出一版偏实现导向的接口草图，目标是：
 
 1. 让 `Weline_Websites` 只依赖抽象
-2. 让 `PageBuilder` 等 provider 可插拔接入
+
 3. 让 Theme 通过独立 theme source 能力接入
 4. 避免核心模块知道 provider 私有字段
 
@@ -180,7 +180,7 @@ interface AiSiteBuilderProviderInterface
 说明：
 
 1. provider 只返回能力接口
-2. `PageBuilder` 实现自己的 provider，不暴露私有字段给核心
+
 3. `websites_default` provider 可在内部组合 ThemeSourceRegistry
 
 ## 5. 分能力接口
@@ -381,7 +381,7 @@ interface WebsiteThemeSourceInterface
 说明：
 
 1. `Weline_Theme` 实现这个接口，为默认 provider 暴露主题方案
-2. 未来也可以有 `pagebuilder_theme_source`
+
 3. `bindingPayload` 用来携带 theme 侧私有引用
 
 ## 7. Repository 抽象
@@ -495,8 +495,8 @@ interface AiSiteBuilderEventRepositoryInterface
 
 1. `weline_theme_id`
 2. `preview_page_id`
-3. PageBuilder 专用 page schema
-4. PageBuilder 专用 component tree
+
+
 
 这些数据只能出现在：
 
@@ -516,4 +516,3 @@ interface AiSiteBuilderEventRepositoryInterface
 2. 再落 `websites_default` provider
 3. 再落 ThemeSource
 4. 再落 materializer / preview
-5. 最后接 PageBuilder provider

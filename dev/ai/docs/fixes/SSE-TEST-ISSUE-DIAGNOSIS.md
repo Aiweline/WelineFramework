@@ -30,10 +30,10 @@ if ($adminId <= 0 || $publicId === '') {
 ## 日志证据
 
 ```
-[2026-04-02 02:14:18] [WorkerSSL#2:16898@default] [INFO] → GET /U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse
-[2026-04-02 02:14:18] [WorkerSSL#2:16898@default] [INFO] Worker 开始处理请求 connId=1081 uri=/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse
+
+
 [2026-04-02 02:14:18] [WorkerSSL#2:16898@default] [INFO] 长链分层命中: layer=layer-3-path-fallback, protocol=sse, connId=1081
-[2026-04-02 02:14:18] [WorkerSSL#2:16898@default] [INFO] 准备进入框架处理: GET /U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse
+
 ```
 
 之后没有任何日志，说明请求卡在框架处理中。
@@ -44,7 +44,7 @@ if ($adminId <= 0 || $publicId === '') {
 
 1. 打开浏览器
 2. 登录后台：`https://weline-p11005ce4.local/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin`
-3. 访问 AI 站点代理页面：`https://weline-p11005ce4.local/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/workspace?public_id=70b0d80861a604e92bcfe7367836d4e0`
+
 4. 打开浏览器开发者工具 → Network 标签
 5. 观察：
    - SSE 连接是否每 3-4 秒重连一次
@@ -60,7 +60,7 @@ COOKIE=$(curl -k "https://weline-p11005ce4.local/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E
   -c - -s | grep PHPSESSID | awk '{print $7}')
 
 # 2. 使用 Cookie 测试 SSE
-curl -k "https://weline-p11005ce4.local/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse?public_id=70b0d80861a604e92bcfe7367836d4e0&last_event_id=0" \
+
   -H "Accept: text/event-stream" \
   -H "Cookie: PHPSESSID=$COOKIE" \
   -N
@@ -84,7 +84,7 @@ if ($adminId <= 0) {
 SSE 短轮询代码已经正确修改：
 
 ```php
-// app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php:464
+
 $maxPolls = 3;
 $pollInterval = 1000;  // 1 秒
 

@@ -35,7 +35,16 @@ class Slot implements TaglibInterface
     /**
      * 允许的 position 值
      */
-    private const VALID_POSITIONS = ['header', 'content', 'footer', 'sidebar'];
+    private const VALID_POSITIONS = [
+        'header',
+        'content',
+        'footer',
+        'sidebar',
+        'dashboard-summary',
+        'dashboard-analysis',
+        'dashboard-side',
+        'dashboard-detail',
+    ];
     
     /**
      * @inheritDoc
@@ -71,7 +80,7 @@ class Slot implements TaglibInterface
             'multiple' => 0,     // 可选：允许多个部件
             'max' => 0,          // 可选：最大部件数量，-1 表示无限制
             'min' => 0,          // 可选：最小部件数量
-            'position' => 0,     // 可选：位置类型：header/content/footer/sidebar
+            'position' => 0,     // 可选：位置类型：header/content/footer/sidebar/dashboard-*
             'required' => 0,     // 可选：是否必须填充部件（DEV 警告）
             'append' => 0,       // 可选：部件追加到默认内容后
             'prepend' => 0,      // 可选：部件插入到默认内容前
@@ -314,7 +323,7 @@ w:slot 主题插槽标签
 - multiple: 允许多个部件
 - max: 最大部件数量，-1 表示无限制
 - min: 最小部件数量
-- position: 位置类型：header/content/footer/sidebar
+- position: 位置类型：header/content/footer/sidebar/dashboard-summary/dashboard-analysis/dashboard-side/dashboard-detail
 - required: 是否必须填充部件（DEV 警告）
 - append: 部件追加到默认内容后
 - prepend: 部件插入到默认内容前
@@ -326,6 +335,7 @@ w:slot 主题插槽标签
 <w:slot id="content" name="主内容区">默认内容</w:slot>
 <w:slot id="logo" accept="logo" exclusive="true"/>
 <w:slot id="sidebar" accept="sidebar-*" max="5" position="sidebar"/>
+<w:slot id="dashboard-summary" accept="dashboard-stat,dashboard-kpi" max="4" position="dashboard-summary"/>
 DOC;
     }
 }

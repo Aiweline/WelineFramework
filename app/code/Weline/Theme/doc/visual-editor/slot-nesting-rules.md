@@ -38,6 +38,22 @@ Slot 系统允许组件定义可以嵌入子组件的位置，支持组件嵌套
 | `slot_type` | string | Slot 类型标识（用于精确匹配） |
 | `max` | int | 最大组件数量 |
 
+## 可视化编辑器实例化规则
+
+在主题组件 `.phtml` 中，内嵌 slot 必须使用组件声明的真实 slot ID 模板，并在运行时替换为当前 `layout_id`：
+
+```php
+data-wslot="section-content:279"
+data-wslot="grid-items:286"
+data-wslot="card-body:288"
+```
+
+编辑器可能在 DOM 或历史数据中遇到 `container:<layout_id>` 这类内部辅助 ID。它们不是可放置的真实 slot，不能出现在“页面插槽”列表，也不能作为 `save-widget` 的 `slot_id`。添加组件时应优先使用：
+
+- 已选中的真实 slot，例如 `section-content:279`
+- 已选中容器部件的第一个可接收内嵌 slot，例如 `grid-items:286`
+- 已选中普通部件所在的父 slot，例如 Text 所在的 `section-content:279`
+
 ## 验证规则
 
 ### 1. 类别匹配
