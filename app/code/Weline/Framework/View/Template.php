@@ -517,20 +517,24 @@ class Template extends DataObject
      */
     public function convertFetchFileName(string $fileName): array
     {
-        $templateContextKey = KeyBuilder::environmentHash(['scope' => 'template-file-map']);
+        $templateContextKey = KeyBuilder::environmentHash(['scope' => 'template-file-map'])
+            . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName);
         $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName|' . $templateContextKey;
         $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
         $comFileName = '';
         $tplFile = '';
+        $skipCache = isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache');
         # 让非生产环境实时读取文件
-        if (PROD) {
+        if (PROD && !$skipCache) {
             $comFileName = $this->viewCache->get($comFileName_cache_key);
             $tplFile = $this->viewCache->get($tplFile_cache_key);
         }
         # 测试
         //        file_put_contents(__DIR__ . '/test.txt', $comFileName . PHP_EOL, FILE_APPEND);
         // 编译文件不存在的时候 重新对文件进行处理 防止每次都处理
-        if (!is_file($comFileName) || !is_file($tplFile)) {
+        if (!\is_string($comFileName) || $comFileName === '' || !is_file($comFileName)
+            || !\is_string($tplFile) || $tplFile === '' || !is_file($tplFile)
+        ) {
             // 解析模板路由
             if ('/' !== DS) {
                 $fileName = str_replace('/', DS, $fileName);
@@ -559,7 +563,9 @@ class Template extends DataObject
                 $tplFile = $view_dir . $fileName . $this->getFileExt();
             }
             //            p($tplFile,1);
+            $sourceTplFile = $tplFile;
             $tplFile = $this->fetchFile($tplFile);
+            $sourceCompilePathSuffix = $this->buildSourceCompilePathSuffix($sourceTplFile, $tplFile);
             //            p($tplFile);
 
             if (!file_exists($tplFile)) {
@@ -570,7 +576,7 @@ class Template extends DataObject
             }
 
             // 检测目录是否存在,不存在则建立
-            $baseComFileDir = $compile_dir . DS . $this->templateCompileContextDir() . DS . ($file_dir ?: '');
+            $baseComFileDir = $compile_dir . DS . $this->templateCompileContextDir() . DS . ($file_dir ?: '') . $sourceCompilePathSuffix;
             if (!is_dir($baseComFileDir) && !@mkdir($baseComFileDir, 0770, true) && !is_dir($baseComFileDir)) {
                 throw new Exception('Failed to create template compile directory: ' . $baseComFileDir);
             }
@@ -584,7 +590,7 @@ class Template extends DataObject
             }
             $comFileName = $this->fetchFile($comFileName);
             # 生产模式缓存: 根据管道设置缓存
-            if (PROD) {
+            if (PROD && !$skipCache) {
                 $this->viewCache->set($comFileName_cache_key, $comFileName);
                 $this->viewCache->set($tplFile_cache_key, $tplFile);
             };
@@ -599,6 +605,32 @@ class Template extends DataObject
             $comFileName = str_replace('//', DS, $comFileName);
         }
         return [$comFileName, $tplFile];
+    }
+
+    private function buildSourceCompilePathSuffix(string $logicalTplFile, string $resolvedTplFile): string
+    {
+        $logicalPath = $this->normalizeTemplateSourcePath($logicalTplFile);
+        $resolvedPath = $this->normalizeTemplateSourcePath($resolvedTplFile);
+        if ($logicalPath === '' || $resolvedPath === '' || $logicalPath === $resolvedPath) {
+            return '';
+        }
+
+        return '__source_' . substr(sha1($resolvedPath), 0, 16) . DS;
+    }
+
+    private function normalizeTemplateSourcePath(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        $realPath = realpath($path);
+        if (is_string($realPath) && $realPath !== '') {
+            $path = $realPath;
+        }
+
+        return str_replace('\\', '/', $path);
     }
 
     private function templateCompileContextDir(): string

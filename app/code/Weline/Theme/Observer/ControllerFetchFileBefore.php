@@ -26,7 +26,9 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemeModeResolver;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeMetaIdentityService;
 use Weline\Theme\Service\ThemePageTypeResolver;
+use Weline\Theme\Service\ThemeTargetTypeRegistry;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 final class ControllerFetchFileBeforeRequestCacheState
@@ -152,17 +154,10 @@ class ControllerFetchFileBefore implements ObserverInterface
             $editorArea = strtolower(trim($editorArea));
 
             $currentPath = strtolower(trim((string)$request->getUrlPath()));
-            $isPageBuilderPreviewRoute = str_contains($currentPath, '/pagebuilder/backend/preview/');
             $isThemeEditorInnerPreviewRoute = str_contains($currentPath, '/theme/backend/theme-editor/layout-preview');
             $isVirtualThemePreview = (int)$request->getParam('virtual_theme_id', 0) > 0
                 || (string)$request->getParam('visual_editor', '') === '1';
-            if ($isPageBuilderPreviewRoute && $isVirtualThemePreview) {
-                // PageBuilder 预览链路必须按 frontend 主题渲染，避免后端 layout 覆盖。
-                $area = 'frontend';
-                if ($editorArea === '') {
-                    $editorArea = 'frontend';
-                }
-            } elseif ($isThemeEditorInnerPreviewRoute && $editorArea === 'frontend') {
+            if ($isThemeEditorInnerPreviewRoute && $editorArea === 'frontend') {
                 // ThemeEditor 的内层预览 iframe 允许按 preview_area/editor_area 切到 frontend；
                 // 但 backend 编辑器外壳页本身必须保持 backend，避免污染后台布局与静态资源。
                 $area = 'frontend';
@@ -192,41 +187,6 @@ class ControllerFetchFileBefore implements ObserverInterface
             || $editorArea === 'frontend'
             || ($editorArea === 'backend' && $isThemeEditorPreviewRoute);
         $theme = $this->resolveThemeForLayout($area, $allowPreviewTheme);
-        $requestUriForDebug = (string)($request?->getServer('REQUEST_URI') ?? $request?->getUri() ?? '');
-        if (false && $requestUriForDebug !== ''
-            && \str_contains($requestUriForDebug, 'pagebuilder/backend/ai-site-agent')) {
-            $debugPayload = [
-                'uri' => $requestUriForDebug,
-                'is_backend_request' => $isBackendRequest,
-                'area' => $area,
-                'editor_area' => $editorArea,
-                'allow_preview_theme' => $allowPreviewTheme,
-                'server_area' => (string)($request?->getServer('WELINE_AREA') ?? ''),
-                'server_is_backend' => $request?->getServer('WELINE_IS_BACKEND'),
-                'context_area' => Context::getCurrent()?->get('route.area', ''),
-                'context_is_backend' => Context::getCurrent()?->get('route.is_backend', null),
-                'theme_id' => $theme->getId(),
-                'theme_path' => $theme->getOriginPath(),
-                'theme_cache_key' => $this->buildThemeCacheKey($area),
-            ];
-            try {
-                \Weline\Server\Log\WlsLogger::warning_('[ThemeResolve] ai-site-agent layout resolve', $debugPayload);
-            } catch (\Throwable) {
-            }
-
-            try {
-                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Area', $area);
-                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Is-Backend', $isBackendRequest ? '1' : '0');
-                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Editor-Area', $editorArea !== '' ? $editorArea : '(empty)');
-                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Allow-Preview', $allowPreviewTheme ? '1' : '0');
-                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Id', (string)$theme->getId());
-                $request->getResponse()->setHeader(
-                    'X-Weline-Debug-Context-Area',
-                    (string)(Context::getCurrent()?->get('route.area', '') ?: '(empty)')
-                );
-            } catch (\Throwable) {
-            }
-        }
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -351,7 +311,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                 }
             }
             if ($resolvedLayoutPath) {
+                $layoutTargets = $this->resolveVirtualLayoutTargets($request);
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
+                if (!empty($layoutTargets)) {
+                    $paramsCacheKey .= '|targets:' . $this->buildTargetCacheSuffix($layoutTargets);
+                }
                 if (is_array($virtualLayout)) {
                     $paramsCacheKey .= '|virtual:' . (int)($virtualLayout['asset_id'] ?? 0) . ':' . (int)($virtualLayout['version_id'] ?? 0);
                 }
@@ -449,6 +413,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 注意：getFileParams 内部会处理 identify 格式，但需要确保 ThemeData 已正确初始化
                 $layoutFilePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $layoutMetaIdentity = $this->extractLayoutMetaIdentity($layoutFilePath, $resolvedLayoutPath, $area);
+                $layoutDefinitions = ThemeData::getParamDefinitions($metaIdentify);
                 $layoutParams = ThemeData::getFileParams($metaIdentify, $scope);
                 
                 // 如果从 Meta 表中没有读取到参数，尝试从文件直接解析
@@ -460,6 +425,9 @@ class ControllerFetchFileBefore implements ObserverInterface
                         if (!empty($parsedMeta['params']) && is_array($parsedMeta['params'])) {
                             // 格式化参数定义
                             $formattedParams = LayoutPathResolver::formatParsedParams($parsedMeta['params']);
+                            if (empty($layoutDefinitions)) {
+                                $layoutDefinitions = $formattedParams;
+                            }
                             // 提取默认值作为参数值
                             foreach ($formattedParams as $paramName => $paramDef) {
                                 $defaultValue = $paramDef['default'] ?? null;
@@ -500,6 +468,20 @@ class ControllerFetchFileBefore implements ObserverInterface
                     // 合并 meta_data 中的配置值到 metaData
                     $layoutStaticMeta = array_merge($layoutStaticMeta, $themeMetaDataObj['meta_data']);
                     $layoutStaticMeta = $this->mergeLayoutMetaIdentity($layoutStaticMeta, $themeMetaDataObj['meta_data']);
+                }
+                $targetIdentify = $this->buildTargetMetaIdentify($area, $layoutTargets, (string)$layoutType, (string)$layoutOption);
+                if ($targetIdentify !== '' && !empty($layoutDefinitions)) {
+                    /** @var ThemeMetaIdentityService $metaIdentityService */
+                    $metaIdentityService = ObjectManager::getInstance(ThemeMetaIdentityService::class);
+                    $layoutStaticMeta = $metaIdentityService->mergeTargetOverrides(
+                        $theme,
+                        $area,
+                        $layoutStaticMeta,
+                        $targetIdentify,
+                        $layoutDefinitions,
+                        $scope,
+                        null
+                    );
                 }
                 $layoutStaticMeta = $this->sanitizeRuntimeLayoutParams($layoutStaticMeta);
                 $metaData = array_merge($layoutStaticMeta, $existingMeta);
@@ -703,7 +685,9 @@ class ControllerFetchFileBefore implements ObserverInterface
     private function appendVirtualLayoutTarget(array &$targets, string $targetType, int $targetId): void
     {
         $targetType = strtolower(trim($targetType));
-        if (!in_array($targetType, ['product', 'category', 'category_product_default'], true) || $targetId <= 0) {
+        /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
+        $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+        if (!$targetTypeRegistry->has($targetType) || $targetId <= 0) {
             return;
         }
 
@@ -711,6 +695,45 @@ class ControllerFetchFileBefore implements ObserverInterface
             'target_type' => $targetType,
             'target_id' => $targetId,
         ];
+    }
+
+    /**
+     * @param list<array{target_type:string,target_id:int}> $targets
+     */
+    private function buildTargetCacheSuffix(array $targets): string
+    {
+        $parts = [];
+        foreach ($targets as $target) {
+            $targetType = strtolower(trim((string)($target['target_type'] ?? '')));
+            $targetId = (int)($target['target_id'] ?? 0);
+            if ($targetType === '' || $targetId <= 0) {
+                continue;
+            }
+            $parts[] = $targetType . ':' . $targetId;
+        }
+
+        return implode(',', $parts);
+    }
+
+    /**
+     * @param list<array{target_type:string,target_id:int}> $targets
+     */
+    private function buildTargetMetaIdentify(string $area, array $targets, string $layoutType, string $layoutOption): string
+    {
+        if (empty($targets)) {
+            return '';
+        }
+
+        $target = $targets[0];
+        $targetType = (string)($target['target_type'] ?? '');
+        $targetId = (int)($target['target_id'] ?? 0);
+        if ($targetType === '' || $targetId <= 0) {
+            return '';
+        }
+
+        /** @var ThemeMetaIdentityService $metaIdentityService */
+        $metaIdentityService = ObjectManager::getInstance(ThemeMetaIdentityService::class);
+        return $metaIdentityService->targetIdentify($area, $targetType, $targetId, $layoutType, $layoutOption);
     }
 
     /**
@@ -1058,14 +1081,21 @@ class ControllerFetchFileBefore implements ObserverInterface
         $frontendThemeId = (int)$request->getParam('frontend_theme_id', 0);
         $backendThemeId = (int)$request->getParam('backend_theme_id', 0);
         $legacyThemeId = (int)$request->getParam('preview_theme', 0);
+        $requestThemeId = (int)$request->getParam('theme_id', 0);
+        $requestArea = strtolower(trim((string)($request->getParam('preview_area', $request->getParam('editor_area', $area)) ?: $area)));
+        $requestArea = $requestArea === 'backend' ? 'backend' : 'frontend';
         $previewThemeId = $area === 'backend'
             ? ($backendThemeId > 0 ? $backendThemeId : $legacyThemeId)
             : ($frontendThemeId > 0 ? $frontendThemeId : $legacyThemeId);
+        if ($previewThemeId <= 0 && $requestThemeId > 0 && $requestArea === $area) {
+            $previewThemeId = $requestThemeId;
+        }
         $previewToken = (string)$request->getParam('weline_preview_token', '');
 
         return implode('|', [
             $area,
             'editor_area:' . strtolower((string)$request->getParam('editor_area', '')),
+            'theme_id:' . $requestThemeId,
             'preview_theme:' . $previewThemeId,
             'preview_token:' . substr($previewToken, 0, 24),
         ]);

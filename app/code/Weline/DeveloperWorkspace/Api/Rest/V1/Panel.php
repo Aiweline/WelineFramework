@@ -6,32 +6,37 @@ namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Observer\DevToolPanelObserver;
-use Weline\Framework\App\Env;
-use Weline\Framework\Http\Cookie;
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Http\Response;
 
 class Panel extends DevToolRestController
 {
     public function getIndex(): Response
     {
-        if (!$this->isAllowed()) {
-            return Response::text('dev tool panel is not allowed', 403);
+        $access = new PanelAccessService();
+        if (!$access->canAccessPanel($this->request)) {
+            return $access->noStore(Response::text('weline panel is not allowed', 403));
         }
 
         $html = (new DevToolPanelObserver($this->request))->renderPanel();
 
-        return Response::html($html)
-            ->setHeader('Cache-Control', 'no-store, max-age=0');
+        return $access->noStore(Response::html($html));
     }
 
-    private function isAllowed(): bool
+    public function postSession(): Response
     {
-        if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
-            return true;
+        $access = new PanelAccessService();
+        if (!$access->authenticate($this->request)) {
+            return $access->noStore(Response::json([
+                'success' => false,
+                'message' => (string)__('Weline 面板 token 无效。'),
+            ], 403));
         }
 
-        $cookieName = (string)Env::get('dev_tool.cookie_name', 'w_dev_tool');
-
-        return Cookie::get($cookieName) === '1';
+        return $access->issueSession(Response::json([
+            'success' => true,
+            'message' => (string)__('Weline 面板已授权。'),
+            'ttl' => $access->sessionTtl(),
+        ]));
     }
 }

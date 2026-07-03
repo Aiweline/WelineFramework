@@ -114,9 +114,6 @@ memory/
 /sql.log
 /dev_sql.log
 
-# PageBuilder local runtime/session artifacts
-/data/pagebuilder/session-artifacts/
-
 .codex/*
 !.codex/agents/
 !.codex/agents/**

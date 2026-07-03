@@ -6,18 +6,9 @@
  **/
 (function(){
 	"use strict";
-	function notifyLoadError(message) {
-		var text = String(message || 'elFinder failed to load.');
-		if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-			window.BackendToast.error(text);
-			return;
-		}
-		console.error(text);
-	}
-
 	var // jQuery and jQueryUI version
-		jqver = '4.0.0',
-		uiver = '1.14.2',
+		jqver = '3.7.1',
+		uiver = '1.13.2',
 		
 		// Detect language (optional)
 		lang = (function() {
@@ -103,7 +94,7 @@
 						);
 					});
 				} else {
-					notifyLoadError('"elFinderConfig" object is wrong.');
+					alert('"elFinderConfig" object is wrong.');
 				}
 			});
 		},
@@ -119,11 +110,16 @@
 				],
 				start,
 				function(error) {
-					notifyLoadError(error && error.message ? error.message : error);
+					alert(error.message);
 				}
 			);
-		};
+		},
 		
+		// is IE8 or :? for determine the jQuery version to use (optional)
+		old = (typeof window.addEventListener === 'undefined' && typeof document.getElementsByClassName === 'undefined')
+		       ||
+		      (!window.chrome && !document.unqueID && !window.opera && !window.sidebar && 'WebkitAppearance' in document.documentElement.style && document.body.style && typeof document.body.style.webkitFilter === 'undefined');
+
 	// config of RequireJS (REQUIRED)
 	require.config({
 		baseUrl : 'js',
@@ -131,7 +127,7 @@
 			'jquery'   : '../jquery.min',
 			'jquery-ui': '../jquery-ui.min',
 			'elfinder' : 'elfinder.min',
-			'encoding-japanese': 'encoding-japanese'
+			'encoding-japanese': '//cdn.rawgit.com/polygonplanet/encoding.js/1.0.26/encoding.min'
 		},
 		waitSeconds : 10 // optional
 	});

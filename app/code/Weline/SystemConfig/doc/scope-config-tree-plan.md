@@ -626,8 +626,8 @@ $systemConfig->resolveConfig($key, $module, $area, $scope = null, $locale = null
 
 | operation | 说明 |
 | --- | --- |
-| `getConfig` | 读取有效配置 |
-| `getConfigs` | 读取模块配置 map |
+| `getConfig` | 读取有效配置；默认返回值本身，`return_type=field|array` 时返回字段对象 |
+| `getConfigs` | 读取模块配置 map；默认返回 key/value map，`return_type=fields` 时返回字段对象 map |
 | `setConfig` | 兼容旧写入，默认写 `default` scope |
 | `setScopedConfig` | 写当前 scope 覆盖 |
 | `deleteScopedConfig` | 删除当前 scope 覆盖，恢复继承 |
@@ -643,6 +643,56 @@ $systemConfig->resolveConfig($key, $module, $area, $scope = null, $locale = null
 | `rollbackScopeConfigVersion` | 按保存批次回滚配置，返回冲突和恢复结果 |
 | `getConfigVersions` | 返回指定 module、area、scope、locale 的保存历史 |
 | `getConfigVersionDetail` | 返回单个版本批次的变更摘要和可回滚状态 |
+
+字段对象读取只在显式传入 `return_type` 时启用，旧调用保持兼容：
+
+```php
+$value = w_query('system_config', 'getConfig', [
+    'module' => 'Weline_Payment',
+    'area' => 'backend',
+    'key' => 'payment/general/checkout_enabled',
+]);
+
+$field = w_query('system_config', 'getConfig', [
+    'module' => 'Weline_Payment',
+    'area' => 'backend',
+    'key' => 'payment/general/checkout_enabled',
+    'code' => 'general',
+    'return_type' => 'field',
+]);
+
+$fields = w_query('system_config', 'getConfigs', [
+    'module' => 'Weline_Payment',
+    'area' => 'backend',
+    'return_type' => 'fields',
+]);
+```
+
+字段对象结构：
+
+```php
+[
+    'key' => 'payment/general/checkout_enabled',
+    'value' => true,
+    'display_value' => '1',
+    'label' => '启用结账支付',
+    'description' => '允许 Weline_Payment 支付方式在通过各自配置准入后参与结账。',
+    'type' => 'switch',
+    'value_type' => 'bool',
+    'default' => '0',
+    'group' => 'payment_runtime',
+    'scope' => 'global,website,store',
+    'options' => [],
+    'options_source' => '',
+    'field_found' => true,
+    'value_found' => true,
+    'has_override' => false,
+    'base_version' => 0,
+    'is_sensitive' => false,
+    'source' => [],
+    'template' => ['module' => 'Weline_Payment', 'area' => 'backend', 'code' => 'general'],
+]
+```
 
 ## 缓存与失效
 
@@ -679,6 +729,11 @@ $systemConfig->getJsonPath($key, $path, $module, $area, $scope = null);
 ```
 
 核心 `getConfig()` 不再混用配置 key 和 JSON path，避免旧点号逻辑继续扩大。
+
+字段属性也不通过 key 后缀读取。不要把 `payment/general/checkout_enabled.value` 或
+`payment/general/checkout_enabled.label` 解释为字段属性；需要字段元信息时使用
+`return_type=field` 或 `return_type=fields` 返回数组，再读取 `value`、`label`、
+`description` 等数组键。
 
 ## 安全规则
 

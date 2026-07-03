@@ -87,6 +87,7 @@ $this->assign('title', $title);
                     accept="layout-category-content,layout-default-content,content,category-content,category-filter,category-grid,product-grid,pagination,product-carousel"
                     reject="header,footer"
                     multiple="true"
+                    append="true"
                     position="content"
                     class="category-layout__content-root-slot">
             <main class="category-layout__main <?= htmlspecialchars($class ?? '') ?>" id="category-layout-main" data-layout="category" data-columns="<?= (int)$gridColumns ?>">

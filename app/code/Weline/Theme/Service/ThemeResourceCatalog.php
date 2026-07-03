@@ -239,6 +239,9 @@ class ThemeResourceCatalog
         if (!is_string($content)) {
             return null;
         }
+        if (!in_array($type, ['variables', 'colors'], true) && trim($content) === '') {
+            return null;
+        }
 
         $relativePath = str_replace(['/', '\\'], '/', ltrim(str_replace($root, '', $filePath), '\\/'));
         $parsed = in_array($type, ['variables', 'colors'], true) ? [] : ComponentMetaParser::parse($filePath);
@@ -262,6 +265,9 @@ class ThemeResourceCatalog
             'params' => $this->formatParams($parsed['params'] ?? []),
             'mtime' => (int)(filemtime($filePath) ?: 0),
             'slots' => $this->extractSlots($content, $area, $filePath),
+            'widget_meta' => $type === 'components' && str_contains($content, '@widget.')
+                ? $this->extractWidgetMeta($content, pathinfo($filePath, PATHINFO_FILENAME))
+                : [],
         ];
 
         return match ($type) {
@@ -409,6 +415,7 @@ class ThemeResourceCatalog
             'is_container' => false,
             'page_layouts' => ['*'],
             'icon' => '',
+            'slots' => [],
         ];
 
         $patterns = [
@@ -447,8 +454,68 @@ class ThemeResourceCatalog
         $data['position'] = $this->parseWidgetListValue($data['position']);
         $data['supports'] = $this->parseWidgetListValue($data['supports']);
         $data['page_layouts'] = $this->parseWidgetListValue($data['page_layouts']) ?: ['*'];
+        $slots = $this->extractWidgetBraceValue($content, 'slots');
+        $data['slots'] = is_array($slots) ? $slots : [];
 
         return $data;
+    }
+
+    private function extractWidgetBraceValue(string $content, string $key): mixed
+    {
+        $pattern = '/@widget\.' . preg_quote($key, '/') . '\s*\{/i';
+        if (!preg_match($pattern, $content, $match, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        $matchPos = (int)$match[0][1];
+        $bracePos = strpos($content, '{', $matchPos);
+        if ($bracePos === false) {
+            return null;
+        }
+
+        $level = 0;
+        $quote = null;
+        $escaped = false;
+        $len = strlen($content);
+        for ($i = $bracePos; $i < $len; $i++) {
+            $ch = $content[$i];
+            if ($quote !== null) {
+                if ($escaped) {
+                    $escaped = false;
+                    continue;
+                }
+                if ($ch === '\\') {
+                    $escaped = true;
+                    continue;
+                }
+                if ($ch === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") {
+                $quote = $ch;
+                continue;
+            }
+            if ($ch === '{') {
+                $level++;
+            } elseif ($ch === '}') {
+                $level--;
+                if ($level === 0) {
+                    $raw = trim(substr($content, $bracePos + 1, $i - $bracePos - 1));
+                    if ($raw === '') {
+                        return null;
+                    }
+                    if (!str_starts_with($raw, '{') && !str_starts_with($raw, '[')) {
+                        $raw = '{' . $raw . '}';
+                    }
+                    $decoded = json_decode($raw, true);
+                    return is_array($decoded) ? $decoded : null;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function extractMeta(string $content, array $parsed, string $fallbackName): array
@@ -490,7 +557,7 @@ class ThemeResourceCatalog
             foreach ($matches as $match) {
                 $attributes = $this->parseHtmlAttributes((string)$match[1]);
                 $slotId = $attributes['id'] ?? '';
-                if ($slotId === '' || isset($slots[$slotId])) {
+                if ($slotId === '' || $this->isDynamicSlotId($slotId) || isset($slots[$slotId])) {
                     continue;
                 }
                 $slots[$slotId] = new ThemeSlotDefinition(
@@ -518,7 +585,7 @@ class ThemeResourceCatalog
             foreach ($matches[0] as $index => $fullMatch) {
                 $attributes = $this->parseHtmlAttributes((string)$fullMatch[0]);
                 $slotId = $attributes['data-wslot'] ?? '';
-                if ($slotId === '' || isset($slots[$slotId])) {
+                if ($slotId === '' || $this->isDynamicSlotId($slotId) || isset($slots[$slotId])) {
                     continue;
                 }
                 $slots[$slotId] = new ThemeSlotDefinition(
@@ -543,6 +610,14 @@ class ThemeResourceCatalog
         }
 
         return array_values(array_map(static fn(ThemeSlotDefinition $slot): array => $slot->toArray(), $slots));
+    }
+
+    private function isDynamicSlotId(string $slotId): bool
+    {
+        return str_contains($slotId, '<?')
+            || str_contains($slotId, '$')
+            || str_contains($slotId, '{layout_id}')
+            || str_contains($slotId, '{tab_key}');
     }
 
     private function parseHtmlAttributes(string $html): array

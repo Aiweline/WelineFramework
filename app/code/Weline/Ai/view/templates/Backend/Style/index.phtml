@@ -824,11 +824,7 @@ $styleI18n = [
     function renderAdapters() {
         clearNode(els.adapter);
         if (!state.adapters.length) {
-            var fallback = document.createElement('option');
-            fallback.value = 'pagebuilder_component_generation';
-            fallback.textContent = 'pagebuilder_component_generation';
-            els.adapter.appendChild(fallback);
-            state.selectedAdapter = fallback.value;
+            state.selectedAdapter = '';
             return;
         }
 
@@ -839,11 +835,7 @@ $styleI18n = [
             els.adapter.appendChild(option);
         });
 
-        var preferred = state.adapters.find(function (adapter) {
-            return adapter.code === 'pagebuilder_component_generation';
-        }) || state.adapters.find(function (adapter) {
-            return adapter.code === 'pagebuilder_plan_generation';
-        }) || state.adapters[0];
+        var preferred = state.adapters[0];
         state.selectedAdapter = preferred.code || '';
         els.adapter.value = state.selectedAdapter;
     }

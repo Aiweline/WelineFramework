@@ -31,9 +31,9 @@ class PlanDraftService
      */
     public function createDraft(
         int $adminUserId,
-        string $providerCode = 'pagebuilder',
+        string $providerCode = '',
         array $payload = [],
-        string $buildMode = 'pagebuilder_style'
+        string $buildMode = ''
     ): AiSitePlanDraft {
         if ($adminUserId <= 0) {
             throw new \InvalidArgumentException((string)__('admin_user_id must be greater than 0'));
@@ -43,7 +43,7 @@ class PlanDraftService
         $draft->clearData()->clearQuery();
         $draft->setData(AiSitePlanDraft::schema_fields_PUBLIC_ID, $this->generatePublicId());
         $draft->setData(AiSitePlanDraft::schema_fields_ADMIN_USER_ID, $adminUserId);
-        $draft->setData(AiSitePlanDraft::schema_fields_PROVIDER_CODE, \trim($providerCode) !== '' ? \trim($providerCode) : 'pagebuilder');
+        $draft->setData(AiSitePlanDraft::schema_fields_PROVIDER_CODE, \trim($providerCode));
         $draft->setData(AiSitePlanDraft::schema_fields_STATUS, AiSitePlanDraft::STATUS_DRAFT);
         $draft->setData(AiSitePlanDraft::schema_fields_CURRENT_VERSION_ID, 0);
         $draft->setData(AiSitePlanDraft::schema_fields_SELECTED_DOMAIN, '');
@@ -437,7 +437,7 @@ class PlanDraftService
 
         $session = clone $this->sessionModel;
         $sessionRows = $session->clearData()->clearQuery()
-            ->where(AiSiteBuilderSession::schema_fields_PROVIDER_CODE, 'pagebuilder')
+            ->where(AiSiteBuilderSession::schema_fields_PROVIDER_CODE, '')
             ->where(AiSiteBuilderSession::schema_fields_UPDATE_TIME, $activeCutoff, '>')
             ->select()
             ->fetchArray();
@@ -523,7 +523,7 @@ class PlanDraftService
     {
         $buildMode = \trim($buildMode);
 
-        return $buildMode === 'pagebuilder_html' ? 'pagebuilder_html' : 'pagebuilder_style';
+        return \trim($buildMode);
     }
 
     private function normalizeDomainSource(string $domainSource): string

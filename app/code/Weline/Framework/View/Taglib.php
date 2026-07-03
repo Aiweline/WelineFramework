@@ -691,6 +691,7 @@ class Taglib
         $this->getCache()->flush();
         $this->getTagRegistry()->clearCache();
         $this->stageResolver?->clearCache();
+        TemplateCacheManager::getInstance()->clearAll();
         self::clearStaticCaches();
     }
 
