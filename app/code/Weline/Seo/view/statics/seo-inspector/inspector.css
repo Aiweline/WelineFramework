@@ -760,6 +760,72 @@
   line-height: 1.45;
 }
 
+.weline-seo-panel__section--issues {
+  border-color: rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.035);
+}
+
+.weline-seo-panel__issue-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.weline-seo-panel__issue-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.weline-seo-panel__issue-card--fail {
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(248, 113, 113, 0.07);
+}
+
+.weline-seo-panel__issue-card--warn {
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.07);
+}
+
+.weline-seo-panel__issue-card--info {
+  border-color: rgba(103, 232, 249, 0.22);
+  background: rgba(103, 232, 249, 0.05);
+}
+
+.weline-seo-panel__issue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.weline-seo-panel__issue-head strong {
+  font-size: 0.84rem;
+}
+
+.weline-seo-panel__issue-fix,
+.weline-seo-panel__issue-ok {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.weline-seo-panel__issue-fix b {
+  color: #ffd700;
+}
+
+.weline-seo-panel__issue-ok {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: rgba(74, 222, 128, 0.1);
+  color: #86efac;
+}
+
 @media (max-width: 720px) {
   .weline-seo-panel__page-context {
     grid-template-columns: 1fr;
@@ -1007,4 +1073,44 @@
 .weline-seo-panel--embedded .weline-seo-panel__engine-actions,
 .weline-seo-panel--embedded .weline-seo-panel__limitations {
   color: #475569;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__section--issues {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-card {
+  border-color: #dbe3ee;
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-card--fail {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-card--warn {
+  border-color: #fde68a;
+  background: #ffffff;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-card--info {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-fix {
+  color: #475569;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-fix b {
+  color: #92400e;
+}
+
+.weline-seo-panel--embedded .weline-seo-panel__issue-ok {
+  background: #dcfce7;
+  color: #166534;
 }
