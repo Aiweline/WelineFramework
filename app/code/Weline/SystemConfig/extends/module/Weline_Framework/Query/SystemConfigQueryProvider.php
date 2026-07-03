@@ -55,9 +55,22 @@ class SystemConfigQueryProvider implements QueryProviderInterface
         $key = (string)($params['key'] ?? '');
         $module = (string)($params['module'] ?? '');
         $area = (string)($params['area'] ?? SystemConfig::area_BACKEND);
+        $returnType = strtolower(trim((string)($params['return_type'] ?? 'value')));
 
         if ($key === '' || $module === '') {
-            return $params['default'] ?? null;
+            return in_array($returnType, ['field', 'array'], true) ? [] : ($params['default'] ?? null);
+        }
+
+        if (in_array($returnType, ['field', 'array'], true)) {
+            return $this->configCenterService->getFieldObject(
+                module: $module,
+                area: $area,
+                key: $key,
+                code: isset($params['code']) ? (string)$params['code'] : null,
+                scope: isset($params['scope']) ? (string)$params['scope'] : null,
+                locale: isset($params['locale']) ? (string)$params['locale'] : null,
+                default: $params['default'] ?? null
+            );
         }
 
         return $this->systemConfig->getConfig(
@@ -97,9 +110,20 @@ class SystemConfigQueryProvider implements QueryProviderInterface
     {
         $module = (string)($params['module'] ?? '');
         $area = (string)($params['area'] ?? SystemConfig::area_BACKEND);
+        $returnType = strtolower(trim((string)($params['return_type'] ?? 'map')));
 
         if ($module === '') {
             return [];
+        }
+
+        if ($returnType === 'fields') {
+            return $this->configCenterService->getFieldObjects(
+                module: $module,
+                area: $area,
+                code: isset($params['code']) ? (string)$params['code'] : null,
+                scope: isset($params['scope']) ? (string)$params['scope'] : null,
+                locale: isset($params['locale']) ? (string)$params['locale'] : null
+            );
         }
 
         return $this->systemConfig->getConfigMapByModule(
@@ -386,8 +410,8 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             'operations' => [
                 [
                     'name' => 'getConfig',
-                    'description' => __('Get a resolved config value.'),
-                    'params' => $this->commonReadParams(true),
+                    'description' => __('Get a resolved config value, or a field object when return_type=field.'),
+                    'params' => $this->getConfigParams(),
                 ],
                 [
                     'name' => 'resolveConfig',
@@ -396,8 +420,8 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'getConfigs',
-                    'description' => __('Get resolved config values for a module.'),
-                    'params' => $this->commonModuleParams(),
+                    'description' => __('Get resolved config values for a module, or field objects when return_type=fields.'),
+                    'params' => $this->getConfigsParams(),
                 ],
                 [
                     'name' => 'getFallbacks',
@@ -551,6 +575,44 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             array_unshift($params, ['name' => 'key', 'type' => 'string', 'required' => true]);
         }
         $params[] = ['name' => 'default', 'type' => 'mixed', 'required' => false];
+
+        return $params;
+    }
+
+    private function getConfigParams(): array
+    {
+        $params = $this->commonReadParams(true);
+        $params[] = [
+            'name' => 'return_type',
+            'type' => 'string',
+            'required' => false,
+            'description' => __('value|field|array; default value keeps compatibility.'),
+        ];
+        $params[] = [
+            'name' => 'code',
+            'type' => 'string',
+            'required' => false,
+            'description' => __('Limit field metadata lookup to one template code when return_type=field.'),
+        ];
+
+        return $params;
+    }
+
+    private function getConfigsParams(): array
+    {
+        $params = $this->commonModuleParams();
+        $params[] = [
+            'name' => 'return_type',
+            'type' => 'string',
+            'required' => false,
+            'description' => __('map|fields; default map keeps compatibility.'),
+        ];
+        $params[] = [
+            'name' => 'code',
+            'type' => 'string',
+            'required' => false,
+            'description' => __('Limit field metadata lookup to one template code when return_type=fields.'),
+        ];
 
         return $params;
     }

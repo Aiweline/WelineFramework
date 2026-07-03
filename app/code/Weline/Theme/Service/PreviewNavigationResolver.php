@@ -6,7 +6,6 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 
 final class PreviewNavigationResolver
@@ -50,14 +49,6 @@ final class PreviewNavigationResolver
             return $this->buildThemeEditorLayoutResult($candidate, $context);
         }
 
-        if ($currentShell === PreviewContextService::SHELL_PAGEBUILDER) {
-            if ($page?->getId()) {
-                return $this->buildPageBuilderEditorResult($page, $context);
-            }
-
-            return $this->buildPreviewResult($candidate, $context, null);
-        }
-
         return $this->buildPreviewResult($candidate, $context, $page);
     }
 
@@ -65,7 +56,7 @@ final class PreviewNavigationResolver
     {
         $pageId = (int)$page->getId();
         $responseContext = \array_replace($context, [
-            'shell' => PreviewContextService::SHELL_PAGEBUILDER,
+            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
             'target_type' => PreviewContextService::TARGET_TYPE_PAGE,
             'target_value' => (string)$pageId,
         ]);
@@ -81,10 +72,10 @@ final class PreviewNavigationResolver
 
         return $this->buildResponse(
             'internal-editor',
-            $this->url->getBackendUrl('pagebuilder/backend/page/edit', $params),
+            $this->url->getBackendUrl('admin/system/cms', $params),
             PreviewContextService::TARGET_TYPE_PAGE,
             (string)$pageId,
-            (string)$page->getData($this->pageTypeField()),
+            (string)$page->getData('type'),
             $pageId,
             $responseContext
         );
@@ -123,40 +114,6 @@ final class PreviewNavigationResolver
         );
     }
 
-    private function buildPageBuilderEditorResult(object $page, array $context): array
-    {
-        $pageId = (int)$page->getId();
-        $responseContext = \array_replace($context, [
-            'shell' => PreviewContextService::SHELL_PAGEBUILDER,
-            'target_type' => PreviewContextService::TARGET_TYPE_PAGE,
-            'target_value' => (string)$pageId,
-        ]);
-
-        $params = $this->previewContextService->toQueryParams($responseContext);
-        $params['page_id'] = $pageId;
-        $params['visual_editor'] = '1';
-        $params['weline_theme_id'] = $this->previewContextService->getThemeIdForArea(
-            PreviewContextService::AREA_FRONTEND,
-            $responseContext,
-            true
-        );
-
-        $locale = $this->resolveLocale();
-        if ($locale !== '') {
-            $params['locale'] = $locale;
-        }
-
-        return $this->buildResponse(
-            'internal-editor',
-            $this->url->getBackendUrl('pagebuilder/backend/preview/full', $params),
-            PreviewContextService::TARGET_TYPE_PAGE,
-            (string)$pageId,
-            (string)$page->getData($this->pageTypeField()),
-            $pageId,
-            $responseContext
-        );
-    }
-
     private function buildPreviewResult(array $candidate, array $context, ?object $page): array
     {
         $responseContext = $context;
@@ -166,7 +123,7 @@ final class PreviewNavigationResolver
         $pageType = $this->resolveThemePageType($candidate['path']);
         if ($page?->getId()) {
             $pageId = (int)$page->getId();
-            $pageType = (string)($page->getData($this->pageTypeField()) ?: $pageType);
+            $pageType = (string)($page->getData('type') ?: $pageType);
             $responseContext['target_type'] = PreviewContextService::TARGET_TYPE_PAGE;
             $responseContext['target_value'] = (string)$pageId;
         } else {
@@ -303,77 +260,7 @@ final class PreviewNavigationResolver
 
     private function resolvePage(array $candidate): ?object
     {
-        $pageModel = $this->pageModel();
-        if ($pageModel === null) {
-            return null;
-        }
-
-        $pageClass = \GuoLaiRen\PageBuilder\Model\Page::class;
-        $pageId = (int)($candidate['query']['page_id'] ?? 0);
-        if ($pageId > 0) {
-            $page = clone $pageModel;
-            $page->clear()->load($pageId);
-            return $page->getId() ? $page : null;
-        }
-
-        $handle = $this->extractHandle($candidate);
-        if ($handle === null) {
-            return null;
-        }
-
-        $websiteId = $this->detectCurrentWebsiteId();
-        if ($handle === '') {
-            $page = clone $pageModel;
-            if ($websiteId > 0) {
-                $page->clear()
-                    ->where($pageClass::schema_fields_WEBSITE_ID, $websiteId)
-                    ->where($pageClass::schema_fields_TYPE, $pageClass::TYPE_HOME)
-                    ->find()
-                    ->fetch();
-                if ($page->getId()) {
-                    return $page;
-                }
-            }
-
-            $page->clear()
-                ->where($pageClass::schema_fields_TYPE, $pageClass::TYPE_HOME)
-                ->find()
-                ->fetch();
-            return $page->getId() ? $page : null;
-        }
-
-        $page = clone $pageModel;
-        if ($websiteId > 0) {
-            $page->clear()
-                ->where($pageClass::schema_fields_WEBSITE_ID, $websiteId)
-                ->where($pageClass::schema_fields_HANDLE, $handle)
-                ->find()
-                ->fetch();
-            if ($page->getId()) {
-                return $page;
-            }
-        }
-
-        $page->clear()
-            ->where($pageClass::schema_fields_HANDLE, $handle)
-            ->find()
-            ->fetch();
-
-        return $page->getId() ? $page : null;
-    }
-
-    private function pageModel(): ?object
-    {
-        if (!\class_exists(\GuoLaiRen\PageBuilder\Model\Page::class)) {
-            return null;
-        }
-
-        return ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\Page::class);
-    }
-
-    private function pageTypeField(): string
-    {
-        return \GuoLaiRen\PageBuilder\Model\Page::schema_fields_TYPE;
+        return null;
     }
 
     private function extractHandle(array $candidate): ?string
@@ -386,11 +273,6 @@ final class PreviewNavigationResolver
             return '';
         }
 
-        if (\str_contains($normalizedPath, 'pagebuilder/frontend/page/view')) {
-            $handle = \trim((string)($query['handle'] ?? ''));
-            return $handle !== '' ? $handle : null;
-        }
-
         if (\preg_match('#\.[a-z0-9]+$#i', $normalizedPath)) {
             return null;
         }
@@ -398,32 +280,10 @@ final class PreviewNavigationResolver
         return $normalizedPath;
     }
 
-    private function detectCurrentWebsiteId(): int
-    {
-        try {
-            if (\class_exists(\Weline\UrlManager\Model\UrlRewrite::class)) {
-                return (int)\Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
-            }
-        } catch (\Throwable) {
-        }
-
-        return (int) (\w_env('website_id', 0) ?? 0);
-    }
-
     private function resolveThemePageType(string $path): string
     {
         $pageType = $this->themePageTypeResolver->resolvePageTypeFromUri($path, ThemeLayout::PAGE_TYPE_HOME);
         return $pageType !== '' ? $pageType : ThemeLayout::PAGE_TYPE_HOME;
-    }
-
-    private function resolveLocale(): string
-    {
-        $locale = \trim((string)$this->request->getParam('locale', ''));
-        if ($locale !== '') {
-            return $locale;
-        }
-
-        return \trim((string)$this->request->getParam('lang', ''));
     }
 
     private function buildResponse(

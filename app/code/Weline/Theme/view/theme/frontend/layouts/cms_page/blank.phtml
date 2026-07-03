@@ -1,0 +1,102 @@
+<?php
+/**
+ * 布局：CMS页面 - 空白布局
+ *
+ * CMS空白页面布局，只保留必要 head、SEO hooks、基础 body hooks 和主内容 slot。
+ *
+ * 字段
+ * @meta.name {default="CMS页面空白布局",name="CMS页面空白布局",description="CMS页面空白布局，用于完全由可视化内容控制页面"}
+ * @meta.description {default="CMS页面空白布局，不渲染 header、footer、breadcrumb",name="CMS页面空白布局描述",description="适合活动页、专题页、独立落地页等完全由CMS可视化编辑的页面"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
+ * @param title {default="CMS页面",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param meta_title {default="",name="SEO标题",description="SEO标题，留空时使用页面标题"}
+ * @param meta_description {default="",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要"}
+ * @param canonical_url {default="",name="Canonical URL",description="Canonical URL，留空时使用CMS页面公开地址"}
+ * @param robots {default="index,follow",name="Robots",description="搜索引擎抓取策略，例如 index,follow 或 noindex,nofollow"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="cms-page-blank <?= htmlspecialchars($meta['class'] ?? '') ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::body-start</w:hook>
+
+    <main class="cms-page-blank__main" id="cms-page-main" data-layout="cms_page" data-layout-option="blank">
+        <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::main-before</w:hook>
+
+        <w:slot id="content"
+                name="内容区域"
+                accept="layout-cms-content,layout-default-content,content,banner,carousel,product,category,faq,video,container"
+                multiple="true"
+                reject="header,footer"
+                position="content"
+                class="cms-page-blank__content-slot">
+            <w:hook name="Weline_Theme::frontend::layouts::cms_page::blank::content">
+                <div class="cms-page-blank__placeholder" data-placeholder="content">
+                    <span class="cms-page-blank__placeholder-title"><?= __('拖拽部件或容器到此处') ?></span>
+                    <span class="cms-page-blank__placeholder-hint"><?= __('空白布局不会渲染 header、footer 或面包屑') ?></span>
+                </div>
+            </w:hook>
+        </w:slot>
+
+        <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::main-after</w:hook>
+    </main>
+
+    <w:hook>Weline_Theme::frontend::layouts::cms_page::blank::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .cms-page-blank {
+        min-height: 100vh;
+        margin: 0;
+        background: var(--weline-layout-surface-primary, #fff);
+        color: var(--weline-layout-text-primary, #111827);
+    }
+
+    .cms-page-blank__main {
+        min-height: 100vh;
+        width: 100%;
+    }
+
+    .cms-page-blank__content-slot {
+        min-height: 100vh;
+        position: relative;
+    }
+
+    .cms-page-blank__placeholder {
+        min-height: 360px;
+        display: grid;
+        place-items: center;
+        gap: 8px;
+        padding: 48px 16px;
+        color: var(--weline-layout-text-secondary, #667085);
+        text-align: center;
+    }
+
+    .cms-page-blank__placeholder-title {
+        color: var(--weline-layout-text-primary, #111827);
+        font-weight: 700;
+    }
+
+    .cms-page-blank__placeholder-hint {
+        font-size: 14px;
+    }
+    </style>
+
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

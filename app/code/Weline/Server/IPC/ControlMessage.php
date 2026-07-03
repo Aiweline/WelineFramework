@@ -37,9 +37,6 @@ class ControlMessage
     /** Master → Worker：通知清缓存（原地执行，不重启） */
     public const TYPE_CACHE_CLEAR = 'cache_clear';
 
-    /** Master → Worker：PageBuilder 单页缓存失效（进程内 handle + ObjectManager，轻量） */
-    public const TYPE_PAGEBUILDER_PAGE_INVALIDATE = 'pagebuilder_page_invalidate';
-
     /** Master → Worker：下发驱动路由策略（file-only hijack + 服务端点） */
     public const TYPE_ROUTING_POLICY = 'routing_policy';
 
@@ -188,8 +185,6 @@ class ControlMessage
     /** 重载并等待完成：Master 滚动重启完成后才返回结果 */
     public const ACTION_RELOAD_WAIT = 'reload_wait';
     public const ACTION_CACHE_CLEAR = 'cache_clear';
-    /** CLI → Master：广播 PageBuilder 单页失效到各 Worker */
-    public const ACTION_PAGEBUILDER_PAGE_INVALIDATE = 'pagebuilder_page_invalidate';
     public const ACTION_STATUS = 'status';
     /** 启用维护模式：启动维护 Worker，准备滚动重启 */
     public const ACTION_MAINTENANCE_ENABLE = 'maintenance_enable';
@@ -559,19 +554,6 @@ class ControlMessage
     {
         return self::encode([
             'type' => self::TYPE_CACHE_CLEAR,
-        ]);
-    }
-
-    /**
-     * PageBuilder：按站点 + handle 失效进程内路由 handle 缓存（由各 Worker 执行）
-     */
-    public static function pageBuilderPageInvalidate(int $websiteId, string $handle, bool $isHomePage): string
-    {
-        return self::encode([
-            'type' => self::TYPE_PAGEBUILDER_PAGE_INVALIDATE,
-            'website_id' => $websiteId,
-            'handle' => $handle,
-            'is_home_page' => $isHomePage,
         ]);
     }
 

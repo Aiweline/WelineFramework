@@ -10,7 +10,7 @@ use Weline\Ai\Interface\ScenarioAdapterInterface;
 /**
  * 文章生成场景适配器
  * 
- * 专为 Blog 和 PageBuilder 模块设计的 AI 文章生成适配器：
+ * 专为内容模块设计的 AI 文章生成适配器：
  * - 支持多种文章类型（博客、新闻、产品介绍、落地页等）
  * - 支持多语言文章生成
  * - 支持 SEO 优化（标题、摘要、关键词、Meta 信息）
@@ -51,7 +51,7 @@ class ArticleGenerationAdapter implements ScenarioAdapterInterface, AdapterModel
 
     public function getCode(): string
     {
-        return 'pagebuilder_article_generation';
+        return 'content_article_generation';
     }
 
     public function getName(): string
@@ -61,7 +61,7 @@ class ArticleGenerationAdapter implements ScenarioAdapterInterface, AdapterModel
 
     public function getDescription(): string
     {
-        return __('专为 Blog 和 PageBuilder 模块设计的 AI 文章生成适配器。支持多种文章类型、多语言、SEO 优化、自定义风格和长度。输出结构化 JSON 格式，包含标题、摘要、正文、SEO 元信息等。');
+        return __('专为内容模块设计的 AI 文章生成适配器。支持多种文章类型、多语言、SEO 优化、自定义风格和长度。输出结构化 JSON 格式，包含标题、摘要、正文、SEO 元信息等。');
     }
 
     public function getVersion(): string

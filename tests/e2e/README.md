@@ -134,32 +134,6 @@ php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium
 php bin/w e2e:run --module=WeShop_Cart --case-id=BACKEND-SMOKE-001 --project=chromium
 ```
 
-PageBuilder AI 建站发布全链路冒烟（需已启动目标 WLS；示例命名实例 `ai-test-e2e-pb`，直连可设 `PLAYWRIGHT_DISABLE_PROXY=1`）：
-
-```bash
-# PowerShell 示例
-$env:PLAYWRIGHT_INSTANCE_NAME='ai-test-e2e-pb'
-$env:PLAYWRIGHT_DISABLE_PROXY='1'
-php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="builder index lists published" --headless --project=chromium
-```
-
-**本地注册商 + `*.weline.local` 子域 + Hub 假购买 + Handoff + SSE 发布 + 真实浏览器打开前台**（用例会执行 `php bin/w server:hosts:add <子域>`，Windows 下建议「以管理员身份」跑终端，否则仅回退为 `Host` 头 API 断言，日志会打印可手动访问的 URL）：
-
-```bash
-$env:PLAYWRIGHT_INSTANCE_NAME='ai-test-e2e-pb'
-$env:PLAYWRIGHT_DISABLE_PROXY='1'
-php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="fake local domain purchase" --headless --project=chromium
-```
-
-不写入 hosts（CI 等）：`$env:PLAYWRIGHT_SKIP_HOSTS_REGISTER='1'`。
-
-PageBuilder 工作台：预览 Tab 切换 iframe、`post-switch-preview-page` 与「重新选择页面类型并重新生成」弹窗（均需已启动 WLS，建议与上文相同 `PLAYWRIGHT_INSTANCE_NAME` / 代理变量）：
-
-```bash
-php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="expert: preview tabs switch iframe src page_type" --headless --project=chromium
-php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="expert: page type repick modal confirm triggers post-start-build" --headless --project=chromium
-```
-
 列出可用模块：
 
 ```bash

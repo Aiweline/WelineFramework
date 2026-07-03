@@ -26,14 +26,6 @@ function ensureAdminThemeScandirDir() {
   fs.mkdirSync(missingThemeDir, { recursive: true });
 }
 
-function ensurePageBuilderTplScandirDir() {
-  const missingPageBuilderTplDir = path.resolve(
-    __dirname,
-    '../../../../app/code/GuoLaiRen/PageBuilder/view/tpl'
-  );
-  fs.mkdirSync(missingPageBuilderTplDir, { recursive: true });
-}
-
 function ensureCatalogTplScandirDir() {
   const missingCatalogTplDir = path.resolve(
     __dirname,
@@ -189,7 +181,6 @@ test.describe.serial('Aiweline_Stock backend smoke', () => {
     }
     ensurePlaywrightArtifactsDir();
     ensureAdminThemeScandirDir();
-    ensurePageBuilderTplScandirDir();
     ensureCatalogTplScandirDir();
     stockSmokeContext = await browser.newContext();
     stockSmokePage = await stockSmokeContext.newPage();
@@ -272,4 +263,3 @@ test.describe.serial('Aiweline_Stock backend smoke', () => {
     );
   });
 });
-

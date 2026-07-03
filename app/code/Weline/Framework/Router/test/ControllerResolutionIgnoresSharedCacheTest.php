@@ -101,7 +101,7 @@ final class ControllerResolutionIgnoresSharedCacheTest extends TestCase
         $router = [
             'class' => [
                 'area' => 'BackendController',
-                'name' => 'GuoLaiRen\\PageBuilder\\Controller\\Backend\\AiSiteAgent',
+                'name' => 'Weline\\Admin\\Controller\\System\\Cms',
                 'method' => 'getStreamSse',
                 'controller_name' => 'Backend/AiSiteAgent',
                 'request_method' => 'GET',
@@ -110,7 +110,7 @@ final class ControllerResolutionIgnoresSharedCacheTest extends TestCase
 
         self::assertSame(
             [
-                'GuoLaiRen\\PageBuilder\\Controller\\Backend\\AiSiteAgent',
+                'Weline\\Admin\\Controller\\System\\Cms',
                 'getStreamSse',
             ],
             $core->getController($router)
@@ -127,14 +127,14 @@ final class ControllerResolutionIgnoresSharedCacheTest extends TestCase
 
         $router = [
             'class' => [
-                'name' => 'GuoLaiRen\\PageBuilder\\Controller\\Backend\\AiSiteAgent',
+                'name' => 'Weline\\Admin\\Controller\\System\\Cms',
                 'method' => '',
             ],
         ];
 
         self::assertSame(
             [
-                'GuoLaiRen\\PageBuilder\\Controller\\Backend\\AiSiteAgent',
+                'Weline\\Admin\\Controller\\System\\Cms',
                 'index',
             ],
             $core->getController($router)

@@ -30,7 +30,10 @@ class HeadRendererSeoProfileTest extends TestCase
             'canonical_url' => 'https://shop.test/blog/launch-news',
             'url' => 'https://shop.test/blog/launch-news',
             'image' => 'https://shop.test/media/news.jpg',
+            'image_alt' => 'Launch News share preview',
             'locale' => 'zh_Hans_CN',
+            'sitemap_url' => '/sitemap.xml',
+            'alternates' => ['x-default' => 'https://shop.test/', 'zh-CN' => 'https://shop.test/blog/launch-news'],
             'organization' => ['name' => 'News Shop', 'url' => 'https://shop.test/', 'logo' => 'https://shop.test/logo.png'],
             'article' => [
                 'headline' => 'Launch News',
@@ -47,7 +50,14 @@ class HeadRendererSeoProfileTest extends TestCase
         $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
 
         self::assertStringContainsString('<meta name="robots" content="index,follow">', $html);
+        self::assertStringContainsString('<meta name="page-type" content="news-article">', $html);
+        self::assertStringContainsString('<meta name="content-category" content="article">', $html);
+        self::assertStringContainsString('<link rel="sitemap" type="application/xml" href="/sitemap.xml">', $html);
+        self::assertStringContainsString('<link rel="alternate" hreflang="x-default" href="https://shop.test/">', $html);
         self::assertStringContainsString('<meta property="og:type" content="article">', $html);
+        self::assertStringContainsString('<meta property="og:site_name" content="News Shop">', $html);
+        self::assertStringContainsString('<meta property="og:image:alt" content="Launch News share preview">', $html);
+        self::assertStringContainsString('<meta name="twitter:image:alt" content="Launch News share preview">', $html);
         self::assertStringContainsString('"@type": "NewsArticle"', $html);
         self::assertStringContainsString('"mainEntityOfPage": {', $html);
         self::assertStringContainsString('"articleSection": "Company News"', $html);
@@ -133,6 +143,13 @@ class HeadRendererSeoProfileTest extends TestCase
 
     public function testFooterSlotIncludesDefaultInspectorBootstrapWithoutProviderPayload(): void
     {
+        if (!\defined('DEBUG')) {
+            \define('DEBUG', true);
+        }
+        if (!\defined('DEV')) {
+            \define('DEV', true);
+        }
+
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['resolve'])
@@ -151,9 +168,9 @@ class HeadRendererSeoProfileTest extends TestCase
             new SeoSlotProviderRegistryStub([])
         ))->render($template, ['slot' => 'footer']);
 
-        self::assertStringContainsString('data-weline-seo-bootstrap="true"', $html);
-        self::assertStringContainsString('data-weline-seo-source="footer-slot"', $html);
-        self::assertStringContainsString('window.__WELINE_SEO__', $html);
+        self::assertStringContainsString('data-weline-panel-seo-bootstrap="true"', $html);
+        self::assertStringContainsString('data-weline-panel-seo-source="footer-slot"', $html);
+        self::assertStringContainsString('window.__WELINE_PANEL_REPORT_PROVIDERS__.seo', $html);
         self::assertStringContainsString('/assets/seo-inspector/inspector.css', $html);
         self::assertStringContainsString('/assets/seo-inspector/inspector.js', $html);
         self::assertStringNotContainsString('@static(', $html);

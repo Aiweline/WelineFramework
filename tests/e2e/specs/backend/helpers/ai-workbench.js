@@ -150,12 +150,14 @@ async function mergeWebsitesScope(page, backendRoot, scopePatch) {
   return result;
 }
 
-function buildWorkbenchUrl(backendRoot = getBackendRoot(), provider = 'pagebuilder', fakeMode = false) {
+function buildWorkbenchUrl(backendRoot = getBackendRoot(), provider = '', fakeMode = false) {
   const normalizedBackendRoot = String(backendRoot || getBackendRoot()).replace(/\/+$/, '');
   const base = new URL(`${normalizedBackendRoot}/`);
   const pathPrefix = base.pathname.replace(/\/+$/, '') || '/';
   const url = new URL(`${base.origin}${pathPrefix}/websites/backend/site-builder-agent/index`);
-  url.searchParams.set('provider', provider);
+  if (provider) {
+    url.searchParams.set('provider', provider);
+  }
   if (fakeMode) {
     url.searchParams.set('fake_mode', '1');
   }

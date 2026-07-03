@@ -25,7 +25,6 @@ interface SitemapUrlProviderInterface
      * 返回 Provider 的 scope 标识
      *
      * 用于区分不同类型的 URL 来源，如：
-     * - page_builder: PageBuilder 页面
      * - catalog: 商品目录
      * - blog: 博客文章
      *
@@ -36,7 +35,6 @@ interface SitemapUrlProviderInterface
     /**
      * 返回 Provider 所属模块名
      *
-     * 例如：GuoLaiRen_PageBuilder, WeShop_Catalog
      *
      * @return string
      */

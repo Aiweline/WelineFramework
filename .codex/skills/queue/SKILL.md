@@ -7,7 +7,7 @@ description: WelineFramework queue diagnostics and operations guide. Use when wo
 
 Use this skill for WelineFramework queue inspection, repair, and operation in this source repository. Prefer the framework query provider and queue CLI over direct database poking unless source-level diagnosis requires model internals.
 
-GuoLaiRen vendor queue knowledge, including PageBuilder queues, has moved with `app/code/GuoLaiRen` to `E:\公司\远程\src\weline`. If a task mentions GuoLaiRen queues, switch to the target repository and use its GuoLaiRen, PageBuilder, and queue skills there.
+
 
 ## First Pass
 

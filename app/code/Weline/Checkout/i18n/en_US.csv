@@ -1,22 +1,4 @@
-﻿订单管理,"Order Management"
-订单不存在,"Order does not exist"
-订单详情,"Order Details"
-无效的请求方法,"Invalid request method"
-参数不完整,"Incomplete parameters"
-订单状态更新成功,"Order status updated successfully"
-更新失败：%{1},"Update failed: %{1}"
-结账,Checkout
-请先登录,"Please login first"
-订单创建成功,"Order created successfully"
-订单创建失败：%{1},"Order creation failed: %{1}"
-结账成功,"Checkout Successful"
-支付处理成功,"Payment processed successfully"
-支付处理失败：%{1},"Payment processing failed: %{1}"
-我的订单,"My Orders"
-无权操作此订单,"No permission to operate this order"
-订单已取消,"Order cancelled"
-取消订单失败：%{1},"Failed to cancel order: %{1}"
-结账数据验证前,"Before Checkout Validation"
+﻿结账数据验证前,"Before Checkout Validation"
 在验证结账数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating checkout data, allowing other modules to modify validation data or perform preprocessing operations."
 结账数据验证后,"After Checkout Validation"
 在验证结账数据之后触发，允许其他模块根据验证结果执行后续操作。,"Triggered after validating checkout data, allowing other modules to perform follow-up operations based on validation results."
@@ -156,6 +138,24 @@
 在后台订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the backend order detail page content, allowing other modules to add custom content at the top of the order detail page."
 后台订单详情页之后,"After Backend Order Detail Page"
 在后台订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the backend order detail page content, allowing other modules to add custom content at the bottom of the order detail page."
+我的订单,"My Orders"
+订单详情,"Order Details"
+无效的请求方法,"Invalid request method"
+请先登录,"Please login first"
+订单不存在,"Order does not exist"
+无权操作此订单,"No permission to operate this order"
+订单已取消,"Order cancelled"
+取消订单失败：%{1},"Failed to cancel order: %{1}"
+结账,Checkout
+订单创建成功,"Order created successfully"
+订单创建失败：%{1},"Order creation failed: %{1}"
+结账成功,"Checkout Successful"
+支付处理成功,"Payment processed successfully"
+支付处理失败：%{1},"Payment processing failed: %{1}"
+订单管理,"Order Management"
+参数不完整,"Incomplete parameters"
+订单状态更新成功,"Order status updated successfully"
+更新失败：%{1},"Update failed: %{1}"
 待处理,Pending
 处理中,Processing
 已完成,Completed
@@ -168,32 +168,12 @@
 已送达,Delivered
 成功,Success
 失败,Failed
-匿名结账需要填写有效邮箱。,"Guest checkout requires a valid email address."
-客户ID不能为空,"Customer ID cannot be empty"
-订单项不能为空,"Order items cannot be empty"
-"订单项 %{1} 的产品ID不能为空","Product ID of order item %{1} cannot be empty"
-"订单项 %{1} 的数量必须大于0","Quantity of order item %{1} must be greater than 0"
-"订单项 %{1} 的价格无效","Price of order item %{1} is invalid"
-收货地址不能为空,"Shipping address cannot be empty"
-订单无法取消,"Order cannot be cancelled"
-订单ID不能为空,"Order ID cannot be empty"
-支付方式不能为空,"Payment method cannot be empty"
-支付金额无效,"Payment amount is invalid"
-订单已支付,"Order has been paid"
-订单状态,"Order Status"
-全部,All
-支付状态,"Payment Status"
-订单号,"Order Number"
-请输入订单号,"Please enter order number"
-搜索,Search
-客户ID,"Customer ID"
-订单总额,"Total Amount"
-创建时间,"Created Time"
-操作,Actions
-暂无订单,"No Orders"
-查看,View
 订单信息,"Order Information"
+订单号,"Order Number"
+订单状态,"Order Status"
+支付状态,"Payment Status"
 配送状态,"Shipping Status"
+创建时间,"Created Time"
 订单项,"Order Items"
 产品名称,"Product Name"
 SKU,SKU
@@ -205,17 +185,37 @@ SKU,SKU
 运费,"Shipping Fee"
 税费,Tax
 折扣,Discount
-返回列表,"Back to List"
-收货地址,"Shipping Address"
-配送方式,"Shipping Method"
-支付方式,"Payment Method"
-提交订单,"Submit Order"
-感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
-查看订单详情,"View Order Details"
+订单总额,"Total Amount"
 返回订单列表,"Back to Order List"
+暂无订单,"No Orders"
 查看详情,"View Details"
 取消订单,"Cancel Order"
 确定要取消此订单吗？,"Are you sure you want to cancel this order?"
 确定取消,确定取消
 保留订单,保留订单
 取消订单失败，请稍后重试,取消订单失败，请稍后重试
+感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
+查看订单详情,"View Order Details"
+收货地址,"Shipping Address"
+配送方式,"Shipping Method"
+支付方式,"Payment Method"
+提交订单,"Submit Order"
+全部,All
+请输入订单号,"Please enter order number"
+搜索,Search
+客户ID,"Customer ID"
+操作,Actions
+查看,View
+返回列表,"Back to List"
+订单无法取消,"Order cannot be cancelled"
+订单ID不能为空,"Order ID cannot be empty"
+支付方式不能为空,"Payment method cannot be empty"
+支付金额无效,"Payment amount is invalid"
+订单已支付,"Order has been paid"
+客户ID不能为空,"Customer ID cannot be empty"
+订单项不能为空,"Order items cannot be empty"
+"订单项 %{1} 的产品ID不能为空","Product ID of order item %{1} cannot be empty"
+"订单项 %{1} 的数量必须大于0","Quantity of order item %{1} must be greater than 0"
+"订单项 %{1} 的价格无效","Price of order item %{1} is invalid"
+收货地址不能为空,"Shipping address cannot be empty"
+匿名结账需要填写有效邮箱。,"Guest checkout requires a valid email address."

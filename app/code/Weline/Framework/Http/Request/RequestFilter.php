@@ -15,6 +15,10 @@ class RequestFilter extends DataObject
 {
     private static RequestFilter $instance;
 
+    private const RETURN_URL_PARAM_KEYS = [
+        'return_url',
+    ];
+
     public const request_ENCODES = [
         'UTF-8', 'ASCII', 'GB2312', 'GBK', 'BIG5',
     ];
@@ -303,10 +307,24 @@ class RequestFilter extends DataObject
 
         //$ArrPGC=array_merge($_GET,$_POST,$_COOKIE);
         foreach (\Weline\Framework\Env\WelineEnv::getGet() as $key => $value) {
-            $this->StopAttack($key, $value, $getfilter);
+            if ($this->isReturnUrlParam((string)$key)) {
+                if ($this->isSafeReturnUrlParam((string)$key, $value)) {
+                    continue;
+                }
+                $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $getfilter);
+            } else {
+                $this->StopAttack($key, $value, $getfilter);
+            }
         }
         foreach (\Weline\Framework\Env\WelineEnv::getPost() as $key => $value) {
-            $this->StopAttack($key, $value, $postfilter);
+            if ($this->isReturnUrlParam((string)$key)) {
+                if ($this->isSafeReturnUrlParam((string)$key, $value)) {
+                    continue;
+                }
+                $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $postfilter);
+            } else {
+                $this->StopAttack($key, $value, $postfilter);
+            }
         }
         foreach (\w_env_cookie() as $key => $value) {
             $this->StopAttack($key, $value, $cookiefilter);
@@ -336,6 +354,144 @@ class RequestFilter extends DataObject
                 ['Content-Type' => 'text/html; charset=UTF-8']
             );
         }
+    }
+
+    private function isSafeReturnUrlParam(string $key, mixed $value): bool
+    {
+        if (!$this->isReturnUrlParam($key) || !is_string($value)) {
+            return false;
+        }
+
+        $url = trim($value);
+        if ($url === '' || str_contains($url, '\\') || preg_match('/[\x00-\x1F\x7F]/', $url) === 1) {
+            return false;
+        }
+
+        $decoded = trim($this->decodeNestedUrlValue($url));
+        if ($decoded === '' || str_contains($decoded, '\\') || preg_match('/[\x00-\x1F\x7F]/', $decoded) === 1) {
+            return false;
+        }
+        if (preg_match('/<\s*script\b|javascript\s*:|vbscript\s*:/i', $decoded) === 1) {
+            return false;
+        }
+
+        if (str_starts_with($decoded, '//')) {
+            return false;
+        }
+
+        $parts = parse_url($decoded);
+        if ($parts === false) {
+            return false;
+        }
+
+        if (isset($parts['scheme'])) {
+            $scheme = strtolower((string)$parts['scheme']);
+            if ($scheme !== 'http' && $scheme !== 'https') {
+                return false;
+            }
+
+            return $this->isCurrentRequestHost((string)($parts['host'] ?? ''));
+        }
+
+        return str_starts_with($decoded, '/');
+    }
+
+    private function isReturnUrlParam(string $key): bool
+    {
+        return in_array(strtolower($key), self::RETURN_URL_PARAM_KEYS, true);
+    }
+
+    private function decodeNestedUrlValue(string $value): string
+    {
+        $decoded = $value;
+        for ($i = 0; $i < 3; $i++) {
+            $next = rawurldecode($decoded);
+            if ($next === $decoded) {
+                break;
+            }
+            $decoded = $next;
+        }
+
+        return $decoded;
+    }
+
+    private function isCurrentRequestHost(string $host): bool
+    {
+        $host = $this->normalizeReturnUrlHost($host);
+        if ($host === '') {
+            return false;
+        }
+
+        $currentHosts = $this->getCurrentRequestHosts();
+        foreach ($currentHosts as $currentHost) {
+            if ($host === $currentHost) {
+                return true;
+            }
+        }
+
+        if ($this->isLocalFrameworkHost($host)) {
+            foreach ($currentHosts as $currentHost) {
+                if ($this->isLocalFrameworkHost($currentHost)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * WLS/dispatcher requests may expose either the browser host, the original
+     * host, or the internal loopback host depending on the current runtime hop.
+     *
+     * @return string[]
+     */
+    private function getCurrentRequestHosts(): array
+    {
+        $hosts = [];
+        foreach ([
+            \Weline\Framework\Env\WelineEnv::get('server.http_host', ''),
+            \Weline\Framework\Env\WelineEnv::get('server.host', ''),
+            \Weline\Framework\Env\WelineEnv::get('server.server_name', ''),
+            \Weline\Framework\Env\WelineEnv::get('http_weline_original_host', ''),
+            \Weline\Framework\Env\WelineEnv::get('http_x_forwarded_host', ''),
+        ] as $source) {
+            foreach (explode(',', (string)$source) as $candidate) {
+                $host = $this->normalizeReturnUrlHost($candidate);
+                if ($host !== '') {
+                    $hosts[$host] = $host;
+                }
+            }
+        }
+
+        return array_values($hosts);
+    }
+
+    private function normalizeReturnUrlHost(string $host): string
+    {
+        $host = trim($host);
+        if ($host === '') {
+            return '';
+        }
+
+        $parts = parse_url(str_contains($host, '://') ? $host : 'http://' . $host);
+        $normalized = is_array($parts) ? (string)($parts['host'] ?? '') : '';
+        if ($normalized === '') {
+            $normalized = $host;
+        }
+
+        return strtolower(trim($normalized, " \t\n\r\0\x0B[]"));
+    }
+
+    private function isLocalFrameworkHost(string $host): bool
+    {
+        $host = $this->normalizeReturnUrlHost($host);
+        return $host === 'localhost'
+            || $host === '127.0.0.1'
+            || $host === '::1'
+            || str_ends_with($host, '.localhost')
+            || str_ends_with($host, '.weline.localhost')
+            || str_ends_with($host, '.weline.test');
     }
 
     public function slog($logs)

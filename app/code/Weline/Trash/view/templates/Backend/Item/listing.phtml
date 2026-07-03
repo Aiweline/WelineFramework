@@ -1,0 +1,427 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$items = $this->getData('items') ?: [];
+$types = $this->getData('types') ?: [];
+$pagination = $this->getData('pagination');
+$codeFilter = (string)($this->getData('code') ?: '');
+$statusFilter = (string)($this->getData('status') ?: 'open');
+$search = (string)($this->getData('search') ?: '');
+$esc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$statusLabels = [
+    'open' => __('待处理'),
+    'all' => __('全部'),
+    'active' => __('待恢复'),
+    'restore_failed' => __('恢复失败'),
+    'purge_failed' => __('清理失败'),
+    'restored' => __('已恢复'),
+    'purged' => __('已清理'),
+];
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Trash::item" order_field="order" name_field="title"></breadcrumb></h4>
+        </div>
+    </div>
+</div>
+
+<style>
+.trash-admin {
+    --trash-surface: var(--backend-component-card-bg, var(--w-box-bg, var(--bs-body-bg, #ffffff)));
+    --trash-soft: var(--backend-component-bg-secondary, var(--bs-tertiary-bg, #f8f9fa));
+    --trash-border: var(--backend-component-card-border, var(--bs-border-color, #dee2e6));
+    --trash-text: var(--backend-component-text-primary, var(--bs-body-color, #212529));
+    --trash-muted: var(--backend-component-text-muted, var(--bs-secondary-color, #6c757d));
+    --trash-code: var(--bs-code-color, #d63384);
+    --trash-control-bg: var(--trash-surface);
+    --trash-control-border: var(--trash-border);
+    --trash-control-placeholder: var(--trash-muted);
+    --trash-row-hover: rgba(15, 23, 42, 0.04);
+}
+html[data-theme-mode="dark"] .trash-admin,
+html[data-layout-mode="dark"] .trash-admin,
+html[data-bs-theme="dark"] .trash-admin,
+body[data-theme-mode="dark"] .trash-admin,
+body[data-layout-mode="dark"] .trash-admin,
+body[data-bs-theme="dark"] .trash-admin {
+    --trash-surface: rgba(15, 23, 42, 0.94);
+    --trash-soft: rgba(17, 24, 39, 0.96);
+    --trash-border: rgba(148, 163, 184, 0.22);
+    --trash-text: #e6eef8;
+    --trash-muted: #9aa8bd;
+    --trash-code: #f472b6;
+    --trash-control-bg: #0f172a;
+    --trash-control-border: rgba(148, 163, 184, 0.28);
+    --trash-control-placeholder: #718096;
+    --trash-row-hover: rgba(96, 165, 250, 0.08);
+    color-scheme: dark;
+}
+.trash-admin .trash-card {
+    color: var(--trash-text);
+    border: 1px solid var(--trash-border);
+    border-radius: 8px;
+    background: var(--trash-surface);
+}
+.trash-admin .trash-filter-card {
+    padding: 14px;
+}
+.trash-admin .trash-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+.trash-admin .trash-filter .trash-search {
+    flex: 1 1 240px;
+    min-width: 220px;
+}
+.trash-admin .trash-filter .trash-type {
+    flex: 0 1 260px;
+    min-width: 210px;
+}
+.trash-admin .trash-filter .trash-status {
+    flex: 0 0 138px;
+}
+.trash-admin .trash-filter .trash-submit {
+    flex: 0 0 auto;
+    min-width: 112px;
+    justify-content: center;
+}
+.trash-admin .trash-table {
+    color: var(--trash-text);
+    min-width: 980px;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--trash-text);
+    --bs-table-border-color: var(--trash-border);
+    --bs-table-hover-bg: var(--trash-row-hover);
+    --bs-table-hover-color: var(--trash-text);
+}
+.trash-admin .trash-table th {
+    color: var(--trash-text);
+    background: var(--trash-soft);
+    border-bottom-color: var(--trash-border);
+    font-weight: 700;
+}
+.trash-admin .trash-table td {
+    color: var(--trash-text);
+    border-color: var(--trash-border);
+}
+.trash-admin .trash-table th,
+.trash-admin .trash-table td {
+    vertical-align: middle;
+}
+.trash-admin .trash-table th:nth-child(1),
+.trash-admin .trash-table td:nth-child(1),
+.trash-admin .trash-table th:nth-child(5),
+.trash-admin .trash-table td:nth-child(5),
+.trash-admin .trash-table th:nth-child(6),
+.trash-admin .trash-table td:nth-child(6),
+.trash-admin .trash-table th:nth-child(8),
+.trash-admin .trash-table td:nth-child(8) {
+    white-space: nowrap;
+}
+.trash-admin .trash-table td:nth-child(3) {
+    overflow-wrap: anywhere;
+}
+.trash-admin .trash-table tbody tr:hover {
+    background: var(--trash-row-hover);
+}
+.trash-admin .trash-table code {
+    color: var(--trash-code);
+}
+.trash-admin .form-control,
+.trash-admin .form-select {
+    color: var(--trash-text);
+    border-color: var(--trash-control-border);
+    background-color: var(--trash-control-bg);
+    min-height: 44px;
+}
+.trash-admin .form-control::placeholder {
+    color: var(--trash-control-placeholder);
+    opacity: 1;
+}
+.trash-admin .form-control:focus,
+.trash-admin .form-select:focus {
+    color: var(--trash-text);
+    border-color: rgba(99, 102, 241, 0.75);
+    background-color: var(--trash-control-bg);
+    box-shadow: 0 0 0 0.16rem rgba(99, 102, 241, 0.18);
+}
+.trash-admin .text-muted {
+    color: var(--trash-muted) !important;
+}
+.trash-admin .btn-outline-secondary {
+    color: var(--trash-text);
+    border-color: var(--trash-border);
+}
+.trash-admin .btn-outline-secondary:hover {
+    color: #ffffff;
+    border-color: #64748b;
+    background: #334155;
+}
+.trash-admin .trash-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.trash-admin .trash-record-list {
+    display: none;
+    gap: 10px;
+}
+.trash-admin .trash-record {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: flex-start;
+    color: var(--trash-text);
+    border: 1px solid var(--trash-border);
+    border-radius: 8px;
+    background: var(--trash-surface);
+    padding: 14px;
+}
+.trash-admin .trash-record-main {
+    min-width: 0;
+}
+.trash-admin .trash-record-kicker,
+.trash-admin .trash-record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    color: var(--trash-muted);
+    font-size: 13px;
+}
+.trash-admin .trash-record-kicker strong {
+    color: var(--trash-text);
+}
+.trash-admin .trash-record-title {
+    margin-top: 6px;
+    font-weight: 700;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+.trash-admin .trash-record code {
+    color: var(--trash-code);
+}
+.trash-admin .trash-record-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+}
+.trash-admin .trash-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 3px 10px;
+    border: 1px solid rgba(34, 197, 94, 0.24);
+    border-radius: 999px;
+    color: #16a34a;
+    background: rgba(34, 197, 94, 0.10);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+html[data-theme-mode="dark"] .trash-admin .trash-status-pill,
+html[data-layout-mode="dark"] .trash-admin .trash-status-pill,
+html[data-bs-theme="dark"] .trash-admin .trash-status-pill,
+body[data-theme-mode="dark"] .trash-admin .trash-status-pill,
+body[data-layout-mode="dark"] .trash-admin .trash-status-pill,
+body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
+    color: #86efac;
+}
+.trash-admin .trash-record-error {
+    margin-top: 8px;
+    color: #ef4444;
+    font-size: 13px;
+}
+@media (max-width: 760px) {
+    .trash-admin .trash-filter {
+        gap: 8px;
+    }
+    .trash-admin .trash-filter .trash-search {
+        flex-basis: 100%;
+    }
+    .trash-admin .trash-filter .trash-type {
+        flex: 1 1 260px;
+    }
+    .trash-admin .trash-filter .trash-status {
+        flex: 0 1 150px;
+    }
+}
+@media (max-width: 1100px) {
+    .trash-admin .trash-desktop-table {
+        display: none;
+    }
+    .trash-admin .trash-record-list {
+        display: grid;
+    }
+}
+@media (max-width: 560px) {
+    .trash-admin .trash-filter .trash-search,
+    .trash-admin .trash-filter .trash-type,
+    .trash-admin .trash-filter .trash-status,
+    .trash-admin .trash-filter .trash-submit {
+        flex: 1 1 100%;
+    }
+    .trash-admin .trash-record {
+        grid-template-columns: 1fr;
+    }
+    .trash-admin .trash-record-side {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+</style>
+
+<div class="trash-admin">
+    <div class="trash-card trash-filter-card mb-3">
+        <form class="trash-filter" method="get" action="<?= $this->getBackendUrl('trash/backend/item/listing') ?>">
+            <input class="form-control trash-search" type="search" name="search" value="<?= $esc($search) ?>" placeholder="<?= $esc(__('搜索标题、实体或 code')) ?>">
+            <select class="form-select trash-type" name="code">
+                <option value=""><?= __('全部类型') ?></option>
+                <?php foreach ($types as $type): ?>
+                    <?php $typeCode = (string)($type['code'] ?? ''); ?>
+                    <option value="<?= $esc($typeCode) ?>" <?= $typeCode === $codeFilter ? 'selected' : '' ?>>
+                        <?= $esc((string)($type['label'] ?? $typeCode)) ?> / <?= $esc($typeCode) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <select class="form-select trash-status" name="status">
+                <?php foreach ($statusLabels as $value => $label): ?>
+                    <option value="<?= $esc($value) ?>" <?= $value === $statusFilter ? 'selected' : '' ?>><?= $esc($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button class="btn btn-primary trash-submit d-inline-flex align-items-center gap-1" type="submit">
+                <i class="mdi mdi-magnify"></i>
+                <?= __('筛选') ?>
+            </button>
+        </form>
+    </div>
+
+    <div class="trash-card p-0 trash-desktop-table">
+        <div class="table-responsive">
+            <table class="table trash-table mb-0 align-middle">
+                <thead>
+                <tr>
+                    <th><?= __('ID') ?></th>
+                    <th><?= __('类型') ?></th>
+                    <th><?= __('标题') ?></th>
+                    <th><?= __('业务实体') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('删除时间') ?></th>
+                    <th><?= __('错误') ?></th>
+                    <th><?= __('操作') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($items)): ?>
+                    <tr>
+                        <td class="text-center text-muted py-5" colspan="8"><?= __('暂无回收站记录') ?></td>
+                    </tr>
+                <?php endif; ?>
+                <?php foreach ($items as $item): ?>
+                    <?php
+                    $trashId = (int)($item['trash_id'] ?? 0);
+                    $status = (string)($item['status'] ?? '');
+                    $open = in_array($status, ['active', 'restore_failed', 'purge_failed'], true);
+                    ?>
+                    <tr>
+                        <td><?= $trashId ?></td>
+                        <td>
+                            <div><?= $esc((string)($item['provider_label'] ?? '')) ?></div>
+                            <code><?= $esc((string)($item['trash_code'] ?? '')) ?></code>
+                        </td>
+                        <td><?= $esc((string)($item['label'] ?? '')) ?></td>
+                        <td>
+                            <div><code><?= $esc((string)($item['entity_key'] ?? '')) ?></code></div>
+                            <?php if (!empty($item['entity_id'])): ?>
+                                <small class="text-muted"><?= __('实体ID') ?>: <?= $esc((string)$item['entity_id']) ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $esc($statusLabels[$status] ?? $status) ?></td>
+                        <td><?= $esc((string)($item['deleted_at'] ?? '')) ?></td>
+                        <td class="text-danger"><?= $esc((string)($item['last_error'] ?? '')) ?></td>
+                        <td>
+                            <div class="trash-actions">
+                                <a class="btn btn-sm btn-outline-secondary" href="<?= $this->getBackendUrl('trash/backend/item/detail', ['trash_id' => $trashId]) ?>">
+                                    <i class="mdi mdi-database-eye-outline"></i>
+                                    <?= __('详情') ?>
+                                </a>
+                                <?php if ($open): ?>
+                                    <form method="post" action="<?= $this->getBackendUrl('trash/backend/item/restore') ?>">
+                                        <input type="hidden" name="trash_id" value="<?= $trashId ?>">
+                                        <button class="btn btn-sm btn-outline-success" type="submit">
+                                            <i class="mdi mdi-restore"></i>
+                                            <?= __('恢复') ?>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="trash-record-list mb-3">
+        <?php if (empty($items)): ?>
+            <div class="trash-record">
+                <div class="text-muted py-3"><?= __('暂无回收站记录') ?></div>
+            </div>
+        <?php endif; ?>
+        <?php foreach ($items as $item): ?>
+            <?php
+            $trashId = (int)($item['trash_id'] ?? 0);
+            $status = (string)($item['status'] ?? '');
+            $open = in_array($status, ['active', 'restore_failed', 'purge_failed'], true);
+            $entityId = (string)($item['entity_id'] ?? '');
+            $lastError = (string)($item['last_error'] ?? '');
+            ?>
+            <div class="trash-record">
+                <div class="trash-record-main">
+                    <div class="trash-record-kicker">
+                        <strong>#<?= $trashId ?></strong>
+                        <span><?= $esc((string)($item['provider_label'] ?? '')) ?></span>
+                        <code><?= $esc((string)($item['trash_code'] ?? '')) ?></code>
+                    </div>
+                    <div class="trash-record-title"><?= $esc((string)($item['label'] ?? '')) ?></div>
+                    <div class="trash-record-meta mt-2">
+                        <code><?= $esc((string)($item['entity_key'] ?? '')) ?></code>
+                        <?php if ($entityId !== ''): ?>
+                            <span><?= __('实体ID') ?>: <?= $esc($entityId) ?></span>
+                        <?php endif; ?>
+                        <span><?= $esc((string)($item['deleted_at'] ?? '')) ?></span>
+                    </div>
+                    <?php if ($lastError !== ''): ?>
+                        <div class="trash-record-error"><?= $esc($lastError) ?></div>
+                    <?php endif; ?>
+                </div>
+                <div class="trash-record-side">
+                    <span class="trash-status-pill"><?= $esc($statusLabels[$status] ?? $status) ?></span>
+                    <div class="trash-actions">
+                        <a class="btn btn-sm btn-outline-secondary" href="<?= $this->getBackendUrl('trash/backend/item/detail', ['trash_id' => $trashId]) ?>">
+                            <i class="mdi mdi-database-eye-outline"></i>
+                            <?= __('详情') ?>
+                        </a>
+                        <?php if ($open): ?>
+                            <form method="post" action="<?= $this->getBackendUrl('trash/backend/item/restore') ?>">
+                                <input type="hidden" name="trash_id" value="<?= $trashId ?>">
+                                <button class="btn btn-sm btn-outline-success" type="submit">
+                                    <i class="mdi mdi-restore"></i>
+                                    <?= __('恢复') ?>
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?= $pagination ?>
+</div>

@@ -147,6 +147,76 @@ class ThemeStaticAssetPublisherTest extends TestCore
         $this->assertFileExists($publishedFile);
     }
 
+    public function testPublishesModuleStaticsResourceFromProductionThemePath(): void
+    {
+        $theme = $this->buildTheme(990006, 'demo-theme', 'Codex/demo-theme');
+        $publishedPath = $this->publisher->publishForRequestPath(
+            '/static/Codex/demo-theme/Weline/Admin/view/statics/assets/css/app-dark.min.css',
+            $theme
+        );
+
+        $this->assertSame(
+            '/pub/static/Codex/demo-theme/Weline/Admin/view/statics/assets/css/app-dark.min.css',
+            $publishedPath
+        );
+
+        $basePath = rtrim(BP, '\\/') . DS;
+        $sourceFile = $basePath . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Admin' . DS . 'view' . DS . 'statics' . DS . 'assets' . DS . 'css' . DS . 'app-dark.min.css';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'Codex' . DS . 'demo-theme' . DS . 'Weline' . DS . 'Admin' . DS . 'view' . DS . 'statics' . DS . 'assets' . DS . 'css' . DS . 'app-dark.min.css';
+
+        $this->assertFileExists($publishedFile);
+        $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
+    }
+
+    public function testPublishesModuleDefaultThemeAssetFromProductionThemePath(): void
+    {
+        $theme = $this->buildTheme(990007, 'demo-theme', 'Codex/demo-theme');
+        $publishedPath = $this->publisher->publishForRequestPath(
+            '/static/Codex/demo-theme/Weline/Theme/view/theme/backend/assets/css/theme.css',
+            $theme
+        );
+
+        $this->assertSame(
+            '/pub/static/Codex/demo-theme/Weline/Theme/view/theme/backend/assets/css/theme.css',
+            $publishedPath
+        );
+
+        $basePath = rtrim(BP, '\\/') . DS;
+        $sourceFile = $basePath . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'backend' . DS . 'assets' . DS . 'css' . DS . 'theme.css';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'Codex' . DS . 'demo-theme' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'backend' . DS . 'assets' . DS . 'css' . DS . 'theme.css';
+
+        $this->assertFileExists($publishedFile);
+        $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
+    }
+
+    public function testPublishesFlatModuleStaticsResource(): void
+    {
+        $publishedPath = $this->publisher->publishForRequestPath('/static/Weline/Backend/js/weline-api.js');
+
+        $this->assertSame('/pub/static/Weline/Backend/js/weline-api.js', $publishedPath);
+
+        $basePath = rtrim(BP, '\\/') . DS;
+        $sourceFile = $basePath . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Backend' . DS . 'view' . DS . 'statics' . DS . 'js' . DS . 'weline-api.js';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'Weline' . DS . 'Backend' . DS . 'js' . DS . 'weline-api.js';
+
+        $this->assertFileExists($publishedFile);
+        $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
+    }
+
+    public function testPublishesFlatModuleWorkerResource(): void
+    {
+        $publishedPath = $this->publisher->publishForRequestPath('/static/Weline/Backend/js/weline-api-worker.js');
+
+        $this->assertSame('/pub/static/Weline/Backend/js/weline-api-worker.js', $publishedPath);
+
+        $basePath = rtrim(BP, '\\/') . DS;
+        $sourceFile = $basePath . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Backend' . DS . 'view' . DS . 'statics' . DS . 'js' . DS . 'weline-api-worker.js';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'Weline' . DS . 'Backend' . DS . 'js' . DS . 'weline-api-worker.js';
+
+        $this->assertFileExists($publishedFile);
+        $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
+    }
+
     private function buildTheme(int $id, string $name, string $path): WelineTheme
     {
         /** @var WelineTheme $theme */

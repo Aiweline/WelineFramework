@@ -4,6 +4,7 @@ namespace Weline\Visitor\Api\Rest\V1;
 
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Visitor\Api\Rest\PanelProtectedTrait;
 use Weline\Visitor\Model\Pixel;
 use Weline\Visitor\Model\AbTest;
 
@@ -13,6 +14,8 @@ use Weline\Visitor\Model\AbTest;
  */
 class Analytics extends FrontendRestController
 {
+    use PanelProtectedTrait;
+
     /**
      * 获取商业价值分析数据
      * 
@@ -49,6 +52,10 @@ class Analytics extends FrontendRestController
      */
     public function getBusinessValue(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -118,6 +125,10 @@ class Analytics extends FrontendRestController
      */
     public function getDashboard(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -181,6 +192,10 @@ class Analytics extends FrontendRestController
      */
     public function getChangePercentage(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -248,6 +263,10 @@ class Analytics extends FrontendRestController
      */
     public function getDailyComparison(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -310,6 +329,10 @@ class Analytics extends FrontendRestController
      */
     public function getAbTest(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -361,6 +384,10 @@ class Analytics extends FrontendRestController
      */
     public function postAbTestCreate(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $post = $this->request->getBodyParams();
             
@@ -426,6 +453,10 @@ class Analytics extends FrontendRestController
      */
     public function getAbTestList(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -479,6 +510,10 @@ class Analytics extends FrontendRestController
      */
     public function getExport(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -607,6 +642,10 @@ class Analytics extends FrontendRestController
      */
     public function getReport(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -637,7 +676,7 @@ class Analytics extends FrontendRestController
             // 先获取时间范围内的事件列表
             $model = w_obj(Pixel::class)->reset()
                 ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
-                ->field(Pixel::schema_fields_EVENT)
+                ->fields(Pixel::schema_fields_EVENT)
                 ->group(Pixel::schema_fields_EVENT);
             
             if ($startDate) {
@@ -689,4 +728,3 @@ class Analytics extends FrontendRestController
         }
     }
 }
-

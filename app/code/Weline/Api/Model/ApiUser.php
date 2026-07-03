@@ -69,9 +69,9 @@ class ApiUser extends Model
     public const schema_fields_allowed_user_agents = 'allowed_user_agents';
     #[Col(type: 'integer', length: 1, nullable: false, default: 0, comment: '是否沙盒账户')]
     public const schema_fields_is_sandbox = 'is_sandbox';
-    #[Col(type: 'datetime', nullable: false, comment: 'Created at')]
+    #[Col(type: 'datetime', nullable: false, default: '1970-01-01 00:00:00', comment: 'Created at')]
     public const schema_fields_created_at = 'created_at';
-    #[Col(type: 'datetime', nullable: false, comment: 'Updated at')]
+    #[Col(type: 'datetime', nullable: false, default: '1970-01-01 00:00:00', comment: 'Updated at')]
     public const schema_fields_updated_at = 'updated_at';
 
     public array $_unit_primary_keys = ['user_id'];

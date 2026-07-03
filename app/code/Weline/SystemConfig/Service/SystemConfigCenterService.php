@@ -112,6 +112,68 @@ class SystemConfigCenterService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function getFieldObject(
+        string $module,
+        string $area,
+        string $key,
+        ?string $code = null,
+        ?string $scope = null,
+        ?string $locale = null,
+        mixed $default = null
+    ): array {
+        $definition = $this->findFieldDefinition($module, $area, $key, $code);
+
+        return $this->buildFieldObject(
+            $module,
+            $area,
+            $key,
+            is_array($definition['field'] ?? null) ? $definition['field'] : null,
+            is_array($definition['template'] ?? null) ? $definition['template'] : null,
+            $scope,
+            $locale,
+            $default
+        );
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    public function getFieldObjects(
+        string $module,
+        string $area,
+        ?string $code = null,
+        ?string $scope = null,
+        ?string $locale = null
+    ): array {
+        $definitions = $this->getFieldDefinitions($module, $area, $code);
+        $fields = [];
+
+        foreach ($definitions as $key => $definition) {
+            $fields[$key] = $this->buildFieldObject(
+                $module,
+                $area,
+                $key,
+                is_array($definition['field'] ?? null) ? $definition['field'] : null,
+                is_array($definition['template'] ?? null) ? $definition['template'] : null,
+                $scope,
+                $locale
+            );
+        }
+
+        foreach ($this->systemConfig->getConfigMapByModule($module, $area, $scope, $locale) as $key => $value) {
+            $key = (string)$key;
+            if ($key === '' || isset($fields[$key])) {
+                continue;
+            }
+            $fields[$key] = $this->buildFieldObject($module, $area, $key, null, null, $scope, $locale, $value);
+        }
+
+        return $fields;
+    }
+
+    /**
      * @param array<string, mixed> $values
      * @param list<string> $inheritKeys
      * @param array<string, mixed> $baseVersions
@@ -427,6 +489,112 @@ class SystemConfigCenterService
         return $fields;
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findFieldDefinition(string $module, string $area, string $key, ?string $code = null): ?array
+    {
+        $definitions = $this->getFieldDefinitions($module, $area, $code);
+
+        return $definitions[$key] ?? null;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function getFieldDefinitions(string $module, string $area, ?string $code = null): array
+    {
+        $definitions = [];
+        $templates = [];
+        $code = trim((string)$code);
+
+        if ($code !== '') {
+            $template = $this->templateService->getTemplateMeta($module, $area, $code);
+            if ($template !== null) {
+                $templates[] = $template;
+            }
+        } else {
+            foreach ($this->templateService->getTemplates($module, $area) as $summary) {
+                $template = $this->templateService->getTemplateMeta(
+                    (string)($summary['module'] ?? $module),
+                    (string)($summary['area'] ?? $area),
+                    (string)($summary['code'] ?? '')
+                );
+                if ($template !== null) {
+                    $templates[] = $template;
+                }
+            }
+        }
+
+        foreach ($templates as $template) {
+            foreach ($this->fieldsByKey($template) as $key => $field) {
+                if (isset($definitions[$key])) {
+                    continue;
+                }
+                $definitions[$key] = [
+                    'field' => $field,
+                    'template' => $template,
+                ];
+            }
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildFieldObject(
+        string $module,
+        string $area,
+        string $key,
+        ?array $field,
+        ?array $template,
+        ?string $scope = null,
+        ?string $locale = null,
+        mixed $default = null
+    ): array {
+        $scope = $this->systemConfig->normalizeScope($scope);
+        $locale = $this->systemConfig->normalizeLocale($locale);
+        $fieldFound = $field !== null;
+        $resolvedDefault = $fieldFound && array_key_exists('default', $field)
+            ? $this->normalizeFieldValue($field['default'], $field)
+            : $default;
+        $resolved = $this->systemConfig->resolveConfig($key, $module, $area, $scope, $locale, $resolvedDefault);
+        $currentRow = $this->systemConfig->getScopedConfigRow($key, $module, $area, $scope, $locale);
+        $source = is_array($resolved['source'] ?? null) ? $resolved['source'] : null;
+        $isSensitive = ($fieldFound && $this->isSensitiveField($field))
+            || (bool)($source['is_sensitive'] ?? false)
+            || (int)($currentRow[SystemConfig::schema_fields_IS_SENSITIVE] ?? 0) === 1;
+        $options = $fieldFound ? $this->projectOptions((string)($field['options'] ?? '')) : ['options' => [], 'options_source' => ''];
+
+        return [
+            'key' => $key,
+            'value' => $resolved['value'] ?? $resolvedDefault,
+            'display_value' => $isSensitive ? '***' : $this->stringifyValue($resolved['value'] ?? $resolvedDefault),
+            'label' => $fieldFound ? (string)__((string)($field['label'] ?? $key)) : '',
+            'description' => $fieldFound ? (string)__((string)($field['description'] ?? '')) : '',
+            'type' => $fieldFound ? (string)($field['type'] ?? 'text') : '',
+            'value_type' => $fieldFound ? $this->fieldValueType($field) : (string)($source['value_type'] ?? SystemConfig::VALUE_TYPE_STRING),
+            'default' => $fieldFound ? ($field['default'] ?? null) : $default,
+            'group' => $fieldFound ? (string)($field['group'] ?? '') : '',
+            'scope' => $fieldFound ? (string)($field['scope'] ?? 'global') : '',
+            'options' => $options['options'],
+            'options_source' => $options['options_source'],
+            'field_found' => $fieldFound,
+            'value_found' => (bool)($resolved['found'] ?? false),
+            'has_override' => $currentRow !== null,
+            'base_version' => (int)($currentRow[SystemConfig::schema_fields_VERSION] ?? 0),
+            'is_sensitive' => $isSensitive,
+            'source' => $source,
+            'template' => [
+                'module' => (string)($template['module'] ?? $module),
+                'area' => (string)($template['area'] ?? $area),
+                'code' => (string)($template['code'] ?? ''),
+            ],
+        ];
+    }
+
     private function validateFieldScope(array $field, string $scope): string
     {
         $allowed = $this->parseList((string)($field['scope'] ?? 'global,website,store'));
@@ -541,6 +709,23 @@ class SystemConfigCenterService
         }
 
         return $result;
+    }
+
+    /**
+     * @return array{options: array<string, string>, options_source: string}
+     */
+    private function projectOptions(string $options): array
+    {
+        $options = trim($options);
+        $projected = [];
+        foreach ($this->parseLiteralOptions($options) as $value => $label) {
+            $projected[(string)$value] = (string)__($label);
+        }
+
+        return [
+            'options' => $projected,
+            'options_source' => $options,
+        ];
     }
 
     private function stringifyValue(mixed $value): string

@@ -261,18 +261,19 @@ class EventsManager
 
         if (is_array($data)) {
             $data['observers'] = $observers;
-            $this->events[$eventName] = (new Event($data))->setName($eventName);
+            $event = (new Event($data))->setName($eventName);
         } else {
-            $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
+            $event = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
         }
 
-        $this->events[$eventName]->dispatch();
+        $this->events[$eventName] = $event;
+        $event->dispatch();
 
         // 将 Observer 修改的 Event 数据回写到调用方的 $data（通过引用）
         // Event 构造时复制了 $data，Observer 修改的是 Event 内部的 _data，
         // 必须在 dispatch 完成后同步回去，否则调用方永远读不到 Observer 设置的 result/error 等
         if (is_array($data)) {
-            $modifiedInner = $this->events[$eventName]->getEvenData();
+            $modifiedInner = $event->getEvenData();
             if ($modifiedInner !== null) {
                 if (array_key_exists('data', $data)) {
                     // 结构化事件数据（如 ['data' => ['operation' => ...]]）
@@ -286,7 +287,7 @@ class EventsManager
             }
         } else {
             // 标量（如 seo_decode 的 $url）：观察者 setData('data', $decoded) 后需回写给调用方
-            $modified = $this->events[$eventName]->getEvenData('data');
+            $modified = $event->getEvenData('data');
             if ($modified !== null) {
                 $data = $modified;
             }

@@ -31,6 +31,10 @@ class WidgetConfigService
                     continue;
                 }
                 if (($widget['module'] ?? '') === $widgetModule && ($widget['code'] ?? '') === $widgetCode) {
+                    $widgetArea = (string)($widget['area'] ?? 'frontend');
+                    if ($widgetArea !== '' && $widgetArea !== $area) {
+                        continue;
+                    }
                     $params = $widget['params'] ?? [];
                     foreach ($params as $key => $param) {
                         if (!is_array($param)) {

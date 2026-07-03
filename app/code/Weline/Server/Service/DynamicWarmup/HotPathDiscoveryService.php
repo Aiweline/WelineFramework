@@ -304,7 +304,7 @@ final class HotPathDiscoveryService
     private function queryIsPreviewOrEditor(string $query): bool
     {
         $query = \strtolower($query);
-        foreach (['preview', 'editor', 'pagebuilder', 'visual_editor', 'weline_editor', 'wls_internal'] as $needle) {
+        foreach (['preview', 'editor', 'visual_editor', 'weline_editor', 'wls_internal'] as $needle) {
             if (\str_contains($query, $needle)) {
                 return true;
             }
@@ -333,7 +333,6 @@ final class HotPathDiscoveryService
             '/static',
             '/media',
             '/pub/static',
-            '/pagebuilder/backend',
             '/editor',
             '/preview',
         ] as $prefix) {

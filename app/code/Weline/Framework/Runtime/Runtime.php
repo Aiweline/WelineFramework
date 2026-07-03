@@ -133,6 +133,13 @@ class Runtime
         if (\defined('WLS_MODE') && WLS_MODE) {
             return RuntimeInterface::MODE_WLS;
         }
+
+        if ((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: '') !== ''
+            || (string)($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: '') !== ''
+            || (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_ENV['WLS_INSTANCE_NAME'] ?? \getenv('WLS_INSTANCE_NAME') ?: '') !== ''
+        ) {
+            return RuntimeInterface::MODE_WLS;
+        }
         
         // CLI 模式
         if (\in_array(PHP_SAPI, ['cli', 'phpdbg'], true)) {

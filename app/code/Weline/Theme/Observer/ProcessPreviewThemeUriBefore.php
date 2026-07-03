@@ -89,6 +89,9 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
                 if ((string)$request->getParam('shell', '') === '') {
                     $request->setGet('shell', (string)($context['shell'] ?? PreviewContextService::SHELL_PREVIEW));
                 }
+                if ((string)$request->getParam('locale', '') === '' && (string)($context['locale'] ?? '') !== '') {
+                    $request->setGet('locale', (string)$context['locale']);
+                }
             } catch (\Throwable) {
             }
         }
