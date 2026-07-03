@@ -27,6 +27,7 @@ class TrustedApp extends BackendController
         $this->assign([
             'apps' => $apps,
             'binding_counts' => $bindingCounts,
+            'developer_application_auto_approve' => $this->getIdentityBridgeService()->isDeveloperApplicationAutoApproveEnabled(),
             'page_title' => __('互通应用'),
         ]);
 
@@ -46,7 +47,8 @@ class TrustedApp extends BackendController
                     $this->getStringParam('trusted_domain'),
                     $this->getStringParam('app_type') ?: 'app',
                     $allowedScopes,
-                    $this->getStringParam('status') ?: TrustedAppModel::STATUS_ACTIVE
+                    $this->getStringParam('status') ?: TrustedAppModel::STATUS_ACTIVE,
+                    $this->getStringParam('application_status') ?: TrustedAppModel::APPLICATION_APPROVED
                 );
 
                 return $this->fetchJson([
@@ -62,7 +64,9 @@ class TrustedApp extends BackendController
                 $this->getStringParam('trusted_domain'),
                 $this->getStringParam('app_type') ?: 'app',
                 $allowedScopes,
-                $this->getStringParam('status') ?: TrustedAppModel::STATUS_ACTIVE
+                $this->getStringParam('status') ?: TrustedAppModel::STATUS_ACTIVE,
+                0,
+                $this->getStringParam('application_status') ?: TrustedAppModel::APPLICATION_APPROVED
             );
 
             return $this->fetchJson([
@@ -143,6 +147,8 @@ class TrustedApp extends BackendController
             'trusted_domain' => $app->getTrustedDomain(),
             'redirect_uri' => $app->getRedirectUri(),
             'allowed_scopes' => $app->getAllowedScopes(),
+            'applicant_customer_id' => $app->getApplicantCustomerId(),
+            'application_status' => $app->getApplicationStatus(),
             'status' => $app->getStatus(),
         ];
     }

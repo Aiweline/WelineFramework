@@ -1,0 +1,835 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$websites = is_array($dashboard_websites ?? null) ? $dashboard_websites : [];
+$views = is_array($dashboard_views ?? null) ? $dashboard_views : [];
+$activeView = is_array($dashboard_active_view ?? null) ? $dashboard_active_view : [];
+$websiteId = (int)($dashboard_website_id ?? ($activeView['website_id'] ?? 0));
+$editorUrl = (string)($dashboard_editor_url ?? '#');
+$dashboardError = (string)($dashboard_error ?? '');
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+$messagesJson = json_encode([
+    'creating' => (string)__('正在创建视图...'),
+    'savingName' => (string)__('正在保存名称...'),
+    'deleteAckRequired' => (string)__('请先勾选删除确认。'),
+    'deleting' => (string)__('正在删除视图...'),
+    'processing' => (string)__('正在处理...'),
+    'layoutSaved' => (string)__('布局已保存，正在刷新面板...'),
+], $jsonFlags) ?: '{}';
+
+$groups = [
+    'default' => ['title' => __('默认'), 'items' => []],
+    'mine' => ['title' => __('我的'), 'items' => []],
+    'public' => ['title' => __('公开'), 'items' => []],
+];
+foreach ($views as $view) {
+    if (!is_array($view)) {
+        continue;
+    }
+    if (!empty($view['is_default']) || ($view['visibility'] ?? '') === 'system') {
+        $groups['default']['items'][] = $view;
+    } elseif (!empty($view['can_edit'])) {
+        $groups['mine']['items'][] = $view;
+    } else {
+        $groups['public']['items'][] = $view;
+    }
+}
+
+$activeViewId = (int)($activeView['view_id'] ?? 0);
+$activeVisibility = (string)($activeView['visibility'] ?? '');
+$activeCanEdit = !empty($activeView['can_edit']);
+$activeIsSystem = $activeVisibility === 'system';
+$showToolbarActions = $activeCanEdit || !$activeIsSystem;
+$activeWebsiteName = '';
+foreach ($websites as $site) {
+    if ((int)($site['website_id'] ?? 0) === $websiteId) {
+        $activeWebsiteName = (string)($site['name'] ?? ('#' . $websiteId));
+        break;
+    }
+}
+if ($activeWebsiteName === '') {
+    $activeWebsiteName = '#' . $websiteId;
+}
+?>
+
+<div class="w-dashboard" data-dashboard-root>
+    <?php if ($dashboardError !== ''): ?>
+        <div class="w-dashboard-alert"><?= htmlspecialchars($dashboardError) ?></div>
+    <?php else: ?>
+        <header class="w-dashboard-header">
+            <div class="w-dashboard-title">
+                <p class="w-dashboard-kicker"><?= __('后台 Dashboard') ?></p>
+                <h1><?= htmlspecialchars((string)($activeView['name'] ?? __('默认概览'))) ?></h1>
+            </div>
+            <div class="w-dashboard-control-row">
+                <div class="w-dashboard-site-picker" data-dashboard-site-picker>
+                    <button type="button" class="w-dashboard-site-trigger" data-dashboard-site-trigger>
+                        <span class="w-dashboard-site-label"><?= __('站点') ?></span>
+                        <strong><?= htmlspecialchars($activeWebsiteName) ?></strong>
+                    </button>
+                    <div class="w-dashboard-site-menu" data-dashboard-site-menu hidden>
+                        <input type="search"
+                               placeholder="<?= htmlspecialchars((string)__('搜索站点')) ?>"
+                               aria-label="<?= htmlspecialchars((string)__('搜索站点')) ?>"
+                               data-dashboard-site-search>
+                        <div class="w-dashboard-site-options" data-dashboard-site-options>
+                            <?php foreach ($websites as $site): ?>
+                                <?php
+                                $siteId = (int)($site['website_id'] ?? 0);
+                                $siteName = (string)($site['name'] ?? ('#' . $siteId));
+                                ?>
+                                <button type="button"
+                                        class="w-dashboard-site-option <?= $siteId === $websiteId ? 'active' : '' ?>"
+                                        data-dashboard-site-option
+                                        data-site-id="<?= $siteId ?>"
+                                        data-site-name="<?= htmlspecialchars($siteName) ?>">
+                                    <?= htmlspecialchars($siteName) ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <select data-dashboard-website hidden>
+                        <?php foreach ($websites as $site): ?>
+                            <?php $siteId = (int)($site['website_id'] ?? 0); ?>
+                            <option value="<?= $siteId ?>" <?= $siteId === $websiteId ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)($site['name'] ?? ('#' . $siteId))) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <nav class="w-dashboard-view-list" aria-label="<?= htmlspecialchars((string)__('Dashboard 视图')) ?>">
+                    <?php foreach ($groups as $groupKey => $group): ?>
+                        <?php if (empty($group['items'])) { continue; } ?>
+                        <?php foreach ($group['items'] as $view): ?>
+                            <?php
+                            $viewId = (int)($view['view_id'] ?? 0);
+                            $url = $this->getBackendUrl('weline_dashboard/backend/dashboard/index', [
+                                'website_id' => (int)($view['website_id'] ?? $websiteId),
+                                'view_id' => $viewId,
+                            ]);
+                            ?>
+                            <a class="w-dashboard-view-link <?= $viewId === $activeViewId ? 'active' : '' ?>"
+                               title="<?= htmlspecialchars((string)$group['title']) ?>"
+                               href="<?= htmlspecialchars($url) ?>">
+                                <span><?= htmlspecialchars((string)($view['name'] ?? ('#' . $viewId))) ?></span>
+                            </a>
+                        <?php endforeach; ?>
+                    <?php endforeach; ?>
+                </nav>
+
+                <a class="w-dashboard-btn primary"
+                   href="<?= htmlspecialchars($editorUrl) ?>"
+                   data-dashboard-editor-open><?= __('编辑布局') ?></a>
+                <button type="button" class="w-dashboard-btn" data-dashboard-panel="create"><?= __('新建视图') ?></button>
+            </div>
+        </header>
+
+        <main class="w-dashboard-main">
+            <?php if ($showToolbarActions): ?>
+                <div class="w-dashboard-toolbar">
+                    <div class="w-dashboard-toolbar-actions">
+                    <?php if ($activeCanEdit): ?>
+                        <button type="button" class="w-dashboard-btn subtle" data-dashboard-panel="rename"><?= __('重命名') ?></button>
+                        <?php if ($activeVisibility === 'private'): ?>
+                            <button type="button" class="w-dashboard-btn subtle" data-dashboard-action="publishView"><?= __('公开') ?></button>
+                        <?php elseif ($activeVisibility === 'public' && empty($activeView['is_default'])): ?>
+                            <button type="button" class="w-dashboard-btn subtle" data-dashboard-action="privatizeView"><?= __('转私有') ?></button>
+                        <?php endif; ?>
+                        <?php if (empty($activeView['is_default'])): ?>
+                            <button type="button" class="w-dashboard-btn subtle" data-dashboard-action="setDefaultView"><?= __('设为默认') ?></button>
+                            <button type="button" class="w-dashboard-btn danger" data-dashboard-panel="delete"><?= __('删除') ?></button>
+                        <?php endif; ?>
+                    <?php elseif (!$activeIsSystem): ?>
+                        <button type="button" class="w-dashboard-btn subtle" data-dashboard-action="duplicateView"><?= __('复制到我的视图') ?></button>
+                    <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+                <div class="w-dashboard-panel" data-dashboard-form="create" hidden>
+                    <form data-dashboard-create-form>
+                        <label>
+                            <span><?= __('视图名称') ?></span>
+                            <input type="text" name="name" maxlength="120" required value="<?= htmlspecialchars((string)__('我的概览')) ?>">
+                        </label>
+                        <label class="w-dashboard-checkbox">
+                            <input type="checkbox" name="public">
+                            <span><?= __('创建后公开') ?></span>
+                        </label>
+                        <button type="submit" class="w-dashboard-btn primary"><?= __('创建') ?></button>
+                    </form>
+                </div>
+
+                <div class="w-dashboard-panel" data-dashboard-form="rename" hidden>
+                    <form data-dashboard-rename-form>
+                        <label>
+                            <span><?= __('新名称') ?></span>
+                            <input type="text" name="name" maxlength="120" required value="<?= htmlspecialchars((string)($activeView['name'] ?? '')) ?>">
+                        </label>
+                        <button type="submit" class="w-dashboard-btn primary"><?= __('保存名称') ?></button>
+                    </form>
+                </div>
+
+                <div class="w-dashboard-panel danger" data-dashboard-form="delete" hidden>
+                    <form data-dashboard-delete-form>
+                        <label class="w-dashboard-checkbox">
+                            <input type="checkbox" name="ack" required>
+                            <span><?= __('我知道删除会同时移除这个视图的布局数据') ?></span>
+                        </label>
+                        <button type="submit" class="w-dashboard-btn danger"><?= __('删除视图') ?></button>
+                    </form>
+                </div>
+
+                <div class="w-dashboard-status" data-dashboard-status hidden></div>
+
+        </main>
+
+        <div class="w-dashboard-editor-modal"
+             data-dashboard-editor-modal
+             aria-hidden="true"
+             hidden>
+            <div class="w-dashboard-editor-shell"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-label="<?= htmlspecialchars((string)__('编辑 Dashboard 布局')) ?>">
+                <header class="w-dashboard-editor-bar">
+                    <strong><?= __('编辑 Dashboard 布局') ?></strong>
+                    <button type="button"
+                            class="w-dashboard-editor-close"
+                            data-dashboard-editor-close
+                            aria-label="<?= htmlspecialchars((string)__('关闭')) ?>"
+                            title="<?= htmlspecialchars((string)__('关闭')) ?>">&times;</button>
+                </header>
+                <iframe class="w-dashboard-editor-frame"
+                        data-dashboard-editor-frame
+                        title="<?= htmlspecialchars((string)__('Dashboard 布局编辑器')) ?>"></iframe>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.w-dashboard {
+    --w-dashboard-surface: var(--bs-card-bg, var(--backend-color-bg-primary, #fff));
+    --w-dashboard-surface-soft: var(--bs-tertiary-bg, #f8fafc);
+    --w-dashboard-text: var(--bs-body-color, var(--backend-color-text-primary, #1f2937));
+    --w-dashboard-heading: var(--bs-heading-color, var(--w-dashboard-text));
+    --w-dashboard-muted: var(--bs-secondary-color, var(--backend-color-text-secondary, #6b7280));
+    --w-dashboard-border: var(--bs-border-color, var(--backend-color-border, #e5e7eb));
+    width: 100%;
+    max-width: 100%;
+    color: var(--w-dashboard-text);
+    box-sizing: border-box;
+}
+.w-dashboard *,
+.w-dashboard *::before,
+.w-dashboard *::after {
+    box-sizing: border-box;
+}
+body[data-theme-mode="dark"] .w-dashboard,
+body[data-layout-mode="dark"] .w-dashboard,
+html[data-bs-theme="dark"] .w-dashboard {
+    --w-dashboard-surface: rgba(15, 23, 42, 0.92);
+    --w-dashboard-surface-soft: rgba(30, 41, 59, 0.78);
+    --w-dashboard-text: #d8e1f2;
+    --w-dashboard-heading: #f8fafc;
+    --w-dashboard-muted: #9aa7bd;
+    --w-dashboard-border: rgba(148, 163, 184, 0.34);
+}
+.w-dashboard-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+.w-dashboard-title {
+    flex: 0 0 auto;
+    min-width: 180px;
+}
+.w-dashboard-kicker {
+    margin: 0 0 4px;
+    color: var(--w-dashboard-muted);
+    font-size: 13px;
+}
+.w-dashboard h1 {
+    margin: 0;
+    color: var(--w-dashboard-heading);
+    font-size: 26px;
+    font-weight: 700;
+}
+.w-dashboard-control-row,
+.w-dashboard-toolbar-actions,
+.w-dashboard-panel form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.w-dashboard-control-row {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    padding-top: 26px;
+    min-width: 0;
+}
+.w-dashboard-btn {
+    border: 1px solid var(--w-dashboard-border);
+    background: var(--w-dashboard-surface);
+    color: var(--w-dashboard-text);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+}
+.w-dashboard-btn.primary {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #fff;
+}
+.w-dashboard-btn.subtle {
+    background: var(--w-dashboard-surface-soft);
+}
+.w-dashboard-btn.danger,
+.w-dashboard-panel.danger .w-dashboard-btn {
+    border-color: #dc2626;
+    background: #dc2626;
+    color: #fff;
+}
+.w-dashboard-site-picker {
+    position: relative;
+    flex: 0 1 230px;
+    min-width: 170px;
+}
+.w-dashboard-site-trigger {
+    width: 100%;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--w-dashboard-border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--w-dashboard-surface);
+    color: var(--w-dashboard-text);
+    cursor: pointer;
+}
+.w-dashboard-site-trigger::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    transform: rotate(45deg) translateY(-2px);
+    opacity: 0.7;
+}
+.w-dashboard-site-trigger strong,
+.w-dashboard-site-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.w-dashboard-site-label {
+    color: var(--w-dashboard-muted);
+    font-weight: 500;
+}
+.w-dashboard-site-menu {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 6px);
+    left: 0;
+    width: min(280px, calc(100vw - 32px));
+    border: 1px solid var(--w-dashboard-border);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--w-dashboard-surface);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24);
+}
+.w-dashboard-site-menu input {
+    width: 100%;
+    min-height: 36px;
+    border: 1px solid var(--w-dashboard-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: var(--w-dashboard-surface);
+    color: var(--w-dashboard-text);
+    margin-bottom: 8px;
+}
+.w-dashboard-panel input[type="text"] {
+    min-height: 36px;
+    border: 1px solid var(--w-dashboard-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: var(--w-dashboard-surface);
+    color: var(--w-dashboard-text);
+}
+.w-dashboard-site-options {
+    display: grid;
+    gap: 4px;
+    max-height: 240px;
+    overflow: auto;
+}
+.w-dashboard-site-option {
+    min-height: 34px;
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: transparent;
+    color: var(--w-dashboard-text);
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.w-dashboard-site-option:hover,
+.w-dashboard-site-option.active {
+    background: rgba(37, 99, 235, 0.16);
+    color: var(--bs-primary, #2563eb);
+}
+.w-dashboard-view-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+.w-dashboard-view-link {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    min-width: 0;
+    max-width: 190px;
+    padding: 7px 11px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: inherit;
+    text-decoration: none;
+    background: var(--w-dashboard-surface-soft);
+    white-space: nowrap;
+}
+.w-dashboard-view-link.active {
+    background: rgba(37, 99, 235, 0.16);
+    border-color: rgba(37, 99, 235, 0.42);
+    color: var(--bs-primary, #2563eb);
+}
+.w-dashboard-view-link span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.w-dashboard-view-link small {
+    color: var(--w-dashboard-muted);
+    font-size: 11px;
+}
+.w-dashboard-main {
+    min-width: 0;
+}
+.w-dashboard-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.w-dashboard-panel {
+    border: 1px solid var(--w-dashboard-border);
+    background: var(--w-dashboard-surface);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.w-dashboard-panel label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.w-dashboard-checkbox input {
+    width: 16px;
+    height: 16px;
+}
+.w-dashboard-status {
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.w-dashboard-status.error {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.w-dashboard-alert {
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+    border-radius: 8px;
+    padding: 16px;
+}
+body.w-dashboard-editor-open {
+    overflow: hidden;
+}
+.w-dashboard-editor-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: flex;
+    padding: 16px;
+    background: rgba(2, 6, 23, 0.64);
+    backdrop-filter: blur(2px);
+}
+.w-dashboard-editor-modal[hidden] {
+    display: none;
+}
+.w-dashboard-editor-shell {
+    position: relative;
+    z-index: 1;
+    width: min(1220px, 100%);
+    height: min(860px, calc(100vh - 32px));
+    margin: auto;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    border: 1px solid var(--w-dashboard-border);
+    border-radius: 8px;
+    background: var(--w-dashboard-surface);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+.w-dashboard-editor-bar {
+    position: relative;
+    z-index: 2;
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 12px 0 16px;
+    border-bottom: 1px solid var(--w-dashboard-border);
+    color: var(--w-dashboard-heading);
+}
+.w-dashboard-editor-close {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--w-dashboard-border);
+    border-radius: 6px;
+    background: var(--w-dashboard-surface-soft);
+    color: var(--w-dashboard-text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+.w-dashboard-editor-frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+}
+@media (max-width: 720px) {
+    .w-dashboard-header,
+    .w-dashboard-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .w-dashboard-control-row {
+        justify-content: flex-start;
+        padding-top: 0;
+    }
+    .w-dashboard-site-picker,
+    .w-dashboard-view-list {
+        flex-basis: 100%;
+    }
+    .w-dashboard-view-link {
+        max-width: 100%;
+    }
+    .w-dashboard-editor-modal {
+        padding: 8px;
+    }
+    .w-dashboard-editor-shell {
+        height: calc(100vh - 16px);
+    }
+}
+</style>
+
+<script>
+(function () {
+    var state = <?= json_encode([
+        'websiteId' => $websiteId,
+        'viewId' => $activeViewId,
+        'baseUrl' => $this->getBackendUrl('weline_dashboard/backend/dashboard/index'),
+        'editorUrl' => $editorUrl,
+    ], $jsonFlags) ?>;
+    var messages = <?= $messagesJson ?>;
+    var editorDirty = false;
+
+    function root() {
+        return document.querySelector('[data-dashboard-root]');
+    }
+
+    function showStatus(message, isError) {
+        var el = document.querySelector('[data-dashboard-status]');
+        if (!el) {
+            return;
+        }
+        el.textContent = message || '';
+        el.hidden = !message;
+        el.classList.toggle('error', !!isError);
+    }
+
+    function waitForQuery(resolve, reject, attempt) {
+        if (typeof window.w_query === 'function') {
+            resolve(window.w_query);
+            return;
+        }
+        if (attempt > 50) {
+            reject(new Error('w_query is not ready'));
+            return;
+        }
+        window.setTimeout(function () {
+            waitForQuery(resolve, reject, attempt + 1);
+        }, 100);
+    }
+
+    function query(operation, params) {
+        return new Promise(function (resolve, reject) {
+            waitForQuery(resolve, reject, 0);
+        }).then(function (wQuery) {
+            return wQuery('dashboard', operation, params || {}, {area: 'backend'});
+        });
+    }
+
+    function reload(nextViewId) {
+        var url = new URL(state.baseUrl, window.location.origin);
+        url.searchParams.set('website_id', String(state.websiteId || 0));
+        if (nextViewId) {
+            url.searchParams.set('view_id', String(nextViewId));
+        }
+        window.location.href = url.href;
+    }
+
+    function setPanel(name) {
+        document.querySelectorAll('[data-dashboard-form]').forEach(function (el) {
+            el.hidden = el.getAttribute('data-dashboard-form') !== name || !el.hidden;
+        });
+    }
+
+    function buildEditorUrl() {
+        var url = new URL(state.editorUrl || '#', window.location.origin);
+        url.searchParams.set('dashboard_modal', '1');
+        return url.href;
+    }
+
+    function openEditorModal() {
+        var modal = document.querySelector('[data-dashboard-editor-modal]');
+        var frame = document.querySelector('[data-dashboard-editor-frame]');
+        if (!modal || !frame || !state.editorUrl || state.editorUrl === '#') {
+            window.location.href = state.editorUrl || '#';
+            return;
+        }
+        editorDirty = false;
+        frame.src = buildEditorUrl();
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('w-dashboard-editor-open');
+    }
+
+    function closeEditorModal(shouldRefresh) {
+        var modal = document.querySelector('[data-dashboard-editor-modal]');
+        var frame = document.querySelector('[data-dashboard-editor-frame]');
+        if (modal) {
+            modal.hidden = true;
+            modal.setAttribute('aria-hidden', 'true');
+        }
+        document.body.classList.remove('w-dashboard-editor-open');
+        if (frame) {
+            frame.src = 'about:blank';
+        }
+        if (shouldRefresh || editorDirty) {
+            reload(state.viewId);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var app = root();
+        if (!app) {
+            return;
+        }
+
+        app.querySelectorAll('[data-dashboard-editor-open]').forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                openEditorModal();
+            });
+        });
+
+        app.querySelectorAll('[data-dashboard-editor-close]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                closeEditorModal(false);
+            });
+        });
+
+        window.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                var modal = document.querySelector('[data-dashboard-editor-modal]');
+                if (modal && !modal.hidden) {
+                    closeEditorModal(false);
+                }
+            }
+        });
+
+        window.addEventListener('message', function (event) {
+            if (event.origin !== window.location.origin || !event.data || typeof event.data !== 'object') {
+                return;
+            }
+            if (event.data.type === 'weline-theme-editor:layout-mutated') {
+                editorDirty = true;
+            }
+            if (event.data.type === 'weline-theme-editor:saved') {
+                editorDirty = true;
+                showStatus(messages.layoutSaved, false);
+                closeEditorModal(true);
+            }
+        });
+
+        var websiteSelect = app.querySelector('[data-dashboard-website]');
+        if (websiteSelect) {
+            websiteSelect.addEventListener('change', function () {
+                state.websiteId = Number(websiteSelect.value || 0);
+                reload(0);
+            });
+        }
+
+        var sitePicker = app.querySelector('[data-dashboard-site-picker]');
+        var siteTrigger = app.querySelector('[data-dashboard-site-trigger]');
+        var siteMenu = app.querySelector('[data-dashboard-site-menu]');
+        var siteSearch = app.querySelector('[data-dashboard-site-search]');
+        var siteOptions = app.querySelectorAll('[data-dashboard-site-option]');
+        if (sitePicker && siteTrigger && siteMenu) {
+            siteTrigger.addEventListener('click', function () {
+                siteMenu.hidden = !siteMenu.hidden;
+                if (!siteMenu.hidden && siteSearch) {
+                    siteSearch.focus();
+                    siteSearch.select();
+                }
+            });
+
+            if (siteSearch) {
+                siteSearch.addEventListener('input', function () {
+                    var keyword = String(siteSearch.value || '').trim().toLowerCase();
+                    siteOptions.forEach(function (option) {
+                        var name = String(option.getAttribute('data-site-name') || option.textContent || '').toLowerCase();
+                        option.hidden = keyword !== '' && name.indexOf(keyword) === -1;
+                    });
+                });
+            }
+
+            siteOptions.forEach(function (option) {
+                option.addEventListener('click', function () {
+                    var nextWebsiteId = Number(option.getAttribute('data-site-id') || 0);
+                    if (!nextWebsiteId || nextWebsiteId === state.websiteId) {
+                        siteMenu.hidden = true;
+                        return;
+                    }
+                    state.websiteId = nextWebsiteId;
+                    if (websiteSelect) {
+                        websiteSelect.value = String(nextWebsiteId);
+                    }
+                    reload(0);
+                });
+            });
+
+            document.addEventListener('click', function (event) {
+                if (!sitePicker.contains(event.target)) {
+                    siteMenu.hidden = true;
+                }
+            });
+        }
+
+        app.querySelectorAll('[data-dashboard-panel]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                setPanel(button.getAttribute('data-dashboard-panel') || '');
+            });
+        });
+
+        var createForm = app.querySelector('[data-dashboard-create-form]');
+        if (createForm) {
+            createForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                var formData = new FormData(createForm);
+                showStatus(messages.creating, false);
+                query('createView', {
+                    website_id: state.websiteId,
+                    name: String(formData.get('name') || ''),
+                    visibility: formData.get('public') ? 'public' : 'private'
+                }).then(function (res) {
+                    if (!res || res.success === false) {
+                        throw new Error((res && res.message) || 'Create failed');
+                    }
+                    reload(res.item && res.item.view_id);
+                }).catch(function (error) {
+                    showStatus(error.message || 'Create failed', true);
+                });
+            });
+        }
+
+        var renameForm = app.querySelector('[data-dashboard-rename-form]');
+        if (renameForm) {
+            renameForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                var formData = new FormData(renameForm);
+                showStatus(messages.savingName, false);
+                query('renameView', {
+                    view_id: state.viewId,
+                    name: String(formData.get('name') || '')
+                }).then(function (res) {
+                    if (!res || res.success === false) {
+                        throw new Error((res && res.message) || 'Rename failed');
+                    }
+                    reload(state.viewId);
+                }).catch(function (error) {
+                    showStatus(error.message || 'Rename failed', true);
+                });
+            });
+        }
+
+        var deleteForm = app.querySelector('[data-dashboard-delete-form]');
+        if (deleteForm) {
+            deleteForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                var formData = new FormData(deleteForm);
+                if (!formData.get('ack')) {
+                    showStatus(messages.deleteAckRequired, true);
+                    return;
+                }
+                showStatus(messages.deleting, false);
+                query('deleteView', {view_id: state.viewId}).then(function (res) {
+                    if (!res || res.success === false) {
+                        throw new Error((res && res.message) || 'Delete failed');
+                    }
+                    reload(0);
+                }).catch(function (error) {
+                    showStatus(error.message || 'Delete failed', true);
+                });
+            });
+        }
+
+        app.querySelectorAll('[data-dashboard-action]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var action = button.getAttribute('data-dashboard-action') || '';
+                showStatus(messages.processing, false);
+                query(action, {view_id: state.viewId}).then(function (res) {
+                    if (!res || res.success === false) {
+                        throw new Error((res && res.message) || 'Action failed');
+                    }
+                    reload((res.item && res.item.view_id) || state.viewId);
+                }).catch(function (error) {
+                    showStatus(error.message || 'Action failed', true);
+                });
+            });
+        });
+    });
+})();
+</script>

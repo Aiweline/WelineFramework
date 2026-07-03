@@ -4,14 +4,17 @@ declare(strict_types=1);
 namespace Weline\Visitor\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Visitor\Service\VisitorAnalyticsWorkerService;
 use Weline\Visitor\Service\PixelEventService;
+use Weline\Visitor\Service\PixelHotBufferService;
 
 class VisitorQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly PixelEventService $pixelEventService,
-        private readonly VisitorAnalyticsWorkerService $analyticsService
+        private readonly VisitorAnalyticsWorkerService $analyticsService,
+        private ?PixelHotBufferService $hotBufferService = null
     ) {
     }
 
@@ -24,6 +27,8 @@ class VisitorQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'trackPixel' => $this->pixelEventService->track($this->payload($params)),
+            'pixelBufferStats' => $this->hotBuffer()->stats(),
+            'pixelBufferFlush' => $this->hotBuffer()->flushDue((bool)($params['force'] ?? false), (int)($params['limit'] ?? 0)),
             'analyticsBusinessValue' => $this->analyticsService->businessValue($params),
             'analyticsDashboard' => $this->analyticsService->dashboard($params),
             'analyticsChangePercentage' => $this->analyticsService->changePercentage($params),
@@ -57,6 +62,31 @@ class VisitorQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Track visitor pixel event',
+                ],
+                [
+                    'name' => 'pixelBufferStats',
+                    'description' => __('Load visitor pixel hot buffer status.'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'params' => [],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Load visitor pixel hot buffer status',
+                ],
+                [
+                    'name' => 'pixelBufferFlush',
+                    'description' => __('Flush visitor pixel hot buffer.'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'force' => ['type' => 'bool', 'required' => false],
+                        'limit' => ['type' => 'int', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Flush visitor pixel hot buffer',
                 ],
                 $this->readOperation('analyticsBusinessValue', 'Load visitor business value analytics.'),
                 $this->readOperation('analyticsDashboard', 'Load visitor realtime dashboard analytics.'),
@@ -112,6 +142,15 @@ class VisitorQueryProvider implements QueryProviderInterface
     {
         $payload = $params['payload'] ?? [];
         return \is_array($payload) && !\array_is_list($payload) ? $payload : [];
+    }
+
+    private function hotBuffer(): PixelHotBufferService
+    {
+        if (!$this->hotBufferService) {
+            $this->hotBufferService = ObjectManager::getInstance(PixelHotBufferService::class);
+        }
+
+        return $this->hotBufferService;
     }
 
     /**

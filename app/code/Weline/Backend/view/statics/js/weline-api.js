@@ -167,6 +167,37 @@
         };
     }
 
+    function removeHeader(headers, name) {
+        var target = String(name).toLowerCase();
+        Object.keys(headers || {}).forEach(function (key) {
+            if (String(key).toLowerCase() === target) {
+                delete headers[key];
+            }
+        });
+    }
+
+    function deserializeBodyForFetch(body, headers) {
+        if (!body) {
+            return null;
+        }
+        if (body.type === 'formData') {
+            removeHeader(headers, 'Content-Type');
+            var formData = new FormData();
+            (body.entries || []).forEach(function (entry) {
+                if (entry.kind === 'blob') {
+                    formData.append(entry.name, entry.value, entry.filename || 'blob');
+                    return;
+                }
+                formData.append(entry.name, entry.value == null ? '' : String(entry.value));
+            });
+            return formData;
+        }
+        if (body.type === 'text' || body.type === 'raw') {
+            return body.value;
+        }
+        return null;
+    }
+
     function normalizeOptions(options) {
         var requestOptions = Object.assign({}, options || {});
         var method = String(requestOptions.method || 'GET').toUpperCase();
@@ -282,6 +313,96 @@
         return statusText || 'Backend request failed.';
     }
 
+    function looksLikeJson(text) {
+        var trimmed = String(text || '').trim();
+        return trimmed.indexOf('{') === 0 || trimmed.indexOf('[') === 0;
+    }
+
+    function collectHeaders(responseHeaders) {
+        var headers = {};
+        responseHeaders.forEach(function (value, key) {
+            headers[key] = value;
+        });
+        return headers;
+    }
+
+    function parseFetchResponseBody(response) {
+        var contentType = response.headers.get('content-type') || '';
+        return response.text().then(function (text) {
+            if (text === '') {
+                return {};
+            }
+            if (contentType.indexOf('application/json') !== -1 || looksLikeJson(text)) {
+                try {
+                    return JSON.parse(text);
+                } catch (error) {
+                    return {
+                        success: false,
+                        message: text
+                    };
+                }
+            }
+            return text;
+        });
+    }
+
+    function directFetch(requestUrl, requestOptions, responseMode) {
+        if (typeof window.fetch !== 'function') {
+            return Promise.reject(new Error('[Weline.Api] fetch is unavailable.'));
+        }
+
+        var method = String(requestOptions.method || 'GET').toUpperCase();
+        var headers = Object.assign({}, requestOptions.headers || {});
+        var body = method === 'GET' || method === 'HEAD'
+            ? null
+            : deserializeBodyForFetch(requestOptions.body, headers);
+        var fetchOptions = {
+            method: method,
+            credentials: requestOptions.credentials || 'same-origin',
+            cache: requestOptions.cache || 'no-store',
+            redirect: requestOptions.redirect || 'follow',
+            headers: headers
+        };
+
+        if (method !== 'GET' && method !== 'HEAD' && body !== null && body !== undefined) {
+            fetchOptions.body = body;
+        }
+
+        return window.fetch(requestUrl, fetchOptions).then(function (response) {
+            return parseFetchResponseBody(response).then(function (bodyData) {
+                var body = normalizeBusinessResult(bodyData);
+                var transportResponse = {
+                    ok: !!response.ok,
+                    status: response.status || 0,
+                    statusText: response.statusText || '',
+                    data: body,
+                    headers: collectHeaders(response.headers),
+                    url: response.url || requestUrl,
+                    redirected: !!response.redirected,
+                    maintenance: response.status === 503
+                };
+
+                if (responseMode === 'fetch') {
+                    if (transportResponse.ok) {
+                        return buildFetchResponse(transportResponse, requestUrl);
+                    }
+                    throw buildError(failureMessage(body, response.statusText), transportResponse, requestUrl);
+                }
+
+                var businessFailed = isBusinessFailure(body);
+                var envelope = buildResponseEnvelope(Object.assign({}, transportResponse, {
+                    ok: !!response.ok && !businessFailed
+                }));
+
+                if (envelope.ok) {
+                    return envelope;
+                }
+
+                throw buildError(failureMessage(body, response.statusText), envelope, requestUrl);
+            });
+        });
+    }
+
     function makeHeaders(headers) {
         var normalized = {};
         Object.keys(headers || {}).forEach(function (key) {
@@ -392,9 +513,14 @@
     };
 
     BackendApiClient.prototype.send = function (url, options, responseMode) {
-        this.ensureWorker();
         var requestUrl = sameOriginUrl(url);
         var requestOptions = normalizeOptions(options);
+        var mode = responseMode || 'body';
+        try {
+            this.ensureWorker();
+        } catch (error) {
+            return directFetch(requestUrl, requestOptions, mode);
+        }
         var messageId = this.nextId();
         var timeoutMs = Math.max(1000, parseInt((options && options.timeoutMs) || this.config.requestTimeoutMs || 15000, 10));
         var worker = this.worker;
@@ -406,13 +532,15 @@
                     return;
                 }
                 delete pending[messageId];
-                reject(buildError('[Weline.Api] backend worker request timed out.', {
-                    ok: false,
-                    status: 0,
-                    statusText: '',
-                    data: null,
-                    maintenance: false
-                }, requestUrl));
+                directFetch(requestUrl, requestOptions, mode).then(resolve).catch(function (error) {
+                    reject(error || buildError('[Weline.Api] backend worker request timed out.', {
+                        ok: false,
+                        status: 0,
+                        statusText: '',
+                        data: null,
+                        maintenance: false
+                    }, requestUrl));
+                });
             }, timeoutMs);
 
             pending[messageId] = {
@@ -420,7 +548,8 @@
                 reject: reject,
                 timeoutId: timeoutId,
                 requestUrl: requestUrl,
-                responseMode: responseMode || 'body'
+                requestOptions: requestOptions,
+                responseMode: mode
             };
 
             try {
@@ -433,7 +562,9 @@
             } catch (error) {
                 window.clearTimeout(timeoutId);
                 delete pending[messageId];
-                reject(error);
+                directFetch(requestUrl, requestOptions, mode).then(resolve).catch(function () {
+                    reject(error);
+                });
             }
         });
     };
@@ -491,17 +622,26 @@
 
     BackendApiClient.prototype.handleWorkerError = function (event) {
         var message = event && event.message ? event.message : '[Weline.Api] backend worker failed.';
+        if (this.worker && typeof this.worker.terminate === 'function') {
+            this.worker.terminate();
+        }
+        this.worker = null;
+        this.config.workerUrl = '';
         Object.keys(this.pending).forEach(function (id) {
             var pending = this.pending[id];
             delete this.pending[id];
             window.clearTimeout(pending.timeoutId);
-            pending.reject(buildError(message, {
-                ok: false,
-                status: 0,
-                statusText: '',
-                data: null,
-                maintenance: false
-            }, pending.requestUrl));
+            directFetch(pending.requestUrl, pending.requestOptions, pending.responseMode)
+                .then(pending.resolve)
+                .catch(function (error) {
+                    pending.reject(error || buildError(message, {
+                        ok: false,
+                        status: 0,
+                        statusText: '',
+                        data: null,
+                        maintenance: false
+                    }, pending.requestUrl));
+                });
         }, this);
     };
 

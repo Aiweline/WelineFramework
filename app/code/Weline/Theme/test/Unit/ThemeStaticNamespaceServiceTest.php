@@ -77,6 +77,54 @@ class ThemeStaticNamespaceServiceTest extends TestCase
         );
     }
 
+    public function testLivePageQueryIgnoresStalePreviewRequestBag(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getUrlPath')->willReturn('/weline_dashboard/backend/dashboard/index');
+        $request->method('getServer')->willReturnCallback(
+            static fn(string $key, mixed $default = null): mixed => $key === 'REQUEST_URI'
+                ? '/admin/weline_dashboard/backend/dashboard/index?website_id=1&view_id=1'
+                : $default
+        );
+        $request->method('getParam')->willReturnCallback(
+            static function (string $key, mixed $default = null): mixed {
+                return [
+                    'backend_theme_id' => 7,
+                    'editor_area' => 'backend',
+                    'shell' => 'theme-editor',
+                    'preview_mode' => 'live',
+                    'status' => 'draft',
+                    'scope' => 'dashboard_view:1',
+                ][$key] ?? $default;
+            }
+        );
+        $request->method('getHeader')->willReturn(null);
+        $request->method('setGet')->willReturnSelf();
+
+        $session = $this->createMock(Session::class);
+        $previewTokenService = $this->createMock(PreviewTokenService::class);
+        $previewTokenService->method('getCurrentPreviewData')->willReturn(null);
+        $previewTokenService->method('getTokenFromRequest')->willReturn(null);
+
+        $previewContextService = new PreviewContextService(
+            $request,
+            $session,
+            $previewTokenService,
+            $this->createMock(WelineTheme::class),
+            new PreviewRequestInspector($request),
+        );
+        $service = new ThemeStaticNamespaceService($previewContextService, $session);
+
+        $this->assertSame(
+            'WeShop/motor',
+            $service->resolvePublicThemePath($this->createTheme('WeShop/motor'))
+        );
+        $this->assertSame(
+            '/static/WeShop/motor/theme.css',
+            $service->appendPreviewContextQuery('/static/WeShop/motor/theme.css')
+        );
+    }
+
     public function testDesignAbsoluteOriginPathResolvesToPublicThemePath(): void
     {
         $service = $this->createService(false, [

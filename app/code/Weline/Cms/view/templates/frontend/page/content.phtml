@@ -1,0 +1,6 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$page = $this->getData('cms_page') ?: [];
+$this->setData('cms_page_id', (int)($page['page_id'] ?? 0));

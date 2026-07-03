@@ -160,6 +160,18 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesVisitorPanelStatisticsSubRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'visitor/rest/v1/statistics/dashboard',
+            'Statistics',
+            'getDashboard',
+            'Weline\\Visitor\\Api\\Rest\\V1\\Statistics'
+        )));
+    }
+
     public function testDoesNotMatchProtectedDataTableFrontendApiRoute(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();

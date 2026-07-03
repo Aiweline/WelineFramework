@@ -199,9 +199,7 @@ DOC
      */
     public static function getRequest(): Request
     {
-        if (!isset(self::$request)) {
-            self::$request = ObjectManager::getInstance(Request::class);
-        }
+        self::$request = ObjectManager::getInstance(Request::class);
         return self::$request;
     }
 }

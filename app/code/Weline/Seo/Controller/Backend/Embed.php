@@ -319,7 +319,6 @@ class Embed extends BaseController
     private function getModuleDisplayName(string $module): string
     {
         $moduleNames = [
-            'GuoLaiRen_PageBuilder' => __('页面构建器'),
             'WeShop_Catalog' => __('商品目录'),
             'WeShop_Product' => __('商品'),
             'Weline_Websites' => __('站点'),

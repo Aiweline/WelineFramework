@@ -48,13 +48,23 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
             $definitionCode = $isLegacyWidget
                 ? (string)($widgetMeta['code'] ?? $componentCode)
                 : "{$category}/{$componentCode}";
+            $slots = $this->normalizeSlotDefinitions($resource['slots'] ?? [], $widgetMeta['slots'] ?? []);
+            $definitionName = $this->firstNonEmptyString(
+                $widgetMeta['name'] ?? null,
+                $resource['meta']['name'] ?? null,
+                $componentCode
+            );
+            $definitionDescription = $this->firstNonEmptyString(
+                $widgetMeta['description'] ?? null,
+                $resource['meta']['description'] ?? null
+            );
 
             $definitions[] = new ThemeComponentDefinition(
                 module: 'Weline_Theme',
                 type: $definitionType,
                 code: $definitionCode,
-                name: (string)($widgetMeta['name'] ?? $resource['meta']['name'] ?? $componentCode),
-                description: (string)($widgetMeta['description'] ?? $resource['meta']['description'] ?? ''),
+                name: $definitionName,
+                description: $definitionDescription,
                 area: $area,
                 sourceType: 'file',
                 category: $category,
@@ -71,7 +81,7 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
                 params: $resource['params'] ?? [],
                 position: $this->normalizeArray($widgetMeta['position'] ?? [], $isLegacyWidget ? [] : ['content']),
                 pageLayouts: $this->normalizeArray($widgetMeta['page_layouts'] ?? ['*'], ['*']),
-                slots: $resource['slots'] ?? [],
+                slots: $slots,
                 slot: !empty($widgetMeta['slot']) ? (string)$widgetMeta['slot'] : null,
                 supports: $this->normalizeArray($widgetMeta['supports'] ?? [], []),
                 exclusive: (bool)($widgetMeta['exclusive'] ?? false),
@@ -89,6 +99,18 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
         }
 
         return $definitions;
+    }
+
+    private function firstNonEmptyString(mixed ...$values): string
+    {
+        foreach ($values as $value) {
+            $text = trim((string)$value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
     }
 
     private function matchesLayer(array $resource, array $options): bool
@@ -154,6 +176,45 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
         ), static fn(string $item): bool => $item !== ''));
 
         return $values ?: $fallback;
+    }
+
+    private function normalizeSlotDefinitions(array $resourceSlots, mixed $metaSlots = []): array
+    {
+        $slots = [];
+        foreach ($resourceSlots as $key => $slot) {
+            if (!is_array($slot)) {
+                continue;
+            }
+            $slotId = (string)($slot['id'] ?? (is_string($key) ? $key : ''));
+            if ($slotId === '') {
+                continue;
+            }
+            $slot['id'] = $slotId;
+            $slots[$slotId] = $slot;
+        }
+
+        if (is_array($metaSlots)) {
+            foreach ($metaSlots as $key => $slot) {
+                if (!is_array($slot)) {
+                    continue;
+                }
+                $slotId = (string)($slot['id'] ?? (is_string($key) ? $key : ''));
+                if ($slotId === '') {
+                    continue;
+                }
+                $slot['id'] = $slotId;
+                $slot['name'] = (string)($slot['name'] ?? $key);
+                if (isset($slot['accept']) && is_string($slot['accept'])) {
+                    $slot['accept'] = $this->normalizeArray($slot['accept'], []);
+                }
+                if (isset($slot['reject']) && is_string($slot['reject'])) {
+                    $slot['reject'] = $this->normalizeArray($slot['reject'], []);
+                }
+                $slots[$slotId] = $slot;
+            }
+        }
+
+        return $slots;
     }
 
     private function resolveTemplatePath(array $resource, string $area, bool $isLegacyWidget): ?string

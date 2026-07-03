@@ -1,80 +1,51 @@
-<!--
-组件：Modal
-
-模态框组件，用于弹窗展示内容
-字段
-@meta.name {default="Modal模态框组件",name="Modal模态框组件",description="Modal模态框组件，用于描述组件的名称"}
-@meta.description {default="模态框组件，用于弹窗展示内容",name="模态框组件，用于弹窗展示内容",description="模态框组件，用于弹窗展示内容，用于描述组件的用途"}
-@param.id {default="",name="模态框ID",description="模态框ID，必填参数，用于设置模态框ID"}
-@param.title {default="",name="模态框标题",description="模态框标题，用于设置模态框标题"}
-@param.content {default="",name="内容（HTML字符串）",description="内容（HTML字符串），必填参数，用于设置模态框内容"}
-@param.footer {default="",name="底部内容（按钮等）",description="底部内容（按钮等），用于设置模态框底部内容"}
-@param.size {default="md",name="尺寸",description="尺寸，可选值：sm/md/lg/xl，用于设置模态框尺寸"}
-@param.backdrop {default=true,name="是否显示背景遮罩",description="是否显示背景遮罩，用于控制背景遮罩的显示"}
-@param.keyboard {default=true,name="是否支持ESC关闭",description="是否支持ESC关闭，用于控制ESC键关闭功能"}
-@param.closeButton {default=true,name="是否显示关闭按钮",description="是否显示关闭按钮，用于控制关闭按钮的显示"}
--->
 <?php
-// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
-$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.modal');
-foreach ($metaParams as $key => $value) {
-    if ($this->getData("meta.{$key}") === null) {
-        $this->setData("meta.{$key}", $value);
-    }
-}
-
-$id = $this->getData("meta.id") ?? '';
-$title = $this->getData("meta.title") ?? '';
-$content = $this->getData("meta.content") ?? '';
-$footer = $this->getData("meta.footer") ?? '';
-$size = $this->getData("meta.size") ?? 'md';
-$backdrop = $this->getData("meta.backdrop") ?? true;
-$keyboard = $this->getData("meta.keyboard") ?? true;
-$closeButton = $this->getData("meta.closeButton") ?? true;
-
-// 构建CSS类
-$modalClass = 'w-modal modal';
-$modalSizeClass = 'w-modal-' . htmlspecialchars($size) . ' modal-' . htmlspecialchars($size);
-$modalContentClass = 'w-modal-content modal-content ' . $modalSizeClass;
+/**
+ * 组件：Modal
+ *
+ * @meta.name {default="Modal 弹窗",name="Modal 弹窗",description="可嵌套内容的弹窗容器"}
+ * @meta.description {default="可嵌套内容的弹窗容器",name="描述",description="组件用途"}
+ * @widget.supports {["builder-component","builder-container","builder-display"]}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*","dashboard"]}
+ * @widget.compatible {true}
+ * @widget.is_container {true}
+ * @widget.slots {"body":{"id":"modal-body:{layout_id}","name":"弹窗内容","accept":["builder-component","builder-form","builder-display","builder-container"],"multiple":true},"footer":{"id":"modal-footer:{layout_id}","name":"弹窗底部","accept":["builder-action","builder-component"],"multiple":true}}
+ * @param.title {default="弹窗标题",name="标题",description="弹窗标题"}
+ * @param.content {default="",name="兼容内容",description="旧版 HTML 字符串内容"}
+ * @param.footer {default="",name="兼容底部",description="旧版 HTML 字符串底部"}
+ */
+$layoutId = (string)($this->getData('layout_id') ?? $this->getData('_layout_id') ?? 'preview');
+$title = (string)($this->getData('title') ?? $this->getData('meta.title') ?? '弹窗标题');
+$content = (string)($this->getData('content') ?? $this->getData('meta.content') ?? '');
+$footer = (string)($this->getData('footer') ?? $this->getData('meta.footer') ?? '');
+$editorMode = (bool)($this->getData('editor_mode') ?? $this->getData('preview_mode') ?? false);
+$bodySlotId = 'modal-body:' . ($layoutId !== '' ? $layoutId : 'preview');
+$footerSlotId = 'modal-footer:' . ($layoutId !== '' ? $layoutId : 'preview');
 ?>
-<div class="<?= $modalClass ?>" 
-     id="<?= htmlspecialchars($id) ?>"
-     tabindex="-1"
-     role="dialog"
-     aria-labelledby="<?= htmlspecialchars($id) ?>Label"
-     aria-hidden="true"
-     data-backdrop="<?= $backdrop ? 'true' : 'false' ?>"
-     data-keyboard="<?= $keyboard ? 'true' : 'false' ?>">
-    <div class="w-modal-dialog modal-dialog <?= $modalSizeClass ?>" role="document">
-        <div class="<?= $modalContentClass ?>">
-            <?php if ($title || $closeButton): ?>
-                <div class="w-modal-header modal-header">
-                    <?php if ($title): ?>
-                        <h5 class="w-modal-title modal-title" id="<?= htmlspecialchars($id) ?>Label">
-                            <?= htmlspecialchars($title) ?>
-                        </h5>
-                    <?php endif; ?>
-                    <?php if ($closeButton): ?>
-                        <button type="button" 
-                                class="w-modal-close close"
-                                data-dismiss="modal" 
-                                aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-            
-            <div class="w-modal-body modal-body">
-                {{content}}
-            </div>
-            
-            <?php if ($footer): ?>
-                <div class="w-modal-footer modal-footer">
-                    {{footer}}
-                </div>
-            <?php endif; ?>
-        </div>
+<section class="w-modal modal-content w-builder-modal">
+    <header class="w-modal-header modal-header">
+        <h3 class="w-modal-title modal-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h3>
+    </header>
+    <div class="w-modal-body modal-body"
+         data-wslot="<?= htmlspecialchars($bodySlotId, ENT_QUOTES, 'UTF-8') ?>"
+         data-wslot-name="<?= htmlspecialchars(__('弹窗内容'), ENT_QUOTES, 'UTF-8') ?>"
+         data-wslot-accept="builder-component,builder-form,builder-display,builder-container"
+         data-wslot-multiple="true">
+        <?php if ($content !== ''): ?>
+            <?= $content ?>
+        <?php elseif ($editorMode): ?>
+            <div class="w-builder-slot-placeholder slot-placeholder"><?= __('拖入弹窗内容') ?></div>
+        <?php endif; ?>
     </div>
-</div>
-
+    <footer class="w-modal-footer modal-footer"
+            data-wslot="<?= htmlspecialchars($footerSlotId, ENT_QUOTES, 'UTF-8') ?>"
+            data-wslot-name="<?= htmlspecialchars(__('弹窗底部'), ENT_QUOTES, 'UTF-8') ?>"
+            data-wslot-accept="builder-action,builder-component"
+            data-wslot-multiple="true">
+        <?php if ($footer !== ''): ?>
+            <?= $footer ?>
+        <?php elseif ($editorMode): ?>
+            <div class="w-builder-slot-placeholder slot-placeholder compact"><?= __('拖入按钮') ?></div>
+        <?php endif; ?>
+    </footer>
+</section>

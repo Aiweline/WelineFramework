@@ -8,9 +8,13 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 /** 主题布局版本模型 - 存储主题布局的历史版本快照 */
 #[Table(comment: '主题布局版本表')]
 #[Index(name: 'idx_theme_page', columns: ['theme_id', 'page_type'])]
+#[Index(name: 'idx_theme_page_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id'])]
 #[Index(name: 'idx_version_number', columns: ['theme_id', 'page_type', 'version_number'])]
+#[Index(name: 'idx_version_identity_number', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'version_number'])]
 #[Index(name: 'idx_current', columns: ['theme_id', 'page_type', 'is_current'])]
+#[Index(name: 'idx_current_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'is_current'])]
 #[Index(name: 'idx_published', columns: ['theme_id', 'page_type', 'is_published'])]
+#[Index(name: 'idx_published_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'is_published'])]
 #[Index(name: 'idx_type', columns: ['version_type'])]
 class ThemeLayoutVersion extends Model
 {
@@ -22,6 +26,14 @@ class ThemeLayoutVersion extends Model
     public const schema_fields_THEME_ID = 'theme_id';
     #[Col('varchar', 50, nullable: false, default: 'homepage', comment: '页面/布局类型')]
     public const schema_fields_PAGE_TYPE = 'page_type';
+    #[Col('varchar', 100, nullable: false, default: 'default', comment: 'Layout option')]
+    public const schema_fields_LAYOUT_OPTION = 'layout_option';
+    #[Col('varchar', 120, nullable: false, default: 'default', comment: 'Scope path')]
+    public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 50, nullable: false, default: 'global', comment: 'Layout target type')]
+    public const schema_fields_TARGET_TYPE = 'target_type';
+    #[Col('int', 11, nullable: false, default: 0, comment: 'Layout target ID')]
+    public const schema_fields_TARGET_ID = 'target_id';
     #[Col('int', 11, nullable: false, default: 1, comment: '版本号')]
     public const schema_fields_VERSION_NUMBER = 'version_number';
     #[Col('varchar', 100, comment: '版本名称')]
@@ -83,6 +95,41 @@ class ThemeLayoutVersion extends Model
     public function setPageType(string $pageType): self
     {
         return $this->setData(self::schema_fields_PAGE_TYPE, $pageType);
+    }
+    public function getLayoutOption(): string
+    {
+        return (string)($this->getData(self::schema_fields_LAYOUT_OPTION) ?: 'default');
+    }
+    public function setLayoutOption(string $layoutOption): self
+    {
+        $layoutOption = trim($layoutOption) !== '' ? trim($layoutOption) : 'default';
+        return $this->setData(self::schema_fields_LAYOUT_OPTION, $layoutOption);
+    }
+    public function getScope(): string
+    {
+        return (string)($this->getData(self::schema_fields_SCOPE) ?: 'default');
+    }
+    public function setScope(string $scope): self
+    {
+        $scope = trim($scope) !== '' ? trim($scope) : 'default';
+        return $this->setData(self::schema_fields_SCOPE, $scope);
+    }
+    public function getTargetType(): string
+    {
+        return (string)($this->getData(self::schema_fields_TARGET_TYPE) ?: 'global');
+    }
+    public function setTargetType(string $targetType): self
+    {
+        $targetType = trim($targetType) !== '' ? trim($targetType) : 'global';
+        return $this->setData(self::schema_fields_TARGET_TYPE, $targetType);
+    }
+    public function getTargetId(): int
+    {
+        return max(0, (int)$this->getData(self::schema_fields_TARGET_ID));
+    }
+    public function setTargetId(int $targetId): self
+    {
+        return $this->setData(self::schema_fields_TARGET_ID, max(0, $targetId));
     }
     public function getVersionNumber(): int
     {
@@ -223,6 +270,10 @@ class ThemeLayoutVersion extends Model
             'version_id' => $this->getVersionId(),
             'theme_id' => $this->getThemeId(),
             'page_type' => $this->getPageType(),
+            'layout_option' => $this->getLayoutOption(),
+            'scope' => $this->getScope(),
+            'target_type' => $this->getTargetType(),
+            'target_id' => $this->getTargetId(),
             'version_number' => $this->getVersionNumber(),
             'version_name' => $this->getVersionName(),
             'display_name' => $this->getDisplayName(),

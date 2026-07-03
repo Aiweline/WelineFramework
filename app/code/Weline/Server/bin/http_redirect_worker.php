@@ -107,7 +107,7 @@ if (\is_file($_envFile)) {
 unset($_envFile);
 
 $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
-    || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
+    || ($envConfig !== null && (($envConfig['system']['deploy'] ?? $envConfig['deploy'] ?? '') === 'dev'));
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
     && $supervisorEnabledRaw !== ''

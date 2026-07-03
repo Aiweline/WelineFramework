@@ -1,22 +1,19 @@
-﻿快递公司不存在,"Courier company does not exist"
-快递公司代码不能为空,"Carrier code cannot be empty"
-快递公司名称不能为空,"Carrier name cannot be empty"
-物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
-快递公司代码已存在,"Carrier code already exists"
-API配置JSON格式错误,"API configuration JSON format error"
+﻿自动定位地址,"Auto Locate Address"
+地址不存在,"Address does not exist"
 更新成功,"Updated successfully"
 创建成功,"Created successfully"
 参数错误,"Invalid parameter"
 删除成功,"Deleted successfully"
-启用成功,"Enabled successfully"
-禁用成功,"Disabled successfully"
-地址不存在,"Address does not exist"
-客户ID不能为空,"Customer ID cannot be empty"
 设置成功,"Set successfully"
-地区编辑功能暂未开放，请通过数据库或后续版本管理。,"Region editing is not yet available. Please manage via the database or a future version."
-同步完成，新增国家数量：%{1},"Sync completed, number of new countries: %{1}"
-同步失败：%{1},"Sync failed: %{1}"
+国家代码不能为空,"Country code cannot be empty"
+配送服务ID不能为空,"Shipping service ID cannot be empty"
+"Get regions success","Get regions success"
 请先登录,"Please log in first"
+获取配送信息成功,"Successfully fetched shipping information"
+物流单号不能为空,"Tracking number cannot be empty"
+快递公司ID不能为空,"Carrier ID cannot be empty"
+订单ID不能为空,"Order ID cannot be empty"
+功能待实现,"Feature not yet implemented"
 %{1}不能为空,"%{1} cannot be empty"
 配送地址更新成功,"Shipping address updated successfully"
 暂无配送地址,"No shipping address"
@@ -24,15 +21,18 @@ API配置JSON格式错误,"API configuration JSON format error"
 用户未登录,"User not logged in"
 地址数据不能为空,"Address data cannot be empty."
 同步成功,"Sync succeeded"
-自动定位地址,"Auto Locate Address"
-"Get regions success","Get regions success"
-国家代码不能为空,"Country code cannot be empty"
-获取配送信息成功,"Successfully fetched shipping information"
-配送服务ID不能为空,"Shipping service ID cannot be empty"
-物流单号不能为空,"Tracking number cannot be empty"
-快递公司ID不能为空,"Carrier ID cannot be empty"
-订单ID不能为空,"Order ID cannot be empty"
-功能待实现,"Feature not yet implemented"
+启用成功,"Enabled successfully"
+禁用成功,"Disabled successfully"
+地区编辑功能暂未开放，请通过数据库或后续版本管理。,"Region editing is not yet available. Please manage via the database or a future version."
+同步完成，新增国家数量：%{1},"Sync completed, number of new countries: %{1}"
+同步失败：%{1},"Sync failed: %{1}"
+快递公司不存在,"Courier company does not exist"
+快递公司代码不能为空,"Carrier code cannot be empty"
+快递公司名称不能为空,"Carrier name cannot be empty"
+物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
+快递公司代码已存在,"Carrier code already exists"
+API配置JSON格式错误,"API configuration JSON format error"
+客户ID不能为空,"Customer ID cannot be empty"
 待发货,Pending
 运输中,"In Transit"
 已送达,Delivered
@@ -41,23 +41,10 @@ API配置JSON格式错误,"API configuration JSON format error"
 取件,Pickup
 到达,Arrival
 派送,Delivery
-电话号码格式不正确,"Invalid phone number format"
-邮政编码格式不正确,"Invalid postal code format"
-无权操作此地址,"No permission to operate this address"
-地址名称不能为空,"Address name cannot be empty."
-地址名称,"Address Name"
-收货人姓名,"Recipient Name"
-联系电话,"Contact Phone"
-省份,Province
-城市,City
-街道地址,"Street Address"
-邮政编码格式不正确，应为6位数字,"Invalid postal code format, should be 6 digits"
-费用模板不存在,"Rate template does not exist"
-联系人姓名,"Contact Name"
-配送服务不存在,"Shipping service does not exist"
-该快递公司暂不支持在线追踪，请联系客服查询,"This carrier does not support online tracking, please contact customer service"
-客服电话：400-xxx-xxxx,"Customer Service: 400-xxx-xxxx"
-查询失败：%{1},"Query failed: %{1}"
+发货地址,"Shipping Address"
+管理发货地址,"Manage shipping addresses"
+收货地址,"Delivery Address"
+管理配送收货地址,"Manage delivery addresses"
 默认,Default
 邮编：,"Postal code:"
 编辑,Edit
@@ -65,17 +52,17 @@ API配置JSON格式错误,"API configuration JSON format error"
 删除,Delete
 新增,Add
 保存后当前页面会自动刷新地址卡片，不会跳转页面。,"After saving, the current page will automatically refresh the address card without navigating away."
+地址名称,"Address Name"
+联系电话,"Contact Phone"
 邮政编码,"Postal Code"
 详细地址,"Detailed address"
 设为默认地址,"Set as Default Address"
 保存地址,"Save Address"
 取消,Cancel
-发货地址,"Shipping Address"
 管理店铺或账户发货时使用的寄出地址。,"Manage the shipping addresses used when shipping from the store or account."
 新增发货地址,"Add Shipping Address"
 还没有发货地址,"No shipping address yet"
 点击“新增发货地址”，直接在当前页面维护。,"Click ""Add Shipping Address"" to maintain it directly on the current page."
-收货地址,"Delivery Address"
 管理配送和订单收货时使用的地址。,"Manage addresses used for delivery and order receiving."
 新增收货地址,"Add Delivery Address"
 还没有收货地址,"No delivery address yet"
@@ -85,6 +72,7 @@ API配置JSON格式错误,"API configuration JSON format error"
 中国,China
 国家/地区,Country/Region
 省/州,State/Province
+城市,City
 区县,District
 关闭,Close
 "例如：华东仓 / 家","e.g., East China Warehouse / Home"
@@ -94,20 +82,136 @@ API配置JSON格式错误,"API configuration JSON format error"
 街道、门牌号、仓库或收件说明,"Street, House Number, Warehouse, or Delivery Instructions"
 联系人,Contact
 收货人,Recipient
-管理发货地址,"Manage shipping addresses"
-管理配送收货地址,"Manage delivery addresses"
-编辑快递公司,"Edit Carrier"
-新增快递公司,"Add Carrier"
+确认操作,确认操作
+确定,Confirm
+操作失败,"Operation failed"
+确定要设置为默认地址吗？,"Are you sure you want to set this as the default address?"
+确定要删除此地址吗？,"Are you sure you want to delete this address?"
+发货地址管理,"Shipping Address Management"
+新增地址,"Add Address"
+暂无地址，请添加发货地址,"No address. Please add a shipping address."
+电话,Phone
+地址,Address
+邮编,"Postal Code"
+发货地址详情,"Shipping address details"
+返回列表,"Return to List"
+默认地址,"Default Address"
+国家,Country
+省份,Province
+街道地址,"Street Address"
+完整地址,"Full Address"
+创建时间,"Created At"
+更新时间,"Update time"
+编辑发货地址,"Edit Shipping Address"
+例如：主仓库、分仓库等,"e.g., Main Repository, Sub-Repository, etc."
+联系人姓名,"Contact Name"
+保存,Save
+收货地址管理,"Delivery Address Management"
+暂无地址，请添加收货地址,"No address. Please add a delivery address."
+收货地址详情,"Shipping Address Details"
+编辑收货地址,"Edit shipping address"
+例如：家、公司、学校等,"e.g., Home, Company, School, etc."
+收货人姓名,"Recipient Name"
+确定要删除这个地址吗？,"Are you sure you want to delete this address?"
+运送地址管理,"Shipping address management"
 系统,System
+运送地址列表,"Shipping address list"
+全部客户,"All Customers"
+搜索地址名称、联系人、电话或街道,"Search address name, contact, phone or street"
+搜索,Search
+重置,Reset
+ID,ID
+客户ID,"Customer ID"
+状态,Status
+操作,Actions
+暂无数据,"No data available"
+是,Yes
+否,No
+启用,Enable
+禁用,Disable
+上一页,"Previous Page"
+下一页,"Next Page"
+编辑运送地址,"Edit Delivery Address"
+新增运送地址,"Add Delivery Address"
+客户,Customer
+请选择客户,"Please select customer"
+请输入地址名称/标签,"Please enter address name/label"
+请输入收货人姓名,"Please enter the recipient's name"
+请输入国家,"Please enter country"
+请输入省份,"Please enter province"
+请输入城市,"Please enter city"
+请输入区县,"Please enter district"
+请输入街道地址,"Please enter street address"
+请输入邮政编码,"Please enter postal code"
+选项,Options
+返回,Back
+配送区域,"Shipping Zone"
+配送区域列表,"Shipping area list"
+当前暂无配送区域，请后续在此页面完善配置。,"There are currently no delivery zones configured. Please complete the configuration on this page later."
+区域名称,"Region Name"
+区域代码,"Region Code"
+费用模板,"Rate Template"
+费用模板列表,"Fee template list"
+当前暂无费用模板配置，请后续在此页面完善配置。,"There are currently no fee templates configured. Please complete the configuration on this page later."
+模板名称,"Template name"
+模板代码,"Template code"
+计算类型,"Calculation type"
+配送系统,"Shipping System"
+配送管理,"Shipping Management"
+地区管理,"Region Management"
 快递公司,Carrier
+免邮规则,"Free Shipping Rule"
+配送服务,"Shipping Service"
+物流跟踪,Tracking
+确定要从i18n同步国家数据吗？,"Are you sure you want to sync country data from i18n?"
+地区列表,"Region List"
+从i18n同步国家,"Sync countries from i18n"
+当前国家暂无地区数据，请先从i18n同步或手动添加。,"No region data for the current country. Please sync from i18n or add manually."
+地区名称,"Region Name"
+地区代码,"Region Code"
+类型,Type
+物流跟踪记录列表,"Tracking Record List"
+当前暂无物流跟踪记录。,"There are currently no logistics tracking records."
+物流单号,"Tracking Number"
+快递公司ID,"Courier Company ID"
+当前位置,"Current location"
+最后查询时间,"Last query time"
+配送服务列表,"Shipping service list"
+当前暂无配送服务配置，请后续在此页面完善配置。,"There are currently no delivery service configurations. Please complete the configuration on this page later."
+服务名称,"Service name"
+服务代码,"Service code"
+区域ID,"Region ID"
+发货地址列表,"Shipping Address List"
+全部状态,"All Status"
+请输入联系人姓名,"Please enter contact name"
+免邮规则列表,"Free Shipping Rule List"
+当前暂无免邮规则配置，请后续在此页面完善配置。,"There are currently no free shipping rules configured. Please complete the configuration on this page later."
+规则名称,"Rule Name"
+规则代码,"Rule Code"
+条件类型,"Condition type"
+优先级,Priority
+确定要禁用这个快递公司吗？,"Are you sure you want to disable this carrier?"
+确定要启用这个快递公司吗？,"Are you sure you want to enable this carrier?"
+确定要删除这个快递公司吗？,"Are you sure you want to delete this carrier?"
+快递公司列表,"Courier Company List"
+新增快递公司,"Add Carrier"
+搜索快递公司代码或名称,"Search carrier code or name"
+当前暂无快递公司配置，请后续在此页面完善配置。,"There are currently no courier companies configured. Please complete the configuration on this page later."
+代码,Code
+名称,Name
+追踪支持,"Tracking Support"
+排序,Sort
+API,API
+手动,Manual
+支持,Supported
+不支持,"Not supported"
+"共 %{1} 条记录，第 %{2} / %{3} 页","Total %{1} records, Page %{2} / %{3}"
+编辑快递公司,"Edit Carrier"
 快递公司代码,"Carrier Code"
 请输入快递公司代码，如：SF、ZTO等,"Enter courier company code, e.g., SF, ZTO, etc."
 代码必须唯一，编辑后不可修改,"Code must be unique and cannot be modified after editing"
 快递公司名称,"Carrier Name"
 请输入快递公司名称，如：顺丰速运,"Enter courier company name, e.g., SF Express"
-类型,Type
-手动,Manual
-API,API
 手动类型需要手动输入物流信息，API类型可通过接口自动获取,"Manual type requires manual input of logistics information, API type can automatically obtain through interface"
 物流跟踪URL模板,"Tracking URL Template"
 例如：https://www.sf-express.com/track/{tracking_number},"Example: https://www.sf-express.com/track/{tracking_number}"
@@ -119,118 +223,14 @@ API配置,"API Configuration"
 "JSON格式，例如：{""api_key"":""your_key"",""api_secret"":""your_secret""}","JSON format, for example: {""api_key"":""your_key"",""api_secret"":""your_secret""}"
 API配置信息，JSON格式,"API configuration information, JSON format"
 追踪支持状态,"Tracking Support Status"
-支持,Supported
-不支持,"Not supported"
-排序,Sort
 数字越小越靠前，默认为0,"Smaller numbers appear first, default is 0"
-状态,Status
-启用,Enable
-保存,Save
-返回,Back
-确认操作,确认操作
-确定,Confirm
-确定要禁用这个快递公司吗？,"Are you sure you want to disable this carrier?"
-确定要启用这个快递公司吗？,"Are you sure you want to enable this carrier?"
-确定要删除这个快递公司吗？,"Are you sure you want to delete this carrier?"
-快递公司列表,"Courier Company List"
-搜索快递公司代码或名称,"Search carrier code or name"
-全部状态,"All Status"
-禁用,Disable
-搜索,Search
-重置,Reset
-当前暂无快递公司配置，请后续在此页面完善配置。,"There are currently no courier companies configured. Please complete the configuration on this page later."
-代码,Code
-名称,Name
-追踪支持,"Tracking Support"
-操作,Actions
-上一页,"Previous Page"
-下一页,"Next Page"
-"共 %{1} 条记录，第 %{2} / %{3} 页","Total %{1} records, Page %{2} / %{3}"
-编辑运送地址,"Edit Delivery Address"
-新增运送地址,"Add Delivery Address"
-运送地址管理,"Shipping address management"
-客户,Customer
-请选择客户,"Please select customer"
-请输入地址名称/标签,"Please enter address name/label"
-请输入收货人姓名,"Please enter the recipient's name"
-国家,Country
-请输入国家,"Please enter country"
-请输入省份,"Please enter province"
-请输入城市,"Please enter city"
-请输入区县,"Please enter district"
-请输入街道地址,"Please enter street address"
-请输入邮政编码,"Please enter postal code"
-选项,Options
-确定要设置为默认地址吗？,"Are you sure you want to set this as the default address?"
-确定要删除这个地址吗？,"Are you sure you want to delete this address?"
-运送地址列表,"Shipping address list"
-新增地址,"Add Address"
-全部客户,"All Customers"
-搜索地址名称、联系人、电话或街道,"Search address name, contact, phone or street"
-ID,ID
-客户ID,"Customer ID"
-地址,Address
-创建时间,"Created At"
-暂无数据,"No data available"
-是,Yes
-否,No
-免邮规则,"Free Shipping Rule"
-免邮规则列表,"Free Shipping Rule List"
-当前暂无免邮规则配置，请后续在此页面完善配置。,"There are currently no free shipping rules configured. Please complete the configuration on this page later."
-规则名称,"Rule Name"
-规则代码,"Rule Code"
-条件类型,"Condition type"
-优先级,Priority
-配送系统,"Shipping System"
-配送管理,"Shipping Management"
-地区管理,"Region Management"
-配送区域,"Shipping Zone"
-费用模板,"Rate Template"
-配送服务,"Shipping Service"
-物流跟踪,Tracking
-费用模板列表,"Fee template list"
-当前暂无费用模板配置，请后续在此页面完善配置。,"There are currently no fee templates configured. Please complete the configuration on this page later."
-模板名称,"Template name"
-模板代码,"Template code"
-计算类型,"Calculation type"
-确定要从i18n同步国家数据吗？,"Are you sure you want to sync country data from i18n?"
-地区列表,"Region List"
-从i18n同步国家,"Sync countries from i18n"
-当前国家暂无地区数据，请先从i18n同步或手动添加。,"No region data for the current country. Please sync from i18n or add manually."
-地区名称,"Region Name"
-地区代码,"Region Code"
-编辑发货地址,"Edit Shipping Address"
-发货地址管理,"Shipping Address Management"
-请输入联系人姓名,"Please enter contact name"
-发货地址列表,"Shipping Address List"
-配送服务列表,"Shipping service list"
-当前暂无配送服务配置，请后续在此页面完善配置。,"There are currently no delivery service configurations. Please complete the configuration on this page later."
-服务名称,"Service name"
-服务代码,"Service code"
-快递公司ID,"Courier Company ID"
-区域ID,"Region ID"
-物流跟踪记录列表,"Tracking Record List"
-当前暂无物流跟踪记录。,"There are currently no logistics tracking records."
-物流单号,"Tracking Number"
-当前位置,"Current location"
-最后查询时间,"Last query time"
-配送区域列表,"Shipping area list"
-当前暂无配送区域，请后续在此页面完善配置。,"There are currently no delivery zones configured. Please complete the configuration on this page later."
-区域名称,"Region Name"
-区域代码,"Region Code"
-编辑收货地址,"Edit shipping address"
-返回列表,"Return to List"
-例如：家、公司、学校等,"e.g., Home, Company, School, etc."
-操作失败,"Operation failed"
-确定要删除此地址吗？,"Are you sure you want to delete this address?"
-收货地址管理,"Delivery Address Management"
-暂无地址，请添加收货地址,"No address. Please add a delivery address."
-电话,Phone
-邮编,"Postal Code"
-收货地址详情,"Shipping Address Details"
-默认地址,"Default Address"
-完整地址,"Full Address"
-更新时间,"Update time"
-例如：主仓库、分仓库等,"e.g., Main Repository, Sub-Repository, etc."
-暂无地址，请添加发货地址,"No address. Please add a shipping address."
-发货地址详情,"Shipping address details"
+配送服务不存在,"Shipping service does not exist"
+电话号码格式不正确,"Invalid phone number format"
+邮政编码格式不正确,"Invalid postal code format"
+无权操作此地址,"No permission to operate this address"
+地址名称不能为空,"Address name cannot be empty."
+邮政编码格式不正确，应为6位数字,"Invalid postal code format, should be 6 digits"
+该快递公司暂不支持在线追踪，请联系客服查询,"This carrier does not support online tracking, please contact customer service"
+客服电话：400-xxx-xxxx,"Customer Service: 400-xxx-xxxx"
+查询失败：%{1},"Query failed: %{1}"
+费用模板不存在,"Rate template does not exist"

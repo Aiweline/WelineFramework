@@ -1,22 +1,4 @@
-﻿仅支持POST请求,"Only POST requests are supported"
-文本不能为空,"Text cannot be empty"
-文本数组不能为空,"Text array cannot be empty"
-没有有效的文本需要翻译,"No valid text to translate"
-渠道不存在,"Channel does not exist"
-配置保存成功！,"Configuration saved successfully!"
-保存失败：%{1},"Save failed: %{1}"
-渠道ID不能为空,"Channel ID cannot be empty"
-未找到渠道适配器,"Channel adapter not found"
-连接测试成功,"Connection test successful"
-连接测试失败,"Connection test failed"
-测试失败：%{1},"Test failed: %{1}"
-删除成功！,"Deleted successfully!"
-删除失败：%{1},"Delete failed: %{1}"
-记录ID不能为空,"Record ID cannot be empty"
-记录不存在,"Record does not exist"
-请选择要删除的记录,"Please select records to delete"
-"成功删除 %{1} 条记录","Successfully deleted %{1} records"
-翻译文本,"Translated Text"
+﻿翻译文本,"Translated Text"
 "翻译文本事件，其他模块可以通过触发此事件来使用翻译服务。观察者会执行翻译并设置 translated_text 字段。","Translation text event. Other modules can use the translation service by triggering this event. Observers will perform the translation and set the translated_text field."
 批量翻译,"Batch translate"
 "批量翻译事件，其他模块可以通过触发此事件来批量翻译多个文本。观察者会执行批量翻译并设置 translated_texts 字段。","Batch translation event, other modules can trigger this event to batch translate multiple texts. Observers will perform batch translation and set the translated_texts field."
@@ -41,86 +23,52 @@
 "Provides frontend worker translation operations.","Provides frontend worker translation operations."
 "Translate text through configured translation service.","Translate text through configured translation service."
 "Translate multiple texts through configured translation service.","Translate multiple texts through configured translation service."
-目标语言不能为空,"Target language cannot be empty"
-"事件处理异常: %{1}","Event processing exception: %{1}"
-请求失败：%{1},"Request failed: %{1}"
-请求失败，HTTP状态码：%{1},"Request failed, HTTP status code: %{1}"
-响应解析失败：%{1},"Response parsing failed: %{1}"
+Google翻译API密钥未配置,"Google Translation API key not configured"
+Google翻译响应格式错误,"Google Translation response format error"
+Google翻译语言检测失败,"Google Translation language detection failed"
+腾讯翻译API密钥未配置,"Tencent Translation API key not configured"
+腾讯翻译API需要实现完整的签名算法，请参考腾讯云文档,"Tencent Translation API requires complete signature algorithm implementation, please refer to Tencent Cloud documentation"
+腾讯翻译语言检测失败：%{1},"Tencent Translation Language Detection Failed: %{1}"
 百度翻译API密钥未配置,"Baidu Translation API key not configured"
 百度翻译错误：%{1},"Baidu Translation error: %{1}"
 百度翻译响应格式错误,"Baidu Translation response format error"
 百度翻译语言检测失败：%{1},"Baidu Translation language detection failed: %{1}"
-DeepL翻译API密钥未配置,"DeepL Translation API key not configured"
-DeepL翻译响应格式错误,"DeepL Translation response format error"
-DeepL翻译语言检测失败：%{1},"DeepL Translation language detection failed: %{1}"
-Google翻译API密钥未配置,"Google Translation API key not configured"
-Google翻译响应格式错误,"Google Translation response format error"
-Google翻译语言检测失败,"Google Translation language detection failed"
 Microsoft翻译API密钥未配置,"Microsoft Translation API key not configured"
 Microsoft翻译响应格式错误,"Microsoft Translation response format error"
 Microsoft翻译语言检测失败,"Microsoft Translation language detection failed"
-腾讯翻译API密钥未配置,"Tencent Translation API key not configured"
-腾讯翻译API需要实现完整的签名算法，请参考腾讯云文档,"Tencent Translation API requires complete signature algorithm implementation, please refer to Tencent Cloud documentation"
-腾讯翻译语言检测失败：%{1},"Tencent Translation Language Detection Failed: %{1}"
 有道翻译API密钥未配置,"Youdao Translation API key not configured"
 有道翻译错误：%{1},"Youdao Translation error: %{1}"
 有道翻译响应格式错误,"Youdao Translation response format error"
 有道翻译语言检测失败：%{1},"Youdao Translation language detection failed: %{1}"
-适配器类不存在：%{1},"Adapter class does not exist: %{1}"
-适配器类必须实现ProviderInterface接口：%{1},"Adapter class must implement the ProviderInterface: %{1}"
-未找到可用的翻译渠道,"No available translation channel found"
-未找到渠道适配器：%{1},"Channel adapter not found: %{1}"
-编辑渠道配置,"Edit Channel Configuration"
-添加渠道配置,"Add Channel Configuration"
-基本信息,"Basic Information"
-渠道名称,"Channel Name"
-渠道代码,"Channel Code"
-渠道代码不可修改,"Channel code cannot be modified"
-渠道代码（小写字母、数字、下划线），留空自动生成,"Channel code (lowercase letters, numbers, underscores), leave blank for auto-generation"
-描述,Description
-API配置,"API Configuration"
-API密钥,"API Key"
-从翻译服务提供商获取API密钥,"Get API key from translation service provider"
-API密钥（Secret）,"API Secret"
-部分服务商需要额外的Secret密钥,"Some providers require additional Secret key"
-API端点URL,"API Endpoint URL"
-API接口地址，留空使用默认地址,"API endpoint address, leave blank to use default address"
-高级配置,"Advanced Configuration"
-启用渠道,"Enable Channel"
-设为默认渠道,"Set as Default Channel"
-优先级,Priority
-数字越大优先级越高,"Higher number means higher priority"
-速率限制（每分钟）,"Rate Limit (per minute)"
-每日限制,"Daily Limit"
-每字符成本,"Cost per Character"
-支持的语言,"Supported Languages"
-选择支持的语言,"Select Supported Languages"
-全选,"Select All"
-全不选,"Deselect All"
-保存,Save
-取消,Cancel
+请求失败：%{1},"Request failed: %{1}"
+请求失败，HTTP状态码：%{1},"Request failed, HTTP status code: %{1}"
+响应解析失败：%{1},"Response parsing failed: %{1}"
+DeepL翻译API密钥未配置,"DeepL Translation API key not configured"
+DeepL翻译响应格式错误,"DeepL Translation response format error"
+DeepL翻译语言检测失败：%{1},"DeepL Translation language detection failed: %{1}"
+文本数组不能为空,"Text array cannot be empty"
+目标语言不能为空,"Target language cannot be empty"
+"事件处理异常: %{1}","Event processing exception: %{1}"
+文本不能为空,"Text cannot be empty"
+记录ID不能为空,"Record ID cannot be empty"
+记录不存在,"Record does not exist"
+删除成功！,"Deleted successfully!"
+删除失败：%{1},"Delete failed: %{1}"
+仅支持POST请求,"Only POST requests are supported"
+请选择要删除的记录,"Please select records to delete"
+"成功删除 %{1} 条记录","Successfully deleted %{1} records"
+渠道不存在,"Channel does not exist"
+配置保存成功！,"Configuration saved successfully!"
+保存失败：%{1},"Save failed: %{1}"
+渠道ID不能为空,"Channel ID cannot be empty"
+未找到渠道适配器,"Channel adapter not found"
+连接测试成功,"Connection test successful"
+连接测试失败,"Connection test failed"
+测试失败：%{1},"Test failed: %{1}"
+没有有效的文本需要翻译,"No valid text to translate"
 确认操作,确认操作
 确定,Confirm
-确定要删除此渠道配置吗？,"Are you sure you want to delete this channel configuration?"
-翻译服务配置,"Translation Service Configuration"
-配置和管理翻译服务渠道，支持Google、百度、DeepL、Microsoft等主流翻译服务,"Configure and manage translation service channels, supporting mainstream translation services such as Google, Baidu, DeepL, Microsoft, etc."
-渠道列表,"Channel List"
-添加渠道,"Add Channel"
-暂无渠道配置,"No channel configuration"
-状态,Status
-默认,Default
-操作,Actions
-启用,Enabled
-禁用,Disabled
-是,Yes
-否,No
-编辑,Edit
-测试,Test
-删除,Delete
-测试中...,Testing...
-测试成功,"Test Passed"
-未知错误,"Unknown error"
-测试失败,"Test failed"
+取消,Cancel
 确定要删除此记录吗？,"Are you sure you want to delete this record?"
 确定要删除选中的记录吗？,"Are you sure you want to delete the selected records?"
 翻译记录管理,"Translation Record Management"
@@ -135,6 +83,7 @@ API接口地址，留空使用默认地址,"API endpoint address, leave blank to
 筛选条件,"Filter Conditions"
 渠道,Channel
 全部,All
+状态,Status
 成功,Success
 失败,Failed
 待处理,Pending
@@ -156,16 +105,63 @@ ID,ID
 成本,Cost
 响应时间,"Response Time"
 创建时间,"Created At"
+操作,Actions
 上一页,"Previous Page"
 下一页,"Next Page"
 提示,Prompt
 翻译记录详情,"Translation Record Details"
 返回列表,"Back to List"
+基本信息,"Basic Information"
 记录ID,"Record ID"
 错误信息,"Error Message"
 翻译内容,"Translation Content"
 请求数据,"Request Data"
 响应数据,"Response Data"
+确定要删除此渠道配置吗？,"Are you sure you want to delete this channel configuration?"
+翻译服务配置,"Translation Service Configuration"
+配置和管理翻译服务渠道，支持Google、百度、DeepL、Microsoft等主流翻译服务,"Configure and manage translation service channels, supporting mainstream translation services such as Google, Baidu, DeepL, Microsoft, etc."
+渠道列表,"Channel List"
+添加渠道,"Add Channel"
+暂无渠道配置,"No channel configuration"
+渠道名称,"Channel Name"
+渠道代码,"Channel Code"
+默认,Default
+优先级,Priority
+启用,Enabled
+禁用,Disabled
+是,Yes
+否,No
+编辑,Edit
+测试,Test
+删除,Delete
+测试中...,Testing...
+测试成功,"Test Passed"
+未知错误,"Unknown error"
+测试失败,"Test failed"
+编辑渠道配置,"Edit Channel Configuration"
+添加渠道配置,"Add Channel Configuration"
+渠道代码不可修改,"Channel code cannot be modified"
+渠道代码（小写字母、数字、下划线），留空自动生成,"Channel code (lowercase letters, numbers, underscores), leave blank for auto-generation"
+描述,Description
+API配置,"API Configuration"
+API密钥,"API Key"
+从翻译服务提供商获取API密钥,"Get API key from translation service provider"
+API密钥（Secret）,"API Secret"
+部分服务商需要额外的Secret密钥,"Some providers require additional Secret key"
+API端点URL,"API Endpoint URL"
+API接口地址，留空使用默认地址,"API endpoint address, leave blank to use default address"
+高级配置,"Advanced Configuration"
+启用渠道,"Enable Channel"
+设为默认渠道,"Set as Default Channel"
+数字越大优先级越高,"Higher number means higher priority"
+速率限制（每分钟）,"Rate Limit (per minute)"
+每日限制,"Daily Limit"
+每字符成本,"Cost per Character"
+支持的语言,"Supported Languages"
+选择支持的语言,"Select Supported Languages"
+全选,"Select All"
+全不选,"Deselect All"
+保存,Save
 AI翻译,"AI translation"
 未找到目标输入框：%{1},"Target input box not found: %{1}"
 输入框内容为空，无法翻译,"The input field is empty, cannot translate"
@@ -173,3 +169,7 @@ Translating...,Translating...
 "Translation success","Translation success"
 "Translation failed","Translation failed"
 "Translation request failed, please try again later.","Translation request failed, please try again later."
+未找到可用的翻译渠道,"No available translation channel found"
+未找到渠道适配器：%{1},"Channel adapter not found: %{1}"
+适配器类不存在：%{1},"Adapter class does not exist: %{1}"
+适配器类必须实现ProviderInterface接口：%{1},"Adapter class must implement the ProviderInterface: %{1}"

@@ -821,6 +821,44 @@ abstract class RequestAbstract extends RequestFilter
         return \w_env_get('isAjax') !== null || \w_env_post('isAjax') !== null;
     }
 
+    public function isDocumentNavigationRequest(): bool
+    {
+        $method = strtoupper((string)$this->getMethod());
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return false;
+        }
+
+        if ($this->isAjax() || $this->isIframe()) {
+            return false;
+        }
+
+        $fetchDest = strtolower(trim((string)$this->requestHeaderValue('Sec-Fetch-Dest')));
+        if ($fetchDest !== '' && $fetchDest !== 'document') {
+            return false;
+        }
+
+        $fetchMode = strtolower(trim((string)$this->requestHeaderValue('Sec-Fetch-Mode')));
+        if ($fetchMode !== '' && $fetchMode !== 'navigate') {
+            return false;
+        }
+
+        $accept = strtolower(trim((string)$this->requestHeaderValue('Accept')));
+        if ($accept === '') {
+            return true;
+        }
+        if (str_contains($accept, 'text/html') || str_contains($accept, 'application/xhtml+xml')) {
+            return true;
+        }
+        if ($accept === '*/*') {
+            return true;
+        }
+
+        return !str_contains($accept, 'application/json')
+            && !str_contains($accept, 'text/event-stream')
+            && !str_contains($accept, 'application/xml')
+            && !str_contains($accept, 'text/xml');
+    }
+
     public function isIframe(): bool
     {
         $serverBag = $this->getServerBag();
@@ -832,5 +870,20 @@ abstract class RequestAbstract extends RequestFilter
             return true;
         }
         return \w_env_get('isIframe') !== null || \w_env_post('isIframe') !== null;
+    }
+
+    private function requestHeaderValue(string $name): string
+    {
+        $serverBag = $this->getServerBag();
+        $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+        $value = $serverBag->get($serverKey, '');
+        if ($value === '') {
+            $value = $serverBag->get($name, '');
+        }
+        if ($value === '') {
+            $value = $serverBag->get(str_replace('-', '_', $name), '');
+        }
+
+        return is_array($value) ? implode(',', $value) : (string)$value;
     }
 }
