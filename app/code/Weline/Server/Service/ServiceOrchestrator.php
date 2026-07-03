@@ -645,7 +645,6 @@ class ServiceOrchestrator
             ControlMessage::ACTION_STOP,
             ControlMessage::ACTION_CACHE_CLEAR,
             ControlMessage::ACTION_ROUTING_CACHE_CLEAR,
-            ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE,
             ControlMessage::ACTION_SSL_CERT_RELOAD,
             ControlMessage::ACTION_MAINTENANCE_ENABLE,
             ControlMessage::ACTION_MAINTENANCE_DISABLE,
@@ -896,7 +895,6 @@ class ServiceOrchestrator
             ControlMessage::ACTION_MAINTENANCE_DISABLE => 'Maintenance disable queued',
             ControlMessage::ACTION_CACHE_CLEAR => 'Cache clear queued',
             ControlMessage::ACTION_ROUTING_CACHE_CLEAR => 'Routing cache clear queued',
-            ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE => 'PageBuilder page invalidate queued',
             ControlMessage::ACTION_SSL_CERT_RELOAD => 'SSL cert reload queued',
             ControlMessage::ACTION_SECURITY_UNBLOCK => 'Security unblock queued',
             ControlMessage::ACTION_FIBER_SET_CONFIG => 'Fiber config update queued',
@@ -1404,14 +1402,6 @@ class ServiceOrchestrator
 
             case ControlMessage::ACTION_ROUTING_CACHE_CLEAR:
                 $this->broadcastCacheClear();
-                return;
-
-            case ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE:
-                $this->broadcastPageBuilderPageInvalidate(
-                    (int)($payload['website_id'] ?? 0),
-                    (string)($payload['handle'] ?? ''),
-                    (bool)($payload['is_home_page'] ?? false)
-                );
                 return;
 
             case ControlMessage::ACTION_SSL_CERT_RELOAD:
@@ -8015,13 +8005,13 @@ class ServiceOrchestrator
             return;
         }
 
-        $prefixes = [
-            'weline-wls-session-',
-            'weline-wls-worker-',
-            'weline-wls-dispatcher-',
-            'weline-wls-redirect-',
-            'weline-wls-maintenance-',
-        ];
+        $instanceName = (string) ($this->context?->instanceName ?: '');
+        if ($instanceName === '') {
+            WlsLogger::warning_('[Orchestrator] 子进程扫尾跳过：缺少当前实例名，避免误杀共享 sidecar');
+            return;
+        }
+
+        $prefixes = $this->getInstanceScopedChildProcessPrefixes($instanceName);
 
         $killed = Processer::killByProcessNamePrefixes($prefixes);
 
@@ -12912,38 +12902,6 @@ class ServiceOrchestrator
             $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::cacheClear());
         }
         WlsLogger::info_('[IPC] CACHE_CLEAR -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)'));
-    }
-
-    /**
-     * 广播 PageBuilder 单页失效：各 Worker 清理 Router handle 静态缓存并重置 ObjectManager（无 opcache 重置）
-     */
-    private function broadcastPageBuilderPageInvalidate(int $websiteId, string $handle, bool $isHomePage): void
-    {
-        if ($this->controlServer === null) {
-            return;
-        }
-        $configuredRoles = $this->context?->getConfig('wls.orchestrator.cache_clear_roles', ['worker']);
-        $targetRoles = \is_array($configuredRoles) ? $configuredRoles : ['worker'];
-        $targetRoles = \array_values(\array_filter(\array_map('strval', $targetRoles)));
-        if (empty($targetRoles)) {
-            $targetRoles = ['worker'];
-        }
-
-        $msg = ControlMessage::pageBuilderPageInvalidate($websiteId, $handle, $isHomePage);
-        $targets = [];
-        foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->ipcClientId === null) {
-                continue;
-            }
-            if (!\in_array($instance->role, $targetRoles, true)) {
-                continue;
-            }
-            $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
-            $this->controlServer->sendTo($instance->ipcClientId, $msg);
-        }
-        WlsLogger::info_(
-            '[IPC] PAGEBUILDER_PAGE_INVALIDATE -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)')
-        );
     }
 
     /**

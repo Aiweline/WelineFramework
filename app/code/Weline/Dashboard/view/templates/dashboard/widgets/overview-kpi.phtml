@@ -1,0 +1,90 @@
+<?php
+try {
+    $statsService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Dashboard\Service\DashboardStatisticsService::class);
+    $items = $statsService->getKpiItems();
+} catch (\Throwable) {
+    $items = [
+        ['label' => __('侧栏入口'), 'value' => '2', 'hint' => __('仪表盘 / 首页')],
+        ['label' => __('已收入口'), 'value' => '0', 'hint' => __('改由面板部件承载')],
+        ['label' => __('统计部件'), 'value' => '0', 'hint' => __('dashboard-widget')],
+        ['label' => __('视图 / 站点'), 'value' => '0 / 0', 'hint' => __('Dashboard 范围')],
+    ];
+}
+?>
+<section class="dashboard-widget dashboard-widget-kpi">
+    <header>
+        <h3><?= __('后台统计') ?></h3>
+        <span><?= __('Dashboard') ?></span>
+    </header>
+    <div class="dashboard-widget-kpi-grid">
+        <?php foreach ($items as $item): ?>
+            <div>
+                <strong><?= htmlspecialchars((string)$item['value']) ?></strong>
+                <span><?= htmlspecialchars((string)$item['label']) ?></span>
+                <small><?= htmlspecialchars((string)$item['hint']) ?></small>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</section>
+<style>
+.dashboard-widget {
+    height: 100%;
+    min-height: 150px;
+    border: 1px solid var(--w-dashboard-border, var(--backend-color-border, #e5e7eb));
+    border-radius: 8px;
+    background: var(--w-dashboard-surface, var(--backend-color-bg-primary, #fff));
+    padding: 16px;
+    box-sizing: border-box;
+    overflow: hidden;
+    word-break: keep-all;
+}
+.dashboard-widget header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.dashboard-widget h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+}
+.dashboard-widget header span,
+.dashboard-widget small {
+    color: var(--w-dashboard-muted, var(--backend-color-text-secondary, #6b7280));
+    font-size: 12px;
+}
+.dashboard-widget-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.dashboard-widget-kpi-grid div {
+    border-radius: 6px;
+    background: var(--w-dashboard-surface-soft, #f8fafc);
+    padding: 12px 8px;
+    text-align: center;
+    min-width: 0;
+}
+.dashboard-widget-kpi-grid strong {
+    display: block;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--bs-primary, #2563eb);
+    overflow-wrap: anywhere;
+}
+.dashboard-widget-kpi-grid span {
+    display: block;
+    margin-top: 7px;
+    font-size: 13px;
+    line-height: 1.25;
+    min-height: 16px;
+}
+.dashboard-widget-kpi-grid small {
+    display: block;
+    margin-top: 3px;
+    line-height: 1.25;
+    min-height: 30px;
+}
+</style>

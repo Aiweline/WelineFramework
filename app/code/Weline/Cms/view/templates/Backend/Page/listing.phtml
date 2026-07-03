@@ -1,0 +1,718 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$siteGroups = $this->getData('site_groups') ?: [];
+$pagination = $this->getData('pagination');
+$search = (string)($this->getData('search') ?: '');
+$status = (string)($this->getData('status') ?: '');
+$scope = (string)($this->getData('scope') ?: '');
+$websiteIdFilter = (string)($this->getData('website_id') ?: '');
+$pathGroupFilter = (string)($this->getData('path_group') ?: '');
+$websites = $this->getData('websites') ?: [];
+$statusLabels = [
+    'draft' => __('草稿'),
+    'published' => __('已发布'),
+    'disabled' => __('已禁用'),
+];
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><breadcrumb model="Weline\Backend\Model\Menu" source="Weline_Cms::page" order_field="order" name_field="title"></breadcrumb></h4>
+        </div>
+    </div>
+</div>
+
+<style>
+.cms-page-listing {
+    --cms-surface: var(--w-box-bg, var(--bs-body-bg));
+    --cms-surface-muted: var(--bs-tertiary-bg);
+    --cms-surface-soft: var(--bs-light-bg-subtle);
+    --cms-border: var(--bs-border-color);
+    --cms-text: var(--bs-body-color);
+    --cms-muted: var(--bs-secondary-color);
+    --cms-code: var(--bs-code-color, #d63384);
+    --cms-table-head: var(--bs-tertiary-bg);
+}
+
+html.dark-mode .cms-page-listing,
+body.dark-mode .cms-page-listing,
+html[data-theme-mode="dark"] .cms-page-listing,
+body[data-theme-mode="dark"] .cms-page-listing,
+html[data-layout-mode="dark"] .cms-page-listing,
+body[data-layout-mode="dark"] .cms-page-listing,
+html[data-bs-theme="dark"] .cms-page-listing,
+body[data-bs-theme="dark"] .cms-page-listing,
+[data-theme-mode="dark"] .cms-page-listing,
+[data-bs-theme="dark"] .cms-page-listing {
+    --cms-surface: #0f1726;
+    --cms-surface-muted: #172236;
+    --cms-surface-soft: #111c2e;
+    --cms-border: #2b3952;
+    --cms-text: #e8eef8;
+    --cms-muted: #a7b3c8;
+    --cms-code: #ff6ba8;
+    --cms-table-head: #1d2a40;
+}
+
+.cms-site-group {
+    margin-bottom: 18px;
+    color: var(--cms-text);
+    border: 1px solid var(--cms-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--cms-surface);
+}
+
+.cms-site-group__header,
+.cms-path-group__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cms-tree-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+}
+
+.cms-tree-heading > div {
+    min-width: 0;
+}
+
+.cms-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin-top: -2px;
+    color: var(--cms-text);
+    border: 1px solid var(--cms-border);
+    border-radius: 6px;
+    background: var(--cms-surface);
+    cursor: pointer;
+}
+
+.cms-collapse-toggle:hover,
+.cms-collapse-toggle:focus {
+    color: var(--cms-code);
+    border-color: var(--cms-code);
+    outline: none;
+}
+
+.cms-collapse-icon {
+    width: 8px;
+    height: 8px;
+    margin-top: -3px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform .16s ease, margin .16s ease;
+}
+
+.cms-collapse-toggle[aria-expanded="false"] .cms-collapse-icon {
+    margin-top: 0;
+    margin-left: -2px;
+    transform: rotate(-45deg);
+}
+
+.cms-site-group__header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--cms-border);
+    background: var(--cms-surface-muted);
+}
+
+.cms-site-group.is-collapsed .cms-site-group__header {
+    border-bottom: 0;
+}
+
+.cms-site-group__title,
+.cms-path-group__title {
+    color: var(--cms-text);
+    font-weight: 700;
+}
+
+.cms-site-group__meta,
+.cms-path-group__meta {
+    color: var(--cms-muted);
+    font-size: 12px;
+}
+
+.cms-path-group__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.cms-page-listing code {
+    color: var(--cms-code);
+    background: transparent;
+}
+
+.cms-count-badge {
+    color: var(--cms-text);
+    background: var(--cms-surface-soft);
+    border: 1px solid var(--cms-border);
+}
+
+.cms-site-group__body {
+    padding: 14px 16px 16px;
+}
+
+.cms-path-grid,
+.cms-page-tile-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.cms-path-grid {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+.cms-page-tile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.cms-site-group__new-path {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    min-height: 172px;
+    padding: 12px;
+    border: 1px dashed var(--cms-border);
+    border-radius: 6px;
+    background: var(--cms-surface-soft);
+}
+
+.cms-create-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cms-text);
+    font-weight: 700;
+}
+
+.cms-path-group {
+    min-width: 0;
+    border: 1px solid var(--cms-border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--cms-surface);
+}
+
+.cms-path-group__header {
+    padding: 10px 12px;
+    background: var(--cms-surface-soft);
+}
+
+.cms-path-group.is-collapsed .cms-path-group__header {
+    border-bottom: 0;
+}
+
+.cms-path-group__body[hidden],
+.cms-site-group__body[hidden] {
+    display: none !important;
+}
+
+.cms-path-action {
+    display: grid;
+    gap: 8px;
+    min-height: 148px;
+    padding: 12px;
+    color: var(--cms-text);
+    border: 1px dashed var(--cms-border);
+    border-radius: 6px;
+    background: var(--cms-surface-soft);
+}
+
+.cms-path-action:hover,
+.cms-path-action:focus {
+    color: var(--cms-code);
+    border-color: var(--cms-code);
+}
+
+.cms-empty-path {
+    padding: 18px 12px;
+    color: var(--cms-muted);
+    text-align: center;
+}
+
+.cms-page-tile-grid {
+    padding: 12px;
+    border-top: 1px solid var(--cms-border);
+}
+
+.cms-page-tile,
+.cms-empty-tile {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--cms-border);
+    border-radius: 6px;
+    background: var(--cms-surface-soft);
+}
+
+.cms-page-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 168px;
+}
+
+.cms-page-tile__head,
+.cms-page-tile__meta {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.cms-page-tile__title {
+    min-width: 0;
+    color: var(--cms-text);
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.cms-page-tile__path {
+    display: grid;
+    gap: 4px;
+    color: var(--cms-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.cms-page-tile__meta {
+    color: var(--cms-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.cms-page-tile__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.cms-page-tile__actions form {
+    margin: 0;
+}
+
+.cms-status-badge {
+    flex: 0 0 auto;
+    color: var(--cms-text);
+    background: var(--cms-surface);
+    border: 1px solid var(--cms-border);
+}
+
+.cms-status-published {
+    color: #0f5132;
+    background: #d1e7dd;
+    border-color: #a3cfbb;
+}
+
+.cms-status-draft {
+    color: #664d03;
+    background: #fff3cd;
+    border-color: #ffecb5;
+}
+
+.cms-status-disabled {
+    color: #842029;
+    background: #f8d7da;
+    border-color: #f5c2c7;
+}
+
+html[data-theme-mode="dark"] .cms-status-published,
+body[data-theme-mode="dark"] .cms-status-published,
+html[data-bs-theme="dark"] .cms-status-published,
+body[data-bs-theme="dark"] .cms-status-published,
+[data-theme-mode="dark"] .cms-status-published,
+[data-bs-theme="dark"] .cms-status-published {
+    color: #8ee0b4;
+    background: #123226;
+    border-color: #1f6f4b;
+}
+
+html[data-theme-mode="dark"] .cms-status-draft,
+body[data-theme-mode="dark"] .cms-status-draft,
+html[data-bs-theme="dark"] .cms-status-draft,
+body[data-bs-theme="dark"] .cms-status-draft,
+[data-theme-mode="dark"] .cms-status-draft,
+[data-bs-theme="dark"] .cms-status-draft {
+    color: #ffd977;
+    background: #3a2d0d;
+    border-color: #8a6715;
+}
+
+html[data-theme-mode="dark"] .cms-status-disabled,
+body[data-theme-mode="dark"] .cms-status-disabled,
+html[data-bs-theme="dark"] .cms-status-disabled,
+body[data-bs-theme="dark"] .cms-status-disabled,
+[data-theme-mode="dark"] .cms-status-disabled,
+[data-bs-theme="dark"] .cms-status-disabled {
+    color: #ffb4bd;
+    background: #3b151a;
+    border-color: #7f2d38;
+}
+
+.cms-empty-tile {
+    display: grid;
+    place-items: center;
+    min-height: 148px;
+    color: var(--cms-muted);
+    text-align: center;
+}
+
+.cms-page-listing .text-muted {
+    color: var(--cms-muted) !important;
+}
+
+.cms-page-listing .table {
+    --bs-table-bg: var(--cms-surface);
+    --bs-table-color: var(--cms-text);
+    --bs-table-border-color: var(--cms-border);
+    --bs-table-striped-bg: var(--cms-surface-soft);
+    --bs-table-striped-color: var(--cms-text);
+    color: var(--cms-text);
+}
+
+.cms-page-listing .table thead th {
+    color: var(--cms-text);
+    background: var(--cms-table-head);
+    border-color: var(--cms-border);
+}
+
+.cms-page-listing .table tbody td {
+    color: var(--cms-text);
+    border-color: var(--cms-border);
+}
+</style>
+
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="cms-page-listing">
+                <form class="row g-2 mb-3" method="get" action="<?= $this->getBackendUrl('cms/backend/page/listing') ?>">
+                    <div class="col-md-3">
+                        <input class="form-control" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" name="website_id">
+                            <option value=""><?= __('全部站点') ?></option>
+                            <?php foreach ($websites as $website): ?>
+                                <?php $websiteId = (string)(int)($website['website_id'] ?? 0); ?>
+                                <option value="<?= htmlspecialchars($websiteId) ?>" <?= $websiteIdFilter === $websiteId ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars((string)($website['label'] ?? $website['code'] ?? $websiteId)) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input class="form-control" type="text" name="path_group" value="<?= htmlspecialchars($pathGroupFilter) ?>" placeholder="<?= htmlspecialchars((string)__('一级 path')) ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" name="status">
+                            <option value=""><?= __('全部状态') ?></option>
+                            <?php foreach ($statusLabels as $value => $label): ?>
+                                <option value="<?= htmlspecialchars($value) ?>" <?= $status === $value ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <input class="form-control" type="text" name="scope" value="<?= htmlspecialchars($scope) ?>" placeholder="<?= htmlspecialchars((string)__('范围')) ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-primary w-100" type="submit">
+                            <i class="mdi mdi-magnify"></i>
+                            <?= __('筛选') ?>
+                        </button>
+                    </div>
+                </form>
+
+                <?php if (empty($siteGroups)): ?>
+                    <div class="text-center text-muted py-5"><?= __('暂无站点') ?></div>
+                <?php endif; ?>
+
+                <?php $siteLoopIndex = 0; ?>
+                <?php foreach ($siteGroups as $site): ?>
+                    <?php
+                    $siteId = (int)($site['website_id'] ?? 0);
+                    $siteCode = (string)($site['website_code'] ?? 'default');
+                    $pathGroups = (array)($site['path_groups'] ?? []);
+                    $siteKey = 'site-' . ($siteId > 0 ? (string)$siteId : preg_replace('/[^A-Za-z0-9_-]+/', '-', $siteCode));
+                    $siteBodyId = 'cms-' . $siteKey . '-body';
+                    $siteExpanded = $siteLoopIndex === 0;
+                    $siteLoopIndex++;
+                    ?>
+                    <section class="cms-site-group<?= $siteExpanded ? '' : ' is-collapsed' ?>" data-cms-collapse-item>
+                        <div class="cms-site-group__header">
+                            <div class="cms-tree-heading">
+                                <button class="cms-collapse-toggle" type="button"
+                                        data-cms-collapse-toggle
+                                        data-cms-collapse-key="<?= htmlspecialchars($siteKey) ?>"
+                                        data-cms-collapse-target="<?= htmlspecialchars($siteBodyId) ?>"
+                                        data-cms-collapse-default="<?= $siteExpanded ? 'expanded' : 'collapsed' ?>"
+                                        aria-expanded="<?= $siteExpanded ? 'true' : 'false' ?>"
+                                        aria-controls="<?= htmlspecialchars($siteBodyId) ?>"
+                                        title="<?= htmlspecialchars((string)__('展开或收起')) ?>"
+                                        aria-label="<?= htmlspecialchars((string)__('展开或收起')) ?>">
+                                    <span class="cms-collapse-icon" aria-hidden="true"></span>
+                                </button>
+                                <div>
+                                    <div class="cms-site-group__title">
+                                        <?= htmlspecialchars((string)($site['name'] ?? $siteCode)) ?>
+                                        <span class="badge cms-count-badge ms-2"><?= (int)($site['page_count'] ?? 0) ?></span>
+                                    </div>
+                                    <div class="cms-site-group__meta">
+                                        <code><?= htmlspecialchars($siteCode) ?></code>
+                                        <?php if (!empty($site['url'])): ?>
+                                            <span class="ms-2"><?= htmlspecialchars((string)$site['url']) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="cms-site-group__meta">
+                                <?= __('一级 path') ?>: <?= (int)($site['path_count'] ?? count($pathGroups)) ?>
+                            </div>
+                        </div>
+
+                        <div class="cms-site-group__body" id="<?= htmlspecialchars($siteBodyId) ?>" data-cms-collapse-panel<?= $siteExpanded ? '' : ' hidden' ?>>
+                            <div class="cms-path-grid">
+                                <form class="cms-site-group__new-path" method="post" action="<?= $this->getBackendUrl('cms/backend/page/save-path-group') ?>">
+                                    <input type="hidden" name="website_id" value="<?= $siteId ?>">
+                                    <input type="hidden" name="website_code" value="<?= htmlspecialchars($siteCode) ?>">
+                                    <div class="cms-create-title">
+                                        <i class="mdi mdi-folder-plus-outline"></i>
+                                        <?= __('新建一级 path') ?>
+                                    </div>
+                                    <input class="form-control" type="text" name="path_group" required placeholder="<?= htmlspecialchars((string)__('新建一级 path，例如 blog')) ?>">
+                                    <input class="form-control" type="text" name="path_group_alias" placeholder="<?= htmlspecialchars((string)__('显示别名，例如 博客')) ?>">
+                                    <button class="btn btn-outline-primary w-100" type="submit"><?= __('创建') ?></button>
+                                </form>
+
+                                <?php if (empty($pathGroups)): ?>
+                                    <div class="cms-empty-tile"><?= __('当前站点暂无一级 path，请先新建。') ?></div>
+                                <?php endif; ?>
+
+                            <?php $pathLoopIndex = 0; ?>
+                            <?php foreach ($pathGroups as $group): ?>
+                                <?php
+                                $groupPages = (array)($group['pages'] ?? []);
+                                $groupPath = (string)($group['path_group'] ?? '');
+                                $groupAlias = (string)($group['path_group_alias'] ?? $groupPath);
+                                $pathKey = $siteKey . '-path-' . substr(md5($groupPath), 0, 12);
+                                $pathBodyId = 'cms-' . $pathKey . '-body';
+                                $pathExpanded = $pathLoopIndex === 0;
+                                $pathLoopIndex++;
+                                ?>
+                                <div class="cms-path-group<?= $pathExpanded ? '' : ' is-collapsed' ?>" data-cms-collapse-item>
+                                    <div class="cms-path-group__header">
+                                        <div class="cms-tree-heading">
+                                            <button class="cms-collapse-toggle" type="button"
+                                                    data-cms-collapse-toggle
+                                                    data-cms-collapse-key="<?= htmlspecialchars($pathKey) ?>"
+                                                    data-cms-collapse-target="<?= htmlspecialchars($pathBodyId) ?>"
+                                                    data-cms-collapse-default="<?= $pathExpanded ? 'expanded' : 'collapsed' ?>"
+                                                    aria-expanded="<?= $pathExpanded ? 'true' : 'false' ?>"
+                                                    aria-controls="<?= htmlspecialchars($pathBodyId) ?>"
+                                                    title="<?= htmlspecialchars((string)__('展开或收起')) ?>"
+                                                    aria-label="<?= htmlspecialchars((string)__('展开或收起')) ?>">
+                                                <span class="cms-collapse-icon" aria-hidden="true"></span>
+                                            </button>
+                                            <div>
+                                                <div class="cms-path-group__title">
+                                                    <?= htmlspecialchars($groupAlias !== '' ? $groupAlias : $groupPath) ?>
+                                                    <span class="badge cms-count-badge ms-2"><?= count($groupPages) ?></span>
+                                                </div>
+                                                <div class="cms-path-group__meta">
+                                                    /<code><?= htmlspecialchars($groupPath) ?></code>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="cms-path-group__actions">
+                                            <form method="post" action="<?= $this->getBackendUrl('cms/backend/page/delete-path-group') ?>">
+                                                <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
+                                                <input type="hidden" name="website_id" value="<?= $siteId ?>">
+                                                <input type="hidden" name="path_group" value="<?= htmlspecialchars($groupPath) ?>">
+                                                <button class="btn btn-sm btn-outline-danger" type="submit">
+                                                    <i class="mdi mdi-folder-remove-outline"></i>
+                                                    <?= __('移入回收站') ?>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+
+                                    <div class="cms-path-group__body" id="<?= htmlspecialchars($pathBodyId) ?>" data-cms-collapse-panel<?= $pathExpanded ? '' : ' hidden' ?>>
+                                        <div class="cms-page-tile-grid">
+                                            <a class="cms-path-action text-decoration-none" href="<?= $this->getBackendUrl('cms/backend/page/new', [
+                                                'website_id' => $siteId,
+                                                'website_code' => $siteCode,
+                                                'path_group_id' => (int)($group['group_id'] ?? 0),
+                                                'path_group' => $groupPath,
+                                                'path_group_alias' => $groupAlias,
+                                            ]) ?>">
+                                                <div class="cms-create-title">
+                                                    <i class="mdi mdi-plus"></i>
+                                                    <?= __('新建页面') ?>
+                                                </div>
+                                                <div class="cms-path-group__meta"><?= __('在这个 path 下创建页面') ?></div>
+                                            </a>
+
+                                            <?php if (empty($groupPages)): ?>
+                                                <div class="cms-empty-tile"><?= __('当前 path 下暂无页面。') ?></div>
+                                            <?php else: ?>
+                                                <?php foreach ($groupPages as $page): ?>
+                                                    <?php
+                                                    $pageId = (int)($page['page_id'] ?? 0);
+                                                    $pageStatus = (string)($page['status'] ?? '');
+                                                    $statusClass = 'cms-status-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($pageStatus));
+                                                    $previewUrl = (string)($page['preview_url'] ?? '');
+                                                    $slug = (string)($page['slug'] ?? '');
+                                                    ?>
+                                                    <article class="cms-page-tile">
+                                                        <div class="cms-page-tile__head">
+                                                            <div class="cms-page-tile__title"><?= htmlspecialchars((string)($page['title'] ?? '')) ?></div>
+                                                            <span class="badge cms-status-badge <?= htmlspecialchars($statusClass) ?>">
+                                                                <?= $statusLabels[$pageStatus] ?? htmlspecialchars($pageStatus) ?>
+                                                            </span>
+                                                        </div>
+                                                        <div class="cms-page-tile__path">
+                                                            <div><?= __('Slug') ?>: <code><?= htmlspecialchars($slug !== '' ? $slug : '/') ?></code></div>
+                                                            <div><?= __('完整路径') ?>: <code><?= htmlspecialchars((string)($page['identifier'] ?? '')) ?></code></div>
+                                                        </div>
+                                                        <div class="cms-page-tile__meta">
+                                                            <span><?= __('ID') ?>: <?= $pageId ?></span>
+                                                            <span><?= __('范围') ?>: <?= htmlspecialchars((string)($page['scope'] ?? '')) ?></span>
+                                                        </div>
+                                                        <div class="cms-page-tile__meta">
+                                                            <span><?= __('更新时间') ?>: <?= htmlspecialchars((string)($page['updated_at'] ?? '')) ?></span>
+                                                        </div>
+                                                        <div class="cms-page-tile__actions">
+                                                            <a class="btn btn-sm btn-outline-primary" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => $pageId]) ?>">
+                                                                <i class="mdi mdi-file-edit-outline"></i>
+                                                                <?= __('编辑') ?>
+                                                            </a>
+                                                            <?php if ($previewUrl !== ''): ?>
+                                                                <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars($previewUrl) ?>" target="_blank" rel="noopener">
+                                                                    <i class="mdi mdi-eye-outline"></i>
+                                                                    <?= __('预览') ?>
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <form method="post" action="<?= $this->getBackendUrl('cms/backend/page/delete') ?>">
+                                                                <input type="hidden" name="page_id" value="<?= $pageId ?>">
+                                                                <button class="btn btn-sm btn-outline-danger" type="submit">
+                                                                    <i class="mdi mdi-delete-outline"></i>
+                                                                    <?= __('移入回收站') ?>
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </article>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </section>
+                <?php endforeach; ?>
+                <?= $pagination ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function initCmsListingCollapse(attempt) {
+        var root = document.querySelector('.cms-page-listing');
+        if (!root) {
+            if ((attempt || 0) < 20) {
+                setTimeout(function () {
+                    initCmsListingCollapse((attempt || 0) + 1);
+                }, 50);
+            }
+            return;
+        }
+        if (root.getAttribute('data-cms-collapse-ready') === '1') {
+            return;
+        }
+        root.setAttribute('data-cms-collapse-ready', '1');
+
+        var storageKey = 'weline.cms.pageListing.collapse.v2';
+        var state = {};
+
+        try {
+            state = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+        } catch (error) {
+            state = {};
+        }
+
+        function persist() {
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(state));
+            } catch (error) {
+                // Ignore private-mode or quota failures; collapse still works for this page load.
+            }
+        }
+
+        function setExpanded(toggle, expanded, shouldPersist) {
+            var key = toggle.getAttribute('data-cms-collapse-key') || '';
+            var targetId = toggle.getAttribute('data-cms-collapse-target') || '';
+            var panel = targetId ? document.getElementById(targetId) : null;
+            var item = toggle.closest('[data-cms-collapse-item]');
+            if (!key || !panel) {
+                return;
+            }
+
+            toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            panel.hidden = !expanded;
+            if (item) {
+                item.classList.toggle('is-collapsed', !expanded);
+            }
+
+            if (shouldPersist) {
+                var defaultExpanded = toggle.getAttribute('data-cms-collapse-default') === 'expanded';
+                if (expanded === defaultExpanded) {
+                    delete state[key];
+                } else {
+                    state[key] = expanded;
+                }
+                persist();
+            }
+        }
+
+        root.querySelectorAll('[data-cms-collapse-toggle]').forEach(function (toggle) {
+            var key = toggle.getAttribute('data-cms-collapse-key') || '';
+            var defaultExpanded = toggle.getAttribute('data-cms-collapse-default') === 'expanded';
+            var hasSavedState = Object.prototype.hasOwnProperty.call(state, key);
+            setExpanded(toggle, hasSavedState ? state[key] === true : defaultExpanded, false);
+            toggle.addEventListener('click', function () {
+                setExpanded(toggle, toggle.getAttribute('aria-expanded') !== 'true', true);
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCmsListingCollapse);
+    } else {
+        initCmsListingCollapse();
+    }
+})();
+</script>

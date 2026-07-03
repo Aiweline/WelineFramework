@@ -41,11 +41,70 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
         self::assertTrue($this->isCandidateRouteAllowed('marketing/backend/credit/index'));
     }
 
+    public function testBackendDetailPagesCanBeReturnTargetsEvenWhenTheyAreNotMenus(): void
+    {
+        self::assertTrue($this->isCandidateRouteAllowed('trash/backend/item/detail'));
+    }
+
     public function testUnsafeActionRoutesAreStillRejected(): void
     {
         self::assertFalse($this->isCandidateRouteAllowed('weline_dbmanager/backend/wls-db-manager/download'));
         self::assertFalse($this->isCandidateRouteAllowed('weline_dbmanager/backend/wls-db-manager/batch-delete'));
         self::assertFalse($this->isCandidateRouteAllowed('weline_dbmanager/backend/wls-db-manager/export-csv'));
+    }
+
+    public function testDocumentPageRequestCapturesReturnUrl(): void
+    {
+        $service = new BackendLoginReturnUrlService(
+            $this->createAclServiceStub(),
+            $this->createMenuServiceStub(),
+            $this->createRequestStub(documentNavigation: true),
+            $this->createUrlStub()
+        );
+
+        $url = '/marketing/backend/credit/index?theme_id=7';
+
+        self::assertTrue($service->shouldCaptureCurrentRequestReturnUrl(null, $url));
+        $loginUrl = $service->buildLoginUrlWithReturn('http://admin.test/admin/login', $url, 'not_logged_in');
+        self::assertStringContainsString('return_url=%2F', $loginUrl);
+        self::assertStringContainsString('%2Fmarketing%2Fbackend%2Fcredit%2Findex%3Ftheme_id%3D7', $loginUrl);
+        self::assertStringNotContainsString('return_url=http%3A', $loginUrl);
+        self::assertStringNotContainsString('return_url=https%3A', $loginUrl);
+    }
+
+    public function testAjaxRequestDoesNotCaptureReturnUrl(): void
+    {
+        $service = new BackendLoginReturnUrlService(
+            $this->createAclServiceStub(),
+            $this->createMenuServiceStub(),
+            $this->createRequestStub(documentNavigation: false),
+            $this->createUrlStub()
+        );
+
+        $url = '/marketing/backend/credit/index?theme_id=7';
+
+        self::assertFalse($service->shouldCaptureCurrentRequestReturnUrl(null, $url));
+        $loginUrl = $service->buildLoginUrlWithReturn('http://admin.test/admin/login', $url, 'not_logged_in');
+        self::assertStringContainsString('no_access_reason=not_logged_in', $loginUrl);
+        self::assertStringNotContainsString('return_url=', $loginUrl);
+    }
+
+    public function testApiPathDoesNotCaptureReturnUrlEvenForDocumentRequest(): void
+    {
+        $service = new BackendLoginReturnUrlService(
+            $this->createAclServiceStub(),
+            $this->createMenuServiceStub(),
+            $this->createRequestStub(documentNavigation: true),
+            $this->createUrlStub()
+        );
+
+        $url = 'http://admin.test/admin/dev/tool/rest/v1/panel/session';
+
+        self::assertFalse($service->shouldCaptureCurrentRequestReturnUrl(null, $url));
+        self::assertStringNotContainsString(
+            'return_url=',
+            $service->buildLoginUrlWithReturn('http://admin.test/admin/login', $url, 'not_logged_in')
+        );
     }
 
     private function isCandidateRouteAllowed(string $routePath): bool
@@ -104,13 +163,21 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
         };
     }
 
-    private function createRequestStub(): Request
+    private function createRequestStub(bool $documentNavigation = true): Request
     {
         $urlBuilder = $this->createUrlStub();
 
-        return new class($urlBuilder) extends Request {
-            public function __construct(private readonly Url $urlBuilder)
+        return new class($urlBuilder, $documentNavigation) extends Request {
+            public function __construct(
+                private readonly Url $urlBuilder,
+                private readonly bool $documentNavigation
+            )
             {
+            }
+
+            public function isDocumentNavigationRequest(): bool
+            {
+                return $this->documentNavigation;
             }
 
             public function isSecure(): bool

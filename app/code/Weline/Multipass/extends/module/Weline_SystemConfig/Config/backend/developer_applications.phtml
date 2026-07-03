@@ -1,0 +1,20 @@
+<?php
+/**
+ * @meta.title {default="Multipass 审核策略",description="Weline_Multipass 开发者申请审核策略配置"}
+ * @meta.description {default="配置前台开发者提交 Multipass 管理申请后的审核方式。"}
+ * @config.area {backend}
+ * @config.sort {60}
+ * @config.acl {Weline_Multipass::trusted_app_management}
+ */
+?>
+
+<w:config:group code="developer_applications" label="开发者申请" description="控制前台用户提交的网站授权登录接入申请是否自动通过。" sort="10">
+    <w:config:field
+        key="identity_bridge/developer_applications/auto_approve"
+        label="自动通过开发者申请"
+        description="关闭时申请默认待审核并禁用；开启后前台提交的 Multipass 管理申请会直接标记已通过并启用。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global" />
+</w:config:group>

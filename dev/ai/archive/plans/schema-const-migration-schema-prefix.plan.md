@@ -395,15 +395,15 @@
 - app/code/GuoLaiRen/Blog/Model/TrendingKeywordLog.php
 - app/code/GuoLaiRen/Desensitization/Model/DesensitizationLog.php
 - app/code/GuoLaiRen/Desensitization/Model/DesensitizationRule.php
-- app/code/GuoLaiRen/PageBuilder/Model/Component.php
-- app/code/GuoLaiRen/PageBuilder/Model/Component/LocalDescription.php
-- app/code/GuoLaiRen/PageBuilder/Model/FormSubmission.php
-- app/code/GuoLaiRen/PageBuilder/Model/Page.php
-- app/code/GuoLaiRen/PageBuilder/Model/Page/LocalDescription.php
-- app/code/GuoLaiRen/PageBuilder/Model/PageLayout.php
-- app/code/GuoLaiRen/PageBuilder/Model/Style.php
-- app/code/GuoLaiRen/PageBuilder/Model/WebsiteUser.php
-- app/code/GuoLaiRen/PageBuilder/Model/AiComponentDraft.php
+
+
+
+
+
+
+
+
+
 
 ### Aws 模块
 

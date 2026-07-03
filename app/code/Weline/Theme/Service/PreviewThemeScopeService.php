@@ -72,15 +72,38 @@ final class PreviewThemeScopeService
         $baseScope = \trim($baseScope) !== '' ? \trim($baseScope) : 'default';
         $previewScope = $this->buildPreviewScope($themeId, $baseScope);
 
+        return $this->publishResolvedPreviewScope($themeId, $area, $baseScope, $previewScope);
+    }
+
+    /**
+     * Publish the session-scoped editor bucket even when the current request carries
+     * a version_id/preview token that would otherwise derive a different scope.
+     *
+     * @return array{published_configs:int,published_translations:int,discarded_preview_configs:int,discarded_preview_translations:int,preview_scope:string}
+     */
+    public function publishSessionPreviewScope(int $themeId, string $area, string $baseScope = 'default'): array
+    {
+        $area = $this->normalizeArea($area);
+        $baseScope = \trim($baseScope) !== '' ? \trim($baseScope) : 'default';
+        $previewScope = $this->buildPreviewScopeFromIdentity(
+            'session|' . $this->ensureSessionId() . '|' . $themeId . '|' . $baseScope
+        );
+
+        return $this->publishResolvedPreviewScope($themeId, $area, $baseScope, $previewScope);
+    }
+
+    /**
+     * @return array{published_configs:int,published_translations:int,discarded_preview_configs:int,discarded_preview_translations:int,preview_scope:string}
+     */
+    private function publishResolvedPreviewScope(int $themeId, string $area, string $baseScope, string $previewScope): array
+    {
+        if ($themeId <= 0) {
+            return $this->emptyPublishResult($previewScope);
+        }
+
         $previewRows = $this->listConfigRows($themeId, $area, $previewScope);
         if (empty($previewRows) && !$this->isScopeInitialized($previewScope, $area, $baseScope)) {
-            return [
-                'published_configs' => 0,
-                'published_translations' => 0,
-                'discarded_preview_configs' => 0,
-                'discarded_preview_translations' => 0,
-                'preview_scope' => $previewScope,
-            ];
+            return $this->emptyPublishResult($previewScope);
         }
 
         $baseRows = $this->listConfigRows($themeId, $area, $baseScope);
@@ -117,7 +140,7 @@ final class PreviewThemeScopeService
         }
 
         $publishedTranslations = $this->publishTranslations($area, $baseScope, $previewScope);
-        $discard = $this->discardPreviewScope($themeId, $area, $baseScope);
+        $discard = $this->discardResolvedPreviewScope($themeId, $area, $baseScope, $previewScope);
 
         return [
             'published_configs' => $publishedConfigs,
@@ -137,6 +160,14 @@ final class PreviewThemeScopeService
         $baseScope = \trim($baseScope) !== '' ? \trim($baseScope) : 'default';
         $previewScope = $this->buildPreviewScope($themeId, $baseScope);
 
+        return $this->discardResolvedPreviewScope($themeId, $area, $baseScope, $previewScope);
+    }
+
+    /**
+     * @return array{discarded_preview_configs:int,discarded_preview_translations:int,preview_scope:string}
+     */
+    private function discardResolvedPreviewScope(int $themeId, string $area, string $baseScope, string $previewScope): array
+    {
         $discardedConfigs = 0;
         foreach ($this->listConfigRows($themeId, $area, $previewScope) as $row) {
             $row->delete()->fetch();
@@ -162,9 +193,34 @@ final class PreviewThemeScopeService
     {
         $baseScope = \trim($baseScope) !== '' ? \trim($baseScope) : 'default';
         $identity = $this->buildPreviewIdentity($themeId, $baseScope);
+
+        return $this->buildPreviewScopeFromIdentity($identity);
+    }
+
+    private function buildPreviewScopeFromIdentity(string $identity): string
+    {
+        $parts = \explode('|', $identity);
+        $themeId = 0;
+        if (\count($parts) >= 3) {
+            $themeId = (int)$parts[\count($parts) - 2];
+        }
         $fingerprint = \substr(\hash('sha256', $identity), 0, 12);
 
         return self::PREFIX . '_t' . $themeId . '_' . $fingerprint;
+    }
+
+    /**
+     * @return array{published_configs:int,published_translations:int,discarded_preview_configs:int,discarded_preview_translations:int,preview_scope:string}
+     */
+    private function emptyPublishResult(string $previewScope): array
+    {
+        return [
+            'published_configs' => 0,
+            'published_translations' => 0,
+            'discarded_preview_configs' => 0,
+            'discarded_preview_translations' => 0,
+            'preview_scope' => $previewScope,
+        ];
     }
 
     private function ensureScopeInitialized(int $themeId, string $area, string $baseScope, string $previewScope): void
@@ -251,12 +307,14 @@ final class PreviewThemeScopeService
 
             /** @var Dictionary $target */
             $target = clone $this->dictionary;
-            $target->clearData()->clearQuery();
-            $target->setData(Dictionary::schema_fields_MD5, Dictionary::generateMd5($previewWord, $localeCode));
-            $target->setData(Dictionary::schema_fields_WORD, $previewWord);
-            $target->setData(Dictionary::schema_fields_LOCALE_CODE, $localeCode);
-            $target->setData(Dictionary::schema_fields_TRANSLATE, $translate);
-            $target->save();
+            $target->clearData()->clearQuery()
+                ->insert([
+                    Dictionary::schema_fields_MD5 => Dictionary::generateMd5($previewWord, $localeCode),
+                    Dictionary::schema_fields_WORD => $previewWord,
+                    Dictionary::schema_fields_LOCALE_CODE => $localeCode,
+                    Dictionary::schema_fields_TRANSLATE => $translate,
+                ], Dictionary::schema_fields_MD5)
+                ->fetch();
         }
     }
 
@@ -461,14 +519,15 @@ final class PreviewThemeScopeService
     {
         /** @var Dictionary $target */
         $target = clone $this->dictionary;
-        $target->clearData()->clearQuery();
         $md5 = Dictionary::generateMd5($word, $localeCode);
-        $target->load(Dictionary::schema_fields_MD5, $md5);
-        $target->setData(Dictionary::schema_fields_MD5, $md5);
-        $target->setData(Dictionary::schema_fields_WORD, $word);
-        $target->setData(Dictionary::schema_fields_LOCALE_CODE, $localeCode);
-        $target->setData(Dictionary::schema_fields_TRANSLATE, $translate);
-        $target->save();
+        $target->clearData()->clearQuery()
+            ->insert([
+                Dictionary::schema_fields_MD5 => $md5,
+                Dictionary::schema_fields_WORD => $word,
+                Dictionary::schema_fields_LOCALE_CODE => $localeCode,
+                Dictionary::schema_fields_TRANSLATE => $translate,
+            ], Dictionary::schema_fields_MD5)
+            ->fetch();
     }
 
     private function normalizeArea(string $area): string

@@ -4,17 +4,30 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Test;
 
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\App\Env;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Model\AttackLog;
+use Weline\Server\Service\HealthAllowCookieService;
 use Weline\Server\Service\WlsPerformanceTraceStore;
 
 class WlsPerformancePanel extends FrontendController
 {
     public function getIndex(): Response
     {
+        if (!$this->canAccessPanel()) {
+            return $this->deniedResponse();
+        }
+
+        $operation = $this->safeString($this->queryParams()['operation'] ?? '');
+        if ($operation === 'attack-stats') {
+            return $this->getAttackStats();
+        }
+        if ($operation === 'health-allow-cookie') {
+            return $this->postHealthAllowCookie();
+        }
+
         return $this->jsonPayload([
             'success' => true,
             'message' => (string)__('WLS 性能面板端点可用。'),
@@ -25,7 +38,7 @@ class WlsPerformancePanel extends FrontendController
     public function getSummary(): Response
     {
         if (!$this->canAccessPanel()) {
-            return $this->jsonPayload($this->denied());
+            return $this->deniedResponse();
         }
 
         $params = $this->queryParams();
@@ -40,7 +53,7 @@ class WlsPerformancePanel extends FrontendController
     public function getRequests(): Response
     {
         if (!$this->canAccessPanel()) {
-            return $this->jsonPayload($this->denied());
+            return $this->deniedResponse();
         }
 
         $params = $this->queryParams();
@@ -63,7 +76,7 @@ class WlsPerformancePanel extends FrontendController
     public function getRequestDetail(): Response
     {
         if (!$this->canAccessPanel()) {
-            return $this->jsonPayload($this->denied());
+            return $this->deniedResponse();
         }
 
         $requestId = $this->safeString($this->queryParams()['request_id'] ?? '');
@@ -87,16 +100,47 @@ class WlsPerformancePanel extends FrontendController
     public function getServices(): Response
     {
         if (!$this->canAccessPanel()) {
-            return $this->jsonPayload($this->denied());
+            return $this->deniedResponse();
         }
 
         return $this->jsonPayload($this->store()->services($this->safeString($this->queryParams()['instance'] ?? '')));
     }
 
+    public function getAttackStats(): Response
+    {
+        if (!$this->canAccessPanel()) {
+            return $this->deniedResponse();
+        }
+
+        $params = $this->queryParams();
+
+        return $this->jsonPayload([
+            'success' => true,
+            'data' => $this->attackLog()->getStatistics(
+                $this->safeString($params['instance'] ?? ''),
+                $this->boundedInt($params['days'] ?? 7, 1, 90, 7)
+            ),
+        ]);
+    }
+
+    public function postHealthAllowCookie(): Response
+    {
+        if (!$this->canAccessPanel()) {
+            return $this->deniedResponse();
+        }
+
+        return $this->jsonPayload($this->healthAllowCookieService()->issue());
+    }
+
+    public function getHealthAllowCookie(): Response
+    {
+        return $this->postHealthAllowCookie();
+    }
+
     public function postClear(): Response
     {
         if (!$this->canAccessPanel()) {
-            return $this->jsonPayload($this->denied());
+            return $this->deniedResponse();
         }
 
         return $this->jsonPayload($this->store()->clear());
@@ -110,11 +154,16 @@ class WlsPerformancePanel extends FrontendController
     /**
      * @param array<string, mixed> $payload
      */
-    private function jsonPayload(array $payload): Response
+    private function jsonPayload(array $payload, int $statusCode = 200): Response
     {
-        return Response::json($payload)
+        return Response::json($payload, $statusCode)
             ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->setHeader('Pragma', 'no-cache');
+    }
+
+    private function deniedResponse(): Response
+    {
+        return $this->jsonPayload($this->denied(), 403);
     }
 
     /**
@@ -129,19 +178,7 @@ class WlsPerformancePanel extends FrontendController
 
     private function canAccessPanel(): bool
     {
-        if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
-            return true;
-        }
-        if ((bool)Env::get('wls.debug.performance_panel', false)) {
-            return true;
-        }
-        if ((bool)Env::get('wls.performance_panel.enable_in_prod', false)) {
-            $cookieName = (string)Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
-
-            return $cookieName !== '' && Cookie::get($cookieName) === '1';
-        }
-
-        return false;
+        return (new PanelAccessService())->canAccessApi($this->request);
     }
 
     /**
@@ -158,6 +195,16 @@ class WlsPerformancePanel extends FrontendController
     private function store(): WlsPerformanceTraceStore
     {
         return ObjectManager::getInstance(WlsPerformanceTraceStore::class);
+    }
+
+    private function attackLog(): AttackLog
+    {
+        return ObjectManager::getInstance(AttackLog::class);
+    }
+
+    private function healthAllowCookieService(): HealthAllowCookieService
+    {
+        return ObjectManager::getInstance(HealthAllowCookieService::class);
     }
 
     private function boundedInt(mixed $value, int $min, int $max, int $default): int

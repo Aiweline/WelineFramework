@@ -1,0 +1,83 @@
+<?php
+/**
+ * 组件：Divider
+ *
+ * @meta.name {default="Divider 分割线",name="Divider 分割线",description="用于分隔页面内容区域"}
+ * @meta.description {default="用于分隔页面内容区域",name="描述",description="组件用途"}
+ * @widget.supports {["builder-component","builder-display"]}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*","dashboard"]}
+ * @widget.compatible {true}
+ * @param.label {default="",name="中间文字",description="可选的分割线文字"}
+ * @param.style {default="solid",name="线条样式",description="solid/dashed/dotted"}
+ * @param.labelPosition {default="center",name="文字位置",description="start/center/end"}
+ * @param.color {default="",name="线条颜色",description="支持 #ddd、rgba()、var(--token)"}
+ * @param.thickness {default="",name="线条粗细",description="例如 1px、2px"}
+ * @param.spacing {default="",name="上下间距",description="例如 24px、3rem"}
+ * @param.maxWidth {default="",name="最大宽度",description="例如 960px、80%"}
+ * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
+ */
+$label = (string)($this->getData('label') ?? $this->getData('meta.label') ?? '');
+$style = strtolower(trim((string)($this->getData('style') ?? $this->getData('meta.style') ?? 'solid')));
+$labelPosition = strtolower(trim((string)($this->getData('labelPosition') ?? $this->getData('meta.labelPosition') ?? 'center')));
+$color = $this->getData('color') ?? $this->getData('meta.color') ?? '';
+$thickness = $this->getData('thickness') ?? $this->getData('meta.thickness') ?? '';
+$spacing = $this->getData('spacing') ?? $this->getData('meta.spacing') ?? '';
+$maxWidth = $this->getData('maxWidth') ?? $this->getData('meta.maxWidth') ?? '';
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+$allowedStyles = ['solid', 'dashed', 'dotted'];
+if (!in_array($style, $allowedStyles, true)) {
+    $style = 'solid';
+}
+$allowedLabelPositions = ['start', 'center', 'end'];
+if (!in_array($labelPosition, $allowedLabelPositions, true)) {
+    $labelPosition = 'center';
+}
+if (!function_exists('weline_builder_component_css_length')) {
+    function weline_builder_component_css_length(mixed $value, string $fallback = ''): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return $fallback;
+        }
+        if (preg_match('/^(0|[0-9]+(?:\.[0-9]+)?(?:px|rem|em|%|vh|vw|svh|lvh|dvh))$/', $value)) {
+            return $value;
+        }
+        if (preg_match('/^clamp\([0-9a-zA-Z%.,\s+\-]+\)$/', $value)) {
+            return $value;
+        }
+        return $fallback;
+    }
+}
+if (!function_exists('weline_builder_component_css_color')) {
+    function weline_builder_component_css_color(mixed $value): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '';
+        }
+        if (preg_match('/^#[0-9a-fA-F]{3,8}$/', $value)
+            || preg_match('/^(rgba?|hsla?)\([0-9.,%\s]+\)$/i', $value)
+            || preg_match('/^var\(--[a-zA-Z0-9_-]+\)$/', $value)
+            || in_array(strtolower($value), ['transparent', 'currentcolor', 'inherit'], true)) {
+            return $value;
+        }
+        return '';
+    }
+}
+$color = weline_builder_component_css_color($color);
+$thickness = weline_builder_component_css_length($thickness);
+$spacing = weline_builder_component_css_length($spacing);
+$maxWidth = weline_builder_component_css_length($maxWidth);
+$styles = [];
+if ($color !== '') $styles[] = '--w-builder-divider-color:' . $color;
+if ($thickness !== '') $styles[] = '--w-builder-divider-thickness:' . $thickness;
+if ($spacing !== '') $styles[] = '--w-builder-divider-spacing:' . $spacing;
+if ($maxWidth !== '') $styles[] = '--w-builder-divider-max:' . $maxWidth;
+$dividerClass = trim('w-builder-divider w-builder-divider--' . $style . ' w-builder-divider-label-' . $labelPosition . ' ' . $class);
+?>
+<div class="<?= htmlspecialchars($dividerClass, ENT_QUOTES, 'UTF-8') ?>" style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>" role="separator" aria-orientation="horizontal">
+    <?php if ($label !== ''): ?>
+        <span class="w-builder-divider__label"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></span>
+    <?php endif; ?>
+</div>

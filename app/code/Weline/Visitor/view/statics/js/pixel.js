@@ -5,6 +5,614 @@
         return;
     }
     window.__WelinePixelLoaded = true;
+
+    var __visitorTrackingConfig = window.__WelineVisitorTrackingConfig || {};
+
+    window.addEventListener('weline:visitor-tracking-config', function (event) {
+        if (event && event.detail && typeof event.detail === 'object') {
+            __visitorTrackingConfig = event.detail;
+            window.__WelineVisitorTrackingConfig = __visitorTrackingConfig;
+            __loadVisitorGa4();
+            __loadCustomVisitorForwarder();
+        }
+    });
+
+    function __visitorConfigSection(section) {
+        var config = window.__WelineVisitorTrackingConfig || __visitorTrackingConfig || {};
+        return config && typeof config[section] === 'object' && config[section] ? config[section] : {};
+    }
+
+    function __visitorConfigBool(value, defaultValue) {
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            return value === 1;
+        }
+        if (typeof value === 'string') {
+            var normalized = value.trim().toLowerCase();
+            if (['1', 'true', 'yes', 'on', 'enabled'].indexOf(normalized) > -1) {
+                return true;
+            }
+            if (['0', 'false', 'no', 'off', 'disabled', ''].indexOf(normalized) > -1) {
+                return false;
+            }
+        }
+        return !!defaultValue;
+    }
+
+    function __visitorPixelEnabled() {
+        var pixel = __visitorConfigSection('pixel');
+        return __visitorConfigBool(pixel.enabled, true);
+    }
+
+    function __visitorConsentState() {
+        var consentConfig = __visitorConfigSection('consent');
+        var enabled = __visitorConfigBool(consentConfig.enabled, false);
+        var state = window.__WelineConsentState || window.WelineConsent || {};
+        function granted(key) {
+            if (!enabled) {
+                return true;
+            }
+            var value = state[key];
+            if (value === undefined && key === 'analytics') {
+                value = state.analytics_storage;
+            }
+            return value === true || value === 'granted' || value === 'yes' || value === 1;
+        }
+        return {
+            enabled: enabled,
+            analytics: granted('analytics'),
+            ad_storage: granted('ad_storage'),
+            ad_user_data: granted('ad_user_data'),
+            ad_personalization: granted('ad_personalization')
+        };
+    }
+
+    function __visitorConsentAllows(key) {
+        var consent = __visitorConsentState();
+        return consent.enabled ? consent[key] === true : true;
+    }
+
+    function __visitorConfigList(section, key) {
+        var value = (__visitorConfigSection(section) || {})[key];
+        if (Array.isArray(value)) {
+            return value.map(function (item) {
+                return String(item || '').trim();
+            }).filter(Boolean);
+        }
+        return String(value || '').split(/[\n\r,]+/).map(function (item) {
+            return item.trim();
+        }).filter(Boolean);
+    }
+
+    function __visitorHostMatches(host, patterns) {
+        host = String(host || '').toLowerCase();
+        return (patterns || []).some(function (pattern) {
+            pattern = String(pattern || '').trim().toLowerCase();
+            if (!pattern) {
+                return false;
+            }
+            if (pattern.indexOf('*.') === 0) {
+                var suffix = pattern.slice(1);
+                return host.slice(-suffix.length) === suffix;
+            }
+            return host === pattern;
+        });
+    }
+
+    function __visitorPathMatches(path, prefixes) {
+        path = String(path || '/');
+        return (prefixes || []).some(function (prefix) {
+            prefix = String(prefix || '').trim();
+            return prefix && path.indexOf(prefix) === 0;
+        });
+    }
+
+    function __visitorQueryMatches(keys) {
+        if (!keys || !keys.length) {
+            return [];
+        }
+        var params = new URLSearchParams(window.location.search || '');
+        var lowered = keys.map(function (key) {
+            return String(key || '').trim().toLowerCase();
+        }).filter(Boolean);
+        var matched = [];
+        params.forEach(function (_value, key) {
+            if (lowered.indexOf(String(key || '').toLowerCase()) > -1) {
+                matched.push(key);
+            }
+        });
+        return matched;
+    }
+
+    function __visitorReferrerHost() {
+        if (!document.referrer) {
+            return '';
+        }
+        try {
+            return new URL(document.referrer).hostname || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function __visitorTrafficDecision() {
+        var rules = __visitorConfigSection('trafficRules');
+        var host = String(window.location.hostname || '').toLowerCase();
+        var path = window.location.pathname || '/';
+        var userAgent = String(navigator.userAgent || '').toLowerCase();
+        var reasons = [];
+        var matchedRules = [];
+
+        function add(reason, label, value) {
+            reasons.push(reason);
+            matchedRules.push({ reason: reason, label: label, value: value || '' });
+        }
+
+        if (__visitorConfigBool(rules.excludeLocalForwarding, true) && __isVisitorLocalHost()) {
+            add('local_access', '本地/私网访问', host);
+        }
+
+        var excludedHosts = __visitorConfigList('trafficRules', 'excludedHosts');
+        if (__visitorHostMatches(host, excludedHosts)) {
+            add('excluded_host', '站点排除 Host', host);
+        }
+
+        var excludedPathPrefixes = __visitorConfigList('trafficRules', 'excludedPathPrefixes');
+        if (__visitorPathMatches(path, excludedPathPrefixes)) {
+            add('excluded_path', '站点排除路径', path);
+        }
+
+        var matchedQueryKeys = __visitorQueryMatches(__visitorConfigList('trafficRules', 'excludedQueryKeys'));
+        if (matchedQueryKeys.length) {
+            add('excluded_query', '站点排除 Query', matchedQueryKeys.join(','));
+        }
+
+        var referrerHost = __visitorReferrerHost();
+        if (referrerHost && __visitorHostMatches(referrerHost, __visitorConfigList('trafficRules', 'excludedReferrerHosts'))) {
+            add('excluded_referrer', '站点排除来源', referrerHost);
+        }
+
+        (__visitorConfigList('trafficRules', 'excludedUserAgentKeywords') || []).some(function (keyword) {
+            keyword = String(keyword || '').toLowerCase();
+            if (keyword && userAgent.indexOf(keyword) > -1) {
+                add('excluded_user_agent', '站点排除 User-Agent', keyword);
+                return true;
+            }
+            return false;
+        });
+
+        return {
+            contractVersion: 'weline-visitor-traffic/v1',
+            source: rules.source || 'Weline_Visitor SystemConfig',
+            filtered: reasons.length > 0,
+            forwardable: reasons.length === 0,
+            localAccess: __isVisitorLocalHost(),
+            reasons: reasons,
+            matchedRules: matchedRules,
+            evaluatedAt: new Date().toISOString()
+        };
+    }
+
+    var __visitorForwarders = window.__WelineVisitorForwarders || {};
+    window.__WelineVisitorForwarders = __visitorForwarders;
+    window.WelineVisitorForwarders = Object.assign({}, window.WelineVisitorForwarders || {}, {
+        register: function (name, handler) {
+            name = String(name || '').trim();
+            if (!name || typeof handler !== 'function') {
+                return false;
+            }
+            __visitorForwarders[name] = handler;
+            return true;
+        },
+        unregister: function (name) {
+            delete __visitorForwarders[String(name || '').trim()];
+        },
+        emit: function (event) {
+            if (event && event.forwarding && event.forwarding.allowed === false) {
+                return;
+            }
+            Object.keys(__visitorForwarders).forEach(function (name) {
+                try {
+                    __visitorForwarders[name](event);
+                } catch (error) {
+                    if (window.DEV) {
+                        console.debug('Weline Visitor forwarder failed:', name, error && error.message ? error.message : error);
+                    }
+                }
+            });
+        },
+        getHandlers: function () {
+            return Object.keys(__visitorForwarders);
+        }
+    });
+
+    var __customVisitorForwarderLoaded = false;
+
+    function __loadCustomVisitorForwarder() {
+        var forwarders = __visitorConfigSection('forwarders');
+        var custom = forwarders && forwarders.custom ? forwarders.custom : {};
+        if (__customVisitorForwarderLoaded || !__visitorConfigBool(custom.enabled, false)) {
+            return false;
+        }
+        var script = String(custom.script || '').trim();
+        if (!script) {
+            return false;
+        }
+        try {
+            __customVisitorForwarderLoaded = true;
+            (new Function('WelineVisitorForwarders', 'window', 'document', script))(window.WelineVisitorForwarders, window, document);
+            return true;
+        } catch (error) {
+            __customVisitorForwarderLoaded = false;
+            if (window.DEV) {
+                console.debug('Weline Visitor custom forwarder failed:', error && error.message ? error.message : error);
+            }
+            return false;
+        }
+    }
+
+    function __visitorEventId(payload) {
+        payload = payload || {};
+        var eventId = String(payload.event_id || payload.eventId || '');
+        if (!eventId) {
+            eventId = 'wv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        }
+        payload.event_id = eventId;
+        return eventId;
+    }
+
+    function __buildVisitorEventEnvelope(pixelEventName, payload, meta, element, platformEventName) {
+        payload = payload || {};
+        meta = meta || {};
+        var normalized = __normalizePixelEventName(pixelEventName || payload.eventName || payload.event || 'behavior_event');
+        var eventId = __visitorEventId(payload);
+        var traffic = __visitorTrafficDecision();
+        var consent = __visitorConsentState();
+        var consentAllowed = consent.enabled ? consent.analytics === true : true;
+        var forwardingReasons = traffic.reasons.slice();
+        var forwardingRules = traffic.matchedRules.slice();
+        if (!consentAllowed) {
+            forwardingReasons.push('consent_denied');
+            forwardingRules.push({ reason: 'consent_denied', label: '同意模式拒绝 analytics', value: '' });
+        }
+        return {
+            contractVersion: 'weline-visitor-event/v1',
+            command: 'weline-visitor-event',
+            eventId: eventId,
+            eventName: normalized,
+            timestampMs: Date.now(),
+            page: {
+                location: window.location.href,
+                title: document.title || '',
+                path: window.location.pathname,
+                referrer: document.referrer || ''
+            },
+            consent: consent,
+            traffic: traffic,
+            forwarding: {
+                allowed: traffic.forwardable && consentAllowed,
+                filtered: traffic.filtered || !consentAllowed,
+                reasons: forwardingReasons,
+                matchedRules: forwardingRules
+            },
+            pixel: {
+                name: payload.name || window.__WelinePixelName || '',
+                module: payload.module || ''
+            },
+            payload: payload,
+            meta: meta,
+            element: {
+                tagName: element && element.tagName || '',
+                text: element ? (element.innerText || element.textContent || '').trim().slice(0, 120) : '',
+                href: element && element.href || '',
+                domElement: element || null
+            },
+            platforms: {
+                ga4: {
+                    eventName: platformEventName || ''
+                }
+            }
+        };
+    }
+
+    function __recordVisitorRuntimeEvent(event) {
+        var runtime = window.__WelineVisitorRuntime = window.__WelineVisitorRuntime || {};
+        runtime.recentEvents = Array.isArray(runtime.recentEvents) ? runtime.recentEvents : [];
+        runtime.recentEvents.unshift({
+            eventId: event.eventId,
+            eventName: event.eventName,
+            timestampMs: event.timestampMs,
+            timeLabel: new Date(event.timestampMs).toLocaleTimeString(),
+            page: event.page,
+            traffic: event.traffic,
+            forwarding: event.forwarding,
+            platforms: event.platforms,
+            element: {
+                tagName: event.element && event.element.tagName || '',
+                text: event.element && event.element.text || '',
+                href: event.element && event.element.href || ''
+            }
+        });
+        runtime.recentEvents = runtime.recentEvents.slice(0, 80);
+        try {
+            window.dispatchEvent(new CustomEvent('weline:visitor-runtime-event', { detail: event }));
+        } catch (error) {
+        }
+    }
+
+    function __emitVisitorPixelEvent(pixelEventName, payload, meta, element, platformEventName) {
+        var event = __buildVisitorEventEnvelope(pixelEventName, payload, meta, element, platformEventName);
+        __recordVisitorRuntimeEvent(event);
+        window.WelineVisitorForwarders.emit(event);
+        try {
+            window.dispatchEvent(new CustomEvent('weline:visitor:event', { detail: event }));
+        } catch (error) {
+        }
+        return event;
+    }
+
+    function __isVisitorLocalHost() {
+        var host = String(window.location.hostname || '').toLowerCase();
+        return host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '::1' ||
+            host === '[::1]' ||
+            host.slice(-6) === '.local' ||
+            /^10\./.test(host) ||
+            /^192\.168\./.test(host) ||
+            /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+    }
+
+    function __isVisitorDiagnosticPanelElement(element) {
+        return Boolean(element && element.closest && element.closest([
+            '#weline-panel-visitor',
+            '#dev-tool-trigger',
+            '.dev-tool-container',
+            '.dev-tool-trigger',
+            '[data-dev-tool-action]',
+            '[data-wvp-subtab]',
+            '[data-weline-panel-visitor-bootstrap]',
+            '[data-weline-panel-seo-bootstrap]'
+        ].join(',')));
+    }
+
+    function __visitorBrowserLanguages() {
+        if (Array.isArray(navigator.languages) && navigator.languages.length) {
+            return navigator.languages.slice();
+        }
+        return navigator.language ? [navigator.language] : [];
+    }
+
+    function __isVisitorChineseBrowser() {
+        return __visitorBrowserLanguages().some(function (language) {
+            return String(language || '').toLowerCase().indexOf('zh') === 0;
+        });
+    }
+
+    function __normalizeGa4EventName(eventName) {
+        eventName = String(eventName || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+        return eventName ? eventName.slice(0, 40) : '';
+    }
+
+    function __ga4Config() {
+        var ga4 = __visitorConfigSection('ga4');
+        var measurementId = String(ga4.measurementId || ga4.measurement_id || '').trim().toUpperCase();
+        var configured = /^G-[A-Z0-9]{4,20}$/.test(measurementId);
+        var enableInDev = __visitorConfigBool(ga4.enableInDev || ga4.enable_in_dev, false);
+        var localHost = __isVisitorLocalHost();
+        var chineseBrowser = __isVisitorChineseBrowser();
+        var traffic = __visitorTrafficDecision();
+        var blockedReasons = [];
+        if (traffic.filtered) {
+            blockedReasons = blockedReasons.concat(traffic.reasons);
+        }
+        if (!__visitorConsentAllows('analytics')) {
+            blockedReasons.push('consent_denied');
+        }
+        var eventsAllowed = blockedReasons.length === 0;
+        var gtagRuntime = typeof window.gtag === 'function';
+        var gtagScript = Boolean(document.querySelector('script[src*="googletagmanager.com/gtag/js"]'));
+        var enabled = __visitorConfigBool(ga4.enabled, false) && configured;
+        var runtime = {
+            enabled: enabled,
+            configured: configured,
+            measurementId: configured ? measurementId : '',
+            enableInDev: enableInDev,
+            autoTrackVisitorEvents: __visitorConfigBool(ga4.autoTrackVisitorEvents || ga4.auto_track_visitor_events, true),
+            ctaEventName: __normalizeGa4EventName(ga4.ctaEventName || ga4.cta_event_name || 'cta_click') || 'cta_click',
+            debugMode: __visitorConfigBool(ga4.debugMode || ga4.debug_mode, false),
+            localHost: localHost,
+            chineseBrowser: chineseBrowser,
+            browserLanguages: __visitorBrowserLanguages(),
+            traffic: traffic,
+            blockedReasons: blockedReasons,
+            eventsAllowed: eventsAllowed,
+            gtagRuntime: gtagRuntime,
+            gtagScript: gtagScript,
+            eventsWillFire: enabled && gtagRuntime && eventsAllowed,
+            previewOnly: !configured && eventsAllowed,
+            recentTriggers: Array.isArray(ga4.recentTriggers) ? ga4.recentTriggers.slice(0, 50) : ((window.__SITE_GA4__ && Array.isArray(window.__SITE_GA4__.recentTriggers)) ? window.__SITE_GA4__.recentTriggers.slice(0, 50) : []),
+            source: ga4.source || 'Weline_Visitor SystemConfig'
+        };
+        window.__SITE_GA4__ = Object.assign({}, window.__SITE_GA4__ || {}, runtime);
+        return runtime;
+    }
+
+    function __shouldLoadGa4(runtime) {
+        runtime = runtime || __ga4Config();
+        if (!runtime.enabled || !runtime.measurementId) {
+            return false;
+        }
+        return runtime.eventsAllowed === true;
+    }
+
+    function __loadVisitorGa4() {
+        var runtime = __ga4Config();
+        if (!__shouldLoadGa4(runtime)) {
+            return runtime;
+        }
+        if (window.__WelineVisitorGa4Loaded === runtime.measurementId) {
+            return runtime;
+        }
+
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = window.gtag || function () {
+            window.dataLayer.push(arguments);
+        };
+        window.gtag('js', new Date());
+        window.gtag('config', runtime.measurementId, {
+            send_page_view: true,
+            debug_mode: runtime.debugMode
+        });
+
+        if (!document.querySelector('script[data-weline-visitor-ga4="true"][src*="' + runtime.measurementId + '"]')) {
+            var script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(runtime.measurementId);
+            script.setAttribute('data-weline-visitor-ga4', 'true');
+            document.head.appendChild(script);
+        }
+        window.__WelineVisitorGa4Loaded = runtime.measurementId;
+        window.__SITE_GA4__ = Object.assign({}, window.__SITE_GA4__ || {}, runtime, {
+            gtagRuntime: true,
+            gtagScript: true,
+            eventsWillFire: runtime.eventsAllowed === true
+        });
+        return runtime;
+    }
+
+    function __recordVisitorGa4Trigger(entry) {
+        var runtime = window.__SITE_GA4__ = window.__SITE_GA4__ || {};
+        runtime.recentTriggers = Array.isArray(runtime.recentTriggers) ? runtime.recentTriggers : [];
+        var trigger = Object.assign({
+            id: 'wv-ga4-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+            timestamp: Date.now(),
+            timeLabel: new Date().toLocaleTimeString(),
+            source: 'Weline_Visitor'
+        }, entry || {});
+        runtime.recentTriggers.unshift(trigger);
+        runtime.recentTriggers = runtime.recentTriggers.slice(0, 50);
+        try {
+            window.dispatchEvent(new CustomEvent('site:ga4-trigger', { detail: trigger }));
+        } catch (error) {
+        }
+    }
+
+    function __isGa4CtaElement(element) {
+        return Boolean(element && element.closest && element.closest('[data-pixel-event], [data-visitor-event], [data-cta-event], [data-cta], [data-cta-action], [data-ga-event], a[role="button"], button, .wf-btn, .btn-primary, .button--primary'));
+    }
+
+    function __resolveGa4EventName(pixelEventName, payload, element) {
+        var explicit = '';
+        if (element && element.closest) {
+            var explicitNode = element.closest('[data-pixel-event], [data-visitor-event], [data-cta-event], [data-ga-event]');
+            if (explicitNode) {
+                explicit = explicitNode.getAttribute('data-pixel-event') ||
+                    explicitNode.getAttribute('data-visitor-event') ||
+                    explicitNode.getAttribute('data-cta-event') ||
+                    explicitNode.getAttribute('data-ga-event') ||
+                    '';
+            }
+        }
+        explicit = __normalizeGa4EventName(explicit);
+        if (explicit) {
+            return explicit;
+        }
+
+        var normalized = __normalizePixelEventName(pixelEventName || payload && payload.eventName || '');
+        var map = {
+            view_item: 'view_item',
+            add_to_cart: 'add_to_cart',
+            begin_checkout: 'begin_checkout',
+            checkout_success: 'purchase',
+            checkout_failure: 'checkout_failure',
+            search_submit: 'search',
+            search_suggestion_click: 'select_content'
+        };
+        if (map[normalized]) {
+            return map[normalized];
+        }
+        if (__isGa4CtaElement(element)) {
+            return __ga4Config().ctaEventName || 'cta_click';
+        }
+        return '';
+    }
+
+    function __buildGa4Params(payload, meta, element) {
+        payload = payload || {};
+        meta = meta || {};
+        var elementInfo = payload.elementInfo || meta.element || {};
+        var params = {
+            visitor_event_name: payload.eventName || payload.event || '',
+            page_location: window.location.href,
+            page_title: document.title || '',
+            page_path: window.location.pathname,
+            event_id: __visitorEventId(payload),
+            pixel_name: payload.name || window.__WelinePixelName || '',
+            link_url: payload.href || elementInfo.href || (element && element.href) || '',
+            link_text: payload.link_text || elementInfo.text || (element ? (element.innerText || element.textContent || '').trim().slice(0, 120) : '')
+        };
+        ['value', 'currency', 'transaction_id', 'items', 'search_term', 'query', 'product_id', 'item_id', 'sku'].forEach(function (key) {
+            if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') {
+                params[key === 'query' ? 'search_term' : key] = payload[key];
+            }
+        });
+        var runtime = __ga4Config();
+        if (runtime.debugMode) {
+            params.debug_mode = true;
+        }
+        if (params.currency === 'RMB') {
+            params.currency = 'CNY';
+        }
+        return params;
+    }
+
+    function __sendVisitorGa4Event(pixelEventName, payload, meta, element) {
+        var runtime = __loadVisitorGa4();
+        var ga4EventName = __normalizeGa4EventName(payload && payload.__ga4EventName) || __resolveGa4EventName(pixelEventName, payload, element);
+        if (!ga4EventName || ga4EventName === 'page_view') {
+            return;
+        }
+        var params = __buildGa4Params(payload, meta, element);
+        if (!runtime.enabled || !runtime.autoTrackVisitorEvents || !__shouldLoadGa4(runtime) || typeof window.gtag !== 'function') {
+            __recordVisitorGa4Trigger({
+                eventName: ga4EventName,
+                params: params,
+                measurementId: runtime.measurementId,
+                delivery: {
+                    mode: runtime.configured ? 'panel_only' : 'preview',
+                    label: runtime.configured ? 'Panel only' : 'Preview',
+                    blockReason: runtime.blockedReasons && runtime.blockedReasons[0] || (!runtime.configured ? 'not_configured' : 'no_gtag')
+                }
+            });
+            return;
+        }
+        window.gtag('event', ga4EventName, params);
+        __recordVisitorGa4Trigger({
+            eventName: ga4EventName,
+            params: params,
+            measurementId: runtime.measurementId,
+            delivery: {
+                mode: 'gtag',
+                label: 'Sent'
+            }
+        });
+    }
+
+    window.WelineVisitorForwarders.register('ga4', function (event) {
+        event = event || {};
+        var payload = Object.assign({}, event.payload || {});
+        var ga4EventName = event.platforms && event.platforms.ga4 ? event.platforms.ga4.eventName : '';
+        if (ga4EventName) {
+            payload.__ga4EventName = ga4EventName;
+        }
+        __sendVisitorGa4Event(event.eventName || payload.eventName || payload.event, payload, event.meta || {}, event.element && event.element.domElement || null);
+    });
+
+    __loadVisitorGa4();
+    __loadCustomVisitorForwarder();
     
     /**
      * 获取配置值
@@ -902,7 +1510,7 @@
             module: __getPixelConfig('module', ''),
             domain: window.location.hostname,
             eventName: 'click',
-            name: '{:name}',
+            name: window.__WelinePixelName || '{:name}',
             value: 0,
             currency: __getPixelCookie('WELINE_USER_CURRENCY') || 'RMB',
             websiteUrl: __getPixelCookie('WELINE_WEBSITE_URL') || '',
@@ -917,7 +1525,7 @@
             module: __getPixelConfig('module', ''),
             domain: window.location.hostname,
             eventName: 'click',
-            name: '{:name}',
+            name: window.__WelinePixelName || '{:name}',
             value: 0,
             currency: __getPixelCookie('WELINE_USER_CURRENCY') || 'RMB',
             websiteUrl: __getPixelCookie('WELINE_WEBSITE_URL') || '',
@@ -931,9 +1539,31 @@
             data = data || this.initData;
             var payloadData = Object.assign({}, data);
             var keepalive = !!payloadData.__keepalive;
+            var ga4Element = payloadData.__ga4Element || null;
+            var ga4EventName = payloadData.__ga4EventName || '';
+            var ga4Meta = payloadData.__ga4Meta || null;
             delete payloadData.__keepalive;
+            delete payloadData.__ga4Element;
+            delete payloadData.__ga4EventName;
+            delete payloadData.__ga4Meta;
 
-            __enqueuePixelPayload(payloadData, keepalive);
+            var visitorEvent = __emitVisitorPixelEvent(
+                payloadData.eventName || payloadData.event,
+                payloadData,
+                ga4Meta || (payloadData.additionalInfo && payloadData.additionalInfo.meta) || {},
+                ga4Element,
+                ga4EventName
+            );
+            payloadData.traffic = visitorEvent.traffic;
+            payloadData.forwarding = visitorEvent.forwarding;
+            payloadData.additionalInfo = Object.assign({}, payloadData.additionalInfo || {}, {
+                traffic: visitorEvent.traffic,
+                forwarding: visitorEvent.forwarding
+            });
+
+            if (__visitorPixelEnabled()) {
+                __enqueuePixelPayload(payloadData, keepalive);
+            }
         },
         track: function (eventName, meta, options) {
             options = options || {};
@@ -958,6 +1588,9 @@
             payload.elementInfo = mergedMeta.element ? mergedMeta.element : null;
             __applyEventMetaToPayload(payload, mergedMeta);
             payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, mergedMeta, options.startedAt);
+            payload.__ga4Element = domElement;
+            payload.__ga4Meta = mergedMeta;
+            payload.__ga4EventName = __resolveGa4EventName(normalizedEventName, payload, domElement);
 
             if (options.keepalive) {
                 payload.__keepalive = true;
@@ -1197,12 +1830,18 @@
         });
 
         document.addEventListener('focusin', function (event) {
+            if (__isVisitorDiagnosticPanelElement(event.target)) {
+                return;
+            }
             if (__isSearchInput(event.target)) {
                 window.WelinePixel.track('search_focus', __getSearchMeta(event.target, 'focusin'));
             }
         }, true);
 
         document.addEventListener('input', function (event) {
+            if (__isVisitorDiagnosticPanelElement(event.target)) {
+                return;
+            }
             if (!__isSearchInput(event.target)) {
                 return;
             }
@@ -1214,6 +1853,9 @@
         }, true);
 
         document.addEventListener('submit', function (event) {
+            if (__isVisitorDiagnosticPanelElement(event.target)) {
+                return;
+            }
             if (__isSearchForm(event.target)) {
                 var input = __findSearchInput(event.target);
                 window.WelinePixel.track('search_submit', __getSearchMeta(input, 'submit', event.target));
@@ -1222,6 +1864,9 @@
 
         document.addEventListener('click', function (event) {
             var element = event.target;
+            if (__isVisitorDiagnosticPanelElement(element)) {
+                return;
+            }
             var startedAt = Date.now();
             var pixelEventName = __findPixelEventNameFromElement(element);
             if (pixelEventName) {

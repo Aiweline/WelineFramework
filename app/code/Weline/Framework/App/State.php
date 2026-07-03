@@ -250,6 +250,18 @@ class State extends DataObject
     }
 
     /**
+     * WLS/CLI 同进程切换语言或货币后，重置本地化语言缓存。
+     */
+    public static function resetLangLocalCache(): void
+    {
+        self::$langLocalCache = null;
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $context->set(self::LANG_LOCAL_CONTEXT_CACHE, null);
+        }
+    }
+
+    /**
      * 判断路径段是否为当前请求允许的语言代码。
      *
      * 优先级：当前网站关联语言 > 全局已启用语言 > i18n 缓存/库探测。

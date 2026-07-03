@@ -1,0 +1,43 @@
+<?php
+/**
+ * 组件：Spacer
+ *
+ * @meta.name {default="Spacer 留白",name="Spacer 留白",description="用于控制页面区块之间的垂直间距"}
+ * @meta.description {default="用于控制页面区块之间的垂直间距",name="描述",description="组件用途"}
+ * @widget.supports {["builder-component","builder-display"]}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*","dashboard"]}
+ * @widget.compatible {true}
+ * @param.size {default="md",name="留白尺寸",description="xs/sm/md/lg/xl"}
+ * @param.height {default="",name="自定义高度",description="例如 32px、8vh、clamp(24px,6vw,96px)"}
+ * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
+ */
+$size = strtolower(trim((string)($this->getData('size') ?? $this->getData('meta.size') ?? 'md')));
+$height = $this->getData('height') ?? $this->getData('meta.height') ?? '';
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
+$allowedSizes = ['xs', 'sm', 'md', 'lg', 'xl'];
+if (!in_array($size, $allowedSizes, true)) {
+    $size = 'md';
+}
+if (!function_exists('weline_builder_component_css_length')) {
+    function weline_builder_component_css_length(mixed $value, string $fallback = ''): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return $fallback;
+        }
+        if (preg_match('/^(0|[0-9]+(?:\.[0-9]+)?(?:px|rem|em|%|vh|vw|svh|lvh|dvh))$/', $value)) {
+            return $value;
+        }
+        if (preg_match('/^clamp\([0-9a-zA-Z%.,\s+\-]+\)$/', $value)) {
+            return $value;
+        }
+        return $fallback;
+    }
+}
+$height = weline_builder_component_css_length($height);
+$styles = [];
+if ($height !== '') $styles[] = '--w-builder-spacer-size:' . $height;
+$spacerClass = trim('w-builder-spacer w-builder-spacer--' . $size . ' ' . $class);
+?>
+<div class="<?= htmlspecialchars($spacerClass, ENT_QUOTES, 'UTF-8') ?>" style="<?= htmlspecialchars(implode(';', $styles), ENT_QUOTES, 'UTF-8') ?>" aria-hidden="true"></div>

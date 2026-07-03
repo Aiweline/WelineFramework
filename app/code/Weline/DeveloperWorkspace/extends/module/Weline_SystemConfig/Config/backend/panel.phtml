@@ -1,0 +1,33 @@
+<?php
+/**
+ * @meta.title {default="Weline 面板门禁",description="Weline 全局开发面板生产环境入口与 API 访问 token 配置"}
+ * @meta.description {default="生产环境仍必须先配置 env: dev_tool.panel.enable_in_prod=true；未配置 env 时不会注入入口，也不会暴露 window.WelinePanel。"}
+ * @config.area {backend}
+ * @config.sort {65}
+ * @config.acl {Weline_DeveloperWorkspace::panel_config}
+ */
+?>
+
+<w:config:group code="weline_panel_access" label="Weline 面板门禁" description="开发环境直接打开；生产环境必须 env 开关与 token 同时存在，面板 UI 和后端数据接口才可访问。" sort="10">
+    <w:config:field
+        key="dev_tool.panel.token_hash"
+        label="面板 Token Hash"
+        description="推荐配置 SHA-256、bcrypt 或 argon2 hash。生产环境输入 weline 后，使用原始 token 建立短期面板 session。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        sensitive="true"
+        validation="max:255" />
+
+    <w:config:field
+        key="dev_tool.panel.token"
+        label="面板明文 Token"
+        description="仅用于调试或后台自动轮换后的临时写入；生产优先使用 Token Hash，避免长期保存明文。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        sensitive="true"
+        validation="max:255" />
+</w:config:group>

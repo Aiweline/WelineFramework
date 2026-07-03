@@ -339,10 +339,48 @@ body {
     border-right: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-color-sidebar-border);
 }
 
-#page-topbar .header-item {
-    border-radius: var(--backend-border-radius-lg);
+#page-topbar .header-item,
+#page-topbar .navbar-header .header-item,
+#page-topbar .navbar-header .dropdown .header-item,
+#page-topbar .navbar-header .dropdown .show.header-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    margin: 0 3px !important;
+    padding: 0 14px !important;
+    border-radius: var(--backend-border-radius-lg) !important;
     color: var(--backend-color-text-secondary);
+    line-height: 1 !important;
     transition: all 0.2s ease;
+}
+
+#page-topbar .header-item i,
+#page-topbar .navbar-header .header-item i {
+    line-height: 1 !important;
+}
+
+#page-topbar #vertical-menu-btn,
+#page-topbar #theme-mode-toggle,
+#page-topbar .navbar-header .noti-icon,
+#page-topbar .navbar-header .weline-notif-btn {
+    width: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
+}
+
+#page-topbar .navbar-brand-box .logo img,
+#page-topbar .navbar-brand-box .logo .logo-sm img,
+#page-topbar .navbar-brand-box .logo .logo-lg img {
+    object-fit: contain !important;
+    box-sizing: border-box;
+}
+
+#page-topbar .weline-notif-btn.header-item {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
 }
 
 #page-topbar .header-item:hover,
@@ -360,16 +398,18 @@ body {
 body[data-theme-mode="dark"] #page-topbar,
 body[data-layout-mode="dark"] #page-topbar,
 body[data-bs-theme="dark"] #page-topbar,
-body[data-topbar="dark"] #page-topbar {
+body[data-topbar="dark"] #page-topbar,
+body[data-sidebar="dark"] #page-topbar {
     background: var(--backend-topbar-bg);
     border-bottom: var(--backend-theme-border-width) var(--backend-theme-border-style) var(--backend-topbar-border);
-    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.32);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
 }
 
 body[data-theme-mode="dark"] #page-topbar .navbar-header,
 body[data-layout-mode="dark"] #page-topbar .navbar-header,
 body[data-bs-theme="dark"] #page-topbar .navbar-header,
-body[data-topbar="dark"] #page-topbar .navbar-header {
+body[data-topbar="dark"] #page-topbar .navbar-header,
+body[data-sidebar="dark"] #page-topbar .navbar-header {
     background: var(--backend-topbar-bg);
     border-bottom-color: var(--backend-topbar-border);
     box-shadow: none;
@@ -381,16 +421,17 @@ body[data-bs-theme="dark"] #page-topbar .navbar-brand-box,
 body[data-topbar="dark"] #page-topbar .navbar-brand-box,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box.text-center {
-    background: var(--backend-topbar-bg) !important;
+    background: transparent !important;
     border-right-color: var(--backend-topbar-border);
 }
 
 body[data-theme-mode="dark"] #page-topbar .header-item,
 body[data-layout-mode="dark"] #page-topbar .header-item,
 body[data-bs-theme="dark"] #page-topbar .header-item,
-body[data-topbar="dark"] #page-topbar .header-item {
-    background: var(--backend-topbar-surface);
-    color: var(--backend-topbar-muted);
+body[data-topbar="dark"] #page-topbar .header-item,
+body[data-sidebar="dark"] #page-topbar .header-item {
+    background: color-mix(in srgb, var(--backend-topbar-surface) 62%, transparent);
+    color: var(--backend-topbar-muted, #cbd5e1);
     border-color: transparent;
     box-shadow: none;
 }
@@ -403,9 +444,52 @@ body[data-bs-theme="dark"] #page-topbar .header-item:hover,
 body[data-bs-theme="dark"] #page-topbar .header-item:focus,
 body[data-topbar="dark"] #page-topbar .header-item:hover,
 body[data-topbar="dark"] #page-topbar .header-item:focus,
-body[data-topbar="dark"] #page-topbar .navbar-header .dropdown .show.header-item {
+body[data-topbar="dark"] #page-topbar .navbar-header .dropdown .show.header-item,
+body[data-sidebar="dark"] #page-topbar .header-item:hover,
+body[data-sidebar="dark"] #page-topbar .header-item:focus,
+body[data-sidebar="dark"] #page-topbar .navbar-header .dropdown .show.header-item {
     background: var(--backend-topbar-surface-hover);
     color: var(--backend-topbar-text);
+}
+
+body[data-theme-mode="dark"] #page-topbar .navbar-brand-box .logo img,
+body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo img,
+body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo img,
+body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo img,
+body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img,
+body[data-theme-mode="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
+body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
+body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
+body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
+body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img {
+    padding: 4px !important;
+    border-radius: var(--backend-border-radius-lg) !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+}
+
+body[data-theme-mode="dark"] #page-topbar .noti-icon i,
+body[data-layout-mode="dark"] #page-topbar .noti-icon i,
+body[data-bs-theme="dark"] #page-topbar .noti-icon i,
+body[data-topbar="dark"] #page-topbar .noti-icon i,
+body[data-sidebar="dark"] #page-topbar .noti-icon i,
+body[data-theme-mode="dark"] #page-topbar .weline-notif-btn > i,
+body[data-layout-mode="dark"] #page-topbar .weline-notif-btn > i,
+body[data-bs-theme="dark"] #page-topbar .weline-notif-btn > i,
+body[data-topbar="dark"] #page-topbar .weline-notif-btn > i,
+body[data-sidebar="dark"] #page-topbar .weline-notif-btn > i {
+    color: inherit;
+}
+
+body[data-theme-mode="dark"] #page-topbar .header-profile-user,
+body[data-layout-mode="dark"] #page-topbar .header-profile-user,
+body[data-bs-theme="dark"] #page-topbar .header-profile-user,
+body[data-topbar="dark"] #page-topbar .header-profile-user,
+body[data-sidebar="dark"] #page-topbar .header-profile-user {
+    background: rgba(255, 255, 255, 0.18);
+    box-shadow:
+        0 0 0 2px var(--backend-topbar-bg),
+        0 0 0 5px rgba(var(--backend-theme-primary-rgb), 0.22);
 }
 
 .app-search .form-control {

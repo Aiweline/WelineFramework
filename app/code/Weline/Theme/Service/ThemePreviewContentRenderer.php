@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 
@@ -218,7 +219,7 @@ class ThemePreviewContentRenderer
         foreach ($layout as $area => $areaData) {
             foreach ($areaData['widgets'] ?? [] as $widget) {
                 $slotId = $this->resolveSlotId($widget, (string)$area);
-                if ($slotId === '' || isset($seen[$slotId])) {
+                if ($slotId === '' || isset($seen[$slotId]) || $this->isComponentInstanceSlotId($slotId)) {
                     continue;
                 }
                 $seen[$slotId] = true;
@@ -227,6 +228,14 @@ class ThemePreviewContentRenderer
         }
 
         return $slotIds;
+    }
+
+    private function isComponentInstanceSlotId(string $slotId): bool
+    {
+        // Slots generated inside a saved component are scoped with that component layout_id
+        // (for example section-content:279). They must be filled only when the parent
+        // component renders, otherwise a top-level preview placeholder consumes them first.
+        return (bool)preg_match('/:[1-9][0-9]*$/', $slotId);
     }
 
     private function resolveSlotId(array $widget, string $fallbackArea): string
@@ -262,10 +271,25 @@ class ThemePreviewContentRenderer
         }
 
         $processedHtml = $layoutData !== null
-            ? $this->slotRendererService->processSlotsWithLayout($html, $layoutData, false, $themeId)
-            : $this->slotRendererService->processSlots($html, $themeId, $pageType, $status);
+            ? $this->slotRendererService->processSlotsWithLayout($html, $layoutData, false, $themeId, $this->resolvePreviewArea())
+            : $this->slotRendererService->processSlots($html, $themeId, $pageType, $status, $this->resolvePreviewArea());
 
         return $this->extractSlotHtml($processedHtml, $orderedSlotIds);
+    }
+
+    private function resolvePreviewArea(): string
+    {
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $area = (string)$request->getParam('preview_area', $request->getParam('editor_area', PreviewContextService::AREA_FRONTEND));
+        } catch (\Throwable) {
+            $area = PreviewContextService::AREA_FRONTEND;
+        }
+
+        return $area === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
     }
 
     /**

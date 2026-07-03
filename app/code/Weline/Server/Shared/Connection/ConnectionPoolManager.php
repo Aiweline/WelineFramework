@@ -113,6 +113,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         );
         $merged['idle_timeout'] = \max((float)($a['idle_timeout'] ?? 300.0), (float)($incoming['idle_timeout'] ?? 300.0));
         $merged['pool_health_ping_idle'] = (bool)(($a['pool_health_ping_idle'] ?? false) || ($incoming['pool_health_ping_idle'] ?? false));
+        $merged['fail_fast_on_cooldown'] = (bool)(($a['fail_fast_on_cooldown'] ?? false) || ($incoming['fail_fast_on_cooldown'] ?? false));
         $merged['log_connect_fail'] = (bool)(($a['log_connect_fail'] ?? true) || ($incoming['log_connect_fail'] ?? false));
         $merged['log_pool_lifecycle'] = (bool)(($a['log_pool_lifecycle'] ?? true) && ($incoming['log_pool_lifecycle'] ?? true));
         if (isset($incoming['service_type']) && \trim((string)$incoming['service_type']) !== '') {
@@ -195,6 +196,12 @@ class ConnectionPoolManager implements ConnectionPoolInterface
 
         while (\microtime(true) <= $deadline) {
             if ($this->isInConnectCooldown()) {
+                if ((bool)($this->options['fail_fast_on_cooldown'] ?? false)) {
+                    $this->recordAcquireMetric($startTime, 'cooldown', $retryCount);
+                    $this->incrementMetric('wls_pool_acquire_cooldown_fast_fail_total', []);
+
+                    return null;
+                }
                 $retryCount++;
                 $this->sleepUntilRetryWindow($deadline);
                 continue;

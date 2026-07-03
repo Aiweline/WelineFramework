@@ -33,7 +33,7 @@
 - `theme-development` -> `前端主题工程师-主题模板开发`
 - `template-source-editing` -> `前端主题工程师-主题模板开发`
 - `frontend-components` -> `前端主题工程师-组件与页面构建`
-- `pagebuilder-style-templates` -> `前端主题工程师-组件与页面构建`
+
 - `website-to-template` -> `前端主题工程师-组件与页面构建`
 - `visitor-pixel` -> `前端主题工程师-组件与页面构建`
 - `frontend-api-interaction` -> `前端主题工程师-前端API交互`

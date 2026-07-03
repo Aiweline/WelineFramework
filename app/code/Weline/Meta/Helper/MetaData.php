@@ -1361,10 +1361,16 @@ class MetaData
             
             $metaList = $query->select()->fetchArray();
             foreach ($metaList as $meta) {
-                $metaIdentifyValue = $meta->getData(Meta::schema_fields_META_IDENTIFY);
+                $metaIdentifyValue = (string)self::readPerformanceRowValue($meta, Meta::schema_fields_META_IDENTIFY, '');
+                if ($metaIdentifyValue === '') {
+                    continue;
+                }
                 $metaRecords[$metaIdentifyValue] = [
-                    'meta' => $meta,
-                    'setting' => json_decode($meta->getData(Meta::schema_fields_SETTING) ?? '{}', true) ?? []
+                    'meta' => self::hydratePerformanceMetaRow($meta),
+                    'setting' => json_decode(
+                        (string)self::readPerformanceRowValue($meta, Meta::schema_fields_SETTING, '{}'),
+                        true
+                    ) ?? []
                 ];
             }
         }
@@ -1400,10 +1406,13 @@ class MetaData
             
             $configList = $query->select()->fetchArray();
             foreach ($configList as $config) {
-                $configKey = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY);
-                $metaIdentifyValue = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY);
-                $configScope = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE) ?? 'default';
-                $configLocale = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_LOCALE);
+                $configKey = (string)self::readPerformanceRowValue($config, \Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY, '');
+                $metaIdentifyValue = (string)self::readPerformanceRowValue($config, \Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY, '');
+                $configScope = (string)self::readPerformanceRowValue($config, \Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, 'default');
+                $configLocale = self::readPerformanceRowValue($config, \Weline\Meta\Model\MetaConfig::schema_fields_LOCALE);
+                if ($configKey === '' || $metaIdentifyValue === '') {
+                    continue;
+                }
                 
                 if (!isset($metaConfigs[$metaIdentifyValue])) {
                     $metaConfigs[$metaIdentifyValue] = [];
@@ -1415,7 +1424,8 @@ class MetaData
                     $metaConfigs[$metaIdentifyValue][$configKey][$configScope] = [];
                 }
                 
-                $metaConfigs[$metaIdentifyValue][$configKey][$configScope][$configLocale ?? ''] = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
+                $metaConfigs[$metaIdentifyValue][$configKey][$configScope][$configLocale ?? ''] =
+                    (string)self::readPerformanceRowValue($config, \Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE, '');
             }
         }
         
@@ -1431,6 +1441,35 @@ class MetaData
         
         $instance->currentPerformanceKey = $key;
         return $instance;
+    }
+
+    protected static function readPerformanceRowValue(mixed $row, string $key, mixed $default = null): mixed
+    {
+        if (is_array($row)) {
+            return $row[$key] ?? $default;
+        }
+
+        if (is_object($row) && method_exists($row, 'getData')) {
+            $value = $row->getData($key);
+            return $value ?? $default;
+        }
+
+        return $default;
+    }
+
+    protected static function hydratePerformanceMetaRow(mixed $row): ?Meta
+    {
+        if ($row instanceof Meta) {
+            return $row;
+        }
+
+        if (is_array($row)) {
+            /** @var Meta $meta */
+            $meta = ObjectManager::make(Meta::class);
+            return $meta->setData($row);
+        }
+
+        return null;
     }
     
     /**
@@ -1519,4 +1558,3 @@ class MetaData
         self::$performanceCache = [];
     }
 }
-

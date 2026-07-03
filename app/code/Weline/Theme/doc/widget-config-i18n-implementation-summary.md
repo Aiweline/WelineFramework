@@ -69,7 +69,8 @@ GET /theme/backend/theme-editor/widget-config?layout_id=485&locale=zh_Hans_CN
       // ... 其他19个配置项
     },
     "config": [],  // 当前配置值（支持多语言）
-    "locale": "zh_Hans_CN"  // 当前语言
+    "locale": "zh_Hans_CN",  // 当前语言
+    "preview_html": "<div>...</div>"  // 当前语言下的部件预览 HTML
   }
 }
 ```
@@ -94,6 +95,7 @@ Content-Type: application/json
 - ✅ 使用 `ThemeData::getWidgetParams()` 获取值（含多语言）
 - ✅ 使用 `ThemeData::setWidgetParams()` 保存值（含多语言）
 - ✅ `locale=null` 时同步更新 `m_theme_layout.config`（向后兼容）
+- ✅ `widget-config` / `save-widget-config` 返回当前语言 `preview_html`，供编辑器即时刷新可视化预览
 
 ---
 
@@ -151,7 +153,7 @@ Content-Type: application/json
 // 1. 重新加载配置（支持多语言）
 async function reloadWidgetConfigWithLocale(layoutId, locale) {
     const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}${locale ? '&locale=' + locale : ''}`;
-    // 加载配置并更新表单
+    // 加载配置并更新表单 + iframe 中对应部件的预览 HTML
     // 显示提示："已切换到 xxx 语言"
 }
 
@@ -159,7 +161,7 @@ async function reloadWidgetConfigWithLocale(layoutId, locale) {
 async function saveWidgetConfigWithLocale(layoutId, configData, locale) {
     const apiUrl = `${config.apiBase}/save-widget-config`;
     const payload = { layout_id, config: configData, locale };
-    // 保存配置
+    // 保存配置，并使用返回的 preview_html 更新可视化预览
     // 显示提示："已保存 xxx 语言的配置"
 }
 
@@ -220,7 +222,7 @@ ThemeData::getWidgetParams($module, $code, $locale, $area)
     ├─ translatable=true → getParamTranslation() → MetaTranslation → i18n_dictionary
     └─ translatable=false → MetaConfig::getConfig() → m_meta_config
     ↓
-返回配置值（含翻译）
+返回配置值（含翻译）和当前语言 preview_html
 ```
 
 **保存流程：**
@@ -236,6 +238,8 @@ ThemeData::setWidgetParams($module, $code, $params, $locale, $area)
     └─ translatable=false → MetaConfig::setConfig() → m_meta_config
     ↓
 如果 locale=null，同步更新 m_theme_layout.config（兼容性）
+    ↓
+返回当前语言 preview_html，前端替换 iframe 中对应部件
 ```
 
 ### 2. 双来源获取策略

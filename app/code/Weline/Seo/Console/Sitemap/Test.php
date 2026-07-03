@@ -293,7 +293,7 @@ class Test implements CommandInterface
 
 此命令会执行以下步骤：
 1. 检查平台适配器（Google, Bing, 百度）
-2. 检查 URL Provider（如 PageBuilder）
+2. 检查 URL Provider
 3. 同步 URL 数据到数据库
 4. 生成平台分组的 Sitemap 文件
 5. 验证生成结果

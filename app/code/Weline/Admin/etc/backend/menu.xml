@@ -4,7 +4,7 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
     <!-- 面板首页 - 归入仪表盘 -->
-    <menu source="Weline_Admin::system_dashboard" name="system_dashboard" title="首页" action="admin"
+    <menu source="Weline_Admin::system_dashboard" name="system_dashboard" title="首页" action="weline_dashboard/backend/dashboard"
          parent="Weline_Backend::dashboard" icon="mdi mdi-home-outline" order="10"/>
     
     <!-- ==================== 用户与权限分组 ==================== -->

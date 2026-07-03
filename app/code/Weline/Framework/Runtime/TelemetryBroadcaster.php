@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Env\WelineEnv;
@@ -91,28 +92,15 @@ class TelemetryBroadcaster
 
     private static function allowsDebugResponseDecoration(): bool
     {
-        return (\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG);
+        return (\defined('DEV') && DEV)
+            || (\defined('DEBUG') && DEBUG)
+            || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE);
     }
 
     private static function hasDevToolActivation(?Request $request): bool
     {
         try {
-            $devToolKey = (string)\Weline\Framework\App\Env::get('dev_tool.key', 'dev_tool');
-            if ($request instanceof Request && $devToolKey !== '' && !empty($request->getGet($devToolKey))) {
-                return true;
-            }
-
-            if ($devToolKey !== '' && !empty($_GET[$devToolKey])) {
-                return true;
-            }
-
-            $cookieName = (string)\Weline\Framework\App\Env::get('dev_tool.cookie_name', 'w_dev_tool');
-            if ($cookieName === '') {
-                return false;
-            }
-
-            return \Weline\Framework\Http\Cookie::get($cookieName) === '1'
-                || (string)($_COOKIE[$cookieName] ?? '') === '1';
+            return ObjectManager::getInstance(PanelAccessService::class)->canAccessPanel($request);
         } catch (\Throwable) {
             return false;
         }
@@ -260,4 +248,3 @@ class TelemetryBroadcaster
         ];
     }
 }
-

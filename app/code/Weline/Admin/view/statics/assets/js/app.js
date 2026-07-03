@@ -170,8 +170,6 @@ File: Main Js File
      * 4. 返回连续匹配的路径段数量，用于选择最佳匹配
      * 
      * 示例：
-     * - 当前页面：/admin/pagebuilder/backend/page/edit
-     * - 菜单A：/admin/pagebuilder/backend/page/index -> 匹配前4段，得分4
      * - 菜单B：/admin/ -> 匹配前1段，得分1
      * - 结果：选择菜单A（得分更高）
      * 

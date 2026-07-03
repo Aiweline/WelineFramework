@@ -3,45 +3,16 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\Service;
 
-use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Visitor\Model\Pixel;
-use Weline\Visitor\Model\PixelAdditional;
 
 class PixelEventService
 {
-    private const PASSIVE_EVENTS_WITH_BROWSER_INFO = [
-        'page_view' => true,
-        'page_load' => true,
-        'homepage' => true,
-        'blog' => true,
-        'category' => true,
-        'search_result_view' => true,
-    ];
-
     public function __construct(
-        private readonly Request $request
+        private readonly Request $request,
+        private ?PixelEventPersistenceService $persistenceService = null,
+        private ?PixelHotBufferService $hotBufferService = null
     ) {
-    }
-
-    /**
-     * @param array<string, mixed> $post
-     */
-    private function shouldPersistAdditional(array $post): bool
-    {
-        foreach (['testId', 'variant', 'test_id', 'testVariant', 'items', 'product_id', 'order_id', 'transaction_id'] as $key) {
-            if (isset($post[$key]) && $post[$key] !== '' && $post[$key] !== []) {
-                return true;
-            }
-        }
-
-        $event = (string)($post['eventName'] ?? $post['event'] ?? '');
-        if (\str_starts_with($event, 'account_')) {
-            return false;
-        }
-
-        return !isset(self::PASSIVE_EVENTS_WITH_BROWSER_INFO[$event]);
     }
 
     /**
@@ -230,6 +201,32 @@ class PixelEventService
      */
     public function track(array $payload): array
     {
+        $prepared = $this->prepare($payload);
+        $buffer = $this->hotBuffer()->buffer($prepared);
+        if ($buffer) {
+            return $this->successResponse([
+                'pixel_id' => null,
+                'pixel_additional_id' => null,
+                'buffered' => true,
+                'event_id' => $prepared['event_id'],
+                'event' => $prepared['data']['event'] ?? '',
+                'hot_buffer' => $buffer,
+            ]);
+        }
+
+        $responseData = $this->persistence()->persistPrepared($prepared['post'], $prepared['data']);
+        $responseData['buffered'] = false;
+        $responseData['event_id'] = $prepared['event_id'];
+
+        return $this->successResponse($responseData);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{post: array<string, mixed>, data: array<string, mixed>, event_id: string, received_at: int}
+     */
+    private function prepare(array $payload): array
+    {
         $post = $this->compactPayload($this->normalizePayload($payload));
         $post['source'] = $post['source'] ?? 'worker';
 
@@ -250,6 +247,8 @@ class PixelEventService
             }
         }
 
+        $eventId = $this->resolveEventId($post);
+        $post['event_id'] = $eventId;
         $data = [
             'url' => (string)$this->truncateScalar($url, 255),
             'module' => substr((string)($post['module'] ?? ''), 0, 255),
@@ -269,46 +268,20 @@ class PixelEventService
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
         ];
 
-        /** @var Pixel $pixel */
-        $pixel = ObjectManager::make(Pixel::class);
-        try {
-            $pixel->save($data);
-        } catch (Exception $e) {
-            throw new \RuntimeException($e->getMessage(), 0, $e);
-        }
-
-        $pixelId = $pixel->getId();
-        $pixelAdditionalId = null;
-        $additionalData = $post;
-
-        if ($pixelId && $this->shouldPersistAdditional($post)) {
-            try {
-                $this->normalizeAbTestFields($post, $additionalData);
-
-                /** @var PixelAdditional $pixelAdditional */
-                $pixelAdditional = ObjectManager::make(PixelAdditional::class);
-                $pixelAdditional->setPixelId((int)$pixelId)
-                    ->setTotalEventData(json_encode($additionalData, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}')
-                    ->save();
-
-                $pixelAdditionalId = $pixelAdditional->getId() ?: null;
-            } catch (Exception $e) {
-                w_log_error('Pixel Additional Save Error: ' . $e->getMessage());
-            }
-        }
-
-        $responseData = [
-            'pixel_id' => $pixelId,
-            'pixel_additional_id' => $pixelAdditionalId,
+        return [
+            'post' => $post,
+            'data' => $data,
+            'event_id' => $eventId,
+            'received_at' => \time(),
         ];
+    }
 
-        if (isset($additionalData['testId']) || isset($additionalData['variant'])) {
-            $responseData['ab_test'] = [
-                'testId' => $additionalData['testId'] ?? null,
-                'variant' => $additionalData['variant'] ?? null,
-            ];
-        }
-
+    /**
+     * @param array<string, mixed> $responseData
+     * @return array<string, mixed>
+     */
+    private function successResponse(array $responseData): array
+    {
         return [
             'success' => true,
             'error' => false,
@@ -317,6 +290,24 @@ class PixelEventService
             'message' => (string)__('请求成功！'),
             'data' => $responseData,
         ];
+    }
+
+    private function persistence(): PixelEventPersistenceService
+    {
+        if (!$this->persistenceService) {
+            $this->persistenceService = ObjectManager::getInstance(PixelEventPersistenceService::class);
+        }
+
+        return $this->persistenceService;
+    }
+
+    private function hotBuffer(): PixelHotBufferService
+    {
+        if (!$this->hotBufferService) {
+            $this->hotBufferService = ObjectManager::getInstance(PixelHotBufferService::class);
+        }
+
+        return $this->hotBufferService;
     }
 
     /**
@@ -355,23 +346,14 @@ class PixelEventService
 
     /**
      * @param array<string, mixed> $post
-     * @param array<string, mixed> $additionalData
      */
-    private function normalizeAbTestFields(array $post, array &$additionalData): void
+    private function resolveEventId(array $post): string
     {
-        if (!isset($post['testId']) && !isset($post['variant']) && !isset($post['test_id']) && !isset($post['testVariant'])) {
-            return;
-        }
-        if (isset($post['test_id']) && !isset($additionalData['testId'])) {
-            $additionalData['testId'] = substr((string)$post['test_id'], 0, 255);
-        } elseif (isset($post['testId'])) {
-            $additionalData['testId'] = substr((string)$post['testId'], 0, 255);
+        $eventId = (string)($post['event_id'] ?? $post['eventId'] ?? '');
+        if ($eventId !== '') {
+            return \substr($eventId, 0, 80);
         }
 
-        if (isset($post['testVariant']) && !isset($additionalData['variant'])) {
-            $additionalData['variant'] = substr((string)$post['testVariant'], 0, 10);
-        } elseif (isset($post['variant'])) {
-            $additionalData['variant'] = substr((string)$post['variant'], 0, 10);
-        }
+        return 'wv-server-' . \substr(\sha1(\json_encode([$post, \microtime(true)], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: \uniqid('', true)), 0, 24);
     }
 }

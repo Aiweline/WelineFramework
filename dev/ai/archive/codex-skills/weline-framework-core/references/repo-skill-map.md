@@ -18,7 +18,7 @@ Use these repo skills on demand instead of loading many at once.
 - `sse-streaming`: EventSource/SSE flows
 - `unified-query-provider`: `w_query()` and cross-module querying
 - `acl-permission-system`: ACL and permission wiring
-- `pagebuilder-style-templates`: PageBuilder templates and style conventions
+
 
 Recommended routing:
 

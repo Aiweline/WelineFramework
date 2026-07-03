@@ -57,6 +57,7 @@ final class ThemeDataRequestState
  */
 class ThemeData
 {
+    public const WIDGET_I18N_INSTANCE_CONFIG_KEY = '_i18n_instance';
     private const RUNTIME_CACHE_TTL = 300;
     private const SHARED_CACHE_NAMESPACE = 'weline_site_runtime';
 
@@ -791,16 +792,16 @@ class ThemeData
         }
 
         /** @var Dictionary $dict */
-        $dict = ObjectManager::getInstance(Dictionary::class);
+        $dict = clone ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(Dictionary::schema_fields_MD5, $md5);
-
-        $dict->setData(Dictionary::schema_fields_MD5, $md5);
-        $dict->setData(Dictionary::schema_fields_WORD, $translationKey);
-        $dict->setData(Dictionary::schema_fields_LOCALE_CODE, $locale);
-        $dict->setData(Dictionary::schema_fields_TRANSLATE, $value);
-
-        $dict->save();
+        $dict->clearData()->clearQuery()
+            ->insert([
+                Dictionary::schema_fields_MD5 => $md5,
+                Dictionary::schema_fields_WORD => $translationKey,
+                Dictionary::schema_fields_LOCALE_CODE => $locale,
+                Dictionary::schema_fields_TRANSLATE => $value,
+            ], Dictionary::schema_fields_MD5)
+            ->fetch();
 
         // 清除性能缓存中与该 meta 相关的翻译缓存（如果以后有需要，可以在此扩展）
         return true;
@@ -828,9 +829,9 @@ class ThemeData
         }
 
         /** @var Dictionary $dict */
-        $dict = ObjectManager::getInstance(Dictionary::class);
+        $dict = clone ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(Dictionary::schema_fields_MD5, $md5);
+        $dict->clearData()->clearQuery()->load(Dictionary::schema_fields_MD5, $md5);
 
         if ($dict->getId()) {
             $dict->delete();
@@ -1779,6 +1780,17 @@ class ThemeData
     {
         return "theme.{$area}.widgets.{$widgetModule}.{$widgetCode}";
     }
+
+    public static function getWidgetInstanceIdentify(string $instanceId, string $area = 'frontend'): string
+    {
+        $area = trim($area) !== '' ? trim($area) : 'frontend';
+        $instanceId = preg_replace('/[^a-zA-Z0-9_-]+/', '_', trim($instanceId)) ?: '';
+        if ($instanceId === '') {
+            $instanceId = 'unknown';
+        }
+
+        return "theme.{$area}.widget_instances.{$instanceId}";
+    }
     
     /**
      * 获取部件参数定义（不含值，仅结构）
@@ -2066,16 +2078,16 @@ class ThemeData
         }
 
         /** @var Dictionary $dict */
-        $dict = ObjectManager::getInstance(Dictionary::class);
+        $dict = clone ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(Dictionary::schema_fields_MD5, $md5);
-
-        $dict->setData(Dictionary::schema_fields_MD5, $md5);
-        $dict->setData(Dictionary::schema_fields_WORD, $translationKey);
-        $dict->setData(Dictionary::schema_fields_LOCALE_CODE, $locale);
-        $dict->setData(Dictionary::schema_fields_TRANSLATE, $value);
-
-        $dict->save();
+        $dict->clearData()->clearQuery()
+            ->insert([
+                Dictionary::schema_fields_MD5 => $md5,
+                Dictionary::schema_fields_WORD => $translationKey,
+                Dictionary::schema_fields_LOCALE_CODE => $locale,
+                Dictionary::schema_fields_TRANSLATE => $value,
+            ], Dictionary::schema_fields_MD5)
+            ->fetch();
         return true;
     }
 
@@ -2094,6 +2106,11 @@ class ThemeData
         string $identify,
         ?string $locale = null
     ): array {
+        $effectiveLocale = $locale ?? (Cookie::getLangLocal() ?? \Weline\Framework\App\Env::default_LANGUAGE_CODE);
+        if ($effectiveLocale === \Weline\Framework\App\Env::default_LANGUAGE_CODE) {
+            return $baseConfig;
+        }
+
         $paths = self::getTranslatablePaths($paramDefs);
 
         foreach ($paths['top'] as $paramName) {
@@ -2150,33 +2167,39 @@ class ThemeData
             }
         }
 
-        if ($locale === null) {
-            $resolvedLocale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
-            foreach ($paths['top'] as $paramName) {
-                if (array_key_exists($paramName, $normalConfig) && is_scalar($normalConfig[$paramName])) {
-                    self::setParamTranslation($identify, $paramName, (string)$normalConfig[$paramName], 'default', $resolvedLocale);
-                }
+        $resolvedLocale = $locale ?? \Weline\Framework\App\Env::default_LANGUAGE_CODE;
+        foreach ($paths['top'] as $paramName) {
+            if (array_key_exists($paramName, $normalConfig) && is_scalar($normalConfig[$paramName])) {
+                self::setParamTranslation($identify, $paramName, (string)$normalConfig[$paramName], 'default', $resolvedLocale);
             }
+        }
 
-            foreach ($paths['array'] as $arrayKey => $subFields) {
-                if (!isset($normalConfig[$arrayKey]) || !is_array($normalConfig[$arrayKey])) {
+        foreach ($paths['array'] as $arrayKey => $subFields) {
+            if (!isset($normalConfig[$arrayKey]) || !is_array($normalConfig[$arrayKey])) {
+                continue;
+            }
+            foreach ($normalConfig[$arrayKey] as $index => $item) {
+                if (!is_array($item)) {
                     continue;
                 }
-                foreach ($normalConfig[$arrayKey] as $index => $item) {
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    foreach ($subFields as $fieldKey) {
-                        if (array_key_exists($fieldKey, $item) && is_scalar($item[$fieldKey])) {
-                            $path = "{$arrayKey}.{$index}.{$fieldKey}";
-                            self::setPathTranslation($identify, $path, (string)$item[$fieldKey], 'default', $resolvedLocale);
-                        }
+                foreach ($subFields as $fieldKey) {
+                    if (array_key_exists($fieldKey, $item) && is_scalar($item[$fieldKey])) {
+                        $path = "{$arrayKey}.{$index}.{$fieldKey}";
+                        self::setPathTranslation($identify, $path, (string)$item[$fieldKey], 'default', $resolvedLocale);
                     }
                 }
+            }
+        }
+
+        if ($locale !== null) {
+            foreach ($paths['top'] as $paramName) {
+                unset($normalConfig[$paramName]);
+            }
+            foreach (array_keys($paths['array']) as $arrayKey) {
+                unset($normalConfig[$arrayKey]);
             }
         }
 
         return $normalConfig;
     }
 }
-

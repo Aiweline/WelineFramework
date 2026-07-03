@@ -15,7 +15,7 @@ Aws_Domains | Model/AwsConfig.php, Model/DomainOperation.php | [x]
 ## GuoLaiRen
 GuoLaiRen_Blog | Model/Category.php, Model/Post.php, Model/TrendProfile.php, Model/TrendingKeywordLog.php, Model/TrendSiteQuota.php | [x]
 GuoLaiRen_Desensitization | Model/DesensitizationLog.php, Model/DesensitizationRule.php | [x]
-GuoLaiRen_PageBuilder | Model/AiComponentDraft.php, Model/Component.php, Model/FormSubmission.php, Model/Page.php, Model/PageLayout.php, Model/Style.php, Model/WebsiteUser.php | [x]
+
 
 ## Weline
 Weline_Acl | Model/Acl.php, Model/IpWhitelist.php, Model/Role.php, Model/RoleAccess.php, Model/SecurityLog.php, Model/WhiteAclSource.php | [x]

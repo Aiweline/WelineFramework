@@ -481,14 +481,21 @@ class LinuxProcessDriver extends AbstractProcessDriver
         }
         
         // 方案3：lsof 不带 -sTCP:LISTEN（某些旧版 lsof 不支持 -sTCP 参数）
+        // 必须解析 LISTEN 状态；macOS 上 lsof -ti:PORT 会返回已关闭的客户端 socket PID。
         $output = [];
-        $this->executeCommand("lsof -ti:{$port} 2>/dev/null", $output);
+        $this->executeCommand("lsof -nP -iTCP:{$port} 2>/dev/null", $output);
         
-        if (!empty($output[0])) {
-            $pid = $this->sanitizePid($output[0]);
-            if ($pid > 0) {
-                return $pid;
+        foreach ($output as $line) {
+            if (\stripos((string) $line, 'LISTEN') === false) {
+                continue;
             }
+            $parts = \preg_split('/\s+/', \trim((string) $line));
+            $pid = $this->sanitizePid((string) ($parts[1] ?? ''));
+            if ($pid <= 0) {
+                continue;
+            }
+
+            return $pid;
         }
         
         // 方案4：fuser（某些最小化 Linux 发行版中可用）

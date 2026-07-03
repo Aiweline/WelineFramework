@@ -15,7 +15,7 @@ use Weline\Websites\Model\Website;
  * 功能：
  * - 网站级维护模式（后台仍可访问）
  */
-#[Acl('Weline_Websites::website_maintenance', '网站维护模式', 'mdi-tools', '网站维护模式', 'Weline_Backend::website_service')]
+#[Acl('Weline_Websites::website_maintenance', '网站维护模式', 'mdi-tools', '网站维护模式', 'Weline_Websites::website_service')]
 class Maintenance extends BackendController
 {
     /**
@@ -124,4 +124,3 @@ class Maintenance extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 }
-

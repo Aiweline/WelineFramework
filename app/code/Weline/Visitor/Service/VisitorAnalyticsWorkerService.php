@@ -190,7 +190,7 @@ class VisitorAnalyticsWorkerService
 
         $model = \w_obj(Pixel::class)->reset()
             ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
-            ->field(Pixel::schema_fields_EVENT)
+            ->fields(Pixel::schema_fields_EVENT)
             ->group(Pixel::schema_fields_EVENT);
         $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
         $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');

@@ -340,6 +340,7 @@ class RequestContext
         $context->set('route.language', $lang);
         self::set('env.user.lang', $lang);
         $_SERVER['WELINE_USER_LANG'] = $lang;
+        \Weline\Framework\App\State::resetLangLocalCache();
     }
 
     public static function getWelineUserCurrency(): string
@@ -358,6 +359,7 @@ class RequestContext
         $context->set('route.currency', $currency);
         self::set('env.user.currency', $currency);
         $_SERVER['WELINE_USER_CURRENCY'] = $currency;
+        \Weline\Framework\App\State::resetLangLocalCache();
     }
 
     public static function isBackendArea(): bool
@@ -420,6 +422,7 @@ class RequestContext
         $_SERVER['WELINE_AREA_ROUTE'] = '';
         $_SERVER['WELINE_IS_BACKEND'] = false;
         unset($_SERVER['WELINE_WEBSITE_ID'], $_SERVER['WELINE_WEBSITE_CODE'], $_SERVER['WELINE_WEBSITE_URL'], $_SERVER['WELINE_USER_LANG'], $_SERVER['WELINE_USER_CURRENCY'], $_SERVER['WELINE_CONNECTION_ID']);
+        \Weline\Framework\App\State::resetLangLocalCache();
     }
 
     public static function websiteId(?int $websiteId = null): ?int

@@ -127,7 +127,7 @@ echo "  Contains '建站': " . (stripos($body, '建站') !== false ? 'yes' : 'no
 echo "  Contains '工作台': " . (stripos($body, '工作台') !== false ? 'yes' : 'no') . "\n";
 
 // Step 4: Create session via API
-$createUrl = "$baseUrl/$prefix/pagebuilder/backend/ai-site-agent/post-create-session";
+
 $ch = curl_init($createUrl);
 curl_setopt_array($ch, $sslOpts + [
     CURLOPT_RETURNTRANSFER => true,

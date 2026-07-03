@@ -421,13 +421,10 @@ return [
             // skip_bulk_launch_port_reprobe：Start CLI 已完成端口预检后，Master 批量拉起阶段不再逐端口重复探测。
             'skip_bulk_launch_port_reprobe' => true,
         ],
-        // WLS 常驻 Worker 下开发面板默认不注入（避免大段 HTML）；本地调试 ?dev_tool=1 时仍须此项为 true
+        // WLS 常驻 Worker 下的开发面板统一由 Weline Panel 注入；生产环境见 dev_tool.panel token 门禁。
         'debug' => [
             // 闈炲父楂樺紑閿€锛氫細璁板綍 Session / Router / URL 瑙ｆ瀽绛夌儹璺粏绮掑害鏃ュ織锛屽彧搴旂煭鏃舵墜鍔ㄦ墦寮€
             'hot_path_logs' => false,
-            'dev_tool_panel' => false,
-            // WLS 性能诊断面板：开发/调试模式可通过输入 wls 打开，生产环境仍需显式授权。
-            'performance_panel' => true,
         ],
     ],
     
@@ -534,10 +531,15 @@ return [
     'debug_key' => null,
     
     'dev_tool' => [
-        'enable_in_prod' => false,
-        'key' => 'dev_tool',
-        'cookie_name' => 'w_dev_tool',
-        'secret' => '',
-        // WLS 模式另见顶层 wls.debug.dev_tool_panel
+        'panel' => [
+            // 开发环境 DEV/DEBUG 会自动注入；生产环境必须 enable_in_prod=true 且 token/token_hash 二选一才注入轻量入口。
+            'enable_in_prod' => false,
+            // 仅示例占位，真实 token 不要提交到仓库。
+            'token' => '',
+            // 推荐使用 hash('sha256', token) 或 password_hash(token, PASSWORD_DEFAULT)。
+            'token_hash' => '',
+            'cookie_name' => 'w_weline_panel',
+            'session_ttl' => 3600,
+        ],
     ],
 ];

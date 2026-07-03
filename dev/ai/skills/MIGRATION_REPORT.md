@@ -43,7 +43,6 @@ This migration rewrites the legacy Weline AI skill set into a Multica-compatible
 - `dev/ai/skills/windows-command-quoting/SKILL.md`
 - `dev/ai/skills/weline-routing/SKILL.md`
 - `dev/ai/skills/sse-streaming/SKILL.md`
-- `dev/ai/skills/pagebuilder-style-templates/SKILL.md`
 - `dev/ai/skills/visitor-pixel/SKILL.md`
 - `dev/ai/skills/website-to-template/SKILL.md`
 - `dev/ai/skills/community-module/SKILLS-CONSOLIDATED.md`
@@ -59,4 +58,3 @@ No listed mandatory or original source files were missing at migration time.
 - Each skill is self-contained and does not require loading the legacy source files at runtime.
 - Shared Weline constraints were redistributed only to the roles they materially affect.
 - The legacy topic-based skill directories were removed after the role-based consolidation was validated.
-- PageBuilder style/template skills were later moved to `E:\公司\远程\src\weline`; the source repository no longer exposes or maintains PageBuilder runtime skills.

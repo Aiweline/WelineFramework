@@ -1,0 +1,64 @@
+<?php
+$rows = [
+    [__('视图'), __('默认概览'), __('系统共享视图')],
+    [__('布局'), __('4 个固定区域'), __('指标、分析、侧栏、明细')],
+    [__('部件'), __('后台专用'), __('由后台统计部件提供')],
+];
+?>
+<section class="dashboard-widget dashboard-widget-detail-snapshot">
+    <header>
+        <h3><?= __('默认明细') ?></h3>
+        <span><?= __('Dashboard') ?></span>
+    </header>
+    <table>
+        <tbody>
+        <?php foreach ($rows as $row): ?>
+            <tr>
+                <th><?= htmlspecialchars((string)$row[0]) ?></th>
+                <td>
+                    <strong><?= htmlspecialchars((string)$row[1]) ?></strong>
+                    <span><?= htmlspecialchars((string)$row[2]) ?></span>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+</section>
+<style>
+.dashboard-widget-detail-snapshot table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.dashboard-widget-detail-snapshot th,
+.dashboard-widget-detail-snapshot td {
+    border-bottom: 1px solid var(--w-dashboard-border, var(--backend-color-border, #e5e7eb));
+    padding: 10px 0;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.35;
+    vertical-align: top;
+}
+.dashboard-widget-detail-snapshot th {
+    width: 32%;
+    color: var(--w-dashboard-muted, var(--backend-color-text-secondary, #6b7280));
+    font-weight: 500;
+    padding-right: 16px;
+    white-space: nowrap;
+}
+.dashboard-widget-detail-snapshot td strong {
+    display: block;
+    color: var(--w-dashboard-heading, var(--backend-color-text-primary, #1f2937));
+    font-weight: 700;
+}
+.dashboard-widget-detail-snapshot td span {
+    display: block;
+    margin-top: 3px;
+    color: var(--w-dashboard-muted, var(--backend-color-text-secondary, #6b7280));
+    font-size: 12px;
+    line-height: 1.35;
+}
+.dashboard-widget-detail-snapshot tr:last-child th,
+.dashboard-widget-detail-snapshot tr:last-child td {
+    border-bottom: 0;
+}
+</style>

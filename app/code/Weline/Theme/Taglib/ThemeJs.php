@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Template;
-use Weline\Framework\View\Data\DataInterface;
 use Weline\Taglib\TaglibInterface;
 
 class ThemeJs implements TaglibInterface
@@ -57,38 +54,66 @@ class ThemeJs implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            /** @var Template $template */
-            $template = ObjectManager::getInstance(Template::class);
-            
-            // 对于成对标签，内容在 $tag_data[2]，属性在 $tag_data[1]
-            // 对于 @tag() 或 @tag{} 格式，内容在 $tag_data[1]
-            $content = '';
-            $attrs = '';
-            
+            // 框架约定：tag_data[0]=rawTag, [1]=rawAttributes/内联内容, [2]=子内容
+            // 若 [1] 被误当作路径（含 :: 或 /），不得作为 HTML 属性输出，并优先当作 content
+            $raw1 = trim((string)($tag_data[1] ?? ''));
+            $raw2 = trim((string)($tag_data[2] ?? ''));
+            $looksLikePath = $raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'));
+
             if ($tag_key === 'tag') {
-                // 成对标签：<theme:js>content</theme:js>
-                $attrs = $tag_data[1] ?? '';
-                $content = trim($tag_data[2] ?? '');
+                $content = $raw2 !== '' ? $raw2 : $raw1;
+                $attrs = (!$looksLikePath && $raw1 !== '') ? $raw1 : '';
+            } elseif ($tag_key === '@tag()' || $tag_key === '@tag{}') {
+                $content = $raw1;
+                $attrs = '';
             } else {
-                // @tag() 或 @tag{} 格式
-                $content = trim($tag_data[1] ?? '');
+                $content = $raw2 !== '' ? $raw2 : $raw1;
+                $attrs = '';
             }
-            
+
             if (empty($content)) {
                 return '';
             }
-            
-            try {
-                $src = $template->fetchTagSource(DataInterface::dir_type_THEME, $content);
-                
-                $attrsStr = $attrs ? ' ' . trim($attrs) : '';
-                $result = "<script{$attrsStr} src='{$src}'></script>";
-                
-                return $result;
-            } catch (\Exception $e) {
-                throw $e;
-            }
+
+            $contentPhp = self::buildRuntimeStringExpression($content);
+            $attrsPhp = var_export($attrs ? ' ' . trim($attrs) : '', true);
+
+            return "<?php \$__themeJsSrc = \$this->fetchTagSource(\\Weline\\Framework\\View\\Data\\DataInterface::dir_type_THEME, {$contentPhp});"
+                . " if (\$__themeJsSrc !== '') { echo '<script' . {$attrsPhp} . ' src=\\''"
+                . " . htmlspecialchars((string)\$__themeJsSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')"
+                . " . '\\'></script>'; } ?>";
         };
+    }
+
+    private static function buildRuntimeStringExpression(string $content): string
+    {
+        $segments = [];
+        $offset = 0;
+        $pattern = '/<\?(?:php\s+echo|=)\s*(.*?)\s*;?\s*\?>/s';
+
+        if (preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+            foreach ($matches[0] as $index => $match) {
+                [$fullTag, $position] = $match;
+                $literal = substr($content, $offset, $position - $offset);
+                if ($literal !== '') {
+                    $segments[] = var_export($literal, true);
+                }
+
+                $expression = trim((string)$matches[1][$index][0]);
+                if ($expression !== '') {
+                    $segments[] = '(string)(' . $expression . ')';
+                }
+
+                $offset = $position + strlen($fullTag);
+            }
+        }
+
+        $tail = substr($content, $offset);
+        if ($tail !== '') {
+            $segments[] = var_export($tail, true);
+        }
+
+        return $segments ? implode(' . ', $segments) : "''";
     }
 
     /**
@@ -123,4 +148,3 @@ class ThemeJs implements TaglibInterface
         return '主题JavaScript文件标签，用于加载theme目录下的JS文件';
     }
 }
-

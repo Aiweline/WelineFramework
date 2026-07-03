@@ -53,6 +53,8 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('.account-hook-nav-link.is-active', $content);
         $this->assertStringContainsString('.account-hook-nav-link.is-active:not([data-account-nav-parent])', $content);
         $this->assertStringContainsString('.account-hook-nav-link[data-account-nav-parent].is-active', $content);
+        $this->assertStringContainsString('.account-hook-nav-group--developer', $content);
+        $this->assertStringContainsString('order: 90;', $content);
         $this->assertStringContainsString('order: 21;', $content);
         $this->assertStringContainsString('justify-content: flex-start;', $content);
         $this->assertStringContainsString('padding: 0.75rem 1rem;', $content);
@@ -76,7 +78,7 @@ final class AccountSidebarHookHostTest extends TestCase
         $css = (string) file_get_contents($cssFile);
         $template = (string) file_get_contents($templateFile);
 
-        $this->assertStringContainsString('20260527-account-mobile-wrap-1', $template);
+        $this->assertStringContainsString('20260701-sidebar-content-loop-guard-1', $template);
         $this->assertStringContainsString('.account-index__user-info', $css);
         $this->assertStringContainsString('max-width: 100%;', $css);
         $this->assertStringContainsString('.account-index__username', $css);

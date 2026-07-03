@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
+use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locals;
 
 class I18nQueryProvider implements QueryProviderInterface
@@ -47,17 +49,51 @@ class I18nQueryProvider implements QueryProviderInterface
         $height = (int)($params['height'] ?? 15);
         $installed = (bool)($params['installed'] ?? true);
 
-        $raw = $this->i18n->getLocalesWithFlagsDisplaySelf($displayLocale, $width, $height, $installed);
-
         $list = [];
-        foreach ($raw as $code => $info) {
+        foreach ($this->loadInstalledLocaleRows($installed) as $row) {
+            $code = (string)($row[Locale::schema_fields_CODE] ?? '');
+            if ($code === '') {
+                continue;
+            }
+
+            $countryCode = (string)($row[Locale::schema_fields_COUNTRY_CODE] ?? '');
+            $flag = $countryCode !== ''
+                ? $this->i18n->getCountryFlag($countryCode, $width, $height)
+                : (string)($row[Locale::schema_fields_FLAG] ?? '');
+            $name = $this->i18n->getLocaleName($code, $displayLocale);
+            $selfName = $this->i18n->getLocaleName($code, $code);
+            if ($selfName !== '' && $selfName !== $name) {
+                $name .= "({$selfName})";
+            }
+
             $list[] = [
-                'code' => (string)$code,
-                'name' => (string)($info['name'] ?? $code),
-                'flag' => (string)($info['flag'] ?? ''),
+                'code' => $code,
+                'name' => $name !== '' ? $name : $code,
+                'flag' => $flag,
             ];
         }
         return $list;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function loadInstalledLocaleRows(bool $installed): array
+    {
+        /** @var Locale $locale */
+        $locale = ObjectManager::getInstance(Locale::class);
+        $query = $locale->reset()
+            ->where(Locale::schema_fields_IS_ACTIVE, 1);
+        if ($installed) {
+            $query->where(Locale::schema_fields_IS_INSTALL, 1);
+        }
+
+        $rows = $query
+            ->order(Locale::schema_fields_CODE, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        return is_array($rows) ? array_values($rows) : [];
     }
 
     private function getLocaleByCode(array $params): ?array

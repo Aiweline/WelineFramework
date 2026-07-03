@@ -84,15 +84,15 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->session->logout();
             $this->session->getSession()->destroy();
         }
+        $returnUrl = $this->getRequestedReturnUrl();
         if ($this->session->isLoggedIn()) {
             $targetPath = $this->resolveDefaultRedirectTarget();
-            w_auth_log('login_index_already_logged_in', '已登录，重定向后台', ['target_path' => $targetPath, 'user_id' => $this->session->getUserId(), 'session' => $this->getSessionDataForLog()]);
-            $this->redirectReferer();
+            w_auth_log('login_index_already_logged_in', '已登录，重定向后台', ['target_path' => $targetPath, 'return_url' => $returnUrl, 'user_id' => $this->session->getUserId(), 'session' => $this->getSessionDataForLog()]);
+            $this->redirectReferer(null, $returnUrl);
             $this->redirect($this->getBackendUrlSameOrigin($targetPath));
         }
         //$this->session->delete('backend_disable_login');
         $this->assign('post_url', $this->getBackendUrlSameOrigin('admin/login/post'));
-        $returnUrl = $this->getRequestedReturnUrl();
         if ($returnUrl !== '') {
             $this->session->set('backend_login_referer', $returnUrl);
         }

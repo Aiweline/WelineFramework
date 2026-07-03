@@ -373,34 +373,6 @@ class Core
         return null;
     }
 
-    private static function isStaleEmptyRootRouterCache(
-        string $requestArea,
-        string $url,
-        array|string|null $rule,
-        mixed $router
-    ): bool {
-        if ($requestArea !== \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND) {
-            return false;
-        }
-
-        if (trim($url, '/') !== '') {
-            return false;
-        }
-
-        if (!is_array($rule) || !empty($rule['module'])) {
-            return false;
-        }
-
-        if (!is_array($router)) {
-            return false;
-        }
-
-        return ($router['module'] ?? '') === 'GuoLaiRen_PageBuilder'
-            && (($router['class']['name'] ?? '') === 'GuoLaiRen\\PageBuilder\\Controller\\Frontend\\Page')
-            && strtolower((string)($router['class']['method'] ?? '')) === 'view';
-    }
-
-
     /**
      * @DESC         |路由处理
      *
@@ -465,23 +437,15 @@ class Core
             && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
         ) {
             $cachedRouter = $this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
-            if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $cachedRouter)) {
-                $this->clearCurrentRequestRouteCaches();
-            } else {
-                $this->router = $cachedRouter;
-                return $this->route();
-            }
+            $this->router = $cachedRouter;
+            return $this->route();
         }
         
         // 回退到旧的缓存方式（兼容性）
         $router = $canUseRouteCache ? $this->cache->get($this->_router_cache_key) : null;
         if ($router) {
-            if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $router)) {
-                $this->clearCurrentRequestRouteCaches();
-            } else {
-                $this->router = $router;
-                return $this->route();
-            }
+            $this->router = $router;
+            return $this->route();
         }
         # 后台接口请求
         
@@ -546,8 +510,7 @@ class Core
         }
         $url = str_replace('//', '/', trim($url, '/'));
         // 后台：WELINE_AREA=backend 时 getAreaRouter() 为空，str_replace(area_router) 不会去掉入口 key。
-        // 若 REQUEST_URI 仍含 /{backendPrefix}/...（解析未写回或上下文漂移），此处兜底剥掉首段，避免误匹配到
-        // 「key/pagebuilder/...」而 404。
+        // 若 REQUEST_URI 仍含 /{backendPrefix}/...（解析未写回或上下文漂移），此处兜底剥掉首段，避免误匹配。
         if ($this->is_backend && $url !== '') {
             $backendPrefix = Env::getAreaRoutePrefix('backend');
             if (\is_string($backendPrefix) && $backendPrefix !== '') {

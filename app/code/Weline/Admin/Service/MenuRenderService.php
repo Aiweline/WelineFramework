@@ -36,6 +36,8 @@ class MenuRenderService
 {
     private const FREQUENT_MENU_CACHE_TTL = 30.0;
     private const RENDER_MENU_CACHE_TTL = 60.0;
+    private const DASHBOARD_ROOT_SOURCE_ID = 'Weline_Backend::dashboard';
+    private const DASHBOARD_HOME_SOURCE_ID = 'Weline_Admin::system_dashboard';
 
     /**
      * @var MenuAccessLog
@@ -156,7 +158,68 @@ class MenuRenderService
         // WLS 兼容逻辑已在 MenuService 中处理，这里只根据 userId 调用服务
         /** @var \Weline\Backend\Service\MenuServiceInterface $menuService */
         $menuService = ObjectManager::getInstance(\Weline\Backend\Service\MenuService::class);
-        return $menuService->getMenuTreeByUserId((int)$user->getId());
+        $menus = $menuService->getMenuTreeByUserId((int)$user->getId());
+
+        return $this->isDashboardOnlySidebar() ? $this->filterDashboardMenuTree($menus) : $menus;
+    }
+
+    public function isDashboardOnlySidebar(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $menus
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterDashboardMenuTree(array $menus): array
+    {
+        foreach ($menus as $menu) {
+            if ((string)($menu['source_id'] ?? '') !== self::DASHBOARD_ROOT_SOURCE_ID) {
+                continue;
+            }
+
+            $dashboardMenu = $menu;
+            $homeNode = $this->findMenuNodeBySource($dashboardMenu['nodes'] ?? [], self::DASHBOARD_HOME_SOURCE_ID);
+            $dashboardMenu['nodes'] = $homeNode === null ? [] : [$this->stripMenuChildren($homeNode)];
+
+            return [$dashboardMenu];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $nodes
+     * @return array<string, mixed>|null
+     */
+    private function findMenuNodeBySource(array $nodes, string $sourceId): ?array
+    {
+        foreach ($nodes as $node) {
+            if (!is_array($node)) {
+                continue;
+            }
+            if ((string)($node['source_id'] ?? '') === $sourceId) {
+                return $node;
+            }
+            $found = $this->findMenuNodeBySource($node['nodes'] ?? [], $sourceId);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @return array<string, mixed>
+     */
+    private function stripMenuChildren(array $node): array
+    {
+        $node['nodes'] = [];
+
+        return $node;
     }
 
     /**
@@ -168,6 +231,14 @@ class MenuRenderService
      */
     public function getFrequentMenus(int $limit = 20, int $days = 7): array
     {
+        if ($this->isDashboardOnlySidebar()) {
+            return [
+                'recentMenus' => [],
+                'frequentMenus' => [],
+                'hasFrequentMenus' => false
+            ];
+        }
+
         $user = $this->getCurrentUser();
         if (!$user || !$user->getId()) {
             return [

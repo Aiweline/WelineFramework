@@ -279,7 +279,7 @@ class Pixel extends Model
         // 先获取该时间范围内所有事件
         $eventModel = w_obj(self::class)->reset()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
-            ->field(self::schema_fields_EVENT)
+            ->fields(self::schema_fields_EVENT)
             ->group(self::schema_fields_EVENT);
         
         if ($startDate !== null) {
@@ -406,87 +406,63 @@ class Pixel extends Model
                 case 'yearly':
                     $startDate = date('Y-m-d 00:00:00', strtotime('-5 years'));
                     break;
+                default:
+                    $startDate = date('Y-m-d 00:00:00', strtotime('-30 days'));
+                    break;
             }
         }
         
-        // 获取模型实例
-        $model = w_obj(self::class);
-        $connector = $model->getConnection()->getConnector();
-        $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
-        $tableName = $prefix . $model->getTable();
-        
-        // 根据时间维度构建SQL日期格式化
-        // 注意：MySQL的QUARTER函数返回1-4，需要特殊处理
-        if ($period === 'quarterly') {
-            $selectDate = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at)) as period_date";
-            $groupBy = "YEAR(created_at), QUARTER(created_at)";
-        } else {
-            $dateFormat = match($period) {
-                'daily' => '%Y-%m-%d',
-                'weekly' => '%Y-%u', // 周数
-                'monthly' => '%Y-%m',
-                'yearly' => '%Y',
-                default => '%Y-%m-%d'
-            };
-            $selectDate = "DATE_FORMAT(created_at, '{$dateFormat}') as period_date";
-            $groupBy = "DATE_FORMAT(created_at, '{$dateFormat}')";
-        }
-        
-        // 构建SQL查询
-        $sql = "SELECT 
-                    {$selectDate},
-                    SUM(value) as total_value,
-                    COUNT(*) as total_events,
-                    COUNT(DISTINCT event) as event_types,
-                    AVG(value) as avg_value
-                FROM `{$tableName}`
-                WHERE website_id = :website_id
-                AND created_at >= :start_date
-                AND created_at <= :end_date
-                GROUP BY {$groupBy}
-                ORDER BY period_date ASC";
-        
-        try {
-            $pdo = $connector->getLink();
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                ':website_id' => $websiteId,
-                ':start_date' => $startDate,
-                ':end_date' => $endDate
-            ]);
-            
-            $dataPoints = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-            
-            // 计算总价值
-            $totalValue = array_sum(array_column($dataPoints, 'total_value'));
-            $totalEvents = array_sum(array_column($dataPoints, 'total_events'));
-            
-            // 格式化数据点
-            $formattedDataPoints = [];
-            foreach ($dataPoints as $point) {
-                $formattedDataPoints[] = [
-                    'date' => $point['period_date'],
-                    'value' => (float)$point['total_value'],
-                    'events' => (int)$point['total_events'],
-                    'event_types' => (int)$point['event_types'],
-                    'avg_value' => (float)$point['avg_value'],
-                    'conversion_rate' => $point['total_events'] > 0 ? (float)$point['total_value'] / (int)$point['total_events'] : 0
+        $buckets = [];
+        foreach (self::getAnalyticsRows($websiteId, $startDate, $endDate) as $row) {
+            $timestamp = \strtotime((string)($row[self::schema_fields_CREATED_AT] ?? ''));
+            if (!$timestamp) {
+                continue;
+            }
+            $bucket = self::periodBucket($timestamp, $period);
+            if (!isset($buckets[$bucket])) {
+                $buckets[$bucket] = [
+                    'total_value' => 0.0,
+                    'total_events' => 0,
+                    'events' => []
                 ];
             }
-            
-            return [
-                'period' => $period,
-                'website_id' => $websiteId,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'total_value' => (float)$totalValue,
-                'total_events' => (int)$totalEvents,
-                'data_points' => $formattedDataPoints
-            ];
-            
-        } catch (\Exception $e) {
-            throw new \Exception(__('获取商业价值数据失败：%{1}', [$e->getMessage()]));
+            $eventName = (string)($row[self::schema_fields_EVENT] ?? '');
+            $buckets[$bucket]['total_value'] += (float)($row[self::schema_fields_VALUE] ?? 0);
+            $buckets[$bucket]['total_events']++;
+            if ($eventName !== '') {
+                $buckets[$bucket]['events'][$eventName] = true;
+            }
         }
+
+        \ksort($buckets);
+        $totalValue = 0.0;
+        $totalEvents = 0;
+        $formattedDataPoints = [];
+        foreach ($buckets as $bucket => $data) {
+            $events = (int)$data['total_events'];
+            $value = (float)$data['total_value'];
+            $eventTypes = \count($data['events']);
+            $totalValue += $value;
+            $totalEvents += $events;
+            $formattedDataPoints[] = [
+                'date' => $bucket,
+                'value' => $value,
+                'events' => $events,
+                'event_types' => $eventTypes,
+                'avg_value' => $events > 0 ? $value / $events : 0,
+                'conversion_rate' => $events > 0 ? $value / $events : 0
+            ];
+        }
+
+        return [
+            'period' => $period,
+            'website_id' => $websiteId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'total_value' => $totalValue,
+            'total_events' => $totalEvents,
+            'data_points' => $formattedDataPoints
+        ];
     }
     
     /**
@@ -502,96 +478,41 @@ class Pixel extends Model
         $endTime = date('Y-m-d H:i:s');
         $startTime = date('Y-m-d H:i:s', strtotime("-{$hours} hours"));
         
-        // 根据时间间隔构建SQL时间格式化
-        // 10分钟：将时间向下取整到10分钟
-        // 30分钟：将时间向下取整到30分钟
-        if ($interval === 10) {
-            $timeFormat = "DATE_FORMAT(DATE_SUB(created_at, INTERVAL MINUTE(created_at) % 10 MINUTE), '%Y-%m-%d %H:%i:00')";
-        } else {
-            $timeFormat = "DATE_FORMAT(DATE_SUB(created_at, INTERVAL MINUTE(created_at) % 30 MINUTE), '%Y-%m-%d %H:%i:00')";
-        }
-        
-        $model = w_obj(self::class);
-        $connector = $model->getConnection()->getConnector();
-        $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
-        $tableName = $prefix . $model->getTable();
-        
-        $sql = "SELECT 
-                    {$timeFormat} as time_slot,
-                    SUM(value) as total_value,
-                    COUNT(*) as total_events
-                FROM `{$tableName}`
-                WHERE website_id = :website_id
-                AND created_at >= :start_time
-                AND created_at <= :end_time
-                GROUP BY time_slot
-                ORDER BY time_slot ASC";
-        
-        try {
-            $pdo = $connector->getLink();
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                ':website_id' => $websiteId,
-                ':start_time' => $startTime,
-                ':end_time' => $endTime
-            ]);
-            
-            $dataPoints = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-            
-            // 获取当前时间段的数据
-            $currentTimeSlot = date('Y-m-d H:i:00');
-            if ($interval === 10) {
-                $currentMinute = (int)date('i');
-                $currentTimeSlot = date('Y-m-d H:i:00', strtotime("-" . ($currentMinute % 10) . " minutes"));
-            } else {
-                $currentMinute = (int)date('i');
-                $currentTimeSlot = date('Y-m-d H:i:00', strtotime("-" . ($currentMinute % 30) . " minutes"));
-            }
-            
-            $currentPeriod = null;
-            foreach ($dataPoints as $point) {
-                if ($point['time_slot'] === $currentTimeSlot) {
-                    $currentPeriod = [
-                        'value' => (float)$point['total_value'],
-                        'events' => (int)$point['total_events'],
-                        'timestamp' => $point['time_slot']
-                    ];
-                    break;
-                }
-            }
-            
-            // 计算变化百分比（当前时间段相比上一个时间段）
-            $changePercentage = 0;
-            if (count($dataPoints) >= 2) {
-                $current = end($dataPoints);
-                $previous = $dataPoints[count($dataPoints) - 2];
-                if ($previous['total_value'] > 0) {
-                    $changePercentage = (($current['total_value'] - $previous['total_value']) / $previous['total_value']) * 100;
-                }
-            }
-            
-            // 格式化数据点
-            $formattedDataPoints = [];
-            foreach ($dataPoints as $point) {
-                $formattedDataPoints[] = [
-                    'timestamp' => $point['time_slot'],
-                    'value' => (float)$point['total_value'],
-                    'events' => (int)$point['total_events']
+        $dataPoints = self::aggregateRowsByInterval(
+            self::getAnalyticsRows($websiteId, $startTime, $endTime),
+            $interval
+        );
+
+        $currentTimeSlot = self::intervalBucket(\time(), $interval);
+        $currentPeriod = null;
+        foreach ($dataPoints as $point) {
+            if ($point['timestamp'] === $currentTimeSlot) {
+                $currentPeriod = [
+                    'value' => (float)$point['value'],
+                    'events' => (int)$point['events'],
+                    'timestamp' => $point['timestamp']
                 ];
+                break;
             }
-            
-            return [
-                'interval' => $interval,
-                'website_id' => $websiteId,
-                'hours' => $hours,
-                'current_period' => $currentPeriod,
-                'data_points' => $formattedDataPoints,
-                'change_percentage' => round($changePercentage, 2)
-            ];
-            
-        } catch (\Exception $e) {
-            throw new \Exception(__('获取大屏数据失败：%{1}', [$e->getMessage()]));
         }
+
+        $changePercentage = 0;
+        if (\count($dataPoints) >= 2) {
+            $current = $dataPoints[\count($dataPoints) - 1];
+            $previous = $dataPoints[\count($dataPoints) - 2];
+            if ($previous['value'] > 0) {
+                $changePercentage = (($current['value'] - $previous['value']) / $previous['value']) * 100;
+            }
+        }
+
+        return [
+            'interval' => $interval,
+            'website_id' => $websiteId,
+            'hours' => $hours,
+            'current_period' => $currentPeriod,
+            'data_points' => $dataPoints,
+            'change_percentage' => \round($changePercentage, 2)
+        ];
     }
     
     /**
@@ -607,76 +528,35 @@ class Pixel extends Model
         $endTime = date('Y-m-d H:i:s');
         $startTime = date('Y-m-d H:i:s', strtotime("-{$hours} hours"));
         
-        // 根据时间间隔构建SQL时间格式化
-        if ($interval === 10) {
-            $timeFormat = "DATE_FORMAT(DATE_SUB(created_at, INTERVAL MINUTE(created_at) % 10 MINUTE), '%Y-%m-%d %H:%i:00')";
-        } else {
-            $timeFormat = "DATE_FORMAT(DATE_SUB(created_at, INTERVAL MINUTE(created_at) % 30 MINUTE), '%Y-%m-%d %H:%i:00')";
-        }
-        
-        $model = w_obj(self::class);
-        $connector = $model->getConnection()->getConnector();
-        $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
-        $tableName = $prefix . $model->getTable();
-        
-        $sql = "SELECT 
-                    {$timeFormat} as time_slot,
-                    SUM(value) as total_value,
-                    COUNT(*) as total_events
-                FROM `{$tableName}`
-                WHERE website_id = :website_id
-                AND created_at >= :start_time
-                AND created_at <= :end_time
-                GROUP BY time_slot
-                ORDER BY time_slot ASC";
-        
-        try {
-            $pdo = $connector->getLink();
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                ':website_id' => $websiteId,
-                ':start_time' => $startTime,
-                ':end_time' => $endTime
-            ]);
-            
-            $dataPoints = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-            
-            // 计算每个时刻的变化百分比
-            $formattedDataPoints = [];
-            $previousValue = null;
-            $previousEvents = null;
-            
-            foreach ($dataPoints as $point) {
-                $currentValue = (float)$point['total_value'];
-                $currentEvents = (int)$point['total_events'];
-                
-                $changePercentage = 0;
-                if ($previousValue !== null && $previousValue > 0) {
-                    $changePercentage = (($currentValue - $previousValue) / $previousValue) * 100;
-                }
-                
-                $formattedDataPoints[] = [
-                    'timestamp' => $point['time_slot'],
-                    'value' => $currentValue,
-                    'events' => $currentEvents,
-                    'change_percentage' => round($changePercentage, 2),
-                    'previous_value' => $previousValue
-                ];
-                
-                $previousValue = $currentValue;
-                $previousEvents = $currentEvents;
+        $dataPoints = self::aggregateRowsByInterval(
+            self::getAnalyticsRows($websiteId, $startTime, $endTime),
+            $interval
+        );
+        $formattedDataPoints = [];
+        $previousValue = null;
+
+        foreach ($dataPoints as $point) {
+            $currentValue = (float)$point['value'];
+            $changePercentage = 0;
+            if ($previousValue !== null && $previousValue > 0) {
+                $changePercentage = (($currentValue - $previousValue) / $previousValue) * 100;
             }
-            
-            return [
-                'website_id' => $websiteId,
-                'interval' => $interval,
-                'hours' => $hours,
-                'data_points' => $formattedDataPoints
+            $formattedDataPoints[] = [
+                'timestamp' => $point['timestamp'],
+                'value' => $currentValue,
+                'events' => (int)$point['events'],
+                'change_percentage' => \round($changePercentage, 2),
+                'previous_value' => $previousValue
             ];
-            
-        } catch (\Exception $e) {
-            throw new \Exception(__('获取变化百分比数据失败：%{1}', [$e->getMessage()]));
+            $previousValue = $currentValue;
         }
+
+        return [
+            'website_id' => $websiteId,
+            'interval' => $interval,
+            'hours' => $hours,
+            'data_points' => $formattedDataPoints
+        ];
     }
     
     /**
@@ -877,7 +757,94 @@ class Pixel extends Model
             throw new \Exception(__('获取A/B测试数据失败：%{1}', [$e->getMessage()]));
         }
     }
-public function getPixelId(): int
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function getAnalyticsRows(int $websiteId, ?string $startDate = null, ?string $endDate = null): array
+    {
+        $model = w_obj(self::class);
+        $connector = $model->getConnection()->getConnector();
+        $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
+        $tableName = $prefix . $model->getTable();
+        $sql = 'SELECT `' . self::schema_fields_VALUE . '`, `' . self::schema_fields_EVENT . '`, `' . self::schema_fields_CREATED_AT . '`
+                FROM `' . $tableName . '`
+                WHERE `' . self::schema_fields_WEBSITE_ID . '` = :website_id';
+        $params = [':website_id' => $websiteId];
+
+        if ($startDate !== null && $startDate !== '') {
+            $sql .= ' AND `' . self::schema_fields_CREATED_AT . '` >= :start_date';
+            $params[':start_date'] = $startDate;
+        }
+        if ($endDate !== null && $endDate !== '') {
+            $sql .= ' AND `' . self::schema_fields_CREATED_AT . '` <= :end_date';
+            $params[':end_date'] = $endDate;
+        }
+        $sql .= ' ORDER BY `' . self::schema_fields_CREATED_AT . '` ASC LIMIT 100000';
+
+        try {
+            $stmt = $connector->getLink()->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            return \is_array($rows) ? $rows : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array{timestamp: string, value: float, events: int}>
+     */
+    private static function aggregateRowsByInterval(array $rows, int $interval): array
+    {
+        $buckets = [];
+        foreach ($rows as $row) {
+            $timestamp = \strtotime((string)($row[self::schema_fields_CREATED_AT] ?? ''));
+            if (!$timestamp) {
+                continue;
+            }
+            $bucket = self::intervalBucket($timestamp, $interval);
+            if (!isset($buckets[$bucket])) {
+                $buckets[$bucket] = [
+                    'value' => 0.0,
+                    'events' => 0
+                ];
+            }
+            $buckets[$bucket]['value'] += (float)($row[self::schema_fields_VALUE] ?? 0);
+            $buckets[$bucket]['events']++;
+        }
+
+        \ksort($buckets);
+        $points = [];
+        foreach ($buckets as $bucket => $data) {
+            $points[] = [
+                'timestamp' => $bucket,
+                'value' => (float)$data['value'],
+                'events' => (int)$data['events']
+            ];
+        }
+        return $points;
+    }
+
+    private static function intervalBucket(int $timestamp, int $interval): string
+    {
+        $seconds = \max(1, $interval) * 60;
+        return \date('Y-m-d H:i:00', (int)(\floor($timestamp / $seconds) * $seconds));
+    }
+
+    private static function periodBucket(int $timestamp, string $period): string
+    {
+        return match ($period) {
+            'weekly' => \date('o-W', $timestamp),
+            'monthly' => \date('Y-m', $timestamp),
+            'quarterly' => \date('Y', $timestamp) . '-Q' . (int)\ceil((int)\date('n', $timestamp) / 3),
+            'yearly' => \date('Y', $timestamp),
+            default => \date('Y-m-d', $timestamp),
+        };
+    }
+
+    public function getPixelId(): int
     {
         return (int)$this->getData(self::schema_fields_ID);
     }

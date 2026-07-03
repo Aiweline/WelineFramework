@@ -324,7 +324,6 @@ final class FirstRender extends CommandAbstract
             'controller_cache' => $this->headerValue($headers, 'X-WLS-Controller-Cache')
                 ?: $this->headerValue($headers, 'X-WLS-Category-View-Cache')
                 ?: $this->headerValue($headers, 'X-WLS-Product-View-Cache')
-                ?: $this->headerValue($headers, 'X-WLS-PageBuilder-View-Cache')
                 ?: 'unknown',
         ];
     }
@@ -374,7 +373,6 @@ final class FirstRender extends CommandAbstract
             'controller_cache' => $this->headerValue($headers, 'X-WLS-Controller-Cache')
                 ?: $this->headerValue($headers, 'X-WLS-Category-View-Cache')
                 ?: $this->headerValue($headers, 'X-WLS-Product-View-Cache')
-                ?: $this->headerValue($headers, 'X-WLS-PageBuilder-View-Cache')
                 ?: 'unknown',
         ];
     }

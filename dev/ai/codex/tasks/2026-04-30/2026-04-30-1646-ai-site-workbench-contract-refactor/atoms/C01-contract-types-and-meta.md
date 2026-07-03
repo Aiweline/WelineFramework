@@ -14,8 +14,8 @@ Do not change prompts. Do not change queue execution. Do not migrate old data.
 
 ## Touch Points
 
-- `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/*`
-- PageBuilder unit tests
+
+
 
 ## Implementation Steps
 
@@ -27,7 +27,7 @@ Do not change prompts. Do not change queue execution. Do not migrate old data.
 ## Acceptance
 
 - Tests can build meta for every v1 contract type.
-- No existing PageBuilder generation behavior changes.
+
 
 ## Rollback
 

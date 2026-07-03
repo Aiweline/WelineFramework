@@ -1,58 +1,4 @@
-﻿客服人员管理,客服人员管理
-加载客服人员失败：%{1},"Échec du chargement des agents de service : %{1}"
-客服名称不能为空,"Le nom de l'agent ne peut pas être vide"
-邮箱格式不正确,"Format d'email invalide"
-请选择后台用户,"Veuillez sélectionner un utilisateur backend"
-客服人员不存在,"L'agent de service n'existe pas"
-保存成功,"Enregistré avec succès"
-保存失败：%{1},"Échec de l'enregistrement : %{1}"
-无效的客服ID,"ID d'agent invalide"
-删除成功,"Supprimé avec succès"
-删除失败：%{1},"Échec de la suppression : %{1}"
-获取成功,"Récupéré avec succès"
-获取统计数据失败：%{1},"Échec de la récupération des statistiques : %{1}"
-客服配置,"Configuration du service"
-加载配置失败：%{1},"Échec du chargement de la configuration : %{1}"
-您不是客服人员，无法使用工作台,"Vous n'êtes pas un agent de service"
-客服工作台,"Console de service client"
-加载工作台失败：%{1},"Échec du chargement de la console : %{1}"
-您不是客服人员,您不是客服人员
-获取会话列表失败：%{1},"Échec de la récupération de la liste des sessions : %{1}"
-无效的会话ID,"ID de session invalide"
-会话不存在,"La session n'existe pas"
-无权访问此会话,"Aucune autorisation pour accéder à cette session"
-获取消息失败：%{1},"Échec de la récupération des messages : %{1}"
-消息内容不能为空,"Le contenu du message ne peut pas être vide"
-发送成功,"Envoyé avec succès"
-发送消息失败：%{1},"Échec de l'envoi du message : %{1}"
-会话已被分配,"La session est déjà assignée"
-已达到最大会话数限制,"La limite maximale de sessions est atteinte"
-分配成功,"Assigné avec succès"
-分配会话失败：%{1},"Échec de l'assignation de la session : %{1}"
-无权关闭此会话,"Aucune autorisation pour fermer cette session"
-会话已关闭,"Session fermée"
-关闭会话失败：%{1},"Échec de la fermeture de la session : %{1}"
-获取客服状态失败：%{1},"Échec de la récupération du statut : %{1}"
-会话管理,"Gestion des sessions"
-加载会话失败：%{1},"Échec du chargement des sessions : %{1}"
-会话详情,"Détails de la session"
-加载会话详情失败：%{1},"Échec du chargement des détails de la session : %{1}"
-邮箱地址不能为空,"L'adresse email ne peut pas être vide"
-会话令牌不能为空,"Le jeton de session ne peut pas être vide"
-验证邮件已发送，请查收,"Email de vérification envoyé"
-发送验证邮件失败，请稍后重试,"Échec de l'envoi de l'email de vérification"
-发送验证邮件失败：%{1},"Échec de l'envoi de l'email de vérification : %{1}"
-验证令牌不能为空,"Le jeton de vérification ne peut pas être vide"
-验证令牌无效或已过期,"Le jeton de vérification est invalide ou expiré"
-邮箱绑定成功,"Email lié avec succès"
-邮箱绑定失败，请稍后重试,"Échec de la liaison de l'email"
-验证失败：%{1},"Échec de la vérification : %{1}"
-客服聊天,"Chat de service client"
-获取会话失败：%{1},"Échec de la récupération de la session : %{1}"
-语言代码不能为空,"Le code de langue ne peut pas être vide"
-语言设置成功,"Langue définie avec succès"
-设置语言失败：%{1},"Échec de la définition de la langue : %{1}"
-客服消息翻译,"Traduction des messages de service client"
+﻿客服消息翻译,"Traduction des messages de service client"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"Le module de service client demande une traduction via cet événement."
 "Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
 "Session and message content are required.","Session and message content are required."
@@ -65,33 +11,67 @@
 "Verification email has been sent.","Verification email has been sent."
 "Customer Service Query","Customer Service Query"
 "Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
-"客服服务 - 邮箱绑定验证","Service client - Vérification de l'email"
-客服系统,"Système de service client"
-客服服务,"Service client"
-检测中...,Vérification...
-设置,Paramètres
-收起,Réduire
-我的语言,"Ma langue"
-显示模式,"Mode d'affichage"
-仅显示译文,"Traduction uniquement"
-原文+译文,"Original + Traduction"
-仅显示原文,"Original uniquement"
-欢迎使用客服服务！,"Bienvenue au service client !"
-请输入您的问题，我们的客服将尽快为您解答。,"Veuillez saisir votre question"
-输入消息...,"Tapez un message..."
-接收客服回复与优惠通知,接收客服回复与优惠通知
-留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
-仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
-接收通知的邮箱,接收通知的邮箱
-请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
-稍后再说,稍后再说
-发送验证邮件,"Envoyer l'email de vérification"
+客服聊天,"Chat de service client"
+获取会话失败：%{1},"Échec de la récupération de la session : %{1}"
+消息内容不能为空,"Le contenu du message ne peut pas être vide"
+无效的会话ID,"ID de session invalide"
+发送消息失败：%{1},"Échec de l'envoi du message : %{1}"
+获取消息失败：%{1},"Échec de la récupération des messages : %{1}"
+语言代码不能为空,"Le code de langue ne peut pas être vide"
+语言设置成功,"Langue définie avec succès"
+设置语言失败：%{1},"Échec de la définition de la langue : %{1}"
+邮箱地址不能为空,"L'adresse email ne peut pas être vide"
+邮箱格式不正确,"Format d'email invalide"
+会话令牌不能为空,"Le jeton de session ne peut pas être vide"
+验证邮件已发送，请查收,"Email de vérification envoyé"
+发送验证邮件失败，请稍后重试,"Échec de l'envoi de l'email de vérification"
+发送验证邮件失败：%{1},"Échec de l'envoi de l'email de vérification : %{1}"
+验证令牌不能为空,"Le jeton de vérification ne peut pas être vide"
+验证令牌无效或已过期,"Le jeton de vérification est invalide ou expiré"
+邮箱绑定成功,"Email lié avec succès"
+邮箱绑定失败，请稍后重试,"Échec de la liaison de l'email"
+验证失败：%{1},"Échec de la vérification : %{1}"
+客服人员管理,客服人员管理
+加载客服人员失败：%{1},"Échec du chargement des agents de service : %{1}"
+客服名称不能为空,"Le nom de l'agent ne peut pas être vide"
+请选择后台用户,"Veuillez sélectionner un utilisateur backend"
+客服人员不存在,"L'agent de service n'existe pas"
+保存成功,"Enregistré avec succès"
+保存失败：%{1},"Échec de l'enregistrement : %{1}"
+无效的客服ID,"ID d'agent invalide"
+删除成功,"Supprimé avec succès"
+删除失败：%{1},"Échec de la suppression : %{1}"
+获取成功,"Récupéré avec succès"
+获取统计数据失败：%{1},"Échec de la récupération des statistiques : %{1}"
+会话管理,"Gestion des sessions"
+加载会话失败：%{1},"Échec du chargement des sessions : %{1}"
+会话不存在,"La session n'existe pas"
+会话详情,"Détails de la session"
+加载会话详情失败：%{1},"Échec du chargement des détails de la session : %{1}"
+会话已关闭,"Session fermée"
+关闭会话失败：%{1},"Échec de la fermeture de la session : %{1}"
+客服配置,"Configuration du service"
+加载配置失败：%{1},"Échec du chargement de la configuration : %{1}"
+您不是客服人员，无法使用工作台,"Vous n'êtes pas un agent de service"
+客服工作台,"Console de service client"
+加载工作台失败：%{1},"Échec du chargement de la console : %{1}"
+您不是客服人员,您不是客服人员
+获取会话列表失败：%{1},"Échec de la récupération de la liste des sessions : %{1}"
+无权访问此会话,"Aucune autorisation pour accéder à cette session"
+发送成功,"Envoyé avec succès"
+会话已被分配,"La session est déjà assignée"
+已达到最大会话数限制,"La limite maximale de sessions est atteinte"
+分配成功,"Assigné avec succès"
+分配会话失败：%{1},"Échec de l'assignation de la session : %{1}"
+无权关闭此会话,"Aucune autorisation pour fermer cette session"
+获取客服状态失败：%{1},"Échec de la récupération du statut : %{1}"
 等待中,"En attente"
 暂无消息,"Aucun message"
 接单,Accepter
 暂无会话,"Aucune session"
 会话,Session
 关闭会话,"Fermer la session"
+输入消息...,"Tapez un message..."
 发送,Envoyer
 发送失败,"Échec de l'envoi"
 发送失败，请稍后重试,发送失败，请稍后重试
@@ -118,6 +98,15 @@
 最长,"Le plus long"
 秒,secondes
 欢迎使用客服服务,欢迎使用客服服务
+我的语言,"Ma langue"
+显示模式,"Mode d'affichage"
+欢迎使用客服服务！,"Bienvenue au service client !"
+请输入您的问题，我们的客服将尽快为您解答。,"Veuillez saisir votre question"
+设置,Paramètres
+收起,Réduire
+仅显示译文,"Traduction uniquement"
+原文+译文,"Original + Traduction"
+仅显示原文,"Original uniquement"
 客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","Service IA"
@@ -125,6 +114,41 @@
 请输入有效的邮箱地址,"Veuillez saisir une adresse email valide"
 会话未初始化，请刷新页面重试,"Session non initialisée"
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
+客服服务,"Service client"
+检测中...,Vérification...
+接收客服回复与优惠通知,接收客服回复与优惠通知
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
+仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
+接收通知的邮箱,接收通知的邮箱
+请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
+稍后再说,稍后再说
+发送验证邮件,"Envoyer l'email de vérification"
+此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Utilisez le bouton flottant pour le chat"
+邮箱绑定验证,"Vérification de l'email"
+验证成功,Vérifié
+您的邮箱,"Votre email"
+已成功绑定到客服会话。,"Lié à la session"
+返回首页,Accueil
+验证失败,Échec
+已绑定邮箱,"Email lié"
+绑定成功后，您将收到客服回复的邮件通知,"Recevez des notifications après la liaison"
+返回上一页,返回上一页
+如有问题，请,"Si vous avez des questions"
+联系客服,"Contacter le service"
+保存失败,"Échec de l'enregistrement"
+启用客服服务,"Activer le service"
+启用,启用
+禁用,Désactiver
+默认客服语言,"Langue par défaut de l'agent"
+简体中文,"Chinois simplifié"
+English,English
+默认客户语言,"Langue par défaut du client"
+"当没有客服人员在线时，可启用 AI 自动回复客户消息。","Activez la réponse automatique IA lorsqu'aucun agent n'est en ligne"
+"启用 AI 自动回复","Activer la réponse IA"
+"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","Affiche le statut IA bleu au lieu de Hors ligne gris"
+"AI 模型","Modèle IA"
+"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","Identifiant du modèle IA"
+保存配置,"Enregistrer la configuration"
 添加客服,"Ajouter un agent"
 ID,ID
 客服名称,"Nom de l'agent"
@@ -140,7 +164,6 @@ ID,ID
 暂无客服人员,"Aucun agent"
 支持的语言,"Langues supportées"
 激活,Activer
-禁用,Désactiver
 查看统计,"Voir les statistiques"
 编辑,Modifier
 删除,Supprimer
@@ -157,7 +180,6 @@ ID,ID
 编辑客服,"Modifier l'agent"
 提示,提示
 确认,确认
-保存失败,"Échec de l'enregistrement"
 确定要删除此客服吗？,"Supprimer cet agent ?"
 删除确认,删除确认
 删除失败,"Échec de la suppression"
@@ -168,18 +190,6 @@ ID,ID
 响应时间,"Temps de réponse"
 平均,Moyenne
 会话时长,"Durée de la session"
-启用客服服务,"Activer le service"
-启用,启用
-默认客服语言,"Langue par défaut de l'agent"
-简体中文,"Chinois simplifié"
-English,English
-默认客户语言,"Langue par défaut du client"
-"当没有客服人员在线时，可启用 AI 自动回复客户消息。","Activez la réponse automatique IA lorsqu'aucun agent n'est en ligne"
-"启用 AI 自动回复","Activer la réponse IA"
-"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","Affiche le statut IA bleu au lieu de Hors ligne gris"
-"AI 模型","Modèle IA"
-"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","Identifiant du modèle IA"
-保存配置,"Enregistrer la configuration"
 客服,Agent
 工作量统计,"Statistiques de charge de travail"
 今日,Aujourd'hui
@@ -210,15 +220,5 @@ English,English
 客服ID,"ID de l'agent"
 聊天记录,"Historique du chat"
 翻译：,"Traduction :"
-邮箱绑定验证,"Vérification de l'email"
-验证成功,Vérifié
-您的邮箱,"Votre email"
-已成功绑定到客服会话。,"Lié à la session"
-返回首页,Accueil
-验证失败,Échec
-已绑定邮箱,"Email lié"
-绑定成功后，您将收到客服回复的邮件通知,"Recevez des notifications après la liaison"
-返回上一页,返回上一页
-如有问题，请,"Si vous avez des questions"
-联系客服,"Contacter le service"
-此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Utilisez le bouton flottant pour le chat"
+"客服服务 - 邮箱绑定验证","Service client - Vérification de l'email"
+客服系统,"Système de service client"

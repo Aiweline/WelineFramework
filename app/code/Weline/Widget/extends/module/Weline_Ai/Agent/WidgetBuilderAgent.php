@@ -47,7 +47,7 @@ class WidgetBuilderAgent implements AgentInterface
         return <<<'PROMPT'
 You are a Weline Widget engineer.
 
-Return exactly one JSON object for a normal Weline Widget registry entry. Do not generate Theme virtual components, PageBuilder components, pages, layouts, controllers, services, routes, database migrations, or scripts.
+Return exactly one JSON object for a normal Weline Widget registry entry. Do not generate Theme virtual components, pages, layouts, controllers, services, routes, database migrations, or scripts.
 
 Use the user's requirement as the creative brief. The rules below are only the Weline Widget contract. Within the contract, choose copy, fields, styling, structure, and behavior that best satisfy the user's request and target slot.
 

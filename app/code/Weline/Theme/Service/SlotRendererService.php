@@ -6,12 +6,16 @@ namespace Weline\Theme\Service;
 
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\Cache\KeyBuilder;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
 use Weline\Server\Service\MemoryStateFacade;
+use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
@@ -67,6 +71,9 @@ class SlotRendererService
     /** 当前渲染周期使用的主题（用于部件模板覆盖解析，确保预览显示所选主题而非全局激活主题） */
     private ?WelineTheme $renderTheme = null;
 
+    /** 当前渲染区域：frontend/backend。 */
+    private string $renderArea = 'frontend';
+
     /** 已加载主题缓存：theme_id => WelineTheme|null */
     private array $renderThemeCache = [];
 
@@ -93,19 +100,31 @@ class SlotRendererService
      * @param string $status 状态：draft=草稿（后台预览），published=已发布（前端显示）
      * @return string 处理后的HTML
      */
-    public function processSlots(string $html, int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): string
+    public function processSlots(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $status = ThemeLayout::STATUS_PUBLISHED,
+        string $area = 'frontend'
+    ): string
     {
         return $this->traceCall(
             'slot_renderer::processSlots',
-            fn() => $this->doProcessSlots($html, $themeId, $pageType, $status)
+            fn() => $this->doProcessSlots($html, $themeId, $pageType, $status, $area)
         );
     }
 
-    public function processSlotsWithLayout(string $html, array $layoutData, bool $filterToHtmlSlots = false, int $themeId = 0): string
+    public function processSlotsWithLayout(
+        string $html,
+        array $layoutData,
+        bool $filterToHtmlSlots = false,
+        int $themeId = 0,
+        string $area = 'frontend'
+    ): string
     {
         return $this->traceCall(
             'slot_renderer::processSlotsWithLayout',
-            function () use ($html, $layoutData, $filterToHtmlSlots, $themeId): string {
+            function () use ($html, $layoutData, $filterToHtmlSlots, $themeId, $area): string {
                 if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
                     return $html;
                 }
@@ -122,13 +141,20 @@ class SlotRendererService
                 $this->filledSlotIdsThisRun = [];
                 return $this->withRenderTheme(
                     $themeId,
+                    $area,
                     fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $filterToHtmlSlots)
                 );
             }
         );
     }
 
-    private function doProcessSlots(string $html, int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): string
+    private function doProcessSlots(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $status = ThemeLayout::STATUS_PUBLISHED,
+        string $area = 'frontend'
+    ): string
     {
         // 检查是否包含插槽标记（支持新旧两种方式）
         if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
@@ -183,6 +209,7 @@ class SlotRendererService
             'slot_renderer::processSlotsWithDom',
             fn() => $this->withRenderTheme(
                 $themeId,
+                $area,
                 fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $status === ThemeLayout::STATUS_PUBLISHED)
             )
         );
@@ -201,28 +228,39 @@ class SlotRendererService
      * @param callable():T $callback
      * @return T
      */
-    private function withRenderTheme(int $themeId, callable $callback)
+    private function withRenderTheme(int $themeId, string $area, callable $callback)
     {
+        $area = $area === 'backend' ? 'backend' : 'frontend';
         $theme = $this->resolveRenderTheme($themeId);
         if (!$theme) {
-            return $callback();
+            $previousRenderArea = $this->renderArea;
+            $this->renderArea = $area;
+            try {
+                return $callback();
+            } finally {
+                $this->renderArea = $previousRenderArea;
+            }
         }
 
         $previousRenderTheme = $this->renderTheme;
+        $previousRenderArea = $this->renderArea;
         $previousThemeData = ThemeData::getCurrentTheme();
         $previousArea = ThemeData::getCurrentArea();
-        $shouldSwitchThemeData = (int)($previousThemeData?->getId() ?? 0) !== (int)$theme->getId();
+        $shouldSwitchThemeData = (int)($previousThemeData?->getId() ?? 0) !== (int)$theme->getId()
+            || (string)$previousArea !== $area;
 
         $this->renderTheme = $theme;
+        $this->renderArea = $area;
         if ($shouldSwitchThemeData) {
             ThemeData::setCurrentTheme($theme);
-            ThemeData::setCurrentArea('frontend');
+            ThemeData::setCurrentArea($area);
         }
 
         try {
             return $callback();
         } finally {
             $this->renderTheme = $previousRenderTheme;
+            $this->renderArea = $previousRenderArea;
             if ($shouldSwitchThemeData) {
                 ThemeData::setCurrentTheme($previousThemeData);
                 ThemeData::setCurrentArea($previousArea);
@@ -734,7 +772,11 @@ class SlotRendererService
         $widgetType = $widget['widget_type'] ?? '';
         $layoutId = $widget['layout_id'] ?? '';
         $config = $widget['config'] ?? [];
-        $widgetOutputCacheKey = $this->buildWidgetOutputCacheKey($widget, \is_array($config) ? $config : []);
+        $config = \is_array($config) ? $config : [];
+        $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, $renderArea);
+        $config = $this->mergeTranslatedWidgetConfig($widget, $config, $definition);
+        $widgetOutputCacheKey = $this->buildWidgetOutputCacheKey($widget, $config);
         if ($widgetOutputCacheKey !== null) {
             $cachedWidget = self::$widgetOutputCache[$widgetOutputCacheKey] ?? null;
             if (\is_array($cachedWidget)
@@ -754,23 +796,17 @@ class SlotRendererService
         }
 
         // 检查缓存
-        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, 'frontend');
         if ($definition) {
             try {
-                $renderConfig = is_array($config) ? $config : [];
+                $renderConfig = $this->appendWidgetRenderContext($config, $widget);
                 $renderConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $renderConfig);
                 $html = $this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
-                    'area' => 'frontend',
+                    'area' => $renderArea,
                     'preview_mode' => false,
+                    'editor_mode' => $renderConfig['editor_mode'] ?? false,
                 ]);
                 if ($layoutId) {
-                    $wrapperAttrs = sprintf(
-                        'data-layout-id="%s" data-widget-code="%s" data-widget-module="%s" data-widget-type="%s"',
-                        htmlspecialchars((string)$layoutId),
-                        htmlspecialchars((string)$widgetCode),
-                        htmlspecialchars((string)$widgetModule),
-                        htmlspecialchars((string)$widgetType)
-                    );
+                    $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $renderConfig);
                     $widgetName = htmlspecialchars((string)($definition->name ?: $widgetCode));
                     $html = sprintf(
                         '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
@@ -791,9 +827,9 @@ class SlotRendererService
             }
         }
 
-        $cacheKey = $widgetModule . '::' . $widgetCode;
+        $cacheKey = $renderArea . '::' . $widgetModule . '::' . $widgetCode;
         if (!isset($this->widgetCache[$cacheKey])) {
-            $this->widgetCache[$cacheKey] = $this->getWidgetMeta($widgetModule, $widgetCode);
+            $this->widgetCache[$cacheKey] = $this->getWidgetMeta($widgetModule, $widgetCode, $renderArea);
         }
 
         $widgetMeta = $this->widgetCache[$cacheKey];
@@ -807,6 +843,7 @@ class SlotRendererService
             $defaultConfig[$key] = $param['default'] ?? '';
         }
         $finalConfig = array_merge($defaultConfig, is_array($config) ? $config : []);
+        $finalConfig = $this->appendWidgetRenderContext($finalConfig, $widget);
         $finalConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $finalConfig);
 
         $templateContent = (string)($widgetMeta['template_content'] ?? '');
@@ -817,13 +854,7 @@ class SlotRendererService
                 $html = is_string($html) ? $html : '';
 
                 if ($layoutId) {
-                    $wrapperAttrs = sprintf(
-                        'data-layout-id="%s" data-widget-code="%s" data-widget-module="%s" data-widget-type="%s"',
-                        htmlspecialchars((string)$layoutId),
-                        htmlspecialchars((string)$widgetCode),
-                        htmlspecialchars((string)$widgetModule),
-                        htmlspecialchars((string)$widgetType)
-                    );
+                    $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $finalConfig);
                     $widgetName = htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode));
                     $html = sprintf(
                         '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
@@ -858,13 +889,7 @@ class SlotRendererService
             // 为编辑器模式包装部件，添加识别属性
             // 这样编辑器可以识别部件并进行配置
             if ($layoutId) {
-                $wrapperAttrs = sprintf(
-                    'data-layout-id="%s" data-widget-code="%s" data-widget-module="%s" data-widget-type="%s"',
-                    htmlspecialchars((string)$layoutId),
-                    htmlspecialchars((string)$widgetCode),
-                    htmlspecialchars((string)$widgetModule),
-                    htmlspecialchars((string)$widgetType)
-                );
+                $wrapperAttrs = $this->buildWidgetWrapperAttrs($widget, $finalConfig);
                 $widgetName = htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode));
                 $html = sprintf(
                     '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
@@ -888,6 +913,224 @@ class SlotRendererService
         }
     }
 
+    private function buildWidgetWrapperAttrs(array $widget, array $config): string
+    {
+        $attrs = [
+            'data-layout-id' => (string)($widget['layout_id'] ?? ''),
+            'data-widget-code' => (string)($widget['widget_code'] ?? ''),
+            'data-widget-module' => (string)($widget['widget_module'] ?? ''),
+            'data-widget-type' => (string)($widget['widget_type'] ?? ''),
+            'data-slot-id' => (string)($widget['slot_id'] ?? ''),
+            'data-layout-option' => (string)($widget['layout_option'] ?? ''),
+            'data-layout-scope' => (string)($widget['scope'] ?? ''),
+            'data-target-type' => (string)($widget['target_type'] ?? ''),
+            'data-target-id' => (string)($widget['target_id'] ?? ''),
+        ];
+
+        $dashboardLayout = $config['dashboard_layout'] ?? [];
+        $dashboardLayout = \is_array($dashboardLayout) ? $dashboardLayout : [];
+        $slotId = (string)($widget['slot_id'] ?? '');
+        $dashboardSlots = [
+            'dashboard-summary' => true,
+            'dashboard-analysis' => true,
+            'dashboard-side' => true,
+            'dashboard-detail' => true,
+        ];
+        if ($this->renderArea === 'backend' && isset($dashboardSlots[$slotId])) {
+            $colSpan = (int)($dashboardLayout['colSpan'] ?? $dashboardLayout['col_span'] ?? 3);
+            $rowSpan = (int)($dashboardLayout['rowSpan'] ?? $dashboardLayout['row_span'] ?? 1);
+            $sortOrder = (int)($dashboardLayout['sortOrder'] ?? $dashboardLayout['sort_order'] ?? 0);
+            $colSpan = \max(1, \min(12, $colSpan));
+            $rowSpan = \max(1, \min(8, $rowSpan));
+
+            $attrs['data-dashboard-col-span'] = (string)$colSpan;
+            $attrs['data-dashboard-row-span'] = (string)$rowSpan;
+            if ($sortOrder > 0) {
+                $attrs['data-dashboard-sort-order'] = (string)$sortOrder;
+            }
+        }
+
+        $parts = [];
+        foreach ($attrs as $name => $value) {
+            if ($value === '') {
+                continue;
+            }
+            $parts[] = \sprintf(
+                '%s="%s"',
+                $name,
+                \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+            );
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    private function appendWidgetRenderContext(array $config, array $widget): array
+    {
+        $layoutId = (string)($widget['layout_id'] ?? '');
+        $slotId = (string)($widget['slot_id'] ?? '');
+        $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+
+        $config['layout_id'] = $layoutId;
+        $config['_layout_id'] = $layoutId;
+        $config['slot_id'] = $slotId;
+        $config['_slot_id'] = $slotId;
+        $config['_widget_module'] = (string)($widget['widget_module'] ?? '');
+        $config['_widget_code'] = (string)($widget['widget_code'] ?? '');
+        $config['_widget_type'] = (string)($widget['widget_type'] ?? '');
+        $config['_widget_area'] = $renderArea;
+        $config['editor_mode'] = $this->isEditorPreviewRequest();
+
+        return $config;
+    }
+
+    private function isEditorPreviewRequest(): bool
+    {
+        try {
+            $request = $this->template->getRequest();
+            return (string)$request->getParam('editor_mode', '') === '1'
+                || (string)$request->getParam('preview_mode', '') === 'live';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function mergeTranslatedWidgetConfig(
+        array $widget,
+        array $config,
+        ?ThemeComponentDefinition $definition = null
+    ): array {
+        try {
+            if (!empty($config['_skip_translation_merge'])) {
+                unset($config['_skip_translation_merge']);
+                return $config;
+            }
+
+            $widgetModule = (string)($widget['widget_module'] ?? '');
+            $widgetCode = (string)($widget['widget_code'] ?? '');
+            $widgetType = (string)($widget['widget_type'] ?? '');
+            $widgetArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+            $instanceIdentify = $this->resolveWidgetInstanceIdentify($config, $widgetArea);
+            $locale = $this->resolveRenderLocale();
+
+            if ($definition) {
+                $identify = $instanceIdentify !== '' ? $instanceIdentify : (($widgetModule === 'Weline_Theme'
+                    && ($widgetType === 'theme_component' || str_contains($widgetCode, '/')))
+                    ? $definition->getMetaIdentify()
+                    : ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $widgetArea));
+
+                return $this->mergeTranslatedPathsWithLegacyInstance(
+                    $widget,
+                    $config,
+                    $definition->params ?: $definition->configSchema,
+                    $identify,
+                    $locale,
+                    $widgetArea
+                );
+            }
+
+            if ($widgetModule === '' || $widgetCode === '') {
+                return $config;
+            }
+
+            $params = ThemeData::getWidgetParamDefinitions($widgetModule, $widgetCode, $widgetArea);
+            if (empty($params)) {
+                return $config;
+            }
+
+            return $this->mergeTranslatedPathsWithLegacyInstance(
+                $widget,
+                $config,
+                $params,
+                $instanceIdentify !== '' ? $instanceIdentify : ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $widgetArea),
+                $locale,
+                $widgetArea
+            );
+        } catch (\Throwable) {
+            return $config;
+        }
+    }
+
+    private function mergeTranslatedPathsWithLegacyInstance(
+        array $widget,
+        array $config,
+        array $params,
+        string $identify,
+        ?string $locale,
+        string $area
+    ): array {
+        $legacyIdentify = $this->legacySlotAreaWidgetInstanceIdentify($widget, $identify, $area);
+        if ($legacyIdentify !== '') {
+            $config = ThemeData::mergeTranslatedPaths($config, $params, $legacyIdentify, $locale);
+        }
+
+        return ThemeData::mergeTranslatedPaths($config, $params, $identify, $locale);
+    }
+
+    private function resolveRenderLocale(): ?string
+    {
+        $locale = '';
+        try {
+            $locale = trim((string)$this->template->getRequest()->getParam('locale', ''));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+
+        if ($locale === '') {
+            try {
+                $locale = trim((string)(RequestContext::locale() ?: ''));
+            } catch (\Throwable) {
+                $locale = '';
+            }
+        }
+
+        if ($locale === '') {
+            try {
+                $locale = trim((string)State::getLangLocal());
+            } catch (\Throwable) {
+                $locale = '';
+            }
+        }
+
+        if ($locale === '' || $locale === Env::default_LANGUAGE_CODE) {
+            return $locale === Env::default_LANGUAGE_CODE ? $locale : null;
+        }
+
+        return preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale)
+            ? $locale
+            : null;
+    }
+
+    private function resolveWidgetInstanceIdentify(array $config, string $area): string
+    {
+        $instanceId = trim((string)($config[ThemeData::WIDGET_I18N_INSTANCE_CONFIG_KEY] ?? ''));
+        if ($instanceId === '') {
+            return '';
+        }
+
+        return ThemeData::getWidgetInstanceIdentify($instanceId, $area);
+    }
+
+    private function legacySlotAreaWidgetInstanceIdentify(array $widget, string $identify, string $area): string
+    {
+        $slotArea = strtolower(trim((string)($widget['slot_id'] ?? $widget['area'] ?? '')));
+        $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
+        if ($slotArea === '' || $slotArea === $area || $slotArea === 'frontend' || $slotArea === 'backend') {
+            return '';
+        }
+
+        if (!preg_match('/^theme\.(frontend|backend)\.widget_instances\.([^\\s]+)$/', $identify, $matches)) {
+            return '';
+        }
+
+        $slotArea = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $slotArea) ?: '';
+        if ($slotArea === '') {
+            return '';
+        }
+
+        return 'theme.' . $matches[1] . '.' . $slotArea . '.widget_instances.' . $matches[2];
+    }
+
     /**
      * 获取部件元数据
      */
@@ -906,6 +1149,7 @@ class SlotRendererService
                 'layout_id' => (string)($widget['layout_id'] ?? ''),
                 'slot_id' => (string)($widget['slot_id'] ?? ''),
                 'type' => (string)($widget['widget_type'] ?? ''),
+                'area' => $this->renderArea === 'backend' ? 'backend' : 'frontend',
                 'config' => $config,
                 'environment' => KeyBuilder::environmentContext([
                     'scope' => 'theme-widget-output',
@@ -950,7 +1194,7 @@ class SlotRendererService
         return $html;
     }
 
-    private function getWidgetMeta(string $module, string $code): ?array
+    private function getWidgetMeta(string $module, string $code, string $area): ?array
     {
         $registry = $this->widgetRegistry->getRegistry();
 
@@ -964,6 +1208,10 @@ class SlotRendererService
                 }
                 if (isset($widget['module']) && isset($widget['code'])
                     && $widget['module'] === $module && $widget['code'] === $code) {
+                    $widgetArea = (string)($widget['area'] ?? 'frontend');
+                    if ($widgetArea !== '' && $widgetArea !== $area) {
+                        continue;
+                    }
                     return $widget;
                 }
             }
@@ -1004,20 +1252,27 @@ class SlotRendererService
 
         $layoutOption = trim((string)$getParam('layout_option', 'default'));
         $scope = trim((string)$getParam('scope', 'default'));
-        $targetType = trim((string)$getParam(
-            'theme_layout_source_target_type',
-            (string)$getParam(
-                'theme_layout_target_type',
-                (string)$getParam('target_type', 'global')
-            )
-        ));
-        $targetId = (int)$getParam(
-            'theme_layout_source_target_id',
-            (int)$getParam(
-                'theme_layout_target_id',
-                (int)$getParam('target_id', 0)
-            )
-        );
+        $targetType = trim((string)$getParam('theme_layout_source_target_type', ''));
+        if ($targetType === '') {
+            $targetType = trim((string)$getParam('theme_layout_target_type', ''));
+        }
+        if ($targetType === '') {
+            $targetType = trim((string)$getParam('target_type', ''));
+            // PreviewContext uses target_type=layout to mean "editing a layout page";
+            // theme_layout rows use global/page-specific target identities, so do not
+            // let that UI context become a DB filter.
+            if ($targetType === 'layout') {
+                $targetType = '';
+            }
+        }
+
+        $targetId = (int)$getParam('theme_layout_source_target_id', 0);
+        if ($targetId <= 0) {
+            $targetId = (int)$getParam('theme_layout_target_id', 0);
+        }
+        if ($targetId <= 0 && $targetType !== '') {
+            $targetId = (int)$getParam('target_id', 0);
+        }
 
         return [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
@@ -1030,18 +1285,20 @@ class SlotRendererService
     private function getLayoutData(int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): array
     {
         $identity = $this->currentLayoutIdentity();
+        $hasTargetIdentity = $this->hasTargetIdentity($identity);
         $cacheKey = "{$themeId}:{$pageType}:{$status}:"
             . $identity['layout_option'] . ':'
             . $identity['scope'] . ':'
             . $identity['target_type'] . ':'
             . $identity['target_id'];
         $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
+        $cacheablePublished = !$isDraft && !$hasTargetIdentity;
 
-        // 草稿不读缓存，保证编辑器/预览每次请求都拿到最新布局（删除、拖拽后立即生效）
-        if (!$isDraft && isset($this->layoutCache[$cacheKey])) {
+        // 草稿和页面级 target 不读缓存，保证编辑器/预览/页面级渲染每次按当前 identify 取数。
+        if ($cacheablePublished && isset($this->layoutCache[$cacheKey])) {
             return $this->layoutCache[$cacheKey];
         }
-        if (!$isDraft) {
+        if ($cacheablePublished) {
             $cached = self::$publishedLayoutDataCache[$cacheKey] ?? null;
             if (\is_array($cached)
                 && isset($cached['expires_at'], $cached['data'])
@@ -1067,8 +1324,9 @@ class SlotRendererService
         // 2. 检查是否有部件数据
         $hasWidgets = $this->hasWidgetsInLayout($layout);
         
-        // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据
-        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
+        // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据。
+        // 页面级 target（如 cms_page）必须保持预览/发布隔离，不能在公开访问时读取或静默发布草稿。
+        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED && !$hasTargetIdentity) {
             $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
             if ($this->hasWidgetsInLayout($draftLayout)) {
                 // 使用草稿数据，并自动发布（后台静默发布）
@@ -1081,7 +1339,7 @@ class SlotRendererService
         // 3.5. 如果仍然没有数据，尝试生成默认布局种子
         // 注意：仅在前端访问（published状态）时自动seed，编辑器模式（draft状态）不自动seed
         // 这样可以尊重用户在编辑器中删除部件的操作，避免被删除的部件自动重新创建
-        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
+        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED && !$hasTargetIdentity) {
             $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
             if ($seeded) {
                 // 重新获取布局数据
@@ -1097,7 +1355,7 @@ class SlotRendererService
         }
         
         // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
-        if (!$hasWidgets && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
+        if (!$hasWidgets && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
             $defaultLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $status);
             if ($this->hasWidgetsInLayout($defaultLayout)) {
                 $layout = $defaultLayout;
@@ -1114,8 +1372,8 @@ class SlotRendererService
         $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
             ->normalizeLayoutForRender($pageType, $layout);
 
-        // 仅已发布状态写入缓存；草稿不缓存
-        if (!$isDraft) {
+        // 仅普通已发布布局写入缓存；草稿和页面级 target 不缓存，避免页面级 Meta/Layout 串页或发布后读旧值。
+        if ($cacheablePublished) {
             $this->layoutCache[$cacheKey] = $layout;
             self::$publishedLayoutDataCache[$cacheKey] = [
                 'expires_at' => \microtime(true) + $this->publishedLayoutCacheTtl(),
@@ -1144,6 +1402,17 @@ class SlotRendererService
             // 静默失败，可能是 seeder 服务不可用
             return false;
         }
+    }
+
+    /**
+     * @param array{target_type:string,target_id:int} $identity
+     */
+    private function hasTargetIdentity(array $identity): bool
+    {
+        $targetType = trim((string)($identity['target_type'] ?? ''));
+        $targetId = (int)($identity['target_id'] ?? 0);
+
+        return ($targetType !== '' && $targetType !== 'global') || $targetId > 0;
     }
     
     /**

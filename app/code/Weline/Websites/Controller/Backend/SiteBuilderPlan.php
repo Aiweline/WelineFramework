@@ -8,7 +8,6 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSitePlanDraft;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService;
@@ -45,7 +44,7 @@ class SiteBuilderPlan extends BackendController
         }
 
         $description = \trim((string)$this->getRequestBodyValue('description', ''));
-        $providerCode = \trim((string)$this->getRequestBodyValue('provider_code', 'pagebuilder'));
+        $providerCode = \trim((string)$this->getRequestBodyValue('provider_code', 'websites_default'));
         $draftPublicId = \trim((string)$this->getRequestBodyValue('draft_public_id', ''));
         $references = $this->normalizeReferenceUrls($this->getRequestBodyValue('reference_urls', ''));
         $buildMode = $this->normalizeBuildMode((string)$this->getRequestBodyValue('build_mode', ''));
@@ -356,7 +355,7 @@ class SiteBuilderPlan extends BackendController
             return $this->fetchJson(['success' => false, 'message' => __('Please select a domain before creating a workspace session')]);
         }
 
-        $providerCode = $draft->getProviderCode() !== '' ? $draft->getProviderCode() : 'pagebuilder';
+        $providerCode = $draft->getProviderCode() !== '' ? $draft->getProviderCode() : 'websites_default';
         $provider = $this->providerRegistry->getProvider($providerCode);
         if ($provider === null || !$provider->isEnabled()) {
             return $this->fetchJson(['success' => false, 'message' => __('Unknown or disabled provider: %{code}', ['code' => $providerCode])]);
@@ -435,9 +434,7 @@ class SiteBuilderPlan extends BackendController
         }
 
         $this->planDraftService->markConverted($draft->getId(), $adminId);
-        $workspaceUrl = $providerCode === 'pagebuilder'
-            ? $this->url->getBackendUrl('websites/backend/site-builder-agent/pagebuilder-handoff', ['public_id' => $session->getPublicId()])
-            : $this->url->getBackendUrl('websites/backend/site-builder-agent/workspace', ['public_id' => $session->getPublicId()]);
+        $workspaceUrl = $this->url->getBackendUrl('websites/backend/site-builder-agent/workspace', ['public_id' => $session->getPublicId()]);
 
         return $this->fetchJson([
             'success' => true,
@@ -456,7 +453,7 @@ class SiteBuilderPlan extends BackendController
     {
         $plan = \is_array($payload['current_plan'] ?? null) ? $payload['current_plan'] : [];
         $buildMode = $this->normalizeBuildMode((string)($plan['build_mode'] ?? $draft->getBuildMode()));
-        $workspaceTrack = $buildMode === 'pagebuilder_html' ? 'html_blocks' : 'virtual_theme';
+        $workspaceTrack = $buildMode === 'html_blocks' ? 'html_blocks' : 'virtual_theme';
         $siteReady = $draft->getSelectedDomainSource() === AiSitePlanDraft::DOMAIN_SOURCE_LOCAL_POOL ? 1 : 0;
 
         $scope = [
@@ -485,62 +482,6 @@ class SiteBuilderPlan extends BackendController
             'site_ready' => $siteReady,
             'fake_mode' => !empty($payload['fake_mode']) ? 1 : 0,
         ];
-
-        return $this->attachPageBuilderStageOneRouteContract($scope, $plan);
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $plan
-     * @return array<string, mixed>
-     */
-    private function attachPageBuilderStageOneRouteContract(array $scope, array $plan): array
-    {
-        if ((string)($scope['provider_code'] ?? '') !== 'pagebuilder') {
-            return $scope;
-        }
-
-        $contractServiceClass = 'GuoLaiRen\\PageBuilder\\Service\\AiSiteStageOneContractService';
-        if (!\class_exists($contractServiceClass)) {
-            return $scope;
-        }
-
-        $pageTypes = $this->normalizeStringList($scope['page_types'] ?? $plan['page_types'] ?? []);
-        if ($pageTypes === []) {
-            return $scope;
-        }
-
-        $contentLocale = \trim((string)($scope['content_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''));
-        $planLocale = \trim((string)($scope['plan_locale'] ?? $contentLocale));
-
-        try {
-            $contractService = ObjectManager::getInstance($contractServiceClass);
-            if (!\is_object($contractService) || !\method_exists($contractService, 'build')) {
-                return $scope;
-            }
-            $stageOneContract = $contractService->build(
-                $scope,
-                $pageTypes,
-                $planLocale,
-                $contentLocale,
-                'site_builder_plan_draft'
-            );
-        } catch (\Throwable) {
-            return $scope;
-        }
-
-        if (!\is_array($stageOneContract)) {
-            return $scope;
-        }
-
-        if (\is_array($stageOneContract['page_route_contract'] ?? null)) {
-            $scope['page_route_contract'] = $stageOneContract['page_route_contract'];
-            $scope['site_plan'] = \is_array($scope['site_plan'] ?? null) ? $scope['site_plan'] : $plan;
-            $scope['site_plan']['page_route_contract'] = $stageOneContract['page_route_contract'];
-        }
-        if (\is_array($stageOneContract['navigation_address_rules'] ?? null)) {
-            $scope['navigation_address_rules'] = $stageOneContract['navigation_address_rules'];
-        }
 
         return $scope;
     }
@@ -639,7 +580,7 @@ class SiteBuilderPlan extends BackendController
     {
         $buildMode = \trim($buildMode);
 
-        return $buildMode === 'pagebuilder_html' ? 'pagebuilder_html' : 'pagebuilder_style';
+        return $buildMode;
     }
 
     private function getRequestBodyValue(string $key, mixed $default = null): mixed

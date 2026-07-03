@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Template;
-use Weline\Framework\View\Data\DataInterface;
 use Weline\Taglib\TaglibInterface;
 
 /**
@@ -61,9 +58,6 @@ class ThemeCss implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            /** @var Template $template */
-            $template = ObjectManager::getInstance(Template::class);
-            
             // 框架约定：tag_data[0]=rawTag, [1]=rawAttributes/内联内容, [2]=子内容
             // 运行期 tag-start 时内容在 [2]，编译期 tag 时内容在 [2]、属性在 [1]
             // 若 [1] 被误当作路径（含 :: 或 /），不得作为 HTML 属性输出，并优先当作 content
@@ -85,16 +79,46 @@ class ThemeCss implements TaglibInterface
             if (empty($content)) {
                 return '';
             }
-            
-            try {
-                $href = $template->fetchTagSource(DataInterface::dir_type_THEME, $content);
-                $attrsStr = $attrs ? ' ' . trim($attrs) : '';
-                $result = "<link{$attrsStr} href='{$href}' rel=\"stylesheet\" type=\"text/css\"/>";
-                return $result;
-            } catch (\Exception $e) {
-                throw $e;
-            }
+
+            $contentPhp = self::buildRuntimeStringExpression($content);
+            $attrsPhp = var_export($attrs ? ' ' . trim($attrs) : '', true);
+
+            return "<?php \$__themeCssHref = \$this->fetchTagSource(\\Weline\\Framework\\View\\Data\\DataInterface::dir_type_THEME, {$contentPhp});"
+                . " if (\$__themeCssHref !== '') { echo '<link' . {$attrsPhp} . ' href=\\''"
+                . " . htmlspecialchars((string)\$__themeCssHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')"
+                . " . '\\' rel=\"stylesheet\" type=\"text/css\"/>'; } ?>";
         };
+    }
+
+    private static function buildRuntimeStringExpression(string $content): string
+    {
+        $segments = [];
+        $offset = 0;
+        $pattern = '/<\?(?:php\s+echo|=)\s*(.*?)\s*;?\s*\?>/s';
+
+        if (preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+            foreach ($matches[0] as $index => $match) {
+                [$fullTag, $position] = $match;
+                $literal = substr($content, $offset, $position - $offset);
+                if ($literal !== '') {
+                    $segments[] = var_export($literal, true);
+                }
+
+                $expression = trim((string)$matches[1][$index][0]);
+                if ($expression !== '') {
+                    $segments[] = '(string)(' . $expression . ')';
+                }
+
+                $offset = $position + strlen($fullTag);
+            }
+        }
+
+        $tail = substr($content, $offset);
+        if ($tail !== '') {
+            $segments[] = var_export($tail, true);
+        }
+
+        return $segments ? implode(' . ', $segments) : "''";
     }
 
     /**
@@ -129,4 +153,3 @@ class ThemeCss implements TaglibInterface
         return '主题CSS文件标签，用于加载theme目录下的CSS文件';
     }
 }
-

@@ -58,9 +58,15 @@
     function getEditorLayoutContext() {
         const params = new URLSearchParams(window.location.search);
         return {
+            pageType: normalizeCode(params.get('page_type') || ''),
             layoutType: normalizeCode(params.get('layout_type') || 'homepage'),
             layoutOption: normalizeCode(params.get('layout_option') || 'default'),
         };
+    }
+
+    function isDashboardLayoutContext() {
+        const ctx = getEditorLayoutContext();
+        return ctx.pageType === 'dashboard' || ctx.layoutType === 'dashboard';
     }
 
     function expandPageLayoutSupportCodes(pageLayouts) {
@@ -511,7 +517,7 @@
         var isBackendLayout = document.documentElement.dataset.theme === 'backend'
             || (!!document.getElementById('layout-wrapper') && !!document.getElementById('page-topbar'));
 
-        if (!isBackendLayout) return;
+        if (!isBackendLayout || isDashboardLayoutContext()) return;
 
         [
             ['#page-topbar', 'backend-topbar', 'Backend Topbar', 'header'],

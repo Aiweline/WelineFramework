@@ -32,7 +32,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
 - `@Weline-WLS运行时工程师` — WLS runtime behavior, dedicated test instances, process cleanup, async/runtime-sensitive validation.
 - `@Weline-安全权限工程师` — authentication, authorization, ACL, permissions, sensitive data protection.
 - `@Weline-文档知识库工程师` — module docs, knowledge base, architecture/API docs, fix reports, stale-reference cleanup.
-- `@Weline-前端主题工程师` — frontend themes, templates, visible UI behavior, PageBuilder/theme interactions, view i18n.
+
 
 ### When Mentioned
 
@@ -93,7 +93,7 @@ Module development must follow these contracts:
 7. Hook, theme, and UI integration
    - If the module contributes visible theme output, use documented Hook points under `view/hooks/{TargetModule}/...` with `@hook-priority` or `@hook-sort-order` metadata.
    - Do not put business logic, ORM queries, direct API requests, or complex interaction scripts into layout files.
-   - Browser-visible UI, template structure, PageBuilder/theme interactions, responsive behavior, or visual quality require `@Weline-前端主题工程师` and UI/UX validation.
+
 8. i18n and user feedback
    - User-visible source text must be Simplified Chinese and use `__()`, `<lang>`, or framework-safe equivalents.
    - Keep `zh_Hans_CN` and `en_US` aligned by the same Chinese source key.

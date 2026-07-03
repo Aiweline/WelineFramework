@@ -14,8 +14,8 @@ Do not implement actual linters or repair logic.
 
 ## Touch Points
 
-- `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/*`
-- PageBuilder unit tests
+
+
 
 ## Implementation Steps
 

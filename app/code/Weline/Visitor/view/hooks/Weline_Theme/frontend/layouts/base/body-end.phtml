@@ -19,21 +19,105 @@ if ($__request_path === '/customer/account'
     return;
 }
 
+$__visitor_tracking_config = [
+    'module' => 'Weline_Visitor',
+    'pixel' => ['enabled' => true],
+    'hotBuffer' => [
+        'enabled' => true,
+        'flushInterval' => 15,
+        'batchSize' => 500,
+        'ttl' => 300,
+        'source' => 'Weline_Visitor default',
+    ],
+    'consent' => [
+        'enabled' => false,
+        'source' => 'Weline_Visitor default',
+    ],
+    'trafficRules' => [
+        'source' => 'Weline_Visitor default',
+        'excludeLocalForwarding' => true,
+        'excludedHosts' => [],
+        'excludedPathPrefixes' => [],
+        'excludedQueryKeys' => [],
+        'excludedReferrerHosts' => [],
+        'excludedUserAgentKeywords' => [],
+    ],
+    'ga4' => [
+        'enabled' => false,
+        'configured' => false,
+        'measurementId' => '',
+        'enableInDev' => false,
+        'autoTrackVisitorEvents' => true,
+        'ctaEventName' => 'cta_click',
+        'debugMode' => false,
+        'source' => 'Weline_Visitor default',
+    ],
+    'forwarders' => [
+        'eventBus' => ['enabled' => true, 'contractVersion' => 'weline-visitor-event/v1'],
+        'ga4' => ['enabled' => false, 'configured' => false, 'measurementId' => '', 'autoTrackVisitorEvents' => true],
+        'custom' => ['enabled' => false, 'script' => ''],
+    ],
+];
+try {
+    $__visitor_tracking_config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\VisitorTrackingConfig::class)
+        ->getRuntimeConfig();
+} catch (\Throwable $throwable) {
+    if (defined('DEV') && DEV) {
+        w_log_error('读取 Visitor 前台统计配置失败: ' . $throwable->getMessage());
+    }
+}
+$__visitor_pixel_enabled = !empty($__visitor_tracking_config['pixel']['enabled']);
+$__visitor_ga4_enabled = !empty($__visitor_tracking_config['ga4']['enabled']);
+$__visitor_panel_enabled = false;
+try {
+    if (class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
+        $__visitor_panel_enabled = (new \Weline\DeveloperWorkspace\Service\PanelAccessService())->shouldInjectBootstrap();
+    }
+} catch (\Throwable) {
+    $__visitor_panel_enabled = false;
+}
+
 $__pixel_name = 'weshop_storefront_behavior';
 $__data = new \Weline\Framework\DataObject\DataObject([
     'pixel_code' => '',
     'name' => $__pixel_name,
-    'enable' => 1,
+    'enable' => $__visitor_pixel_enabled ? 1 : 0,
 ]);
 $__event = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
 $__event->dispatch('Weline_Visitor::taglib_pixel', $__data);
+$__visitor_pixel_enabled = $__visitor_pixel_enabled && !empty($__data->getData('enable'));
 
-if (!empty($__data->getData('enable'))) {
-    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)?v=20260521-static-1';
+$__visitor_tracking_config['pixel']['enabled'] = $__visitor_pixel_enabled;
+$__visitor_tracking_json = json_encode(
+    $__visitor_tracking_config,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+);
+if ($__visitor_tracking_json === false) {
+    $__visitor_tracking_json = '{}';
+}
+
+if ($__visitor_pixel_enabled || $__visitor_ga4_enabled || $__visitor_panel_enabled) {
+    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)?v=20260702-visitor-forwarder-traffic-2';
+    $__visitor_panel_script_url = '@static(Weline_Visitor::js/weline-panel-visitor.js)?v=20260702-visitor-panel-events-2';
     ?>
 <script>
 (function () {
     'use strict';
+
+    var visitorTrackingConfig = <?= $__visitor_tracking_json ?>;
+    var shouldLoadPixel = <?= ($__visitor_pixel_enabled || $__visitor_ga4_enabled) ? 'true' : 'false' ?>;
+    window.__WelineVisitorTrackingConfig = visitorTrackingConfig;
+    window.__SITE_GA4__ = Object.assign({}, window.__SITE_GA4__ || {}, visitorTrackingConfig.ga4 || {}, {
+        source: (visitorTrackingConfig.ga4 && visitorTrackingConfig.ga4.source) || 'Weline_Visitor SystemConfig'
+    });
+    try {
+        window.dispatchEvent(new CustomEvent('weline:visitor-tracking-config', { detail: visitorTrackingConfig }));
+    } catch (error) {
+    }
+
+    if (!shouldLoadPixel) {
+        return;
+    }
 
     if (window.__WelinePixelLazyScheduled) {
         return;
@@ -71,6 +155,15 @@ if (!empty($__data->getData('enable'))) {
     }
 })();
 </script>
+<?php
+}
+
+if ($__visitor_panel_enabled) {
+    ?>
+<script src="<?= $__visitor_panel_script_url ?? '@static(Weline_Visitor::js/weline-panel-visitor.js)?v=20260701-visitor-panel-5' ?>"
+        data-no-extract="true"
+        data-load-order="last"
+        data-weline-panel-visitor-bootstrap="true"></script>
 <?php
 }
 ?>

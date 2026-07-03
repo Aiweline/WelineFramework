@@ -212,6 +212,24 @@ https://bbs.example.com/multipass/frontend/identity/callback
 
 `Weline_Multipass` 会通过 `account.sidebar` 与 `account.sidebar.content` hook 在 `/customer/account` 注入“授权应用”分区。用户可查看已授权的 App、Skill、BBS、A2A 等可信应用，并可撤销授权。撤销后对应绑定会置为 revoked，存量 Access Token / Refresh Token 会立即失效。
 
+### 个人中心开发者申请
+
+`Weline_Multipass` 还会在个人中心侧栏注入“开发者 -> Multipass 管理申请”。前台用户可提交自己网站的应用名称、网站域名、回调地址和申请授权范围，用于申请把自己的网站登录与 Weline 账号授权登录挂钩。
+
+前台申请会写入 `multipass_trusted_app`：
+
+- `applicant_customer_id`：提交申请的前台用户 ID。
+- `application_status`：申请状态，支持 `pending`、`approved`、`rejected`。
+- `status`：运行状态；默认人工审核时前台申请为 `disabled`，管理员审核启用后才可用于授权登录。
+
+提交成功时会生成 `client_id` 与 `client_secret`，其中 `client_secret` 只显示一次。管理员可在后台 `Multipass管理 -> 互通应用` 查看申请人、申请状态，审核后启用应用或轮换密钥。
+
+审核策略由后台系统配置中心控制：
+
+- 默认关闭自动通过：前台申请写入 `application_status=pending`、`status=disabled`，需要管理员在 `Multipass管理 -> 互通应用` 审核并启用。
+- 开启自动通过：前台申请会直接写入 `application_status=approved`、`status=active`，提交后生成的客户端凭据立即可用于 Weline 授权登录。
+- 配置入口：`系统配置中心 -> Weline_Multipass -> Multipass 审核策略 -> 自动通过开发者申请`。
+
 ### 授权信息
 
 **接口**：`GET /{rest_frontend}/multipass/rest/v1/identity/authorize`
@@ -404,4 +422,3 @@ Identity endpoints must include the configured frontend REST prefix before
 ```text
 /api123/multipass/rest/v1/identity/authorize
 ```
-

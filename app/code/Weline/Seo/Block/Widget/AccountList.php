@@ -20,9 +20,8 @@ use Weline\Seo\Model\SeoAccount;
  * SEO 账户列表 Widget
  * 
  * 使用方式：
- * <w:block class='Weline\Seo\Block\Widget\AccountList'
- *          scope='page_builder'
- *          readonly='1' />
+     * <w:block class='Weline\Seo\Block\Widget\AccountList'
+     *          readonly='1' />
  */
 class AccountList extends Block
 {

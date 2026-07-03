@@ -134,6 +134,7 @@ class BackendRememberLoginService
             $rawSession->set('backend_acl_role_id', $aclRoleId);
             $rawSession->set('backend_acl_is_enabled', $adminUser->getIsEnabled() ? 1 : 0);
             $rawSession->save();
+            $this->refreshRestoredSessionCookie($session, $rawSession, $expireAt);
             return;
         }
 
@@ -148,7 +149,23 @@ class BackendRememberLoginService
             $rawSession->set('backend_acl_role_id', $aclRoleId);
             $rawSession->set('backend_acl_is_enabled', $adminUser->getIsEnabled() ? 1 : 0);
             $rawSession->save();
+            $this->refreshRestoredSessionCookie($session, $rawSession, $expireAt);
         }
+    }
+
+    private function refreshRestoredSessionCookie(object $session, object $rawSession, int $expireAt): void
+    {
+        if (!\method_exists($session, 'getId') || !\method_exists($rawSession, 'getStrategy')) {
+            return;
+        }
+
+        $sessionId = (string) $session->getId();
+        $remainingTtl = $expireAt - \time();
+        if ($sessionId === '' || $remainingTtl <= 0) {
+            return;
+        }
+
+        $rawSession->getStrategy()->setCookie($sessionId, $remainingTtl);
     }
 
     private function clearRememberCookie(Request $request): void

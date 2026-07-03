@@ -17,6 +17,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_namespace', columns: ['namespace'])]
 #[Index(name: 'idx_meta_type', columns: ['meta_type'])]
 #[Index(name: 'idx_file_path', columns: ['file_path'])]
+#[Index(name: 'idx_meta_identify', columns: ['meta_identify'])]
+#[Index(name: 'idx_namespace_identify', columns: ['namespace', 'meta_identify'])]
 #[Index(name: 'idx_namespace_type', columns: ['namespace', 'meta_type'])]
 #[Index(name: 'idx_namespace_area', columns: ['namespace', 'area'])]
 #[Index(name: 'idx_type_area', columns: ['meta_type', 'area'])]
