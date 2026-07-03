@@ -12,7 +12,7 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 
 - Use for theme-visible API interactions, frontend business requests, provider calls, browser-side query access, SSE or stream subscriptions, and request error handling on browser surfaces.
 - Use for keywords such as `weline-api`, `Weline.Api`, `resource()`, `graph()`, `stream()`, `theme.js`, worker request chain, frontend API, browser API, query-bin, and frontend QueryProvider access.
-- Use when the task changes how browser code requests, submits, refreshes, streams, or handles API data in a theme, component, widget, or PageBuilder surface.
+
 
 # Source Material
 
@@ -34,7 +34,7 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 # Workflow
 
 1. Read `AI-ENTRY.md`, `dev/ai/global-constraints.md`, and the Weline API docs before touching browser request code.
-2. Identify the visible surface: theme template, component JS, widget, PageBuilder panel, or route-level frontend script.
+
 3. Classify the interaction:
    - Provider-style business operation -> `const Api = await Weline.Api.resource('provider')`
    - Aggregated or graph-style browser query -> `Weline.Api.graph()`

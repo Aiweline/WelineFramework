@@ -9,7 +9,6 @@
     
     <!-- ==================== 2. 内容管理 ==================== -->
     <menu source="Weline_Backend::content_management" name="content_management" title="内容管理" icon="mdi mdi-file-document-multiple-outline" order="1000">
-        <menu source="Weline_Backend::page_builder_group" name="page_builder_group" title="页面构建" icon="mdi mdi-palette-outline" order="100"/>
         <menu source="Weline_Backend::cms_group" name="cms_group" title="内容系统" icon="mdi mdi-text-box-outline" order="200"/>
         <menu source="Weline_Backend::blog_group" name="blog_group" title="博客管理" icon="mdi mdi-post-outline" order="300"/>
         <menu source="Weline_Backend::media_group" name="media_group" title="媒体管理" icon="mdi mdi-folder-image" order="400"/>

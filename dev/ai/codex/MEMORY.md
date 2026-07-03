@@ -137,12 +137,12 @@ Queue:
 - `app/code/Weline/Queue/Model/Queue.php`
 - `app/code/Weline/Queue/Controller/Backend/Queue.php`
 
-PageBuilder:
 
-- `app/code/GuoLaiRen/PageBuilder` has moved to `E:\公司\远程\src\weline`.
-- This source repository no longer supports PageBuilder development, validation,
+
+
+
   deployment, or skill maintenance. Switch to the target repository for
-  PageBuilder module work and use the target repository's PageBuilder skills.
+
 
 WeShop ecommerce:
 
@@ -176,11 +176,11 @@ WeShop ecommerce:
 - For orphan/default-instance bugs, verify live runtime state before deleting
   metadata or killing by broad process-name prefix.
 
-## PageBuilder Ownership
 
-PageBuilder rules, module docs, AI site generation plans, queue notes, and
+
+
 prompt/skill constraints are maintained in `E:\公司\远程\src\weline`. Do not use
-this source repository's historical PageBuilder notes as current guidance.
+
 
 ## Verification Patterns
 

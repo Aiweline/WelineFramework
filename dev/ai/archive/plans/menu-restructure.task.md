@@ -14,7 +14,7 @@
 
 ### 内容管理 (content_management)
 - [ ] 2.1 Weline_Cms - 归入内容管理
-- [ ] 2.2 GuoLaiRen_PageBuilder - 归入内容管理
+
 - [ ] 2.3 WeShop_Cms - 取消顶层，归入内容管理
 - [ ] 2.4 GuoLaiRen_Blog - 归入内容管理
 - [ ] 2.5 Weline_MediaManager - 归入内容管理

@@ -18,51 +18,51 @@ WLS（Weline Server）常驻内存模式下，PHP 进程不会在每个请求后
 
 在 `app/code/Weline/Framework/Runtime/StateManager.php` 中新增以下状态重置：
 
-#### 1.1 PageBuilder 模块（16 项）
+
 
 ```php
 // 权限缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Controller\Backend\Page::class, 'userPermissionsCache', null);
+
 
 // 路由缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Controller\Router::class, 'handleCache', []);
+
 
 // 下载注册表
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::class, 'entries', []);
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::class, 'stateHooked', false);
+
+
 
 // 布局缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Model\Layout::class, 'layoutsCache', null);
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Model\Layout::class, 'layoutConfigCache', []);
+
+
 
 // 样式扫描状态
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Model\Style::class, 'lastScanTime', null);
+
 
 // AI 组件缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::class, 'componentCache', []);
+
 
 // 组件解析器缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class, 'componentCache', []);
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class, 'componentFilesCache', []);
+
+
 
 // 插槽验证器缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\Component\SlotValidator::class, 'componentJsonCache', []);
+
 
 // 布局装配器缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class, 'componentFilesCache', []);
+
 
 // 页面渲染服务缓存
-self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\PageRenderService::class, 'componentFilesCache', []);
+
 
 // 单例实例清理
-self::registerResetCallback('pagebuilder_singletons', function () {
+
     $singletonClasses = [
-        \GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::class,
-        \GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer::class,
-        \GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class,
-        \GuoLaiRen\PageBuilder\Service\Component\SlotValidator::class,
-        \GuoLaiRen\PageBuilder\Service\ComponentValidator::class,
-        \GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer::class,
+
+
+
+
+
+
     ];
     foreach ($singletonClasses as $class) {
         if (\class_exists($class, false)) {
@@ -77,16 +77,16 @@ self::registerResetCallback('pagebuilder_singletons', function () {
 ```php
 self::registerResetCallback('virtual_theme_context', function () {
     // 清理 VirtualThemeRequestInterceptor 实例
-    if (\class_exists(\GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor::class, false)) {
+
         \Weline\Framework\Manager\ObjectManager::removeInstance(
-            \GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor::class
+
         );
     }
 
     // 清理 VirtualThemeContextService 实例
-    if (\class_exists(\GuoLaiRen\PageBuilder\Service\VirtualThemeContextService::class, false)) {
+
         \Weline\Framework\Manager\ObjectManager::removeInstance(
-            \GuoLaiRen\PageBuilder\Service\VirtualThemeContextService::class
+
         );
     }
 });
@@ -205,7 +205,7 @@ class StatePollutionDetector
 
 | 模块 | 静态变量数量 | 状态 |
 |------|------------|------|
-| PageBuilder | 20+ | ✅ 已修复 |
+
 | Theme | 1 | ✅ 已修复 |
 | Admin | 2 | ✅ 已修复 |
 | Framework/App | 7 | ✅ 已修复 |
@@ -227,14 +227,14 @@ class StatePollutionDetector
 - Template 实例
 - State 实例
 - Session 实例
-- PageBuilder 相关服务（6 个单例）
+
 
 ## 测试验证
 
 ### 测试场景
 
 1. **虚拟主题隔离测试**
-   - 访问 AI 站点代理：`/pagebuilder/backend/ai-site-agent/workspace`
+
    - 访问前台页面：`/`
    - **结果**：✅ 前台页面不显示虚拟主题，状态正确隔离
 
@@ -310,7 +310,7 @@ tail -f var/log/wls/default/wls.log | grep StatePollutionDetector
 - `app/code/Weline/Framework/Runtime/StateManager.php` - 状态管理器（核心）
 - `app/code/Weline/Framework/Runtime/StatePollutionDetector.php` - 自动检测器（新增）
 - `app/code/Weline/Framework/Cache/Adapter/WlsMemoryAdapter.php` - 缓存优化
-- `app/code/GuoLaiRen/PageBuilder/Observer/VirtualThemeRequestInterceptor.php` - 虚拟主题隔离
+
 
 ## 总结
 

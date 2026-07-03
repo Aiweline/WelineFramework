@@ -1,95 +1,70 @@
 ---
 name: WLS运行时工程师-WLS面板性能诊断
-description: WLS performance panel skill for diagnosing framework bottlenecks, lazy-loading the panel, and keeping static/cache paths fast under WLS.
-version: 1.0.0
+description: WLS performance diagnostics through the unified Weline Panel WLS 服务 tab and console report protocol.
+version: 1.1.0
 ---
 
 # Role
 
-本技能负责 WLS 性能面板、`wls` 命令调试入口、框架性能瓶颈定位、静态资源缓存路径和显式预览绕过缓存规则。
+本技能负责通过全局 `weline` 面板进入 `WLS 服务` tab，诊断 WLS 性能瓶颈、静态资源缓存路径、FPC miss、worker_fastpath、Services/Workers/Logs，以及生成 AI 可读性能报告。
 
 # When To Use
 
-- 用户提到 WLS 面板、WLS Performance、输入 `wls`、性能面板报错、`Invalid Weline binary magic`、query-bin 卡慢、静态资源卡慢、FPC miss、worker_fastpath、请求瀑布图、Services/Workers/Logs。
+- 用户提到 WLS 面板、WLS Performance、`WLS 服务` tab、性能面板报错、`Invalid Weline binary magic`、query-bin 卡慢、静态资源卡慢、FPC miss、worker_fastpath、请求瀑布图、Services/Workers/Logs。
 - 需要判断普通静态资源是否应该走内存缓存或快速缓存。
 - 需要判断预览态是否可以绕过缓存。
-- 需要在浏览器里验证 WLS 面板是否按需加载、默认中文、是否能在后台/前台/开发文档页打开。
+- 需要在浏览器里验证 WLS 诊断是否能通过统一 Weline Panel 按需加载。
 
 # Core Rules
 
-- WLS 面板必须在页面 footer/body-end 注入轻量 bootstrap；初始页面只允许注入口令监听和配置，不得预加载完整面板 HTML、CSS、JS 或 query-bin API 链。
-- 输入 `wls` 后才加载 `wls-performance-panel/panel.css` 和 `panel.js`；面板 HTML 由 JS 打开时创建。
-- WLS 性能面板自身的诊断数据不要依赖 `Weline.Api.resource('server')` 或 query-bin；面板用于排查 query-bin 时，必须使用独立 JSON 端点，避免诊断工具被被诊断链路拖垮。
-- WLS 面板加载后必须提供浏览器控制台协议，AI/自动化优先通过 JSON 报告分析性能，不以截图作为主要证据。
-- 面板默认中文。新增用户可见文本必须中文优先并走 `__()` 或前端文案表。
+- 唯一入口是输入 `weline` 打开全局 `WelinePanel`；不再使用 `wls` 口令。
+- 开发环境可直接输入 `weline` 打开面板；生产环境即使输入 `weline`，也必须先通过 token 门禁。
+- WLS 诊断只作为 `WLS 服务` tab 出现，且仅 WLS 环境显示。
+- WLS 性能数据仍使用专用 JSON 端点，不依赖 `Weline.Api.resource('server')` 或 query-bin。
+- AI/自动化优先通过 JSON 报告分析性能，不以截图作为主要证据。
 - 静态文件、模块静态资源、主题非预览资源，能走 WLS 内存缓存、fastpath 或快速缺失返回就走缓存/fastpath。
 - 只有明确预览请求才绕过缓存：路径包含 `__preview` / `theme_previews`，或 query 中存在明确的 `preview`、`preview_theme`、`preview_theme_id`、`theme_preview`、`weline_preview_token`、`virtual_theme_id`、`frontend_theme_id`、`backend_theme_id`、`visual_editor` 等预览参数。
-- SEO 面板的 `weline` 口令默认在前台 SEO footer 中启用；开发文档等开发态页面可通过 `<w:seo slot="inspector"/>` 只加载轻量 bootstrap，不要把 SEO inspector 全量脚本放进初始 head。
-
-# Diagnosis Workflow
-
-1. 打开用户给的真实 URL，先确认页面初始阶段是否只出现 bootstrap：
-   - WLS：存在 `script[data-weline-wls-performance-bootstrap]`。
-   - WLS：不存在 `link[data-weline-wls-panel="css"]` 和 `script[data-weline-wls-panel="js"]`。
-   - SEO：前台页存在 `script[data-weline-seo-bootstrap]`，不存在 `link[data-weline-seo-inspector]` 和 `script[data-weline-seo-inspector]`。
-2. 输入 `wls` 后验证 WLS 面板能打开，且不再出现 `Invalid Weline binary magic`。
-3. 优先从控制台导出结构化报告：
-   - `await window.__WELINE_WLS_PANEL__.publish({refresh:true, limit:80})`
-   - 读取 `window.__WELINE_WLS_PERFORMANCE_REPORT__` 或 `script#weline-wls-performance-report`。
-   - 先看 `actions`，再看 `requests.groups`、`bottlenecks.slowRequests`、`selectedRequest.trace.spans`、`services`、`workers`。
-4. 在 WLS 面板按顺序查看：
-   - Requests：找总耗时、FPC miss、DB、Session、Template 异常行。
-   - Waterfall：找耗时最高 span。
-   - Services：看 SessionServer / MemoryServer 是否慢或未命中。
-   - Workers：看 worker、端口、pid、请求分布是否异常。
-5. 对静态资源卡慢：
-   - 先确认是否普通静态资源。
-   - 如果不是明确预览，不应绕过缓存。
-   - 如果是缺失静态文件，应优先 fast missing，不应进入完整框架渲染链路。
-6. 修改后必须重载 WLS 路由/进程，并用浏览器在真实 URL 验证。
 
 # Console Protocol
 
-输入 `wls` 加载面板后，控制台会暴露：
+开发环境打开页面后：
 
 ```js
-await window.__WELINE_WLS_PANEL__.report({refresh:true, limit:80})
-await window.__WELINE_WLS_PANEL__.publish({refresh:true, limit:80})
-window.__WELINE_WLS_PERFORMANCE_REPORT__
-JSON.parse(document.getElementById('weline-wls-performance-report').textContent)
+await window.WelinePanel.open()
+await window.WelinePanel.activateTab("wls")
+await window.WelinePanel.publish({tabs:["wls"], refresh:true, limit:80})
 ```
 
-协议版本：`contractVersion === "weline-wls-performance-console/v1"`，命令：`command === "wls-performance-report"`。
+统一报告位置：
 
-报告字段：
+```js
+window.__WELINE_PANEL_REPORT__
+JSON.parse(document.getElementById("weline-panel-report").textContent)
+```
 
-- `summary`：窗口内请求量、p95/p99、FPC、错误数、组件聚合耗时。
-- `requests.rows`：最近请求，含 URI、分组、状态码、总耗时、worker、FPC、Session、DB、模板耗时。
-- `requests.groups`：路由、静态资源、面板、API/AJAX 等分组统计，可快速定位哪类请求拖慢。
-- `selectedRequest.trace.spans`：选中请求的瀑布 span，按耗时排序，meta 已脱敏。
-- `services`：SessionServer / MemoryServer 连接和 pool 状态。
-- `workers`：worker/pid/port 请求分布、慢请求和错误数。
-- `bottlenecks` 与 `actions`：给 AI 使用的瓶颈候选和优先级建议。
+顶层协议：`contractVersion === "weline-panel-console/v1"`，`command === "weline-panel-report"`。
 
-报告导出必须脱敏 cookie、password、token、session_id/session_value、authorization 等字段；保留 `session_start_ms`、SessionServer 连接耗时、worker、pid、port、namespace、hit/miss、pool 状态等诊断字段。
+WLS tab 协议：`tabs.wls.contractVersion === "weline-panel-wls/v1"`，`tabs.wls.command === "weline-panel:wls"`。
+
+# Diagnosis Workflow
+
+1. 打开真实 URL，确认初始只存在 `script[data-weline-panel-bootstrap]`，不预加载完整 WLS 性能 CSS/JS。
+2. 输入 `weline`，进入 `WLS 服务` tab。
+3. 运行统一控制台协议发布报告。
+4. 优先看 `tabs.wls.actions`，再看 `requests.groups`、`bottlenecks.slowRequests`、`selectedRequest.trace.spans`、`services`、`workers`。
+5. 静态资源卡慢时，先确认是否普通静态资源；非明确预览不应绕过缓存，缺失静态文件应优先 fast missing。
+6. 修改 WLS 运行时代码后，使用独立 `9502+`、唯一 `ai-test-*` 实例验证，测试结束必须停止实例。
 
 # Validation
 
 - `php -l` 检查改动 PHP 文件。
-- `node --check` 检查面板 JS。
+- `node --check` 检查面板和 WLS JS。
 - 新 Controller 或路由变更后执行 `php bin/w setup:upgrade --route`。
-- 真实浏览器冒烟：
-  - `https://127.0.0.1:9520/dev/tool/docs?id=6`
-  - `https://127.0.0.1:9520/dev/tool/docs/api`
-  - 一个普通前台页面。
 - 验收点：
-  - 初始页只加载 bootstrap。
-  - 输入 `wls` 后才加载 WLS 面板 CSS/JS。
-  - 面板默认中文。
-  - 面板数据来自专用 JSON 端点。
-  - 控制台 `await window.__WELINE_WLS_PANEL__.publish({refresh:true})` 返回 `weline-wls-performance-console/v1` 报告。
-  - docs 页面不再出现 `Invalid Weline binary magic`。
-  - SEO inspector 输入 `weline` 后才加载全量脚本。
+  - 输入 `weline` 能打开全局面板。
+  - `WLS 服务` tab 仅 WLS 环境出现。
+  - 旧 `wls` 输入不打开任何面板。
+  - `await window.WelinePanel.publish({tabs:["wls"], refresh:true})` 返回 `weline-panel-console/v1` 顶层报告，且 `tabs.wls.contractVersion === "weline-panel-wls/v1"`。
 
 # Constraints
 

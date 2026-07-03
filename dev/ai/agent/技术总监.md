@@ -32,7 +32,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
 - `@Weline-WLS运行时工程师` — WLS runtime behavior, dedicated test instances, process cleanup, async/runtime-sensitive validation.
 - `@Weline-安全权限工程师` — authentication, authorization, ACL, permissions, sensitive data protection.
 - `@Weline-文档知识库工程师` — module docs, knowledge base, architecture/API docs, fix reports, stale-reference cleanup.
-- `@Weline-前端主题工程师` — frontend themes, templates, visible UI behavior, PageBuilder/theme interactions, view i18n.
+
 
 ### When Mentioned
 

@@ -2,12 +2,12 @@
 
 ## 测试环境
 - 测试时间：2026-04-02 01:52
-- 测试 URL：https://weline-p11005ce4.local/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/workspace?public_id=70b0d80861a604e92bcfe7367836d4e0
+
 
 ## 已完成的修复
 
 ### 1. SSE 短轮询修复 ✅
-- **文件**：`app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php`
+
 - **改动**：将 SSE 连接时长从 900 秒改为 3 秒
 - **效果**：Worker 占用时间减少 99.7%
 - **状态**：代码已修改并重载

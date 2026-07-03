@@ -27,7 +27,7 @@ $accountLogoutPath = parse_url($this->getFrontendUrl('customer/account/logout'),
 if (!is_string($accountLogoutPath) || $accountLogoutPath === '') {
     $accountLogoutPath = '/customer/account/logout';
 }
-$accountSidebarAssetVersion = '20260522-account-logout-confirm-1';
+$accountSidebarAssetVersion = '20260701-account-responsive-5';
 $accountLogoutConfigJson = json_encode([
     'title' => (string) __('退出登录'),
     'message' => (string) __('确定要退出登录吗？'),
@@ -55,7 +55,16 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
         </div>
     </header>
 
-    <nav class="account-sidebar__nav">
+    <button class="account-sidebar__menu-toggle" type="button" aria-expanded="false" aria-controls="accountSidebarNav" data-account-sidebar-toggle>
+        <span class="account-sidebar__menu-toggle-main">
+            <i class="ri-menu-3-line" aria-hidden="true"></i>
+            <span><lang>账户菜单</lang></span>
+        </span>
+        <span class="account-sidebar__menu-toggle-current" data-account-sidebar-current><lang>当前栏目</lang></span>
+        <i class="ri-arrow-down-s-line account-sidebar__menu-toggle-icon" aria-hidden="true"></i>
+    </button>
+
+    <nav class="account-sidebar__nav" id="accountSidebarNav" data-account-sidebar-nav>
         <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#profile" data-section="profile" data-account-nav-link="true">
             <span><lang>个人资料</lang></span>
         </a>
@@ -70,6 +79,96 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
         </a>
     </nav>
 </div>
+
+<script>
+(function() {
+    'use strict';
+
+    function initAccountSidebarMenu() {
+        var root = document.querySelector('.account-sidebar-wrapper');
+        if (!root) {
+            return;
+        }
+
+        var toggle = root.querySelector('[data-account-sidebar-toggle]');
+        var current = root.querySelector('[data-account-sidebar-current]');
+        if (!toggle || !current) {
+            return;
+        }
+
+        var mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null;
+
+        function isMobile() {
+            return mobileQuery ? mobileQuery.matches : window.innerWidth <= 767;
+        }
+
+        function getActiveLabel() {
+            var active = root.querySelector('[data-account-nav-link].account-sidebar__nav-link--active, [data-account-nav-link].is-active');
+            if (!active && window.location.hash) {
+                Array.prototype.some.call(root.querySelectorAll('[data-account-nav-link][href]'), function(link) {
+                    var href = link.getAttribute('href') || '';
+                    if (href.slice(-window.location.hash.length) === window.location.hash) {
+                        active = link;
+                        return true;
+                    }
+                    return false;
+                });
+            }
+            var titleNode = active ? (active.querySelector('.account-hook-nav-link__text strong') || active.querySelector('strong') || active.querySelector('span')) : null;
+            var text = titleNode ? (titleNode.innerText || titleNode.textContent || '') : (active ? (active.innerText || active.textContent || '') : '');
+            text = text.replace(/\s+/g, ' ').trim();
+            return text || toggle.getAttribute('data-fallback-label') || '账户菜单';
+        }
+
+        function setOpen(open) {
+            root.classList.toggle('is-menu-open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        function refresh() {
+            var mobile = isMobile();
+            root.classList.toggle('is-mobile-menu-ready', mobile);
+            current.textContent = getActiveLabel();
+            if (!mobile) {
+                setOpen(true);
+            } else if (!root.getAttribute('data-account-menu-touched')) {
+                setOpen(false);
+            }
+        }
+
+        toggle.setAttribute('data-fallback-label', toggle.innerText.replace(/\s+/g, ' ').trim() || '账户菜单');
+        toggle.addEventListener('click', function() {
+            root.setAttribute('data-account-menu-touched', '1');
+            setOpen(!root.classList.contains('is-menu-open'));
+        });
+
+        root.addEventListener('click', function(event) {
+            var link = event.target && event.target.closest ? event.target.closest('[data-account-nav-link]') : null;
+            if (link && isMobile()) {
+                setOpen(false);
+                window.setTimeout(refresh, 80);
+            }
+        });
+
+        window.addEventListener('hashchange', function() {
+            window.setTimeout(refresh, 80);
+        });
+        window.addEventListener('weline:account-sidebar-content-loaded', refresh);
+        if (mobileQuery && mobileQuery.addEventListener) {
+            mobileQuery.addEventListener('change', refresh);
+        }
+
+        window.setTimeout(refresh, 0);
+        window.setTimeout(refresh, 160);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAccountSidebarMenu);
+    } else {
+        initAccountSidebarMenu();
+    }
+})();
+</script>
 
 <?php if (false): ?>
 <style>
@@ -206,6 +305,11 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
     flex-direction: column;
     gap: 0.25rem;
     margin: 0.75rem 0;
+    order: 30;
+}
+
+.account-hook-nav-group--developer {
+    order: 90;
 }
 
 .account-hook-nav-title {

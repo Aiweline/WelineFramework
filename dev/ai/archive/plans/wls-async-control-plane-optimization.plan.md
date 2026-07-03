@@ -218,7 +218,7 @@ CLI 收到的同步回包也需要统一：
 
 - `cache_clear`
 - `ssl_cert_reload`
-- `pagebuilder_page_invalidate`
+
 
 规则：
 
@@ -237,7 +237,7 @@ CLI 收到的同步回包也需要统一：
 
 - `stop`：`preempt` 当前 active operation，清空待执行队列，只保留自己；这是唯一允许清场抢占的命令。
 - `reload` / `reload_wait` / `rolling_restart` / `maintenance_enable` / `maintenance_disable`：默认 `enqueue`，第一阶段宁可保守串行，也不要再保留半并发特例。
-- `cache_clear` / `ssl_cert_reload` / `pagebuilder_page_invalidate`：优先 `coalesce`，若当前有 active mutating operation，则延后到队尾统一发。
+
 - `status`：如果只是本地快照可直接 inline；一旦需要等待异步聚合结果，则也走 operation queue。
 - `telemetry_query` / `fiber_*`：凡是需要等 Worker 回包的请求，都按 operation 处理，避免与 stop/reload 交错。
 

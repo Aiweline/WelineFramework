@@ -14,7 +14,7 @@ Do not allow editing builtin skill files.
 
 ## Touch Points
 
-- `AiSiteAgent.php` or a PageBuilder backend skill controller
+
 - Skill repository
 - Skill normalizer
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service\Head;
 
+use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Structure\SeoStructureRegistry;
 
@@ -33,7 +34,7 @@ class HeadRenderer
             return '';
         }
         if ($slot === 'inspector') {
-            return $this->renderSeoInspectorBootstrap($template, 'inspector-slot');
+            return $this->renderSeoPanelTabBootstrap($template, 'inspector-slot');
         }
 
         $context = $this->resolver->resolve($template, $options);
@@ -54,7 +55,7 @@ class HeadRenderer
                 $slot === 'head' ? $this->renderSocial($context) : '',
                 $slot === 'head' ? $this->renderStructuredData($context) : '',
                 $slot !== 'head' ? $this->renderCustomSlot($slot, $template, $context, $options) : '',
-                $slot === 'footer' ? $this->renderSeoInspectorBootstrap($template) : '',
+                $slot === 'footer' ? $this->renderSeoPanelTabBootstrap($template) : '',
             ])),
         };
     }
@@ -98,7 +99,38 @@ class HeadRenderer
         if (!empty($context['robots'])) {
             $html[] = '<meta name="robots" content="' . $this->escape((string) $context['robots']) . '">';
         }
+        $pageType = $this->headPageType((string) ($context['page_type'] ?? ''));
+        if ($pageType !== '') {
+            $html[] = '<meta name="page-type" content="' . $this->escape($pageType) . '">';
+        }
+        $contentCategory = trim((string) ($context['content_category'] ?? ''));
+        if ($contentCategory === '') {
+            $contentCategory = $this->defaultContentCategory($pageType);
+        }
+        if ($contentCategory !== '') {
+            $html[] = '<meta name="content-category" content="' . $this->escape($contentCategory) . '">';
+        }
         return implode("\n", $html);
+    }
+
+    private function headPageType(string $pageType): string
+    {
+        $normalized = $this->normalizePageType($pageType);
+        return $normalized === '' ? '' : str_replace('_', '-', $normalized);
+    }
+
+    private function defaultContentCategory(string $pageType): string
+    {
+        return match ($this->normalizePageType($pageType)) {
+            'home' => 'framework',
+            'product' => 'product',
+            'category', 'tag_collection', 'collection' => 'collection',
+            'search', 'search_results' => 'search',
+            'blog_post', 'post', 'article', 'news', 'news_article' => 'article',
+            'contact' => 'contact',
+            'legal' => 'legal',
+            default => '',
+        };
     }
 
     private function readTemplateData($template, string $key): string
@@ -117,6 +149,13 @@ class HeadRenderer
         $html = [];
         if (!empty($context['canonical_url'])) {
             $html[] = '<link rel="canonical" href="' . $this->escape((string) $context['canonical_url']) . '">';
+        }
+        $sitemapUrl = trim((string) ($context['sitemap_url'] ?? ''));
+        if ($sitemapUrl === '' && !empty($context['sitemap']) && is_array($context['sitemap'])) {
+            $sitemapUrl = trim((string) ($context['sitemap']['url'] ?? $context['sitemap']['href'] ?? ''));
+        }
+        if ($sitemapUrl !== '') {
+            $html[] = '<link rel="sitemap" type="application/xml" href="' . $this->escape($sitemapUrl) . '">';
         }
         foreach ((array) ($context['alternates'] ?? []) as $locale => $url) {
             if (!is_string($locale) || !is_string($url) || trim($url) === '') {
@@ -147,6 +186,10 @@ class HeadRenderer
         if ($ogLocale !== '') {
             $html[] = '<meta property="og:locale" content="' . $this->escape($ogLocale) . '">';
         }
+        $siteName = trim((string) ($context['site_name'] ?? ''));
+        if ($siteName !== '') {
+            $html[] = '<meta property="og:site_name" content="' . $this->escape($siteName) . '">';
+        }
         if ($title !== '') {
             $html[] = '<meta property="og:title" content="' . $this->escape($title) . '">';
             $html[] = '<meta name="twitter:title" content="' . $this->escape($title) . '">';
@@ -161,6 +204,11 @@ class HeadRenderer
         if (!empty($context['image'])) {
             $html[] = '<meta property="og:image" content="' . $this->escape((string) $context['image']) . '">';
             $html[] = '<meta name="twitter:image" content="' . $this->escape((string) $context['image']) . '">';
+            $imageAlt = trim((string) ($context['image_alt'] ?? $context['title'] ?? ''));
+            if ($imageAlt !== '') {
+                $html[] = '<meta property="og:image:alt" content="' . $this->escape($imageAlt) . '">';
+                $html[] = '<meta name="twitter:image:alt" content="' . $this->escape($imageAlt) . '">';
+            }
             $html[] = '<meta name="twitter:card" content="summary_large_image">';
         } else {
             $html[] = '<meta name="twitter:card" content="summary">';
@@ -227,49 +275,35 @@ class HeadRenderer
         ]));
     }
 
-    private function renderSeoInspectorBootstrap($template, string $source = 'footer-slot'): string
+    private function renderSeoPanelTabBootstrap($template, string $source = 'footer-slot'): string
     {
-        if ($this->claimTemplateRender($template, '__weline_seo_inspector_bootstrap_rendered')) {
+        if (!(new PanelAccessService())->shouldInjectBootstrap()) {
             return '';
         }
 
-        $cssUrl = $this->jsonString($this->resolveStaticUrl($template, self::INSPECTOR_CSS_SOURCE));
-        $jsUrl = $this->jsonString($this->resolveStaticUrl($template, self::INSPECTOR_JS_SOURCE));
+        if ($this->claimTemplateRender($template, '__weline_panel_seo_bootstrap_rendered')) {
+            return '';
+        }
+
+        $cssUrl = $this->jsonString($this->withPanelAssetVersion($this->resolveStaticUrl($template, self::INSPECTOR_CSS_SOURCE)));
+        $jsUrl = $this->jsonString($this->withPanelAssetVersion($this->resolveStaticUrl($template, self::INSPECTOR_JS_SOURCE)));
         $sourceAttribute = $this->escape($source);
 
         return <<<HTML
-<script data-no-extract="true" data-load-order="last" data-weline-seo-bootstrap="true" data-weline-seo-source="{$sourceAttribute}">
+<script data-no-extract="true" data-load-order="last" data-weline-panel-seo-bootstrap="true" data-weline-panel-seo-source="{$sourceAttribute}">
 (function () {
   "use strict";
 
-  if (window.__WELINE_SEO_BOOTSTRAPPED__) {
+  if (window.__WELINE_PANEL_SEO_BOOTSTRAPPED__) {
     return;
   }
 
-  window.__WELINE_SEO_BOOTSTRAPPED__ = true;
+  window.__WELINE_PANEL_SEO_BOOTSTRAPPED__ = true;
 
-  var PASSWORD = "weline";
   var INSPECTOR_CSS_URL = {$cssUrl};
   var INSPECTOR_JS_URL = {$jsUrl};
-  var buffer = "";
   var inspectorPromise = null;
   var stylesheetPromise = null;
-
-  function isPasswordLikeTarget(target) {
-    if (!target) {
-      return false;
-    }
-
-    var tag = (target.tagName || "").toLowerCase();
-    if (tag !== "input") {
-      return false;
-    }
-
-    var type = (target.getAttribute("type") || "text").toLowerCase();
-    var autocomplete = (target.getAttribute("autocomplete") || "").toLowerCase();
-
-    return type === "password" || autocomplete.indexOf("password") !== -1;
-  }
 
   function appendToHead(node) {
     (document.head || document.documentElement).appendChild(node);
@@ -357,74 +391,166 @@ class HeadRenderer
     }
   }
 
-  function openInspector() {
-    return loadStylesheet()
-      .then(ensureInspectorScript)
-      .then(function (inspector) {
-        if (inspector && typeof inspector.open === "function") {
-          inspector.open();
-        }
-      })
-      .catch(reportError);
+  function normalizeSeoReport(report) {
+    var output = Object.assign({}, report || {});
+    output.contractVersion = "weline-panel-seo/v1";
+    output.command = "weline-panel:seo";
+    return output;
   }
 
-  window.__WELINE_SEO__ = {
-    version: "1.0.0",
-    command: "weline-seo",
-    getReport: function () {
-      return ensureInspectorScript().then(function (inspector) {
-        if (inspector && typeof inspector.publish === "function") {
-          return inspector.publish();
-        }
-        if (inspector && typeof inspector.report === "function") {
-          return inspector.report();
-        }
-        return null;
-      });
-    },
-    open: openInspector,
-    readReport: function () {
-      return window.__WELINE_SEO_REPORT__ || null;
+  function ensurePanelAuthorized() {
+    var config = window.__WELINE_PANEL_CONFIG__ || {};
+    if (config.tokenRequired !== true) {
+      return Promise.resolve(true);
     }
-  };
+    if (!window.WelinePanel || typeof window.WelinePanel.isAuthorized !== "function") {
+      return Promise.reject(new Error("Weline Panel token required."));
+    }
+    if (window.WelinePanel.isAuthorized()) {
+      return Promise.resolve(true);
+    }
+    if (typeof window.WelinePanel.requestAuthorization === "function") {
+      return Promise.resolve(window.WelinePanel.requestAuthorization()).then(function (allowed) {
+        if (!allowed) {
+          throw new Error("Weline Panel token required.");
+        }
+        return true;
+      });
+    }
+    return Promise.reject(new Error("Weline Panel token required."));
+  }
 
-  window.welineSeo = function () {
-    return window.__WELINE_SEO__.getReport().then(function (report) {
-      if (typeof console !== "undefined" && typeof console.info === "function") {
-        console.info("[weline-seo]", report);
-      }
-      return report;
+  function getPanelSeoReport() {
+    return ensurePanelAuthorized().then(function () {
+      return ensureInspectorScript().then(function (inspector) {
+        if (inspector && typeof inspector.report === "function") {
+          return normalizeSeoReport(inspector.report());
+        }
+        if (inspector && typeof inspector.publish === "function") {
+          return normalizeSeoReport(inspector.publish());
+        }
+        return normalizeSeoReport(null);
+      });
     });
-  };
-
-  function installKeyListener() {
-    document.addEventListener("keydown", function (event) {
-      if (event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-      if (event.isComposing || isPasswordLikeTarget(event.target)) {
-        return;
-      }
-      if (!event.key || event.key.length !== 1) {
-        return;
-      }
-
-      buffer = (buffer + event.key.toLowerCase()).slice(-PASSWORD.length);
-      if (buffer !== PASSWORD) {
-        return;
-      }
-
-      buffer = "";
-      openInspector();
-    }, true);
   }
 
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(installKeyListener, { timeout: 1500 });
-    return;
+	  function escapeHtml(value) {
+	    return String(value == null ? "" : value)
+	      .replace(/&/g, "&amp;")
+	      .replace(new RegExp("\\x3C", "g"), "&lt;")
+	      .replace(/>/g, "&gt;")
+	      .replace(/"/g, "&quot;")
+	      .replace(/'/g, "&#039;");
+	  }
+
+  function updateHeaderContext(report) {
+    var hint = document.querySelector(".dev-tool-header-hint");
+    if (!hint) {
+      return;
+    }
+    var snapshot = report && report.snapshot ? report.snapshot : {};
+    var page = report && report.page ? report.page : {};
+    var title = snapshot.title || page.title || document.title || "未命名页面";
+    var url = page.url || window.location.href;
+    hint.textContent = title + " · " + url;
+    hint.title = title + "\\n" + url;
+    hint.classList.add("is-visible");
+    hint.setAttribute("aria-hidden", "false");
   }
 
-  window.setTimeout(installKeyListener, 0);
+  function bindSeoPublishButtons() {
+    var scopes = Array.prototype.slice.call(arguments).filter(Boolean);
+    scopes.forEach(function (scope) {
+      Array.prototype.slice.call(scope.querySelectorAll("[data-weline-seo-publish]")).forEach(function (publishButton) {
+        if (publishButton.__welineSeoPublishBound) {
+          return;
+        }
+        publishButton.__welineSeoPublishBound = true;
+        publishButton.addEventListener("click", function () {
+          publishButton.disabled = true;
+          var publish = window.WelinePanel && typeof window.WelinePanel.publish === "function"
+            ? window.WelinePanel.publish({ tabs: ["seo"], refresh: true })
+            : getPanelSeoReport();
+          Promise.resolve(publish).finally(function () {
+            publishButton.disabled = false;
+          });
+        });
+      });
+    });
+  }
+
+  function renderSeoTab(ctx) {
+    var content = ctx && ctx.content ? ctx.content : document.getElementById("dev-tool-content");
+    var searchArea = ctx && ctx.searchArea ? ctx.searchArea : document.getElementById("dev-tool-search-area-seo");
+	    if (!content) {
+	      return getPanelSeoReport();
+	    }
+    updateHeaderContext(null);
+    if (searchArea) {
+      searchArea.innerHTML = '\\x3Cdiv class="dev-tool-loading">\\x3Ci class="fa fa-spinner spinning">\\x3C/i>\\x3Cdiv>加载 SEO 面板...\\x3C/div>\\x3C/div>';
+    }
+	    content.innerHTML = '\\x3Cdiv class="dev-tool-loading">\\x3Ci class="fa fa-spinner spinning">\\x3C/i>\\x3Cdiv>加载 SEO 诊断...\\x3C/div>\\x3C/div>';
+	    return ensurePanelAuthorized()
+	      .then(function () {
+	        return loadStylesheet().catch(function (error) {
+	          reportError(error);
+          return true;
+        });
+      })
+	      .then(ensureInspectorScript)
+	      .then(function (inspector) {
+	        content.innerHTML =
+	          '\\x3Cdiv id="weline-panel-seo-diagnostics">\\x3C/div>';
+        var target = content.querySelector("#weline-panel-seo-diagnostics");
+        var raw = null;
+        if (inspector && typeof inspector.renderInto === "function") {
+          raw = inspector.renderInto(target, { toolbarContainer: searchArea });
+        }
+        bindSeoPublishButtons(content, searchArea);
+        updateHeaderContext(raw);
+        if (inspector && typeof inspector.report === "function") {
+          var report = normalizeSeoReport(inspector.report());
+          updateHeaderContext(report);
+          return report;
+	        }
+	        return normalizeSeoReport(raw);
+	    }).catch(function (error) {
+        if (searchArea) {
+          searchArea.innerHTML = '\\x3Cdiv class="dev-tool-empty">' + escapeHtml((error && error.message) || "SEO 诊断加载失败") + '\\x3C/div>';
+        }
+	      content.innerHTML = '\\x3Cdiv class="dev-tool-empty">' + escapeHtml((error && error.message) || "SEO 诊断加载失败") + '\\x3C/div>';
+	      throw error;
+	    });
+	  }
+
+  function registerWithWelinePanel() {
+    var manifest = {
+      id: "seo",
+      title: "SEO",
+      order: 200,
+      activate: renderSeoTab,
+      report: function () {
+        return getPanelSeoReport();
+      }
+    };
+    window.__WELINE_PANEL_TAB_QUEUE__ = window.__WELINE_PANEL_TAB_QUEUE__ || [];
+    window.__WELINE_PANEL_REPORT_PROVIDERS__ = window.__WELINE_PANEL_REPORT_PROVIDERS__ || {};
+    window.__WELINE_PANEL_REPORT_PROVIDERS__.seo = function () {
+      return getPanelSeoReport();
+    };
+    if (window.WelinePanel && typeof window.WelinePanel.registerTab === "function") {
+      window.WelinePanel.registerTab(manifest);
+    } else {
+      window.__WELINE_PANEL_TAB_QUEUE__.push(manifest);
+    }
+    if (window.WelinePanel && typeof window.WelinePanel.registerReportProvider === "function") {
+      window.WelinePanel.registerReportProvider("seo", function () {
+        return getPanelSeoReport();
+      });
+    }
+  }
+
+  registerWithWelinePanel();
 })();
 </script>
 HTML;
@@ -449,6 +575,11 @@ HTML;
         }
 
         return '/' . ltrim($normalizedSource, '/');
+    }
+
+    private function withPanelAssetVersion(string $url): string
+    {
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'v=20260702-weline-panel-seo-score-detail-1';
     }
 
     private function jsonString(string $value): string

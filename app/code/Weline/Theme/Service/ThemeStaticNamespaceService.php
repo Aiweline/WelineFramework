@@ -18,11 +18,11 @@ final class ThemeStaticNamespaceService
 
     public function usesPreviewNamespace(?array $context = null): bool
     {
-        $context = $this->resolveContext($context);
-
         if (!$this->previewContextService->shouldUseStoredContext()) {
             return false;
         }
+
+        $context = $this->resolveContext($context);
 
         return (int)($context['frontend_theme_id'] ?? 0) > 0
             || (int)($context['backend_theme_id'] ?? 0) > 0

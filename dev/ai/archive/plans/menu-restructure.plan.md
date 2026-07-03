@@ -15,7 +15,7 @@
 |-----|-----------|-------|------|------|
 | 0 | Weline_Backend::dashboard | 面板 | Weline_Backend | ✅ 保留 |
 | 40 | Weline_Cms::menu_page_management | 页面管理 | Weline_Cms | ❌ 重复 |
-| 40 | GuoLaiRen_PageBuilder::menu_page_management | 页面管理 | GuoLaiRen_PageBuilder | ❌ 重复 |
+
 | 40 | WeShop_Cms::cms_page_management | CMS页面管理 | WeShop_Cms | ❌ 重复 |
 | 10000 | Weline_Backend::business_module | 业务模块 | Weline_Backend | ⚠️ 需整合 |
 | 10000 | GuoLaiRen_Desensitization::main | 数据脱敏 | GuoLaiRen_Desensitization | ❌ 应归入工具 |
@@ -53,7 +53,7 @@
 #### 1. 内容管理 (order: 1000)
 ```
 内容管理
-├── 页面构建（合并 PageBuilder）
+
 │   ├── 快速建站
 │   ├── 网站构建器
 │   ├── 网站管理
@@ -201,7 +201,7 @@
 | Weline_Admin | 用户管理 parent 改为 system_management |
 | Weline_Acl | 权限管理 parent 改为 system_management |
 | Weline_Cms | 合并到 content_management |
-| GuoLaiRen_PageBuilder | 合并到 content_management |
+
 | WeShop_Cms | 取消顶层，归入 content_management |
 | GuoLaiRen_Blog | 归入 content_management |
 | Weline_Order | 归入 business_operations |
@@ -254,7 +254,7 @@ app/code/Weline/Backend/etc/backend/menu.xml          # 核心顶层菜单定义
 app/code/Weline/Admin/etc/backend/menu.xml            # 用户管理
 app/code/Weline/Acl/etc/backend/menu.xml              # 权限管理
 app/code/Weline/Cms/etc/backend/menu.xml              # CMS
-app/code/GuoLaiRen/PageBuilder/etc/backend/menu.xml   # PageBuilder
+
 app/code/WeShop/Cms/etc/backend/menu.xml              # WeShop CMS
 app/code/GuoLaiRen/Blog/etc/backend/menu.xml          # 博客
 app/code/Weline/Order/etc/backend/menu.xml            # 订单

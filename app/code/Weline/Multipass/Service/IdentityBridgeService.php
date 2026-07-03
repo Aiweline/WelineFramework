@@ -9,9 +9,13 @@ use Weline\Multipass\Model\AccountBinding;
 use Weline\Multipass\Model\AuthorizationCode;
 use Weline\Multipass\Model\IdentityToken;
 use Weline\Multipass\Model\TrustedApp;
+use Weline\SystemConfig\Model\SystemConfig;
 
 class IdentityBridgeService
 {
+    public const CONFIG_MODULE = 'Weline_Multipass';
+    public const CONFIG_DEVELOPER_APPLICATION_AUTO_APPROVE = 'identity_bridge/developer_applications/auto_approve';
+
     private const AUTHORIZATION_CODE_TTL = 600;
     private const ACCESS_TOKEN_TTL = 3600;
     private const REFRESH_TOKEN_TTL = 2592000;
@@ -56,7 +60,9 @@ class IdentityBridgeService
         string $trustedDomain = '',
         string $appType = 'app',
         array $allowedScopes = [],
-        string $status = TrustedApp::STATUS_ACTIVE
+        string $status = TrustedApp::STATUS_ACTIVE,
+        int $applicantCustomerId = 0,
+        string $applicationStatus = TrustedApp::APPLICATION_APPROVED
     ): array {
         $name = trim($name);
         $redirectUri = trim($redirectUri);
@@ -79,6 +85,8 @@ class IdentityBridgeService
             ->setTrustedDomain($trustedDomain)
             ->setAppType($appType)
             ->setAllowedScopes($allowedScopes ?: self::DEFAULT_SCOPES)
+            ->setApplicantCustomerId($applicantCustomerId)
+            ->setApplicationStatus($applicationStatus)
             ->setStatus($status)
             ->setClientId($credentials['client_id'])
             ->setClientSecret($credentials['client_secret'])
@@ -95,7 +103,8 @@ class IdentityBridgeService
         string $trustedDomain,
         string $appType,
         array $allowedScopes,
-        string $status
+        string $status,
+        string $applicationStatus = TrustedApp::APPLICATION_APPROVED
     ): TrustedApp {
         $app = $this->loadApp($appId);
         if (!$app) {
@@ -112,16 +121,77 @@ class IdentityBridgeService
         if ($trustedDomain === '') {
             throw new \InvalidArgumentException((string) __('可信域名不能为空'));
         }
+        if ($applicationStatus === TrustedApp::APPLICATION_REJECTED) {
+            $status = TrustedApp::STATUS_DISABLED;
+        } elseif ($status === TrustedApp::STATUS_ACTIVE && $applicationStatus === TrustedApp::APPLICATION_PENDING) {
+            $applicationStatus = TrustedApp::APPLICATION_APPROVED;
+        }
 
         $app->setName($name)
             ->setRedirectUri($redirectUri)
             ->setTrustedDomain($trustedDomain)
             ->setAppType($appType)
             ->setAllowedScopes($allowedScopes ?: self::DEFAULT_SCOPES)
+            ->setApplicationStatus($applicationStatus)
             ->setStatus($status)
             ->save();
 
         return $app;
+    }
+
+    public function createDeveloperApplication(
+        Customer $customer,
+        string $name,
+        string $redirectUri,
+        string $trustedDomain = '',
+        string $appType = 'custom',
+        array $allowedScopes = []
+    ): array {
+        $customerId = (int) $customer->getId();
+        if ($customerId <= 0) {
+            throw new \InvalidArgumentException((string) __('用户未登录'));
+        }
+
+        $redirectUri = trim($redirectUri);
+        if ($redirectUri === '' || filter_var($redirectUri, FILTER_VALIDATE_URL) === false) {
+            throw new \InvalidArgumentException((string) __('回调地址格式不正确'));
+        }
+        if (strtolower((string) parse_url($redirectUri, PHP_URL_SCHEME)) !== 'https') {
+            throw new \InvalidArgumentException((string) __('回调地址必须使用 HTTPS'));
+        }
+
+        $this->assertNoDuplicateDeveloperApplication($customerId, $redirectUri);
+
+        $autoApprove = $this->isDeveloperApplicationAutoApproveEnabled();
+
+        return $this->createTrustedApp(
+            $name,
+            $redirectUri,
+            $trustedDomain,
+            $appType,
+            $allowedScopes ?: self::DEFAULT_SCOPES,
+            $autoApprove ? TrustedApp::STATUS_ACTIVE : TrustedApp::STATUS_DISABLED,
+            $customerId,
+            $autoApprove ? TrustedApp::APPLICATION_APPROVED : TrustedApp::APPLICATION_PENDING
+        );
+    }
+
+    public function isDeveloperApplicationAutoApproveEnabled(): bool
+    {
+        try {
+            /** @var SystemConfig $systemConfig */
+            $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+            $value = $systemConfig->getConfig(
+                self::CONFIG_DEVELOPER_APPLICATION_AUTO_APPROVE,
+                self::CONFIG_MODULE,
+                SystemConfig::area_BACKEND,
+                '0'
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $this->normalizeConfigFlag($value);
     }
 
     public function rotateClientSecret(int $appId): array
@@ -511,6 +581,24 @@ class IdentityBridgeService
         return is_array($items) ? $items : [];
     }
 
+    public function listDeveloperApplicationsForCustomer(int $customerId, int $limit = 50): array
+    {
+        if ($customerId <= 0) {
+            return [];
+        }
+
+        $items = $this->newTrustedAppModel()
+            ->where(TrustedApp::schema_fields_APPLICANT_CUSTOMER_ID, $customerId)
+            ->where(TrustedApp::schema_fields_STATUS, [TrustedApp::STATUS_ACTIVE, TrustedApp::STATUS_DISABLED], 'in')
+            ->order(TrustedApp::schema_fields_ID, 'DESC')
+            ->pagination(1, $limit)
+            ->select()
+            ->fetch()
+            ->getItems() ?? [];
+
+        return is_array($items) ? $items : [];
+    }
+
     public function countBindingsForApp(int $appId): int
     {
         if ($appId <= 0) {
@@ -675,6 +763,37 @@ class IdentityBridgeService
         }
 
         return array_values(array_unique($requested));
+    }
+
+    private function assertNoDuplicateDeveloperApplication(int $customerId, string $redirectUri): void
+    {
+        $redirectUri = trim($redirectUri);
+        if ($redirectUri === '') {
+            return;
+        }
+
+        $existing = $this->newTrustedAppModel()
+            ->where(TrustedApp::schema_fields_APPLICANT_CUSTOMER_ID, $customerId)
+            ->where(TrustedApp::schema_fields_REDIRECT_URI, $redirectUri)
+            ->where(TrustedApp::schema_fields_STATUS, [TrustedApp::STATUS_ACTIVE, TrustedApp::STATUS_DISABLED], 'in')
+            ->where(TrustedApp::schema_fields_APPLICATION_STATUS, [TrustedApp::APPLICATION_PENDING, TrustedApp::APPLICATION_APPROVED], 'in')
+            ->find()
+            ->fetch();
+        if ($existing instanceof TrustedApp && $existing->getId()) {
+            throw new \InvalidArgumentException((string) __('该回调地址已经提交过 Multipass 管理申请'));
+        }
+    }
+
+    private function normalizeConfigFlag(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int)$value === 1;
+        }
+
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on', 'enabled'], true);
     }
 
     private function redirectUriMatches(TrustedApp $app, string $redirectUri): bool

@@ -528,7 +528,7 @@ class ModelSetup
         }
         
         $className = get_class($this->model);
-        // 从命名空间提取模块名，例如：GuoLaiRen\PageBuilder\Model\Page -> GuoLaiRen_PageBuilder
+        // 从命名空间提取模块名。
         if (preg_match('/^([A-Za-z0-9_]+)\\\\([A-Za-z0-9_]+)\\\\/', $className, $matches)) {
             return $matches[1] . '_' . $matches[2];
         }

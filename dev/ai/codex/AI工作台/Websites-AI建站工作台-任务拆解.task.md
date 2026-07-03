@@ -10,8 +10,8 @@
 - [x] 0.1 明确平台归属为 `Weline_Websites`
 - [x] 0.2 明确 `provider_code` 绑定流程提供者而不是工具列表
 - [x] 0.3 明确 Theme 通过独立 theme source 接入
-- [ ] 0.4 确认 `PageBuilder` 旧入口的兼容策略
-- [ ] 0.5 确认 `Weline_Websites` 菜单与 `PageBuilder` 菜单最终入口策略
+
+
 
 目标文件：
 
@@ -236,29 +236,29 @@
 
 - 工作台可创建 Website 并预览
 
-## Epic 9. PageBuilder provider 接入
 
-- [ ] 9.1 新建 `PageBuilderProvider`
+
+
 - [ ] 9.2 将现有 `AiSiteAgentSessionService` 所需能力适配到平台 session/event/artifact
-- [ ] 9.3 抽离 PageBuilder 自己的对话、草稿、预览、物料化实现
-- [ ] 9.4 `PageBuilder` 菜单指向 `Websites` 工作台并带 `provider=pagebuilder`
+
+
 - [ ] 9.5 旧 `AiSiteAgent` 控制器改为兼容跳转或维护模式
-- [ ] 9.6 单元测试覆盖 `PageBuilderProvider`
+
 
 测试先行：
 
-- `app/code/GuoLaiRen/PageBuilder/Test/Unit/Extends/Weline_Websites/PageBuilderProviderTest.php`
+
 
 目标文件：
 
-- `app/code/GuoLaiRen/PageBuilder/extends/module/Weline_Websites/AiSiteBuilderProvider/PageBuilderProvider.php`
-- `app/code/GuoLaiRen/PageBuilder/etc/backend/menu.xml`
-- `app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php`
+
+
+
 
 完成标准：
 
-- `provider=pagebuilder` 能走 PageBuilder 自己的流程
-- `Weline_Websites` 内部没有 PageBuilder 私有字段判断
+
+
 
 ## Epic 10. E2E 与回归验证
 
@@ -266,7 +266,7 @@
 - [ ] 10.2 新增 domain flow e2e
 - [ ] 10.3 新增 theme/page type/draft e2e
 - [ ] 10.4 新增 preview e2e
-- [ ] 10.5 新增 PageBuilder provider e2e
+
 - [ ] 10.6 配置 fake AI responder
 - [ ] 10.7 配置 fake registrar / fake lifecycle
 - [ ] 10.8 写 `http:request` 验证脚本清单
@@ -277,7 +277,7 @@
 - `app/code/Weline/Websites/test/e2e/backend/ai-workbench-domain-flow.spec.js`
 - `app/code/Weline/Websites/test/e2e/backend/ai-workbench-theme-page-flow.spec.js`
 - `app/code/Weline/Websites/test/e2e/backend/ai-workbench-preview.spec.js`
-- `app/code/GuoLaiRen/PageBuilder/test/e2e/backend/ai-workbench-pagebuilder-provider.spec.js`
+
 
 完成标准：
 
@@ -288,7 +288,7 @@
 
 - [ ] 11.1 更新 `Weline_Websites/extends.md`
 - [ ] 11.2 更新 Theme 主题源接入文档
-- [ ] 11.3 更新 PageBuilder provider 接入文档
+
 - [ ] 11.4 记录兼容跳转与旧入口处置策略
 - [ ] 11.5 记录测试命令与调试说明
 

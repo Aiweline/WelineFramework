@@ -187,8 +187,10 @@ $_wlsEnvFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 
 $_wlsEnvConfig = \is_file($_wlsEnvFile) ? @include $_wlsEnvFile : [];
 $_wlsEnvConfig = \is_array($_wlsEnvConfig) ? $_wlsEnvConfig : [];
 if (!\defined('WLS_DEV_MODE')) {
-    \define('WLS_DEV_MODE', ($_wlsEnvConfig['deploy'] ?? '') === 'dev');
+    $_wlsSystemConfig = \is_array($_wlsEnvConfig['system'] ?? null) ? $_wlsEnvConfig['system'] : [];
+    \define('WLS_DEV_MODE', (($_wlsSystemConfig['deploy'] ?? $_wlsEnvConfig['deploy'] ?? '') === 'dev'));
 }
+unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsSystemConfig);
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 

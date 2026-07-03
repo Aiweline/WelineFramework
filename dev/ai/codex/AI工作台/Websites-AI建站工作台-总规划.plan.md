@@ -7,20 +7,20 @@
 - 负责模块：
   - `Weline_Websites`
   - `Weline_Theme`
-  - `GuoLaiRen_PageBuilder`
+
 - 目标产物：
   - `Weline_Websites` 统一 AI 建站工作台
   - provider 扩展机制
   - Theme 主题源接入机制
   - 默认 Websites 建站流程
-  - PageBuilder provider 接入方案
+
   - 单元测试 + e2e 自动测试
 
 ## 1. 背景与目标
 
 ### 1.1 目标
 
-把当前分散在 `Weline_Websites` 与 `GuoLaiRen_PageBuilder` 的 AI 建站能力，收敛成一个由 `Weline_Websites` 持有的平台级工作台：
+
 
 1. 用户在 `Websites` 的 AI 建站工作台中，通过聊天与智能体完成建站
 2. 平台默认流程支持：
@@ -33,12 +33,12 @@
    - 生成预览入口
 3. 平台支持 `provider_code` 扩展：
    - `websites_default` 走 Websites 自带流程
-   - `pagebuilder` 走 PageBuilder 自己的流程与工具
+
    - 后续模块可以继续接入
 
 ### 1.2 核心约束
 
-1. `Weline_Websites` 不得直接知道 `PageBuilder` 内部的 `weline_theme_id`、`preview_page_id`、虚拟主题结构等私有实现细节
+
 2. `provider_code` 绑定“流程提供者”，而不是只绑定“工具列表”
 3. Theme 不直接依赖 Websites 工作台内部实现，Theme 只通过受控扩展点提供“主题源能力”
 4. 所有实现遵循 SOLID 与 TDD
@@ -49,13 +49,13 @@
 ### 2.1 本规划不做的事
 
 1. 不在本阶段重写整个 `Weline_Ai` Agent 框架
-2. 不在本阶段统一所有 PageBuilder 旧会话数据的历史迁移
+
 3. 不在本阶段改造所有 Theme 编辑器交互，只暴露工作台所需最小能力
 4. 不在本阶段做真实域名购买的自动化测试
 
 ### 2.2 可后置的事
 
-1. 旧 PageBuilder AI 工作台历史会话迁移
+
 2. 多租户/多管理员协作编辑
 3. 更复杂的草稿 diff、版本回滚、多人审批流
 
@@ -74,7 +74,7 @@
    - `DomainPurchaseService`
    - `DomainResolveService`
    - QueryProvider / lifecycle 查询链路
-4. `GuoLaiRen_PageBuilder` 已有更重的工作台雏形：
+
    - `Controller/Backend/AiSiteAgent.php`
    - `Service/AiSiteAgentSessionService.php`
    - `Model/AiSiteAgentSession.php`
@@ -93,7 +93,7 @@
 2. 缺少 provider 注册表与 provider 抽象
 3. Theme 还没有“向建站工作台提供主题源能力”的正式扩展点
 4. 页面类型、虚拟主题生成、页面微调还没有统一落在 `Websites` 工作台的默认流程里
-5. `PageBuilder` 自己的 AI 工作台与 `Websites` 没有统一抽象
+
 6. 域名处理流还没转换成工作台顶部状态条与事件流模型
 7. 缺少完整的 TDD 方案与 e2e 分层测试矩阵
 
@@ -132,7 +132,7 @@
 2. 提供主题候选项、布局元数据、默认 page types
 3. 提供“如何创建/绑定主题产物”的能力
 
-#### D. 外部流程提供者层：`GuoLaiRen_PageBuilder` 等
+
 
 负责：
 
@@ -148,15 +148,15 @@
 1. `websites_default`
    - Platforms 核心默认流程
    - 主题来自 `WebsiteThemeSourceInterface` 注册表
-2. `pagebuilder`
-   - PageBuilder 自己的 AI 建站流程
+
+
    - 可走自己的页面草稿生成与可视化编辑
 
 ### 4.3 关键边界
 
 1. `Weline_Websites` 只知道 `provider_code`
 2. `Weline_Websites` 只知道通用 `artifact`、`event`、`message`
-3. `Weline_Websites` 不知道 PageBuilder 专用主题主键
+
 4. provider 自己决定如何把私有引用放进 `provider_state_json` 或 artifact payload
 
 ## 5. 默认 Websites 流程设计
@@ -318,11 +318,11 @@
 3. 返回页面类型建议
 4. 接收“根据站点画像创建主题产物”的请求
 
-### 7.3 PageBuilder 的角色
 
-`GuoLaiRen_PageBuilder` 实现 `AiSiteBuilderProviderInterface`：
 
-1. code 为 `pagebuilder`
+
+
+
 2. 自己控制阶段
 3. 自己控制 AI 工具
 4. 自己决定如何生成页面草稿与预览
@@ -335,7 +335,7 @@
 
 1. `app/code/Weline/Websites/etc/backend/menu.xml`
    - 保留 Websites 主入口
-   - 清理或弱化对 PageBuilder 菜单组的耦合
+
 2. `app/code/Weline/Websites/Controller/Backend/SiteBuilderAgent.php`
    - 从一次性触发页升级为工作台控制器
 3. `app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index.phtml`
@@ -381,19 +381,19 @@
 3. `Service/WebsiteThemeMaterializer.php`
    - 接受站点画像与 page drafts，创建数据库主题或绑定既有主题
 
-### 8.3 `GuoLaiRen_PageBuilder`
+
 
 #### 修改
 
-1. `app/code/GuoLaiRen/PageBuilder/etc/backend/menu.xml`
-   - AI 建站工作台入口改为指向 Websites 工作台并带 `provider=pagebuilder`
-2. `app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php`
+
+
+
    - 逐步退化为兼容跳转或 provider 内部调试入口
 
 #### 新增
 
-1. `app/code/GuoLaiRen/PageBuilder/extends/module/Weline_Websites/AiSiteBuilderProvider/PageBuilderProvider.php`
-2. `app/code/GuoLaiRen/PageBuilder/Service/AiWorkbench/*`
+
+
    - 适配现有 `AiSiteAgentSessionService` 与工具链
 
 ## 9. 实施阶段
@@ -495,18 +495,18 @@
 2. 主题与网站关系建立成功
 3. 点击预览可打开
 
-### Phase 7. PageBuilder provider 接入
+
 
 目标：
 
-1. PageBuilder 以 `pagebuilder` provider 接入统一工作台
+
 2. 保留它自己的工具和流程
 3. Websites 不感知其私有字段
 
 验收：
 
-1. `provider=pagebuilder` 能进入 PageBuilder 流程
-2. PageBuilder 菜单可跳到统一工作台
+
+
 3. 平台 session/event/artifact 可复用
 
 ### Phase 8. 测试与硬化
@@ -545,11 +545,11 @@
 2. 开闭原则：
    - 新 provider、新 theme source 不修改核心分发逻辑
 3. 里氏替换：
-   - `pagebuilder` provider 必须完全替代默认 provider 的接口契约
+
 4. 接口隔离：
    - conversation/domain/theme/draft/materialize/preview 分成小接口
 5. 依赖倒置：
-   - core 依赖接口与 DTO，不依赖 PageBuilder 实现
+
 
 ## 11. 测试策略
 
@@ -559,7 +559,7 @@
 
 1. `app/code/Weline/Websites/Test/Unit/Service/AiWorkbench/`
 2. `app/code/Weline/Theme/Test/Unit/Extends/Weline_Websites/`
-3. `app/code/GuoLaiRen/PageBuilder/Test/Unit/Extends/Weline_Websites/`
+
 
 重点测试：
 
@@ -572,7 +572,7 @@
 7. DomainLifecycleBridgeService
 8. WebsitesDefaultProvider
 9. Theme source provider
-10. PageBuilder provider adapter
+
 
 ### 11.2 路由与接口验证
 
@@ -593,7 +593,7 @@ php bin/w http:request websites/backend/site-builder-agent/stream-sse -b
 2. `app/code/Weline/Websites/test/e2e/backend/ai-workbench-domain-flow.spec.js`
 3. `app/code/Weline/Websites/test/e2e/backend/ai-workbench-theme-page-flow.spec.js`
 4. `app/code/Weline/Websites/test/e2e/backend/ai-workbench-preview.spec.js`
-5. `app/code/GuoLaiRen/PageBuilder/test/e2e/backend/ai-workbench-pagebuilder-provider.spec.js`
+
 
 ### 11.4 E2E 环境原则
 
@@ -609,13 +609,13 @@ php bin/w http:request websites/backend/site-builder-agent/stream-sse -b
 1. 域名购买是外部真实动作
    - 必须强制确认
    - 测试环境必须 fake 化
-2. `Websites` 若直接依赖 PageBuilder 细节，会造成核心模块反向污染
+
 3. 如果只抽“工具列表”不抽“流程 provider”，后续 provider 会再次分叉
 
 ### 12.2 中风险问题
 
 1. Theme 当前只提供有限 query，可能不足以支撑工作台所需元数据
-2. PageBuilder 旧 `AiSiteAgentSession` 与新平台 session 可能并存一段时间
+
 3. SSE 会话与轮询混用时要注意重复事件与去重
 4. WLS 长驻进程下，registry/cache 如果使用 static，必须评估 `StateManager` 重置
 
@@ -630,13 +630,13 @@ php bin/w http:request websites/backend/site-builder-agent/stream-sse -b
 ### 13.1 短期兼容
 
 1. 保留 `Weline_Websites` 原工作台路由
-2. `PageBuilder` 旧入口先保留
-3. 新统一工作台上线后，`PageBuilder` 菜单可先跳转到 Websites 工作台并带 `provider=pagebuilder`
+
+
 
 ### 13.2 中期迁移
 
-1. `PageBuilder\Controller\Backend\AiSiteAgent` 改为兼容 redirect
-2. `PageBuilder` 旧会话表保留只读，不强制迁移历史数据
+
+
 
 ## 14. 完成定义
 
@@ -645,6 +645,6 @@ php bin/w http:request websites/backend/site-builder-agent/stream-sse -b
 1. `Weline_Websites` 工作台已是会话式 AI 建站中心
 2. 默认 `websites_default` 流程可完成从聊天到预览
 3. Theme 已能通过扩展点向建站中心提供主题源能力
-4. `pagebuilder` provider 已能接入统一工作台
-5. 不存在 `Websites` 对 `PageBuilder` 私有字段的直接依赖
+
+
 6. 单元测试与 e2e 已覆盖核心主路径

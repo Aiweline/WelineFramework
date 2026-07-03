@@ -14,7 +14,7 @@ Do not depend on live AI responses.
 
 ## Touch Points
 
-- Existing PageBuilder workbench e2e spec
+
 - Skill API mocks or test fixtures
 - Queue start request assertions
 

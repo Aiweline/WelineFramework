@@ -244,7 +244,7 @@
 |-----------|--------------|------|
 | Weline    | Framework, Database, Eav, Backend, Admin, Acl, Ai, Api, Async, AutoLeadAgent, BackendActivity, Bt_Center, CacheManager, Captcha, Cdn, Checkout, Cms, Component, Cron, Customer, CustomerService, DataTable, DeveloperWorkspace, Frontend, GenerativeEngineOptimization, I18n, Index, Indexer, Layout, Maintenance, Meta, ModuleManager, Multipass, Order, Payment, Queue, RdpWrapper, Saas, Seo, Server, SessionManager, Shipping, Smtp, Storage, SystemConfig, Taglib, Terraform, Theme, TranslationService, TwoFactorAuth, UrlManager, Visitor, Websites, Widget 等 | 数量最多，需按模块逐 Model 迁移 |
 | WeShop    | Address, Affiliate, B2B, Cart, Catalog, Cms, Compare, Compliance, Customer, Filters, GiftCard, Inventory, Invoice, Logistics, Membership, Notification, Order, Product, Promotion, QA, RMA, RecentlyViewed, Review, Search, Shipping, Social, Store, Subscription 等 | 全部改为 #[Col] 或排除 |
-| GuoLaiRen | Blog, PageBuilder, Desensitization | 全部改为 #[Col] 或排除 |
+
 | Aws       | Domains | 全部改为 #[Col] 或排除 |
 | Agent     | WeeklyReport | 全部改为 #[Col] 或排除 |
 | WelineTools | FontSubLetter | 全部改为 #[Col] 或排除 |

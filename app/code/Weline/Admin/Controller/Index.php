@@ -13,6 +13,6 @@ class Index extends BaseController
 {
     public function index()
     {
-        return $this->fetch();
+        return $this->redirect('weline_dashboard/backend/dashboard');
     }
 }

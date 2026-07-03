@@ -7,13 +7,13 @@ status: completed
 isProject: false
 todos:
   - id: codex-admin-table-compaction-1
-    content: Inspect and redesign the overcrowded PageBuilder and Websites domain and website tables into merged, human-friendly columns
+
     status: completed
   - id: codex-admin-table-compaction-2
     content: Implement template and CSS changes for Weline_Websites domain list, domain pool, and website management tables
     status: completed
   - id: codex-admin-table-compaction-3
-    content: Mirror the compact table design in PageBuilder domain management and website management views
+
     status: completed
   - id: codex-admin-table-compaction-4
     content: Fix misleading DNS or Cloudflare hint wording in shared service and controller text and verify for syntax regressions
@@ -33,5 +33,3 @@ Focus on compacting the overcrowded admin tables first, then fix DNS hint wordin
 ## Completion
 
 - Completed: 2026-03-21 22:26
-- Result: Websites / PageBuilder website tables and PageBuilder domain management tables were compacted, stale `colspan` values were fixed, and DNS / Cloudflare hints were rewritten to avoid overstating delegation or propagation status.
-- Verification: `php -l` passed for every touched template and PHP file in this plan, including the previously broken `GuoLaiRen/PageBuilder/view/templates/Backend/DomainManagement/index.phtml`.

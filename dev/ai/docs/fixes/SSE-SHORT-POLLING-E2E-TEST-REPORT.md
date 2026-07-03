@@ -130,7 +130,7 @@ data: {"success":true,"message":"Test complete - SSE short polling works!"}
 ### 问题 1：原始 SSE 端点无法测试
 
 **现象**：
-- 使用 `curl` 测试 `/pagebuilder/backend/ai-site-agent/stream-sse` 端点
+
 - 连接超时 10 秒，没有任何响应
 
 **根本原因**：
@@ -220,7 +220,7 @@ private function handleStreamSse(): void
 3. `dev/ai/docs/fixes/SSE-SHORT-POLLING-E2E-TEST-REPORT.md` - 本报告
 
 ### 修改文件
-1. `app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php`
+
    - Line 438-487: 修改 `handleStreamSse()` 方法
    - 在启动 SSE 之前先验证认证
    - 认证失败时返回 HTTP 错误响应

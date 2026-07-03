@@ -14,11 +14,7 @@ use Weline\Queue\Model\Queue;
 class QueueDispatchService
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
-    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
-        \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class => '512M',
-        \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class => '512M',
-        \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class => '512M',
-    ];
+    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [];
 
     public function __construct(
         private readonly Queue $queue,

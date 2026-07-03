@@ -1486,7 +1486,7 @@ class AiService
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
-            // 测试模式放宽筛选：仅要求激活；PageBuilder 等后台任务可显式允许零余额账户。
+            // 测试模式放宽筛选：仅要求激活；后台任务可显式允许零余额账户。
             $isTestMode = (bool)($params['test_mode'] ?? false);
             $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? ($params['resolved_config']['allow_zero_balance_provider'] ?? false));
             $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {

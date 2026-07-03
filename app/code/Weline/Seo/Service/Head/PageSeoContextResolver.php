@@ -101,6 +101,11 @@ class PageSeoContextResolver
             $this->firstImage($this->read($product, ['images'])),
             $this->read($page, ['image', 'cover_image', 'featured_image']),
         ]));
+        $imageAlt = $this->normalizeDescription($this->firstNonEmpty([
+            $this->read($seo, ['image_alt', 'og_image_alt', 'twitter_image_alt']),
+            $this->read($product, ['image_alt', 'alt']),
+            $this->read($page, ['image_alt', 'cover_image_alt', 'featured_image_alt']),
+        ]));
 
         $pageType = $this->detectPageType($product, $category, $page, $meta, $seo);
         $breadcrumbs = $this->normalizeBreadcrumbs($this->firstNonEmpty([
@@ -122,11 +127,26 @@ class PageSeoContextResolver
             'keywords' => $keywords,
             'robots' => $explicitRobots,
             '_robots_explicit' => $explicitRobots !== '',
+            'content_category' => (string) $this->firstNonEmpty([
+                $this->read($seo, ['content_category', 'category_name', 'section']),
+                $this->read($meta, ['content_category', 'category_name', 'section']),
+                $this->read($page, ['content_category', 'category_name', 'section']),
+                $this->read($category, ['name', 'title']),
+            ]),
             'url' => $url,
             'canonical_url' => (string) $canonical,
             'image' => $image,
+            'image_alt' => $imageAlt,
             'locale' => (string) ($this->readTemplate($template, 'lang_local') ?: w_env('user.lang', 'en_US')),
             'alternates' => $this->normalizeAlternates($this->read($seo, ['alternates', 'hreflang'])),
+            'search_url_template' => (string) $this->firstNonEmpty([
+                $this->read($seo, ['search_url_template', 'site_search_url_template']),
+                $this->read($meta, ['search_url_template', 'site_search_url_template']),
+            ]),
+            'site_search_enabled' => (bool) $this->firstNonEmpty([
+                $this->read($seo, ['site_search_enabled']),
+                $this->read($meta, ['site_search_enabled']),
+            ]),
             'breadcrumbs' => $breadcrumbs,
             'product' => $product,
             'category' => $category,
@@ -144,17 +164,31 @@ class PageSeoContextResolver
                 $this->read($page, ['item_list', 'items']),
                 $this->read($category, ['item_list', 'seo_directory']),
             ]), $template),
+            'schema_nodes' => $this->normalizeSchemaNodes($this->firstNonEmpty([
+                $this->readTemplate($template, 'schema_nodes'),
+                $this->read($seo, ['schema_nodes']),
+                $this->read($page, ['schema_nodes']),
+            ])),
             'sitemap' => $this->toArray($this->firstNonEmpty([
                 $this->read($seo, ['sitemap']),
                 $this->read($meta, ['sitemap']),
                 $this->read($page, ['sitemap']),
             ])),
+            'sitemap_url' => (string) $this->firstNonEmpty([
+                $this->read($seo, ['sitemap_url']),
+                $this->read($meta, ['sitemap_url']),
+                $this->read($page, ['sitemap_url']),
+            ]),
             'geo' => $this->toArray($this->firstNonEmpty([
                 $this->read($seo, ['geo']),
                 $this->read($meta, ['geo']),
                 $this->read($page, ['geo']),
             ])),
-            'faqs' => $this->normalizeFaqs($this->firstNonEmpty([$this->readTemplate($template, 'faqs'), $this->read($page, ['faqs'])])),
+            'faqs' => $this->normalizeFaqs($this->firstNonEmpty([
+                $this->readTemplate($template, 'faqs'),
+                $this->read($seo, ['faqs']),
+                $this->read($page, ['faqs']),
+            ])),
             'qa_list' => $this->normalizeQaList($this->firstNonEmpty([
                 $this->readTemplate($template, 'qa_list'),
                 $this->read($page, ['qa_list']),
@@ -808,6 +842,18 @@ class PageSeoContextResolver
         }
 
         return array_values(array_filter($items, static fn ($item): bool => is_array($item)));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeSchemaNodes(mixed $nodes): array
+    {
+        if (!is_array($nodes) || !$this->isList($nodes)) {
+            return [];
+        }
+
+        return array_values(array_filter($nodes, static fn ($node): bool => is_array($node) && $node !== []));
     }
 
     /**

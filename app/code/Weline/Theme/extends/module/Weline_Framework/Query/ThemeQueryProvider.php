@@ -8,7 +8,10 @@ use Weline\Backend\Block\ThemeConfig as BackendThemeConfig;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
 
@@ -55,12 +58,172 @@ class ThemeQueryProvider implements QueryProviderInterface
             'listLayoutSelectionVersions' => $this->listLayoutSelectionVersions($params),
             'precheckLayoutSelectionRollback' => $this->precheckLayoutSelectionRollback($params),
             'rollbackLayoutSelectionVersion' => $this->rollbackLayoutSelectionVersion($params),
+            'generatePreviewToken' => $this->generatePreviewToken($params),
+            'validatePreviewToken' => $this->validatePreviewToken($params),
             'editorRequest' => $this->editorRequest($params),
             'setBackendThemeMode' => $this->setBackendThemeMode($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Theme 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    private function generatePreviewToken(array $params): array
+    {
+        /** @var PreviewContextService $previewContextService */
+        $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
+        /** @var PreviewTokenService $previewTokenService */
+        $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
+
+        $frontendThemeId = (int)($params['frontend_theme_id'] ?? $params['theme_id'] ?? 0);
+        if ($frontendThemeId <= 0) {
+            $frontendTheme = $this->themeContext->resolveTheme(ThemeContextService::AREA_FRONTEND);
+            $frontendThemeId = $frontendTheme !== null ? (int)$frontendTheme->getId() : 0;
+        }
+        if ($frontendThemeId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('当前没有可用于预览的前台主题。'),
+                'token' => '',
+                'token_key' => PreviewTokenService::TOKEN_KEY,
+            ];
+        }
+
+        $pageType = trim((string)($params['page_type'] ?? $params['layout_type'] ?? 'homepage'));
+        if ($pageType === '') {
+            $pageType = 'homepage';
+        }
+        $layoutType = trim((string)($params['layout_type'] ?? $pageType));
+        if ($layoutType === '') {
+            $layoutType = $pageType;
+        }
+        $layoutOption = trim((string)($params['layout_option'] ?? $params['layout_code'] ?? 'default'));
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        $themeTargetType = trim((string)($params['theme_layout_target_type'] ?? $params['target_type'] ?? ''));
+        $themeTargetId = (int)($params['theme_layout_target_id'] ?? $params['target_id'] ?? 0);
+        $targetValue = trim((string)($params['target_value'] ?? ''));
+        if ($targetValue === '' && $themeTargetType !== '' && $themeTargetId > 0) {
+            $targetValue = $themeTargetType . ':' . $themeTargetId;
+        }
+        if ($targetValue === '') {
+            $targetValue = $pageType;
+        }
+
+        $context = is_array($params['context'] ?? null) ? $params['context'] : [];
+        $context = array_replace([
+            'frontend_theme_id' => $frontendThemeId,
+            'backend_theme_id' => (int)($params['backend_theme_id'] ?? 0),
+            'editor_area' => PreviewContextService::AREA_FRONTEND,
+            'shell' => PreviewContextService::SHELL_PREVIEW,
+            'preview_mode' => (string)($params['preview_mode'] ?? PreviewContextService::DEFAULT_PREVIEW_MODE),
+            'status' => (string)($params['status'] ?? PreviewContextService::DEFAULT_STATUS),
+            'version_id' => isset($params['version_id']) ? (int)$params['version_id'] : null,
+            'scope' => (string)($params['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
+            'target_type' => (string)($params['preview_target_type'] ?? PreviewContextService::TARGET_TYPE_PAGE),
+            'target_value' => $targetValue,
+            'page_type' => $pageType,
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'theme_layout_target_type' => $themeTargetType,
+            'theme_layout_target_id' => $themeTargetId,
+            'theme_layout_source_target_type' => (string)($params['theme_layout_source_target_type'] ?? $themeTargetType),
+            'theme_layout_source_target_id' => (int)($params['theme_layout_source_target_id'] ?? $themeTargetId),
+        ], $context);
+        $context = $previewContextService->ensureThemeIds(
+            $previewContextService->buildContext($context, false),
+            true,
+            true
+        );
+
+        $token = $previewTokenService->generateToken(
+            $frontendThemeId,
+            $pageType,
+            $context['version_id'] ?? null,
+            $context
+        );
+        $context = $previewContextService->withPreviewToken($context, $token);
+
+        if (!empty($params['set_cookie'])) {
+            $previewTokenService->setPreviewCookie($token);
+        }
+
+        return [
+            'success' => true,
+            'token' => $token,
+            'token_key' => PreviewTokenService::TOKEN_KEY,
+            'context' => $context,
+            'expires_in' => 3600,
+        ];
+    }
+
+    private function validatePreviewToken(array $params): array
+    {
+        /** @var PreviewTokenService $previewTokenService */
+        $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
+        $token = trim((string)($params['token'] ?? $params[PreviewTokenService::TOKEN_KEY] ?? ''));
+        if ($token === '') {
+            return [
+                'success' => false,
+                'token' => '',
+                'token_key' => PreviewTokenService::TOKEN_KEY,
+                'message' => (string)__('缺少预览 token。'),
+            ];
+        }
+
+        $tokenData = $previewTokenService->validateToken($token);
+        if (!is_array($tokenData) || !$this->previewTokenMatches($tokenData, $params)) {
+            return [
+                'success' => false,
+                'token' => $token,
+                'token_key' => PreviewTokenService::TOKEN_KEY,
+                'message' => (string)__('预览 token 无效或已过期。'),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'token' => $token,
+            'token_key' => PreviewTokenService::TOKEN_KEY,
+            'data' => $tokenData,
+            'context' => is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [],
+            'expires_at' => (int)($tokenData['expires_at'] ?? 0),
+        ];
+    }
+
+    private function previewTokenMatches(array $tokenData, array $params): bool
+    {
+        $context = is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+
+        $expectedPageType = trim((string)($params['page_type'] ?? ''));
+        if ($expectedPageType !== '') {
+            $actualPageType = trim((string)($tokenData['page_type'] ?? $context['page_type'] ?? $context['layout_type'] ?? ''));
+            $isGenericRestoredToken = $actualPageType === 'homepage'
+                && empty($context['theme_layout_target_type'])
+                && preg_match('/^pv_\d+_\d+_[a-f0-9]{16}$/', (string)($tokenData['token'] ?? ''));
+            if ($isGenericRestoredToken) {
+                return true;
+            }
+            if ($actualPageType !== $expectedPageType) {
+                return false;
+            }
+        }
+
+        $expectedTargetType = trim((string)($params['theme_layout_target_type'] ?? ''));
+        if ($expectedTargetType !== '') {
+            $actualTargetType = trim((string)($context['theme_layout_target_type'] ?? ''));
+            if ($actualTargetType !== $expectedTargetType) {
+                return false;
+            }
+        }
+
+        $expectedTargetId = (int)($params['theme_layout_target_id'] ?? 0);
+        if ($expectedTargetId > 0 && (int)($context['theme_layout_target_id'] ?? 0) !== $expectedTargetId) {
+            return false;
+        }
+
+        return true;
     }
 
     private function setBackendThemeMode(array $params): array
@@ -193,7 +356,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         if (!$theme->getId()) {
             return [];
         }
-        $fileOptions = $this->doScanThemeLayouts($layoutType, $area, $theme);
+        $fileOptions = $this->scanThemeLayoutCatalog($layoutType, $area, $theme);
         $virtualOptions = $this->virtualLayoutService()->listLayoutOptions(
             $layoutType,
             (int)$theme->getId(),
@@ -202,6 +365,51 @@ class ThemeQueryProvider implements QueryProviderInterface
         );
 
         return array_replace($fileOptions, $virtualOptions);
+    }
+
+    private function scanThemeLayoutCatalog(string $layoutType, string $area, WelineTheme $theme): array
+    {
+        /** @var ThemeResourceCatalog $catalog */
+        $catalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
+        $layoutOptions = $catalog->getLayouts($area, $theme)[$layoutType] ?? [];
+        $layouts = [];
+
+        foreach ($layoutOptions as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+
+            $value = trim((string)($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $meta = is_array($option['meta'] ?? null) ? $option['meta'] : [];
+            $label = trim((string)($meta['name'] ?? $meta['title'] ?? ''));
+            if ($label === '') {
+                $label = ucfirst(str_replace(['_', '-'], ' ', $value));
+            }
+
+            $layouts[$value] = [
+                'value' => $value,
+                'label' => $label,
+                'name' => $label,
+                'layout_code' => $value,
+                'layout_name' => $label,
+                'description' => (string)($meta['description'] ?? ''),
+                'template' => (string)($option['logical_key'] ?? ''),
+                'file' => (string)($option['file'] ?? ''),
+                'path' => (string)($option['path'] ?? ''),
+                'preview_image' => (string)($meta['preview_image'] ?? $meta['preview_url'] ?? ''),
+                'config' => is_array($meta['config'] ?? null) ? $meta['config'] : [],
+                'meta' => $meta,
+                'layer_type' => (string)($option['layer_type'] ?? ''),
+                'layer_key' => (string)($option['layer_key'] ?? ''),
+                'module_name' => (string)($option['module_name'] ?? ''),
+            ];
+        }
+
+        return $layouts;
     }
 
     private function listVirtualLayoutOptions(array $params): array
@@ -1020,6 +1228,31 @@ class ThemeQueryProvider implements QueryProviderInterface
                         ['name' => 'scope', 'type' => 'string', 'required' => false],
                         ['name' => 'locale', 'type' => 'string', 'required' => false],
                         ['name' => 'reason', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'generatePreviewToken',
+                    'description' => __('生成 Theme 前台预览 token'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'page_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => false],
+                        ['name' => 'theme_layout_target_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'theme_layout_target_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'context', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'validatePreviewToken',
+                    'description' => __('校验 Theme 前台预览 token'),
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'token', 'type' => 'string', 'required' => true],
+                        ['name' => 'page_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'theme_layout_target_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'theme_layout_target_id', 'type' => 'int', 'required' => false],
                     ],
                 ],
                 [

@@ -6,6 +6,14 @@
  */
 $apps = $this->getData('apps') ?? [];
 $bindingCounts = $this->getData('binding_counts') ?? [];
+$autoApproveDeveloperApplications = (bool)($this->getData('developer_application_auto_approve') ?? false);
+$configUrl = $this->getBackendUrl('weline_systemconfig/backend/config', [
+    'area' => 'backend',
+    'scope' => 'default.default.default',
+    'module' => 'Weline_Multipass',
+    'search' => 'developer_applications',
+]);
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <style>
 .weline-multipass-app-card {
@@ -34,6 +42,28 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
 }
 .weline-multipass-status.disabled,
 .weline-multipass-status.deleted {
+    background: var(--backend-color-danger-bg, #f8d7da);
+    color: var(--backend-color-danger, #dc3545);
+}
+.weline-multipass-application-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--backend-color-card-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+.weline-multipass-application-status.pending {
+    background: var(--backend-color-warning-bg, #fff3cd);
+    color: var(--backend-color-warning, #b58100);
+}
+.weline-multipass-application-status.approved {
+    background: var(--backend-color-success-bg, #d1e7dd);
+    color: var(--backend-color-success, #198754);
+}
+.weline-multipass-application-status.rejected {
     background: var(--backend-color-danger-bg, #f8d7da);
     color: var(--backend-color-danger, #dc3545);
 }
@@ -73,6 +103,20 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
     <template>Weline_Component::message.phtml</template>
 </div>
 
+<div class="alert <?= $autoApproveDeveloperApplications ? 'alert-warning' : 'alert-info' ?> d-flex align-items-start justify-content-between gap-3">
+    <div>
+        <div class="fw-semibold mb-1"><?= __('审核策略') ?></div>
+        <div>
+            <?= $autoApproveDeveloperApplications
+                ? __('当前已开启自动通过：前台用户提交后会直接成为已通过并启用，仍可在本页管理或禁用。')
+                : __('当前为人工审核：前台用户提交后默认待审核并禁用，需管理员通过并启用。') ?>
+        </div>
+    </div>
+    <a href="<?= $escape($configUrl) ?>" class="btn btn-sm btn-outline-primary flex-shrink-0">
+        <i class="mdi mdi-cog-outline"></i> <?= __('配置审核策略') ?>
+    </a>
+</div>
+
 <div class="weline-multipass-secret-panel" id="secretPanel">
     <div class="d-flex align-items-start justify-content-between gap-3">
         <div>
@@ -91,9 +135,14 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0"><?= __('可信应用列表') ?></h5>
-                <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#trustedAppOffcanvas">
-                    <i class="mdi mdi-plus"></i> <?= __('添加应用') ?>
-                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="<?= $escape($configUrl) ?>" class="btn btn-outline-secondary">
+                        <i class="mdi mdi-shield-check-outline"></i> <?= __('审核策略') ?>
+                    </a>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#trustedAppOffcanvas">
+                        <i class="mdi mdi-plus"></i> <?= __('添加应用') ?>
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <?php if (empty($apps)): ?>
@@ -113,10 +162,13 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
                                 'trusted_domain' => $app->getTrustedDomain(),
                                 'redirect_uri' => $app->getRedirectUri(),
                                 'allowed_scopes' => $app->getAllowedScopes(),
+                                'applicant_customer_id' => $app->getApplicantCustomerId(),
+                                'application_status' => $app->getApplicationStatus(),
                                 'status' => $app->getStatus(),
                             ];
                             $encodedApp = htmlspecialchars(json_encode($appData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
                             $status = $app->getStatus();
+                            $applicationStatus = $app->getApplicationStatus();
                             ?>
                             <div class="col-md-6 col-xl-4">
                                 <div class="weline-multipass-app-card">
@@ -126,8 +178,18 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
                                             <span class="badge bg-secondary"><?= htmlspecialchars($app->getAppType(), ENT_QUOTES, 'UTF-8') ?></span>
                                         </div>
                                         <span class="weline-multipass-status <?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>">
-                                            <i class="mdi mdi-circle-medium"></i><?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>
+                                            <i class="mdi mdi-circle-medium"></i><?= htmlspecialchars($app->getStatusLabel(), ENT_QUOTES, 'UTF-8') ?>
                                         </span>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <span class="weline-multipass-application-status <?= htmlspecialchars($applicationStatus, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars($app->getApplicationStatusLabel(), ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                        <?php if ($app->getApplicantCustomerId() > 0): ?>
+                                            <span class="badge bg-info-subtle text-info">
+                                                <?= __('申请人') ?> #<?= (int)$app->getApplicantCustomerId() ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="mb-2">
                                         <small class="text-muted"><?= __('Client ID') ?></small>
@@ -226,6 +288,16 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
                 </select>
             </div>
 
+            <div class="mb-3">
+                <label class="form-label"><?= __('申请状态') ?></label>
+                <select class="form-select" name="application_status" id="application_status">
+                    <option value="pending"><?= __('待审核') ?></option>
+                    <option value="approved"><?= __('已通过') ?></option>
+                    <option value="rejected"><?= __('已拒绝') ?></option>
+                </select>
+                <small class="form-text text-muted"><?= __('前台用户提交的 Multipass 管理申请会带有申请人和申请状态。') ?></small>
+            </div>
+
             <div class="d-grid gap-2">
                 <button type="submit" class="btn btn-primary">
                     <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
@@ -276,6 +348,7 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
         document.getElementById('redirect_uri').value = appData.redirect_uri || '';
         document.getElementById('trusted_domain').value = appData.trusted_domain || '';
         document.getElementById('status').value = appData.status || 'active';
+        document.getElementById('application_status').value = appData.application_status || 'approved';
         document.querySelectorAll('.scope-checkbox').forEach(function(input) {
             input.checked = (appData.allowed_scopes || []).indexOf(input.value) !== -1;
         });
@@ -351,6 +424,7 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
         document.getElementById('trustedAppOffcanvasTitle').textContent = '<?= __('添加互通应用') ?>';
         document.getElementById('trustedAppForm').reset();
         document.getElementById('app_id').value = '';
+        document.getElementById('application_status').value = 'approved';
         document.querySelectorAll('.scope-checkbox').forEach(function(input) {
             input.checked = ['profile.basic', 'profile.email', 'account.bind'].indexOf(input.value) !== -1;
         });

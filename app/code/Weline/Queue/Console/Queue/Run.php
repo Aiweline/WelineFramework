@@ -25,11 +25,7 @@ use Weline\Queue\QueueInterface;
 class Run implements \Weline\Framework\Console\CommandInterface
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
-    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
-        'GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue' => '512M',
-        'GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue' => '512M',
-        'GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue' => '512M',
-    ];
+    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [];
 
     private Printing $printing;
     private Queue $queue;
@@ -353,7 +349,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->tip(),
             [
                 '-h, --help' => '显示帮助信息',
-                '-f, --force' => '强制模式：将 _force_rebuild 注入队列内容；PageBuilder 阶段一/二/构建队列会换新 execution_token 并清 result，避免 duplicate_stream 秒跳过',
+                '-f, --force' => '强制模式：将 _force_rebuild 注入队列内容，并清 result，避免历史输出干扰本次执行',
             ],
             [],
             []

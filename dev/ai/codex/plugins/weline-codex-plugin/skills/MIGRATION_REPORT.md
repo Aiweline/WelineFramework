@@ -43,7 +43,7 @@ This migration rewrites the legacy Weline AI skill set into a Multica-compatible
 - `dev/ai/skills/windows-command-quoting/SKILL.md`
 - `dev/ai/skills/weline-routing/SKILL.md`
 - `dev/ai/skills/sse-streaming/SKILL.md`
-- `dev/ai/skills/pagebuilder-style-templates/SKILL.md`
+
 - `dev/ai/skills/visitor-pixel/SKILL.md`
 - `dev/ai/skills/website-to-template/SKILL.md`
 - `dev/ai/skills/community-module/SKILLS-CONSOLIDATED.md`

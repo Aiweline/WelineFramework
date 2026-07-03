@@ -945,7 +945,6 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
 
     /**
      * 通过权限ID模式推断父级权限
-     * 例如：GuoLaiRen_PageBuilder::page_builder_edit_post -> GuoLaiRen_PageBuilder::page_builder
      * 
      * @param string $sourceId 权限ID
      * @return string 推断的父级权限ID，如果无法推断则返回空字符串
@@ -960,13 +959,9 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         list($module, $permission) = explode('::', $sourceId, 2);
         
         // 如果权限名包含下划线，尝试推断父级
-        // 例如：page_builder_edit_post -> page_builder
-        // 例如：page_builder_index -> page_builder
         if (strpos($permission, '_') !== false) {
             $parts = explode('_', $permission);
             // 只有当权限名至少有3部分时，才推断父级（避免 ai_market -> ai_market 的情况）
-            // 例如：page_builder_edit_post (4部分) -> page_builder (前2部分)
-            // 例如：page_builder_index (3部分) -> page_builder (前2部分)
             // 例如：ai_market (2部分) -> 不推断，返回空字符串
             if (count($parts) >= 3) {
                 $parentPermission = $parts[0] . '_' . $parts[1];
@@ -1058,7 +1053,6 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     $parentSourceId = $item->getData(Acl::schema_fields_SOURCE_ID);
                     if ($parentSourceId && $parentSourceId !== $currentSourceId) {
                         // 检查权限ID是否可能是父级（通过模式匹配）
-                        // 例如：如果当前是 page_builder_index，父级可能是 page_builder
                         $currentParts = explode('::', $currentSourceId);
                         $parentParts = explode('::', $parentSourceId);
                         if (count($currentParts) === 2 && count($parentParts) === 2) {

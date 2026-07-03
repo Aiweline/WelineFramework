@@ -1,4 +1,9 @@
 (function() {
+    if (window.__welineAccountIndexInitialized) {
+        return;
+    }
+    window.__welineAccountIndexInitialized = true;
+
     function readAccountConfig() {
         var el = document.getElementById('weline-account-index-config');
         if (!el) {
@@ -264,6 +269,7 @@
                         window.location.href = payload.redirect;
                     }
 
+                    loadedSidebarSections[sectionName] = true;
                     return false;
                 }
 
@@ -279,6 +285,7 @@
                 return true;
             }).catch(function(error) {
                 console.error(error);
+                loadedSidebarSections[sectionName] = true;
                 return false;
             }).finally(function() {
                 delete sidebarContentLoading[sectionName];
@@ -405,7 +412,10 @@
             }
             if (!targetSection) {
                 return loadSidebarContent(targetId).then(function() {
-                    showAccountSection(targetId);
+                    var loadedTargetSection = document.querySelector('[data-account-section="' + targetId + '"]') || document.getElementById(targetId + '-section');
+                    if (loadedTargetSection) {
+                        showAccountSection(targetId);
+                    }
                 });
             }
             sections.forEach(function(section) {

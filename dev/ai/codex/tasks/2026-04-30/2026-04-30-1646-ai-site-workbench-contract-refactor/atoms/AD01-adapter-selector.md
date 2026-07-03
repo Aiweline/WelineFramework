@@ -14,7 +14,7 @@ Do not replace model providers. Do not hardcode secrets or new model names.
 
 ## Touch Points
 
-- `app/code/GuoLaiRen/PageBuilder/Service/AI/*`
+
 - Stage1 and Stage2 service callers later
 
 ## Implementation Steps
