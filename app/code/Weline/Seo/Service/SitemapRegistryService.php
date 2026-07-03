@@ -306,14 +306,12 @@ class SitemapRegistryService
     /**
      * 从扩展信息推断类名
      * 
-     * @param string $sourceModule 来源模块名（如 GuoLaiRen_PageBuilder）
+     * @param string $sourceModule 来源模块名
      * @param array $extension 扩展信息
      * @return string|null 完整的类名
      */
     private function inferClassName(string $sourceModule, array $extension): ?string
     {
-        // file_path 格式: SitemapProvider/PageBuilderSitemapProvider.php
-        // relative_path 格式: extends/module/Weline_Seo/SitemapProvider/PageBuilderSitemapProvider.php
         $filePath = $extension['file_path'] ?? '';
         if (empty($filePath)) {
             return null;
@@ -326,18 +324,14 @@ class SitemapRegistryService
         $classPath = str_replace('.php', '', $filePath);
         
         // 将路径转换为类名
-        // SitemapProvider/PageBuilderSitemapProvider -> SitemapProvider\PageBuilderSitemapProvider
         $classPath = str_replace('/', '\\', $classPath);
         
         // 将模块名转换为命名空间
-        // GuoLaiRen_PageBuilder -> GuoLaiRen\PageBuilder
         $namespace = str_replace('_', '\\', $sourceModule);
         
         // 完整的类名 - 使用小写 extends/module 目录名（符合框架规约）
-        // GuoLaiRen\PageBuilder\extends\module\Weline_Seo\SitemapProvider\PageBuilderSitemapProvider
         $fullClass = $namespace . '\\extends\\module\\Weline_Seo\\' . $classPath;
         
         return $fullClass;
     }
 }
-

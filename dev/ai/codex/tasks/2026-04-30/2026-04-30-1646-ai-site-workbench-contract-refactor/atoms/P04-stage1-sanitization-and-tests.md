@@ -2,7 +2,7 @@
 
 ## Background Snapshot
 
-Prior PageBuilder work required rejecting prompt-like AI output and preserving customer-visible implementation plans.
+
 
 ## Goal
 

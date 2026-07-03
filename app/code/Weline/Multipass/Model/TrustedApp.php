@@ -14,6 +14,8 @@ use Weline\Framework\Setup\Db\ModelSetup;
 #[Table(comment: 'Multipass trusted identity app')]
 #[Index(name: 'idx_multipass_trusted_app_client_id', columns: ['client_id'], type: 'UNIQUE', comment: 'Client ID')]
 #[Index(name: 'idx_multipass_trusted_app_status', columns: ['status'], comment: 'Status')]
+#[Index(name: 'idx_multipass_trusted_app_applicant', columns: ['applicant_customer_id'], comment: 'Applicant customer')]
+#[Index(name: 'idx_multipass_trusted_app_application_status', columns: ['application_status'], comment: 'Application status')]
 class TrustedApp extends Model
 {
     public const schema_table = 'multipass_trusted_app';
@@ -35,6 +37,10 @@ class TrustedApp extends Model
     public const schema_fields_REDIRECT_URI = 'redirect_uri';
     #[Col(type: 'text', nullable: true, comment: 'Allowed scopes JSON')]
     public const schema_fields_ALLOWED_SCOPES = 'allowed_scopes';
+    #[Col(type: 'int', nullable: false, default: 0, comment: 'Applicant customer ID')]
+    public const schema_fields_APPLICANT_CUSTOMER_ID = 'applicant_customer_id';
+    #[Col(type: 'varchar', length: 32, nullable: false, default: 'approved', comment: 'Application status')]
+    public const schema_fields_APPLICATION_STATUS = 'application_status';
     #[Col(type: 'varchar', length: 32, nullable: false, default: 'active', comment: 'Status')]
     public const schema_fields_STATUS = 'status';
     #[Col(type: 'datetime', nullable: false, comment: 'Created at')]
@@ -45,9 +51,12 @@ class TrustedApp extends Model
     public const STATUS_ACTIVE = 'active';
     public const STATUS_DISABLED = 'disabled';
     public const STATUS_DELETED = 'deleted';
+    public const APPLICATION_PENDING = 'pending';
+    public const APPLICATION_APPROVED = 'approved';
+    public const APPLICATION_REJECTED = 'rejected';
 
     public array $_unit_primary_keys = [self::schema_fields_ID];
-    public array $_index_sort_keys = ['app_id', 'client_id', 'status'];
+    public array $_index_sort_keys = ['app_id', 'client_id', 'status', 'applicant_customer_id', 'application_status'];
 
     public function getId(mixed $default = 0): int
     {
@@ -69,11 +78,15 @@ class TrustedApp extends Model
             ->addColumn(self::schema_fields_TRUSTED_DOMAIN, TableInterface::column_type_VARCHAR, 255, "not null default ''", 'Trusted domain')
             ->addColumn(self::schema_fields_REDIRECT_URI, TableInterface::column_type_VARCHAR, 1024, "not null default ''", 'Redirect URI')
             ->addColumn(self::schema_fields_ALLOWED_SCOPES, TableInterface::column_type_TEXT, null, 'default null', 'Allowed scopes JSON')
+            ->addColumn(self::schema_fields_APPLICANT_CUSTOMER_ID, TableInterface::column_type_INTEGER, null, 'not null default 0', 'Applicant customer ID')
+            ->addColumn(self::schema_fields_APPLICATION_STATUS, TableInterface::column_type_VARCHAR, 32, "not null default 'approved'", 'Application status')
             ->addColumn(self::schema_fields_STATUS, TableInterface::column_type_VARCHAR, 32, "not null default 'active'", 'Status')
             ->addColumn(self::schema_fields_CREATED_AT, TableInterface::column_type_DATETIME, null, 'not null', 'Created at')
             ->addColumn(self::schema_fields_UPDATED_AT, TableInterface::column_type_DATETIME, null, 'not null', 'Updated at')
             ->addIndex(TableInterface::index_type_UNIQUE, 'idx_multipass_trusted_app_client_id', [self::schema_fields_CLIENT_ID], 'Client ID')
             ->addIndex(TableInterface::index_type_DEFAULT, 'idx_multipass_trusted_app_status', [self::schema_fields_STATUS], 'Status')
+            ->addIndex(TableInterface::index_type_DEFAULT, 'idx_multipass_trusted_app_applicant', [self::schema_fields_APPLICANT_CUSTOMER_ID], 'Applicant customer')
+            ->addIndex(TableInterface::index_type_DEFAULT, 'idx_multipass_trusted_app_application_status', [self::schema_fields_APPLICATION_STATUS], 'Application status')
             ->create();
     }
 
@@ -168,6 +181,39 @@ class TrustedApp extends Model
         return $this->setData(self::schema_fields_ALLOWED_SCOPES, json_encode($scopes, JSON_UNESCAPED_UNICODE));
     }
 
+    public function getApplicantCustomerId(): int
+    {
+        return (int) ($this->getData(self::schema_fields_APPLICANT_CUSTOMER_ID) ?? 0);
+    }
+
+    public function setApplicantCustomerId(int $customerId): self
+    {
+        return $this->setData(self::schema_fields_APPLICANT_CUSTOMER_ID, max(0, $customerId));
+    }
+
+    public function getApplicationStatus(): string
+    {
+        return (string) ($this->getData(self::schema_fields_APPLICATION_STATUS) ?? self::APPLICATION_APPROVED);
+    }
+
+    public function setApplicationStatus(string $status): self
+    {
+        if (!in_array($status, [self::APPLICATION_PENDING, self::APPLICATION_APPROVED, self::APPLICATION_REJECTED], true)) {
+            $status = self::APPLICATION_PENDING;
+        }
+
+        return $this->setData(self::schema_fields_APPLICATION_STATUS, $status);
+    }
+
+    public function getApplicationStatusLabel(): string
+    {
+        return match ($this->getApplicationStatus()) {
+            self::APPLICATION_APPROVED => (string) __('已通过'),
+            self::APPLICATION_REJECTED => (string) __('已拒绝'),
+            default => (string) __('待审核'),
+        };
+    }
+
     public function getStatus(): string
     {
         return (string) ($this->getData(self::schema_fields_STATUS) ?? self::STATUS_ACTIVE);
@@ -184,6 +230,15 @@ class TrustedApp extends Model
     public function isActive(): bool
     {
         return $this->getStatus() === self::STATUS_ACTIVE;
+    }
+
+    public function getStatusLabel(): string
+    {
+        return match ($this->getStatus()) {
+            self::STATUS_ACTIVE => (string) __('启用'),
+            self::STATUS_DELETED => (string) __('删除态'),
+            default => (string) __('禁用'),
+        };
     }
 
     public function generateClientCredentials(): array

@@ -38,7 +38,7 @@ class AiSitePlanDraft extends Model
     #[Col(type: 'int', nullable: false, comment: 'Admin user id')]
     public const schema_fields_ADMIN_USER_ID = 'admin_user_id';
 
-    #[Col(type: 'varchar', length: 64, nullable: false, default: 'pagebuilder', comment: 'Provider code')]
+    #[Col(type: 'varchar', length: 64, nullable: false, default: '', comment: 'Provider code')]
     public const schema_fields_PROVIDER_CODE = 'provider_code';
 
     #[Col(type: 'varchar', length: 32, nullable: false, default: self::STATUS_DRAFT, comment: 'Draft status')]
@@ -59,7 +59,7 @@ class AiSitePlanDraft extends Model
     #[Col(type: 'int', nullable: false, default: 0, comment: 'Preferred registrar account id')]
     public const schema_fields_REGISTRAR_ACCOUNT_ID = 'registrar_account_id';
 
-    #[Col(type: 'varchar', length: 64, nullable: false, default: 'pagebuilder_style', comment: 'Selected build mode')]
+    #[Col(type: 'varchar', length: 64, nullable: false, default: '', comment: 'Selected build mode')]
     public const schema_fields_BUILD_MODE = 'build_mode';
 
     #[Col(type: 'longtext', nullable: true, comment: 'Draft payload JSON')]
@@ -104,7 +104,7 @@ class AiSitePlanDraft extends Model
 
     public function getProviderCode(): string
     {
-        return (string)($this->getData(self::schema_fields_PROVIDER_CODE) ?: 'pagebuilder');
+        return (string)$this->getData(self::schema_fields_PROVIDER_CODE);
     }
 
     public function getStatus(): string
@@ -139,7 +139,7 @@ class AiSitePlanDraft extends Model
 
     public function getBuildMode(): string
     {
-        return (string)($this->getData(self::schema_fields_BUILD_MODE) ?: 'pagebuilder_style');
+        return (string)$this->getData(self::schema_fields_BUILD_MODE);
     }
 
     /**

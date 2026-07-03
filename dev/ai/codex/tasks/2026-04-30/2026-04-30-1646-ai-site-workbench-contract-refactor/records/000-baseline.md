@@ -14,8 +14,8 @@ Observed:
 
 ```text
 ## dev...origin/dev [ahead 2663, behind 1606]
- M app/code/GuoLaiRen/PageBuilder/Queue/AiSiteAssetQueue.php
- M tests/e2e/specs/backend/pagebuilder-ai-site-workbench.spec.js
+
+
 ```
 
 ## Documentation Split

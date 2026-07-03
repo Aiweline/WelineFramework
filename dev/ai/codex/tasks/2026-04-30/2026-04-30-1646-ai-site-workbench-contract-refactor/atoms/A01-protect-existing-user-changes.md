@@ -2,7 +2,7 @@
 
 ## Background Snapshot
 
-The worktree can contain user edits. Current known dirty files include PageBuilder queue/frontend test areas. Contract refactor work must not revert or rewrite unrelated user changes.
+
 
 ## Goal
 

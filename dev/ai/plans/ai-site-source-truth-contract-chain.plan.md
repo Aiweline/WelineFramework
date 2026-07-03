@@ -15,7 +15,7 @@ Phase-1 ──→ Phase-2 ──→ Phase-3 ──→ Phase-4 ──→ Phase-5 
 
 ## 1.1 移除 "2-3 blocks only" 硬限制
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php`
+
 
 ### Step 1.1.1 — 新增 block budget 方法
 
@@ -122,7 +122,7 @@ b) 在 Prompt 的 `'Hard rules: ...'` 行（1898）之前插入：
 
 ## 1.2 Checkpoint signature 追加字段
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php`
+
 
 **位置：** `buildStageOneCheckpointSignature()` 方法，行 571-579
 
@@ -139,7 +139,7 @@ b) 在 Prompt 的 `'Hard rules: ...'` 行（1898）之前插入：
 
 ## 1.3 QA 急拦截
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/ContractQaReportBuilder.php`
+
 
 ### Step 1.3.1 — 新增 content quality finding 工厂方法
 
@@ -221,14 +221,14 @@ $contentQualityFindings = array_merge(
 
 ## 2.1 新增 `SourceTruthContractBuilder.php`
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/SourceTruthContractBuilder.php`
+
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
+
 
 final class SourceTruthContractBuilder
 {
@@ -458,14 +458,14 @@ final class SourceTruthContractBuilder
 
 ## 2.2 新增 `SourceTruthContractValidator.php`
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/SourceTruthContractValidator.php`
+
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
+
 
 final class SourceTruthContractValidator
 {
@@ -518,14 +518,14 @@ final class SourceTruthContractValidator
 
 ## 2.3 新增 `SourceTruthCoverageLinter.php`
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/SourceTruthCoverageLinter.php`
+
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
+
 
 final class SourceTruthCoverageLinter
 {
@@ -746,7 +746,7 @@ final class SourceTruthCoverageLinter
 
 ## 2.4 接入执行链路
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php`
+
 
 **位置：** `buildPlanArtifactsByStagedAiStream()` 方法，参考图理解完成后（行 380 之后）、requirement_expand（行 412）之前。
 
@@ -786,7 +786,7 @@ private function getSourceTruthContractBuilder(): SourceTruthContractBuilder
 
 ## 2.5 Stage-1/Stage-2 Prompt 注入
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php`
+
 
 ### 2.5a — page-level Prompt 追加
 
@@ -828,7 +828,7 @@ private function getSourceTruthContractBuilder(): SourceTruthContractBuilder
 
 ## 3.1 升级 ReferenceImageInsight schema
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteReferenceImageInsightService.php`
+
 
 ### 3.1a — 扩展 Prompt schema
 
@@ -883,7 +883,7 @@ $visualContract = \is_array($insights['visual_contract'] ?? null) ? $insights['v
 
 ## 3.2 视觉合同注入 Theme Prompt
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php`
+
 
 在 `buildAiStageOneRequirementExpansionPrompt()`（生成 theme_design 的 Prompt）中，在 reference image insights 段落附近追加：
 
@@ -903,7 +903,7 @@ $visualContract = \is_array($insights['visual_contract'] ?? null) ? $insights['v
 
 ## 3.3 QA 视觉覆盖率检查
 
-### 文件：`app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/ContractQaReportBuilder.php`
+
 
 在 `buildContentQualityFindings()` 方法中追加：
 
@@ -939,7 +939,7 @@ foreach (\is_array($args['forbidden_visuals_hit'] ?? null) ? $args['forbidden_vi
 
 ## 4.1 升级 AssetManifestService
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AiSiteAssetManifestService.php`
+
 
 ### 新增常量和方法
 
@@ -1033,14 +1033,14 @@ public function validateBlockUsage(array $manifest, string $blockKey, array $use
 
 ## 4.3 新增 `VisualAssetUsageValidator.php`
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/VisualAssetUsageValidator.php`
+
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
+
 
 final class VisualAssetUsageValidator
 {
@@ -1120,14 +1120,14 @@ final class VisualAssetUsageValidator
 
 ## 5.1 新增 `BlockRecipeRegistry.php`
 
-**文件：** `app/code/GuoLaiRen/PageBuilder/Service/AI/Contract/BlockRecipeRegistry.php`
+
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
+
 
 final class BlockRecipeRegistry
 {
@@ -1336,7 +1336,7 @@ abstract class AbstractAiSiteFunctionalTest extends \PHPUnit\Framework\TestCase
 
 ```bash
 # 跑全部 AI 建站测试
-php bin/w test:run --directory=app/code/GuoLaiRen/PageBuilder/test/Functional/AiSite
+
 
 # 跑单个测试
 php bin/w test:run --filter=testSourceTruthContracts --class=TestCaseIndiaCardGameAPK

@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Role
 
-This skill owns storefront pixel markup usage for Weline Visitor and the project-specific WeShop analytics marker contract. It keeps frontend templates aligned with the shared `pixel` taglib and avoids ad hoc tracking snippets inside business templates.
+This skill owns storefront pixel markup usage for Weline Visitor and the project-specific analytics event-marker contract. It keeps frontend templates aligned with the shared `pixel` taglib, the real frontend event parser, and the module's CTA forwarding rules instead of ad hoc tracking snippets inside business templates.
 
 # When To Use
 
@@ -20,34 +20,39 @@ This skill owns storefront pixel markup usage for Weline Visitor and the project
 - `app/code/Weline/Visitor/view/taglib/js/pixel.phtml`
 - `app/code/Weline/Visitor/doc/像素拓展使用指南.md`
 - `app/code/Weline/Visitor/doc/event/访客像素标签.md`
-- `app/code/WeShop/Analytics/Observer/TaglibPixelGoogleBridge.php`
-- `app/code/WeShop/Analytics/Test/Unit/View/DefaultThemePixelMarkerTest.php`
+- `app/code/Weline/Visitor/extends/module/Weline_SystemConfig/Config/backend/tracking.phtml`
 
 # Responsibilities
 
 - Use the shared `<pixel name="..."/>` taglib instead of duplicating bootstrap logic in templates.
-- Mark key clickable storefront elements with the approved `weline-pixel::event_name` class contract.
+- Treat `weline-pixel::event_name` as the module's standard custom pixel-event marker for business interactions.
+- Use `weline-pixel::event_name:value` or `data-pixel-value` when the event carries a numeric value.
+- Use `data-pixel-event`, `data-visitor-event`, or `data-cta-event` only as explicit CTA/forwarding event names that the Visitor runtime and analytics panel can read.
 - Keep event naming consistent with the owning integration in this repo.
-- Route provider-specific behavior through `Weline_Visitor::taglib_pixel` observers instead of embedding provider code in page templates.
+- Route provider-specific behavior through `Weline_Visitor::taglib_pixel` observers for enable/name control, not inline page snippets.
 
 # Project Contract
 
-- `Weline_Visitor` base docs show kebab-case examples such as `add-to-cart`.
-- This repo's WeShop analytics bridge normalizes and expects the storefront markers already used by current templates and tests:
+- The real parser in `view/taglib/js/pixel.phtml` walks the DOM upward and extracts the first class starting with `weline-pixel::`, excluding `:value` suffixes.
+- Numeric event value resolution is driven by `weline-pixel::event_name:value` first, then `data-pixel-value`, then nearby price/summary selectors.
+- The runtime also reads explicit CTA attributes in this order: `data-pixel-event`, `data-visitor-event`, `data-cta-event`, `data-ga-event`.
+- `data-ga-event` is legacy compatibility only; new code should not introduce it.
+- For standard storefront conversion flows already present in repo templates, keep the underscore event names currently used by source templates, such as:
   - `weline-pixel::add_to_cart`
   - `weline-pixel::add_to_wishlist`
-  - `weline-pixel::begin_checkout`
-- Follow the existing repo convention in WeShop templates unless you are explicitly refactoring both the JS marker parser and the analytics bridge together.
+- For generic CTA forwarding with no explicit event name, GA4 fallback uses the configured default CTA event name from SystemConfig.
 
 # Workflow
 
 1. Confirm whether the page already includes the shared `<pixel .../>` taglib through layout or theme composition.
 2. Find the real clickable CTA element, not only its wrapper or icon.
-3. Add the `weline-pixel::event_name` class on the clickable host element.
-4. Only mirror the marker onto nested icons or child spans when the current click handling can target that child directly.
-5. For new event families, verify the name is compatible with `TaglibPixelGoogleBridge` normalization and downstream provider mapping.
-6. If provider-specific custom code is needed, implement it through a `Weline_Visitor::taglib_pixel` observer that writes `pixel_code`.
-7. Validate the rendered template and confirm the marker sits on the real interaction point.
+3. If you are tracking a real business interaction, add `weline-pixel::event_name` on the clickable host element.
+4. If the event needs an amount or similar numeric payload, add `weline-pixel::event_name:value` near the interaction point or provide `data-pixel-value`.
+5. Only add `data-pixel-event`, `data-visitor-event`, or `data-cta-event` when you need an explicit CTA/forwarding event name for panel inspection or downstream forwarding.
+6. Only mirror markers onto nested icons or child spans when the current click handling can target that child directly.
+7. For new event families, verify the name is compatible with Visitor runtime normalization and downstream forwarding rules.
+8. If provider-specific behavior is needed, use `Weline_Visitor::taglib_pixel` only for enable/name control; do not rely on `pixel_code` as executable frontend JS.
+9. Validate the rendered template and confirm the marker sits on the real interaction point.
 
 # Weline Rules
 
@@ -55,6 +60,7 @@ This skill owns storefront pixel markup usage for Weline Visitor and the project
 - Do not duplicate page-level pixel bootstrap code.
 - Do not edit compiled template outputs instead of source templates.
 - Keep marker placement minimal and attached to the real CTA.
+- Treat `pixel_code` as non-executable in current Visitor runtime.
 
 # Inputs Required
 
@@ -65,21 +71,25 @@ This skill owns storefront pixel markup usage for Weline Visitor and the project
 
 # Expected Output
 
-- Source-template updates that add approved pixel markers to key interactive elements.
+- Source-template updates that add approved pixel markers and value markers to key interactive elements.
+- Explicit CTA attributes only when the flow needs them.
 - Any required observer-level note when provider behavior must be extended through `Weline_Visitor::taglib_pixel`.
 - Validation evidence showing the marker exists on the rendered interaction point.
 
 # Validation
 
 - Confirm the marker is on the clickable element the user actually interacts with.
+- Confirm class-based events use `weline-pixel::event_name` and value carriers use `weline-pixel::event_name:value` or `data-pixel-value`.
+- Confirm any `data-pixel-event` / `data-visitor-event` / `data-cta-event` usage is deliberate CTA naming rather than a replacement for the standard pixel class marker.
 - Confirm the event name matches the repo convention for that storefront flow.
 - Confirm no duplicate inline provider bootstrap was introduced.
 - Confirm browser-visible validation happened when runtime allows it.
 
 # Constraints
 
-- Do not invent a parallel `data-*` tracking contract when `weline-pixel::...` is the existing standard.
-- Do not rename existing WeShop storefront pixel events from underscore to kebab case unless the whole analytics chain is being migrated.
+- Do not replace standard custom event markers with `data-pixel-event` when the module expects `weline-pixel::...` for business event discovery.
+- Do not introduce `data-ga-event` in new code.
+- Do not rename existing storefront pixel events from underscore to kebab case unless the whole analytics chain is being migrated.
 - Do not place provider snippets inside templates that should instead flow through `Weline_Visitor::taglib_pixel`.
 
 # Shared Collaboration Contract

@@ -6,7 +6,7 @@ The current branch already has user edits. Before contract work starts, record c
 
 ## Goal
 
-Run and record targeted PageBuilder baseline checks.
+
 
 ## Non-goals
 
@@ -15,13 +15,13 @@ Do not edit code. Do not fix failing tests. Do not overwrite user changes.
 ## Touch Points
 
 - `git status --short --branch`
-- PageBuilder PHP unit test commands, if available
+
 - Workbench e2e command, if available
 
 ## Implementation Steps
 
 1. Capture current git status.
-2. Run narrow PHP tests for PageBuilder AI services if configured.
+
 3. Run the existing workbench e2e spec only if environment dependencies are available.
 4. Record commands and results in this task directory.
 

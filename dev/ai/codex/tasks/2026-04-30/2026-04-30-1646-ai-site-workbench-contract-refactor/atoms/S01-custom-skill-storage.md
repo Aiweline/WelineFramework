@@ -14,13 +14,13 @@ Do not build frontend UI. Do not change prompt injection.
 
 ## Touch Points
 
-- PageBuilder model/schema conventions
-- `app/code/GuoLaiRen/PageBuilder/Model/*`
+
+
 - setup or schema files used by this module
 
 ## Implementation Steps
 
-1. Inspect existing PageBuilder model/schema patterns.
+
 2. Add a custom skill model/table with code, name, description, body, status, source, timestamps.
 3. Enforce unique custom skill code.
 4. Add repository methods for find/list/save.

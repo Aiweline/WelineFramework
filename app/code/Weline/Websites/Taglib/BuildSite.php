@@ -9,7 +9,6 @@ declare(strict_types=1);
  * 使用示例：
  * 添加：id="add_website" mode="add"
  * 编辑：mode="edit" vars="website" action-params="{id:website.website_id}"
- * PageBuilder 添加：mode="add" action 传 *\/backend/websiteManagement/add
  */
 
 namespace Weline\Websites\Taglib;
@@ -142,7 +141,7 @@ class BuildSite implements TaglibInterface
 ### 用法
 添加：<w:websites:website:build id="add_website" mode="add" />
 编辑：<w:websites:website:build id="edit_website" mode="edit" vars="website" action-params="{id:website.website_id}" />
-自定义 action（如 PageBuilder）：<w:websites:website:build id="pb_add" mode="add" action="*/backend/websiteManagement/add" />
+自定义 action：<w:websites:website:build id="website_add" mode="add" action="*/backend/websiteManagement/add" />
 
 ### 属性
 - id: 必需，唯一标识

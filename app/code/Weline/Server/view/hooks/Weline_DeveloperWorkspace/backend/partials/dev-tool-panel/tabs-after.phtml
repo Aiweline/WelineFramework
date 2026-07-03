@@ -2,29 +2,13 @@
 /**
  * Weline_Server - 开发工具面板扩展标签：WLS
  * Hook：Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::tabs-after
- * 仅 WLS 模式下显示 WLS 标签，非 WLS 时不渲染，避免请求 /_wls/health。
+ * 由 Weline_Server 模块注册 WLS 标签；标签激活后再检测 WLS runtime。
  *
  * @hook-priority 200
  * @hook-sort-order 0
  * @hook-solo false
  */
-use Weline\Framework\Runtime\Runtime;
-
-if (!Runtime::isWls()) {
-    return;
-}
 ?>
-<button class="dev-tool-tab" data-tab="wls" data-dev-tool-tab-action="switch-main-tab">
-    <i class="fa fa-server"></i> WLS
+<button class="dev-tool-tab" data-tab="wls" data-dev-tool-action="switch-main-tab">
+    <i class="fa fa-server"></i> WLS 服务
 </button>
-<script>
-(function() {
-    document.addEventListener('click', function(event) {
-        var trigger = event.target.closest('[data-dev-tool-tab-action="switch-main-tab"][data-tab="wls"]');
-        if (!trigger) return;
-        if (window.DevToolPanel && typeof window.DevToolPanel.switchMainTab === 'function') {
-            window.DevToolPanel.switchMainTab(trigger, 'wls');
-        }
-    });
-})();
-</script>

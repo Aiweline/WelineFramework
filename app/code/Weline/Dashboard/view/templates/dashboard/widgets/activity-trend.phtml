@@ -1,0 +1,49 @@
+<?php
+$bars = [42, 58, 51, 68, 61, 74, 70];
+$labels = [__('一'), __('二'), __('三'), __('四'), __('五'), __('六'), __('日')];
+?>
+<section class="dashboard-widget dashboard-widget-trend">
+    <header>
+        <h3><?= __('活跃趋势') ?></h3>
+        <span><?= __('近 7 天') ?></span>
+    </header>
+    <div class="dashboard-widget-bars">
+        <?php foreach ($bars as $index => $height): ?>
+            <div>
+                <i style="height: <?= (int)$height ?>%"></i>
+                <span><?= htmlspecialchars((string)($labels[$index] ?? '')) ?></span>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</section>
+<style>
+.dashboard-widget-trend .dashboard-widget-bars {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 9px;
+    height: 168px;
+    align-items: end;
+}
+.dashboard-widget-trend .dashboard-widget-bars div {
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    text-align: center;
+}
+.dashboard-widget-trend .dashboard-widget-bars i {
+    display: block;
+    width: 100%;
+    min-height: 24px;
+    border-radius: 6px 6px 3px 3px;
+    background: var(--bs-primary, #2563eb);
+}
+.dashboard-widget-trend .dashboard-widget-bars span {
+    color: var(--w-dashboard-muted, var(--backend-color-text-secondary, #6b7280));
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+}
+</style>

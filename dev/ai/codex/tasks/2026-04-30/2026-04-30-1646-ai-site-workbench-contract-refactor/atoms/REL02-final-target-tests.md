@@ -14,7 +14,7 @@ Do not hide failing tests. Do not claim live AI verification unless it actually 
 
 ## Touch Points
 
-- PageBuilder PHP unit tests
+
 - Queue/service tests
 - Workbench e2e tests
 - Task record

@@ -20,5 +20,5 @@
 16: Weline/Ai,Weline/AiKnowledge,Weline/AliDdnsServer,Weline/Currency
 17: WeShop/Address,WeShop/Affiliate,WeShop/B2B,WeShop/Cart,WeShop/Catalog,WeShop/Checkout,WeShop/Cms,WeShop/Compare,WeShop/Compliance,WeShop/Customer
 18: WeShop/Filters,WeShop/GiftCard,WeShop/Invoice,WeShop/Inventory,WeShop/Logistics,WeShop/Membership,WeShop/Notification,WeShop/Order,WeShop/Price,WeShop/Product,WeShop/Promotion,WeShop/QA,WeShop/RecentlyViewed,WeShop/Report,WeShop/Review,WeShop/RMA,WeShop/Search,WeShop/Social,WeShop/Store,WeShop/Subscription,WeShop/Tax,WeShop/Wishlist
-19: GuoLaiRen/Blog,GuoLaiRen/Desensitization,GuoLaiRen/PageBuilder
+
 20: Aws,Agent,WelineTools

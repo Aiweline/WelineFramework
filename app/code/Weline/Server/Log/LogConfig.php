@@ -154,7 +154,7 @@ class LogConfig
         }
 
         $envConfig = self::loadRawEnvConfig();
-        return ($envConfig['deploy'] ?? '') === 'dev';
+        return (($envConfig['system']['deploy'] ?? $envConfig['deploy'] ?? '') === 'dev');
     }
 
     public static function clearCache(): void

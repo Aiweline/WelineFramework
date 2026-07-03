@@ -30,5 +30,5 @@ Recovered from the last `update_plan` found in the source session. This reflects
 ## Completion (2026-03-21)
 
 - 已核对 `dev/ai/plans/AI建站智能体的计划` 仅含愿景叙述，无 Codex 统筹误植内容。
-- 已确认并补强 `dev/ai/codex/plans/ai-site-agent.plan.md`（增加 Document map，链到原始计划与 `codex-pagebuilder-ai-site-agent` 实现向计划）。
+
 - 已新增任务日志并更新 `dev/ai/codex/ACTIVE.md`。

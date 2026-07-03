@@ -27,6 +27,7 @@
         apiVirtualThemePublishVersion: '',
         apiLayoutPreview: '',
         apiParamRenderForm: '',
+        defaultLocale: 'zh_Hans_CN',
         autoSaveDelay: 1000,
         // 版本控制 API
         apiVersions: '',
@@ -84,11 +85,297 @@
         lastHoverPoint: null,
         virtualThemeAiCatalog: null,
         layoutLock: { enabled: false },
+        sidePanels: { configOpen: true, widgetOpen: true },
+        fullscreenSidePanelsSnapshot: null,
+        editorFullscreenFallback: false,
+        configLocale: '',
+        widgetLibraryTab: 'general',
     };
 
     // DOM 元素
     let elements = {};
     let editorModalEventsBound = false;
+    const SIDE_PANEL_STORAGE_KEY = 'weline.theme.editor.sidePanels.v1';
+    const DASHBOARD_BASIC_WIDGET_CODES = new Set([
+        'alert', 'badge', 'button', 'card', 'dropdown', 'form', 'field',
+        'field-group', 'form-actions', 'form-group', 'grid', 'input',
+        'loading', 'message', 'modal', 'pagination', 'section', 'table', 'tabs',
+        'text', 'image', 'divider', 'spacer'
+    ]);
+    const WIDGET_LIBRARY_FILTER_PARAM_KEYS = [
+        'widget_allow_groups',
+        'widget_reject_groups',
+        'widget_allow_codes',
+        'widget_reject_codes',
+        'widget_allow_widgets',
+        'widget_reject_widgets',
+        'widget_allow_supports',
+        'widget_reject_supports',
+        'widget_allow_protocols',
+        'widget_reject_protocols'
+    ];
+
+    function notifyDashboardEditor(eventName, detail = {}) {
+        if (!window.parent || window.parent === window) {
+            return;
+        }
+        if ((state.pageType || '') !== 'dashboard') {
+            return;
+        }
+        try {
+            window.parent.postMessage({
+                type: `weline-theme-editor:${eventName}`,
+                detail: detail,
+            }, window.location.origin);
+        } catch (error) {
+        }
+    }
+
+    function notifyDashboardLayoutMutated(reason, detail = {}) {
+        notifyDashboardEditor('layout-mutated', {
+            reason: reason,
+            ...detail,
+        });
+    }
+
+    function notifyDashboardLayoutSaved(reason, detail = {}) {
+        notifyDashboardEditor('saved', {
+            reason: reason,
+            ...detail,
+        });
+    }
+
+    function isCompactEditorViewport() {
+        return typeof window.matchMedia === 'function'
+            ? window.matchMedia('(max-width: 1100px)').matches
+            : window.innerWidth <= 1100;
+    }
+
+    function readSidePanelPreference() {
+        try {
+            const raw = window.localStorage ? window.localStorage.getItem(SIDE_PANEL_STORAGE_KEY) : '';
+            if (!raw) {
+                return null;
+            }
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') {
+                return null;
+            }
+
+            return {
+                configOpen: data.configOpen === true,
+                widgetOpen: data.widgetOpen === true,
+            };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveSidePanelPreference() {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            window.localStorage.setItem(SIDE_PANEL_STORAGE_KEY, JSON.stringify({
+                configOpen: state.sidePanels.configOpen === true,
+                widgetOpen: state.sidePanels.widgetOpen === true,
+            }));
+        } catch (error) {
+        }
+    }
+
+    function notifyEditorViewportChanged() {
+        const emitResize = function() {
+            try {
+                if (elements.previewFrame && elements.previewFrame.contentWindow) {
+                    elements.previewFrame.contentWindow.dispatchEvent(new Event('resize'));
+                }
+            } catch (error) {
+            }
+
+            scheduleFitWidgetPreviews();
+        };
+
+        emitResize();
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(emitResize);
+        }
+        window.setTimeout(emitResize, 240);
+    }
+
+    function applySidePanelState() {
+        if (!elements.container) {
+            return;
+        }
+        const compact = isCompactEditorViewport();
+        elements.container.classList.toggle('editor-compact-mode', compact);
+        elements.container.classList.toggle('panel-config-open', state.sidePanels.configOpen === true);
+        elements.container.classList.toggle('panel-widget-open', state.sidePanels.widgetOpen === true);
+        elements.container.classList.toggle('panel-config-collapsed', state.sidePanels.configOpen !== true);
+        elements.container.classList.toggle('panel-widget-collapsed', state.sidePanels.widgetOpen !== true);
+        notifyEditorViewportChanged();
+    }
+
+    function initSidePanels() {
+        const preference = readSidePanelPreference();
+        const defaultOpen = !isCompactEditorViewport();
+        state.sidePanels.configOpen = preference ? preference.configOpen : defaultOpen;
+        state.sidePanels.widgetOpen = preference ? preference.widgetOpen : defaultOpen;
+        applySidePanelState();
+
+        window.addEventListener('resize', debounce(function() {
+            applySidePanelState();
+        }, 120));
+    }
+
+    function setSidePanelOpen(panel, open, persist = true) {
+        if (panel === 'config') {
+            state.sidePanels.configOpen = open === true;
+        } else if (panel === 'widget') {
+            state.sidePanels.widgetOpen = open === true;
+        }
+
+        applySidePanelState();
+        if (persist) {
+            saveSidePanelPreference();
+        }
+        if (panel === 'widget' && open) {
+            scheduleFitWidgetPreviews();
+        }
+    }
+
+    function openWidgetPanelForSlotSelection(slot) {
+        setSidePanelOpen('widget', true);
+
+        loadWidgetListIfEmpty().then(function() {
+            const currentSlotId = state.selectedSlot?.id || '';
+            if (slot && currentSlotId === (slot.id || '')) {
+                applySlotWidgetRecommendations(slot);
+                scrollToHighlightedWidgets();
+            }
+        }).catch(function(err) {
+            console.warn('[ThemeEditor] load widget library for slot selection failed:', err);
+        });
+    }
+
+    function openConfigPanelForWidgetSelection() {
+        setSidePanelOpen('config', true);
+    }
+
+    function getEditorFullscreenElement() {
+        return document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement
+            || document.msFullscreenElement
+            || null;
+    }
+
+    function isEditorFullscreen() {
+        return state.editorFullscreenFallback === true || getEditorFullscreenElement() === elements.container;
+    }
+
+    function setFullscreenButtonState(active) {
+        if (!elements.btnFullscreenPreview) {
+            return;
+        }
+
+        elements.btnFullscreenPreview.classList.toggle('active', active);
+        elements.btnFullscreenPreview.title = active ? translateUiText('退出全屏') : translateUiText('全屏预览');
+        elements.btnFullscreenPreview.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+        const icon = elements.btnFullscreenPreview.querySelector('i');
+        if (icon) {
+            icon.className = active ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line';
+        }
+
+        Array.from(elements.btnFullscreenPreview.childNodes)
+            .filter(node => node.nodeType === Node.TEXT_NODE)
+            .forEach(node => node.remove());
+        elements.btnFullscreenPreview.appendChild(document.createTextNode(' ' + (active ? translateUiText('退出全屏') : translateUiText('全屏'))));
+    }
+
+    function enterEditorFullscreenUi(fallback = false) {
+        state.editorFullscreenFallback = fallback === true;
+        if (elements.container) {
+            elements.container.classList.add('editor-fullscreen-mode');
+            elements.container.classList.toggle('editor-fullscreen-fallback', state.editorFullscreenFallback === true);
+        }
+        setFullscreenButtonState(true);
+
+        if (!state.fullscreenSidePanelsSnapshot) {
+            state.fullscreenSidePanelsSnapshot = {
+                configOpen: state.sidePanels.configOpen === true,
+                widgetOpen: state.sidePanels.widgetOpen === true,
+            };
+        }
+        state.sidePanels.configOpen = true;
+        state.sidePanels.widgetOpen = true;
+        applySidePanelState();
+    }
+
+    function exitEditorFullscreenUi() {
+        state.editorFullscreenFallback = false;
+        if (elements.container) {
+            elements.container.classList.remove('editor-fullscreen-mode', 'editor-fullscreen-fallback');
+        }
+        setFullscreenButtonState(false);
+
+        if (state.fullscreenSidePanelsSnapshot) {
+            state.sidePanels.configOpen = state.fullscreenSidePanelsSnapshot.configOpen;
+            state.sidePanels.widgetOpen = state.fullscreenSidePanelsSnapshot.widgetOpen;
+            state.fullscreenSidePanelsSnapshot = null;
+        }
+        applySidePanelState();
+    }
+
+    function handleEditorFullscreenChanged() {
+        if (getEditorFullscreenElement() === elements.container) {
+            enterEditorFullscreenUi(false);
+            return;
+        }
+
+        if (state.editorFullscreenFallback !== true) {
+            exitEditorFullscreenUi();
+        }
+    }
+
+    async function toggleEditorFullscreen() {
+        if (!elements.container) {
+            return;
+        }
+
+        if (state.editorFullscreenFallback === true) {
+            exitEditorFullscreenUi();
+            return;
+        }
+
+        if (getEditorFullscreenElement() === elements.container) {
+            const exitFullscreen = document.exitFullscreen
+                || document.webkitExitFullscreen
+                || document.mozCancelFullScreen
+                || document.msExitFullscreen;
+            if (exitFullscreen) {
+                await exitFullscreen.call(document);
+            }
+            return;
+        }
+
+        const requestFullscreen = elements.container.requestFullscreen
+            || elements.container.webkitRequestFullscreen
+            || elements.container.mozRequestFullScreen
+            || elements.container.msRequestFullscreen;
+        if (!requestFullscreen || document.fullscreenEnabled === false) {
+            enterEditorFullscreenUi(true);
+            return;
+        }
+
+        try {
+            await requestFullscreen.call(elements.container);
+        } catch (error) {
+            console.warn('[ThemeEditor] native fullscreen unavailable, fallback to editor fullscreen:', error);
+            enterEditorFullscreenUi(true);
+        }
+    }
 
     function ensureEditorModalEvents() {
         if (editorModalEventsBound) {
@@ -353,6 +640,35 @@
         }
     }
 
+    function appendThemeLayoutRuntimeParams(url, overrides = {}) {
+        if (!url || !url.searchParams) {
+            return;
+        }
+
+        appendLayoutLockRuntimeParams(url);
+
+        const currentUrl = getCurrentWindowUrl();
+        [
+            'scope',
+            'target_type',
+            'target_id',
+            'theme_layout_target_type',
+            'theme_layout_target_id',
+            'theme_layout_source_target_type',
+            'theme_layout_source_target_id',
+        ].forEach((key) => {
+            if (url.searchParams.has(key)) {
+                return;
+            }
+            const value = Object.prototype.hasOwnProperty.call(overrides, key)
+                ? overrides[key]
+                : currentUrl.searchParams.get(key);
+            if (value !== null && value !== undefined && value !== '') {
+                url.searchParams.set(key, String(value));
+            }
+        });
+    }
+
     function buildLayoutLockVirtualIdentityPayload(extra = {}) {
         const layoutType = getEffectiveLayoutType();
         const layoutOption = getEffectiveLayoutOption();
@@ -363,6 +679,33 @@
             layout_type: layoutType,
             layout_option: layoutOption,
             ...getLayoutLockVirtualPayload(),
+            ...extra,
+        };
+    }
+
+    function buildLayoutVersionIdentityPayload(extra = {}) {
+        const layoutType = getEffectiveLayoutType();
+        const layoutOption = getEffectiveLayoutOption();
+        const scope = isLayoutLocked() ? (state.layoutLock.scope || 'default') : 'default';
+        const targetType = isLayoutLocked() ? (state.layoutLock.target_type || 'global') : 'global';
+        const targetId = isLayoutLocked() ? (parseInt(state.layoutLock.target_id || 0, 10) || 0) : 0;
+        const payload = {
+            theme_id: state.themeId || 0,
+            page_type: layoutType,
+            layout_type: layoutType,
+            layout_option: layoutOption,
+            scope,
+            target_type: targetType,
+            target_id: targetId,
+        };
+        if (targetType && targetType !== 'global' && targetId > 0) {
+            payload.theme_layout_target_type = targetType;
+            payload.theme_layout_target_id = targetId;
+            payload.theme_layout_source_target_type = targetType;
+            payload.theme_layout_source_target_id = targetId;
+        }
+        return {
+            ...payload,
             ...extra,
         };
     }
@@ -516,12 +859,6 @@
             '/save-layout-selection',
             '/save-layout-config',
             '/save-compiled-layout',
-            '/save-version',
-            '/publish-version',
-            '/switch-version',
-            '/delete-version',
-            '/rename-version',
-            '/restore-original',
             '/publish',
             '/publish-and-exit',
         ].some((endpoint) => path.includes(endpoint));
@@ -604,6 +941,16 @@
 
     function getCurrentWindowParam(key) {
         return getCurrentWindowUrl().searchParams.get(key) || '';
+    }
+
+    function appendWidgetLibraryFilterParams(url) {
+        const currentUrl = getCurrentWindowUrl();
+        WIDGET_LIBRARY_FILTER_PARAM_KEYS.forEach(function (key) {
+            const value = currentUrl.searchParams.get(key);
+            if (value !== null && value !== '') {
+                url.searchParams.set(key, value);
+            }
+        });
     }
 
     function normalizeRequestHeaders(headers) {
@@ -728,13 +1075,34 @@
         return response;
     }
 
+    function describeNonJsonApiResponse(text, response = null) {
+        const status = response && typeof response.status === 'number' ? response.status : 0;
+        const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+        if (/data-login-form|管理员登录|admin\/login|login-form/i.test(normalized)) {
+            return '登录状态已失效，请刷新后台后重新登录';
+        }
+        if (status >= 400) {
+            return `接口请求失败（HTTP ${status}）`;
+        }
+        return '接口没有返回 JSON，请刷新页面后重试';
+    }
+
     async function apiJson(url, options = {}) {
-        const result = await unwrapApiPayload(await apiRequest(url, options));
+        const response = await apiRequest(url, options);
+        if (response && typeof response.text === 'function') {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                throw new Error(describeNonJsonApiResponse(text, response));
+            }
+        }
+        const result = await unwrapApiPayload(response);
         if (typeof result === 'string') {
             try {
                 return JSON.parse(result);
             } catch (e) {
-                throw new Error('API returned non JSON response');
+                throw new Error(describeNonJsonApiResponse(result));
             }
         }
         return result || {};
@@ -823,14 +1191,18 @@
         url.searchParams.set('status', previewStatus);
         url.searchParams.set('editor_area', previewArea);
         url.searchParams.set('preview_area', previewArea);
+        const previewLocale = getPreviewLocaleForRequest(overrides);
+        if (previewLocale) {
+            url.searchParams.set('locale', previewLocale);
+        }
 
-        ['frontend_theme_id', 'backend_theme_id', 'scope', 'version_id'].forEach((key) => {
+        ['frontend_theme_id', 'backend_theme_id', 'version_id'].forEach((key) => {
             const overrideValue = Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : currentUrl.searchParams.get(key);
             if (overrideValue !== null && overrideValue !== undefined && overrideValue !== '') {
                 url.searchParams.set(key, String(overrideValue));
             }
         });
-        appendLayoutLockRuntimeParams(url);
+        appendThemeLayoutRuntimeParams(url, overrides);
 
         url.searchParams.set('_t', String(overrides._t || Date.now()));
         return url.toString();
@@ -890,6 +1262,7 @@
         config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
         config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
+        config.defaultLocale = container.dataset.defaultLocale || config.defaultLocale || 'zh_Hans_CN';
 
         // 版本控制 API 端点
         config.apiVersions = container.dataset.apiVersions || `${config.apiBase}/versions`;
@@ -916,7 +1289,7 @@
         // - apiWidgetPreview: legacy per-widget preview fetches (to be removed)
         // - apiLayoutPreview: used by refreshPreviewWidgets() and loadLayoutPreview()
         // - apiCompileLayout: used by fetchLayoutSlots()
-        // - apiUpdateConfig/apiSaveWidget: save flows that should return preview_html
+        // - apiSaveWidget/save-widget-config: save flows that should return preview_html
 
         state.themeId = parseInt(container.dataset.themeId) || 0;
         state.pageType = container.dataset.pageType || 'default';
@@ -924,6 +1297,7 @@
         state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
         state.layoutOptionsByType = parseLayoutOptionsByType(container.dataset.layoutOptions || '{}');
         state.layoutLock = parseLayoutLock(container.dataset.layoutLock || '{}');
+        _installedLocalesCache = parseInstalledLocales(container.dataset.installedLocales || '[]');
 
         // 缓存 DOM 元素
         elements = {
@@ -932,12 +1306,14 @@
             pageTypeSelect: document.getElementById('pageTypeSelect'),
             layoutOptionSelect: document.getElementById('layoutOptionSelect'),
             editorAreaSelect: document.getElementById('editorAreaSelect'),
+            editorLangSwitcher: document.getElementById('editorLangSwitcher'),
             configPanel: document.getElementById('configPanel'),
             configContent: document.getElementById('configContent'),
             configPanelTitle: document.querySelector('#configPanel .panel-title'),
             configModeLayout: document.getElementById('configModeLayout'),
             configModeWidget: document.getElementById('configModeWidget'),
             widgetPanel: document.getElementById('widgetPanel'),
+            widgetLibraryTabs: document.getElementById('widgetLibraryTabs'),
             widgetList: document.getElementById('widgetList'),
             widgetSearch: document.getElementById('widgetSearch'),
             previewFrame: document.getElementById('previewFrame'),
@@ -953,6 +1329,9 @@
             btnFullscreenPreview: document.getElementById('btnFullscreenPreview'),
         };
 
+        initSidePanels();
+        initWidgetLibraryTabs();
+
         // 当前布局信息
         // pageType 和 layoutType 现在是同一个概念，直接使用 pageType
         state.layoutType = state.pageType || 'homepage';
@@ -961,6 +1340,7 @@
             container.dataset.layoutOption || getCurrentWindowParam('layout_option') || 'default'
         );
         renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+        initEditorLanguageSwitcher();
         state.slots = {}; // 页面插槽信息
         state.missingSlotWarnings = [];
 
@@ -973,6 +1353,7 @@
         // 适配部件库预览缩放
         initWidgetPreviewFitObserver();
         scheduleFitWidgetPreviews();
+        hydrateWidgetLibraryPreviews();
         window.addEventListener('resize', debounce(() => {
             scheduleFitWidgetPreviews();
         }, 200));
@@ -1010,6 +1391,27 @@
      * 绑定事件
      */
     function bindEvents() {
+        document.addEventListener('click', function(e) {
+            const actionButton = e.target.closest('[data-theme-editor-action]');
+            if (!actionButton) {
+                return;
+            }
+            const action = actionButton.getAttribute('data-theme-editor-action') || '';
+            if (action === 'open-config-panel') {
+                e.preventDefault();
+                setSidePanelOpen('config', state.sidePanels.configOpen !== true);
+            } else if (action === 'close-config-panel') {
+                e.preventDefault();
+                setSidePanelOpen('config', false);
+            } else if (action === 'open-widget-panel') {
+                e.preventDefault();
+                setSidePanelOpen('widget', state.sidePanels.widgetOpen !== true);
+            } else if (action === 'close-widget-panel') {
+                e.preventDefault();
+                setSidePanelOpen('widget', false);
+            }
+        });
+
         if (elements.configModeLayout) {
             elements.configModeLayout.addEventListener('click', function() {
                 setConfigMode('layout');
@@ -1022,6 +1424,20 @@
                 showWidgetConfigState();
             });
         }
+        if (elements.editorLangSwitcher) {
+            elements.editorLangSwitcher.addEventListener('change', function() {
+                setActiveConfigLocale(this.value || '');
+            });
+        }
+        const delegatedLocaleChangeHandler = function(e) {
+            const langSwitcher = e.target && e.target.closest ? e.target.closest('#configLangSwitcher') : null;
+            if (!langSwitcher) {
+                return;
+            }
+            handleConfigLocaleSwitcherChange(langSwitcher);
+        };
+        document.addEventListener('change', delegatedLocaleChangeHandler, true);
+        document.addEventListener('input', delegatedLocaleChangeHandler, true);
         // 主题选择（仅刷新预览，不整页跳转）
         if (elements.themeSelect) {
             elements.themeSelect.addEventListener('change', async function() {
@@ -1055,6 +1471,7 @@
                 if (state.themeId && area) {
                     showPreviewLoadingImmediate();
                     state.editorArea = area;
+                    initWidgetLibraryTabs();
                     try {
                         await refreshLayoutOptions({ editor_area: area, layout_option: '', silent: true });
                     } catch (error) {
@@ -1080,6 +1497,7 @@
                 if (state.themeId && pageType) {
                     showPreviewLoadingImmediate();
                     setCurrentLayoutSelection(pageType, '');
+                    initWidgetLibraryTabs();
                     try {
                         await refreshLayoutOptions({ layout_type: pageType, layout_option: '', silent: true });
                     } catch (error) {
@@ -1148,17 +1566,42 @@
             }, 350));
         }
 
-        // 组件预览按钮（部件库列表中的「预览」）
-        document.addEventListener('click', function(e) {
-            const btn = e.target.closest('.btn-preview-component');
-            if (!btn) return;
-            e.preventDefault();
+        if (elements.widgetLibraryTabs) {
+            elements.widgetLibraryTabs.addEventListener('click', function(e) {
+                const tabButton = e.target.closest('[data-widget-library-tab]');
+                if (!tabButton) {
+                    return;
+                }
+                e.preventDefault();
+                setWidgetLibraryTab(tabButton.getAttribute('data-widget-library-tab') || 'general');
+            });
+        }
+
+	        // 组件预览按钮（部件库列表中的「预览」）
+	        document.addEventListener('click', function(e) {
+	            const btn = e.target.closest('.btn-preview-component');
+	            if (!btn) return;
+	            e.preventDefault();
             e.stopPropagation();
             const module = btn.dataset.widgetModule || '';
             const code = btn.dataset.widgetCode || '';
-            const name = btn.dataset.widgetName || '';
-            if (module && code) openComponentPreviewModal(module, code, name);
-        });
+	            const name = btn.dataset.widgetName || '';
+	            if (module && code) openComponentPreviewModal(module, code, name);
+	        });
+
+	        // 部件添加按钮（部件库列表中的「添加到当前插槽」）
+	        document.addEventListener('click', function(e) {
+	            const btn = e.target.closest('.btn-add-component');
+	            if (!btn) return;
+		            e.preventDefault();
+		            e.stopPropagation();
+		            const item = btn.closest('.widget-item[data-widget-code]');
+                    if (!isWidgetLibraryItemActive(item)) {
+                        showToast(translateUiText('请先切换到对应部件分类'), 'warning');
+                        return;
+                    }
+		            addWidgetFromLibraryItem(item);
+		        });
 
         document.addEventListener('click', function(e) {
             const clearImageBtn = e.target.closest('[data-config-image-clear]');
@@ -1289,8 +1732,9 @@
         });
 
         // 关闭配置面板
-        document.getElementById('closeConfigPanel')?.addEventListener('click', function() {
-            deselectWidget();
+        document.getElementById('closeConfigPanel')?.addEventListener('click', function(event) {
+            event.preventDefault();
+            setSidePanelOpen('config', false);
         });
 
         // 保存按钮
@@ -1319,7 +1763,7 @@
                 const i18nBtn = e.target.closest('.w-param-btn-i18n, .btn-i18n-edit');
                 if (i18nBtn) {
                     e.preventDefault();
-                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     const fieldKey = i18nBtn.dataset.field;
                     const layoutId = i18nBtn.dataset.layoutId;
                     const panelId = 'i18n_panel_' + layoutId + '_' + fieldKey.replace(/\./g, '_');
@@ -1337,6 +1781,8 @@
                 }
                 const closeBtn = e.target.closest('[data-close-i18n], .btn-i18n-close');
                 if (closeBtn) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
                     const panel = closeBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                     if (panel) {
                         panel.style.display = 'none';
@@ -1348,7 +1794,7 @@
                 const aiBtn = e.target.closest('[data-ai-i18n], .btn-ai-i18n');
                 if (aiBtn) {
                     e.preventDefault();
-                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                     const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
                     const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
@@ -1359,6 +1805,8 @@
                 }
                 const saveBtn = e.target.closest('[data-save-i18n], .btn-save-i18n');
                 if (saveBtn) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
                     const panel = saveBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                     const fieldKey = saveBtn.dataset.field || panel?.dataset.field;
                     const layoutId = saveBtn.dataset.layoutId || panel?.dataset.layoutId;
@@ -1494,11 +1942,17 @@
         // 全屏预览按钮
         if (elements.btnFullscreenPreview) {
             elements.btnFullscreenPreview.addEventListener('click', function() {
-                if (elements.previewFrame && elements.previewFrame.requestFullscreen) {
-                    elements.previewFrame.requestFullscreen();
-                }
+                toggleEditorFullscreen().catch(function(error) {
+                    console.warn('[ThemeEditor] fullscreen toggle failed:', error);
+                    showToast(translateUiText('无法进入全屏编辑'), 'warning');
+                });
             });
         }
+
+        document.addEventListener('fullscreenchange', handleEditorFullscreenChanged);
+        document.addEventListener('webkitfullscreenchange', handleEditorFullscreenChanged);
+        document.addEventListener('mozfullscreenchange', handleEditorFullscreenChanged);
+        document.addEventListener('MSFullscreenChange', handleEditorFullscreenChanged);
 
         // 监听 iframe 消息（预览页面与编辑器通信）
         window.addEventListener('message', handleIframeMessage);
@@ -1588,11 +2042,253 @@
         }
     }
 
-    async function ensureWidgetCanvasPreview(canvas, widgetModule, widgetCode) {
-        if (!canvas || canvas.dataset.previewLoading === '1' || canvas.dataset.previewLoaded === '1') {
+    function isWidgetPreviewFallbackHtml(previewHtml) {
+        const html = String(previewHtml || '').trim();
+        return html === ''
+            || html.includes('widget-preview-placeholder')
+            || html.includes('widget-preview-error');
+    }
+
+    function isWidgetPreviewFallbackCanvas(canvas) {
+        if (!canvas) {
+            return false;
+        }
+        return String(canvas.innerHTML || '').trim() === ''
+            || !!canvas.querySelector('.widget-preview-placeholder, .widget-preview-error');
+    }
+
+    function normalizeWidgetPreviewCode(widgetCode) {
+        const parts = String(widgetCode || '').replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : '';
+    }
+
+    function isBasicThemeComponentPreviewCode(widgetCode) {
+        return [
+            'alert',
+            'badge',
+            'button',
+            'card',
+            'dropdown',
+            'form-group',
+            'loading',
+            'message',
+            'modal',
+            'pagination',
+            'section',
+            'grid',
+            'text',
+            'image',
+            'divider',
+            'spacer',
+            'table',
+            'tabs'
+        ].includes(normalizeWidgetPreviewCode(widgetCode));
+    }
+
+    function getPreviewHtmlText(html) {
+        const probe = document.createElement('div');
+        probe.innerHTML = sanitizeHtmlForEditorPreview(String(html || ''));
+        probe.querySelectorAll('style, script').forEach((node) => node.remove());
+        return String(probe.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function buildClientComponentPreviewHtml(widgetCode, widgetName) {
+        const code = normalizeWidgetPreviewCode(widgetCode);
+        const escName = escapeHtml(widgetName || widgetCode || '');
+        const text = {
+            alertTitle: translateUiText('系统提示'),
+            alertBody: translateUiText('这是一条状态提示信息。'),
+            enabled: translateUiText('已启用'),
+            backend: translateUiText('后台'),
+            primary: translateUiText('主要操作'),
+            secondary: translateUiText('次要'),
+            cardTitle: translateUiText('数据卡片'),
+            cardSubtitle: translateUiText('用于组织内容'),
+            cardBody: translateUiText('这里展示核心信息、摘要或操作入口。'),
+            action: translateUiText('选择操作'),
+            detail: translateUiText('查看详情'),
+            copy: translateUiText('复制视图'),
+            metric: translateUiText('指标'),
+            status: translateUiText('状态'),
+            trend: translateUiText('趋势'),
+            order: translateUiText('订单'),
+            ok: translateUiText('正常'),
+            payment: translateUiText('支付'),
+            stable: translateUiText('稳定'),
+            label: translateUiText('字段名称'),
+            placeholder: translateUiText('请输入内容'),
+            username: translateUiText('管理员'),
+            syncing: translateUiText('正在同步数据'),
+            messageTitle: translateUiText('操作完成'),
+            messageBody: translateUiText('数据已保存，可以继续编辑。'),
+            modalTitle: translateUiText('确认发布'),
+            modalBody: translateUiText('公开后同站点后台用户可见。'),
+            cancel: translateUiText('取消'),
+            confirm: translateUiText('确认'),
+            previous: translateUiText('上一页'),
+            next: translateUiText('下一页'),
+            tabOverview: translateUiText('概览'),
+            tabSettings: translateUiText('设置'),
+            sectionTitle: translateUiText('精选区块'),
+            sectionSubtitle: translateUiText('Section'),
+            sectionBody: translateUiText('拖入卡片、文本、图片或表单组件'),
+            gridItem: translateUiText('栅格项'),
+            textTitle: translateUiText('清晰表达你的页面主张'),
+            textBody: translateUiText('用标题和段落快速搭建页面内容。'),
+            imageAlt: translateUiText('图片媒体'),
+            dividerLabel: translateUiText('内容分隔'),
+            spacerLabel: translateUiText('留白间距'),
+        };
+
+        if (code === 'alert') {
+            return '<div class="te-component-preview te-component-preview-alert"><div class="w-alert w-alert-info" role="alert"><i class="ri-information-line me-2"></i><strong>'
+                + escapeHtml(text.alertTitle) + '</strong><span>' + escapeHtml(text.alertBody) + '</span></div></div>';
+        }
+        if (code === 'badge') {
+            return '<div class="te-component-preview te-component-preview-badge"><span class="w-badge w-badge-success">'
+                + escapeHtml(text.enabled) + '</span><span class="w-badge w-badge-info">' + escapeHtml(text.backend) + '</span></div>';
+        }
+        if (code === 'button') {
+            return '<div class="te-component-preview te-component-preview-button"><button type="button" class="w-btn w-btn-primary w-btn-md"><i class="ri-flashlight-line"></i> '
+                + escapeHtml(text.primary) + '</button><button type="button" class="w-btn w-btn-secondary w-btn-sm">' + escapeHtml(text.secondary) + '</button></div>';
+        }
+        if (code === 'card') {
+            return '<div class="te-component-preview te-component-preview-card"><div class="w-card"><div class="w-card-header"><h3 class="w-card-title">'
+                + escapeHtml(text.cardTitle) + '</h3><p class="w-card-subtitle">' + escapeHtml(text.cardSubtitle)
+                + '</p></div><div class="w-card-body">' + escapeHtml(text.cardBody) + '</div></div></div>';
+        }
+        if (code === 'dropdown') {
+            return '<div class="te-component-preview te-component-preview-dropdown"><div class="w-dropdown dropdown"><button type="button" class="w-btn w-btn-secondary w-dropdown-toggle dropdown-toggle">'
+                + escapeHtml(text.action) + '</button><div class="w-dropdown-menu dropdown-menu show"><a class="w-dropdown-item dropdown-item" href="#">'
+                + escapeHtml(text.detail) + '</a><a class="w-dropdown-item dropdown-item" href="#">' + escapeHtml(text.copy) + '</a></div></div></div>';
+        }
+        if (code === 'section') {
+            return '<div class="te-component-preview te-component-preview-section"><section class="w-builder-section w-builder-section--subtle"><header class="w-builder-section__header"><p class="w-builder-section__eyebrow">'
+                + escapeHtml(text.sectionSubtitle) + '</p><h2 class="w-builder-section__title">' + escapeHtml(text.sectionTitle)
+                + '</h2><p class="w-builder-section__description">' + escapeHtml(text.sectionBody) + '</p></header><div class="w-builder-slot-placeholder">'
+                + escapeHtml(text.sectionBody) + '</div></section></div>';
+        }
+        if (code === 'grid') {
+            return '<div class="te-component-preview te-component-preview-grid"><div class="w-builder-grid" style="--w-builder-grid-columns:3;--w-builder-grid-gap:10px;--w-builder-grid-min:120px;"><div class="w-card"><div class="w-card-body">'
+                + escapeHtml(text.gridItem) + ' 1</div></div><div class="w-card"><div class="w-card-body">' + escapeHtml(text.gridItem)
+                + ' 2</div></div><div class="w-card"><div class="w-card-body">' + escapeHtml(text.gridItem) + ' 3</div></div></div></div>';
+        }
+        if (code === 'text') {
+            return '<div class="te-component-preview te-component-preview-text"><div class="w-builder-text w-builder-text--sm"><p class="w-builder-text__eyebrow">Text</p><h2 class="w-builder-text__title">'
+                + escapeHtml(text.textTitle) + '</h2><p class="w-builder-text__body">' + escapeHtml(text.textBody) + '</p></div></div>';
+        }
+        if (code === 'image') {
+            return '<div class="te-component-preview te-component-preview-image"><figure class="w-builder-image w-builder-image--16x9"><div class="w-builder-image__placeholder">'
+                + escapeHtml(text.imageAlt) + '</div></figure></div>';
+        }
+        if (code === 'divider') {
+            return '<div class="te-component-preview te-component-preview-divider"><div class="w-builder-divider"><span class="w-builder-divider__label">'
+                + escapeHtml(text.dividerLabel) + '</span></div></div>';
+        }
+        if (code === 'spacer') {
+            return '<div class="te-component-preview te-component-preview-spacer"><div class="w-builder-spacer w-builder-spacer--md"></div><span>'
+                + escapeHtml(text.spacerLabel) + '</span></div>';
+        }
+        if (code === 'form-group') {
+            return '<div class="te-component-preview te-component-preview-form-group"><label class="w-form-label">'
+                + escapeHtml(text.label) + '</label><input class="w-form-control" type="text" value="' + escapeHtml(text.username)
+                + '" placeholder="' + escapeHtml(text.placeholder) + '"></div>';
+        }
+        if (code === 'loading') {
+            return '<div class="te-component-preview te-component-preview-loading"><span class="w-loading-spinner"></span><span>'
+                + escapeHtml(text.syncing) + '</span></div>';
+        }
+        if (code === 'message') {
+            return '<div class="te-component-preview te-component-preview-message"><div class="w-message w-message-success"><i class="ri-checkbox-circle-line"></i><div><strong>'
+                + escapeHtml(text.messageTitle) + '</strong><span>' + escapeHtml(text.messageBody) + '</span></div></div></div>';
+        }
+        if (code === 'modal') {
+            return '<div class="te-component-preview te-component-preview-modal"><div class="w-modal-preview"><div class="w-modal-header"><strong>'
+                + escapeHtml(text.modalTitle) + '</strong><span aria-hidden="true">×</span></div><div class="w-modal-body">'
+                + escapeHtml(text.modalBody) + '</div><div class="w-modal-footer"><button type="button" class="w-btn w-btn-secondary w-btn-sm">'
+                + escapeHtml(text.cancel) + '</button><button type="button" class="w-btn w-btn-primary w-btn-sm">'
+                + escapeHtml(text.confirm) + '</button></div></div></div>';
+        }
+        if (code === 'pagination') {
+            return '<div class="te-component-preview te-component-preview-pagination"><nav class="w-pagination"><a href="#">'
+                + escapeHtml(text.previous) + '</a><a href="#">1</a><a class="active" href="#">2</a><a href="#">3</a><a href="#">'
+                + escapeHtml(text.next) + '</a></nav></div>';
+        }
+        if (code === 'table') {
+            return '<div class="te-component-preview te-component-preview-table"><table class="w-table w-table-striped"><thead><tr><th>'
+                + escapeHtml(text.metric) + '</th><th>' + escapeHtml(text.status) + '</th><th>' + escapeHtml(text.trend)
+                + '</th></tr></thead><tbody><tr><td>' + escapeHtml(text.order) + '</td><td>' + escapeHtml(text.ok)
+                + '</td><td>+12%</td></tr><tr><td>' + escapeHtml(text.payment) + '</td><td>' + escapeHtml(text.stable)
+                + '</td><td>+4%</td></tr></tbody></table></div>';
+        }
+        if (code === 'tabs') {
+            return '<div class="te-component-preview te-component-preview-tabs"><div class="w-tabs"><div class="w-tab-list"><button type="button" class="active">'
+                + escapeHtml(text.tabOverview) + '</button><button type="button">' + escapeHtml(text.tabSettings)
+                + '</button></div><div class="w-tab-panel">' + escapeHtml(text.cardBody) + '</div></div></div>';
+        }
+
+        return '<div class="te-component-preview te-component-preview-generic"><strong>' + escName + '</strong><span>' + escapeHtml(widgetCode || '') + '</span></div>';
+    }
+
+    function normalizeWidgetCanvasPreview(canvas) {
+        if (!canvas) {
+            return false;
+        }
+        const item = canvas.closest?.('.widget-item[data-widget-code]');
+        const widgetCode = canvas.dataset.widgetCode || item?.dataset?.widgetCode || item?.getAttribute?.('data-widget-code') || '';
+        if (!isBasicThemeComponentPreviewCode(widgetCode)) {
+            return false;
+        }
+        if (widgetCode && !canvas.dataset.widgetCode) {
+            canvas.dataset.widgetCode = widgetCode;
+        }
+        if (canvas.firstElementChild?.classList?.contains('te-component-preview')) {
+            canvas.dataset.previewLoaded = '1';
+            return true;
+        }
+
+        const widgetName = item?.dataset?.widgetName || widgetCode;
+        const rawHtml = String(canvas.innerHTML || '').trim();
+        const visibleText = getPreviewHtmlText(rawHtml);
+        if (!rawHtml || !visibleText || isWidgetPreviewFallbackHtml(rawHtml)) {
+            canvas.innerHTML = buildClientComponentPreviewHtml(widgetCode, widgetName);
+        } else {
+            canvas.innerHTML = '<div class="te-component-preview te-component-preview-' + escapeHtml(normalizeWidgetPreviewCode(widgetCode)) + '">' + rawHtml + '</div>';
+        }
+        canvas.dataset.previewLoaded = '1';
+        return true;
+    }
+
+    function hydrateWidgetLibraryPreviews(root) {
+        const scope = root || elements.widgetList || document;
+        scope.querySelectorAll('.widget-preview-canvas').forEach((canvas) => {
+            if (normalizeWidgetCanvasPreview(canvas)) {
+                scheduleFitWidgetPreviews();
+                return;
+            }
+            if (!isWidgetPreviewFallbackCanvas(canvas)) {
+                return;
+            }
+            const item = canvas.closest?.('.widget-item[data-widget-code]');
+            ensureWidgetCanvasPreview(
+                canvas,
+                canvas.dataset.widgetModule || item?.dataset?.widgetModule || item?.getAttribute?.('data-widget-module') || '',
+                canvas.dataset.widgetCode || item?.dataset?.widgetCode || item?.getAttribute?.('data-widget-code') || '',
+                { area: canvas.dataset.widgetArea || state.editorArea || 'frontend' }
+            );
+        });
+    }
+
+    async function ensureWidgetCanvasPreview(canvas, widgetModule, widgetCode, options = {}) {
+        if (!canvas || canvas.dataset.previewLoading === '1') {
             return;
         }
-        if (canvas.querySelector('[class*="widget-"]') && !canvas.querySelector('.widget-preview-placeholder, .widget-preview-error')) {
+        if (!isWidgetPreviewFallbackCanvas(canvas) && canvas.dataset.previewLoaded === '1') {
+            canvas.dataset.previewLoaded = '1';
+            scheduleFitWidgetPreviews();
+            return;
+        }
+        if (!isWidgetPreviewFallbackCanvas(canvas) && canvas.querySelector('[class*="widget-"]')) {
             canvas.dataset.previewLoaded = '1';
             scheduleFitWidgetPreviews();
             return;
@@ -1605,11 +2301,17 @@
             const url = new URL(config.apiWidgetPreview, window.location.origin);
             url.searchParams.set('widget_module', widgetModule);
             url.searchParams.set('widget_code', widgetCode);
-            const data = await apiJson(url.toString());
+            url.searchParams.set('editor_area', options.area || state.editorArea || 'frontend');
+            url.searchParams.set('theme_id', String(state.themeId || 0));
+            url.searchParams.set('_t', String(Date.now()));
+            const data = await apiJson(url.toString(), { silent: true });
             const html = (data && data.html) ? sanitizeHtmlForEditorPreview(data.html) : '';
             if (html.trim() !== '') {
                 canvas.innerHTML = html;
-                canvas.dataset.previewLoaded = '1';
+                normalizeWidgetCanvasPreview(canvas);
+                if (!isWidgetPreviewFallbackHtml(html)) {
+                    canvas.dataset.previewLoaded = '1';
+                }
                 scheduleFitWidgetPreviews();
             }
         } catch (err) {
@@ -1629,7 +2331,9 @@
             return;
         }
         canvas.insertAdjacentHTML('beforeend', html);
-        canvas.dataset.previewLoaded = '1';
+        if (!isWidgetPreviewFallbackHtml(html)) {
+            canvas.dataset.previewLoaded = '1';
+        }
     }
 
     /**
@@ -1641,6 +2345,10 @@
             let viewport = canvas.firstElementChild;
             if (!viewport) return;
             if (viewport.classList.contains('widget-preview-placeholder') || viewport.classList.contains('widget-preview-error')) return;
+            if (viewport.classList.contains('te-component-preview')) {
+                canvas.dataset.previewLoaded = '1';
+                return;
+            }
 
             let inner = null;
             if (viewport.classList.contains('widget-preview-viewport')) {
@@ -1776,19 +2484,76 @@
         };
     }
 
-    function applySlotWidgetRecommendations(slot) {
-        const slotId = slot.id || '';
-        const areaCode = slot.area || inferAreaFromSlotId(slotId);
-        const rejectTypes = normalizeCodeList(slot.reject || '');
+    function buildSlotSelectionFromAreaElement(areaElement) {
+        if (!areaElement) {
+            return null;
+        }
+
+        const areaCode = areaElement.dataset.area || '';
+        const slotId = areaElement.dataset.slot || areaElement.dataset.wslot || areaCode;
+        if (!slotId) {
+            return null;
+        }
+
+        const slotName = areaElement.dataset.slotName
+            || areaElement.querySelector('.slot-placeholder-large .placeholder-title')?.textContent?.trim()
+            || areaElement.querySelector('.area-label')?.textContent?.trim()
+            || slotId;
+
+        return normalizeSelectedSlot({
+            id: slotId,
+            name: slotName,
+            accept: areaElement.dataset.slotAccept || areaElement.dataset.accept || areaCode || '*',
+            reject: areaElement.dataset.slotReject || areaElement.dataset.reject || '',
+            area: areaCode || inferAreaFromSlotId(slotId),
+            exclusive: areaElement.dataset.slotExclusive === 'true' || areaElement.dataset.exclusive === 'true',
+            multiple: areaElement.dataset.slotMultiple !== 'false' && areaElement.dataset.multiple !== 'false',
+            max: areaElement.dataset.slotMax || areaElement.dataset.max || '',
+            min: areaElement.dataset.slotMin || areaElement.dataset.min || '',
+            source: 'structure',
+        });
+    }
+
+    function shouldFilterWidgetsByArea(areaCode) {
+        return ['header', 'content', 'footer', 'left_sidebar', 'right_sidebar', 'banner'].includes(normalizeCode(areaCode));
+    }
+
+    function slotPrefersBasicWidgetTab(slot) {
+        const acceptCodes = normalizeCodeList(slot?.accept ?? []);
+        const specific = acceptCodes.filter(code => code && code !== '*');
+        return specific.length > 0 && specific.every(code => code === 'builder-component' || code.startsWith('builder-'));
+    }
+
+    function applySlotWidgetFilter(slot, options = {}) {
+        const normalizedSlot = normalizeSelectedSlot(slot);
+        if (!normalizedSlot) {
+            applyWidgetLibraryTabVisibility();
+            return 0;
+        }
+
+        const slotId = normalizedSlot.id || '';
+        const areaCode = normalizedSlot.area || inferAreaFromSlotId(slotId);
+        const rejectTypes = normalizeCodeList(normalizedSlot.reject || '');
 
         restoreWidgetOrder();
 
-        if (areaCode) {
-            filterWidgetsByArea(areaCode, rejectTypes);
-            state.selectedArea = areaCode;
+        if (options.autoSwitchTab !== false && slotPrefersBasicWidgetTab(normalizedSlot)) {
+            setWidgetLibraryTab('basic', { silent: true, skipSlotRefresh: true });
         }
 
-        highlightAcceptableWidgets(slot.accept);
+        if (areaCode && shouldFilterWidgetsByArea(areaCode)) {
+            filterWidgetsByArea(areaCode, rejectTypes);
+            state.selectedArea = areaCode;
+        } else {
+            filterWidgetsByArea(null, rejectTypes);
+            state.selectedArea = null;
+        }
+
+        return highlightAcceptableWidgets(normalizedSlot.accept);
+    }
+
+    function applySlotWidgetRecommendations(slot) {
+        return applySlotWidgetFilter(slot, { autoSwitchTab: true });
     }
 
     function handleSlotSelected(slot) {
@@ -1806,16 +2571,17 @@
 
         console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', normalizedSlot.area, 'resolved areaCode:', areaCode);
 
+        openWidgetPanelForSlotSelection(normalizedSlot);
         applySlotWidgetRecommendations(normalizedSlot);
 
         // 滚动到高亮的部件（延迟以等待DOM更新）
         scrollToHighlightedWidgets();
 
         // 更新左侧配置面板，显示插槽信息
-        renderSlotInfoPanel(slot);
+        renderSlotInfoPanel(normalizedSlot);
 
         // 显示提示
-        showToast(`已选中插槽: ${slot.name}`, 'info');
+        showToast(`已选中插槽: ${normalizedSlot.name || normalizedSlot.id}`, 'info');
     }
 
     /**
@@ -2103,6 +2869,12 @@
         url.searchParams.set('editor_area', getEffectiveEditorArea());
         url.searchParams.set('preview_area', getEffectiveEditorArea());
         url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        const lockPayload = getLayoutLockVirtualPayload();
+        Object.entries(lockPayload).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                url.searchParams.set(key, String(value));
+            }
+        });
         if (locale) {
             url.searchParams.set('locale', locale);
         }
@@ -2119,7 +2891,10 @@
             elements.configContent.innerHTML = '<div class="widget-config-loading">加载布局配置...</div>';
         }
         try {
-            const payload = await apiJson(buildLayoutConfigUrl(options.locale || ''));
+            const locale = Object.prototype.hasOwnProperty.call(options, 'locale')
+                ? (options.locale || '')
+                : getActiveConfigLocale();
+            const payload = await apiJson(buildLayoutConfigUrl(locale));
             if (!payload.success) {
                 throw new Error(payload.message || 'Load layout config failed');
             }
@@ -2174,7 +2949,7 @@
             layoutConfigAutoSaveTimer = setTimeout(async function() {
                 layoutConfigAutoSaveTimer = null;
                 try {
-                    await saveLayoutConfig(form, '', { silent: true });
+                    await saveLayoutConfig(form, getActiveConfigLocale(), { silent: true });
                 } catch (error) {
                     console.error('[ThemeEditor] layout config auto-save error:', error);
                 }
@@ -2199,6 +2974,7 @@
         const silent = options.silent === true;
         const configData = collectWidgetConfigData(form);
         const editorArea = getEffectiveEditorArea();
+        const effectiveLocale = locale === undefined ? getActiveConfigLocale() : (locale || '');
         const payload = {
             theme_id: state.themeId || 0,
             layout_type: getEffectiveLayoutType(),
@@ -2206,8 +2982,9 @@
             editor_area: editorArea,
             preview_area: editorArea,
             scope: getCurrentWindowParam('scope') || 'default',
-            locale: locale || '',
-            config: configData
+            locale: effectiveLocale,
+            config: configData,
+            ...getLayoutLockVirtualPayload()
         };
         const result = await apiJson(config.apiSaveLayoutConfig, {
             method: 'POST',
@@ -2823,7 +3600,7 @@
             const i18nBtn = e.target.closest('.w-param-btn-i18n, .btn-i18n-edit');
             if (i18nBtn) {
                 e.preventDefault();
-                e.stopPropagation();
+                e.stopImmediatePropagation();
                 const fieldKey = i18nBtn.dataset.field;
                 const layoutId = i18nBtn.dataset.layoutId;
                 const panelId = 'i18n_panel_' + layoutId + '_' + fieldKey.replace(/\./g, '_');
@@ -2844,6 +3621,8 @@
             // 关闭按钮
             const closeBtn = e.target.closest('[data-close-i18n], .btn-i18n-close');
             if (closeBtn) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
                 const panel = closeBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                 if (panel) {
                     panel.style.display = 'none';
@@ -2856,7 +3635,7 @@
             const aiBtn = e.target.closest('[data-ai-i18n], .btn-ai-i18n');
             if (aiBtn) {
                 e.preventDefault();
-                e.stopPropagation();
+                e.stopImmediatePropagation();
                 const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                 const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
                 const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
@@ -2869,6 +3648,8 @@
             // 保存多语言按钮
             const saveBtn = e.target.closest('[data-save-i18n], .btn-save-i18n');
             if (saveBtn) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
                 const panel = saveBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                 const fieldKey = saveBtn.dataset.field || panel?.dataset.field;
                 const layoutId = saveBtn.dataset.layoutId || panel?.dataset.layoutId;
@@ -3256,14 +4037,22 @@
                 const configData = collectWidgetConfigData(this);
 
                 try {
-                    const result = await apiJson(config.apiUpdateConfig, {
+                    const result = await apiJson(getWidgetConfigSaveUrl(), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ layout_id: layoutId, config: configData })
+                        body: JSON.stringify({
+                            layout_id: layoutId,
+                            config: configData,
+                            locale: getActiveConfigLocale() || null,
+                        })
                     });
 
                     if (result.success) {
                         showToast('配置已保存', 'success');
+                        const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
+                        if (!getActiveConfigLocale() && state.selectedWidget) {
+                            state.selectedWidget.dataset.config = JSON.stringify(normalizedConfig);
+                        }
                         // 更新预览
                         if (result.preview_html) {
                             updateWidgetPreviewInIframe(layoutId, result.preview_html);
@@ -4083,6 +4872,7 @@
         const widgetElement = resolvePreviewWidgetElement(data);
         state.selectedWidget = widgetElement;
         state.selectedSlot = null;
+        openConfigPanelForWidgetSelection();
         setConfigMode('widget');
         markPreviewWidgetSelected(widgetElement.dataset.layoutId);
         loadWidgetConfig(widgetElement);
@@ -4120,7 +4910,8 @@
 
         // accept 包含 * 表示接受所有部件，等同于无限制
         if (normalizedAccept.includes('*')) {
-            return document.querySelectorAll('.widget-item:not([style*="display: none"])').length;
+            applyWidgetLibraryTabVisibility();
+            return document.querySelectorAll('.widget-item:not([style*="display: none"]):not(.widget-library-tab-hidden)').length;
         }
 
         // 保存原始顺序（如果还没有保存）
@@ -4186,6 +4977,7 @@
             clearWidgetRecommendations(slot);
         }
 
+        applyWidgetLibraryTabVisibility();
         return totalMatched;
 
     }
@@ -4339,6 +5131,7 @@
         // 清空保存的顺序
         state.originalWidgetOrder.clear();
         state.originalGroupOrder = [];
+        applyWidgetLibraryTabVisibility();
     }
 
     /**
@@ -4355,6 +5148,7 @@
         if (state.editorArea) {
             url.searchParams.set('editor_area', state.editorArea);
         }
+        appendWidgetLibraryFilterParams(url);
         return url.toString();
     }
 
@@ -4426,6 +5220,214 @@
         return state.widgetLib;
     }
 
+    function isDashboardLayoutMode() {
+        return normalizeCode(state.pageType || state.layoutType || '') === 'dashboard'
+            && normalizeCode(state.editorArea || '') === 'backend';
+    }
+
+    function isDashboardWidgetLibraryMode() {
+        return true;
+    }
+
+    function normalizeCodeTail(code) {
+        const parts = normalizeCode(code).replace(/\\/g, '/').split('/').filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : '';
+    }
+
+    function isDashboardContractWidget(widgetData) {
+        if (!isDashboardLayoutMode()) {
+            return false;
+        }
+        const codes = [
+            widgetData?.code,
+            widgetData?.type,
+            widgetData?.slot,
+        ];
+
+        normalizeCodeList(widgetData?.position || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.supports || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.slots || []).forEach(code => codes.push(code));
+
+        return normalizeCodeList(codes).some(code => code === 'dashboard' || code.startsWith('dashboard-'));
+    }
+
+    function getDashboardWidgetLibraryTab(widgetData) {
+        if (isDashboardContractWidget(widgetData)) {
+            return 'general';
+        }
+
+        const moduleName = normalizeCode(widgetData?.module || '');
+        const widgetType = normalizeCode(widgetData?.type || '');
+        const widgetCode = normalizeCode(widgetData?.code || '');
+        const widgetCodeTail = normalizeCodeTail(widgetCode);
+        const groupType = normalizeCode(widgetData?.group_type || widgetData?.groupType || '');
+        const groupLabel = normalizeCode(widgetData?.group_label || widgetData?.groupLabel || '');
+        const supportCodes = collectWidgetSupportCodes(widgetData);
+        const isThemeComponent = moduleName === 'weline_theme'
+            && (widgetType === 'theme_component' || widgetCode.includes('/') || widgetCode.startsWith('basic/'));
+        const basicByCode = widgetCode.startsWith('basic/') || DASHBOARD_BASIC_WIDGET_CODES.has(widgetCodeTail);
+        const basicByProtocol = supportCodes.some(code => code === 'builder-component' || code.startsWith('builder-'));
+        const basicByGroup = groupType === 'basic'
+            || groupType === 'base'
+            || groupLabel.includes('基础')
+            || groupLabel.includes('base');
+
+        return isThemeComponent && (basicByCode || basicByGroup || basicByProtocol) ? 'basic' : 'general';
+    }
+
+    function getWidgetLibraryDataFromElement(item) {
+        if (!item) {
+            return {};
+        }
+
+        let pageLayouts = item.dataset.widgetPageLayouts || '[]';
+        try {
+            pageLayouts = JSON.parse(pageLayouts);
+        } catch (err) {
+            pageLayouts = normalizeCodeList(pageLayouts);
+        }
+
+        const group = item.closest('.widget-group');
+        return {
+            code: item.dataset.widgetCode || '',
+            module: item.dataset.widgetModule || '',
+            type: item.dataset.widgetType || '',
+            slot: item.dataset.widgetSlot || '',
+            position: item.dataset.widgetPosition || '',
+            supports: item.dataset.widgetSupports || '',
+            slots: item.dataset.widgetSlots || '',
+            page_layouts: pageLayouts,
+            group_type: group?.dataset.type || '',
+            group_label: group?.querySelector('.widget-group-header span:not(.widget-count)')?.textContent || '',
+        };
+    }
+
+    function resolveWidgetLibraryItemTab(item) {
+        const tab = getDashboardWidgetLibraryTab(getWidgetLibraryDataFromElement(item));
+        if (item) {
+            item.dataset.widgetLibraryTab = tab;
+        }
+        return tab;
+    }
+
+    function resetWidgetLibraryInlineFilter() {
+        const listEl = elements.widgetList;
+        if (!listEl) {
+            return;
+        }
+        removeWidgetRecommendationEmptyState();
+        listEl.querySelectorAll('.widget-item').forEach(item => {
+            item.style.display = '';
+            item.classList.remove('highlighted', 'area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
+        });
+        listEl.querySelectorAll('.widget-group').forEach(group => {
+            group.style.display = '';
+        });
+    }
+
+    function setWidgetLibraryTab(tab, options = {}) {
+        state.widgetLibraryTab = tab === 'basic' ? 'basic' : 'general';
+        if (!options.silent && !options.skipSlotRefresh && state.selectedSlot) {
+            applySlotWidgetFilter(state.selectedSlot, { autoSwitchTab: false });
+        } else {
+            applyWidgetLibraryTabVisibility();
+        }
+        if (!options.silent && isDashboardWidgetLibraryMode()) {
+            const label = state.widgetLibraryTab === 'basic' ? translateUiText('基础组件') : translateUiText('通用部件');
+            showToast(label, 'info');
+        }
+    }
+
+    function initWidgetLibraryTabs() {
+        if (!elements.widgetLibraryTabs) {
+            return;
+        }
+        elements.widgetLibraryTabs.hidden = false;
+        bindWidgetLibraryTabButtons();
+        setWidgetLibraryTab(state.widgetLibraryTab || 'general', { silent: true });
+    }
+
+    function bindWidgetLibraryTabButtons() {
+        if (!elements.widgetLibraryTabs) {
+            return;
+        }
+
+        elements.widgetLibraryTabs.querySelectorAll('[data-widget-library-tab]').forEach(button => {
+            if (button.dataset.widgetLibraryTabBound === '1') {
+                return;
+            }
+            button.dataset.widgetLibraryTabBound = '1';
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                setWidgetLibraryTab(this.getAttribute('data-widget-library-tab') || 'general');
+            });
+        });
+    }
+
+    function updateWidgetLibraryTabCounts() {
+        if (!elements.widgetLibraryTabs) {
+            return;
+        }
+
+        const counts = { general: 0, basic: 0 };
+        elements.widgetList?.querySelectorAll('.widget-item').forEach(item => {
+            const tab = resolveWidgetLibraryItemTab(item);
+            counts[tab === 'basic' ? 'basic' : 'general']++;
+        });
+
+        elements.widgetLibraryTabs.querySelectorAll('[data-widget-library-tab-count]').forEach(el => {
+            const tab = el.getAttribute('data-widget-library-tab-count') || 'general';
+            el.textContent = String(counts[tab] || 0);
+        });
+    }
+
+    function applyWidgetLibraryTabVisibility() {
+        const listEl = elements.widgetList;
+        const tabsEl = elements.widgetLibraryTabs;
+        if (!listEl) {
+            return;
+        }
+
+        if (!state.selectedSlot) {
+            resetWidgetLibraryInlineFilter();
+        }
+
+        const dashboardMode = isDashboardWidgetLibraryMode();
+        if (tabsEl) {
+            tabsEl.hidden = !dashboardMode;
+            tabsEl.querySelectorAll('[data-widget-library-tab]').forEach(button => {
+                button.classList.toggle('active', (button.getAttribute('data-widget-library-tab') || 'general') === state.widgetLibraryTab);
+            });
+        }
+
+        listEl.querySelectorAll('.widget-item').forEach(item => {
+            const tab = resolveWidgetLibraryItemTab(item);
+            const active = !dashboardMode || tab === state.widgetLibraryTab;
+            item.classList.toggle('widget-library-tab-hidden', !active);
+            item.classList.toggle('widget-tab-disabled', !active);
+            item.draggable = active;
+        });
+
+        listEl.querySelectorAll('.widget-group').forEach(group => {
+            const items = Array.from(group.querySelectorAll('.widget-item'));
+            const hasActiveItem = !dashboardMode
+                || items.some(item => resolveWidgetLibraryItemTab(item) === state.widgetLibraryTab && item.style.display !== 'none');
+            group.dataset.widgetLibraryTab = hasActiveItem && dashboardMode ? state.widgetLibraryTab : (group.dataset.widgetLibraryTab || 'general');
+            group.classList.toggle('widget-library-tab-hidden', !hasActiveItem);
+        });
+
+        updateWidgetLibraryTabCounts();
+    }
+
+    function isWidgetLibraryItemActive(item) {
+        if (!item || !isDashboardWidgetLibraryMode()) {
+            return true;
+        }
+        const tab = resolveWidgetLibraryItemTab(item);
+        return tab === state.widgetLibraryTab && !item.classList.contains('widget-library-tab-hidden');
+    }
+
     /**
      * 延迟加载部件库：不再首屏立即拉取，而是等待主预览 iframe 加载完成后再触发；
      * 同时设置兜底定时器，避免 iframe 长时间不触发 load 时部件库永远不出现。
@@ -4459,6 +5461,7 @@
         if (state.pageType) url.searchParams.set('page_type', state.pageType);
         if (state.themeId) url.searchParams.set('theme_id', String(state.themeId));
         if (state.editorArea) url.searchParams.set('editor_area', state.editorArea);
+        appendWidgetLibraryFilterParams(url);
         url.searchParams.set('offset', String(lib.offset));
         url.searchParams.set('limit', String(lib.limit));
         if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
@@ -4514,6 +5517,7 @@
                 if (!options.silent) showToast(emptyText, 'info');
             }
             renderWidgetLoadMoreHint();
+            applyWidgetLibraryTabVisibility();
         } catch (err) {
             console.warn('[ThemeEditor] loadWidgetLibrary failed:', err);
             if (options.reset) {
@@ -4586,14 +5590,16 @@
     /**
      * 确保指定分组容器存在，返回其 .widget-group-content 元素
      */
-    function ensureWidgetGroup(listEl, type, label) {
+    function ensureWidgetGroup(listEl, type, label, libraryTab = 'general') {
         let group = listEl.querySelector('.widget-group[data-type="' + cssEscape(type) + '"]');
         if (group) {
+            group.dataset.widgetLibraryTab = libraryTab || group.dataset.widgetLibraryTab || 'general';
             return group.querySelector('.widget-group-content');
         }
         group = document.createElement('div');
         group.className = 'widget-group';
         group.setAttribute('data-type', type);
+        group.dataset.widgetLibraryTab = libraryTab || 'general';
         group.innerHTML = '<div class="widget-group-header" data-toggle="collapse">'
             + '<i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(label) + '</span>'
             + '<span class="widget-count">0</span></div>'
@@ -4621,9 +5627,12 @@
         if (!listEl || !Array.isArray(items) || items.length === 0) return;
         items.forEach(function (w) {
             if (!w || typeof w !== 'object') return;
-            const type = (w.group_type ?? w.type ?? 'other').toString();
-            const label = (w.group_label ?? type).toString();
-            const contentEl = ensureWidgetGroup(listEl, type, label);
+            const libraryTab = getDashboardWidgetLibraryTab(w);
+            w.widget_library_tab = libraryTab;
+            const originalType = (w.group_type ?? w.type ?? 'other').toString();
+            const type = libraryTab === 'basic' ? 'builder-components' : originalType;
+            const label = libraryTab === 'basic' ? translateUiText('基础组件 / HTML 搭建') : (w.group_label ?? type).toString();
+            const contentEl = ensureWidgetGroup(listEl, type, label, libraryTab);
             if (!contentEl) return;
             const itemEl = createWidgetLibraryItem(w);
             if (!itemEl) return;
@@ -4636,7 +5645,41 @@
                 countEl.textContent = String(contentEl.querySelectorAll('.widget-item').length);
             }
         });
+        hydrateWidgetLibraryPreviews(listEl);
         scheduleFitWidgetPreviews();
+        applyWidgetLibraryTabVisibility();
+    }
+
+    /**
+     * 生成部件标题兜底，避免后端元数据为空时卡片信息区变成空白。
+     */
+    function humanizeWidgetCode(code) {
+        const tail = String(code || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
+        return tail
+            .split(/[-_]+/)
+            .filter(Boolean)
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+    }
+
+    function resolveWidgetLibraryName(name, code) {
+        const text = String(name ?? '').trim();
+        if (text !== '') {
+            return text;
+        }
+
+        return humanizeWidgetCode(code) || String(code || '').trim() || translateUiText('未命名部件');
+    }
+
+    function resolveWidgetLibraryDescription(description, code) {
+        const text = String(description ?? '').trim();
+        if (text !== '') {
+            return text;
+        }
+
+        return String(code || '').trim() !== ''
+            ? translateUiText('可拖拽到页面插槽的基础组件')
+            : '';
     }
 
     /**
@@ -4647,8 +5690,8 @@
         const wCode = (w.code ?? '').toString();
         const wModule = (w.module ?? '').toString();
         const wType = (w.type ?? '').toString();
-        const wName = (w.name ?? wCode ?? '').toString();
-        const wDesc = (w.description ?? '').toString();
+        const wName = resolveWidgetLibraryName(w.name, wCode);
+        const wDesc = resolveWidgetLibraryDescription(w.description, wCode);
         const wSlot = (w.slot ?? '').toString();
         const wSupports = normalizeCodeList(w.supports ?? []);
         const wSlots = normalizeCodeList(w.slots ?? []);
@@ -4661,12 +5704,13 @@
         const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
         const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
         const previewHtml = (w.preview_html ?? '').toString();
+        const libraryTab = (w.widget_library_tab ?? getDashboardWidgetLibraryTab(w)).toString() === 'basic' ? 'basic' : 'general';
 
         const itemEl = document.createElement('div');
         itemEl.className = 'widget-item draggable'
             + (wIsContainer ? ' widget-container' : '')
             + (wExclusive ? ' widget-exclusive' : '');
-        itemEl.draggable = true;
+        itemEl.draggable = libraryTab === state.widgetLibraryTab || !isDashboardWidgetLibraryMode();
         itemEl.dataset.widgetCode = wCode;
         itemEl.dataset.widgetModule = wModule;
         itemEl.dataset.widgetType = wType;
@@ -4679,12 +5723,16 @@
         itemEl.dataset.widgetSlots = wSlots.join(',');
         itemEl.dataset.widgetPageLayouts = layoutJson;
         itemEl.dataset.widgetIsContainer = wIsContainer ? '1' : '0';
+        itemEl.dataset.widgetLibraryTab = libraryTab;
 
         const previewWrap = document.createElement('div');
         previewWrap.className = 'widget-preview';
 
         const canvas = document.createElement('div');
         canvas.className = 'widget-preview-canvas';
+        canvas.dataset.widgetModule = wModule;
+        canvas.dataset.widgetCode = wCode;
+        canvas.dataset.widgetArea = state.editorArea || 'frontend';
         mountWidgetPreviewHtml(canvas, previewHtml);
 
         const overlay = document.createElement('div');
@@ -4695,6 +5743,7 @@
 
         const titleEl = document.createElement('div');
         titleEl.className = 'widget-preview-title';
+        titleEl.title = wName;
         titleEl.textContent = wName;
         if (wIsContainer) {
             titleEl.insertAdjacentHTML('beforeend', ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>');
@@ -4703,30 +5752,43 @@
             titleEl.insertAdjacentHTML('beforeend', ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>');
         }
 
-        const previewBtn = document.createElement('button');
-        previewBtn.type = 'button';
-        previewBtn.className = 'btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0';
-        previewBtn.title = translateUiText('预览');
+	        const previewBtn = document.createElement('button');
+	        previewBtn.type = 'button';
+	        previewBtn.className = 'btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0';
+	        previewBtn.title = translateUiText('预览');
         previewBtn.dataset.widgetModule = wModule;
         previewBtn.dataset.widgetCode = wCode;
-        previewBtn.dataset.widgetName = wName;
-        previewBtn.innerHTML = '<i class="ri-eye-line"></i>';
+	        previewBtn.dataset.widgetName = wName;
+	        previewBtn.innerHTML = '<i class="ri-eye-line"></i>';
 
-        titleRow.appendChild(titleEl);
-        titleRow.appendChild(previewBtn);
+	        const addBtn = document.createElement('button');
+	        addBtn.type = 'button';
+	        addBtn.className = 'btn btn-sm btn-primary btn-add-component flex-shrink-0';
+	        addBtn.title = translateUiText('添加到当前插槽');
+	        addBtn.setAttribute('aria-label', translateUiText('添加到当前插槽'));
+	        addBtn.innerHTML = '<i class="ri-add-line"></i>';
+
+	        const actionGroup = document.createElement('div');
+	        actionGroup.className = 'd-flex align-items-center gap-1 flex-shrink-0';
+	        actionGroup.appendChild(addBtn);
+	        actionGroup.appendChild(previewBtn);
+
+	        titleRow.appendChild(titleEl);
+	        titleRow.appendChild(actionGroup);
 
         const descEl = document.createElement('div');
         descEl.className = 'widget-preview-desc';
+        descEl.title = wDesc;
         descEl.textContent = wDesc;
 
         overlay.appendChild(titleRow);
         overlay.appendChild(descEl);
-        previewWrap.appendChild(canvas);
         previewWrap.appendChild(overlay);
+        previewWrap.appendChild(canvas);
         itemEl.appendChild(previewWrap);
 
-        if (!previewHtml.trim()) {
-            ensureWidgetCanvasPreview(canvas, wModule, wCode);
+        if (isWidgetPreviewFallbackHtml(previewHtml)) {
+            ensureWidgetCanvasPreview(canvas, wModule, wCode, { area: canvas.dataset.widgetArea });
         }
 
         return itemEl;
@@ -4740,8 +5802,8 @@
         const wCode = (w.code ?? '').toString();
         const wModule = (w.module ?? '').toString();
         const wType = (w.type ?? '').toString();
-        const wName = (w.name ?? wCode ?? '').toString();
-        const wDesc = (w.description ?? '').toString();
+        const wName = resolveWidgetLibraryName(w.name, wCode);
+        const wDesc = resolveWidgetLibraryDescription(w.description, wCode);
         const wSlot = (w.slot ?? '').toString();
         const wSupports = normalizeCodeList(w.supports ?? []);
         const wSlots = normalizeCodeList(w.slots ?? []);
@@ -4754,22 +5816,31 @@
         const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
         const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
         const previewHtml = (w.preview_html ?? '').toString();
+        const libraryTab = (w.widget_library_tab ?? getDashboardWidgetLibraryTab(w)).toString() === 'basic' ? 'basic' : 'general';
         const itemClass = 'widget-item draggable' + (wIsContainer ? ' widget-container' : '') + (wExclusive ? ' widget-exclusive' : '');
-        let html = '<div class="' + itemClass + '" draggable="true"';
+        let html = '<div class="' + itemClass + '" draggable="' + ((!isDashboardWidgetLibraryMode() || libraryTab === state.widgetLibraryTab) ? 'true' : 'false') + '"';
         html += ' data-widget-code="' + escapeHtml(wCode) + '" data-widget-module="' + escapeHtml(wModule) + '"';
         html += ' data-widget-type="' + escapeHtml(wType) + '" data-widget-name="' + escapeHtml(wName) + '"';
         html += ' data-widget-position="' + escapeHtml(posJson) + '" data-widget-compatible="' + (wCompatible ? '1' : '0') + '"';
         html += ' data-widget-slot="' + escapeHtml(wSlot) + '" data-widget-exclusive="' + (wExclusive ? '1' : '0') + '"';
         html += ' data-widget-supports="' + escapeHtml(wSupportCodes) + '" data-widget-slots="' + escapeHtml(wSlots.join(',')) + '"';
-        html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '">';
-        html += '<div class="widget-preview"><div class="widget-preview-canvas">' + previewHtml + '</div>';
+        html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '"';
+        html += ' data-widget-library-tab="' + escapeHtml(libraryTab) + '">';
+        html += '<div class="widget-preview">';
         html += '<div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">';
-        html += '<div class="widget-preview-title">' + escapeHtml(wName);
+        html += '<div class="widget-preview-title" title="' + escapeHtml(wName) + '">' + escapeHtml(wName);
         if (wIsContainer) html += ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>';
         if (wExclusive) html += ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>';
         html += '</div>';
-        html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(wModule) + '" data-widget-code="' + escapeHtml(wCode) + '" data-widget-name="' + escapeHtml(wName) + '"><i class="ri-eye-line"></i></button>';
-        html += '</div><div class="widget-preview-desc">' + escapeHtml(wDesc) + '</div></div></div></div>';
+	        html += '<div class="d-flex align-items-center gap-1 flex-shrink-0">';
+	        html += '<button type="button" class="btn btn-sm btn-primary btn-add-component flex-shrink-0" title="添加到当前插槽" aria-label="添加到当前插槽"><i class="ri-add-line"></i></button>';
+	        html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(wModule) + '" data-widget-code="' + escapeHtml(wCode) + '" data-widget-name="' + escapeHtml(wName) + '"><i class="ri-eye-line"></i></button>';
+	        html += '</div>';
+        html += '</div><div class="widget-preview-desc" title="' + escapeHtml(wDesc) + '">' + escapeHtml(wDesc) + '</div></div>';
+        html += '<div class="widget-preview-canvas" data-widget-module="' + escapeHtml(wModule)
+            + '" data-widget-code="' + escapeHtml(wCode)
+            + '" data-widget-area="' + escapeHtml(state.editorArea || 'frontend') + '">' + previewHtml + '</div>';
+        html += '</div></div>';
         return html;
     }
 
@@ -5191,12 +6262,13 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const result = await apiJson(config.apiUpdateConfig, {
+            const result = await apiJson(getWidgetConfigSaveUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     layout_id: layoutId,
-                    config: configData
+                    config: configData,
+                    locale: getActiveConfigLocale() || null,
                 }),
             });
 
@@ -5606,20 +6678,181 @@
      * @param {DragEvent} e
      * @returns {Object|null}
      */
-    function getDropWidgetData(e) {
-        let data = state.draggingWidget;
-        if (!data) {
-            try {
-                const json = e.dataTransfer.getData('application/json');
-                if (json) data = JSON.parse(json);
-            } catch (err) { /* ignore */ }
-        }
-        return data || null;
-    }
+	    function getDropWidgetData(e) {
+	        let data = state.draggingWidget;
+	        if (!data) {
+	            try {
+	                const json = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+	                if (json) data = JSON.parse(json);
+	            } catch (err) { /* ignore */ }
+	        }
+	        return data || null;
+	    }
 
-    /**
-     * 解析插槽元素（向上查找最近的 [data-wslot] 或 .container-slot）
-     * @param {Element} el
+	    function parseWidgetListAttribute(value, fallback = []) {
+	        if (value == null || value === '') {
+	            return fallback;
+	        }
+	        try {
+	            const parsed = JSON.parse(value);
+	            return Array.isArray(parsed) ? parsed : normalizeCodeList(parsed);
+	        } catch (error) {
+	            const normalized = normalizeCodeList(value);
+	            return normalized.length ? normalized : fallback;
+	        }
+	    }
+
+	    function readWidgetDataFromElement(widgetEl) {
+	        if (!widgetEl) {
+	            return null;
+	        }
+	        const code = widgetEl.dataset.widgetCode || widgetEl.getAttribute('data-widget-code') || '';
+	        if (!code) {
+	            return null;
+	        }
+	        return {
+	            code,
+	            module: widgetEl.dataset.widgetModule || widgetEl.getAttribute('data-widget-module') || 'Weline_Widget',
+	            type: widgetEl.dataset.widgetType || widgetEl.getAttribute('data-widget-type') || 'content',
+	            name: widgetEl.dataset.widgetName || widgetEl.getAttribute('data-widget-name') || code,
+	            position: parseWidgetListAttribute(widgetEl.dataset.widgetPosition || widgetEl.getAttribute('data-widget-position'), []),
+	            compatible: (widgetEl.dataset.widgetCompatible || widgetEl.getAttribute('data-widget-compatible')) !== '0',
+	            slot: widgetEl.dataset.widgetSlot || widgetEl.getAttribute('data-widget-slot') || null,
+	            supports: normalizeCodeList(widgetEl.dataset.widgetSupports || widgetEl.getAttribute('data-widget-supports') || ''),
+	            slots: normalizeCodeList(widgetEl.dataset.widgetSlots || widgetEl.getAttribute('data-widget-slots') || ''),
+	            exclusive: ['1', 'true'].includes(String(widgetEl.dataset.widgetExclusive || widgetEl.getAttribute('data-widget-exclusive') || '').toLowerCase()),
+	            pageLayouts: parseWidgetListAttribute(widgetEl.dataset.widgetPageLayouts || widgetEl.getAttribute('data-widget-page-layouts'), ['*']),
+	            isContainer: (widgetEl.dataset.widgetIsContainer || widgetEl.getAttribute('data-widget-is-container')) === '1',
+	        };
+	    }
+
+	    function resolveWidgetLibraryAddSlot(widgetData) {
+	        const selectedSlot = state.selectedSlot ? normalizePlacementSlotInfo(state.selectedSlot) : null;
+	        if (selectedSlot) {
+	            return isSlotDataAccepted(selectedSlot, widgetData) ? selectedSlot : null;
+	        }
+
+	        const selectedWidgetInnerSlot = resolveSelectedWidgetInnerSlot(widgetData);
+	        if (selectedWidgetInnerSlot) {
+	            return selectedWidgetInnerSlot;
+	        }
+
+	        const selectedWidgetParentSlot = resolveSelectedWidgetParentSlot(widgetData);
+	        if (selectedWidgetParentSlot) {
+	            return selectedWidgetParentSlot;
+	        }
+
+	        const slots = collectWidgetPlacementSlots();
+	        if (!slots.length) {
+	            return null;
+	        }
+	        const requestedSlot = widgetData.slot
+	            ? slots.find(slot => slot.id === widgetData.slot && isSlotDataAccepted(slot, widgetData))
+	            : null;
+	        if (requestedSlot) {
+	            return requestedSlot;
+	        }
+
+	        return slots.find(slot => slot.area === 'content' && isSlotDataAccepted(slot, widgetData))
+	            || slots.find(slot => isSlotDataAccepted(slot, widgetData))
+	            || slots.find(slot => slot.area === 'content')
+	            || slots[0]
+	            || null;
+	    }
+
+	    function resolveSelectedWidgetInnerSlot(widgetData) {
+	        const selectedWidget = state.selectedWidget;
+	        const layoutId = selectedWidget?.dataset?.layoutId || selectedWidget?.getAttribute?.('data-layout-id') || '';
+	        if (!selectedWidget || !layoutId) {
+	            return null;
+	        }
+
+	        const anchorInfo = resolveAnchorPlacementInfo(layoutId);
+	        const parentSlotId = String(anchorInfo?.slotId || '').trim();
+	        const candidates = [];
+	        if (selectedWidget.matches?.('[data-wslot], [data-slot], [data-slot-id]')) {
+	            candidates.push(selectedWidget);
+	        }
+	        selectedWidget.querySelectorAll?.('[data-wslot], [data-slot], [data-slot-id]').forEach(slotEl => {
+	            candidates.push(slotEl);
+	        });
+
+	        for (const slotEl of candidates) {
+	            const slotId = String(
+	                slotEl.getAttribute('data-wslot')
+	                || slotEl.getAttribute('data-slot')
+	                || slotEl.getAttribute('data-slot-id')
+	                || ''
+	            ).trim();
+	            if (!slotId || slotId === parentSlotId || isSyntheticContainerSlotId(slotId)) {
+	                continue;
+	            }
+	            const slot = normalizePlacementSlotInfo({
+	                ...(state.slots?.[slotId] || {}),
+	                ...buildSlotInfoFromElement(slotId, slotEl),
+	                id: slotId,
+	                source: 'selected_widget_inner',
+	            });
+	            if (slot && isSlotDataAccepted(slot, widgetData)) {
+	                return slot;
+	            }
+	        }
+
+	        return null;
+	    }
+
+	    function resolveSelectedWidgetParentSlot(widgetData) {
+	        const selectedWidget = state.selectedWidget;
+	        const layoutId = selectedWidget?.dataset?.layoutId || selectedWidget?.getAttribute?.('data-layout-id') || '';
+	        if (!layoutId) {
+	            return null;
+	        }
+
+	        const anchorInfo = resolveAnchorPlacementInfo(layoutId);
+	        const slotId = String(anchorInfo?.slotId || '').trim();
+	        if (!slotId || isSyntheticContainerSlotId(slotId)) {
+	            return null;
+	        }
+
+	        const catalogSlot = state.slots?.[slotId] && typeof state.slots[slotId] === 'object'
+	            ? state.slots[slotId]
+	            : {};
+	        const slot = normalizePlacementSlotInfo({
+	            ...catalogSlot,
+	            ...(anchorInfo?.slotEl ? buildSlotInfoFromElement(slotId, anchorInfo.slotEl) : {}),
+	            id: slotId,
+	            area: anchorInfo?.area || catalogSlot.area || inferAreaFromSlotId(slotId),
+	            source: 'selected_widget_parent',
+	        });
+
+	        return slot && isSlotDataAccepted(slot, widgetData) ? slot : null;
+	    }
+
+	    async function addWidgetFromLibraryItem(widgetEl) {
+	        const widgetData = readWidgetDataFromElement(widgetEl);
+	        if (!widgetData) {
+	            showToast('无法读取部件数据', 'error');
+	            return null;
+	        }
+	        if (!isWidgetAllowedForLayout(widgetData.pageLayouts, state.layoutType, widgetData)) {
+	            showToast(`部件 "${widgetData.name}" 不支持当前布局 "${state.layoutType}"`, 'warning');
+	            return null;
+	        }
+
+	        const slot = resolveWidgetLibraryAddSlot(widgetData);
+	        if (!slot) {
+	            const selectedName = state.selectedSlot?.name || state.selectedSlot?.id || '';
+	            showToast(selectedName ? `部件 "${widgetData.name}" 不能放入插槽 "${selectedName}"` : '请先选择要放置的 slot', 'warning');
+	            return null;
+	        }
+
+	        const sortOrder = getNextSlotSortOrder(slot.id);
+	        return handleWidgetDropped(widgetData, slot, sortOrder);
+	    }
+
+	    /**
+	     * 解析插槽元素（向上查找最近的 [data-wslot] 或 .container-slot）
+	     * @param {Element} el
      * @returns {Element|null}
      */
     function resolveSlotElement(el) {
@@ -5710,6 +6943,11 @@
                 if (layoutId) {
                     addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive);
                 }
+                notifyDashboardLayoutMutated('widget-added', {
+                    layoutId: layoutId || null,
+                    slotId: slotId || null,
+                    area: area || null,
+                });
 
                 if (switchToPreview) {
                     switchPreviewView('preview');
@@ -5730,7 +6968,8 @@
             }
         } catch (err) {
             console.error('保存部件失败:', err);
-            showToast('保存部件失败', 'error');
+            const message = err && err.message ? err.message : '保存部件失败';
+            showToast(message || '保存部件失败', 'error');
             return null;
         } finally {
             state.saveInProgress = false;
@@ -5741,6 +6980,12 @@
      * 拖拽开始
      */
     function handleDragStart(e) {
+        if (!isWidgetLibraryItemActive(this)) {
+            showToast(translateUiText('请先切换到对应部件分类'), 'warning');
+            e.preventDefault();
+            return;
+        }
+
         state.isDragging = true;
         this.classList.add('dragging');
 
@@ -7692,6 +8937,10 @@
                 }
 
                 showToast('部件已删除', 'success');
+                notifyDashboardLayoutMutated('widget-deleted', {
+                    layoutId: layoutId || null,
+                    slotId: slotId || null,
+                });
 
                 // 更新同层部件的移动按钮状态（如果有的话）
                 if (slotId) {
@@ -8048,6 +9297,9 @@
             if (result.success) {
                 showToast('排序已保存', 'success');
                 updateSiblingMoveButtons(slotId);
+                notifyDashboardLayoutMutated('widget-sorted', {
+                    slotId: slotId || null,
+                });
                 return true;
             } else {
                 loadLayoutPreview();
@@ -8112,8 +9364,10 @@
         // 选中当前
         widgetElement.classList.add('selected');
         state.selectedWidget = widgetElement;
+        state.selectedSlot = null;
 
         // 加载配置面板
+        openConfigPanelForWidgetSelection();
         setConfigMode('widget');
         loadWidgetConfig(widgetElement);
     }
@@ -8207,9 +9461,18 @@
             const url = new URL(config.apiWidgetPreview, window.location.origin);
             url.searchParams.set('widget_module', widgetModule);
             url.searchParams.set('widget_code', widgetCode);
+            url.searchParams.set('editor_area', state.editorArea || 'frontend');
+            url.searchParams.set('theme_id', String(state.themeId || 0));
+            url.searchParams.set('_t', String(Date.now()));
             const data = await apiJson(url.toString());
             if (data && data.html) {
-                const html = sanitizeHtmlForEditorPreview(data.html);
+                let html = sanitizeHtmlForEditorPreview(data.html);
+                if (isBasicThemeComponentPreviewCode(widgetCode)) {
+                    const visibleText = getPreviewHtmlText(html);
+                    html = (!visibleText || isWidgetPreviewFallbackHtml(html))
+                        ? buildClientComponentPreviewHtml(widgetCode, widgetName)
+                        : '<div class="te-component-preview te-component-preview-' + escapeHtml(normalizeWidgetPreviewCode(widgetCode)) + '">' + html + '</div>';
+                }
                 inners.forEach(el => { el.innerHTML = html; });
             } else if (data && data.success === false) {
                 inners.forEach(el => renderPreviewError(el, data.message || ''));
@@ -8314,7 +9577,7 @@
 
         if (layoutId) {
             try {
-                const savedData = await loadSavedWidgetConfig(layoutId);
+                const savedData = await loadSavedWidgetConfig(layoutId, getActiveConfigLocale());
                 const params = (savedData.params && typeof savedData.params === 'object') ? savedData.params : {};
                 const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
                 const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
@@ -8711,18 +9974,17 @@
         const langSwitcher = document.getElementById('configLangSwitcher');
         if (!langSwitcher) return;
         fetchInstalledLocales().then(locales => {
-            for (const loc of locales) {
-                const opt = document.createElement('option');
-                opt.value = loc.code;
-                opt.textContent = loc.name;
-                langSwitcher.appendChild(opt);
-            }
+            populateLocaleSelect(langSwitcher, locales);
         });
-        langSwitcher.addEventListener('change', async function() {
-            const locale = this.value || null;
-            const layoutId = this.dataset.widgetLayoutId;
-            await reloadWidgetConfigWithLocale(layoutId, locale);
-        });
+        if (langSwitcher.dataset.localeChangeBound !== '1') {
+            langSwitcher.dataset.localeChangeBound = '1';
+            langSwitcher.addEventListener('change', function() {
+                handleConfigLocaleSwitcherChange(langSwitcher);
+            });
+            langSwitcher.addEventListener('input', function() {
+                handleConfigLocaleSwitcherChange(langSwitcher);
+            });
+        }
     }
 
     function renderConfigForm(widget, params) {
@@ -8905,18 +10167,17 @@
         const langSwitcher = document.getElementById('configLangSwitcher');
         if (langSwitcher) {
             fetchInstalledLocales().then(locales => {
-                for (const loc of locales) {
-                    const opt = document.createElement('option');
-                    opt.value = loc.code;
-                    opt.textContent = loc.name;
-                    langSwitcher.appendChild(opt);
-                }
+                populateLocaleSelect(langSwitcher, locales);
             });
-            langSwitcher.addEventListener('change', async function() {
-                const locale = this.value || null;
-                const layoutId = this.dataset.widgetLayoutId;
-                await reloadWidgetConfigWithLocale(layoutId, locale);
-            });
+            if (langSwitcher.dataset.localeChangeBound !== '1') {
+                langSwitcher.dataset.localeChangeBound = '1';
+                langSwitcher.addEventListener('change', function() {
+                    handleConfigLocaleSwitcherChange(langSwitcher);
+                });
+                langSwitcher.addEventListener('input', function() {
+                    handleConfigLocaleSwitcherChange(langSwitcher);
+                });
+            }
         }
     }
 
@@ -8929,10 +10190,12 @@
      * @returns {Promise<Array<{code:string,name:string,flag:string}>>}
      */
     async function fetchInstalledLocales() {
-        if (_installedLocalesCache) return _installedLocalesCache;
+        if (Array.isArray(_installedLocalesCache) && _installedLocalesCache.length > 0) {
+            return _installedLocalesCache;
+        }
         try {
             const result = await apiJson(`${config.apiBase}/installed-locales`);
-            if (result.success && result.locales) {
+            if (result.success && Array.isArray(result.locales) && result.locales.length > 0) {
                 _installedLocalesCache = result.locales;
                 return _installedLocalesCache;
             }
@@ -8940,6 +10203,229 @@
             console.error('fetchInstalledLocales error:', err);
         }
         return [{ code: 'zh_Hans_CN', name: '简体中文', flag: '' }, { code: 'en_US', name: 'English', flag: '' }];
+    }
+
+    function parseInstalledLocales(value) {
+        if (!value) {
+            return null;
+        }
+        if (Array.isArray(value)) {
+            return value.length > 0 ? value : null;
+        }
+        try {
+            const parsed = JSON.parse(String(value));
+            return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+        } catch (error) {
+            console.warn('[ThemeEditor] Invalid installed locales payload:', error);
+            return null;
+        }
+    }
+
+    function getActiveConfigLocale() {
+        return String(state.configLocale || '').trim();
+    }
+
+    function getPreviewLocaleForRequest(overrides = {}) {
+        const locale = Object.prototype.hasOwnProperty.call(overrides, 'locale')
+            ? String(overrides.locale || '').trim()
+            : getActiveConfigLocale();
+        return locale || config.defaultLocale || '';
+    }
+
+    function getWidgetConfigSaveUrl() {
+        return `${config.apiBase}/save-widget-config`;
+    }
+
+    function formatLocaleOptionLabel(locale) {
+        const code = String(locale?.code || '').trim();
+        const name = String(locale?.name || code).replace(/\s+/g, ' ').trim();
+        if (!code) {
+            return name || '未知语言';
+        }
+        if (!name || name === code) {
+            return code;
+        }
+        return `${code} · ${name}`;
+    }
+
+    function populateLocaleSelect(select, locales) {
+        if (!select) {
+            return;
+        }
+        select.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '默认（全语言）';
+        select.appendChild(defaultOption);
+
+        (Array.isArray(locales) ? locales : []).forEach((locale) => {
+            const code = String(locale?.code || '').trim();
+            if (!code) {
+                return;
+            }
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = formatLocaleOptionLabel(locale);
+            option.title = String(locale?.name || code);
+            select.appendChild(option);
+        });
+
+        ensureLocaleOption(select, getActiveConfigLocale());
+        select.value = getActiveConfigLocale();
+        if (select.value !== getActiveConfigLocale()) {
+            select.value = '';
+        }
+        const selected = select.options[select.selectedIndex];
+        select.title = selected ? selected.textContent : '默认（全语言）';
+    }
+
+    function ensureLocaleOption(select, locale) {
+        const normalizedLocale = String(locale || '').trim();
+        if (!select || !normalizedLocale) {
+            return;
+        }
+        const hasOption = Array.from(select.options || []).some((option) => option.value === normalizedLocale);
+        if (hasOption) {
+            return;
+        }
+
+        const sourceOption = Array.from(document.querySelectorAll('#editorLangSwitcher option, #configLangSwitcher option'))
+            .find((option) => option.value === normalizedLocale);
+        const option = document.createElement('option');
+        option.value = normalizedLocale;
+        option.textContent = sourceOption ? sourceOption.textContent : normalizedLocale;
+        option.title = sourceOption ? (sourceOption.title || sourceOption.textContent || normalizedLocale) : normalizedLocale;
+        select.appendChild(option);
+    }
+
+    function syncConfigLocaleSwitchers() {
+        const locale = getActiveConfigLocale();
+        [elements.editorLangSwitcher, document.getElementById('configLangSwitcher')]
+            .filter(Boolean)
+            .forEach((select) => {
+                ensureLocaleOption(select, locale);
+                select.value = locale;
+                if (select.value !== locale) {
+                    select.value = '';
+                }
+                const selected = select.options[select.selectedIndex];
+                select.title = selected ? selected.textContent : '默认（全语言）';
+            });
+    }
+
+    async function handleConfigLocaleSwitcherChange(langSwitcher) {
+        if (!langSwitcher) {
+            return;
+        }
+        const locale = langSwitcher.value || '';
+        const layoutId = langSwitcher.dataset.widgetLayoutId || '';
+        const switchKey = `${layoutId}|${locale}`;
+        if (state.configLocaleChangeInFlight === switchKey) {
+            return;
+        }
+
+        state.configLocaleChangeInFlight = switchKey;
+        try {
+            await setActiveConfigLocale(locale, { layoutId });
+        } finally {
+            if (state.configLocaleChangeInFlight === switchKey) {
+                state.configLocaleChangeInFlight = '';
+            }
+        }
+    }
+
+    function initEditorLanguageSwitcher() {
+        if (!elements.editorLangSwitcher) {
+            return;
+        }
+        fetchInstalledLocales().then((locales) => {
+            populateLocaleSelect(elements.editorLangSwitcher, locales);
+        });
+    }
+
+    async function setActiveConfigLocale(locale, options = {}) {
+        state.configLocale = String(locale || '').trim();
+        syncConfigLocaleSwitchers();
+
+        if (options.reload === false) {
+            return;
+        }
+
+        const widgetLayoutId = options.layoutId
+            || document.getElementById('widgetConfigForm')?.dataset?.layoutId
+            || state.selectedWidget?.dataset?.layoutId
+            || '';
+        if (widgetLayoutId && (state.configMode === 'widget' || document.getElementById('widgetConfigForm'))) {
+            await reloadWidgetConfigWithLocale(widgetLayoutId, getActiveConfigLocale(), {
+                sync: false,
+                toast: options.toast !== false,
+                refreshPreview: false,
+            });
+            if (options.refreshPreview !== false) {
+                loadLayoutPreview({ locale: getActiveConfigLocale() });
+                return;
+            }
+            return;
+        }
+
+        await loadLayoutConfig({
+            locale: getActiveConfigLocale(),
+            silent: options.silent === true,
+        });
+        if (options.refreshPreview !== false) {
+            loadLayoutPreview({ locale: getActiveConfigLocale() });
+        }
+    }
+
+    function decodeHtmlEntitiesOnce(value) {
+        if (!value || !/[&][a-z#0-9]+;/i.test(value)) {
+            return String(value || '');
+        }
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = String(value);
+        return textarea.value;
+    }
+
+    function stripXmlDeclaration(value) {
+        return String(value || '').trim().replace(/<\?xml[^?]*\?>/i, '').trim();
+    }
+
+    function normalizeLocaleFlagSvg(flagValue) {
+        const rawFlag = stripXmlDeclaration(decodeHtmlEntitiesOnce(flagValue));
+        if (!/^<svg\b[\s\S]*<\/svg>\s*$/i.test(rawFlag)) {
+            return '';
+        }
+        const safeFlagHtml = sanitizeHtmlForEditorPreview(rawFlag).trim();
+        return /^<svg\b[\s\S]*<\/svg>\s*$/i.test(safeFlagHtml) ? safeFlagHtml : '';
+    }
+
+    function normalizeLocaleFlagText(flagValue) {
+        const rawFlag = stripXmlDeclaration(decodeHtmlEntitiesOnce(flagValue));
+        if (!rawFlag || /^<|&lt;/i.test(rawFlag)) {
+            return '';
+        }
+        // Keep only tiny glyph-style flags, never long markup or source text.
+        return rawFlag.length <= 8 ? rawFlag : '';
+    }
+
+    function localeBadgeFromCode(code) {
+        const parts = String(code || '').replace(/-/g, '_').split('_').filter(Boolean);
+        const token = parts.length > 1 ? parts[parts.length - 1] : (parts[0] || '??');
+        return token.slice(0, 2).toUpperCase();
+    }
+
+    function appendLocaleLabelBadge(label, loc) {
+        const flagSvg = normalizeLocaleFlagSvg(loc.flag || '');
+        const flagText = flagSvg ? '' : normalizeLocaleFlagText(loc.flag || '');
+        const badge = document.createElement('span');
+        badge.className = flagSvg ? 'lang-flag-svg' : 'lang-flag-badge';
+        badge.setAttribute('aria-hidden', 'true');
+        if (flagSvg) {
+            badge.innerHTML = flagSvg;
+        } else {
+            badge.textContent = flagText || localeBadgeFromCode(loc.code || '');
+        }
+        label.appendChild(badge);
     }
 
     /**
@@ -8959,22 +10445,12 @@
 
             const label = document.createElement('label');
             label.className = `${p}i18n-label`;
-            const rawFlag = String(loc.flag || '').trim().replace(/<\?xml[^?]*\?>/i, '');
-            if (rawFlag) {
-                const flag = document.createElement('span');
-                flag.className = 'lang-flag-svg';
-                const safeFlagHtml = /^<svg[\s\S]*<\/svg>\s*$/i.test(rawFlag)
-                    ? sanitizeHtmlForEditorPreview(rawFlag)
-                    : '';
-                if (safeFlagHtml && /^<svg[\s\S]*<\/svg>\s*$/i.test(safeFlagHtml.trim())) {
-                    flag.innerHTML = safeFlagHtml;
-                } else {
-                    flag.textContent = rawFlag;
-                }
-                label.appendChild(flag);
-                label.appendChild(document.createTextNode(' '));
-            }
-            label.appendChild(document.createTextNode(String(loc.code || '')));
+            label.title = [loc.name || '', loc.code || ''].filter(Boolean).join(' ');
+            appendLocaleLabelBadge(label, loc);
+            const code = document.createElement('span');
+            code.className = 'lang-code';
+            code.textContent = String(loc.code || '');
+            label.appendChild(code);
 
             const input = document.createElement('input');
             input.type = 'text';
@@ -9194,6 +10670,8 @@
     async function saveI18nValues(layoutId, fieldKey, panel) {
         const inputs = panel.querySelectorAll('.i18n-input');
         let successCount = 0;
+        const activeLocale = getActiveConfigLocale();
+        let activePreviewHtml = '';
 
         for (const input of inputs) {
             const locale = input.dataset.locale;
@@ -9211,11 +10689,12 @@
                             editor_area: state.editorArea || 'frontend',
                             scope: getCurrentWindowParam('scope') || 'default',
                             config: { [fieldKey]: value },
-                            locale: locale
+                            locale: locale,
+                            ...getLayoutLockVirtualPayload()
                         })
                     });
                 } else {
-                    result = await apiJson(`${config.apiBase}/save-widget-config`, {
+                    result = await apiJson(getWidgetConfigSaveUrl(), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -9225,7 +10704,12 @@
                         })
                     });
                 }
-                if (result.success) successCount++;
+                if (result.success) {
+                    successCount++;
+                    if (!isLayoutConfigPanel(panel) && locale === activeLocale && result.preview_html) {
+                        activePreviewHtml = result.preview_html;
+                    }
+                }
             } catch (err) {
                 console.error(`Save i18n ${locale} error:`, err);
             }
@@ -9233,9 +10717,65 @@
 
         if (successCount > 0) {
             showToast(`已保存 ${successCount} 种语言的翻译`, 'success');
+            if (activePreviewHtml) {
+                updateWidgetPreviewInIframe(layoutId, activePreviewHtml);
+            }
         } else {
             showToast('保存失败', 'error');
         }
+    }
+
+    function setConfigControlValue(control, value) {
+        if (!control) {
+            return;
+        }
+        if (control.type === 'checkbox') {
+            if (Array.isArray(value)) {
+                control.checked = value.map(String).includes(String(control.value));
+            } else if (control.value && !['on', '1', 'true'].includes(String(control.value).toLowerCase())) {
+                control.checked = String(value) === String(control.value);
+            } else {
+                control.checked = value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+            }
+            return;
+        }
+        if (control.type === 'radio') {
+            control.checked = String(value ?? '') === String(control.value);
+            return;
+        }
+        if (control.tagName === 'SELECT' && control.multiple) {
+            const selectedValues = Array.isArray(value) ? value.map(String) : [String(value ?? '')];
+            Array.from(control.options).forEach((option) => {
+                option.selected = selectedValues.includes(String(option.value));
+            });
+            return;
+        }
+        if (control.type === 'hidden' && (Array.isArray(value) || (value && typeof value === 'object'))) {
+            control.value = JSON.stringify(value);
+            return;
+        }
+        control.value = value === null || value === undefined ? '' : String(value);
+    }
+
+    function updateWidgetConfigFormValues(form, params, widgetConfig) {
+        if (!form) {
+            return;
+        }
+        const keys = new Set([
+            ...Object.keys(params || {}),
+            ...Object.keys(widgetConfig || {}),
+        ]);
+        keys.forEach((key) => {
+            const param = params?.[key] || {};
+            const value = Object.prototype.hasOwnProperty.call(widgetConfig || {}, key)
+                ? widgetConfig[key]
+                : (Object.prototype.hasOwnProperty.call(param, 'default') ? param.default : '');
+            const controls = form.querySelectorAll([
+                dataAttributeSelector('name', key),
+                dataAttributeSelector('name', `${key}[]`),
+            ].join(','));
+            controls.forEach((control) => setConfigControlValue(control, value));
+        });
     }
 
     /**
@@ -9243,12 +10783,16 @@
      * @param {string} layoutId 布局ID
      * @param {string|null} locale 语言代码，null表示默认语言
      */
-    async function reloadWidgetConfigWithLocale(layoutId, locale) {
+    async function reloadWidgetConfigWithLocale(layoutId, locale, options = {}) {
         if (!layoutId) return;
+        const normalizedLocale = String(locale || '').trim();
+        if (options.sync !== false) {
+            state.configLocale = normalizedLocale;
+            syncConfigLocaleSwitchers();
+        }
 
         try {
-            const apiUrl = `${config.apiBase}/widget-config?layout_id=${encodeURIComponent(layoutId)}${locale ? '&locale=' + encodeURIComponent(locale) : ''}`;
-            const result = await apiJson(apiUrl);
+            const result = await apiJson(buildSavedWidgetConfigUrl(layoutId, normalizedLocale));
 
             if (result.success && result.data) {
                 const widgetData = result.data;
@@ -9258,19 +10802,19 @@
                 // 更新表单中的值
                 const form = document.getElementById('widgetConfigForm');
                 if (form) {
-                    for (const [key, value] of Object.entries(widgetConfig)) {
-                        const input = form.querySelector(dataAttributeSelector('name', key));
-                        if (input) {
-                            if (input.type === 'checkbox') {
-                                input.checked = !!value;
-                            } else {
-                                input.value = value || '';
-                            }
-                        }
-                    }
+                    updateWidgetConfigFormValues(form, params, widgetConfig);
                 }
 
-                showToast(locale ? `已切换到 ${locale} 语言` : '已切换到默认语言', 'success');
+                const previewHtml = widgetData.preview_html || result.preview_html || '';
+                if (previewHtml) {
+                    updateWidgetPreviewInIframe(layoutId, previewHtml);
+                } else if (options.refreshPreview !== false) {
+                    loadLayoutPreview();
+                }
+
+                if (options.toast !== false) {
+                    showToast(normalizedLocale ? `已切换到 ${normalizedLocale} 语言` : '已切换到默认语言', 'success');
+                }
             } else {
                 showToast('加载配置失败', 'error');
             }
@@ -9288,8 +10832,7 @@
      */
     async function saveWidgetConfigWithLocale(layoutId, configData, locale) {
         try {
-            const apiUrl = `${config.apiBase}/save-widget-config`;
-            const result = await apiJson(apiUrl, {
+            const result = await apiJson(getWidgetConfigSaveUrl(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -9303,6 +10846,9 @@
 
             if (result.success) {
                 showToast(result.message || '配置已保存', 'success');
+                if (result.preview_html) {
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html);
+                }
                 return true;
             } else {
                 showToast(result.message || '保存失败', 'error');
@@ -9397,7 +10943,8 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const result = await apiJson(config.apiUpdateConfig, {
+            const locale = getActiveConfigLocale();
+            const result = await apiJson(getWidgetConfigSaveUrl(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -9405,6 +10952,7 @@
                 body: JSON.stringify({
                     layout_id: layoutId,
                     config: configData,
+                    locale: locale || null,
                 }),
             });
 
@@ -9412,7 +10960,7 @@
                 if (!autoSave) showToast('配置已保存', 'success');
                 // 更新部件的 data-config
                 const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                if (widgetElement) {
+                if (!locale && widgetElement) {
                     widgetElement.dataset.config = JSON.stringify(normalizedConfig);
                 }
                 if (!autoSave) {
@@ -9440,9 +10988,10 @@
         if (!layoutId) return;
 
         const configData = collectWidgetConfigData(form);
+        const locale = getActiveConfigLocale();
 
         try {
-            const result = await apiJson(config.apiUpdateConfig, {
+            const result = await apiJson(getWidgetConfigSaveUrl(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -9450,17 +10999,20 @@
                 body: JSON.stringify({
                     layout_id: layoutId,
                     config: configData,
+                    locale: locale || null,
                 }),
             });
 
             if (result.success) {
                 if (!silent) showToast('配置已保存', 'success');
                 const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                if (state.selectedWidget) {
+                if (!locale && state.selectedWidget) {
                     state.selectedWidget.dataset.config = JSON.stringify(normalizedConfig);
                 }
                 if (result.preview_html) {
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
+                } else if (locale) {
+                    loadLayoutPreview();
                 }
             } else {
                 showToast(result.message || '保存失败', 'error');
@@ -9591,17 +11143,6 @@
      * 保存布局为新版本
      */
     async function saveLayout() {
-        if (isLayoutLocked()) {
-            try {
-                showToast('Saving virtual layout draft...', 'info');
-                const data = await saveLockedVirtualLayoutDraft();
-                showToast(data.version_id ? `Virtual layout draft saved: #${data.version_id}` : 'Virtual layout draft saved', 'success');
-            } catch (error) {
-                console.error('[ThemeEditor] Save virtual layout draft error:', error);
-                showToast(error.message || 'Save virtual layout draft failed', 'error');
-            }
-            return;
-        }
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
@@ -9629,17 +11170,21 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
-                    page_type: state.pageType,
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
                     version_name: versionName || undefined,
-                }),
+                })),
             });
 
             if (result.success) {
                 showToast(result.message || 'Version saved', 'success');
                 // 刷新版本列表
-                await loadVersions();
+                try {
+                    await loadVersions();
+                } finally {
+                    notifyDashboardLayoutSaved('version-saved', {
+                        versionId: result.data?.version_id || null,
+                    });
+                }
             } else {
                 showToast(result.message || 'Save failed', 'error');
             }
@@ -9653,26 +11198,6 @@
      * 发布主题（发布当前版本）
      */
     async function publishTheme() {
-        if (isLayoutLocked()) {
-            const confirmed = await showCustomConfirm(
-                'Publish virtual layout?',
-                'Publish the latest locked virtual layout version for this page context.',
-                'Publish',
-                'Cancel'
-            );
-            if (!confirmed) {
-                return;
-            }
-            try {
-                showToast('Publishing virtual layout...', 'info');
-                const data = await publishLatestLockedVirtualLayoutVersion();
-                showToast(data.version_id ? `Virtual layout version published: #${data.version_id}` : 'Virtual layout version published', 'success');
-            } catch (error) {
-                console.error('[ThemeEditor] Publish virtual layout error:', error);
-                showToast(error.message || 'Publish virtual layout version failed', 'error');
-            }
-            return;
-        }
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
@@ -9696,20 +11221,24 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
                     frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
                     backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
                     editor_area: state.editorArea || 'frontend',
-                    page_type: state.pageType,
                     status: state.previewStatus || 'draft',
-                }),
+                })),
             });
 
             if (result.success) {
                 showToast(result.message || '发布成功', 'success');
                 // 刷新版本列表以更新发布状态
-                await loadVersions();
+                try {
+                    await loadVersions();
+                } finally {
+                    notifyDashboardLayoutSaved('version-published', {
+                        versionId: result.data?.version_id || null,
+                    });
+                }
             } else {
                 showToast(result.message || '发布失败', 'error');
             }
@@ -9756,15 +11285,13 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
                     frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
                     backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
                     editor_area: 'frontend',
-                    page_type: state.pageType,
-                    layout_option: state.layoutOption || 'default',
                     status: state.previewStatus || 'draft',
-                }),
+                    locale: getPreviewLocaleForRequest(),
+                })),
             });
 
             if (result.success && result.data && result.data.preview_url) {
@@ -9877,6 +11404,7 @@
                 group.style.display = '';
             }
         });
+        applyWidgetLibraryTabVisibility();
     }
 
     /**
@@ -9896,6 +11424,7 @@
                 group.style.display = '';
                 group.classList.remove('collapsed');
             });
+            applyWidgetLibraryTabVisibility();
             return;
         }
 
@@ -10064,6 +11593,7 @@
         });
 
         console.log('[filterWidgetsByArea] Area:', areaCode, 'Reject types:', finalRejectTypes);
+        applyWidgetLibraryTabVisibility();
     }
 
     /**
@@ -10107,12 +11637,25 @@
     function selectArea(areaElement) {
         const areaCode = areaElement.dataset.area;
         const areaName = areaElement.querySelector('.area-label')?.textContent || areaCode;
+        const slotInfo = buildSlotSelectionFromAreaElement(areaElement);
+        const activateAreaSlot = function() {
+            if (!slotInfo) {
+                setSidePanelOpen('widget', true);
+                return;
+            }
+
+            state.selectedSlot = slotInfo;
+            openWidgetPanelForSlotSelection(slotInfo);
+            applySlotWidgetRecommendations(slotInfo);
+            renderSlotInfoPanel(slotInfo);
+        };
 
         // 如果点击的是已选中的区域，只执行滚动，不取消选中
         if (state.selectedArea === areaCode) {
+            activateAreaSlot();
             // 直接滚动到该区域的部件
             scrollToMatchedWidgets(areaCode);
-            showToast(`已滚动到 "${areaName}" 区域部件`, 'info');
+            showToast(slotInfo ? `已选中插槽: ${slotInfo.name || slotInfo.id}` : `已滚动到 "${areaName}" 区域部件`, 'info');
             return;
         }
 
@@ -10127,9 +11670,10 @@
 
         // 按区域/插槽在服务端重新过滤加载部件库（分页），并在搜索框显示当前插槽标签
         setWidgetSlotFilter(areaCode, areaName, areaCode);
+        activateAreaSlot();
 
         // 显示提示
-        showToast(`已筛选 "${areaName}" 区域的部件`, 'info');
+        showToast(slotInfo ? `已选中插槽: ${slotInfo.name || slotInfo.id}` : `已筛选 "${areaName}" 区域的部件`, 'info');
 
         console.log('[ThemeEditor] Area selected:', areaCode, '- reloading slot-filtered widgets');
     }
@@ -10452,8 +11996,14 @@
         template.innerHTML = String(html);
 
         template.content
-            .querySelectorAll('script, style, link, meta, object, embed, iframe, frame, frameset, base, form, input, button, textarea, select, option')
+            .querySelectorAll('script, link, meta, object, embed, iframe, frame, frameset, base, form, input, textarea, select, option')
             .forEach(el => el.remove());
+
+        template.content.querySelectorAll('style').forEach(el => {
+            if (!isSafeEditorPreviewCss(el.textContent || '')) {
+                el.remove();
+            }
+        });
 
         template.content.querySelectorAll('*').forEach(el => {
             Array.from(el.attributes).forEach(attr => {
@@ -10474,13 +12024,25 @@
                     return;
                 }
 
-                if (name === 'style' && /expression\s*\(|url\s*\(\s*['"]?\s*(?:javascript|vbscript|data):/i.test(attr.value)) {
+                if (name === 'style' && !isSafeEditorPreviewCss(attr.value || '')) {
                     el.removeAttribute(attr.name);
                 }
             });
         });
 
         return template.innerHTML;
+    }
+
+    function isSafeEditorPreviewCss(css) {
+        const value = String(css || '').trim();
+        if (!value) {
+            return true;
+        }
+        if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value)) {
+            return false;
+        }
+
+        return !/@import\b|expression\s*\(|behavior\s*:|-moz-binding\s*:|url\s*\(\s*['"]?\s*(?:javascript|vbscript):|url\s*\(\s*['"]?\s*data:(?!image\/(?:png|gif|jpe?g|webp|bmp|svg\+xml);base64,)/i.test(value);
     }
 
     /**
@@ -10635,10 +12197,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
-                    page_type: state.pageType,
-                }),
+                body: JSON.stringify(buildLayoutVersionIdentityPayload()),
             });
 
             if (result.success) {
@@ -10878,7 +12437,7 @@
      * 后台编辑器 iframe 使用 editor_mode=1 参数，
      * 支持通过 status 参数切换 draft/published 版本
      */
-    function loadLayoutPreview() {
+    function loadLayoutPreview(overrides = {}) {
         if (!elements.previewFrame || !state.themeId) {
             return;
         }
@@ -10889,8 +12448,8 @@
         }
 
         // 构建预览 URL
-        elements.previewFrame.src = buildLayoutPreviewUrl();
-        fetchLayoutSlots();
+        elements.previewFrame.src = buildLayoutPreviewUrl(overrides);
+        fetchLayoutSlots(overrides);
         return;
 
         const url = new URL(config.apiLayoutPreview, window.location.origin);
@@ -10926,16 +12485,20 @@
             url.searchParams.set('preview_mode', overrides.preview_mode || 'live');
             url.searchParams.set('status', overrides.status || state.previewStatus || 'draft');
             url.searchParams.set('include_html', '0');
-            appendLayoutLockRuntimeParams(url);
+            const previewLocale = getPreviewLocaleForRequest(overrides);
+            if (previewLocale) {
+                url.searchParams.set('locale', previewLocale);
+            }
+            appendThemeLayoutRuntimeParams(url, overrides);
             if (overrides.version_id) {
                 url.searchParams.set('version_id', String(overrides.version_id));
             }
 
             const result = await apiJson(url.toString(), { silent: true });
             if (result.success && result.slots) {
-                state.slots = result.slots;
+                state.slots = mergeSlotInfoMaps(result.slots, collectDomSlotsForInfo(result.slots));
                 state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
-                renderSlotsInfo(result.slots, state.missingSlotWarnings);
+                renderSlotsInfo(state.slots, state.missingSlotWarnings);
 
                 // 显示插槽面板
                 if (elements.slotsInfoPanel) {
@@ -10947,11 +12510,134 @@
         }
     }
 
+    function normalizeSlotInfoMap(slots) {
+        if (!slots) {
+            return {};
+        }
+
+        if (Array.isArray(slots)) {
+            return slots.reduce((map, slot) => {
+                const slotId = String(slot?.id || slot?.slot_id || '').trim();
+                if (slotId && !isSyntheticContainerSlotId(slotId)) {
+                    map[slotId] = { ...slot, id: slotId };
+                }
+                return map;
+            }, {});
+        }
+
+        if (typeof slots === 'object') {
+            return Object.entries(slots).reduce((map, [slotId, slot]) => {
+                const normalizedId = String(slot?.id || slot?.slot_id || slotId || '').trim();
+                if (normalizedId && !isSyntheticContainerSlotId(normalizedId)) {
+                    map[normalizedId] = {
+                        ...(slot && typeof slot === 'object' ? slot : {}),
+                        id: normalizedId,
+                    };
+                }
+                return map;
+            }, {});
+        }
+
+        return {};
+    }
+
+    function isSyntheticContainerSlotId(slotId) {
+        // Generated wrapper helpers are not real drop targets. Component slots must use
+        // their declared IDs, e.g. section-content:279 or grid-items:285.
+        return /^container:[1-9][0-9]*$/.test(String(slotId || '').trim());
+    }
+
+    function mergeSlotInfoMaps(...slotMaps) {
+        const merged = {};
+        slotMaps.forEach((slotMap) => {
+            Object.entries(normalizeSlotInfoMap(slotMap)).forEach(([slotId, slot]) => {
+                merged[slotId] = {
+                    ...(merged[slotId] || {}),
+                    ...slot,
+                    id: slotId,
+                };
+            });
+        });
+        return merged;
+    }
+
+    function isSlotInfoElement(element) {
+        if (!element || element.nodeType !== 1) {
+            return false;
+        }
+        if (element.ownerDocument === document
+            && element.closest('#widgetPanel, #widgetList, .editor-widget-panel, .widget-list, .widget-group, .widget-item, .widget-preview')) {
+            return false;
+        }
+        if (element.matches('.preview-widget-item, .widget-wrapper, .preview-widget, [data-widget-code][data-layout-id]')) {
+            return false;
+        }
+        if (element.hasAttribute('data-wslot')) {
+            return true;
+        }
+        if (element.matches('.area-slot, .content-slot, .header-slot, .footer-slot, .container-slot, .slot-widgets')) {
+            return true;
+        }
+        return element.hasAttribute('data-slot')
+            && !element.hasAttribute('data-layout-id')
+            && !element.hasAttribute('data-widget-code');
+    }
+
+    function getSlotIdFromElement(element) {
+        return String(
+            element?.getAttribute('data-wslot')
+            || element?.getAttribute('data-slot')
+            || element?.getAttribute('data-slot-id')
+            || ''
+        ).trim();
+    }
+
+    function collectDomSlotsFromDocument(doc) {
+        const slots = {};
+        if (!doc) {
+            return slots;
+        }
+
+        doc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id], .area-slot, .content-slot, .header-slot, .footer-slot, .container-slot, .slot-widgets')
+            .forEach((element) => {
+                if (!isSlotInfoElement(element)) {
+                    return;
+                }
+                const slotId = getSlotIdFromElement(element);
+                if (!slotId || isSyntheticContainerSlotId(slotId)) {
+                    return;
+                }
+                slots[slotId] = {
+                    ...buildSlotInfoFromElement(slotId, element),
+                    source: 'dom',
+                };
+            });
+
+        return slots;
+    }
+
+    function collectDomSlotsForInfo(catalogSlots = {}) {
+        const previousSlots = state.slots;
+        state.slots = mergeSlotInfoMaps(previousSlots, catalogSlots);
+
+        try {
+            return mergeSlotInfoMaps(
+                collectDomSlotsFromDocument(document),
+                collectDomSlotsFromDocument(getPreviewDocument())
+            );
+        } finally {
+            state.slots = previousSlots;
+        }
+    }
+
     /**
      * 渲染插槽信息列表
      */
     function renderSlotsInfo(slots, missingSlotWarnings = []) {
         if (!elements.slotsInfoList) return;
+
+        slots = mergeSlotInfoMaps(slots, collectDomSlotsForInfo(slots));
+        state.slots = slots;
 
         let html = renderMissingSlotWarnings(missingSlotWarnings);
         for (const [slotId, slot] of Object.entries(slots)) {
@@ -11087,6 +12773,9 @@
     function collectWidgetPlacementSlots() {
         const slotsById = new Map();
         Object.entries(state.slots || {}).forEach(([slotId, slot]) => {
+            if (isSyntheticContainerSlotId(slotId)) {
+                return;
+            }
             const normalized = normalizePlacementSlotInfo({
                 ...(slot && typeof slot === 'object' ? slot : {}),
                 id: slotId,
@@ -11101,7 +12790,7 @@
         if (iframeDoc) {
             iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id]').forEach(slotEl => {
                 const slotId = slotEl.getAttribute('data-wslot') || slotEl.getAttribute('data-slot') || slotEl.getAttribute('data-slot-id') || '';
-                if (!slotId) {
+                if (!slotId || isSyntheticContainerSlotId(slotId)) {
                     return;
                 }
                 const normalized = normalizePlacementSlotInfo({
@@ -11122,6 +12811,14 @@
 
     function buildWidgetPlacementSlotTree(slots, anchors) {
         const areas = ['header', 'content', 'footer'];
+        const innerSlotIds = new Set();
+        anchors.forEach(anchor => {
+            (anchor.inner_slots || []).forEach(innerSlot => {
+                if (innerSlot?.id) {
+                    innerSlotIds.add(innerSlot.id);
+                }
+            });
+        });
         const root = {
             id: 'page',
             label: '页面',
@@ -11137,6 +12834,9 @@
         const areaNodes = new Map(root.children.map(node => [node.area, node]));
 
         slots.forEach(slot => {
+            if (innerSlotIds.has(slot.id)) {
+                return;
+            }
             const area = slot.area || inferAreaFromSlotId(slot.id);
             const areaNode = areaNodes.get(area) || areaNodes.get('content');
             areaNode.children.push({
@@ -11154,11 +12854,8 @@
             areaNode.children.forEach(slotNode => slotNodes.set(slotNode.id, slotNode));
         });
 
+        const anchorNodes = new Map();
         anchors.forEach(anchor => {
-            const slotNode = slotNodes.get(anchor.slot_id);
-            if (!slotNode) {
-                return;
-            }
             const anchorNode = {
                 id: `widget:${anchor.layout_id}`,
                 label: anchor.widget_name || anchor.widget_code || anchor.layout_id,
@@ -11168,15 +12865,29 @@
                 children: [],
             };
             (anchor.inner_slots || []).forEach(innerSlot => {
-                anchorNode.children.push({
+                const innerSlotNode = {
                     id: innerSlot.id,
                     label: innerSlot.name || innerSlot.id,
                     type: 'slot',
                     area: innerSlot.area || anchor.area,
                     slot: innerSlot,
                     children: [],
-                });
+                };
+                anchorNode.children.push(innerSlotNode);
+                slotNodes.set(innerSlot.id, innerSlotNode);
             });
+            anchorNodes.set(String(anchor.layout_id), anchorNode);
+        });
+
+        anchors.forEach(anchor => {
+            const slotNode = slotNodes.get(anchor.slot_id);
+            const anchorNode = anchorNodes.get(String(anchor.layout_id));
+            if (!slotNode || !anchorNode) {
+                return;
+            }
+            if (slotNode.children.some(child => child.id === anchorNode.id)) {
+                return;
+            }
             slotNode.children.push(anchorNode);
         });
 
@@ -11205,6 +12916,9 @@
                     return;
                 }
                 const innerSlotId = inner.getAttribute('data-wslot') || inner.getAttribute('data-slot') || inner.getAttribute('data-slot-id') || '';
+                if (isSyntheticContainerSlotId(innerSlotId)) {
+                    return;
+                }
                 const normalized = normalizePlacementSlotInfo({
                     ...buildSlotInfoFromElement(innerSlotId, inner),
                     source: 'inner_dom',
@@ -11552,8 +13266,11 @@
 
         try {
             const url = new URL(config.apiVersions, window.location.origin);
-            url.searchParams.set('theme_id', state.themeId);
-            url.searchParams.set('page_type', state.pageType);
+            Object.entries(buildLayoutVersionIdentityPayload()).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && String(value) !== '') {
+                    url.searchParams.set(key, String(value));
+                }
+            });
             url.searchParams.set('limit', '20');
 
             const result = await apiJson(url.toString());
@@ -11707,11 +13424,9 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
-                    page_type: state.pageType,
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
                     version_id: versionId,
-                }),
+                })),
             });
 
             if (result.success) {
@@ -11761,9 +13476,9 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
                     version_id: versionId,
-                }),
+                })),
             });
 
             if (result.success) {

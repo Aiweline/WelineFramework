@@ -1,0 +1,28 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$page = $this->getData('page') ?: [];
+$frontendPreviewUrl = (string)($this->getData('frontend_preview_url') ?: '');
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= htmlspecialchars((string)($page['title'] ?? __('CMS 页面预览'))) ?></h4>
+            <div class="page-title-right">
+                <a class="btn btn-outline-secondary" href="<?= $this->getBackendUrl('cms/backend/page/edit', ['page_id' => (int)($page['page_id'] ?? 0)]) ?>">
+                    <i class="mdi mdi-arrow-left"></i>
+                    <?= __('返回编辑') ?>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <iframe src="<?= htmlspecialchars($frontendPreviewUrl) ?>"
+                title="<?= htmlspecialchars((string)__('CMS 页面预览')) ?>"
+                style="width:100%; min-height:calc(100vh - 170px); border:1px solid var(--bs-border-color); border-radius:6px; background:#fff;"></iframe>
+    </div>
+</div>

@@ -1,6 +1,6 @@
 ---
 name: AI建站中台代码重做计划
-overview: 基于新的两阶段文档口径，重做 PageBuilder AI 工作台实现计划：先闭环 plan/confirm/resume 接口与持久化模型，再替换自动续跑为显式继续，并补齐集成与E2E验收。
+
 todos:
   - id: backend-plan-confirm-resume
     content: 实现并收敛 post-start-plan / post-confirm-plan / post-resume-build 与 start-build 前置校验
@@ -17,7 +17,7 @@ todos:
 isProject: false
 ---
 
-# PageBuilder 两阶段执行重做计划
+
 
 ## 目标
 将现有“自动续跑 + 弱蓝图”实现切换到“阶段一方案书、阶段二确认执行、任务级断点恢复、显式继续”口径，并与最新文档契约完全一致。
@@ -30,9 +30,9 @@ isProject: false
 - 测试与验收要覆盖 plan SSE、confirm 持久化、build 前置校验、任务边界恢复、重入交互与多语言文案一致性。
 
 ## 当前实现基线（已确认）
-- 控制器已暴露 URL 注入位：`post-start-plan`、`post-confirm-plan`、`post-resume-build`、`post-start-build`（[AiSiteAgent.php](e:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php)）。
-- 前端仍有自动续跑逻辑：`workspaceSnapshotResume` / `autoResumeActiveOperation`（[workspace.phtml](e:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace.phtml)）。
-- 执行蓝图服务已具备 `execution_blueprint.tasks[]` 生成能力（[AiSiteExecutionBlueprintService.php](e:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php)）。
+
+
+
 
 ## 实施范围
 - 后端：控制器流程门禁、plan/confirm/resume 端点、scope/checkpoint 持久化顺序。
@@ -41,17 +41,17 @@ isProject: false
 
 ## 分阶段执行
 1. **阶段 A：后端契约闭环**
-   - 在 [AiSiteAgent.php](e:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php) 完成 `postStartPlan/postConfirmPlan/postResumeBuild` 的请求校验、返回结构、错误码规范。
+
    - 在 `postStartBuild` 增加 confirmed plan 前置检查；缺失时统一返回 `PLAN_REQUIRED_BEFORE_BUILD`。
    - 固化持久化顺序：先写 `scope_json.plan_workbench` / `scope_json.build_checkpoint` 与 `build_tasks[*].status`，再发送 SSE 事件。
 
 2. **阶段 B：执行蓝图与恢复状态机收敛**
-   - 复用 [AiSiteExecutionBlueprintService.php](e:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php) 输出，补齐 tasks 字段契约（`field_plan/style_brief/palette_usage/content_brief/seo_brief`）。
+
    - 确保 `shared:header` / `shared:footer` 始终作为显式 task 持久化。
    - `postResumeBuild` 仅从 checkpoint 索引恢复未完成任务，避免重跑已 `done` 项。
 
 3. **阶段 C：前端交互改造（显式继续）**
-   - 在 [workspace.phtml](e:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace.phtml) 删除页面加载即 `startOperationStream(..., 'autoResumeActiveOperation')` 的默认行为。
+
    - 新增“检测到 running / 检测到未完成任务”的两类提示弹层与按钮分支：`继续` 调 `post-resume-build` 或观察流；`稍后再说` 只保留状态。
    - 保留 SSE 观察能力，但进入观察必须有显式用户动作或明确“继续观察”确认。
 

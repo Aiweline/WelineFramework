@@ -24,7 +24,6 @@ class RequestLifecycleTrace
     private const DEFAULT_MAX_SPANS = 4096;
 
     private const HEAVY_ROUTE_PREFIXES = [
-        '/pagebuilder/backend/ai-site-agent/',
         '/websites/backend/site-builder-agent/',
     ];
 
@@ -95,6 +94,8 @@ class RequestLifecycleTrace
             $enabled = true;
         } elseif (\defined('DEBUG') && DEBUG) {
             $enabled = true;
+        } elseif (\defined('WLS_DEV_MODE') && WLS_DEV_MODE) {
+            $enabled = true;
         }
 
         if (!$enabled) {
@@ -132,11 +133,12 @@ class RequestLifecycleTrace
             return self::isExplicitPersistentTraceRequested();
         }
 
-        $panelEnabled = (bool)\Weline\Framework\App\Env::get('wls.debug.dev_tool_panel', false)
-            || (bool)\Weline\Framework\App\Env::get(
-                'wls.debug.performance_panel',
-                (\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)
-            );
+        $panelEnabled = (\defined('DEV') && DEV)
+            || (\defined('DEBUG') && DEBUG)
+            || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE);
+        if (\class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
+            $panelEnabled = (new \Weline\DeveloperWorkspace\Service\PanelAccessService())->shouldInjectBootstrap();
+        }
 
         return self::isExplicitPersistentTraceRequested()
             || (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
@@ -360,13 +362,23 @@ class RequestLifecycleTrace
         }
 
         $dbDurationMs = 0.0;
+        $totalMs = 0.0;
         $categoryCounts = [];
+        $categoryTotals = [];
         foreach ($spans as $span) {
             $category = (string)($span['category'] ?? 'framework');
+            $durationMs = (float)($span['duration_ms'] ?? 0.0);
             $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
-            if ($category === 'db') {
-                $dbDurationMs += (float)($span['duration_ms'] ?? 0.0);
+            $categoryTotals[$category] = ($categoryTotals[$category] ?? 0.0) + $durationMs;
+            if ((string)($span['parent'] ?? '') === '') {
+                $totalMs += $durationMs;
             }
+            if ($category === 'db') {
+                $dbDurationMs += $durationMs;
+            }
+        }
+        if ($totalMs <= 0.0) {
+            $totalMs = (float)\array_sum($categoryTotals);
         }
 
         return [
@@ -380,12 +392,29 @@ class RequestLifecycleTrace
             ],
             'summary' => [
                 'span_count' => \count($spans),
+                'request_id' => self::ensureRequestId(),
+                'total_ms' => \round($totalMs, 2),
                 'db_duration_ms' => \round($dbDurationMs, 2),
                 'category_counts' => $categoryCounts,
+                'category_totals' => self::roundFloatMap($categoryTotals),
                 'truncated' => self::$recordingDisabledUntilReset,
                 'max_spans' => self::getMaxSpansCap(),
             ],
         ];
+    }
+
+    /**
+     * @param array<string, float> $values
+     * @return array<string, float>
+     */
+    private static function roundFloatMap(array $values): array
+    {
+        $out = [];
+        foreach ($values as $key => $value) {
+            $out[$key] = \round((float)$value, 2);
+        }
+
+        return $out;
     }
 
     /**

@@ -8,7 +8,6 @@
 文件删除前触发，可用于验证或阻止删除。,"Triggered before file deletion, can be used to validate or prevent deletion."
 存储源切换,"Storage source switch"
 用户切换存储源时触发。,"Triggered when the user switches the storage source."
-本地存储,"Local Storage"
 允许的文件类型：,"Allowed file types:"
 允许的文件大小：,"Allowed file size:"
 媒体选择器初始化失败，请刷新页面后重试。,媒体选择器初始化失败，请刷新页面后重试。
@@ -76,3 +75,4 @@ OK,OK
 选择模式,"Selection Mode"
 选择文件,"Select Files"
 请等待当前目录加载完成后再上传,"Please wait for the current folder to load before uploading"
+本地存储,"Local Storage"

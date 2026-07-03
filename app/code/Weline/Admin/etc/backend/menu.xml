@@ -3,10 +3,6 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 面板首页 - 归入仪表盘 -->
-    <menu source="Weline_Admin::system_dashboard" name="system_dashboard" title="首页" action="admin"
-         parent="Weline_Backend::dashboard" icon="mdi mdi-home-outline" order="10"/>
-    
     <!-- ==================== 用户与权限分组 ==================== -->
     
     <!-- 用户管理入口 - 直接挂载到 Backend 定义的用户管理菜单下 -->

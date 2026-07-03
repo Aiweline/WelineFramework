@@ -250,7 +250,8 @@ if not exist "%ROOT%\setup\server_installer\run.php" (
   if defined WELINE_REPO_URL (
     set "REPO_URL=%WELINE_REPO_URL%"
   ) else (
-    set "REPO_URL=https://github.com/Aiweline/PageBuilder.git"
+    set "CECHO_MSG=WELINE_REPO_URL is required when framework code is missing." & call :cecho Red ""
+    exit /b 1
   )
   set "CLONE_URL=%REPO_URL%"
   if defined WELINE_GITHUB_TOKEN call :build_clone_url "%REPO_URL%"
