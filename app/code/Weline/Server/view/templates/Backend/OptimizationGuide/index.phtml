@@ -39,6 +39,39 @@ $apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
     background: linear-gradient(135deg, var(--w-box-bg) 0%, var(--bs-primary-bg-subtle) 100%);
     border-radius: 8px;
 }
+.guide-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+    align-items: center;
+    margin-top: 1rem;
+    margin-bottom: 0;
+}
+.guide-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: .45rem .85rem;
+    border-radius: 999px;
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid transparent;
+}
+.guide-badge-time {
+    color: #084298;
+    background: #cfe2ff;
+    border-color: #9ec5fe;
+}
+.guide-badge-platform {
+    color: #243447;
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+.guide-badge-local {
+    color: #0f5132;
+    background: #d1e7dd;
+    border-color: #a3cfbb;
+}
 .step-card {
     background: var(--w-box-bg);
 }
@@ -143,10 +176,10 @@ function renderContent(data) {
         <div class="guide-header mb-4">
             <h2><i class="bi bi-lightning-charge text-warning"></i> <?= __('Weline Server 性能优化指南') ?></h2>
             <p class="text-muted"><?= __('基于您当前的 PHP 环境自动生成的优化建议') ?></p>
-            <p class="small">
-                <span class="badge bg-info"><?= __('生成时间') ?>: ${new Date().toLocaleString()}</span>
-                <span class="badge bg-secondary ms-2">${escapeHtml(php_info.os)} (${escapeHtml(php_info.arch)})</span>
-                <span class="badge bg-success ms-2"><?= __('本地访问') ?> ✓</span>
+            <p class="small guide-meta">
+                <span class="guide-badge guide-badge-time"><?= __('生成时间') ?>: ${new Date().toLocaleString()}</span>
+                <span class="guide-badge guide-badge-platform"><?= __('操作系统') ?>: ${escapeHtml(php_info.os)} (${escapeHtml(php_info.arch)})</span>
+                <span class="guide-badge guide-badge-local"><?= __('本地访问') ?> ✓</span>
             </p>
         </div>
         

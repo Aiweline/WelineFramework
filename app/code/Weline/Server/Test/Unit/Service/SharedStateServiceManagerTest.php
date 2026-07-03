@@ -582,6 +582,41 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertTrue($reusable);
     }
 
+    public function testReusablePortTreatsClosedTcpPortAsAvailableBeforeProcessInspection(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            public array $tcpChecks = [];
+
+            protected function probeSharedPortWithToken(int $port, string $tokenFileName): bool
+            {
+                return false;
+            }
+
+            protected function probeTcpPortInUse(string $host, int $port, float $timeoutSec = 0.15): bool
+            {
+                $this->tcpChecks[] = [$host, $port];
+
+                return false;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                TestCase::fail('closed TCP port must not require process inspection');
+            }
+        };
+
+        $reusable = (bool) $this->invokePrivateMethod(
+            $manager,
+            'isPortCandidateReusable',
+            ControlMessage::ROLE_SESSION_SERVER,
+            19970,
+            'session_server.token'
+        );
+
+        self::assertTrue($reusable);
+        self::assertSame([['127.0.0.1', 19970]], $manager->tcpChecks);
+    }
+
     public function testImplicitSharedMemoryTokenRebasesToResolvedNonDefaultPort(): void
     {
         $manager = new SharedStateServiceManager();

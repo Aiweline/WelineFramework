@@ -14,12 +14,19 @@ if ($dataLayout !== 'horizontal'):
     /**@var \Weline\Admin\Service\MenuRenderService $menuRenderService */
     $menuRenderService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Service\MenuRenderService::class);
     $adminPhrase = static fn(string $phrase): string => $menuRenderService->translateMenuTitle($phrase, 'Weline_Admin::left-sidebar');
+    $dashboardOnlySidebar = $menuRenderService->isDashboardOnlySidebar();
     
     // 获取常用菜单数据
-    $frequentMenusData = $menuRenderService->getFrequentMenus(20, 7);
-    $recentMenus = $frequentMenusData['recentMenus'];
-    $frequentMenus = $frequentMenusData['frequentMenus'];
-    $hasFrequentMenus = $frequentMenusData['hasFrequentMenus'];
+    if ($dashboardOnlySidebar) {
+        $recentMenus = [];
+        $frequentMenus = [];
+        $hasFrequentMenus = false;
+    } else {
+        $frequentMenusData = $menuRenderService->getFrequentMenus(20, 7);
+        $recentMenus = $frequentMenusData['recentMenus'];
+        $frequentMenus = $frequentMenusData['frequentMenus'];
+        $hasFrequentMenus = $frequentMenusData['hasFrequentMenus'];
+    }
     
     // 获取菜单树
     $roleAccessMenus = $menuRenderService->getMenuTree();
@@ -31,6 +38,7 @@ if ($dataLayout !== 'horizontal'):
 
             <!--- Sidemenu -->
             <div id="sidebar-menu">
+                <?php if (!$dashboardOnlySidebar): ?>
                 <!-- 悬浮搜索和常用菜单容器 - 改造为菜单项形式 -->
                 <div class="sticky-menu-section" id="sticky-menu-section">
                     <!-- Tab切换按钮（正常状态下显示） -->
@@ -100,9 +108,11 @@ if ($dataLayout !== 'horizontal'):
                     </div>
                 </div>
                 <!-- 悬浮区域结束 -->
+                <?php endif; ?>
 
                 <!-- Left Menu Start -->
                 <ul class="metismenu list-unstyled" id="side-menu">
+                    <?php if (!$dashboardOnlySidebar): ?>
                     <!-- 搜索菜单项（以菜单形式实现，折叠状态下hover展开） -->
                     <li class="menu-search-item" id="menu-search-item" data-source="menu-search">
                         <a href="#" role="button" class="has-arrow waves-effect" id="menu-search-link">
@@ -157,6 +167,7 @@ if ($dataLayout !== 'horizontal'):
                     <?php
                     endif;
                     ?>
+                    <?php endif; ?>
                     <?php
                     // 使用服务渲染主菜单
                     echo $menuRenderService->renderMenu($roleAccessMenus);
@@ -1489,7 +1500,7 @@ if ($dataLayout !== 'horizontal'):
         }
     </style>
 
-    <script>
+    <script data-no-extract="true">
     (function($) {
         'use strict';
 
@@ -1994,7 +2005,7 @@ if ($dataLayout !== 'horizontal'):
 
             $el.menuItems.each(function() {
                 var $item = $(this);
-                if ($item.hasClass('menu-search-item') || $item.hasClass('menu-frequent-item')) return;
+                if ($item.closest('.menu-search-item, .menu-frequent-item').length > 0) return;
 
                 // 菜单分组标题
                 if ($item.hasClass('menu-title')) {
@@ -2052,10 +2063,32 @@ if ($dataLayout !== 'horizontal'):
             matchedItems.forEach(function(data) {
                 if (data.hasChildren) expandMatchedChildren(data.$item, finalItems);
             });
+            finalItems = uniqueSearchItems(finalItems);
             matchCount = finalItems.length;
 
             state.matchedItems = finalItems;
             updateSearchResults(matchCount, finalItems, firstMatch, text);
+        }
+
+        function getSearchItemKey($item) {
+            var $link = $item.find('> a').first();
+            var href = ($link.attr('href') || '').trim();
+            var source = ($link.attr('data-source') || $item.attr('data-source') || '').trim();
+            var text = ($link.find('span').text() || $link.text() || '').trim().replace(/\s+/g, ' ');
+
+            if (href && href !== '#' && href.charAt(0) !== '#') return 'href:' + href;
+            if (source) return 'source:' + source;
+            return 'text:' + text;
+        }
+
+        function uniqueSearchItems(items) {
+            var seen = {};
+            return items.filter(function(data) {
+                var key = getSearchItemKey(data.$item);
+                if (seen[key]) return false;
+                seen[key] = true;
+                return true;
+            });
         }
 
         function expandMatchedChildren($item, items) {

@@ -76,6 +76,21 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
+$sharedSidecarDetached = false;
+$sharedSidecarDetachError = '';
+if ($sharedService && !$isFrontend && PHP_OS_FAMILY !== 'Windows' && \function_exists('posix_setsid')) {
+    $detachResult = @\posix_setsid();
+    if ($detachResult !== false && $detachResult >= 0) {
+        $sharedSidecarDetached = true;
+    } else {
+        $errno = \function_exists('posix_get_last_error') ? (int) \posix_get_last_error() : 0;
+        $message = $errno > 0 && \function_exists('posix_strerror')
+            ? (string) \posix_strerror($errno)
+            : 'unknown';
+        $sharedSidecarDetachError = $errno > 0 ? "{$errno}:{$message}" : $message;
+    }
+}
+
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
@@ -112,8 +127,13 @@ if ($processName) {
 
 if ($processName) {
     \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
-    if ($port > 0) {
-        \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
+}
+
+if ($sharedService && !$isFrontend) {
+    if ($sharedSidecarDetached) {
+        WlsLogger::info_('Shared service detached from launcher process group');
+    } elseif (PHP_OS_FAMILY !== 'Windows' && \function_exists('posix_setsid')) {
+        WlsLogger::warning_('Shared service process group detach failed: ' . $sharedSidecarDetachError);
     }
 }
 
@@ -125,7 +145,7 @@ if (\is_file($_envFile)) {
 unset($_envFile);
 
 $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
-    || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
+    || ($envConfig !== null && (($envConfig['system']['deploy'] ?? $envConfig['deploy'] ?? '') === 'dev'));
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
     && $supervisorEnabledRaw !== ''
@@ -169,6 +189,11 @@ if (!$server->start($host, $port)) {
     exit(1);
 }
 
+$port = $server->getPort();
+if ($processName && $port > 0) {
+    \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
+}
+
 WlsLogger::info_("Started on tcp://{$host}:{$port}");
 WlsLogger::info_("Instance: {$instanceName}, role={$role}, PID: " . \getmypid());
 if ($bootstrapInstance !== '') {
@@ -182,6 +207,19 @@ WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50
     ", persist_interval=" . ($sessionConfig['persist_interval'] ?? 60) . "s" .
     ", session_ttl=" . ($sessionConfig['session_ttl'] ?? 3600) . "s");
 WlsLogger::info_("Persist file: " . ($sessionConfig['persist_file_name'] ?? 'wls_session_store.dat'));
+
+$normalExit = false;
+\register_shutdown_function(static function () use (&$normalExit, $role, $port, $instanceName): void {
+    if ($normalExit) {
+        return;
+    }
+
+    $error = \error_get_last();
+    $suffix = $error !== null
+        ? ' last_error=' . \json_encode($error, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
+        : ' last_error=null';
+    WlsLogger::warning_("[SessionServer] Process shutdown without normal exit role={$role} port={$port} instance={$instanceName}{$suffix}");
+});
 
 $ipcReceivedShutdown = false;
 $kernel = null;
@@ -248,6 +286,16 @@ if (\function_exists('pcntl_signal')) {
     if (\defined('SIGPIPE')) {
         \pcntl_signal(SIGPIPE, SIG_IGN);
     }
+    if (\defined('SIGHUP')) {
+        \pcntl_signal(SIGHUP, function () use ($sharedService) {
+            if ($sharedService) {
+                WlsLogger::warning_('收到 SIGHUP 信号，共享侧车忽略并继续运行');
+                return;
+            }
+
+            WlsLogger::warning_('收到 SIGHUP 信号，保持当前运行状态');
+        });
+    }
     \pcntl_signal(SIGINT, SIG_IGN);
     \pcntl_signal(SIGTERM, function () use ($server) {
         WlsLogger::info_('收到 SIGTERM 信号，执行优雅退出');
@@ -305,5 +353,6 @@ if ($processName) {
     \Weline\Framework\System\Process\Processer::removePidFile('--name=' . $processName);
 }
 
+$normalExit = true;
 WlsLogger::info_('Session Server stopped');
 exit(0);

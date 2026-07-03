@@ -27,7 +27,6 @@
 - [ ] 添加购物车布局 `layouts/cart/default.phtml`
 - [ ] 添加结算布局 `layouts/checkout/default.phtml`
 - [ ] 添加用户相关布局（登录、注册、账户，如 `layouts/account/default.phtml` 等）
-- [ ] 添加摩托车特色 PageBuilder 部件（车型轮播、品牌专区等）
 - [ ] 响应式细节优化与无障碍检查
 - [ ] 添加主题预览图片和演示数据
 

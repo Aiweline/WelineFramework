@@ -25,6 +25,9 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 
 **ALWAYS:** Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{unique-id}`) | **Stop test instance after testing (`server:stop -n {instance-name}`)**
 
+## Delivery
+- After every development/fix/deploy delivery, list related accessible links (page/admin/API/doc/PR/commit/release URLs) in the final response; if none exist, explicitly say `无可访问链接`.
+
 ## Resources
 - Diagrams: `dev/ai/diagrams/00-INDEX.txt`
 - Skills: `dev/ai/skills/_index.md`

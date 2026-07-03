@@ -20,6 +20,8 @@ $page_type = $this->getData('page_type') ?: 'homepage';
 $page_types = $this->getData('page_types') ?: [];
 $layout_option = (string)($this->getData('layout_option') ?: 'default');
 $layout_options_by_type = $this->getData('layout_options_by_type') ?: [];
+$installed_locales = $this->getData('installed_locales') ?: [];
+$installed_locales = is_array($installed_locales) ? $installed_locales : [];
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -37,6 +39,7 @@ if (empty($current_layout_options)) {
     ]];
 }
 $layout_options_json = json_encode($layout_options_by_type, $jsonForScriptFlags) ?: '{}';
+$installed_locales_json = json_encode($installed_locales, $jsonForScriptFlags) ?: '[]';
 $areas = $this->getData('areas') ?: [];
 $editor_area = $this->getData('editor_area') ?: 'frontend';
 $theme_has_backend = (bool)$this->getData('theme_has_backend');
@@ -47,9 +50,18 @@ $preview_status = is_array($preview_context) ? (string)($preview_context['status
 $layout_editor_lock = $this->getData('layout_editor_lock') ?: ['enabled' => false];
 $layout_editor_lock = is_array($layout_editor_lock) ? $layout_editor_lock : ['enabled' => false];
 $layout_editor_locked = !empty($layout_editor_lock['enabled']);
+$layout_lock_source = strtolower(trim((string)($layout_editor_lock['lock_source'] ?? '')));
+$editorShellClasses = ['theme-editor-container'];
+if ($layout_editor_locked) {
+    $editorShellClasses[] = 'theme-editor-locked';
+}
+if ($layout_lock_source === 'cms') {
+    $editorShellClasses[] = 'theme-editor-cms-embed';
+}
 $layout_editor_lock_json = json_encode($layout_editor_lock, $jsonForScriptFlags) ?: '{"enabled":false}';
 $frontend_theme_id = (int)($this->getData('frontend_theme_id') ?: ($editor_area === 'frontend' ? $theme_id : 0));
 $backend_theme_id = (int)($this->getData('backend_theme_id') ?: ($editor_area === 'backend' ? $theme_id : 0));
+$default_locale = \Weline\Framework\App\Env::default_LANGUAGE_CODE;
 $previewParams = [
     'theme_id' => $theme_id,
     'page_type' => $page_type,
@@ -62,6 +74,7 @@ $previewParams = [
     'preview_area' => $editor_area,
     'frontend_theme_id' => $frontend_theme_id,
     'backend_theme_id' => $backend_theme_id,
+    'locale' => (string)$this->request->getParam('locale', $default_locale),
     '_t' => time(),
 ];
 if ($layout_editor_locked) {
@@ -73,6 +86,31 @@ if ($layout_editor_locked) {
         $previewParams['theme_layout_target_id'] = $previewTargetId;
         $previewParams['theme_layout_source_target_type'] = $previewTargetType;
         $previewParams['theme_layout_source_target_id'] = $previewTargetId;
+    }
+} else {
+    $previewScope = trim((string)($preview_context['scope'] ?? $this->request->getParam('scope', '')));
+    if ($previewScope !== '') {
+        $previewParams['scope'] = $previewScope;
+    }
+    $previewTargetType = trim((string)(
+        $preview_context['theme_layout_target_type']
+        ?? $this->request->getParam('theme_layout_target_type', '')
+    ));
+    $previewTargetId = (int)(
+        $preview_context['theme_layout_target_id']
+        ?? $this->request->getParam('theme_layout_target_id', 0)
+    );
+    if ($previewTargetType !== '' && $previewTargetType !== 'global' && $previewTargetId > 0) {
+        $previewParams['theme_layout_target_type'] = $previewTargetType;
+        $previewParams['theme_layout_target_id'] = $previewTargetId;
+        $previewParams['theme_layout_source_target_type'] = trim((string)(
+            $preview_context['theme_layout_source_target_type']
+            ?? $this->request->getParam('theme_layout_source_target_type', $previewTargetType)
+        ));
+        $previewParams['theme_layout_source_target_id'] = (int)(
+            $preview_context['theme_layout_source_target_id']
+            ?? $this->request->getParam('theme_layout_source_target_id', $previewTargetId)
+        );
     }
 }
 $initialPreviewUrl = 'about:blank';
@@ -117,13 +155,14 @@ $getWidgetIcon = function ($type) {
 ?>
 <!-- 引入 Remix Icon CSS -->
 <css>Weline_Admin::assets/css/icons.min.css</css>
+<css>Weline_Theme::css/remixicon.css</css>
 <!-- 引入部件配置面板美化样式 -->
 <css>Weline_Theme::css/widget-config-panel.css</css>
-<link rel="stylesheet" href="@static(Weline_Theme::css/widget-config-panel.css)?v=20260609-border-simplify">
+<link rel="stylesheet" href="@static(Weline_Theme::css/widget-config-panel.css)?v=20260702-editor-locale-switcher">
 <!-- Widget 参数类型 UI 自包含样式与脚本（唯一前缀 w-param-，闭包） -->
 <css>Weline_Widget::css/widget-param-types.css</css>
 
-<div class="theme-editor-container" id="themeEditor" 
+<div class="<?= htmlspecialchars(implode(' ', $editorShellClasses), ENT_QUOTES, 'UTF-8') ?>" id="themeEditor"
      data-theme-id="<?= $theme_id ?>"
      data-editor-area="<?= htmlspecialchars($editor_area) ?>"
      data-preview-status="<?= htmlspecialchars($preview_status) ?>"
@@ -131,8 +170,11 @@ $getWidgetIcon = function ($type) {
      data-file-manager-connector-base="<?= $fileManagerConnectorUrl ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
      data-layout-option="<?= htmlspecialchars($layout_option) ?>"
+     data-default-locale="<?= htmlspecialchars($default_locale, ENT_QUOTES, 'UTF-8') ?>"
      data-layout-options="<?= htmlspecialchars($layout_options_json, ENT_QUOTES, 'UTF-8') ?>"
+     data-installed-locales="<?= htmlspecialchars($installed_locales_json, ENT_QUOTES, 'UTF-8') ?>"
      data-layout-lock-enabled="<?= $layout_editor_locked ? '1' : '0' ?>"
+     data-layout-lock-source="<?= htmlspecialchars($layout_lock_source) ?>"
      data-layout-lock="<?= htmlspecialchars($layout_editor_lock_json, ENT_QUOTES, 'UTF-8') ?>"
      data-api-base="<?= $this->getUrl('theme/backend/theme-editor') ?>"
      data-api-save-widget="<?= $this->getUrl('theme/backend/theme-editor/save-widget') ?>"
@@ -239,6 +281,29 @@ $getWidgetIcon = function ($type) {
                         <?php endif; ?>
                     </select>
                 </label>
+                <label class="toolbar-select-field toolbar-select-field-language">
+                    <span class="toolbar-select-label"><?= __('语言') ?></span>
+                    <select id="editorLangSwitcher" class="form-select" title="<?= __('配置语言') ?>" aria-label="<?= __('配置语言') ?>">
+                        <option value=""><?= __('默认（全语言）') ?></option>
+                        <?php foreach ($installed_locales as $locale):
+                            $localeData = is_object($locale)
+                                ? (method_exists($locale, 'getData') ? (array)$locale->getData() : get_object_vars($locale))
+                                : (is_array($locale) ? $locale : []);
+                            $localeCode = trim((string)($localeData['code'] ?? ''));
+                            if ($localeCode === '') {
+                                continue;
+                            }
+                            $localeName = trim((string)($localeData['name'] ?? $localeCode));
+                            $localeLabel = $localeName !== '' && $localeName !== $localeCode
+                                ? ($localeCode . ' · ' . $localeName)
+                                : $localeCode;
+                        ?>
+                            <option value="<?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($localeName, ENT_QUOTES, 'UTF-8') ?>">
+                                <?= htmlspecialchars($localeLabel, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
             </div>
         </div>
         
@@ -296,6 +361,36 @@ $getWidgetIcon = function ($type) {
         </div>
     </div>
 
+    <!-- 顶部预览工具栏：放在主编辑区外，避免被左右配置/部件面板挤压 -->
+    <div class="preview-toolbar editor-preview-toolbar">
+        <div class="preview-tabs">
+            <button type="button" class="preview-tab active" data-view="preview"><?= __('实时预览') ?></button>
+            <button type="button" class="preview-tab" data-view="structure"><?= __('结构视图') ?></button>
+        </div>
+        <div class="preview-actions">
+            <button type="button" class="btn btn-sm btn-outline-warning" id="btnRestoreLayout" title="<?= __('恢复到主题模板原始布局（自动创建备份）') ?>">
+                <i class="ri-history-line"></i> <?= __('恢复原始布局') ?>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshPreview" title="<?= __('刷新预览') ?>">
+                <i class="ri-refresh-line"></i> <?= __('刷新') ?>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFullscreenPreview" title="<?= __('全屏预览') ?>">
+                <i class="ri-fullscreen-line"></i> <?= __('全屏') ?>
+            </button>
+        </div>
+    </div>
+
+    <div class="editor-floating-panel-actions" aria-label="<?= htmlspecialchars((string)__('编辑面板')) ?>">
+        <button type="button" class="editor-panel-toggle editor-panel-toggle-config" data-theme-editor-action="open-config-panel" title="<?= __('配置') ?>">
+            <i class="ri-arrow-right-s-line panel-toggle-arrow"></i>
+            <span><?= __('配置') ?></span>
+        </button>
+        <button type="button" class="editor-panel-toggle editor-panel-toggle-widget" data-theme-editor-action="open-widget-panel" title="<?= __('部件库') ?>">
+            <span><?= __('部件') ?></span>
+            <i class="ri-arrow-left-s-line panel-toggle-arrow"></i>
+        </button>
+    </div>
+
     <!-- 主编辑区 -->
     <div class="editor-main">
         <!-- 左侧：配置面板 -->
@@ -305,7 +400,7 @@ $getWidgetIcon = function ($type) {
                     <button type="button" class="config-mode-tab active" id="configModeLayout" data-config-mode="layout"><?= __('布局配置') ?></button>
                     <button type="button" class="config-mode-tab" id="configModeWidget" data-config-mode="widget"><?= __('部件配置') ?></button>
                 </div>
-                <button type="button" class="panel-close" id="closeConfigPanel">
+                <button type="button" class="panel-close" id="closeConfigPanel" data-theme-editor-action="close-config-panel" title="<?= __('关闭配置') ?>">
                     <i class="ri-close-line"></i>
                 </button>
             </div>
@@ -321,25 +416,6 @@ $getWidgetIcon = function ($type) {
         <!-- 中间：预览区域 - 使用 iframe 加载插槽式预览 -->
         <div class="editor-preview-area">
             <div class="preview-wrapper">
-                <!-- 预览工具栏 -->
-                <div class="preview-toolbar">
-                    <div class="preview-tabs">
-                        <button type="button" class="preview-tab active" data-view="preview"><?= __('实时预览') ?></button>
-                        <button type="button" class="preview-tab" data-view="structure"><?= __('结构视图') ?></button>
-                    </div>
-                    <div class="preview-actions">
-                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnRestoreLayout" title="<?= __('恢复到主题模板原始布局（自动创建备份）') ?>">
-                            <i class="ri-history-line"></i> <?= __('恢复原始布局') ?>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshPreview" title="<?= __('刷新预览') ?>">
-                            <i class="ri-refresh-line"></i> <?= __('刷新') ?>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFullscreenPreview" title="<?= __('全屏预览') ?>">
-                            <i class="ri-fullscreen-line"></i> <?= __('全屏') ?>
-                        </button>
-                    </div>
-                </div>
-                
                 <!-- iframe 实时预览（编译后的布局页面） -->
                 <div class="preview-view preview-view-preview active" id="previewViewPreview">
                     <iframe id="previewFrame" 
@@ -488,6 +564,22 @@ $getWidgetIcon = function ($type) {
                 <div class="panel-search">
                     <input type="text" id="widgetSearch" class="form-control form-control-sm" placeholder="<?= __('搜索部件...') ?>">
                 </div>
+                <button type="button" class="panel-close panel-close-widget" data-theme-editor-action="close-widget-panel" title="<?= __('关闭部件库') ?>">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+
+            <div class="widget-library-tabs" id="widgetLibraryTabs" hidden>
+                <button type="button" class="widget-library-tab active" data-widget-library-tab="general">
+                    <i class="ri-dashboard-3-line"></i>
+                    <span><?= __('通用部件') ?></span>
+                    <span class="widget-library-tab-count" data-widget-library-tab-count="general">0</span>
+                </button>
+                <button type="button" class="widget-library-tab" data-widget-library-tab="basic">
+                    <i class="ri-shapes-line"></i>
+                    <span><?= __('基础组件') ?></span>
+                    <span class="widget-library-tab-count" data-widget-library-tab-count="basic">0</span>
+                </button>
             </div>
             
             <div class="panel-content">
@@ -517,8 +609,17 @@ $getWidgetIcon = function ($type) {
                                     $wCode = (string)($widget['code'] ?? '');
                                     $wModule = (string)($widget['module'] ?? '');
                                     $wType = (string)($widget['type'] ?? '');
-                                    $wName = (string)($widget['name'] ?? $wCode ?? '');
-                                    $wDesc = (string)($widget['description'] ?? '');
+                                    $wName = trim((string)($widget['name'] ?? ''));
+                                    if ($wName === '') {
+                                        $wNamePart = basename(str_replace('\\', '/', $wCode));
+                                        $wName = $wNamePart !== ''
+                                            ? ucwords(str_replace(['-', '_'], ' ', $wNamePart))
+                                            : (string)__('未命名部件');
+                                    }
+                                    $wDesc = trim((string)($widget['description'] ?? ''));
+                                    if ($wDesc === '' && $wCode !== '') {
+                                        $wDesc = (string)__('可拖拽到页面插槽的基础组件');
+                                    }
                                     $wPosition = $widget['position'] ?? [];
                                     $wCompatible = $widget['compatible'] ?? false;
                                     $wSlot = (string)($widget['slot'] ?? '');
@@ -549,12 +650,9 @@ $getWidgetIcon = function ($type) {
                                          data-widget-page-layouts='<?= htmlspecialchars(json_encode($wPageLayouts, $jsonForScriptFlags) ?: '[]', ENT_QUOTES, 'UTF-8') ?>'
                                          data-widget-is-container="<?= $wIsContainer ? '1' : '0' ?>">
                                         <div class="widget-preview">
-                                            <div class="widget-preview-canvas">
-                                                <?= $widget['preview_html'] ?? '' ?>
-                                            </div>
                                             <div class="widget-preview-overlay">
                                                 <div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">
-                                                    <div class="widget-preview-title">
+                                                    <div class="widget-preview-title" title="<?= htmlspecialchars($wName) ?>">
                                                         <?= htmlspecialchars($wName) ?>
                                                         <?php if ($wIsContainer): ?>
                                                             <span class="badge badge-sm bg-primary ms-1" title="<?= __('容器部件') ?>">
@@ -567,11 +665,22 @@ $getWidgetIcon = function ($type) {
                                                             </span>
                                                         <?php endif; ?>
                                                     </div>
-                                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="<?= __('预览') ?>" data-widget-module="<?= htmlspecialchars($wModule) ?>" data-widget-code="<?= htmlspecialchars($wCode) ?>" data-widget-name="<?= htmlspecialchars($wName) ?>">
-                                                        <i class="ri-eye-line"></i>
-                                                    </button>
-                                                </div>
-                                                <div class="widget-preview-desc"><?= htmlspecialchars($wDesc) ?></div>
+	                                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+	                                                        <button type="button" class="btn btn-sm btn-primary btn-add-component flex-shrink-0" title="<?= __('添加到当前插槽') ?>" aria-label="<?= __('添加到当前插槽') ?>">
+	                                                            <i class="ri-add-line"></i>
+	                                                        </button>
+	                                                        <button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="<?= __('预览') ?>" data-widget-module="<?= htmlspecialchars($wModule) ?>" data-widget-code="<?= htmlspecialchars($wCode) ?>" data-widget-name="<?= htmlspecialchars($wName) ?>">
+	                                                            <i class="ri-eye-line"></i>
+	                                                        </button>
+	                                                    </div>
+	                                                </div>
+                                                <div class="widget-preview-desc" title="<?= htmlspecialchars($wDesc) ?>"><?= htmlspecialchars($wDesc) ?></div>
+                                            </div>
+                                            <div class="widget-preview-canvas"
+                                                 data-widget-module="<?= htmlspecialchars($wModule) ?>"
+                                                 data-widget-code="<?= htmlspecialchars($wCode) ?>"
+                                                 data-widget-area="<?= htmlspecialchars($editor_area) ?>">
+                                                <?= $widget['preview_html'] ?? '' ?>
                                             </div>
                                         </div>
                                     </div>
@@ -769,6 +878,11 @@ body:has(.theme-editor-container) .footer {
 }
 
 .theme-editor-container {
+    --te-config-panel-width: clamp(200px, 18vw, 260px);
+    --te-widget-panel-width: clamp(200px, 20vw, 260px);
+    --te-active-config-panel-width: var(--te-config-panel-width);
+    --te-active-widget-panel-width: var(--te-widget-panel-width);
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -777,6 +891,37 @@ body:has(.theme-editor-container) .footer {
     background: var(--te-bg-dark);
     color: var(--te-text-primary);
     overflow: hidden;
+}
+
+.theme-editor-container:fullscreen,
+.theme-editor-container:-webkit-full-screen,
+.theme-editor-container.editor-fullscreen-mode {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    max-height: none;
+    background: var(--te-bg-dark);
+}
+
+.theme-editor-container.editor-fullscreen-mode {
+    --te-config-panel-width: clamp(260px, 20vw, 360px);
+    --te-widget-panel-width: clamp(280px, 22vw, 380px);
+}
+
+.theme-editor-container.editor-fullscreen-fallback {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+}
+
+.theme-editor-container.editor-fullscreen-mode .editor-main,
+.theme-editor-container.editor-fullscreen-mode .editor-preview-area,
+.theme-editor-container.editor-fullscreen-mode .preview-wrapper {
+    min-height: 0;
+}
+
+.theme-editor-container.editor-fullscreen-mode .editor-floating-panel-actions {
+    display: none;
 }
 
 /* 顶部工具栏 */
@@ -888,6 +1033,10 @@ body:has(.theme-editor-container) .footer {
     width: clamp(56px, 6vw, 80px);
 }
 
+.toolbar-selects .toolbar-select-field-language .form-select {
+    width: clamp(92px, 10vw, 136px);
+}
+
 .toolbar-select-label {
     color: var(--te-text-secondary);
     font-size: 11px;
@@ -901,6 +1050,7 @@ body:has(.theme-editor-container) .footer {
     width: auto;
     flex: 0 1 auto;
     min-width: 0;
+    text-overflow: ellipsis;
     min-height: 24px;
     height: 24px;
     padding: 1px 20px 1px 6px;
@@ -937,22 +1087,26 @@ body:has(.theme-editor-container) .footer {
 
 /* 主编辑区 */
 .editor-main {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--te-active-config-panel-width) minmax(0, 1fr) var(--te-active-widget-panel-width);
     flex: 1;
     overflow: hidden;
     position: relative;
+    transition: grid-template-columns 0.2s ease;
 }
 
 /* 配置面板（左侧） */
 .editor-config-panel {
-    width: 260px;
+    width: auto;
+    min-width: 0;
     background: var(--te-bg-card);
     border-right: 1px solid var(--te-border);
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    overflow: hidden;
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
     z-index: 10;
+    transition: opacity 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .panel-header {
@@ -1031,11 +1185,13 @@ body:has(.theme-editor-container) .footer {
     padding: 8px 10px;
 }
 
-/* 部件库预览：始终显示，名称悬浮在预览上 */
+/* 部件库预览：预览与信息分层，名称/说明始终可读 */
 .widget-preview {
     position: relative;
     width: 100%;
-    background: var(--te-bg-dark);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
     border: 1px solid var(--te-border);
     border-radius: var(--te-radius-md);
     overflow: hidden;
@@ -1043,13 +1199,18 @@ body:has(.theme-editor-container) .footer {
 }
 
 .widget-preview-canvas {
+    order: 2;
     width: 100%;
-    height: 72px;
+    height: 82px;
+    flex: 0 0 82px;
     overflow: hidden;
-    /* 使用中性灰色背景，白色和黑色文字都能看到 */
-    background: #6b7280;
-    border-radius: 4px;
-    min-height: 40px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92)),
+        radial-gradient(circle at 20% 18%, rgba(99, 102, 241, 0.10), transparent 30%),
+    radial-gradient(circle at 82% 70%, rgba(20, 184, 166, 0.10), transparent 28%);
+    border-radius: 0;
+    border-top: 1px solid var(--te-border-light);
+    min-height: 82px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1070,35 +1231,60 @@ body:has(.theme-editor-container) .footer {
 }
 
 .widget-preview-overlay {
-    padding: 6px 8px;
-    background: var(--te-bg-card);
-    border-top: 1px solid var(--te-border);
+    order: 1;
+    min-height: 76px;
+    padding: 10px 10px 9px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
     color: var(--te-text-primary);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    position: relative;
+    z-index: 2;
 }
 
 .widget-preview-title-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center !important;
     min-width: 0;
+    gap: 8px !important;
 }
 .widget-preview-title {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 800;
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--te-text-primary);
+    color: #111827;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .btn-preview-component {
-    padding: 2px 6px;
+    padding: 4px 7px;
     font-size: 14px;
+}
+.widget-preview-title-row .btn {
+    min-width: 32px;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .widget-preview-desc {
-    font-size: 11px;
-    color: var(--te-text-secondary);
+    min-height: 32px;
+    font-size: 12px;
+    line-height: 1.42;
+    color: #475569;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .widget-preview .widget-preview-placeholder,
@@ -1106,6 +1292,428 @@ body:has(.theme-editor-container) .footer {
     color: var(--te-text-muted);
     font-size: 12px;
     padding: 8px;
+}
+
+.te-component-preview {
+    width: 100%;
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    color: #111827;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.94), rgba(248,250,252,0.96)),
+        radial-gradient(circle at 10% 15%, rgba(37,99,235,0.12), transparent 26%),
+        radial-gradient(circle at 90% 82%, rgba(20,184,166,0.12), transparent 28%);
+    box-sizing: border-box;
+}
+.component-preview-inner .te-component-preview {
+    min-height: 320px;
+    padding: 28px;
+}
+.te-component-preview .w-alert {
+    width: min(680px, 100%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(37, 99, 235, 0.20);
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.te-component-preview .w-alert strong {
+    color: #1e3a8a;
+    white-space: nowrap;
+}
+.te-component-preview .w-alert span {
+    color: #475569;
+}
+.te-component-preview .w-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.te-component-preview .w-badge-success {
+    background: #dcfce7;
+    color: #166534;
+}
+.te-component-preview .w-badge-info {
+    background: #e0f2fe;
+    color: #075985;
+}
+.te-component-preview .w-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 8px 13px;
+    font-size: 13px;
+    font-weight: 700;
+}
+.te-component-preview .w-btn-primary {
+    background: #2563eb;
+    color: #fff;
+}
+.te-component-preview .w-btn-secondary {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+.te-component-preview .w-card {
+    width: min(560px, 100%);
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+    overflow: hidden;
+}
+.te-component-preview .w-card-header {
+    padding: 14px 16px 8px;
+    border-bottom: 1px solid #edf2f7;
+}
+.te-component-preview .w-card-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.35;
+    color: #0f172a;
+}
+.te-component-preview .w-card-subtitle {
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+.te-component-preview .w-card-body {
+    padding: 14px 16px;
+    color: #475569;
+    font-size: 13px;
+}
+.te-component-preview .w-dropdown {
+    position: relative;
+}
+.te-component-preview .w-dropdown-menu {
+    display: block;
+    position: static;
+    min-width: 160px;
+    margin-top: 8px;
+    padding: 6px;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+.te-component-preview .w-dropdown-item {
+    display: block;
+    padding: 7px 9px;
+    border-radius: 6px;
+    color: #334155;
+    font-size: 13px;
+    text-decoration: none;
+}
+.te-component-preview .w-dropdown-item:hover {
+    background: #f8fafc;
+}
+.te-component-preview-form-group {
+    flex-direction: column;
+    align-items: stretch;
+}
+.te-component-preview .w-form-label {
+    display: block;
+    margin-bottom: 7px;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+}
+.te-component-preview .w-form-control {
+    width: min(420px, 100%);
+    height: 38px;
+    padding: 8px 11px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 13px;
+}
+.te-component-preview-loading {
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+}
+.te-component-preview .w-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #dbeafe;
+    border-top-color: #2563eb;
+    border-radius: 999px;
+    animation: te-preview-spin 0.9s linear infinite;
+}
+@keyframes te-preview-spin {
+    to { transform: rotate(360deg); }
+}
+.te-component-preview .w-message {
+    width: min(520px, 100%);
+    display: flex;
+    gap: 11px;
+    padding: 13px 14px;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    background: #f0fdf4;
+    color: #166534;
+}
+.te-component-preview .w-message i {
+    font-size: 20px;
+}
+.te-component-preview .w-message strong,
+.te-component-preview .w-message span {
+    display: block;
+}
+.te-component-preview .w-message span {
+    margin-top: 3px;
+    color: #475569;
+    font-size: 12px;
+}
+.te-component-preview .w-modal-preview {
+    width: min(520px, 100%);
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+}
+.te-component-preview .w-modal-header,
+.te-component-preview .w-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #edf2f7;
+}
+.te-component-preview .w-modal-header span {
+    color: #94a3b8;
+    font-size: 20px;
+}
+.te-component-preview .w-modal-body {
+    padding: 14px;
+    color: #475569;
+    font-size: 13px;
+}
+.te-component-preview .w-modal-footer {
+    justify-content: flex-end;
+    border-top: 1px solid #edf2f7;
+    border-bottom: 0;
+}
+.te-component-preview .w-btn-sm {
+    min-height: 30px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+.te-component-preview .w-pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+}
+.te-component-preview .w-pagination a {
+    min-width: 30px;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 9px;
+    border-radius: 6px;
+    color: #475569;
+    font-size: 12px;
+    text-decoration: none;
+}
+.te-component-preview .w-pagination a.active {
+    background: #2563eb;
+    color: #fff;
+}
+.te-component-preview .w-table {
+    width: min(680px, 100%);
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 0 0 1px #dbe3ef;
+}
+.te-component-preview .w-table th,
+.te-component-preview .w-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 13px;
+    text-align: left;
+}
+.te-component-preview .w-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 700;
+}
+.te-component-preview .w-table tr:last-child td {
+    border-bottom: 0;
+}
+.te-component-preview .w-tabs {
+    width: min(540px, 100%);
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+.te-component-preview .w-tab-list {
+    display: flex;
+    gap: 4px;
+    padding: 7px;
+    border-bottom: 1px solid #edf2f7;
+    background: #f8fafc;
+}
+.te-component-preview .w-tab-list button {
+    min-height: 30px;
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+}
+.te-component-preview .w-tab-list button.active {
+    background: #fff;
+    color: #2563eb;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.10);
+}
+.te-component-preview .w-tab-panel {
+    padding: 13px 14px;
+    color: #475569;
+    font-size: 13px;
+}
+.te-component-preview-section {
+    align-items: stretch;
+}
+.te-component-preview .w-builder-section {
+    width: min(680px, 100%);
+    padding: 18px;
+    border: 1px solid #dbe3ef;
+    border-radius: 10px;
+    background: #fff;
+}
+.te-component-preview .w-builder-section__header,
+.te-component-preview .w-builder-text {
+    display: grid;
+    gap: 7px;
+}
+.te-component-preview .w-builder-section__eyebrow,
+.te-component-preview .w-builder-text__eyebrow {
+    margin: 0;
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.te-component-preview .w-builder-section__title,
+.te-component-preview .w-builder-text__title {
+    margin: 0;
+    color: #0f172a;
+    font-size: 18px;
+    line-height: 1.2;
+}
+.te-component-preview .w-builder-section__description,
+.te-component-preview .w-builder-text__body {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.te-component-preview .w-builder-slot-placeholder {
+    margin-top: 12px;
+    min-height: 42px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed #93c5fd;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 12px;
+}
+.te-component-preview-grid .w-builder-grid {
+    width: min(620px, 100%);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+.te-component-preview-grid .w-card {
+    min-height: 68px;
+}
+.te-component-preview-text {
+    align-items: center;
+    justify-content: flex-start;
+}
+.te-component-preview-image .w-builder-image {
+    width: min(420px, 100%);
+    margin: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f8fafc;
+}
+.te-component-preview-image .w-builder-image__placeholder {
+    min-height: 120px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed #cbd5e1;
+    color: #64748b;
+    font-size: 13px;
+}
+.te-component-preview-divider,
+.te-component-preview-spacer {
+    flex-direction: column;
+}
+.te-component-preview .w-builder-divider {
+    width: min(520px, 100%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #64748b;
+}
+.te-component-preview .w-builder-divider::before,
+.te-component-preview .w-builder-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    border-top: 1px solid #cbd5e1;
+}
+.te-component-preview .w-builder-divider__label,
+.te-component-preview-spacer span {
+    color: #64748b;
+    font-size: 12px;
+}
+.te-component-preview .w-builder-spacer {
+    width: min(460px, 100%);
+    height: 36px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #eef2ff 8px, #eef2ff 16px);
+}
+.te-component-preview-generic {
+    flex-direction: column;
+}
+.te-component-preview-generic strong {
+    color: #111827;
+}
+.te-component-preview-generic span {
+    color: #64748b;
+    font-size: 12px;
 }
 
 .no-widget-selected {
@@ -1566,6 +2174,13 @@ body:has(.theme-editor-container) .footer {
     border-bottom: 1px solid var(--te-border);
     box-shadow: var(--te-shadow-sm);
     min-height: 32px;
+}
+
+.editor-preview-toolbar {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 95;
+    padding: 4px 12px;
 }
 
 .preview-tabs {
@@ -2691,14 +3306,16 @@ body:has(.theme-editor-container) .footer {
 
 /* 部件面板（右侧） */
 .editor-widget-panel {
-    width: 260px;
+    width: auto;
+    min-width: 0;
     background: var(--te-bg-card);
     border-left: 1px solid var(--te-border);
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    overflow: hidden;
     box-shadow: -2px 0 12px rgba(0, 0, 0, 0.2);
     z-index: 10;
+    transition: opacity 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 #widgetPanel .panel-header {
@@ -2742,9 +3359,72 @@ body:has(.theme-editor-container) .footer {
     outline: none;
 }
 
+.widget-library-tabs[hidden] {
+    display: none !important;
+}
+
+.widget-library-tabs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+    padding: 8px 10px 0;
+}
+
+.widget-library-tab {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 30px;
+    padding: 5px 8px;
+    border: 1px solid var(--te-border);
+    border-radius: 6px;
+    background: var(--te-bg-hover);
+    color: var(--te-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.widget-library-tab:hover {
+    color: var(--te-text-primary);
+    border-color: var(--te-border-light);
+    background: var(--te-bg-active);
+}
+
+.widget-library-tab.active {
+    color: var(--te-accent);
+    border-color: rgba(99, 102, 241, 0.34);
+    background: rgba(99, 102, 241, 0.10);
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08);
+}
+
+.widget-library-tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.14);
+    color: currentColor;
+    font-size: 10px;
+}
+
 /* 部件列表 */
 .widget-list {
     padding: 6px 8px;
+}
+
+.widget-library-tab-hidden {
+    display: none !important;
+}
+
+.widget-item.widget-tab-disabled {
+    cursor: default;
 }
 
 .widget-list-loading {
@@ -3348,12 +4028,27 @@ body:has(.theme-editor-container) .footer {
 }
 
 /* 组件预览弹窗 - PC / iPad / Mobile / 响应式视口 */
+#componentPreviewModal .modal-dialog {
+    width: min(1480px, calc(100vw - 28px));
+    max-width: min(1480px, calc(100vw - 28px));
+}
+#componentPreviewModal .modal-content {
+    min-height: min(880px, calc(100vh - 28px));
+}
+#componentPreviewModal .tab-content {
+    min-height: 520px;
+    overflow: auto;
+}
 .component-preview-viewport {
     margin: 0 auto;
-    min-height: 200px;
-    max-height: 70vh;
+    min-height: 360px;
+    max-height: calc(100vh - 230px);
     overflow: auto;
-    background: #6b7280;
+    background:
+        linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(148,163,184,0.12) 1px, transparent 1px),
+        #eef2f7;
+    background-size: 20px 20px;
     border-radius: 8px;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
 }
@@ -3362,7 +4057,7 @@ body:has(.theme-editor-container) .footer {
 .component-preview-viewport-mobile { width: 375px; }
 .component-preview-viewport-responsive { width: 768px; transition: width 0.2s ease; }
 .component-preview-inner {
-    min-height: 100px;
+    min-height: 360px;
     background: #fff;
     margin: 0 auto;
 }
@@ -3837,6 +4532,67 @@ body:has(.theme-editor-container) .footer {
     box-sizing: border-box;
 }
 
+.theme-editor-container [class^="ri-"],
+.theme-editor-container [class*=" ri-"] {
+    font-family: "remixicon" !important;
+    font-style: normal;
+    font-weight: normal;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.theme-editor-container .fa,
+.theme-editor-container .fa::before {
+    font-family: FontAwesome !important;
+}
+
+.theme-editor-container .w-param-form .w-param-i18n-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 104px;
+    min-width: 104px;
+    max-width: 104px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.theme-editor-container .lang-flag-svg,
+.theme-editor-container .lang-flag-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 16px;
+    overflow: hidden;
+}
+
+.theme-editor-container .lang-flag-svg svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.theme-editor-container .lang-flag-badge {
+    border: 1px solid var(--te-border);
+    border-radius: 4px;
+    background: var(--te-bg-hover);
+    color: var(--te-text-secondary);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.theme-editor-container .w-param-i18n-label .lang-code {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .editor-toolbar {
     min-height: 0;
 }
@@ -3868,11 +4624,13 @@ body:has(.theme-editor-container) .footer {
 }
 
 .editor-config-panel {
-    width: clamp(200px, 18vw, 260px);
+    width: auto;
+    flex-basis: auto;
 }
 
 .editor-widget-panel {
-    width: clamp(200px, 20vw, 260px);
+    width: auto;
+    flex-basis: auto;
 }
 
 .preview-toolbar {
@@ -3960,14 +4718,6 @@ body:has(.theme-editor-container) .footer {
         font-size: 12px;
     }
 
-    .editor-config-panel {
-        width: 220px;
-    }
-
-    .editor-widget-panel {
-        width: 220px;
-    }
-
     .preview-toolbar {
         padding: 4px 8px;
     }
@@ -3979,39 +4729,11 @@ body:has(.theme-editor-container) .footer {
 
 @media (max-width: 1100px) {
     .theme-editor-container {
-        overflow: auto;
-    }
-
-    .editor-main {
-        flex-wrap: wrap;
-        overflow: auto;
-        align-content: stretch;
-    }
-
-    .editor-config-panel {
-        order: 1;
-        flex: 1 1 320px;
-        width: auto;
-        max-height: 34vh;
-        border-right: 0;
-        border-bottom: 1px solid var(--te-border);
-    }
-
-    .editor-widget-panel {
-        order: 2;
-        flex: 1 1 320px;
-        width: auto;
-        min-width: 0;
-        max-width: 100%;
-        max-height: 34vh;
-        border-left: 1px solid var(--te-border);
-        border-bottom: 1px solid var(--te-border);
+        overflow: hidden;
     }
 
     .editor-preview-area {
-        order: 3;
-        flex: 1 1 100%;
-        min-height: 62vh;
+        min-height: 0;
     }
 }
 
@@ -4034,17 +4756,6 @@ body:has(.theme-editor-container) .footer {
     .toolbar-right .btn,
     .btn-version-toggle {
         max-width: 100%;
-    }
-
-    .editor-config-panel,
-    .editor-widget-panel {
-        flex-basis: 100%;
-        max-height: 30vh;
-        border-left: 0;
-    }
-
-    .editor-preview-area {
-        min-height: 58vh;
     }
 
     .slots-info-panel {
@@ -4150,11 +4861,11 @@ body:has(.theme-editor-container) .footer {
 }
 
 .theme-editor-container .widget-preview-title {
-    font-size: 11px;
+    font-size: 13px;
 }
 
 .theme-editor-container .widget-preview-desc {
-    font-size: 10px;
+    font-size: 11.5px;
 }
 
 .theme-editor-container .preview-view-preview {
@@ -4192,6 +4903,183 @@ body:has(.theme-editor-container) .footer {
 
 .theme-editor-container .area-content.area-slot .slot-placeholder-large {
     min-height: 140px;
+}
+
+/* ========================================
+   Collapsible push panels / CMS embed shell
+   ======================================== */
+.editor-floating-panel-actions,
+.editor-panel-toggle {
+    display: none;
+}
+
+.editor-floating-panel-actions {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.editor-panel-toggle {
+    pointer-events: auto;
+    position: absolute;
+    top: 50%;
+    min-width: 34px;
+    min-height: 72px;
+    padding: 8px 5px;
+    border: 1px solid var(--te-border);
+    background: var(--te-bg-card);
+    color: var(--te-text-primary);
+    box-shadow: var(--te-shadow-md);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, left 0.2s ease, right 0.2s ease;
+}
+
+.editor-panel-toggle:hover {
+    background: var(--te-bg-active);
+    border-color: var(--te-accent);
+}
+
+.editor-panel-toggle .panel-toggle-arrow {
+    display: inline-flex;
+    font-size: 16px;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.editor-panel-toggle-config {
+    left: 0;
+    transform: translateY(-50%);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.editor-panel-toggle-widget {
+    right: 0;
+    transform: translateY(-50%);
+    border-right: 0;
+    border-radius: 8px 0 0 8px;
+}
+
+.theme-editor-container.panel-config-open .editor-panel-toggle-config {
+    left: var(--te-config-panel-width);
+}
+
+.theme-editor-container.panel-widget-open .editor-panel-toggle-widget {
+    right: var(--te-widget-panel-width);
+}
+
+.theme-editor-container.panel-config-collapsed {
+    --te-active-config-panel-width: 0px;
+}
+
+.theme-editor-container.panel-widget-collapsed {
+    --te-active-widget-panel-width: 0px;
+}
+
+.theme-editor-container:is(.editor-compact-mode, .panel-config-collapsed, .panel-widget-collapsed) .editor-floating-panel-actions {
+    display: block;
+}
+
+.theme-editor-container:is(.editor-compact-mode, .panel-config-collapsed) .editor-panel-toggle-config,
+.theme-editor-container:is(.editor-compact-mode, .panel-widget-collapsed) .editor-panel-toggle-widget {
+    display: inline-flex;
+}
+
+.theme-editor-container.panel-config-open .editor-panel-toggle-config .panel-toggle-arrow {
+    transform: rotate(180deg);
+}
+
+.theme-editor-container.panel-widget-open .editor-panel-toggle-widget .panel-toggle-arrow {
+    transform: rotate(180deg);
+}
+
+.theme-editor-container.panel-config-collapsed .editor-config-panel {
+    opacity: 0;
+    pointer-events: none;
+    border-right-color: transparent;
+    box-shadow: none;
+}
+
+.theme-editor-container.panel-widget-collapsed .editor-widget-panel {
+    opacity: 0;
+    pointer-events: none;
+    border-left-color: transparent;
+    box-shadow: none;
+}
+
+.theme-editor-container .panel-close-widget {
+    display: inline-flex;
+}
+
+@media (max-width: 1100px) {
+    .theme-editor-container {
+        --te-config-panel-width: min(320px, 42vw);
+        --te-widget-panel-width: min(320px, 42vw);
+        overflow: hidden;
+    }
+
+    .theme-editor-container .editor-main {
+        display: grid;
+        overflow: hidden;
+    }
+
+    .theme-editor-container .editor-preview-area {
+        min-height: 0;
+    }
+
+    .theme-editor-container .editor-config-panel,
+    .theme-editor-container .editor-widget-panel {
+        width: var(--te-config-panel-width);
+        max-width: var(--te-config-panel-width);
+        max-height: none;
+        border-bottom: 0;
+    }
+
+    .theme-editor-container .editor-widget-panel {
+        width: var(--te-widget-panel-width);
+        max-width: var(--te-widget-panel-width);
+    }
+}
+
+@media (max-width: 720px) {
+    .theme-editor-container {
+        --te-config-panel-width: min(300px, 72vw);
+        --te-widget-panel-width: min(300px, 72vw);
+    }
+
+    .theme-editor-container .editor-config-panel,
+    .theme-editor-container .editor-widget-panel {
+        width: var(--te-config-panel-width);
+        max-width: var(--te-config-panel-width);
+    }
+
+    .theme-editor-container .editor-widget-panel {
+        width: var(--te-widget-panel-width);
+        max-width: var(--te-widget-panel-width);
+    }
+}
+
+@media (max-width: 1100px) {
+    .theme-editor-container.editor-fullscreen-mode {
+        --te-config-panel-width: min(260px, 34vw);
+        --te-widget-panel-width: min(280px, 36vw);
+    }
+}
+
+@media (max-width: 720px) {
+    .theme-editor-container.editor-fullscreen-mode {
+        --te-config-panel-width: min(230px, 34vw);
+        --te-widget-panel-width: min(240px, 36vw);
+    }
 }
 
 .drag-insert-indicator {
@@ -4300,4 +5188,170 @@ body:has(.theme-editor-container) .footer {
 </script>
 <!-- ThemeEditor uses same-origin backend controller URLs; Weline.Api remains a fallback for non-direct requests. -->
 <script src="@static(Weline_Widget::js/widget-param-types.js)?v=20260602-ai-context-provider"></script>
-<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260609-virtual-theme-block-ai"></script>
+<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260702-builder-components-url-filter-6"></script>
+<script>
+(function () {
+    const labels = {
+        alertTitle: '<?= htmlspecialchars((string)__('系统提示'), ENT_QUOTES, 'UTF-8') ?>',
+        alertBody: '<?= htmlspecialchars((string)__('这是一条状态提示信息。'), ENT_QUOTES, 'UTF-8') ?>',
+        enabled: '<?= htmlspecialchars((string)__('已启用'), ENT_QUOTES, 'UTF-8') ?>',
+        backend: '<?= htmlspecialchars((string)__('后台'), ENT_QUOTES, 'UTF-8') ?>',
+        primary: '<?= htmlspecialchars((string)__('主要操作'), ENT_QUOTES, 'UTF-8') ?>',
+        secondary: '<?= htmlspecialchars((string)__('次要'), ENT_QUOTES, 'UTF-8') ?>',
+        cardTitle: '<?= htmlspecialchars((string)__('数据卡片'), ENT_QUOTES, 'UTF-8') ?>',
+        cardSubtitle: '<?= htmlspecialchars((string)__('用于组织内容'), ENT_QUOTES, 'UTF-8') ?>',
+        cardBody: '<?= htmlspecialchars((string)__('这里展示核心信息、摘要或操作入口。'), ENT_QUOTES, 'UTF-8') ?>',
+        action: '<?= htmlspecialchars((string)__('选择操作'), ENT_QUOTES, 'UTF-8') ?>',
+        detail: '<?= htmlspecialchars((string)__('查看详情'), ENT_QUOTES, 'UTF-8') ?>',
+        copy: '<?= htmlspecialchars((string)__('复制视图'), ENT_QUOTES, 'UTF-8') ?>',
+        metric: '<?= htmlspecialchars((string)__('指标'), ENT_QUOTES, 'UTF-8') ?>',
+        status: '<?= htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') ?>',
+        trend: '<?= htmlspecialchars((string)__('趋势'), ENT_QUOTES, 'UTF-8') ?>',
+        order: '<?= htmlspecialchars((string)__('订单'), ENT_QUOTES, 'UTF-8') ?>',
+        ok: '<?= htmlspecialchars((string)__('正常'), ENT_QUOTES, 'UTF-8') ?>',
+        payment: '<?= htmlspecialchars((string)__('支付'), ENT_QUOTES, 'UTF-8') ?>',
+        stable: '<?= htmlspecialchars((string)__('稳定'), ENT_QUOTES, 'UTF-8') ?>',
+        label: '<?= htmlspecialchars((string)__('字段名称'), ENT_QUOTES, 'UTF-8') ?>',
+        placeholder: '<?= htmlspecialchars((string)__('请输入内容'), ENT_QUOTES, 'UTF-8') ?>',
+        username: '<?= htmlspecialchars((string)__('管理员'), ENT_QUOTES, 'UTF-8') ?>',
+        syncing: '<?= htmlspecialchars((string)__('正在同步数据'), ENT_QUOTES, 'UTF-8') ?>',
+        messageTitle: '<?= htmlspecialchars((string)__('操作完成'), ENT_QUOTES, 'UTF-8') ?>',
+        messageBody: '<?= htmlspecialchars((string)__('数据已保存，可以继续编辑。'), ENT_QUOTES, 'UTF-8') ?>',
+        modalTitle: '<?= htmlspecialchars((string)__('确认发布'), ENT_QUOTES, 'UTF-8') ?>',
+        modalBody: '<?= htmlspecialchars((string)__('公开后同站点后台用户可见。'), ENT_QUOTES, 'UTF-8') ?>',
+        cancel: '<?= htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') ?>',
+        confirm: '<?= htmlspecialchars((string)__('确认'), ENT_QUOTES, 'UTF-8') ?>',
+        previous: '<?= htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') ?>',
+        next: '<?= htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') ?>',
+        tabOverview: '<?= htmlspecialchars((string)__('概览'), ENT_QUOTES, 'UTF-8') ?>',
+        tabSettings: '<?= htmlspecialchars((string)__('设置'), ENT_QUOTES, 'UTF-8') ?>',
+        sectionTitle: '<?= htmlspecialchars((string)__('精选区块'), ENT_QUOTES, 'UTF-8') ?>',
+        sectionSubtitle: '<?= htmlspecialchars((string)__('Section'), ENT_QUOTES, 'UTF-8') ?>',
+        sectionBody: '<?= htmlspecialchars((string)__('拖入卡片、文本、图片或表单组件'), ENT_QUOTES, 'UTF-8') ?>',
+        gridItem: '<?= htmlspecialchars((string)__('栅格项'), ENT_QUOTES, 'UTF-8') ?>',
+        textTitle: '<?= htmlspecialchars((string)__('清晰表达你的页面主张'), ENT_QUOTES, 'UTF-8') ?>',
+        textBody: '<?= htmlspecialchars((string)__('用标题和段落快速搭建页面内容。'), ENT_QUOTES, 'UTF-8') ?>',
+        imageAlt: '<?= htmlspecialchars((string)__('图片媒体'), ENT_QUOTES, 'UTF-8') ?>',
+        dividerLabel: '<?= htmlspecialchars((string)__('内容分隔'), ENT_QUOTES, 'UTF-8') ?>',
+        spacerLabel: '<?= htmlspecialchars((string)__('留白间距'), ENT_QUOTES, 'UTF-8') ?>'
+    };
+
+    function normalizeCode(code) {
+        const parts = String(code || '').replace(/\\/g, '/').toLowerCase().split('/').filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : '';
+    }
+
+    function previewHtml(code) {
+        switch (normalizeCode(code)) {
+            case 'alert':
+                return '<div class="te-component-preview te-component-preview-alert"><div class="w-alert w-alert-info" role="alert"><i class="ri-information-line me-2"></i><strong>' + labels.alertTitle + '</strong><span>' + labels.alertBody + '</span></div></div>';
+            case 'badge':
+                return '<div class="te-component-preview te-component-preview-badge"><span class="w-badge w-badge-success">' + labels.enabled + '</span><span class="w-badge w-badge-info">' + labels.backend + '</span></div>';
+            case 'button':
+                return '<div class="te-component-preview te-component-preview-button"><button type="button" class="w-btn w-btn-primary w-btn-md"><i class="ri-flashlight-line"></i> ' + labels.primary + '</button><button type="button" class="w-btn w-btn-secondary w-btn-sm">' + labels.secondary + '</button></div>';
+            case 'card':
+                return '<div class="te-component-preview te-component-preview-card"><div class="w-card"><div class="w-card-header"><h3 class="w-card-title">' + labels.cardTitle + '</h3><p class="w-card-subtitle">' + labels.cardSubtitle + '</p></div><div class="w-card-body">' + labels.cardBody + '</div></div></div>';
+            case 'dropdown':
+                return '<div class="te-component-preview te-component-preview-dropdown"><div class="w-dropdown dropdown"><button type="button" class="w-btn w-btn-secondary w-dropdown-toggle dropdown-toggle">' + labels.action + '</button><div class="w-dropdown-menu dropdown-menu show"><a class="w-dropdown-item dropdown-item" href="#">' + labels.detail + '</a><a class="w-dropdown-item dropdown-item" href="#">' + labels.copy + '</a></div></div></div>';
+            case 'section':
+                return '<div class="te-component-preview te-component-preview-section"><section class="w-builder-section w-builder-section--subtle"><header class="w-builder-section__header"><p class="w-builder-section__eyebrow">' + labels.sectionSubtitle + '</p><h2 class="w-builder-section__title">' + labels.sectionTitle + '</h2><p class="w-builder-section__description">' + labels.sectionBody + '</p></header><div class="w-builder-slot-placeholder">' + labels.sectionBody + '</div></section></div>';
+            case 'grid':
+                return '<div class="te-component-preview te-component-preview-grid"><div class="w-builder-grid"><div class="w-card"><div class="w-card-body">' + labels.gridItem + ' 1</div></div><div class="w-card"><div class="w-card-body">' + labels.gridItem + ' 2</div></div><div class="w-card"><div class="w-card-body">' + labels.gridItem + ' 3</div></div></div></div>';
+            case 'text':
+                return '<div class="te-component-preview te-component-preview-text"><div class="w-builder-text w-builder-text--sm"><p class="w-builder-text__eyebrow">Text</p><h2 class="w-builder-text__title">' + labels.textTitle + '</h2><p class="w-builder-text__body">' + labels.textBody + '</p></div></div>';
+            case 'image':
+                return '<div class="te-component-preview te-component-preview-image"><figure class="w-builder-image w-builder-image--16x9"><div class="w-builder-image__placeholder">' + labels.imageAlt + '</div></figure></div>';
+            case 'divider':
+                return '<div class="te-component-preview te-component-preview-divider"><div class="w-builder-divider"><span class="w-builder-divider__label">' + labels.dividerLabel + '</span></div></div>';
+            case 'spacer':
+                return '<div class="te-component-preview te-component-preview-spacer"><div class="w-builder-spacer w-builder-spacer--md"></div><span>' + labels.spacerLabel + '</span></div>';
+            case 'form-group':
+                return '<div class="te-component-preview te-component-preview-form-group"><label class="w-form-label">' + labels.label + '</label><input class="w-form-control" type="text" value="' + labels.username + '" placeholder="' + labels.placeholder + '"></div>';
+            case 'loading':
+                return '<div class="te-component-preview te-component-preview-loading"><span class="w-loading-spinner"></span><span>' + labels.syncing + '</span></div>';
+            case 'message':
+                return '<div class="te-component-preview te-component-preview-message"><div class="w-message w-message-success"><i class="ri-checkbox-circle-line"></i><div><strong>' + labels.messageTitle + '</strong><span>' + labels.messageBody + '</span></div></div></div>';
+            case 'modal':
+                return '<div class="te-component-preview te-component-preview-modal"><div class="w-modal-preview"><div class="w-modal-header"><strong>' + labels.modalTitle + '</strong><span aria-hidden="true">×</span></div><div class="w-modal-body">' + labels.modalBody + '</div><div class="w-modal-footer"><button type="button" class="w-btn w-btn-secondary w-btn-sm">' + labels.cancel + '</button><button type="button" class="w-btn w-btn-primary w-btn-sm">' + labels.confirm + '</button></div></div></div>';
+            case 'pagination':
+                return '<div class="te-component-preview te-component-preview-pagination"><nav class="w-pagination"><a href="#">' + labels.previous + '</a><a href="#">1</a><a class="active" href="#">2</a><a href="#">3</a><a href="#">' + labels.next + '</a></nav></div>';
+            case 'table':
+                return '<div class="te-component-preview te-component-preview-table"><table class="w-table w-table-striped"><thead><tr><th>' + labels.metric + '</th><th>' + labels.status + '</th><th>' + labels.trend + '</th></tr></thead><tbody><tr><td>' + labels.order + '</td><td>' + labels.ok + '</td><td>+12%</td></tr><tr><td>' + labels.payment + '</td><td>' + labels.stable + '</td><td>+4%</td></tr></tbody></table></div>';
+            case 'tabs':
+                return '<div class="te-component-preview te-component-preview-tabs"><div class="w-tabs"><div class="w-tab-list"><button type="button" class="active">' + labels.tabOverview + '</button><button type="button">' + labels.tabSettings + '</button></div><div class="w-tab-panel">' + labels.cardBody + '</div></div></div>';
+            default:
+                return '';
+        }
+    }
+
+    function patchCanvases(root) {
+        (root || document).querySelectorAll('.widget-preview-canvas').forEach(function (canvas) {
+            const item = canvas.closest('.widget-item[data-widget-code]');
+            const code = canvas.getAttribute('data-widget-code') || (item ? item.getAttribute('data-widget-code') : '');
+            const html = previewHtml(code);
+            if (!html || (canvas.firstElementChild && canvas.firstElementChild.classList.contains('te-component-preview'))) {
+                return;
+            }
+            if (code && !canvas.getAttribute('data-widget-code')) {
+                canvas.setAttribute('data-widget-code', code);
+            }
+            canvas.innerHTML = html;
+            canvas.dataset.previewLoaded = '1';
+        });
+    }
+
+    function patchModalPreview() {
+        const code = window.__welineComponentPreviewCode || '';
+        const html = previewHtml(code);
+        if (!html) {
+            return;
+        }
+        document.querySelectorAll('#componentPreviewModal .component-preview-inner').forEach(function (inner) {
+            inner.innerHTML = html;
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('.btn-preview-component[data-widget-code]');
+        if (button) {
+            window.__welineComponentPreviewCode = button.getAttribute('data-widget-code') || '';
+            window.setTimeout(patchModalPreview, 120);
+            window.setTimeout(patchModalPreview, 600);
+            window.setTimeout(patchModalPreview, 1400);
+        }
+    }, true);
+
+    function bootPreviewPatch() {
+        patchCanvases(document);
+        window.setTimeout(function () { patchCanvases(document); }, 300);
+        window.setTimeout(function () { patchCanvases(document); }, 1200);
+        window.setTimeout(function () { patchCanvases(document); }, 2400);
+        let patchTimer = null;
+        const observer = new MutationObserver(function (records) {
+            let shouldPatchDocument = false;
+            records.forEach(function (record) {
+                record.addedNodes.forEach(function (node) {
+                    if (node && node.nodeType === 1) {
+                        patchCanvases(node);
+                        shouldPatchDocument = true;
+                    }
+                });
+            });
+            if (shouldPatchDocument) {
+                window.clearTimeout(patchTimer);
+                patchTimer = window.setTimeout(function () {
+                    patchCanvases(document);
+                    patchModalPreview();
+                }, 80);
+            }
+        });
+        observer.observe(document.body, {childList: true, subtree: true});
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootPreviewPatch);
+    } else {
+        bootPreviewPatch();
+    }
+})();
+</script>

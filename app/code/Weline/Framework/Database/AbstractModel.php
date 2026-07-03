@@ -1368,20 +1368,21 @@ abstract class AbstractModel extends DataObject
      * @param string $field
      * @return array|string
      */
-    public function getModelChangedData(string $field = ''): array|string
+    public function getModelChangedData(string $field = ''): array|string|null
     {
-        $data = $this->getModelData($field);
         if ($field) {
-            if (isset($data[$field]) && $changed_data = $this->getChangedData($field)) {
-                return $changed_data;
+            $changed_data = $this->getChangedData();
+            if (array_key_exists($field, $changed_data)) {
+                return $changed_data[$field];
             } else {
                 return '';
             }
         } else {
+            $data = $this->getModelData();
             $changed_data = $this->getChangedData();
             $changed_model_data = [];
             foreach ($data as $field => $datum) {
-                if (isset($changed_data[$field])) {
+                if (array_key_exists($field, $changed_data)) {
                     $changed_model_data[$field] = $changed_data[$field];
                 }
             }

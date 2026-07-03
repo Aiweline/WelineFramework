@@ -4,8 +4,303 @@
  *
  * @meta.name {default="Design Homepage Override",name="Design Homepage Override",description="Design theme override for Weline_Theme homepage/default"}
  * @param.title {default="Design Homepage Override",name="Page Title",description="Page title"}
+ * @param.content {default="",name="Content HTML",description="Main content"}
+ * @param.showHeader {default=true,name="Show Header",description="Whether to render header"}
+ * @param.showFooter {default=true,name="Show Footer",description="Whether to render footer"}
+ * @param.class {default="",name="Extra CSS class",description="Extra CSS class"}
  */
+
+$meta = $this->getData('meta') ?? [];
+$title = htmlspecialchars((string)($meta['title'] ?? __('Design Homepage Override')), ENT_QUOTES, 'UTF-8');
+$class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
+$metaContent = (string)($meta['content'] ?? '');
+$isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
+    || (string)($this->getData('preview_mode') ?? '') !== '';
+$shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
 ?>
-<main data-layout-source="design-homepage-override">
-    <h1><?= __('Design Homepage Override') ?></h1>
-</main>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <style data-theme-inline="layout-homepage-design-override">
+        .theme-layout-homepage--design-override .design-homepage {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 16% 12%, rgba(99, 102, 241, .14), transparent 30rem),
+                radial-gradient(circle at 88% 10%, rgba(20, 184, 166, .16), transparent 28rem),
+                linear-gradient(180deg, #fbfcff 0%, #f7faf8 100%);
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__hero {
+            padding: clamp(56px, 8vw, 112px) clamp(24px, 5vw, 80px);
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__eyebrow {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            margin-bottom: 18px;
+            padding: 8px 14px;
+            border: 1px solid rgba(15, 23, 42, .12);
+            border-radius: 999px;
+            color: #0f766e;
+            background: rgba(255, 255, 255, .78);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__title {
+            max-width: 980px;
+            margin: 0;
+            color: #0f172a;
+            font-size: clamp(44px, 7vw, 112px);
+            line-height: .92;
+            letter-spacing: -.07em;
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__lead {
+            max-width: 680px;
+            margin: 24px 0 0;
+            color: #52635d;
+            font-size: clamp(18px, 2.2vw, 24px);
+            line-height: 1.65;
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__section {
+            padding: clamp(36px, 6vw, 78px) clamp(24px, 5vw, 80px);
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__panel {
+            border: 1px solid rgba(15, 23, 42, .1);
+            border-radius: 28px;
+            background: rgba(255, 255, 255, .72);
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .08);
+            backdrop-filter: blur(18px);
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__card {
+            padding: 28px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, .76);
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__card h3 {
+            margin: 0 0 8px;
+            color: #0f172a;
+            font-size: 20px;
+        }
+
+        .theme-layout-homepage--design-override .design-homepage__card p {
+            margin: 0;
+            color: #64748b;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 860px) {
+            .theme-layout-homepage--design-override .design-homepage__grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="theme-layout-homepage theme-layout-homepage--design-override <?= $class ?>">
+<w:hook>seo::body</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
+
+<div class="weline-page-wrapper design-homepage">
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::homepage::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::homepage::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+
+    <main class="weline-main-content homepage-main" id="homepage-main" data-layout="homepage" data-layout-source="design-homepage-override">
+        <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
+
+        <w:slot id="content"
+                name="Homepage content"
+                accept="layout-homepage-content,layout-default-content,content,container,banner,carousel,product,category"
+                multiple="true"
+                reject="header,footer"
+                position="content"
+                class="homepage-content-slot">
+            <w:hook>
+                Weline_Theme::frontend::layouts::homepage::content
+                <else/>
+            <?php if ($shouldRenderMetaContent): ?>
+                <?php echo $metaContent; ?>
+            <?php else: ?>
+                <w:slot id="homepage-hero"
+                        name="Homepage hero"
+                        accept="layout-homepage-hero,hero-slider,promo-banner,banner,carousel,hero"
+                        exclusive="true"
+                        multiple="false"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__hero homepage-section homepage-hero">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::hero
+                        <else/>
+                    <span class="design-homepage__eyebrow"><?= __('Design Theme') ?></span>
+                    <h1 class="design-homepage__title"><?= $title ?></h1>
+                    <p class="design-homepage__lead"><?= __('这个设计主题覆盖了默认首页视觉，但仍保留 Weline_Theme 默认首页插槽，方便继续拖拽、配置和替换内容。') ?></p>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-featured"
+                        name="Homepage featured"
+                        accept="layout-homepage-featured,featured-products,product-carousel,product,content,cards"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section homepage-section--soft">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::featured
+                        <else/>
+                    <div class="design-homepage__panel design-homepage__card">
+                        <h3><?= __('精选内容插槽') ?></h3>
+                        <p><?= __('可放置商品轮播、精选商品或内容卡片。') ?></p>
+                    </div>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-categories"
+                        name="Homepage categories"
+                        accept="layout-homepage-categories,category-grid,category-list,category,content,cards"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::categories
+                        <else/>
+                    <div class="design-homepage__grid">
+                        <article class="design-homepage__card"><h3><?= __('分类') ?></h3><p><?= __('分类网格或分类列表可以挂载在这里。') ?></p></article>
+                        <article class="design-homepage__card"><h3><?= __('促销') ?></h3><p><?= __('活动、促销横幅或专题入口可以放这里。') ?></p></article>
+                        <article class="design-homepage__card"><h3><?= __('内容') ?></h3><p><?= __('图文、品牌故事或服务内容也可以替换。') ?></p></article>
+                    </div>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-promo"
+                        name="Homepage promotion"
+                        accept="layout-homepage-promo,promo-banner,banner,content"
+                        exclusive="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section homepage-promo">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::promo
+                        <else/>
+                    <div class="design-homepage__panel design-homepage__card">
+                        <h3><?= __('推广插槽') ?></h3>
+                        <p><?= __('适合放置大促横幅、倒计时或活动入口。') ?></p>
+                    </div>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-new-arrivals"
+                        name="Homepage new arrivals"
+                        accept="layout-homepage-new-arrivals,new-products,product-list,product,content"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section homepage-section--soft">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::new-arrivals
+                        <else/>
+                    <div class="design-homepage__panel design-homepage__card">
+                        <h3><?= __('最新内容插槽') ?></h3>
+                        <p><?= __('新品、文章或动态内容可以继续挂载。') ?></p>
+                    </div>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-bestsellers"
+                        name="Homepage bestsellers"
+                        accept="layout-homepage-bestsellers,bestseller-products,product-list,product,content"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::bestsellers
+                        <else/>
+                    <div class="design-homepage__panel design-homepage__card">
+                        <h3><?= __('热门内容插槽') ?></h3>
+                        <p><?= __('热卖、推荐或排行榜模块可挂载到这里。') ?></p>
+                    </div>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-brands"
+                        name="Homepage brands"
+                        accept="layout-homepage-brands,brand-list,brands,content"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section homepage-section--soft">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::brands
+                        <else/>
+                    <div class="design-homepage__panel design-homepage__card">
+                        <h3><?= __('品牌插槽') ?></h3>
+                        <p><?= __('品牌 Logo、合作伙伴或信任背书可以放这里。') ?></p>
+                    </div>
+                    </w:hook>
+                </w:slot>
+
+                <w:slot id="homepage-trust"
+                        name="Homepage trust"
+                        accept="layout-homepage-trust,trust-badges,testimonial,content"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="design-homepage__section homepage-section">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::trust
+                        <else/>
+                    <div class="design-homepage__grid">
+                        <article class="design-homepage__card"><h3><?= __('可靠') ?></h3><p><?= __('保留默认契约，插件和部件可以找到挂载点。') ?></p></article>
+                        <article class="design-homepage__card"><h3><?= __('可编辑') ?></h3><p><?= __('可视化编辑器能识别这些页面插槽。') ?></p></article>
+                        <article class="design-homepage__card"><h3><?= __('可替换') ?></h3><p><?= __('真实业务部件可以替换默认内容。') ?></p></article>
+                    </div>
+                    </w:hook>
+                </w:slot>
+            <?php endif; ?>
+            </w:hook>
+        </w:slot>
+
+        <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </main>
+
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::homepage::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::homepage::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+</div>
+
+<w:hook>Weline_Theme::frontend::layouts::homepage::body-end</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>

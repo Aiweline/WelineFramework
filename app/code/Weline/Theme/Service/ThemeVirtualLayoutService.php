@@ -56,10 +56,15 @@ class ThemeVirtualLayoutService
     ): array {
         $layoutType = $this->normalizeLayoutType($layoutType);
         $layoutOption = $this->normalizeLayoutOption($layoutOption);
-        $targetType = $this->normalizeTargetType($targetType);
+        try {
+            $targetType = $this->normalizeTargetTypeForWrite($targetType);
+        } catch (\InvalidArgumentException $e) {
+            return ['success' => false, 'status' => 'invalid_target_type', 'message' => $e->getMessage()];
+        }
         if ($targetId <= 0 || $layoutType === '' || $layoutOption === '') {
             return ['success' => false, 'status' => 'invalid_identity'];
         }
+        $locale = $this->normalizeSelectionLocale($locale);
         if (!$this->isSelectableLayoutOption($layoutType, $layoutOption, [
             'area' => self::DEFAULT_AREA,
             'scope' => $scope,
@@ -114,7 +119,12 @@ class ThemeVirtualLayoutService
         array $options = []
     ): array {
         $layoutType = $this->normalizeLayoutType($layoutType);
-        $targetType = $this->normalizeTargetType($targetType);
+        try {
+            $targetType = $this->normalizeTargetTypeForWrite($targetType);
+        } catch (\InvalidArgumentException $e) {
+            return ['success' => false, 'status' => 'invalid_target_type', 'message' => $e->getMessage()];
+        }
+        $locale = $this->normalizeSelectionLocale($locale);
         $key = $this->selectionKey($targetType, $targetId, $layoutType);
 
         $result = $this->systemConfig->saveScopeConfig(
@@ -142,7 +152,7 @@ class ThemeVirtualLayoutService
     }
 
     /**
-     * @return array{layout_code:string, source:string, source_scope:string, version:int}|null
+     * @return array{layout_option:string, layout_code:string, layout_type:string, target_type:string, target_id:int, source:string, source_scope:string, version:int}|null
      */
     public function resolveLayoutSelection(
         string $targetType,
@@ -151,11 +161,16 @@ class ThemeVirtualLayoutService
         ?string $scope = null,
         ?string $locale = null
     ): ?array {
+        $rawTargetType = strtolower(trim($targetType));
         $layoutType = $this->normalizeLayoutType($layoutType);
         $targetType = $this->normalizeTargetType($targetType);
+        if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL && $rawTargetType !== ThemeVirtualLayout::TARGET_GLOBAL) {
+            return null;
+        }
         if ($targetId <= 0 || $layoutType === '') {
             return null;
         }
+        $locale = $this->normalizeSelectionLocale($locale);
 
         $resolved = $this->systemConfig->resolveConfig(
             $this->selectionKey($targetType, $targetId, $layoutType),
@@ -175,7 +190,11 @@ class ThemeVirtualLayoutService
 
         $source = is_array($resolved['source'] ?? null) ? $resolved['source'] : [];
         return [
+            'layout_option' => $layoutCode,
             'layout_code' => $layoutCode,
+            'layout_type' => $layoutType,
+            'target_type' => $targetType,
+            'target_id' => $targetId,
             'source' => 'theme_config',
             'source_scope' => (string)($source['scope'] ?? ''),
             'version' => (int)($source['version'] ?? 0),
@@ -811,8 +830,16 @@ class ThemeVirtualLayoutService
             'target_id' => max(0, $targetId),
             'layout_type' => $this->normalizeLayoutType($layoutType),
             'scope' => $this->normalizeScope($scope),
-            'locale' => $this->systemConfig->normalizeLocale($locale),
+            'locale' => $this->normalizeSelectionLocale($locale),
         ];
+    }
+
+    private function normalizeSelectionLocale(?string $locale = null): string
+    {
+        $locale = trim((string)($locale ?? ''));
+        return $locale === ''
+            ? SystemConfig::LOCALE_DEFAULT
+            : $this->systemConfig->normalizeLocale($locale);
     }
 
     /**
@@ -908,12 +935,16 @@ class ThemeVirtualLayoutService
 
     private function normalizeTargetType(string $targetType): string
     {
-        $targetType = strtolower(trim($targetType));
-        return in_array($targetType, [
-            ThemeVirtualLayout::TARGET_PRODUCT,
-            ThemeVirtualLayout::TARGET_CATEGORY,
-            ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT,
-        ], true) ? $targetType : ThemeVirtualLayout::TARGET_GLOBAL;
+        /** @var ThemeTargetTypeRegistry $registry */
+        $registry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+        return $registry->normalize($targetType);
+    }
+
+    private function normalizeTargetTypeForWrite(string $targetType): string
+    {
+        /** @var ThemeTargetTypeRegistry $registry */
+        $registry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+        return $registry->normalizeForWrite($targetType);
     }
 
     private function getActiveThemeId(string $area): int

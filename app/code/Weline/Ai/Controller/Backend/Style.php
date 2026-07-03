@@ -345,28 +345,6 @@ class Style extends BackendController
             }
         }
 
-        foreach (['pagebuilder_plan_generation', 'pagebuilder_component_generation', 'pagebuilder_ai_site_assets'] as $code) {
-            if (isset($itemsByCode[$code])) {
-                continue;
-            }
-            try {
-                $adapter = $this->adapterScanner()->getAdapter($code);
-            } catch (\Throwable) {
-                $adapter = null;
-            }
-            if (!$adapter) {
-                continue;
-            }
-            $itemsByCode[$code] = [
-                'code' => $code,
-                'name' => (string)$adapter->getName(),
-                'description' => (string)$adapter->getDescription(),
-                'version' => (string)$adapter->getVersion(),
-                'default_style_codes' => $this->resolver()->getDefaultStyleCodes($code),
-                'manual_style_codes' => $this->adapterStyleRepository()->listActiveStyleCodes($code),
-            ];
-        }
-
         \ksort($itemsByCode);
         return \array_values($itemsByCode);
     }

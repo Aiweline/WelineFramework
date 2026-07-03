@@ -19,12 +19,12 @@ namespace Weline\Seo\Interface;
 interface SitemapProviderInterface
 {
     /**
-     * 返回该 Sitemap 提供者所属的 scope，例如 page_builder、website、blog 等。
+     * 返回该 Sitemap 提供者所属的 scope，例如 website、blog 等。
      */
     public function getScope(): string;
 
     /**
-     * 返回该 Sitemap 提供者所属的模块名称，例如 Weline_Websites、GuoLaiRen_PageBuilder。
+     * 返回该 Sitemap 提供者所属的模块名称。
      */
     public function getModule(): string;
 
@@ -40,4 +40,3 @@ interface SitemapProviderInterface
      */
     public function getDescription(): string;
 }
-

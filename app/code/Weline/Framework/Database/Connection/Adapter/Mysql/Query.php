@@ -1002,7 +1002,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 foreach ($this->updates[0] as $update_field => $field_value) {
                     $update_key = ':' . md5($update_field);
                     $update_field_quoted = '`' . $update_field . '`';
-                    $this->bound_values[$update_key] = (string)$field_value;
+                    if (is_bool($field_value)) {
+                        $this->bound_values[$update_key] = $field_value ? '1' : '0';
+                    } elseif ($field_value === null) {
+                        $this->bound_values[$update_key] = null;
+                    } else {
+                        $this->bound_values[$update_key] = (string)$field_value;
+                    }
                     // 单条更新时也通过数组覆盖，确保同一字段只有一个赋值
                     $updateExpressions[$update_field] = "{$update_field_quoted} = $update_key";
                 }
@@ -1014,7 +1020,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             foreach ($this->single_updates as $update_field => $update_value) {
                 $update_field_quoted = '`' . $update_field . '`';
                 $update_key = ':' . md5($update_field);
-                $this->bound_values[$update_key] = (string)$update_value;
+                if (is_bool($update_value)) {
+                    $this->bound_values[$update_key] = $update_value ? '1' : '0';
+                } elseif ($update_value === null) {
+                    $this->bound_values[$update_key] = null;
+                } else {
+                    $this->bound_values[$update_key] = (string)$update_value;
+                }
                 // single_updates 的值优先级最高，覆盖前面的表达式
                 $updateExpressions[$update_field] = "{$update_field_quoted}=$update_key";
             }

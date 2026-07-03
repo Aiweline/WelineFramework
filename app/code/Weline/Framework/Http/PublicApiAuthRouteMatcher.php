@@ -56,6 +56,7 @@ class PublicApiAuthRouteMatcher
     private const DEMO_PATH_PATTERNS = [
         'dev/tool/rest/v1/trace',
         'dev/tool/rest/v1/panel',
+        'dev/tool/rest/v1/panel/session',
         'dev/tool/rest/v1/routes',
         'dev/tool/rest/v1/document/modules',
         'dev/tool/rest/v1/document/search',
@@ -77,6 +78,8 @@ class PublicApiAuthRouteMatcher
     ];
 
     private const GUEST_FRONTEND_PATH_PATTERNS = [
+        'visitor/rest/v1/statistics',
+        'visitor/rest/v1/analytics',
         'api/rest/v1/weshop/checkout/methods',
         'api/rest/v1/weshop/cart/add',
         'api/rest/v1/weshop/cart/options',
@@ -212,6 +215,7 @@ class PublicApiAuthRouteMatcher
         foreach (($patterns ?? array_merge(self::AUTH_PATH_PATTERNS, self::DEMO_PATH_PATTERNS)) as $pattern) {
             if (
                 $normalizedPath === $pattern
+                || str_starts_with($normalizedPath, $pattern . '/')
                 || str_ends_with($normalizedPath, '/' . $pattern)
                 || str_ends_with($normalizedPath, $pattern)
                 || str_contains($normalizedPath, '/' . $pattern . '/')
