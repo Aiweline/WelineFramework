@@ -20,7 +20,6 @@ use Weline\Framework\Http\Url;
  * 用于在其他模块中嵌入 SEO 管理界面
  * 
  * 使用示例:
- * <w:seo:manager module="GuoLaiRen_PageBuilder" scope="page_builder" />
  * <w:seo:manager module="WeShop_Catalog" scope="catalog" height="600" />
  * 
  * @package Weline_Seo
@@ -50,8 +49,8 @@ class Manager implements TaglibInterface
     public static function attr(): array
     {
         return [
-            'module' => true,   // 必须：模块标识，如 GuoLaiRen_PageBuilder
-            'scope' => false,   // 可选：业务scope，如 page_builder
+            'module' => true,   // 必须：模块标识
+            'scope' => false,   // 可选：业务 scope
             'id' => false,      // 可选：iframe ID
             'height' => false,  // 可选：iframe 高度，默认 100%
             'class' => false,   // 可选：容器 CSS 类
@@ -170,8 +169,8 @@ class Manager implements TaglibInterface
     <tr><th>属性</th><th>必填</th><th>说明</th></tr>
   </thead>
   <tbody>
-    <tr><td><code>module</code></td><td>是</td><td>模块标识，如 GuoLaiRen_PageBuilder</td></tr>
-    <tr><td><code>scope</code></td><td>否</td><td>业务 scope 标识，如 page_builder</td></tr>
+    <tr><td><code>module</code></td><td>是</td><td>模块标识</td></tr>
+    <tr><td><code>scope</code></td><td>否</td><td>业务 scope 标识</td></tr>
     <tr><td><code>id</code></td><td>否</td><td>iframe 元素 ID，默认自动生成</td></tr>
     <tr><td><code>height</code></td><td>否</td><td>iframe 高度，默认 100%，可传数字(px)或CSS值</td></tr>
     <tr><td><code>class</code></td><td>否</td><td>容器 CSS 类名</td></tr>
@@ -183,10 +182,8 @@ class Manager implements TaglibInterface
 <h4>使用示例</h4>
 <pre>
 &lt;!-- 基础用法 --&gt;
-&lt;w:seo:manager module="GuoLaiRen_PageBuilder" /&gt;
 
 &lt;!-- 带 scope 过滤 --&gt;
-&lt;w:seo:manager module="GuoLaiRen_PageBuilder" scope="page_builder" /&gt;
 
 &lt;!-- 带标题和固定高度 --&gt;
 &lt;w:seo:manager 

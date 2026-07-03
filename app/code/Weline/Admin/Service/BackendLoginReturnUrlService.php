@@ -39,9 +39,11 @@ class BackendLoginReturnUrlService
             $params['no_access_reason'] = $reason;
         }
 
-        $returnUrl = $this->normalizeCandidateUrl($currentUrl);
-        if ($returnUrl !== null) {
-            $params['return_url'] = $returnUrl;
+        if ($this->shouldCaptureCurrentRequestReturnUrl($this->request, $currentUrl)) {
+            $returnUrl = $this->normalizeCandidateUrl($currentUrl);
+            if ($returnUrl !== null) {
+                $params['return_url'] = $this->toRelativeReturnUrl($returnUrl);
+            }
         }
 
         if ($params === []) {
@@ -49,6 +51,21 @@ class BackendLoginReturnUrlService
         }
 
         return $loginUrl . (str_contains($loginUrl, '?') ? '&' : '?') . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    public function shouldCaptureCurrentRequestReturnUrl(?Request $request = null, string $currentUrl = ''): bool
+    {
+        $request ??= $this->request;
+        if (!$request->isDocumentNavigationRequest()) {
+            return false;
+        }
+
+        $path = (string)(parse_url($currentUrl, PHP_URL_PATH) ?: '');
+        if ($path === '') {
+            $path = (string)(parse_url($request->getUrlBuilder()->getCurrentUrl(), PHP_URL_PATH) ?: '');
+        }
+
+        return !$this->isApiOrInterfacePath($path);
     }
 
     public function resolveForUser(BackendUser $user, string $explicitReturnUrl = ''): ?string
@@ -105,14 +122,6 @@ class BackendLoginReturnUrlService
         if ($routePath === '') {
             return null;
         }
-        if (str_contains(strtolower($routePath), 'pagebuilder/backend/ai-site-agent/workspace-preview')) {
-            $query = (string)(parse_url($normalized, PHP_URL_QUERY) ?: '');
-            parse_str($query, $params);
-            if ((string)($params['public_id'] ?? '') === '') {
-                return null;
-            }
-        }
-
         $roleId = $this->resolveRoleId($user);
         if ($roleId <= 0) {
             return null;
@@ -159,6 +168,10 @@ class BackendLoginReturnUrlService
             return false;
         }
 
+        if ($this->looksLikeBackendControllerRoute($normalized)) {
+            return true;
+        }
+
         return $this->isKnownBackendReturnRoute($normalized);
     }
 
@@ -198,6 +211,17 @@ class BackendLoginReturnUrlService
         }
     }
 
+    private function looksLikeBackendControllerRoute(string $routePath): bool
+    {
+        $segments = array_values(array_filter(
+            explode('/', trim($routePath, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+
+        return isset($segments[0], $segments[1], $segments[2])
+            && strtolower($segments[1]) === 'backend';
+    }
+
     private function extractRoutePath(string $url): string
     {
         $path = (string)(parse_url($url, PHP_URL_PATH) ?: '');
@@ -217,8 +241,32 @@ class BackendLoginReturnUrlService
             }
             array_shift($segments);
         }
+        if ($backendPrefix !== '' && isset($segments[0]) && strcasecmp((string)$segments[0], $backendPrefix) === 0) {
+            array_shift($segments);
+        }
 
         return trim(implode('/', $segments), '/');
+    }
+
+    private function isApiOrInterfacePath(string $path): bool
+    {
+        $routePath = strtolower($this->extractRoutePath($path));
+        if ($routePath === '') {
+            return false;
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', trim($routePath, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+
+        foreach ($segments as $segment) {
+            if (in_array($segment, ['api', 'rest', 'graphql'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveRoleId(BackendUser $user): int
@@ -229,6 +277,27 @@ class BackendLoginReturnUrlService
         }
 
         return (int)$user->getId() === 1 ? 1 : 0;
+    }
+
+    private function toRelativeReturnUrl(string $returnUrl): string
+    {
+        $parsed = parse_url($returnUrl);
+        if (!is_array($parsed) || (!isset($parsed['scheme']) && !isset($parsed['host']))) {
+            return $returnUrl;
+        }
+
+        $path = (string)($parsed['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        if (!str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        $query = isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '';
+        $fragment = isset($parsed['fragment']) && $parsed['fragment'] !== '' ? '#' . $parsed['fragment'] : '';
+
+        return $path . $query . $fragment;
     }
 
     private function ensureSameOrigin(string $candidate): string
@@ -289,7 +358,8 @@ class BackendLoginReturnUrlService
 
     private function isCurrencySegment(string $segment): bool
     {
-        return State::isAllowedCurrencyCode($segment);
+        return State::isAllowedCurrencyCode($segment)
+            || (bool)preg_match('/^[A-Z]{3}$/', $segment);
     }
 
     private function isLocaleSegment(string $segment): bool

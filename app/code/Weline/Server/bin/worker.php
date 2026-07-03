@@ -226,11 +226,12 @@ if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
 // 预读 env.php 判断开发模式（在框架初始化前定义，供 WlsRequest 等使用）
 $_wlsEnvFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
 $_wlsEnvConfig = \is_file($_wlsEnvFile) ? @include $_wlsEnvFile : [];
-$_wlsDevMode = ($_wlsEnvConfig['deploy'] ?? '') === 'dev';
+$_wlsSystemConfig = \is_array($_wlsEnvConfig['system'] ?? null) ? $_wlsEnvConfig['system'] : [];
+$_wlsDevMode = (($_wlsSystemConfig['deploy'] ?? $_wlsEnvConfig['deploy'] ?? '') === 'dev');
 if (!\defined('WLS_DEV_MODE')) {
     \define('WLS_DEV_MODE', $_wlsDevMode);
 }
-unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
+unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsSystemConfig, $_wlsDevMode);
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
@@ -318,7 +319,9 @@ $lastMainLoopUnblockedLogAt = 0.0;
 $isDev = false;
 if (\defined('DEV') && DEV) {
     $isDev = true;
-} elseif ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev') {
+} elseif ($envConfig !== null
+    && (($envConfig['system']['deploy'] ?? $envConfig['deploy'] ?? '') === 'dev')
+) {
     $isDev = true;
 }
 // stdout：默认显示子进程启动/操作日志；只有显式配置关闭时才静默
@@ -1023,17 +1026,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         handleStaticFile('__CLEAR_CACHE__', '');
                     }
                     WlsLogger::info_("收到 cache_clear 命令，已清理缓存");
-                    break;
-
-                case \Weline\Server\IPC\ControlMessage::TYPE_PAGEBUILDER_PAGE_INVALIDATE:
-                    $pbWid = (int)($msg['website_id'] ?? 0);
-                    $pbHandle = (string)($msg['handle'] ?? '');
-                    $pbHome = (bool)($msg['is_home_page'] ?? false);
-                    if (\class_exists(\GuoLaiRen\PageBuilder\Controller\Router::class)) {
-                        \GuoLaiRen\PageBuilder\Controller\Router::clearHandleCacheForPage($pbWid, $pbHandle, $pbHome);
-                    }
-                    \Weline\Framework\Manager\ObjectManager::clearInstances();
-                    WlsLogger::info_('收到 pagebuilder_page_invalidate，已清理 PageBuilder handle 缓存并重置 ObjectManager');
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
@@ -3425,90 +3417,6 @@ function wlsDecorateFormattedStaticResponseForPerformancePanel(
     return $response;
 }
 
-function wlsDecorateFrameworkResponseForPerformancePanel(
-    \Weline\Framework\Http\Response $response,
-    string $rawRequest
-): void {
-    if (!wlsPerformancePanelAllowed($rawRequest)) {
-        return;
-    }
-
-    [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
-    if ($method === 'HEAD'
-        || wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)
-        || \in_array($response->getStatusCode(), [204, 205, 304], true)
-    ) {
-        return;
-    }
-
-    $contentTypeHeader = $response->getHeader('Content-Type');
-    $contentType = \strtolower(\is_array($contentTypeHeader)
-        ? (string)($contentTypeHeader[0] ?? '')
-        : (string)($contentTypeHeader ?? '')
-    );
-    if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
-        return;
-    }
-
-    $body = $response->getBody();
-    if ($body === '') {
-        return;
-    }
-
-    $contentEncodingHeader = $response->getHeader('Content-Encoding');
-    $contentEncoding = \strtolower(\trim(\is_array($contentEncodingHeader)
-        ? (string)($contentEncodingHeader[0] ?? '')
-        : (string)($contentEncodingHeader ?? '')
-    ));
-    $isGzip = $contentEncoding === 'gzip';
-    if ($isGzip) {
-        $decoded = \gzdecode($body);
-        if (!\is_string($decoded)) {
-            return;
-        }
-        $body = $decoded;
-    } elseif ($contentEncoding !== '') {
-        return;
-    }
-
-    if (\stripos($body, 'data-weline-wls-performance-bootstrap') !== false
-        || !wlsPerformancePanelBodyLooksInjectable($body)
-    ) {
-        return;
-    }
-
-    $limit = (int)\Weline\Framework\App\Env::get('wls.performance_panel.max_response_bytes', 1048576);
-    if ($limit > 0 && \strlen($body) > $limit) {
-        return;
-    }
-
-    $requestIdHeader = $response->getHeader('X-Weline-Request-Id');
-    $requestId = \is_array($requestIdHeader)
-        ? (string)($requestIdHeader[0] ?? '')
-        : (string)($requestIdHeader ?? '');
-    if (!\preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $requestId)) {
-        $requestId = wlsPerformancePanelRequestId($rawRequest);
-        $response->setHeader('X-Weline-Request-Id', $requestId);
-    }
-
-    $bootstrap = wlsRenderPerformancePanelBootstrap($requestId);
-    $bodyClosePos = \strripos($body, '</body>');
-    $body = $bodyClosePos === false
-        ? $body . $bootstrap
-        : \substr($body, 0, $bodyClosePos) . $bootstrap . \substr($body, $bodyClosePos);
-    if ($isGzip) {
-        $encoded = \gzencode($body, 6);
-        if (!\is_string($encoded)) {
-            return;
-        }
-        $body = $encoded;
-    }
-    $response->setBody($body);
-    if ($response->getHeader('Content-Length') !== null) {
-        $response->setHeader('Content-Length', (string)\strlen($body));
-    }
-}
-
 function wlsFormattedHttpStatusCode(string $response): int
 {
     if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/', $response, $matches) === 1) {
@@ -3520,23 +3428,92 @@ function wlsFormattedHttpStatusCode(string $response): int
 
 function wlsPerformancePanelAllowed(string $rawRequest = ''): bool
 {
+    if (\class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
+        try {
+            return (new \Weline\DeveloperWorkspace\Service\PanelAccessService())->canAccessRawHttp($rawRequest);
+        } catch (\Throwable) {
+        }
+    }
+
     if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
         return true;
     }
-    if ((bool)\Weline\Framework\App\Env::get('wls.debug.performance_panel', false)) {
-        return true;
-    }
-    if (!(bool)\Weline\Framework\App\Env::get('wls.performance_panel.enable_in_prod', false)) {
+    if (!wlsPanelEnvTruthy(\Weline\Framework\App\Env::get('dev_tool.panel.enable_in_prod', false))) {
         return false;
     }
 
-    $cookieName = (string)\Weline\Framework\App\Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
+    $token = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token', ''));
+    $tokenHash = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token_hash', ''));
+    if ($token === '' && $tokenHash === '') {
+        return false;
+    }
+    $cookieName = (string)\Weline\Framework\App\Env::get('dev_tool.panel.cookie_name', 'w_weline_panel');
     if ($cookieName === '') {
         return false;
     }
     $cookieHeader = (string)(getHeaderValue($rawRequest, 'Cookie') ?? '');
 
-    return getCookieValue($cookieHeader, $cookieName) === '1';
+    return wlsPanelSessionCookieValid((string)(getCookieValue($cookieHeader, $cookieName) ?? ''));
+}
+
+function wlsPanelEnvTruthy(mixed $value): bool
+{
+    if (\is_bool($value)) {
+        return $value;
+    }
+    if (\is_int($value) || \is_float($value)) {
+        return (bool)$value;
+    }
+    if (\is_string($value)) {
+        return \in_array(\strtolower(\trim($value)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    return false;
+}
+
+function wlsPanelSessionCookieValid(string $cookieValue): bool
+{
+    if ($cookieValue === '') {
+        return false;
+    }
+    $decoded = wlsPanelBase64UrlDecode($cookieValue);
+    $parts = \explode('.', $decoded);
+    if (\count($parts) !== 4) {
+        return false;
+    }
+    [$issuedAt, $expiresAt, $nonce, $signature] = $parts;
+    if (!\ctype_digit($issuedAt) || !\ctype_digit($expiresAt) || $nonce === '' || $signature === '') {
+        return false;
+    }
+    if ((int)$expiresAt < \time()) {
+        return false;
+    }
+    $payload = $issuedAt . '.' . $expiresAt . '.' . $nonce;
+    $expected = \hash_hmac('sha256', $payload, wlsPanelSessionSigningKey());
+
+    return \hash_equals($expected, $signature);
+}
+
+function wlsPanelSessionSigningKey(): string
+{
+    $tokenHash = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token_hash', ''));
+    $token = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token', ''));
+    $material = $tokenHash !== '' ? $tokenHash : $token;
+    $salt = \defined('BP') ? (string)BP : __DIR__;
+
+    return \hash('sha256', $material . '|' . $salt);
+}
+
+function wlsPanelBase64UrlDecode(string $value): string
+{
+    $value = \strtr($value, '-_', '+/');
+    $padding = \strlen($value) % 4;
+    if ($padding > 0) {
+        $value .= \str_repeat('=', 4 - $padding);
+    }
+    $decoded = \base64_decode($value, true);
+
+    return \is_string($decoded) ? $decoded : '';
 }
 
 function wlsPerformancePanelRequestId(string $rawRequest): string
@@ -3598,80 +3575,6 @@ function wlsRecordFormattedFpcFastResponseForPerformancePanel(
     }
 }
 
-function wlsCanInjectPerformancePanelIntoFormattedResponse(string $rawRequest, string $response): bool
-{
-    [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
-    if ($method === 'HEAD') {
-        return false;
-    }
-    if (wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)) {
-        return false;
-    }
-
-    $headerEnd = \strpos($response, "\r\n\r\n");
-    if ($headerEnd === false) {
-        return false;
-    }
-    $headersPart = \substr($response, 0, $headerEnd);
-    $bodyPart = \substr($response, $headerEnd + 4);
-    if ($bodyPart === ''
-        || \preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)
-        || \preg_match('/^Content-Encoding:/mi', $headersPart)) {
-        return false;
-    }
-    $limit = (int)\Weline\Framework\App\Env::get('wls.performance_panel.max_response_bytes', 1048576);
-    if ($limit > 0 && \strlen($bodyPart) > $limit) {
-        return false;
-    }
-    $contentType = '';
-    if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
-        $contentType = \strtolower(\trim((string)$typeMatch[1]));
-    }
-    if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
-        return false;
-    }
-
-    return wlsPerformancePanelBodyLooksInjectable($bodyPart);
-}
-
-function wlsPerformancePanelIsAjaxOrApiRequest(string $rawRequest, string $target): bool
-{
-    $requestedWith = \strtolower(\trim((string)(getHeaderValue($rawRequest, 'X-Requested-With') ?? '')));
-    if ($requestedWith === 'xmlhttprequest') {
-        return true;
-    }
-    $fetchDest = \strtolower(\trim((string)(getHeaderValue($rawRequest, 'Sec-Fetch-Dest') ?? '')));
-    if ($fetchDest === 'iframe') {
-        return true;
-    }
-    $accept = \strtolower((string)(getHeaderValue($rawRequest, 'Accept') ?? ''));
-    if ($accept !== '' && !\str_contains($accept, 'text/html') && !\str_contains($accept, '*/*')) {
-        return true;
-    }
-    $path = \parse_url($target, PHP_URL_PATH);
-    $path = \is_string($path) ? '/' . \ltrim($path, '/') : '/';
-    $restPrefixes = [
-        (string)\Weline\Framework\App\Env::get('router.area_routes.rest_frontend.prefix', 'api'),
-        (string)\Weline\Framework\App\Env::get('router.area_routes.rest_backend.prefix', ''),
-    ];
-    foreach ($restPrefixes as $prefix) {
-        $prefix = '/' . \trim($prefix, '/');
-        if ($prefix !== '/' && ($path === $prefix || \str_starts_with($path, $prefix . '/'))) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-function wlsPerformancePanelBodyLooksInjectable(string $body): bool
-{
-    return \stripos($body, '<html') !== false
-        || \stripos($body, '<!doctype') !== false
-        || \stripos($body, '<body') !== false
-        || \preg_match('/<(?:main|section|article|div|span|p|a|form|table|ul|ol|script|style)\b/i', $body) === 1;
-}
-
 function wlsPerformancePanelRequestLine(string $rawRequest): array
 {
     if (\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $matches)) {
@@ -3679,28 +3582,6 @@ function wlsPerformancePanelRequestLine(string $rawRequest): array
     }
 
     return ['GET', '/'];
-}
-
-function wlsRenderPerformancePanelBootstrap(string $requestId): string
-{
-    $assetVersion = '20260630-wls-performance-panel-console-1';
-    $requestIdJson = wlsJsonString($requestId);
-    $cssUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=' . $assetVersion);
-    $jsUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=' . $assetVersion);
-    $endpointUrl = wlsJsonString('/server/test/wls-performance-panel');
-
-    return <<<HTML
-<script data-no-extract="true" data-load-order="last" data-weline-wls-performance-bootstrap="true">
-(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var endpointUrl={$endpointUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,endpointUrl:endpointUrl});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("WLS 面板样式加载失败"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS 面板 API 不存在"))};script.onerror=function(){reject(new Error("WLS 面板脚本加载失败"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}function markEvent(event){try{Object.defineProperty(event,"__wlsPanelSeen",{value:true})}catch(error){event.__wlsPanelSeen=true}}function onKeydown(event){if(event.__wlsPanelSeen)return;markEvent(event);if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()}w.wlsPanel=openPanel;w.addEventListener("keydown",onKeydown,true);d.addEventListener("keydown",onKeydown,true)})(document,window);
-</script>
-HTML;
-}
-
-function wlsJsonString(string $value): string
-{
-    $encoded = \json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-    return \is_string($encoded) ? $encoded : '""';
 }
 
 function wlsAddFormattedVaryAcceptEncoding(string $headersPart): string
@@ -4545,8 +4426,6 @@ function handleRequest(
             );
         }
 
-        wlsDecorateFrameworkResponseForPerformancePanel($response, $rawRequest);
-
         $acceptEncoding = $request->getHeader('Accept-Encoding');
         if ($acceptEncoding && \is_string($acceptEncoding)) {
             $response->compress($acceptEncoding);
@@ -4672,7 +4551,7 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
     $uri = normalizeBackendReturnUri($uri);
 
     $scheme = $request->isSecure() ? 'https' : 'http';
-    $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
+    $host = resolveBackendLoginReturnHost($request, $scheme);
     $returnUrl = $scheme . '://' . $host . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
     $query = [
         'no_access_reason' => 'not_logged_in',
@@ -4681,6 +4560,25 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
 
     $redirectUrl = removeBackendLoginReturnParams($redirectUrl);
     return $redirectUrl . (\str_contains($redirectUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
+function resolveBackendLoginReturnHost(\Weline\Framework\Http\Request $request, string $scheme): string
+{
+    $host = \trim((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost'));
+    if ($host === '' || \str_contains($host, ':') || \str_starts_with($host, '[')) {
+        return $host !== '' ? $host : 'localhost';
+    }
+
+    $port = \trim((string)($request->getServer('HTTP_WELINE_ORIGINAL_PORT') ?: ''));
+    if ($port === '' || !\ctype_digit($port)) {
+        return $host;
+    }
+
+    if (($scheme === 'http' && $port === '80') || ($scheme === 'https' && $port === '443')) {
+        return $host;
+    }
+
+    return $host . ':' . $port;
 }
 
 function normalizeBackendReturnUri(string $uri): string

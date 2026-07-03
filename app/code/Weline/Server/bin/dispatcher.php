@@ -223,10 +223,12 @@ if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
 // 预读 env.php 判断开发模式
 $_wlsEnvFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
 $_wlsEnvConfig = \is_file($_wlsEnvFile) ? @include $_wlsEnvFile : [];
-$_wlsDevMode = ($_wlsEnvConfig['deploy'] ?? '') === 'dev';
+$_wlsSystemConfig = \is_array($_wlsEnvConfig['system'] ?? null) ? $_wlsEnvConfig['system'] : [];
+$_wlsDevMode = (($_wlsSystemConfig['deploy'] ?? $_wlsEnvConfig['deploy'] ?? '') === 'dev');
 if (!\defined('WLS_DEV_MODE')) {
     \define('WLS_DEV_MODE', $_wlsDevMode);
 }
+unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsSystemConfig, $_wlsDevMode);
 $_SERVER['WLS_PROCESS_ROLE'] = 'dispatcher';
 $_ENV['WLS_PROCESS_ROLE'] = 'dispatcher';
 @\putenv('WLS_PROCESS_ROLE=dispatcher');

@@ -40,6 +40,15 @@ class RouterRunBefore implements ObserverInterface
         # 匹配静态资源/static/
         if (str_starts_with($path, '/static/')) {
             $staticPath = $decodedPath;
+            // Theme/module assets may have a stale pub/static copy from a previous request.
+            // Refresh them before serving the existing published file.
+            $publishedThemePath = $this->publishThemeOverrideStaticPath($staticPath);
+            if ($publishedThemePath !== null) {
+                /** @var Core $core */
+                $core = ObjectManager::getInstance(Core::class);
+                $core->StaticFile($publishedThemePath, true);
+            }
+
             $file_path = $this->resolveExistingFileInRoot(BP . '/pub/static', \substr($staticPath, \strlen('/static/')));
             if ($file_path !== null && is_file($file_path)) {
                 /**@var Core $core */
@@ -47,13 +56,6 @@ class RouterRunBefore implements ObserverInterface
                 // 传递包含pub目录的完整路径
                 $full_path = '/pub' . $staticPath;
                 $core->StaticFile($full_path, true);
-            }
-
-            $publishedThemePath = $this->publishThemeOverrideStaticPath($staticPath);
-            if ($publishedThemePath !== null) {
-                /** @var Core $core */
-                $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile($publishedThemePath, true);
             }
         }
         

@@ -541,11 +541,7 @@ $skillI18n = [
     function renderAdapters() {
         clearNode(els.adapter);
         if (!state.adapters.length) {
-            var empty = document.createElement('option');
-            empty.value = 'pagebuilder_component_generation';
-            empty.textContent = 'pagebuilder_component_generation';
-            els.adapter.appendChild(empty);
-            state.selectedAdapter = empty.value;
+            state.selectedAdapter = '';
             return;
         }
 
@@ -556,9 +552,7 @@ $skillI18n = [
             els.adapter.appendChild(option);
         });
 
-        var preferred = state.adapters.find(function (adapter) {
-            return adapter.code === 'pagebuilder_component_generation';
-        }) || state.adapters[0];
+        var preferred = state.adapters[0];
         state.selectedAdapter = preferred.code || '';
         els.adapter.value = state.selectedAdapter;
     }

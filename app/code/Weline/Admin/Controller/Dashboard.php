@@ -21,6 +21,6 @@ class Dashboard extends BaseController
 {
     public function index()
     {
-        return $this->fetch('Index/index');
+        return $this->redirect('weline_dashboard/backend/dashboard');
     }
 }

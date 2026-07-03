@@ -1,0 +1,60 @@
+<?php
+/**
+ * 组件：Field
+ *
+ * @meta.name {default="Field 字段",name="Field 字段",description="可拖入表单的单字段组件"}
+ * @meta.description {default="可拖入表单的单字段组件",name="描述",description="组件用途"}
+ * @widget.supports {["builder-component","builder-field"]}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*","dashboard"]}
+ * @widget.compatible {true}
+ * @param.name {default="field_name",name="字段名",description="input name"}
+ * @param.label {default="字段名称",name="标签",description="字段标签"}
+ * @param.type {default="text",name="类型",description="text/select/textarea/checkbox/radio/date/file/hidden"}
+ * @param.placeholder {default="",name="占位符",description="输入提示"}
+ * @param.required {default=false,name="必填",description="是否必填"}
+ * @param.options {default=[],name="选项",description="select/radio 选项数组"}
+ */
+$name = (string)($this->getData('name') ?? $this->getData('meta.name') ?? 'field_name');
+$label = (string)($this->getData('label') ?? $this->getData('meta.label') ?? '字段名称');
+$type = strtolower((string)($this->getData('type') ?? $this->getData('meta.type') ?? 'text'));
+$placeholder = (string)($this->getData('placeholder') ?? $this->getData('meta.placeholder') ?? '');
+$required = (bool)($this->getData('required') ?? $this->getData('meta.required') ?? false);
+$options = $this->getData('options') ?? $this->getData('meta.options') ?? [];
+if (!is_array($options)) {
+    $options = array_filter(array_map('trim', explode("\n", (string)$options)));
+}
+$allowedTypes = ['text', 'select', 'textarea', 'checkbox', 'radio', 'date', 'file', 'hidden'];
+if (!in_array($type, $allowedTypes, true)) {
+    $type = 'text';
+}
+$id = 'field-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name);
+?>
+<div class="mb-3 w-builder-field w-builder-field-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>">
+    <?php if ($type !== 'hidden' && $label !== ''): ?>
+        <label class="form-label" for="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?><?= $required ? ' *' : '' ?>
+        </label>
+    <?php endif; ?>
+    <?php if ($type === 'textarea'): ?>
+        <textarea class="form-control" id="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= htmlspecialchars($placeholder, ENT_QUOTES, 'UTF-8') ?>"<?= $required ? ' required' : '' ?>></textarea>
+    <?php elseif ($type === 'select'): ?>
+        <select class="form-select" id="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"<?= $required ? ' required' : '' ?>>
+            <?php foreach ($options as $key => $value): ?>
+                <?php $optionValue = is_string($key) ? $key : (string)$value; ?>
+                <option value="<?= htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') ?></option>
+            <?php endforeach; ?>
+        </select>
+    <?php elseif ($type === 'checkbox' || $type === 'radio'): ?>
+        <?php $optionList = $options !== [] ? $options : [$label ?: $name]; ?>
+        <?php foreach ($optionList as $key => $value): ?>
+            <?php $optionValue = is_string($key) ? $key : (string)$value; ?>
+            <label class="form-check">
+                <input class="form-check-input" type="<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8') ?>"<?= $required ? ' required' : '' ?>>
+                <span class="form-check-label"><?= htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') ?></span>
+            </label>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <input class="form-control" type="<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>" id="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= htmlspecialchars($placeholder, ENT_QUOTES, 'UTF-8') ?>"<?= $required ? ' required' : '' ?>>
+    <?php endif; ?>
+</div>

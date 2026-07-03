@@ -692,8 +692,7 @@ class WlsRuntime implements RuntimeInterface
             || \preg_match('#^/[a-z]{2}_[a-z0-9_]+/?$#i', $lower) === 1
             || \str_contains($lower, '/catalog/category/')
             || \str_contains($lower, '/product/')
-            || \str_contains($lower, '/product/view')
-            || \str_contains($lower, '/pagebuilder/');
+            || \str_contains($lower, '/product/view');
     }
 
     private function assertGeneratedRouteFilesReady(): void
@@ -1493,7 +1492,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function dynamicWarmupControllerCacheSource(array $headers): string
     {
-        foreach (['X-WLS-Controller-Cache', 'X-WLS-PageBuilder-View-Cache', 'X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache'] as $headerName) {
+        foreach (['X-WLS-Controller-Cache', 'X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache'] as $headerName) {
             $value = $this->warmupHeaderValue($headers, $headerName);
             if ($value !== '') {
                 return \strtolower($value);
@@ -1517,7 +1516,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function dynamicWarmupStoreStatus(array $headers): string
     {
-        foreach (['X-WLS-PageBuilder-View-Cache-Store', 'X-WLS-Category-View-Cache-Store', 'X-WLS-Product-View-Cache-Store'] as $headerName) {
+        foreach (['X-WLS-Category-View-Cache-Store', 'X-WLS-Product-View-Cache-Store'] as $headerName) {
             $value = $this->warmupHeaderValue($headers, $headerName);
             if ($value !== '') {
                 return $value;
@@ -2940,10 +2939,6 @@ class WlsRuntime implements RuntimeInterface
             if (\is_array($routerProfile) && $routerProfile !== []) {
                 $timing['router_profile'] = $routerProfile;
             }
-            $pageBuilderRenderProfile = RequestContext::get('pagebuilder.render.profile');
-            if (\is_array($pageBuilderRenderProfile) && $pageBuilderRenderProfile !== []) {
-                $timing['pagebuilder_render'] = $pageBuilderRenderProfile;
-            }
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             if ($resultStr === '') {
                 $this->logResponseDiagnostic('empty_runtime_response_body', $request, $timing, [
@@ -3566,7 +3561,6 @@ class WlsRuntime implements RuntimeInterface
             'product.view.profile',
             'view.template.profile',
             'router.start.profile',
-            'pagebuilder.render.profile',
         ] as $key) {
             RequestContext::remove($key);
         }
@@ -4000,18 +3994,6 @@ class WlsRuntime implements RuntimeInterface
                     $response->setHeader('X-WLS-Performance-UrlParser-' . (string)$name, (string)$value);
                 }
             }
-            $pageBuilderRender = $timing['pagebuilder_render'] ?? null;
-            if (\is_array($pageBuilderRender)) {
-                foreach (['total', 'layout_config', 'render_header', 'render_content', 'render_footer', 'finalize_output'] as $stage) {
-                    $key = $stage === 'total' ? 'total_ms' : $stage . '_ms';
-                    if (isset($pageBuilderRender[$key]) && \is_scalar($pageBuilderRender[$key])) {
-                        $response->setHeader(
-                            'X-WLS-Performance-PageBuilder-' . \str_replace('_', '-', $stage),
-                            (string)$pageBuilderRender[$key]
-                        );
-                    }
-                }
-            }
         } catch (\Throwable) {
             // 蹇界暐鍝嶅簲澶村啓鍏ラ敊璇紝涓嶅奖鍝嶄富娴佺▼銆?
         }
@@ -4098,7 +4080,7 @@ class WlsRuntime implements RuntimeInterface
 
     private function resolveControllerCacheSource(array $timing, Response $response): string
     {
-        foreach (['X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache', 'X-WLS-PageBuilder-View-Cache'] as $headerName) {
+        foreach (['X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache'] as $headerName) {
             $value = $response->getHeader($headerName);
             if (\is_scalar($value) && \trim((string)$value) !== '') {
                 return \strtolower(\trim((string)$value));
@@ -4185,8 +4167,7 @@ class WlsRuntime implements RuntimeInterface
     {
         if (!$isDev
             && !(\defined('DEBUG') && DEBUG)
-            && !(bool)Env::get('wls.debug.performance_panel', false)
-            && !(bool)Env::get('wls.performance_panel.enable_in_prod', false)
+            && !\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)->canAccessApi()
         ) {
             return;
         }
@@ -4252,19 +4233,8 @@ class WlsRuntime implements RuntimeInterface
 
     private function shouldDecorateCachedFpcResponseForTelemetry(): bool
     {
-        if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
-            return true;
-        }
-        if ((bool)Env::get('wls.debug.performance_panel', false)) {
-            return true;
-        }
-        if (!(bool)Env::get('wls.performance_panel.enable_in_prod', false)) {
-            return false;
-        }
-
         try {
-            $cookieName = (string)Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
-            return $cookieName !== '' && \Weline\Framework\Http\Cookie::get($cookieName) === '1';
+            return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)->canAccessApi();
         } catch (\Throwable) {
             return false;
         }
@@ -4480,7 +4450,7 @@ class WlsRuntime implements RuntimeInterface
     private function withBackendLoginReturnUrl(string $redirectUrl, ?Request $request): string
     {
         $method = strtoupper((string)($request?->getMethod() ?: ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
-        if ($method !== 'GET' && $method !== 'HEAD') {
+        if (!$this->isBackendLoginReturnDocumentRequest($request, $method)) {
             return $redirectUrl;
         }
 
@@ -4491,6 +4461,9 @@ class WlsRuntime implements RuntimeInterface
         ) {
             return $redirectUrl;
         }
+        if ($this->redirectUrlHasBackendReturnUrl($redirectUrl)) {
+            return $redirectUrl;
+        }
 
         $uri = (string)(
             ($request?->getServer('WELINE_ORIGIN_REQUEST_URI') ?: null)
@@ -4499,6 +4472,9 @@ class WlsRuntime implements RuntimeInterface
             ?: ($_SERVER['REQUEST_URI'] ?? '')
         );
         if ($uri === '') {
+            return $redirectUrl;
+        }
+        if ($this->isBackendLoginReturnApiOrInterfaceUri($uri)) {
             return $redirectUrl;
         }
         $queryString = (string)($_SERVER['QUERY_STRING'] ?? $request?->getServer('QUERY_STRING') ?? '');
@@ -4517,20 +4493,18 @@ class WlsRuntime implements RuntimeInterface
 
         $backendPrefix = substr($redirectPath, 0, -strlen('/admin/login'));
         $uriPath = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
-        if ($backendPrefix !== '' && $uriPath !== '' && !str_starts_with($uriPath, $backendPrefix . '/')) {
+        $baseBackendPrefix = $this->resolveBackendAreaPrefixPath($backendPrefix);
+        $hasLocalizedPrefix = $backendPrefix !== ''
+            && ($uriPath === $backendPrefix || str_starts_with($uriPath, $backendPrefix . '/'));
+        $hasBasePrefix = $baseBackendPrefix !== ''
+            && ($uriPath === $baseBackendPrefix || str_starts_with($uriPath, $baseBackendPrefix . '/'));
+        if ($backendPrefix !== '' && $uriPath !== '' && !$hasLocalizedPrefix && !$hasBasePrefix) {
             $uri = $backendPrefix . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
         }
         $uri = $this->normalizeBackendLoginReturnUri($uri);
 
         $scheme = $request?->isSecure() ? 'https' : 'http';
-        $host = (string)(
-            WelineEnv::get('server.http_host', '')
-            ?: WelineEnv::get('server.host', '')
-            ?: WelineEnv::get('server.server_name', '')
-            ?: ($request?->getServer('HTTP_HOST') ?: null)
-            ?: ($request?->getServer('SERVER_NAME') ?: null)
-            ?: 'localhost'
-        );
+        $host = $this->resolveBackendLoginReturnHost($request, $scheme);
         $returnUrl = $scheme . '://' . $host . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
         $query = [
             'no_access_reason' => 'not_logged_in',
@@ -4538,6 +4512,139 @@ class WlsRuntime implements RuntimeInterface
         ];
 
         return $this->removeBackendLoginReturnParams($redirectUrl) . (str_contains($this->removeBackendLoginReturnParams($redirectUrl), '?') ? '&' : '?') . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function isBackendLoginReturnDocumentRequest(?Request $request, string $method): bool
+    {
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return false;
+        }
+
+        if ($request instanceof Request) {
+            return $request->isDocumentNavigationRequest();
+        }
+
+        $fetchDest = strtolower(trim($this->backendLoginReturnHeaderValue(null, 'Sec-Fetch-Dest')));
+        if ($fetchDest !== '' && $fetchDest !== 'document') {
+            return false;
+        }
+
+        $fetchMode = strtolower(trim($this->backendLoginReturnHeaderValue(null, 'Sec-Fetch-Mode')));
+        if ($fetchMode !== '' && $fetchMode !== 'navigate') {
+            return false;
+        }
+
+        $requestedWith = strtolower(trim($this->backendLoginReturnHeaderValue(null, 'X-Requested-With')));
+        if ($requestedWith === 'xmlhttprequest') {
+            return false;
+        }
+
+        $accept = strtolower(trim($this->backendLoginReturnHeaderValue(null, 'Accept')));
+        if ($accept === '' || $accept === '*/*') {
+            return true;
+        }
+        if (str_contains($accept, 'text/html') || str_contains($accept, 'application/xhtml+xml')) {
+            return true;
+        }
+
+        return !str_contains($accept, 'application/json')
+            && !str_contains($accept, 'text/event-stream')
+            && !str_contains($accept, 'application/xml')
+            && !str_contains($accept, 'text/xml');
+    }
+
+    private function backendLoginReturnHeaderValue(?Request $request, string $name): string
+    {
+        $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+        $value = (string)(
+            ($request?->getServer($serverKey) ?: null)
+            ?: ($_SERVER[$serverKey] ?? '')
+        );
+        if ($value !== '') {
+            return $value;
+        }
+
+        $header = $request?->getHeader($name);
+        if (is_array($header)) {
+            return implode(',', $header);
+        }
+
+        return is_scalar($header) ? (string)$header : '';
+    }
+
+    private function isBackendLoginReturnApiOrInterfaceUri(string $uri): bool
+    {
+        $path = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
+        if ($path === '') {
+            return false;
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        foreach ($segments as $segment) {
+            if (in_array(strtolower($segment), ['api', 'rest', 'graphql'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function redirectUrlHasBackendReturnUrl(string $url): bool
+    {
+        $query = (string)(parse_url($url, PHP_URL_QUERY) ?: '');
+        if ($query === '') {
+            return false;
+        }
+
+        parse_str($query, $params);
+        $returnUrl = $params['return_url'] ?? '';
+        return is_string($returnUrl) && trim($returnUrl) !== '';
+    }
+
+    private function resolveBackendAreaPrefixPath(string $localizedBackendPrefix): string
+    {
+        $configuredPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        if ($configuredPrefix !== '') {
+            return '/' . $configuredPrefix;
+        }
+
+        $segments = explode('/', trim($localizedBackendPrefix, '/'));
+        $firstSegment = (string)($segments[0] ?? '');
+        return $firstSegment !== '' ? '/' . $firstSegment : '';
+    }
+
+    private function resolveBackendLoginReturnHost(?Request $request, string $scheme): string
+    {
+        $host = trim((string)(
+            ($request?->getServer('HTTP_HOST') ?: null)
+            ?: WelineEnv::get('server.http_host', '')
+            ?: WelineEnv::get('server.host', '')
+            ?: WelineEnv::get('server.server_name', '')
+            ?: ($request?->getServer('SERVER_NAME') ?: null)
+            ?: 'localhost'
+        ));
+
+        if ($host === '' || str_contains($host, ':') || str_starts_with($host, '[')) {
+            return $host !== '' ? $host : 'localhost';
+        }
+
+        $port = trim((string)(
+            ($request?->getServer('HTTP_WELINE_ORIGINAL_PORT') ?: null)
+            ?: WelineEnv::get('http_weline_original_port', '')
+            ?: ''
+        ));
+        if ($port === '' || !ctype_digit($port)) {
+            return $host;
+        }
+
+        if (($scheme === 'http' && $port === '80') || ($scheme === 'https' && $port === '443')) {
+            return $host;
+        }
+
+        return $host . ':' . $port;
     }
 
     private function normalizeBackendLoginReturnUri(string $uri): string
@@ -4567,7 +4674,8 @@ class WlsRuntime implements RuntimeInterface
 
     private function isBackendReturnCurrencySegment(string $segment): bool
     {
-        return State::isAllowedCurrencyCode($segment);
+        return State::isAllowedCurrencyCode($segment)
+            || (bool)preg_match('/^[A-Z]{3}$/', $segment);
     }
 
     private function isBackendReturnLocaleSegment(string $segment): bool

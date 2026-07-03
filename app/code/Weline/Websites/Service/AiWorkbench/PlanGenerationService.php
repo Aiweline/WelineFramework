@@ -9,7 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class PlanGenerationService
 {
-    private const PLAN_SCENARIO_CODE = 'pagebuilder_plan_generation';
+    private const PLAN_SCENARIO_CODE = null;
 
     /** @var list<string> */
     private const SUPPORTED_PAGE_TYPES = [
@@ -176,9 +176,9 @@ class PlanGenerationService
             : (\json_encode($currentPlan, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: 'None');
 
         return \implode("\n", [
-            'You are an AI site planning assistant for a PageBuilder-driven site workbench.',
+            'You are an AI site planning assistant.',
             'Return STRICT JSON only. No markdown fences, no explanations.',
-            'Build a practical site plan that can be used directly for PageBuilder generation.',
+            'Build a practical site plan.',
             'The plan must contain these keys:',
             '{',
             '  "site_positioning": "string",',
@@ -187,7 +187,7 @@ class PlanGenerationService
             '  "visual_style": "string",',
             '  "seo_keywords": ["string", "string", "string"],',
             '  "page_types": ["home_page", "about_page", "contact_page", "custom_page", "blog_list"],',
-            '  "build_mode": "pagebuilder_style or pagebuilder_html",',
+            '  "build_mode": "string",',
             '  "shared_elements": ["header", "footer"],',
             '  "references_summary": "string",',
             '  "domain_strategy": "string",',
@@ -196,19 +196,17 @@ class PlanGenerationService
             '  "brief_description": "string"',
             '}',
             'Rules:',
-            '- page_types must use only these PageBuilder page type codes: home_page, about_page, contact_page, privacy_policy, terms_of_service, refund_policy, shipping_policy, cookie_policy, blog_post, blog_category, blog_list, custom_page.',
+            '- page_types must use only these page type codes: home_page, about_page, contact_page, privacy_policy, terms_of_service, refund_policy, shipping_policy, cookie_policy, blog_post, blog_category, blog_list, custom_page.',
             '- If the user explicitly asks for product, service, solution, case, portfolio, or series pages and no dedicated code exists, include custom_page.',
             '- If several requested pages collapse into custom_page, preserve their exact page intents and labels inside brief_description.',
             '- If the user explicitly asks for academy, knowledge, articles, news, resources, guides, or blog pages, include blog_list.',
-            '- build_mode must be exactly one of pagebuilder_style or pagebuilder_html.',
-            '- Prefer pagebuilder_style unless the request clearly asks for simple lightweight HTML pages.',
             '- SEO keywords should be realistic and user-facing.',
             '- references_summary must explain how the references affect the plan.',
             '- Keep site_title concise and site_tagline short.',
             '- color_palette must be derived from the brief. Do not fall back to generic blue unless the brief actually asks for it.',
             '- visual_style must name concrete visual anchors: layout rhythm, imagery type, texture/material, CTA treatment, and atmosphere. Avoid generic words only.',
             '- brief_description must be a compact generation contract that preserves requested pages, visual direction, conversion goals, and content language.',
-            '- Use the same customer language as the original brief for all customer-visible values. For a Chinese brief, use Simplified Chinese except brand names and PageBuilder codes.',
+            '- Use the same customer language as the original brief for all customer-visible values. For a Chinese brief, use Simplified Chinese except brand names and technical codes.',
             'Original brief:',
             $brief !== '' ? $brief : 'None',
             'Latest user message:',
@@ -529,7 +527,7 @@ class PlanGenerationService
     {
         $buildMode = \trim($buildMode);
 
-        return $buildMode === 'pagebuilder_html' ? 'pagebuilder_html' : 'pagebuilder_style';
+        return \trim($buildMode);
     }
 
     private function pickString(mixed ...$values): string

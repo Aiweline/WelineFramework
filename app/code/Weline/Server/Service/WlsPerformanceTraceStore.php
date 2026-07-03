@@ -412,7 +412,7 @@ class WlsPerformanceTraceStore
      */
     private function normalizeSpans(array $spans): array
     {
-        $limit = (int)($this->config['max_spans'] ?? $this->envValue('wls.performance_panel.max_spans', self::DEFAULT_MAX_SPANS));
+        $limit = (int)($this->config['max_spans'] ?? $this->envValue('dev_tool.panel.wls_performance.max_spans', self::DEFAULT_MAX_SPANS));
         $limit = \max(1, \min($limit, 5000));
         $spans = \array_slice($spans, -$limit);
         $out = [];
@@ -577,7 +577,7 @@ class WlsPerformanceTraceStore
                 'direct_connect' => true,
             ];
         }
-        $max = (int)($this->config['max_meta_bytes'] ?? $this->envValue('wls.performance_panel.max_meta_bytes', self::DEFAULT_MAX_META_BYTES));
+        $max = (int)($this->config['max_meta_bytes'] ?? $this->envValue('dev_tool.panel.wls_performance.max_meta_bytes', self::DEFAULT_MAX_META_BYTES));
         $out = [];
         foreach ($meta as $key => $value) {
             $key = (string)$key;
@@ -913,12 +913,12 @@ class WlsPerformanceTraceStore
 
     private function ttl(): int
     {
-        return \max(1, \min((int)($this->config['ttl'] ?? $this->envValue('wls.performance_panel.ttl', self::DEFAULT_TTL)), 3600));
+        return \max(1, \min((int)($this->config['ttl'] ?? $this->envValue('dev_tool.panel.wls_performance.ttl', self::DEFAULT_TTL)), 3600));
     }
 
     private function maxRecent(): int
     {
-        return \max(1, \min((int)($this->config['max_recent'] ?? $this->envValue('wls.performance_panel.max_recent', self::DEFAULT_MAX_RECENT)), 1000));
+        return \max(1, \min((int)($this->config['max_recent'] ?? $this->envValue('dev_tool.panel.wls_performance.max_recent', self::DEFAULT_MAX_RECENT)), 1000));
     }
 
     private function envValue(string $key, mixed $default): mixed

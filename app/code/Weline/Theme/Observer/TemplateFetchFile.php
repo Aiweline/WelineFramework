@@ -14,7 +14,10 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Template;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
@@ -107,7 +110,9 @@ class TemplateFetchFile implements ObserverInterface
         if ($area === null) {
             $area = $this->themeContext->getPreviewArea() ?? 'frontend';
         }
-        $theme = $this->themeContext->resolveTheme($area);
+        $theme = $this->resolveExplicitRequestTheme($area)
+            ?? $this->resolveTemplateScopedTheme($fileData, $area)
+            ?? $this->themeContext->resolveTheme($area);
         if ($theme === null || !$theme->getId()) {
             try {
                 $theme = $this->welineTheme->getActiveTheme($area);
@@ -125,6 +130,157 @@ class TemplateFetchFile implements ObserverInterface
         $theme_file_path = $this->themePathResolver->resolveThemeFile($module_file_path, $theme);
         $theme_file_path = str_replace('\\', DS, $theme_file_path);
         $fileData->setData('filename', $theme_file_path);
+    }
+
+    private function resolveTemplateScopedTheme(DataObject $fileData, string $area): ?WelineTheme
+    {
+        $template = $fileData->getData('object');
+        if ($template instanceof Template) {
+            $themeData = $template->getData('theme');
+            if (\is_array($themeData)) {
+                $themeArea = \strtolower(\trim((string)($themeData['area'] ?? '')));
+                $theme = $themeData['theme'] ?? null;
+                if (($themeArea === '' || $themeArea === $area) && $theme instanceof WelineTheme && $theme->getId()) {
+                    return $theme;
+                }
+            }
+        }
+
+        try {
+            $themeArea = \strtolower(\trim((string)(ThemeData::getCurrentArea() ?? '')));
+            $theme = ThemeData::getCurrentTheme();
+            if (($themeArea === '' || $themeArea === $area) && $theme instanceof WelineTheme && $theme->getId()) {
+                return $theme;
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function resolveExplicitRequestTheme(string $area): ?WelineTheme
+    {
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!$request instanceof Request || !$this->shouldHonorExplicitThemeRequest($request)) {
+            return null;
+        }
+
+        $requestArea = $this->resolveRequestArea($request, $area);
+        $themeId = $this->resolveAreaThemeId($request, $area, $requestArea);
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        try {
+            /** @var WelineTheme $theme */
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            $theme->reset()->load($themeId);
+            return $theme->getId() ? $theme : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function resolveAreaThemeId(Request $request, string $area, string $requestArea): int
+    {
+        $themeId = 0;
+        if ($area === 'backend') {
+            $themeId = $this->readRequestInt($request, ['backend_theme_id']);
+        } else {
+            $themeId = $this->readRequestInt($request, ['frontend_theme_id', 'weline_theme_id']);
+        }
+
+        if ($themeId <= 0 && $requestArea === $area) {
+            $themeId = $this->readRequestInt($request, ['theme_id', 'preview_theme_id']);
+        }
+
+        return $themeId;
+    }
+
+    private function readRequestInt(Request $request, array $keys): int
+    {
+        foreach ($keys as $key) {
+            $value = $this->readRequestValue($request, (string)$key);
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $intValue = (int)$value;
+            if ($intValue > 0) {
+                return $intValue;
+            }
+        }
+
+        return 0;
+    }
+
+    private function readRequestValue(Request $request, string $key): mixed
+    {
+        $value = null;
+        try {
+            $value = $request->getData($key);
+        } catch (\Throwable) {
+        }
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+
+        try {
+            $value = $request->getParam($key, null);
+        } catch (\Throwable) {
+        }
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+
+        try {
+            return $request->getGet($key, '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function resolveRequestArea(Request $request, string $fallbackArea): string
+    {
+        $area = $this->readRequestValue($request, 'preview_area');
+        if (!\is_scalar($area) || trim((string)$area) === '') {
+            $area = $this->readRequestValue($request, 'editor_area');
+        }
+        if (!\is_scalar($area) || trim((string)$area) === '') {
+            $area = $fallbackArea;
+        }
+
+        return strtolower(trim((string)$area)) === 'backend' ? 'backend' : 'frontend';
+    }
+
+    private function shouldHonorExplicitThemeRequest(Request $request): bool
+    {
+        try {
+            $urlPath = strtolower(trim((string)$request->getUrlPath()));
+            if ($urlPath !== '' && str_contains($urlPath, '/theme/')) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        foreach ([
+            'editor_mode',
+            'preview_mode',
+            'visual_editor',
+            'preview_token',
+            'preview_area',
+            'editor_area',
+        ] as $key) {
+            $value = $this->readRequestValue($request, $key);
+            if (\is_scalar($value) && trim((string)$value) !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

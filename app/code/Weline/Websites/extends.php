@@ -62,7 +62,6 @@ return [
                 'module_mode' => [
                     'path' => 'extends/module/Weline_Websites/AiSiteBuilderProvider/{ProviderName}.php',
                     'description' => __('AI 建站 provider 实现类，在模块的 extends/module/Weline_Websites/AiSiteBuilderProvider/ 目录下创建 PHP 文件。'),
-                    'example' => 'extends/module/Weline_Websites/AiSiteBuilderProvider/PageBuilderProvider.php',
                 ],
                 'implementation' => [
                     'interface' => 'Weline\\Websites\\Api\\AiSiteBuilderProviderInterface',
@@ -79,8 +78,7 @@ return [
                     ],
                 ],
                 'use_case' => [
-                    'description' => __('用于向 Websites AI 建站工作台接入不同流程提供者，例如默认流程、PageBuilder 流程或未来其他模块流程。'),
-                    'example' => __('PageBuilder 可通过此扩展点把自己的建站流程挂接到 Websites 工作台入口。'),
+                    'description' => __('用于向 Websites AI 建站工作台接入不同流程提供者。'),
                 ],
             ],
         ],
@@ -110,7 +108,7 @@ return [
                     ],
                 ],
                 'use_case' => [
-                    'description' => __('用于让 Theme、PageBuilder 或未来其他模块以独立来源方式向 Websites 工作台提供主题选择能力。'),
+                    'description' => __('用于让 Theme 或其他模块以独立来源方式向 Websites 工作台提供主题选择能力。'),
                     'example' => __('Weline_Theme 可通过此扩展点输出 layouts 派生的主题候选。'),
                 ],
             ],

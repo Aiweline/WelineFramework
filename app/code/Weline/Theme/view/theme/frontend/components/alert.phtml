@@ -6,22 +6,26 @@
  * 字段
  * @meta.name {default="Alert提示组件",name="Alert提示组件",description="Alert提示组件，用于描述组件的名称"}
  * @meta.description {default="提示信息组件，支持多种类型和样式",name="提示信息组件，支持多种类型和样式",description="提示信息组件，支持多种类型和样式，用于描述组件的用途"}
+ * @widget.supports {["builder-component","builder-display"]}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*","dashboard"]}
+ * @widget.compatible {true}
  * @param type {default="info",name="类型",description="类型，可选值：success/error/warning/info"}
- * @param message {default="",name="提示信息",description="提示信息，必填参数"}
- * @param title {default="",name="标题",description="标题，用于设置提示标题"}
+ * @param message {default="这里展示提示信息。",name="提示信息",description="提示信息，必填参数"}
+ * @param title {default="提示",name="标题",description="标题，用于设置提示标题"}
  * @param dismissible {default=false,name="是否可关闭",description="是否可关闭，用于控制提示是否可关闭"}
  * @param icon {default="",name="自定义图标",description="自定义图标，用于设置自定义图标"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
  * @param html {default=false,name="是否解析HTML",description="是否解析HTML，设为true时message中的HTML标签会被渲染"}
  */
-$type = $this->getData('type') ?? 'info';
-$message = $this->getData('message') ?? '';
-$title = $this->getData('title') ?? '';
-$dismissible = $this->getData('dismissible') ?? false;
-$icon = $this->getData('icon') ?? '';
-$class = $this->getData('class') ?? '';
-$allowHtml = $this->getData('html') ?? false;
-$alertId = trim((string) ($this->getData('id') ?? ''));
+$type = $this->getData('type') ?? $this->getData('meta.type') ?? 'info';
+$message = $this->getData('message') ?? $this->getData('meta.message') ?? __('这里展示提示信息。');
+$title = $this->getData('title') ?? $this->getData('meta.title') ?? __('提示');
+$dismissible = $this->getData('dismissible') ?? $this->getData('meta.dismissible') ?? false;
+$icon = $this->getData('icon') ?? $this->getData('meta.icon') ?? '';
+$class = $this->getData('class') ?? $this->getData('meta.class') ?? '';
+$allowHtml = $this->getData('html') ?? $this->getData('meta.html') ?? false;
+$alertId = trim((string) ($this->getData('id') ?? $this->getData('meta.id') ?? ''));
 
 // Theme uses danger for error-state alerts.
 $themeAlertModifier = ($type === 'error') ? 'danger' : $type;
@@ -78,4 +82,3 @@ if (!$icon) {
         </button>
     <?php endif; ?>
 </div>
-

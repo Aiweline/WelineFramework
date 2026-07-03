@@ -1,0 +1,192 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+use Weline\Multipass\Model\TrustedApp;
+
+$applications = (array)($this->getData('developer_applications') ?? []);
+$autoApprove = (bool)($this->getData('developer_application_auto_approve') ?? false);
+$applyAction = $this->getFrontendUrl('multipass/frontend/identity/developer-application');
+$returnUrl = '/customer/account/index#multipass-developer-apps';
+$assetVersion = '20260701-developer-apps-responsive-2';
+$scopeOptions = [
+    'profile.basic' => __('基础资料'),
+    'profile.email' => __('邮箱地址'),
+    'account.bind' => __('账号绑定'),
+    'appstore.account' => __('应用商城账号'),
+    'community.account' => __('社区账号'),
+];
+$appTypeOptions = [
+    'app' => 'App',
+    'skill' => 'Skill',
+    'bbs' => 'BBS',
+    'appstore' => 'AppStore',
+    'community' => __('社区'),
+    'custom' => __('自定义'),
+];
+?>
+<link rel="stylesheet" href="@static(Weline_Multipass::css/account-developer.css)?v=<?= $assetVersion ?>">
+
+<div class="multipass-developer">
+    <header class="multipass-developer__intro">
+        <div>
+            <p class="multipass-developer__eyebrow"><lang>开发者</lang></p>
+            <h2 class="multipass-developer__title"><lang>Multipass 管理申请</lang></h2>
+            <?php if ($autoApprove): ?>
+                <p class="multipass-developer__desc"><lang>提交你的网站回调地址后会自动生成并启用客户端，可立即把你的网站登录与 Weline 账号授权登录挂钩。</lang></p>
+            <?php else: ?>
+                <p class="multipass-developer__desc"><lang>提交你的网站回调地址，审核通过后即可把你的网站登录与 Weline 账号授权登录挂钩。</lang></p>
+            <?php endif; ?>
+        </div>
+        <?php if ($autoApprove): ?>
+            <span class="multipass-developer__badge"><lang>自动通过</lang></span>
+        <?php else: ?>
+            <span class="multipass-developer__badge"><lang>需审核</lang></span>
+        <?php endif; ?>
+    </header>
+
+    <section class="multipass-developer__panel">
+        <div class="multipass-developer__panel-head">
+            <div>
+                <h3><lang>我的申请</lang></h3>
+                <p><lang>已提交的网站接入申请会显示在这里。</lang></p>
+            </div>
+        </div>
+
+        <?php if (empty($applications)): ?>
+            <div class="multipass-developer__empty">
+                <strong><lang>还没有 Multipass 管理申请</lang></strong>
+                <?php if ($autoApprove): ?>
+                    <span><lang>填写下方表单后，系统会自动通过并启用你的应用。</lang></span>
+                <?php else: ?>
+                    <span><lang>填写下方表单后，平台管理员会审核你的网站和回调地址。</lang></span>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
+            <div class="multipass-developer__list">
+                <?php foreach ($applications as $app): ?>
+                    <?php
+                    if (!$app instanceof TrustedApp || !$app->getId()) {
+                        continue;
+                    }
+                    $applicationStatus = $app->getApplicationStatus();
+                    $applicationStatusClass = htmlspecialchars((string)(preg_replace('/[^a-z0-9_-]/', '', $applicationStatus) ?: 'pending'), ENT_QUOTES, 'UTF-8');
+                    $runtimeStatusClass = htmlspecialchars((string)(preg_replace('/[^a-z0-9_-]/', '', $app->getStatus()) ?: 'disabled'), ENT_QUOTES, 'UTF-8');
+                    $scopes = $app->getAllowedScopes();
+                    $updatedAt = (string)($app->getData(TrustedApp::schema_fields_UPDATED_AT) ?? '');
+                    ?>
+                    <article class="multipass-developer__card">
+                        <div class="multipass-developer__card-head">
+                            <div>
+                                <h4><?= htmlspecialchars($app->getName(), ENT_QUOTES, 'UTF-8') ?></h4>
+                                <p><?= htmlspecialchars($app->getTrustedDomain(), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($appTypeOptions[$app->getAppType()] ?? $app->getAppType()), ENT_QUOTES, 'UTF-8') ?></p>
+                            </div>
+                            <div class="multipass-developer__status-stack">
+                                <span class="multipass-developer__status multipass-developer__status--<?= $applicationStatusClass ?>"><?= htmlspecialchars($app->getApplicationStatusLabel(), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="multipass-developer__runtime multipass-developer__runtime--<?= $runtimeStatusClass ?>"><?= htmlspecialchars($app->getStatusLabel(), ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                        </div>
+
+                        <div class="multipass-developer__meta">
+                            <div>
+                                <span class="multipass-developer__meta-label"><lang>客户端 ID</lang></span>
+                                <span class="multipass-developer__meta-value"><?= htmlspecialchars($app->getClientId(), ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                            <div>
+                                <span class="multipass-developer__meta-label"><lang>回调地址</lang></span>
+                                <span class="multipass-developer__meta-value"><?= htmlspecialchars($app->getRedirectUri(), ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                            <?php if ($updatedAt !== ''): ?>
+                                <div>
+                                    <span class="multipass-developer__meta-label"><lang>最近更新</lang></span>
+                                    <span class="multipass-developer__meta-value"><?= htmlspecialchars($updatedAt, ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="multipass-developer__scopes">
+                            <?php foreach ($scopes as $scope): ?>
+                                <span><?= htmlspecialchars((string)($scopeOptions[$scope] ?? $scope), ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <?php if ($applicationStatus === TrustedApp::APPLICATION_PENDING): ?>
+                            <p class="multipass-developer__hint"><lang>申请正在审核中。审核通过并启用后，该客户端才能发起 Weline 授权登录。</lang></p>
+                        <?php elseif ($applicationStatus === TrustedApp::APPLICATION_REJECTED): ?>
+                            <p class="multipass-developer__hint multipass-developer__hint--danger"><lang>申请未通过。请调整网站信息后重新提交。</lang></p>
+                        <?php else: ?>
+                            <p class="multipass-developer__hint"><lang>申请已通过。若需要重新生成密钥，请联系管理员轮换 client_secret。</lang></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <section class="multipass-developer__panel">
+        <div class="multipass-developer__panel-head">
+            <div>
+                <h3><lang>提交新申请</lang></h3>
+                <p><lang>回调地址必须是你的网站接收授权码的完整 HTTPS 地址。</lang></p>
+            </div>
+        </div>
+
+        <form class="multipass-developer__form" method="post" action="<?= htmlspecialchars($applyAction, ENT_QUOTES, 'UTF-8') ?>">
+            <?= $this->getFormKey($applyAction) ?>
+            <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') ?>">
+
+            <div class="multipass-developer__grid">
+                <label class="multipass-developer__field">
+                    <span><lang>应用名称</lang></span>
+                    <input type="text" name="name" required maxlength="120" placeholder="@lang{例如：我的社区网站}">
+                </label>
+
+                <label class="multipass-developer__field">
+                    <span><lang>应用类型</lang></span>
+                    <select name="app_type">
+                        <?php foreach ($appTypeOptions as $value => $label): ?>
+                            <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"<?= $value === 'custom' ? ' selected' : '' ?>><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </div>
+
+            <label class="multipass-developer__field">
+                <span><lang>网站域名</lang></span>
+                <input type="text" name="trusted_domain" maxlength="255" placeholder="@lang{example.com 或 https://example.com}">
+                <small><lang>留空时会从回调地址自动提取域名。</lang></small>
+            </label>
+
+            <label class="multipass-developer__field">
+                <span><lang>回调地址</lang></span>
+                <input type="url" name="redirect_uri" required maxlength="1024" placeholder="https://example.com/multipass/callback">
+                <small><lang>授权码换取 token 时会精确校验这个地址。</lang></small>
+            </label>
+
+            <fieldset class="multipass-developer__fieldset">
+                <legend><lang>申请授权范围</lang></legend>
+                <div class="multipass-developer__checks">
+                    <?php foreach ($scopeOptions as $scope => $label): ?>
+                        <?php $checked = in_array($scope, ['profile.basic', 'profile.email', 'account.bind'], true); ?>
+                        <label>
+                            <input type="checkbox" name="allowed_scopes[]" value="<?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?>"<?= $checked ? ' checked' : '' ?>>
+                            <span><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            </fieldset>
+
+            <div class="multipass-developer__notice">
+                <strong><lang>提交后会生成客户端凭据</lang></strong>
+                <?php if ($autoApprove): ?>
+                    <span><lang>客户端密钥只显示一次。自动通过后凭据会立即生效，请妥善保存。</lang></span>
+                <?php else: ?>
+                    <span><lang>客户端密钥只显示一次。审核通过前凭据不会生效，请妥善保存。</lang></span>
+                <?php endif; ?>
+            </div>
+
+            <button class="multipass-developer__submit" type="submit">
+                <i class="ri-send-plane-line" aria-hidden="true"></i>
+                <span><lang>提交申请</lang></span>
+            </button>
+        </form>
+    </section>
+</div>

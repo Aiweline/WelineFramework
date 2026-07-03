@@ -3286,7 +3286,7 @@ class Start extends CommandAbstract
         // 确保本地域名（0.0.0.0/127.0.0.1/localhost）有自签证书
         if (empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'local-certificates:before');
-            $this->ensureLocalSelfSignedCertificates();
+            $this->ensureLocalSelfSignedCertificates($config);
             $this->traceStartupPhase($instanceName, 'local-certificates:after');
         } else {
             $this->traceStartupPhase($instanceName, 'local-certificates:skipped-http-only');
@@ -4376,29 +4376,34 @@ class Start extends CommandAbstract
             $this->printer->warning(__('本地泛域名证书准备失败：%{1}', [(string) $result['message']]));
         }
 
-        if (\PHP_OS_FAMILY === 'Darwin') {
-            $trust = $sslService->ensureLocalDevelopmentCaTrusted();
-            if (($trust['trusted'] ?? false) !== true && !empty($trust['message'])) {
-                $this->printer->warning((string) $trust['message']);
-            }
-        }
+        $this->ensureLocalDevelopmentCaTrusted($sslService);
     }
 
     /**
-     * 确保 0.0.0.0、127.0.0.1、localhost 三个本地域名都有自签证书。
-     * 仅在证书目录不存在或证书无效时才生成，避免重复生成。
+     * 确保 0.0.0.0、127.0.0.1、localhost 以及本次启动的本地域名都有本地 CA 证书。
+     * 仅在证书不可被当前本地 CA 复用或证书无效时才生成，避免旧 CA 漂移导致浏览器不信任。
      */
-    protected function ensureLocalSelfSignedCertificates(): void
+    protected function ensureLocalSelfSignedCertificates(array $config = []): void
     {
         /** @var SslCertificateService $sslService */
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
         // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是合法证书 CN，归一为 localhost
-        $localDomains = ['127.0.0.1', 'localhost'];
+        $localDomains = [
+            '127.0.0.1' => '127.0.0.1',
+            'localhost' => 'localhost',
+        ];
+        foreach (['host', 'public_host', 'ssl_domain'] as $key) {
+            $domain = $this->normalizeCertificateDomainCandidate((string)($config[$key] ?? ''));
+            if ($domain === '' || $this->isWildcardBindHost($domain)) {
+                continue;
+            }
+            if ($sslService->needsSelfSignedCertificate($domain)) {
+                $localDomains[$domain] = $domain;
+            }
+        }
 
         foreach ($localDomains as $localDomain) {
-            $certDir = $sslService->getCertificateDir($localDomain);
-            $certPath = $certDir . 'fullchain.pem';
-            if ($sslService->isCertificateValid($certPath)) {
+            if ($sslService->hasValidLocalCertificate($localDomain)) {
                 continue;
             }
             $result = $sslService->generateLocalCaSignedCertificate($localDomain);
@@ -4408,6 +4413,16 @@ class Start extends CommandAbstract
             if ($result['success'] ?? false) {
                 $this->printer->note(__('已为 %{1} 生成自签证书', [$localDomain]));
             }
+        }
+
+        $this->ensureLocalDevelopmentCaTrusted($sslService);
+    }
+
+    protected function ensureLocalDevelopmentCaTrusted(SslCertificateService $sslService): void
+    {
+        $trust = $sslService->ensureLocalDevelopmentCaTrusted();
+        if (($trust['trusted'] ?? false) !== true && !empty($trust['message'])) {
+            $this->printer->warning((string) $trust['message']);
         }
     }
 

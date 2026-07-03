@@ -98,6 +98,7 @@ class Data
             // 非批量模式：从文件读取
             $routers = [];
             if (is_file($path)) {
+                $this->invalidatePhpFileCache($path);
                 $routers = require $path;
                 if (!is_array($routers)) {
                     $routers = [];
@@ -148,6 +149,14 @@ class Data
         }
         fwrite($fh, "\n];\n");
         fclose($fh);
+        $this->invalidatePhpFileCache($path);
+    }
+
+    private function invalidatePhpFileCache(string $path): void
+    {
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate($path, true);
+        }
     }
     
     /**
@@ -185,6 +194,7 @@ class Data
             // 立即写入模式：需要从文件读取现有路由并合并
             $existingRouters = [];
             if (is_file($path)) {
+                $this->invalidatePhpFileCache($path);
                 $existingRouters = require $path;
                 if (!is_array($existingRouters)) {
                     $existingRouters = [];
@@ -219,6 +229,7 @@ class Data
             $routers = [];
             $routers[$api['router']] = $api['rule'];
             if (is_file($path)) {
+                $this->invalidatePhpFileCache($path);
                 $file_routers = require $path;
                 if (is_array($file_routers)) {
                     $routers = array_merge($file_routers, $routers);
@@ -250,6 +261,7 @@ class Data
         }
         
         // 读取现有路由
+        $this->invalidatePhpFileCache($path);
         $routers = require $path;
         if (!is_array($routers)) {
             $routers = [];

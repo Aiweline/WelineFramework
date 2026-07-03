@@ -3,11 +3,7 @@
 
 $loginSiteName = (string) ($this->getData('login_site_name') ?: 'Weline');
 $loginSiteDescription = trim((string) $this->getData('login_site_description'));
-$defaultLoginLogo = (string) (
-    $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-weline-default.svg')
-    ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png')
-    ?: $this->fetchTagSourceFile('statics', 'Weline_Backend::img/logo.png')
-);
+$defaultLoginLogo = '/Weline/Admin/view/statics/assets/images/logo-weline-default.svg';
 $configuredLoginLogoDark = (string) $this->getData('login_logo_dark');
 $configuredLoginLogoLight = (string) $this->getData('login_logo_light');
 $loginLogoDark = $configuredLoginLogoDark && !str_contains($configuredLoginLogoDark, '/media/image/backend/logo/logo.png')
@@ -16,6 +12,8 @@ $loginLogoDark = $configuredLoginLogoDark && !str_contains($configuredLoginLogoD
 $loginLogoLight = $configuredLoginLogoLight && !str_contains($configuredLoginLogoLight, '/media/image/backend/logo/logo.png')
     ? $configuredLoginLogoLight
     : $defaultLoginLogo;
+$defaultLoginLotusBg = '/Weline/Admin/view/statics/assets/images/login-lotus-bg.png';
+$loginBgUrl = (string) ($this->getData('login_bg_url') ?: $defaultLoginLotusBg);
 $loginHighlights = [
     [
         'icon' => 'ri-shield-keyhole-line',
@@ -452,6 +450,7 @@ $currentYear = date('Y');
     }
 
     .weline-admin-login-panel-inner {
+        position: relative;
         width: 100%;
         max-width: 29rem;
         margin: 0 auto;
@@ -461,6 +460,75 @@ $currentYear = date('Y');
         background: var(--login-surface-bg);
         box-shadow: 0 16px 42px rgba(15, 23, 42, 0.06);
         backdrop-filter: blur(16px);
+    }
+
+    .weline-admin-login-panel-orbit {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.58rem;
+        min-height: 2.2rem;
+        margin: -0.12rem auto 1.05rem;
+        color: var(--login-accent);
+    }
+
+    .weline-admin-login-panel-orbit::before {
+        content: '';
+        position: absolute;
+        left: 14%;
+        right: 14%;
+        top: 50%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.28), transparent);
+        transform: translateY(-50%);
+    }
+
+    .weline-admin-login-panel-orbit-node {
+        position: relative;
+        z-index: 1;
+        width: 0.48rem;
+        height: 0.48rem;
+        border-radius: 999px;
+        background: currentColor;
+        box-shadow: 0 0 0 0.28rem var(--login-accent-soft);
+    }
+
+    .weline-admin-login-panel-orbit-node--soft {
+        opacity: 0.48;
+        transform: scale(0.78);
+    }
+
+    .weline-admin-login-panel-orbit-label {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        padding: 0.42rem 0.72rem;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--login-text-secondary);
+        font-size: 0.76rem;
+        font-weight: 760;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+        backdrop-filter: blur(12px);
+    }
+
+    .weline-admin-login-panel-orbit-label i {
+        color: var(--login-accent);
+        font-size: 0.95rem;
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-panel-orbit::before {
+        background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.24), transparent);
+    }
+
+    [data-layout-mode="dark"] .weline-admin-login-panel-orbit-label {
+        border-color: rgba(71, 85, 105, 0.36);
+        background: rgba(15, 23, 42, 0.72);
+        box-shadow: 0 14px 30px rgba(2, 6, 23, 0.28);
     }
 
     .weline-admin-login-header {
@@ -1155,12 +1223,509 @@ $currentYear = date('Y');
             padding-bottom: 0.9rem;
         }
     }
+
+    body.weline-admin-login-page {
+        background:
+            linear-gradient(120deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 247, 0.94)),
+            #f8faf7;
+        font-family: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    body.weline-admin-login-page,
+    body.weline-admin-login-page * {
+        box-sizing: border-box;
+    }
+
+    body.weline-admin-login-page::before {
+        background-image:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.46)),
+            var(--login-custom-bg);
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+        opacity: 0.82;
+        filter: saturate(0.82) contrast(0.96);
+        animation: none;
+        transform: none;
+    }
+
+    body.weline-admin-login-page::after {
+        display: none;
+    }
+
+    .weline-admin-login-viewport {
+        min-height: 100vh;
+        padding: clamp(0.9rem, 3vw, 2.4rem);
+    }
+
+    .weline-admin-login-shell {
+        max-width: 29rem;
+    }
+
+    .weline-admin-login-card {
+        overflow: visible;
+        border-radius: 1.45rem;
+        border-color: rgba(86, 120, 106, 0.14);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 18px 48px rgba(38, 74, 64, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
+        backdrop-filter: blur(10px) saturate(0.98);
+        transform: translateY(0) scale(1);
+        transition:
+            background 0.36s ease,
+            border-color 0.36s ease,
+            box-shadow 0.36s ease,
+            transform 0.36s ease,
+            backdrop-filter 0.36s ease;
+    }
+
+    .weline-admin-login-card::before {
+        content: '';
+        position: absolute;
+        inset: -0.95rem;
+        border-radius: 2rem;
+        background:
+            radial-gradient(circle at 50% 14%, rgba(106, 160, 140, 0.16), transparent 42%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(216, 237, 228, 0.08));
+        opacity: 0.24;
+        filter: blur(14px) saturate(0.98);
+        pointer-events: none;
+        transform: scale(1.01);
+        transition: opacity 0.36s ease, filter 0.36s ease, transform 0.36s ease;
+        z-index: 0;
+    }
+
+    .weline-admin-login-card::after {
+        content: '';
+        position: absolute;
+        inset: 0.6rem;
+        border-radius: 1.08rem;
+        border: 1px solid rgba(91, 128, 113, 0.12);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.32), transparent 46%);
+        pointer-events: none;
+        opacity: 0.52;
+        transition: opacity 0.32s ease, border-color 0.32s ease;
+        z-index: 0;
+    }
+
+    .weline-admin-login-card:hover,
+    .weline-admin-login-card:focus-within {
+        border-color: rgba(63, 127, 107, 0.24);
+        background: rgba(255, 255, 255, 0.93);
+        box-shadow: 0 22px 54px rgba(38, 74, 64, 0.13), 0 0 0 1px rgba(255, 255, 255, 0.72) inset;
+        backdrop-filter: blur(8px) saturate(1.02);
+        transform: translateY(-1px);
+    }
+
+    .weline-admin-login-card:hover::before,
+    .weline-admin-login-card:focus-within::before {
+        opacity: 0.18;
+        filter: blur(16px) saturate(1);
+        transform: scale(1.02);
+    }
+
+    .weline-admin-login-card:hover::after,
+    .weline-admin-login-card:focus-within::after {
+        border-color: rgba(255, 255, 255, 0.58);
+        opacity: 0.48;
+    }
+
+    .weline-admin-login-card-bloom {
+        position: absolute;
+        inset: -1.8rem 1.2rem auto;
+        height: 5.6rem;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(0.7rem) scale(0.94);
+        transition: opacity 0.36s ease, transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
+        z-index: 1;
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-card-bloom,
+    .weline-admin-login-card:focus-within .weline-admin-login-card-bloom {
+        opacity: 0.32;
+        transform: translateY(0) scale(1);
+    }
+
+    .weline-admin-login-card-bloom-layer {
+        position: absolute;
+        width: 8.4rem;
+        height: 4.8rem;
+        border-radius: 999px;
+        background:
+            radial-gradient(circle at 50% 72%, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0) 44%),
+            linear-gradient(160deg, rgba(255, 255, 255, 0.18), rgba(176, 216, 201, 0.2));
+        box-shadow: none;
+        filter: blur(7px) saturate(0.94);
+        opacity: 0.42;
+        transform-origin: 50% 92%;
+        transition: filter 0.46s ease, opacity 0.46s ease, transform 0.46s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .weline-admin-login-card-bloom-layer--center {
+        left: 50%;
+        top: 0.2rem;
+        transform: translateX(-50%) translateY(2rem) scale(0.74);
+    }
+
+    .weline-admin-login-card-bloom-layer--left {
+        left: 0.6rem;
+        top: 2rem;
+        background-position: center, center, 22% 42%;
+        transform: translateX(2rem) translateY(1.6rem) rotate(-16deg) scale(0.7);
+    }
+
+    .weline-admin-login-card-bloom-layer--right {
+        right: 0.6rem;
+        top: 2rem;
+        background-position: center, center, 78% 42%;
+        transform: translateX(-2rem) translateY(1.6rem) rotate(16deg) scale(0.7);
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-card-bloom-layer,
+    .weline-admin-login-card:focus-within .weline-admin-login-card-bloom-layer {
+        filter: blur(1.2px) saturate(1.12);
+        opacity: 0.78;
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-card-bloom-layer--center,
+    .weline-admin-login-card:focus-within .weline-admin-login-card-bloom-layer--center {
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-card-bloom-layer--left,
+    .weline-admin-login-card:focus-within .weline-admin-login-card-bloom-layer--left {
+        transform: translateX(0) translateY(0) rotate(-28deg) scale(0.96);
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-card-bloom-layer--right,
+    .weline-admin-login-card:focus-within .weline-admin-login-card-bloom-layer--right {
+        transform: translateX(0) translateY(0) rotate(28deg) scale(0.96);
+    }
+
+    .weline-admin-login-layout {
+        display: block;
+        position: relative;
+        min-height: auto;
+        z-index: 2;
+    }
+
+    .weline-admin-login-stage {
+        display: none;
+    }
+
+    .weline-admin-login-panel {
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    .weline-admin-login-panel-inner {
+        max-width: none;
+        padding: clamp(1.25rem, 3vw, 1.75rem);
+        border-radius: 1.18rem;
+        border-color: rgba(95, 128, 116, 0.12);
+        background: rgba(255, 255, 255, 0.76);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76), 0 8px 26px rgba(63, 113, 96, 0.04);
+        backdrop-filter: blur(8px) saturate(1);
+        transition:
+            background 0.36s ease,
+            border-color 0.36s ease,
+            box-shadow 0.36s ease,
+            backdrop-filter 0.36s ease;
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-panel-inner,
+    .weline-admin-login-card:focus-within .weline-admin-login-panel-inner {
+        border-color: rgba(63, 127, 107, 0.18);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 12px 30px rgba(63, 113, 96, 0.07);
+        backdrop-filter: blur(7px) saturate(1.04);
+    }
+
+    .weline-admin-login-panel-orbit {
+        display: none;
+        margin: -0.15rem auto 1rem;
+        color: #3f8f78;
+        opacity: 0.76;
+        transform: translateY(0);
+        transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-panel-orbit,
+    .weline-admin-login-card:focus-within .weline-admin-login-panel-orbit {
+        opacity: 1;
+        transform: translateY(-1px);
+    }
+
+    .weline-admin-login-panel-orbit::before {
+        left: 10%;
+        right: 10%;
+        background: linear-gradient(90deg, transparent, rgba(63, 143, 120, 0.28), transparent);
+    }
+
+    .weline-admin-login-panel-orbit-label {
+        border-color: rgba(63, 143, 120, 0.14);
+        background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(239, 250, 245, 0.64)),
+            var(--login-custom-bg);
+        background-position: center;
+        background-size: cover;
+        color: #587065;
+        box-shadow: 0 12px 24px rgba(63, 143, 120, 0.08);
+    }
+
+    .weline-admin-login-panel-orbit-label i {
+        color: #3f8f78;
+    }
+
+    .weline-admin-login-header {
+        margin-bottom: 1rem;
+        gap: 0.58rem;
+        text-align: center;
+    }
+
+    .weline-admin-login-logo-frame {
+        position: relative;
+        width: 3.25rem;
+        height: 3.25rem;
+        padding: 0;
+        border-radius: 1.05rem 1.05rem 0.82rem 1.05rem;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: linear-gradient(145deg, rgba(125, 188, 168, 0.92), rgba(58, 135, 112, 0.96));
+        box-shadow: 0 10px 22px rgba(63, 127, 107, 0.16);
+        color: #ffffff;
+        transition: transform 0.32s ease, box-shadow 0.32s ease;
+    }
+
+    .weline-admin-login-card:hover .weline-admin-login-logo-frame,
+    .weline-admin-login-card:focus-within .weline-admin-login-logo-frame {
+        box-shadow: 0 12px 24px rgba(63, 127, 107, 0.18);
+        transform: translateY(-1px);
+    }
+
+    .weline-admin-login-logo-frame::before {
+        content: 'W';
+        font-size: 1.38rem;
+        line-height: 1;
+        font-weight: 760;
+        letter-spacing: 0;
+    }
+
+    .weline-admin-login-logo {
+        display: none !important;
+    }
+
+    .weline-admin-login-eyebrow,
+    .weline-admin-login-security-pill {
+        background: rgba(63, 127, 107, 0.08);
+        color: #426e61;
+        letter-spacing: 0;
+        font-weight: 700;
+    }
+
+    .weline-admin-login-eyebrow::before {
+        box-shadow: 0 0 0 0.32rem rgba(63, 143, 120, 0.12);
+    }
+
+    .weline-admin-login-heading {
+        max-width: 19.5rem;
+        margin: 0.6rem auto 0;
+        font-size: clamp(1.34rem, 3.8vw, 1.72rem);
+        line-height: 1.24;
+        font-weight: 760;
+        letter-spacing: -0.035em;
+    }
+
+    .weline-admin-login-subtitle {
+        max-width: 21.5rem;
+        margin: 0.5rem auto 0;
+        font-size: 0.84rem;
+        line-height: 1.72;
+        color: #5e7068;
+    }
+
+    .weline-admin-login-messages .wflash {
+        padding: 0.78rem 0.88rem 0.78rem 3.15rem;
+        padding-inline-end: 2.5rem;
+        border-radius: 0.82rem;
+        box-shadow: none;
+        backdrop-filter: none;
+    }
+
+    .weline-admin-login-messages .wflash::before {
+        inset-inline-start: 0.9rem;
+        top: 0.82rem;
+        width: 1.15rem;
+        height: 1.15rem;
+        background-size: 0.68rem 0.68rem;
+        box-shadow: none;
+    }
+
+    .weline-admin-login-messages .wflash__title,
+    .weline-admin-login-messages .wflash__body {
+        font-size: 0.86rem;
+        line-height: 1.5;
+    }
+
+    .weline-admin-login-messages .wflash__title {
+        margin-bottom: 0.12rem;
+        font-weight: 720;
+    }
+
+    .weline-admin-login-messages .wflash--warning {
+        border-color: rgba(205, 154, 54, 0.28);
+        background: rgba(255, 249, 225, 0.72);
+        color: #8a561d;
+    }
+
+    .weline-admin-login-messages .wflash--warning .wflash__title {
+        color: #7a4215;
+    }
+
+    .weline-admin-login-messages .wflash--warning .wflash__body {
+        color: #6f4d29;
+    }
+
+    .login-form-group {
+        margin-bottom: 0.78rem;
+    }
+
+    .login-form-label {
+        margin-bottom: 0.36rem;
+        font-size: 0.78rem;
+        color: #17231f;
+        font-weight: 700;
+        letter-spacing: 0;
+    }
+
+    .login-form-input,
+    .login-verification-input,
+    .login-verification-code-img,
+    .login-submit-btn {
+        height: 2.88rem;
+        border-radius: 0.78rem;
+    }
+
+    .login-form-input,
+    .login-verification-input {
+        border-color: rgba(109, 128, 121, 0.22);
+        background: rgba(255, 255, 255, 0.88);
+        font-size: 0.88rem;
+    }
+
+    .login-form-input:focus,
+    .login-verification-input:focus {
+        border-color: #4f927d;
+        box-shadow: 0 0 0 3px rgba(79, 146, 125, 0.12);
+        transform: none;
+    }
+
+    .login-input-icon-wrap:focus-within .input-icon {
+        color: #4f927d;
+    }
+
+    .weline-admin-login-options {
+        margin: 0.84rem 0 1.08rem;
+    }
+
+    .weline-admin-login-remember {
+        font-size: 0.86rem;
+        font-weight: 700;
+    }
+
+    .weline-admin-login-checkbox {
+        width: 0.98rem;
+        height: 0.98rem;
+        border-radius: 0.3rem;
+    }
+
+    .weline-admin-login-option-note {
+        margin-top: 0.45rem;
+        font-size: 0.78rem;
+        color: #667870;
+    }
+
+    .login-submit-btn {
+        background: linear-gradient(135deg, rgba(116, 184, 162, 0.96), rgba(56, 132, 110, 0.98));
+        box-shadow: 0 12px 24px rgba(63, 127, 107, 0.16);
+        font-size: 0.9rem;
+        font-weight: 760;
+        letter-spacing: 0.04em;
+    }
+
+    .login-submit-btn:not(.is-loading):hover {
+        transform: translateY(-1px);
+        box-shadow: 0 15px 28px rgba(63, 127, 107, 0.19);
+    }
+
+    .login-submit-btn::after {
+        opacity: 0.48;
+    }
+
+    .weline-admin-login-support {
+        margin-top: 1rem;
+        padding-top: 0.82rem;
+        text-align: center;
+    }
+
+    .weline-admin-login-support-tags,
+    .weline-admin-login-support-title,
+    .weline-admin-login-support-copy {
+        display: none;
+    }
+
+    .weline-admin-login-copyright {
+        margin: 0;
+        font-size: 0.73rem;
+        color: #7f8f88;
+    }
+
+    @media (max-width: 575.98px) {
+        .weline-admin-login-viewport {
+            padding: 0.9rem;
+        }
+
+        .weline-admin-login-card,
+        .weline-admin-login-panel-inner {
+            border-radius: 1.05rem;
+        }
+
+        .weline-admin-login-card:hover,
+        .weline-admin-login-card:focus-within {
+            transform: translateY(-1px);
+        }
+
+        .weline-admin-login-card-bloom {
+            inset: -1.3rem 0.8rem auto;
+            height: 4.8rem;
+        }
+
+        .weline-admin-login-card-bloom-layer {
+            width: 7.2rem;
+            height: 4rem;
+        }
+
+        .weline-admin-login-panel-orbit {
+            margin-bottom: 0.8rem;
+            transform: scale(0.94);
+        }
+
+        .weline-admin-login-card:hover .weline-admin-login-panel-orbit,
+        .weline-admin-login-card:focus-within .weline-admin-login-panel-orbit {
+            transform: translateY(-1px) scale(0.94);
+        }
+    }
     </style>
 </head>
-<body class="weline-admin-login-page"<?php if ($bgUrl = $this->getData('login_bg_url')): ?> style="--login-custom-bg: url('<?= htmlspecialchars((string) $bgUrl, ENT_QUOTES, 'UTF-8') ?>');"<?php endif; ?>>
+<body class="weline-admin-login-page" style="<?php if ($loginBgUrl !== ''): ?>--login-custom-bg: url('<?= htmlspecialchars($loginBgUrl, ENT_QUOTES, 'UTF-8') ?>');<?php endif; ?>">
 <main class="weline-admin-login-viewport">
     <div class="weline-admin-login-shell">
         <div class="weline-admin-login-card">
+            <div class="weline-admin-login-card-bloom" aria-hidden="true">
+                <span class="weline-admin-login-card-bloom-layer weline-admin-login-card-bloom-layer--left"></span>
+                <span class="weline-admin-login-card-bloom-layer weline-admin-login-card-bloom-layer--center"></span>
+                <span class="weline-admin-login-card-bloom-layer weline-admin-login-card-bloom-layer--right"></span>
+            </div>
             <div class="weline-admin-login-layout">
                 <div class="weline-admin-login-stage">
                     <div class="weline-admin-login-stage-top">
@@ -1215,6 +1780,15 @@ $currentYear = date('Y');
 
                 <div class="weline-admin-login-panel">
                     <div class="weline-admin-login-panel-inner">
+                        <div class="weline-admin-login-panel-orbit" aria-hidden="true">
+                            <span class="weline-admin-login-panel-orbit-node weline-admin-login-panel-orbit-node--soft"></span>
+                            <span class="weline-admin-login-panel-orbit-label">
+                                <i class="ri-shield-check-line"></i>
+                                <?= __('安全入口') ?>
+                            </span>
+                            <span class="weline-admin-login-panel-orbit-node"></span>
+                            <span class="weline-admin-login-panel-orbit-node weline-admin-login-panel-orbit-node--soft"></span>
+                        </div>
                         <div class="weline-admin-login-header">
                             <div class="weline-admin-login-logo-frame">
                                 <img src="<?= htmlspecialchars($loginLogoDark, ENT_QUOTES, 'UTF-8') ?>"

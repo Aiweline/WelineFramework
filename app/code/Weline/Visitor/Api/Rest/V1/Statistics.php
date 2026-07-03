@@ -3,6 +3,7 @@
 namespace Weline\Visitor\Api\Rest\V1;
 
 use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Visitor\Api\Rest\PanelProtectedTrait;
 use Weline\Visitor\Model\Pixel;
 
 /**
@@ -11,6 +12,8 @@ use Weline\Visitor\Model\Pixel;
  */
 class Statistics extends FrontendRestController
 {
+    use PanelProtectedTrait;
+
     /**
      * 获取站点统计信息
      * 
@@ -40,6 +43,10 @@ class Statistics extends FrontendRestController
      */
     public function getWebsite(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID（优先从请求参数获取，其次从SERVER变量获取）
             $websiteId = 0;
@@ -96,6 +103,10 @@ class Statistics extends FrontendRestController
      */
     public function getEvent(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             // 获取站点ID
             $websiteId = 0;
@@ -168,6 +179,10 @@ class Statistics extends FrontendRestController
      */
     public function getWebsites(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteIds = Pixel::getAllWebsiteIds();
             
@@ -198,6 +213,10 @@ class Statistics extends FrontendRestController
      */
     public function getBusinessValue(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -241,6 +260,10 @@ class Statistics extends FrontendRestController
      */
     public function getDashboard(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -281,6 +304,10 @@ class Statistics extends FrontendRestController
      */
     public function getDailyComparison(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -317,6 +344,10 @@ class Statistics extends FrontendRestController
      */
     public function getChangePercentage(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -359,6 +390,10 @@ class Statistics extends FrontendRestController
      */
     public function getTopEvents(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -429,6 +464,10 @@ class Statistics extends FrontendRestController
      */
     public function getEventDistribution(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -503,6 +542,10 @@ class Statistics extends FrontendRestController
      */
     public function getTimeRangeStats(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -564,6 +607,10 @@ class Statistics extends FrontendRestController
      */
     public function getRealtimeStats(): string
     {
+        if ($forbidden = $this->guardVisitorPanelApi()) {
+            return $forbidden;
+        }
+
         try {
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
@@ -598,7 +645,7 @@ class Statistics extends FrontendRestController
                 ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(Pixel::schema_fields_CREATED_AT, $startTime, '>=')
                 ->where(Pixel::schema_fields_CREATED_AT, $endTime, '<=')
-                ->field(Pixel::schema_fields_EVENT)
+                ->fields(Pixel::schema_fields_EVENT)
                 ->group(Pixel::schema_fields_EVENT);
             
             $eventResult = $eventModel->select()->fetchArray();
@@ -629,4 +676,3 @@ class Statistics extends FrontendRestController
         }
     }
 }
-

@@ -118,6 +118,13 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         } catch (\Throwable) {
             // Enhanced template cache clear is best-effort during global cache clear.
         }
+
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Cache\Console\Template\Clear::class)
+                ->execute([], ['silent' => true]);
+        } catch (\Throwable) {
+            // Template cache CLI clear is best-effort during global cache clear.
+        }
     }
 
     /**
@@ -382,4 +389,3 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         );
     }
 }
-
