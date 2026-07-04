@@ -92,20 +92,18 @@ export default defineConfig({
 ## 📁 测试结构
 
 ```
-tests/e2e/
-├── playwright.config.js      # Playwright配置
-├── package.json              # npm依赖
-├── specs/                    # 测试用例
-│   ├── backend/              # 后台测试
-│   │   ├── model.spec.js     # 模型管理
-│   │   ├── apikey.spec.js    # API密钥
-│   │   └── adapter.spec.js   # 适配器
-│   └── frontend/             # 前台测试
-│       ├── chat.spec.js      # 聊天功能
-│       └── center.spec.js    # 用户中心
+tests/e2e/                    # 公共 Playwright 运行器、helper、报告目录
+app/code/Weline/Ai/test/e2e/  # Weline_Ai 模块自己的 E2E 用例
+├── backend/                  # 后台测试
+│   ├── model.spec.js         # 模型管理
+│   ├── apikey.spec.js        # API密钥
+│   └── adapter.spec.js       # 适配器
 ├── fixtures/                 # 测试夹具
 │   ├── auth.js               # 认证夹具
 │   └── data.js               # 测试数据
+├── frontend/                 # 前台测试
+│   ├── chat.spec.js          # 聊天功能
+│   └── center.spec.js        # 用户中心
 └── utils/                    # 工具函数
     ├── login.js              # 登录助手
     └── wait.js               # 等待助手
@@ -116,7 +114,7 @@ tests/e2e/
 ### 示例1：后台登录测试
 
 ```javascript
-// tests/e2e/specs/backend/login.spec.js
+// app/code/Weline/Ai/test/e2e/backend/login.spec.js
 import { test, expect } from '@playwright/test';
 
 test.describe('后台登录功能', () => {
@@ -156,7 +154,7 @@ test.describe('后台登录功能', () => {
 ### 示例2：模型管理测试
 
 ```javascript
-// tests/e2e/specs/backend/model.spec.js
+// app/code/Weline/Ai/test/e2e/backend/model.spec.js
 import { test, expect } from '@playwright/test';
 
 test.describe('AI模型管理', () => {
@@ -237,7 +235,7 @@ test.describe('AI模型管理', () => {
 ### 示例3：AI 管理聚合页测试
 
 ```javascript
-// tests/e2e/specs/backend/manager.spec.js
+// app/code/Weline/Ai/test/e2e/backend/manager.spec.js
 import { test, expect } from '@playwright/test';
 
 test.describe('AI 管理', () => {
@@ -584,4 +582,3 @@ jobs:
 ---
 
 **提示**: 开始E2E测试前，确保服务器正在运行（`php bin/w s:sta`）。
-

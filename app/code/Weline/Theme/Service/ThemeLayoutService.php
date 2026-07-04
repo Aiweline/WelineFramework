@@ -17,6 +17,9 @@ use Weline\Theme\Model\WelineTheme;
 class ThemeLayoutService
 {
     private const WIDGET_I18N_INSTANCE_KEY = \Weline\Theme\Helper\ThemeData::WIDGET_I18N_INSTANCE_CONFIG_KEY;
+    private const NO_PLACEMENTS_WIDGET_MODULE = 'Weline_Theme';
+    private const NO_PLACEMENTS_WIDGET_TYPE = 'layout_state';
+    private const NO_PLACEMENTS_WIDGET_CODE = '__no_widget_placements__';
 
     private ThemeLayout $themeLayout;
     private WelineTheme $welineTheme;
@@ -99,6 +102,123 @@ class ThemeLayoutService
         $this->themeLayout->clearQuery()->clearData();
 
         return count($layoutIds);
+    }
+
+    private function hasWidgetPlacementsInput(array $layoutData): bool
+    {
+        foreach ($layoutData as $widgets) {
+            if (is_array($widgets) && $widgets !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Store an inactive sentinel row so "the user explicitly removed every
+     * widget placement" is distinguishable from "this layout has never been
+     * configured".
+     *
+     * The row is ignored by getLayout() because is_active=0, but hasDraft() and
+     * preview fallback decisions can still see the placement state. Slots still
+     * come from the theme template and keep rendering their own default content.
+     *
+     * @param array<string,mixed> $identity
+     */
+    private function markNoWidgetPlacements(int $themeId, string $pageType, string $status, array $identity): void
+    {
+        $identity = $this->normalizeLayoutIdentity($identity);
+        if ($this->hasNoWidgetPlacements($themeId, $pageType, $status, $identity)) {
+            return;
+        }
+
+        $this->themeLayout->clearQuery()->clearData()
+            ->setThemeId($themeId)
+            ->setPageType($pageType)
+            ->setLayoutOption($identity['layout_option'])
+            ->setScope($identity['scope'])
+            ->setTargetType($identity['target_type'])
+            ->setTargetId($identity['target_id'])
+            ->setArea(ThemeLayout::AREA_CONTENT)
+            ->setSlotId(null)
+            ->setWidgetCode(self::NO_PLACEMENTS_WIDGET_CODE)
+            ->setWidgetModule(self::NO_PLACEMENTS_WIDGET_MODULE)
+            ->setWidgetType(self::NO_PLACEMENTS_WIDGET_TYPE)
+            ->setWidgetConfig(['no_widget_placements' => true])
+            ->setSortOrder(0)
+            ->setIsActive(false)
+            ->setStatus($status)
+            ->save();
+        $this->themeLayout->clearQuery()->clearData();
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    private function deleteNoWidgetPlacementsMarker(int $themeId, string $pageType, string $status, array $identity): void
+    {
+        $identity = $this->normalizeLayoutIdentity($identity);
+        $query = $this->themeLayout->clearQuery()->clearData()
+            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayout::schema_fields_STATUS, $status)
+            ->where(ThemeLayout::schema_fields_WIDGET_MODULE, self::NO_PLACEMENTS_WIDGET_MODULE)
+            ->where(ThemeLayout::schema_fields_WIDGET_TYPE, self::NO_PLACEMENTS_WIDGET_TYPE)
+            ->where(ThemeLayout::schema_fields_WIDGET_CODE, self::NO_PLACEMENTS_WIDGET_CODE);
+        $query = $this->applyLayoutIdentityFilters($query, $identity);
+        $rows = $query->select()->fetchArray();
+
+        foreach ((array)$rows as $row) {
+            $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
+            if ($layoutId > 0) {
+                $this->themeLayout->clearQuery()->clearData()->load($layoutId)->delete();
+            }
+        }
+        $this->themeLayout->clearQuery()->clearData();
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    public function hasNoWidgetPlacements(int $themeId, string $pageType, string $status, array $identity = []): bool
+    {
+        try {
+            $identity = $this->normalizeLayoutIdentity($identity);
+            $query = $this->themeLayout->clearQuery()->clearData()
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->where(ThemeLayout::schema_fields_WIDGET_MODULE, self::NO_PLACEMENTS_WIDGET_MODULE)
+                ->where(ThemeLayout::schema_fields_WIDGET_TYPE, self::NO_PLACEMENTS_WIDGET_TYPE)
+                ->where(ThemeLayout::schema_fields_WIDGET_CODE, self::NO_PLACEMENTS_WIDGET_CODE);
+            $query = $this->applyLayoutIdentityFilters($query, $identity);
+            $rows = $query->select()->fetchArray();
+
+            return is_array($rows) && count($rows) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    private function hasActiveWidgetPlacementsForLayout(int $themeId, string $pageType, string $status, array $identity): bool
+    {
+        try {
+            $query = $this->themeLayout->clearQuery()->clearData()
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1);
+            $query = $this->applyLayoutIdentityFilters($query, $identity);
+            $rows = $query->select()->fetchArray();
+
+            return is_array($rows) && count($rows) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -320,12 +440,16 @@ class ThemeLayoutService
         $status = $data['status'] ?? ThemeLayout::STATUS_DRAFT;
         $sortOrder = (int)($data['sort_order'] ?? 0);
         $identity = $this->normalizeLayoutIdentity($data);
+        $pageType = $data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT;
+        $isNoPlacementsMarker = (string)($data['widget_module'] ?? '') === self::NO_PLACEMENTS_WIDGET_MODULE
+            && (string)($data['widget_type'] ?? '') === self::NO_PLACEMENTS_WIDGET_TYPE
+            && (string)($data['widget_code'] ?? '') === self::NO_PLACEMENTS_WIDGET_CODE;
 
         // 如果是独占插槽，先删除该插槽/区域中相同类型的部件（仅限同状态）
         if ($exclusive && !$layoutId) {
             $this->removeExclusiveWidgets(
                 (int)$data['theme_id'],
-                $data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT,
+                $pageType,
                 $data['area'],
                 $slotId,
                 $data['widget_code'],
@@ -338,13 +462,17 @@ class ThemeLayoutService
         if (!$exclusive && !$layoutId) {
             $this->shiftSortOrder(
                 (int)$data['theme_id'],
-                $data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT,
+                $pageType,
                 $data['area'],
                 $slotId,
                 $sortOrder,
                 $status,
                 $identity
             );
+        }
+
+        if (!$layoutId && !$isNoPlacementsMarker) {
+            $this->deleteNoWidgetPlacementsMarker((int)$data['theme_id'], (string)$pageType, (string)$status, $identity);
         }
 
         if ($layoutId) {
@@ -362,7 +490,7 @@ class ThemeLayoutService
 
         $this->themeLayout
             ->setThemeId((int)$data['theme_id'])
-            ->setPageType($data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT)
+            ->setPageType($pageType)
             ->setLayoutOption($identity['layout_option'])
             ->setScope($identity['scope'])
             ->setTargetType($identity['target_type'])
@@ -552,6 +680,11 @@ class ThemeLayoutService
         // 先删除该页面该状态的所有布局
         $this->deleteLayoutRows($themeId, $pageType, $status, $identity);
 
+        if (!$this->hasWidgetPlacementsInput($layoutData)) {
+            $this->markNoWidgetPlacements($themeId, $pageType, $status, $identity);
+            return true;
+        }
+
         // 保存新布局
         foreach ($layoutData as $area => $widgets) {
             foreach ($widgets as $index => $widget) {
@@ -576,6 +709,82 @@ class ThemeLayoutService
         }
 
         return true;
+    }
+
+    /**
+     * Copy draft/published widget rows from one layout identity to another.
+     *
+     * @param array<string,mixed> $sourceIdentity layout_option/scope/target_type/target_id
+     * @param array<string,mixed> $targetIdentity layout_option/scope/target_type/target_id
+     * @return array{success:bool,status:string,copied:array<string,int>,source_identity:array<string,mixed>,target_identity:array<string,mixed>}
+     */
+    public function copyLayoutIdentity(
+        int $themeId,
+        string $pageType,
+        array $sourceIdentity,
+        array $targetIdentity
+    ): array {
+        $sourceIdentity = $this->normalizeLayoutIdentity($sourceIdentity);
+        $targetIdentity = $this->normalizeLayoutIdentity($targetIdentity);
+
+        if ($themeId <= 0 || trim($pageType) === '') {
+            return [
+                'success' => false,
+                'status' => 'invalid_theme_or_page_type',
+                'copied' => [],
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+            ];
+        }
+
+        if ($sourceIdentity === $targetIdentity) {
+            return [
+                'success' => false,
+                'status' => 'same_identity',
+                'copied' => [],
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+            ];
+        }
+
+        $copied = [];
+        foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
+            $layout = $this->getLayout($themeId, $pageType, $status, $sourceIdentity);
+            $layoutData = [];
+            foreach ($layout as $area => $areaData) {
+                $widgets = is_array($areaData['widgets'] ?? null) ? $areaData['widgets'] : [];
+                foreach ($widgets as $widget) {
+                    if (!is_array($widget)) {
+                        continue;
+                    }
+                    $layoutData[$area][] = [
+                        'widget_code' => (string)($widget['widget_code'] ?? ''),
+                        'widget_module' => (string)($widget['widget_module'] ?? ''),
+                        'widget_type' => (string)($widget['widget_type'] ?? ''),
+                        'slot_id' => $widget['slot_id'] ?? null,
+                        'config' => is_array($widget['config'] ?? null) ? $widget['config'] : [],
+                        'sort_order' => (int)($widget['sort_order'] ?? 0),
+                        'is_active' => (bool)($widget['is_active'] ?? true),
+                    ];
+                }
+            }
+
+            if ($layoutData === []) {
+                $copied[$status] = 0;
+                continue;
+            }
+
+            $this->saveLayout($themeId, $pageType, $layoutData, $status, $targetIdentity);
+            $copied[$status] = array_sum(array_map('count', $layoutData));
+        }
+
+        return [
+            'success' => true,
+            'status' => 'copied',
+            'copied' => $copied,
+            'source_identity' => $sourceIdentity,
+            'target_identity' => $targetIdentity,
+        ];
     }
 
     /**
@@ -619,6 +828,10 @@ class ThemeLayoutService
 
                 // 2. 删除旧的已发布记录（全量替换，避免残留）
                 $this->deleteLayoutRows($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
+                if (!$hasDraftWidgets) {
+                    $this->markNoWidgetPlacements($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
+                    continue;
+                }
 
                 // 3. 去重：独占插槽按 slot_id；其余只去掉完全重复的脏草稿/快照记录。
                 $exclusiveSlotSeen = [];
@@ -879,22 +1092,48 @@ class ThemeLayoutService
      */
     public function deleteWidget(int $layoutId): bool
     {
-        // 不对 clearQuery() 链式调用 load()，避免在 Query 上调用 load() 导致致命错误
-        $this->themeLayout->load($layoutId);
+        $this->themeLayout->clearQuery()->clearData()->load($layoutId);
         $loadedId = $this->themeLayout->getLayoutId();
 
         if (!$loadedId) {
             return false;
         }
+        $themeId = (int)$this->themeLayout->getData(ThemeLayout::schema_fields_THEME_ID);
+        $pageType = (string)$this->themeLayout->getData(ThemeLayout::schema_fields_PAGE_TYPE);
+        $status = (string)$this->themeLayout->getData(ThemeLayout::schema_fields_STATUS);
+        $identity = $this->normalizeLayoutIdentity([
+            'layout_option' => $this->themeLayout->getData(ThemeLayout::schema_fields_LAYOUT_OPTION),
+            'scope' => $this->themeLayout->getData(ThemeLayout::schema_fields_SCOPE),
+            'target_type' => $this->themeLayout->getData(ThemeLayout::schema_fields_TARGET_TYPE),
+            'target_id' => $this->themeLayout->getData(ThemeLayout::schema_fields_TARGET_ID),
+        ]);
+        $wasNoPlacementsMarker = (string)$this->themeLayout->getData(ThemeLayout::schema_fields_WIDGET_MODULE) === self::NO_PLACEMENTS_WIDGET_MODULE
+            && (string)$this->themeLayout->getData(ThemeLayout::schema_fields_WIDGET_TYPE) === self::NO_PLACEMENTS_WIDGET_TYPE
+            && (string)$this->themeLayout->getData(ThemeLayout::schema_fields_WIDGET_CODE) === self::NO_PLACEMENTS_WIDGET_CODE;
 
         // 使用模型已加载状态执行删除（getQuery() 会带表名，delete() 用主键条件，避免 clearQuery 后链式导致表名/条件丢失）
         $this->themeLayout->delete()->fetch();
 
         // 验证删除结果
-        $this->themeLayout->clearQuery();
-        $checkAfter = $this->themeLayout->where('layout_id', $layoutId)->select()->fetchArray();
+        $this->themeLayout->clearQuery()->clearData();
+        $checkAfter = $this->themeLayout->clearQuery()->clearData()
+            ->where(ThemeLayout::schema_fields_ID, $layoutId)
+            ->select()
+            ->fetchArray();
+        $this->themeLayout->clearQuery()->clearData();
 
-        return empty($checkAfter);
+        $deleted = empty($checkAfter);
+        if ($deleted
+            && !$wasNoPlacementsMarker
+            && $themeId > 0
+            && $pageType !== ''
+            && $status !== ''
+            && !$this->hasActiveWidgetPlacementsForLayout($themeId, $pageType, $status, $identity)
+        ) {
+            $this->markNoWidgetPlacements($themeId, $pageType, $status, $identity);
+        }
+
+        return $deleted;
     }
 
     /**

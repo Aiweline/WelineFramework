@@ -490,6 +490,107 @@ class ThemeVirtualLayoutService
         ];
     }
 
+    /**
+     * Copy exact virtual layout versions from one target identity to another.
+     *
+     * This intentionally does not use fallback resolution: a page copy should duplicate
+     * only data owned by the source page target, not a global layout fallback.
+     *
+     * @param array<string,mixed> $sourceIdentity
+     * @param array<string,mixed> $targetIdentity
+     * @return array{success:bool,status:string,copied:int,source_identity:array<string,mixed>,target_identity:array<string,mixed>,results:list<array<string,mixed>>}
+     */
+    public function copyVirtualLayoutIdentity(array $sourceIdentity, array $targetIdentity): array
+    {
+        $sourceIdentity = $this->normalizeIdentity($sourceIdentity);
+        $targetIdentity = $this->normalizeIdentity($targetIdentity);
+        $results = [];
+
+        if ($sourceIdentity['layout_option'] === 'default' || $targetIdentity['layout_option'] === 'default') {
+            return [
+                'success' => true,
+                'status' => 'default_layout_option',
+                'copied' => 0,
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+                'results' => [],
+            ];
+        }
+
+        if ($sourceIdentity === $targetIdentity) {
+            return [
+                'success' => false,
+                'status' => 'same_identity',
+                'copied' => 0,
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+                'results' => [],
+            ];
+        }
+
+        $asset = $this->loadAssetByIdentity($sourceIdentity);
+        if (!$asset || !$asset->getId()) {
+            return [
+                'success' => true,
+                'status' => 'no_source_asset',
+                'copied' => 0,
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+                'results' => [],
+            ];
+        }
+
+        $targetIdentity['name'] = (string)($targetIdentity['name'] ?: $asset->getName());
+        $targetIdentity['description'] = (string)($targetIdentity['description'] ?: $asset->getDescription());
+        $targetIdentity['metadata'] = array_merge($asset->getMetadata(), [
+            'copied_from' => [
+                'asset_id' => $asset->getId(),
+                'theme_id' => $asset->getThemeId(),
+                'target_type' => $asset->getTargetType(),
+                'target_id' => $asset->getTargetId(),
+            ],
+        ]);
+
+        $latest = $this->loadLatestVersion($asset->getId());
+        $published = $asset->getPublishedVersionId() > 0
+            ? $this->loadVersion($asset->getPublishedVersionId())
+            : null;
+
+        if ($published && $published->getId()) {
+            $results[] = $this->saveSourceVersion(
+                $targetIdentity,
+                $published->getSourceCode(),
+                $this->buildCopiedVersionData($published, $asset, (string)__('复制 CMS 页面发布布局版本')),
+                true
+            );
+        }
+
+        if ($latest && $latest->getId() && (!$published || $latest->getId() !== $published->getId())) {
+            $results[] = $this->saveSourceVersion(
+                $targetIdentity,
+                $latest->getSourceCode(),
+                $this->buildCopiedVersionData($latest, $asset, (string)__('复制 CMS 页面草稿布局版本')),
+                false
+            );
+        }
+
+        $copied = 0;
+        foreach ($results as $result) {
+            if (!empty($result['success'])) {
+                $copied++;
+            }
+        }
+
+        return [
+            'success' => $copied === count($results),
+            'status' => $copied === count($results) ? 'copied' : 'partial_failed',
+            'copied' => $copied,
+            'source_identity' => $sourceIdentity,
+            'target_identity' => $targetIdentity,
+            'results' => $results,
+        ];
+    }
+
     public function publishVersion(int $versionId): bool
     {
         $version = $this->loadVersion($versionId);
@@ -1202,6 +1303,31 @@ class ThemeVirtualLayoutService
     {
         $latest = $this->loadLatestVersion($assetId);
         return $latest ? $latest->getVersionNo() + 1 : 1;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildCopiedVersionData(
+        ThemeVirtualLayoutVersion $version,
+        ThemeVirtualLayout $asset,
+        string $reason
+    ): array {
+        return [
+            'source_type' => $asset->getSourceType(),
+            'is_ai_generated' => (bool)$asset->getData(ThemeVirtualLayout::schema_fields_IS_AI_GENERATED),
+            'visual_schema' => $version->getVisualSchema(),
+            'generation_meta' => array_merge($version->getGenerationMeta(), [
+                'copied_from_version_id' => $version->getId(),
+                'copied_from_asset_id' => $asset->getId(),
+            ]),
+            'validation' => $version->getValidation(),
+            'ai_prompt' => (string)($version->getData(ThemeVirtualLayoutVersion::schema_fields_AI_PROMPT) ?: ''),
+            'parent_version_id' => $version->getId(),
+            'actor_id' => (string)($version->getData(ThemeVirtualLayoutVersion::schema_fields_ACTOR_ID) ?: ''),
+            'actor_name' => (string)($version->getData(ThemeVirtualLayoutVersion::schema_fields_ACTOR_NAME) ?: ''),
+            'reason' => $reason,
+        ];
     }
 
     /**

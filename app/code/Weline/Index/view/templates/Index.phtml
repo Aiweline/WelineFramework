@@ -133,18 +133,28 @@ $seoKeywords = [
 $seoRobots = 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1';
 $seoCanonicalUrl = '';
 try {
-    $fullRequestUri = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
-    if ($fullRequestUri !== '' && preg_match('/^https?:\/\//i', $fullRequestUri)) {
-        $parts = parse_url($fullRequestUri);
-        if (is_array($parts) && !empty($parts['host'])) {
-            $scheme = 'https';
-            $host = (string)$parts['host'];
-            $port = isset($parts['port']) ? ':' . (string)$parts['port'] : '';
-            $seoCanonicalUrl = $scheme . '://' . $host . $port . '/';
+    $baseCandidates = [
+        (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', ''),
+        (string)\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', ''),
+    ];
+    foreach ($baseCandidates as $candidate) {
+        if ($candidate !== '' && preg_match('/^https?:\/\//i', $candidate)) {
+            $parts = parse_url($candidate);
+            if (is_array($parts) && !empty($parts['host'])) {
+                $scheme = (string)($parts['scheme'] ?? 'https');
+                $host = (string)$parts['host'];
+                $port = isset($parts['port']) ? ':' . (string)$parts['port'] : '';
+                $seoCanonicalUrl = $scheme . '://' . $host . $port . '/';
+                break;
+            }
         }
     }
     if ($seoCanonicalUrl === '' && isset($this->request)) {
-        $scheme = 'https';
+        $scheme = (string)($this->request->getServer('REQUEST_SCHEME') ?: 'http');
+        $https = strtolower((string)$this->request->getServer('HTTPS'));
+        if ($https !== '' && $https !== 'off') {
+            $scheme = 'https';
+        }
         $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
         if ($host !== '') {
             $seoCanonicalUrl = $scheme . '://' . $host . '/';
@@ -881,6 +891,8 @@ $this->setData('seo', $seoContext);
                 <figure class="wf-status__figure">
                     <img src="<?= $escapeRaw($seoImage) ?>"
                          alt="<?= $escape('WelineFramework PHP 模块化开发框架与 WLS 常驻运行时架构概览') ?>"
+                         width="1200"
+                         height="630"
                          loading="eager"
                          decoding="async">
                 </figure>

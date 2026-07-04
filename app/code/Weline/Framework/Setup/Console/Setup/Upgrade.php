@@ -43,6 +43,7 @@ use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
+use Weline\Framework\UnitTest\Service\TestCollectionService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Framework\Console\ParseModuleArgsTrait;
 
@@ -2591,6 +2592,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $jsonFile = $e2eDir . DS . 'modules.json';
             $jsonContent = json_encode($modulesData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             file_put_contents($jsonFile, $jsonContent);
+
+            /** @var TestCollectionService $testCollector */
+            $testCollector = ObjectManager::getInstance(TestCollectionService::class);
+            $testCollector->writeJson(
+                $testCollector->collectE2eManifest(),
+                $e2eDir . DS . 'collected-tests.json'
+            );
             
             $this->printing->success(__('✓ modules.json 已生成: %{1}', [$jsonFile]));
         } catch (\Exception $e) {

@@ -17,6 +17,7 @@ use Weline\Seo\Service\SitemapRegistryService;
 use Weline\Seo\Service\WebSitemapData;
 use Weline\Seo\Service\SitemapAdapterRegistry;
 use Weline\Seo\Service\SeoWebsiteDirectory;
+use Weline\Seo\Service\SitemapUrlSyncService;
 use Weline\Seo\Model\SitemapUrl;
 
 /**
@@ -33,19 +34,22 @@ class Test implements CommandInterface
     private SitemapAdapterRegistry $adapterRegistry;
     private SitemapUrl $sitemapUrlModel;
     private SeoWebsiteDirectory $websiteDirectory;
+    private SitemapUrlSyncService $syncService;
 
     public function __construct(
         SitemapRegistryService $registryService,
         WebSitemapData $webSitemapData,
         SitemapAdapterRegistry $adapterRegistry,
         SitemapUrl $sitemapUrlModel,
-        SeoWebsiteDirectory $websiteDirectory
+        SeoWebsiteDirectory $websiteDirectory,
+        SitemapUrlSyncService $syncService
     ) {
         $this->registryService = $registryService;
         $this->webSitemapData = $webSitemapData;
         $this->adapterRegistry = $adapterRegistry;
         $this->sitemapUrlModel = $sitemapUrlModel;
         $this->websiteDirectory = $websiteDirectory;
+        $this->syncService = $syncService;
     }
 
     public function execute(array $args = [], array $options = []): string
@@ -137,35 +141,32 @@ class Test implements CommandInterface
     {
         $this->printSection('步骤 3: 同步 URL 到数据库');
         
-        $providers = $this->registryService->getUrlProviders();
+        $providers = $this->registryService->getUrlProviders(true);
         
         if (empty($providers)) {
             echo "  ⚠ 没有可用的 URL Provider\n";
             return;
         }
-        
-        foreach ($providers as $provider) {
-            if (!$provider->isEnabled()) {
-                continue;
-            }
-            
-            $module = $provider->getModule();
+
+        $syncStats = $this->syncService->syncAll(true);
+        foreach (($syncStats['providers'] ?? []) as $providerStats) {
+            $module = (string)($providerStats['module'] ?? 'unknown');
             echo "\n  处理: {$module}\n";
-            
-            $websiteIds = $provider->getWebsiteIds();
-            foreach ($websiteIds as $websiteId) {
+
+            foreach ((array)($providerStats['websites'] ?? []) as $websiteStats) {
+                $websiteId = (int)($websiteStats['website_id'] ?? 0);
                 echo "    - 站点 {$websiteId}: ";
-                
-                try {
-                    $result = $provider->syncUrls($websiteId);
-                    echo "✓ ";
-                    echo "新增 {$result['inserted']}, ";
-                    echo "更新 {$result['updated']}, ";
-                    echo "删除 {$result['deleted']}, ";
-                    echo "总计 {$result['total']} 条\n";
-                } catch (\Throwable $e) {
-                    echo "✗ 失败: {$e->getMessage()}\n";
+                if (!empty($websiteStats['errors'])) {
+                    $errors = implode('; ', array_slice((array)($websiteStats['error_messages'] ?? []), 0, 2));
+                    echo "✗ {$errors}\n";
+                    continue;
                 }
+                echo "✓ ";
+                echo "新增 " . (int)($websiteStats['inserted'] ?? 0) . ", ";
+                echo "更新 " . (int)($websiteStats['updated'] ?? 0) . ", ";
+                echo "禁用 " . (int)($websiteStats['disabled'] ?? 0) . ", ";
+                echo "不变 " . (int)($websiteStats['unchanged'] ?? 0) . ", ";
+                echo "总计 " . (int)($websiteStats['total'] ?? 0) . " 条\n";
             }
         }
         

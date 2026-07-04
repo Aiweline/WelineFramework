@@ -52,6 +52,7 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 禁止原生 `alert()`、`confirm()`、`prompt()`。
 - 禁止硬编码用户可见文案。
 - 禁止跨模块直接引用对方内部 PHP 类或内部实现；跨模块协作必须使用契约、Hook、事件、Query Provider、配置、接口、队列或扩展点。
+- 禁止任何浏览器侧前后端业务接口绕过 bin-query / `weline-api`；不得使用原生 Ajax/XHR、`fetch`、`$.ajax`、`axios`、`EventSource` 或手写接口 URL 直连后台。
 - 禁止用类名白名单、特例分支、路径判断、字符串修补等方式只修症状不修根因。
 - 禁止在使用 AI 能力时由调用方直接硬编码模型名、直接实例化模型客户端、直接按模型字段分支或绕过能力匹配；必须通过已发布的 Provider / Adapter / ModelResolver / CapabilityRouter 等适配器契约，根据任务场景、能力需求、配置、租户/模块上下文匹配正确模型。若当前能力缺少适配层，先补适配器或解析契约与文档，再接入 AI 调用。
 
@@ -87,11 +88,13 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - PHP 控制器中的 Flash / 会话提示使用 `Weline\Framework\Manager\MessageManager` 静态门面。
 - `.phtml` 能用 Taglib / 视图 DSL 时优先使用。
 
-## 7. 前端与请求链路
+## 7. 前端与请求链路（强制高压线）
 
+- **强制高压线**：所有浏览器侧前后端业务接口必须走 bin-query，也就是 Theme 内置 `weline-api` / `Weline.Api.*`；任何原生 Ajax/XHR、`fetch`、`$.ajax`、`axios`、手写 `query-bin` URL、直连 REST URL 或临时 fallback 都视为违规。
 - 业务前端请求必须通过 Theme 的 `theme.js -> weline-api -> worker -> /{rest_frontend}/framework/query-bin -> FrontendQueryGateway -> QueryProvider/service` 链路；`{rest_frontend}` 由 `Env::getAreaRoutePrefix('rest_frontend')` 生成，禁止假定固定为 `api`。
+- 后端提供给前端消费的站内业务能力必须发布为 QueryProvider / `frontend=true` operation，并由 `weline-api` 通过 bin-query 调用；不得为了页面交互新建绕过 query-bin 的私有直连接口。
 - 站内浏览器业务 API 只能使用 `Weline.Api.resource()`、`Weline.Api.graph()` 或 `Weline.Api.stream()`。
-- 禁止在业务 JS、`.phtml`、内联脚本或 API 示例中新增 direct `fetch(window.api(...))`、`XMLHttpRequest`、`$.ajax`、`axios`、`new EventSource(url)` 或手写 query-bin URL。
+- 禁止在业务 JS、`.phtml`、内联脚本或 API 示例中新增原生 `ajax()`/`XMLHttpRequest`、`fetch(...)`、`fetch(window.api(...))`、`$.ajax`、`axios`、`new EventSource(url)` 或手写 query-bin URL。
 - 涉及前端请求、QueryProvider、流式订阅或 worker 链路，必须加载 `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`。
 - 涉及浏览器可见 UI、组件、页面、布局、样式、响应式、状态展示、可用性或审美优化，必须加载命中的 Weline 前端技能和 `dev/ai/skills/ui-ux-pro-max/SKILL.md`。
 - `ui-ux-pro-max` 只补设计系统、信息层级、视觉质量和可用性约束；不得覆盖 Weline 的模板边界、layout 约定、i18n、请求链路和验证要求。
@@ -146,7 +149,8 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 - Bug 修复说明写到相关模块 `doc/`，不要写仓库根目录。
 - 只更新长期可复用内容，不写无价值流水账。
 - 交付说明必须区分：已改内容、验证证据、未验证项、剩余风险。
-- 每次完成开发、修复、部署或可运行功能交付后，最终交付说明必须列出本次相关可访问地址链接，包括本地/测试/线上页面 URL、后台入口、API 路径、文档页、PR/commit/release 地址等；若本次没有可访问地址，必须明确写“无可访问链接”。可点击资源优先使用 Markdown 链接格式。
+- 每次完成开发、修复、部署或可运行功能交付后，最终交付说明必须优先列出本次相关地址：本地/测试/线上页面 URL、后台入口 URL、API endpoint、文档路径/URL、PR/commit/release 地址，以及曾启动的测试实例地址。
+- 若没有可直接打开的 live URL，仍必须列出相关路由/路径地址，并明确访问前置条件（例如需要启动 WLS、需要后台登录 Session、需要部署到指定环境等）；只有确实没有任何可访问地址或相关路径时，才写“无可访问链接”。可点击资源优先使用 Markdown 链接格式。
 - 验收报告必须来自实际执行结果；禁止用“理论上”“应该可以”“看代码推测”冒充证据。
 
 ## 12. SaaS / 部署请求

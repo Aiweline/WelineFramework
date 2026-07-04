@@ -26,6 +26,7 @@ use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeSlotContractService;
+use Weline\Theme\Service\WidgetDefaultInjectionService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Widget\Service\ParamTypeRenderer;
@@ -361,12 +362,17 @@ class ThemeEditor extends BackendController
 
         $layout = [];
         $hasDraft = false;
-        $layoutIdentity = !empty($layoutEditorLock['enabled']) ? [
-            'layout_option' => (string)($layoutEditorLock['layout_option'] ?? 'default'),
-            'scope' => (string)($layoutEditorLock['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
-            'target_type' => (string)($layoutEditorLock['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
-            'target_id' => (int)($layoutEditorLock['target_id'] ?? 0),
-        ] : [];
+        $layoutIdentity = $this->resolveVersionLayoutIdentity([
+            'layout_option' => $layoutOption,
+        ]);
+        if (!empty($layoutEditorLock['enabled'])) {
+            $layoutIdentity = [
+                'layout_option' => (string)($layoutEditorLock['layout_option'] ?? 'default'),
+                'scope' => (string)($layoutEditorLock['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
+                'target_type' => (string)($layoutEditorLock['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
+                'target_id' => (int)($layoutEditorLock['target_id'] ?? 0),
+            ];
+        }
         if ($currentThemeId) {
             $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType, $layoutIdentity);
             if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($currentThemeId, $pageType, $layoutIdentity)) {
@@ -428,11 +434,26 @@ class ThemeEditor extends BackendController
         }
         $lockTargetType = (string)$this->request->getParam(
             'virtual_target_type',
-            (string)$this->request->getParam('layout_lock_target_type', ThemeVirtualLayout::TARGET_GLOBAL)
+            (string)$this->request->getParam(
+                'layout_lock_target_type',
+                (string)$this->request->getParam(
+                    'theme_layout_target_type',
+                    (string)$this->request->getParam('theme_layout_source_target_type', ThemeVirtualLayout::TARGET_GLOBAL)
+                )
+            )
         );
         $lockTargetId = (int)$this->request->getParam(
             'virtual_target_id',
-            (int)$this->request->getParam('target_id', 0)
+            (int)$this->request->getParam(
+                'layout_lock_target_id',
+                (int)$this->request->getParam(
+                    'theme_layout_target_id',
+                    (int)$this->request->getParam(
+                        'theme_layout_source_target_id',
+                        (int)$this->request->getParam('target_id', 0)
+                    )
+                )
+            )
         );
 
         return [
@@ -483,9 +504,13 @@ class ThemeEditor extends BackendController
     {
         foreach ([
             'theme_layout_target_type',
+            'theme_layout_target_id',
             'theme_layout_source_target_type',
+            'theme_layout_source_target_id',
             'virtual_target_type',
+            'virtual_target_id',
             'layout_lock_target_type',
+            'layout_lock_target_id',
         ] as $key) {
             if (trim((string)$this->request->getParam($key, '')) !== '') {
                 return true;
@@ -515,6 +540,7 @@ class ThemeEditor extends BackendController
             'theme_layout_source_target_type',
             'theme_layout_source_target_id',
             'layout_lock_target_type',
+            'layout_lock_target_id',
             'virtual_target_type',
             'virtual_target_id',
             'target_id',
@@ -622,7 +648,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 获取布局数据 (AJAX) - 读取草稿数据
+     * 获取布局数据 (Query) - 读取草稿数据
      */
     public function getLayout()
     {
@@ -663,7 +689,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 获取部件列表 (AJAX)
+     * 获取部件列表 (Query)
      * 
      * 参数：
      * - page_type: 页面类型（可选），用于过滤部件
@@ -769,6 +795,135 @@ class ThemeEditor extends BackendController
     }
 
     /**
+     * 获取当前布局缺失的默认注入部件 (Query)
+     */
+    public function getDefaultInjections()
+    {
+        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $pageType = (string)$this->request->getParam(
+            'page_type',
+            $this->request->getParam('layout_type', ThemeLayout::PAGE_TYPE_HOME)
+        );
+        $editorArea = (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND);
+        $editorArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
+        $keyword = trim((string)$this->request->getParam('keyword', ''));
+        $identity = $this->resolveVersionLayoutIdentity();
+
+        if ($themeId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('请选择主题'),
+                'items' => [],
+                'total' => 0,
+            ]);
+        }
+
+        try {
+            /** @var WidgetDefaultInjectionService $service */
+            $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+            $items = $service->getMissingForLayout($themeId, $pageType, $identity, $editorArea, $keyword);
+
+            return $this->fetchJson([
+                'success' => true,
+                'items' => $items,
+                'total' => count($items),
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'layout_option' => $identity['layout_option'],
+                'editor_area' => $editorArea,
+            ]);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'items' => [],
+                'total' => 0,
+            ]);
+        }
+    }
+
+    /**
+     * 按 default_injections 声明位置重新应用部件 (Query)
+     */
+    public function postApplyDefaultInjection()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $decoded = json_decode($bodyParams, true);
+            $data = is_array($decoded) ? $decoded : [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)(
+            $data['page_type']
+            ?? $data['layout_type']
+            ?? $this->request->getParam('page_type', $this->request->getParam('layout_type', ThemeLayout::PAGE_TYPE_HOME))
+        );
+        $injectionKey = trim((string)($data['injection_key'] ?? $this->request->getParam('injection_key', '')));
+        $editorArea = (string)($data['editor_area'] ?? $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND));
+        $editorArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
+        $identity = $this->resolveVersionLayoutIdentity($data);
+
+        if ($themeId <= 0 || $pageType === '' || $injectionKey === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('参数不完整'),
+            ]);
+        }
+
+        try {
+            /** @var WidgetDefaultInjectionService $service */
+            $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+            $item = $service->applyInjectionByKey(
+                $themeId,
+                $pageType,
+                $injectionKey,
+                $identity,
+                ThemeLayout::STATUS_DRAFT,
+                $editorArea
+            );
+
+            if (!$item || empty($item['layout_id'])) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('该推荐部件已在当前布局中'),
+                ]);
+            }
+
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            $previewHtml = $this->buildPreviewHtmlForLayoutId((int)$item['layout_id'], $item['config'] ?? []);
+
+            $response = [
+                'success' => true,
+                'message' => __('已应用推荐部件'),
+                'data' => $item,
+            ];
+            if ($previewHtml !== null) {
+                $response['preview_html'] = $previewHtml;
+            }
+
+            return $this->fetchJson($response);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * 将 getWidgetsForSlot 的结果（独占/普通/精确匹配）合并去重为「按部件类型分组」结构，
      * 供分页拍平复用。去重以 module + code 为准。
      *
@@ -809,7 +964,7 @@ class ThemeEditor extends BackendController
     }
     
     /**
-     * 获取指定 slot 的推荐部件 (AJAX)
+     * 获取指定 slot 的推荐部件 (Query)
      * 
      * 精细筛选逻辑：
      * - 顶层独占区域（header/footer）：返回独占大部件
@@ -882,7 +1037,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 保存部件 (AJAX)
+     * 保存部件 (Query)
      */
     public function postSaveWidget()
     {
@@ -1005,7 +1160,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 更新部件配置 (AJAX)
+     * 更新部件配置 (Query)
      */
     public function postUpdateConfig()
     {
@@ -1079,7 +1234,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 删除部件 (AJAX)
+     * 删除部件 (Query)
      * 路由: /backend/theme-editor/remove-widget (POST)
      */
     public function postRemoveWidget()
@@ -1260,7 +1415,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 移动部件 (AJAX)
+     * 移动部件 (Query)
      */
     public function postMoveWidget()
     {
@@ -1291,7 +1446,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 更新排序 (AJAX)
+     * 更新排序 (Query)
      */
     public function postUpdateSort()
     {
@@ -1323,7 +1478,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 交换两个部件的排序 (AJAX)
+     * 交换两个部件的排序 (Query)
      */
     public function postSwapWidgetOrder()
     {
@@ -1357,7 +1512,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 保存完整布局 (AJAX)
+     * 保存完整布局 (Query)
      */
     public function postSaveLayout()
     {
@@ -1389,7 +1544,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 获取部件位置信息 (AJAX)
+     * 获取部件位置信息 (Query)
      */
     public function getPlacementInfo()
     {
@@ -1440,7 +1595,7 @@ class ThemeEditor extends BackendController
             $orphansCleaned = $this->layoutService->cleanOrphanWidgets($themeId, $pageType, $identity);
             
             // 2. 将草稿发布为正式版（复制 draft -> published，含去重）
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, $identity);
+            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, $identity, true);
             if (!$publishResult) {
                 return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                     'success' => false,
@@ -1476,7 +1631,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 撤销草稿 (AJAX) - 放弃所有未发布的修改
+     * 撤销草稿 (Query) - 放弃所有未发布的修改
      */
     public function postDiscardDraft()
     {
@@ -1531,7 +1686,7 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 渲染单个部件 (AJAX) - 用于实时预览
+     * 渲染单个部件 (Query) - 用于实时预览
      * 
      * 支持两种调用方式：
      * 1. 通过 widget_module + widget_code 查找部件定义并渲染
@@ -2171,6 +2326,13 @@ class ThemeEditor extends BackendController
             } else {
                 // 特定语言：只写翻译层（普通可翻译字段）
                 $this->persistThemeDefaultConfig($widgetModule, $widgetType, $widgetCode, $normalConfig, $locale, $area);
+            }
+
+            ThemeData::clearCache();
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            $themeId = (int)($widgetLayout->getData(ThemeLayout::schema_fields_THEME_ID) ?: $widgetLayout->getData('theme_id'));
+            if ($themeId > 0) {
+                $this->cacheGenerator->clearCache($themeId);
             }
 
             $previewHtml = $this->buildPreviewHtmlForLayoutId(
@@ -4874,13 +5036,15 @@ HTML;
             $this->assign('preview_context', $context);
             $this->assign('layout_type', $layoutType);
             $this->assign('layout_option', $layoutOption);
+            $layoutIdentity = $this->resolveVersionLayoutIdentity($context);
             /** @var ThemePreviewContentRenderer $previewContentRenderer */
             $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
             $previewPayload = $previewContentRenderer->build(
                 $themeId,
                 $layoutType,
                 (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT),
-                $versionId > 0 ? $versionId : null
+                $versionId > 0 ? $versionId : null,
+                $layoutIdentity
             );
             $this->assign('content', $previewPayload['content']);
             $layoutIdentify = $this->buildLayoutConfigIdentify($layoutType, $layoutOption);
@@ -4905,7 +5069,11 @@ HTML;
                 'showPartners' => true,
             ], $previewPayload['meta'], $layoutMeta));
 
-            return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+            $previewContentTemplate = $editorArea === PreviewContextService::AREA_BACKEND
+                ? 'Weline_Theme::templates/backend/theme-preview/content.phtml'
+                : 'Weline_Theme::templates/frontend/theme-preview/content.phtml';
+
+            return (string)$this->fetch($previewContentTemplate);
         } catch (\Throwable) {
             return '';
         } finally {
@@ -5163,7 +5331,7 @@ HTML;
     // ==================== 版本控制 API ====================
 
     /**
-     * 获取版本列表 (AJAX)
+     * 获取版本列表 (Query)
      * 路由: /backend/theme-editor/versions (GET)
      */
     public function getVersions()
@@ -5205,7 +5373,7 @@ HTML;
     }
 
     /**
-     * 保存为新版本 (AJAX)
+     * 保存为新版本 (Query)
      * 路由: /backend/theme-editor/save-version (POST)
      */
     public function postSaveVersion()
@@ -5255,7 +5423,7 @@ HTML;
     }
 
     /**
-     * 切换到指定版本 (AJAX)
+     * 切换到指定版本 (Query)
      * 路由: /backend/theme-editor/switch-version (POST)
      */
     public function postSwitchVersion()
@@ -5310,7 +5478,7 @@ HTML;
     }
 
     /**
-     * 恢复原始布局 (AJAX) - 重构版本
+     * 恢复原始布局 (Query) - 重构版本
      * 路由: /backend/theme-editor/restore-original (POST)
      * 
      * 新行为：
@@ -5371,7 +5539,7 @@ HTML;
     }
 
     /**
-     * 发布版本 (AJAX)
+     * 发布版本 (Query)
      * 路由: /backend/theme-editor/publish-version (POST)
      */
     public function postPublishVersion()
@@ -5429,7 +5597,7 @@ HTML;
     }
 
     /**
-     * 删除版本 (AJAX)
+     * 删除版本 (Query)
      * 路由: /backend/theme-editor/delete-version (POST)
      */
     public function postDeleteVersion()
@@ -5483,7 +5651,7 @@ HTML;
     }
 
     /**
-     * 重命名版本 (AJAX)
+     * 重命名版本 (Query)
      * 路由: /backend/theme-editor/rename-version (POST)
      */
     public function postRenameVersion()
@@ -5534,7 +5702,7 @@ HTML;
     // ==================== 前端预览 API ====================
 
     /**
-     * 启动前端预览 (AJAX)
+     * 启动前端预览 (Query)
      * 路由: /backend/theme-editor/start-preview (POST)
      * 
      * 生成预览 Token 并返回前端预览 URL
@@ -5713,7 +5881,7 @@ HTML;
     }
 
     /**
-     * 退出前端预览 (AJAX)
+     * 退出前端预览 (Query)
      * 路由: /backend/theme-editor/exit-preview (POST)
      * 
      * 删除预览 Token
@@ -5843,7 +6011,7 @@ HTML;
     }
 
     /**
-     * 发布并退出预览 (AJAX)
+     * 发布并退出预览 (Query)
      * 路由: /backend/theme-editor/publish-and-exit (POST)
      * 
      * 发布当前预览内容并退出预览模式
@@ -5891,7 +6059,7 @@ HTML;
                 ]);
             }
 
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, $identity);
+            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, $identity, true);
             if (!$publishResult) {
                 return $this->fetchJson([
                     'success' => false,
@@ -5997,7 +6165,7 @@ HTML;
             }
 
             // 1. 发布布局
-            $publishResult = $this->layoutService->publishLayout($themeId, $pageType);
+            $publishResult = $this->layoutService->publishLayout($themeId, $pageType, [], true);
             if (!$publishResult) {
                 return $this->fetchJson([
                     'success' => false,
@@ -6254,7 +6422,7 @@ HTML;
     // ==================== 编辑锁定 API ====================
 
     /**
-     * 检查编辑锁定状态 (AJAX)
+     * 检查编辑锁定状态 (Query)
      * 路由: /backend/theme-editor/check-lock (GET)
      * 
      * 返回当前锁定状态，如果被其他用户锁定，返回锁定信息
@@ -6289,7 +6457,7 @@ HTML;
     }
 
     /**
-     * 释放编辑锁定 (AJAX)
+     * 释放编辑锁定 (Query)
      * 路由: /backend/theme-editor/release-lock (POST)
      */
     public function postReleaseLock()
@@ -6323,7 +6491,7 @@ HTML;
     }
 
     /**
-     * 更新编辑活动时间 (AJAX)
+     * 更新编辑活动时间 (Query)
      * 路由: /backend/theme-editor/update-activity (POST)
      * 
      * 用于保持锁定活跃，防止自动过期
@@ -6358,7 +6526,7 @@ HTML;
     }
 
     /**
-     * 请求接管编辑 (AJAX)
+     * 请求接管编辑 (Query)
      * 路由: /backend/theme-editor/request-takeover (POST)
      */
     public function postRequestTakeover()
@@ -6391,7 +6559,7 @@ HTML;
     }
 
     /**
-     * 检查是否有接管请求 (AJAX)
+     * 检查是否有接管请求 (Query)
      * 路由: /backend/theme-editor/check-takeover-request (GET)
      * 
      * 当前锁定者调用此接口检查是否有人请求接管
@@ -6420,7 +6588,7 @@ HTML;
     }
 
     /**
-     * 强制接管编辑 (AJAX)
+     * 强制接管编辑 (Query)
      * 路由: /backend/theme-editor/force-takeover (POST)
      */
     public function postForceTakeover()
