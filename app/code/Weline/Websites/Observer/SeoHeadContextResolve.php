@@ -16,7 +16,7 @@ class SeoHeadContextResolve implements ObserverInterface
     public function execute(Event &$event): void
     {
         $website = WebsiteData::getWebsite();
-        if ($website === null || $website->getWebsiteId() <= 0) {
+        if ($website === null || $website->getWebsiteId() < 0) {
             return;
         }
 
