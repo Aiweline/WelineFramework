@@ -16,6 +16,7 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 ## Core Patterns (see AI-ENTRY.md for details)
 - ORM: chains end with `.fetch()`/`.fetchArray()` | Pagination: `.pagination($p,$s)`
 - Schema: `#[Col]` + `setup:upgrade` (NEVER edit `generated/` or `Setup/Upgrade.php`)
+- Websites: `website_id=0`/`code=default` is auto-installed system default site; NEVER treat 0 as empty/invalid/no site.
 - Frontend API: browser frontend-backend business interfaces **MUST** use bin-query / `weline-api` (`Weline.Api.*`) | NEVER native Ajax/XHR/fetch/axios
 - WLS Testing: **ALWAYS** start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`) | Default port 9501 is PRODUCTION (DO NOT TOUCH) | **MUST stop test instance after testing**
 - WLS Lifecycle: code→`reload` | master→`restart -r` | NO `sleep/die/exit`
