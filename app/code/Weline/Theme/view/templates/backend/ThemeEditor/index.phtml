@@ -59,6 +59,17 @@ if ($layout_lock_source === 'cms') {
     $editorShellClasses[] = 'theme-editor-cms-embed';
 }
 $layout_editor_lock_json = json_encode($layout_editor_lock, $jsonForScriptFlags) ?: '{"enabled":false}';
+$layout_identity = $this->getData('layout_identity') ?: [];
+$layout_identity = is_array($layout_identity) ? $layout_identity : [];
+$layout_identity_scope = (string)($layout_identity['scope'] ?? ($preview_context['scope'] ?? $this->request->getParam('scope', 'default')));
+$layout_identity_target_type = (string)($layout_identity['target_type'] ?? (
+    $preview_context['theme_layout_target_type']
+    ?? $this->request->getParam('theme_layout_target_type', $this->request->getParam('target_type', 'global'))
+));
+$layout_identity_target_id = max(0, (int)($layout_identity['target_id'] ?? (
+    $preview_context['theme_layout_target_id']
+    ?? $this->request->getParam('theme_layout_target_id', $this->request->getParam('target_id', 0))
+)));
 $frontend_theme_id = (int)($this->getData('frontend_theme_id') ?: ($editor_area === 'frontend' ? $theme_id : 0));
 $backend_theme_id = (int)($this->getData('backend_theme_id') ?: ($editor_area === 'backend' ? $theme_id : 0));
 $default_locale = \Weline\Framework\App\Env::default_LANGUAGE_CODE;
@@ -77,11 +88,18 @@ $previewParams = [
     'locale' => (string)$this->request->getParam('locale', $default_locale),
     '_t' => time(),
 ];
+$previewTargetIsConcrete = static function (string $targetType, int $targetId): bool {
+    return $targetType !== ''
+        && $targetType !== 'global'
+        && ($targetId > 0 || $targetType === 'website');
+};
 if ($layout_editor_locked) {
     $previewParams['scope'] = (string)($layout_editor_lock['scope'] ?? ($preview_context['scope'] ?? 'default'));
     $previewTargetType = trim((string)($layout_editor_lock['target_type'] ?? ''));
     $previewTargetId = (int)($layout_editor_lock['target_id'] ?? 0);
-    if ($previewTargetType !== '' && $previewTargetType !== 'global' && $previewTargetId > 0) {
+    if ($previewTargetIsConcrete($previewTargetType, $previewTargetId)) {
+        $previewParams['target_type'] = $previewTargetType;
+        $previewParams['target_id'] = $previewTargetId;
         $previewParams['theme_layout_target_type'] = $previewTargetType;
         $previewParams['theme_layout_target_id'] = $previewTargetId;
         $previewParams['theme_layout_source_target_type'] = $previewTargetType;
@@ -100,7 +118,9 @@ if ($layout_editor_locked) {
         $preview_context['theme_layout_target_id']
         ?? $this->request->getParam('theme_layout_target_id', 0)
     );
-    if ($previewTargetType !== '' && $previewTargetType !== 'global' && $previewTargetId > 0) {
+    if ($previewTargetIsConcrete($previewTargetType, $previewTargetId)) {
+        $previewParams['target_type'] = $previewTargetType;
+        $previewParams['target_id'] = $previewTargetId;
         $previewParams['theme_layout_target_type'] = $previewTargetType;
         $previewParams['theme_layout_target_id'] = $previewTargetId;
         $previewParams['theme_layout_source_target_type'] = trim((string)(
@@ -169,7 +189,15 @@ $getWidgetIcon = function ($type) {
      data-theme-has-backend="<?= $theme_has_backend ? '1' : '0' ?>"
      data-file-manager-connector-base="<?= $fileManagerConnectorUrl ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
+     data-layout-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
      data-layout-option="<?= htmlspecialchars($layout_option) ?>"
+     data-scope="<?= htmlspecialchars($layout_identity_scope, ENT_QUOTES, 'UTF-8') ?>"
+     data-target-type="<?= htmlspecialchars($layout_identity_target_type, ENT_QUOTES, 'UTF-8') ?>"
+     data-target-id="<?= $layout_identity_target_id ?>"
+     data-theme-layout-target-type="<?= htmlspecialchars($layout_identity_target_type, ENT_QUOTES, 'UTF-8') ?>"
+     data-theme-layout-target-id="<?= $layout_identity_target_id ?>"
+     data-theme-layout-source-target-type="<?= htmlspecialchars($layout_identity_target_type, ENT_QUOTES, 'UTF-8') ?>"
+     data-theme-layout-source-target-id="<?= $layout_identity_target_id ?>"
      data-default-locale="<?= htmlspecialchars($default_locale, ENT_QUOTES, 'UTF-8') ?>"
      data-layout-options="<?= htmlspecialchars($layout_options_json, ENT_QUOTES, 'UTF-8') ?>"
      data-installed-locales="<?= htmlspecialchars($installed_locales_json, ENT_QUOTES, 'UTF-8') ?>"
@@ -3509,7 +3537,8 @@ body:has(.theme-editor-container) .footer {
 
 .widget-default-injection-module,
 .widget-default-injection-reason,
-.widget-default-injection-target {
+.widget-default-injection-target,
+.widget-default-injection-scope {
     color: var(--te-text-secondary);
     font-size: 11px;
     line-height: 1.45;
@@ -3518,6 +3547,19 @@ body:has(.theme-editor-container) .footer {
 
 .widget-default-injection-reason {
     color: var(--te-text-muted);
+}
+
+.widget-default-injection-scope {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    color: var(--te-text-muted);
+}
+
+.widget-default-injection-scope i {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    font-size: 12px;
 }
 
 .widget-default-injection-badge {
@@ -3536,16 +3578,20 @@ body:has(.theme-editor-container) .footer {
 }
 
 .widget-default-injection-actions {
-    display: flex;
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
 }
 
 .btn-apply-default-injection {
+    min-width: 0;
+    width: 100%;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 5px;
     min-height: 26px;
-    padding: 4px 9px;
+    padding: 5px 7px;
     border: 1px solid var(--te-accent);
     border-radius: 5px;
     background: var(--te-accent);
@@ -3553,6 +3599,22 @@ body:has(.theme-editor-container) .footer {
     font-size: 11px;
     font-weight: 700;
     cursor: pointer;
+}
+
+.btn-apply-default-injection span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-apply-default-injection-current {
+    background: #fff;
+    color: var(--te-accent);
+}
+
+.btn-apply-default-injection-all {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .btn-apply-default-injection:disabled {
@@ -5309,9 +5371,9 @@ body:has(.theme-editor-container) .footer {
     });
 })();
 </script>
-<!-- ThemeEditor requests are routed through w_query('theme', 'editorRequest') for the visual editor API surface. -->
+<!-- ThemeEditor same-origin editor APIs use Weline.Api backend requests; w_query remains a fallback. -->
 <script src="@static(Weline_Widget::js/widget-param-types.js)?v=20260602-ai-context-provider"></script>
-<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260704-dashboard-save-close-v3"></script>
+<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260704-dashboard-widget-api-v2"></script>
 <script>
 (function () {
     const labels = {

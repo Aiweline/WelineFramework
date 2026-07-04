@@ -45,6 +45,15 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 公共接口、权限、安全、支付、数据删除、加密、隐私、生产配置等变更必须额外说明风险和验证方式。
 - 不为了“看起来完成”引入假数据、隐藏开关、宽松兼容、静默跳过、临时 fallback 或兜底代码。
 
+### 3.1 零号站点硬约定（强制）
+
+- `website_id = 0`、`code = default` 是框架安装时自动创建的系统默认站点；它不是用户业务新建出来的普通站点。
+- 一切零号站点都必须被理解为“系统默认站点”，不得解释为“没有站点”“未选择站点”“无效站点 ID”“空值”或“需要自动新建普通站点”。
+- 普通业务站点使用正整数 ID；站点相关代码必须显式区分“参数缺失”和“参数值为 0”。
+- 涉及 `Weline_Websites`、Dashboard、Theme target、CMS、SEO、Visitor、URL 解析、域名绑定、配置作用域、安装/升级迁移时，`website_id=0` 必须作为合法站点 ID 参与读写、渲染、迁移和权限范围判断。
+- 禁止用 `empty($websiteId)`、`$websiteId <= 0`、`$websiteId > 0`、`getId()` 真值判断、`if (!$websiteId)` 等方式把零号站点过滤掉；应使用显式字段存在性、`array_key_exists('website_id', ...)`、`hasData(Website::schema_fields_ID)`、`website_id >= 0` 或 `code = default` 判断。
+- 新增 AI 文档、模块 README、QueryProvider、Setup/Upgrade、后台表单、REST/API、URL/路由上下文时，都要复查这个约定，防止把零号站点当成空值。
+
 ## 4. 禁止项
 
 - 禁止直接修改 `generated/`、`view/tpl/**`、`app/code/*/*/view/tpl/**`、`app/design/*/*/*/view/tpl/**` 等生成/编译产物；必须改源模板、服务、Hook、Widget、Taglib、生成规则或构建链路。

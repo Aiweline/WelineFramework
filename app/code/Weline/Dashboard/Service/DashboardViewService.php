@@ -10,17 +10,23 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
+use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Service\DefaultWebsiteService;
 
 class DashboardViewService
 {
+    public const DEFAULT_WEBSITE_ID = 0;
+
     public function __construct(
         private readonly DashboardView $dashboardView,
         private readonly Website $website,
         private readonly BackendUserConfig $backendUserConfig,
         private readonly ThemeContextService $themeContext,
         private readonly ThemeLayoutService $themeLayoutService,
+        private readonly ThemeLayoutVersionService $themeLayoutVersionService,
         private readonly ThemeLayout $themeLayout,
+        private readonly DefaultWebsiteService $defaultWebsiteService,
     ) {
     }
 
@@ -32,13 +38,20 @@ class DashboardViewService
     public function getDefaultWebsiteId(): int
     {
         try {
+            $row = $this->defaultWebsiteService->ensureDefaultWebsite(false);
+            if ((string)($row[Website::schema_fields_CODE] ?? '') === Website::CODE_DEFAULT) {
+                return max(self::DEFAULT_WEBSITE_ID, (int)($row[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID));
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
             $row = $this->website->clearQuery()->clearData()
                 ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
                 ->find()
                 ->fetchArray();
-            $websiteId = (int)($row[Website::schema_fields_ID] ?? 0);
-            if ($websiteId > 0) {
-                return $websiteId;
+            if (is_array($row) && array_key_exists(Website::schema_fields_ID, $row)) {
+                return max(self::DEFAULT_WEBSITE_ID, (int)($row[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID));
             }
         } catch (\Throwable) {
         }
@@ -57,6 +70,11 @@ class DashboardViewService
     public function listWebsites(): array
     {
         try {
+            $this->defaultWebsiteService->ensureDefaultWebsite(false);
+        } catch (\Throwable) {
+        }
+
+        try {
             $rows = $this->website->clearQuery()->clearData()
                 ->order(Website::schema_fields_ID, 'ASC')
                 ->select()
@@ -71,7 +89,7 @@ class DashboardViewService
                 continue;
             }
             $websiteId = (int)($row[Website::schema_fields_ID] ?? 0);
-            if ($websiteId <= 0) {
+            if ($websiteId < self::DEFAULT_WEBSITE_ID) {
                 continue;
             }
             $result[] = [
@@ -88,12 +106,13 @@ class DashboardViewService
     public function ensureDefaultView(int $websiteId): ?DashboardView
     {
         $websiteId = $this->normalizeWebsiteId($websiteId);
-        if ($websiteId <= 0) {
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return null;
         }
 
         $existing = $this->findSystemDefaultView($websiteId);
         if ($existing) {
+            $this->ensureLayoutInitialized($existing);
             return $existing;
         }
 
@@ -110,6 +129,7 @@ class DashboardViewService
             ->save();
 
         $this->clearOtherDefaults($websiteId, $view->getViewId());
+        $this->ensureLayoutInitialized($view);
 
         return $view;
     }
@@ -195,7 +215,7 @@ class DashboardViewService
     ): DashboardView
     {
         $websiteId = $this->normalizeWebsiteId($websiteId);
-        if ($websiteId <= 0) {
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             throw new \InvalidArgumentException((string)__('缺少站点。'));
         }
         if ($userId <= 0) {
@@ -227,6 +247,102 @@ class DashboardViewService
         }
 
         return $view;
+    }
+
+    /**
+     * Ensure a module-owned dashboard page identity exists for a website.
+     *
+     * The page identity is stored as a Dashboard view, while its widgets remain
+     * normal Theme layout rows under the view's layout identity.
+     *
+     * @param array<string,list<array<string,mixed>>>|list<array<string,mixed>> $layoutData
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function ensureSharedLayoutPage(
+        int $websiteId,
+        string $code,
+        string $name,
+        array $layoutData = [],
+        array $options = []
+    ): array {
+        $websiteId = $this->normalizeWebsiteId($websiteId);
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
+            throw new \InvalidArgumentException((string)__('缺少站点。'));
+        }
+
+        $code = $this->normalizePageCode($code, $name);
+        $visibility = (string)($options['visibility'] ?? DashboardView::VISIBILITY_SYSTEM);
+        if (!in_array($visibility, [DashboardView::VISIBILITY_SYSTEM, DashboardView::VISIBILITY_PUBLIC], true)) {
+            $visibility = DashboardView::VISIBILITY_SYSTEM;
+        }
+
+        $view = $this->findSharedViewByCode($websiteId, $code);
+        $created = false;
+        if (!$view) {
+            $view = clone $this->dashboardView;
+            $view->clearQuery()->clearData()
+                ->setWebsiteId($websiteId)
+                ->setOwnerAdminId(null)
+                ->setName($name)
+                ->setCode($code)
+                ->setVisibility($visibility)
+                ->setIsDefault(false)
+                ->setIsActive(true)
+                ->setSortOrder((int)($options['sort_order'] ?? $this->nextSharedSortOrder($websiteId)))
+                ->save();
+            $created = true;
+        } else {
+            $changed = false;
+            if (!empty($options['update_name']) && $view->getName() !== trim($name)) {
+                $view->setName($name);
+                $changed = true;
+            }
+            if (!empty($options['update_visibility']) && $view->getVisibility() !== $visibility) {
+                $view->setVisibility($visibility);
+                $changed = true;
+            }
+            if (!$view->isActive()) {
+                $view->setIsActive(true);
+                $changed = true;
+            }
+            if ($changed) {
+                $view->save();
+            }
+        }
+
+        $this->ensureLayoutInitialized($view);
+
+        $replaceLayout = !empty($options['replace_layout']);
+        $hasLayout = $this->hasLayoutRows($view);
+        $layoutResult = [
+            'success' => true,
+            'status' => $hasLayout ? 'kept_existing_layout' : 'empty_layout',
+            'seeded' => [],
+        ];
+
+        if ($replaceLayout || !$hasLayout) {
+            if ($layoutData !== []) {
+                $layoutResult = $this->seedLayout($view, $layoutData);
+            } elseif (($options['copy_default_layout'] ?? true) === true) {
+                $source = $this->findDefaultView($websiteId) ?? $this->ensureDefaultView($websiteId);
+                $layoutResult = $source && $source->getViewId() !== $view->getViewId()
+                    ? $this->copyLayoutIdentity($source, $view)
+                    : [
+                        'success' => false,
+                        'status' => 'missing_source_layout_identity',
+                        'copied' => [],
+                    ];
+            }
+        }
+
+        return [
+            'success' => true,
+            'created' => $created,
+            'layout' => $layoutResult,
+            'view' => $this->viewToPayload($view, 0),
+            'identity' => $view->layoutIdentity(),
+        ];
     }
 
     public function renameView(int $viewId, int $userId, string $name): DashboardView
@@ -276,9 +392,20 @@ class DashboardViewService
 
     public function ensureLayoutInitialized(DashboardView $view): void
     {
-        // Default dashboard widgets are suggestions in ThemeEditor, not automatic
-        // mutations. An empty layout may be intentional after the user deletes
-        // every widget and saves.
+        $themeId = $this->getBackendThemeId();
+        if ($themeId <= 0 || $view->getViewId() <= 0) {
+            return;
+        }
+
+        try {
+            $this->themeLayoutVersionService->initializeVersionIfNeeded(
+                $themeId,
+                DashboardView::PAGE_TYPE,
+                null,
+                $view->layoutIdentity()
+            );
+        } catch (\Throwable) {
+        }
     }
 
     public function setDefaultView(int $viewId, int $userId): DashboardView
@@ -425,7 +552,7 @@ class DashboardViewService
 
     private function normalizeWebsiteId(int $websiteId): int
     {
-        return $websiteId > 0 ? $websiteId : $this->getDefaultWebsiteId();
+        return $websiteId >= self::DEFAULT_WEBSITE_ID ? $websiteId : $this->getDefaultWebsiteId();
     }
 
     private function findSystemDefaultView(int $websiteId): ?DashboardView
@@ -553,6 +680,59 @@ class DashboardViewService
         }
     }
 
+    private function findSharedViewByCode(int $websiteId, string $code): ?DashboardView
+    {
+        try {
+            $row = $this->dashboardView->clearQuery()->clearData()
+                ->where(DashboardView::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(DashboardView::schema_fields_OWNER_ADMIN_ID, null, 'IS NULL')
+                ->where(DashboardView::schema_fields_CODE, $code)
+                ->find()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_array($row) && (int)($row[DashboardView::schema_fields_ID] ?? 0) > 0
+            ? $this->loadView((int)$row[DashboardView::schema_fields_ID])
+            : null;
+    }
+
+    private function normalizePageCode(string $code, string $fallbackName): string
+    {
+        $value = strtolower(trim($code));
+        $value = preg_replace('/[^a-z0-9_\\-]+/', '-', $value) ?: '';
+        $value = trim($value, '-_');
+        if ($value === '') {
+            $value = $this->slug($fallbackName);
+        }
+        if ($value === '') {
+            $value = 'module-page';
+        }
+
+        return mb_substr($value, 0, 120);
+    }
+
+    private function nextSharedSortOrder(int $websiteId): int
+    {
+        try {
+            $rows = $this->dashboardView->clearQuery()->clearData()
+                ->where(DashboardView::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(DashboardView::schema_fields_OWNER_ADMIN_ID, null, 'IS NULL')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return 100;
+        }
+
+        $max = 0;
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $max = max($max, (int)($row[DashboardView::schema_fields_SORT_ORDER] ?? 0));
+        }
+
+        return max(100, $max + 10);
+    }
+
     private function slug(string $name): string
     {
         $value = strtolower(trim($name));
@@ -591,38 +771,154 @@ class DashboardViewService
 
     private function copyLayout(DashboardView $source, DashboardView $target): bool
     {
-        $themeId = $this->getBackendThemeId();
-        if ($themeId <= 0) {
+        $result = $this->copyLayoutIdentity($source, $target);
+        if (empty($result['success'])) {
             return false;
         }
-        $copied = false;
+
+        return array_sum(array_map('intval', $result['copied'] ?? [])) > 0;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function copyLayoutIdentity(DashboardView $source, DashboardView $target): array
+    {
+        $themeId = $this->getBackendThemeId();
+        if ($themeId <= 0) {
+            return [
+                'success' => false,
+                'status' => 'missing_backend_theme',
+                'copied' => [],
+            ];
+        }
+
+        return $this->themeLayoutService->copyLayoutIdentity(
+            $themeId,
+            DashboardView::PAGE_TYPE,
+            $source->layoutIdentity(),
+            $target->layoutIdentity()
+        );
+    }
+
+    /**
+     * @param array<string,list<array<string,mixed>>>|list<array<string,mixed>> $layoutData
+     * @return array<string,mixed>
+     */
+    private function seedLayout(DashboardView $view, array $layoutData): array
+    {
+        $themeId = $this->getBackendThemeId();
+        if ($themeId <= 0) {
+            return [
+                'success' => false,
+                'status' => 'missing_backend_theme',
+                'seeded' => [],
+            ];
+        }
+
+        $payload = $this->normalizeSeedLayout($layoutData);
+        if ($payload === []) {
+            return [
+                'success' => false,
+                'status' => 'empty_seed_layout',
+                'seeded' => [],
+            ];
+        }
+
+        $seeded = [];
         foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
-            $layout = $this->themeLayoutService->getLayout(
+            $this->themeLayoutService->saveLayout(
                 $themeId,
                 DashboardView::PAGE_TYPE,
+                $payload,
                 $status,
-                $source->layoutIdentity()
+                $view->layoutIdentity()
             );
-            $payload = [];
-            foreach ($layout as $area => $areaData) {
-                $widgets = is_array($areaData['widgets'] ?? null) ? $areaData['widgets'] : [];
-                if ($widgets !== []) {
-                    $payload[$area] = $widgets;
+            $seeded[$status] = array_sum(array_map('count', $payload));
+        }
+
+        return [
+            'success' => true,
+            'status' => 'seeded',
+            'seeded' => $seeded,
+        ];
+    }
+
+    /**
+     * @param array<string,list<array<string,mixed>>>|list<array<string,mixed>> $layoutData
+     * @return array<string,list<array<string,mixed>>>
+     */
+    private function normalizeSeedLayout(array $layoutData): array
+    {
+        $grouped = [];
+        foreach ($layoutData as $area => $widgets) {
+            if (is_string($area) && is_array($widgets) && $this->arrayIsList($widgets)) {
+                foreach ($widgets as $widget) {
+                    if (!is_array($widget)) {
+                        continue;
+                    }
+                    $normalized = $this->normalizeSeedWidget($widget, $area);
+                    if ($normalized !== null) {
+                        $grouped[$area][] = $normalized;
+                    }
                 }
+                continue;
             }
-            if ($payload !== []) {
-                $this->themeLayoutService->saveLayout(
-                    $themeId,
-                    DashboardView::PAGE_TYPE,
-                    $payload,
-                    $status,
-                    $target->layoutIdentity()
-                );
-                $copied = true;
+
+            if (is_array($widgets)) {
+                $normalized = $this->normalizeSeedWidget($widgets);
+                if ($normalized !== null) {
+                    $widgetArea = (string)($widgets['area'] ?? 'content');
+                    $grouped[$widgetArea][] = $normalized;
+                }
             }
         }
 
-        return $copied;
+        foreach ($grouped as &$widgets) {
+            usort($widgets, static fn(array $a, array $b): int => ((int)($a['_sort_order'] ?? 0)) <=> ((int)($b['_sort_order'] ?? 0)));
+            foreach ($widgets as &$widget) {
+                unset($widget['_sort_order']);
+            }
+            unset($widget);
+        }
+        unset($widgets);
+
+        return $grouped;
+    }
+
+    /**
+     * @param array<string,mixed> $widget
+     * @return array<string,mixed>|null
+     */
+    private function normalizeSeedWidget(array $widget, string $defaultArea = 'content'): ?array
+    {
+        $module = trim((string)($widget['widget_module'] ?? $widget['module'] ?? ''));
+        $type = trim((string)($widget['widget_type'] ?? $widget['type'] ?? ''));
+        $code = trim((string)($widget['widget_code'] ?? $widget['code'] ?? ''));
+        if ($module === '' || $type === '' || $code === '') {
+            return null;
+        }
+
+        $sortOrder = (int)($widget['sort_order'] ?? $widget['position'] ?? 0);
+
+        return [
+            'widget_module' => $module,
+            'widget_type' => $type,
+            'widget_code' => $code,
+            'slot_id' => $widget['slot_id'] ?? $widget['slot'] ?? null,
+            'config' => is_array($widget['config'] ?? null) ? $widget['config'] : [],
+            'is_active' => (bool)($widget['is_active'] ?? true),
+            '_sort_order' => $sortOrder,
+            'area' => (string)($widget['area'] ?? $defaultArea),
+        ];
+    }
+
+    /**
+     * @param array<mixed> $value
+     */
+    private function arrayIsList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
     }
 
     private function hasLayoutRows(DashboardView $view): bool
