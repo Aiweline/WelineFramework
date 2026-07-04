@@ -8,6 +8,24 @@
 - 根域、`@`、`www` 的状态监控
 - 与本模块内生命周期编排（`DomainLifecycleOrchestrationService`）、`Weline_Server` HTTPS 证书能力联动
 
+## 默认站点约定
+
+`Weline_Websites` 保留 `website_id = 0`、`code = default` 作为系统默认站点。安装和升级流程必须通过 `Weline\Websites\Service\DefaultWebsiteService::ensureDefaultWebsite()` 兜底保证该站点存在；若历史数据里 `code = default` 使用了正整数 ID，升级会迁移回 `0`，并同步本模块内的网站域名、货币、语言关联。
+
+默认站点基础数据：
+
+```text
+website_id       = 0
+code             = default
+name             = 默认网站
+url              = http://localhost
+default_currency = CNY
+default_language = zh_Hans_CN
+default_timezone = Asia/Shanghai
+```
+
+普通业务站点仍使用正整数 ID。判断站点是否存在时不要用 `empty($websiteId)`、`getId()` 或 `> 0` 过滤默认站点；应以 `code = default` 或显式字段 `website_id` 是否存在为准。
+
 ## GName 购买结果兼容
 
 `Weline\Websites\Adapter\GnameRegistrar` 已对 `code = -1` 且提示“已被注册”的歧义结果做二次确认：
