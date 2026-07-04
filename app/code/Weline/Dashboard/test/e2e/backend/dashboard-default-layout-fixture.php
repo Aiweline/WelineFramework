@@ -6,15 +6,16 @@ require dirname(__DIR__, 7) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR 
 
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\ThemeWidgetDefaultInjection;
 use Weline\Theme\Service\ThemeLayoutService;
-use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 use Weline\Websites\Model\Website;
+use Weline\Widget\Model\WidgetRegistryEntry;
+use Weline\Widget\Service\WidgetRegistryRefreshService;
+use Weline\Visitor\Service\VisitorDashboardPageInstaller;
 
 function fixture_fail(string $message): void
 {
@@ -63,7 +64,7 @@ function fixture_apply_identity($query, array $identity, string $modelClass)
 
 function fixture_cleanup_layout(int $themeId, int $websiteId, int $viewId): void
 {
-    if ($themeId <= 0 || $websiteId <= 0 || $viewId <= 0) {
+    if ($themeId <= 0 || $websiteId < 0 || $viewId <= 0) {
         return;
     }
 
@@ -148,25 +149,30 @@ function fixture_create_website(string $token): Website
     return $website;
 }
 
-function fixture_create_empty_default_view(Website $website): DashboardView
+function fixture_create_empty_view(Website $website, string $code = 'default', string $name = 'E2E 默认概览', bool $isDefault = true): DashboardView
 {
     /** @var DashboardView $view */
     $view = clone ObjectManager::getInstance(DashboardView::class);
     $view->clearQuery()->clearData()
         ->setWebsiteId($website->getWebsiteId())
         ->setOwnerAdminId(null)
-        ->setName('E2E 默认概览')
-        ->setCode('default')
-        ->setVisibility(DashboardView::VISIBILITY_SYSTEM)
-        ->setIsDefault(true)
+        ->setName($name)
+        ->setCode($code)
+        ->setVisibility($isDefault ? DashboardView::VISIBILITY_SYSTEM : DashboardView::VISIBILITY_PUBLIC)
+        ->setIsDefault($isDefault)
         ->setIsActive(true)
-        ->setSortOrder(0)
+        ->setSortOrder($isDefault ? 0 : 10)
         ->save();
 
     return $view;
 }
 
-function fixture_load_default_view(string $code): ?DashboardView
+function fixture_create_empty_default_view(Website $website): DashboardView
+{
+    return fixture_create_empty_view($website);
+}
+
+function fixture_load_website(string $code): ?Website
 {
     /** @var Website $website */
     $website = clone ObjectManager::getInstance(Website::class);
@@ -179,13 +185,27 @@ function fixture_load_default_view(string $code): ?DashboardView
         return null;
     }
 
+    $website->clearQuery()->clearData()->load($websiteId);
+    return $website->getWebsiteId() > 0 ? $website : null;
+}
+
+function fixture_load_default_view(string $code, string $viewCode = 'default', int $viewId = 0): ?DashboardView
+{
+    $website = fixture_load_website($code);
+    if (!$website) {
+        return null;
+    }
+
     /** @var DashboardView $view */
     $view = clone ObjectManager::getInstance(DashboardView::class);
-    $row = $view->clearQuery()->clearData()
-        ->where(DashboardView::schema_fields_WEBSITE_ID, $websiteId)
-        ->where(DashboardView::schema_fields_CODE, 'default')
-        ->find()
-        ->fetchArray();
+    $query = $view->clearQuery()->clearData()
+        ->where(DashboardView::schema_fields_WEBSITE_ID, $website->getWebsiteId());
+    if ($viewId > 0) {
+        $query->where(DashboardView::schema_fields_ID, $viewId);
+    } else {
+        $query->where(DashboardView::schema_fields_CODE, $viewCode !== '' ? $viewCode : 'default');
+    }
+    $row = $query->find()->fetchArray();
     $viewId = is_array($row) ? (int)($row[DashboardView::schema_fields_ID] ?? 0) : 0;
     if ($viewId <= 0) {
         return null;
@@ -193,6 +213,20 @@ function fixture_load_default_view(string $code): ?DashboardView
 
     $view->clearQuery()->clearData()->load($viewId);
     return $view->getViewId() > 0 ? $view : null;
+}
+
+function fixture_load_selected_view(array $payload, string $code, DashboardViewService $dashboardService): ?DashboardView
+{
+    if (!empty($payload['system_default'])) {
+        $websiteId = $dashboardService->getDefaultWebsiteId();
+        return $dashboardService->ensureDefaultView($websiteId);
+    }
+
+    return fixture_load_default_view(
+        $code,
+        trim((string)($payload['view_code'] ?? 'default')),
+        (int)($payload['view_id'] ?? 0)
+    );
 }
 
 function fixture_snapshot(int $themeId, DashboardView $view): array
@@ -236,14 +270,20 @@ function fixture_modules(array $payload): array
     return array_values($result);
 }
 
-function fixture_dispatch_registry_refresh(string $source, array $modules): void
+function fixture_reset_widget_registry_entries(array $modules): void
 {
-    $eventData = [
-        'source' => $source,
-        'modules' => $modules,
-    ];
-    ObjectManager::getInstance(EventsManager::class)
-        ->dispatch('Weline_Widget::registry_refresh_after', $eventData);
+    /** @var WidgetRegistryEntry $entry */
+    $entry = clone ObjectManager::getInstance(WidgetRegistryEntry::class);
+    foreach ($modules as $module) {
+        $module = trim((string)$module);
+        if ($module === '') {
+            continue;
+        }
+        $entry->clearQuery()->clearData()
+            ->where(WidgetRegistryEntry::schema_fields_WIDGET_MODULE, $module)
+            ->delete()
+            ->fetch();
+    }
 }
 
 function fixture_clear_layout(int $themeId, DashboardView $view): void
@@ -268,8 +308,43 @@ if ($themeId <= 0) {
 
 try {
     if ($action === 'cleanup') {
+        if (!empty($payload['system_default'])) {
+            $view = fixture_load_selected_view($payload, $code, $dashboardService);
+            if ($view) {
+                fixture_cleanup_layout($themeId, $view->getWebsiteId(), $view->getViewId());
+                $dashboardService->ensureLayoutInitialized($view);
+                if (!empty($payload['modules'])) {
+                    fixture_reset_widget_registry_entries(fixture_modules($payload));
+                    /** @var WidgetRegistryRefreshService $refreshService */
+                    $refreshService = ObjectManager::getInstance(WidgetRegistryRefreshService::class);
+                    $refreshService->refresh('e2e_widget_registry_cleanup');
+                }
+            }
+            fixture_json(['success' => true]);
+            exit(0);
+        }
+
         fixture_cleanup_website($code, $themeId);
         fixture_json(['success' => true]);
+        exit(0);
+    }
+
+    if ($action === 'prepare-system-default-view') {
+        $view = fixture_load_selected_view(['system_default' => true], $code, $dashboardService);
+        if (!$view || $view->getViewId() <= 0) {
+            fixture_fail('Failed to create system default dashboard view.');
+        }
+        fixture_cleanup_layout($themeId, $view->getWebsiteId(), $view->getViewId());
+        $dashboardService->ensureLayoutInitialized($view);
+
+        fixture_json([
+            'success' => true,
+            'theme_id' => $themeId,
+            'website_id' => $view->getWebsiteId(),
+            'view_id' => $view->getViewId(),
+            'identity' => $view->layoutIdentity(),
+            'layout' => fixture_snapshot($themeId, $view),
+        ]);
         exit(0);
     }
 
@@ -277,9 +352,33 @@ try {
         fixture_cleanup_website($code, $themeId);
         $website = fixture_create_website($token);
         $view = fixture_create_empty_default_view($website);
-        /** @var ThemeLayoutVersionService $versionService */
-        $versionService = ObjectManager::getInstance(ThemeLayoutVersionService::class);
-        $versionService->initializeVersionIfNeeded($themeId, DashboardView::PAGE_TYPE, null, $view->layoutIdentity());
+        $dashboardService->ensureLayoutInitialized($view);
+
+        fixture_json([
+            'success' => true,
+            'theme_id' => $themeId,
+            'website_id' => $website->getWebsiteId(),
+            'view_id' => $view->getViewId(),
+            'identity' => $view->layoutIdentity(),
+            'layout' => fixture_snapshot($themeId, $view),
+        ]);
+        exit(0);
+    }
+
+    if ($action === 'prepare-extra-empty-view') {
+        $website = fixture_load_website($code);
+        if (!$website) {
+            fixture_fail('Missing prepared dashboard website.');
+        }
+        $viewCode = trim((string)($payload['view_code'] ?? 'secondary'));
+        $viewCode = $viewCode !== '' ? $viewCode : 'secondary';
+        $view = fixture_create_empty_view(
+            $website,
+            $viewCode,
+            trim((string)($payload['name'] ?? 'E2E 第二身份视图')) ?: 'E2E 第二身份视图',
+            false
+        );
+        $dashboardService->ensureLayoutInitialized($view);
 
         fixture_json([
             'success' => true,
@@ -293,7 +392,7 @@ try {
     }
 
     if ($action === 'snapshot') {
-        $view = fixture_load_default_view($code);
+        $view = fixture_load_selected_view($payload, $code, $dashboardService);
         if (!$view) {
             fixture_fail('Missing prepared dashboard view.');
         }
@@ -329,16 +428,19 @@ try {
         exit(0);
     }
 
-    if ($action === 'dispatch-registry-refresh') {
-        $view = fixture_load_default_view($code);
+    if ($action === 'refresh-widget-registry') {
+        $view = fixture_load_selected_view($payload, $code, $dashboardService);
         if (!$view) {
             fixture_fail('Missing prepared dashboard view.');
         }
 
-        fixture_dispatch_registry_refresh(
-            trim((string)($payload['source'] ?? 'module_install_after')),
-            fixture_modules($payload)
-        );
+        if (!empty($payload['reset_registry'])) {
+            fixture_reset_widget_registry_entries(fixture_modules($payload));
+        }
+
+        /** @var WidgetRegistryRefreshService $refreshService */
+        $refreshService = ObjectManager::getInstance(WidgetRegistryRefreshService::class);
+        $report = $refreshService->refresh('e2e_widget_registry_collection');
 
         fixture_json([
             'success' => true,
@@ -346,13 +448,14 @@ try {
             'website_id' => $view->getWebsiteId(),
             'view_id' => $view->getViewId(),
             'identity' => $view->layoutIdentity(),
+            'report' => $report,
             'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
     }
 
     if ($action === 'clear-layout') {
-        $view = fixture_load_default_view($code);
+        $view = fixture_load_selected_view($payload, $code, $dashboardService);
         if (!$view) {
             fixture_fail('Missing prepared dashboard view.');
         }
@@ -371,7 +474,7 @@ try {
     }
 
     if ($action === 'default-injections') {
-        $view = fixture_load_default_view($code);
+        $view = fixture_load_selected_view($payload, $code, $dashboardService);
         if (!$view) {
             fixture_fail('Missing prepared dashboard view.');
         }
@@ -393,6 +496,85 @@ try {
             'identity' => $view->layoutIdentity(),
             'items' => $items,
             'total' => count($items),
+        ]);
+        exit(0);
+    }
+
+    if ($action === 'apply-default-injection') {
+        $view = fixture_load_selected_view($payload, $code, $dashboardService);
+        if (!$view) {
+            fixture_fail('Missing prepared dashboard view.');
+        }
+        $injectionKey = trim((string)($payload['injection_key'] ?? ''));
+        if ($injectionKey === '') {
+            fixture_fail('Missing injection_key.');
+        }
+
+        /** @var WidgetDefaultInjectionService $defaultInjectionService */
+        $defaultInjectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+        $applyScope = strtolower(trim((string)($payload['apply_scope'] ?? 'current')));
+        if ($applyScope === 'all') {
+            $result = $defaultInjectionService->applyInjectionByKeyForAllLayoutIdentities(
+                $themeId,
+                DashboardView::PAGE_TYPE,
+                $injectionKey,
+                $view->layoutIdentity(),
+                ThemeLayout::STATUS_DRAFT,
+                'backend'
+            );
+        } else {
+            $item = $defaultInjectionService->applyInjectionByKey(
+                $themeId,
+                DashboardView::PAGE_TYPE,
+                $injectionKey,
+                $view->layoutIdentity(),
+                ThemeLayout::STATUS_DRAFT,
+                'backend'
+            );
+            $result = [
+                'items' => $item ? [$item] : [],
+                'current_item' => $item,
+                'applied_count' => $item && !empty($item['layout_id']) ? 1 : 0,
+                'skipped_count' => $item && !empty($item['layout_id']) ? 0 : 1,
+                'total_identities' => 1,
+            ];
+        }
+
+        fixture_json([
+            'success' => true,
+            'theme_id' => $themeId,
+            'website_id' => $view->getWebsiteId(),
+            'view_id' => $view->getViewId(),
+            'identity' => $view->layoutIdentity(),
+            'apply_scope' => $applyScope === 'all' ? 'all' : 'current',
+            'result' => $result,
+            'layout' => fixture_snapshot($themeId, $view),
+        ]);
+        exit(0);
+    }
+
+    if ($action === 'ensure-visitor-dashboard-pages') {
+        $website = fixture_load_website($code);
+        if (!$website) {
+            fixture_fail('Missing prepared dashboard website.');
+        }
+
+        /** @var VisitorDashboardPageInstaller $installer */
+        $installer = ObjectManager::getInstance(VisitorDashboardPageInstaller::class);
+        $result = $installer->ensurePages();
+        $view = fixture_load_default_view($code, 'weline_visitor_event_statistics');
+        if (!$view) {
+            fixture_fail('Missing Visitor event statistics dashboard view.');
+        }
+
+        fixture_json([
+            'success' => true,
+            'theme_id' => $themeId,
+            'website_id' => $website->getWebsiteId(),
+            'view_id' => $view->getViewId(),
+            'identity' => $view->layoutIdentity(),
+            'result' => $result,
+            'layout' => fixture_snapshot($themeId, $view),
         ]);
         exit(0);
     }
