@@ -234,14 +234,20 @@ function defaultInjectionItem(page) {
     .first();
 }
 
-async function applyFromApplicationsTab(page) {
+async function applyFromApplicationsTab(page, scope = 'current') {
   const item = defaultInjectionItem(page);
   await expect(item).toBeVisible({ timeout: 30000 });
   await expect(item).toContainText('像素概览');
   await expect(item).toContainText('安装访客统计后自动展示像素概览');
   await expect(item).toContainText(DEFAULT_WIDGET.slot);
   await expect(item).toContainText('强烈推荐');
-  await item.locator('.btn-apply-default-injection').click();
+  await expect(item).toContainText('当前布局身份');
+  await expect(item.locator('.btn-apply-default-injection[data-apply-scope="current"]')).toBeVisible();
+  await expect(item.locator('.btn-apply-default-injection[data-apply-scope="all"]')).toBeVisible();
+  const selector = scope === 'all'
+    ? '.btn-apply-default-injection[data-apply-scope="all"]'
+    : '.btn-apply-default-injection[data-apply-scope="current"]';
+  await item.locator(selector).click();
 }
 
 moduleDescribe(test, MODULE, 'theme editor default injections', () => {
@@ -364,6 +370,61 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         await expect(defaultInjectionItem(page)).toHaveCount(0, { timeout: 30000 });
       } finally {
         if (identity) {
+          runFixture('cleanup', { theme_id: themeId, page_type: PAGE_TYPE, identity });
+        }
+        runFixture('cleanup_dashboard_identity', { theme_id: themeId, page_type: PAGE_TYPE, token });
+      }
+    },
+  );
+
+  moduleCase(
+    test,
+    { module: MODULE, id: 'THEME-DEFAULT-INJECTION-002' },
+    'applications tab can restore a default widget to every identity of the same layout',
+    async ({ page }, testInfo) => {
+      const themeId = resolveThemeId();
+      test.skip(themeId <= 0, 'No active backend theme found in runtime info.');
+
+      const token = makeScope(testInfo);
+      let identities = [];
+
+      try {
+        const prepared = runFixture('prepare_dashboard_identities', {
+          theme_id: themeId,
+          page_type: PAGE_TYPE,
+          token,
+          count: 2,
+        });
+        expectEditorSuccess(prepared, 'prepare dashboard identities');
+        identities = prepared.identities || [];
+        expect(identities.length).toBe(2);
+        const [primaryIdentity, secondaryIdentity] = identities;
+        const basePayload = identityPayload(themeId, primaryIdentity);
+
+        for (const identity of identities) {
+          expect(snapshotRows(themeId, identity)).toHaveLength(0);
+        }
+
+        await loginAsAdmin(page, { timeout: 60000, settleMs: 1000 });
+        await gotoBackend(page, buildQueryPath('theme/backend/theme-editor', basePayload), {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
+          settleMs: 1500,
+        });
+        await waitForThemeEditor(page);
+
+        await openApplicationsTab(page);
+        await applyFromApplicationsTab(page, 'all');
+
+        const primaryRows = await waitForWidgetRows(themeId, primaryIdentity, 1);
+        const secondaryRows = await waitForWidgetRows(themeId, secondaryIdentity, 1);
+        expect(primaryRows[0].slot_id).toBe(DEFAULT_WIDGET.slot);
+        expect(secondaryRows[0].slot_id).toBe(DEFAULT_WIDGET.slot);
+        expect(primaryRows[0].status).toBe('draft');
+        expect(secondaryRows[0].status).toBe('draft');
+        await expect(defaultInjectionItem(page)).toHaveCount(0, { timeout: 30000 });
+      } finally {
+        for (const identity of identities) {
           runFixture('cleanup', { theme_id: themeId, page_type: PAGE_TYPE, identity });
         }
         runFixture('cleanup_dashboard_identity', { theme_id: themeId, page_type: PAGE_TYPE, token });

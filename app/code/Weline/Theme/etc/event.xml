@@ -135,7 +135,7 @@
                   sort="200"/>
     </event>
 
-    <event name="Weline_Widget::registry_refresh_after">
+    <event name="Weline_Widget::widget_install_after">
         <observer name="Weline_Theme::apply_widget_default_injections"
                   instance="Weline\Theme\Observer\ApplyWidgetDefaultInjections"
                   disabled="false"

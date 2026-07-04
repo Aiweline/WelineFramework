@@ -54,7 +54,9 @@ class DomainPool extends BaseController
             $grouped = $this->request->getGet('grouped', 'true') === 'true';
             $siteReadyOnly = $this->request->getGet('site_ready', 'true') === 'true';
             $parentDomainId = (int) $this->request->getGet('parent_domain_id', 0);
-            $websiteId = (int) $this->request->getGet('website_id', 0);
+            $websiteIdRaw = $this->request->getGet('website_id', null);
+            $hasWebsiteId = $websiteIdRaw !== null && $websiteIdRaw !== '';
+            $websiteId = (int) ($websiteIdRaw ?? 0);
             $poolIdsRaw = trim((string) $this->request->getGet('pool_ids', ''));
             $includePoolIds = [];
             if ($poolIdsRaw !== '') {
@@ -71,7 +73,7 @@ class DomainPool extends BaseController
             $model->clearQuery()
                 ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
             $selectedPoolIds = [];
-            if ($websiteId > 0) {
+            if ($hasWebsiteId && $websiteId >= \Weline\Websites\Model\Website::ID_DEFAULT) {
                 $websiteDomainModel = \Weline\Framework\Manager\ObjectManager::getInstance(WebsiteDomain::class);
                 $selectedRows = $websiteDomainModel->clearQuery()
                     ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
