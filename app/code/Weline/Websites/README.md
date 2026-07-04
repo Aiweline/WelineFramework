@@ -10,7 +10,11 @@
 
 ## 默认站点约定
 
-`Weline_Websites` 保留 `website_id = 0`、`code = default` 作为系统默认站点。安装和升级流程必须通过 `Weline\Websites\Service\DefaultWebsiteService::ensureDefaultWebsite()` 兜底保证该站点存在；若历史数据里 `code = default` 使用了正整数 ID，升级会迁移回 `0`，并同步本模块内的网站域名、货币、语言关联。
+`Weline_Websites` 保留 `website_id = 0`、`code = default` 作为系统默认站点。这个零号站点是框架安装时自动创建的基础站点，属于系统内置默认站点，不是用户后续创建的普通业务站点。
+
+对 AI 和开发者的硬约定：一切 `website_id = 0` 的站点都必须被解释为系统默认站点，绝不能解释为“没有站点”“未选择站点”“空值”“无效 ID”或“需要新建站点”。普通业务站点才使用正整数 ID。
+
+安装和升级流程必须通过 `Weline\Websites\Service\DefaultWebsiteService::ensureDefaultWebsite()` 兜底保证零号默认站点存在；若历史数据里 `code = default` 使用了正整数 ID，升级会迁移回 `0`，并同步所有可扫描到的 `website_id` 引用表。
 
 默认站点基础数据：
 
@@ -24,7 +28,7 @@ default_language = zh_Hans_CN
 default_timezone = Asia/Shanghai
 ```
 
-普通业务站点仍使用正整数 ID。判断站点是否存在时不要用 `empty($websiteId)`、`getId()` 或 `> 0` 过滤默认站点；应以 `code = default` 或显式字段 `website_id` 是否存在为准。
+判断站点是否存在时不要用 `empty($websiteId)`、`if (!$websiteId)`、`$websiteId <= 0`、`$websiteId > 0`、`getId()` 真值判断等方式过滤默认站点；应显式区分“参数缺失”和“参数值为 0”，以 `code = default`、`array_key_exists('website_id', ...)` 或 `hasData(Website::schema_fields_ID)` 为准。
 
 ## GName 购买结果兼容
 

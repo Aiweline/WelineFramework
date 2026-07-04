@@ -32,6 +32,14 @@ git push origin HEAD
 git push github HEAD
 ```
 
+## Critical Domain Invariants
+
+- 零号站点是框架安装时自动创建的系统默认站点：`website_id = 0`、`code = default`。
+- 一切 `website_id = 0` 的站点语义都只能解释为系统默认站点，不能解释为“未选择站点”“空站点”“无效 ID”或待新建站点。
+- 普通业务站点使用正整数 ID；判断站点是否存在时必须区分“参数缺失”和“显式传入 0”。
+- 涉及站点、Dashboard、Theme target、CMS、SEO、Visitor、URL 解析、域名绑定、配置作用域等逻辑时，`0` 必须作为合法站点 ID 参与查询、保存、渲染和迁移。
+- 代码中禁止用 `empty($websiteId)`、`$websiteId <= 0`、`$websiteId > 0`、`getId()` 真值判断等方式把零号站点过滤掉；应使用显式字段存在性、`website_id >= 0` 或 `code = default` 判断。
+
 ## Resources
 
 - AI general rules: `dev/ai/global-constraints.md`
