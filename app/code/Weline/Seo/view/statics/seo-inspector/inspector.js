@@ -2392,7 +2392,7 @@
   }
 
   function isPanelOrInspectorResource(value) {
-    return /(?:seo-inspector|dev-tool-panel|weline-panel|panel-token|codex|browser_pass)/i.test(String(value || ""));
+    return /(?:seo-inspector|dev-tool-panel|weline-panel|panel-token|\/dev\/tool\/|hot-update|codex|browser_pass)/i.test(String(value || ""));
   }
 
   function resolveAuditUrl(raw) {
@@ -3011,6 +3011,219 @@
     blocked: "阻断发布：存在关键失败项，必须先修复后再推广。"
   };
 
+  var SITE_AUDIT_CONTRACT_VERSION = "weline-seo-site-audit/v1";
+  var SITE_CRAWL_CONTRACT_VERSION = "weline-seo-site-crawl/v1";
+  var latestSiteCrawlReport = window.__WELINE_PANEL_SEO_CRAWL_REPORT__ || null;
+  var siteCrawlRunning = false;
+  var siteCrawlStatus = "";
+  var siteCrawlError = "";
+  var SITE_AUDIT_CATEGORY_LABELS = {
+    crawlability: "Crawlability",
+    indexability: "Indexability",
+    head_meta: "Meta & Head",
+    international: "International SEO",
+    content: "Content Quality",
+    structured_data: "Structured Data",
+    media: "Media & Social",
+    headings_ia: "Headings & IA",
+    security: "Security & Compliance",
+    performance: "Performance",
+    mobile: "Mobile UX",
+    site_audit: "Site Audit Issues",
+    engine_specific: "Search Engine Fit"
+  };
+
+  function uniqueStrings(items) {
+    var seen = {};
+    return (items || []).filter(function (item) {
+      var value = String(item || "").trim();
+      if (!value || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    });
+  }
+
+  function siteAuditSeverity(issue) {
+    var severity = String(issue && issue.severity || "").toLowerCase();
+    if (severity === "critical" || severity === "high") return "error";
+    if (severity === "medium") return "warning";
+    return "notice";
+  }
+
+  function siteAuditPriority(issue) {
+    var severity = String(issue && issue.severity || "").toLowerCase();
+    if (issue && issue.blocking) return "P0";
+    if (severity === "critical") return "P0";
+    if (severity === "high") return "P1";
+    if (severity === "medium") return "P2";
+    return "P3";
+  }
+
+  function siteAuditWhy(issue) {
+    var category = String(issue && issue.category || "");
+    var title = String(issue && issue.title || "");
+    if (title === "mixed content resources") {
+      return "HTTPS 页面加载 HTTP 资源会触发混合内容、降低信任信号，并可能导致资源被浏览器或搜索渲染环境阻断。";
+    }
+    if (title.indexOf("hreflang") !== -1 || category === "international") {
+      return "多语言标记错误会让搜索引擎难以选择正确地区/语言版本，造成错误收录、重复页或语言串页。";
+    }
+    if (category === "performance") {
+      return "性能问题会影响抓取渲染、Core Web Vitals、移动端体验和转化效率。";
+    }
+    if (category === "structured_data") {
+      return "结构化数据不合格会降低搜索引擎理解页面类型和富结果资格的概率。";
+    }
+    if (category === "indexability" || category === "crawlability") {
+      return "抓取或索引基础项失败会直接影响页面能否进入搜索引擎索引。";
+    }
+    if (category === "content") {
+      return "内容质量问题会影响搜索意图匹配、摘要展示、平台 spam 风险和 AI 摘取稳定性。";
+    }
+    return "该问题会降低搜索引擎对页面质量、可理解性或可推广性的判断。";
+  }
+
+  function siteAuditEvidence(issue) {
+    return (issue && Array.isArray(issue.evidence) ? issue.evidence : []).map(function (item) {
+      return {
+        url: item.url || window.location.href,
+        value: item.value || "",
+        source: item.source || "rendered_dom"
+      };
+    });
+  }
+
+  function mergeSiteAuditIssues(issues) {
+    var map = {};
+    (issues || []).forEach(function (issue) {
+      var id = issue.id || normalizeIssueKey((issue.category || "seo") + "_" + (issue.title || "issue"));
+      var key = id + "|" + (issue.category || "") + "|" + (issue.title || "");
+      if (!map[key]) {
+        map[key] = {
+          id: id,
+          type: "issue",
+          severity: siteAuditSeverity(issue),
+          rawSeverity: issue.severity || "medium",
+          priority: siteAuditPriority(issue),
+          category: issue.category || "site_audit",
+          categoryLabel: SITE_AUDIT_CATEGORY_LABELS[issue.category] || issue.category || "Site Audit",
+          title: issue.title || id,
+          status: "open",
+          affectedUrls: [],
+          affectedCount: 0,
+          engines: [],
+          evidence: [],
+          whyItMatters: siteAuditWhy(issue),
+          howToFix: issue.recommendation || "Fix the reported issue, then rerun the Weline SEO audit.",
+          confidence: issue.confidence || "medium",
+          blocking: Boolean(issue.blocking)
+        };
+      }
+      map[key].affectedUrls = uniqueStrings(map[key].affectedUrls.concat(issue.affectedUrls || [window.location.href]));
+      map[key].affectedCount = map[key].affectedUrls.length;
+      map[key].engines = uniqueStrings(map[key].engines.concat(issue.engines || []));
+      map[key].evidence = map[key].evidence.concat(siteAuditEvidence(issue)).slice(0, 8);
+      map[key].blocking = map[key].blocking || Boolean(issue.blocking);
+      if (siteAuditPriority(issue) < map[key].priority) map[key].priority = siteAuditPriority(issue);
+    });
+    return Object.keys(map).map(function (key) { return map[key]; });
+  }
+
+  function siteAuditIssueCounts(findings) {
+    return {
+      errors: findings.filter(function (issue) { return issue.severity === "error"; }).length,
+      warnings: findings.filter(function (issue) { return issue.severity === "warning"; }).length,
+      notices: findings.filter(function (issue) { return issue.severity === "notice"; }).length,
+      total: findings.length
+    };
+  }
+
+  function buildSiteAuditCategories(findings) {
+    var map = {};
+    findings.forEach(function (issue) {
+      var key = issue.category || "site_audit";
+      if (!map[key]) {
+        map[key] = {
+          id: key,
+          label: issue.categoryLabel || SITE_AUDIT_CATEGORY_LABELS[key] || key,
+          errors: 0,
+          warnings: 0,
+          notices: 0,
+          issueIds: []
+        };
+      }
+      if (issue.severity === "error") map[key].errors += 1;
+      else if (issue.severity === "warning") map[key].warnings += 1;
+      else map[key].notices += 1;
+      map[key].issueIds.push(issue.id);
+    });
+    return Object.keys(map).map(function (key) { return map[key]; });
+  }
+
+  function buildSiteAuditOutput(raw, engineDiagnostics, scoreBreakdown, verdict) {
+    var findings = mergeSiteAuditIssues(engineDiagnostics.issues || []);
+    findings.sort(function (a, b) {
+      var order = { P0: 0, P1: 1, P2: 2, P3: 3 };
+      return (order[a.priority] || 9) - (order[b.priority] || 9);
+    });
+    var counts = siteAuditIssueCounts(findings);
+    var pageIssueIds = findings
+      .filter(function (issue) { return issue.affectedUrls.indexOf(window.location.href) !== -1; })
+      .map(function (issue) { return issue.id; });
+    return {
+      contractVersion: SITE_AUDIT_CONTRACT_VERSION,
+      outputStyle: "seo-audit-platform",
+      generatedAt: new Date().toISOString(),
+      crawl: {
+        mode: "browser-rendered-single-page",
+        scope: "single_page",
+        startUrl: window.location.href,
+        crawledPages: 1,
+        discoveredPages: 1,
+        blockedByRobots: null,
+        httpStatus: "browser-rendered"
+      },
+      project: {
+        domain: raw.snapshot.siteDomain || window.location.hostname,
+        market: "global",
+        engines: allEngineIds()
+      },
+      health: {
+        score: typeof scoreBreakdown.total === "number" ? scoreBreakdown.total : 0,
+        verdict: verdict,
+        errors: counts.errors,
+        warnings: counts.warnings,
+        notices: counts.notices
+      },
+      thematicScores: {
+        indexability: scoreBreakdown.indexability,
+        understandability: scoreBreakdown.understandability,
+        experience: scoreBreakdown.experience,
+        engineFit: scoreBreakdown.engineFit
+      },
+      issueCounts: counts,
+      categories: buildSiteAuditCategories(findings),
+      issues: findings,
+      pages: [
+        {
+          url: window.location.href,
+          title: raw.snapshot.title || "",
+          canonical: raw.snapshot.canonical || "",
+          language: raw.snapshot.pageLang || "",
+          seoType: raw.snapshot.seoType || "",
+          healthScore: typeof scoreBreakdown.total === "number" ? scoreBreakdown.total : 0,
+          issueCount: pageIssueIds.length,
+          issueIds: pageIssueIds
+        }
+      ],
+      exports: {
+        jsonPath: "report.siteAudit",
+        issueColumns: ["severity", "priority", "category", "title", "affectedCount", "affectedUrls", "whyItMatters", "howToFix", "evidence"]
+      },
+      limitations: engineDiagnostics.limitations || BROWSER_MODE_LIMITATIONS
+    };
+  }
+
   function buildAgentReport(raw) {
     var fails = raw.checks.filter(function (item) { return item.level === "fail"; });
     var warns = raw.checks.filter(function (item) { return item.level === "warn"; });
@@ -3066,9 +3279,13 @@
     var h1Text = getMainH1Text();
     var engineDiagnostics = raw.engineDiagnostics || buildEngineDiagnostics(raw);
     var scoreBreakdown = engineDiagnostics.scores || {};
+    var siteAudit = buildSiteAuditOutput(raw, engineDiagnostics, scoreBreakdown, verdict);
+    var siteCrawl = latestSiteCrawlReport || null;
 
     return {
       contractVersion: AGENT_CONTRACT_VERSION,
+      auditContractVersion: SITE_AUDIT_CONTRACT_VERSION,
+      siteCrawlContractVersion: SITE_CRAWL_CONTRACT_VERSION,
       command: AGENT_COMMAND,
       generatedAt: new Date().toISOString(),
       page: {
@@ -3105,9 +3322,18 @@
         engines: {
           target: engineDiagnostics.target,
           counts: engineDiagnostics.counts,
+          audit: siteAudit.issueCounts,
           limitations: engineDiagnostics.limitations
-        }
+        },
+        siteCrawl: siteCrawl ? {
+          health: siteCrawl.health || {},
+          crawl: siteCrawl.crawl || {},
+          issueCount: Array.isArray(siteCrawl.issues) ? siteCrawl.issues.length : 0
+        } : null
       },
+      siteAudit: siteAudit,
+      siteCrawl: siteCrawl,
+      auditPlatform: siteAudit,
       engines: engineDiagnostics.profiles,
       engineMatrix: engineDiagnostics.engineMatrix,
       issues: engineDiagnostics.issues,
@@ -3253,10 +3479,10 @@
 
     return {
       howToJudge:
-        "Use verdict.status as primary gate. fail=blocking SEO defect, warn=optimization debt, info=expected environment note. Visitor Pixel forwarding is checked in the Visitor panel, not SEO.",
+        "Use siteAudit.health and siteAudit.issues as the default SEO audit output. verdict.status remains the promotion gate. fail=blocking SEO defect, warn=optimization debt, info=expected environment note. Visitor Pixel forwarding is checked in the Visitor panel, not SEO.",
       promotionGate: verdict === "ship" || verdict === "polish",
       doNotPromoteIf: ["blocked", "fix"].indexOf(verdict) !== -1,
-      interpretationOrder: ["verdict", "actions(P0->P3)", "checks.seoFlat", "monitoringGaps"],
+      interpretationOrder: ["siteAudit.health", "siteAudit.issues(P0->P3)", "verdict", "actions(P0->P3)", "checks.seoFlat", "monitoringGaps"],
       nextSteps: steps
     };
   }
@@ -3267,6 +3493,7 @@
 
   function publishAgentReport(report) {
     window.__WELINE_PANEL_SEO_REPORT__ = report;
+    window.__WELINE_PANEL_SEO_AUDIT__ = report && report.siteAudit ? report.siteAudit : null;
     var node = document.getElementById("weline-panel-seo-report");
     if (!node) {
       node = document.createElement("script");
@@ -3275,7 +3502,36 @@
       document.head.appendChild(node);
     }
     node.textContent = JSON.stringify(report);
+    var auditNode = document.getElementById("weline-panel-seo-audit");
+    if (!auditNode) {
+      auditNode = document.createElement("script");
+      auditNode.type = "application/json";
+      auditNode.id = "weline-panel-seo-audit";
+      document.head.appendChild(auditNode);
+    }
+    auditNode.textContent = JSON.stringify(window.__WELINE_PANEL_SEO_AUDIT__ || {});
+    publishSiteCrawlReport(latestSiteCrawlReport);
     window.dispatchEvent(new CustomEvent("weline-panel:seo-report", { detail: report }));
+    window.dispatchEvent(new CustomEvent("weline-panel:seo-audit", { detail: window.__WELINE_PANEL_SEO_AUDIT__ }));
+    return report;
+  }
+
+  function publishSiteCrawlReport(report) {
+    if (report) {
+      latestSiteCrawlReport = report;
+      window.__WELINE_PANEL_SEO_CRAWL_REPORT__ = report;
+    }
+    var node = document.getElementById("weline-panel-seo-crawl-report");
+    if (!node) {
+      node = document.createElement("script");
+      node.type = "application/json";
+      node.id = "weline-panel-seo-crawl-report";
+      document.head.appendChild(node);
+    }
+    node.textContent = JSON.stringify(window.__WELINE_PANEL_SEO_CRAWL_REPORT__ || {});
+    window.dispatchEvent(new CustomEvent("weline-panel:seo-crawl", {
+      detail: window.__WELINE_PANEL_SEO_CRAWL_REPORT__ || null
+    }));
     return report;
   }
 
@@ -3561,11 +3817,247 @@
     );
   }
 
+  function defaultSitemapUrl() {
+    var link = document.querySelector('link[rel="sitemap"][href], link[type="application/xml"][rel="sitemap"][href]');
+    if (link && link.href) {
+      try {
+        var linkedUrl = new URL(link.href, window.location.href);
+        if (linkedUrl.host === window.location.host && window.location.protocol === "http:" && linkedUrl.protocol === "https:") {
+          linkedUrl.protocol = "http:";
+        }
+        return linkedUrl.href;
+      } catch (_linkError) {
+        return link.href;
+      }
+    }
+    try {
+      return new URL("/sitemap.xml", window.location.href).href;
+    } catch (_error) {
+      return "/sitemap.xml";
+    }
+  }
+
+  function unwrapApiPayload(payload) {
+    if (payload && payload.data && payload.data.report) return payload.data.report;
+    if (payload && payload.report) return payload.report;
+    return payload || null;
+  }
+
+  function crawlSeverityTone(severity) {
+    if (severity === "error") return "fail";
+    if (severity === "warning") return "warn";
+    return "info";
+  }
+
+  function crawlSeverityLabel(severity) {
+    return {
+      error: "Error",
+      warning: "Warning",
+      notice: "Notice"
+    }[severity] || "Notice";
+  }
+
+  function renderSiteCrawlHealth(report) {
+    if (!report) return "";
+    var health = report.health || {};
+    var crawl = report.crawl || {};
+    var score = typeof health.score === "number" ? health.score : 0;
+    var scoreTone = score >= 90 ? "pass" : score >= 75 ? "warn" : "fail";
+    var items = [
+      ["Health", score, scoreTone],
+      ["Errors", health.errors || 0, "fail"],
+      ["Warnings", health.warnings || 0, "warn"],
+      ["Scanned", crawl.scanned || 0, "info"],
+      ["Failed", crawl.failed || 0, (crawl.failed || 0) ? "fail" : "pass"]
+    ];
+    return (
+      '<div class="weline-seo-panel__crawl-health">' +
+      items.map(function (item) {
+        return (
+          '<div class="weline-seo-panel__crawl-health-card weline-seo-panel__crawl-health-card--' +
+          escapeHtml(item[2]) +
+          '"><span>' +
+          escapeHtml(item[0]) +
+          "</span><strong>" +
+          escapeHtml(String(item[1])) +
+          "</strong></div>"
+        );
+      }).join("") +
+      "</div>"
+    );
+  }
+
+  function renderSiteCrawlDeductions(report) {
+    var deductions = report && report.health && Array.isArray(report.health.deductions) ? report.health.deductions : [];
+    if (!deductions.length) {
+      return '<p class="weline-seo-panel__issue-ok">当前全站审计没有扣分项。</p>';
+    }
+    return (
+      '<section class="weline-seo-panel__section"><h3>扣分来源</h3>' +
+      '<div class="weline-seo-panel__crawl-deductions">' +
+      deductions.slice(0, 20).map(function (item) {
+        return (
+          '<div class="weline-seo-panel__crawl-deduction">' +
+          '<b>-' +
+          escapeHtml(String(item.points || 0)) +
+          "</b><span>" +
+          escapeHtml(item.title || item.issueId || "SEO issue") +
+          "</span><small>" +
+          escapeHtml(String(item.affectedCount || 0)) +
+          " URLs</small></div>"
+        );
+      }).join("") +
+      (deductions.length > 20 ? '<p class="weline-seo-panel__hint">还有 ' + escapeHtml(String(deductions.length - 20)) + ' 个扣分项未展开。</p>' : "") +
+      "</div></section>"
+    );
+  }
+
+  function renderSiteCrawlIssues(report) {
+    var issues = report && Array.isArray(report.issues) ? report.issues : [];
+    if (!issues.length) {
+      return '<section class="weline-seo-panel__section"><h3>Issue</h3><p class="weline-seo-panel__issue-ok">未发现全站 SEO Issue。</p></section>';
+    }
+    return (
+      '<section class="weline-seo-panel__section"><h3>Issue 列表</h3>' +
+      '<div class="weline-seo-panel__crawl-issues">' +
+      issues.map(function (issue) {
+        var tone = crawlSeverityTone(issue.severity);
+        var urls = Array.isArray(issue.affectedUrls) ? issue.affectedUrls : [];
+        var evidence = Array.isArray(issue.evidence) ? issue.evidence : [];
+        return (
+          '<article class="weline-seo-panel__crawl-issue weline-seo-panel__crawl-issue--' +
+          escapeHtml(tone) +
+          '">' +
+          '<div class="weline-seo-panel__crawl-issue-head"><span class="weline-seo-panel__badge weline-seo-panel__badge--' +
+          escapeHtml(tone) +
+          '">' +
+          escapeHtml(crawlSeverityLabel(issue.severity)) +
+          "</span><strong>" +
+          escapeHtml(issue.title || issue.id) +
+          "</strong><em>" +
+          escapeHtml(issue.priority || "P3") +
+          " · " +
+          escapeHtml(issue.category || "SEO") +
+          " · -" +
+          escapeHtml(String(issue.deduction || 0)) +
+          "</em></div>" +
+          '<dl class="weline-seo-panel__crawl-issue-detail">' +
+          "<div><dt>影响</dt><dd>" +
+          escapeHtml(issue.whyItMatters || "影响搜索引擎理解和页面质量。") +
+          "</dd></div>" +
+          "<div><dt>建议</dt><dd>" +
+          escapeHtml(issue.howToFix || "修复对应页面源 HTML 后重新扫描。") +
+          "</dd></div>" +
+          "</dl>" +
+          (urls.length ? '<div class="weline-seo-panel__crawl-url-list"><b>受影响 URL</b>' + urls.slice(0, 8).map(function (url) {
+            return '<code>' + escapeHtml(url) + "</code>";
+          }).join("") + (issue.affectedCount > urls.length ? '<small>+' + escapeHtml(String(issue.affectedCount - urls.length)) + " more</small>" : "") + "</div>" : "") +
+          (evidence.length ? '<details class="weline-seo-panel__crawl-evidence"><summary>证据</summary><pre>' + escapeHtml(JSON.stringify(evidence.slice(0, 4), null, 2)) + "</pre></details>" : "") +
+          "</article>"
+        );
+      }).join("") +
+      "</div></section>"
+    );
+  }
+
+  function renderSiteCrawlPages(report) {
+    var pages = report && Array.isArray(report.pages) ? report.pages : [];
+    if (!pages.length) {
+      return "";
+    }
+    return (
+      '<section class="weline-seo-panel__section"><h3>页面明细</h3>' +
+      '<div class="weline-seo-panel__crawl-table-wrap"><table class="weline-seo-panel__crawl-table">' +
+      "<thead><tr><th>Score</th><th>Status</th><th>Title</th><th>URL</th><th>Canonical</th><th>Lang</th><th>Issues</th></tr></thead><tbody>" +
+      pages.slice(0, 120).map(function (page) {
+        return (
+          "<tr><td><b>" +
+          escapeHtml(String(page.score || 0)) +
+          "</b></td><td>" +
+          escapeHtml(String(page.status || 0)) +
+          "</td><td>" +
+          escapeHtml(page.title || "missing") +
+          "</td><td><code>" +
+          escapeHtml(page.url || "") +
+          "</code></td><td><code>" +
+          escapeHtml(page.canonical || "") +
+          "</code></td><td>" +
+          escapeHtml(page.language || "") +
+          "</td><td>" +
+          escapeHtml(String((page.issueIds || []).length)) +
+          "</td></tr>"
+        );
+      }).join("") +
+      "</tbody></table></div>" +
+      (pages.length > 120 ? '<p class="weline-seo-panel__hint">页面明细仅展示前 120 条，完整数据请查看 JSON 导出。</p>' : "") +
+      "</section>"
+    );
+  }
+
+  function renderSiteCrawlFailures(report) {
+    var failed = report && Array.isArray(report.failedUrls) ? report.failedUrls : [];
+    if (!failed.length) {
+      return "";
+    }
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__section--issues"><h3>失败 URL</h3>' +
+      '<div class="weline-seo-panel__crawl-failures">' +
+      failed.slice(0, 40).map(function (item) {
+        return '<div><b>' + escapeHtml(String(item.status || 0)) + '</b><code>' + escapeHtml(item.url || "") + '</code><span>' + escapeHtml(item.error || "") + "</span></div>";
+      }).join("") +
+      "</div></section>"
+    );
+  }
+
+  function renderSiteCrawlExport(report) {
+    if (!report) return "";
+    return (
+      '<section class="weline-seo-panel__section"><h3>JSON 导出</h3>' +
+      '<details class="weline-seo-panel__crawl-export"><summary>展开 JSON</summary><pre>' +
+      escapeHtml(JSON.stringify(report, null, 2)) +
+      "</pre></details></section>"
+    );
+  }
+
+  function renderSiteCrawlTab() {
+    var state = readPanelState();
+    var sitemapUrl = state.crawlSitemapUrl || defaultSitemapUrl();
+    var limit = state.crawlLimit || 100;
+    var report = latestSiteCrawlReport;
+    var status = siteCrawlRunning
+      ? '<p class="weline-seo-panel__crawl-status is-running">全站审计运行中，请保持面板打开。</p>'
+      : (siteCrawlStatus ? '<p class="weline-seo-panel__crawl-status">' + escapeHtml(siteCrawlStatus) + "</p>" : "");
+    var error = siteCrawlError ? '<p class="weline-seo-panel__crawl-status is-error">' + escapeHtml(siteCrawlError) + "</p>" : "";
+
+    return (
+      '<section class="weline-seo-panel__section weline-seo-panel__crawl-start">' +
+      "<h3>全站 Sitemap 审计</h3>" +
+      '<p class="weline-seo-panel__hint">按需扫描 sitemap 内同源页面，输出健康分、扣分原因、受影响 URL 和修复建议。生产环境必须通过 Weline Panel token。</p>' +
+      '<div class="weline-seo-panel__crawl-form">' +
+      '<label><span>Sitemap</span><input type="url" data-weline-crawl-sitemap value="' +
+      escapeHtml(sitemapUrl) +
+      '" placeholder="https://example.com/sitemap.xml"></label>' +
+      '<label><span>Limit</span><input type="number" min="1" max="500" step="1" data-weline-crawl-limit value="' +
+      escapeHtml(String(limit)) +
+      '"></label>' +
+      '<button type="button" class="weline-seo-panel__publish-btn" data-weline-crawl-start ' +
+      (siteCrawlRunning ? "disabled" : "") +
+      ">" +
+      (siteCrawlRunning ? "审计中" : "开始全站审计") +
+      "</button></div>" +
+      status +
+      error +
+      "</section>" +
+      (report ? renderSiteCrawlHealth(report) + renderSiteCrawlDeductions(report) + renderSiteCrawlIssues(report) + renderSiteCrawlPages(report) + renderSiteCrawlFailures(report) + renderSiteCrawlExport(report) : "")
+    );
+  }
+
   function renderPanelTabs() {
     return (
       '<div class="weline-seo-panel__tabs" role="tablist" aria-label="Inspector sections">' +
       '<button type="button" class="weline-seo-panel__tab is-active" data-weline-tab="seo" role="tab" aria-selected="true">SEO 校验</button>' +
       '<button type="button" class="weline-seo-panel__tab" data-weline-tab="engines" role="tab" aria-selected="false">搜索平台</button>' +
+      '<button type="button" class="weline-seo-panel__tab" data-weline-tab="crawl" role="tab" aria-selected="false">全站审计</button>' +
       "</div>"
     );
   }
@@ -3771,7 +4263,7 @@
   var SEO_PANEL_STATE_KEY = "weline-seo-panel-state-v1";
 
   function normalizePanelTab(tabId) {
-    return ["seo", "engines"].indexOf(tabId) !== -1 ? tabId : "seo";
+    return ["seo", "engines", "crawl"].indexOf(tabId) !== -1 ? tabId : "seo";
   }
 
   function readPanelState() {
@@ -3820,6 +4312,127 @@
     });
   }
 
+  function closestActionTarget(target, selector, scope) {
+    var node = target && target.nodeType === 1 ? target : (target && target.parentElement);
+    if (!node || typeof node.closest !== "function") return null;
+    var match = node.closest(selector);
+    return match && scope && scope.contains(match) ? match : null;
+  }
+
+  function bindPanelActions(root, controlsRoot) {
+    bindPanelTabs(root, controlsRoot);
+    if (!root.__welineSeoActionsDelegated) {
+      root.__welineSeoActionsDelegated = true;
+      root.addEventListener("click", function (event) {
+        var crawlButton = closestActionTarget(event.target, "[data-weline-crawl-start]", root);
+        if (crawlButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          startSiteCrawl(root, controlsRoot);
+          return;
+        }
+        var publishButton = closestActionTarget(event.target, "[data-weline-seo-publish]", root);
+        if (publishButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          publishAgentReport(auditAgentReport());
+        }
+      });
+    }
+    if (controlsRoot && !controlsRoot.__welineSeoActionsDelegated) {
+      controlsRoot.__welineSeoActionsDelegated = true;
+      controlsRoot.addEventListener("click", function (event) {
+        var crawlButton = closestActionTarget(event.target, "[data-weline-crawl-start]", controlsRoot);
+        if (crawlButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          startSiteCrawl(root, controlsRoot);
+          return;
+        }
+        var publishButton = closestActionTarget(event.target, "[data-weline-seo-publish]", controlsRoot);
+        if (publishButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          publishAgentReport(auditAgentReport());
+        }
+      });
+    }
+    root.querySelectorAll("[data-weline-crawl-start]").forEach(function (button) {
+      if (button.__welineSeoCrawlBound) return;
+      button.__welineSeoCrawlBound = true;
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        startSiteCrawl(root, controlsRoot);
+      });
+    });
+    panelTabScopes(root, controlsRoot).forEach(function (scope) {
+      scope.querySelectorAll("[data-weline-seo-publish]").forEach(function (button) {
+        if (button.__welineSeoPublishBound) return;
+        button.__welineSeoPublishBound = true;
+        button.addEventListener("click", function () {
+          publishAgentReport(auditAgentReport());
+        });
+      });
+    });
+  }
+
+  function refreshCrawlPanel(root, controlsRoot) {
+    var panel = root.querySelector('[data-weline-panel="crawl"]');
+    if (!panel) return;
+    panel.innerHTML = renderSiteCrawlTab();
+    bindPanelActions(root, controlsRoot);
+    setPanelTab(root, "crawl", controlsRoot);
+  }
+
+  function startSiteCrawl(root, controlsRoot) {
+    var panel = root.querySelector('[data-weline-panel="crawl"]') || root;
+    var sitemapInput = panel.querySelector("[data-weline-crawl-sitemap]");
+    var limitInput = panel.querySelector("[data-weline-crawl-limit]");
+    var sitemapUrl = sitemapInput ? String(sitemapInput.value || "").trim() : defaultSitemapUrl();
+    var limit = limitInput ? Number(limitInput.value || 100) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) limit = 100;
+    limit = Math.max(1, Math.min(500, Math.round(limit)));
+    savePanelState({ activeTab: "crawl", crawlSitemapUrl: sitemapUrl, crawlLimit: limit });
+
+    if (!window.WelinePanel || typeof window.WelinePanel.apiFetch !== "function") {
+      siteCrawlError = "WelinePanel.apiFetch 不可用，请刷新页面后重新打开 weline 面板。";
+      refreshCrawlPanel(root, controlsRoot);
+      return;
+    }
+
+    siteCrawlRunning = true;
+    siteCrawlStatus = "正在抓取 sitemap 并审计页面...";
+    siteCrawlError = "";
+    refreshCrawlPanel(root, controlsRoot);
+
+    window.WelinePanel.apiFetch("seo/crawl/start", {
+      method: "POST",
+      body: {
+        startUrl: window.location.href,
+        sitemapUrl: sitemapUrl,
+        limit: limit,
+        currentPage: {
+          title: document.title || "",
+          url: window.location.href
+        }
+      }
+    }).then(function (payload) {
+      var report = unwrapApiPayload(payload);
+      if (!report || report.contractVersion !== SITE_CRAWL_CONTRACT_VERSION) {
+        throw new Error("SEO 全站审计返回格式不正确。");
+      }
+      publishSiteCrawlReport(report);
+      siteCrawlStatus = "审计完成：" + ((report.crawl && report.crawl.scanned) || 0) + " 个页面，" + ((report.issues && report.issues.length) || 0) + " 个 issue。";
+      publishAgentReport(buildAgentReport(auditCurrentPage()));
+    }).catch(function (error) {
+      siteCrawlError = (error && error.message) || "SEO 全站审计失败。";
+    }).finally(function () {
+      siteCrawlRunning = false;
+      refreshCrawlPanel(root, controlsRoot);
+    });
+  }
+
   function setPanelTab(root, tabId, controlsRoot) {
     activePanelTab = normalizePanelTab(tabId);
     savePanelState({ activeTab: activePanelTab });
@@ -3846,6 +4459,9 @@
       "</div>" +
       '<div class="weline-seo-panel__tab-panel" data-weline-panel="engines" role="tabpanel" hidden>' +
       renderEngineTab(report) +
+      "</div>" +
+      '<div class="weline-seo-panel__tab-panel" data-weline-panel="crawl" role="tabpanel" hidden>' +
+      renderSiteCrawlTab(report) +
       "</div>"
     );
   }
@@ -3875,7 +4491,7 @@
       '<div class="weline-seo-panel__body">' +
       renderPanelBody(raw, { externalToolbar: Boolean(toolbarRoot) }) +
       "</div></div>";
-    bindPanelTabs(root, toolbarRoot);
+    bindPanelActions(root, toolbarRoot);
     setPanelTab(root, activePanelTab, toolbarRoot);
     publishAgentReport(buildAgentReport(raw));
     return raw;

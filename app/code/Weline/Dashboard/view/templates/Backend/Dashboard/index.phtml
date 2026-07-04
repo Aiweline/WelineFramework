@@ -13,7 +13,9 @@ $messagesJson = json_encode([
     'deleteAckRequired' => (string)__('请先勾选删除确认。'),
     'deleting' => (string)__('正在删除视图...'),
     'processing' => (string)__('正在处理...'),
+    'layoutSaving' => (string)__('正在保存 Dashboard 布局...'),
     'layoutSaved' => (string)__('布局已保存，正在刷新面板...'),
+    'layoutSaveFailed' => (string)__('布局保存失败。'),
 ], $jsonFlags) ?: '{}';
 
 $groups = [
@@ -38,6 +40,7 @@ $activeViewId = (int)($activeView['view_id'] ?? 0);
 $activeVisibility = (string)($activeView['visibility'] ?? '');
 $activeCanEdit = !empty($activeView['can_edit']);
 $activeIsSystem = $activeVisibility === 'system';
+$activeCanEditLayout = $activeCanEdit || $activeIsSystem;
 $showToolbarActions = $activeCanEdit || !$activeIsSystem;
 $activeWebsiteName = '';
 foreach ($websites as $site) {
@@ -117,9 +120,11 @@ if ($activeWebsiteName === '') {
                     <?php endforeach; ?>
                 </nav>
 
-                <a class="w-dashboard-btn primary"
-                   href="<?= htmlspecialchars($editorUrl) ?>"
-                   data-dashboard-editor-open><?= __('编辑布局') ?></a>
+                <?php if ($activeCanEditLayout): ?>
+                    <a class="w-dashboard-btn primary"
+                       href="<?= htmlspecialchars($editorUrl) ?>"
+                       data-dashboard-editor-open><?= __('编辑布局') ?></a>
+                <?php endif; ?>
                 <button type="button" class="w-dashboard-btn" data-dashboard-panel="create"><?= __('新建视图') ?></button>
             </div>
         </header>
@@ -194,11 +199,16 @@ if ($activeWebsiteName === '') {
                  aria-label="<?= htmlspecialchars((string)__('编辑 Dashboard 布局')) ?>">
                 <header class="w-dashboard-editor-bar">
                     <strong><?= __('编辑 Dashboard 布局') ?></strong>
-                    <button type="button"
-                            class="w-dashboard-editor-close"
-                            data-dashboard-editor-close
-                            aria-label="<?= htmlspecialchars((string)__('关闭')) ?>"
-                            title="<?= htmlspecialchars((string)__('关闭')) ?>">&times;</button>
+                    <div class="w-dashboard-editor-bar-actions">
+                        <button type="button"
+                                class="w-dashboard-btn primary"
+                                data-dashboard-editor-save-close><?= __('保存并关闭') ?></button>
+                        <button type="button"
+                                class="w-dashboard-editor-close"
+                                data-dashboard-editor-close
+                                aria-label="<?= htmlspecialchars((string)__('关闭')) ?>"
+                                title="<?= htmlspecialchars((string)__('关闭')) ?>">&times;</button>
+                    </div>
                 </header>
                 <iframe class="w-dashboard-editor-frame"
                         data-dashboard-editor-frame
@@ -511,6 +521,11 @@ body.w-dashboard-editor-open {
     border-bottom: 1px solid var(--w-dashboard-border);
     color: var(--w-dashboard-heading);
 }
+.w-dashboard-editor-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 .w-dashboard-editor-close {
     width: 32px;
     height: 32px;
@@ -564,6 +579,7 @@ body.w-dashboard-editor-open {
     ], $jsonFlags) ?>;
     var messages = <?= $messagesJson ?>;
     var editorDirty = false;
+    var editorSaving = false;
 
     function root() {
         return document.querySelector('[data-dashboard-root]');
@@ -647,9 +663,121 @@ body.w-dashboard-editor-open {
         if (frame) {
             frame.src = 'about:blank';
         }
-        if (shouldRefresh || editorDirty) {
+        if (shouldRefresh) {
             reload(state.viewId);
         }
+    }
+
+    function setEditorSaving(isSaving) {
+        editorSaving = isSaving;
+        document.querySelectorAll('[data-dashboard-editor-save-close], [data-dashboard-editor-close]').forEach(function (button) {
+            button.disabled = isSaving;
+        });
+    }
+
+    function editorUnavailableError(message) {
+        var error = new Error(message || 'ThemeEditor is not ready');
+        error.editorUnavailable = true;
+        return error;
+    }
+
+    function postEditorSaveRequest() {
+        return new Promise(function (resolve, reject) {
+            var frame = document.querySelector('[data-dashboard-editor-frame]');
+            var frameWindow = frame && frame.contentWindow ? frame.contentWindow : null;
+            if (!frameWindow) {
+                reject(editorUnavailableError('ThemeEditor frame is not ready'));
+                return;
+            }
+
+            var requestId = 'dashboard-save-close-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            var timeout = null;
+            var retryTimer = null;
+
+            function cleanup() {
+                window.removeEventListener('message', onMessage);
+                if (timeout) {
+                    window.clearTimeout(timeout);
+                }
+                if (retryTimer) {
+                    window.clearInterval(retryTimer);
+                }
+            }
+
+            function onMessage(event) {
+                if (!event.data || typeof event.data !== 'object') {
+                    return;
+                }
+                if (event.data.type !== 'weline-theme-editor:save-close-result' || event.data.requestId !== requestId) {
+                    return;
+                }
+
+                cleanup();
+                if (event.data.success === false) {
+                    reject(new Error(event.data.message || messages.layoutSaveFailed));
+                    return;
+                }
+                resolve({
+                    success: true,
+                    message: event.data.message || messages.layoutSaved,
+                    data: event.data.data || null
+                });
+            }
+
+            function sendRequest() {
+                try {
+                    frameWindow.postMessage({
+                        type: 'weline-dashboard-editor:save-close',
+                        requestId: requestId
+                    }, '*');
+                } catch (error) {
+                    cleanup();
+                    reject(error);
+                }
+            }
+
+            window.addEventListener('message', onMessage);
+            timeout = window.setTimeout(function () {
+                cleanup();
+                reject(editorUnavailableError('ThemeEditor save request timed out'));
+            }, 90000);
+            retryTimer = window.setInterval(sendRequest, 300);
+            sendRequest();
+        });
+    }
+
+    function saveEditorLayoutAndClose(forceSave) {
+        if (editorSaving) {
+            return;
+        }
+        if (!editorDirty && !forceSave) {
+            closeEditorModal(false);
+            return;
+        }
+
+        setEditorSaving(true);
+        showStatus(messages.layoutSaving, false);
+        postEditorSaveRequest()
+            .catch(function (error) {
+                if (error && error.editorUnavailable) {
+                    return query('saveLayout', {view_id: state.viewId});
+                }
+                throw error;
+            })
+            .then(function (result) {
+                if (!result || result.success === false) {
+                    throw new Error((result && result.message) || messages.layoutSaveFailed);
+                }
+                editorDirty = false;
+                showStatus(result.message || messages.layoutSaved, false);
+                closeEditorModal(true);
+            })
+            .catch(function (error) {
+                showStatus((error && error.message) || messages.layoutSaveFailed, true);
+            })
+            .finally(function () {
+                setEditorSaving(false);
+            });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -667,7 +795,13 @@ body.w-dashboard-editor-open {
 
         app.querySelectorAll('[data-dashboard-editor-close]').forEach(function (button) {
             button.addEventListener('click', function () {
-                closeEditorModal(false);
+                saveEditorLayoutAndClose(false);
+            });
+        });
+
+        app.querySelectorAll('[data-dashboard-editor-save-close]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                saveEditorLayoutAndClose(true);
             });
         });
 
@@ -675,7 +809,7 @@ body.w-dashboard-editor-open {
             if (event.key === 'Escape') {
                 var modal = document.querySelector('[data-dashboard-editor-modal]');
                 if (modal && !modal.hidden) {
-                    closeEditorModal(false);
+                    saveEditorLayoutAndClose(false);
                 }
             }
         });
@@ -689,8 +823,7 @@ body.w-dashboard-editor-open {
             }
             if (event.data.type === 'weline-theme-editor:saved') {
                 editorDirty = true;
-                showStatus(messages.layoutSaved, false);
-                closeEditorModal(true);
+                saveEditorLayoutAndClose(true);
             }
         });
 

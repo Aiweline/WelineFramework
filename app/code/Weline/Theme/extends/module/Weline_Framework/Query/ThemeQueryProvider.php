@@ -11,6 +11,7 @@ use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
@@ -49,6 +50,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             'loadVirtualLayoutSource' => $this->loadVirtualLayoutSource($params),
             'listVirtualLayoutVersions' => $this->listVirtualLayoutVersions($params),
             'saveVirtualLayoutSource' => $this->saveVirtualLayoutSource($params),
+            'copyTargetLayoutData' => $this->copyTargetLayoutData($params),
             'rollbackVirtualLayoutVersion' => $this->rollbackVirtualLayoutVersion($params),
             'resolveVirtualLayoutRuntime' => $this->resolveVirtualLayoutRuntime($params),
             'clearRuntimeLayoutCaches' => $this->clearRuntimeLayoutCaches($params),
@@ -461,6 +463,96 @@ class ThemeQueryProvider implements QueryProviderInterface
         return $this->virtualLayoutService()->saveSourceVersion($identity, $source, $versionData, $publish);
     }
 
+    private function copyTargetLayoutData(array $params): array
+    {
+        $area = $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND;
+        $themeId = (int)($params['theme_id'] ?? 0);
+        if ($themeId <= 0) {
+            $theme = $this->themeContext->resolveTheme($area);
+            $themeId = $theme !== null ? (int)$theme->getId() : 0;
+        }
+
+        $layoutType = (string)($params['layout_type'] ?? $params['page_type'] ?? '');
+        $layoutOption = (string)($params['layout_option'] ?? $params['layout_code'] ?? 'default');
+        $scope = (string)($params['scope'] ?? 'default');
+        $sourceTargetType = (string)($params['source_target_type'] ?? $params['target_type_from'] ?? '');
+        $sourceTargetId = (int)($params['source_target_id'] ?? $params['target_id_from'] ?? 0);
+        $targetTargetType = (string)($params['target_target_type'] ?? $params['target_type_to'] ?? '');
+        $targetTargetId = (int)($params['target_target_id'] ?? $params['target_id_to'] ?? 0);
+
+        if ($themeId <= 0 || trim($layoutType) === '' || $sourceTargetType === '' || $targetTargetType === ''
+            || $sourceTargetId <= 0 || $targetTargetId <= 0) {
+            return [
+                'success' => false,
+                'status' => 'invalid_identity',
+                'message' => (string)__('Theme target 布局复制参数不完整。'),
+            ];
+        }
+
+        $sourceIdentity = [
+            'theme_id' => $themeId,
+            'area' => $area,
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'scope' => $scope,
+            'target_type' => $sourceTargetType,
+            'target_id' => $sourceTargetId,
+        ];
+        $targetIdentity = [
+            'theme_id' => $themeId,
+            'area' => $area,
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'scope' => $scope,
+            'target_type' => $targetTargetType,
+            'target_id' => $targetTargetId,
+        ];
+
+        $selectionResult = $this->saveLayoutSelection([
+            'target_type' => $targetTargetType,
+            'target_id' => $targetTargetId,
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'scope' => $scope,
+            'options' => [
+                'reason' => (string)__('复制 Theme target 布局选择'),
+                'metadata' => [
+                    'copied_from_target_type' => $sourceTargetType,
+                    'copied_from_target_id' => $sourceTargetId,
+                ],
+            ],
+        ]);
+
+        $layoutResult = ObjectManager::getInstance(ThemeLayoutService::class)->copyLayoutIdentity(
+            $themeId,
+            $layoutType,
+            $sourceIdentity,
+            $targetIdentity
+        );
+        $virtualLayoutResult = $this->virtualLayoutService()->copyVirtualLayoutIdentity(
+            $sourceIdentity,
+            $targetIdentity
+        );
+        $this->clearRuntimeLayoutCaches(['reason' => 'theme_query_copy_target_layout_data']);
+
+        $success = !empty($selectionResult['success'])
+            && !empty($layoutResult['success'])
+            && !empty($virtualLayoutResult['success']);
+
+        return [
+            'success' => $success,
+            'status' => $success ? 'copied' : 'partial_failed',
+            'theme_id' => $themeId,
+            'area' => $area,
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'scope' => $scope,
+            'selection' => $selectionResult,
+            'layout' => $layoutResult,
+            'virtual_layout' => $virtualLayoutResult,
+        ];
+    }
+
     private function rollbackVirtualLayoutVersion(array $params): array
     {
         return $this->virtualLayoutService()->rollbackPublishedVersion(
@@ -589,77 +681,11 @@ class ThemeQueryProvider implements QueryProviderInterface
             return $directResponse;
         }
 
-        $curlHeaders = ['X-Requested-With: XMLHttpRequest'];
-        $hasContentType = false;
-        foreach ($headers as $name => $value) {
-            $name = trim((string)$name);
-            if ($name === '') {
-                continue;
-            }
-            $lowerName = strtolower($name);
-            if (!in_array($lowerName, ['content-type', 'accept', 'x-requested-with'], true)) {
-                continue;
-            }
-            if ($lowerName === 'content-type') {
-                $hasContentType = true;
-            }
-            $curlHeaders[] = $name . ': ' . (string)$value;
-        }
-        if ($method === 'POST' && !$hasContentType) {
-            $curlHeaders[] = 'Content-Type: application/json';
-        }
-
-        $curl = curl_init($url);
-        curl_setopt_array($curl, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER => true,
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => $curlHeaders,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_CONNECTTIMEOUT => 10,
-        ]);
-
-        $cookie = (string)$request->getServer('HTTP_COOKIE');
-        if ($cookie !== '') {
-            curl_setopt($curl, CURLOPT_COOKIE, $cookie);
-        }
-        if ($method === 'POST') {
-            curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
-        }
-
-        if ($this->shouldSkipEditorRequestSslVerification($url, $request)) {
-            curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-        }
-
-        $raw = curl_exec($curl);
-        $errno = curl_errno($curl);
-        $error = curl_error($curl);
-        $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        $headerSize = (int)curl_getinfo($curl, CURLINFO_HEADER_SIZE);
-        $contentType = (string)curl_getinfo($curl, CURLINFO_CONTENT_TYPE);
-        curl_close($curl);
-
-        if ($errno !== 0 || !is_string($raw)) {
-            return ['success' => false, 'message' => $error !== '' ? $error : 'Editor request failed.'];
-        }
-
-        $responseBody = substr($raw, $headerSize);
-        $decoded = json_decode($responseBody, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-            return $decoded;
-        }
-
-        if ($status < 200 || $status >= 300) {
-            return [
-                'success' => false,
-                'message' => 'Editor request returned HTTP ' . $status,
-                'content_type' => $contentType,
-                'body' => mb_substr(trim($responseBody), 0, 500),
-            ];
-        }
-
-        return $responseBody;
+        return [
+            'success' => false,
+            'message' => 'Editor request is not mapped to the Theme Query provider.',
+            'path' => $this->normalizeEditorRequestPath((string)(parse_url($url, PHP_URL_PATH) ?: '')),
+        ];
     }
 
     private function dispatchEditorRequestDirect(string $url, string $method, array $headers, string $body): mixed
@@ -673,6 +699,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         if (!str_starts_with($path, '/theme/backend/theme-editor/')
             && !str_starts_with($path, '/theme/backend/virtual-theme/')
             && !str_starts_with($path, '/theme/backend/widget/paramrender/')
+            && !str_starts_with($path, '/weline/eav/api/options')
         ) {
             return null;
         }
@@ -688,6 +715,8 @@ class ThemeQueryProvider implements QueryProviderInterface
         try {
             $response = match ($path) {
                 '/theme/backend/theme-editor/widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgets(),
+                '/theme/backend/theme-editor/default-injections' => ($themeEditor ??= $this->createDirectThemeEditor())->getDefaultInjections(),
+                '/theme/backend/theme-editor/apply-default-injection' => ($themeEditor ??= $this->createDirectThemeEditor())->postApplyDefaultInjection(),
                 '/theme/backend/theme-editor/widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetConfig(),
                 '/theme/backend/theme-editor/widget-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetPreview(),
                 '/theme/backend/theme-editor/layout-options' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutOptionsPayload(),
@@ -734,6 +763,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/virtual-theme/publish-version' => $this->createDirectVirtualTheme()->postPublishVersion(),
                 '/theme/backend/virtual-theme/rollback-version' => $this->createDirectVirtualTheme()->postRollbackVersion(),
                 '/theme/backend/widget/paramrender/form' => $this->createDirectParamRender()->postForm(),
+                '/weline/eav/api/options' => $this->createDirectEavOptions()->getIndex(),
+                '/weline/eav/api/options/attributes' => $this->createDirectEavOptions()->getAttributes(),
+                '/weline/eav/api/options/entities' => $this->createDirectEavOptions()->getEntities(),
                 default => null,
             };
         } catch (\Throwable $e) {
@@ -789,6 +821,17 @@ class ThemeQueryProvider implements QueryProviderInterface
             ObjectManager::getInstance(WelineTheme::class),
             ObjectManager::getInstance(\Weline\Theme\Service\ThemeVirtualThemeManifestService::class),
             ObjectManager::getInstance(ThemeVirtualLayoutService::class)
+        );
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function createDirectEavOptions(): \Weline\Eav\Controller\Api\Options
+    {
+        $controller = new \Weline\Eav\Controller\Api\Options(
+            ObjectManager::getInstance(\Weline\Eav\Model\EavEntity::class),
+            ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute::class),
+            ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Option::class)
         );
         $this->injectRequestIntoController($controller);
         return $controller;
@@ -891,33 +934,6 @@ class ThemeQueryProvider implements QueryProviderInterface
         }
 
         return $scheme . '://' . $host . (str_starts_with($url, '/') ? $url : '/' . $url);
-    }
-
-    private function shouldSkipEditorRequestSslVerification(string $url, \Weline\Framework\Http\Request $request): bool
-    {
-        if (strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: '')) !== 'https') {
-            return false;
-        }
-
-        $targetHost = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
-        if ($targetHost === '') {
-            return false;
-        }
-
-        if (in_array($targetHost, ['127.0.0.1', 'localhost', '::1'], true)) {
-            return true;
-        }
-
-        $requestHost = strtolower((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: ''));
-        $requestHostName = strtolower((string)(parse_url('//' . $requestHost, PHP_URL_HOST) ?: $requestHost));
-        if ($requestHostName === '' || $targetHost !== $requestHostName) {
-            return false;
-        }
-
-        // WLS local domains use self-signed certificates. The request has already passed the editor path and same-host whitelist.
-        return str_ends_with($targetHost, '.weline.test')
-            || str_ends_with($targetHost, '.weline.localhost')
-            || str_ends_with($targetHost, '.local.test');
     }
 
     private function assertAllowedEditorRequestUrl(string $url): void
@@ -1126,6 +1142,20 @@ class ThemeQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name' => 'copyTargetLayoutData',
+                    'description' => __('复制 Theme target 的布局选择、可视化布局和虚拟布局数据'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'source_target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'source_target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'target_target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
                     'name' => 'rollbackVirtualLayoutVersion',
                     'description' => __('回滚 Theme 虚拟布局发布版本'),
                     'mode' => 'write',
@@ -1270,6 +1300,7 @@ class ThemeQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'setBackendThemeMode',
                     'description' => __('同步后台亮色/暗色模式'),
+                    'frontend' => true,
                     'mode' => 'write',
                     'params' => [
                         ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('light 或 dark')],

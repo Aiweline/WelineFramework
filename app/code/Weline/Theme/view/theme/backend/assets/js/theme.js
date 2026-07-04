@@ -1296,27 +1296,7 @@
 
         Query: {
             request: async (provider, operation, params = {}, options = {}) => {
-                const area = options.area || 'backend';
-                const queryConfig = runtimeConfig.query || {};
-                const frontendUrl = queryConfig.frontendUrl || buildFrontendApiUrl('framework/query');
-                const backendUrl = queryConfig.backendUrl || buildBackendApiUrl('framework/query');
-                const endpoint = area === 'frontend' ? frontendUrl : backendUrl;
-                const response = await Weline.Api.request(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        provider: provider,
-                        operation: operation,
-                        params: params
-                    })
-                });
-                const payload = unwrapApiPayload(response);
-                if (!isApiPayloadOk(response, payload)) {
-                    throw new Error((payload && (payload.msg || payload.message)) ? (payload.msg || payload.message) : __('查询失败'));
-                }
-                return Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+                return Weline.Api.call(provider, operation, params, Object.assign({ area: 'backend' }, options || {}));
             },
             help: async (provider = null, params = {}, options = {}) => {
                 if (provider == null || provider === '') {

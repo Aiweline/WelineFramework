@@ -7,7 +7,6 @@ namespace Weline\Theme\Test\Unit;
 use Weline\Framework\UnitTest\TestCore;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
-use Weline\Theme\Service\DefaultLayoutSeeder;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
@@ -48,14 +47,11 @@ class ThemePreviewContentRendererRestoreTest extends TestCore
             {
             }
 
-            public function getCurrentVersion(int $themeId, string $pageType): ?ThemeLayoutVersion
+            public function getCurrentVersion(int $themeId, string $pageType, array $identity = []): ?ThemeLayoutVersion
             {
                 return $this->currentVersion;
             }
         };
-
-        $defaultLayoutSeeder = $this->createMock(DefaultLayoutSeeder::class);
-        $defaultLayoutSeeder->expects($this->never())->method('seedDefaultLayout');
 
         $slotRenderer = $this->createMock(SlotRendererService::class);
         $slotRenderer->expects($this->never())->method('processSlots');
@@ -64,7 +60,6 @@ class ThemePreviewContentRendererRestoreTest extends TestCore
 
         $renderer = new ThemePreviewContentRenderer(
             $layoutService,
-            $defaultLayoutSeeder,
             $slotRenderer,
             $pageTypeResolver,
             $versionService,

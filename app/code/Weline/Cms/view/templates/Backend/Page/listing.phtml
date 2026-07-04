@@ -10,11 +10,42 @@ $scope = (string)($this->getData('scope') ?: '');
 $websiteIdFilter = (string)($this->getData('website_id') ?: '');
 $pathGroupFilter = (string)($this->getData('path_group') ?: '');
 $websites = $this->getData('websites') ?: [];
+$copyNoticeData = $this->getData('copy_notice');
+$copyHighlightData = $this->getData('copy_highlight');
+$copyNotice = is_array($copyNoticeData) ? $copyNoticeData : [];
+$copyHighlight = is_array($copyHighlightData) ? $copyHighlightData : [];
+$highlightType = (string)($copyHighlight['type'] ?? '');
+$highlightWebsiteId = (int)($copyHighlight['website_id'] ?? 0);
+$highlightWebsiteCode = (string)($copyHighlight['website_code'] ?? '');
+$highlightPathGroup = (string)($copyHighlight['path_group'] ?? '');
+$highlightPageId = (int)($copyHighlight['page_id'] ?? 0);
 $statusLabels = [
     'draft' => __('草稿'),
     'published' => __('已发布'),
     'disabled' => __('已禁用'),
 ];
+$websiteOptionValue = static function (array $website): string {
+    $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+    $websiteCode = (string)($website['code'] ?? $website['website_code'] ?? 'default');
+    return $websiteId . '|' . $websiteCode;
+};
+$isSourceWebsite = static function (array $website, int $sourceWebsiteId, string $sourceWebsiteCode): bool {
+    $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+    $websiteCode = (string)($website['code'] ?? $website['website_code'] ?? 'default');
+    if ($sourceWebsiteId > 0 && $websiteId > 0) {
+        return $sourceWebsiteId === $websiteId;
+    }
+    return strcasecmp($sourceWebsiteCode, $websiteCode) === 0;
+};
+$matchesHighlightedSite = static function (int $websiteId, string $websiteCode) use ($highlightWebsiteId, $highlightWebsiteCode): bool {
+    if ($highlightWebsiteId > 0 && $websiteId > 0) {
+        return $highlightWebsiteId === $websiteId;
+    }
+    if ($highlightWebsiteCode !== '') {
+        return strcasecmp($highlightWebsiteCode, $websiteCode) === 0;
+    }
+    return false;
+};
 ?>
 <div class="row">
     <div class="col-12">
@@ -306,6 +337,116 @@ body[data-bs-theme="dark"] .cms-page-listing,
     margin: 0;
 }
 
+.cms-copy-menu {
+    min-width: 0;
+}
+
+.cms-copy-menu[open] {
+    flex: 1 1 100%;
+}
+
+.cms-copy-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.cms-copy-summary::-webkit-details-marker {
+    display: none;
+}
+
+.cms-copy-panel {
+    display: grid;
+    gap: 8px;
+    width: min(100%, 280px);
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--cms-border);
+    border-radius: 6px;
+    background: var(--cms-surface);
+}
+
+.cms-copy-panel .form-select {
+    min-width: 0;
+}
+
+.cms-copy-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    color: var(--cms-text);
+    border: 1px solid #22c55e;
+    border-radius: 6px;
+    background: var(--cms-surface);
+    background: color-mix(in srgb, #22c55e 14%, var(--cms-surface));
+}
+
+.cms-copy-notice__main {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+}
+
+.cms-copy-notice__icon {
+    flex: 0 0 auto;
+    color: #16a34a;
+    font-size: 20px;
+    line-height: 1.2;
+}
+
+.cms-copy-notice__title {
+    color: var(--cms-text);
+    font-weight: 700;
+}
+
+.cms-copy-notice__meta {
+    color: var(--cms-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.cms-copy-notice__actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.cms-copy-notice.is-warning {
+    border-color: #f59e0b;
+    background: var(--cms-surface);
+    background: color-mix(in srgb, #f59e0b 16%, var(--cms-surface));
+}
+
+.cms-copy-notice.is-warning .cms-copy-notice__icon {
+    color: #d97706;
+}
+
+.cms-copy-highlight {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, .24), 0 0 22px rgba(220, 38, 38, .28);
+    animation: cmsCopyHighlightPulse 1s ease-in-out 10;
+}
+
+@keyframes cmsCopyHighlightPulse {
+    0%,
+    100% {
+        border-color: #dc2626;
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, .18), 0 0 14px rgba(220, 38, 38, .2);
+    }
+    50% {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 5px rgba(239, 68, 68, .34), 0 0 28px rgba(239, 68, 68, .38);
+    }
+}
+
 .cms-status-badge {
     flex: 0 0 auto;
     color: var(--cms-text);
@@ -395,6 +536,21 @@ body[data-bs-theme="dark"] .cms-status-disabled,
     color: var(--cms-text);
     border-color: var(--cms-border);
 }
+
+@media (max-width: 575.98px) {
+    .cms-copy-notice {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .cms-copy-notice__actions {
+        justify-content: stretch;
+    }
+
+    .cms-copy-notice__actions .btn {
+        flex: 1 1 0;
+    }
+}
 </style>
 
 <div class="row">
@@ -406,6 +562,57 @@ body[data-bs-theme="dark"] .cms-status-disabled,
         <div class="card">
             <div class="card-body">
                 <div class="cms-page-listing">
+                <?php if (!empty($copyNotice)): ?>
+                    <?php
+                    $copyNoticeType = (string)($copyNotice['type'] ?? 'page');
+                    $copyTargetLabel = (string)($copyNotice['target_label'] ?? '');
+                    $copyNoticeTitle = $copyNoticeType === 'path'
+                        ? (string)__('CMS 一级 path 已拷贝到 %{1}。', $copyTargetLabel)
+                        : (string)__('CMS 页面已拷贝到 %{1}。', $copyTargetLabel);
+                    $copyGoParams = is_array($copyNotice['go_params'] ?? null) ? $copyNotice['go_params'] : [];
+                    $copyGoUrl = $this->getBackendUrl('cms/backend/page/listing', $copyGoParams);
+                    $copyPathGroup = (string)($copyNotice['path_group'] ?? '');
+                    $copyIdentifier = (string)($copyNotice['identifier'] ?? '');
+                    $copyPageTitle = (string)($copyNotice['page_title'] ?? '');
+                    $copyPageCount = (int)($copyNotice['page_count'] ?? 0);
+                    $copyNoticeMetaParts = [];
+                    if ($copyPathGroup !== '') {
+                        $copyNoticeMetaParts[] = '/' . $copyPathGroup;
+                    }
+                    if ($copyNoticeType === 'page' && $copyPageTitle !== '') {
+                        $copyNoticeMetaParts[] = $copyPageTitle;
+                    }
+                    if ($copyNoticeType === 'page' && $copyIdentifier !== '') {
+                        $copyNoticeMetaParts[] = '/' . $copyIdentifier;
+                    }
+                    if ($copyNoticeType === 'path' && $copyPageCount > 0) {
+                        $copyNoticeMetaParts[] = (string)__('共 %{1} 个页面', $copyPageCount);
+                    }
+                    if (!empty($copyNotice['theme_partial'])) {
+                        $copyNoticeMetaParts[] = (string)__('部分 Theme 布局数据未完整复制');
+                    }
+                    ?>
+                    <div class="cms-copy-notice<?= !empty($copyNotice['theme_partial']) ? ' is-warning' : '' ?>" data-cms-copy-notice>
+                        <div class="cms-copy-notice__main">
+                            <i class="mdi <?= $copyNoticeType === 'path' ? 'mdi-folder-check-outline' : 'mdi-check-circle-outline' ?> cms-copy-notice__icon"></i>
+                            <div>
+                                <div class="cms-copy-notice__title"><?= htmlspecialchars($copyNoticeTitle) ?></div>
+                                <?php if (!empty($copyNoticeMetaParts)): ?>
+                                    <div class="cms-copy-notice__meta"><?= htmlspecialchars(implode(' · ', $copyNoticeMetaParts)) ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="cms-copy-notice__actions">
+                            <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($copyGoUrl) ?>">
+                                <i class="mdi mdi-arrow-right"></i>
+                                <?= __('前往查看') ?>
+                            </a>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-cms-copy-notice-close>
+                                <?= __('我知道了') ?>
+                            </button>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <form class="row g-2 mb-3" method="get" action="<?= $this->getBackendUrl('cms/backend/page/listing') ?>">
                     <div class="col-md-3">
                         <input class="form-control" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
@@ -436,10 +643,18 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                         <input class="form-control" type="text" name="scope" value="<?= htmlspecialchars($scope) ?>" placeholder="<?= htmlspecialchars((string)__('范围')) ?>">
                     </div>
                     <div class="col-md-2">
-                        <button class="btn btn-outline-primary w-100" type="submit">
-                            <i class="mdi mdi-magnify"></i>
-                            <?= __('筛选') ?>
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-primary flex-grow-1" type="submit">
+                                <i class="mdi mdi-magnify"></i>
+                                <?= __('筛选') ?>
+                            </button>
+                            <a class="btn btn-outline-secondary flex-shrink-0"
+                               href="<?= $this->getBackendUrl('cms/backend/page/listing') ?>"
+                               title="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>"
+                               aria-label="<?= htmlspecialchars((string)__('清理筛选并刷新')) ?>">
+                                <i class="mdi mdi-close-circle-outline"></i>
+                            </a>
+                        </div>
                     </div>
                 </form>
 
@@ -455,10 +670,15 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                     $pathGroups = (array)($site['path_groups'] ?? []);
                     $siteKey = 'site-' . ($siteId > 0 ? (string)$siteId : preg_replace('/[^A-Za-z0-9_-]+/', '-', $siteCode));
                     $siteBodyId = 'cms-' . $siteKey . '-body';
-                    $siteExpanded = $siteLoopIndex === 0;
+                    $siteHasHighlight = $matchesHighlightedSite($siteId, $siteCode);
+                    $siteExpanded = $siteLoopIndex === 0 || $siteHasHighlight;
                     $siteLoopIndex++;
                     ?>
-                    <section class="cms-site-group<?= $siteExpanded ? '' : ' is-collapsed' ?>" data-cms-collapse-item>
+                    <section class="cms-site-group<?= $siteExpanded ? '' : ' is-collapsed' ?>"
+                             data-cms-collapse-item
+                             data-cms-website-id="<?= $siteId ?>"
+                             data-cms-website-code="<?= htmlspecialchars($siteCode) ?>"
+                             <?= $siteHasHighlight ? 'data-cms-force-expanded="1"' : '' ?>>
                         <div class="cms-site-group__header">
                             <div class="cms-tree-heading">
                                 <button class="cms-collapse-toggle" type="button"
@@ -516,10 +736,16 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                 $groupAlias = (string)($group['path_group_alias'] ?? $groupPath);
                                 $pathKey = $siteKey . '-path-' . substr(md5($groupPath), 0, 12);
                                 $pathBodyId = 'cms-' . $pathKey . '-body';
-                                $pathExpanded = $pathLoopIndex === 0;
+                                $pathHasHighlight = $siteHasHighlight && $highlightPathGroup !== '' && $highlightPathGroup === $groupPath;
+                                $pathIsHighlighted = $pathHasHighlight && $highlightType === 'path';
+                                $pathExpanded = $pathLoopIndex === 0 || $pathHasHighlight;
                                 $pathLoopIndex++;
                                 ?>
-                                <div class="cms-path-group<?= $pathExpanded ? '' : ' is-collapsed' ?>" data-cms-collapse-item>
+                                <div class="cms-path-group<?= $pathExpanded ? '' : ' is-collapsed' ?><?= $pathIsHighlighted ? ' cms-copy-highlight' : '' ?>"
+                                     data-cms-collapse-item
+                                     data-cms-path-group="<?= htmlspecialchars($groupPath) ?>"
+                                     data-cms-path-group-id="<?= (int)($group['group_id'] ?? 0) ?>"
+                                     <?= $pathHasHighlight ? 'data-cms-force-expanded="1"' : '' ?>>
                                     <div class="cms-path-group__header">
                                         <div class="cms-tree-heading">
                                             <button class="cms-collapse-toggle" type="button"
@@ -544,6 +770,31 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                             </div>
                                         </div>
                                         <div class="cms-path-group__actions">
+                                            <details class="cms-copy-menu">
+                                                <summary class="btn btn-sm btn-outline-secondary cms-copy-summary">
+                                                    <i class="mdi mdi-content-copy"></i>
+                                                    <?= __('拷贝') ?>
+                                                </summary>
+                                                <form class="cms-copy-panel" method="post" action="<?= $this->getBackendUrl('cms/backend/page/copy-path-group') ?>">
+                                                    <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
+                                                    <input type="hidden" name="source_website_id" value="<?= $siteId ?>">
+                                                    <input type="hidden" name="source_path_group" value="<?= htmlspecialchars($groupPath) ?>">
+                                                    <select class="form-select form-select-sm" name="target_website" required>
+                                                        <option value=""><?= __('选择目标站点') ?></option>
+                                                        <?php foreach ($websites as $targetWebsite): ?>
+                                                            <?php if (!is_array($targetWebsite)) { continue; } ?>
+                                                            <?php $disabled = $isSourceWebsite($targetWebsite, $siteId, $siteCode); ?>
+                                                            <option value="<?= htmlspecialchars($websiteOptionValue($targetWebsite)) ?>" <?= $disabled ? 'disabled' : '' ?>>
+                                                                <?= htmlspecialchars((string)($targetWebsite['label'] ?? $targetWebsite['code'] ?? $targetWebsite['website_code'] ?? 'default')) ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-primary" type="submit">
+                                                        <i class="mdi mdi-check"></i>
+                                                        <?= __('确认拷贝') ?>
+                                                    </button>
+                                                </form>
+                                            </details>
                                             <form method="post" action="<?= $this->getBackendUrl('cms/backend/page/delete-path-group') ?>">
                                                 <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                 <input type="hidden" name="website_id" value="<?= $siteId ?>">
@@ -582,8 +833,11 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                     $statusClass = 'cms-status-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($pageStatus));
                                                     $previewUrl = (string)($page['preview_url'] ?? '');
                                                     $slug = (string)($page['slug'] ?? '');
+                                                    $pageIsHighlighted = $pathHasHighlight && $highlightType === 'page' && $highlightPageId > 0 && $pageId === $highlightPageId;
                                                     ?>
-                                                    <article class="cms-page-tile">
+                                                    <article class="cms-page-tile<?= $pageIsHighlighted ? ' cms-copy-highlight' : '' ?>"
+                                                             data-cms-page-id="<?= $pageId ?>"
+                                                             data-cms-page-path="<?= htmlspecialchars((string)($page['identifier'] ?? '')) ?>">
                                                         <div class="cms-page-tile__head">
                                                             <div class="cms-page-tile__title"><?= htmlspecialchars((string)($page['title'] ?? '')) ?></div>
                                                             <span class="badge cms-status-badge <?= htmlspecialchars($statusClass) ?>">
@@ -612,6 +866,31 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                                     <?= __('预览') ?>
                                                                 </a>
                                                             <?php endif; ?>
+                                                            <details class="cms-copy-menu">
+                                                                <summary class="btn btn-sm btn-outline-secondary cms-copy-summary">
+                                                                    <i class="mdi mdi-content-copy"></i>
+                                                                    <?= __('拷贝') ?>
+                                                                </summary>
+                                                                <form class="cms-copy-panel" method="post" action="<?= $this->getBackendUrl('cms/backend/page/copy') ?>">
+                                                                    <input type="hidden" name="page_id" value="<?= $pageId ?>">
+                                                                    <input type="hidden" name="source_website_id" value="<?= (int)($page['website_id'] ?? $siteId) ?>">
+                                                                    <input type="hidden" name="source_path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? $groupPath)) ?>">
+                                                                    <select class="form-select form-select-sm" name="target_website" required>
+                                                                        <option value=""><?= __('选择目标站点') ?></option>
+                                                                        <?php foreach ($websites as $targetWebsite): ?>
+                                                                            <?php if (!is_array($targetWebsite)) { continue; } ?>
+                                                                            <?php $disabled = $isSourceWebsite($targetWebsite, (int)($page['website_id'] ?? $siteId), (string)($page['website_code'] ?? $siteCode)); ?>
+                                                                            <option value="<?= htmlspecialchars($websiteOptionValue($targetWebsite)) ?>" <?= $disabled ? 'disabled' : '' ?>>
+                                                                                <?= htmlspecialchars((string)($targetWebsite['label'] ?? $targetWebsite['code'] ?? $targetWebsite['website_code'] ?? 'default')) ?>
+                                                                            </option>
+                                                                        <?php endforeach; ?>
+                                                                    </select>
+                                                                    <button class="btn btn-sm btn-primary" type="submit">
+                                                                        <i class="mdi mdi-check"></i>
+                                                                        <?= __('确认拷贝') ?>
+                                                                    </button>
+                                                                </form>
+                                                            </details>
                                                             <form method="post" action="<?= $this->getBackendUrl('cms/backend/page/delete') ?>">
                                                                 <input type="hidden" name="page_id" value="<?= $pageId ?>">
                                                                 <button class="btn btn-sm btn-outline-danger" type="submit">
@@ -702,17 +981,92 @@ body[data-bs-theme="dark"] .cms-status-disabled,
             var key = toggle.getAttribute('data-cms-collapse-key') || '';
             var defaultExpanded = toggle.getAttribute('data-cms-collapse-default') === 'expanded';
             var hasSavedState = Object.prototype.hasOwnProperty.call(state, key);
-            setExpanded(toggle, hasSavedState ? state[key] === true : defaultExpanded, false);
+            var item = toggle.closest('[data-cms-collapse-item]');
+            var forceExpanded = item && item.getAttribute('data-cms-force-expanded') === '1';
+            setExpanded(toggle, forceExpanded ? true : (hasSavedState ? state[key] === true : defaultExpanded), false);
             toggle.addEventListener('click', function () {
                 setExpanded(toggle, toggle.getAttribute('aria-expanded') !== 'true', true);
             });
         });
     }
 
+    function cleanupCopyParams(keys) {
+        try {
+            var url = new URL(window.location.href);
+            keys.forEach(function (key) {
+                url.searchParams.delete(key);
+            });
+            window.history.replaceState({}, document.title, url.toString());
+        } catch (error) {
+            // URL cleanup is cosmetic; leave the page behavior intact if history is unavailable.
+        }
+    }
+
+    function initCmsCopyFeedback(attempt) {
+        var root = document.querySelector('.cms-page-listing');
+        if (!root) {
+            if ((attempt || 0) < 20) {
+                setTimeout(function () {
+                    initCmsCopyFeedback((attempt || 0) + 1);
+                }, 50);
+            }
+            return;
+        }
+        if (root.getAttribute('data-cms-copy-feedback-ready') === '1') {
+            return;
+        }
+        root.setAttribute('data-cms-copy-feedback-ready', '1');
+
+        var noticeKeys = [
+            'copy_notice',
+            'copy_target_website_id',
+            'copy_target_website_code',
+            'copy_target_label',
+            'copy_target_path_group',
+            'copy_target_page_id',
+            'copy_target_title',
+            'copy_target_identifier',
+            'copy_target_page_count',
+            'copy_theme_partial'
+        ];
+        root.querySelectorAll('[data-cms-copy-notice-close]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var notice = button.closest('[data-cms-copy-notice]');
+                if (notice) {
+                    notice.remove();
+                }
+                cleanupCopyParams(noticeKeys);
+            });
+        });
+
+        var highlights = Array.prototype.slice.call(root.querySelectorAll('.cms-copy-highlight'));
+        if (highlights.length > 0) {
+            setTimeout(function () {
+                highlights[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }, 80);
+            setTimeout(function () {
+                highlights.forEach(function (item) {
+                    item.classList.remove('cms-copy-highlight');
+                });
+                cleanupCopyParams([
+                    'copy_highlight',
+                    'copy_highlight_website_id',
+                    'copy_highlight_website_code',
+                    'copy_highlight_path_group',
+                    'copy_highlight_page_id'
+                ]);
+            }, 10000);
+        }
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCmsListingCollapse);
+        document.addEventListener('DOMContentLoaded', function () {
+            initCmsListingCollapse(0);
+            initCmsCopyFeedback(0);
+        });
     } else {
-        initCmsListingCollapse();
+        initCmsListingCollapse(0);
+        initCmsCopyFeedback(0);
     }
 })();
 </script>

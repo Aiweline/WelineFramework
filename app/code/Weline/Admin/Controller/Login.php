@@ -41,6 +41,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
      */
     private const SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE = 'need_backend_verification_code';
     private const SESSION_KEY_BACKEND_VERIFICATION_CODE = 'backend_verification_code';
+    private const DEFAULT_LOGIN_BG_URL = '/Weline/Admin/view/statics/assets/images/login-lotus-bg.png';
     protected ?string $layoutType = null;
     
     protected BackendUser $adminUser;
@@ -135,7 +136,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
             $loginBg = ltrim($loginBg, '/');
         }
-        $loginBgUrl = $loginBg !== '' ? '/pub/media/' . $loginBg : '';
+        $loginBgUrl = $loginBg !== '' ? '/pub/media/' . $loginBg : self::DEFAULT_LOGIN_BG_URL;
         $this->assign('login_bg_url', $loginBgUrl);
         // 锁定提示以 Session 为准，但若数据库中该用户 attempt_times 已恢复（管理员改过），则清除 Session 标志避免一直提示
         $s = $this->session;
