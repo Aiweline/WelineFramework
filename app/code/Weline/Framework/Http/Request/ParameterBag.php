@@ -199,11 +199,8 @@ class ParameterBag
     public function setQuery(string $key, mixed $value): static
     {
         $this->query[$key] = $value;
-        \w_env_set("get.{$key}", $value);
+        WelineEnv::setGet($key, $value);
         $this->allParams = null;
-        return $this;
-        \w_env_set("get.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
-        $this->allParams = null; // 清除缓存
         return $this;
     }
     

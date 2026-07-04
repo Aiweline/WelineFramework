@@ -181,6 +181,8 @@ $getWidgetIcon = function ($type) {
      data-api-update-config="<?= $this->getUrl('theme/backend/theme-editor/update-config') ?>"
      data-api-delete-widget="<?= $this->getUrl('theme/backend/theme-editor/remove-widget') ?>"
      data-api-widgets="<?= $this->getUrl('theme/backend/theme-editor/widgets') ?>"
+     data-api-default-injections="<?= $this->getUrl('theme/backend/theme-editor/default-injections') ?>"
+     data-api-apply-default-injection="<?= $this->getUrl('theme/backend/theme-editor/apply-default-injection') ?>"
      data-api-publish="<?= $this->getUrl('theme/backend/theme-editor/publish') ?>"
      data-api-preview="<?= $this->getUrl('theme/backend/theme-editor/preview') ?>"
      data-api-render-widget="<?= $this->getUrl('theme/backend/theme-editor/render-widget') ?>"
@@ -571,14 +573,25 @@ $getWidgetIcon = function ($type) {
 
             <div class="widget-library-tabs" id="widgetLibraryTabs" hidden>
                 <button type="button" class="widget-library-tab active" data-widget-library-tab="general">
-                    <i class="ri-dashboard-3-line"></i>
-                    <span><?= __('通用部件') ?></span>
+                    <span class="widget-library-tab-main">
+                        <i class="ri-dashboard-3-line"></i>
+                        <span><?= __('通用部件') ?></span>
+                    </span>
                     <span class="widget-library-tab-count" data-widget-library-tab-count="general">0</span>
                 </button>
                 <button type="button" class="widget-library-tab" data-widget-library-tab="basic">
-                    <i class="ri-shapes-line"></i>
-                    <span><?= __('基础组件') ?></span>
+                    <span class="widget-library-tab-main">
+                        <i class="ri-shapes-line"></i>
+                        <span><?= __('基础组件') ?></span>
+                    </span>
                     <span class="widget-library-tab-count" data-widget-library-tab-count="basic">0</span>
+                </button>
+                <button type="button" class="widget-library-tab" data-widget-library-tab="applications">
+                    <span class="widget-library-tab-main">
+                        <i class="ri-apps-2-line"></i>
+                        <span><?= __('应用') ?></span>
+                    </span>
+                    <span class="widget-library-tab-count" data-widget-library-tab-count="applications">0</span>
                 </button>
             </div>
             
@@ -3365,19 +3378,20 @@ body:has(.theme-editor-container) .footer {
 
 .widget-library-tabs {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     padding: 8px 10px 0;
 }
 
 .widget-library-tab {
     min-width: 0;
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    min-height: 30px;
-    padding: 5px 8px;
+    gap: 4px;
+    min-height: 50px;
+    padding: 7px 8px 6px;
     border: 1px solid var(--te-border);
     border-radius: 6px;
     background: var(--te-bg-hover);
@@ -3386,6 +3400,28 @@ body:has(.theme-editor-container) .footer {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.18s ease;
+}
+
+.widget-library-tab-main {
+    width: 100%;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.widget-library-tab-main i {
+    flex: 0 0 auto;
+    font-size: 13px;
+}
+
+.widget-library-tab-main span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .widget-library-tab:hover {
@@ -3402,9 +3438,9 @@ body:has(.theme-editor-container) .footer {
 }
 
 .widget-library-tab-count {
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
+    min-width: 20px;
+    height: 16px;
+    padding: 0 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3412,6 +3448,7 @@ body:has(.theme-editor-container) .footer {
     background: rgba(99, 102, 241, 0.14);
     color: currentColor;
     font-size: 10px;
+    line-height: 16px;
 }
 
 /* 部件列表 */
@@ -3435,6 +3472,92 @@ body:has(.theme-editor-container) .footer {
     padding: 24px 12px;
     color: #6b7280;
     font-size: 12px;
+}
+
+.widget-default-injection-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    margin: 6px 0;
+    background: var(--te-bg-hover);
+    border: 1px solid var(--te-border);
+    border-radius: var(--te-radius-md);
+}
+
+.widget-default-injection-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.widget-default-injection-title {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.widget-default-injection-name {
+    color: var(--te-text-primary);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.widget-default-injection-module,
+.widget-default-injection-reason,
+.widget-default-injection-target {
+    color: var(--te-text-secondary);
+    font-size: 11px;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.widget-default-injection-reason {
+    color: var(--te-text-muted);
+}
+
+.widget-default-injection-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 20px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+    border: 1px solid rgba(245, 158, 11, 0.24);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.widget-default-injection-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-apply-default-injection {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 26px;
+    padding: 4px 9px;
+    border: 1px solid var(--te-accent);
+    border-radius: 5px;
+    background: var(--te-accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-apply-default-injection:disabled {
+    cursor: wait;
+    opacity: 0.72;
 }
 
 .widget-load-more-hint {
@@ -5186,9 +5309,9 @@ body:has(.theme-editor-container) .footer {
     });
 })();
 </script>
-<!-- ThemeEditor uses same-origin backend controller URLs; Weline.Api remains a fallback for non-direct requests. -->
+<!-- ThemeEditor requests are routed through w_query('theme', 'editorRequest') for the visual editor API surface. -->
 <script src="@static(Weline_Widget::js/widget-param-types.js)?v=20260602-ai-context-provider"></script>
-<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260702-builder-components-url-filter-6"></script>
+<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260704-dashboard-save-close-v3"></script>
 <script>
 (function () {
     const labels = {

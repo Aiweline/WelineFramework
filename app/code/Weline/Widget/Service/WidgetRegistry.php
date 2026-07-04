@@ -92,7 +92,7 @@ class WidgetRegistry
     }
 
     /**
-     * 刷新注册表：用 yield 迭代器流式扫描并写入，不构建完整数组，128MB 内完成
+     * 刷新注册表
      *
      * @return bool
      */
@@ -102,58 +102,23 @@ class WidgetRegistry
     }
 
     /**
-     * 从 (type, name, config) 生成器流式写入注册表文件，不落盘完整数组
+     * 从 (type, name, config) 生成器按 type 聚合后写入注册表。
+     * 生成器产出的 type 不保证连续，直接流式写会生成重复顶层 key，PHP include 时会被后者覆盖。
      *
      * @param \Generator<int, array{0: string, 1: string, 2: array}, void, void> $items
      * @return bool
      */
     private function saveRegistryFromGenerator(\Generator $items): bool
     {
-        try {
-            $registryDir = dirname(self::REGISTRY_FILE);
-            if (!is_dir($registryDir)) {
-                mkdir($registryDir, 0755, true);
+        $registry = [];
+        foreach ($items as [$type, $name, $config]) {
+            if (!isset($registry[$type]) || !is_array($registry[$type])) {
+                $registry[$type] = [];
             }
-            $fh = fopen(self::REGISTRY_FILE, 'wb');
-            if ($fh === false) {
-                return false;
-            }
-            fwrite($fh, "<?php\n");
-            fwrite($fh, "/**\n * 部件注册表\n * 此文件由系统自动生成，请勿手动修改\n * 生成时间: " . date('Y-m-d H:i:s') . "\n */\n\nreturn [\n");
-            $currentType = null;
-            $firstType = true;
-            $firstName = true;
-            foreach ($items as [$type, $name, $config]) {
-                if ($type !== $currentType) {
-                    if ($currentType !== null) {
-                        fwrite($fh, "\n]");
-                        $firstType = false;
-                    }
-                    if (!$firstType) {
-                        fwrite($fh, ",\n");
-                    }
-                    fwrite($fh, var_export($type, true) . " => [\n");
-                    $currentType = $type;
-                    $firstName = true;
-                }
-                if (!$firstName) {
-                    fwrite($fh, ",\n");
-                }
-                $firstName = false;
-                fwrite($fh, '    ' . var_export($name, true) . ' => ' . var_export($config, true));
-            }
-            if ($currentType !== null) {
-                fwrite($fh, "\n]");
-            }
-            fwrite($fh, "\n];\n");
-            fclose($fh);
-
-            self::clearRuntimeCache();
-            return true;
-        } catch (\Exception $e) {
-            w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
-            return false;
+            $registry[$type][$name] = $config;
         }
+
+        return $this->saveRegistry($registry);
     }
 
     /**

@@ -53,6 +53,8 @@ class Page extends BackendController
         $this->assign('scope', (string)($params['scope'] ?? ''));
         $this->assign('website_id', (string)($params['website_id'] ?? ''));
         $this->assign('path_group', (string)($params['path_group'] ?? ''));
+        $this->assign('copy_notice', $this->buildCopyNotice($params));
+        $this->assign('copy_highlight', $this->buildCopyHighlight($params));
 
         return $this->fetch('listing');
     }
@@ -219,6 +221,106 @@ class Page extends BackendController
                 $params['website_id'] = $websiteId;
             }
             return $this->redirect('cms/backend/page/listing', $params);
+        }
+    }
+
+    #[Acl('Weline_Cms::page_copy', '拷贝 CMS 页面', 'mdi mdi-content-copy', '将 CMS 页面拷贝到目标站点')]
+    public function postCopy(): string
+    {
+        $data = $this->collectRequestData();
+        $sourcePageId = (int)($data['page_id'] ?? $data['id'] ?? 0);
+        $sourcePage = $sourcePageId > 0 ? $this->pageService->getPageModel($sourcePageId, false) : null;
+        $sourceListingParams = $this->buildSourceListingParams($data, $sourcePage);
+
+        try {
+            $result = $this->pageService->copyPage($sourcePageId, $data);
+            $page = $result['page'];
+            $themeResult = is_array($result['theme'] ?? null) ? $result['theme'] : [];
+            $this->markActivity('cms_page', $page->getPageId(), 'copy', $page->getTitle(), [
+                'source_page_id' => $sourcePageId,
+                'target_page_id' => $page->getPageId(),
+                'identifier' => $page->getIdentifier(),
+                'website_id' => $page->getWebsiteId(),
+                'website_code' => $page->getWebsiteCode(),
+                'path_group' => $page->getPathGroup(),
+                'slug' => $page->getSlug(),
+                'theme_copy_success' => !empty($themeResult['success']),
+            ]);
+            if (empty($themeResult['success'])) {
+                $this->getMessageManager()->addWarning(__('CMS 页面已拷贝，但 Theme 布局数据复制不完整。'));
+            }
+
+            $targetWebsite = is_array($result['target_website'] ?? null)
+                ? $result['target_website']
+                : $this->buildTargetWebsiteFromPage($page);
+            $noticeParams = $this->buildCopyNoticeRedirectParams('page', $targetWebsite, [
+                'path_group' => $page->getPathGroup(),
+                'page_id' => $page->getPageId(),
+                'title' => $page->getTitle(),
+                'identifier' => $page->getIdentifier(),
+                'theme_partial' => empty($themeResult['success']),
+            ]);
+
+            return $this->redirect('cms/backend/page/listing', array_merge($sourceListingParams, $noticeParams));
+        } catch (ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+            return $this->redirect('cms/backend/page/listing', $sourceListingParams);
+        }
+    }
+
+    #[Acl('Weline_Cms::path_group_copy', '拷贝 CMS 一级 path', 'mdi mdi-content-copy', '将 CMS 一级 path 及页面拷贝到目标站点')]
+    public function postCopyPathGroup(): string
+    {
+        $data = $this->collectRequestData();
+        $sourceListingParams = $this->buildSourceListingParams($data);
+
+        try {
+            $result = $this->pageService->copyPathGroup($data);
+            $group = $result['path_group'];
+            $themeResults = is_array($result['theme_results'] ?? null) ? $result['theme_results'] : [];
+            $themeCopySuccess = true;
+            foreach ($themeResults as $themeResult) {
+                if (is_array($themeResult) && empty($themeResult['success'])) {
+                    $themeCopySuccess = false;
+                    break;
+                }
+            }
+            $this->markActivity('cms_path_group', $group->getGroupId(), 'copy', $group->getAlias() !== '' ? $group->getAlias() : $group->getPathGroup(), [
+                'source_group_id' => (int)($data['group_id'] ?? $data['path_group_id'] ?? 0),
+                'target_group_id' => $group->getGroupId(),
+                'website_id' => $group->getWebsiteId(),
+                'website_code' => $group->getWebsiteCode(),
+                'path_group' => $group->getPathGroup(),
+                'alias' => $group->getAlias(),
+                'copied_page_count' => count((array)($result['pages'] ?? [])),
+                'theme_copy_success' => $themeCopySuccess,
+            ]);
+            if (!$themeCopySuccess) {
+                $this->getMessageManager()->addWarning(__('CMS 一级 path 已拷贝到目标站点，但部分 Theme 布局数据复制不完整。'));
+            }
+
+            $targetWebsite = is_array($result['target_website'] ?? null)
+                ? $result['target_website']
+                : [
+                    'website_id' => $group->getWebsiteId(),
+                    'website_code' => $group->getWebsiteCode(),
+                    'name' => $group->getWebsiteCode(),
+                    'url' => '',
+                ];
+            $noticeParams = $this->buildCopyNoticeRedirectParams('path', $targetWebsite, [
+                'path_group' => $group->getPathGroup(),
+                'page_count' => count((array)($result['pages'] ?? [])),
+                'theme_partial' => !$themeCopySuccess,
+            ]);
+
+            return $this->redirect('cms/backend/page/listing', array_merge($sourceListingParams, $noticeParams));
+        } catch (ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+            return $this->redirect('cms/backend/page/listing', $sourceListingParams);
         }
     }
 
@@ -553,6 +655,174 @@ class Page extends BackendController
     }
 
     /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function buildSourceListingParams(array $data, ?CmsPage $sourcePage = null): array
+    {
+        $params = [];
+        if ($sourcePage !== null && $sourcePage->getPageId() > 0) {
+            $params['website_id'] = $sourcePage->getWebsiteId();
+            $params['path_group'] = $sourcePage->getPathGroup();
+
+            return $params;
+        }
+
+        $websiteId = (int)($data['source_website_id'] ?? $data['website_id'] ?? 0);
+        $pathGroup = trim((string)($data['source_path_group'] ?? $data['path_group'] ?? ''));
+        if ($websiteId > 0) {
+            $params['website_id'] = $websiteId;
+        }
+        if ($pathGroup !== '') {
+            $params['path_group'] = $pathGroup;
+        }
+
+        return $params;
+    }
+
+    /**
+     * @param array<string,mixed> $targetWebsite
+     * @param array<string,mixed> $copy
+     * @return array<string,mixed>
+     */
+    private function buildCopyNoticeRedirectParams(string $type, array $targetWebsite, array $copy): array
+    {
+        $websiteId = (int)($targetWebsite['website_id'] ?? 0);
+        $websiteCode = trim((string)($targetWebsite['website_code'] ?? $targetWebsite['code'] ?? ''));
+        $websiteName = trim((string)($targetWebsite['name'] ?? ''));
+        $pathGroup = trim((string)($copy['path_group'] ?? ''));
+        $params = [
+            'copy_notice' => $type,
+            'copy_target_label' => $this->buildWebsiteLabel($websiteId, $websiteCode, $websiteName),
+        ];
+
+        if ($websiteId > 0) {
+            $params['copy_target_website_id'] = $websiteId;
+        }
+        if ($websiteCode !== '') {
+            $params['copy_target_website_code'] = $websiteCode;
+        }
+        if ($pathGroup !== '') {
+            $params['copy_target_path_group'] = $pathGroup;
+        }
+        if ((int)($copy['page_id'] ?? 0) > 0) {
+            $params['copy_target_page_id'] = (int)$copy['page_id'];
+        }
+        if (trim((string)($copy['title'] ?? '')) !== '') {
+            $params['copy_target_title'] = trim((string)$copy['title']);
+        }
+        if (trim((string)($copy['identifier'] ?? '')) !== '') {
+            $params['copy_target_identifier'] = trim((string)$copy['identifier']);
+        }
+        if ((int)($copy['page_count'] ?? 0) > 0) {
+            $params['copy_target_page_count'] = (int)$copy['page_count'];
+        }
+        if (!empty($copy['theme_partial'])) {
+            $params['copy_theme_partial'] = 1;
+        }
+
+        return $params;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function buildCopyNotice(array $params): array
+    {
+        $type = strtolower(trim((string)($params['copy_notice'] ?? '')));
+        if (!in_array($type, ['page', 'path'], true)) {
+            return [];
+        }
+
+        $websiteId = (int)($params['copy_target_website_id'] ?? 0);
+        $websiteCode = trim((string)($params['copy_target_website_code'] ?? ''));
+        $pathGroup = trim((string)($params['copy_target_path_group'] ?? ''));
+        $pageId = (int)($params['copy_target_page_id'] ?? 0);
+        $goParams = [
+            'copy_highlight' => $type,
+        ];
+        if ($websiteId > 0) {
+            $goParams['website_id'] = $websiteId;
+            $goParams['copy_highlight_website_id'] = $websiteId;
+        }
+        if ($websiteCode !== '') {
+            $goParams['copy_highlight_website_code'] = $websiteCode;
+        }
+        if ($pathGroup !== '') {
+            $goParams['path_group'] = $pathGroup;
+            $goParams['copy_highlight_path_group'] = $pathGroup;
+        }
+        if ($type === 'page' && $pageId > 0) {
+            $goParams['copy_highlight_page_id'] = $pageId;
+        }
+
+        return [
+            'type' => $type,
+            'target_website_id' => $websiteId,
+            'target_website_code' => $websiteCode,
+            'target_label' => trim((string)($params['copy_target_label'] ?? '')) !== ''
+                ? trim((string)$params['copy_target_label'])
+                : $this->buildWebsiteLabel($websiteId, $websiteCode, ''),
+            'path_group' => $pathGroup,
+            'page_id' => $pageId,
+            'page_title' => trim((string)($params['copy_target_title'] ?? '')),
+            'identifier' => trim((string)($params['copy_target_identifier'] ?? '')),
+            'page_count' => (int)($params['copy_target_page_count'] ?? 0),
+            'theme_partial' => !empty($params['copy_theme_partial']),
+            'go_params' => $goParams,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function buildCopyHighlight(array $params): array
+    {
+        $type = strtolower(trim((string)($params['copy_highlight'] ?? '')));
+        if (!in_array($type, ['page', 'path'], true)) {
+            return [];
+        }
+
+        return [
+            'type' => $type,
+            'website_id' => (int)($params['copy_highlight_website_id'] ?? $params['website_id'] ?? 0),
+            'website_code' => trim((string)($params['copy_highlight_website_code'] ?? '')),
+            'path_group' => trim((string)($params['copy_highlight_path_group'] ?? $params['path_group'] ?? '')),
+            'page_id' => (int)($params['copy_highlight_page_id'] ?? 0),
+        ];
+    }
+
+    /**
+     * @return array{website_id:int,website_code:string,name:string,url:string}
+     */
+    private function buildTargetWebsiteFromPage(CmsPage $page): array
+    {
+        return [
+            'website_id' => $page->getWebsiteId(),
+            'website_code' => $page->getWebsiteCode(),
+            'name' => $page->getWebsiteCode(),
+            'url' => '',
+        ];
+    }
+
+    private function buildWebsiteLabel(int $websiteId, string $websiteCode, string $websiteName): string
+    {
+        if ($websiteName !== '' && $websiteCode !== '' && strcasecmp($websiteName, $websiteCode) !== 0) {
+            return $websiteName . ' / ' . $websiteCode;
+        }
+        if ($websiteName !== '') {
+            return $websiteName;
+        }
+        if ($websiteCode !== '') {
+            return $websiteCode;
+        }
+
+        return $websiteId > 0 ? (string)$websiteId : 'default';
+    }
+
+    /**
      * @param array<string,mixed> $payload
      */
     private function markActivity(string $entityType, string|int $entityId, string $action, string $title = '', array $payload = []): void
@@ -610,6 +880,13 @@ class Page extends BackendController
             'status',
             'layout_option',
             'deleted_at',
+            'target_website',
+            'target_website_id',
+            'target_website_code',
+            'target_site_id',
+            'target_site',
+            'source_website_id',
+            'source_path_group',
         ] as $key) {
             $value = $this->request->getParam($key, null);
             if ($value !== null && $value !== '') {

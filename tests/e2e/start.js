@@ -704,7 +704,7 @@ async function main() {
 
             if (result.total_tests === 0) {
                 console.warn('[e2e] no tests were collected');
-                console.warn('   Check app/code/*/*/test/e2e/*.spec.js or tests/e2e/specs/**/*.spec.js\n');
+                console.warn('   Check app/code/*/*/test/e2e/**/*.spec.js or app/code/*/*/Test/e2e/**/*.spec.js\n');
             }
         } catch (error) {
             console.error('[e2e] test collection failed:', error.message);

@@ -19,7 +19,7 @@ use Weline\Seo\Interface\SitemapUrlProviderInterface;
 /**
  * Sitemap Provider 注册服务
  *
- * 通过 extends/module/Weline_Seo/SitemapProvider 自动收集所有 SitemapProvider 实现。
+ * 通过 extends/module/Weline_Seo/SitemapUrlProvider 自动收集 URL Provider 实现。
  * 支持两种接口：
  * - SitemapProviderInterface（旧接口，生成 sitemap 文件）
  * - SitemapUrlProviderInterface（新接口，只提供 URL 数据）

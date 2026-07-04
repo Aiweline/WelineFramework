@@ -8,10 +8,12 @@ use Weline\Cms\Model\PathGroup;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\MemoryStateFacade;
 
@@ -50,7 +52,8 @@ class PageService
         private readonly Page $pageModel,
         private readonly PathGroup $pathGroupModel,
         private readonly Url $url,
-        private readonly Request $request
+        private readonly Request $request,
+        private readonly ?EventsManager $eventsManager = null
     ) {
     }
 
@@ -204,11 +207,13 @@ class PageService
         }
 
         $page = clone $this->pageModel;
+        $previousData = [];
         if ($pageId > 0) {
             $page->load($pageId);
             if ($page->getPageId() <= 0) {
                 throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
             }
+            $previousData = $page->getData();
         }
 
         $page->setData(Page::schema_fields_WEBSITE_ID, (int)$website['website_id']);
@@ -234,6 +239,11 @@ class PageService
         }
 
         $this->clearThemeRuntimeCaches('cms_page_save_' . $page->getPageId());
+        $this->dispatchPageChanged(
+            $page,
+            $this->resolvePageChangeAction($page, $previousData, $pageId <= 0),
+            $previousData
+        );
 
         return $page;
     }
@@ -275,6 +285,80 @@ class PageService
         return $page;
     }
 
+    /**
+     * @param array<string,mixed> $data
+     * @return array{page:Page,theme:array<string,mixed>,target_website:array{website_id:int,website_code:string,name:string,url:string}}
+     */
+    public function copyPage(int $sourcePageId, array $data): array
+    {
+        $sourcePage = $this->getPageModel($sourcePageId, false);
+        if ($sourcePage === null) {
+            throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
+        }
+
+        $targetWebsite = $this->resolveCopyTargetWebsite($data);
+        if ($this->isSameWebsite($sourcePage->getWebsiteId(), $sourcePage->getWebsiteCode(), $targetWebsite)) {
+            throw new \InvalidArgumentException((string)__('源站点和目标站点相同，无需拷贝。'));
+        }
+
+        $result = $this->copyPageToWebsite($sourcePage, $targetWebsite);
+        $result['target_website'] = $targetWebsite;
+
+        return $result;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array{path_group:PathGroup,pages:list<Page>,theme_results:list<array<string,mixed>>,target_website:array{website_id:int,website_code:string,name:string,url:string}}
+     */
+    public function copyPathGroup(array $data): array
+    {
+        $sourceGroup = $this->resolveCopySourcePathGroup($data);
+        $targetWebsite = $this->resolveCopyTargetWebsite($data);
+        if ($this->isSameWebsite($sourceGroup->getWebsiteId(), $sourceGroup->getWebsiteCode(), $targetWebsite)) {
+            throw new \InvalidArgumentException((string)__('源站点和目标站点相同，无需拷贝。'));
+        }
+
+        $sourcePages = $this->listPageModelsForPathGroup($sourceGroup);
+        $conflicts = [];
+        foreach ($sourcePages as $sourcePage) {
+            try {
+                $this->assertUniqueIdentifier($sourcePage->getIdentifier(), (int)$targetWebsite['website_id'], 0);
+            } catch (\InvalidArgumentException) {
+                $conflicts[] = $sourcePage->getIdentifier();
+            }
+        }
+        if ($conflicts !== []) {
+            $visibleConflicts = implode(', ', array_slice(array_values(array_unique($conflicts)), 0, 5));
+            throw new \InvalidArgumentException(
+                (string)__('目标站点已存在相同路径的 CMS 页面：%{1}', $visibleConflicts)
+            );
+        }
+
+        $targetGroup = $this->savePathGroup([
+            'website_id' => (int)$targetWebsite['website_id'],
+            'website_code' => (string)$targetWebsite['website_code'],
+            'path_group' => $sourceGroup->getPathGroup(),
+            'path_group_alias' => $sourceGroup->getAlias(),
+            'sort_order' => (int)$sourceGroup->getData(PathGroup::schema_fields_SORT_ORDER),
+        ]);
+
+        $copiedPages = [];
+        $themeResults = [];
+        foreach ($sourcePages as $sourcePage) {
+            $result = $this->copyPageToWebsite($sourcePage, $targetWebsite, $targetGroup);
+            $copiedPages[] = $result['page'];
+            $themeResults[] = $result['theme'];
+        }
+
+        return [
+            'path_group' => $targetGroup,
+            'pages' => $copiedPages,
+            'theme_results' => $themeResults,
+            'target_website' => $targetWebsite,
+        ];
+    }
+
     public function softDeletePage(int $pageId): Page
     {
         $page = $this->getPageModel($pageId, true);
@@ -282,10 +366,12 @@ class PageService
             throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
         }
 
+        $previousData = $page->getData();
         $page->setData(Page::schema_fields_STATUS, Page::STATUS_DISABLED);
         $page->setData(Page::schema_fields_DELETED_AT, date('Y-m-d H:i:s'));
         $page->save();
         $this->clearThemeRuntimeCaches('cms_page_delete_' . $page->getPageId());
+        $this->dispatchPageChanged($page, 'delete', is_array($previousData) ? $previousData : []);
 
         return $page;
     }
@@ -925,6 +1011,117 @@ class PageService
         );
     }
 
+    /**
+     * @param array<string,mixed> $previousData
+     */
+    private function resolvePageChangeAction(Page $page, array $previousData, bool $isCreate): string
+    {
+        if ($page->isDeleted()) {
+            return 'delete';
+        }
+        if (!$page->isPublished()) {
+            return $page->getStatus() === Page::STATUS_DISABLED ? 'unpublish' : 'draft';
+        }
+
+        $previousStatus = (string)($previousData[Page::schema_fields_STATUS] ?? '');
+        if ($previousStatus !== Page::STATUS_PUBLISHED) {
+            return 'publish';
+        }
+
+        return $isCreate ? 'publish' : 'upsert';
+    }
+
+    /**
+     * @param array<string,mixed> $previousData
+     */
+    private function dispatchPageChanged(Page $page, string $action, array $previousData = []): void
+    {
+        try {
+            $previousUrl = '';
+            if ($previousData !== []) {
+                $previous = clone $this->pageModel;
+                $previous->clearData()->setData($previousData);
+                $previousUrl = $previous->getIdentifier() !== '' ? $this->buildPublicUrl($previous) : '';
+            }
+
+            $payload = [
+                'page' => $this->toPageApiArray($page),
+                'previous' => $previousData,
+                'action' => $action,
+                'seo_action' => $action,
+                'url' => $this->buildPublicUrl($page),
+                'previous_url' => $previousUrl,
+                'website_id' => $page->getWebsiteId(),
+                'website_code' => $page->getWebsiteCode(),
+                'scope' => $page->getScope(),
+                'module' => 'Weline_Cms',
+                'subject_type' => Page::TARGET_TYPE,
+                'subject_id' => $page->getPageId(),
+                'published' => $page->isPublished() && !$page->isDeleted(),
+                'deleted' => $page->isDeleted(),
+            ];
+            $payload['url_key'] = 'cms-page-' . $page->getPageId();
+            $payload['targets'] = [[
+                'website_id' => $page->getWebsiteId(),
+                'website_code' => $page->getWebsiteCode(),
+                'url' => $payload['url'],
+                'previous_url' => $previousUrl,
+                'url_key' => $payload['url_key'],
+            ]];
+            $payload['seo_result'] = $this->notifySeoUrlChanged($payload);
+
+            $this->getEventsManager()->dispatch(
+                $action === 'delete' ? 'Weline_Cms::page_delete_after' : 'Weline_Cms::page_save_after',
+                $payload
+            );
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning(
+                    (string)__('CMS 页面 SEO 变更事件触发失败：%{1}', $e->getMessage()),
+                    ['page_id' => $page->getPageId(), 'action' => $action],
+                    'cms'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function notifySeoUrlChanged(array $payload): array
+    {
+        $serviceClass = '\\Weline\\Seo\\Service\\SeoUrlChangeService';
+        if (!class_exists($serviceClass)) {
+            return ['skipped' => true, 'reason' => 'seo_module_missing'];
+        }
+
+        try {
+            $service = ObjectManager::getInstance($serviceClass);
+            if (!is_object($service) || !method_exists($service, 'notify')) {
+                return ['skipped' => true, 'reason' => 'seo_url_change_service_unavailable'];
+            }
+
+            /** @var object{notify: callable} $service */
+            return $service->notify($payload);
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning(
+                    (string)__('CMS 页面 SEO URL 变更通知失败：%{1}', $e->getMessage()),
+                    ['subject_id' => (int)($payload['subject_id'] ?? 0), 'action' => (string)($payload['action'] ?? '')],
+                    'cms'
+                );
+            }
+
+            return ['skipped' => true, 'reason' => 'seo_notify_failed', 'error' => $e->getMessage()];
+        }
+    }
+
+    private function getEventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
+    }
+
     private function purgeRouterFpcPayloadFiles(string $reason): void
     {
         $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
@@ -1023,7 +1220,24 @@ class PageService
             return $websiteId;
         }
 
-        return (int)w_env('website_id', 0);
+        $websiteId = (int)WelineEnv::server('WELINE_WEBSITE_ID', 0);
+        if ($websiteId > 0) {
+            return $websiteId;
+        }
+
+        $websiteId = (int)w_env('website_id', 0);
+        if ($websiteId > 0) {
+            return $websiteId;
+        }
+
+        if (class_exists(RequestContext::class, false)) {
+            $websiteId = RequestContext::getWelineWebsiteId();
+            if ($websiteId > 0) {
+                return $websiteId;
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -1142,6 +1356,169 @@ class PageService
         }
 
         return $group;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array{website_id:int,website_code:string,name:string,url:string}
+     */
+    private function resolveCopyTargetWebsite(array $data): array
+    {
+        $target = trim((string)($data['target_website'] ?? ''));
+        $targetWebsiteId = (int)($data['target_website_id'] ?? $data['target_site_id'] ?? 0);
+        $targetWebsiteCode = trim((string)($data['target_website_code'] ?? $data['target_site'] ?? ''));
+        if ($target !== '') {
+            if (str_contains($target, '|')) {
+                [$idPart, $codePart] = array_pad(explode('|', $target, 2), 2, '');
+                $targetWebsiteId = (int)$idPart;
+                $targetWebsiteCode = trim($codePart);
+            } elseif (ctype_digit($target)) {
+                $targetWebsiteId = (int)$target;
+            } else {
+                $targetWebsiteCode = $target;
+            }
+        }
+
+        if ($targetWebsiteId <= 0 && $targetWebsiteCode === '') {
+            throw new \InvalidArgumentException((string)__('请选择目标站点。'));
+        }
+
+        return $this->resolveWebsiteForSave([
+            'website_id' => $targetWebsiteId,
+            'website_code' => $targetWebsiteCode,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function resolveCopySourcePathGroup(array $data): PathGroup
+    {
+        $groupId = (int)($data['group_id'] ?? $data['path_group_id'] ?? $data['id'] ?? 0);
+        if ($groupId > 0) {
+            $group = $this->getPathGroupModel($groupId, false);
+            if ($group !== null) {
+                return $group;
+            }
+        }
+
+        $sourceWebsiteId = (int)($data['source_website_id'] ?? $data['website_id'] ?? 0);
+        $pathGroup = trim((string)($data['source_path_group'] ?? $data['path_group'] ?? ''));
+        if ($pathGroup !== '') {
+            $group = $this->getPathGroupByPath($sourceWebsiteId, $pathGroup, false);
+            if ($group !== null) {
+                return $group;
+            }
+        }
+
+        throw new \InvalidArgumentException((string)__('源 CMS 一级 path 不存在。'));
+    }
+
+    /**
+     * @param array{website_id:int,website_code:string,name:string,url:string} $targetWebsite
+     * @return array{page:Page,theme:array<string,mixed>}
+     */
+    private function copyPageToWebsite(Page $sourcePage, array $targetWebsite, ?PathGroup $targetGroup = null): array
+    {
+        $targetGroup = $targetGroup ?: $this->ensurePathGroup(
+            $targetWebsite,
+            $sourcePage->getPathGroup(),
+            $sourcePage->getPathGroupAlias()
+        );
+
+        $targetPage = $this->savePage([
+            'title' => $sourcePage->getTitle(),
+            'path_group_id' => $targetGroup->getGroupId(),
+            'website_id' => (int)$targetWebsite['website_id'],
+            'website_code' => (string)$targetWebsite['website_code'],
+            'path_group' => $targetGroup->getPathGroup(),
+            'path_group_alias' => $targetGroup->getAlias(),
+            'slug' => $sourcePage->getSlug(),
+            'scope' => $sourcePage->getScope(),
+            'status' => $sourcePage->getStatus(),
+        ]);
+
+        return [
+            'page' => $targetPage,
+            'theme' => $this->copyThemeTargetData($sourcePage, $targetPage),
+        ];
+    }
+
+    /**
+     * @return list<Page>
+     */
+    private function listPageModelsForPathGroup(PathGroup $group): array
+    {
+        $rows = (clone $this->pageModel)->clearData()->reset()
+            ->where(Page::schema_fields_WEBSITE_ID, $group->getWebsiteId())
+            ->where(Page::schema_fields_PATH_GROUP, $group->getPathGroup())
+            ->where(Page::schema_fields_DELETED_AT, null, 'IS NULL')
+            ->order(Page::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        $pages = [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $page = clone $this->pageModel;
+            $page->clearData()->setData($row);
+            if ($page->getPageId() > 0) {
+                $pages[] = $page;
+            }
+        }
+
+        return $pages;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function copyThemeTargetData(Page $sourcePage, Page $targetPage): array
+    {
+        try {
+            $layoutSelection = $this->resolveLayoutSelectionForPage($sourcePage);
+            $layoutOption = $this->normalizeLayoutOption((string)($layoutSelection['layout_option'] ?? 'default'));
+            $result = w_query('theme', 'copyTargetLayoutData', [
+                'source_target_type' => Page::TARGET_TYPE,
+                'source_target_id' => $sourcePage->getPageId(),
+                'target_target_type' => Page::TARGET_TYPE,
+                'target_target_id' => $targetPage->getPageId(),
+                'layout_type' => Page::LAYOUT_TYPE,
+                'layout_option' => $layoutOption,
+                'scope' => $sourcePage->getScope(),
+                'area' => 'frontend',
+            ]);
+
+            return is_array($result) ? $result : ['success' => false, 'status' => 'invalid_theme_response'];
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning(
+                    (string)__('CMS 拷贝 Theme target 数据失败：%{1}', $e->getMessage()),
+                    ['source_page_id' => $sourcePage->getPageId(), 'target_page_id' => $targetPage->getPageId()],
+                    'cms'
+                );
+            }
+            return [
+                'success' => false,
+                'status' => 'exception',
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @param array{website_id:int,website_code:string,name:string,url:string} $website
+     */
+    private function isSameWebsite(int $websiteId, string $websiteCode, array $website): bool
+    {
+        $targetId = (int)$website['website_id'];
+        if ($websiteId > 0 && $targetId > 0) {
+            return $websiteId === $targetId;
+        }
+
+        return strcasecmp($websiteCode, (string)$website['website_code']) === 0;
     }
 
     /**
@@ -1416,15 +1793,14 @@ class PageService
     private function resolveFrontendBaseUrl(?Page $page = null): string
     {
         $requestBase = $this->resolveRequestBaseUrl();
-        if ($requestBase !== '' && $this->isLocalPreviewHost($requestBase)) {
-            return $requestBase;
-        }
-
         if ($page !== null && $page->getWebsiteId() > 0) {
             $website = $this->getWebsiteById($page->getWebsiteId());
             $siteUrl = trim((string)($website['url'] ?? ''));
             if (preg_match('~^https?://[^/]+(?:/[^?#]*)?~i', $siteUrl, $matches)) {
-                return rtrim($matches[0], '/');
+                $siteBase = rtrim($matches[0], '/');
+                if ($requestBase === '' || !$this->sameHostBase($requestBase, $siteBase)) {
+                    return $siteBase;
+                }
             }
         }
 
@@ -1447,6 +1823,25 @@ class PageService
         return 'http://localhost';
     }
 
+    private function sameHostBase(string $left, string $right): bool
+    {
+        $leftHost = strtolower((string)(parse_url($left, PHP_URL_HOST) ?: ''));
+        $rightHost = strtolower((string)(parse_url($right, PHP_URL_HOST) ?: ''));
+        if ($leftHost === '' || $rightHost === '' || $leftHost !== $rightHost) {
+            return false;
+        }
+
+        $leftPort = (int)(parse_url($left, PHP_URL_PORT) ?: ($this->isHttpsUrl($left) ? 443 : 80));
+        $rightPort = (int)(parse_url($right, PHP_URL_PORT) ?: ($this->isHttpsUrl($right) ? 443 : 80));
+
+        return $leftPort === $rightPort;
+    }
+
+    private function isHttpsUrl(string $url): bool
+    {
+        return strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: '')) === 'https';
+    }
+
     private function resolveRequestBaseUrl(): string
     {
         $baseHost = trim((string)$this->request->getBaseHost());
@@ -1455,14 +1850,5 @@ class PageService
         }
 
         return '';
-    }
-
-    private function isLocalPreviewHost(string $baseUrl): bool
-    {
-        $host = strtolower((string)(parse_url($baseUrl, PHP_URL_HOST) ?: ''));
-        return $host === '127.0.0.1'
-            || $host === 'localhost'
-            || $host === '::1'
-            || str_ends_with($host, '.weline.test');
     }
 }
