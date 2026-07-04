@@ -15,6 +15,8 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_scope', columns: ['scope'])]
 class Website extends Model
 {
+    /** 默认网站 ID，保留给安装兜底站点，不分配给普通业务站点 */
+    public const ID_DEFAULT = 0;
     /** 默认网站代码，底层禁止删除 */
     public const CODE_DEFAULT = 'default';
 
@@ -175,7 +177,7 @@ class Website extends Model
      */
     public function getCurrencyCodes(): array
     {
-        if (!$this->getWebsiteId()) {
+        if (!$this->hasData(self::schema_fields_ID)) {
             return [];
         }
         $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
@@ -189,7 +191,7 @@ class Website extends Model
      */
     public function getLanguageCodes(): array
     {
-        if (!$this->getWebsiteId()) {
+        if (!$this->hasData(self::schema_fields_ID)) {
             return [];
         }
         $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);

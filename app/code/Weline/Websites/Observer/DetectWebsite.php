@@ -251,7 +251,7 @@ class DetectWebsite implements ObserverInterface
 
         foreach ($this->getWebsiteDomainRows() as $domainRow) {
             $websiteId = (int)($domainRow[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0);
-            if ($websiteId > 0) {
+            if ($websiteId >= Website::ID_DEFAULT) {
                 $domainsByWebsite[$websiteId][] = $domainRow;
             }
         }
@@ -353,7 +353,7 @@ class DetectWebsite implements ObserverInterface
 
         $chosen = $candidates[0];
         $websiteId = (int)($chosen['website_id'] ?? 0);
-        if ($websiteId <= 0 || !isset($websiteRowsById[$websiteId])) {
+        if ($websiteId < Website::ID_DEFAULT || !isset($websiteRowsById[$websiteId])) {
             return null;
         }
 
@@ -498,7 +498,7 @@ class DetectWebsite implements ObserverInterface
                 /** @var Website $website */
                 $website = clone $websiteModel;
                 $website->clearData()->clearQuery()->load($domainModel->getWebsiteId());
-                if ($website->getWebsiteId() <= 0) {
+                if (!$website->hasData(Website::schema_fields_ID)) {
                     continue;
                 }
 
@@ -699,7 +699,7 @@ class DetectWebsite implements ObserverInterface
         $rowsById = [];
         foreach ($this->getWebsiteRows($websiteModel) as $row) {
             $websiteId = (int)($row['website_id'] ?? 0);
-            if ($websiteId > 0) {
+            if ($websiteId >= Website::ID_DEFAULT) {
                 $rowsById[$websiteId] = $row;
             }
         }

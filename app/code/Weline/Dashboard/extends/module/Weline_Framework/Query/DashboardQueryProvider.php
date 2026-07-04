@@ -7,6 +7,7 @@ namespace Weline\Dashboard\Extends\Module\Weline_Framework\Query;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Websites\Model\Website;
 
 class DashboardQueryProvider implements QueryProviderInterface
 {
@@ -55,7 +56,7 @@ class DashboardQueryProvider implements QueryProviderInterface
         return [
             'success' => true,
             'items' => $this->viewService->getVisibleViews($websiteId, $userId),
-            'website_id' => $websiteId > 0 ? $websiteId : $this->viewService->getDefaultWebsiteId(),
+            'website_id' => $websiteId >= Website::ID_DEFAULT ? $websiteId : $this->viewService->getDefaultWebsiteId(),
         ];
     }
 

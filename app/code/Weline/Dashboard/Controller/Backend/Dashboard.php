@@ -7,6 +7,7 @@ namespace Weline\Dashboard\Controller\Backend;
 use Weline\Admin\Controller\BaseController;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
+use Weline\Websites\Model\Website;
 
 class Dashboard extends BaseController
 {
@@ -20,7 +21,7 @@ class Dashboard extends BaseController
     public function index()
     {
         $websiteId = (int)$this->request->getParam('website_id', 0);
-        if ($websiteId <= 0) {
+        if ($websiteId < Website::ID_DEFAULT) {
             $websiteId = $this->dashboardViewService->getDefaultWebsiteId();
         }
         $userId = $this->dashboardViewService->getCurrentUserId();
