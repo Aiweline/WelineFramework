@@ -105,7 +105,7 @@ class ThemePreviewContentRenderer
             ];
         }
 
-        $slotHtml = $this->renderSlots($themeId, $resolvedPageType, $resolvedStatus, $orderedSlotIds, $versionLayout);
+        $slotHtml = $this->renderSlots($themeId, $resolvedPageType, $resolvedStatus, $orderedSlotIds, $versionLayout ?? $layout);
         [$meta, $consumedSlotIds] = $this->buildMetaFragments($baseLayoutType, $slotHtml);
         $content = $this->buildContentHtml($baseLayoutType, $orderedSlotIds, $slotHtml, $consumedSlotIds);
 
@@ -361,6 +361,10 @@ class ThemePreviewContentRenderer
      */
     private function buildContentHtml(string $layoutType, array $orderedSlotIds, array $slotHtml, array $consumedSlotIds): string
     {
+        if ($layoutType === ThemeLayout::PAGE_TYPE_DASHBOARD) {
+            return $this->buildDashboardContentHtml($slotHtml);
+        }
+
         $contentParts = [];
         $consumed = array_fill_keys($consumedSlotIds, true);
         $added = [];
@@ -384,6 +388,37 @@ class ThemePreviewContentRenderer
         }
 
         return implode(PHP_EOL, $contentParts);
+    }
+
+    /**
+     * @param array<string,string> $slotHtml
+     */
+    private function buildDashboardContentHtml(array $slotHtml): string
+    {
+        $regions = [
+            'dashboard-summary' => ['w-dashboard-region-summary w-dashboard-slot-summary', '指标区', '只放关键数值、KPI、状态数字。', '最多 4 个'],
+            'dashboard-analysis' => ['w-dashboard-region-analysis w-dashboard-slot-stack', '主分析区', '用于趋势图、核心图表和主要观察。', ''],
+            'dashboard-side' => ['w-dashboard-region-side w-dashboard-slot-stack', '侧栏洞察', '放状态、短列表、异常提醒。', ''],
+            'dashboard-detail' => ['w-dashboard-region-detail w-dashboard-slot-stack', '明细区', '放表格、排行和可展开列表。', ''],
+        ];
+
+        $html = '<section class="w-dashboard-canvas-wrap" data-dashboard-layout-slots><div class="w-dashboard-layout-grid">';
+        foreach ($regions as $slotId => [$className, $title, $description, $note]) {
+            $slotContent = trim((string)($slotHtml[$slotId] ?? ''));
+            $html .= '<section class="w-dashboard-region ' . htmlspecialchars($className, ENT_QUOTES, 'UTF-8') . ' w-dashboard-slot" data-wslot="' . htmlspecialchars($slotId, ENT_QUOTES, 'UTF-8') . '">';
+            $html .= '<div class="w-dashboard-region-head"><div><h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2><p>' . htmlspecialchars($description, ENT_QUOTES, 'UTF-8') . '</p></div>';
+            if ($note !== '') {
+                $html .= '<span>' . htmlspecialchars($note, ENT_QUOTES, 'UTF-8') . '</span>';
+            }
+            $html .= '</div>';
+            $html .= $slotContent !== ''
+                ? $slotContent
+                : '<div class="w-dashboard-empty slot-placeholder"><strong>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</strong><span>拖入部件</span></div>';
+            $html .= '</section>';
+        }
+        $html .= '</div></section>';
+
+        return $html;
     }
 
     private function extractInnerHtml(\DOMElement $node): string
