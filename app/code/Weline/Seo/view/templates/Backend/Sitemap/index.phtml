@@ -140,7 +140,7 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                 <div class="step-card" style="background: #fff; border-left: 4px solid #667eea; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                                                     <div class="step-number" style="width: 32px; height: 32px; background: #667eea; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">1</div>
                                                     <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>URL 数据采集</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等</lang></p>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等</lang></p>
                                                 </div>
                                                 
                                                 <!-- 步骤 2 -->
@@ -173,10 +173,10 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                             <lang>Provider 扩展机制</lang>
                                                         </h6>
                                                         <ul class="mb-0" style="font-size: 13px; line-height: 1.8; padding-left: 20px;">
-                                                            <li><lang>各模块通过 <code>extends/module/Weline_Seo/SitemapProvider/</code> 注册自己的 URL 提供器</lang></li>
+                                                            <li><lang>各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器</lang></li>
                                                             <li><lang>实现 <code>SitemapUrlProviderInterface</code> 接口</lang></li>
-                                                            <li><lang>支持增量更新（<code>syncUrls</code> 方法）</lang></li>
-                                                            <li><lang>URL 数据统一存储在 <code>sitemap_url</code> 表</lang></li>
+                                                            <li><lang>返回稳定 <code>url_key</code>，SEO 模块负责增量同步</lang></li>
+                                                            <li><lang>URL 数据统一存储在 <code>weline_sitemap_url</code> 表</lang></li>
                                                         </ul>
                                                     </div>
                                                 </div>
@@ -286,10 +286,12 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                         <h6 style="font-weight: 600; margin-bottom: 10px;">SitemapUrlProviderInterface</h6>
                                                         <p class="text-muted mb-2" style="font-size: 12px;"><lang>模块实现此接口以提供 URL 数据</lang></p>
                                                         <pre style="margin: 0; font-size: 11px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"><code>interface SitemapUrlProviderInterface {
-    public function getUrls(): array;
-    public function syncUrls(int $websiteId): array;
-    public function getModule(): string;
     public function getScope(): string;
+    public function getModule(): string;
+    public function getWebsiteIds(): array;
+    public function getUrlsForWebsite(int $websiteId): array;
+    public function getDescription(): string;
+    public function isEnabled(): bool;
 }</code></pre>
                                                     </div>
                                                 </div>
@@ -367,7 +369,7 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                 </button>
                                 <p class="text-muted mt-2 mb-0" style="font-size: 12px;">
                                     <i class="mdi mdi-alert-circle-outline me-1" style="color: #f39c12;"></i>
-                                    <lang>注意：请先点击下方"调用所有生成器"按钮生成URL数据，然后再点击此按钮生成sitemap文件</lang>
+                                    <lang>注意：请先点击下方"同步所有 Provider"按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件</lang>
                                 </p>
                             </div>
                         </div>
@@ -377,7 +379,7 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                             <div class="card-body">
                                 <h4 class="card-title mb-4">
                                     <i class="mdi mdi-puzzle-outline me-2"></i>
-                                    <lang>Sitemap 生成器</lang>
+                                    <lang>Sitemap URL Provider</lang>
                                     <span class="badge bg-primary ms-2"><?= count($providers) ?></span>
                                 </h4>
                                 
@@ -391,7 +393,14 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                 </div>
                                                 <div>
                                                     <div class="provider-name"><?= htmlspecialchars($provider['module']) ?></div>
-                                                    <div class="provider-scope">scope: <?= htmlspecialchars($provider['scope']) ?></div>
+                                                    <div class="provider-scope">
+                                                        scope: <?= htmlspecialchars($provider['scope']) ?>
+                                                        <?php if (!empty($provider['enabled'])): ?>
+                                                            <span class="badge bg-success ms-1"><lang>启用</lang></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary ms-1"><lang>停用</lang></span>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -409,17 +418,40 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                     <?php endforeach; ?>
                                     
                                     <button type="button" class="btn btn-success w-100 mt-3" data-seo-sitemap-action="generate-all">
-                                        <i class="mdi mdi-refresh-auto me-2"></i><lang>调用所有生成器</lang>
+                                        <i class="mdi mdi-refresh-auto me-2"></i><lang>同步所有 Provider</lang>
                                     </button>
                                 <?php else: ?>
                                     <div class="text-center text-muted py-4">
                                         <i class="mdi mdi-puzzle-outline" style="font-size: 40px; opacity: 0.3;"></i>
-                                        <p class="mt-2 mb-0"><lang>暂无注册的 Sitemap 生成器</lang></p>
-                                        <p class="small"><lang>其他模块可通过 extends 扩展点注册</lang></p>
+                                        <p class="mt-2 mb-0"><lang>暂无注册的 Sitemap URL Provider</lang></p>
+                                        <p class="small"><lang>其他模块可通过 SitemapUrlProvider 扩展点注册</lang></p>
                                     </div>
                                 <?php endif; ?>
                             </div>
                         </div>
+
+                        <?php if (!empty($websiteStats)): ?>
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-3">
+                                    <i class="mdi mdi-database-search-outline me-2"></i>
+                                    <lang>Sitemap URL 数据</lang>
+                                </h4>
+                                <?php foreach ($websiteStats as $stat): ?>
+                                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                                    <div>
+                                        <div class="fw-medium"><?= htmlspecialchars($stat['website_name'] ?: ($stat['website_code'] ?? 'Website')) ?></div>
+                                        <div class="text-muted small"><?= htmlspecialchars($stat['website_code'] ?? '') ?></div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-primary"><?= (int)($stat['url_count'] ?? 0) ?> URL</span>
+                                        <div class="text-muted small"><?= (int)($stat['platform_count'] ?? 0) ?> <lang>个平台</lang></div>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                     
                     <!-- 右侧：Sitemap 文件列表 -->
@@ -599,7 +631,7 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                         <i class="mdi mdi-alert-outline" style="color: #ff9800;"></i>
                                                         <p class="mb-0" style="color: #ff9800;">
                                                             <strong><lang>该站点没有 URL 数据</lang></strong><br>
-                                                            <small><lang>请先点击上方的"调用所有生成器"按钮生成 URL 数据</lang></small>
+                                                            <small><lang>请先点击上方的"同步所有 Provider"按钮生成 URL 数据</lang></small>
                                                         </p>
                                                     <?php elseif ($websiteData['error'] === 'no_seo_account'): ?>
                                                         <i class="mdi mdi-alert-circle-outline" style="color: #f44336;"></i>

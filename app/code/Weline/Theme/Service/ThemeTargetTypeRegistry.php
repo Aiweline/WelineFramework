@@ -153,6 +153,7 @@ class ThemeTargetTypeRegistry
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_PRODUCT, (string)__('商品'), ['product']),
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY, (string)__('分类'), ['category', 'product_list']),
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT, (string)__('分类商品默认'), ['product']),
+            new BuiltInThemeTargetTypeProvider('website', (string)__('站点'), ['dashboard']),
         ] as $provider) {
             $providers[$provider->getCode()] = $provider;
         }

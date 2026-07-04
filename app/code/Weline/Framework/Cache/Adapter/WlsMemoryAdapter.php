@@ -68,18 +68,18 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
         // 先查本地缓存
         if (\array_key_exists($key, $this->localCache)) {
-            self::$stats[$this->identity]['hits']++;
+            $this->recordHit();
             return $this->localCache[$key];
         }
 
         if ($this->isLocalMemoryUnderPressure()) {
-            self::$stats[$this->identity]['misses']++;
+            $this->recordMiss();
             return null;
         }
 
         // 本地缓存未命中，查共享内存；服务不可用时快速降级为 miss，避免 WLS 请求反复等待超时。
         if ($this->isRemoteUnavailable()) {
-            self::$stats[$this->identity]['misses']++;
+            $this->recordMiss();
             return null;
         }
 
@@ -88,17 +88,17 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
             $this->markRemoteAvailable();
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
-            self::$stats[$this->identity]['misses']++;
+            $this->recordMiss();
             return null;
         }
         if ($value === null) {
-            self::$stats[$this->identity]['misses']++;
+            $this->recordMiss();
             return null;
         }
 
         // 写入本地缓存
         $this->setLocalCache($key, $value);
-        self::$stats[$this->identity]['hits']++;
+        $this->recordHit();
 
         return $value;
     }
@@ -364,9 +364,28 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     private function initBucket(): void
     {
-        if (!isset(self::$stats[$this->identity])) {
-            self::$stats[$this->identity] = ['hits' => 0, 'misses' => 0];
-        }
+        $this->ensureStatsBucket();
+    }
+
+    private function ensureStatsBucket(): void
+    {
+        $stats = self::$stats[$this->identity] ?? [];
+        self::$stats[$this->identity] = [
+            'hits' => (int)($stats['hits'] ?? 0),
+            'misses' => (int)($stats['misses'] ?? 0),
+        ];
+    }
+
+    private function recordHit(): void
+    {
+        $this->ensureStatsBucket();
+        self::$stats[$this->identity]['hits']++;
+    }
+
+    private function recordMiss(): void
+    {
+        $this->ensureStatsBucket();
+        self::$stats[$this->identity]['misses']++;
     }
 
     public static function resetRequestState(): void

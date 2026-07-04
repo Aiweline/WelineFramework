@@ -14,6 +14,23 @@ return [
         'position' => ['dashboard-summary'],
         'slot' => 'dashboard-summary',
         'supports' => ['dashboard-widget', 'dashboard-slot-summary', 'dashboard-stat', 'dashboard-kpi'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-summary',
+            'area' => 'content',
+            'sort_order' => 10,
+            'required' => true,
+            'reason' => 'Dashboard 默认面板需要后台统计概览',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 4,
+                    'rowSpan' => 1,
+                    'sortOrder' => 10,
+                ],
+            ],
+        ]],
     ],
     'activity_trend' => [
         'name' => '活跃趋势',
@@ -26,6 +43,23 @@ return [
         'position' => ['dashboard-analysis'],
         'slot' => 'dashboard-analysis',
         'supports' => ['dashboard-widget', 'dashboard-slot-analysis', 'dashboard-chart', 'dashboard-trend'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-analysis',
+            'area' => 'content',
+            'sort_order' => 20,
+            'required' => true,
+            'reason' => 'Dashboard 默认面板需要展示活跃趋势',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 5,
+                    'rowSpan' => 2,
+                    'sortOrder' => 20,
+                ],
+            ],
+        ]],
     ],
     'system_status' => [
         'name' => '系统状态',
@@ -38,6 +72,23 @@ return [
         'position' => ['dashboard-side', 'dashboard-detail'],
         'slot' => 'dashboard-side',
         'supports' => ['dashboard-widget', 'dashboard-slot-side', 'dashboard-status', 'dashboard-table'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-side',
+            'area' => 'content',
+            'sort_order' => 30,
+            'required' => true,
+            'reason' => 'Dashboard 默认面板需要系统状态监控',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 3,
+                    'rowSpan' => 2,
+                    'sortOrder' => 30,
+                ],
+            ],
+        ]],
     ],
     'detail_snapshot' => [
         'name' => '默认明细',
@@ -50,5 +101,22 @@ return [
         'position' => ['dashboard-detail'],
         'slot' => 'dashboard-detail',
         'supports' => ['dashboard-widget', 'dashboard-slot-detail', 'dashboard-table', 'dashboard-list'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-detail',
+            'area' => 'content',
+            'sort_order' => 40,
+            'required' => true,
+            'reason' => 'Dashboard 默认面板需要明细快照',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 9,
+                    'rowSpan' => 1,
+                    'sortOrder' => 40,
+                ],
+            ],
+        ]],
     ],
 ];

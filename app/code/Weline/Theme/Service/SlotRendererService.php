@@ -1321,12 +1321,13 @@ class SlotRendererService
         // 1. 按指定状态获取数据
         $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
         
-        // 2. 检查是否有部件数据
+        // 2. 检查是否有部件配置；slot 结构来自模板，即使没有部件也会继续渲染默认内容。
         $hasWidgets = $this->hasWidgetsInLayout($layout);
+        $hasNoWidgetPlacements = $this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $status, $identity);
         
         // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据。
         // 页面级 target（如 cms_page）必须保持预览/发布隔离，不能在公开访问时读取或静默发布草稿。
-        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED && !$hasTargetIdentity) {
+        if (!$hasWidgets && !$hasNoWidgetPlacements && $status === ThemeLayout::STATUS_PUBLISHED && !$hasTargetIdentity) {
             $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
             if ($this->hasWidgetsInLayout($draftLayout)) {
                 // 使用草稿数据，并自动发布（后台静默发布）
@@ -1336,26 +1337,12 @@ class SlotRendererService
             }
         }
         
-        // 3.5. 如果仍然没有数据，尝试生成默认布局种子
-        // 注意：仅在前端访问（published状态）时自动seed，编辑器模式（draft状态）不自动seed
-        // 这样可以尊重用户在编辑器中删除部件的操作，避免被删除的部件自动重新创建
-        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED && !$hasTargetIdentity) {
-            $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
-            if ($seeded) {
-                // 重新获取布局数据
-                $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
-                if ($this->hasWidgetsInLayout($layout)) {
-                    $hasWidgets = true;
-                    // 如果是前端请求已发布状态，自动发布
-                    if ($status === ThemeLayout::STATUS_PUBLISHED) {
-                        $this->autoPublishDraft($themeId, $pageType, $layout);
-                    }
-                }
-            }
-        }
+        // Default widgets are suggestions only. Do not auto-seed an empty
+        // published layout; the user can restore suggestions from the editor.
         
-        // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
-        if (!$hasWidgets && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
+        // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据。
+        // 已明确保存为“没有部件配置”的布局必须保持这个状态，只渲染 slot 默认内容。
+        if (!$hasWidgets && !$hasNoWidgetPlacements && !$hasTargetIdentity && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
             $defaultLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $status);
             if ($this->hasWidgetsInLayout($defaultLayout)) {
                 $layout = $defaultLayout;
@@ -1385,25 +1372,6 @@ class SlotRendererService
         return $layout;
     }
     
-    /**
-     * 如果需要，生成默认布局种子
-     * 
-     * @param int $themeId 主题ID
-     * @param string $pageType 页面类型
-     * @return bool 是否生成了新的布局
-     */
-    private function seedDefaultLayoutIfNeeded(int $themeId, string $pageType): bool
-    {
-        try {
-            /** @var DefaultLayoutSeeder $seeder */
-            $seeder = ObjectManager::getInstance(DefaultLayoutSeeder::class);
-            return $seeder->seedDefaultLayout($themeId, $pageType, false);
-        } catch (\Exception $e) {
-            // 静默失败，可能是 seeder 服务不可用
-            return false;
-        }
-    }
-
     /**
      * @param array{target_type:string,target_id:int} $identity
      */

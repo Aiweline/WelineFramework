@@ -68,18 +68,26 @@ class ProcessCmsPageUriBefore implements ObserverInterface
         $previewByQuery = (int)$this->request->getParam('preview', 0) === 1
             || (int)$this->request->getParam(PageService::PREVIEW_QUERY_FLAG, 0) === 1;
         $preview = $previewByPath || $previewByQuery;
-        if ($identifier === '' || $this->shouldBypass($identifier) || $this->generatedFrontendRouteExists($identifier)) {
+        $identifierCandidates = $this->buildIdentifierCandidates($path, $identifier);
+        if ($identifierCandidates === []) {
             return;
         }
 
+        $page = null;
         try {
             $websiteId = (int)$this->request->getParam('website_id', $this->request->getParam('site_id', 0));
-            $page = $this->pageService->getPageByIdentifier(
-                $identifier,
-                null,
-                $preview,
-                $websiteId > 0 ? $websiteId : null
-            );
+            foreach ($identifierCandidates as $candidateIdentifier) {
+                $page = $this->pageService->getPageByIdentifier(
+                    $candidateIdentifier,
+                    null,
+                    $preview,
+                    $websiteId > 0 ? $websiteId : null
+                );
+                if ($page !== null) {
+                    $identifier = $candidateIdentifier;
+                    break;
+                }
+            }
         } catch (\Throwable) {
             return;
         }
@@ -107,6 +115,40 @@ class ProcessCmsPageUriBefore implements ObserverInterface
 
         $data->setData('path', 'cms/frontend/page/view');
         $data->setData('rule', new DataObject($ruleArray));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildIdentifierCandidates(string $eventPath, string $parsedIdentifier): array
+    {
+        $rawCandidates = [
+            (string)(\w_env('request.uri', '') ?? ''),
+            (string)(\w_env('full_request_uri', '') ?? ''),
+            (string)$this->request->getServer('WELINE_ORIGIN_REQUEST_URI'),
+            $eventPath,
+            $parsedIdentifier,
+        ];
+
+        $candidates = [];
+        foreach ($rawCandidates as $rawCandidate) {
+            $rawCandidate = trim($rawCandidate);
+            if ($rawCandidate === '') {
+                continue;
+            }
+            try {
+                $slug = $this->pageService->parseSlugPreviewPath($rawCandidate);
+                $identifier = (string)($slug['identifier'] ?? '');
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($identifier === '' || $this->shouldBypass($identifier) || $this->generatedFrontendRouteExists($identifier)) {
+                continue;
+            }
+            $candidates[] = $identifier;
+        }
+
+        return array_values(array_unique($candidates));
     }
 
     private function shouldBypass(string $identifier): bool

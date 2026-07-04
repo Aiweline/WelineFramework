@@ -156,7 +156,7 @@
 
 | 交付物 | 类型 | 优先级 | 状态 |
 |--------|------|--------|------|
-| `tests/e2e/specs/wls/wls-fiber-sse-concurrency.spec.js` | Playwright | P1 | 已加（`WLS_FIBER_SSE_E2E=1`；后台 `Weline_Server/sse-test`；`useProxy: false`；本地 `retries:1`） |
+| `app/code/Weline/Framework/test/e2e/wls/wls-fiber-sse-concurrency.spec.js` | Playwright | P1 | 已加（`WLS_FIBER_SSE_E2E=1`；后台 `Weline_Server/sse-test`；`useProxy: false`；本地 `retries:1`） |
 | 系统页弱回归（Backend/Server 多路由容错） | E2E | P1 | 已加（同上开关） |
 | `app/code/Weline/Framework/Test/Integration/Runtime/StateManagerPeerOmitIntegrationTest.php` | PHPUnit | P2 | 已加 |
 | P3 压测脚本 + 报告模板 | 运维 | P3 前 | 待定 |
@@ -172,7 +172,7 @@ cd tests/e2e
 set WLS_FIBER_SSE_E2E=1
 set PLAYWRIGHT_INSTANCE_NAME=ai-test-e2e-pb
 rem 将实例名换成你本机 php bin/w server:status 中「运行中」的那一条
-set PLAYWRIGHT_TEST_FILES=["tests/e2e/specs/wls/wls-fiber-sse-concurrency.spec.js"]
+set PLAYWRIGHT_TEST_FILES=["app/code/Weline/Framework/test/e2e/wls/wls-fiber-sse-concurrency.spec.js"]
 npx playwright test -c playwright.config.js
 rem 可选：set PLAYWRIGHT_TARGET_ORIGIN=https://127.0.0.1:9512
 ```

@@ -579,7 +579,7 @@ HTML;
 
     private function withPanelAssetVersion(string $url): string
     {
-        return $url . (str_contains($url, '?') ? '&' : '?') . 'v=20260702-weline-panel-seo-score-detail-1';
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'v=20260703-weline-panel-seo-audit-clean-1';
     }
 
     private function jsonString(string $value): string

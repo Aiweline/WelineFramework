@@ -7,7 +7,11 @@
         <observer name="Weline_Seo::store_save_after" instance="Weline\Seo\Observer\StoreSaveAfter" />
     </event>
 
-    <!-- Website-account binding remains event driven. URL push submission is sourced from url_rewrite cron diff. -->
+    <event name="Weline_Seo::integration::url_submit_request">
+        <observer name="Weline_Seo::url_submit_request" instance="Weline\Seo\Observer\UrlSubmitRequest" />
+    </event>
+
+    <!-- Website-account binding remains event driven. URL rewrite cron only fills gaps missed by immediate URL submit events. -->
     <event name="Weline_Seo::domain::website_account_bind">
         <observer name="Weline_Seo::website_account_bind" instance="Weline\Seo\Observer\WebsiteAccountBind" />
     </event>

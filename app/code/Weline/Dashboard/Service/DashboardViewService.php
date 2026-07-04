@@ -110,7 +110,6 @@ class DashboardViewService
             ->save();
 
         $this->clearOtherDefaults($websiteId, $view->getViewId());
-        $this->seedDefaultLayout($view);
 
         return $view;
     }
@@ -192,7 +191,7 @@ class DashboardViewService
         int $userId,
         string $name,
         string $visibility = DashboardView::VISIBILITY_PRIVATE,
-        bool $copyDefaultLayout = true
+        bool $copyDefaultLayout = false
     ): DashboardView
     {
         $websiteId = $this->normalizeWebsiteId($websiteId);
@@ -222,11 +221,8 @@ class DashboardViewService
 
         if ($copyDefaultLayout) {
             $source = $this->findDefaultView($websiteId) ?? $this->ensureDefaultView($websiteId);
-            $copied = $source && $source->getViewId() !== $view->getViewId()
-                ? $this->copyLayout($source, $view)
-                : false;
-            if (!$copied) {
-                $this->seedDefaultLayout($view);
+            if ($source && $source->getViewId() !== $view->getViewId()) {
+                $this->copyLayout($source, $view);
             }
         }
 
@@ -280,17 +276,9 @@ class DashboardViewService
 
     public function ensureLayoutInitialized(DashboardView $view): void
     {
-        if (!$view->getViewId() || $this->hasLayoutRows($view)) {
-            return;
-        }
-
-        $source = $this->findDefaultView($view->getWebsiteId()) ?? $this->ensureDefaultView($view->getWebsiteId());
-        $copied = $source && $source->getViewId() !== $view->getViewId()
-            ? $this->copyLayout($source, $view)
-            : false;
-        if (!$copied) {
-            $this->seedDefaultLayout($view);
-        }
+        // Default dashboard widgets are suggestions in ThemeEditor, not automatic
+        // mutations. An empty layout may be intentional after the user deletes
+        // every widget and saves.
     }
 
     public function setDefaultView(int $viewId, int $userId): DashboardView
@@ -336,6 +324,35 @@ class DashboardViewService
         return $view->getOwnerAdminId() === $userId;
     }
 
+    public function saveLayout(int $viewId, int $userId): bool
+    {
+        $view = $this->getViewForUser($viewId, $userId);
+        if (!$view) {
+            throw new \RuntimeException((string)__('视图不存在或无权访问。'));
+        }
+
+        if ($view->getVisibility() !== DashboardView::VISIBILITY_SYSTEM && !$this->canEdit($view, $userId)) {
+            throw new \RuntimeException((string)__('当前视图不能直接编辑，请先复制到我的视图。'));
+        }
+
+        $themeId = $this->getBackendThemeId();
+        if ($themeId <= 0) {
+            throw new \RuntimeException((string)__('未找到后台主题，无法保存 Dashboard 布局。'));
+        }
+
+        $saved = $this->themeLayoutService->publishLayout(
+            $themeId,
+            DashboardView::PAGE_TYPE,
+            $view->layoutIdentity(),
+            true
+        );
+        if (!$saved) {
+            throw new \RuntimeException((string)__('Dashboard 布局保存失败。'));
+        }
+
+        return true;
+    }
+
     public function getBackendThemeId(): int
     {
         try {
@@ -357,8 +374,13 @@ class DashboardViewService
             'page_type' => DashboardView::PAGE_TYPE,
             'layout_type' => DashboardView::PAGE_TYPE,
             'layout_option' => DashboardView::LAYOUT_OPTION,
+            'lock_layout_context' => 1,
+            'lock_source' => 'dashboard',
             'scope' => $view->scopeKey(),
             'target_type' => DashboardView::TARGET_TYPE_WEBSITE,
+            'target_id' => $view->getWebsiteId(),
+            'layout_lock_target_type' => DashboardView::TARGET_TYPE_WEBSITE,
+            'layout_lock_target_id' => $view->getWebsiteId(),
             'theme_layout_target_type' => DashboardView::TARGET_TYPE_WEBSITE,
             'theme_layout_target_id' => $view->getWebsiteId(),
             'theme_layout_source_target_type' => DashboardView::TARGET_TYPE_WEBSITE,
@@ -565,67 +587,6 @@ class DashboardViewService
         }
 
         return $max + 10;
-    }
-
-    private function seedDefaultLayout(DashboardView $view): void
-    {
-        $themeId = $this->getBackendThemeId();
-        if ($themeId <= 0) {
-            return;
-        }
-        $identity = $view->layoutIdentity();
-        if ($this->themeLayoutService->hasDraft($themeId, DashboardView::PAGE_TYPE, $identity)) {
-            return;
-        }
-
-        $defaultWidgets = [
-            [
-                'widget_module' => 'Weline_Dashboard',
-                'widget_type' => 'stats',
-                'widget_code' => 'overview_kpi',
-                'slot_id' => 'dashboard-summary',
-                'config' => ['dashboard_layout' => ['colSpan' => 4, 'rowSpan' => 1, 'sortOrder' => 10]],
-                'is_active' => true,
-            ],
-            [
-                'widget_module' => 'Weline_Dashboard',
-                'widget_type' => 'chart',
-                'widget_code' => 'activity_trend',
-                'slot_id' => 'dashboard-analysis',
-                'config' => ['dashboard_layout' => ['colSpan' => 5, 'rowSpan' => 2, 'sortOrder' => 20]],
-                'is_active' => true,
-            ],
-            [
-                'widget_module' => 'Weline_Dashboard',
-                'widget_type' => 'table',
-                'widget_code' => 'system_status',
-                'slot_id' => 'dashboard-side',
-                'config' => ['dashboard_layout' => ['colSpan' => 3, 'rowSpan' => 2, 'sortOrder' => 30]],
-                'is_active' => true,
-            ],
-            [
-                'widget_module' => 'Weline_Dashboard',
-                'widget_type' => 'table',
-                'widget_code' => 'detail_snapshot',
-                'slot_id' => 'dashboard-detail',
-                'config' => ['dashboard_layout' => ['colSpan' => 9, 'rowSpan' => 1, 'sortOrder' => 40]],
-                'is_active' => true,
-            ],
-        ];
-
-        $this->themeLayoutService->saveLayout(
-            $themeId,
-            DashboardView::PAGE_TYPE,
-            ['content' => $defaultWidgets],
-            ThemeLayout::STATUS_DRAFT,
-            $identity
-        );
-        $this->themeLayoutService->publishLayout(
-            $themeId,
-            DashboardView::PAGE_TYPE,
-            $identity,
-            true
-        );
     }
 
     private function copyLayout(DashboardView $source, DashboardView $target): bool
