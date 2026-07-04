@@ -84,6 +84,75 @@
         return '/' + resolveApiBase() + '/panel/session';
     }
 
+    function apiUrl(path, params) {
+        var value = String(path || '').trim();
+        if (/^https?:\/\//i.test(value)) {
+            return appendQuery(value, params || {});
+        }
+        value = value.replace(/^\/+/, '');
+        var base = resolveApiBase();
+        if (value.indexOf(base + '/') === 0) {
+            return appendQuery('/' + value, params || {});
+        }
+        return appendQuery('/' + base + '/' + value, params || {});
+    }
+
+    function appendQuery(url, params) {
+        params = params || {};
+        var query = Object.keys(params).filter(function (key) {
+            return params[key] !== undefined && params[key] !== null && params[key] !== '';
+        }).map(function (key) {
+            return encodeURIComponent(key) + '=' + encodeURIComponent(String(params[key]));
+        }).join('&');
+        if (!query) {
+            return url;
+        }
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + query;
+    }
+
+    function apiFetch(path, options) {
+        options = options || {};
+        return requestAuthorization().then(function (allowed) {
+            if (!allowed) {
+                throw new Error('Weline Panel token required.');
+            }
+            var headers = Object.assign({
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Weline-Panel': '1'
+            }, options.headers || {});
+            var body = options.body;
+            var isFormData = typeof window.FormData !== 'undefined' && body instanceof window.FormData;
+            if (body !== undefined && body !== null && typeof body !== 'string' && !isFormData) {
+                headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+                body = JSON.stringify(body);
+            }
+            return fetch(apiUrl(path, options.params || {}), {
+                method: options.method || (body !== undefined && body !== null ? 'POST' : 'GET'),
+                credentials: 'same-origin',
+                cache: options.cache || 'no-store',
+                headers: headers,
+                body: body
+            }).then(function (response) {
+                return response.text().then(function (text) {
+                    var payload = null;
+                    if (text) {
+                        try {
+                            payload = JSON.parse(text);
+                        } catch (error) {
+                            payload = { raw: text };
+                        }
+                    }
+                    if (!response.ok || (payload && payload.success === false)) {
+                        var message = payload && (payload.message || payload.error || payload.msg);
+                        throw new Error(message || ('HTTP ' + response.status));
+                    }
+                    return payload || {};
+                });
+            });
+        });
+    }
+
     function isIgnoredTarget(target) {
         if (!target) {
             return false;
@@ -473,7 +542,9 @@
             searchArea: document.getElementById('dev-tool-search-area-' + id),
             open: openPanel,
             activateTab: activateTab,
-            publish: publishReport
+            publish: publishReport,
+            apiUrl: apiUrl,
+            apiFetch: apiFetch
         };
     }
 
@@ -575,6 +646,8 @@
         api.activateTab = activateTab;
         api.report = buildReport;
         api.publish = publishReport;
+        api.apiUrl = apiUrl;
+        api.apiFetch = apiFetch;
         api.registerTab = registerTab;
         api.registerReportProvider = registerReportProvider;
         api.isAuthorized = function () {
