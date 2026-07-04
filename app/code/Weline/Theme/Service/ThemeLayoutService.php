@@ -601,16 +601,12 @@ class ThemeLayoutService
     }
 
     /**
-     * 清理孤儿部件：删除同一 slot_id 下的重复记录（只保留最新一条）
-     * 
-     * 孤儿场景：
-     * 1. 同一独占插槽被多次写入（并发/bug），数据库中出现重复
-     * 2. slot_id 为 NULL 的旧数据不再匹配任何插槽
-     * 
-     * @param int $themeId 主题ID
-     * @param string|null $pageType 页面类型（null=所有）
+     * 清理孤儿部件。
+     *
+     * 只对独占插槽做同 slot 收敛；普通业务插槽允许多个部件共存，比如 Dashboard 的
+     * dashboard-summary/dashboard-analysis/dashboard-side/dashboard-detail。
+     *
      * @param array<string,mixed> $identity layout_option/scope/target_type/target_id
-     * @return int 清理的记录数
      */
     public function cleanOrphanWidgets(int $themeId, ?string $pageType = null, array $identity = []): int
     {
@@ -624,20 +620,18 @@ class ThemeLayoutService
                 foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
                     $layout = $this->getLayout($themeId, $type, $status, $identity);
                     
-                    // 按 slot_id 分组，找出独占插槽中的重复记录
                     foreach ($layout as $area => $areaData) {
                         $slotWidgets = []; // slot_id => [layout_ids...]
                         
                         foreach ($areaData['widgets'] as $widget) {
                             $slotId = $widget['slot_id'] ?? '';
-                            if (empty($slotId)) {
-                                continue; // 跳过无 slot_id 的记录（可能是旧数据）
+                            if (empty($slotId) || !$this->isExclusivePublishSlot((string)$slotId)) {
+                                continue;
                             }
                             
                             $slotWidgets[$slotId][] = $widget['layout_id'];
                         }
                         
-                        // 如果同一 slot_id 有多条记录，只保留最后一条（layout_id 最大的）
                         foreach ($slotWidgets as $slotId => $layoutIds) {
                             if (count($layoutIds) <= 1) {
                                 continue;
