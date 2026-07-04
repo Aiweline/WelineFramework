@@ -17,6 +17,11 @@ namespace Weline\Seo\Interface;
  * 定义 URL 提供者的标准接口，所有 Sitemap Provider 必须实现此接口。
  * Provider 只负责提供 URL 数据，不负责生成 sitemap 文件。
  *
+ * Provider 是 sitemap URL 资产的权威来源：
+ * - cron 会通过 SitemapRegistryService 自动发现 Provider 并调用 getUrlsForWebsite()
+ * - 保存/发布事件会通过 SEO 服务定向同步相关站点的 Provider
+ * - URL push 任务只消费 Provider/业务事件产出的站点 URL，不改变 Provider 发现能力
+ *
  * @package Weline_Seo
  */
 interface SitemapUrlProviderInterface
@@ -64,7 +69,9 @@ interface SitemapUrlProviderInterface
      *
      * 注意：
      * - url_key 在同一站点+scope+module下必须唯一
-     * - 继承 AbstractSitemapUrlProvider 可自动同步到数据库
+     * - 同一个 url_key 可以出现在多个站点
+     * - 业务实体属于多个站点时，Provider 必须为每个站点分别提供 URL
+     * - cron 会自动发现此 Provider 并立即拉取 URL，不能依赖后台手动写入
      *
      * @param int $websiteId 站点ID
      * @return array URL 数据列表

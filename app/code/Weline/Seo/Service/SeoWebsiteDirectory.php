@@ -65,19 +65,56 @@ class SeoWebsiteDirectory
      */
     public function matchWebsiteByUrl(string $url): ?array
     {
-        $host = $this->hostFromUrl($url);
-        if ($host === '') {
-            return null;
+        $websites = $this->matchWebsitesByUrl($url);
+        return $websites[0] ?? null;
+    }
+
+    /**
+     * Match every website that can own the URL.
+     *
+     * Multiple websites may share a host/path shape, and business entities such
+     * as products can intentionally exist in more than one website. Callers that
+     * handle URL assets must not collapse matches to a single website.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function matchWebsitesByUrl(string $url): array
+    {
+        $urlParts = $this->urlParts($url);
+        if ($urlParts['host'] === '') {
+            return [];
         }
 
+        $matches = [];
         foreach ($this->listWebsites() as $website) {
-            $websiteHost = $this->hostFromUrl((string)($website['url'] ?? ''));
-            if ($websiteHost !== '' && strcasecmp($websiteHost, $host) === 0) {
-                return $website;
+            $websiteParts = $this->urlParts((string)($website['url'] ?? ''));
+            if ($websiteParts['host'] === '' || strcasecmp($websiteParts['host'], $urlParts['host']) !== 0) {
+                continue;
             }
+            if (
+                $websiteParts['port'] !== ''
+                && $urlParts['port'] !== ''
+                && $websiteParts['port'] !== $urlParts['port']
+            ) {
+                continue;
+            }
+            if (!$this->pathOwnsUrl($websiteParts['path'], $urlParts['path'])) {
+                continue;
+            }
+
+            $matches[] = $website + ['_seo_match_path_length' => strlen($websiteParts['path'])];
         }
 
-        return null;
+        usort(
+            $matches,
+            static fn (array $a, array $b): int => ((int)($b['_seo_match_path_length'] ?? 0))
+                <=> ((int)($a['_seo_match_path_length'] ?? 0))
+        );
+
+        return array_map(static function (array $website): array {
+            unset($website['_seo_match_path_length']);
+            return $website;
+        }, $matches);
     }
 
     /**
@@ -215,7 +252,16 @@ class SeoWebsiteDirectory
 
     private function currentRequestBaseUrl(): string
     {
-        $fullUrl = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $websiteUrl = (string)($_SERVER['WELINE_WEBSITE_URL'] ?? w_env('website_url', ''));
+        if ($websiteUrl !== '' && preg_match('/^https?:\/\//i', $websiteUrl)) {
+            $parts = parse_url($websiteUrl);
+            if (is_array($parts) && !empty($parts['host'])) {
+                $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+                return (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port;
+            }
+        }
+
+        $fullUrl = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? w_env('full_request_uri', ''));
         if ($fullUrl !== '' && preg_match('/^https?:\/\//i', $fullUrl)) {
             $parts = parse_url($fullUrl);
             if (is_array($parts) && !empty($parts['host'])) {
@@ -235,6 +281,7 @@ class SeoWebsiteDirectory
         }
 
         $host = $this->currentHost(false);
+        $host = $this->withCurrentPort($host, $scheme);
         return $host !== '' ? $scheme . '://' . $host : '';
     }
 
@@ -253,6 +300,30 @@ class SeoWebsiteDirectory
         return $stripPort ? (preg_replace('/:\d+$/', '', $host) ?: $host) : $host;
     }
 
+    private function withCurrentPort(string $host, string $scheme): string
+    {
+        if ($host === '' || preg_match('/:\d+$/', $host)) {
+            return $host;
+        }
+
+        $port = (string)(
+            $_SERVER['HTTP_X_FORWARDED_PORT']
+            ?? $_SERVER['SERVER_PORT']
+            ?? w_env('server.server_port', '')
+            ?? w_env('server.port', '')
+            ?: w_env('request.port', '')
+        );
+        if ($port === '' || !ctype_digit($port)) {
+            return $host;
+        }
+
+        if (($scheme === 'http' && $port === '80') || ($scheme === 'https' && $port === '443')) {
+            return $host;
+        }
+
+        return $host . ':' . $port;
+    }
+
     private function hostFromUrl(string $url): string
     {
         $url = trim($url);
@@ -265,5 +336,47 @@ class SeoWebsiteDirectory
 
         $host = (string)(parse_url($url, PHP_URL_HOST) ?: '');
         return strtolower(preg_replace('/^www\./i', '', $host) ?: $host);
+    }
+
+    /**
+     * @return array{host:string,port:string,path:string}
+     */
+    private function urlParts(string $url): array
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return ['host' => '', 'port' => '', 'path' => '/'];
+        }
+        if (!preg_match('/^https?:\/\//i', $url)) {
+            $url = 'https://' . ltrim($url, '/');
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return ['host' => '', 'port' => '', 'path' => '/'];
+        }
+
+        $host = strtolower(preg_replace('/^www\./i', '', (string)($parts['host'] ?? '')) ?: (string)($parts['host'] ?? ''));
+        $path = '/' . trim((string)($parts['path'] ?? ''), '/');
+        if ($path !== '/') {
+            $path = rtrim($path, '/');
+        }
+
+        return [
+            'host' => $host,
+            'port' => isset($parts['port']) ? (string)$parts['port'] : '',
+            'path' => $path,
+        ];
+    }
+
+    private function pathOwnsUrl(string $basePath, string $urlPath): bool
+    {
+        $basePath = '/' . trim($basePath, '/');
+        $urlPath = '/' . trim($urlPath, '/');
+        if ($basePath === '/') {
+            return true;
+        }
+
+        return $urlPath === $basePath || str_starts_with($urlPath, $basePath . '/');
     }
 }

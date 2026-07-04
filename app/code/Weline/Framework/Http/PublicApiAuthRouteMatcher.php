@@ -58,6 +58,7 @@ class PublicApiAuthRouteMatcher
         'dev/tool/rest/v1/panel',
         'dev/tool/rest/v1/panel/session',
         'dev/tool/rest/v1/routes',
+        'dev/tool/rest/v1/seo/crawl',
         'dev/tool/rest/v1/document/modules',
         'dev/tool/rest/v1/document/search',
         'dev/tool/rest/v1/document/detail',
