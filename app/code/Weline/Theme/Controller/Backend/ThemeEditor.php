@@ -395,6 +395,7 @@ class ThemeEditor extends BackendController
         $this->assign('themes', $themes);
         $this->assign('page_type', $pageType);
         $this->assign('layout_option', $layoutOption);
+        $this->assign('layout_identity', $layoutIdentity);
         $this->assign('layout_options_by_type', $this->compactEditorLayoutOptions($layoutOptionsByType));
         $this->assign('page_types', $pageTypes);
         $this->assign('areas', ThemeLayout::getAreas());
@@ -518,8 +519,8 @@ class ThemeEditor extends BackendController
         }
 
         $legacyTargetType = strtolower(trim((string)$this->request->getParam('target_type', '')));
-        $legacyTargetId = (int)$this->request->getParam('target_id', 0);
-        return $legacyTargetId > 0
+        $legacyTargetIdRaw = trim((string)$this->request->getParam('target_id', ''));
+        return $legacyTargetIdRaw !== ''
             && $legacyTargetType !== ''
             && !in_array($legacyTargetType, [
                 PreviewContextService::TARGET_TYPE_LAYOUT,
@@ -873,6 +874,8 @@ class ThemeEditor extends BackendController
             ? PreviewContextService::AREA_BACKEND
             : PreviewContextService::AREA_FRONTEND;
         $identity = $this->resolveVersionLayoutIdentity($data);
+        $applyScope = strtolower(trim((string)($data['apply_scope'] ?? $this->request->getParam('apply_scope', 'current'))));
+        $applyScope = in_array($applyScope, ['all', 'all_identities', 'layout'], true) ? 'all' : 'current';
 
         if ($themeId <= 0 || $pageType === '' || $injectionKey === '') {
             return $this->fetchJson([
@@ -884,29 +887,57 @@ class ThemeEditor extends BackendController
         try {
             /** @var WidgetDefaultInjectionService $service */
             $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            $item = $service->applyInjectionByKey(
-                $themeId,
-                $pageType,
-                $injectionKey,
-                $identity,
-                ThemeLayout::STATUS_DRAFT,
-                $editorArea
-            );
+            if ($applyScope === 'all') {
+                $applyResult = $service->applyInjectionByKeyForAllLayoutIdentities(
+                    $themeId,
+                    $pageType,
+                    $injectionKey,
+                    $identity,
+                    ThemeLayout::STATUS_DRAFT,
+                    $editorArea
+                );
+                $item = $applyResult['current_item'] ?? ($applyResult['items'][0] ?? null);
+                $appliedCount = (int)($applyResult['applied_count'] ?? 0);
+                $skippedCount = (int)($applyResult['skipped_count'] ?? 0);
+                $totalIdentities = (int)($applyResult['total_identities'] ?? 0);
+            } else {
+                $item = $service->applyInjectionByKey(
+                    $themeId,
+                    $pageType,
+                    $injectionKey,
+                    $identity,
+                    ThemeLayout::STATUS_DRAFT,
+                    $editorArea
+                );
+                $appliedCount = $item && !empty($item['layout_id']) ? 1 : 0;
+                $skippedCount = $appliedCount > 0 ? 0 : 1;
+                $totalIdentities = 1;
+            }
 
-            if (!$item || empty($item['layout_id'])) {
+            if ($appliedCount <= 0 || !$item || empty($item['layout_id'])) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('该推荐部件已在当前布局中'),
+                    'message' => $applyScope === 'all'
+                        ? __('该推荐部件已在所有布局身份中')
+                        : __('该推荐部件已在当前布局中'),
                 ]);
             }
 
             ObjectManager::getInstance(SlotRendererService::class)->clearCache();
             $previewHtml = $this->buildPreviewHtmlForLayoutId((int)$item['layout_id'], $item['config'] ?? []);
 
+            $item['apply_scope'] = $applyScope;
+            $item['applied_count'] = $appliedCount;
+            $item['skipped_count'] = $skippedCount;
+            $item['total_identities'] = $totalIdentities;
             $response = [
                 'success' => true,
-                'message' => __('已应用推荐部件'),
+                'message' => $applyScope === 'all' ? __('已应用到所有布局身份') : __('已应用推荐部件'),
                 'data' => $item,
+                'apply_scope' => $applyScope,
+                'applied_count' => $appliedCount,
+                'skipped_count' => $skippedCount,
+                'total_identities' => $totalIdentities,
             ];
             if ($previewHtml !== null) {
                 $response['preview_html'] = $previewHtml;
@@ -1260,8 +1291,8 @@ class ThemeEditor extends BackendController
 
         try {
             // 获取要删除的部件信息（在删除前）。不对 clearQuery() 链式调用 load()，避免 clearQuery() 返回 Query 时在 Query 上调用 load() 导致致命错误。
-            $this->themeLayout->load($layoutId);
-            $widget = $this->themeLayout;
+            $widget = clone $this->themeLayout;
+            $widget->clearQuery()->clearData()->load($layoutId);
             $slotId = $widget->getData('slot_id');
             $pageType = $widget->getData('page_type');
             $area = $widget->getData('area');
@@ -3850,6 +3881,60 @@ HTML;
             || $pageType === ThemeLayout::PAGE_TYPE_DASHBOARD;
     }
 
+    private function renderDashboardEditorPreviewShell(string $content): string
+    {
+        if (trim($content) === '') {
+            return '';
+        }
+
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="backend">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Preview</title>
+    <style>
+        body { margin: 0; background: #f5f7fb; color: #1f2937; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .dashboard-layout-wrapper { padding: 18px; box-sizing: border-box; min-height: 100vh; }
+        .w-dashboard-layout-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; align-items: start; }
+        .w-dashboard-region { min-width: 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 14px; }
+        .w-dashboard-region-summary { grid-column: 1 / span 4; }
+        .w-dashboard-region-analysis { grid-column: 5 / span 5; }
+        .w-dashboard-region-side { grid-column: 10 / span 3; grid-row: 1 / span 2; }
+        .w-dashboard-region-detail { grid-column: 1 / span 9; }
+        .w-dashboard-region-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        .w-dashboard-region-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+        .w-dashboard-region-head p, .w-dashboard-region-head span { margin: 3px 0 0; color: #64748b; font-size: 12px; line-height: 1.35; }
+        .w-dashboard-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .w-dashboard-slot-summary > .w-dashboard-region-head, .w-dashboard-slot-summary > .widget-wrapper[data-widget-code="overview_kpi"] { grid-column: 1 / -1; }
+        .w-dashboard-slot-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+        .widget-wrapper { min-width: 0; }
+        .dashboard-widget { height: 100%; min-width: 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 14px; box-sizing: border-box; overflow: hidden; }
+        .dashboard-widget header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .dashboard-widget h3 { margin: 0; font-size: 16px; font-weight: 700; }
+        .dashboard-widget header span, .dashboard-widget small { color: #64748b; font-size: 12px; white-space: nowrap; }
+        .w-dashboard-empty { min-height: 96px; border: 1px dashed #cbd5e1; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: #64748b; text-align: center; }
+        .dashboard-widget-detail-snapshot table { width: 100%; border-collapse: collapse; }
+        .dashboard-widget-detail-snapshot th, .dashboard-widget-detail-snapshot td { border-bottom: 1px solid #e5e7eb; padding: 10px 0; text-align: left; font-size: 13px; line-height: 1.35; vertical-align: top; }
+        @media (max-width: 980px) {
+            .w-dashboard-layout-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+            .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-detail { grid-column: 1 / span 5; }
+            .w-dashboard-region-side { grid-column: 6 / -1; grid-row: 1 / span 3; }
+        }
+        @media (max-width: 640px) {
+            .w-dashboard-layout-grid { grid-template-columns: minmax(0, 1fr); }
+            .w-dashboard-region-summary, .w-dashboard-region-analysis, .w-dashboard-region-side, .w-dashboard-region-detail { grid-column: 1 / -1; grid-row: auto; }
+        }
+    </style>
+</head>
+<body>
+    <main class="dashboard-layout-wrapper">{$content}</main>
+</body>
+</html>
+HTML;
+    }
+
     private function injectSlotAttributesIntoFirstTag(
         string $html,
         string $pattern,
@@ -4208,7 +4293,8 @@ HTML;
         if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
             return '';
         }
-        if ($targetId <= 0) {
+        $provider = $targetTypeRegistry->get($targetType);
+        if (!$provider || !$provider->validate($targetId)) {
             throw new \InvalidArgumentException((string)__('主题目标ID不能为空。'));
         }
 
@@ -4818,7 +4904,9 @@ HTML;
         );
         if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
             $legacyTargetType = trim((string)($data['target_type'] ?? $this->request->getParam('target_type', '')));
-            if ($targetId > 0
+            $legacyTargetIdExplicit = array_key_exists('target_id', $data)
+                || trim((string)$this->request->getParam('target_id', '')) !== '';
+            if (($targetId > 0 || $legacyTargetIdExplicit)
                 && $legacyTargetType !== ''
                 && !in_array($legacyTargetType, [
                     PreviewContextService::TARGET_TYPE_LAYOUT,
@@ -4851,7 +4939,7 @@ HTML;
             'scope' => $scope !== '' ? $scope : PreviewContextService::DEFAULT_SCOPE,
         ];
 
-        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL || $targetId <= 0) {
+        if (!$this->hasConcreteThemeLayoutTarget($targetType, $targetId)) {
             return $params;
         }
 
@@ -4872,7 +4960,7 @@ HTML;
         $params = $this->buildThemeLayoutRuntimeParams($identity);
         $targetType = trim((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL));
         $targetId = max(0, (int)($identity['target_id'] ?? 0));
-        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL || $targetId <= 0) {
+        if (!$this->hasConcreteThemeLayoutTarget($targetType, $targetId)) {
             return $params;
         }
 
@@ -4909,6 +4997,23 @@ HTML;
                 }
             } catch (\Throwable) {
             }
+        }
+    }
+
+    private function hasConcreteThemeLayoutTarget(string $targetType, int $targetId): bool
+    {
+        $targetType = strtolower(trim($targetType));
+        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
+            return false;
+        }
+
+        try {
+            /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
+            $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+            $provider = $targetTypeRegistry->get($targetType);
+            return $provider !== null && $provider->validate($targetId);
+        } catch (\Throwable) {
+            return $targetId > 0;
         }
     }
 
@@ -5047,6 +5152,10 @@ HTML;
                 $layoutIdentity
             );
             $this->assign('content', $previewPayload['content']);
+            if ($editorArea === PreviewContextService::AREA_BACKEND && $this->isDashboardPreviewLayout($layoutType)) {
+                return $this->renderDashboardEditorPreviewShell((string)$previewPayload['content']);
+            }
+
             $layoutIdentify = $this->buildLayoutConfigIdentify($layoutType, $layoutOption);
             $targetIdentify = $this->buildTargetLayoutConfigIdentify($editorArea, $layoutType, $layoutOption);
             $layoutDefinitions = $this->loadLayoutParamDefinitions($this->welineTheme, $editorArea, $layoutType, $layoutOption, $layoutIdentify);

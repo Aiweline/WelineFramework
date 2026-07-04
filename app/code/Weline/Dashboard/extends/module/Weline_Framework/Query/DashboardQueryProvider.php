@@ -7,7 +7,6 @@ namespace Weline\Dashboard\Extends\Module\Weline_Framework\Query;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
-use Weline\Websites\Model\Website;
 
 class DashboardQueryProvider implements QueryProviderInterface
 {
@@ -56,7 +55,7 @@ class DashboardQueryProvider implements QueryProviderInterface
         return [
             'success' => true,
             'items' => $this->viewService->getVisibleViews($websiteId, $userId),
-            'website_id' => $websiteId >= Website::ID_DEFAULT ? $websiteId : $this->viewService->getDefaultWebsiteId(),
+            'website_id' => $websiteId >= DashboardViewService::DEFAULT_WEBSITE_ID ? $websiteId : $this->viewService->getDefaultWebsiteId(),
         ];
     }
 
@@ -80,7 +79,8 @@ class DashboardQueryProvider implements QueryProviderInterface
                 (int)($params['website_id'] ?? 0),
                 $this->viewService->getCurrentUserId(),
                 (string)($params['name'] ?? __('未命名视图')),
-                (string)($params['visibility'] ?? DashboardView::VISIBILITY_PRIVATE)
+                (string)($params['visibility'] ?? DashboardView::VISIBILITY_PRIVATE),
+                true
             );
 
             return [
@@ -227,39 +227,39 @@ class DashboardQueryProvider implements QueryProviderInterface
             'description' => __('管理后台 Dashboard 的站点范围、个人私有视图、公开视图和默认视图。'),
             'module' => 'Weline_Dashboard',
             'operations' => [
-                ['name' => 'listWebsites', 'description' => __('列出站点'), 'params' => []],
-                ['name' => 'listViews', 'description' => __('列出当前用户可见视图'), 'params' => [
+                ['name' => 'listWebsites', 'description' => __('列出站点'), 'frontend' => true, 'mode' => 'read', 'params' => []],
+                ['name' => 'listViews', 'description' => __('列出当前用户可见视图'), 'frontend' => true, 'mode' => 'read', 'params' => [
                     ['name' => 'website_id', 'type' => 'int', 'required' => false],
                 ]],
-                ['name' => 'getView', 'description' => __('读取视图'), 'params' => [
+                ['name' => 'getView', 'description' => __('读取视图'), 'frontend' => true, 'mode' => 'read', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'createView', 'description' => __('创建个人视图'), 'params' => [
+                ['name' => 'createView', 'description' => __('创建个人视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'website_id', 'type' => 'int', 'required' => true],
                     ['name' => 'name', 'type' => 'string', 'required' => true],
                     ['name' => 'visibility', 'type' => 'string', 'required' => false],
                 ]],
-                ['name' => 'renameView', 'description' => __('重命名视图'), 'params' => [
+                ['name' => 'renameView', 'description' => __('重命名视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                     ['name' => 'name', 'type' => 'string', 'required' => true],
                 ]],
-                ['name' => 'publishView', 'description' => __('公开视图'), 'params' => [
+                ['name' => 'publishView', 'description' => __('公开视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'privatizeView', 'description' => __('转为私有视图'), 'params' => [
+                ['name' => 'privatizeView', 'description' => __('转为私有视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'duplicateView', 'description' => __('复制可见视图为我的私有视图'), 'params' => [
+                ['name' => 'duplicateView', 'description' => __('复制可见视图为我的私有视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                     ['name' => 'name', 'type' => 'string', 'required' => false],
                 ]],
-                ['name' => 'setDefaultView', 'description' => __('设置站点默认视图'), 'params' => [
+                ['name' => 'setDefaultView', 'description' => __('设置站点默认视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'saveLayout', 'description' => __('保存并发布当前 Dashboard 布局'), 'params' => [
+                ['name' => 'saveLayout', 'description' => __('保存并发布当前 Dashboard 布局'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'deleteView', 'description' => __('删除我的视图'), 'params' => [
+                ['name' => 'deleteView', 'description' => __('删除我的视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
             ],

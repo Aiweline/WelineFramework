@@ -20,17 +20,12 @@ class ApplyWidgetDefaultInjections implements ObserverInterface
     public function execute(Event &$event): void
     {
         try {
-            $source = (string)$event->getData('source');
-            if (!in_array($source, ['module_install_after', 'module_upgrade_after'], true)) {
+            $widgets = $this->widgetsFromEvent($event);
+            if ($widgets === []) {
                 return;
             }
 
-            $modules = $this->modulesFromEvent($event);
-            if ($modules === []) {
-                return;
-            }
-
-            $applied = $this->defaultInjectionService->applyAllForAvailableThemes($modules);
+            $applied = $this->defaultInjectionService->applyInstalledWidgetsForAvailableThemes($widgets);
             if ($applied > 0) {
                 $this->slotRendererService->clearCache();
             }
@@ -40,29 +35,38 @@ class ApplyWidgetDefaultInjections implements ObserverInterface
     }
 
     /**
-     * @return list<string>
+     * @return list<array<string,mixed>>
      */
-    private function modulesFromEvent(Event $event): array
+    private function widgetsFromEvent(Event $event): array
     {
-        $modules = $event->getData('modules');
-        if (is_string($modules)) {
-            $modules = preg_split('/[,\s]+/', $modules) ?: [];
-        }
-        if (!is_array($modules)) {
-            $modules = [];
-        }
-
-        $module = $event->getData('module');
-        if (is_string($module) && trim($module) !== '') {
-            $modules[] = $module;
+        $widgets = $event->getData('widgets');
+        if (!is_array($widgets)) {
+            return [];
         }
 
         $result = [];
-        foreach ($modules as $item) {
-            $item = trim((string)$item);
-            if ($item !== '') {
-                $result[$item] = $item;
+        foreach ($widgets as $widget) {
+            if (!is_array($widget)) {
+                continue;
             }
+            $module = trim((string)($widget['module'] ?? $widget['widget_module'] ?? ''));
+            $type = trim((string)($widget['type'] ?? $widget['widget_type'] ?? ''));
+            $code = trim((string)($widget['code'] ?? $widget['widget_code'] ?? ''));
+            if ($module === '' || $type === '' || $code === '') {
+                continue;
+            }
+            $area = trim((string)($widget['area'] ?? $widget['widget_area'] ?? ''));
+            $key = implode('|', [$area, $module, $type, $code]);
+            $result[$key] = [
+                'area' => $area,
+                'widget_area' => $area,
+                'module' => $module,
+                'widget_module' => $module,
+                'type' => $type,
+                'widget_type' => $type,
+                'code' => $code,
+                'widget_code' => $code,
+            ];
         }
 
         return array_values($result);

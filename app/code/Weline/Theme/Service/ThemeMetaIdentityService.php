@@ -37,7 +37,10 @@ class ThemeMetaIdentityService
         $targetType = strtolower(trim($targetType));
         $layoutType = trim($layoutType) ?: 'homepage';
 
-        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL || $targetId <= 0) {
+        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
+            return '';
+        }
+        if ($targetType !== 'website' && $targetId <= 0) {
             return '';
         }
 

@@ -24,6 +24,8 @@ use Weline\Websites\Service\ProvisioningQueryHandler;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
+    private const DEFAULT_WEBSITE_ID = 0;
+
     public function __construct(
         private readonly DomainRegistrarResolverService $resolver,
         private readonly DomainSyncService $domainSyncService,
@@ -904,7 +906,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
     private function getWebsiteById(array $params): ?array
     {
         $websiteId = (int)($params['website_id'] ?? 0);
-        if ($websiteId < Website::ID_DEFAULT) {
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return null;
         }
         $website = clone $this->websiteModel;
@@ -929,8 +931,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
             if (!\is_array($w)) {
                 continue;
             }
-            $websiteId = (int)($w[Website::schema_fields_ID] ?? Website::ID_DEFAULT);
-            if ($websiteId < Website::ID_DEFAULT) {
+            $websiteId = (int)($w[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID);
+            if ($websiteId < self::DEFAULT_WEBSITE_ID) {
                 continue;
             }
             $list[] = $this->normalizeWebsitePayload($w);
@@ -945,7 +947,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
     private function normalizeWebsitePayload(array $row): array
     {
         return [
-            'website_id' => (int)($row[Website::schema_fields_ID] ?? Website::ID_DEFAULT),
+            'website_id' => (int)($row[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID),
             'name' => (string)($row[Website::schema_fields_NAME] ?? ''),
             'code' => (string)($row[Website::schema_fields_CODE] ?? ''),
             'url' => (string)($row[Website::schema_fields_URL] ?? ''),
@@ -959,7 +961,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
     private function getWebsiteLanguageCodes(array $params): array
     {
         $websiteId = (int)($params['website_id'] ?? 0);
-        if ($websiteId < Website::ID_DEFAULT) {
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return [];
         }
         return $this->websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
