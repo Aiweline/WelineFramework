@@ -426,7 +426,7 @@ class Url implements UrlInterface
             ];
 
             $websiteId = (int)($site['website_id'] ?? 0);
-            if ($websiteId > 0) {
+            if ($websiteId >= 0) {
                 $scopes['website:' . $websiteId] = $defaults;
             }
 
@@ -506,8 +506,8 @@ class Url implements UrlInterface
 
     private static function currentWebsiteValidationScope(): string
     {
-        $parserWebsiteId = (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? 0);
-        if ($parserWebsiteId > 0) {
+        if (\array_key_exists('WELINE_WEBSITE_ID', self::$parserServer)) {
+            $parserWebsiteId = (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? 0);
             return 'website:' . $parserWebsiteId;
         }
 
@@ -521,7 +521,7 @@ class Url implements UrlInterface
                 $website = \Weline\Websites\Data\WebsiteData::getWebsite();
                 if ($website !== null && \method_exists($website, 'getWebsiteId')) {
                     $websiteId = (int)$website->getWebsiteId();
-                    if ($websiteId > 0) {
+                    if ($websiteId >= 0) {
                         return 'website:' . $websiteId;
                     }
                 }
@@ -530,8 +530,8 @@ class Url implements UrlInterface
         }
 
         $context = Context::getCurrent();
-        $websiteId = (int)($context?->get('route.website_id', 0) ?? 0);
-        if ($websiteId > 0) {
+        if ($context?->has('route.website_id')) {
+            $websiteId = (int)($context->get('route.website_id', 0) ?? 0);
             return 'website:' . $websiteId;
         }
 
@@ -913,7 +913,7 @@ class Url implements UrlInterface
         if ($params) {
             // 过滤掉数组值，避免在 http_build_query 时出现问题
             foreach ($params as $key => $param) {
-                if (empty($param) || is_array($param)) {
+                if (is_array($param) || $param === null || $param === '' || $param === false) {
                     unset($params[$key]);
                 }
             }
@@ -1291,7 +1291,7 @@ class Url implements UrlInterface
                 $detect_website_data = new DataObject([
                     'sites' => [],
                     'site_sample' => [
-                        "website_id" => 1,
+                        "website_id" => 0,
                         "name" => "默认网站",
                         "code" => "default",
                         "url" => "http://127.0.0.1:9981/default",
@@ -2138,8 +2138,11 @@ class Url implements UrlInterface
             $detectWebsiteData = new DataObject(['url' => $url]);
             $eventManager = w_obj(EventsManager::class);
             $eventManager->dispatch('Weline_Framework_Url::detect_website', $detectWebsiteData);
+            if (!$detectWebsiteData->hasData('website_id')) {
+                return null;
+            }
             $websiteId = (int)$detectWebsiteData->getData('website_id');
-            if ($websiteId <= 0) {
+            if ($websiteId < 0) {
                 return null;
             }
 
@@ -2186,7 +2189,7 @@ class Url implements UrlInterface
             $detect_website_data = new DataObject([
                 'sites' => [],
                 'site_sample' => [
-                    "website_id" => 1,
+                    "website_id" => 0,
                     "name" => "榛樿缃戠珯",
                     "code" => "default",
                     "url" => "http://127.0.0.1:9981/default",

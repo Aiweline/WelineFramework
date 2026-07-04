@@ -26,7 +26,10 @@ class Install implements InstallInterface
         /** @var DashboardViewService $dashboardViewService */
         $dashboardViewService = ObjectManager::getInstance(DashboardViewService::class);
         foreach ($dashboardViewService->listWebsites() as $website) {
-            $dashboardViewService->ensureDefaultView((int)($website['website_id'] ?? 0));
+            $view = $dashboardViewService->ensureDefaultView((int)($website['website_id'] ?? 0));
+            if ($view) {
+                $dashboardViewService->ensureLayoutInitialized($view);
+            }
         }
     }
 }

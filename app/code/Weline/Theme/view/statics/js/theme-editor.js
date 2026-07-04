@@ -87,6 +87,7 @@
         lastHoverPoint: null,
         virtualThemeAiCatalog: null,
         layoutLock: { enabled: false },
+        layoutIdentity: {},
         sidePanels: { configOpen: true, widgetOpen: true },
         fullscreenSidePanelsSnapshot: null,
         editorFullscreenFallback: false,
@@ -584,6 +585,45 @@
         }
     }
 
+    function parseLayoutIdentityDataset(dataset) {
+        if (!dataset) {
+            return {};
+        }
+
+        const scope = String(dataset.scope || '').trim();
+        const targetType = String(
+            dataset.themeLayoutTargetType
+            || dataset.themeLayoutSourceTargetType
+            || dataset.targetType
+            || ''
+        ).trim();
+        const targetIdRaw = dataset.themeLayoutTargetId
+            || dataset.themeLayoutSourceTargetId
+            || dataset.targetId
+            || '';
+        const targetId = parseInt(targetIdRaw || 0, 10) || 0;
+        if (scope === '' && targetType === '' && targetId <= 0) {
+            return {};
+        }
+
+        const payload = {};
+        if (scope !== '') {
+            payload.scope = scope;
+        }
+        if (targetType !== '') {
+            payload.target_type = targetType;
+            payload.theme_layout_target_type = targetType;
+            payload.theme_layout_source_target_type = targetType;
+        }
+        if (targetId > 0 || targetType !== '') {
+            payload.target_id = targetId;
+            payload.theme_layout_target_id = targetId;
+            payload.theme_layout_source_target_id = targetId;
+        }
+
+        return payload;
+    }
+
     function isLayoutLocked() {
         return Boolean(state.layoutLock && state.layoutLock.enabled);
     }
@@ -592,10 +632,12 @@
         const scope = String(getCurrentWindowParam('scope') || '').trim();
         const targetType = String(
             getCurrentWindowParam('theme_layout_target_type')
+            || getCurrentWindowParam('theme_layout_source_target_type')
             || getCurrentWindowParam('target_type')
             || ''
         ).trim();
         const targetIdRaw = getCurrentWindowParam('theme_layout_target_id')
+            || getCurrentWindowParam('theme_layout_source_target_id')
             || getCurrentWindowParam('target_id')
             || '';
         const targetId = parseInt(targetIdRaw || 0, 10) || 0;
@@ -605,7 +647,7 @@
             || ''
         ).trim();
         const sourceTargetIdRaw = getCurrentWindowParam('theme_layout_source_target_id')
-            || (targetId > 0 ? String(targetId) : '');
+            || (targetType !== '' ? String(targetId) : '');
         const sourceTargetId = parseInt(sourceTargetIdRaw || 0, 10) || 0;
         const hasIdentity = scope !== ''
             || targetType !== ''
@@ -641,7 +683,10 @@
 
     function getLayoutLockVirtualPayload() {
         if (!isLayoutLocked()) {
-            return getUrlLayoutIdentityPayload();
+            return {
+                ...(state.layoutIdentity || {}),
+                ...getUrlLayoutIdentityPayload(),
+            };
         }
 
         return {
@@ -694,7 +739,7 @@
         }
         const targetType = String(payload.target_type || '');
         const targetId = parseInt(payload.target_id || 0, 10) || 0;
-        if (targetType && targetType !== 'global' && targetId > 0) {
+        if (targetType && targetType !== 'global') {
             url.searchParams.set('theme_layout_target_type', targetType);
             url.searchParams.set('theme_layout_target_id', String(targetId));
             url.searchParams.set('theme_layout_source_target_type', targetType);
@@ -761,7 +806,7 @@
             target_type: targetType,
             target_id: targetId,
         };
-        if (targetType && targetType !== 'global' && targetId > 0) {
+        if (targetType && targetType !== 'global') {
             payload.theme_layout_target_type = targetType;
             payload.theme_layout_target_id = targetId;
             payload.theme_layout_source_target_type = targetType;
@@ -1076,6 +1121,25 @@
         }
     }
 
+    function resolveDirectEditorRequestUrl(url) {
+        const resolved = resolveSameOriginEditorUrl(url);
+        if (!resolved) {
+            return '';
+        }
+
+        try {
+            const parsed = new URL(resolved);
+            const path = parsed.pathname;
+            return [
+                '/theme/backend/theme-editor',
+                '/theme/backend/widget/',
+                '/theme/backend/virtual-theme/',
+            ].some((prefix) => path.includes(prefix)) ? resolved : '';
+        } catch (error) {
+            return '';
+        }
+    }
+
     function waitForWQuery(attempt = 0) {
         if (typeof window.w_query === 'function') {
             return Promise.resolve(window.w_query);
@@ -1119,6 +1183,24 @@
         }
         if (body !== null) {
             params.body = body;
+        }
+        const directUrl = resolveDirectEditorRequestUrl(params.url);
+        if (directUrl) {
+            try {
+                const editorApi = resolveEditorApi();
+                if (editorApi.mode === 'direct' && editorApi.api && typeof editorApi.api.request === 'function') {
+                    return editorApi.api.request(directUrl, {
+                        method: params.method,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            ...headers,
+                        },
+                        body,
+                    });
+                }
+            } catch (error) {
+                // Fall back to the query provider bridge below when the backend API facade is unavailable.
+            }
         }
         return themeQuery('editorRequest', params, { silent: options.silent === true });
     }
@@ -1365,6 +1447,7 @@
         state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
         state.layoutOptionsByType = parseLayoutOptionsByType(container.dataset.layoutOptions || '{}');
         state.layoutLock = parseLayoutLock(container.dataset.layoutLock || '{}');
+        state.layoutIdentity = parseLayoutIdentityDataset(container.dataset || {});
         _installedLocalesCache = parseInstalledLocales(container.dataset.installedLocales || '[]');
 
         // 缓存 DOM 元素
@@ -1656,7 +1739,11 @@
             }
             e.preventDefault();
             e.stopPropagation();
-            applyDefaultInjection(btn.getAttribute('data-injection-key') || '', btn);
+            applyDefaultInjection(
+                btn.getAttribute('data-injection-key') || '',
+                btn,
+                btn.getAttribute('data-apply-scope') || 'current'
+            );
         });
 
 	        // 组件预览按钮（部件库列表中的「预览」）
@@ -4185,7 +4272,8 @@
                             slot_id: slotIdFb,
                             area: areaFb,
                             layout_type: state.layoutType || 'homepage',
-                            layout_option: state.layoutOption || 'default'
+                            layout_option: state.layoutOption || 'default',
+                            ...getLayoutLockVirtualPayload()
                         })
                     });
 
@@ -4239,6 +4327,7 @@
 
                         // 关闭配置面板
                         elements.configPanel.classList.remove('show');
+                        await refreshDefaultInjectionApplications({ render: state.widgetLibraryTab === 'applications', silent: true });
                     } else {
                         showToast(result.message || '删除失败', 'error');
                     }
@@ -5704,6 +5793,7 @@
         const requiredBadge = item.required
             ? '<span class="widget-default-injection-badge"><i class="ri-alarm-warning-line"></i>' + escapeHtml(translateUiText('强烈推荐')) + '</span>'
             : '';
+        const scopePrompt = translateUiText('恢复范围：当前布局身份或同一布局的所有身份');
 
         el.innerHTML = '<div class="widget-default-injection-header">'
             + '<div class="widget-default-injection-title">'
@@ -5714,28 +5804,33 @@
             + '</div>'
             + '<div class="widget-default-injection-target">' + escapeHtml(targetParts.join(' · ')) + '</div>'
             + (reason ? '<div class="widget-default-injection-reason">' + escapeHtml(reason) + '</div>' : '')
+            + '<div class="widget-default-injection-scope"><i class="ri-information-line"></i><span>' + escapeHtml(scopePrompt) + '</span></div>'
             + '<div class="widget-default-injection-actions">'
-            + '<button type="button" class="btn-apply-default-injection" data-injection-key="' + escapeHtml(item.injection_key || '') + '">'
-            + '<i class="ri-add-circle-line"></i><span>' + escapeHtml(translateUiText('应用')) + '</span>'
+            + '<button type="button" class="btn-apply-default-injection btn-apply-default-injection-current" data-apply-scope="current" data-injection-key="' + escapeHtml(item.injection_key || '') + '" title="' + escapeHtml(translateUiText('只恢复当前布局身份')) + '">'
+            + '<i class="ri-focus-3-line"></i><span>' + escapeHtml(translateUiText('应用当前身份')) + '</span>'
+            + '</button>'
+            + '<button type="button" class="btn-apply-default-injection btn-apply-default-injection-all" data-apply-scope="all" data-injection-key="' + escapeHtml(item.injection_key || '') + '" title="' + escapeHtml(translateUiText('恢复到所有布局身份')) + '">'
+            + '<i class="ri-layout-grid-line"></i><span>' + escapeHtml(translateUiText('应用全部身份')) + '</span>'
             + '</button>'
             + '</div>';
 
         return el;
     }
 
-    async function applyDefaultInjection(injectionKey, buttonEl) {
+    async function applyDefaultInjection(injectionKey, buttonEl, applyScope = 'current') {
         injectionKey = String(injectionKey || '').trim();
         if (!injectionKey) {
             showToast(translateUiText('缺少应用项标识'), 'warning');
             return;
         }
+        applyScope = String(applyScope || 'current').trim() === 'all' ? 'all' : 'current';
         const defaults = state.defaultInjectionLib;
         if (defaults.applyingKey) {
             showToast(translateUiText('正在应用推荐部件，请稍候'), 'info');
             return;
         }
 
-        defaults.applyingKey = injectionKey;
+        defaults.applyingKey = injectionKey + ':' + applyScope;
         if (buttonEl) {
             buttonEl.disabled = true;
         }
@@ -5743,6 +5838,7 @@
         try {
             const payload = buildLayoutVersionIdentityPayload({
                 injection_key: injectionKey,
+                apply_scope: applyScope,
                 editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
             });
             const result = await apiJson(config.apiApplyDefaultInjection || `${config.apiBase}/apply-default-injection`, {
@@ -5787,7 +5883,12 @@
                 loadLayoutPreview();
             }
 
-            showToast(result.message || translateUiText('已应用推荐部件'), 'success');
+            const appliedCount = Number(result.applied_count || data.applied_count || 0);
+            const successMessage = result.message
+                || (applyScope === 'all' && appliedCount > 1
+                    ? translateUiText('已应用到所有布局身份')
+                    : translateUiText('已应用推荐部件'));
+            showToast(successMessage, 'success');
             await refreshDefaultInjectionApplications({ render: state.widgetLibraryTab === 'applications', silent: true });
         } catch (err) {
             console.error('[ThemeEditor] apply default injection failed:', err);
@@ -9226,7 +9327,8 @@
                     slot_id: slotId,
                     area: area,
                     layout_type: state.layoutType || 'homepage',
-                    layout_option: state.layoutOption || 'default'
+                    layout_option: state.layoutOption || 'default',
+                    ...getLayoutLockVirtualPayload()
                 })
             });
 
@@ -9281,6 +9383,7 @@
                     layoutId: layoutId || null,
                     slotId: slotId || null,
                 });
+                await refreshDefaultInjectionApplications({ render: state.widgetLibraryTab === 'applications', silent: true });
 
                 // 更新同层部件的移动按钮状态（如果有的话）
                 if (slotId) {
@@ -11579,26 +11682,6 @@
         }
     }
 
-    async function directApiJson(url, options = {}) {
-        const response = await fetch(url, {
-            ...options,
-            credentials: options.credentials || 'include',
-        });
-        const text = await response.text();
-        let result = {};
-        if (text) {
-            try {
-                result = JSON.parse(text);
-            } catch (error) {
-                throw new Error(describeNonJsonApiResponse(text, response));
-            }
-        }
-        if (!response.ok) {
-            throw new Error((result && result.message) || describeNonJsonApiResponse(text, response));
-        }
-        return result || {};
-    }
-
     function buildFormBody(payload) {
         const body = new URLSearchParams();
         Object.entries(payload || {}).forEach(([key, value]) => {
@@ -11622,7 +11705,7 @@
                 showToast(translateUiText('正在保存布局...'), 'info');
             }
 
-            const result = await directApiJson(config.apiPublish, {
+            const result = await apiJson(config.apiPublish, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -13652,6 +13735,7 @@
                 area: area || inferAreaFromSlotId(slotId),
                 layout_type: state.layoutType || state.pageType || 'homepage',
                 layout_option: state.layoutOption || 'default',
+                ...getLayoutLockVirtualPayload()
             })
         });
         return !!result?.success;
