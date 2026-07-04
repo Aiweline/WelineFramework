@@ -154,7 +154,7 @@ class WebsiteData
             return self::$currencyCodes;
         }
 
-        if (!self::$website || !self::$website->getWebsiteId()) {
+        if (!self::$website || !self::$website->hasData(Website::schema_fields_ID)) {
             self::$currencyCodes = [];
             return self::$currencyCodes;
         }
@@ -175,7 +175,7 @@ class WebsiteData
             return self::$languageCodes;
         }
 
-        if (!self::$website || !self::$website->getWebsiteId()) {
+        if (!self::$website || !self::$website->hasData(Website::schema_fields_ID)) {
             self::$languageCodes = [];
             return self::$languageCodes;
         }
@@ -421,4 +421,3 @@ class WebsiteData
         self::$currencies = null;
     }
 }
-
