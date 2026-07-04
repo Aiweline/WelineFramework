@@ -12,10 +12,8 @@ declare(strict_types=1);
 namespace Weline\Widget\Console\Widget;
 
 use Weline\Framework\Console\CommandAbstract;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Widget\Service\ParamSchemaRegistry;
-use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Service\WidgetRegistryRefreshService;
 
 /**
  * 部件注册表刷新命令
@@ -35,33 +33,29 @@ class Refresh extends CommandAbstract
         try {
             $this->printer->setup(__('开始刷新部件注册表...'));
 
-            /** @var WidgetRegistry $registry */
-            $registry = ObjectManager::getInstance(WidgetRegistry::class);
-
-            $ok = $registry->refresh();
+            /** @var WidgetRegistryRefreshService $refreshService */
+            $refreshService = ObjectManager::getInstance(WidgetRegistryRefreshService::class);
+            $report = $refreshService->refresh('widget_refresh_command');
+            $ok = (bool)($report['success'] ?? false);
             if ($ok) {
                 $this->printer->success(__('✓ 部件注册表已刷新完成。'));
                 $this->printer->note(__('位置：generated/widgets.php'));
+                $this->printer->note(__('首次入库：%{1}，更新：%{2}，默认注入事件：%{3}', [
+                    (string)($report['created_count'] ?? 0),
+                    (string)($report['updated_count'] ?? 0),
+                    !empty($report['widget_install_event_dispatched']) ? __('已派发') : __('未派发'),
+                ]));
             } else {
                 $this->printer->error(__('✖ 写入部件注册表失败。'));
             }
 
-            /** @var ParamSchemaRegistry $paramSchemaRegistry */
-            $paramSchemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
-            $schemaOk = $paramSchemaRegistry->refresh();
+            $schemaOk = (bool)($report['param_schema_success'] ?? false);
             if ($schemaOk) {
                 $this->printer->success(__('✓ ParamSchema 注册表已刷新完成。'));
                 $this->printer->note(__('位置：generated/param_schemas.php'));
             } else {
                 $this->printer->error(__('✖ 写入 ParamSchema 注册表失败。'));
             }
-
-            /** @var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventData = [
-                'source' => 'widget_refresh_command',
-            ];
-            $eventsManager->dispatch('Weline_Widget::registry_refresh_after', $eventData);
         } catch (\Throwable $e) {
             $this->printer->error(__('刷新失败：%{1}', [$e->getMessage()]));
             if (DEV) {
