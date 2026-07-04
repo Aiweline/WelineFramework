@@ -19,11 +19,11 @@ final class WelineBinaryCodec
     private const TYPE_LIST = 0x07;
     private const TYPE_MAP = 0x08;
 
-    private const MAX_PACKET_BYTES = 65536;
-    private const MAX_DEPTH = 8;
+    private const MAX_PACKET_BYTES = 4194304;
+    private const MAX_DEPTH = 32;
     private const MAX_LIST_ITEMS = 200;
     private const MAX_MAP_KEYS = 100;
-    private const MAX_STRING_BYTES = 16384;
+    private const MAX_STRING_BYTES = 2097152;
     private const MAX_SAFE_INTEGER = 9007199254740991;
 
     public function encodePacket(mixed $payload): string
@@ -130,9 +130,7 @@ final class WelineBinaryCodec
 
         $encoded = \chr(self::TYPE_MAP) . $this->encodeVarUint(\count($map));
         foreach ($map as $key => $value) {
-            if (!\is_string($key)) {
-                throw new \InvalidArgumentException('Map key must be a string.');
-            }
+            $key = (string)$key;
             if (\strlen($key) > self::MAX_STRING_BYTES || \preg_match('//u', $key) !== 1) {
                 throw new \InvalidArgumentException('Invalid Weline binary map key.');
             }

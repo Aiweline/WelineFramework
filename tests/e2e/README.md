@@ -1,6 +1,6 @@
 # Playwright E2E
 
-`tests/e2e` 现在提供一层统一的 E2E 封包，目标是让用例尽量只关心业务行为，不再手写运行时地址、后台前缀、API 前缀、协议差异或当前 WLS 端口。
+`tests/e2e` 现在提供一层统一的 E2E 封包和运行器，目标是让用例尽量只关心业务行为，不再手写运行时地址、后台前缀、API 前缀、协议差异或当前 WLS 端口。业务用例请放回各自模块的 `test/e2e` 或 `Test/e2e`，`tests/e2e` 不再承载模块业务 spec。
 
 ## 设计目标
 
@@ -12,12 +12,11 @@
 
 ## 自动收集规则
 
-收集脚本会扫描：
+收集脚本会扫描 active module 目录：
 
-- `tests/e2e/specs/**`
 - 模块目录下的 `test/e2e/**`
 - 模块目录下的 `Test/e2e/**`
-- `e2e` / `E2E` 大小写变体
+- 兼容 `e2e` / `E2E` 大小写变体
 
 运行：
 
@@ -107,7 +106,7 @@ php bin/w e2e:run
 只跑某个用例：
 
 ```bash
-php bin/w e2e:run specs/backend/WeShop_Cart-smoke-backend.spec.js --project=chromium --workers=1
+php bin/w e2e:run app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js --project=chromium --workers=1
 ```
 
 列出当前收集结果：
@@ -182,6 +181,6 @@ moduleDescribe(test, MODULE, 'backend smoke', () => {
 2. `node tests/e2e/collect-tests.js`
 3. `npx playwright test --list`
 
-**若在仓库根目录执行 `npx playwright test tests/e2e/specs/...` 出现 `test.describe() was not expected here` / `No tests found`：**请改用 `php bin/w e2e:run ...`（命令会在 `tests/e2e` 下调用 `node node_modules/playwright/cli.js test`，与 spec 中的 `require('@playwright/test')` 为同一套 Runner）。若坚持本地 npx，请先 `cd tests/e2e` 再执行 `npx playwright test --config playwright.config.js specs/backend/xxx.spec.js`。
+**若在仓库根目录执行 `npx playwright test app/code/.../test/e2e/...` 出现 `test.describe() was not expected here` / `No tests found`：**请改用 `php bin/w e2e:run ...`（命令会在 `tests/e2e` 下调用 `node node_modules/playwright/cli.js test`，与 spec 中的 `require('@playwright/test')` 为同一套 Runner）。若坚持本地 npx，请先 `cd tests/e2e` 再执行 `npx playwright test --config playwright.config.js ../../app/code/Vendor/Module/test/e2e/backend/xxx.spec.js`。
 
 如果主题预览或后台地址异常，通常不是用例本身的问题，而是运行时信息、随机前缀或主题上下文没有被统一 helper 接管。

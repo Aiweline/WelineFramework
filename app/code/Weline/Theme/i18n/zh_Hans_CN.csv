@@ -2089,3 +2089,8 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 编译less静态资源！,编译less静态资源！
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
+"复制 CMS 页面发布布局版本","复制 CMS 页面发布布局版本"
+"复制 CMS 页面草稿布局版本","复制 CMS 页面草稿布局版本"
+"Theme target 布局复制参数不完整。","Theme target 布局复制参数不完整。"
+"复制 Theme target 布局选择","复制 Theme target 布局选择"
+"复制 Theme target 的布局选择、可视化布局和虚拟布局数据","复制 Theme target 的布局选择、可视化布局和虚拟布局数据"

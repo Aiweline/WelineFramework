@@ -101,6 +101,8 @@ class WidgetQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getAvailableList',
                     'description' => __('获取可用部件列表（分组、过滤、i18n）'),
+                    'frontend' => true,
+                    'mode' => 'read',
                     'params' => [
                         ['name' => 'page_type', 'type' => 'string|null', 'required' => false, 'description' => __('页面类型，null 表示不过滤')],
                         ['name' => 'filter_options', 'type' => 'array|null', 'required' => false, 'description' => __('过滤选项，如 slot_id、area、show_exclusive_only')],

@@ -4,6 +4,8 @@
 
     const MAGIC = [0x57, 0x51, 0x42, 0x31]; // WQB1
     const VERSION = 1;
+    const MAX_DEPTH = 32;
+    const MAX_STRING_BYTES = 2097152;
     const CONTENT_TYPE = 'application/x-weline-query-bin';
     const PROTOCOL = 'worker-query-bin-v1';
     const WORKER_PROTOCOL = 'weline-worker-request-v1';
@@ -229,7 +231,7 @@
             body: rawBody,
         });
 
-        const body = decodePacket(new Uint8Array(await response.arrayBuffer()));
+        const body = decodeResponsePacket(response, new Uint8Array(await response.arrayBuffer()));
         if (!response.ok || !body || body.ok !== true || !body.data) {
             const message = body && body.error ? body.error.message : 'Weline worker handshake failed.';
             throw Object.assign(new Error(message), { code: 'auth_error', status: response.status });
@@ -275,7 +277,7 @@
         });
 
         const responseBytes = new Uint8Array(await response.arrayBuffer());
-        const body = responseBytes.length > 0 ? decodePacket(responseBytes) : null;
+        const body = responseBytes.length > 0 ? decodeResponsePacket(response, responseBytes) : null;
         return {
             responseOk: response.ok,
             status: response.status,
@@ -289,6 +291,33 @@
         if (status === 503) return true;
         const code = body && body.error && typeof body.error.code === 'string' ? body.error.code : '';
         return code.toLowerCase() === 'maintenance';
+    }
+
+    function decodeResponsePacket(response, responseBytes) {
+        try {
+            return decodePacket(responseBytes);
+        } catch (error) {
+            const status = response && response.status ? response.status : 0;
+            const contentType = response && response.headers && typeof response.headers.get === 'function'
+                ? (response.headers.get('content-type') || '')
+                : '';
+            const bytes = Array.from(responseBytes.slice(0, 32))
+                .map((byte) => byte.toString(16).padStart(2, '0'))
+                .join(' ');
+            const ascii = Array.from(responseBytes.slice(0, 600))
+                .map((byte) => (byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.'))
+                .join('');
+            const message = [
+                error instanceof Error ? error.message : String(error),
+                `(HTTP ${status}${contentType ? ', ' + contentType : ''})`,
+                bytes ? `bytes=${bytes}` : 'bytes=empty',
+                ascii ? `preview=${ascii}` : '',
+            ].filter(Boolean).join(' ');
+            throw Object.assign(new Error(message), {
+                code: 'protocol_error',
+                status,
+            });
+        }
     }
 
     function collectHeaders(responseHeaders) {
@@ -569,7 +598,7 @@
     }
 
     function encodeValue(writer, value, depth) {
-        if (depth > 8) throw new Error('Weline binary value exceeds max depth.');
+        if (depth > MAX_DEPTH) throw new Error('Weline binary value exceeds max depth.');
         if (value === null || typeof value === 'undefined') {
             writer.byte(0x00);
             return;
@@ -599,7 +628,7 @@
         }
         if (typeof value === 'string') {
             const bytes = encoder.encode(value);
-            if (bytes.length > 16384) throw new Error('String exceeds 16KB limit.');
+            if (bytes.length > MAX_STRING_BYTES) throw new Error('String exceeds 2MB limit.');
             writer.byte(0x05);
             writer.varuint(bytes.length);
             writer.bytesValue(bytes);
@@ -607,7 +636,7 @@
         }
         if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
             const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
-            if (bytes.length > 16384) throw new Error('Bytes exceed 16KB limit.');
+            if (bytes.length > MAX_STRING_BYTES) throw new Error('Bytes exceed 2MB limit.');
             writer.byte(0x06);
             writer.varuint(bytes.length);
             writer.bytesValue(bytes);
@@ -627,7 +656,7 @@
             writer.varuint(keys.length);
             keys.forEach((key) => {
                 const keyBytes = encoder.encode(key);
-                if (keyBytes.length === 0 || keyBytes.length > 16384) {
+                if (keyBytes.length === 0 || keyBytes.length > MAX_STRING_BYTES) {
                     throw new Error('Invalid Weline map key.');
                 }
                 writer.varuint(keyBytes.length);
@@ -657,7 +686,7 @@
     }
 
     function decodeValue(reader, depth) {
-        if (depth > 8) throw new Error('Weline binary value exceeds max depth.');
+        if (depth > MAX_DEPTH) throw new Error('Weline binary value exceeds max depth.');
         const type = reader.byte();
         if (type === 0x00) return null;
         if (type === 0x01) return false;
@@ -676,12 +705,12 @@
         }
         if (type === 0x05) {
             const length = reader.varuint();
-            if (length > 16384) throw new Error('String exceeds 16KB limit.');
+            if (length > MAX_STRING_BYTES) throw new Error('String exceeds 2MB limit.');
             return decoder.decode(reader.bytesValue(length));
         }
         if (type === 0x06) {
             const length = reader.varuint();
-            if (length > 16384) throw new Error('Bytes exceed 16KB limit.');
+            if (length > MAX_STRING_BYTES) throw new Error('Bytes exceed 2MB limit.');
             return reader.bytesValue(length);
         }
         if (type === 0x07) {
@@ -699,7 +728,7 @@
             const map = {};
             for (let i = 0; i < count; i += 1) {
                 const length = reader.varuint();
-                if (length === 0 || length > 16384) throw new Error('Invalid Weline map key.');
+                if (length === 0 || length > MAX_STRING_BYTES) throw new Error('Invalid Weline map key.');
                 const key = decoder.decode(reader.bytesValue(length));
                 if (Object.prototype.hasOwnProperty.call(map, key)) {
                     throw new Error('Duplicate Weline map key.');

@@ -30,6 +30,7 @@ Public reads are exposed through:
 
 - `w_query('cms', 'getPage', ['page_id'|'identifier'])`
 - `w_query('cms', 'listPages', ['status', 'scope', 'page', 'page_size'])`
+- `w_query('cms', 'listPathGroups', ['website_id', 'path_group', 'search'])`
 - `w_query('cms', 'resolveThemeTarget', ['target_id'])`
 - `w_query('cms', 'renderPagePayload', ['identifier'|'page_id', 'scope', 'preview'])`
 
@@ -38,6 +39,10 @@ Cross-module Theme data access must continue through `w_query('theme', ...)`.
 ## Delete Policy
 
 CMS pages are soft-deleted by setting `deleted_at` and disabling the page. Theme target data is retained and is not hard-deleted with the page.
+
+## Copy Policy
+
+Backend copy actions support both a single CMS page and a top-level path group. The operator chooses a target website before submitting. CMS copies the page/path records inside `Weline_Cms`, while Theme-owned layout selection, visual layout rows, and virtual layout versions are copied through `w_query('theme', 'copyTargetLayoutData', ...)` so CMS never writes Theme internals directly.
 
 ## Preview URL
 
