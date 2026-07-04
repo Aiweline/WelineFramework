@@ -7,10 +7,11 @@ namespace Weline\Framework\UnitTest\Console\E2e;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\UnitTest\Service\TestCollectionService;
 
 class Run extends CommandAbstract
 {
-    private const COLLECT_SCRIPT = 'collect-tests.js';
     private const COLLECTED_TESTS_FILE = 'collected-tests.json';
 
     public function execute(array $args = [], array $data = []): int
@@ -27,31 +28,33 @@ class Run extends CommandAbstract
         }
 
         $control = $this->parseControlOptions($args);
-        $collected = [];
-        if ($control['module'] !== '' || $control['list_modules']) {
-            $collected = $this->loadCollectedTests($e2eDir, $control['refresh_collection']);
-        }
+        $collected = $this->loadCollectedTests($e2eDir, $control['refresh_collection']);
         if ($control['list_modules']) {
             return $this->printModules($collected);
         }
 
         $extraEnv = [];
-        if ($control['module'] !== '' && $control['spec'] === '') {
-            $moduleFiles = $this->resolveModuleFiles($control['module'], $collected);
-            // Fallback: if no dedicated tests, search shared specs by module name pattern
-            if ($moduleFiles === [] && isset($collected['all_test_files']) && is_array($collected['all_test_files'])) {
-                $escapedModule = preg_quote($control['module'], '/');
-                $pattern = "/(?:^|[\\/\\\\]){$escapedModule}(?:$|[-.\/\\\\])/i";
-                $moduleFiles = array_values(array_filter(
+        if ($control['spec'] === '') {
+            $filesToRun = [];
+            if ($control['module'] !== '') {
+                $filesToRun = $this->resolveModuleFiles($control['module'], $collected);
+                if ($filesToRun === []) {
+                    $this->printer->warning(__('模块 %{1} 未找到 E2E 用例，退出。', [$control['module']]));
+                    return 1;
+                }
+                $extraEnv['MODULE_FILTER'] = $control['module'];
+            } elseif (isset($collected['all_test_files']) && is_array($collected['all_test_files'])) {
+                $filesToRun = array_values(array_filter(
                     $collected['all_test_files'],
-                    static fn(string $f) => preg_match($pattern, $f) === 1
+                    static fn($file): bool => is_string($file) && $file !== ''
                 ));
             }
-            if ($moduleFiles === []) {
-                $this->printer->warning(__('模块 %{1} 未找到 E2E 用例，退出。', [$control['module']]));
+
+            if ($filesToRun === []) {
+                $this->printer->warning(__('未找到可运行的 E2E 用例，退出。'));
                 return 1;
             }
-            $extraEnv['MODULE_FILTER'] = $control['module'];
+            $extraEnv['PLAYWRIGHT_TEST_FILES'] = json_encode(array_values($filesToRun), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
         }
 
         $playwrightArgs = $this->buildPlaywrightArgs($args, $control);
@@ -61,6 +64,10 @@ class Run extends CommandAbstract
 
         if (!$this->hasAnyHeadMode($playwrightArgs, $control['headless'])) {
             $playwrightArgs[] = '--headed';
+        }
+
+        if (!$this->ensurePlaywrightRuntime($e2eDir)) {
+            return 1;
         }
 
         $command = $this->buildPlaywrightCommand($e2eDir, $playwrightArgs, $extraEnv);
@@ -92,7 +99,7 @@ class Run extends CommandAbstract
             'e2e:run [spec] [options]',
             __('直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。'),
             [
-                '[spec]' => __('可选，指定测试文件或目录，例如 specs/backend/WeShop_Cart-smoke-backend.spec.js'),
+                '[spec]' => __('可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js'),
                 '--project=NAME' => __('指定 Playwright project，如 chromium/firefox/webkit'),
                 '--module=Vendor_Module' => __('只运行指定模块（基于 collected-tests.json 精准过滤）'),
                 '--case="用例标题关键字"' => __('按测试标题关键词筛选（映射为 --grep）'),
@@ -108,7 +115,7 @@ class Run extends CommandAbstract
             [],
             [
                 __('运行全部 E2E') => 'php bin/w e2e:run',
-                __('运行单个后端用例') => 'php bin/w e2e:run specs/backend/WeShop_Cart-smoke-backend.spec.js --project=chromium',
+                __('运行单个后端用例') => 'php bin/w e2e:run app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js --project=chromium',
                 __('按模块运行') => 'php bin/w e2e:run --module=WeShop_Cart --project=chromium',
                 __('按用例标题运行') => 'php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium',
                 __('按用例 ID 运行') => 'php bin/w e2e:run --module=WeShop_Cart --case-id=CART-REMOVE-001 --project=chromium',
@@ -151,6 +158,9 @@ class Run extends CommandAbstract
 
         foreach ($args as $key => $value) {
             if (is_int($key)) {
+                if (is_string($value) && $control['spec'] !== '' && trim($value) === $control['spec']) {
+                    continue;
+                }
                 if (is_string($value) && $value !== '' && !str_starts_with($value, '-') && !str_contains($value, ':')) {
                     $result[] = $value;
                 }
@@ -172,7 +182,7 @@ class Run extends CommandAbstract
                 $normalizedKey = $aliasMap[$normalizedKey];
             }
 
-            if ($value === true || $value === 'true' || $value === 1 || $value === '1') {
+            if ($value === true || $value === 'true') {
                 $result[] = '--' . $normalizedKey;
                 if ($normalizedKey === 'grep') {
                     $hasGrep = true;
@@ -180,7 +190,7 @@ class Run extends CommandAbstract
                 continue;
             }
 
-            if ($value === false || $value === 'false' || $value === 0 || $value === '0' || $value === null) {
+            if ($value === false || $value === 'false' || $value === null) {
                 continue;
             }
 
@@ -230,11 +240,17 @@ class Run extends CommandAbstract
             $envList[(string)$key] = (string)$value;
         }
         $envPrefix = '';
-        foreach ($envList as $key => $value) {
-            $envPrefix .= 'set "' . $key . '=' . $value . '" && ';
-        }
         if (PHP_OS_FAMILY === 'Windows') {
+            foreach ($envList as $key => $value) {
+                $envPrefix .= 'set "' . $key . '=' . $value . '" && ';
+            }
             return 'cd /d ' . escapeshellarg($e2eDir) . ' && ' . $envPrefix . $playwrightCommand;
+        }
+        foreach ($envList as $key => $value) {
+            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string)$key)) {
+                continue;
+            }
+            $envPrefix .= $key . '=' . escapeshellarg((string)$value) . ' ';
         }
         return 'cd ' . escapeshellarg($e2eDir) . ' && ' . $envPrefix . $playwrightCommand;
     }
@@ -269,6 +285,110 @@ class Run extends CommandAbstract
         return (int)proc_close($process);
     }
 
+    private function ensurePlaywrightRuntime(string $e2eDir): bool
+    {
+        $localPlaywright = $this->joinPath($this->joinPath($e2eDir, 'node_modules'), 'playwright');
+        $localPlaywrightTest = $this->joinPath($this->joinPath($this->joinPath($e2eDir, 'node_modules'), '@playwright'), 'test');
+        if (is_file($this->joinPath($localPlaywright, 'cli.js')) && is_file($this->joinPath($localPlaywrightTest, 'index.js'))) {
+            return true;
+        }
+
+        $runtimePlaywright = $this->resolvePlaywrightPackageDir($e2eDir);
+        if ($runtimePlaywright === null) {
+            $this->printer->error(__('未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。'));
+            return false;
+        }
+
+        $nodeModules = $this->joinPath($e2eDir, 'node_modules');
+        if (!is_dir($nodeModules) && !@mkdir($nodeModules, 0775, true) && !is_dir($nodeModules)) {
+            $this->printer->error(__('无法创建 E2E node_modules 目录：%{1}', [$nodeModules]));
+            return false;
+        }
+
+        if (!$this->preparePlaywrightPackageShim($localPlaywright, $runtimePlaywright)) {
+            return false;
+        }
+
+        if (!is_dir($localPlaywrightTest) && !@mkdir($localPlaywrightTest, 0775, true) && !is_dir($localPlaywrightTest)) {
+            $this->printer->error(__('无法创建 @playwright/test shim 目录：%{1}', [$localPlaywrightTest]));
+            return false;
+        }
+
+        $packageJson = $this->joinPath($localPlaywrightTest, 'package.json');
+        $indexJs = $this->joinPath($localPlaywrightTest, 'index.js');
+        if (!is_file($packageJson)) {
+            @file_put_contents($packageJson, "{\"name\":\"@playwright/test\",\"main\":\"index.js\"}\n");
+        }
+        if (!is_file($indexJs)) {
+            @file_put_contents($indexJs, "module.exports = require('playwright/test');\n");
+        }
+
+        return is_file($this->joinPath($localPlaywright, 'cli.js')) && is_file($indexJs);
+    }
+
+    private function preparePlaywrightPackageShim(string $localPlaywright, string $runtimePlaywright): bool
+    {
+        if (is_file($this->joinPath($localPlaywright, 'cli.js'))) {
+            return true;
+        }
+
+        if (!file_exists($localPlaywright)) {
+            if (@symlink($runtimePlaywright, $localPlaywright)) {
+                return true;
+            }
+        }
+
+        if (!is_dir($localPlaywright) && !@mkdir($localPlaywright, 0775, true) && !is_dir($localPlaywright)) {
+            $this->printer->error(__('无法创建 playwright shim 目录：%{1}', [$localPlaywright]));
+            return false;
+        }
+
+        $targetCli = $this->joinPath($runtimePlaywright, 'cli.js');
+        $targetTest = $this->joinPath($runtimePlaywright, 'test.js');
+        $targetIndex = $this->joinPath($runtimePlaywright, 'index.js');
+        $shims = [
+            'cli.js' => $targetCli,
+            'test.js' => $targetTest,
+            'index.js' => $targetIndex,
+        ];
+        foreach ($shims as $file => $target) {
+            if (!is_file($target)) {
+                continue;
+            }
+            $content = "module.exports = require(" . json_encode($target, JSON_UNESCAPED_SLASHES) . ");\n";
+            @file_put_contents($this->joinPath($localPlaywright, $file), $content);
+        }
+
+        return is_file($this->joinPath($localPlaywright, 'cli.js'));
+    }
+
+    private function resolvePlaywrightPackageDir(string $e2eDir): ?string
+    {
+        $candidates = [];
+        foreach (['WELINE_E2E_PLAYWRIGHT_DIR', 'PLAYWRIGHT_PACKAGE_DIR'] as $envName) {
+            $configured = trim((string)getenv($envName));
+            if ($configured !== '') {
+                $candidates[] = $configured;
+            }
+        }
+
+        $candidates[] = $this->joinPath($this->joinPath($e2eDir, 'node_modules'), 'playwright');
+        $candidates[] = BP . 'node_modules' . DS . 'playwright';
+        $home = trim((string)getenv('HOME'));
+        if ($home !== '') {
+            $candidates[] = $home . DS . '.cache' . DS . 'codex-runtimes' . DS . 'codex-primary-runtime' . DS . 'dependencies' . DS . 'node' . DS . 'node_modules' . DS . 'playwright';
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = rtrim($candidate, "\\/");
+            if ($candidate !== '' && is_file($this->joinPath($candidate, 'cli.js'))) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     private function buildProcessEnvironment(array $extraEnv): array
     {
         $env = [];
@@ -292,20 +412,6 @@ class Run extends CommandAbstract
         }
 
         return $env;
-    }
-
-    private function buildCollectCommand(string $e2eDir): string
-    {
-        $nodeBinary = $this->resolveNodeBinary();
-        $collectParts = [$nodeBinary, self::COLLECT_SCRIPT];
-        $collectCommand = implode(' ', array_map(static fn(string $part): string => escapeshellarg($part), $collectParts));
-        $envPrefix = PHP_OS_FAMILY === 'Windows'
-            ? 'set "PATH=' . $this->buildWindowsE2ePath($nodeBinary) . '" && '
-            : '';
-        if (PHP_OS_FAMILY === 'Windows') {
-            return 'cd /d ' . escapeshellarg($e2eDir) . ' && ' . $envPrefix . $collectCommand;
-        }
-        return 'cd ' . escapeshellarg($e2eDir) . ' && ' . $collectCommand;
     }
 
     private function buildWindowsE2ePath(string $nodeBinary): string
@@ -427,12 +533,32 @@ class Run extends CommandAbstract
             return '';
         };
 
+        $spec = $pick($args, ['spec', 'file']);
+        if ($spec === '') {
+            foreach ($args as $value) {
+                if (!is_string($value)) {
+                    continue;
+                }
+                $candidate = trim($value);
+                if ($candidate === '' || str_starts_with($candidate, '-')) {
+                    continue;
+                }
+                $absolute = str_starts_with($candidate, DIRECTORY_SEPARATOR)
+                    ? $candidate
+                    : BP . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $candidate), DIRECTORY_SEPARATOR);
+                if (str_ends_with($candidate, '.spec.js') || is_file($absolute) || is_dir($absolute)) {
+                    $spec = $candidate;
+                    break;
+                }
+            }
+        }
+
         return [
             'module' => $pick($args, ['module', 'm']),
             'headless' => isset($args['headless']),
             'case' => $pick($args, ['case']),
             'case_id' => $pick($args, ['case_id', 'case-id']),
-            'spec' => $pick($args, ['spec', 'file']),
+            'spec' => $spec,
             'list_modules' => isset($args['list_modules']) || isset($args['list-modules']),
             'refresh_collection' => isset($args['refresh_collection']) || isset($args['refresh-collection']) || isset($args['rc']),
         ];
@@ -441,26 +567,15 @@ class Run extends CommandAbstract
     private function loadCollectedTests(string $e2eDir, bool $refresh): array
     {
         $file = $e2eDir . DS . self::COLLECTED_TESTS_FILE;
-        if ($refresh || !is_file($file)) {
-            $collectCommand = $this->buildCollectCommand($e2eDir);
-            $code = 1;
-            passthru($collectCommand, $code);
-            if ($code !== 0) {
-                $this->printer->warning(__('测试收集脚本执行失败，模块过滤可能不可用。'));
-            }
+        /** @var TestCollectionService $collector */
+        $collector = ObjectManager::getInstance(TestCollectionService::class);
+        $manifest = $collector->collectE2eManifest();
+        if (!$collector->writeJson($manifest, $file)) {
+            $this->printer->warning(__('测试清单写入失败，模块过滤可能不可用。'));
+            return $manifest;
         }
 
-        if (!is_file($file)) {
-            return [];
-        }
-
-        $content = @file_get_contents($file);
-        if (!is_string($content) || trim($content) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($content, true);
-        return is_array($decoded) ? $decoded : [];
+        return $manifest;
     }
 
     private function resolveModuleFiles(string $module, array $collected): array
@@ -506,4 +621,3 @@ class Run extends CommandAbstract
         return 0;
     }
 }
-

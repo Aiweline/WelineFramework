@@ -26,6 +26,7 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 # Responsibilities
 
 - Keep all browser business requests on the official `theme.js -> weline-api -> worker` path.
+- Treat bin-query / `weline-api` as the only approved frontend-backend business interface path.
 - Choose the correct frontend API surface: `Weline.Api.resource()`, `Weline.Api.graph()`, `Weline.Api.stream()`, or low-level `Weline.Api.request()` helpers when appropriate.
 - Keep backend protocol details hidden from business templates and module scripts.
 - Preserve unified maintenance handling, HTTP error handling, retry behavior, and DEV diagnostics provided by `Weline.Api`.
@@ -46,11 +47,13 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 
 # Weline Rules
 
-- All browser-visible business requests must go through Theme `theme.js` and the built-in `weline-api`.
+- All browser-visible frontend-backend business requests must go through bin-query, via Theme `theme.js` and the built-in `weline-api`.
 - For station-internal business APIs, prefer `const Api = await Weline.Api.resource('provider')` and then `await Api.operation(params)`.
 - Use `Weline.Api.graph()` for graph-style frontend data access and `Weline.Api.stream()` for stream or SSE-style subscriptions.
+- Backend capabilities consumed by browser business flows must be exposed through QueryProvider / `frontend=true` operations and called through `Weline.Api.*`.
 - Do not handwrite `/api/framework/query-bin`, worker protocol URLs, or direct business REST URLs in theme templates, module scripts, or API examples.
-- Do not add direct browser requests with `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or `new EventSource(url)` for Weline business flows.
+- Do not add direct browser requests with native Ajax/XHR, `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or `new EventSource(url)` for Weline business flows.
+- Do not keep "quick" examples, temporary fallbacks, or compatibility branches that use raw Ajax/XHR/fetch when `weline-api` is unavailable.
 - Do not bypass Weline maintenance handling, default HTTP error handling, or unified request diagnostics unless the framework docs explicitly allow it.
 - Use `silent`, `onError`, and `onHttpError` only when the business case genuinely needs custom handling.
 - Keep examples copy-safe for other AIs and engineers: if one example would normalize a bad pattern, do not write it.

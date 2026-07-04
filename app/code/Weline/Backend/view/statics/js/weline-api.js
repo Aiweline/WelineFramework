@@ -47,6 +47,19 @@
             : '/static/Weline/Backend/js/weline-api-worker.js';
     }
 
+    function defaultQueryWorkerUrl() {
+        if (window.Weline && window.Weline.staticResourceResolver && typeof window.Weline.staticResourceResolver.resolve === 'function') {
+            try {
+                return window.Weline.staticResourceResolver.resolve('Weline_Frontend::js/weline-api-worker.js');
+            } catch (error) {
+                /* fallback below */
+            }
+        }
+        return isDevMode()
+            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+            : '/static/Weline/Frontend/js/weline-api-worker.js';
+    }
+
     function withDevCacheBust(url) {
         if (!isDevMode()) {
             return url;
@@ -214,6 +227,87 @@
             cache: requestOptions.cache || 'no-store',
             redirect: requestOptions.redirect || 'follow'
         };
+    }
+
+    function getRuntimeConfig() {
+        return (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+    }
+
+    function mergeApiConfig() {
+        var runtimeConfig = getRuntimeConfig();
+        return Object.assign({}, runtimeConfig.api || {}, window.WelineApiConfig || {});
+    }
+
+    function normalizeCallParams(params) {
+        if (!params || typeof params !== 'object' || Array.isArray(params) || isFormData(params)) {
+            return params || {};
+        }
+        var normalized = {};
+        Object.keys(params).forEach(function (key) {
+            if (key === 'form_key' || key === 'csrf_token' || key === '_token') {
+                return;
+            }
+            normalized[key] = params[key];
+        });
+        return normalized;
+    }
+
+    function normalizeLocale(value) {
+        var locale = String(value || '').trim();
+        return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function normalizeCurrencyList(values) {
+        var codes = [];
+        var seen = {};
+        if (!Array.isArray(values)) {
+            values = [values];
+        }
+        values.forEach(function (value) {
+            if (value && typeof value === 'object') {
+                value = value.code || value.currency || value.currency_code || value.value || '';
+            }
+            var code = normalizeCurrencyCode(value);
+            if (!/^[A-Z]{3}$/.test(code) || seen[code]) {
+                return;
+            }
+            seen[code] = true;
+            codes.push(code);
+        });
+        return codes;
+    }
+
+    function normalizeCurrency(value, config) {
+        var currency = normalizeCurrencyCode(value);
+        var supported = {};
+        normalizeCurrencyList(config.availableCurrencies).forEach(function (code) {
+            supported[code] = true;
+        });
+        if (config.defaultCurrency) {
+            supported[normalizeCurrencyCode(config.defaultCurrency)] = true;
+        }
+        return supported[currency] ? currency : '';
+    }
+
+    function buildQueryBinConfig() {
+        var apiConfig = mergeApiConfig();
+        var runtimeConfig = getRuntimeConfig();
+        var config = {
+            endpoint: sameOriginUrl(apiConfig.endpoint || apiConfig.queryBinUrl || '/api/framework/query-bin'),
+            workerUrl: withDevCacheBust(sameOriginUrl(apiConfig.queryWorkerUrl || apiConfig.workerUrl || defaultQueryWorkerUrl())),
+            deployVersion: String(apiConfig.deployVersion || apiConfig.deploy_version || runtimeConfig.deployVersion || runtimeConfig.deploy_version || 'dev'),
+            workerBuildId: String(apiConfig.workerBuildId || apiConfig.worker_build_id || runtimeConfig.workerBuildId || runtimeConfig.worker_build_id || 'dev'),
+            locale: normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || ''),
+            defaultCurrency: normalizeCurrencyCode(apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'),
+            availableCurrencies: normalizeCurrencyList(apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || []),
+            requestTimeoutMs: parseInt(apiConfig.requestTimeoutMs || runtimeConfig.requestTimeoutMs || 60000, 10)
+        };
+        config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || '', config);
+        return config;
     }
 
     function buildError(message, response, requestUrl) {
@@ -522,7 +616,7 @@
             return directFetch(requestUrl, requestOptions, mode);
         }
         var messageId = this.nextId();
-        var timeoutMs = Math.max(1000, parseInt((options && options.timeoutMs) || this.config.requestTimeoutMs || 15000, 10));
+        var timeoutMs = Math.max(1000, parseInt((options && options.timeoutMs) || this.config.requestTimeoutMs || 60000, 10));
         var worker = this.worker;
         var pending = this.pending;
 
@@ -663,10 +757,201 @@
         }));
     };
 
+    function BackendQueryBinClient() {
+        this.worker = null;
+        this.requestId = 0;
+        this.pending = {};
+        this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
+        this.handleWorkerError = this.handleWorkerError.bind(this);
+    }
+
+    BackendQueryBinClient.prototype.ensureWorker = function (config) {
+        if (this.worker && this.workerUrl === config.workerUrl) {
+            return;
+        }
+        if (this.worker && typeof this.worker.terminate === 'function') {
+            this.worker.terminate();
+        }
+        if (typeof window.Worker !== 'function') {
+            throw new Error('[Weline.Api] Worker is unavailable; bin-query requests are disabled.');
+        }
+        this.workerUrl = config.workerUrl;
+        this.worker = new Worker(config.workerUrl);
+        this.worker.addEventListener('message', this.handleWorkerMessage);
+        this.worker.addEventListener('error', this.handleWorkerError);
+        this.worker.addEventListener('messageerror', this.handleWorkerError);
+    };
+
+    BackendQueryBinClient.prototype.nextId = function () {
+        this.requestId += 1;
+        return 'backend_query_' + Date.now() + '_' + this.requestId;
+    };
+
+    BackendQueryBinClient.prototype.call = function (provider, operation, params, options) {
+        if (!provider || !operation) {
+            return Promise.reject(new Error('[Weline.Api] provider and operation are required.'));
+        }
+        return this.send({
+            type: 'call',
+            provider: provider,
+            operation: operation,
+            params: normalizeCallParams(params),
+            options: options || {}
+        });
+    };
+
+    BackendQueryBinClient.prototype.graph = function (graph, options) {
+        return this.send({
+            type: 'graph',
+            graph: graph || {},
+            options: options || {}
+        });
+    };
+
+    BackendQueryBinClient.prototype.resource = function (provider, optionalMap) {
+        if (!provider || typeof provider !== 'string') {
+            throw new Error('[Weline.Api] resource provider is required.');
+        }
+        var client = this;
+        var methodMap = optionalMap && typeof optionalMap === 'object' ? optionalMap : null;
+        return new Proxy(Object.create(null), {
+            get: function (_target, property) {
+                if (typeof property === 'symbol' || RESERVED_METHODS[property]) {
+                    return undefined;
+                }
+                var methodName = String(property);
+                if (methodMap && !hasOwn(methodMap, methodName)) {
+                    return undefined;
+                }
+                var operation = methodMap ? String(methodMap[methodName]) : methodName;
+                if (!operation) {
+                    return undefined;
+                }
+                return function (params, options) {
+                    return client.call(provider, operation, params || {}, options || {});
+                };
+            },
+            has: function (_target, property) {
+                return typeof property === 'string' && !RESERVED_METHODS[property] && (!methodMap || hasOwn(methodMap, property));
+            }
+        });
+    };
+
+    BackendQueryBinClient.prototype.send = function (payload) {
+        var config = buildQueryBinConfig();
+        this.ensureWorker(config);
+        var messageId = this.nextId();
+        var optionTimeout = payload && payload.options
+            ? (payload.options.requestTimeoutMs || payload.options.timeoutMs || payload.options.timeout)
+            : null;
+        var configuredTimeout = parseInt(optionTimeout || config.requestTimeoutMs || 60000, 10);
+        var timeoutMs = isFinite(configuredTimeout) ? Math.max(1000, configuredTimeout) : 60000;
+        var worker = this.worker;
+        var pending = this.pending;
+
+        return new Promise(function (resolve, reject) {
+            var timeoutId = window.setTimeout(function () {
+                if (!pending[messageId]) {
+                    return;
+                }
+                delete pending[messageId];
+                var error = new Error('[Weline.Api] bin-query worker request timed out.');
+                error.code = 'worker_timeout';
+                reject(error);
+            }, timeoutMs);
+
+            pending[messageId] = {
+                resolve: resolve,
+                reject: reject,
+                timeoutId: timeoutId,
+                payload: payload
+            };
+
+            worker.postMessage(Object.assign({}, payload, {
+                id: messageId,
+                config: {
+                    endpoint: config.endpoint,
+                    deployVersion: config.deployVersion,
+                    workerBuildId: config.workerBuildId,
+                    locale: config.locale,
+                    currency: config.currency,
+                    defaultCurrency: config.defaultCurrency,
+                    availableCurrencies: config.availableCurrencies
+                }
+            }));
+        });
+    };
+
+    BackendQueryBinClient.prototype.handleWorkerMessage = function (event) {
+        var data = event.data || {};
+        var pending = this.pending[data.id];
+        if (!pending) {
+            return;
+        }
+        delete this.pending[data.id];
+        window.clearTimeout(pending.timeoutId);
+
+        var wrapper = data.body || {};
+        if (data.ok === true && wrapper.ok === true) {
+            var businessData = wrapper.data;
+            var requestOptions = pending.payload && pending.payload.options;
+            var keepBusinessResult = !!(requestOptions && requestOptions.keepBusinessResult);
+            if (isBusinessFailure(businessData) && !keepBusinessResult) {
+                var message = failureMessage(businessData, data.statusText || '请求失败');
+                var businessError = buildError(message, {
+                    ok: false,
+                    status: data.status || 200,
+                    statusText: data.statusText || '',
+                    data: wrapper,
+                    headers: data.headers || {},
+                    maintenance: !!data.maintenance
+                }, buildQueryBinConfig().endpoint);
+                businessError.code = (businessData && businessData.code) || 'business_error';
+                pending.reject(businessError);
+                return;
+            }
+            pending.resolve(businessData);
+            return;
+        }
+
+        var serverError = wrapper.error || {};
+        var error = buildError(serverError.message || data.error || 'Weline bin-query request failed.', {
+            ok: false,
+            status: data.status || 0,
+            statusText: data.statusText || '',
+            data: wrapper,
+            headers: data.headers || {},
+            maintenance: !!data.maintenance
+        }, buildQueryBinConfig().endpoint);
+        error.code = serverError.code || 'protocol_error';
+        pending.reject(error);
+    };
+
+    BackendQueryBinClient.prototype.handleWorkerError = function (event) {
+        var message = event && event.message ? event.message : '[Weline.Api] bin-query worker failed.';
+        if (this.worker && typeof this.worker.terminate === 'function') {
+            this.worker.terminate();
+        }
+        this.worker = null;
+        Object.keys(this.pending).forEach(function (id) {
+            var pending = this.pending[id];
+            delete this.pending[id];
+            window.clearTimeout(pending.timeoutId);
+            pending.reject(buildError(message, {
+                ok: false,
+                status: 0,
+                statusText: '',
+                data: null,
+                maintenance: false
+            }, buildQueryBinConfig().endpoint));
+        }, this);
+    };
+
     var client = new BackendApiClient({
         workerUrl: withDevCacheBust(sameOriginUrl(defaultWorkerUrl())),
-        requestTimeoutMs: 15000
+        requestTimeoutMs: 60000
     });
+    var queryBinClient = new BackendQueryBinClient();
 
     var ApiModule = {
         __full: true,
@@ -686,29 +971,17 @@
         fetch: function (url, options) {
             return client.fetch(url, options);
         },
-        call: function () {
-            return Promise.reject(new Error('[Weline.Api] backend call() is not available for direct controller routes.'));
+        call: function (provider, operation, params, options) {
+            return queryBinClient.call(provider, operation, params, options);
         },
-        graph: function () {
-            return Promise.reject(new Error('[Weline.Api] backend graph() is not available for direct controller routes.'));
+        graph: function (graph, options) {
+            return queryBinClient.graph(graph, options);
         },
         stream: function () {
-            return Promise.reject(new Error('[Weline.Api] backend stream() is not available for direct controller routes.'));
+            return Promise.reject(new Error('[Weline.Api] backend stream() is not available yet.'));
         },
-        resource: function () {
-            return new Proxy(Object.create(null), {
-                get: function (_target, property) {
-                    if (typeof property === 'symbol' || RESERVED_METHODS[property]) {
-                        return undefined;
-                    }
-                    return function () {
-                        return Promise.reject(new Error('[Weline.Api] backend resource() is not available for direct controller routes.'));
-                    };
-                },
-                has: function (_target, property) {
-                    return typeof property === 'string' && !RESERVED_METHODS[property];
-                }
-            });
+        resource: function (provider, optionalMap) {
+            return queryBinClient.resource(provider, optionalMap);
         },
         markCartActive: function () {},
         markCartEmpty: function () {},

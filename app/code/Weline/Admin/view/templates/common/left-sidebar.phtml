@@ -14,7 +14,7 @@ if ($dataLayout !== 'horizontal'):
     /**@var \Weline\Admin\Service\MenuRenderService $menuRenderService */
     $menuRenderService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Service\MenuRenderService::class);
     $adminPhrase = static fn(string $phrase): string => $menuRenderService->translateMenuTitle($phrase, 'Weline_Admin::left-sidebar');
-    $dashboardOnlySidebar = $menuRenderService->isDashboardOnlySidebar();
+    $dashboardOnlySidebar = false;
     
     // 获取常用菜单数据
     if ($dashboardOnlySidebar) {

@@ -15,7 +15,7 @@ use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 use Weline\Seo\Service\SeoWebsiteDirectory;
-use Weline\Seo\Service\SitemapRegistryService;
+use Weline\Seo\Service\SitemapUrlSyncService;
 use Weline\Seo\Service\WebSitemapData;
 
 /**
@@ -54,8 +54,8 @@ class SitemapSubmit implements CronTaskInterface
     public function execute(): string
     {
         try {
-            /** @var SitemapRegistryService $sitemapRegistry */
-            $sitemapRegistry = ObjectManager::getInstance(SitemapRegistryService::class);
+            /** @var SitemapUrlSyncService $syncService */
+            $syncService = ObjectManager::getInstance(SitemapUrlSyncService::class);
             /** @var WebSitemapData $webSitemapData */
             $webSitemapData = ObjectManager::getInstance(WebSitemapData::class);
             /** @var SeoWebsiteDirectory $websiteDirectory */
@@ -65,35 +65,25 @@ class SitemapSubmit implements CronTaskInterface
 
             $stats = [
                 'collected_websites' => 0,
+                'synced_urls' => 0,
+                'disabled_urls' => 0,
                 'generated_files' => 0,
                 'submitted' => 0,
                 'errors' => 0,
                 'unbound_websites' => [],
             ];
 
-            // ========== 步骤1：调用所有 Provider 收集 URL 数据 ==========
-            $providers = $sitemapRegistry->getUrlProviders();
-            
-            foreach ($providers as $provider) {
-                if (!$provider->isEnabled()) {
-                    continue;
-                }
+            // ========== 步骤1：调用所有 Provider 同步 URL 数据到数据库 ==========
+            $syncStats = $syncService->syncAll(true);
+            $stats['collected_websites'] = count($syncStats['changed_websites'] ?? []);
+            $stats['synced_urls'] = (int)($syncStats['inserted'] ?? 0)
+                + (int)($syncStats['updated'] ?? 0)
+                + (int)($syncStats['unchanged'] ?? 0);
+            $stats['disabled_urls'] = (int)($syncStats['disabled'] ?? 0);
+            $stats['errors'] += (int)($syncStats['errors'] ?? 0);
 
-                try {
-                    $websiteIds = $provider->getWebsiteIds();
-                    foreach ($websiteIds as $websiteId) {
-                        // Provider 内部会调用 syncUrls 同步到数据库
-                        $provider->getUrlsForWebsite($websiteId);
-                        $stats['collected_websites']++;
-                    }
-                } catch (\Exception $e) {
-                    w_log_error(sprintf(
-                        '[Weline_Seo] SitemapSubmit provider error: %s - %s',
-                        $provider->getModule(),
-                        $e->getMessage()
-                    ));
-                    $stats['errors']++;
-                }
+            foreach ((array)($syncStats['error_messages'] ?? []) as $message) {
+                w_log_error('[Weline_Seo] SitemapSubmit provider sync error: ' . $message);
             }
 
             // ========== 步骤2：为所有站点生成 sitemap 文件 ==========
@@ -185,7 +175,9 @@ class SitemapSubmit implements CronTaskInterface
             }
 
             return sprintf(
-                'Sitemap任务完成：收集 %d 个站点，生成 %d 个文件，提交 %d 个，未绑定 %d 个，错误 %d 个',
+                'Sitemap任务完成：同步 %d 条URL，禁用 %d 条，变更 %d 个站点，生成 %d 个文件，提交 %d 个，未绑定 %d 个，错误 %d 个',
+                $stats['synced_urls'],
+                $stats['disabled_urls'],
                 $stats['collected_websites'],
                 $stats['generated_files'],
                 $stats['submitted'],

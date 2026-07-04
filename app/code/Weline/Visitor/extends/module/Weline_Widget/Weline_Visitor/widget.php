@@ -1,0 +1,187 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'pixel_overview' => [
+        'name' => '像素概览',
+        'description' => '展示像素事件、独立访客、事件类型和处理率。',
+        'type' => 'stats',
+        'code' => 'pixel_overview',
+        'area' => 'backend',
+        'template' => 'Weline_Visitor::templates/dashboard/widgets/pixel-overview.phtml',
+        'page_layouts' => ['dashboard'],
+        'position' => ['dashboard-summary'],
+        'slot' => 'dashboard-summary',
+        'supports' => ['dashboard-widget', 'dashboard-slot-summary', 'dashboard-stat', 'dashboard-kpi'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-summary',
+            'area' => 'content',
+            'sort_order' => 50,
+            'required' => true,
+            'reason' => '安装访客统计后自动展示像素概览',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 4,
+                    'rowSpan' => 1,
+                    'sortOrder' => 50,
+                ],
+            ],
+        ]],
+        'params' => [
+            'range' => [
+                'default' => '7d',
+                'type' => 'select',
+                'label' => '统计范围',
+                'options' => [
+                    'today' => '今日',
+                    'yesterday' => '昨日',
+                    '7d' => '近 7 天',
+                    '30d' => '近 30 天',
+                    '90d' => '近 90 天',
+                ],
+            ],
+            'website_id' => [
+                'default' => '',
+                'type' => 'string',
+                'label' => '站点 ID',
+                'description' => '留空时跟随当前 Dashboard 站点。',
+            ],
+        ],
+    ],
+    'pixel_event_trend' => [
+        'name' => '像素事件趋势',
+        'description' => '展示像素事件近几日变化趋势。',
+        'type' => 'chart',
+        'code' => 'pixel_event_trend',
+        'area' => 'backend',
+        'template' => 'Weline_Visitor::templates/dashboard/widgets/pixel-event-trend.phtml',
+        'page_layouts' => ['dashboard'],
+        'position' => ['dashboard-analysis'],
+        'slot' => 'dashboard-analysis',
+        'supports' => ['dashboard-widget', 'dashboard-slot-analysis', 'dashboard-chart', 'dashboard-trend'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-analysis',
+            'area' => 'content',
+            'sort_order' => 60,
+            'required' => true,
+            'reason' => '安装访客统计后自动展示像素事件趋势',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 5,
+                    'rowSpan' => 2,
+                    'sortOrder' => 60,
+                ],
+            ],
+        ]],
+        'params' => [
+            'range' => [
+                'default' => '7d',
+                'type' => 'select',
+                'label' => '统计范围',
+                'options' => [
+                    '7d' => '近 7 天',
+                    '30d' => '近 30 天',
+                    '90d' => '近 90 天',
+                ],
+            ],
+            'website_id' => [
+                'default' => '',
+                'type' => 'string',
+                'label' => '站点 ID',
+                'description' => '留空时跟随当前 Dashboard 站点。',
+            ],
+        ],
+    ],
+    'pixel_top_events' => [
+        'name' => '热门像素事件',
+        'description' => '展示当前范围内触发最多的像素事件。',
+        'type' => 'table',
+        'code' => 'pixel_top_events',
+        'area' => 'backend',
+        'template' => 'Weline_Visitor::templates/dashboard/widgets/pixel-top-events.phtml',
+        'page_layouts' => ['dashboard'],
+        'position' => ['dashboard-detail'],
+        'slot' => 'dashboard-detail',
+        'supports' => ['dashboard-widget', 'dashboard-slot-detail', 'dashboard-table', 'dashboard-list'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-detail',
+            'area' => 'content',
+            'sort_order' => 70,
+            'required' => true,
+            'reason' => '安装访客统计后自动展示热门像素事件',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 9,
+                    'rowSpan' => 1,
+                    'sortOrder' => 70,
+                ],
+            ],
+        ]],
+        'params' => [
+            'range' => [
+                'default' => '7d',
+                'type' => 'select',
+                'label' => '统计范围',
+                'options' => [
+                    'today' => '今日',
+                    '7d' => '近 7 天',
+                    '30d' => '近 30 天',
+                    '90d' => '近 90 天',
+                ],
+            ],
+            'website_id' => [
+                'default' => '',
+                'type' => 'string',
+                'label' => '站点 ID',
+                'description' => '留空时跟随当前 Dashboard 站点。',
+            ],
+        ],
+    ],
+    'pixel_realtime' => [
+        'name' => '像素实时动向',
+        'description' => '展示最近一小时像素事件触发情况。',
+        'type' => 'list',
+        'code' => 'pixel_realtime',
+        'area' => 'backend',
+        'template' => 'Weline_Visitor::templates/dashboard/widgets/pixel-realtime.phtml',
+        'page_layouts' => ['dashboard'],
+        'position' => ['dashboard-side', 'dashboard-detail'],
+        'slot' => 'dashboard-side',
+        'supports' => ['dashboard-widget', 'dashboard-slot-side', 'dashboard-list', 'dashboard-status', 'dashboard-stat'],
+        'default_injections' => [[
+            'layout_type' => 'dashboard',
+            'layout_option' => 'default',
+            'target_type' => 'website',
+            'slot' => 'dashboard-side',
+            'area' => 'content',
+            'sort_order' => 80,
+            'required' => true,
+            'reason' => '安装访客统计后自动展示像素实时动向',
+            'config' => [
+                'dashboard_layout' => [
+                    'colSpan' => 3,
+                    'rowSpan' => 2,
+                    'sortOrder' => 80,
+                ],
+            ],
+        ]],
+        'params' => [
+            'website_id' => [
+                'default' => '',
+                'type' => 'string',
+                'label' => '站点 ID',
+                'description' => '留空时跟随当前 Dashboard 站点。',
+            ],
+        ],
+    ],
+];
