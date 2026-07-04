@@ -19,8 +19,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'Sitemap URL 数据表')]
 #[Index(name: 'idx_website_id', columns: ['website_id'])]
 #[Index(name: 'idx_module', columns: ['module'])]
+#[Index(name: 'idx_module_scope', columns: ['module', 'scope'])]
 #[Index(name: 'idx_status', columns: ['status'])]
-#[Index(name: 'idx_unique_url', columns: ['website_id', 'module', 'entity_type', 'entity_id'], type: 'UNIQUE')]
+#[Index(name: 'idx_unique_url_key', columns: ['website_id', 'scope', 'module', 'url_key'], type: 'UNIQUE')]
 class SitemapUrl extends Model
 {
 
@@ -35,6 +36,8 @@ class SitemapUrl extends Model
     public const schema_fields_MODULE = 'module';
     #[Col('varchar', 50, nullable: false, default: '', comment: '业务范围')]
     public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 191, nullable: true, comment: 'Provider URL 稳定唯一键')]
+    public const schema_fields_URL_KEY = 'url_key';
     #[Col('varchar', 50, nullable: false, default: '', comment: '实体类型')]
     public const schema_fields_ENTITY_TYPE = 'entity_type';
     #[Col('int', 0, nullable: false, default: 0, comment: '实体ID')]
@@ -66,6 +69,16 @@ class SitemapUrl extends Model
         return self::schema_fields_ID;
     }
 
+    public function save_before(): void
+    {
+        parent::save_before();
+
+        if (!$this->getData(self::schema_fields_CREATED_AT)) {
+            $this->setData(self::schema_fields_CREATED_AT, date('Y-m-d H:i:s'));
+        }
+        $this->setData(self::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+    }
+
     /**
      * 获取站点的所有活跃 URL（按模块分组）
      *
@@ -78,6 +91,8 @@ class SitemapUrl extends Model
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->where(self::schema_fields_STATUS, 1)
             ->order(self::schema_fields_MODULE, 'ASC')
+            ->order(self::schema_fields_SCOPE, 'ASC')
+            ->order(self::schema_fields_URL_KEY, 'ASC')
             ->order(self::schema_fields_ENTITY_TYPE, 'ASC')
             ->order(self::schema_fields_ENTITY_ID, 'ASC')
             ->select()
@@ -145,25 +160,31 @@ class SitemapUrl extends Model
             foreach ($urls as $url) {
                 $websiteId = $url['website_id'] ?? 0;
                 $module = $url['module'] ?? '';
+                $scope = $url['scope'] ?? '';
+                $urlKey = $url['url_key'] ?? $url['key'] ?? '';
                 $entityType = $url['entity_type'] ?? '';
                 $entityId = $url['entity_id'] ?? 0;
 
-                if (!$websiteId || !$module) {
+                if (!$websiteId || !$module || !$urlKey) {
                     continue;
                 }
 
                 // 查找现有记录
                 $existing = $this->reset()
                     ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(self::schema_fields_SCOPE, $scope)
                     ->where(self::schema_fields_MODULE, $module)
-                    ->where(self::schema_fields_ENTITY_TYPE, $entityType)
-                    ->where(self::schema_fields_ENTITY_ID, $entityId)
+                    ->where(self::schema_fields_URL_KEY, $urlKey)
                     ->find()
                     ->fetch();
 
                 if ($existing) {
                     // 更新
                     $this->reset()->load($existing[self::schema_fields_ID]);
+                    $this->setData(self::schema_fields_URL_KEY, $urlKey);
+                    $this->setData(self::schema_fields_SCOPE, $scope);
+                    $this->setData(self::schema_fields_ENTITY_TYPE, $entityType);
+                    $this->setData(self::schema_fields_ENTITY_ID, $entityId);
                     $this->setData(self::schema_fields_URL, $url['url'] ?? '');
                     $this->setData(self::schema_fields_CHANGEFREQ, $url['changefreq'] ?? 'weekly');
                     $this->setData(self::schema_fields_PRIORITY, $url['priority'] ?? '0.5');
@@ -176,7 +197,8 @@ class SitemapUrl extends Model
                     $this->reset()->setData([
                         self::schema_fields_WEBSITE_ID => $websiteId,
                         self::schema_fields_MODULE => $module,
-                        self::schema_fields_SCOPE => $url['scope'] ?? '',
+                        self::schema_fields_SCOPE => $scope,
+                        self::schema_fields_URL_KEY => $urlKey,
                         self::schema_fields_ENTITY_TYPE => $entityType,
                         self::schema_fields_ENTITY_ID => $entityId,
                         self::schema_fields_URL => $url['url'] ?? '',
@@ -267,4 +289,3 @@ class SitemapUrl extends Model
         }
     }
 }
-
