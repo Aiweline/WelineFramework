@@ -913,7 +913,7 @@ class Url implements UrlInterface
         if ($params) {
             // 过滤掉数组值，避免在 http_build_query 时出现问题
             foreach ($params as $key => $param) {
-                if (empty($param) || is_array($param)) {
+                if (is_array($param) || $param === null || $param === '' || $param === false) {
                     unset($params[$key]);
                 }
             }

@@ -38,6 +38,8 @@
 AI翻译,AI翻译
 保存多语言,保存多语言
 启用,启用
+普通部件首次入库后,普通部件首次入库后
+"普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。","普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。"
 "Widget 查询器不支持的 operation：%{1}","Widget 查询器不支持的 operation：%{1}"
 "Widget 部件查询","Widget 部件查询"
 提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力,提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力
@@ -173,6 +175,9 @@ FAQ部件,FAQ部件
 开始刷新部件注册表...,开始刷新部件注册表...
 "✓ 部件注册表已刷新完成。","✓ 部件注册表已刷新完成。"
 位置：generated/widgets.php,位置：generated/widgets.php
+首次入库：%{1}，更新：%{2}，默认注入事件：%{3},首次入库：%{1}，更新：%{2}，默认注入事件：%{3}
+已派发,已派发
+未派发,未派发
 "✖ 写入部件注册表失败。","✖ 写入部件注册表失败。"
 "✓ ParamSchema 注册表已刷新完成。","✓ ParamSchema 注册表已刷新完成。"
 位置：generated/param_schemas.php,位置：generated/param_schemas.php
