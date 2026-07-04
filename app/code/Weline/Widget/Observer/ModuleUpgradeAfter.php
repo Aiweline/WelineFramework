@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Observer;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Widget\Service\ParamSchemaRegistry;
@@ -34,8 +34,43 @@ class ModuleUpgradeAfter implements ObserverInterface
             /** @var ParamSchemaRegistry $paramSchemaRegistry */
             $paramSchemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
             $paramSchemaRegistry->refresh();
+
+            $eventData = [
+                'source' => 'module_upgrade_after',
+                'modules' => $this->modulesFromEvent($event),
+            ];
+            ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Widget::registry_refresh_after', $eventData);
         } catch (\Exception $e) {
             w_log_error('模块升级后收集注册表时出错: ' . $e->getMessage(), [], 'WidgetObserver');
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function modulesFromEvent(Event $event): array
+    {
+        $modules = $event->getData('modules');
+        if (is_string($modules)) {
+            $modules = preg_split('/[,\s]+/', $modules) ?: [];
+        }
+        if (!is_array($modules)) {
+            $modules = [];
+        }
+
+        $module = $event->getData('module');
+        if (is_string($module) && trim($module) !== '') {
+            $modules[] = $module;
+        }
+
+        $result = [];
+        foreach ($modules as $item) {
+            $item = trim((string)$item);
+            if ($item !== '') {
+                $result[$item] = $item;
+            }
+        }
+
+        return array_values($result);
     }
 }

@@ -1,5 +1,5 @@
 // tests/e2e/playwright.config.js
-// Shared Playwright config for module-local test/e2e specs and shared tests/e2e/specs.
+// Shared Playwright config for module-local test/e2e specs.
 
 const path = require('path');
 const fs = require('fs');
@@ -193,6 +193,36 @@ process.env.NODE_PATH = [localNodeModules, __dirname, process.env.NODE_PATH]
   .join(path.delim);
 Module._initPaths();
 
+// Specs now live under app/code/*/*/test/e2e. Their native Node resolution chain
+// does not pass through tests/e2e/node_modules, so pin Playwright imports to the
+// runner-local package shim prepared by php bin/w e2e:run.
+function installPlaywrightModuleResolver() {
+  if (Module.__welineE2eResolverInstalled) {
+    return;
+  }
+
+  const originalResolveFilename = Module._resolveFilename;
+  Module._resolveFilename = function resolveWelineE2eModule(request, parent, isMain, options) {
+    if (request === '@playwright/test') {
+      const candidate = path.join(localNodeModules, '@playwright', 'test', 'index.js');
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    if (request === 'playwright/test') {
+      const candidate = path.join(localNodeModules, 'playwright', 'test.js');
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    return originalResolveFilename.call(this, request, parent, isMain, options);
+  };
+  Module.__welineE2eResolverInstalled = true;
+}
+
+installPlaywrightModuleResolver();
+
 let testDir = rootDir;
 let testMatch = [];
 
@@ -221,21 +251,8 @@ try {
           filesToUse = moduleTests.test_files;
           console.log(`[playwright] module filter "${moduleFilter}" matched ${moduleTests.test_files.length} files`);
         } else {
-          // Module has no dedicated test/e2e dir; fall back to shared specs matching module name
-          // Match module name (e.g. WeShop_Catalog) in paths like:
-          //   WeShop_Catalog-smoke-backend.spec.js  (underscore in filename)
-          //   /WeShop_Catalog-smoke-backend.spec.js (underscore after dir sep)
-          // Only escape dots, keep underscores as literal chars in the module name
-          const escapedModule = moduleFilter.replace(/\./g, '[/\\\\]');
-          const regex = new RegExp(`(?:^|[/\\\\])${escapedModule}(?:$|[-./\\\\])`, 'i');
-          const matchedShared = result.all_test_files.filter(f => regex.test(f));
-          if (matchedShared.length > 0) {
-            filesToUse = matchedShared;
-            console.log(`[playwright] module "${moduleFilter}" no dedicated tests, matched ${matchedShared.length} shared specs`);
-          } else {
-            console.warn(`[playwright] module "${moduleFilter}" has no collected test files`);
-            filesToUse = [];
-          }
+          console.warn(`[playwright] module "${moduleFilter}" has no collected module-local test files`);
+          filesToUse = [];
         }
       }
 
@@ -249,13 +266,13 @@ try {
       }
       console.log(`[playwright] collected ${filesToUse.length} test files`);
     } else {
-      console.log('[playwright] no collected files after filtering, falling back to shared specs');
+      console.log('[playwright] no collected files after filtering');
     }
   } else {
-    console.log('[playwright] no collected files, falling back to shared specs');
+    console.log('[playwright] no collected files');
   }
 } catch (error) {
-  console.warn('[playwright] test collection failed, falling back to shared specs:', error.message);
+  console.warn('[playwright] test collection failed:', error.message);
   console.warn('   Make sure setup metadata is available when needed.');
 }
 }
@@ -281,7 +298,12 @@ module.exports = defineConfig({
     timeout: resolvedExpectTimeout,
   },
   testDir,
-  testMatch: testMatch.length > 0 ? testMatch : ['tests/e2e/specs/**/*.spec.js'],
+  testMatch: testMatch.length > 0 ? testMatch : [
+    'app/code/*/*/test/e2e/**/*.spec.js',
+    'app/code/*/*/Test/e2e/**/*.spec.js',
+    'app/code/*/*/test/E2E/**/*.spec.js',
+    'app/code/*/*/Test/E2E/**/*.spec.js',
+  ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -324,6 +346,7 @@ module.exports = defineConfig({
         ...devices['Desktop Chrome'],
         // 直连 WLS https://127.0.0.1 自签证书时，避免 Chromium 落到 chrome-error 页
         launchOptions: {
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
           args: ['--ignore-certificate-errors'],
         },
       },

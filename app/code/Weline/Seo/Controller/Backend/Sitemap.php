@@ -10,6 +10,7 @@ use Weline\Framework\Manager\Message;
 use Weline\Seo\Service\SeoPlatformCapabilityService;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapRegistryService;
+use Weline\Seo\Service\SitemapUrlSyncService;
 
 /**
  * Sitemap管理控制器
@@ -44,10 +45,12 @@ class Sitemap extends BackendController
             
             // 获取 pub/sitemaps 目录下各模块生成的 sitemap（包含错误信息）
             $moduleSitemaps = $this->getModuleSitemapsWithStatus($websites);
+            $websiteStats = $this->getWebsiteStats();
             
             $this->assign('websites', $websites);
             $this->assign('providers', $providers);
             $this->assign('module_sitemaps', $moduleSitemaps);
+            $this->assign('website_stats', $websiteStats);
             
             return $this->fetch();
             
@@ -56,6 +59,7 @@ class Sitemap extends BackendController
             $this->assign('websites', []);
             $this->assign('providers', []);
             $this->assign('module_sitemaps', []);
+            $this->assign('website_stats', []);
             return $this->fetch();
         }
     }
@@ -117,50 +121,9 @@ class Sitemap extends BackendController
      */
     private function generateByProviders(string $filterModule = ''): array
     {
-        /** @var SitemapRegistryService $registry */
-        $registry = ObjectManager::getInstance(SitemapRegistryService::class);
-        
-        // 使用新架构：获取 URL Provider
-        $urlProviders = $registry->getUrlProviders(true); // 强制刷新
-        
-        $providerResults = [];
-        $totalUrlsSynced = 0;
-        
-        // 第一步：调用所有 URL Provider 同步 URL 数据到数据库
-        foreach ($urlProviders as $provider) {
-            // 如果指定了模块，只调用该模块的 Provider
-            if ($filterModule !== '' && $provider->getModule() !== $filterModule) {
-                continue;
-            }
-            
-            // 检查 Provider 是否启用
-            if (!$provider->isEnabled()) {
-                continue;
-            }
-            
-            try {
-                // 调用新方法：saveUrls() 保存 URL 到数据库
-                $urlCount = $provider->saveUrls();
-                $totalUrlsSynced += $urlCount;
-                
-                $providerResults[] = [
-                    'module' => $provider->getModule(),
-                    'scope' => $provider->getScope(),
-                    'description' => $provider->getDescription(),
-                    'url_count' => $urlCount,
-                    'success' => true,
-                ];
-            } catch (\Throwable $e) {
-                $providerResults[] = [
-                    'module' => $provider->getModule(),
-                    'scope' => $provider->getScope(),
-                    'description' => $provider->getDescription(),
-                    'url_count' => 0,
-                    'success' => false,
-                    'error' => $e->getMessage(),
-                ];
-            }
-        }
+        /** @var SitemapUrlSyncService $syncService */
+        $syncService = ObjectManager::getInstance(SitemapUrlSyncService::class);
+        $syncStats = $syncService->syncAll(true, $filterModule);
         
         // 第二步：为所有站点生成实际的 sitemap XML 文件
         $websites = $this->getAllWebsites();
@@ -188,9 +151,10 @@ class Sitemap extends BackendController
         }
         
         return [
-            'provider_results' => $providerResults,
+            'provider_results' => $syncStats['providers'] ?? [],
             'sitemap_results' => $sitemapResults,
-            'total_urls_synced' => $totalUrlsSynced,
+            'total_urls_synced' => ($syncStats['inserted'] ?? 0) + ($syncStats['updated'] ?? 0) + ($syncStats['unchanged'] ?? 0),
+            'sync_stats' => $syncStats,
             'total_files_generated' => $totalFiles,
         ];
     }
@@ -212,7 +176,7 @@ class Sitemap extends BackendController
     }
     
     /**
-     * 获取所有注册的 SitemapProvider
+     * 获取所有注册的 SitemapUrlProvider
      * 
      * @return array
      */
@@ -221,7 +185,7 @@ class Sitemap extends BackendController
         try {
             /** @var SitemapRegistryService $registry */
             $registry = ObjectManager::getInstance(SitemapRegistryService::class);
-            $providers = $registry->getProviders();
+            $providers = $registry->getUrlProviders(true);
             
             $result = [];
             foreach ($providers as $provider) {
@@ -229,12 +193,24 @@ class Sitemap extends BackendController
                     'scope' => $provider->getScope(),
                     'module' => $provider->getModule(),
                     'description' => $provider->getDescription(),
+                    'enabled' => $provider->isEnabled(),
                     'class' => get_class($provider),
                 ];
             }
             
             return $result;
         } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function getWebsiteStats(): array
+    {
+        try {
+            /** @var \Weline\Seo\Service\WebSitemapData $webSitemapData */
+            $webSitemapData = ObjectManager::getInstance(\Weline\Seo\Service\WebSitemapData::class);
+            return $webSitemapData->getAllWebsiteStats();
+        } catch (\Throwable) {
             return [];
         }
     }
@@ -749,13 +725,19 @@ class Sitemap extends BackendController
             $html .= '<hr style="margin:8px 0;"><p><strong>' . __('Provider 同步明细') . '</strong></p>';
             $html .= '<ul style="margin:0;padding-left:1.2em;">';
             foreach ($providerResults as $pr) {
-                $icon = ($pr['success'] ?? false) ? '&#9989;' : '&#10060;';
+                $hasError = !empty($pr['errors']);
+                $icon = $hasError ? '&#10060;' : '&#9989;';
                 $module = $pr['module'] ?? __('未知');
-                $count = $pr['url_count'] ?? 0;
+                $count = ($pr['inserted'] ?? 0) + ($pr['updated'] ?? 0) + ($pr['unchanged'] ?? 0);
                 $desc = $pr['description'] ?? '';
-                $line = $icon . ' ' . $module . ($desc ? " ({$desc})" : '') . ' — ' . __('%{1} 个URL', $count);
-                if (!($pr['success'] ?? false) && !empty($pr['error'])) {
-                    $line .= ' <span style="color:#dc3545;">(' . htmlspecialchars($pr['error']) . ')</span>';
+                $line = $icon . ' ' . $module . ($desc ? " ({$desc})" : '') . ' — ' . __('%{1} 个URL，新增 %{2}，更新 %{3}，禁用 %{4}', [
+                    $count,
+                    $pr['inserted'] ?? 0,
+                    $pr['updated'] ?? 0,
+                    $pr['disabled'] ?? 0,
+                ]);
+                if ($hasError && !empty($pr['error_messages'])) {
+                    $line .= ' <span style="color:#dc3545;">(' . htmlspecialchars(implode('; ', array_slice((array)$pr['error_messages'], 0, 3))) . ')</span>';
                 }
                 $html .= '<li>' . $line . '</li>';
             }

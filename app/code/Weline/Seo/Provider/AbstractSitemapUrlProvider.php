@@ -91,7 +91,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
      * 3. 增量更新：插入新 URL，更新已存在的 URL，删除不再存在的 URL
      *
      * @param int $websiteId 站点ID
-     * @return array 同步结果 ['inserted' => int, 'updated' => int, 'deleted' => int]
+     * @return array 同步结果 ['inserted' => int, 'updated' => int, 'disabled' => int]
      */
     public function syncUrls(int $websiteId): array
     {
@@ -134,6 +134,16 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
                 $entityType = $matches[1];
                 $entityId = (int)$matches[2];
             }
+            if ($entityType === '') {
+                if (preg_match('/^([a-z0-9_]+)/i', (string)$url['url_key'], $matches)) {
+                    $entityType = strtolower($matches[1]);
+                } else {
+                    $entityType = 'url';
+                }
+            }
+            if ($entityId <= 0) {
+                $entityId = ((int)sprintf('%u', crc32((string)$url['url_key'])) % 2147483646) + 1;
+            }
             
             // 标准化数据格式（适配 SitemapUrl 模型字段）
             $validated[] = [
@@ -173,8 +183,11 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             // 使用 entity_type + entity_id 构建 url_key
             $entityType = $row[SitemapUrl::schema_fields_ENTITY_TYPE] ?? '';
             $entityId = $row[SitemapUrl::schema_fields_ENTITY_ID] ?? 0;
-            if ($entityType && $entityId) {
+            $urlKey = (string)($row[SitemapUrl::schema_fields_URL_KEY] ?? '');
+            if ($urlKey === '' && $entityType && $entityId) {
                 $urlKey = $entityType . '-' . $entityId;
+            }
+            if ($urlKey !== '') {
                 $existing[$urlKey] = $row;
             }
         }
@@ -201,7 +214,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
     ): array {
         $inserted = 0;
         $updated = 0;
-        $deleted = 0;
+        $disabled = 0;
         
         $newUrlKeys = [];
         
@@ -227,15 +240,15 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
         // 删除不再存在的 URL
         foreach ($existingUrls as $urlKey => $existingRow) {
             if (!in_array($urlKey, $newUrlKeys, true)) {
-                $this->deleteUrl($existingRow[SitemapUrl::schema_fields_ID]);
-                $deleted++;
+                $this->disableUrl($existingRow[SitemapUrl::schema_fields_ID]);
+                $disabled++;
             }
         }
         
         return [
             'inserted' => $inserted,
             'updated' => $updated,
-            'deleted' => $deleted,
+            'disabled' => $disabled,
             'total' => count($newUrls),
         ];
     }
@@ -252,6 +265,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
         // 对比关键字段（注意字段映射）
         $comparisons = [
             'url' => SitemapUrl::schema_fields_URL,  // newData['url'] vs existingRow['url']
+            'url_key' => SitemapUrl::schema_fields_URL_KEY,
             'lastmod' => SitemapUrl::schema_fields_LASTMOD,
             'changefreq' => SitemapUrl::schema_fields_CHANGEFREQ,
             'priority' => SitemapUrl::schema_fields_PRIORITY,
@@ -264,7 +278,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             }
         }
         
-        return false;
+        return (int)($existingRow[SitemapUrl::schema_fields_STATUS] ?? 1) !== 1;
     }
 
     /**
@@ -277,6 +291,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             SitemapUrl::schema_fields_WEBSITE_ID => $websiteId,
             SitemapUrl::schema_fields_SCOPE => $scope,
             SitemapUrl::schema_fields_MODULE => $module,
+            SitemapUrl::schema_fields_URL_KEY => $urlData['url_key'] ?? '',
             SitemapUrl::schema_fields_ENTITY_TYPE => $urlData['entity_type'] ?? '',
             SitemapUrl::schema_fields_ENTITY_ID => $urlData['entity_id'] ?? 0,
             SitemapUrl::schema_fields_URL => $urlData['url'], // 使用 url 字段
@@ -297,11 +312,15 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
         $model = clone $this->sitemapUrlModel;
         $model->load($id);
         $model->setData([
+            SitemapUrl::schema_fields_URL_KEY => $urlData['url_key'] ?? '',
+            SitemapUrl::schema_fields_ENTITY_TYPE => $urlData['entity_type'] ?? '',
+            SitemapUrl::schema_fields_ENTITY_ID => $urlData['entity_id'] ?? 0,
             SitemapUrl::schema_fields_URL => $urlData['url'], // 使用 url 字段
             SitemapUrl::schema_fields_LASTMOD => $urlData['lastmod'],
             SitemapUrl::schema_fields_CHANGEFREQ => $urlData['changefreq'],
             SitemapUrl::schema_fields_PRIORITY => $urlData['priority'],
             SitemapUrl::schema_fields_METADATA => $urlData['metadata'] ?? '',
+            SitemapUrl::schema_fields_STATUS => 1,
         ]);
         $model->save();
     }
@@ -333,10 +352,10 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
     /**
      * 删除 URL
      */
-    protected function deleteUrl(int $id): void
+    protected function disableUrl(int $id): void
     {
         $model = clone $this->sitemapUrlModel;
         $model->load($id);
-        $model->delete();
+        $model->setData(SitemapUrl::schema_fields_STATUS, 0)->save();
     }
 }

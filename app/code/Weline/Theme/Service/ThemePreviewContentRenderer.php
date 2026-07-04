@@ -57,7 +57,6 @@ class ThemePreviewContentRenderer
 
     public function __construct(
         private readonly ThemeLayoutService $layoutService,
-        private readonly DefaultLayoutSeeder $defaultLayoutSeeder,
         private readonly SlotRendererService $slotRendererService,
         private readonly ThemePageTypeResolver $pageTypeResolver,
         ?ThemeLayoutVersionService $versionService = null,
@@ -68,8 +67,14 @@ class ThemePreviewContentRenderer
     /**
      * @return array{content:string,meta:array,page_type:string,status:string,used_seed:bool}
      */
-    public function build(int $themeId, string $layoutType, string $status = ThemeLayout::STATUS_DRAFT, ?int $versionId = null): array
-    {
+    public function build(
+        int $themeId,
+        string $layoutType,
+        string $status = ThemeLayout::STATUS_DRAFT,
+        ?int $versionId = null,
+        array $identity = [],
+    ): array {
+        $identity = $this->normalizeLayoutIdentity($identity);
         $baseLayoutType = $this->pageTypeResolver->extractBaseLayoutType($layoutType);
         if ($baseLayoutType === '') {
             $baseLayoutType = ThemeLayout::PAGE_TYPE_DEFAULT;
@@ -78,7 +83,7 @@ class ThemePreviewContentRenderer
         $pageType = $this->pageTypeResolver->mapLayoutTypeToPageType($baseLayoutType);
         $versionLayout = null;
         if ($versionId !== null && $versionId > 0) {
-            $versionLayout = $this->versionService->getVersionSnapshot($themeId, $pageType, $versionId);
+            $versionLayout = $this->versionService->getVersionSnapshot($themeId, $pageType, $versionId, $identity);
             [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = [
                 $versionLayout ?? [],
                 $pageType,
@@ -86,7 +91,7 @@ class ThemePreviewContentRenderer
                 false,
             ];
         } else {
-            [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = $this->resolvePreviewLayout($themeId, $pageType, $status);
+            [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = $this->resolvePreviewLayout($themeId, $pageType, $status, $identity);
         }
         $orderedSlotIds = $this->collectOrderedSlotIds($layout);
 
@@ -116,50 +121,66 @@ class ThemePreviewContentRenderer
     /**
      * @return array{0:array,1:string,2:string,3:bool}
      */
-    private function resolvePreviewLayout(int $themeId, string $pageType, string $requestedStatus): array
+    private function resolvePreviewLayout(int $themeId, string $pageType, string $requestedStatus, array $identity = []): array
     {
         $requestedStatus = $requestedStatus === ThemeLayout::STATUS_PUBLISHED
             ? ThemeLayout::STATUS_PUBLISHED
             : ThemeLayout::STATUS_DRAFT;
 
         if ($requestedStatus === ThemeLayout::STATUS_DRAFT) {
-            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
             if ($this->hasWidgets($draftLayout)) {
                 return [$draftLayout, $pageType, ThemeLayout::STATUS_DRAFT, false];
             }
 
-            if ($this->hasEmptyCurrentRestoreVersion($themeId, $pageType)) {
-                return [[], $pageType, ThemeLayout::STATUS_DRAFT, false];
+            if ($this->layoutService->hasDraft($themeId, $pageType, $identity)
+                || $this->hasEmptyCurrentRestoreVersion($themeId, $pageType, $identity)) {
+                return [$draftLayout, $pageType, ThemeLayout::STATUS_DRAFT, false];
             }
         }
 
+        if ($this->layoutService->hasNoWidgetPlacements($themeId, $pageType, $requestedStatus, $identity)) {
+            return [$this->layoutService->getFullLayout($themeId, $pageType, $requestedStatus, $identity), $pageType, $requestedStatus, false];
+        }
+
         foreach ($this->buildLookupCandidates($pageType, $requestedStatus) as [$candidatePageType, $candidateStatus]) {
-            $layout = $this->layoutService->getFullLayout($themeId, $candidatePageType, $candidateStatus);
+            $layout = $this->layoutService->getFullLayout($themeId, $candidatePageType, $candidateStatus, $identity);
             if ($this->hasWidgets($layout)) {
                 return [$layout, $candidatePageType, $candidateStatus, false];
             }
         }
 
-        $usedSeed = false;
-        foreach ($this->buildSeedCandidates($pageType) as $candidatePageType) {
-            $usedSeed = $this->defaultLayoutSeeder->seedDefaultLayout($themeId, $candidatePageType, false) || $usedSeed;
-            $layout = $this->layoutService->getFullLayout($themeId, $candidatePageType, ThemeLayout::STATUS_DRAFT);
-            if ($this->hasWidgets($layout)) {
-                return [$layout, $candidatePageType, ThemeLayout::STATUS_DRAFT, $usedSeed];
-            }
-        }
-
-        return [[], $pageType, $requestedStatus, $usedSeed];
+        // Default widgets are suggestions in the editor application tab. Layouts with no
+        // widget placements keep rendering the template slots until the user applies one.
+        return [[], $pageType, $requestedStatus, false];
     }
 
-    private function hasEmptyCurrentRestoreVersion(int $themeId, string $pageType): bool
+    private function hasEmptyCurrentRestoreVersion(int $themeId, string $pageType, array $identity = []): bool
     {
-        $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType);
+        $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
         if (!$currentVersion?->isRestoreType()) {
             return false;
         }
 
         return !$this->hasWidgets($currentVersion->getSnapshotData());
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     */
+    private function normalizeLayoutIdentity(array $identity = []): array
+    {
+        $layoutOption = trim((string)($identity['layout_option'] ?? 'default'));
+        $scope = trim((string)($identity['scope'] ?? 'default'));
+        $targetType = trim((string)($identity['target_type'] ?? $identity['theme_layout_target_type'] ?? 'global'));
+
+        return [
+            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
+            'scope' => $scope !== '' ? $scope : 'default',
+            'target_type' => $targetType !== '' ? $targetType : 'global',
+            'target_id' => max(0, (int)($identity['target_id'] ?? $identity['theme_layout_target_id'] ?? 0)),
+        ];
     }
 
     /**
@@ -179,19 +200,6 @@ class ThemePreviewContentRenderer
         if ($pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
             $candidates[] = [ThemeLayout::PAGE_TYPE_DEFAULT, $requestedStatus];
             $candidates[] = [ThemeLayout::PAGE_TYPE_DEFAULT, $fallbackStatus];
-        }
-
-        return $candidates;
-    }
-
-    /**
-     * @return string[]
-     */
-    private function buildSeedCandidates(string $pageType): array
-    {
-        $candidates = [$pageType];
-        if ($pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
-            $candidates[] = ThemeLayout::PAGE_TYPE_DEFAULT;
         }
 
         return $candidates;

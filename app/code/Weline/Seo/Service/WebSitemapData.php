@@ -105,7 +105,7 @@ class WebSitemapData
                 'total_urls' => 0,
                 'website_code' => $websiteCode,
                 'error' => 'no_urls',
-                'message' => __('该站点没有 URL 数据，请先点击"调用所有生成器"按钮生成 URL'),
+                'message' => __('该站点没有 URL 数据，请先点击"同步所有 Provider"按钮生成 URL'),
             ];
         }
         

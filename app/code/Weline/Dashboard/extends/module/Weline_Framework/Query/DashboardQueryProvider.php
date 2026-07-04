@@ -32,6 +32,7 @@ class DashboardQueryProvider implements QueryProviderInterface
             'privatizeView' => $this->privatizeView($params),
             'duplicateView' => $this->duplicateView($params),
             'setDefaultView' => $this->setDefaultView($params),
+            'saveLayout' => $this->saveLayout($params),
             'deleteView' => $this->deleteView($params),
             default => throw new \InvalidArgumentException((string)__('Dashboard 查询器不支持的操作：%{1}', [$operation])),
         };
@@ -200,6 +201,23 @@ class DashboardQueryProvider implements QueryProviderInterface
         }
     }
 
+    private function saveLayout(array $params): array
+    {
+        try {
+            $this->viewService->saveLayout(
+                (int)($params['view_id'] ?? 0),
+                $this->viewService->getCurrentUserId()
+            );
+
+            return [
+                'success' => true,
+                'message' => (string)__('Dashboard 布局已保存。'),
+            ];
+        } catch (\Throwable $throwable) {
+            return ['success' => false, 'message' => $throwable->getMessage()];
+        }
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -235,6 +253,9 @@ class DashboardQueryProvider implements QueryProviderInterface
                     ['name' => 'name', 'type' => 'string', 'required' => false],
                 ]],
                 ['name' => 'setDefaultView', 'description' => __('设置站点默认视图'), 'params' => [
+                    ['name' => 'view_id', 'type' => 'int', 'required' => true],
+                ]],
+                ['name' => 'saveLayout', 'description' => __('保存并发布当前 Dashboard 布局'), 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
                 ['name' => 'deleteView', 'description' => __('删除我的视图'), 'params' => [

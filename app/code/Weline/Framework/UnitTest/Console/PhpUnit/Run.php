@@ -18,9 +18,11 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\UnitTest\Pest\Pest as PestTest;
+use Weline\Framework\UnitTest\Service\TestCollectionService;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
@@ -1485,6 +1487,141 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $content = "<?php return " . var_export($env, true) . ";";
         file_put_contents($envFile, $content);
     }
+
+    private function getTestCollectionService(): TestCollectionService
+    {
+        /** @var TestCollectionService $collector */
+        $collector = ObjectManager::getInstance(TestCollectionService::class);
+        return $collector;
+    }
+
+    private function generateCollectedSuiteConfig(array $collection, string $reportPath): string
+    {
+        $testsuites = '';
+        foreach (($collection['modules'] ?? []) as $moduleName => $module) {
+            $files = $module['tests']['phpunit'] ?? [];
+            if (!is_array($files) || $files === []) {
+                continue;
+            }
+
+            $fileEntries = $this->buildPhpUnitFileEntries($files);
+            if ($fileEntries === '') {
+                continue;
+            }
+
+            $suiteName = $this->escapeXml((string)$moduleName);
+            $testsuites .= "
+        <testsuite name='unit'>
+            {$fileEntries}
+        </testsuite>
+        <testsuite name='{$suiteName}'>
+            {$fileEntries}
+        </testsuite>";
+        }
+
+        if ($testsuites === '') {
+            return '';
+        }
+
+        return $this->buildPhpUnitXml('unit', $testsuites, '../../app/code', $reportPath);
+    }
+
+    private function generateCollectedModuleConfig(string $moduleName, array $files, string $coverageSource, string $reportPath): string
+    {
+        $fileEntries = $this->buildPhpUnitFileEntries($files);
+        if ($fileEntries === '') {
+            return '';
+        }
+
+        $suiteName = $this->escapeXml($moduleName);
+        $testsuites = "
+        <testsuite name='{$suiteName}'>
+            {$fileEntries}
+        </testsuite>";
+
+        return $this->buildPhpUnitXml($moduleName, $testsuites, $coverageSource, $reportPath);
+    }
+
+    private function buildPhpUnitFileEntries(array $files): string
+    {
+        $entries = [];
+        foreach ($files as $file) {
+            $absolute = $this->resolvePhpUnitFilePath((string)$file);
+            if ($absolute === null) {
+                continue;
+            }
+            $entries[] = '<file>' . $this->escapeXml($absolute) . '</file>';
+        }
+
+        return implode("\n            ", array_values(array_unique($entries)));
+    }
+
+    private function resolvePhpUnitFilePath(string $file): ?string
+    {
+        $file = trim($file);
+        if ($file === '') {
+            return null;
+        }
+
+        if (is_file($file)) {
+            return $file;
+        }
+
+        $absolute = BP . ltrim(str_replace(['/', '\\'], DS, $file), DS);
+        return is_file($absolute) ? $absolute : null;
+    }
+
+    private function buildPhpUnitXml(string $defaultSuite, string $testsuites, string $coverageSource, string $reportPath): string
+    {
+        $coverageSource = $this->escapeXml($this->normalizeCoverageSourcePath($coverageSource));
+        $defaultSuite = $this->escapeXml($defaultSuite);
+        $reportPath = rtrim($this->escapeXml($reportPath), '/');
+
+        return '<?xml version=\'1.0\' encoding=\'UTF-8\'?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://schema.phpunit.de/6.2/phpunit.xsd"
+         backupGlobals="false"
+         backupStaticAttributes="false"
+         bootstrap="../../app/bootstrap.php"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         defaultTestSuite="' . $defaultSuite . '"
+         processIsolation="false"
+         stopOnFailure="false">
+    <testsuites>' . $testsuites . '
+    </testsuites>
+<coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">' . $coverageSource . '</directory>
+        </include>
+        <exclude>
+            <directory suffix=".php">' . $coverageSource . '/Test</directory>
+            <directory suffix=".php">' . $coverageSource . '/test</directory>
+            <directory suffix=".php">' . $coverageSource . '/tests</directory>
+            <directory suffix=".php">' . $coverageSource . '/Tests</directory>
+            <directory suffix=".php">' . $coverageSource . '/UnitTest</directory>
+            <directory suffix=".php">' . $coverageSource . '/view</directory>
+            <directory suffix=".php">' . $coverageSource . '/Console</directory>
+            <directory suffix=".php">' . $coverageSource . '/env</directory>
+        </exclude>
+    </coverage>
+     <logging>
+        <junit outputFile="' . $reportPath . '/junit.xml"/>
+        <teamcity outputFile="' . $reportPath . '/teamcity.txt"/>
+        <testdoxHtml outputFile="' . $reportPath . '/index.html"/>
+        <testdoxText outputFile="' . $reportPath . '/testdox.txt"/>
+        <testdoxXml outputFile="' . $reportPath . '/testdox.xml"/>
+        <text outputFile="' . $reportPath . '/logfile.txt"/>
+     </logging>
+</phpunit>';
+    }
+
+    private function escapeXml(string $value): string
+    {
+        return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+    }
     
     /**
      * 生成套件测试配置
@@ -1494,6 +1631,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function generateSuiteConfig(string $reportPath): string
     {
+        $collectedConfig = $this->generateCollectedSuiteConfig(
+            $this->getTestCollectionService()->collect(),
+            $reportPath
+        );
+        if ($collectedConfig !== '') {
+            return $collectedConfig;
+        }
+
         $modules = Env::getInstance()->getActiveModules();
         $php_unit_xml = '<?xml version=\'1.0\' encoding=\'UTF-8\'?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -1681,6 +1826,17 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function generateModuleConfig(string $moduleName, string $reportPath): string
     {
+        $collector = $this->getTestCollectionService();
+        $resolvedModuleName = $collector->resolveModuleName($moduleName);
+        if ($resolvedModuleName !== null) {
+            $files = $collector->getPhpUnitFiles($resolvedModuleName);
+            $coverageSource = $collector->getModuleBasePath($resolvedModuleName) ?? '../../app/code';
+            $collectedConfig = $this->generateCollectedModuleConfig($resolvedModuleName, $files, $coverageSource, $reportPath);
+            if ($collectedConfig !== '') {
+                return $collectedConfig;
+            }
+        }
+
         $modules = Env::getInstance()->getActiveModules();
         $targetModule = null;
         
@@ -1906,6 +2062,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function findTestFile(string $fileName, bool $debug = false): ?string
     {
+        $collectedFile = $this->getTestCollectionService()->findPhpTestFile($fileName);
+        if ($collectedFile !== null) {
+            if ($debug) {
+                $this->printing->note(__('调试 - collector 找到文件: %{1}', [$collectedFile]));
+            }
+            return $collectedFile;
+        }
+
         $modules = Env::getInstance()->getActiveModules();
         
         # 检查是否是测试方法名（包含::）
@@ -2075,6 +2239,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function findTestFileInModule(string $fileName, string $moduleName): ?string
     {
+        $collectedFile = $this->getTestCollectionService()->findPhpTestFile($fileName, $moduleName);
+        if ($collectedFile !== null) {
+            return $collectedFile;
+        }
+
         $modules = Env::getInstance()->getActiveModules();
         
         # 检查是否是测试方法名（包含::）
@@ -2728,6 +2897,30 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         return $count;
     }
+
+    private function countTestMethodsInFiles(array $files): int
+    {
+        $count = 0;
+        foreach ($files as $file) {
+            $absolute = $this->resolvePhpUnitFilePath((string)$file);
+            if ($absolute === null || !is_file($absolute)) {
+                continue;
+            }
+
+            $content = file_get_contents($absolute);
+            if ($content === false) {
+                continue;
+            }
+
+            foreach (explode("\n", $content) as $line) {
+                if (preg_match('/^\s*(public\s+)?function\s+test\w+\s*\(/', trim($line))) {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
     
     /**
      * 统计模块中的测试方法数量
@@ -2736,6 +2929,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function countTestMethodsInModule(string $moduleName): int
     {
+        $files = $this->getTestCollectionService()->getPhpUnitFiles($moduleName);
+        if ($files !== []) {
+            return $this->countTestMethodsInFiles($files);
+        }
+
         $modules = Env::get('modules');
         if (!$modules || !is_array($modules)) {
             return 0;
@@ -2787,6 +2985,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function countTestMethodsInSuite(string $suiteName): int
     {
+        $files = $this->getTestCollectionService()->getPhpUnitFiles();
+        if ($files !== []) {
+            return $this->countTestMethodsInFiles($files);
+        }
+
         $count = 0;
         $modules = Env::get('modules');
         if (!$modules || !is_array($modules)) {

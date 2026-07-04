@@ -82,6 +82,8 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                 $templateContent = !empty($widget['template_content']) ? (string)$widget['template_content'] : null;
                 $templatePath = !empty($widget['template']) ? (string)$widget['template'] : null;
 
+                $defaultInjections = $this->normalizeDefaultInjections($widget['default_injections'] ?? ($widget['config']['default_injections'] ?? []));
+
                 $definitions[] = new ThemeComponentDefinition(
                     module: $module,
                     type: $widgetType,
@@ -95,6 +97,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     configSchema: $this->buildConfigSchema($widget['params'] ?? []),
                     defaultConfig: $this->buildDefaultConfig($widget['params'] ?? []),
                     meta: array_merge($widget['meta'] ?? [], [
+                        'default_injections' => $defaultInjections,
                         'registry_group' => $type,
                         'template' => $widget['template'] ?? null,
                     ]),
@@ -103,6 +106,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     pageLayouts: $this->normalizeArray($widget['page_layouts'] ?? ['*'], ['*']),
                     slots: is_array($widget['slots'] ?? null) ? $widget['slots'] : [],
                     slot: !empty($widget['slot']) ? (string)$widget['slot'] : null,
+                    defaultInjections: $defaultInjections,
                     supports: $this->normalizeArray($widget['supports'] ?? [], []),
                     exclusive: (bool)($widget['exclusive'] ?? false),
                     compatible: (bool)($widget['compatible'] ?? false),
@@ -164,6 +168,30 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
         ), static fn(string $item): bool => $item !== ''));
 
         return $items ?: $fallback;
+    }
+
+    private function normalizeDefaultInjections(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($value) || $value === []) {
+            return [];
+        }
+
+        $isList = array_keys($value) === range(0, count($value) - 1);
+        $items = $isList ? $value : [$value];
+        $result = [];
+
+        foreach ($items as $item) {
+            if (is_array($item) && $item !== []) {
+                $result[] = $item;
+            }
+        }
+
+        return $result;
     }
 
     private function resolvePositions(array $widget, string $widgetType, string $code): array

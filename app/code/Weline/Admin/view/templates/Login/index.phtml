@@ -12,8 +12,7 @@ $loginLogoDark = $configuredLoginLogoDark && !str_contains($configuredLoginLogoD
 $loginLogoLight = $configuredLoginLogoLight && !str_contains($configuredLoginLogoLight, '/media/image/backend/logo/logo.png')
     ? $configuredLoginLogoLight
     : $defaultLoginLogo;
-$defaultLoginLotusBg = '/Weline/Admin/view/statics/assets/images/login-lotus-bg.png';
-$loginBgUrl = (string) ($this->getData('login_bg_url') ?: $defaultLoginLotusBg);
+$loginBgUrl = (string) $this->getData('login_bg_url');
 $loginHighlights = [
     [
         'icon' => 'ri-shield-keyhole-line',
@@ -1238,13 +1237,13 @@ $currentYear = date('Y');
 
     body.weline-admin-login-page::before {
         background-image:
-            linear-gradient(90deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.46)),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.24)),
             var(--login-custom-bg);
         background-position: center;
         background-repeat: no-repeat;
         background-size: cover;
-        opacity: 0.82;
-        filter: saturate(0.82) contrast(0.96);
+        opacity: 0.96;
+        filter: saturate(0.94) contrast(0.98);
         animation: none;
         transform: none;
     }
@@ -1334,16 +1333,16 @@ $currentYear = date('Y');
         inset: -1.8rem 1.2rem auto;
         height: 5.6rem;
         pointer-events: none;
-        opacity: 0;
-        transform: translateY(0.7rem) scale(0.94);
+        opacity: 0.28;
+        transform: translateY(0) scale(1);
         transition: opacity 0.36s ease, transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
         z-index: 1;
     }
 
     .weline-admin-login-card:hover .weline-admin-login-card-bloom,
     .weline-admin-login-card:focus-within .weline-admin-login-card-bloom {
-        opacity: 0.32;
-        transform: translateY(0) scale(1);
+        opacity: 0.42;
+        transform: translateY(-0.15rem) scale(1.02);
     }
 
     .weline-admin-login-card-bloom-layer {
@@ -1355,8 +1354,8 @@ $currentYear = date('Y');
             radial-gradient(circle at 50% 72%, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0) 44%),
             linear-gradient(160deg, rgba(255, 255, 255, 0.18), rgba(176, 216, 201, 0.2));
         box-shadow: none;
-        filter: blur(7px) saturate(0.94);
-        opacity: 0.42;
+        filter: blur(1.8px) saturate(1.02);
+        opacity: 0.76;
         transform-origin: 50% 92%;
         transition: filter 0.46s ease, opacity 0.46s ease, transform 0.46s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
@@ -1364,27 +1363,27 @@ $currentYear = date('Y');
     .weline-admin-login-card-bloom-layer--center {
         left: 50%;
         top: 0.2rem;
-        transform: translateX(-50%) translateY(2rem) scale(0.74);
+        transform: translateX(-50%) translateY(0.12rem) scale(0.92);
     }
 
     .weline-admin-login-card-bloom-layer--left {
         left: 0.6rem;
         top: 2rem;
         background-position: center, center, 22% 42%;
-        transform: translateX(2rem) translateY(1.6rem) rotate(-16deg) scale(0.7);
+        transform: translateX(0.2rem) translateY(0.15rem) rotate(-24deg) scale(0.88);
     }
 
     .weline-admin-login-card-bloom-layer--right {
         right: 0.6rem;
         top: 2rem;
         background-position: center, center, 78% 42%;
-        transform: translateX(-2rem) translateY(1.6rem) rotate(16deg) scale(0.7);
+        transform: translateX(-0.2rem) translateY(0.15rem) rotate(24deg) scale(0.88);
     }
 
     .weline-admin-login-card:hover .weline-admin-login-card-bloom-layer,
     .weline-admin-login-card:focus-within .weline-admin-login-card-bloom-layer {
-        filter: blur(1.2px) saturate(1.12);
-        opacity: 0.78;
+        filter: blur(1px) saturate(1.14);
+        opacity: 0.86;
     }
 
     .weline-admin-login-card:hover .weline-admin-login-card-bloom-layer--center,

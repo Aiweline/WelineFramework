@@ -6,6 +6,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\Router\Service\RouteUpdateService;
+use Weline\Framework\UnitTest\Service\TestCollectionService;
 
 require dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'bootstrap.php';
 
@@ -158,6 +159,14 @@ function generateModulesJson(): int
     }
 
     file_put_contents($jsonFile, $jsonContent);
+
+    /** @var TestCollectionService $testCollector */
+    $testCollector = ObjectManager::getInstance(TestCollectionService::class);
+    $testCollector->writeJson(
+        $testCollector->collectE2eManifest(),
+        $e2eDir . DIRECTORY_SEPARATOR . 'collected-tests.json'
+    );
+
     return count($modulesData['modules']);
 }
 

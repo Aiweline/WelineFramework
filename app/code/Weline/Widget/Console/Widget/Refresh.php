@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Console\Widget;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Widget\Service\ParamSchemaRegistry;
 use Weline\Widget\Service\WidgetRegistry;
@@ -54,6 +55,13 @@ class Refresh extends CommandAbstract
             } else {
                 $this->printer->error(__('✖ 写入 ParamSchema 注册表失败。'));
             }
+
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = [
+                'source' => 'widget_refresh_command',
+            ];
+            $eventsManager->dispatch('Weline_Widget::registry_refresh_after', $eventData);
         } catch (\Throwable $e) {
             $this->printer->error(__('刷新失败：%{1}', [$e->getMessage()]));
             if (DEV) {

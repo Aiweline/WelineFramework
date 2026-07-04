@@ -25,7 +25,7 @@ class UrlRewriteSubmitSyncService
     }
 
     /**
-     * @return array{rewrites:int, urls:int, accounts:int, created_tasks:int, skipped_existing:int, skipped_unbound:int}
+     * @return array{rewrites:int, urls:int, accounts:int, created_tasks:int, skipped_existing:int, skipped_unbound:int, skipped_no_account:int, skipped_no_push_capability:int}
      */
     public function sync(): array
     {
@@ -40,6 +40,8 @@ class UrlRewriteSubmitSyncService
             'created_tasks' => 0,
             'skipped_existing' => 0,
             'skipped_unbound' => 0,
+            'skipped_no_account' => 0,
+            'skipped_no_push_capability' => 0,
         ];
 
         if ($targets === []) {
@@ -55,9 +57,15 @@ class UrlRewriteSubmitSyncService
                 continue;
             }
 
+            $allAccounts = $this->bindingService->getWebsiteAccountsWithPlatforms($websiteId);
             $pushAccounts = $this->bindingService->getUrlPushAccounts($websiteId);
             if ($pushAccounts === []) {
                 $stats['skipped_unbound']++;
+                if ($allAccounts === []) {
+                    $stats['skipped_no_account']++;
+                } else {
+                    $stats['skipped_no_push_capability']++;
+                }
                 continue;
             }
 
@@ -67,15 +75,17 @@ class UrlRewriteSubmitSyncService
                     continue;
                 }
 
-                $knownKey = $accountId . ':' . $target['route_fingerprint'];
-                if (isset($known[$knownKey])) {
+                $routeKnownKey = $accountId . ':' . $target['route_fingerprint'];
+                $urlKnownKey = $accountId . ':' . $target['url_fingerprint'];
+                if (isset($known[$routeKnownKey]) || isset($known[$urlKnownKey])) {
                     $stats['skipped_existing']++;
                     continue;
                 }
 
                 $accountTargets[$accountId][] = $target;
                 $accountInfoMap[$accountId] = $accountInfo;
-                $known[$knownKey] = true;
+                $known[$routeKnownKey] = true;
+                $known[$urlKnownKey] = true;
             }
         }
 
@@ -101,7 +111,7 @@ class UrlRewriteSubmitSyncService
 
     /**
      * @param list<array<string, mixed>> $rawRewrites
-     * @return list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}>
+     * @return list<array{url:string, route_fingerprint:string, url_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}>
      */
     private function loadRouteTargets(array $rawRewrites): array
     {
@@ -141,6 +151,7 @@ class UrlRewriteSubmitSyncService
                 $targets[] = [
                     'url' => $url,
                     'route_fingerprint' => $fingerprint,
+                    'url_fingerprint' => $this->urlFingerprint($url),
                     'route_id' => $rewriteId,
                     'source_website_id' => $sourceWebsiteId,
                     'website_id' => (int)$websiteId,
@@ -180,9 +191,14 @@ class UrlRewriteSubmitSyncService
     private function resolveWebsiteContexts(int $sourceWebsiteId, array $websites, string $rewrite): array
     {
         if ($this->isAbsoluteUrl($rewrite)) {
-            $website = $this->websiteDirectory->matchWebsiteByUrl($rewrite);
-            $websiteId = (int)($website['website_id'] ?? 0);
-            return $websiteId > 0 ? [$websiteId => $website] : [];
+            $matched = [];
+            foreach ($this->websiteDirectory->matchWebsitesByUrl($rewrite) as $website) {
+                $websiteId = (int)($website['website_id'] ?? 0);
+                if ($websiteId > 0) {
+                    $matched[$websiteId] = $website;
+                }
+            }
+            return $matched;
         }
 
         if ($sourceWebsiteId > 0) {
@@ -249,8 +265,8 @@ class UrlRewriteSubmitSyncService
     }
 
     /**
-     * @param list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}> $targets
-     * @return list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}>
+     * @param list<array{url:string, route_fingerprint:string, url_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}> $targets
+     * @return list<array{url:string, route_fingerprint:string, url_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}>
      */
     private function uniqueTargets(array $targets): array
     {
@@ -275,7 +291,6 @@ class UrlRewriteSubmitSyncService
         $known = [];
         $tasks = $this->seoTask->reset()
             ->where(SeoTask::schema_fields_TASK_TYPE, SeoTask::TASK_TYPE_PUSH_URLS)
-            ->where(SeoTask::schema_fields_SUBJECT_TYPE, self::SUBJECT_TYPE)
             ->select()
             ->fetchArray();
 
@@ -317,10 +332,12 @@ class UrlRewriteSubmitSyncService
     {
         $fingerprints = [];
 
-        foreach ((array)($payload['route_fingerprints'] ?? []) as $fingerprint) {
-            $fingerprint = trim((string)$fingerprint);
-            if ($fingerprint !== '') {
-                $fingerprints[] = $fingerprint;
+        foreach (['route_fingerprints', 'url_fingerprints', 'submit_fingerprints'] as $key) {
+            foreach ((array)($payload[$key] ?? []) as $fingerprint) {
+                $fingerprint = trim((string)$fingerprint);
+                if ($fingerprint !== '') {
+                    $fingerprints[] = $fingerprint;
+                }
             }
         }
 
@@ -328,9 +345,11 @@ class UrlRewriteSubmitSyncService
             if (!is_array($route)) {
                 continue;
             }
-            $fingerprint = trim((string)($route['route_fingerprint'] ?? ''));
-            if ($fingerprint !== '') {
-                $fingerprints[] = $fingerprint;
+            foreach (['route_fingerprint', 'url_fingerprint'] as $key) {
+                $fingerprint = trim((string)($route[$key] ?? ''));
+                if ($fingerprint !== '') {
+                    $fingerprints[] = $fingerprint;
+                }
             }
         }
 
@@ -339,7 +358,7 @@ class UrlRewriteSubmitSyncService
 
     /**
      * @param array<string, mixed> $account
-     * @param list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}> $targets
+     * @param list<array{url:string, route_fingerprint:string, url_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}> $targets
      */
     private function enqueueAccountTasks(
         array $accountInfo,
@@ -371,6 +390,7 @@ class UrlRewriteSubmitSyncService
                 'source' => self::SOURCE,
                 'routes' => $chunk,
                 'route_fingerprints' => array_values(array_column($chunk, 'route_fingerprint')),
+                'url_fingerprints' => array_values(array_column($chunk, 'url_fingerprint')),
             ];
 
             $task = $this->seoTask->clear()
@@ -404,5 +424,10 @@ class UrlRewriteSubmitSyncService
         }
 
         return $created;
+    }
+
+    private function urlFingerprint(string $url): string
+    {
+        return sha1('url|' . $url);
     }
 }
