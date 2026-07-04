@@ -11,6 +11,7 @@
 - `public` 视图同站点后台用户可见，默认只有创建者可编辑，其他用户可复制。
 - Dashboard Widget 只允许后台使用。
 - 后台侧栏只保留仪表盘入口；需要进入后台面板的信息，优先注册 Dashboard 统计/图表/表格部件。
+- `website_id = 0` 是 `Weline_Websites` 的系统默认站点，Dashboard 必须把它当作合法站点，而不是“未选择站点”。
 
 ## 布局映射
 
@@ -20,9 +21,11 @@ Dashboard 视图映射到 `theme_layout`：
 page_type     = dashboard
 layout_option = default
 target_type   = website
-target_id     = website_id
+target_id     = website_id（默认站点为 0）
 scope         = dashboard_view:{view_id}
 ```
+
+当安装或升级时站点表为空，`Weline_Websites` 会先补齐 `website_id=0/code=default` 的默认站点，Dashboard 再为该站点创建 `system/default` 默认视图。因此后台 Dashboard 不应因站点列表为空显示“当前没有可用站点，无法初始化 Dashboard”。
 
 Dashboard 不提供自由画布，而是固定几个后台报表区域 slot：
 

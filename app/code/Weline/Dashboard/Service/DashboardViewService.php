@@ -11,6 +11,7 @@ use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Service\DefaultWebsiteService;
 
 class DashboardViewService
 {
@@ -21,6 +22,7 @@ class DashboardViewService
         private readonly ThemeContextService $themeContext,
         private readonly ThemeLayoutService $themeLayoutService,
         private readonly ThemeLayout $themeLayout,
+        private readonly DefaultWebsiteService $defaultWebsiteService,
     ) {
     }
 
@@ -32,13 +34,20 @@ class DashboardViewService
     public function getDefaultWebsiteId(): int
     {
         try {
+            $row = $this->defaultWebsiteService->ensureDefaultWebsite(false);
+            if ((string)($row[Website::schema_fields_CODE] ?? '') === Website::CODE_DEFAULT) {
+                return max(Website::ID_DEFAULT, (int)($row[Website::schema_fields_ID] ?? Website::ID_DEFAULT));
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
             $row = $this->website->clearQuery()->clearData()
                 ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
                 ->find()
                 ->fetchArray();
-            $websiteId = (int)($row[Website::schema_fields_ID] ?? 0);
-            if ($websiteId > 0) {
-                return $websiteId;
+            if (is_array($row) && array_key_exists(Website::schema_fields_ID, $row)) {
+                return max(Website::ID_DEFAULT, (int)($row[Website::schema_fields_ID] ?? Website::ID_DEFAULT));
             }
         } catch (\Throwable) {
         }
@@ -57,6 +66,11 @@ class DashboardViewService
     public function listWebsites(): array
     {
         try {
+            $this->defaultWebsiteService->ensureDefaultWebsite(false);
+        } catch (\Throwable) {
+        }
+
+        try {
             $rows = $this->website->clearQuery()->clearData()
                 ->order(Website::schema_fields_ID, 'ASC')
                 ->select()
@@ -71,7 +85,7 @@ class DashboardViewService
                 continue;
             }
             $websiteId = (int)($row[Website::schema_fields_ID] ?? 0);
-            if ($websiteId <= 0) {
+            if ($websiteId < Website::ID_DEFAULT) {
                 continue;
             }
             $result[] = [
@@ -88,7 +102,7 @@ class DashboardViewService
     public function ensureDefaultView(int $websiteId): ?DashboardView
     {
         $websiteId = $this->normalizeWebsiteId($websiteId);
-        if ($websiteId <= 0) {
+        if ($websiteId < Website::ID_DEFAULT) {
             return null;
         }
 
@@ -195,7 +209,7 @@ class DashboardViewService
     ): DashboardView
     {
         $websiteId = $this->normalizeWebsiteId($websiteId);
-        if ($websiteId <= 0) {
+        if ($websiteId < Website::ID_DEFAULT) {
             throw new \InvalidArgumentException((string)__('缺少站点。'));
         }
         if ($userId <= 0) {
@@ -425,7 +439,7 @@ class DashboardViewService
 
     private function normalizeWebsiteId(int $websiteId): int
     {
-        return $websiteId > 0 ? $websiteId : $this->getDefaultWebsiteId();
+        return $websiteId >= Website::ID_DEFAULT ? $websiteId : $this->getDefaultWebsiteId();
     }
 
     private function findSystemDefaultView(int $websiteId): ?DashboardView
