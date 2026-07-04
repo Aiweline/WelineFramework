@@ -20,7 +20,7 @@ class Dashboard extends BaseController
     public function index()
     {
         $websiteId = (int)$this->request->getParam('website_id', 0);
-        if ($websiteId <= 0) {
+        if ($websiteId < DashboardViewService::DEFAULT_WEBSITE_ID) {
             $websiteId = $this->dashboardViewService->getDefaultWebsiteId();
         }
         $userId = $this->dashboardViewService->getCurrentUserId();
