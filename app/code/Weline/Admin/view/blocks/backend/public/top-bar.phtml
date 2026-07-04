@@ -172,6 +172,182 @@ $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo
         right: 0;
         max-width: min(420px, calc(100vw - 16px));
     }
+
+    @media (max-width: 575.98px) {
+        #page-topbar,
+        #page-topbar .navbar-header {
+            max-width: 100vw !important;
+            overflow: hidden !important;
+        }
+
+        #page-topbar .navbar-header {
+            height: 64px !important;
+            padding: 0 8px !important;
+            gap: 6px !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex {
+            min-width: 0 !important;
+            align-items: center !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex:first-child {
+            flex: 0 0 auto !important;
+            gap: 4px !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex:last-child {
+            flex: 1 1 auto !important;
+            justify-content: flex-end !important;
+            gap: 3px !important;
+            overflow: hidden !important;
+        }
+
+        #page-topbar .navbar-brand-box {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: auto !important;
+            min-width: 52px !important;
+            padding: 0 2px !important;
+            flex: 0 0 auto !important;
+        }
+
+        #page-topbar .logo {
+            line-height: 64px !important;
+        }
+
+        #page-topbar .logo .logo-lg {
+            display: none !important;
+        }
+
+        #page-topbar .logo .logo-sm {
+            display: inline-flex !important;
+            align-items: center !important;
+        }
+
+        #page-topbar .navbar-brand-box .logo img {
+            width: 50px !important;
+            height: 50px !important;
+            max-width: 50px !important;
+            max-height: 50px !important;
+        }
+
+        #page-topbar .navbar-header .header-item,
+        #page-topbar .navbar-header .dropdown .header-item,
+        #page-topbar .navbar-header .dropdown .show.header-item {
+            width: 38px !important;
+            min-width: 38px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            margin: 0 1px !important;
+            padding: 0 !important;
+            border-radius: 12px !important;
+        }
+
+        #page-topbar #vertical-menu-btn,
+        #page-topbar #theme-mode-toggle,
+        #page-topbar .navbar-header .noti-icon,
+        #page-topbar .navbar-header .weline-notif-btn {
+            width: 38px !important;
+            min-width: 38px !important;
+        }
+
+        #page-topbar [data-i18n-switcher] {
+            min-width: 0 !important;
+            flex: 0 1 auto !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle {
+            width: 72px !important;
+            min-width: 72px !important;
+            max-width: 72px !important;
+            padding: 0 8px !important;
+            gap: 5px !important;
+            justify-content: flex-start !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle .align-middle {
+            display: inline-block !important;
+            max-width: 28px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        #page-topbar .user-dropdown .header-item {
+            width: 38px !important;
+            min-width: 38px !important;
+        }
+
+        #page-topbar .header-profile-user {
+            width: 32px !important;
+            height: 32px !important;
+            padding: 2px !important;
+        }
+
+        #page-topbar .navbar-header > .d-flex:last-child > .dropdown:last-child,
+        #page-topbar .navbar-header .dropdown:has(> .right-bar-toggle),
+        #page-topbar .navbar-header .right-bar-toggle.header-item,
+        #page-topbar .navbar-header .noti-icon.right-bar-toggle,
+        #page-topbar .right-bar-toggle {
+            display: none !important;
+        }
+
+        #page-topbar .dropdown-menu.dropdown-menu-end,
+        #page-topbar .weline-i18n-switcher-panel,
+        #page-topbar .weline-notif-menu,
+        #page-topbar .weline-notification-menu {
+            left: auto !important;
+            right: 8px !important;
+            max-width: calc(100vw - 16px) !important;
+        }
+    }
+
+    @media (max-width: 390px) {
+        #page-topbar .navbar-header {
+            padding: 0 6px !important;
+            gap: 4px !important;
+        }
+
+        #page-topbar .navbar-brand-box {
+            min-width: 46px !important;
+        }
+
+        #page-topbar .navbar-brand-box .logo img {
+            width: 44px !important;
+            height: 44px !important;
+            max-width: 44px !important;
+            max-height: 44px !important;
+        }
+
+        #page-topbar .navbar-header .header-item,
+        #page-topbar .navbar-header .dropdown .header-item,
+        #page-topbar .navbar-header .dropdown .show.header-item,
+        #page-topbar #vertical-menu-btn,
+        #page-topbar #theme-mode-toggle,
+        #page-topbar .navbar-header .noti-icon,
+        #page-topbar .navbar-header .weline-notif-btn,
+        #page-topbar .user-dropdown .header-item {
+            width: 36px !important;
+            min-width: 36px !important;
+            height: 38px !important;
+            min-height: 38px !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle {
+            width: 58px !important;
+            min-width: 58px !important;
+            max-width: 58px !important;
+            padding: 0 7px !important;
+        }
+
+        #page-topbar .weline-i18n-switcher-toggle .align-middle {
+            display: none !important;
+        }
+    }
 </style>
 <script>
     (function () {
