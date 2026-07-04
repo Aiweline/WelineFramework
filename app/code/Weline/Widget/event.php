@@ -4,8 +4,8 @@
  * Widget 模块事件定义
  */
 return [
-    'Weline_Widget::registry_refresh_after' => [
-        'name' => __('部件注册表刷新后'),
-        'description' => __('部件注册表刷新完成后触发，允许其他模块基于最新部件元数据执行同步或默认注入等后置处理。'),
+    'Weline_Widget::widget_install_after' => [
+        'name' => __('普通部件首次入库后'),
+        'description' => __('普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。'),
     ],
 ];

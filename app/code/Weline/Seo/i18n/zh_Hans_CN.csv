@@ -12,6 +12,12 @@
 "Allows other modules to provide SEO feed data.","Allows other modules to provide SEO feed data."
 "SEO head context resolve","SEO head context resolve"
 "Allows other modules to enrich page-level SEO head context before profile providers merge.","Allows other modules to enrich page-level SEO head context before profile providers merge."
+"SEO URL submit request","SEO URL submit request"
+"Allows modules to enqueue changed public URLs for immediate search engine URL push.","Allows modules to enqueue changed public URLs for immediate search engine URL push."
+"SEO URL changed","SEO URL changed"
+"Unified URL change notification before SEO decides sitemap sync and URL push tasks.","Unified URL change notification before SEO decides sitemap sync and URL push tasks."
+"SEO URL change processed","SEO URL change processed"
+"Dispatched after URL change notification has been mapped to sitemap sync and URL push decisions.","Dispatched after URL change notification has been mapped to sitemap sync and URL push decisions."
 "SEO task enqueued","SEO task enqueued"
 "Dispatched after an SEO task is enqueued.","Dispatched after an SEO task is enqueued."
 "SEO task completed","SEO task completed"
@@ -133,7 +139,7 @@ SEO主体管理,SEO主体管理
 "URL Provider 数：%{1}","URL Provider 数：%{1}"
 "Provider 同步明细","Provider 同步明细"
 未知,未知
-"%{1} 个URL","%{1} 个URL"
+"%{1} 个URL，新增 %{2}，更新 %{3}，禁用 %{4}","%{1} 个URL，新增 %{2}，更新 %{3}，禁用 %{4}"
 各站点生成明细,各站点生成明细
 "站点 #%{1}：%{2}","站点 #%{1}：%{2}"
 生成失败,生成失败
@@ -263,17 +269,17 @@ Sitemap管理,Sitemap管理
 点击查看,点击查看
 工作流程概览,工作流程概览
 "URL 数据采集","URL 数据采集"
-"各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等","各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等"
+"各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等","各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等"
 平台适配器生成,平台适配器生成
 "根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml","根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml"
 自动提交,自动提交
 "定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap","定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap"
 架构设计,架构设计
 "Provider 扩展机制","Provider 扩展机制"
-"各模块通过 <code>extends/module/Weline_Seo/SitemapProvider/</code> 注册自己的 URL 提供器","各模块通过 <code>extends/module/Weline_Seo/SitemapProvider/</code> 注册自己的 URL 提供器"
+"各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器","各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器"
 "实现 <code>SitemapUrlProviderInterface</code> 接口","实现 <code>SitemapUrlProviderInterface</code> 接口"
-"支持增量更新（<code>syncUrls</code> 方法）","支持增量更新（<code>syncUrls</code> 方法）"
-"URL 数据统一存储在 <code>sitemap_url</code> 表","URL 数据统一存储在 <code>sitemap_url</code> 表"
+"返回稳定 <code>url_key</code>，SEO 模块负责增量同步","返回稳定 <code>url_key</code>，SEO 模块负责增量同步"
+"URL 数据统一存储在 <code>weline_sitemap_url</code> 表","URL 数据统一存储在 <code>weline_sitemap_url</code> 表"
 平台适配器模式,平台适配器模式
 每个搜索引擎平台有独立的适配器,每个搜索引擎平台有独立的适配器
 "适配器负责生成符合平台规范的 XML 文件","适配器负责生成符合平台规范的 XML 文件"
@@ -300,14 +306,16 @@ Sitemap管理,Sitemap管理
 选择站点,选择站点
 全站生成,全站生成
 生成Sitemap,生成Sitemap
-"注意：请先点击下方""调用所有生成器""按钮生成URL数据，然后再点击此按钮生成sitemap文件","注意：请先点击下方""调用所有生成器""按钮生成URL数据，然后再点击此按钮生成sitemap文件"
-"Sitemap 生成器","Sitemap 生成器"
+"注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件","注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件"
+"Sitemap URL Provider","Sitemap URL Provider"
 生成,生成
-调用所有生成器,调用所有生成器
-"暂无注册的 Sitemap 生成器","暂无注册的 Sitemap 生成器"
+"同步所有 Provider","同步所有 Provider"
+"暂无注册的 Sitemap URL Provider","暂无注册的 Sitemap URL Provider"
+"其他模块可通过 SitemapUrlProvider 扩展点注册","其他模块可通过 SitemapUrlProvider 扩展点注册"
+"Sitemap URL 数据","Sitemap URL 数据"
+个平台,个平台
 "多平台 Sitemap","多平台 Sitemap"
 自动生成,自动生成
-个平台,个平台
 个文件,个文件
 个模块,个模块
 定时推送,定时推送
@@ -316,7 +324,7 @@ Sitemap管理,Sitemap管理
 查看,查看
 个分片,个分片
 "该站点没有 URL 数据","该站点没有 URL 数据"
-"请先点击上方的""调用所有生成器""按钮生成 URL 数据","请先点击上方的""调用所有生成器""按钮生成 URL 数据"
+"请先点击上方的""同步所有 Provider""按钮生成 URL 数据","请先点击上方的""同步所有 Provider""按钮生成 URL 数据"
 "该站点未绑定 SEO 账户","该站点未绑定 SEO 账户"
 已有,已有
 "条 URL 数据，但无法生成 sitemap 文件","条 URL 数据，但无法生成 sitemap 文件"
@@ -410,6 +418,10 @@ Scope,Scope
 提示,提示
 确认操作,确认操作
 确定,确定
+"URL target 数据不是数组","URL target 数据不是数组"
+"缺少 URL 提交 scope","缺少 URL 提交 scope"
+"无法识别 URL 所属站点","无法识别 URL 所属站点"
+"没有可提交的公开 URL","没有可提交的公开 URL"
 "已向Google Indexing API 提交 %{success} 个URL","已向Google Indexing API 提交 %{success} 个URL"
 "向Google Indexing API 提交URL失败","向Google Indexing API 提交URL失败"
 "Sitemap URL为空","Sitemap URL为空"
@@ -445,9 +457,15 @@ Scope,Scope
 "百度 URL 提交失败","百度 URL 提交失败"
 "百度站长平台 API Token","百度站长平台 API Token"
 "已在百度站长平台验证的站点 URL","已在百度站长平台验证的站点 URL"
-"该站点没有 URL 数据，请先点击""调用所有生成器""按钮生成 URL","该站点没有 URL 数据，请先点击""调用所有生成器""按钮生成 URL"
+"SEO sitemap Provider 定向同步失败：%{1}","SEO sitemap Provider 定向同步失败：%{1}"
+"该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL","该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL"
 "该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。","该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。"
 "平台 %{1} 不支持自动提交","平台 %{1} 不支持自动提交"
+"缺少 sitemap 定向同步 module 或 website_id","缺少 sitemap 定向同步 module 或 website_id"
+"SitemapUrlProvider 必须返回非空 scope 和 module","SitemapUrlProvider 必须返回非空 scope 和 module"
+"第 %{1} 条 URL 数据不是数组","第 %{1} 条 URL 数据不是数组"
+"第 %{1} 条 URL 缺少 url_key 或 loc","第 %{1} 条 URL 缺少 url_key 或 loc"
+"重复的 sitemap url_key：%{1}","重复的 sitemap url_key：%{1}"
 "Sitemap 提交提示","Sitemap 提交提示"
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","以下站点未绑定 SEO 账户，无法自动提交 sitemap："
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
