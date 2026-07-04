@@ -3,7 +3,7 @@
  * 
  * 功能：
  * 1. 读取 modules.json 获取所有模块信息
- * 2. 扫描每个模块的 test/e2e/ 目录
+ * 2. 扫描每个模块的 test/e2e/ 或 Test/e2e/ 目录
  * 3. 收集所有 *.spec.js 测试文件
  * 4. 生成测试文件列表供 Playwright 使用
  */
@@ -15,19 +15,54 @@ const path = require('path');
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const MODULES_JSON = path.join(__dirname, 'modules.json');
 const OUTPUT_FILE = path.join(__dirname, 'collected-tests.json');
-const SHARED_SPECS_DIR = path.join(__dirname, 'specs');
 const TEST_DIR_CANDIDATES = [
     ['test', 'e2e'],
     ['Test', 'e2e'],
     ['test', 'E2E'],
     ['Test', 'E2E'],
+    ['tests', 'e2e'],
+    ['Tests', 'e2e'],
 ];
 
 function toRelativeProjectPath(fullPath, baseDir = ROOT_DIR) {
     return path.relative(baseDir, fullPath).replace(/\\/g, '/');
 }
 
-function resolveModuleTestDir(moduleInfo) {
+function pathKey(filePath) {
+    try {
+        return fs.realpathSync(filePath).toLowerCase();
+    } catch (error) {
+        return path.resolve(filePath).toLowerCase();
+    }
+}
+
+function uniqueExistingDirs(dirs) {
+    const unique = new Map();
+    for (const dir of dirs) {
+        if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+            continue;
+        }
+        const key = pathKey(dir);
+        if (!unique.has(key)) {
+            unique.set(key, dir);
+        }
+    }
+    return Array.from(unique.values()).sort();
+}
+
+function uniqueProjectPaths(files) {
+    const unique = new Map();
+    for (const file of files) {
+        const absolute = path.isAbsolute(file) ? file : path.join(ROOT_DIR, file.replace(/\//g, path.sep));
+        const key = pathKey(absolute);
+        if (!unique.has(key)) {
+            unique.set(key, toRelativeProjectPath(absolute));
+        }
+    }
+    return Array.from(unique.values()).sort();
+}
+
+function resolveModuleTestDirs(moduleInfo) {
     const candidateDirs = [];
 
     if (moduleInfo.test_path) {
@@ -39,7 +74,7 @@ function resolveModuleTestDir(moduleInfo) {
     }
 
     if (!moduleInfo.base_path) {
-        return candidateDirs.find(candidate => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) || null;
+        return uniqueExistingDirs(candidateDirs);
     }
 
     const moduleBasePath = path.isAbsolute(moduleInfo.base_path)
@@ -50,13 +85,7 @@ function resolveModuleTestDir(moduleInfo) {
         candidateDirs.push(path.join(moduleBasePath, ...parts));
     }
 
-    for (const candidateDir of candidateDirs) {
-        if (fs.existsSync(candidateDir) && fs.statSync(candidateDir).isDirectory()) {
-            return candidateDir;
-        }
-    }
-
-    return null;
+    return uniqueExistingDirs(candidateDirs);
 }
 
 /**
@@ -100,7 +129,7 @@ function collectTestFiles(dir, baseDir = ROOT_DIR) {
         }
     }
     
-    return testFiles;
+    return uniqueProjectPaths(testFiles);
 }
 
 /**
@@ -130,38 +159,21 @@ function collectAllTests() {
     const allTestFiles = [];
     const moduleTestMap = {};
 
-    const sharedSpecs = collectTestFiles(SHARED_SPECS_DIR);
-    if (sharedSpecs.length > 0) {
-        moduleTestMap.Shared_E2E_Specs = {
-            module: 'Shared_E2E_Specs',
-            base_path: toRelativeProjectPath(SHARED_SPECS_DIR),
-            test_path: toRelativeProjectPath(SHARED_SPECS_DIR),
-            test_files: sharedSpecs,
-            count: sharedSpecs.length,
-            shared: true
-        };
-        allTestFiles.push(...sharedSpecs);
-
-        console.log(`✓ Shared_E2E_Specs: 发现 ${sharedSpecs.length} 个测试文件`);
-        sharedSpecs.forEach(file => {
-            console.log(`  - ${file}`);
-        });
-    }
-    
     // 遍历所有模块
     for (const [moduleName, moduleInfo] of Object.entries(modulesData.modules || {})) {
-        const testDir = resolveModuleTestDir(moduleInfo);
-        if (!testDir) {
+        const testDirs = resolveModuleTestDirs(moduleInfo);
+        if (testDirs.length === 0) {
             continue;
         }
 
-        const testFiles = collectTestFiles(testDir);
+        const testFiles = uniqueProjectPaths(testDirs.flatMap(testDir => collectTestFiles(testDir)));
         
         if (testFiles.length > 0) {
             moduleTestMap[moduleName] = {
                 module: moduleName,
                 base_path: moduleInfo.base_path,
-                test_path: moduleInfo.test_path || toRelativeProjectPath(testDir),
+                test_path: moduleInfo.test_path || toRelativeProjectPath(testDirs[0]),
+                test_paths: testDirs.map(testDir => toRelativeProjectPath(testDir)),
                 test_files: testFiles,
                 count: testFiles.length,
                 autodiscovered: !moduleInfo.test_path
@@ -179,9 +191,9 @@ function collectAllTests() {
     const result = {
         generated_at: new Date().toISOString(),
         total_modules: Object.keys(moduleTestMap).length,
-        total_tests: allTestFiles.length,
+        total_tests: uniqueProjectPaths(allTestFiles).length,
         modules: moduleTestMap,
-        all_test_files: allTestFiles
+        all_test_files: uniqueProjectPaths(allTestFiles)
     };
     
     // 保存到文件

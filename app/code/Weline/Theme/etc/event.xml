@@ -135,6 +135,14 @@
                   sort="200"/>
     </event>
 
+    <event name="Weline_Widget::registry_refresh_after">
+        <observer name="Weline_Theme::apply_widget_default_injections"
+                  instance="Weline\Theme\Observer\ApplyWidgetDefaultInjections"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <event name="Weline_Framework_Runtime::worker_bootstrap_after">
         <observer name="Weline_Theme::worker_bootstrap_warmup"
                   instance="Weline\Theme\Observer\WorkerBootstrapWarmup"
