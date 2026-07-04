@@ -2298,3 +2298,4 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","处理完成：%d 条非法记录"
+"默认站点 ID %{1} 已被站点 %{2} 占用，无法迁移 default 站点。","Default website ID %{1} is already occupied by website %{2}; unable to migrate the default website."

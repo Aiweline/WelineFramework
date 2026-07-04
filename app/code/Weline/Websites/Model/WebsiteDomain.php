@@ -485,12 +485,17 @@ class WebsiteDomain extends Model
         }
         $row = $rows[0];
         $websiteId = (int) ($row[self::schema_fields_WEBSITE_ID] ?? 0);
-        if ($websiteId <= 0) {
+        if ($websiteId < Website::ID_DEFAULT) {
             return null;
         }
         $website = ObjectManager::getInstance(Website::class);
-        $website->load($websiteId);
-        $name = $website->getId() ? (string) $website->getData(Website::schema_fields_NAME) : (string) $websiteId;
+        $websiteRow = $website->clearQuery()->clearData()
+            ->where(Website::schema_fields_ID, $websiteId)
+            ->find()
+            ->fetchArray();
+        $name = \is_array($websiteRow) && \array_key_exists(Website::schema_fields_NAME, $websiteRow)
+            ? (string) $websiteRow[Website::schema_fields_NAME]
+            : (string) $websiteId;
         return ['website_id' => $websiteId, 'website_name' => $name];
     }
     
@@ -684,4 +689,3 @@ class WebsiteDomain extends Model
             ->fetchArray();
     }
 }
-

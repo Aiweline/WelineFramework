@@ -289,7 +289,7 @@ class Website extends BackendController
         
         $websiteId = $this->request->getParam('id');
         
-        if (empty($websiteId)) {
+        if ($websiteId === null || $websiteId === '') {
             $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => __('网站ID不能为空'),
                 'reload' => '0',
@@ -304,7 +304,7 @@ class Website extends BackendController
         $this->website->load($websiteId);
         
         // 检查网站是否存在
-        if (!$this->website->getWebsiteId()) {
+        if (!$this->website->hasData(\Weline\Websites\Model\Website::schema_fields_ID)) {
             $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => __('网站不存在'),
                 'reload' => '0',
@@ -319,15 +319,15 @@ class Website extends BackendController
             
             // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id，最后使用已加载的 websiteId
             $postWebsiteId = $data['website_id'] ?? null;
-            if (empty($postWebsiteId)) {
+            if ($postWebsiteId === null || $postWebsiteId === '') {
                 $postWebsiteId = $this->request->getParam('id');
             }
-            if (empty($postWebsiteId)) {
+            if ($postWebsiteId === null || $postWebsiteId === '') {
                 $postWebsiteId = $websiteId;
             }
             
             // 如果还是没有，说明是新增，不是编辑
-            if (empty($postWebsiteId)) {
+            if ($postWebsiteId === null || $postWebsiteId === '') {
                 $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => __('网站ID不能为空'),
                     'reload' => '0',
@@ -806,7 +806,7 @@ class Website extends BackendController
         array $postData,
         array $addressList = []
     ): void {
-        if ($websiteId <= 0) {
+        if ($websiteId < \Weline\Websites\Model\Website::ID_DEFAULT) {
             return;
         }
 
@@ -1158,5 +1158,3 @@ class Website extends BackendController
         return $this->normalizeSubPath((string) $first);
     }
 }
-
-
