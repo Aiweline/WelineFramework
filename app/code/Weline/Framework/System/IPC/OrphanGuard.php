@@ -9,7 +9,7 @@ use Weline\Framework\System\Process\Processer;
  * 孤儿进程保护
  *
  * 子进程通过此类检测主控进程（Master）是否存活。
- * 当 IPC 连接断开且 Master PID 不可达时，触发孤儿退出。
+ * 当 Master PID 不可达时，触发孤儿退出。
  *
  * 设计为与具体应用无关，WLS 和 Cron 均可使用。
  */
@@ -66,31 +66,53 @@ class OrphanGuard
         }
         $this->lastCheckTs = $now;
 
+        $disconnectedDuration = 0;
+        if (!$ipcConnected) {
+            // IPC 断开：记录首次断开时间（如果尚未记录）
+            if ($this->disconnectFirstDetectedAt === 0) {
+                $this->disconnectFirstDetectedAt = $now;
+            }
+
+            $disconnectedDuration = $now - $this->disconnectFirstDetectedAt;
+
+            // ========== 硬性超时检查（最优先）==========
+            // 无论 Master 是否可达，只要 IPC 断开超过 maxExitWaitSec 就强制退出
+            // 防止子进程无限等待已死亡的 Master
+            if ($disconnectedDuration >= $this->maxExitWaitSec) {
+                $this->logger->warning(
+                    "[{$selfTag}] 硬性超时达到 ({$disconnectedDuration}s >= {$this->maxExitWaitSec}s)，强制退出"
+                );
+                $this->disconnectFirstDetectedAt = 0;
+                return true;
+            }
+        }
+
+        // Master PID 已知时，不再因为 IPC 仍连接而短路。
+        // 控制通道状态可能与真实进程脱节，PID 不存在就让子进程自行退出。
+        if ($masterPid > 0) {
+            if ($this->masterAlive($masterPid)) {
+                $this->deadCount = 0;
+                $this->unknownDisconnectCount = 0;
+                if ($ipcConnected) {
+                    $this->disconnectFirstDetectedAt = 0;
+                }
+                return false;
+            }
+
+            $this->deadCount++;
+            $ipcState = $ipcConnected ? 'IPC 仍连接' : "IPC 已断开 {$disconnectedDuration}s";
+            $this->logger->warning(
+                "[{$selfTag}] Master PID {$masterPid} 不可达 ({$this->deadCount}/{$this->deadThreshold}, {$ipcState})"
+            );
+            return $this->deadCount >= $this->deadThreshold;
+        }
+
         // IPC 连接正常：重置所有计数器
         if ($ipcConnected) {
             $this->deadCount = 0;
             $this->unknownDisconnectCount = 0;
             $this->disconnectFirstDetectedAt = 0;
             return false;
-        }
-
-        // IPC 断开：记录首次断开时间（如果尚未记录）
-        if ($this->disconnectFirstDetectedAt === 0) {
-            $this->disconnectFirstDetectedAt = $now;
-        }
-
-        // 计算已断开时长
-        $disconnectedDuration = $now - $this->disconnectFirstDetectedAt;
-
-        // ========== 硬性超时检查（最优先）==========
-        // 无论 IPC 连接状态、Master 是否可达，只要断开超过 maxExitWaitSec 就强制退出
-        // 防止子进程无限等待已死亡的 Master
-        if ($disconnectedDuration >= $this->maxExitWaitSec) {
-            $this->logger->warning(
-                "[{$selfTag}] 硬性超时达到 ({$disconnectedDuration}s >= {$this->maxExitWaitSec}s)，强制退出"
-            );
-            $this->disconnectFirstDetectedAt = 0;
-            return true;
         }
 
         // ========== Master PID 未知时的检查 ==========
@@ -102,18 +124,7 @@ class OrphanGuard
             return $this->unknownDisconnectCount >= $this->unknownDisconnectThreshold;
         }
 
-        // ========== Master PID 已知但可能不可达时的检查 ==========
-        if ($this->masterAlive($masterPid)) {
-            $this->deadCount = 0;
-            $this->unknownDisconnectCount = 0;
-            return false;
-        }
-
-        $this->deadCount++;
-        $this->logger->warning(
-            "[{$selfTag}] Master PID {$masterPid} 不可达且 IPC 断开 ({$this->deadCount}/{$this->deadThreshold}, 已断开 {$disconnectedDuration}s, 剩余 " . ($this->maxExitWaitSec - $disconnectedDuration) . "s 硬性超时)"
-        );
-        return $this->deadCount >= $this->deadThreshold;
+        return false;
     }
 
     protected function masterAlive(int $masterPid): bool
