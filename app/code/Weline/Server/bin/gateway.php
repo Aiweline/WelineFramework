@@ -43,6 +43,16 @@ use Weline\Server\Model\ReverseProxy;
 $gateway = new WlsGateway();
 $gateway->setListenAddress($listenHost, $listenPort);
 $gateway->setInstanceName((string)$instanceName);
+$childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
+    $masterPid,
+    (string)($runtimeArgs['master-lease-file'] ?? ''),
+    (string)($runtimeArgs['master-token'] ?? ''),
+    'Gateway:' . $listenPort,
+    (string)$instanceName,
+    (int)($runtimeArgs['epoch'] ?? 0)
+);
+$gateway->setMasterGuard($childMasterGuard);
+$childMasterGuard->assertAliveOrExit('Gateway bootstrap 后 Master 自治检查');
 
 // 如果提供了 IPC 参数，启用动态路由
 if ($controlPort > 0 && $masterPid > 0) {

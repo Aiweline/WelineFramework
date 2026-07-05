@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ChildControl\ChildMasterGuard;
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
@@ -22,6 +24,8 @@ use Weline\Server\IPC\ControlMessage;
  */
 class WlsGateway
 {
+    private const MASTER_PID_CHECK_INTERVAL_SEC = 5;
+
     /**
      * 路由表：域名 => 后端地址
      *
@@ -55,6 +59,8 @@ class WlsGateway
      * Master PID
      */
     private int $masterPid = 0;
+    private int $lastMasterPidCheck = 0;
+    private ?ChildMasterGuard $masterGuard = null;
 
     /**
      * 是否启用动态路由
@@ -203,6 +209,11 @@ class WlsGateway
     {
         $this->controlPort = $controlPort;
         $this->masterPid = $masterPid;
+    }
+
+    public function setMasterGuard(?ChildMasterGuard $guard): void
+    {
+        $this->masterGuard = $guard;
     }
 
     public function setIpcIdentity(
@@ -467,6 +478,32 @@ class WlsGateway
         }
     }
 
+    private function checkMasterPidAlive(): void
+    {
+        if ($this->masterGuard !== null && $this->masterGuard->shouldExit()) {
+            echo "Master lease/PID 已失效，Gateway 自行退出: " . $this->masterGuard->getLastExitReason() . "\n";
+            $this->running = false;
+            return;
+        }
+
+        if ($this->masterPid <= 0) {
+            return;
+        }
+
+        $now = \time();
+        if (($now - $this->lastMasterPidCheck) < self::MASTER_PID_CHECK_INTERVAL_SEC) {
+            return;
+        }
+        $this->lastMasterPidCheck = $now;
+
+        if (Processer::isRunningByPid($this->masterPid)) {
+            return;
+        }
+
+        echo "Master PID {$this->masterPid} 已不存在，Gateway 自行退出\n";
+        $this->running = false;
+    }
+
     /**
      * @param resource $listenSocket
      */
@@ -503,6 +540,8 @@ class WlsGateway
             echo "动态路由已启用\n";
         }
 
+        $this->masterGuard?->assertAliveOrExit('Gateway listen 前 Master 自治检查');
+
         // 创建 TCP Socket
         $socket = stream_socket_server(
             "tcp://{$this->listenHost}:{$this->listenPort}",
@@ -524,6 +563,13 @@ class WlsGateway
         while ($this->running) {
             // 检查 IPC 消息
             $this->checkIpcMessages();
+            if (!$this->running) {
+                break;
+            }
+            $this->checkMasterPidAlive();
+            if (!$this->running) {
+                break;
+            }
 
             // 接受客户端连接
             $client = @stream_socket_accept($socket, 0);
