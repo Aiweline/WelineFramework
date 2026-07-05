@@ -98,6 +98,8 @@ class MasterProcess
     protected ?ServiceContext $context = null;
     private bool $deferredSslRetryTriggered = false;
     private string $controlToken = '';
+    private string $masterLeaseToken = '';
+    private string $masterLeaseFile = '';
 
     /**
      * 启动完成后的回调（用于释放启动锁等）
@@ -408,6 +410,7 @@ class MasterProcess
             $this->orchestrator->bootstrapControlPlane($this->context);
             $this->context = $this->orchestrator->getContext() ?? $this->context;
             $this->controlPort = $this->context?->controlPort ?? $this->controlPort;
+            $this->writeMasterLeaseRunning($this->context);
             $this->traceStartupPhase('master-control-plane:after', [
                 'control_port' => $this->controlPort,
             ]);
@@ -445,6 +448,7 @@ class MasterProcess
             try {
                 if ($this->orchestrator !== null && $this->orchestrator->isRunning()) {
                     $this->log(__('Master 正在关闭，通知所有子进程...'));
+                    $this->markMasterLeaseStopping();
                     $this->saveMasterInfo('stopping');
                     $this->orchestrator->stopAll('master_shutdown', null);
                 }
@@ -574,6 +578,10 @@ class MasterProcess
         if ($this->controlToken === '') {
             $this->controlToken = self::generateControlToken();
         }
+        if ($this->masterLeaseToken === '') {
+            $this->masterLeaseToken = self::generateControlToken();
+        }
+        $this->masterLeaseFile = MasterLeaseManager::pathForInstance($this->instanceName);
 
         return new ServiceContext(
             instanceName: $this->instanceName,
@@ -598,7 +606,49 @@ class MasterProcess
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
             publicHost: $publicHost,
+            masterLeaseFile: $this->masterLeaseFile,
+            masterToken: $this->masterLeaseToken,
         );
+    }
+
+    private function writeMasterLeaseRunning(?ServiceContext $context): void
+    {
+        if ($context === null || $context->masterToken === '') {
+            return;
+        }
+
+        try {
+            $path = (new MasterLeaseManager())->writeRunning(
+                $context->instanceName,
+                $context->masterPid,
+                $context->controlPort,
+                $context->epoch,
+                $context->masterToken
+            );
+            $this->masterLeaseFile = $path;
+            WlsLogger::info_('[Master] Master lease 已写入: ' . $path);
+        } catch (\Throwable $throwable) {
+            WlsLogger::warning_('[Master] Master lease 写入失败: ' . $throwable->getMessage());
+        }
+    }
+
+    private function markMasterLeaseStopping(): void
+    {
+        $instance = $this->context?->instanceName ?? $this->instanceName;
+        $token = $this->context?->masterToken ?: $this->masterLeaseToken;
+        if ($instance === '' || $token === '') {
+            return;
+        }
+
+        try {
+            (new MasterLeaseManager())->markStopping(
+                $instance,
+                $this->context?->masterPid ?? (int)\getmypid(),
+                $token
+            );
+        } catch (\Throwable $throwable) {
+            WlsLogger::warning_('[Master] Master lease 标记 stopping 失败: ' . $throwable->getMessage());
+        }
     }
 
     private static function generateControlToken(): string
@@ -865,6 +915,7 @@ class MasterProcess
     {
         $this->log("停机流程进行中，再次收到终止信号：将强制结束子进程并退出 Master（signal={$signal}）", 'warning');
         $this->logger?->flush(true);
+        $this->markMasterLeaseStopping();
         if ($this->orchestrator !== null) {
             $this->orchestrator->forceTerminateMasterAndChildren('repeat_signal:' . $signal);
         }
@@ -881,6 +932,7 @@ class MasterProcess
         }
 
         $this->stopRequested = true;
+        $this->markMasterLeaseStopping();
         $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
 
@@ -916,6 +968,7 @@ class MasterProcess
         }
 
         $this->stopRequested = true;
+        $this->markMasterLeaseStopping();
         $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
         $this->orchestrator?->stopAll('manual');
