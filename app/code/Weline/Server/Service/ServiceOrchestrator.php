@@ -1101,6 +1101,52 @@ class ServiceOrchestrator
         }
     }
 
+    private function hasDueResurrectQueueWork(float $now): bool
+    {
+        if ($this->resurrectQueue === [] || $this->isRecoverySuspended()) {
+            return false;
+        }
+
+        foreach ($this->resurrectQueue as $entry) {
+            if (($entry['launching'] ?? false) === true) {
+                continue;
+            }
+
+            $role = (string) ($entry['role'] ?? '');
+            if ($this->childServicesBootstrapInProgress
+                && ($role === ControlMessage::ROLE_WORKER || $role === ControlMessage::ROLE_MAINTENANCE)) {
+                continue;
+            }
+
+            if ($role === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
+                return true;
+            }
+
+            if ((float) ($entry['scheduledAt'] ?? 0.0) <= $now) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function scheduleResurrectQueueMainLoopTaskIfDue(float $now): bool
+    {
+        if ($this->resurrectQueue === []) {
+            return false;
+        }
+
+        $this->guardResurrectQueueTasks($now);
+        if (!$this->hasDueResurrectQueueWork($now)
+            || $this->hasMainLoopTask('periodic:resurrect_queue')) {
+            return false;
+        }
+
+        return $this->scheduleMainLoopTask('periodic:resurrect_queue', 'resurrect_queue', function (): void {
+            $this->processResurrectQueue();
+        });
+    }
+
     private function scheduleMainLoopTask(string $key, string $label, callable $task): bool
     {
         if ($this->mainLoopFiberScheduler === null) {
@@ -6924,13 +6970,8 @@ class ServiceOrchestrator
 
             // 启动确认完成后才处理复活队列；启动期只收集 READY，超时直接失败清理。
             if ($this->startupAcceptanceComplete) {
-                $this->guardResurrectQueueTasks($now);
-                if (!$this->hasMainLoopTask('periodic:resurrect_queue')) {
-                    if ($this->scheduleMainLoopTask('periodic:resurrect_queue', 'resurrect_queue', function (): void {
-                        $this->processResurrectQueue();
-                    })) {
-                        continue;
-                    }
+                if ($this->scheduleResurrectQueueMainLoopTaskIfDue($now)) {
+                    continue;
                 }
             }
 
@@ -8249,16 +8290,16 @@ class ServiceOrchestrator
                     continue;
                 }
             }
-            if ($this->shouldYieldPeriodicWork(true)) {
-                return;
-            }
             if (($entry['role'] ?? '') === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
                 unset($this->resurrectQueue[$key]);
                 WlsLogger::info_("[Orchestrator] 维护模式已关闭，取消 maintenance#{$entry['instanceId']} 待执行复活");
                 continue;
             }
-            if ($now < $entry['scheduledAt']) {
+            if ($now < (float) ($entry['scheduledAt'] ?? 0.0)) {
                 continue;
+            }
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
             }
 
             $provider = $this->registry->getProvider($entry['role']);
