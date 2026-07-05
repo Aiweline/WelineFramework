@@ -85,6 +85,8 @@ $orchestratorLaunchId = '';
 $controlPort = 0;
 $masterPid = 0;
 $workerCount = 1;
+$masterLeaseFile = '';
+$masterToken = '';
 
 $positionalArgs = [];
 foreach ($argv as $i => $arg) {
@@ -124,6 +126,10 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--master-lease-file=')) {
+        $masterLeaseFile = (string)\substr($arg, 20);
+    } elseif (\str_starts_with($arg, '--master-token=')) {
+        $masterToken = (string)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--ssl-cert=')) {
         $sslCert = \substr($arg, 11);
     } elseif (\str_starts_with($arg, '--ssl-key=')) {
@@ -231,6 +237,16 @@ $sslEngine = \strtolower(\trim((string)($sslConfig['engine'] ?? 'stream')));
 \Weline\Server\Log\WlsLogger::getInstance()
     ->setStdoutEnabled(\Weline\Server\Log\LogConfig::isStdoutEnabled($isFrontend, \Weline\Server\Log\LogConfig::isDevMode()))
     ->setProcessTag($processTag);
+
+$childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
+    $masterPid,
+    $masterLeaseFile,
+    $masterToken,
+    ($isMaintenanceWorker ? 'EventMaintenanceSSLWorker' : 'EventSSLWorker') . "#{$workerId}",
+    $instanceName,
+    $orchestratorEpoch
+);
+$childMasterGuard->assertAliveOrExit('Event SSL listen 前 Master 自治检查');
 
 if ($sslEngine !== 'event_buffer') {
     \Weline\Server\Log\WlsLogger::error_('worker_ssl_event.php requires wls.ssl.engine=event_buffer');
@@ -732,9 +748,11 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     $maxDrainTime,
     &$connections,
     &$stats,
+    &$listener,
     $base,
     $masterPid,
-    &$ipcReceivedShutdown
+    &$ipcReceivedShutdown,
+    $childMasterGuard
 ): void {
     if ($kernel !== null) {
         $kernel->tick();
@@ -753,10 +771,18 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
 
     static $lastMasterProcessCheck = 0.0;
     $now = \microtime(true);
-    $ipcConnected = $ipcClient !== null && $ipcClient->isConnected();
+    if ($childMasterGuard->shouldExit()) {
+        \Weline\Server\Log\WlsLogger::warning_('EventBuffer SSL worker Master lease/PID invalid; exiting: ' . $childMasterGuard->getLastExitReason());
+        $shouldExit = true;
+        $ipcDraining = true;
+        $drainStartTime = $now;
+        if ($listener instanceof \EventListener) {
+            $listener->disable();
+        }
+    }
+
     if ($masterPid > 0
         && !$ipcReceivedShutdown
-        && !$ipcConnected
         && ($now - $lastMasterProcessCheck) >= 2.0) {
         $lastMasterProcessCheck = $now;
         if (!wlsEventProcessExists($masterPid)) {

@@ -41,6 +41,8 @@ class ServiceContext
         /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.weline.test） */
         public readonly ?string $publicHost = null,
         public readonly string $controlToken = '',
+        public readonly string $masterLeaseFile = '',
+        public readonly string $masterToken = '',
     ) {}
 
     /**
@@ -70,6 +72,8 @@ class ServiceContext
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
             publicHost: $this->publicHost,
+            masterLeaseFile: $this->masterLeaseFile,
+            masterToken: $this->masterToken,
         );
     }
 
@@ -97,6 +101,8 @@ class ServiceContext
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
             publicHost: $this->publicHost,
+            masterLeaseFile: $this->masterLeaseFile,
+            masterToken: $this->masterToken,
         );
     }
 
