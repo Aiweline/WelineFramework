@@ -29,6 +29,8 @@ $masterPid = 0;
 $isFrontend = false;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$masterLeaseFile = '';
+$masterToken = '';
 $role = 'session_server';
 $tokenFileName = '';
 $bootstrapInstance = '';
@@ -49,6 +51,10 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = $normalizeArgValue((string)\substr($arg, 12));
+    } elseif (\str_starts_with($arg, '--master-lease-file=')) {
+        $masterLeaseFile = $normalizeArgValue((string)\substr($arg, 20));
+    } elseif (\str_starts_with($arg, '--master-token=')) {
+        $masterToken = $normalizeArgValue((string)\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--role=')) {
         $argRole = $normalizeArgValue((string)\substr($arg, 7));
         if ($argRole !== '') {
@@ -128,6 +134,16 @@ if ($processName) {
 if ($processName) {
     \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
 }
+
+$childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
+    $masterPid,
+    $masterLeaseFile,
+    $masterToken,
+    $processLabel . ':' . $port,
+    $instanceName,
+    $orchestratorEpoch
+);
+$childMasterGuard->assertAliveOrExit($processLabel . ' listen 前 Master 自治检查');
 
 if ($sharedService && !$isFrontend) {
     if ($sharedSidecarDetached) {
@@ -317,6 +333,12 @@ while ($server->isRunning()) {
         $kernel->flushWrites();
     }
     $server->maintainSharedConsumerTokens();
+
+    if ($childMasterGuard->shouldExit()) {
+        WlsLogger::warning_("[{$processLabel}] Master lease/PID 已失效，子进程自治退出: " . $childMasterGuard->getLastExitReason());
+        $server->setRunning(false);
+        continue;
+    }
 
     if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {
         $kernel->reconnect();

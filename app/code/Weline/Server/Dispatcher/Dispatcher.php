@@ -23,6 +23,7 @@ namespace Weline\Server\Dispatcher;
 
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ChildControl\ChildMasterGuard;
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
@@ -253,6 +254,7 @@ class Dispatcher
     private int $masterPid = 0;
     private int $orchestratorEpoch = 0;
     private string $orchestratorLaunchId = '';
+    private ?ChildMasterGuard $masterGuard = null;
     
     private int $lastMasterPidCheck = 0;
     private int $masterDeadCount = 0;
@@ -710,6 +712,11 @@ class Dispatcher
     public function setMasterPid(int $pid): void
     {
         $this->masterPid = $pid;
+    }
+
+    public function setMasterGuard(?ChildMasterGuard $guard): void
+    {
+        $this->masterGuard = $guard;
     }
 
     /**
@@ -1783,6 +1790,12 @@ class Dispatcher
      */
     private function checkMasterPidAlive(): void
     {
+        if ($this->masterGuard !== null && $this->masterGuard->shouldExit()) {
+            $this->log('Master lease/PID 已失效，Dispatcher 自行退出: ' . $this->masterGuard->getLastExitReason(), 'ERROR');
+            $this->running = false;
+            return;
+        }
+
         if ($this->masterPid <= 0 || $this->ipcReceivedShutdown) {
             return;
         }
@@ -1792,14 +1805,7 @@ class Dispatcher
         }
         $this->lastMasterPidCheck = $now;
 
-        // IPC 连接正常 → Master 存活，无需 PID 检测
-        if ($this->ipcClient && $this->ipcClient->isConnected()) {
-            $this->masterDeadCount = 0;
-            return;
-        }
-
-        // IPC 断开，用 PID 检测确认 Master 是否真的死了
-        // 注意：Windows 下 isRunningByPid 会执行 tasklist 命令（阻塞），但只在 IPC 断开时才执行
+        // 不再因 IPC 连接状态跳过 PID 检测：控制通道可能与真实进程状态脱节。
         $alive = false;
         if (\function_exists('posix_kill')) {
             $alive = @\posix_kill($this->masterPid, 0);
@@ -1812,7 +1818,7 @@ class Dispatcher
                 }
             }
         } elseif ($this->isWindows()) {
-            // Windows: 使用 Processer::isRunningByPid() 检测（会阻塞，但只在 IPC 断开时执行）
+            // Windows: 使用 Processer::isRunningByPid() 检测
             $alive = Processer::isRunningByPid($this->masterPid);
         } else {
             $alive = @\file_exists("/proc/{$this->masterPid}");
@@ -1828,8 +1834,9 @@ class Dispatcher
         }
 
         $this->masterDeadCount++;
+        $ipcState = $this->ipcClient && $this->ipcClient->isConnected() ? 'IPC 仍连接' : 'IPC 已断开';
         $this->log(
-            "Master PID {$this->masterPid} 不可达且 IPC 断开 ({$this->masterDeadCount}/" . self::MASTER_PID_DEAD_THRESHOLD . ")",
+            "Master PID {$this->masterPid} 不可达 ({$this->masterDeadCount}/" . self::MASTER_PID_DEAD_THRESHOLD . ", {$ipcState})",
             'WARN'
         );
         if ($this->masterDeadCount >= self::MASTER_PID_DEAD_THRESHOLD) {
