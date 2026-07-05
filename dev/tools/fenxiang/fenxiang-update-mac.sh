@@ -285,6 +285,11 @@ assert_site_clean_before_update() {
     return 0
 }
 
+is_git_worktree() {
+    local project_root="$1"
+    cd "$project_root" && git rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
 collect_site_framework_changes() {
     local project_root="$1"
     local status
@@ -375,6 +380,7 @@ if ! printf '%s\n' "$remotes" | grep -qx 'origin'; then
     echo "Core repo must have remote 'origin'." >&2
     exit 1
 fi
+core_origin_url="$(git_output remote get-url origin)"
 
 if [[ "$skip_commit" -ne 1 ]]; then
     assert_no_sensitive_core_changes
@@ -427,7 +433,8 @@ for site in "${sites[@]}"; do
 
     if [[ "$dry_run" -eq 1 ]]; then
         echo "[$project_root] git status --porcelain"
-        echo "[$project_root] php bin/w core:update -b $branch"
+        echo "[$project_root] php bin/w core:update -b $branch --repo=$core_origin_url"
+        echo "[$project_root] if site had local changes before core:update, site commit/push is skipped."
         if [[ "$skip_site_commit" -ne 1 ]]; then
             echo "[$project_root] git add -A -- <framework changes only>"
             echo "[$project_root] git diff --cached --check"
@@ -442,16 +449,25 @@ for site in "${sites[@]}"; do
         continue
     fi
 
-    if ! assert_site_clean_before_update "$project_root"; then
-        failures+=("$project_root => site worktree is not clean before core:update")
-        continue
+    site_is_git=0
+    site_had_preexisting_changes=0
+    if is_git_worktree "$project_root"; then
+        site_is_git=1
+        site_pre_update_status="$(cd "$project_root" && git status --porcelain)"
+        if [[ -n "$site_pre_update_status" ]]; then
+            site_had_preexisting_changes=1
+            echo "Site has local changes before core:update; core update will continue, site commit/push will be skipped: $project_root" >&2
+            printf '%s\n' "$site_pre_update_status" >&2
+        fi
+    else
+        echo "Site is not a git repository; core update will continue, site commit/push will be skipped: $project_root" >&2
     fi
 
     set +e
-    output="$(cd "$project_root" && php bin/w core:update -b "$branch" 2>&1)"
+    output="$(cd "$project_root" && php bin/w core:update -b "$branch" --repo="$core_origin_url" 2>&1)"
     exit_code=$?
     set -e
-    echo "[$project_root] php bin/w core:update -b $branch"
+    echo "[$project_root] php bin/w core:update -b $branch --repo=$core_origin_url"
     [[ -z "$output" ]] || printf '%s\n' "$output"
     if [[ "$exit_code" -ne 0 ]] || has_weline_command_failure "$output"; then
         failures+=("$project_root => core:update failed")
@@ -459,7 +475,11 @@ for site in "${sites[@]}"; do
     fi
 
     if [[ "$skip_site_commit" -ne 1 ]]; then
-        if ! commit_site_framework_changes "$project_root"; then
+        if [[ "$site_is_git" -ne 1 ]]; then
+            echo "[$project_root] site commit/push skipped because project is not a git repository."
+        elif [[ "$site_had_preexisting_changes" -eq 1 ]]; then
+            echo "[$project_root] site commit/push skipped because local changes existed before core:update."
+        elif ! commit_site_framework_changes "$project_root"; then
             failures+=("$project_root => framework commit failed")
             continue
         fi
