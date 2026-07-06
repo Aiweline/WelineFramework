@@ -18,6 +18,9 @@
 !deploy/
 !deploy/**
 
+!docker/
+!docker/**
+
 # 保留分项口令脚本
 !tools/
 !tools/fenxiang/

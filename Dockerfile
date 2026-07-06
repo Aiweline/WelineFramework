@@ -82,19 +82,19 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/docker-php-opcache.ini 
     && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/docker-php-opcache.ini
 
 # 配置 Nginx
-COPY docker/nginx.conf /etc/nginx/sites-available/default
+COPY dev/docker/nginx.conf /etc/nginx/sites-available/default
 RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default \
     && rm -f /etc/nginx/sites-enabled/default.bak
 
 # 配置 Supervisor
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY dev/docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # 创建启动脚本
-COPY docker/start.sh /usr/local/bin/start.sh
+COPY dev/docker/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 
 # 创建健康检查脚本
-COPY docker/healthcheck.sh /usr/local/bin/healthcheck.sh
+COPY dev/docker/healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/healthcheck.sh
 
 # 暴露端口
