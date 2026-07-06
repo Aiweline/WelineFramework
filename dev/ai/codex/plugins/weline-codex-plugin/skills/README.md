@@ -45,7 +45,8 @@
 
 ## 目录导航
 
-- `[_index.md](_index.md)`：Multica 路由索引
+- `[_index.md](_index.md)`：Multica/Codex 路由索引
+- `[testing](testing/SKILL.md)`：Codex-facing testing guide and validation-layer router.
 - `[ROLE_SKILL_BINDING.md](ROLE_SKILL_BINDING.md)`：角色与原技能映射
 - `[TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)`：团队协作流程
 - `[MIGRATION_REPORT.md](MIGRATION_REPORT.md)`：迁移说明与来源记录

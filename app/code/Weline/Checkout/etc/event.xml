@@ -19,5 +19,20 @@
                   shared="true" 
                   sort="10"/>
     </event>
-</config>
 
+    <event name="Weline_Payment::payment::success">
+        <observer name="Weline_Checkout::payment_status_sync_success"
+                  instance="Weline\Checkout\Observer\PaymentStatusSyncObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
+    <event name="Weline_Payment::payment::failed">
+        <observer name="Weline_Checkout::payment_status_sync_failed"
+                  instance="Weline\Checkout\Observer\PaymentStatusSyncObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+</config>

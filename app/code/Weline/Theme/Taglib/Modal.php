@@ -59,6 +59,9 @@ class Modal implements TaglibInterface
             $class = $attributes['class'] ?? '';
             $style = $attributes['style'] ?? '';
 
+            $t_copy = addslashes((string)__('复制'));
+            $t_copied = addslashes((string)__('已复制'));
+            $t_copy_failed = addslashes((string)__('复制失败'));
             $t_close = addslashes((string)__('关闭'));
 
             $code = \Weline\Taglib\Taglib::attributes($attributes);
@@ -91,11 +94,16 @@ class Modal implements TaglibInterface
             // 头部（可选）
             $html[] = '      <div class="weline-modal-header" id="<?= htmlspecialchars($Taglib__id) ?>_header">';
             $html[] = '        <h5 class="weline-modal-title" id="<?= htmlspecialchars($Taglib__id) ?>_title"><?= htmlspecialchars($Taglib__title ?? \'\') ?></h5>';
+            $html[] = '        <div class="weline-modal-actions">';
+            $html[] = '          <button type="button" class="weline-modal-copy" id="<?= htmlspecialchars($Taglib__id) ?>_copy" title="' . $t_copy . '" aria-label="' . $t_copy . '" data-copy-label="' . $t_copy . '" data-copied-label="' . $t_copied . '" data-copy-failed-label="' . $t_copy_failed . '">';
+            $html[] = '            <span class="weline-modal-copy-text">' . $t_copy . '</span>';
+            $html[] = '          </button>';
             if ($closable) {
                 $html[] = '        <button type="button" class="weline-modal-close" id="<?= htmlspecialchars($Taglib__id) ?>_close" title="' . $t_close . '">';
                 $html[] = '          <i class="mdi mdi-close"></i>';
                 $html[] = '        </button>';
             }
+            $html[] = '        </div>';
             $html[] = '      </div>';
             
             // 主体
@@ -141,8 +149,13 @@ class Modal implements TaglibInterface
 .weline-modal--xl .weline-modal-content { max-width: 900px; }
 .weline-modal--fullscreen .weline-modal-content { max-width: none; width: calc(100% - 32px); height: calc(100% - 32px); border-radius: var(--backend-border-radius-md, 8px); display: flex; flex-direction: column; }
 .weline-modal--fullscreen .weline-modal-body { flex: 1; overflow-y: auto; }
-.weline-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--backend-color-border-light, #e9ecef); }
-.weline-modal-title { margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--backend-color-text-primary, #212529); }
+.weline-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--backend-color-border-light, #e9ecef); }
+.weline-modal-title { margin: 0; min-width: 0; flex: 1 1 auto; font-size: 1.1rem; font-weight: 600; color: var(--backend-color-text-primary, #212529); overflow-wrap: anywhere; }
+.weline-modal-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
+.weline-modal-copy { height: 32px; min-width: 48px; padding: 0 12px; border: 1px solid var(--backend-color-border-light, #e9ecef); border-radius: var(--backend-border-radius, 6px); background: var(--backend-color-bg-secondary, #f8f9fa); color: var(--backend-color-text-secondary, #6c757d); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 0.86rem; font-weight: 600; line-height: 1; transition: background-color 0.2s, border-color 0.2s, color 0.2s; white-space: nowrap; }
+.weline-modal-copy:hover { background: var(--backend-color-bg-tertiary, #e9ecef); color: var(--backend-color-text-primary, #212529); }
+.weline-modal-copy.is-copied { border-color: var(--backend-color-success, #34c38f); color: var(--backend-color-success, #198754); }
+.weline-modal-copy.is-error { border-color: var(--backend-color-danger, #f46a6a); color: var(--backend-color-danger, #dc3545); }
 .weline-modal-close { width: 32px; height: 32px; border: none; border-radius: var(--backend-border-radius, 6px); background: transparent; color: var(--backend-color-text-secondary, #6c757d); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 1.2rem; }
 .weline-modal-close:hover { background: var(--backend-color-bg-tertiary, #e9ecef); color: var(--backend-color-text-primary, #212529); }
 .weline-modal-body { padding: 20px; color: var(--backend-color-text-primary, #212529); }
@@ -174,6 +187,7 @@ CSS;
 var modal = document.getElementById(id);
 var backdrop = modal.querySelector('.weline-modal-backdrop');
 var closeBtn = document.getElementById(id + '_close');
+var copyBtn = document.getElementById(id + '_copy');
 var headerEl = document.getElementById(id + '_header');
 var titleEl = document.getElementById(id + '_title');
 var bodyEl = document.getElementById(id + '_body');
@@ -186,6 +200,12 @@ var isBackdropClose = modal.dataset.backdrop === 'true';
 if (closeBtn) {
     closeBtn.addEventListener('click', function() {
         hide();
+    });
+}
+
+if (copyBtn) {
+    copyBtn.addEventListener('click', function() {
+        copyBody();
     });
 }
 
@@ -248,6 +268,66 @@ function setClosable(val) {
     isClosable = val;
     modal.dataset.closable = val ? 'true' : 'false';
     if (closeBtn) closeBtn.style.display = val ? 'flex' : 'none';
+}
+
+function setCopyable(val) {
+    if (copyBtn) copyBtn.style.display = val ? 'inline-flex' : 'none';
+}
+
+function defaultCopyLabel() {
+    return copyBtn ? (copyBtn.getAttribute('data-copy-label') || copyBtn.getAttribute('aria-label') || copyBtn.textContent || '') : '';
+}
+
+function restoreCopyButton() {
+    if (!copyBtn) return;
+    copyBtn.textContent = defaultCopyLabel();
+    copyBtn.classList.remove('is-copied', 'is-error');
+}
+
+function notifyCopy(success) {
+    if (!copyBtn) return;
+    copyBtn.textContent = copyBtn.getAttribute(success ? 'data-copied-label' : 'data-copy-failed-label') || defaultCopyLabel();
+    copyBtn.classList.toggle('is-copied', success);
+    copyBtn.classList.toggle('is-error', !success);
+    window.setTimeout(restoreCopyButton, 1600);
+}
+
+function fallbackCopy(text) {
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'readonly');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    var copied = false;
+    try {
+        copied = document.execCommand('copy');
+    } catch (error) {
+        copied = false;
+    }
+    document.body.removeChild(textarea);
+    return copied ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+}
+
+function writeClipboard(text) {
+    if (!text) return Promise.reject(new Error('empty'));
+    if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(text);
+    }
+    return fallbackCopy(text);
+}
+
+function copyBody() {
+    var text = bodyEl ? (bodyEl.innerText || bodyEl.textContent || '').trim() : '';
+    return writeClipboard(text).then(function() {
+        notifyCopy(true);
+        return true;
+    }).catch(function() {
+        notifyCopy(false);
+        return false;
+    });
 }
 
 // 进度模式快捷方法
@@ -318,6 +398,8 @@ window.WelineModal[id] = {
     showHeader: showHeader,
     showFooter: showFooter,
     setClosable: setClosable,
+    setCopyable: setCopyable,
+    copyBody: copyBody,
     showProgress: showProgress,
     updateProgress: updateProgress,
     isVisible: function() { return modal.classList.contains('show'); },
@@ -415,6 +497,8 @@ modal.hide();
     <li><code>showHeader(bool)</code> - 显示/隐藏头部</li>
     <li><code>showFooter(bool)</code> - 显示/隐藏底部</li>
     <li><code>setClosable(bool)</code> - 设置是否可关闭</li>
+    <li><code>setCopyable(bool)</code> - 显示/隐藏复制按钮</li>
+    <li><code>copyBody()</code> - 复制当前弹窗主体内容</li>
     <li><code>showProgress(options)</code> - 进度模式</li>
     <li><code>updateProgress(options)</code> - 更新进度</li>
     <li><code>isVisible()</code> - 是否可见</li>

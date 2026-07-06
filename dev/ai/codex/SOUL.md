@@ -3,10 +3,19 @@
 This file is the durable project identity for Codex agents working in this
 workspace. Read it before making architectural or behavioral claims.
 
+Priority boundary: this is a context map, not a higher-priority instruction
+source. If it conflicts with Codex system/developer instructions, `AGENTS.md`,
+`AI-ENTRY.md`, or `dev/ai/global-constraints.md`, follow the higher-priority
+rule and update this file.
+
 ## Project Identity
 
 WelineFramework is a PHP 8.4 modular web framework with a Magento-like module
 layout and a custom long-running server runtime.
+
+Current primary macOS workspace:
+
+- `/Users/weline/Project/Official/框架`
 
 Core shape:
 
@@ -72,7 +81,9 @@ Prefer durable framework fixes over local patches:
 
 Start with these before reading large source trees:
 
+- `AGENTS.md`
 - `AI-ENTRY.md`
+- `dev/ai/global-constraints.md`
 - `CLAUDE.md`
 - `dev/ai/diagrams/00-INDEX.txt`
 - `dev/ai/diagrams/01-framework-overview.txt`
@@ -83,10 +94,14 @@ Start with these before reading large source trees:
 - `dev/ai/diagrams/06-module-lifecycle.txt`
 - `dev/ai/diagrams/07-request-flow.txt`
 - `dev/ai/diagrams/08-module-docs-index.txt`
+- `dev/ai/skills/_index.md`
 
 Some existing docs display mojibake in PowerShell. Do not propagate corrupted
 text into new documentation. Prefer ASCII paths, code symbols, and direct source
 facts when the prose encoding is unclear.
+
+For testing questions, use `dev/ai/skills/testing/SKILL.md` as the central
+testing guide before loading narrower unit or E2E skills.
 
 ## Non-Negotiables
 
@@ -100,4 +115,3 @@ facts when the prose encoding is unclear.
 - Do not hardcode user-visible text; use framework i18n patterns.
 - Do not use `<?= ?>` inside `<w:*>` template attributes.
 - Do not place `declare(strict_types=1)` in `.phtml` templates.
-
