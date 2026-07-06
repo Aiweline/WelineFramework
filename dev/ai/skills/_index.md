@@ -60,7 +60,7 @@
 | E2E、路由、UI 冒烟 | 用户明确要求 E2E 时加载 `E2E自动化工程师-端到端流程测试`；轻量路由/UI 冒烟加载 `E2E自动化工程师-路由与UI冒烟验证` |
 | CI、发布、部署、环境兼容 | `CI发布工程师-CI与发布门禁`；`CI发布工程师-环境兼容与命令安全` |
 | Weline_Deploy、Webhook、`deploy:release`、生产 WLS 部署 | `CI发布工程师-部署发布系统` |
-| **口令「分仓」**：DEV→weline 分仓、git tag 递增、双端推送、Packagist 刷新；**「分仓+模块名」只处理该模块** | **仅**加载 `dev/ai/skills/CI发布工程师-分仓发布/SKILL.md`；脚本在 `dev/tools/fencang/`；Codex 另见 `.codex/skills/fencang-release/SKILL.md`；无口令不得触发 |
+| **口令「分仓」**：DEV→项目兄弟目录 `框架-分仓` 分仓；缺本地仓库自动从 Gitee/GitHub clone；git tag 递增、双端推送、Packagist 刷新；**「分仓+模块名」只处理该模块** | **仅**加载 `dev/ai/skills/CI发布工程师-分仓发布/SKILL.md`；脚本在 `dev/tools/fencang/`；Codex 另见 `.codex/skills/fencang-release/SKILL.md`；无口令不得触发 |
 | **口令「分项」**：当前核心仓提交并推送当前核心分支后，让 Windows `E:\WelineFramework\Framework-Official` 固定分项，或 macOS `/Users/weline/Project/Official` 下自动发现的带 `bin/w` 分项，运行 `php bin/w core:update -b <branch>` 同步核心代码；子项目只提交/推送框架更新产生的变更，业务路径或脏工作区阻塞该站点；用户只说「分项」默认 `dev`，说「分项 <分支>」则处理该分支；站点 WLS 运行中则 reload | **仅**加载 `dev/ai/skills/CI发布工程师-分项更新/SKILL.md`；Windows 脚本 `dev/tools/fenxiang/fenxiang-update.ps1`，macOS 脚本 `dev/tools/fenxiang/fenxiang-update-mac.sh`；Codex 另见 `.codex/skills/fenxiang-update/SKILL.md`；无口令不得触发 |
 | 文档、知识库、规则沉淀 | `文档知识库工程师-文档规范与变更记录`；`文档知识库工程师-技能索引与知识库`；`文档知识库工程师-会话复盘与规则沉淀` |
 
