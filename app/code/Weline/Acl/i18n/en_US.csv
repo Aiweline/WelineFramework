@@ -1,10 +1,46 @@
-﻿无权限访问重定向前,"No permission to access the redirect target"
+﻿角色名不能为空！,"Role name cannot be empty!"
+角色已存在！,"Role already exists!"
+角色创建成功！,"Role created successfully!"
+角色创建失败！,"Role creation failed!"
+角色已不存在！,"Role no longer exists!"
+删除成功！,"Deletion successful!"
+仅允许超管分配权限！,"Only admins are allowed to assign permissions!"
+角色ID不存在！,"Role ID does not exist!"
+权限分配成功！,"Permission assignment succeeded!"
+权限缓存清理成功！,"Permission cache cleared successfully!"
+权限分配失败！,"Permission assignment failed!"
+搜索成功,"Search Successful"
+加载IP白名单失败：%{1},"Failed to load IP whitelist: %{1}"
+IP地址不能为空,"IP address cannot be empty"
+IP地址格式不正确,"IP address format is incorrect"
+该IP地址已存在,"The IP address already exists"
+添加成功,"Add Success"
+添加失败,"Add Failed"
+添加失败：%{1},"Add Failed: %{1}"
+记录不存在,"Record Not Found"
+该IP地址已被其他记录使用,"This IP address is already in use by another record."
+更新成功,"Update successful"
+更新失败,"Update failed"
+更新失败：%{1},"Update failed: %{1}"
+无效的请求方法,"Invalid request method"
+无效的ID,"Invalid ID"
+删除成功,"Deletion successful"
+删除失败,"Deletion failed"
+删除失败：%{1},"Deletion failed: %{1}"
+状态更新成功,"Status Update Successful"
+状态更新失败,"Status Update Failed"
+状态更新失败：%{1},"Status Update Failed: %{1}"
+登录失败,"Login failed"
+登录成功,"Login successful"
+权限拒绝,"Permission denied"
+ACL违规,"ACL violation"
+可疑活动,"Suspicious Activity"
+加载安全日志失败：%{1},"Failed to load security logs: %{1}"
+无权限访问重定向前,"No permission to access the redirect target"
 在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。,"Triggered before performing a redirect operation when a user does not have permission to access. Allows other modules to execute custom operations before the redirect, such as logging, sending notifications, etc."
 角色检查,"Role check"
 在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,"Triggered when checking user role permissions, allowing other modules to customize the role checking logic."
-acl标签缺少source属性,"acl tag missing source attribute"
-"该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！","Some resources on this page reference permission settings, but you currently do not have permission: unable to access the %{1} resource. Please contact the administrator if needed!"
-使用示例：,"Usage example:"
+不能删除超级管理员！,"Cannot delete super administrator!"
 "资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}","Resource ID and parent resource ID cannot be the same, please check! Resource ID: %{1}, Parent resource ID: %{2}"
 "框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}","Framework Convention Error: Class-level ACL %{1} is not attached to a menu ACL. Please ensure that source_id corresponds to a menu.xml node, or that parent_source points to a menu node with type=menus. Current parent_source=%{2}"
 (空),(null)
@@ -40,135 +76,68 @@ acl标签缺少source属性,"acl tag missing source attribute"
 "超级管理员已拥有全部 ACL 权限，无需追加。","The super admin already has all ACL permissions, no need to add more."
 "已为超级管理员（role_id=1）授予 %{1} 条新权限。","Granted %{1} new permissions to the super administrator (role_id=1)."
 为超级管理员授予权限时出错：%{1},"Error granting permissions to super administrator: %{1}"
-加载IP白名单失败：%{1},"Failed to load IP whitelist: %{1}"
-IP地址不能为空,"IP address cannot be empty"
-IP地址格式不正确,"IP address format is incorrect"
-该IP地址已存在,"The IP address already exists"
-添加成功,"Add Success"
-添加失败,"Add Failed"
-添加失败：%{1},"Add Failed: %{1}"
-记录不存在,"Record Not Found"
-该IP地址已被其他记录使用,"This IP address is already in use by another record."
-更新成功,"Update successful"
-更新失败,"Update failed"
-更新失败：%{1},"Update failed: %{1}"
-无效的请求方法,"Invalid request method"
-无效的ID,"Invalid ID"
-删除成功,"Deletion successful"
-删除失败,"Deletion failed"
-删除失败：%{1},"Deletion failed: %{1}"
-状态更新成功,"Status Update Successful"
-状态更新失败,"Status Update Failed"
-状态更新失败：%{1},"Status Update Failed: %{1}"
-登录失败,"Login failed"
-登录成功,"Login successful"
-权限拒绝,"Permission denied"
-ACL违规,"ACL violation"
-可疑活动,"Suspicious Activity"
-加载安全日志失败：%{1},"Failed to load security logs: %{1}"
-角色名不能为空！,"Role name cannot be empty!"
-角色已存在！,"Role already exists!"
-角色创建成功！,"Role created successfully!"
-角色创建失败！,"Role creation failed!"
-角色已不存在！,"Role no longer exists!"
-删除成功！,"Deletion successful!"
-仅允许超管分配权限！,"Only admins are allowed to assign permissions!"
-角色ID不存在！,"Role ID does not exist!"
-权限分配成功！,"Permission assignment succeeded!"
-权限缓存清理成功！,"Permission cache cleared successfully!"
-权限分配失败！,"Permission assignment failed!"
-搜索成功,"Search Successful"
-不能删除超级管理员！,"Cannot delete super administrator!"
-IP白名单,"IP whitelist"
-添加IP,"Add IP"
-关键词,Keywords
-搜索,Search
-重置,Reset
-IP白名单列表,"IP whitelist list"
-ID,ID
-IP地址,"IP address"
-描述,Description
-状态,Status
-创建时间,"Creation time"
-操作,Operation
-编辑,Edit
-删除,Delete
-显示,Display
-到,to
-共,Total
-条记录,"items of records"
-上一页,"Previous page"
-下一页,"Next page"
-暂无IP白名单记录,"No IP Whitelist Records"
-添加IP白名单,"Add IP whitelist"
-支持单个IP或CIDR格式的IP范围,"Supports a single IP or CIDR format IP range"
-启用,Enable
-取消,Cancel
-保存,Save
-搜索IP地址或描述,"Search IP address or description"
-禁用,Disable
-"例如：192.168.1.1 或 192.168.1.0/24","For example: 192.168.1.1 or 192.168.1.0/24"
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
-编辑ID：,"Edit ID:"
-操作失败,"Operation failed"
-确定要切换状态吗？,"Are you sure you want to toggle the status?"
-确定要删除这条记录吗？,"Are you sure you want to delete this record?"
-安全日志,"Security log"
-事件类型,"Event type"
-全部,All
-日志列表,"Log list"
-用户ID,"User ID"
-消息,Message
-查看详情,"View Details"
-暂无安全日志记录,"No security log records"
-搜索消息或IP地址,"Search Message or IP Address"
-查看日志ID：,"View Log ID:"
+"资源不能以自己为父级： %{1}","Resource cannot have itself as parent: %{1}"
+"检测到循环引用： %{1} -> %{2}","Detected circular reference: %{1} -> %{2}"
+"设置此父级会形成循环引用： %{1} -> %{2}","Setting this parent will create a circular reference: %{1} -> %{2}"
+"非标准父子类型组合： %{1} -> %{2}","Non-standard parent-child type combination: %{1} -> %{2}"
+"资源 ID 不能为空","Resource ID cannot be empty"
+"资源 ID 已存在： %{1}","Resource ID already exists: %{1}"
+"该菜单下有 %{1} 个子菜单，请先删除子菜单","This menu has %{1} submenu(s). Please delete the submenus first"
+acl标签缺少source属性,"acl tag missing source attribute"
+"该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！","Some resources on this page reference permission settings, but you currently do not have permission: unable to access the %{1} resource. Please contact the administrator if needed!"
+使用示例：,"Usage example:"
 Acl权限管理,"Acl permission management"
 系统配置,"System Configuration"
-Acl角色管理,"Acl role management"
 支持角色权限管理,"Supports role-based permission management"
-添加,Add
 权限管理,"Permission management"
-暂无记录,"No records"
-添加角色,"Add Role"
-角色名,"Role name"
-请输入角色名称,"Please enter the role name"
-角色描述,"Role description"
-请输入角色描述,"Please enter the role description"
-提交,Submit
-请输入角色名,"Please enter the role name"
-正在创建...,Creating...
-正在创建角色...,"Creating role..."
-角色创建失败，请检查输入后重试,"Role creation failed. Please check your input and try again."
-权限分配,"Permission assignment"
+"ACL 权限管理","ACL permission management"
+管理系统中所有的访问控制权限，包括菜单、接口等资源,"Manage all access control permissions in the system, including resources such as menus and APIs."
 角色管理,"Role management"
+安全日志,"Security log"
+IP白名单,"IP whitelist"
+权限总数,"Total permissions"
+涉及模块,"Involved modules"
+菜单权限,"Menu permissions"
+接口权限,"Interface permission"
+搜索,Search
+权限列表,"Permission list"
+共,Total
+条记录,"items of records"
+暂无权限数据,"No permission data"
+ID,ID
+资源标识,"Resource identifier"
+资源名称,"Resource name"
+类型,Type
+请求方法,"Request method"
+路由,Route
+所属模块,"Parent Module"
+更新时间,"Update time"
+搜索权限名称、ID、路由...,"Search Permission Name, ID, Route..."
+所有类型,"All types"
+菜单,Menu
+接口,API
+所有模块,"All modules"
+其他,Other
+权限分配,"Permission assignment"
 角色权限配置,"Role permission configuration"
 为角色分配系统访问权限，控制菜单和功能的可见性,"Assign system access to roles, control visibility of menus and features"
 操作者,Operator
 配置角色,"Configure roles"
 已授权权限,"Authorized permissions"
-权限总数,"Total permissions"
 权限分组,"Permission groups"
 授权进度,"Authorization progress"
 展开,Expand
 折叠,Collapse
 全选,"Select All"
 清空,Clear
-权限列表,"Permission list"
 勾选需要授予的权限，子权限会自动关联父权限,"Check the permissions to grant; child permissions will automatically associate with parent permissions"
 返回列表,"Return to List"
 保存权限配置,"Save permission configuration"
 "搜索权限名称、ID 或描述...","Search Permission Name, ID, or Description..."
 按模块筛选,"Filter by module"
-所有模块,"All modules"
 按类型筛选,"Filter by type"
-所有类型,"All types"
-菜单,Menu
-接口,API
 展开所有,"Expand all"
 折叠所有,"Collapse All"
-菜单权限,"Menu permissions"
-接口权限,"Interface permission"
 访问权限,"Access permission"
 未知,Unknown
 保存中...,Saving...
@@ -179,26 +148,57 @@ Acl角色管理,"Acl role management"
 已清空所有选择,"Cleared all selections"
 筛选结果,"Filter Results"
 个分组,groups
+Acl角色管理,"Acl role management"
 Acl角色添加,"Acl role addition"
+角色名,"Role name"
 角色名称验证成功,"Role name validation successful"
+请输入角色名称,"Please enter the role name"
+角色描述,"Role description"
 角色描述验证成功,"Role description validation successful"
-"ACL 权限管理","ACL permission management"
-管理系统中所有的访问控制权限，包括菜单、接口等资源,"Manage all access control permissions in the system, including resources such as menus and APIs."
-涉及模块,"Involved modules"
-暂无权限数据,"No permission data"
-资源标识,"Resource identifier"
-资源名称,"Resource name"
-类型,Type
-请求方法,"Request method"
-路由,Route
-所属模块,"Parent Module"
-更新时间,"Update time"
-搜索权限名称、ID、路由...,"Search Permission Name, ID, Route..."
-其他,Other
-"资源不能以自己为父级： %{1}","Resource cannot have itself as parent: %{1}"
-"检测到循环引用： %{1} -> %{2}","Detected circular reference: %{1} -> %{2}"
-"设置此父级会形成循环引用： %{1} -> %{2}","Setting this parent will create a circular reference: %{1} -> %{2}"
-"非标准父子类型组合： %{1} -> %{2}","Non-standard parent-child type combination: %{1} -> %{2}"
-"资源 ID 不能为空","Resource ID cannot be empty"
-"资源 ID 已存在： %{1}","Resource ID already exists: %{1}"
-"该菜单下有 %{1} 个子菜单，请先删除子菜单","This menu has %{1} submenu(s). Please delete the submenus first"
+请输入角色描述,"Please enter the role description"
+提交,Submit
+请输入角色名,"Please enter the role name"
+添加,Add
+编辑,Edit
+暂无记录,"No records"
+添加角色,"Add Role"
+取消,Cancel
+删除,Delete
+正在创建...,Creating...
+正在创建角色...,"Creating role..."
+角色创建失败，请检查输入后重试,"Role creation failed. Please check your input and try again."
+添加IP,"Add IP"
+关键词,Keywords
+重置,Reset
+IP白名单列表,"IP whitelist list"
+IP地址,"IP address"
+描述,Description
+状态,Status
+创建时间,"Creation time"
+操作,Operation
+显示,Display
+到,to
+上一页,"Previous page"
+下一页,"Next page"
+暂无IP白名单记录,"No IP Whitelist Records"
+添加IP白名单,"Add IP whitelist"
+支持单个IP或CIDR格式的IP范围,"Supports a single IP or CIDR format IP range"
+启用,Enable
+保存,Save
+搜索IP地址或描述,"Search IP address or description"
+禁用,Disable
+"例如：192.168.1.1 或 192.168.1.0/24","For example: 192.168.1.1 or 192.168.1.0/24"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+编辑ID：,"Edit ID:"
+操作失败,"Operation failed"
+确定要切换状态吗？,"Are you sure you want to toggle the status?"
+确定要删除这条记录吗？,"Are you sure you want to delete this record?"
+事件类型,"Event type"
+全部,All
+日志列表,"Log list"
+用户ID,"User ID"
+消息,Message
+查看详情,"View Details"
+暂无安全日志记录,"No security log records"
+搜索消息或IP地址,"Search Message or IP Address"
+查看日志ID：,"View Log ID:"
