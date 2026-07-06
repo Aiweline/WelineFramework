@@ -111,6 +111,11 @@ return [
         'description' => __('在渲染页头 Logo 之后触发，允许其他模块在 Logo 结束处注入内容。'),
         'doc' => 'frontend/partials/header/logo-after.md',
     ],
+    'Weline_Theme::frontend::partials::header::announcement' => [
+        'name' => __('页头公告内容'),
+        'description' => __('覆盖或注入页头公告区域，允许业务模块提供全站促销、配送或运营提示。'),
+        'doc' => 'frontend/partials/header/announcement.md',
+    ],
     'Weline_Theme::frontend::partials::header::categories-before' => [
         'name' => __('页头分类菜单之前'),
         'description' => __('在渲染页头分类菜单之前触发，允许其他模块在分类菜单开始处注入内容。'),
@@ -165,6 +170,11 @@ return [
         'name' => __('页头账户操作'),
         'description' => __('覆盖默认页头账户入口，允许客户、会员或站点模块接入自己的账户中心地址。'),
         'doc' => 'frontend/partials/header/account.md',
+    ],
+    'Weline_Theme::frontend::partials::header::cart' => [
+        'name' => __('页头购物车入口'),
+        'description' => __('覆盖默认页头购物车入口，允许购物车模块提供数量、金额、迷你购物车或结账入口。'),
+        'doc' => 'frontend/partials/header/cart.md',
     ],
     'Weline_Theme::frontend::partials::header::actions-after' => [
         'name' => __('页头操作按钮之后'),
@@ -516,6 +526,11 @@ return [
         'name' => __('产品列表布局内容之前'),
         'description' => __('在渲染产品列表布局的主要内容之前触发，允许其他模块在内容开始处注入内容。'),
         'doc' => 'frontend/layouts/product_list/content-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::content' => [
+        'name' => __('产品列表布局内容'),
+        'description' => __('覆盖产品列表布局的主内容区域，允许商品模块提供列表、筛选、分页或空状态。'),
+        'doc' => 'frontend/layouts/product_list/content.md',
     ],
     'Weline_Theme::frontend::layouts::product-list::content-after' => [
         'name' => __('产品列表布局内容之后'),
