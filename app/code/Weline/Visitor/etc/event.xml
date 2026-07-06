@@ -26,5 +26,11 @@
                   shared="true"
                   sort="100"/>
     </event>
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Visitor::ensure_dashboard_pages"
+                  instance="Weline\Visitor\Observer\EnsureDashboardPages"
+                  disabled="false"
+                  shared="true"
+                  sort="80"/>
+    </event>
 </config>
-

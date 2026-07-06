@@ -60,10 +60,11 @@ class Backup extends BackendController
         }
         
         try {
-            $websiteId = (int)$this->request->getPost('website_id', 0);
+            $websiteIdRaw = $this->request->getPost('website_id', null);
+            $websiteId = (int)($websiteIdRaw ?? 0);
             $backupType = $this->request->getPost('backup_type', 'full'); // full, database, files
             
-            if ($websiteId <= 0) {
+            if ($websiteIdRaw === null || $websiteIdRaw === '' || $websiteId < Website::ID_DEFAULT) {
                 return $this->jsonResponse(false, __('无效的网站ID'));
             }
             
