@@ -12,7 +12,11 @@ This plugin packages WelineFramework's Codex-facing development skills into a re
 
 ## Marketplace
 
-The marketplace lives at:
+The official repo-scoped marketplace lives at:
+
+- `.agents/plugins/marketplace.json`
+
+The legacy/local marketplace root is also kept at:
 
 - `dev/ai/codex/.agents/plugins/marketplace.json`
 
@@ -21,6 +25,14 @@ The plugin source is:
 - `dev/ai/codex/plugins/weline-codex-plugin`
 
 Install from this checkout:
+
+```powershell
+codex plugin marketplace add .
+codex plugin add weline-codex-plugin@weline-framework
+codex plugin list
+```
+
+Install from the legacy local marketplace root:
 
 ```powershell
 codex plugin marketplace add dev/ai/codex

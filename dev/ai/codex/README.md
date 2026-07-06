@@ -76,9 +76,16 @@ dev/ai/codex/tasks/2026-03-23/2026-03-23-2045-example-task/
 - 计划先行：每个任务都要有可执行计划。
 - 框架优先：先复用现有模块、服务、扩展点、技能，不要发明框架 API。
 - SOLID：控制器保持薄、服务承载业务流、模型聚焦持久化与实体行为；依赖抽象，不把多种职责揉进一个类。
-- TDD：能先写失败用例就先写；至少先定义失败场景、验证口和验收条件，再写实现。
-- E2E：涉及用户主路径的前后端功能，默认需要 e2e，或者明确记录为什么暂不具备。
+- 测试策略：先定义失败场景、真实验证入口和验收条件；只有用户明确要求写测试/补单测/写 E2E/更新 fixtures 时，才新增或修改测试产物。
+- 浏览器验证：涉及用户可见主路径时，优先用真实入口、HTTP、WLS、Codex Browser 或现有 E2E 命令给证据；不要默认固化新 E2E spec。
 - 验证闭环：`result.md` 必须写验证命令、结果、未验证项与原因。
+
+## Codex 持久入口
+
+- `AGENTS.md` 是 Codex 自动加载的仓库规则入口，必须保持短小。
+- `SOUL.md`、`USER.md`、`MEMORY.md` 是 repo-local Codex context maps，用于初始化项目理解；它们不能覆盖 `AGENTS.md`、`AI-ENTRY.md`、`global-constraints.md` 或 Codex system/developer 指令。
+- `.agents/plugins/marketplace.json` 是官方推荐的 repo-scoped Codex plugin marketplace 入口。
+- `.codex/skills/*` 是当前仓库保留的轻量技能适配器；详细规则以 `dev/ai/skills/*/SKILL.md` 为准。
 
 ## 兼容说明
 

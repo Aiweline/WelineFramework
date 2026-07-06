@@ -23,6 +23,8 @@ $controlPort = 0;  // 0 means use Master endpoint bootstrap if no argument is pa
 $masterPid = 0;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$masterLeaseFile = '';
+$masterToken = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -34,6 +36,10 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--master-lease-file=')) {
+        $masterLeaseFile = (string)\substr($arg, 20);
+    } elseif (\str_starts_with($arg, '--master-token=')) {
+        $masterToken = (string)\substr($arg, 15);
     }
 }
 
@@ -50,6 +56,16 @@ if (!\defined('DS')) {
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
+
+$childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
+    $masterPid,
+    $masterLeaseFile,
+    $masterToken,
+    'HttpRedirect:' . $httpPort,
+    $instanceName,
+    $orchestratorEpoch
+);
+$childMasterGuard->assertAliveOrExit('HTTP redirect 启动前 Master 自治检查');
 
 // IPC control port. Prefer the explicit Master-provided argument; the endpoint
 // file is only a bootstrap pointer when the argument is absent.
@@ -300,6 +316,11 @@ while (true) {
         $gracefulExit('收到 IPC shutdown 命令');
     }
     
+    if ($childMasterGuard->shouldExit()) {
+        WlsLogger::warning_('[HTTP Redirect] Master lease/PID 已失效，子进程自治退出: ' . $childMasterGuard->getLastExitReason());
+        $gracefulExit('Master lease/PID 自治退出');
+    }
+
     // ========== 孤儿检测（IPC 优先） ==========
     if ($orphanGuard->shouldExit(
         $masterPid,

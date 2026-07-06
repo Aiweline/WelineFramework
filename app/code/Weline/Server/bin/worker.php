@@ -138,6 +138,8 @@ $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $workerCount = 1;
+$masterLeaseFile = '';
+$masterToken = '';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -156,6 +158,10 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--master-lease-file=')) {
+        $masterLeaseFile = (string)\substr($arg, 20);
+    } elseif (\str_starts_with($arg, '--master-token=')) {
+        $masterToken = (string)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--wls-loop-driver=')) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
@@ -180,6 +186,23 @@ require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
+// Master PID / lease 先验检查要早于 endpoint resolve 与 listen/bind。
+if (!isset($masterPid) || $masterPid <= 0) {
+    $masterPid = 0;
+}
+if (!isset($isMaintenanceWorker)) {
+    $isMaintenanceWorker = false;
+}
+$childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
+    $masterPid,
+    $masterLeaseFile,
+    $masterToken,
+    ($isMaintenanceWorker ? 'MaintenanceWorker' : 'Worker') . "#{$workerId}",
+    $instanceName,
+    $orchestratorEpoch
+);
+$childMasterGuard->assertAliveOrExit('启动前 Master 自治检查');
+
 // IPC control port. Prefer the explicit Master-provided argument; the endpoint
 // file is only a bootstrap pointer when the argument is absent.
 if (!isset($controlPort)) {
@@ -191,14 +214,6 @@ $supervisorEnabled = $supervisorEnabledRaw !== false
     && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
 if ($controlPort <= 0 && !$supervisorEnabled) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort, 30);
-}
-// Master PID（用于孤儿检测）
-if (!isset($masterPid) || $masterPid <= 0) {
-    $masterPid = 0;
-}
-// 是否为维护 Worker
-if (!isset($isMaintenanceWorker)) {
-    $isMaintenanceWorker = false;
 }
 if ($isMaintenanceWorker && !\defined('WLS_MAINTENANCE_WORKER')) {
     \define('WLS_MAINTENANCE_WORKER', true);
@@ -1516,6 +1531,11 @@ while (true) {
     WlsLogger::flush_(false);
 
     $now = \time();
+
+    if ($childMasterGuard->shouldExit()) {
+        WlsLogger::warning_('[Worker] Master lease/PID 已失效，子进程自治退出: ' . $childMasterGuard->getLastExitReason());
+        $gracefulExit('Master lease/PID 自治退出');
+    }
 
     // ========== 定时GC触发（防止内存泄漏） ==========
     // 每60秒触发一次主动GC，减少内存占用

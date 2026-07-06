@@ -210,6 +210,66 @@ html[data-bs-theme="dark"] .i18n-admin-page {
     color: var(--i18n-text);
 }
 
+.i18n-admin-form textarea.form-control {
+    min-height: 8.5rem;
+    line-height: 1.55;
+    resize: vertical;
+}
+
+.i18n-admin-form .i18n-admin-source-textarea {
+    min-height: 8rem;
+}
+
+.i18n-admin-form .i18n-admin-translation-textarea {
+    min-height: 10rem;
+}
+
+.i18n-admin-form .weline-language-select {
+    display: block;
+    width: 100%;
+}
+
+.i18n-admin-form .weline-language-select-trigger {
+    width: 100%;
+    min-height: 45px;
+    border-color: var(--i18n-border, var(--backend-color-border-default, #ced4da));
+    background: var(--i18n-surface-strong, var(--backend-color-card-bg, #ffffff));
+    color: var(--i18n-text, var(--backend-color-text-primary, #212529));
+}
+
+.i18n-admin-form .weline-language-select-trigger.is-display-only {
+    opacity: 1;
+    background: linear-gradient(
+        180deg,
+        var(--i18n-surface-strong, var(--backend-color-card-bg, #ffffff)),
+        var(--i18n-surface-muted, var(--backend-color-bg-subtle, #f3f6fb))
+    );
+}
+
+.i18n-admin-form .weline-language-select-tag {
+    background: var(--i18n-primary-soft, rgba(37, 99, 235, 0.1));
+    border-color: var(--i18n-border, var(--backend-color-border-default, #ced4da));
+    color: var(--i18n-text, var(--backend-color-text-primary, #212529));
+}
+
+.i18n-admin-form .weline-language-select-code,
+.i18n-admin-form .weline-language-select-placeholder,
+.i18n-admin-form .weline-language-select-state {
+    color: var(--i18n-text-muted, var(--backend-color-text-secondary, #64748b));
+}
+
+.i18n-admin-form .weline-language-select-search {
+    border-color: var(--i18n-border, var(--backend-color-border-default, #ced4da));
+    background: var(--i18n-surface-strong, var(--backend-color-card-bg, #ffffff));
+    color: var(--i18n-text, var(--backend-color-text-primary, #212529));
+}
+
+body .weline-language-select-dropdown[id^="dictionary_"] {
+    border-color: var(--backend-color-border-default, #ced4da);
+    background: var(--backend-color-card-bg, #ffffff);
+    color: var(--backend-color-text-primary, #212529);
+}
+
 .i18n-admin-readonly {
     background: linear-gradient(180deg, var(--i18n-surface-strong), var(--i18n-surface-muted)) !important;
 }

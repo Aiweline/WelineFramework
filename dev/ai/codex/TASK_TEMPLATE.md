@@ -22,7 +22,7 @@ dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/
 - `task.md`
   记录任务标题、状态、目标、范围、约束、相关文件、恢复入口。
 - `plan.md`
-  记录本任务的执行步骤和验证目标；步骤状态建议使用 `- [ ]`、`- [x]`。
+  记录本任务的执行步骤和验证目标；步骤状态建议使用 `- [ ]`、`- [x]`。测试产物只在用户明确要求时规划，普通开发/修复默认规划真实入口验证。
 - `progress.md`
   记录按时间追加的过程日志，不要只在结束时补写。
 - `result.md`
@@ -44,4 +44,4 @@ dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/
 1. 每个任务只写自己的目录。
 2. 不再把共享状态写入 `dev/ai/codex/ACTIVE.md`。
 3. 大计划写 `dev/ai/codex/plans/*.plan.md`，执行状态写当前任务目录。
-4. 完成后记得同步 `memory/YYYY-MM-DD.md`。
+4. 完成后仅在结论值得长期保留时同步 `dev/ai/codex/MEMORY.md` 或相关长期文档；不要把短期流水账写入共享记忆。

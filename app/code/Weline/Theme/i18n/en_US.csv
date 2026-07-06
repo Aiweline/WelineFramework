@@ -675,6 +675,81 @@ Default,Default
 "严重错误：编译后的%{1}文件中检测到PHP代码，这是不允许的\n\n位置信息：\n  源文件: %{2}\n  来源标识: %{3}\n  %{1}内容中的行号: 第 %{4} 行\n  PHP代码位置: 字符位置 %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  主题布局内不允许存在编译后还有PHP代码。\n  编译后的%{1}文件必须是纯%{1}，不能包含任何PHP代码。\n\n正确的做法：\n  1. 使用CSS变量：在模板中定义CSS变量，然后在CSS中使用 var()\n  2. 使用data属性：在HTML元素上设置data属性，然后在JS中读取\n  3. 使用window对象：在模板中设置 window.config = {...}，然后在JS中使用\n  4. 使用标签系统：使用框架提供的标签系统传递数据\n  5. 如果确实需要PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Fatal error: PHP code was detected in the compiled %{1} file, which is not allowed\n\nLocation information:\n Source file: %{2}\n Source identifier: %{3}\n %{1} Line number in content: Line %{4}\n PHP code position: Character position %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n Compiled PHP code is not allowed in the theme layout. \n The compiled %{1} file must be pure %{1} and cannot contain any PHP code. \n\nCorrect approach:\n 1. Use CSS variables: define CSS variables in the template, and then use var() in CSS\n 2. Use data attributes: set the data attribute on the HTML element, and then read it in JS\n 3. Use window objects: set window.config = {...} in the template, and then use it in JS\n 4. Use the tag system: use the tag system provided by the framework to pass data\n 5. If you really need PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
 "© %{1} Weline Framework. %{2}","© %{1} Weline Framework. %{2}"
 保留所有权利,"All rights reserved"
+任务进度,"Task progress"
+等待中,Waiting
+执行中,Executing
+成功,Success
+失败,Failed
+已跳过,Skipped
+正在连接...,Connecting...
+已连接,Connected
+已断开,Disconnected
+就绪,Ready
+复制,Copy
+清空,Clear
+已复制,Copied
+复制失败,"Copy failed"
+请选择,"Please select"
+暂无数据,"No data"
+加载中...,Loading...
+搜索...,Searching...
+终端输出,"Terminal output"
+连接错误,"Connection Error"
+连接失败（可能为网络问题或服务端异常），请查看下方日志或服务器终端。,"Connection failed (network or server error). Check the log below or server terminal."
+停止,Stop
+开始,Start
+"【DNS 供应商返回】","DNS provider response"
+思考输出：开（点击关闭）,"Thinking Output: On (Click to Disable)"
+思考输出：关（点击开启）,"Thinking Output: Off (Click to Enable)"
+思考,Think
+连接重试中...,Reconnecting...
+【输出过长，已省略前部】,"[The output is too long, the front part has been omitted]"
+开始日期,"Start date"
+结束日期,"End date"
+至,To
+今天,Today
+昨天,Yesterday
+最近7天,"Last 7 days"
+最近30天,"Last 30 Days"
+本月,"This Month"
+上月,"last month"
+今年,"This year"
+输入后按回车添加,"Press Enter after entering to add"
+移除,Remove
+已达到最大标签数量,"Maximum tag count reached"
+标签已存在,"Tag already exists"
+标签太短,"Tag too short"
+标签太长,"Tag too long"
+"w:slot 标签缺少必填属性 id","w:slot tag missing required attribute id"
+"w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot tag id format invalid: ""%{id}"", must start with letter, contains letters, numbers, underscore, hyphen"
+"w:slot 标签 id 重复: ""%{id}""","w:slot tag id duplicate: ""%{id}"""
+"已存在于: %{location}","Already exists at: %{location}"
+"当前位置: %{location}","Current location: %{location}"
+"w:slot 标签 position 属性值无效: ""%{value}""","w:slot tag position attribute value invalid: ""%{value}"""
+"允许的值: %{values}","Allowed values: %{values}"
+"w:slot 标签属性冲突 - exclusive 和 multiple 不能同时为 true","w:slot tag attribute conflict - exclusive and multiple cannot both be true"
+"w:slot 标签属性冲突 - append 和 prepend 不能同时为 true","w:slot tag attribute conflict - append and prepend cannot both be true"
+"w:slot 标签属性冲突 - exclusive 模式下不能使用 append 或 prepend","w:slot tag attribute conflict - cannot use append or prepend in exclusive mode"
+"w:slot id=""%{id}"" accept 和 reject 包含相同的部件类型: %{types}","w:slot id=""%{id}"" accept and reject contain same widget types: %{types}"
+"w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}""","w:slot tag max attribute must be integer >= -1, current value: ""%{value}"""
+"w:slot 标签 min 属性必须是 >= 0 的整数，当前值: ""%{value}""","w:slot tag min attribute must be integer >= 0, current value: ""%{value}"""
+"w:slot 标签 min (%{min}) 不能大于 max (%{max})","w:slot tag min (%{min}) cannot be greater than max (%{max})"
+致命错误,"Fatal Error"
+"文件: %{file}","File: %{file}"
+"行数: %{line}","Line: %{line}"
+"示例: %{example}","Example: %{example}"
+警告,Warning
+选择图标,"Select Icon"
+搜索图标...,"Search icon..."
+没有找到匹配的图标,"No matching icon found"
+全部,All
+预设颜色,"Preset Colors"
+请选择或搜索...,"Select or search..."
+没有找到匹配的结果,"No matching results found"
+搜索中...,Searching...
+加载失败,"Failed to load"
+输入关键词搜索,"Enter keywords to search"
+关闭,Close
 页脚之前,"Before Footer"
 在渲染页脚组件之前触发，允许其他模块在页脚开始处注入内容。,"Triggered before rendering the footer component, allowing other modules to inject content at the beginning of the footer."
 页脚内容之前,"Before Footer Content"
