@@ -2,7 +2,7 @@
 
 Claude / Claude Code entry point. This file is an index only.
 
-Read `AI-ENTRY.md`, then follow `dev/ai/global-constraints.md` as the single source of repository-wide AI rules.
+Read `AI-ENTRY.md`, then `dev/ai/AI-RULES-PACK.md`, then follow `dev/ai/global-constraints.md` as the single source of repository-wide AI rules.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
