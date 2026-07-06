@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Order\Service;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
@@ -24,6 +25,13 @@ use Weline\Order\Model\OrderHistory;
  */
 class OrderService
 {
+    private const BUSINESS_SOURCE_FIELDS = [
+        'source_app',
+        'source_module',
+        'business_code',
+        'business_name',
+    ];
+
     private ObjectManager $objectManager;
     private OrderStateMachine $stateMachine;
     private EventsManager $eventsManager;
@@ -96,6 +104,9 @@ class OrderService
             if (empty($data[Order::schema_fields_ORDER_NUMBER])) {
                 $data[Order::schema_fields_ORDER_NUMBER] = $order->generateOrderNumber();
             }
+            $businessContext = $this->resolveBusinessContext($data, is_array($data['items'] ?? null) ? $data['items'] : []);
+            $this->applyBusinessContextToOrderData($data, $businessContext);
+            $this->stripUnavailableBusinessSourceFields($order, $data);
             
             // 设置默认值
             $data[Order::schema_fields_STATUS] = $data[Order::schema_fields_STATUS] ?? Order::STATUS_PENDING;
@@ -120,7 +131,7 @@ class OrderService
             
             // 创建订单项
             if (isset($data['items']) && is_array($data['items'])) {
-                $this->createOrderItems($order->getId(), $data['items']);
+                $this->createOrderItems($order->getId(), $data['items'], $businessContext);
             }
             
             // 记录订单历史
@@ -160,6 +171,8 @@ class OrderService
         $connection->beginTransaction();
         
         try {
+            $this->stripUnavailableBusinessSourceFields($order, $data);
+
             // 更新订单数据
             foreach ($data as $key => $value) {
                 if ($key !== 'items' && $key !== Order::schema_fields_ORDER_ID) {
@@ -175,7 +188,8 @@ class OrderService
                     ->delete();
                 
                 // 创建新订单项
-                $this->createOrderItems($orderId, $data['items']);
+                $orderContext = $this->resolveBusinessContext($order->getData(), $data['items']);
+                $this->createOrderItems($orderId, $data['items'], $orderContext);
                 
                 // 重新计算总额
                 $items = $this->getOrderItems($orderId);
@@ -282,6 +296,18 @@ class OrderService
         if (isset($filters['fulfillment_status']) && $filters['fulfillment_status']) {
             $model->where(Order::schema_fields_FULFILLMENT_STATUS, $filters['fulfillment_status']);
         }
+
+        if (isset($filters['source_app']) && $filters['source_app']) {
+            $model->where(Order::schema_fields_SOURCE_APP, $filters['source_app']);
+        }
+
+        if (isset($filters['source_module']) && $filters['source_module']) {
+            $model->where(Order::schema_fields_SOURCE_MODULE, $filters['source_module']);
+        }
+
+        if (isset($filters['business_code']) && $filters['business_code']) {
+            $model->where(Order::schema_fields_BUSINESS_CODE, $filters['business_code']);
+        }
         
         if (isset($filters['keyword']) && $filters['keyword']) {
             $keyword = "%{$filters['keyword']}%";
@@ -348,11 +374,18 @@ class OrderService
      * @param array $items 订单项数据
      * @return void
      */
-    private function createOrderItems(int $orderId, array $items): void
+    private function createOrderItems(int $orderId, array $items, array $orderBusinessContext = []): void
     {
         foreach ($items as $itemData) {
             $item = $this->getOrderItemModel()->reset();
-            $item->setData(OrderItem::schema_fields_ORDER_ID, $orderId);
+            $itemBusinessContext = $this->resolveBusinessContext($itemData, [$itemData], $orderBusinessContext);
+            $itemSaveData = [
+                OrderItem::schema_fields_ORDER_ID => $orderId,
+                OrderItem::schema_fields_SOURCE_APP => $itemBusinessContext['source_app'],
+                OrderItem::schema_fields_SOURCE_MODULE => $itemBusinessContext['source_module'],
+                OrderItem::schema_fields_BUSINESS_CODE => $itemBusinessContext['business_code'],
+                OrderItem::schema_fields_BUSINESS_NAME => $itemBusinessContext['business_name'],
+            ];
             
             // 映射字段
             $fieldMap = [
@@ -369,19 +402,23 @@ class OrderService
             
             foreach ($fieldMap as $source => $target) {
                 if (isset($itemData[$source])) {
-                    $item->setData($target, $itemData[$source]);
+                    $itemSaveData[$target] = $itemData[$source];
                 }
             }
+
+            $item->setData($itemSaveData);
             
             // 计算行总计
             $rowTotal = $item->calculateRowTotal();
-            $item->setData(OrderItem::schema_fields_ROW_TOTAL, $rowTotal);
+            $itemSaveData[OrderItem::schema_fields_ROW_TOTAL] = $rowTotal;
             
             // 设置默认值
-            $item->setData(OrderItem::schema_fields_QTY_SHIPPED, 0);
-            $item->setData(OrderItem::schema_fields_QTY_REFUNDED, 0);
-            $item->setData(OrderItem::schema_fields_QTY_CANCELLED, 0);
+            $itemSaveData[OrderItem::schema_fields_QTY_SHIPPED] = 0;
+            $itemSaveData[OrderItem::schema_fields_QTY_REFUNDED] = 0;
+            $itemSaveData[OrderItem::schema_fields_QTY_CANCELLED] = 0;
             
+            $this->stripUnavailableBusinessSourceFields($item, $itemSaveData);
+            $item->clear()->setData($itemSaveData);
             $item->save();
         }
     }
@@ -458,6 +495,174 @@ class OrderService
             }
         }
     }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function stripUnavailableBusinessSourceFields(AbstractModel $model, array &$data): void
+    {
+        $availableColumns = $this->availableColumnMap($model);
+        if ($availableColumns === null) {
+            return;
+        }
+
+        foreach (self::BUSINESS_SOURCE_FIELDS as $field) {
+            if (!isset($availableColumns[$field])) {
+                unset($data[$field]);
+            }
+        }
+    }
+
+    /**
+     * @return array<string, true>|null
+     */
+    private function availableColumnMap(AbstractModel $model): ?array
+    {
+        try {
+            $columns = $model->columns();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $map = [];
+        foreach ($columns as $column) {
+            if (!is_array($column)) {
+                continue;
+            }
+            $name = $column['Field']
+                ?? $column['field']
+                ?? $column['column_name']
+                ?? $column['Column']
+                ?? $column['name']
+                ?? '';
+            $name = trim((string)$name);
+            if ($name !== '') {
+                $map[$name] = true;
+            }
+        }
+
+        return $map === [] ? null : $map;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<int, array<string, mixed>> $items
+     * @param array<string, string> $fallback
+     * @return array{source_app: string, source_module: string, business_code: string, business_name: string}
+     */
+    private function resolveBusinessContext(array $data, array $items = [], array $fallback = []): array
+    {
+        $business = is_array($data['business'] ?? null) ? $data['business'] : [];
+
+        $sourceModule = $this->firstBusinessString($data, ['source_module', 'business_module', 'module'], 100)
+            ?: $this->firstBusinessString($business, ['source_module', 'business_module', 'module'], 100)
+            ?: $this->uniqueItemBusinessString($items, ['source_module', 'business_module', 'module'], 100)
+            ?: ($fallback['source_module'] ?? '')
+            ?: 'Weline_Order';
+        $sourceApp = $this->firstBusinessString($data, ['source_app', 'app_code', 'app'], 80)
+            ?: $this->firstBusinessString($business, ['source_app', 'app_code', 'app'], 80)
+            ?: $this->uniqueItemBusinessString($items, ['source_app', 'app_code', 'app'], 80)
+            ?: $this->sourceAppFromModule($sourceModule)
+            ?: ($fallback['source_app'] ?? '')
+            ?: 'Weline';
+        $businessCode = $this->firstBusinessString($data, ['business_code', 'business_type'], 100)
+            ?: $this->firstBusinessString($business, ['code', 'business_code', 'business_type'], 100)
+            ?: $this->uniqueItemBusinessString($items, ['business_code', 'business_type'], 100)
+            ?: ($fallback['business_code'] ?? '')
+            ?: 'order';
+        $businessName = $this->firstBusinessString($data, ['business_name', 'business_label'], 160)
+            ?: $this->firstBusinessString($business, ['name', 'business_name', 'business_label'], 160)
+            ?: $this->uniqueItemBusinessString($items, ['business_name', 'business_label'], 160, (string)__('混合业务订单'))
+            ?: ($fallback['business_name'] ?? '')
+            ?: 'Weline Order';
+
+        return [
+            'source_app' => $sourceApp,
+            'source_module' => $sourceModule,
+            'business_code' => $businessCode,
+            'business_name' => $businessName,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, string> $businessContext
+     */
+    private function applyBusinessContextToOrderData(array &$data, array $businessContext): void
+    {
+        $fieldMap = [
+            Order::schema_fields_SOURCE_APP => 'source_app',
+            Order::schema_fields_SOURCE_MODULE => 'source_module',
+            Order::schema_fields_BUSINESS_CODE => 'business_code',
+            Order::schema_fields_BUSINESS_NAME => 'business_name',
+        ];
+
+        foreach ($fieldMap as $field => $contextKey) {
+            if (trim((string)($data[$field] ?? '')) === '') {
+                $data[$field] = (string)($businessContext[$contextKey] ?? '');
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<int, string> $keys
+     */
+    private function firstBusinessString(array $data, array $keys, int $limit): string
+    {
+        foreach ($keys as $key) {
+            $value = $this->shortBusinessString($data[$key] ?? '', $limit);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @param array<int, string> $keys
+     */
+    private function uniqueItemBusinessString(array $items, array $keys, int $limit, string $mixedValue = 'mixed'): string
+    {
+        $values = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $value = $this->firstBusinessString($item, $keys, $limit);
+            if ($value === '') {
+                continue;
+            }
+            $values[$value] = true;
+            if (count($values) > 1) {
+                return $this->shortBusinessString($mixedValue, $limit);
+            }
+        }
+
+        return $values === [] ? '' : (string)array_key_first($values);
+    }
+
+    private function shortBusinessString(mixed $value, int $limit): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '';
+        }
+
+        return strlen($value) <= $limit ? $value : substr($value, 0, $limit);
+    }
+
+    private function sourceAppFromModule(string $moduleName): string
+    {
+        $moduleName = trim($moduleName);
+        if ($moduleName === '') {
+            return '';
+        }
+
+        return str_contains($moduleName, '_') ? strstr($moduleName, '_', true) : $moduleName;
+    }
     
     /**
      * 验证优惠规则是否可以应用于订单
@@ -499,4 +704,3 @@ class OrderService
         return $validationService->validateRuleActions($paymentMethodCode, $ruleActions);
     }
 }
-

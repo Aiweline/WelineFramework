@@ -6,14 +6,28 @@ namespace Weline\Cart\Service;
 use Weline\Cart\Session\CartSession;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
 
 class CartService
 {
     private const CART_COUNT_COOKIE = 'weline_cart_item_count';
+    private const ITEM_SOURCE_STRING_LIMITS = [
+        'source_app' => 80,
+        'source_module' => 100,
+        'business_module' => 100,
+        'business_code' => 100,
+        'business_name' => 160,
+        'product_type' => 80,
+    ];
+
+    private readonly CartItemSnapshotProviderRegistry $snapshotProviderRegistry;
 
     public function __construct(
-        private readonly CartSession $cartSession
+        private readonly CartSession $cartSession,
+        ?CartItemSnapshotProviderRegistry $snapshotProviderRegistry = null
     ) {
+        $this->snapshotProviderRegistry = $snapshotProviderRegistry
+            ?? ObjectManager::getInstance(CartItemSnapshotProviderRegistry::class);
     }
 
     /**
@@ -55,6 +69,25 @@ class CartService
 
         $selectedOptions = $params['selected_options'] ?? $params['options'] ?? [];
         $selectedOptions = \is_array($selectedOptions) ? $this->sanitizeOptions($selectedOptions) : [];
+        $snapshot = $this->resolveItemSnapshot($productId, $params);
+        if (($snapshot['found'] ?? true) === false) {
+            return $this->summary(false, (string)($snapshot['message'] ?? __('商品不存在或已下架。')));
+        }
+        if (($snapshot['sellable'] ?? true) === false) {
+            return $this->summary(false, (string)($snapshot['message'] ?? __('该商品暂不可售。')));
+        }
+
+        $requestedQty = $qty;
+        $stock = array_key_exists('stock', $snapshot) ? \max(0, (int)$snapshot['stock']) : null;
+        if (array_key_exists('qty', $snapshot)) {
+            $qty = $this->normalizeQty($snapshot['qty']);
+        } elseif ($stock !== null) {
+            if ($stock <= 0) {
+                return $this->summary(false, (string)($snapshot['message'] ?? __('该商品暂时缺货。')));
+            }
+            $qty = \min($qty, $stock);
+        }
+
         $itemKey = $this->buildItemKey($productId, $selectedOptions);
         $items = $this->getItems();
         $found = false;
@@ -62,6 +95,24 @@ class CartService
         foreach ($items as &$item) {
             if ((string)($item['item_id'] ?? '') !== $itemKey) {
                 continue;
+            }
+            if ($stock !== null) {
+                $availableQty = $stock - (int)$item['qty'];
+                if ($availableQty <= 0) {
+                    return $this->summary(false, (string)__('库存不足，购物车中该商品数量已达到当前可售库存。'));
+                }
+                $qty = \min($qty, $availableQty);
+            }
+            $cartItemData = \array_replace($params, $snapshot);
+            foreach (['name', 'sku', 'image', 'price'] as $key) {
+                if (array_key_exists($key, $cartItemData)) {
+                    $item[$key] = $key === 'price'
+                        ? $this->normalizePrice($cartItemData[$key])
+                        : $this->limitString((string)$cartItemData[$key], $key === 'image' ? 512 : ($key === 'name' ? 160 : 80));
+                }
+            }
+            foreach ($this->sourceFieldsFrom($cartItemData) as $key => $value) {
+                $item[$key] = $value;
             }
             $item['qty'] = $this->normalizeQty((int)$item['qty'] + $qty);
             $item['row_total'] = $this->rowTotal($item);
@@ -71,21 +122,30 @@ class CartService
         unset($item);
 
         if (!$found) {
+            $cartItemData = \array_replace($params, $snapshot);
             $items[] = $this->normalizeItem([
                 'item_id' => $itemKey,
                 'product_id' => $productId,
-                'name' => trim((string)($params['name'] ?? '')) ?: (string)__('商品 #%{1}', $productId),
-                'sku' => trim((string)($params['sku'] ?? '')),
-                'image' => trim((string)($params['image'] ?? '')),
-                'price' => $this->normalizePrice($params['price'] ?? 0),
+                'name' => trim((string)($cartItemData['name'] ?? '')) ?: (string)__('商品 #%{1}', $productId),
+                'sku' => trim((string)($cartItemData['sku'] ?? '')),
+                'image' => trim((string)($cartItemData['image'] ?? '')),
+                'price' => $this->normalizePrice($cartItemData['price'] ?? 0),
                 'qty' => $qty,
                 'selected_options' => $selectedOptions,
-            ]);
+            ] + $this->sourceFieldsFrom($cartItemData));
         }
 
         $this->setItems($items);
 
-        return $this->summary(true, (string)__('已加入购物车。'));
+        $summary = $this->summary(true, (string)__('已加入购物车。'));
+        if ($qty !== $requestedQty) {
+            $summary['quantity_adjusted'] = true;
+            $summary['requested_quantity'] = $requestedQty;
+            $summary['adjusted_quantity'] = $qty;
+            $summary['message'] = (string)__('库存不足，已按当前可售数量加入购物车。');
+        }
+
+        return $summary;
     }
 
     /**
@@ -220,6 +280,25 @@ class CartService
     }
 
     /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function resolveItemSnapshot(int $productId, array $params): array
+    {
+        try {
+            $snapshot = $this->snapshotProviderRegistry->resolve($productId, $params);
+        } catch (\Throwable $throwable) {
+            if (function_exists('w_log_error')) {
+                w_log_error('购物车商品快照解析失败：' . $throwable->getMessage());
+            }
+
+            return [];
+        }
+
+        return \is_array($snapshot) ? $snapshot : [];
+    }
+
+    /**
      * @param array<string, mixed> $item
      * @return array<string, mixed>
      */
@@ -246,9 +325,30 @@ class CartService
         if ($normalized['name'] === '' && $productId > 0) {
             $normalized['name'] = (string)__('商品 #%{1}', $productId);
         }
+        $normalized += $this->sourceFieldsFrom($item);
         $normalized['row_total'] = $this->rowTotal($normalized);
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array<string, string>
+     */
+    private function sourceFieldsFrom(array $item): array
+    {
+        $fields = [];
+        foreach (self::ITEM_SOURCE_STRING_LIMITS as $key => $limit) {
+            if (!array_key_exists($key, $item)) {
+                continue;
+            }
+            $value = $this->limitString((string)$item[$key], $limit);
+            if ($value !== '') {
+                $fields[$key] = $value;
+            }
+        }
+
+        return $fields;
     }
 
     /**
