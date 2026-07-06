@@ -31,7 +31,10 @@ class DomainPool extends BackendRestController
             $grouped = $this->toBool($params['grouped'] ?? $this->request->getParam('grouped', true), true);
             $siteReadyOnly = $this->toBool($params['site_ready'] ?? $this->request->getParam('site_ready', true), true);
             $parentDomainId = (int)($params['parent_domain_id'] ?? $this->request->getParam('parent_domain_id', 0));
-            $websiteId = (int)($params['website_id'] ?? $this->request->getParam('website_id', 0));
+            $requestWebsiteIdRaw = $this->request->getParam('website_id', null);
+            $hasWebsiteId = \array_key_exists('website_id', $params)
+                || ($requestWebsiteIdRaw !== null && $requestWebsiteIdRaw !== '');
+            $websiteId = (int)($params['website_id'] ?? $requestWebsiteIdRaw ?? 0);
             $poolIdsRaw = (string)($params['pool_ids'] ?? $this->request->getParam('pool_ids', ''));
             $includePoolIds = $this->parsePoolIds($poolIdsRaw, (array)($params['pool_ids'] ?? []));
 
@@ -39,7 +42,7 @@ class DomainPool extends BackendRestController
             $model->clearQuery()->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
 
             $selectedPoolIds = [];
-            if ($websiteId > 0) {
+            if ($hasWebsiteId && $websiteId >= \Weline\Websites\Model\Website::ID_DEFAULT) {
                 $selectedRows = ObjectManager::getInstance(WebsiteDomain::class)
                     ->clearQuery()
                     ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)

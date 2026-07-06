@@ -7,9 +7,9 @@
 "SystemConfig query provider does not support: %{1}","SystemConfig query provider does not support: %{1}"
 "System config query","System config query"
 "Provides scope-aware system config read, write, version, and rollback operations.","Provides scope-aware system config read, write, version, and rollback operations."
-"Get a resolved config value.","Get a resolved config value."
+"Get a resolved config value, or a field object when return_type=field.","Get a resolved config value, or a field object when return_type=field."
 "Get a resolved config value with source and fallback metadata.","Get a resolved config value with source and fallback metadata."
-"Get resolved config values for a module.","Get resolved config values for a module."
+"Get resolved config values for a module, or field objects when return_type=fields.","Get resolved config values for a module, or field objects when return_type=fields."
 "Preview normalized scope and fallback scopes.","Preview normalized scope and fallback scopes."
 "List SystemConfig templates registered through Extends.","List SystemConfig templates registered through Extends."
 "Parse one SystemConfig PHTML template without executing it.","Parse one SystemConfig PHTML template without executing it."
@@ -24,6 +24,10 @@
 "Rollback a scoped config version batch.","Rollback a scoped config version batch."
 "List scoped config version batches.","List scoped config version batches."
 "Get one scoped config version detail with sensitive values masked.","Get one scoped config version detail with sensitive values masked."
+"value|field|array; default value keeps compatibility.","value|field|array; default value keeps compatibility."
+"Limit field metadata lookup to one template code when return_type=field.","Limit field metadata lookup to one template code when return_type=field."
+"map|fields; default map keeps compatibility.","map|fields; default map keeps compatibility."
+"Limit field metadata lookup to one template code when return_type=fields.","Limit field metadata lookup to one template code when return_type=fields."
 backend|frontend,backend|frontend
 统一配置中心,统一配置中心
 配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
