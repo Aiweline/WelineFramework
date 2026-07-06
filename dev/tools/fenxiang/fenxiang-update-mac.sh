@@ -276,6 +276,32 @@ is_sensitive_site_path() {
     return 1
 }
 
+site_push_remotes() {
+    local project_root="$1"
+    local remote
+    local url
+    local normalized
+    local found=0
+
+    while IFS= read -r remote; do
+        [[ -n "$remote" ]] || continue
+        url="$(cd "$project_root" && git remote get-url --push "$remote")"
+        normalized="$(printf '%s' "${url%/}" | tr '[:upper:]' '[:lower:]')"
+        case "$normalized" in
+            *welineframework|*welineframework.git)
+                continue
+                ;;
+        esac
+        printf '%s\n' "$remote"
+        found=1
+    done < <(cd "$project_root" && git remote)
+
+    if [[ "$found" -eq 0 ]]; then
+        echo "Site repo has no non-core push remote; refusing to push to WelineFramework.git: $project_root" >&2
+        return 1
+    fi
+}
+
 assert_site_clean_before_update() {
     local project_root="$1"
     local status
@@ -347,16 +373,11 @@ commit_site_framework_changes() {
         return 0
     fi
 
-    local site_remotes
-    site_remotes="$(cd "$project_root" && git remote)"
-    if ! printf '%s\n' "$site_remotes" | grep -qx 'origin'; then
-        echo "Site repo must have remote 'origin' before pushing: $project_root" >&2
-        return 1
-    fi
-    run_checked "$project_root" 0 git push origin "HEAD:$branch"
-    if printf '%s\n' "$site_remotes" | grep -qx 'github'; then
-        run_checked "$project_root" 0 git push github "HEAD:$branch"
-    fi
+    local site_remote
+    while IFS= read -r site_remote; do
+        [[ -n "$site_remote" ]] || continue
+        run_checked "$project_root" 0 git push "$site_remote" "HEAD:$branch"
+    done < <(site_push_remotes "$project_root")
 }
 
 if [[ "${#sites[@]}" -eq 0 ]]; then
