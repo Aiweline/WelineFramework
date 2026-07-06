@@ -264,6 +264,7 @@ return [
         ],
         'ssl' => [
             'engine' => 'stream', // stream|event_buffer; native Windows only supports stream
+            'protocols' => ['tls1.2', 'tls1.3'],
             'event_buffer_enabled' => false,
             'event_buffer_max_connections_per_worker' => 0,
             'event_buffer_read_high_watermark' => 1048576,
