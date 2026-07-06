@@ -108,7 +108,7 @@ class BinQueryApiDocContributor implements ObserverInterface
                 ],
                 'example' => [
                     'domain' => 'example.com',
-                    'download' => 'sdk/binquery-php, sdk/binquery-js',
+                    'download' => 'pub/source/binquery-php, pub/source/binquery-js',
                     'downloads' => [
                         ['label' => '下载 PHP SDK', 'url' => '/dev/tool/docs/api/sdk-download?sdk=php'],
                         ['label' => '下载 JS SDK', 'url' => '/dev/tool/docs/api/sdk-download?sdk=js'],
@@ -128,7 +128,7 @@ class BinQueryApiDocContributor implements ObserverInterface
                 'method' => 'php-sdk',
                 'document' => [
                     'summary' => 'PHP SDK download and install',
-                    'description' => 'Composer package aiweline/binquery-php; initial repository directory sdk/binquery-php.',
+                    'description' => 'Composer package aiweline/binquery-php; repository source directory pub/source/binquery-php.',
                     'tags' => ['BinQuery SDK', 'PHP'],
                     'category' => 'BinQuery SDK',
                     'deprecated' => false,
@@ -136,7 +136,7 @@ class BinQueryApiDocContributor implements ObserverInterface
                 'parameters' => [],
                 'example' => [
                     'package' => 'aiweline/binquery-php',
-                    'download' => 'sdk/binquery-php',
+                    'download' => 'pub/source/binquery-php',
                     'download_url' => '/dev/tool/docs/api/sdk-download?sdk=php',
                     'install' => 'composer require aiweline/binquery-php',
                     'docs' => 'app/code/Weline/Framework/doc/BinQuery/SDK使用指南.md',
@@ -148,7 +148,7 @@ class BinQueryApiDocContributor implements ObserverInterface
                 'method' => 'js-sdk',
                 'document' => [
                     'summary' => 'JS SDK download and install',
-                    'description' => 'npm package @aiweline/binquery; initial repository directory sdk/binquery-js.',
+                    'description' => 'npm package @aiweline/binquery; repository source directory pub/source/binquery-js.',
                     'tags' => ['BinQuery SDK', 'JavaScript'],
                     'category' => 'BinQuery SDK',
                     'deprecated' => false,
@@ -156,7 +156,7 @@ class BinQueryApiDocContributor implements ObserverInterface
                 'parameters' => [],
                 'example' => [
                     'package' => '@aiweline/binquery',
-                    'download' => 'sdk/binquery-js',
+                    'download' => 'pub/source/binquery-js',
                     'download_url' => '/dev/tool/docs/api/sdk-download?sdk=js',
                     'install' => 'npm install @aiweline/binquery',
                     'docs' => 'app/code/Weline/Framework/doc/BinQuery/SDK使用指南.md',
