@@ -16,8 +16,24 @@
 重写路由,"Rewrite route"
 输入网站ID，0表示默认,"Enter the website ID, 0 means default"
 输入路径,"Enter the path"
-"URL 管理","URL management"
+添加,Add
+"URL ID","URL ID"
+指纹,Fingerprint
+类型,Type
+创建时间,"Create time"
+更新时间,"Update time"
+是否已删除,Deleted
+操作,Operation
+自定义,Custom
+前台,Frontend
+是,Yes
+否,No
+编辑,Edit
+删除,Delete
+URL管理,"URL management"
 系统配置,"System Configuration"
+URL管理器,"URL manager"
+"URL 管理","URL management"
 "URL 管理器","URL manager"
 路由列表,"Route List"
 "管理系统中可访问的 URL，可为关键页面设置更友好的自定义地址，提升 SEO 和可读性。","Manage accessible URLs and set friendly custom addresses for key pages to improve SEO and readability."
@@ -26,22 +42,6 @@
 访问路径,"Access Path"
 路由标识,"Route ID"
 所属模块,Module
-类型,Type
-创建时间,"Create time"
-更新时间,"Update time"
-操作,Operation
-前台,Frontend
-自定义,Custom
 重写,Rewrite
 暂无路由数据,"No route data"
 请检查相关模块是否正确注册,"Please check if related modules are registered correctly"
-添加,Add
-"URL ID","URL ID"
-指纹,Fingerprint
-是否已删除,Deleted
-是,Yes
-否,No
-编辑,Edit
-删除,Delete
-URL管理,"URL management"
-URL管理器,"URL manager"

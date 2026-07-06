@@ -1,13 +1,13 @@
-﻿"w-check: debounce method is missing.","w-check: debounce method is missing."
+﻿"w-auto-complete: debounce method is missing.","w-auto-complete: debounce method is missing."
+"w-auto-complete: jQuery UI autocomplete is missing.","w-auto-complete: jQuery UI autocomplete is missing."
+"element w-url is missing.","element w-url is missing."
+"w-check: debounce method is missing.","w-check: debounce method is missing."
 "w-check: jQuery is missing.","w-check: jQuery is missing."
 "w-check: w-check-type is required.","w-check: w-check-type is required."
 "w-check: w-check-id-field is required.","w-check: w-check-id-field is required."
-"element w-url is missing.","element w-url is missing."
 确认,Confirm
 取消,Cancel
 删除成功,"Delete successful"
 删除失败,"Delete failed"
 删除请求失败,"Delete request failed"
 确认删除吗？,"Confirm deletion?"
-"w-auto-complete: debounce method is missing.","w-auto-complete: debounce method is missing."
-"w-auto-complete: jQuery UI autocomplete is missing.","w-auto-complete: jQuery UI autocomplete is missing."

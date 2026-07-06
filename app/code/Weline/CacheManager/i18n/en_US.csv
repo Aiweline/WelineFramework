@@ -1,5 +1,4 @@
-﻿缓存策略已保存，非持久缓存已清理,缓存策略已保存，非持久缓存已清理
-"参数 identity 不能为空","参数 identity 不能为空"
+﻿"参数 identity 不能为空","参数 identity 不能为空"
 操作成功！,"Operation successful!"
 请至少选择一个缓存项,"Please select at least one cache item"
 批量缓存状态已更新,"Batch cache status updated"
@@ -10,6 +9,29 @@
 "并额外清理 %{1} 个 WLS 共享缓存命名空间","And additionally clean up %{1} WLS shared cache namespaces"
 定时任务执行完成！已清理过期缓存文件。,"Scheduled Task Execution Completed! Expired Cache Files Have Been Cleaned Up."
 "定时任务执行失败: %{1}。请检查 Cron 配置和日志。","Scheduled Task Execution Failed: %{1}. Please Check the Cron Configuration and Logs."
+缓存策略已保存，非持久缓存已清理,缓存策略已保存，非持久缓存已清理
+缓存清理任务,"Cache Cleanup Task"
+自动清理过期的缓存文件，防止缓存目录过大,"Automatically clean up expired cache files to prevent the cache directory from becoming too large"
+缓存清理完成,"Cache Cleanup Complete"
+"缓存清理任务执行失败: %{1}","Cache Cleanup Task Execution Failed: %{1}"
+"缓存清理失败: %{1}","Cache Cleanup Failed: %{1}"
+"缓存池 %{1} 不存在","Cache pool %{1} does not exist"
+"env 配置写入失败，请检查 app/etc/env.php 权限","Failed to write env configuration, please check app/etc/env.php permissions"
+"缓存池 %{1} 为持久缓存，需要强制清理（force=1）","Cache pool %{1} is a persistent cache and requires forced cleanup (force=1)"
+应用,Apply
+系统,System
+"WLS 常驻内存","WLS resident memory"
+"FPM 请求隔离","FPM request quarantine"
+CLI,CLI
+"缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。","Cache cleanup will process the cache pool, WLS shared memory namespace, and Worker runtime synchronization simultaneously."
+缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。,"Cache cleanup will directly affect the current cache backend; the next request will reload the cache content."
+未知适配器,"Unknown adapter"
+"WLS 共享内存","WLS Shared Memory"
+文件缓存,"File cache"
+Redis,Redis
+Memcached,Memcached
+APCu,APCu
+"cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限","cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限"
 默认值：%{1},默认值：%{1}
 缓存策略,缓存策略
 缓存管理,"Cache Management"
@@ -31,25 +53,3 @@
 正在保存...,正在保存...
 保存失败,保存失败
 保存成功,保存成功
-"cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限","cache.runtime_policy 配置写入失败，请检查 app/etc/env.php 权限"
-"缓存池 %{1} 不存在","Cache pool %{1} does not exist"
-"env 配置写入失败，请检查 app/etc/env.php 权限","Failed to write env configuration, please check app/etc/env.php permissions"
-"缓存池 %{1} 为持久缓存，需要强制清理（force=1）","Cache pool %{1} is a persistent cache and requires forced cleanup (force=1)"
-应用,Apply
-系统,System
-"WLS 常驻内存","WLS resident memory"
-"FPM 请求隔离","FPM request quarantine"
-CLI,CLI
-"缓存清理会同时处理缓存池、WLS 共享内存命名空间和 Worker 运行时同步。","Cache cleanup will process the cache pool, WLS shared memory namespace, and Worker runtime synchronization simultaneously."
-缓存清理会直接作用于当前缓存后端，下一次请求将重新装载缓存内容。,"Cache cleanup will directly affect the current cache backend; the next request will reload the cache content."
-未知适配器,"Unknown adapter"
-"WLS 共享内存","WLS Shared Memory"
-文件缓存,"File cache"
-Redis,Redis
-Memcached,Memcached
-APCu,APCu
-缓存清理任务,"Cache Cleanup Task"
-自动清理过期的缓存文件，防止缓存目录过大,"Automatically clean up expired cache files to prevent the cache directory from becoming too large"
-缓存清理完成,"Cache Cleanup Complete"
-"缓存清理任务执行失败: %{1}","Cache Cleanup Task Execution Failed: %{1}"
-"缓存清理失败: %{1}","Cache Cleanup Failed: %{1}"
