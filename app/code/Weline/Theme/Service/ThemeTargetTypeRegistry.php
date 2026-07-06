@@ -201,7 +201,14 @@ final class BuiltInThemeTargetTypeProvider implements TargetTypeProviderInterfac
 
     public function validate(int $targetId, array $context = []): bool
     {
-        return $this->code === ThemeVirtualLayout::TARGET_GLOBAL || $targetId > 0;
+        if ($this->code === ThemeVirtualLayout::TARGET_GLOBAL) {
+            return true;
+        }
+        if ($this->code === 'website') {
+            return $targetId >= 0;
+        }
+
+        return $targetId > 0;
     }
 
     public function resolve(int $targetId, array $context = []): ?array
