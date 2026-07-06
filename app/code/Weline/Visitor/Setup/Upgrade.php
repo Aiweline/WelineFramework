@@ -16,6 +16,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\Setup;
 use Weline\Visitor\Service\PixelEncryptionService;
+use Weline\Visitor\Service\VisitorDashboardPageInstaller;
 
 /**
  * Visitor模块升级脚本
@@ -40,6 +41,8 @@ class Upgrade
             // 生成版本号并创建token
             $this->generateVersionToken($context);
         }
+
+        ObjectManager::getInstance(VisitorDashboardPageInstaller::class)->ensurePages();
     }
 
     /**
@@ -104,4 +107,3 @@ class Upgrade
         }
     }
 }
-
