@@ -12,7 +12,8 @@
 
 ## 导入规则
 
-- 目录格式固定为 `dev/ai/skills/{角色}-{技能名}/SKILL.md`。
+- 目录格式通常为 `dev/ai/skills/{角色}-{技能名}/SKILL.md`。
+- Codex bridge skills may use stable lowercase names such as `testing` when `.codex/skills/*` adapters or plugin packaging need an English trigger.
 - 目录名必须与 `SKILL.md` frontmatter 中的 `name` 完全一致。
 - 技能名使用中文。
 - `SKILL.md` 正文使用英文，便于 Multica 路由与复用。
