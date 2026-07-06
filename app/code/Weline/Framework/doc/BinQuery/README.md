@@ -54,8 +54,8 @@ CDN 缓存只允许公开只读 operation：
 
 ## SDK
 
-- PHP：`aiweline/binquery-php`，源码目录 `sdk/binquery-php`
-- JS：`@aiweline/binquery`，源码目录 `sdk/binquery-js`
+- PHP：`aiweline/binquery-php`，源码目录 `pub/source/binquery-php`
+- JS：`@aiweline/binquery`，源码目录 `pub/source/binquery-js`
 
 更多示例见 [SDK使用指南.md](SDK使用指南.md)。
 
