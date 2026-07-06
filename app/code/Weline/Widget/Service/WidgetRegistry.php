@@ -28,11 +28,16 @@ class WidgetRegistry
     
     private WidgetScanner $scanner;
     private ?AiWidgetRegistrySource $aiWidgetRegistrySource;
+    private ?WidgetRegistryRecordService $recordService;
 
-    public function __construct(WidgetScanner $scanner, ?AiWidgetRegistrySource $aiWidgetRegistrySource = null)
-    {
+    public function __construct(
+        WidgetScanner $scanner,
+        ?AiWidgetRegistrySource $aiWidgetRegistrySource = null,
+        ?WidgetRegistryRecordService $recordService = null
+    ) {
         $this->scanner = $scanner;
         $this->aiWidgetRegistrySource = $aiWidgetRegistrySource;
+        $this->recordService = $recordService;
     }
 
     /**
@@ -98,17 +103,50 @@ class WidgetRegistry
      */
     public function refresh(): bool
     {
-        return $this->saveRegistryFromGenerator($this->scanner->scanAllWidgetsGenerator());
+        $report = $this->refreshWithReport();
+        return (bool)($report['success'] ?? false);
     }
 
     /**
-     * 从 (type, name, config) 生成器按 type 聚合后写入注册表。
-     * 生成器产出的 type 不保证连续，直接流式写会生成重复顶层 key，PHP include 时会被后者覆盖。
+     * 刷新注册表并同步普通 Widget DB 注册账本。
+     *
+     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    public function refreshWithReport(array $context = []): array
+    {
+        $registry = $this->buildRegistryFromGenerator($this->scanner->scanAllWidgetsGenerator());
+        $saved = $this->saveRegistry($registry);
+        $report = [
+            'success' => $saved,
+            'file_saved' => $saved,
+            'db_available' => null,
+            'created_widgets' => [],
+            'updated_widgets' => [],
+            'created_default_injection_widgets' => [],
+            'created_count' => 0,
+            'updated_count' => 0,
+            'created_default_injection_count' => 0,
+        ];
+        if (!$saved) {
+            return $report;
+        }
+
+        $recordReport = $this->recordService()->sync($registry, $context);
+        foreach ($recordReport as $key => $value) {
+            $report[$key] = $value;
+        }
+
+        return $report;
+    }
+
+    /**
+     * 从 (type, name, config) 生成器按 type 聚合。
      *
      * @param \Generator<int, array{0: string, 1: string, 2: array}, void, void> $items
-     * @return bool
+     * @return array<string,array<string,array<string,mixed>>>
      */
-    private function saveRegistryFromGenerator(\Generator $items): bool
+    private function buildRegistryFromGenerator(\Generator $items): array
     {
         $registry = [];
         foreach ($items as [$type, $name, $config]) {
@@ -118,7 +156,7 @@ class WidgetRegistry
             $registry[$type][$name] = $config;
         }
 
-        return $this->saveRegistry($registry);
+        return $registry;
     }
 
     /**
@@ -192,5 +230,14 @@ class WidgetRegistry
         }
 
         return $registry;
+    }
+
+    private function recordService(): WidgetRegistryRecordService
+    {
+        if (!$this->recordService) {
+            $this->recordService = ObjectManager::getInstance(WidgetRegistryRecordService::class);
+        }
+
+        return $this->recordService;
     }
 }

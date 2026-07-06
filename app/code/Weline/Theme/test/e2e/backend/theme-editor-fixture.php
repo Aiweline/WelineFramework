@@ -4,9 +4,11 @@ declare(strict_types=1);
 require dirname(__DIR__, 7) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'bootstrap.php';
 
 use Weline\Dashboard\Model\DashboardView;
+use Weline\Dashboard\Service\DashboardViewService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
+use Weline\Theme\Service\WidgetDefaultInjectionService;
 use Weline\Websites\Model\Website;
 
 function fail(string $message): void
@@ -230,12 +232,72 @@ function prepare_dashboard_identity_fixture(
         ->save();
 
     $identity = dashboard_identity($view->getViewId(), $website->getWebsiteId());
+    ObjectManager::getInstance(DashboardViewService::class)->ensureLayoutInitialized($view);
 
     return [
         'success' => true,
         'website_id' => $website->getWebsiteId(),
         'view_id' => $view->getViewId(),
         'identity' => $identity,
+    ];
+}
+
+function prepare_dashboard_identities_fixture(
+    ThemeLayout $layout,
+    ThemeLayoutVersion $version,
+    int $themeId,
+    string $token,
+    int $count = 2
+): array {
+    cleanup_dashboard_identity_fixture($layout, $version, $themeId, $token);
+    $count = max(2, min(5, $count));
+    $code = 'e2e-theme-default-' . $token;
+
+    /** @var Website $website */
+    $website = clone ObjectManager::getInstance(Website::class);
+    $website->clearQuery()->clearData()
+        ->setName('E2E Theme Default ' . $token)
+        ->setCode($code)
+        ->setUrl($code . '.test')
+        ->setDefaultCurrency('CNY')
+        ->setDefaultLanguage('zh_Hans_CN')
+        ->setDefaultTimezone('Asia/Shanghai')
+        ->setScope('e2e-theme-default')
+        ->save();
+
+    /** @var DashboardViewService $dashboardService */
+    $dashboardService = ObjectManager::getInstance(DashboardViewService::class);
+    $views = [];
+    $identities = [];
+    for ($i = 0; $i < $count; $i++) {
+        /** @var DashboardView $view */
+        $view = clone ObjectManager::getInstance(DashboardView::class);
+        $view->clearQuery()->clearData()
+            ->setWebsiteId($website->getWebsiteId())
+            ->setOwnerAdminId(null)
+            ->setName($i === 0 ? 'E2E 默认概览' : 'E2E 身份视图 ' . ($i + 1))
+            ->setCode($i === 0 ? 'default' : 'identity-' . ($i + 1))
+            ->setVisibility($i === 0 ? DashboardView::VISIBILITY_SYSTEM : DashboardView::VISIBILITY_PUBLIC)
+            ->setIsDefault($i === 0)
+            ->setIsActive(true)
+            ->setSortOrder($i * 10)
+            ->save();
+        $dashboardService->ensureLayoutInitialized($view);
+
+        $identity = dashboard_identity($view->getViewId(), $website->getWebsiteId());
+        $views[] = [
+            'view_id' => $view->getViewId(),
+            'code' => $view->getCode(),
+            'identity' => $identity,
+        ];
+        $identities[] = $identity;
+    }
+
+    return [
+        'success' => true,
+        'website_id' => $website->getWebsiteId(),
+        'views' => $views,
+        'identities' => $identities,
     ];
 }
 
@@ -265,6 +327,17 @@ try {
         exit(0);
     }
 
+    if ($action === 'prepare_dashboard_identities') {
+        output_json(prepare_dashboard_identities_fixture(
+            $layout,
+            $version,
+            $themeId,
+            $token,
+            (int)($payload['count'] ?? 2)
+        ));
+        exit(0);
+    }
+
     if ($action === 'cleanup_dashboard_identity') {
         cleanup_dashboard_identity_fixture($layout, $version, $themeId, $token);
         output_json(['success' => true]);
@@ -279,6 +352,62 @@ try {
 
     if ($action === 'snapshot') {
         output_json(snapshot_theme_editor_fixture($layout, $version, $themeId, $pageType, $identity));
+        exit(0);
+    }
+
+    if ($action === 'default_injections') {
+        /** @var WidgetDefaultInjectionService $service */
+        $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+        $items = $service->getMissingForLayout($themeId, $pageType, $identity, 'backend');
+        output_json([
+            'success' => true,
+            'items' => $items,
+            'total' => count($items),
+        ]);
+        exit(0);
+    }
+
+    if ($action === 'apply_default_injection') {
+        $injectionKey = trim((string)($payload['injection_key'] ?? ''));
+        if ($injectionKey === '') {
+            fail('Missing injection_key.');
+        }
+
+        /** @var WidgetDefaultInjectionService $service */
+        $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+        $scope = strtolower(trim((string)($payload['apply_scope'] ?? 'current')));
+        if ($scope === 'all') {
+            $result = $service->applyInjectionByKeyForAllLayoutIdentities(
+                $themeId,
+                $pageType,
+                $injectionKey,
+                $identity,
+                ThemeLayout::STATUS_DRAFT,
+                'backend'
+            );
+        } else {
+            $item = $service->applyInjectionByKey(
+                $themeId,
+                $pageType,
+                $injectionKey,
+                $identity,
+                ThemeLayout::STATUS_DRAFT,
+                'backend'
+            );
+            $result = [
+                'items' => $item ? [$item] : [],
+                'current_item' => $item,
+                'applied_count' => $item && !empty($item['layout_id']) ? 1 : 0,
+                'skipped_count' => $item && !empty($item['layout_id']) ? 0 : 1,
+                'total_identities' => 1,
+            ];
+        }
+
+        output_json([
+            'success' => true,
+            'apply_scope' => $scope === 'all' ? 'all' : 'current',
+            'result' => $result,
+        ]);
         exit(0);
     }
 

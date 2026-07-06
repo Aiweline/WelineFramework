@@ -6,6 +6,7 @@
 "域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","Triggered when the domain resolution result deviates from this site (e.g., DNS pointing changes), used to send notifications to alert the administrator."
 "一站式配置 - 绑定 DNS","One-stop configuration - Bind DNS"
 "一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。","Triggered when the one-stop configuration performs the DNS binding step, where observers can create zones/records."
+站点,Site
 域名配置编排服务暂不可用：%{1},"Domain configuration orchestration service temporarily unavailable: %{1}"
 "Websites 查询器不支持的操作：%{1}","Operations not supported by Websites query: %{1}"
 域名与网站查询,"Domain and site lookup"
@@ -959,7 +960,6 @@ SSL,SSL
 申请中,Applying
 有效,Valid
 申请错误,"Application error"
-站点,Site
 访问入口,"Access entry"
 "语言 / 货币","Language / Currency"
 操作,Actions
@@ -2142,6 +2142,7 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 本地演示：已生成模拟生命周期状态,"Local demo: simulated lifecycle status generated"
 "生命周期订单已完成，联动更新根域状态：%{1} → active","Lifecycle order completed, updating root domain status: %{1} → active"
 "生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条","Lifecycle dirty data fix: %{1} root domains synced, %{2} items re-tagged"
+"默认站点 ID %{1} 已被站点 %{2} 占用，无法迁移 default 站点。","Default website ID %{1} is already occupied by website %{2}; unable to migrate the default website."
 "[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；此检查只做告警，不会在这里直接改 NS。","[NS is inconsistent with the configured DNS account] Domain name %{1}: The public network is identified as %{2}, and the configured DNS account service provider is %{3} (account_id=%{4}). Public network NS: %{5}. Please check the registrar NS or wait for the switch to propagate; this check is only for warning, and the NS will not be changed directly here."
 "[NS 自愈策略] 已为域名 %{1} 写入 dns_switch_pending=1（冷却内单次排队），将由 DnsCdnAutoSwitch 执行切换。","[NS self-healing policy] dns_switch_pending=1 has been written for the domain name %{1} (single queue within cooldown), the switch will be performed by DnsCdnAutoSwitch."
 "DNS 解析与子域入池","DNS resolution and subdomain pooling"
