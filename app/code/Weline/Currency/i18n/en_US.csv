@@ -1,4 +1,11 @@
-﻿基准货币代码必须是3位大写字母,"Base currency code must be 3 uppercase letters"
+﻿API返回数据格式错误,"API return data format error"
+"无法获取货币 %{1} 的汇率","Unable to get exchange rate for currency %{1}"
+"API返回的汇率数据异常: %{1}","API returned abnormal exchange rate data: %{1}"
+"API请求失败: %{1}","API request failed: %{1}"
+"API返回错误状态码: %{1}","API returned error status code: %{1}"
+"API返回数据解析失败: %{1}","API response data parsing failed: %{1}"
+"API请求失败，已重试 %{1} 次: %{2}","API request failed, retried %{1} times: %{2}"
+基准货币代码必须是3位大写字母,"Base currency code must be 3 uppercase letters"
 Cron执行时间不能为空,"Cron execution time cannot be empty"
 配置已保存，需要更新所有货币汇率,"Configuration saved, need to update all currency exchange rates"
 "配置保存成功！已更新 %{1} 个货币的汇率（成功: %{2}, 失败: %{3}）","Configuration saved successfully! Updated exchange rates for %{1} currencies (Success: %{2}, Failed: %{3})"
@@ -35,6 +42,9 @@ API服务暂时不可用，请稍后重试,"API service is temporarily unavailab
 货币名称不能为空,"Currency name cannot be empty"
 汇率必须在0到1000000之间,"Exchange rate must be between 0 and 1000000"
 货币符号位置必须是left或right,"Currency symbol position must be left or right"
+"无法获取新基准货币的汇率: %{1}","Unable to get exchange rate for new base currency: %{1}"
+新基准货币的汇率无效，无法重新计算,"New base currency exchange rate is invalid, cannot recalculate"
+货币汇率无效,"Currency exchange rate is invalid"
 货币管理,"Currency Management"
 货币配置,"Currency Configuration"
 系统,System
@@ -132,28 +142,12 @@ API连接测试失败,"API connection test failed"
 导入中...,Importing...
 导入成功,"Import successful"
 导入失败,"Import failed"
-货币列表,"Currency List"
-添加货币,"Add Currency"
-搜索,Search
-ID,ID
 货币代码,"Currency Code"
-货币名称,"Currency Name"
-图标,Icon
-符号,Symbol
-汇率,"Exchange Rate"
-格式化示例,"Format Example"
-状态,Status
-操作,Actions
-暂无数据,"No data"
-启用,Enabled
-禁用,Disabled
-编辑,Edit
-删除,Delete
-搜索货币代码、名称或符号,"Search currency code, name or symbol"
-确定要删除该货币吗？,"Are you sure you want to delete this currency?"
 "3位大写字母（ISO 4217标准），如：USD, CNY","3 uppercase letters (ISO 4217 standard), e.g.: USD, CNY"
+货币名称,"Currency Name"
 货币多语言名称,货币多语言名称
 留空时前台回退使用基础名称,留空时前台回退使用基础名称
+汇率,"Exchange Rate"
 相对于基准货币的汇率,"Exchange rate relative to base currency"
 货币符号,"Currency Symbol"
 符号位置,"Symbol Position"
@@ -165,18 +159,24 @@ ID,ID
 格式,Format
 "格式：小数位数,整数位数","Format: decimal places, integer places"
 基准货币代码（3位大写字母）,"Base Currency Code (3 uppercase letters)"
+状态,Status
+启用,Enabled
+禁用,Disabled
 格式化预览,"Format Preview"
 输入金额后显示预览,"Display preview after entering amount"
 保存,Save
 编辑货币,"Edit Currency"
+添加货币,"Add Currency"
 Unicode符号或图标路径,"Unicode symbol or icon path"
-API返回数据格式错误,"API return data format error"
-"无法获取货币 %{1} 的汇率","Unable to get exchange rate for currency %{1}"
-"API返回的汇率数据异常: %{1}","API returned abnormal exchange rate data: %{1}"
-"API请求失败: %{1}","API request failed: %{1}"
-"API返回错误状态码: %{1}","API returned error status code: %{1}"
-"API返回数据解析失败: %{1}","API response data parsing failed: %{1}"
-"API请求失败，已重试 %{1} 次: %{2}","API request failed, retried %{1} times: %{2}"
-"无法获取新基准货币的汇率: %{1}","Unable to get exchange rate for new base currency: %{1}"
-新基准货币的汇率无效，无法重新计算,"New base currency exchange rate is invalid, cannot recalculate"
-货币汇率无效,"Currency exchange rate is invalid"
+货币列表,"Currency List"
+搜索,Search
+ID,ID
+图标,Icon
+符号,Symbol
+格式化示例,"Format Example"
+操作,Actions
+暂无数据,"No data"
+编辑,Edit
+删除,Delete
+搜索货币代码、名称或符号,"Search currency code, name or symbol"
+确定要删除该货币吗？,"Are you sure you want to delete this currency?"

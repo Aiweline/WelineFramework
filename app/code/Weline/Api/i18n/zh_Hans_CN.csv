@@ -1,11 +1,14 @@
-﻿闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie,闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie
-"Missing authentication token.","Missing authentication token."
-"Token is invalid or expired.","Token is invalid or expired."
-"User has been disabled.","User has been disabled."
-"IP is not allowed.","IP is not allowed."
-"User agent does not match.","User agent does not match."
-"This token cannot access backend APIs.","This token cannot access backend APIs."
-"This token cannot access frontend customer APIs.","This token cannot access frontend customer APIs."
+﻿应用创建成功,应用创建成功
+应用授权范围,应用授权范围
+"应用 token 不能批准新的应用授权","应用 token 不能批准新的应用授权"
+应用授权成功,应用授权成功
+授权码或客户端凭证无效,授权码或客户端凭证无效
+"Token 发放成功","Token 发放成功"
+"刷新 token 无效","刷新 token 无效"
+"Token 刷新成功","Token 刷新成功"
+"Token 不能为空","Token 不能为空"
+"Token 不存在或已失效","Token 不存在或已失效"
+"Token 已撤销","Token 已撤销"
 用户名和密码不能为空,用户名和密码不能为空
 用户不存在,用户不存在
 用户已被禁用,用户已被禁用
@@ -31,6 +34,29 @@ Token无效或已过期,Token无效或已过期
 Token无效,Token无效
 获取token信息成功,获取token信息成功
 获取token信息失败：%{1},获取token信息失败：%{1}
+用户未登录,用户未登录
+测试成功,测试成功
+测试数量不能为负数,测试数量不能为负数
+API文档导入测试成功,API文档导入测试成功
+测试标题不能为空,测试标题不能为空
+测试内容不能为空,测试内容不能为空
+创建成功,创建成功
+测试名称不能为空,测试名称不能为空
+创建失败,创建失败
+数据已写入沙盒数据库,数据已写入沙盒数据库
+数据已写入正式数据库,数据已写入正式数据库
+数据来自沙盒数据库,数据来自沙盒数据库
+数据来自正式数据库,数据来自正式数据库
+数据ID不能为空,数据ID不能为空
+删除失败，数据不存在,删除失败，数据不存在
+删除成功,删除成功
+数据已从沙盒数据库删除,数据已从沙盒数据库删除
+数据已从正式数据库删除,数据已从正式数据库删除
+仅支持POST请求,仅支持POST请求
+配置保存成功！,配置保存成功！
+没有需要保存的配置,没有需要保存的配置
+保存失败：%{1},保存失败：%{1}
+查看API接入管理失败：{1},查看API接入管理失败：{1}
 用户ID不能为空,用户ID不能为空
 用户名不能为空,用户名不能为空
 用户名长度必须在3-50字符之间,用户名长度必须在3-50字符之间
@@ -57,11 +83,22 @@ Token无效,Token无效
 该用户尚未分配角色，请先分配角色,该用户尚未分配角色，请先分配角色
 权限分配成功！,权限分配成功！
 权限分配失败：%{1},权限分配失败：%{1}
-仅支持POST请求,仅支持POST请求
-配置保存成功！,配置保存成功！
-没有需要保存的配置,没有需要保存的配置
-保存失败：%{1},保存失败：%{1}
-查看API接入管理失败：{1},查看API接入管理失败：{1}
+配置值不能为负数：%{1},配置值不能为负数：%{1}
+闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie,闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie
+"Missing authentication token.","Missing authentication token."
+"Token is invalid or expired.","Token is invalid or expired."
+"User has been disabled.","User has been disabled."
+"IP is not allowed.","IP is not allowed."
+"User agent does not match.","User agent does not match."
+"This token cannot access backend APIs.","This token cannot access backend APIs."
+"This token cannot access frontend customer APIs.","This token cannot access frontend customer APIs."
+应用名称不能为空,应用名称不能为空
+回调地址不能为空,回调地址不能为空
+应用不存在或已禁用,应用不存在或已禁用
+回调地址不匹配,回调地址不匹配
+安装目标无效或未注册解析器,安装目标无效或未注册解析器
+"授权 scope 不能为空","授权 scope 不能为空"
+"以下 scope 不存在、已禁用或不允许外部授权：%{1}","以下 scope 不存在、已禁用或不允许外部授权：%{1}"
 API模块配置,API模块配置
 配置API令牌刷新周期等参数,配置API令牌刷新周期等参数
 令牌刷新配置,令牌刷新配置
@@ -150,40 +187,3 @@ API,API
 默认604800（7天），范围：86400-2592000（1-30天）,默认604800（7天），范围：86400-2592000（1-30天）
 默认2592000（30天），范围：604800-7776000（7-90天）,默认2592000（30天），范围：604800-7776000（7-90天）
 已复制到剪贴板,已复制到剪贴板
-应用创建成功,应用创建成功
-应用授权范围,应用授权范围
-"应用 token 不能批准新的应用授权","应用 token 不能批准新的应用授权"
-应用授权成功,应用授权成功
-授权码或客户端凭证无效,授权码或客户端凭证无效
-"Token 发放成功","Token 发放成功"
-"刷新 token 无效","刷新 token 无效"
-"Token 刷新成功","Token 刷新成功"
-"Token 不能为空","Token 不能为空"
-"Token 不存在或已失效","Token 不存在或已失效"
-"Token 已撤销","Token 已撤销"
-用户未登录,用户未登录
-测试成功,测试成功
-测试数量不能为负数,测试数量不能为负数
-API文档导入测试成功,API文档导入测试成功
-测试标题不能为空,测试标题不能为空
-测试内容不能为空,测试内容不能为空
-创建成功,创建成功
-测试名称不能为空,测试名称不能为空
-创建失败,创建失败
-数据已写入沙盒数据库,数据已写入沙盒数据库
-数据已写入正式数据库,数据已写入正式数据库
-数据来自沙盒数据库,数据来自沙盒数据库
-数据来自正式数据库,数据来自正式数据库
-数据ID不能为空,数据ID不能为空
-删除失败，数据不存在,删除失败，数据不存在
-删除成功,删除成功
-数据已从沙盒数据库删除,数据已从沙盒数据库删除
-数据已从正式数据库删除,数据已从正式数据库删除
-应用名称不能为空,应用名称不能为空
-回调地址不能为空,回调地址不能为空
-应用不存在或已禁用,应用不存在或已禁用
-回调地址不匹配,回调地址不匹配
-安装目标无效或未注册解析器,安装目标无效或未注册解析器
-"授权 scope 不能为空","授权 scope 不能为空"
-"以下 scope 不存在、已禁用或不允许外部授权：%{1}","以下 scope 不存在、已禁用或不允许外部授权：%{1}"
-配置值不能为负数：%{1},配置值不能为负数：%{1}

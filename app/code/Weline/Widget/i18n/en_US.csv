@@ -1,45 +1,37 @@
-﻿选择图标,"Select Icon"
-搜索图标...,"Search icon..."
-输入自定义图标类名,"Enter a custom icon class name"
-应用,Apply
-点击选择图片或输入URL,"Click to select an image or enter a URL."
-预览,Preview
-从媒体库选择,"Select from media library"
-选择,Select
-上传图片,"Upload pictures"
-上传,upload
-清除图片,"Clear images"
-图片URL,"Image URL"
-"最大 %s KB","最大 %s KB"
-"建议比例 %s","建议比例 %s"
-"范围: %s - %s","范围: %s - %s"
-"最小值: %s","最小值: %s"
-"最大值: %s","最大值: %s"
-清除,Clear
-今天,Today
-明天,Tomorrow
-下周,"next week"
-"格式: %s","格式: %s"
-测试,Test
-在新窗口打开,"Open in a new window"
-快捷链接:,"Quick Links:"
-添加项目,"Add Project"
-暂无项目，点击下方按钮添加,"No projects. Click the button below to add one."
-"%d / %d 项","%d / %d 项"
-从媒体库选择图片并添加为一项，可再编辑标题等,"Select an image from the media library and add it as an item; the title etc. can be edited later"
-选择图片添加,"Select and Add Image"
-拖拽排序,"Drag to sort"
-删除,Delete
-设为透明,"Set to Transparent"
-从媒体库选择图片,"Select image from media library"
-编辑多语言,"Edit multilingual"
-多语言,Multilingual
-多语言配置,"Multilingual Configuration"
-AI翻译,"AI Translate"
-保存多语言,"Save Multilingual"
-启用,Enable
-普通部件首次入库后,普通部件首次入库后
-"普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。","普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。"
+开始刷新部件注册表...,"Refreshing widget registry..."
+"✓ 部件注册表已刷新完成。","✓ Part registry refresh completed."
+位置：generated/widgets.php,"Location: generated/widgets.php"
+"✖ 写入部件注册表失败。","✖ Failed to write to the component registry."
+"✓ ParamSchema 注册表已刷新完成。","✓ ParamSchema registry has been refreshed."
+位置：generated/param_schemas.php,"Location: generated/param_schemas.php"
+"✖ 写入 ParamSchema 注册表失败。","✖ Writing to ParamSchema registry failed."
+刷新失败：%{1},"Refresh Failed: %{1}"
+"部件注册表：%{1} 个类型，共 %{2} 个部件","Component registry: %{1} types, %{2} components total"
+文件：generated/widgets.php,"File: generated/widgets.php"
+查看部件注册表状态,"View Component Registry Status"
+"查看 generated/widgets.php 中的部件类型数与总个数","View widget type count and total in generated/widgets.php"
+可视化编辑器,"Visual Editor"
+内容管理,"Content Management"
+标题和标识不能为空,"Title and handle cannot be empty"
+页面标识已存在,"Page handle already exists"
+保存成功,"Saved successfully"
+"保存失败: %{1}","Save failed: %{1}"
+页面ID不能为空,"Page ID cannot be empty"
+页面不存在,"Page does not exist"
+"加载失败: %{1}","Load failed: %{1}"
+"获取部件列表失败: %{1}","Failed to get widget list: %{1}"
+部件类型和名称不能为空,"Widget type and name cannot be empty"
+部件不存在,"Widget does not exist"
+"预览失败: %{1}","Preview failed: %{1}"
+页面内容不能为空,"Page content cannot be empty"
+部件管理,"Widget Management"
+"获取部件详情失败: %{1}","Failed to get widget details: %{1}"
+部件注册表刷新后,部件注册表刷新后
+部件注册表刷新完成后触发，允许其他模块基于最新部件元数据执行同步或默认注入等后置处理。,部件注册表刷新完成后触发，允许其他模块基于最新部件元数据执行同步或默认注入等后置处理。
+"Widget 生成智能体","Widget 生成智能体"
+"根据 slot 协议生成普通 Widget registry JSON","根据 slot 协议生成普通 Widget registry JSON"
+"AI Widget 生成调用失败：%{1}","AI Widget 生成调用失败：%{1}"
+"AI Widget 生成结果为空","AI Widget 生成结果为空"
 "Widget 查询器不支持的 operation：%{1}","Operation not supported by Widget query: %{1}"
 "Widget 部件查询","Widget component query"
 提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力,"Provides component list, parameter definitions, configuration forms, field rendering, configuration validation, preview, and other query capabilities"
@@ -73,67 +65,23 @@ AI翻译,"AI Translate"
 放置目标,放置目标
 期望部件类型,期望部件类型
 模型代码,模型代码
-"Widget 生成智能体","Widget 生成智能体"
-"根据 slot 协议生成普通 Widget registry JSON","根据 slot 协议生成普通 Widget registry JSON"
-"AI Widget 生成调用失败：%{1}","AI Widget 生成调用失败：%{1}"
-"AI Widget 生成结果为空","AI Widget 生成结果为空"
-部件类型和名称不能为空,"Widget type and name cannot be empty"
-部件不存在,"Widget does not exist"
-"预览失败: %{1}","Preview failed: %{1}"
-页面内容不能为空,"Page content cannot be empty"
-可视化编辑器,"Visual Editor"
-内容管理,"Content Management"
-标题和标识不能为空,"Title and handle cannot be empty"
-页面标识已存在,"Page handle already exists"
-保存成功,"Saved successfully"
-"保存失败: %{1}","Save failed: %{1}"
-页面ID不能为空,"Page ID cannot be empty"
-页面不存在,"Page does not exist"
-"加载失败: %{1}","Load failed: %{1}"
-"获取部件列表失败: %{1}","Failed to get widget list: %{1}"
-部件管理,"Widget Management"
-"获取部件详情失败: %{1}","Failed to get widget details: %{1}"
-确认组件不可用，操作已取消,确认组件不可用，操作已取消
-解析部件参数失败,"Failed to parse widget parameters"
-预览失败,"Preview failed"
-确定要删除这个部件吗？,"Are you sure you want to delete this widget?"
-确认删除,确认删除
-取消,取消
-选择一个部件进行配置,"Select a widget to configure"
-请填写页面标题和标识,"Please fill in page title and handle"
-"Page preview","Page preview"
-"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
-快速查看、筛选并预览部件详情,"Quickly view, filter, and preview part details"
-部件详情,"Component details"
-关闭,Close
-加载中...,Loading...
-操作失败,"Operation failed"
-类型,Type
-模块,Module.
-版本,Version
-参数配置,"Parameter configuration"
-总部件数,"Total Parts"
-部件类型,"Component type"
-来源模块,"Source Module"
-关键字,Keyword
-搜索部件...,"Search widgets..."
-所有模块,"All Modules"
-所有类型,"All Types"
-筛选,Filter
-重置筛选,"Reset Filter"
-部件列表,"Widget List"
-没有找到部件,"No widgets found"
-部件名称,"Widget Name"
-描述,Description
-操作,Actions
-详情,Details
-保存,Save
-页面标题,"Page Title"
-页面标识,"Page Handle"
-部件库,"Widget Library"
-画布,Canvas
-从左侧拖放部件到这里,"Drag widgets from left panel here"
-属性配置,Properties
+请先填写生成要求,请先填写生成要求
+"AI Widget 生成失败","AI Widget 生成失败"
+选择的部件类型不受支持：%{1},选择的部件类型不受支持：%{1}
+"AI 返回内容为空","AI 返回内容为空"
+"AI 返回的 Widget JSON 无法解析","AI 返回的 Widget JSON 无法解析"
+"AI 生成的 Widget 类型不受支持：%{1}","AI 生成的 Widget 类型不受支持：%{1}"
+"AI 生成结果缺少 template_content","AI 生成结果缺少 template_content"
+"AI 生成了不支持的参数类型：%{1}","AI 生成了不支持的参数类型：%{1}"
+"AI 生成模板包含不允许的逻辑：%{1}","AI 生成模板包含不允许的逻辑：%{1}"
+删除,Delete
+鍒犻櫎,鍒犻櫎
+基本信息,"Basic information"
+样式设置,"Style settings"
+链接配置,"Link Configuration"
+高级设置,"Advanced settings"
+该部件无可配置项,"This component has no configurable items"
+"字段 ""%s"" 的值无效","字段 ""%s"" 的值无效"
 头部部件,"Header Widget"
 底部部件,"Bottom Widget"
 侧栏部件,"Sidebar Widget"
@@ -152,34 +100,88 @@ FAQ部件,"FAQ widget"
 分页部件,"Pagination widget"
 视频部件,"Video widget"
 其他部件,"Other components"
-请先填写生成要求,请先填写生成要求
-"AI Widget 生成失败","AI Widget 生成失败"
-选择的部件类型不受支持：%{1},选择的部件类型不受支持：%{1}
-"AI 返回内容为空","AI 返回内容为空"
-"AI 返回的 Widget JSON 无法解析","AI 返回的 Widget JSON 无法解析"
-"AI 生成的 Widget 类型不受支持：%{1}","AI 生成的 Widget 类型不受支持：%{1}"
-"AI 生成结果缺少 template_content","AI 生成结果缺少 template_content"
-"AI 生成了不支持的参数类型：%{1}","AI 生成了不支持的参数类型：%{1}"
-"AI 生成模板包含不允许的逻辑：%{1}","AI 生成模板包含不允许的逻辑：%{1}"
-鍒犻櫎,鍒犻櫎
-基本信息,"Basic information"
-样式设置,"Style settings"
-链接配置,"Link Configuration"
-高级设置,"Advanced settings"
-该部件无可配置项,"This component has no configurable items"
-"字段 ""%s"" 的值无效","字段 ""%s"" 的值无效"
-"部件注册表：%{1} 个类型，共 %{2} 个部件","Component registry: %{1} types, %{2} components total"
-文件：generated/widgets.php,"File: generated/widgets.php"
-查看部件注册表状态,"View Component Registry Status"
-"查看 generated/widgets.php 中的部件类型数与总个数","View widget type count and total in generated/widgets.php"
-开始刷新部件注册表...,"Refreshing widget registry..."
-"✓ 部件注册表已刷新完成。","✓ Part registry refresh completed."
-位置：generated/widgets.php,"Location: generated/widgets.php"
+编辑多语言,"Edit multilingual"
+多语言,Multilingual
+多语言配置,"Multilingual Configuration"
+AI翻译,"AI Translate"
+保存多语言,"Save Multilingual"
+添加项目,"Add Project"
+暂无项目，点击下方按钮添加,"No projects. Click the button below to add one."
+"%d / %d 项","%d / %d 项"
+从媒体库选择图片并添加为一项，可再编辑标题等,"Select an image from the media library and add it as an item; the title etc. can be edited later"
+选择图片添加,"Select and Add Image"
+拖拽排序,"Drag to sort"
+预览,Preview
+从媒体库选择,"Select from media library"
+选择,Select
+设为透明,"Set to Transparent"
+启用,Enable
+清除,Clear
+今天,Today
+明天,Tomorrow
+下周,"next week"
+"格式: %s","格式: %s"
+选择图标,"Select Icon"
+搜索图标...,"Search icon..."
+输入自定义图标类名,"Enter a custom icon class name"
+应用,Apply
+点击选择图片或输入URL,"Click to select an image or enter a URL."
+上传图片,"Upload pictures"
+上传,upload
+清除图片,"Clear images"
+图片URL,"Image URL"
+"最大 %s KB","最大 %s KB"
+"建议比例 %s","建议比例 %s"
+从媒体库选择图片,"Select image from media library"
+"范围: %s - %s","范围: %s - %s"
+"最小值: %s","最小值: %s"
+"最大值: %s","最大值: %s"
+测试,Test
+在新窗口打开,"Open in a new window"
+快捷链接:,"Quick Links:"
+确认组件不可用，操作已取消,确认组件不可用，操作已取消
+解析部件参数失败,"Failed to parse widget parameters"
+预览失败,"Preview failed"
+确定要删除这个部件吗？,"Are you sure you want to delete this widget?"
+确认删除,确认删除
+取消,取消
+选择一个部件进行配置,"Select a widget to configure"
+请填写页面标题和标识,"Please fill in page title and handle"
+"Page preview","Page preview"
+"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
+保存,Save
+页面标题,"Page Title"
+页面标识,"Page Handle"
+部件库,"Widget Library"
+搜索部件...,"Search widgets..."
+画布,Canvas
+从左侧拖放部件到这里,"Drag widgets from left panel here"
+属性配置,Properties
+快速查看、筛选并预览部件详情,"Quickly view, filter, and preview part details"
+部件详情,"Component details"
+关闭,Close
+加载中...,Loading...
+操作失败,"Operation failed"
+类型,Type
+模块,Module.
+版本,Version
+参数配置,"Parameter configuration"
+总部件数,"Total Parts"
+部件类型,"Component type"
+来源模块,"Source Module"
+关键字,Keyword
+所有模块,"All Modules"
+所有类型,"All Types"
+筛选,Filter
+重置筛选,"Reset Filter"
+部件列表,"Widget List"
+没有找到部件,"No widgets found"
+部件名称,"Widget Name"
+描述,Description
+操作,Actions
+详情,Details
+普通部件首次入库后,普通部件首次入库后
+"普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。","普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。"
 首次入库：%{1}，更新：%{2}，默认注入事件：%{3},首次入库：%{1}，更新：%{2}，默认注入事件：%{3}
 已派发,已派发
 未派发,未派发
-"✖ 写入部件注册表失败。","✖ Failed to write to the component registry."
-"✓ ParamSchema 注册表已刷新完成。","✓ ParamSchema registry has been refreshed."
-位置：generated/param_schemas.php,"Location: generated/param_schemas.php"
-"✖ 写入 ParamSchema 注册表失败。","✖ Writing to ParamSchema registry failed."
-刷新失败：%{1},"Refresh Failed: %{1}"
