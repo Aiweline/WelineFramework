@@ -1,32 +1,4 @@
-﻿"所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>","所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>"
-所指定的name找不到对应的js模板文件！,"The specified name could not find the corresponding JS template file!"
-所指定的name找不到对应的css模板文件！,"The specified name could not find the corresponding CSS template file!"
-"Scope 标签属性 container-id 不能为空！","Scope label attribute container-id cannot be empty!"
-检测到标签循环依赖：%{1},"Detected circular dependency in labels: %{1}"
-"标签 '%{1}' 依赖的父标签 '%{2}' 不存在","The parent tag '%{2}' that tag '%{1}' depends on does not exist"
-"标签 '%{1}' 依赖的父标签 '%{2}' 没有parent()方法，可能不是预期的父标签","The parent tag '%{2}' that tag '%{1}' depends on has no parent() method, may not be the expected parent tag"
-参数缺失,"Missing parameter"
-保存成功,"Save successful"
-获取成功！,"Successfully got!"
-濂界殑,濂界殑
-绠椾簡,绠椾簡
-鎿嶄綔鎴愬姛!,鎿嶄綔鎴愬姛!
-开发>标签管理,"Development > Tag Management"
-开发,Development
-标签管理,"Tag management"
-列表,List
-开发-标签管理,"Development - Tag Management"
-管理标签,"Manage Tags"
-标签ID,"Tag ID"
-标签,Tag
-系统,System
-模块,Module.
-创建时间,"Create time"
-更新时间,"Update time"
-操作,Operation
-标签文档,"Tag documentation"
-json数据,"json data"
-“%{1}”不是已注册模块名，已忽略；仅收集已注册模块的标签。,"""%{1}"" is not a registered module name and has been ignored; only the labels of registered modules are collected."
+﻿“%{1}”不是已注册模块名，已忽略；仅收集已注册模块的标签。,"""%{1}"" is not a registered module name and has been ignored; only the labels of registered modules are collected."
 "正在收集模块 %{1} 的标签库...","Collecting tag library for module %{1}..."
 "模块 %{1} 标签库收集成功！","Module %{1} tag library collection succeeded!"
 "模块 %{1} 标签库收集失败：%{2}","Module %{1} tag library collection failed: %{2}"
@@ -56,3 +28,31 @@ json数据,"json data"
 指定要收集的模块名称（可选）,"Specify the module name to collect (optional)"
 收集所有模块的标签库,"Collect Tag Libraries for All Modules"
 收集指定模块的标签库,"Collect Tag Library for Specified Module"
+参数缺失,"Missing parameter"
+保存成功,"Save successful"
+获取成功！,"Successfully got!"
+检测到标签循环依赖：%{1},"Detected circular dependency in labels: %{1}"
+"标签 '%{1}' 依赖的父标签 '%{2}' 不存在","The parent tag '%{2}' that tag '%{1}' depends on does not exist"
+"标签 '%{1}' 依赖的父标签 '%{2}' 没有parent()方法，可能不是预期的父标签","The parent tag '%{2}' that tag '%{1}' depends on has no parent() method, may not be the expected parent tag"
+所指定的name找不到对应的css模板文件！,"The specified name could not find the corresponding CSS template file!"
+"所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>","所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>"
+所指定的name找不到对应的js模板文件！,"The specified name could not find the corresponding JS template file!"
+"Scope 标签属性 container-id 不能为空！","Scope label attribute container-id cannot be empty!"
+濂界殑,濂界殑
+绠椾簡,绠椾簡
+鎿嶄綔鎴愬姛!,鎿嶄綔鎴愬姛!
+标签文档,"Tag documentation"
+json数据,"json data"
+开发>标签管理,"Development > Tag Management"
+开发,Development
+标签管理,"Tag management"
+列表,List
+开发-标签管理,"Development - Tag Management"
+管理标签,"Manage Tags"
+标签ID,"Tag ID"
+标签,Tag
+系统,System
+模块,Module.
+创建时间,"Create time"
+更新时间,"Update time"
+操作,Operation
