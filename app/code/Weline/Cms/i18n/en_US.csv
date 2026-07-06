@@ -1,8 +1,25 @@
-﻿"CMS 页面","CMS 页面"
-"CMS 查询器不支持的操作：%{1}","Unsupported CMS query operation: %{1}"
-"CMS 页面ID不能为空。","CMS 页面ID不能为空。"
+﻿"CMS 草稿页面已创建，可以开始可视化编辑。","CMS 草稿页面已创建，可以开始可视化编辑。"
 "CMS 页面不存在。","CMS page does not exist."
+草稿,Draft
+已发布,Published
+已禁用,Disabled
+页面已保存，但布局选择保存失败。,"The page was saved, but the layout selection failed to save."
+"CMS 页面已保存。","CMS page saved."
+"CMS 一级 path 已保存。","CMS 一级 path 已保存。"
+"CMS 页面已拷贝，但 Theme 布局数据复制不完整。","CMS page copied, but Theme layout data was not copied completely."
+"CMS 一级 path 已拷贝到目标站点，但部分 Theme 布局数据复制不完整。","CMS top-level path copied to the target site, but some Theme layout data was not copied completely."
 "CMS 页面已移入回收站。","CMS 页面已移入回收站。"
+"CMS 页面移入回收站失败。","Failed to move CMS page to trash."
+"CMS 一级 path 已移入回收站。","CMS 一级 path 已移入回收站。"
+"CMS 一级 path 移入回收站失败。","Failed to move CMS path group to trash."
+"CMS page saved","CMS page saved"
+"Dispatched after a CMS page is created, updated, published, unpublished, or saved as draft.","Dispatched after a CMS page is created, updated, published, unpublished, or saved as draft."
+"CMS page deleted","CMS page deleted"
+"Dispatched after a CMS page is moved to trash or disabled as deleted.","Dispatched after a CMS page is moved to trash or disabled as deleted."
+"CMS 查询器不支持的操作：%{1}","Unsupported CMS query operation: %{1}"
+"CMS 已发布页面 sitemap URL 提供器","CMS 已发布页面 sitemap URL 提供器"
+"CMS 页面","CMS 页面"
+"CMS 页面ID不能为空。","CMS 页面ID不能为空。"
 "回收站快照中缺少 CMS 页面ID，无法恢复。","回收站快照中缺少 CMS 页面ID，无法恢复。"
 "原 CMS 页面记录不存在，无法自动恢复；请从原始数据手动处理。","原 CMS 页面记录不存在，无法自动恢复；请从原始数据手动处理。"
 "CMS 页面已恢复。","CMS 页面已恢复。"
@@ -12,7 +29,6 @@
 "CMS 一级 path","CMS 一级 path"
 "CMS 一级 path 不存在。","CMS 一级 path 不存在。"
 "该一级 path 下还有页面，不能直接移入回收站。","该一级 path 下还有页面，不能直接移入回收站。"
-"CMS 一级 path 已移入回收站。","CMS 一级 path 已移入回收站。"
 "回收站快照中缺少 CMS 一级 path ID，无法恢复。","回收站快照中缺少 CMS 一级 path ID，无法恢复。"
 "原 CMS 一级 path 记录不存在，无法自动恢复；请从原始数据手动处理。","原 CMS 一级 path 记录不存在，无法自动恢复；请从原始数据手动处理。"
 "CMS 一级 path 已恢复。","CMS 一级 path 已恢复。"
@@ -20,53 +36,6 @@
 "CMS 一级 path 当前未处于删除状态，不能永久清理。","CMS 一级 path 当前未处于删除状态，不能永久清理。"
 "CMS 一级 path 记录已永久清理。","CMS 一级 path 记录已永久清理。"
 "CMS 页面模块，基于 Theme/Meta 管理布局、可视化编辑与页面级渲染配置。","CMS page module based on Theme/Meta for layout, visual editing, and page-level render configuration."
-"CMS 草稿页面已创建，可以开始可视化编辑。","CMS draft page created. You can start visual editing."
-草稿,Draft
-已发布,Published
-已禁用,Disabled
-页面已保存，但布局选择保存失败。,"The page was saved, but the layout selection failed to save."
-"CMS 页面已保存。","CMS page saved."
-"CMS 一级 path 已保存。","CMS 一级 path 已保存。"
-"CMS 页面移入回收站失败。","Failed to move CMS page to trash."
-"CMS 一级 path 移入回收站失败。","Failed to move CMS path group to trash."
-搜索标题或路径,"Search title or path"
-全部站点,全部站点
-"一级 path","一级 path"
-全部状态,"All statuses"
-范围,Scope
-筛选,Filter
-暂无站点,暂无站点
-展开或收起,"Expand or collapse"
-"新建一级 path","新建一级 path"
-"新建一级 path，例如 blog","新建一级 path，例如 blog"
-"显示别名，例如 博客","显示别名，例如 博客"
-创建,Create
-"当前站点暂无一级 path，请先新建。","当前站点暂无一级 path，请先新建。"
-移入回收站,移入回收站
-新建页面,"New page"
-"在这个 path 下创建页面","在这个 path 下创建页面"
-"当前 path 下暂无页面。","当前 path 下暂无页面。"
-Slug,Slug
-完整路径,完整路径
-ID,ID
-更新时间,"Updated at"
-编辑,Edit
-预览,Preview
-删除,Delete
-请选择或搜索布局...,"Select or search a layout..."
-返回列表,"Back to list"
-"站点 / 一级 path","站点 / 一级 path"
-站点,站点
-标题,Title
-"path 别名","path 别名"
-状态,Status
-"Theme 布局","Theme layout"
-保存页面设置,"Save page settings"
-新窗口打开编辑器,"Open editor in new window"
-"先保存页面设置，然后直接在这里进行 Theme 可视化编辑。","Save the page settings first, then edit visually here with Theme."
-"Theme 可视化编辑","Theme visual editor"
-"CMS 页面预览","CMS page preview"
-返回编辑,"Back to edit"
 页面路径不能为空。,"Page path is required."
 "页面路径不能超过 190 个字符。","Page path cannot exceed 190 characters."
 页面路径只能包含字母、数字、斜杠、中划线和下划线。,"Page path can only contain letters, numbers, slashes, hyphens, and underscores."
@@ -80,39 +49,70 @@ ID,ID
 页面标题不能为空。,"Page title is required."
 "CMS 页面保存后未能读取页面ID。","Failed to read the page ID after saving the CMS page."
 "新建 CMS 页面","New CMS page"
+源站点和目标站点相同，无需拷贝。,"The source site and target site are the same; no copy is needed."
+"目标站点已存在相同路径的 CMS 页面：%{1}","The target site already has CMS pages with the same paths: %{1}"
 "CMS 页面恢复后仍处于删除状态，请检查数据库 soft delete 字段写入。","CMS 页面恢复后仍处于删除状态，请检查数据库 soft delete 字段写入。"
 "CMS 一级 path 恢复后仍处于删除状态，请检查数据库 soft delete 字段写入。","CMS 一级 path 恢复后仍处于删除状态，请检查数据库 soft delete 字段写入。"
 "CMS 页面不存在","CMS page does not exist"
 "保存 CMS 页面布局选择","Save CMS page layout selection"
 "CMS 清理 Theme 运行时缓存失败：%{1}","CMS failed to clear Theme runtime cache: %{1}"
 "CMS 清理前台缓存失败：%{1}","CMS 清理前台缓存失败：%{1}"
+"CMS 页面 SEO 变更事件触发失败：%{1}","CMS 页面 SEO 变更事件触发失败：%{1}"
+"CMS 页面 SEO URL 变更通知失败：%{1}","CMS 页面 SEO URL 变更通知失败：%{1}"
 选择的站点不存在。,选择的站点不存在。
+请选择目标站点。,"Please select a target site."
+"源 CMS 一级 path 不存在。","The source CMS top-level path does not exist."
+"CMS 拷贝 Theme target 数据失败：%{1}","CMS failed to copy Theme target data: %{1}"
 布局选项格式无效。,"The layout option format is invalid."
 "CMS 生成预览 token 失败：%{1}","CMS 生成预览 token 失败：%{1}"
 路径不能为空。,路径不能为空。
 "页面完整路径不能超过 190 个字符。","页面完整路径不能超过 190 个字符。"
 "同一站点下已存在相同路径的 CMS 页面。","同一站点下已存在相同路径的 CMS 页面。"
 页面路径与已有系统或模块路由冲突，不能发布。,"The page path conflicts with an existing system or module route and cannot be published."
-"拷贝","Copy"
-"选择目标站点","Select target site"
-"确认拷贝","Confirm copy"
-"拷贝 CMS 页面","Copy CMS page"
-"将 CMS 页面拷贝到目标站点","Copy the CMS page to a target site"
-"拷贝 CMS 一级 path","Copy CMS top-level path"
-"将 CMS 一级 path 及页面拷贝到目标站点","Copy the CMS top-level path and its pages to a target site"
-"CMS 页面已拷贝到目标站点。","CMS page copied to the target site."
-"CMS 页面已拷贝，但 Theme 布局数据复制不完整。","CMS page copied, but Theme layout data was not copied completely."
-"CMS 一级 path 已拷贝到目标站点。","CMS top-level path copied to the target site."
-"CMS 一级 path 已拷贝到目标站点，但部分 Theme 布局数据复制不完整。","CMS top-level path copied to the target site, but some Theme layout data was not copied completely."
-"CMS 页面已拷贝到 %{1}。","CMS page copied to %{1}."
+请选择或搜索布局...,"Select or search a layout..."
+返回列表,"Back to list"
+预览,Preview
+"站点 / 一级 path","站点 / 一级 path"
+站点,站点
+标题,Title
+"一级 path","一级 path"
+"path 别名","path 别名"
+Slug,Slug
+范围,Scope
+状态,Status
+"Theme 布局","Theme layout"
+保存页面设置,"Save page settings"
+新窗口打开编辑器,"Open editor in new window"
+"先保存页面设置，然后直接在这里进行 Theme 可视化编辑。","Save the page settings first, then edit visually here with Theme."
+"Theme 可视化编辑","Theme visual editor"
 "CMS 一级 path 已拷贝到 %{1}。","CMS top-level path copied to %{1}."
+"CMS 页面已拷贝到 %{1}。","CMS page copied to %{1}."
 "共 %{1} 个页面","%{1} pages"
 "部分 Theme 布局数据未完整复制","Some Theme layout data was not copied completely"
-"前往查看","View it"
-"我知道了","Got it"
-"清理筛选并刷新","Clear filters and reload"
-"请选择目标站点。","Please select a target site."
-"源站点和目标站点相同，无需拷贝。","The source site and target site are the same; no copy is needed."
-"目标站点已存在相同路径的 CMS 页面：%{1}","The target site already has CMS pages with the same paths: %{1}"
-"源 CMS 一级 path 不存在。","The source CMS top-level path does not exist."
-"CMS 拷贝 Theme target 数据失败：%{1}","CMS failed to copy Theme target data: %{1}"
+前往查看,"View it"
+我知道了,"Got it"
+搜索标题或路径,"Search title or path"
+全部站点,全部站点
+全部状态,"All statuses"
+筛选,Filter
+清理筛选并刷新,"Clear filters and reload"
+暂无站点,暂无站点
+展开或收起,"Expand or collapse"
+"新建一级 path","新建一级 path"
+"新建一级 path，例如 blog","新建一级 path，例如 blog"
+"显示别名，例如 博客","显示别名，例如 博客"
+创建,Create
+"当前站点暂无一级 path，请先新建。","当前站点暂无一级 path，请先新建。"
+拷贝,Copy
+选择目标站点,"Select target site"
+确认拷贝,"Confirm copy"
+移入回收站,移入回收站
+新建页面,"New page"
+"在这个 path 下创建页面","在这个 path 下创建页面"
+"当前 path 下暂无页面。","当前 path 下暂无页面。"
+完整路径,完整路径
+ID,ID
+更新时间,"Updated at"
+编辑,Edit
+"CMS 页面预览","CMS page preview"
+返回编辑,"Back to edit"
