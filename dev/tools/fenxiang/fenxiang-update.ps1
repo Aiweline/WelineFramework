@@ -380,6 +380,27 @@ function Test-SensitiveSitePath {
     return $false
 }
 
+function Get-SitePushRemotes {
+    param([Parameter(Mandatory = $true)][string]$Repo)
+
+    $remotes = (Get-GitOutput -Repo $Repo -Arguments @('remote')).Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+    $siteRemotes = @()
+
+    foreach ($remote in $remotes) {
+        $url = (Get-GitOutput -Repo $Repo -Arguments @('remote', 'get-url', '--push', $remote)).Trim()
+        $normalized = $url.TrimEnd('/').ToLowerInvariant()
+        if ($normalized -notmatch 'welineframework(\.git)?$') {
+            $siteRemotes += $remote
+        }
+    }
+
+    if ($siteRemotes.Count -eq 0) {
+        throw "Site repo has no non-core push remote; refusing to push to WelineFramework.git: $Repo"
+    }
+
+    return $siteRemotes
+}
+
 function Assert-SiteCleanBeforeUpdate {
     param([Parameter(Mandatory = $true)][string]$Repo)
 
@@ -431,13 +452,9 @@ function Commit-SiteFrameworkChanges {
         return
     }
 
-    $siteRemotes = (Get-GitOutput -Repo $Repo -Arguments @('remote')).Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
-    if (-not ($siteRemotes -contains 'origin')) {
-        throw "Site repo must have remote 'origin' before pushing: $Repo"
-    }
-    Invoke-Git -Repo $Repo -Arguments @('push', 'origin', "HEAD:$Branch") | Out-Null
-    if ($siteRemotes -contains 'github') {
-        Invoke-Git -Repo $Repo -Arguments @('push', 'github', "HEAD:$Branch") | Out-Null
+    $siteRemotes = Get-SitePushRemotes -Repo $Repo
+    foreach ($remote in $siteRemotes) {
+        Invoke-Git -Repo $Repo -Arguments @('push', $remote, "HEAD:$Branch") | Out-Null
     }
 }
 
