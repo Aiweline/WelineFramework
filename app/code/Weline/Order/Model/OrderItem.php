@@ -19,6 +19,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '订单项表')]
 #[Index(name: 'idx_order_id', columns: ['order_id'])]
 #[Index(name: 'idx_product_id', columns: ['product_id'])]
+#[Index(name: 'idx_source_module', columns: ['source_module'])]
+#[Index(name: 'idx_business_code', columns: ['business_code'])]
 class OrderItem extends Model
 {
     public const schema_table = 'weline_order_item';
@@ -38,6 +40,14 @@ class OrderItem extends Model
     public const schema_fields_PRODUCT_NAME = 'product_name';
     #[Col(type: 'varchar', length: 50, nullable: true, comment: '商品类型')]
     public const schema_fields_PRODUCT_TYPE = 'product_type';
+    #[Col(type: 'varchar', length: 80, nullable: false, default: '', comment: '来源应用')]
+    public const schema_fields_SOURCE_APP = 'source_app';
+    #[Col(type: 'varchar', length: 100, nullable: false, default: '', comment: '来源模块')]
+    public const schema_fields_SOURCE_MODULE = 'source_module';
+    #[Col(type: 'varchar', length: 100, nullable: false, default: '', comment: '业务代码')]
+    public const schema_fields_BUSINESS_CODE = 'business_code';
+    #[Col(type: 'varchar', length: 160, nullable: false, default: '', comment: '业务名称')]
+    public const schema_fields_BUSINESS_NAME = 'business_name';
     #[Col(type: 'decimal', length: '10,2', nullable: false, default: 0.00, comment: '订购数量')]
     public const schema_fields_QTY_ORDERED = 'qty_ordered';
     #[Col(type: 'decimal', length: '10,2', nullable: false, default: 0.00, comment: '已发货数量')]

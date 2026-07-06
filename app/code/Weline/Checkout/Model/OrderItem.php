@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Model;
 
+use Weline\Checkout\Api\OrderItemSchemaInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -22,7 +23,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_order_id', columns: ['order_id'])]
 #[Index(name: 'idx_product_id', columns: ['product_id'])]
 #[Index(name: 'idx_product_sku', columns: ['product_sku'])]
-class OrderItem extends Model
+#[Index(name: 'idx_source_module', columns: ['source_module'])]
+#[Index(name: 'idx_business_code', columns: ['business_code'])]
+class OrderItem extends Model implements OrderItemSchemaInterface
 {
     public const schema_table = 'weline_checkout_order_item';
     public const schema_primary_key = 'item_id';
@@ -38,6 +41,14 @@ class OrderItem extends Model
     public const schema_fields_PRODUCT_NAME = 'product_name';
     #[Col('varchar', 100, comment: '产品SKU')]
     public const schema_fields_PRODUCT_SKU = 'product_sku';
+    #[Col('varchar', 80, default: '', comment: '来源应用')]
+    public const schema_fields_SOURCE_APP = 'source_app';
+    #[Col('varchar', 100, default: '', comment: '来源模块')]
+    public const schema_fields_SOURCE_MODULE = 'source_module';
+    #[Col('varchar', 100, default: '', comment: '业务代码')]
+    public const schema_fields_BUSINESS_CODE = 'business_code';
+    #[Col('varchar', 160, default: '', comment: '业务名称')]
+    public const schema_fields_BUSINESS_NAME = 'business_name';
     #[Col('int', default: 1, comment: '数量')]
     public const schema_fields_QUANTITY = 'quantity';
     #[Col('decimal', '10,2', default: '0.00', comment: '单价')]
@@ -145,4 +156,3 @@ class OrderItem extends Model
         }
     }
 }
-

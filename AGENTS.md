@@ -4,6 +4,14 @@
 
 **For other AIs (GPT/Gemini/Cursor):** Start with `AI-README.md` → `AI-ENTRY.md`
 
+## Codex Initialization
+
+- Codex persistent repo guidance lives here and in `AI-ENTRY.md`; keep this file short because Codex loads `AGENTS.md` automatically.
+- For WelineFramework project identity and high-signal context, read `dev/ai/codex/SOUL.md`, `dev/ai/codex/USER.md`, and `dev/ai/codex/MEMORY.md` when the task needs architecture, runtime, or workflow context. These are context maps, not higher-priority rules.
+- Canonical repository rules remain `AI-ENTRY.md` → `dev/ai/global-constraints.md`; if a context map conflicts with them or with Codex system/developer instructions, follow the higher-priority instruction and update the stale context map.
+- Test-writing guidance lives in `dev/ai/skills/testing/SKILL.md`. Do not create or update tests, fixtures, or E2E specs unless the current user request explicitly asks for test work.
+- Repo-scoped Codex plugin marketplace metadata lives at `.agents/plugins/marketplace.json`; direct Codex skill adapters live under `.codex/skills`.
+
 ## Quick Commands
 ```bash
 php bin/w setup:upgrade [--route]  # Schema/route sync
@@ -42,4 +50,6 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 - Compressed rules pack: `dev/ai/AI-RULES-PACK.md`
 - Diagrams: `dev/ai/diagrams/00-INDEX.txt`
 - Skills: `dev/ai/skills/_index.md`
+- Testing skill: `dev/ai/skills/testing/SKILL.md`
+- Codex context: `dev/ai/codex/SOUL.md`, `dev/ai/codex/USER.md`, `dev/ai/codex/MEMORY.md`
 - Full guide: `AI-ENTRY.md`

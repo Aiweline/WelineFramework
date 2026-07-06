@@ -7,6 +7,7 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 namespace Weline\Checkout\Model;
+use Weline\Checkout\Api\OrderSchemaInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -18,9 +19,12 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_order_number', columns: ['order_number'], type: 'UNIQUE')]
 #[Index(name: 'idx_customer_id', columns: ['customer_id'])]
 #[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_source_app', columns: ['source_app'])]
+#[Index(name: 'idx_source_module', columns: ['source_module'])]
+#[Index(name: 'idx_business_code', columns: ['business_code'])]
 #[Index(name: 'idx_payment_status', columns: ['payment_status'])]
 #[Index(name: 'idx_created_time', columns: ['created_time'])]
-class Order extends Model
+class Order extends Model implements OrderSchemaInterface
 {
     public const schema_table = 'weline_checkout_order';
     public const schema_primary_key = 'order_id';
@@ -45,6 +49,14 @@ class Order extends Model
     public const schema_fields_TOTAL_AMOUNT = 'total_amount';
     #[Col('varchar', 10, default: 'CNY', comment: '货币代码')]
     public const schema_fields_CURRENCY = 'currency';
+    #[Col('varchar', 80, default: '', comment: '来源应用')]
+    public const schema_fields_SOURCE_APP = 'source_app';
+    #[Col('varchar', 100, default: '', comment: '来源模块')]
+    public const schema_fields_SOURCE_MODULE = 'source_module';
+    #[Col('varchar', 100, default: '', comment: '业务代码')]
+    public const schema_fields_BUSINESS_CODE = 'business_code';
+    #[Col('varchar', 160, default: '', comment: '业务名称')]
+    public const schema_fields_BUSINESS_NAME = 'business_name';
     #[Col('text', comment: '收货地址')]
     public const schema_fields_SHIPPING_ADDRESS = 'shipping_address';
     #[Col('text', comment: '账单地址')]

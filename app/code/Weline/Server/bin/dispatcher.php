@@ -68,6 +68,8 @@ $controlPort = 0;  // 0 means use Master endpoint bootstrap if no argument is pa
 $masterPid = 0;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$masterLeaseFile = '';
+$masterToken = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -81,6 +83,10 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--master-lease-file=')) {
+        $masterLeaseFile = (string)\substr($arg, 20);
+    } elseif (\str_starts_with($arg, '--master-token=')) {
+        $masterToken = (string)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     }
@@ -98,6 +104,16 @@ if (!\defined('DS')) {
 
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+$childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
+    $masterPid,
+    $masterLeaseFile,
+    $masterToken,
+    'Dispatcher:' . $port,
+    $instanceName,
+    $orchestratorEpoch
+);
+$childMasterGuard->assertAliveOrExit('Dispatcher listen 前 Master 自治检查');
 
 // ========== 主端口尽早 listen（先于控制面解析）==========
 if (!\function_exists('wlsDispatcherIsIpBindAddress')) {
@@ -280,6 +296,7 @@ $dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
 if ($masterPid > 0) {
     $dispatcher->setMasterPid($masterPid);
 }
+$dispatcher->setMasterGuard($childMasterGuard);
 if ($controlPort > 0 || $supervisorEnabled) {
     $dispatcher->connectIpc($controlPort, false);
 }
@@ -497,6 +514,7 @@ WlsLogger::info_("Dispatcher 启动，监听 tcp://{$host}:{$port}，预计 Work
 
 // 连接 IPC 控制通道
 $dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
+$dispatcher->setMasterGuard($childMasterGuard);
 
 if ($controlPort > 0 || $supervisorEnabled) {
     if ($dispatcherAlreadyBootstrapped) {
