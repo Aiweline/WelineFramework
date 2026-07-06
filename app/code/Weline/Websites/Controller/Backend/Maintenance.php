@@ -64,10 +64,11 @@ class Maintenance extends BackendController
         }
         
         try {
-            $websiteId = (int)$this->request->getPost('website_id', 0);
+            $websiteIdRaw = $this->request->getPost('website_id', null);
+            $websiteId = (int)($websiteIdRaw ?? 0);
             $enabled = (bool)$this->request->getPost('enabled', false);
             
-            if ($websiteId <= 0) {
+            if ($websiteIdRaw === null || $websiteIdRaw === '' || $websiteId < Website::ID_DEFAULT) {
                 return $this->jsonResponse(false, __('无效的网站ID'));
             }
             

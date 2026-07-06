@@ -27,7 +27,7 @@ foreach ($views as $view) {
     if (!is_array($view)) {
         continue;
     }
-    if (!empty($view['is_default']) || ($view['visibility'] ?? '') === 'system') {
+    if (!empty($view['is_default'])) {
         $groups['default']['items'][] = $view;
     } elseif (!empty($view['can_edit'])) {
         $groups['mine']['items'][] = $view;
@@ -580,6 +580,7 @@ body.w-dashboard-editor-open {
     var messages = <?= $messagesJson ?>;
     var editorDirty = false;
     var editorSaving = false;
+    var dashboardInitialized = false;
 
     function root() {
         return document.querySelector('[data-dashboard-root]');
@@ -780,11 +781,15 @@ body.w-dashboard-editor-open {
             });
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
+    function initDashboard() {
+        if (dashboardInitialized) {
+            return;
+        }
         var app = root();
         if (!app) {
             return;
         }
+        dashboardInitialized = true;
 
         app.querySelectorAll('[data-dashboard-editor-open]').forEach(function (button) {
             button.addEventListener('click', function (event) {
@@ -963,6 +968,12 @@ body.w-dashboard-editor-open {
                 });
             });
         });
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDashboard, {once: true});
+    } else {
+        initDashboard();
+    }
 })();
 </script>
