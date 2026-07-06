@@ -7,6 +7,7 @@
 - 将原有按技术主题组织的技能重构为按团队角色组织的技能。
 - 每个技能目录都可以被 Multica 独立导入。
 - 保留 WelineFramework 的开发约束、阅读顺序、验证规则和文档边界，并统一引用 `dev/ai/global-constraints.md`。
+- 保留跨 AI 的压缩加载契约，并统一引用 `dev/ai/AI-RULES-PACK.md`。
 - 明确技术主管、专项工程师、QA、CI、文档角色之间的协作边界。
 - 将开发规范、代码质量、国际化与用户提示等跨角色执行方式沉淀为 `通用工程师-开发规范与代码质量`；总则正文仍以 `dev/ai/global-constraints.md` 为准。
 
@@ -21,16 +22,18 @@
 ## 先读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/00-INDEX.txt`
-4. `dev/ai/diagrams/08-module-docs-index.txt`
-5. 当前目录下命中的角色技能
-6. Source code as the last resort
+2. `dev/ai/AI-RULES-PACK.md`
+3. `dev/ai/global-constraints.md`
+4. `dev/ai/diagrams/00-INDEX.txt`
+5. `dev/ai/diagrams/08-module-docs-index.txt`
+6. 当前目录下命中的角色技能
+7. Source code as the last resort
 
 ## 共享约束
 
 共享约束不在本文件重复维护。所有技能必须遵守：
 
+- `dev/ai/AI-RULES-PACK.md`
 - `dev/ai/global-constraints.md`
 
 ## 智能体名录

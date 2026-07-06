@@ -5,16 +5,17 @@ description: Entry skill for WelineFramework development in Codex. Use when work
 
 # WelineFramework Entry Skill
 
-Use this skill as the first plugin entry point for WelineFramework work in Codex.
+Use this skill as the first plugin entry point for WelineFramework work in Codex. When installed from GitHub, prefer a sparse `dev/ai` checkout so `dev/ai/AI-RULES-PACK.md` is available next to the plugin source.
 
 ## Required Reading Order
 
 1. Read repository `AGENTS.md`.
 2. Read `AI-ENTRY.md`.
-3. Read `dev/ai/global-constraints.md`.
-4. Read `dev/ai/skills/_index.md`.
-5. Load only the 1 to 3 role skills matched to the current task.
-6. Read diagrams, module docs, source files, tests, and configuration only when relevant.
+3. Read `dev/ai/AI-RULES-PACK.md`.
+4. Read `dev/ai/global-constraints.md`.
+5. Read `dev/ai/skills/_index.md`.
+6. Load only the 1 to 3 role skills matched to the current task.
+7. Read diagrams, module docs, source files, tests, and configuration only when relevant.
 
 ## Routing
 
@@ -37,4 +38,4 @@ Use this skill as the first plugin entry point for WelineFramework work in Codex
 
 ## Plugin Notes
 
-This plugin bundles WelineFramework skills for Codex discovery. The repository source of truth remains the WelineFramework repository documents, especially `AI-ENTRY.md`, `dev/ai/global-constraints.md`, and `dev/ai/skills/_index.md`.
+This plugin bundles WelineFramework skills for Codex discovery. The repository source of truth remains the WelineFramework repository documents, especially `AI-ENTRY.md`, `dev/ai/AI-RULES-PACK.md`, `dev/ai/global-constraints.md`, and `dev/ai/skills/_index.md`.
