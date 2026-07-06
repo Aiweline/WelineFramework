@@ -1,7 +1,7 @@
 ---
 name: testing
 description: >-
-
+  WelineFramework local testing adapter. Use when working in this repo on how to write module tests, choose validation layers, or run PHPUnit, Pest, Vitest, Playwright, HTTP smoke, Browser smoke, or WLS-backed test flows. Read dev/ai/skills/testing/SKILL.md before acting.
 ---
 
 # testing

@@ -14,6 +14,13 @@ $currentLocale = $availableLocales[$localeCode] ?? [
     'name' => $targetLocale['name'] ?? $localeCode,
     'display' => ($targetLocale['name'] ?? $localeCode) . ($localeCode !== '' ? ' (' . $localeCode . ')' : ''),
 ];
+$availableLocaleCodes = array_values(array_filter(array_map('strval', array_keys($availableLocales))));
+if ($availableLocaleCodes === [] && $localeCode !== '') {
+    $availableLocaleCodes[] = $localeCode;
+}
+$dictionaryEditLocaleValue = $localeCode;
+$dictionaryLocaleEmptyText = (string)__('点击选择目标语言');
+$dictionaryLocaleSearchPlaceholder = (string)__('搜索语言、国家或代码...');
 
 $translatedCount = (int)($progress['translated'] ?? 0);
 $totalCount = (int)($progress['total'] ?? 0);
@@ -84,6 +91,8 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                         <a class="btn btn-outline-success" href="@backend-url('*/backend/dictionary/exportTranslations')?locale_code=<?= urlencode($localeCode) ?>"><?= __('导出翻译包') ?></a>
                         <a class="btn btn-outline-secondary" href="@backend-url('*/backend/dictionary/exportCsv')?locale_code=<?= urlencode($localeCode) ?>"><?= __('导出CSV') ?></a>
                         <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#dictionary-import-modal"><?= __('导入CSV') ?></button>
+                        <button type="button" class="btn btn-outline-danger" id="dictionary-clear-locale-btn"><?= __('清理语言') ?></button>
+                        <button type="button" class="btn btn-danger" id="dictionary-clear-all-btn"><?= __('清理全部') ?></button>
                     </div>
                 </div>
 
@@ -140,13 +149,19 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                 <form method="get" action="@backend-url('*/backend/dictionary')" class="row g-3 align-items-end i18n-admin-form">
                     <div class="col-xl-4 col-md-6">
                         <label class="form-label"><?= __('目标语言') ?></label>
-                        <select name="locale_code" class="form-select">
-                            <?php foreach ($availableLocales as $localeKey => $localeInfo): ?>
-                                <option value="<?= htmlspecialchars((string)$localeKey, ENT_QUOTES, 'UTF-8') ?>" <?= $localeCode === (string)$localeKey ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars((string)($localeInfo['display'] ?? $localeKey), ENT_QUOTES, 'UTF-8') ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <w:i18n:language:select
+                            id="dictionary_filter_locale_selector"
+                            name="locale_code"
+                            input-id="dictionary-filter-locale"
+                            value="localeCode"
+                            allowed-values="availableLocaleCodes"
+                            display-locale="localeCode"
+                            allow-empty="false"
+                            required="true"
+                            class="i18n-admin-language-select"
+                            empty-text="dictionaryLocaleEmptyText"
+                            search-placeholder="dictionaryLocaleSearchPlaceholder"
+                        />
                     </div>
                     <div class="col-xl-5 col-md-6">
                         <label class="form-label"><?= __('搜索') ?></label>
@@ -258,7 +273,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 </div>
 
 <div class="modal fade" id="dictionary-add-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <form method="post" action="@backend-url('*/backend/dictionary/add')" class="i18n-admin-form">
                 <div class="modal-header">
@@ -267,23 +282,29 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                 </div>
                 <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label"><?= __('目标语言') ?></label>
-                            <select name="locale_code" class="form-select">
-                                <?php foreach ($availableLocales as $localeKey => $localeInfo): ?>
-                                    <option value="<?= htmlspecialchars((string)$localeKey, ENT_QUOTES, 'UTF-8') ?>" <?= $localeCode === (string)$localeKey ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars((string)($localeInfo['display'] ?? $localeKey), ENT_QUOTES, 'UTF-8') ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <w:i18n:language:select
+                                id="dictionary_add_locale_selector"
+                                name="locale_code"
+                                input-id="dictionary-add-locale"
+                                value="localeCode"
+                                allowed-values="availableLocaleCodes"
+                                display-locale="localeCode"
+                                allow-empty="false"
+                                required="true"
+                                class="i18n-admin-language-select"
+                                empty-text="dictionaryLocaleEmptyText"
+                                search-placeholder="dictionaryLocaleSearchPlaceholder"
+                            />
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label"><?= __('原文') ?></label>
-                            <input type="text" name="word" class="form-control" required>
+                            <textarea name="word" rows="5" class="form-control i18n-admin-source-textarea" required placeholder="<?= __('请输入原文') ?>"></textarea>
                         </div>
                         <div class="col-12">
                             <label class="form-label"><?= __('译文') ?></label>
-                            <textarea name="translate" rows="6" class="form-control" required></textarea>
+                            <textarea name="translate" rows="7" class="form-control i18n-admin-translation-textarea" required placeholder="<?= __('请输入译文') ?>"></textarea>
                         </div>
                     </div>
                 </div>
@@ -297,7 +318,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 </div>
 
 <div class="modal fade" id="dictionary-edit-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form">
                 <div class="modal-header">
@@ -307,17 +328,28 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                 <div class="modal-body">
                     <input type="hidden" name="md5" id="dictionary-edit-md5">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label"><?= __('目标语言') ?></label>
-                            <input type="text" id="dictionary-edit-locale-label" class="form-control" readonly>
+                            <w:i18n:language:select
+                                id="dictionary_edit_locale_selector"
+                                name="locale_code"
+                                input-id="dictionary-edit-locale-code"
+                                value="dictionaryEditLocaleValue"
+                                allowed-values="availableLocaleCodes"
+                                display-locale="localeCode"
+                                display-only="true"
+                                class="i18n-admin-language-select i18n-admin-language-select-display"
+                                empty-text="dictionaryLocaleEmptyText"
+                                search-placeholder="dictionaryLocaleSearchPlaceholder"
+                            />
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label"><?= __('原文') ?></label>
-                            <input type="text" id="dictionary-edit-word" class="form-control" readonly>
+                            <textarea id="dictionary-edit-word" rows="5" class="form-control i18n-admin-source-textarea" readonly></textarea>
                         </div>
                         <div class="col-12">
                             <label class="form-label"><?= __('译文') ?></label>
-                            <textarea name="translate" id="dictionary-edit-translate" rows="6" class="form-control" required></textarea>
+                            <textarea name="translate" id="dictionary-edit-translate" rows="7" class="form-control i18n-admin-translation-textarea" required placeholder="<?= __('请输入译文') ?>"></textarea>
                         </div>
                     </div>
                 </div>
@@ -363,6 +395,8 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
     var localeCode = <?= json_encode($localeCode, $jsonForScriptFlags) ?>;
     var endpoints = {
         collectWords: "@backend-url('*/backend/dictionary/collectWords')",
+        clearLocale: "@backend-url('*/backend/dictionary/clearLocale')",
+        clearAll: "@backend-url('*/backend/dictionary/clearAll')",
         currentTranslationMode: "@backend-url('*/backend/dictionary/currentTranslationMode')",
         checkAutoRegister: "@backend-url('*/backend/dictionary/checkAutoRegister')",
         enableAutoRegister: "@backend-url('*/backend/dictionary/enableAutoRegister')",
@@ -433,7 +467,17 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
             document.getElementById('dictionary-edit-md5').value = button.dataset.md5 || '';
             document.getElementById('dictionary-edit-word').value = button.dataset.word || '';
             document.getElementById('dictionary-edit-translate').value = button.dataset.translate === button.dataset.word ? '' : (button.dataset.translate || '');
-            document.getElementById('dictionary-edit-locale-label').value = button.dataset.localeCode || '';
+            var editLocaleCode = button.dataset.localeCode || localeCode || '';
+            var editLanguageSelector = window.WelineLanguageSelect && window.WelineLanguageSelect.dictionary_edit_locale_selector;
+            if (editLanguageSelector && typeof editLanguageSelector.setValue === 'function') {
+                editLanguageSelector.setValue(editLocaleCode);
+                return;
+            }
+
+            var editLocaleInput = document.getElementById('dictionary-edit-locale-code');
+            if (editLocaleInput) {
+                editLocaleInput.value = editLocaleCode;
+            }
         });
     });
 
@@ -464,6 +508,52 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
             });
         });
     }
+
+    function bindClearButton(buttonId, endpoint, message, payload) {
+        var button = document.getElementById(buttonId);
+        if (!button) {
+            return;
+        }
+
+        button.addEventListener('click', function () {
+            I18nAdminUI.confirm(message, 'danger').then(function (confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+
+                button.disabled = true;
+                postJson(endpoint, payload || {}).then(function (result) {
+                    if (result.success) {
+                        I18nAdminUI.toast('success', result.message || '<?= addslashes(__('清理完成')) ?>');
+                        window.setTimeout(function () {
+                            window.location.reload();
+                        }, 600);
+                        return;
+                    }
+
+                    I18nAdminUI.toast('error', result.message || '<?= addslashes(__('清理失败')) ?>');
+                }).catch(function (error) {
+                    I18nAdminUI.toast('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
+                }).finally(function () {
+                    button.disabled = false;
+                });
+            });
+        });
+    }
+
+    bindClearButton(
+        'dictionary-clear-locale-btn',
+        endpoints.clearLocale,
+        <?= json_encode((string)__('确定清理当前目标语言 %{1} 的所有译文吗？基础词条会保留。', [$localeCode]), $jsonForScriptFlags) ?>,
+        {locale_code: localeCode}
+    );
+
+    bindClearButton(
+        'dictionary-clear-all-btn',
+        endpoints.clearAll,
+        <?= json_encode((string)__('确定清理全部词典和所有语言译文吗？此操作不可撤销。'), $jsonForScriptFlags) ?>,
+        {}
+    );
 
     document.querySelectorAll('[data-mode-switch]').forEach(function (button) {
         button.addEventListener('click', function () {

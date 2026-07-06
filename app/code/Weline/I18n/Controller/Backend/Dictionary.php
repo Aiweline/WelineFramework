@@ -14,11 +14,14 @@ namespace Weline\I18n\Controller\Backend;
 
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\Framework\Manager\Message;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Model\Dictionary as WordDictionary;
+use Weline\I18n\Parser as I18nParser;
 use Weline\I18n\Service\AiTranslationQueueService;
 
 class Dictionary extends BaseController
@@ -367,6 +370,88 @@ class Dictionary extends BaseController
             Message::error(__('删除失败: %{1}', $exception->getMessage()));
         }
         $this->redirect($this->request->getReferer());
+    }
+
+    public function postClearLocale()
+    {
+        $localeCode = trim((string)$this->request->getParam('locale_code', ''));
+        if ($localeCode === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少目标语言参数')
+            ]);
+        }
+
+        try {
+            $count = (int)$this->localeDictionary->reset()
+                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->count();
+
+            if ($count > 0) {
+                $this->localeDictionary->beginTransaction();
+                try {
+                    $this->localeDictionary->reset()
+                        ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                        ->delete()
+                        ->fetch();
+                    $this->localeDictionary->commit();
+                } catch (\Throwable $throwable) {
+                    $this->localeDictionary->rollBack();
+                    throw $throwable;
+                }
+            }
+
+            $this->clearRuntimeTranslationCaches();
+
+            return $this->fetchJson([
+                'success' => true,
+                'count' => $count,
+                'message' => __('已清理目标语言 %{1} 的译文：%{2} 条', [$localeCode, $count])
+            ]);
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('清理目标语言失败: %{1}', $throwable->getMessage())
+            ]);
+        }
+    }
+
+    public function postClearAll()
+    {
+        try {
+            $localeCount = (int)$this->localeDictionary->reset()->count();
+            $wordCount = (int)$this->dictionary->reset()->count();
+
+            if ($localeCount > 0 || $wordCount > 0) {
+                $this->dictionary->beginTransaction();
+                try {
+                    if ($localeCount > 0) {
+                        $this->localeDictionary->reset()->delete()->fetch();
+                    }
+                    if ($wordCount > 0) {
+                        $this->dictionary->reset()->delete()->fetch();
+                    }
+                    $this->dictionary->commit();
+                } catch (\Throwable $throwable) {
+                    $this->dictionary->rollBack();
+                    throw $throwable;
+                }
+            }
+
+            $this->clearRuntimeTranslationCaches();
+
+            return $this->fetchJson([
+                'success' => true,
+                'word_count' => $wordCount,
+                'locale_count' => $localeCount,
+                'message' => __('已清理全部词典：词条 %{1} 条，译文 %{2} 条', [$wordCount, $localeCount])
+            ]);
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('清理全部词典失败: %{1}', $throwable->getMessage())
+            ]);
+        }
     }
     
     /**
@@ -984,23 +1069,14 @@ class Dictionary extends BaseController
      */
     public function postCollectWords()
     {
-        
-        try {            
+        try {
             // 调用I18n模型的convertToLanguageFile方法来收集词汇
             $this->i18n->convertToLanguageFile(false);
             
-            // 从收集到的所有词中获取词（不依赖特定locale）
             $defaultLanguageCode = Env::default_LANGUAGE_CODE;
-            $words = $this->i18n->getLocalWords($defaultLanguageCode);
+            $words = $this->normalizeCollectedWords($this->i18n->getLocalWords($defaultLanguageCode));
             $collectedCount = 0;
-            $insertData = [];
-            
-           
-            
-            // 过滤空词汇
-            $words = array_filter($words, function($word) {
-                return !empty($word);
-            });
+            $defaultLocaleCount = 0;
             
             if (empty($words)) {
                 return $this->fetchJson([
@@ -1010,19 +1086,25 @@ class Dictionary extends BaseController
                 ]);
             }
             
-           // 查询已存在的记录
-           $existingRecords = $this->dictionary->reset()
-                ->where($this->dictionary::schema_fields_WORD, array_keys($words), 'IN')
-                ->select()
-                ->fetchArray();
-            if($existingRecords){
-                $existingRecords = array_column($existingRecords, $this->dictionary::schema_fields_WORD);
+            $wordKeys = array_keys($words);
+            $existingRecords = [];
+            foreach (array_chunk($wordKeys, 999) as $wordChunk) {
+                $records = $this->dictionary->reset()
+                    ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
+                    ->select()
+                    ->fetchArray();
+                foreach ((array)$records as $record) {
+                    $word = (string)($record[$this->dictionary::schema_fields_WORD] ?? '');
+                    if ($word !== '') {
+                        $existingRecords[$word] = true;
+                    }
+                }
             }
             
             // 构建插入数据（排除已存在的）
             $insertData = [];
-            foreach ($words as $word) {
-                if (!in_array($word, $existingRecords)) {
+            foreach ($words as $word => $translate) {
+                if (!isset($existingRecords[$word])) {
                     $insertData[] = [
                         $this->dictionary::schema_fields_WORD => $word,
                         $this->dictionary::schema_fields_IS_BACKEND => 0,
@@ -1040,19 +1122,42 @@ class Dictionary extends BaseController
                     $this->dictionary->reset()
                     ->insert($insertDataItem, $this->dictionary::schema_fields_WORD)
                     ->fetch();
-                     // 写入默认语言的翻译
-                     $insertDataItemDefault = [];
-                     foreach ($insertDataItem as $insertDataItemItem) {
-                        $insertDataItemDefault[] = [
-                            $this->localeDictionary::schema_fields_WORD => $insertDataItemItem['word'],
-                            $this->localeDictionary::schema_fields_LOCALE_CODE => $defaultLanguageCode,
-                            $this->localeDictionary::schema_fields_TRANSLATE => $insertDataItemItem['word'],
-                            $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5($insertDataItemItem['word'], $defaultLanguageCode)
-                        ];
-                     }
-                     $this->localeDictionary->reset()
-                     ->insert($insertDataItemDefault, $this->localeDictionary::schema_fields_MD5)
-                      ->fetch();
+                }
+            }
+
+            // 默认语言译文跟随真实收集值写入，避免显示成“暂无翻译数据”。
+            foreach (array_chunk($wordKeys, 999) as $wordChunk) {
+                $existingLocaleWords = [];
+                $localeRecords = $this->localeDictionary->reset()
+                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
+                    ->where($this->localeDictionary::schema_fields_WORD, $wordChunk, 'IN')
+                    ->select()
+                    ->fetchArray();
+                foreach ((array)$localeRecords as $record) {
+                    $word = (string)($record[$this->localeDictionary::schema_fields_WORD] ?? '');
+                    if ($word !== '') {
+                        $existingLocaleWords[$word] = true;
+                    }
+                }
+
+                $defaultLocaleRows = [];
+                foreach ($wordChunk as $word) {
+                    if (isset($existingLocaleWords[$word])) {
+                        continue;
+                    }
+                    $defaultLocaleRows[] = [
+                        $this->localeDictionary::schema_fields_WORD => $word,
+                        $this->localeDictionary::schema_fields_LOCALE_CODE => $defaultLanguageCode,
+                        $this->localeDictionary::schema_fields_TRANSLATE => $words[$word] ?? $word,
+                        $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5($word, $defaultLanguageCode)
+                    ];
+                    $defaultLocaleCount++;
+                }
+
+                if ($defaultLocaleRows) {
+                    $this->localeDictionary->reset()
+                        ->insert($defaultLocaleRows, $this->localeDictionary::schema_fields_MD5)
+                        ->fetch();
                 }
             }
 
@@ -1061,16 +1166,10 @@ class Dictionary extends BaseController
                 $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
             }
 
-           
-            
-            $queued = [];
-            if (($successCount + $updateCount) > 0) {
-                $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_import');
-            }
-
             return $this->fetchJson([
                 'success' => true,
                 'count' => $collectedCount,
+                'default_locale_count' => $defaultLocaleCount,
                 'queue_count' => count($queued),
                 'message' => __('收集完成')
             ]);
@@ -1080,6 +1179,56 @@ class Dictionary extends BaseController
                 'success' => false,
                 'message' => $e->getMessage()
             ]);
+        }
+    }
+
+    private function normalizeCollectedWords(array $words): array
+    {
+        $normalized = [];
+
+        foreach ($words as $word => $translate) {
+            if (!is_string($word) && !is_int($word)) {
+                continue;
+            }
+
+            if (!is_scalar($translate) && $translate !== null) {
+                continue;
+            }
+
+            $word = trim((string)$word);
+            if ($word === '') {
+                continue;
+            }
+
+            $translate = $translate === null ? '' : (string)$translate;
+            $normalized[$word] = trim($translate) === '' ? $word : $translate;
+        }
+
+        return $normalized;
+    }
+
+    private function clearRuntimeTranslationCaches(): void
+    {
+        try {
+            w_cache('i18n')->clear();
+        } catch (\Throwable) {
+        }
+
+        try {
+            w_cache('phrase')->clear();
+        } catch (\Throwable) {
+        }
+
+        I18n::clearLocalWordsCache();
+        PhraseParser::clearWorkerCaches();
+        I18nParser::clearWorkerCaches();
+
+        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
+        if (class_exists($dispatchClass)) {
+            try {
+                ObjectManager::getInstance($dispatchClass)->cacheClear();
+            } catch (\Throwable) {
+            }
         }
     }
 

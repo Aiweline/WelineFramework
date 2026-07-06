@@ -11,6 +11,15 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Add extends FrontendController
 {
+    private const SOURCE_CONTEXT_STRING_LIMITS = [
+        'source_app' => 80,
+        'source_module' => 100,
+        'business_module' => 100,
+        'business_code' => 100,
+        'business_name' => 160,
+        'product_type' => 80,
+    ];
+
     public function index(): string
     {
         if (\strtoupper((string) $this->request->getMethod()) !== 'POST') {
@@ -23,7 +32,7 @@ class Add extends FrontendController
                 'product_id' => (int) $this->request->getPost('product_id', 0),
                 'qty' => (int) $this->request->getPost('qty', 1),
                 'selected_options' => $this->request->getPost('selected_options', []),
-            ]);
+            ] + $this->sourceContextFromPost());
 
             $success = (bool) ($data['success'] ?? false);
             $message = (string) ($data['message'] ?? '');
@@ -47,6 +56,26 @@ class Add extends FrontendController
         return ObjectManager::getInstance(CartService::class);
     }
 
+    /**
+     * @return array<string, string>
+     */
+    private function sourceContextFromPost(): array
+    {
+        $context = [];
+        foreach (self::SOURCE_CONTEXT_STRING_LIMITS as $key => $limit) {
+            $rawValue = $this->request->getPost($key, '');
+            if (!\is_scalar($rawValue)) {
+                continue;
+            }
+            $value = $this->limitString((string) $rawValue, $limit);
+            if ($value !== '') {
+                $context[$key] = $value;
+            }
+        }
+
+        return $context;
+    }
+
     private function resolveRedirectUrl(): string
     {
         $redirect = \trim((string) $this->request->getPost('redirect', ''));
@@ -56,5 +85,14 @@ class Add extends FrontendController
 
         return $redirect;
     }
-}
 
+    private function limitString(string $value, int $length): string
+    {
+        $value = \trim($value);
+        if (\strlen($value) <= $length) {
+            return $value;
+        }
+
+        return \substr($value, 0, $length);
+    }
+}
