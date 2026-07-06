@@ -82,6 +82,39 @@ app/code/{Vendor}/{Module}/extends/module/Weline_SystemConfig/Config/{area}/{cod
 </w:config:group>
 ```
 
+### 后台引导高亮
+
+业务模块可以从自己的上线检查、向导或工作台跳转到统一配置中心，并让 SystemConfig 高亮目标配置项。该能力属于通用后台配置体验，不绑定具体业务模块。
+
+支持的 URL 参数：
+
+- `module`: 配置模板所属模块，例如 `WeShop_Payment`
+- `area`: 配置区域，例如 `backend` 或 `frontend`
+- `guide_key`: 需要高亮的完整配置 key
+- `guide_title`: 顶部引导卡片标题
+- `guide_summary`: 顶部引导卡片说明
+- `guide_step`: 向导步骤编号或短标签
+- `guide_return`: 保存或查看后返回的后台引导 URL
+
+`guide_return` 只接受站内相对 URL 或与当前请求同 host 的 `http/https` URL；外部域名、
+协议相对 URL 和脚本协议会被配置中心丢弃，避免配置向导被复用成开放跳转入口。
+
+示例：
+
+```php
+$url = $urlBuilder->getBackendUrl('weline_systemconfig/backend/config', [
+    'module' => 'Vendor_Module',
+    'area' => 'backend',
+    'guide_key' => 'vendor_module/payment/enabled',
+    'guide_title' => (string)__('配置支付开关'),
+    'guide_summary' => (string)__('启用后该支付方式才会进入结账可选项。'),
+    'guide_step' => '03',
+    'guide_return' => $urlBuilder->getBackendUrl('vendor_module/backend/readiness'),
+]);
+```
+
+配置中心会在顶部展示引导卡片，定位并高亮匹配 `guide_key` 的字段。保存或回滚配置后，引导参数会继续保留，方便运营按步骤完成配置。
+
 ### 配置读取
 ```php
 use Weline\SystemConfig\Helper\Config;
