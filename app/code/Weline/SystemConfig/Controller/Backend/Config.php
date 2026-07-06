@@ -22,6 +22,7 @@ class Config extends BackendController
         $search = trim((string)$this->request->getGet('search', ''));
         $scope = trim((string)$this->request->getGet('scope', SystemConfig::SCOPE_GLOBAL));
         $locale = trim((string)$this->request->getGet('locale', SystemConfig::LOCALE_DEFAULT));
+        $guideParams = $this->guideParams('get');
 
         /** @var SystemConfigTemplateService $templateService */
         $templateService = ObjectManager::getInstance(SystemConfigTemplateService::class);
@@ -53,6 +54,19 @@ class Config extends BackendController
         $this->assign('locale', $normalizedLocale);
         $this->assign('fallback_scopes', $systemConfig->getFallbackScopes($normalizedScope));
         $this->assign('post_url', $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config'));
+        $this->assign('guide_params', $guideParams);
+        $this->assign('guide_key', (string)($guideParams['guide_key'] ?? ''));
+        $this->assign('guide_title', (string)($guideParams['guide_title'] ?? ''));
+        $this->assign('guide_summary', (string)($guideParams['guide_summary'] ?? ''));
+        $this->assign('guide_return', (string)($guideParams['guide_return'] ?? ''));
+        $this->assign('guide_step', (string)($guideParams['guide_step'] ?? ''));
+        $this->assign('guide', [
+            'key' => (string)($guideParams['guide_key'] ?? ''),
+            'title' => (string)($guideParams['guide_title'] ?? ''),
+            'summary' => (string)($guideParams['guide_summary'] ?? ''),
+            'return' => (string)($guideParams['guide_return'] ?? ''),
+            'step' => (string)($guideParams['guide_step'] ?? ''),
+        ]);
 
         return $this->fetch('Weline_SystemConfig::templates/backend/config/index.phtml');
     }
@@ -67,6 +81,7 @@ class Config extends BackendController
         $scope = trim((string)$this->request->getPost('scope', SystemConfig::SCOPE_GLOBAL));
         $locale = trim((string)$this->request->getPost('locale', SystemConfig::LOCALE_DEFAULT));
         $search = trim((string)$this->request->getPost('search', ''));
+        $guideParams = $this->guideParams('post');
 
         try {
             /** @var SystemConfigCenterService $configCenterService */
@@ -110,13 +125,13 @@ class Config extends BackendController
             $this->getMessageManager()->addError($throwable->getMessage());
         }
 
-        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', [
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', array_merge([
             'module' => $module,
             'area' => $area,
             'scope' => $scope,
             'locale' => $locale,
             'search' => $search,
-        ]));
+        ], $guideParams)));
 
         return '';
     }
@@ -164,6 +179,91 @@ class Config extends BackendController
             'actor_name' => $actorName,
             'reason' => $reason,
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function guideParams(string $source): array
+    {
+        $params = [];
+        foreach ([
+            'guide_key' => 240,
+            'guide_title' => 120,
+            'guide_summary' => 360,
+            'guide_return' => 800,
+            'guide_step' => 32,
+        ] as $name => $limit) {
+            $value = trim((string)($source === 'post'
+                ? $this->request->getPost($name, '')
+                : $this->request->getGet($name, '')));
+            if ($value === '') {
+                continue;
+            }
+            $value = mb_substr($value, 0, max(1, (int)$limit));
+            if ($name === 'guide_return') {
+                $value = $this->safeGuideReturnUrl($value);
+            }
+            if ($value !== '') {
+                $params[$name] = $value;
+            }
+        }
+
+        if (empty($params['guide_key'])) {
+            $highlight = trim((string)($source === 'post'
+                ? $this->request->getPost('highlight', '')
+                : $this->request->getGet('highlight', '')));
+            if ($highlight !== '') {
+                $params['guide_key'] = mb_substr($highlight, 0, 240);
+            }
+        }
+
+        return $params;
+    }
+
+    private function safeGuideReturnUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === ''
+            || preg_match('/[\x00-\x1F\x7F]/', $url)
+            || preg_match('/^\s*(javascript|data|vbscript):/i', $url)
+            || str_starts_with($url, '//')
+        ) {
+            return '';
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return '';
+        }
+
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        $host = strtolower((string)($parts['host'] ?? ''));
+        if ($scheme === '' && $host === '') {
+            return preg_match('#^(/(?!/)|[?#])#', $url) ? $url : '';
+        }
+        if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return '';
+        }
+
+        $currentHost = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
+        $currentParts = parse_url('http://' . ltrim($currentHost, '/'));
+        if (!is_array($currentParts)) {
+            return '';
+        }
+
+        $expectedHost = strtolower((string)($currentParts['host'] ?? ''));
+        if ($expectedHost === '' || $host !== $expectedHost) {
+            return '';
+        }
+
+        $expectedPort = (int)($currentParts['port'] ?? 0);
+        $actualPort = (int)($parts['port'] ?? 0);
+        if ($expectedPort > 0 && $actualPort > 0 && $expectedPort !== $actualPort) {
+            return '';
+        }
+
+        return $url;
     }
 
     /**

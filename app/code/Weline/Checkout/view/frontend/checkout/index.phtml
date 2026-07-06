@@ -1,80 +1,558 @@
 <?php
-/**
- * 结账页面
- */
+/** @var \Weline\Framework\View\Template $this */
+$copy = [
+    'loading' => (string)__('正在加载结账信息...'),
+    'load_failed' => (string)__('结账信息加载失败，请稍后重试。'),
+    'empty_cart' => (string)__('购物车为空，请先加入商品。'),
+    'submit' => (string)__('提交订单并支付'),
+    'submitting' => (string)__('正在提交订单...'),
+    'payment_redirect' => (string)__('订单已创建，正在前往支付页面。'),
+    'payment_pending' => (string)__('订单已创建，支付正在处理中。'),
+    'required' => (string)__('请补全收货信息并选择配送和支付方式。'),
+    'api_missing' => (string)__('Weline.Api 尚未就绪，请刷新页面后重试。'),
+];
 ?>
-<div class="checkout-page">
-    <h1><?= __('结账') ?></h1>
-    
-    <form id="checkout-form" method="post" action="<?= $this->getUrl('checkout/frontend/checkout/createOrder') ?>">
-        <div class="checkout-section">
-            <h2><?= __('收货地址') ?></h2>
-            <div id="shipping-address-form">
-                <!-- 地址表单将由JavaScript动态生成或通过hook注入 -->
-            </div>
+<section class="weline-checkout" data-weline-checkout>
+    <header class="weline-checkout__header">
+        <div>
+            <p class="weline-checkout__eyebrow"><?= __('安全结账') ?></p>
+            <h1><?= __('结账') ?></h1>
+            <p><?= __('购物车、配送、支付和订单创建都由 Weline 核心模块承接。') ?></p>
         </div>
-        
-        <div class="checkout-section">
-            <h2><?= __('订单项') ?></h2>
-            <div id="order-items">
-                <!-- 订单项列表将由JavaScript动态生成 -->
-            </div>
+        <a class="weline-checkout__back" href="<?= $this->getUrl('cart') ?>"><?= __('返回购物车') ?></a>
+    </header>
+
+    <div class="weline-checkout__notice" data-checkout-message aria-live="polite"><?= htmlspecialchars($copy['loading'], ENT_QUOTES, 'UTF-8') ?></div>
+
+    <form class="weline-checkout__grid" data-checkout-form>
+        <div class="weline-checkout__main">
+            <section class="weline-checkout__panel">
+                <h2><?= __('收货信息') ?></h2>
+                <div class="weline-checkout__fields">
+                    <label>
+                        <span><?= __('收货人') ?></span>
+                        <input name="name" autocomplete="name" required>
+                    </label>
+                    <label>
+                        <span><?= __('电话') ?></span>
+                        <input name="phone" autocomplete="tel" required>
+                    </label>
+                    <label>
+                        <span><?= __('邮箱') ?></span>
+                        <input name="email" type="email" autocomplete="email">
+                    </label>
+                    <label>
+                        <span><?= __('国家/地区代码') ?></span>
+                        <input name="country_code" maxlength="8" value="CN" required>
+                    </label>
+                    <label>
+                        <span><?= __('省/州') ?></span>
+                        <input name="province" autocomplete="address-level1">
+                    </label>
+                    <label>
+                        <span><?= __('城市') ?></span>
+                        <input name="city" autocomplete="address-level2">
+                    </label>
+                    <label class="weline-checkout__span">
+                        <span><?= __('详细地址') ?></span>
+                        <input name="address1" autocomplete="street-address" required>
+                    </label>
+                    <label>
+                        <span><?= __('邮编') ?></span>
+                        <input name="postal_code" autocomplete="postal-code">
+                    </label>
+                </div>
+            </section>
+
+            <section class="weline-checkout__panel">
+                <h2><?= __('配送方式') ?></h2>
+                <div class="weline-checkout__options" data-shipping-methods></div>
+            </section>
+
+            <section class="weline-checkout__panel">
+                <h2><?= __('支付方式') ?></h2>
+                <div class="weline-checkout__options" data-payment-methods></div>
+            </section>
         </div>
-        
-        <div class="checkout-section">
-            <h2><?= __('配送方式') ?></h2>
-            <div id="shipping-methods">
-                <!-- 配送方式选择 -->
-            </div>
-        </div>
-        
-        <div class="checkout-section">
-            <h2><?= __('支付方式') ?></h2>
-            <div id="payment-methods">
-                <!-- 支付方式选择，可通过hook注入 -->
-                <?= $this->getHook('Weline_Checkout::payment::process::before') ?>
-            </div>
-        </div>
-        
-        <div class="checkout-totals">
-            <div class="total-row">
-                <span><?= __('商品小计') ?>:</span>
-                <span id="subtotal">¥0.00</span>
-            </div>
-            <div class="total-row">
-                <span><?= __('运费') ?>:</span>
-                <span id="shipping-amount">¥0.00</span>
-            </div>
-            <div class="total-row">
-                <span><?= __('税费') ?>:</span>
-                <span id="tax-amount">¥0.00</span>
-            </div>
-            <div class="total-row">
-                <span><?= __('折扣') ?>:</span>
-                <span id="discount-amount">-¥0.00</span>
-            </div>
-            <div class="total-row total">
-                <span><?= __('订单总额') ?>:</span>
-                <span id="total-amount">¥0.00</span>
-            </div>
-        </div>
-        
-        <div class="checkout-actions">
-            <button type="submit" class="btn btn-primary"><?= __('提交订单') ?></button>
-        </div>
+
+        <aside class="weline-checkout__summary">
+            <h2><?= __('订单摘要') ?></h2>
+            <div class="weline-checkout__items" data-cart-items></div>
+            <dl class="weline-checkout__totals">
+                <div>
+                    <dt><?= __('商品小计') ?></dt>
+                    <dd data-subtotal>--</dd>
+                </div>
+                <div>
+                    <dt><?= __('运费') ?></dt>
+                    <dd data-shipping-amount>--</dd>
+                </div>
+                <div class="weline-checkout__grand">
+                    <dt><?= __('应付合计') ?></dt>
+                    <dd data-grand-total>--</dd>
+                </div>
+            </dl>
+            <button class="weline-checkout__submit" type="submit" data-submit>
+                <?= htmlspecialchars($copy['submit'], ENT_QUOTES, 'UTF-8') ?>
+            </button>
+        </aside>
     </form>
-</div>
+</section>
+
+<style>
+    .weline-checkout {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0 64px;
+        color: var(--weline-layout-text-primary, #111827);
+    }
+    .weline-checkout__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .weline-checkout__eyebrow {
+        margin: 0 0 6px;
+        color: var(--weline-layout-link-color, #2563eb);
+        font-weight: 800;
+        font-size: 13px;
+    }
+    .weline-checkout h1,
+    .weline-checkout h2,
+    .weline-checkout p,
+    .weline-checkout dl {
+        margin: 0;
+    }
+    .weline-checkout h1 {
+        font-size: 32px;
+        line-height: 1.2;
+    }
+    .weline-checkout__header p:not(.weline-checkout__eyebrow) {
+        margin-top: 8px;
+        color: var(--weline-layout-text-secondary, #64748b);
+    }
+    .weline-checkout__back {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--weline-layout-link-color, #2563eb);
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .weline-checkout__notice {
+        min-height: 44px;
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        background: var(--weline-layout-surface-secondary, #f8fafc);
+        color: var(--weline-layout-text-secondary, #475569);
+    }
+    .weline-checkout__notice.is-error {
+        border-color: #fecaca;
+        background: #fff1f2;
+        color: #991b1b;
+    }
+    .weline-checkout__notice.is-success {
+        border-color: #bbf7d0;
+        background: #f0fdf4;
+        color: #166534;
+    }
+    .weline-checkout__grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 24px;
+        align-items: start;
+    }
+    .weline-checkout__main {
+        display: grid;
+        gap: 16px;
+    }
+    .weline-checkout__panel,
+    .weline-checkout__summary {
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        background: var(--weline-layout-surface-primary, #fff);
+        box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .06));
+    }
+    .weline-checkout__panel {
+        padding: 20px;
+    }
+    .weline-checkout__panel h2,
+    .weline-checkout__summary h2 {
+        font-size: 20px;
+        line-height: 1.25;
+    }
+    .weline-checkout__fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+    }
+    .weline-checkout__fields label,
+    .weline-checkout__option {
+        display: grid;
+        gap: 7px;
+    }
+    .weline-checkout__fields span {
+        color: var(--weline-layout-text-secondary, #64748b);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .weline-checkout__fields input {
+        min-height: 42px;
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--weline-theme-border-color-subtle, #d1d5db);
+        border-radius: 8px;
+        padding: 0 12px;
+        background: var(--weline-layout-surface-primary, #fff);
+        color: inherit;
+        font: inherit;
+    }
+    .weline-checkout__span {
+        grid-column: 1 / -1;
+    }
+    .weline-checkout__options {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .weline-checkout__option {
+        grid-template-columns: 20px minmax(0, 1fr) auto;
+        align-items: center;
+        min-height: 54px;
+        padding: 12px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+    }
+    .weline-checkout__option strong {
+        display: block;
+    }
+    .weline-checkout__option small {
+        display: block;
+        margin-top: 2px;
+        color: var(--weline-layout-text-secondary, #64748b);
+    }
+    .weline-checkout__summary {
+        position: sticky;
+        top: 24px;
+        padding: 20px;
+    }
+    .weline-checkout__items {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .weline-checkout__item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+    }
+    .weline-checkout__item strong,
+    .weline-checkout__item span {
+        min-width: 0;
+    }
+    .weline-checkout__item small {
+        display: block;
+        margin-top: 3px;
+        color: var(--weline-layout-text-secondary, #64748b);
+    }
+    .weline-checkout__totals {
+        margin-top: 16px;
+    }
+    .weline-checkout__totals div {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+    }
+    .weline-checkout__grand {
+        border-bottom: 0;
+        font-size: 18px;
+        font-weight: 900;
+    }
+    .weline-checkout__submit {
+        width: 100%;
+        min-height: 46px;
+        margin-top: 18px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--weline-layout-link-color, #2563eb);
+        color: var(--weline-theme-on-primary, #fff);
+        font: inherit;
+        font-weight: 900;
+        cursor: pointer;
+    }
+    .weline-checkout__submit:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+    }
+    @media (max-width: 860px) {
+        .weline-checkout {
+            width: min(100% - 24px, 1180px);
+            padding: 28px 0 48px;
+        }
+        .weline-checkout__header,
+        .weline-checkout__grid {
+            display: grid;
+        }
+        .weline-checkout__grid {
+            grid-template-columns: 1fr;
+        }
+        .weline-checkout__summary {
+            position: static;
+        }
+        .weline-checkout__fields {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 
 <script>
-// 结账页面JavaScript逻辑
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('checkout-form');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            // 处理表单提交
+(function () {
+    'use strict';
+
+    const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const root = document.querySelector('[data-weline-checkout]');
+    if (!root) {
+        return;
+    }
+
+    const form = root.querySelector('[data-checkout-form]');
+    const message = root.querySelector('[data-checkout-message]');
+    const submitButton = root.querySelector('[data-submit]');
+    const shippingBox = root.querySelector('[data-shipping-methods]');
+    const paymentBox = root.querySelector('[data-payment-methods]');
+    const itemsBox = root.querySelector('[data-cart-items]');
+    const subtotalNode = root.querySelector('[data-subtotal]');
+    const shippingAmountNode = root.querySelector('[data-shipping-amount]');
+    const grandTotalNode = root.querySelector('[data-grand-total]');
+
+    let checkoutApi = null;
+    let checkoutState = {
+        currency: 'CNY',
+        cart: {},
+        shippingMethods: [],
+        paymentMethods: [],
+    };
+
+    function text(value) {
+        return value == null ? '' : String(value);
+    }
+
+    function setMessage(value, type) {
+        message.textContent = text(value);
+        message.classList.toggle('is-error', type === 'error');
+        message.classList.toggle('is-success', type === 'success');
+    }
+
+    function money(amount) {
+        const currency = checkoutState.currency || 'CNY';
+        return currency + ' ' + Number(amount || 0).toFixed(2);
+    }
+
+    function formAddress() {
+        const data = new FormData(form);
+        return {
+            name: text(data.get('name')).trim(),
+            phone: text(data.get('phone')).trim(),
+            email: text(data.get('email')).trim(),
+            country_code: text(data.get('country_code')).trim().toUpperCase() || 'CN',
+            province: text(data.get('province')).trim(),
+            city: text(data.get('city')).trim(),
+            address1: text(data.get('address1')).trim(),
+            postal_code: text(data.get('postal_code')).trim(),
+        };
+    }
+
+    function selectedValue(name) {
+        const checked = form.querySelector('input[name="' + name + '"]:checked');
+        return checked ? checked.value : '';
+    }
+
+    function selectedShippingAmount() {
+        const code = selectedValue('shipping_method');
+        const method = checkoutState.shippingMethods.find(function (entry) {
+            return entry && entry.code === code;
+        });
+        return method ? Number(method.amount || method.fee || 0) : 0;
+    }
+
+    function renderItems(items) {
+        itemsBox.innerHTML = '';
+        if (!items.length) {
+            const empty = document.createElement('p');
+            empty.textContent = copy.empty_cart;
+            itemsBox.appendChild(empty);
+            return;
+        }
+        items.forEach(function (item) {
+            const row = document.createElement('div');
+            row.className = 'weline-checkout__item';
+            const info = document.createElement('div');
+            const title = document.createElement('strong');
+            title.textContent = text(item.name || item.product_name);
+            const meta = document.createElement('small');
+            meta.textContent = 'x' + Number(item.qty || item.quantity || 1);
+            info.appendChild(title);
+            info.appendChild(meta);
+            const total = document.createElement('span');
+            total.textContent = money(item.row_total || (Number(item.price || 0) * Number(item.qty || item.quantity || 1)));
+            row.appendChild(info);
+            row.appendChild(total);
+            itemsBox.appendChild(row);
         });
     }
-});
-</script>
 
+    function renderMethods(container, methods, name) {
+        container.innerHTML = '';
+        if (!methods.length) {
+            const empty = document.createElement('p');
+            empty.textContent = name === 'shipping_method'
+                ? '<?= __('暂无可用配送方式。') ?>'
+                : '<?= __('暂无可用支付方式。') ?>';
+            container.appendChild(empty);
+            return;
+        }
+        methods.forEach(function (method, index) {
+            const label = document.createElement('label');
+            label.className = 'weline-checkout__option';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = name;
+            input.value = text(method.code);
+            input.checked = index === 0;
+            const body = document.createElement('span');
+            const title = document.createElement('strong');
+            title.textContent = text(method.label || method.title || method.code);
+            const meta = document.createElement('small');
+            meta.textContent = text(method.description || method.eta_label || method.source || '');
+            body.appendChild(title);
+            if (meta.textContent) {
+                body.appendChild(meta);
+            }
+            const price = document.createElement('span');
+            price.textContent = name === 'shipping_method' ? money(method.amount || method.fee || 0) : '';
+            label.appendChild(input);
+            label.appendChild(body);
+            label.appendChild(price);
+            container.appendChild(label);
+        });
+    }
+
+    function renderTotals() {
+        const subtotal = Number(checkoutState.cart.subtotal || 0);
+        const shipping = selectedShippingAmount();
+        subtotalNode.textContent = money(subtotal);
+        shippingAmountNode.textContent = money(shipping);
+        grandTotalNode.textContent = money(subtotal + shipping);
+    }
+
+    function render(data) {
+        checkoutState.currency = text(data.currency || data.cart && data.cart.currency || 'CNY') || 'CNY';
+        checkoutState.cart = data.cart || {};
+        checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
+        checkoutState.paymentMethods = Array.isArray(data.payment_methods) ? data.payment_methods : [];
+        renderItems(Array.isArray(data.items) ? data.items : []);
+        renderMethods(shippingBox, checkoutState.shippingMethods, 'shipping_method');
+        renderMethods(paymentBox, checkoutState.paymentMethods, 'payment_method');
+        renderTotals();
+        submitButton.disabled = Boolean(checkoutState.cart.is_empty) || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
+        if (checkoutState.cart.is_empty) {
+            setMessage(copy.empty_cart, 'error');
+        } else {
+            setMessage('<?= __('请确认收货信息、配送方式和支付方式。') ?>', 'success');
+        }
+    }
+
+    async function getApi() {
+        if (checkoutApi) {
+            return checkoutApi;
+        }
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            throw new Error(copy.api_missing);
+        }
+        checkoutApi = await window.Weline.Api.resource('checkout');
+        return checkoutApi;
+    }
+
+    async function loadCheckout() {
+        const api = await getApi();
+        const data = await api.getData({ shipping_address: formAddress() });
+        render(data || {});
+    }
+
+    let reloadTimer = null;
+    function scheduleReload() {
+        window.clearTimeout(reloadTimer);
+        reloadTimer = window.setTimeout(function () {
+            loadCheckout().catch(function (error) {
+                setMessage(error.message || copy.load_failed, 'error');
+            });
+        }, 350);
+    }
+
+    form.addEventListener('change', function (event) {
+        if (event.target && event.target.name === 'shipping_method') {
+            renderTotals();
+            return;
+        }
+        if (event.target && ['country_code', 'province', 'city', 'postal_code'].indexOf(event.target.name) !== -1) {
+            scheduleReload();
+        }
+    });
+
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        if (!form.reportValidity()) {
+            setMessage(copy.required, 'error');
+            return;
+        }
+        const shippingMethod = selectedValue('shipping_method');
+        const paymentMethod = selectedValue('payment_method');
+        if (!shippingMethod || !paymentMethod) {
+            setMessage(copy.required, 'error');
+            return;
+        }
+        submitButton.disabled = true;
+        submitButton.textContent = copy.submitting;
+        setMessage(copy.submitting, '');
+        try {
+            const api = await getApi();
+            const result = await api.placeOrder({
+                shipping_address: formAddress(),
+                shipping_method: shippingMethod,
+                payment_method: paymentMethod,
+            });
+            const redirect = text(result && result.redirect);
+            if (redirect) {
+                setMessage(result.requires_action ? copy.payment_redirect : copy.payment_pending, 'success');
+                window.location.href = redirect;
+                return;
+            }
+            setMessage(copy.payment_pending, 'success');
+        } catch (error) {
+            setMessage(error.message || copy.load_failed, 'error');
+            submitButton.disabled = false;
+            submitButton.textContent = copy.submit;
+        }
+    });
+
+    shippingBox.addEventListener('change', renderTotals);
+
+    loadCheckout().catch(function (error) {
+        setMessage(error.message || copy.load_failed, 'error');
+        submitButton.disabled = true;
+    });
+})();
+</script>

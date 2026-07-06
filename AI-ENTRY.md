@@ -11,6 +11,16 @@ Universal AI entry index for WelineFramework development. This file only routes 
 5. `dev/ai/skills/_index.md` and only the skills matched to the task
 6. Targeted source files for the actual call chain; broad source scans only after docs and indexes are insufficient
 
+## Codex Context Maps
+
+Codex-specific context maps live under `dev/ai/codex/`:
+
+- `SOUL.md`: project identity, architectural spine, runtime shape, and non-negotiable local conventions.
+- `USER.md`: stable workspace communication and execution preferences.
+- `MEMORY.md`: repo-local context snapshot and high-signal paths.
+
+These files are initialization context, not a higher-priority rule layer. If they conflict with `AGENTS.md`, this file, `dev/ai/global-constraints.md`, or Codex system/developer instructions, follow the higher-priority rule and update the stale context map.
+
 ## Quick Commands
 
 ```bash
@@ -50,3 +60,5 @@ git push github HEAD
 - Skills: `dev/ai/skills/_index.md`
 - Agent roster: `dev/ai/agent/README.md`
 - Extended development guide: `dev/ai/AI-开发与测试指南.md`
+- Testing guide skill: `dev/ai/skills/testing/SKILL.md`
+- Codex context maps: `dev/ai/codex/SOUL.md`, `dev/ai/codex/USER.md`, `dev/ai/codex/MEMORY.md`

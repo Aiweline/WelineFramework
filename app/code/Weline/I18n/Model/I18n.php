@@ -1345,13 +1345,34 @@ class I18n
     public function getLocalWords(string $local_code = 'zh_Hans_CN'): array
     {
         $locals_words = $this->getLocalsWords();
-        if (isset($locals_words[$local_code])) {
-            return (array)$locals_words[$local_code];
+
+        $words = [];
+        if (isset($locals_words['all_words']) && is_array($locals_words['all_words'])) {
+            $words = $this->mergePreferTranslatedWords(
+                $words,
+                $this->flattenLocaleWords((array)$locals_words['all_words'])
+            );
         }
-        if (isset($locals_words['zh_Hans_CN'])) {
-            return (array)$locals_words['zh_Hans_CN'];
+
+        if (isset($locals_words[$local_code]) && is_array($locals_words[$local_code])) {
+            return $this->mergePreferTranslatedWords(
+                $words,
+                $this->flattenLocaleWords((array)$locals_words[$local_code])
+            );
         }
-        return [];
+
+        if (isset($locals_words['zh_Hans_CN']) && is_array($locals_words['zh_Hans_CN'])) {
+            return $this->mergePreferTranslatedWords(
+                $words,
+                $this->flattenLocaleWords((array)$locals_words['zh_Hans_CN'])
+            );
+        }
+
+        if ($words) {
+            return $words;
+        }
+
+        return $this->flattenLocaleWords($locals_words);
     }
 
     public function convertToLanguageFile(bool $cache = true, ?string $moduleName = null): void
@@ -1362,6 +1383,63 @@ class I18n
     public function getCollectedWords(): array
     {
         return $this->getLocalWords(Env::default_LANGUAGE_CODE);
+    }
+
+    public static function clearLocalWordsCache(): void
+    {
+        self::$local_words = [];
+    }
+
+    private function flattenLocaleWords(array $words): array
+    {
+        $flatWords = [];
+
+        foreach ($words as $word => $translate) {
+            if (is_array($translate)) {
+                $flatWords = $this->mergePreferTranslatedWords(
+                    $flatWords,
+                    $this->flattenLocaleWords($translate)
+                );
+                continue;
+            }
+
+            if (!is_string($word) && !is_int($word)) {
+                continue;
+            }
+
+            if (!is_scalar($translate) && $translate !== null) {
+                continue;
+            }
+
+            $word = trim((string)$word);
+            if ($word === '') {
+                continue;
+            }
+
+            $translate = $translate === null ? '' : (string)$translate;
+            $flatWords[$word] = trim($translate) === '' ? $word : $translate;
+        }
+
+        return $flatWords;
+    }
+
+    private function mergePreferTranslatedWords(array $baseWords, array $candidateWords): array
+    {
+        foreach ($candidateWords as $word => $translate) {
+            if (!is_string($word) || !is_string($translate)) {
+                continue;
+            }
+
+            if (
+                !isset($baseWords[$word])
+                || $baseWords[$word] === $word
+                || $translate !== $word
+            ) {
+                $baseWords[$word] = $translate;
+            }
+        }
+
+        return $baseWords;
     }
     
     private function getFullModuleName(string $module_name): string
