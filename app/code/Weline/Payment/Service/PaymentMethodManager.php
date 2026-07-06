@@ -106,6 +106,7 @@ class PaymentMethodManager
         $methods = array_values(array_filter($methods, function (mixed $method) use ($context): bool {
             return $method instanceof PaymentMethod && $this->isMethodActiveForScope($method, $context);
         }));
+        $methods = $this->uniqueMethodsByCode($methods);
         usort($methods, function (PaymentMethod $left, PaymentMethod $right) use ($context): int {
             $leftConfig = $this->getRuntimeConfig($left, $context);
             $rightConfig = $this->getRuntimeConfig($right, $context);
@@ -396,5 +397,30 @@ class PaymentMethodManager
     private function normalizeCode(string $code): string
     {
         return strtolower(trim($code));
+    }
+
+    /**
+     * @param PaymentMethod[] $methods
+     * @return PaymentMethod[]
+     */
+    private function uniqueMethodsByCode(array $methods): array
+    {
+        $unique = [];
+        foreach ($methods as $method) {
+            if (!$method instanceof PaymentMethod) {
+                continue;
+            }
+            $code = $this->normalizeCode((string) $method->getData(PaymentMethod::schema_fields_CODE));
+            if ($code === '') {
+                continue;
+            }
+
+            $current = $unique[$code] ?? null;
+            if (!$current instanceof PaymentMethod || (int)$method->getId() > (int)$current->getId()) {
+                $unique[$code] = $method;
+            }
+        }
+
+        return array_values($unique);
     }
 }
