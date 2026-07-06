@@ -111,14 +111,76 @@ class WidgetDefaultInjectionService
     }
 
     /**
-     * Apply default injections once for modules that were just installed/upgraded.
+     * Apply one declared default injection to every known identity of the same layout.
      *
-     * @param list<string>|array<string,mixed> $modules
+     * @return array{items:list<array<string,mixed>>,current_item:?array<string,mixed>,applied_count:int,skipped_count:int,total_identities:int}
      */
-    public function applyAllForAvailableThemes(array $modules = []): int
+    public function applyInjectionByKeyForAllLayoutIdentities(
+        int $themeId,
+        string $pageType,
+        string $injectionKey,
+        array $identity = [],
+        string $status = ThemeLayout::STATUS_DRAFT,
+        string $componentArea = PreviewContextService::AREA_FRONTEND
+    ): array {
+        $result = [
+            'items' => [],
+            'current_item' => null,
+            'applied_count' => 0,
+            'skipped_count' => 0,
+            'total_identities' => 0,
+        ];
+
+        $theme = $this->loadTheme($themeId);
+        if (!$theme) {
+            return $result;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        foreach ($this->collectDeclarations($theme, $componentArea, $pageType, $identity) as $item) {
+            if ((string)$item['injection_key'] !== $injectionKey) {
+                continue;
+            }
+
+            foreach ($this->expandItemForAllLayoutIdentities($themeId, $item, $componentArea, $identity) as $expandedItem) {
+                $result['total_identities']++;
+                if ($this->widgetExists($themeId, $expandedItem['page_type'], $expandedItem['identity'], $status, $expandedItem)) {
+                    $result['skipped_count']++;
+                    continue;
+                }
+
+                $layoutId = $this->saveInjection($themeId, $expandedItem, $status);
+                $this->markInitialHandled($themeId, $expandedItem, 'manual_apply_all');
+                $expandedItem['layout_id'] = $layoutId;
+                $expandedItem['status'] = $status;
+                $result['items'][] = $expandedItem;
+                $result['applied_count']++;
+
+                if ($result['current_item'] === null && $this->identityMatches($expandedItem['identity'], $identity)) {
+                    $result['current_item'] = $expandedItem;
+                }
+            }
+
+            if ($result['current_item'] === null && !empty($result['items'])) {
+                $result['current_item'] = $result['items'][0];
+            }
+
+            return $result;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Apply default injections once for widgets that were first recorded in the DB registry ledger.
+     *
+     * @param list<array<string,mixed>>|array<string,array<string,mixed>> $widgets
+     */
+    public function applyInstalledWidgetsForAvailableThemes(array $widgets): int
     {
-        $moduleFilter = $this->normalizeModuleFilter($modules);
-        if ($moduleFilter === []) {
+        $widgetFilter = $this->normalizeWidgetIdentityFilter($widgets);
+        if ($widgetFilter === []) {
             return 0;
         }
 
@@ -132,7 +194,7 @@ class WidgetDefaultInjectionService
             }
 
             foreach ([PreviewContextService::AREA_FRONTEND, PreviewContextService::AREA_BACKEND] as $componentArea) {
-                foreach ($this->collectDeclarations($theme, $componentArea, null, [], $moduleFilter) as $item) {
+                foreach ($this->collectDeclarations($theme, $componentArea, null, [], $widgetFilter) as $item) {
                     foreach ($this->expandItemForExistingIdentities($themeId, $item, $componentArea) as $expandedItem) {
                         if ($this->hasInitialHandled($themeId, $expandedItem)) {
                             continue;
@@ -174,44 +236,6 @@ class WidgetDefaultInjectionService
         return $applied;
     }
 
-    /**
-     * Apply default injections once for a concrete layout identity.
-     *
-     * @param list<string>|array<string,mixed> $modules
-     * @param list<string>|string $statuses
-     */
-    public function applyInitialForLayout(
-        int $themeId,
-        string $pageType,
-        array $identity = [],
-        string $componentArea = PreviewContextService::AREA_FRONTEND,
-        array $modules = [],
-        array|string $statuses = [ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED]
-    ): int {
-        $moduleFilter = $this->normalizeModuleFilter($modules);
-        if ($moduleFilter === []) {
-            return 0;
-        }
-
-        $theme = $this->loadTheme($themeId);
-        if (!$theme) {
-            return 0;
-        }
-
-        $identity = $this->normalizeIdentity($identity);
-        $componentArea = $this->normalizeComponentArea($componentArea);
-        $applied = 0;
-
-        foreach ($this->collectDeclarations($theme, $componentArea, $pageType, $identity, $moduleFilter) as $item) {
-            if ($this->hasInitialHandled($themeId, $item)) {
-                continue;
-            }
-            $applied += $this->applyInitialItem($themeId, $item, $statuses);
-        }
-
-        return $applied;
-    }
-
     private function saveInjection(int $themeId, array $item, string $status): int
     {
         return $this->layoutService->saveWidget([
@@ -242,17 +266,18 @@ class WidgetDefaultInjectionService
         string $componentArea,
         ?string $pageType,
         array $identity,
-        array $moduleFilter = []
+        array $widgetFilter = []
     ): array {
+        $identityProvided = $identity !== [];
         $identity = $this->normalizeIdentity($identity);
         $items = [];
 
         foreach ($this->componentCatalog->getDefinitions($componentArea, $theme) as $definition) {
-            if ($moduleFilter !== [] && !isset($moduleFilter[$definition->module])) {
+            if ($widgetFilter !== [] && !$this->definitionMatchesWidgetFilter($definition, $widgetFilter)) {
                 continue;
             }
             foreach ($this->getDefinitionDefaultInjections($definition) as $rawInjection) {
-                $item = $this->normalizeInjection($definition, $rawInjection, $pageType, $identity);
+                $item = $this->normalizeInjection($definition, $rawInjection, $pageType, $identity, $identityProvided);
                 if ($item === null) {
                     continue;
                 }
@@ -374,7 +399,8 @@ class WidgetDefaultInjectionService
         ThemeComponentDefinition $definition,
         array $injection,
         ?string $currentPageType,
-        array $currentIdentity
+        array $currentIdentity,
+        bool $currentIdentityProvided = false
     ): ?array {
         $declaredPageType = trim((string)($injection['layout_type'] ?? $injection['page_type'] ?? ''));
         if ($declaredPageType === '') {
@@ -393,13 +419,20 @@ class WidgetDefaultInjectionService
             return null;
         }
 
-        $identity = $this->normalizeIdentity([
+        $identitySource = [
             'layout_option' => $layoutOption,
             'scope' => $injection['scope'] ?? ($currentIdentity['scope'] ?? 'default'),
             'target_type' => $injection['target_type'] ?? ($currentIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
             'target_id' => $injection['target_id'] ?? ($currentIdentity['target_id'] ?? 0),
-        ]);
-        if ($currentPageType !== null && !$this->identityMatches($identity, $currentIdentity)) {
+        ];
+        if ($currentPageType !== null && $currentIdentityProvided) {
+            $identitySource['scope'] = $currentIdentity['scope'];
+            $identitySource['target_type'] = $currentIdentity['target_type'];
+            $identitySource['target_id'] = $currentIdentity['target_id'];
+        }
+
+        $identity = $this->normalizeIdentity($identitySource);
+        if ($currentPageType !== null && $currentIdentityProvided && !$this->identityMatches($identity, $currentIdentity)) {
             return null;
         }
 
@@ -451,12 +484,49 @@ class WidgetDefaultInjectionService
     private function expandItemForExistingIdentities(int $themeId, array $item, string $componentArea): array
     {
         $identity = $this->normalizeIdentity((array)($item['identity'] ?? []));
-        if (!$this->requiresConcreteTarget($identity)) {
+        if (!$this->requiresConcreteTarget($identity) && $identity['target_type'] === ThemeVirtualLayout::TARGET_GLOBAL) {
             return [$item];
         }
 
+        $identities = $this->collectExistingLayoutIdentities($themeId, $item, $componentArea);
+        if ($identities === []) {
+            return [];
+        }
+
+        return $this->copyItemForIdentities($item, $identities);
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function expandItemForAllLayoutIdentities(int $themeId, array $item, string $componentArea, array $currentIdentity = []): array
+    {
         $expanded = [];
         foreach ($this->collectExistingLayoutIdentities($themeId, $item, $componentArea) as $layoutIdentity) {
+            $expanded[$this->identityMapKey($layoutIdentity)] = $layoutIdentity;
+        }
+        if ($currentIdentity !== []) {
+            $identity = $this->normalizeIdentity($currentIdentity);
+            if (!$this->requiresConcreteTarget($identity) || $this->allowsZeroTargetIdentity($identity)) {
+                $expanded[$this->identityMapKey($identity)] = $identity;
+            }
+        }
+
+        if ($expanded === []) {
+            return [$item];
+        }
+
+        return $this->copyItemForIdentities($item, array_values($expanded));
+    }
+
+    /**
+     * @param list<array{layout_option:string,scope:string,target_type:string,target_id:int}> $identities
+     * @return list<array<string,mixed>>
+     */
+    private function copyItemForIdentities(array $item, array $identities): array
+    {
+        $expanded = [];
+        foreach ($identities as $layoutIdentity) {
             $copy = $item;
             $copy['identity'] = $layoutIdentity;
             $copy['layout_option'] = $layoutIdentity['layout_option'];
@@ -487,14 +557,7 @@ class WidgetDefaultInjectionService
             $query = (clone $this->themeLayout)->clearQuery()->clearData()
                 ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type']);
-            if (!empty($item['identity_scope_declared'])) {
-                $query->where(ThemeLayout::schema_fields_SCOPE, $identity['scope']);
-            }
-            if (!empty($item['identity_target_id_declared']) && $identity['target_id'] > 0) {
-                $query->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id']);
-            }
+                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option']);
             $this->addIdentityRows($found, $query->select()->fetchArray());
         } catch (\Throwable) {
         }
@@ -503,14 +566,7 @@ class WidgetDefaultInjectionService
             $query = (clone $this->themeLayoutVersion)->clearQuery()->clearData()
                 ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
                 ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayoutVersion::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeLayoutVersion::schema_fields_TARGET_TYPE, $identity['target_type']);
-            if (!empty($item['identity_scope_declared'])) {
-                $query->where(ThemeLayoutVersion::schema_fields_SCOPE, $identity['scope']);
-            }
-            if (!empty($item['identity_target_id_declared']) && $identity['target_id'] > 0) {
-                $query->where(ThemeLayoutVersion::schema_fields_TARGET_ID, $identity['target_id']);
-            }
+                ->where(ThemeLayoutVersion::schema_fields_LAYOUT_OPTION, $identity['layout_option']);
             $this->addIdentityRows($found, $query->select()->fetchArray());
         } catch (\Throwable) {
         }
@@ -521,14 +577,7 @@ class WidgetDefaultInjectionService
                 ->where(ThemeVirtualLayout::schema_fields_AREA, $this->normalizeComponentArea($componentArea))
                 ->where(ThemeVirtualLayout::schema_fields_LAYOUT_TYPE, $pageType)
                 ->where(ThemeVirtualLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeVirtualLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
                 ->where(ThemeVirtualLayout::schema_fields_IS_ACTIVE, 1);
-            if (!empty($item['identity_scope_declared'])) {
-                $query->where(ThemeVirtualLayout::schema_fields_SCOPE, $identity['scope']);
-            }
-            if (!empty($item['identity_target_id_declared']) && $identity['target_id'] > 0) {
-                $query->where(ThemeVirtualLayout::schema_fields_TARGET_ID, $identity['target_id']);
-            }
             $this->addIdentityRows($found, $query->select()->fetchArray());
         } catch (\Throwable) {
         }
@@ -551,17 +600,22 @@ class WidgetDefaultInjectionService
                 'target_type' => $row['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL,
                 'target_id' => $row['target_id'] ?? 0,
             ]);
-            if ($this->requiresConcreteTarget($identity)) {
+            if ($this->requiresConcreteTarget($identity) && !$this->allowsZeroTargetIdentity($identity)) {
                 continue;
             }
-            $key = implode('|', [
-                $identity['layout_option'],
-                $identity['scope'],
-                $identity['target_type'],
-                (string)$identity['target_id'],
-            ]);
-            $found[$key] = $identity;
+            $found[$this->identityMapKey($identity)] = $identity;
         }
+    }
+
+    private function identityMapKey(array $identity): string
+    {
+        $identity = $this->normalizeIdentity($identity);
+        return implode('|', [
+            $identity['layout_option'],
+            $identity['scope'],
+            $identity['target_type'],
+            (string)$identity['target_id'],
+        ]);
     }
 
     private function widgetExists(int $themeId, string $pageType, array $identity, string $status, array $item): bool
@@ -639,6 +693,13 @@ class WidgetDefaultInjectionService
             && (int)$identity['target_id'] <= 0;
     }
 
+    private function allowsZeroTargetIdentity(array $identity): bool
+    {
+        $identity = $this->normalizeIdentity($identity);
+        return $identity['target_type'] === 'website'
+            && (int)$identity['target_id'] === 0;
+    }
+
     /**
      * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
      */
@@ -664,21 +725,47 @@ class WidgetDefaultInjectionService
     }
 
     /**
-     * @param list<string>|array<string,mixed> $modules
+     * @param list<array<string,mixed>>|array<string,array<string,mixed>> $widgets
      * @return array<string,true>
      */
-    private function normalizeModuleFilter(array $modules): array
+    private function normalizeWidgetIdentityFilter(array $widgets): array
     {
         $filter = [];
-        foreach ($modules as $key => $value) {
-            $module = is_string($value) ? $value : (is_string($key) ? $key : '');
-            $module = trim($module);
-            if ($module !== '') {
-                $filter[$module] = true;
+        foreach ($widgets as $widget) {
+            if (!is_array($widget)) {
+                continue;
             }
+            $module = trim((string)($widget['module'] ?? $widget['widget_module'] ?? ''));
+            $type = trim((string)($widget['type'] ?? $widget['widget_type'] ?? ''));
+            $code = trim((string)($widget['code'] ?? $widget['widget_code'] ?? ''));
+            if ($module === '' || $type === '' || $code === '') {
+                continue;
+            }
+            $area = $this->normalizeComponentArea((string)($widget['area'] ?? $widget['widget_area'] ?? ''));
+            $filter[$this->widgetIdentityKey($module, $type, $code, $area)] = true;
+            $filter[$this->widgetIdentityKey($module, $type, $code, '')] = true;
         }
 
         return $filter;
+    }
+
+    /**
+     * @param array<string,true> $filter
+     */
+    private function definitionMatchesWidgetFilter(ThemeComponentDefinition $definition, array $filter): bool
+    {
+        return isset($filter[$this->widgetIdentityKey($definition->module, $definition->type, $definition->code, $definition->area)])
+            || isset($filter[$this->widgetIdentityKey($definition->module, $definition->type, $definition->code, '')]);
+    }
+
+    private function widgetIdentityKey(string $module, string $type, string $code, string $area = ''): string
+    {
+        return implode("\x1F", [
+            trim($area),
+            trim($module),
+            trim($type),
+            trim($code),
+        ]);
     }
 
     /**
