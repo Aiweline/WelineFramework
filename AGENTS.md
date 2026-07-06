@@ -31,10 +31,15 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 - After every development/fix/deploy delivery, always give the user the related addresses in the final response: runnable page URLs, backend/admin URLs, API endpoints, doc paths/URLs, PR/commit/release URLs, and the test instance URL when one was started.
 - If no live URL is available, still list relevant route/path addresses and clearly state what is required to access them, such as starting WLS or logging into the backend. If there is truly no accessible address, explicitly say `无可访问链接`.
 
-## Delivery
-- After every development/fix/deploy delivery, list related accessible links (page/admin/API/doc/PR/commit/release URLs) in the final response; if none exist, explicitly say `无可访问链接`.
+## Project Self-Learning
+- Treat user corrections, repeated preferences, accepted fixes, and "avoid this next time" requests as learning signals.
+- Global Codex behavior rules belong in global memory or the owning shared skill; DEV-workspace-specific lessons belong only in this project's `AGENTS.md`, matching module docs, or matching `dev/ai/skills/*` file.
+- Do not copy DEV-workspace-specific rules into sibling projects. Do not write sibling-project lessons here.
+- Before adding a learned rule, extract the trigger, root cause, Do, Avoid, and verification path; merge with an existing rule when the root cause already exists.
+- Keep learned rules short and durable. Do not store raw chat transcripts, credentials, temporary paths, or one-off environment accidents as project rules.
 
 ## Resources
+- Compressed rules pack: `dev/ai/AI-RULES-PACK.md`
 - Diagrams: `dev/ai/diagrams/00-INDEX.txt`
 - Skills: `dev/ai/skills/_index.md`
 - Full guide: `AI-ENTRY.md`
