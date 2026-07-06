@@ -1,4 +1,4 @@
 interface:
   display_name: "Fencang Release"
-  short_description: "Passphrase 分仓: DEV→weline Composer repo sync, tag bump, dual push, Packagist"
-  default_prompt: "User said 分仓. Load dev/ai/skills/CI发布工程师-分仓发布/SKILL.md and run only the modules they named (or ask if unspecified)."
+  short_description: "Passphrase 分仓: DEV→框架-分仓 Composer sync, auto-clone missing repos, tag bump, dual push, Packagist"
+  default_prompt: "User said 分仓. Load dev/ai/skills/CI发布工程师-分仓发布/SKILL.md, auto-clone missing split repos into the DEV-workspace sibling 框架-分仓 when no WelineRoot is given, and run only the modules they named (or ask if unspecified)."

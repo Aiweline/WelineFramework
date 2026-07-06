@@ -23,6 +23,13 @@
 !tools/fenxiang/
 !tools/fenxiang/**
 
+# 保留分仓口令脚本；日志与运行输出不入库
+!tools/fencang/
+!tools/fencang/*.ps1
+tools/fencang/*.log
+tools/fencang/*.tmp
+tools/fencang/*.local.json
+
 # 但排除 codex tasks 全目录（本地任务日志不入库）
 ai/codex/tasks/
 
