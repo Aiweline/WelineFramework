@@ -33,8 +33,8 @@ build/
 target/
 out/
 
-# Code intelligence outputs. Indexing these recursively makes CGC very slow.
-.codex/code-intelligence/
+# Local AI/code-intelligence outputs. Indexing these recursively makes CGC very slow.
+.codex/
 .codegraphcontext/
 repomix-output.*
 repopack-output.*
@@ -50,6 +50,7 @@ dev/ai/codex/automations/
 dev/ai/codex/AI工作台/
 
 # Large frontend vendor bundles and generated/static assets.
+setup/static/
 app/code/**/view/statics/**/assets/libs/
 app/code/**/view/statics/**/assets/vendor/
 app/code/**/view/statics/**/assets/
