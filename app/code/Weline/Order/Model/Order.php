@@ -19,6 +19,9 @@ use Weline\Framework\DataObject\DataObject;
 #[Index(name: 'idx_order_number', columns: ['order_number'])]
 #[Index(name: 'idx_customer_id', columns: ['customer_id'])]
 #[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_source_app', columns: ['source_app'])]
+#[Index(name: 'idx_source_module', columns: ['source_module'])]
+#[Index(name: 'idx_business_code', columns: ['business_code'])]
 #[Index(name: 'idx_created_at', columns: ['created_at'])]
 class Order extends Model
 {
@@ -47,6 +50,14 @@ class Order extends Model
     public const schema_fields_DISCOUNT_AMOUNT = 'discount_amount';
     #[Col('varchar', 10, nullable: false, default: 'CNY', comment: '货币代码')]
     public const schema_fields_CURRENCY = 'currency';
+    #[Col('varchar', 80, nullable: false, default: '', comment: '来源应用')]
+    public const schema_fields_SOURCE_APP = 'source_app';
+    #[Col('varchar', 100, nullable: false, default: '', comment: '来源模块')]
+    public const schema_fields_SOURCE_MODULE = 'source_module';
+    #[Col('varchar', 100, nullable: false, default: '', comment: '业务代码')]
+    public const schema_fields_BUSINESS_CODE = 'business_code';
+    #[Col('varchar', 160, nullable: false, default: '', comment: '业务名称')]
+    public const schema_fields_BUSINESS_NAME = 'business_name';
     #[Col('varchar', 50, nullable: false, default: 'pending', comment: '支付状态')]
     public const schema_fields_PAYMENT_STATUS = 'payment_status';
     #[Col('varchar', 50, nullable: false, default: 'pending', comment: '发货状态')]

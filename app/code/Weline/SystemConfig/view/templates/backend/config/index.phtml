@@ -23,6 +23,14 @@ $postUrl = (string)($post_url ?? '');
 if ($postUrl === '') {
     $postUrl = (string)$this->getBackendUrl('weline_systemconfig/backend/config');
 }
+$guideData = is_array($this->getData('guide')) ? $this->getData('guide') : [];
+$assignedGuideParams = is_array($guide_params ?? null) ? $guide_params : [];
+$guideKey = trim((string)($guideData['key'] ?? $assignedGuideParams['guide_key'] ?? ($guide_key ?? '')));
+$guideTitle = trim((string)($guideData['title'] ?? $assignedGuideParams['guide_title'] ?? ($guide_title ?? '')));
+$guideSummary = trim((string)($guideData['summary'] ?? $assignedGuideParams['guide_summary'] ?? ($guide_summary ?? '')));
+$guideStep = trim((string)($guideData['step'] ?? $assignedGuideParams['guide_step'] ?? ($guide_step ?? '')));
+$guideReturn = trim((string)($guideData['return'] ?? $assignedGuideParams['guide_return'] ?? ($guide_return ?? '')));
+$guideActive = $guideKey !== '' || $guideTitle !== '' || $guideSummary !== '';
 $moduleRows = $tree['modules'] ?? [];
 $totalTemplates = 0;
 $totalFields = 0;
@@ -48,10 +56,83 @@ $parseOptions = static function (string $options): array {
     }
     return $result;
 };
-$configUrl = static function (array $params = []) use ($postUrl): string {
+$guideParams = [];
+if ($guideActive) {
+    foreach ([
+        'guide_key' => $guideKey,
+        'guide_title' => $guideTitle,
+        'guide_summary' => $guideSummary,
+        'guide_step' => $guideStep,
+        'guide_return' => $guideReturn,
+    ] as $guideParamKey => $guideParamValue) {
+        if ($guideParamValue !== '') {
+            $guideParams[$guideParamKey] = $guideParamValue;
+        }
+    }
+}
+$configUrl = static function (array $params = []) use ($postUrl, $guideParams): string {
+    $params = array_merge($guideParams, $params);
     $query = http_build_query($params);
     $url = $postUrl . ($query !== '' ? '?' . $query : '');
     return htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+};
+$templateInstance = $this;
+$adapterQueryParams = static function (array $adapter): array {
+    $query = trim((string)($adapter['query'] ?? ''));
+    if ($query === '') {
+        return [];
+    }
+
+    $params = [];
+    parse_str($query, $params);
+    return is_array($params) ? $params : [];
+};
+$adapterAction = static function (array $adapter) use ($templateInstance, $adapterQueryParams): array {
+    $url = '';
+    $target = trim((string)($adapter['target'] ?? ''));
+    $queryParams = $adapterQueryParams($adapter);
+
+    if (!empty($adapter['external-url'])) {
+        $url = trim((string)$adapter['external-url']);
+        $target = $target !== '' ? $target : '_blank';
+    } elseif (!empty($adapter['backend-url']) || !empty($adapter['manage-url'])) {
+        $route = trim((string)($adapter['backend-url'] ?? $adapter['manage-url'] ?? ''));
+        if ($route !== '') {
+            if (str_contains($route, '://') || str_starts_with($route, '/')) {
+                $url = $route;
+                if ($queryParams !== []) {
+                    $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($queryParams);
+                }
+            } else {
+                $url = (string)$templateInstance->getBackendUrl($route, $queryParams);
+            }
+        }
+    } elseif (!empty($adapter['frontend-url'])) {
+        $route = trim((string)$adapter['frontend-url']);
+        if ($route !== '') {
+            if (str_contains($route, '://') || str_starts_with($route, '/')) {
+                $url = $route;
+                if ($queryParams !== []) {
+                    $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($queryParams);
+                }
+            } elseif (method_exists($templateInstance, 'getFrontendUrl')) {
+                $url = (string)$templateInstance->getFrontendUrl($route, $queryParams);
+            } else {
+                $url = (string)$templateInstance->getUrl($route, $queryParams);
+            }
+        }
+    } elseif (!empty($adapter['url'])) {
+        $url = trim((string)$adapter['url']);
+        if ($queryParams !== []) {
+            $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($queryParams);
+        }
+    }
+
+    return [
+        'url' => $url,
+        'target' => $target,
+        'label' => trim((string)($adapter['action-label'] ?? __('打开'))),
+    ];
 };
 ?>
 
@@ -178,6 +259,70 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
         background: var(--wsc-panel);
     }
 
+    .wsc-guide-card {
+        border: 1px solid #ffd6a6;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff8ed 0%, #fffdf9 100%);
+        box-shadow: 0 14px 36px rgba(217, 119, 6, .12);
+    }
+
+    .wsc-guide-card .card-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: center;
+    }
+
+    .wsc-guide-step,
+    .wsc-guide-target-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        font-weight: 700;
+    }
+
+    .wsc-guide-step {
+        padding: 4px 10px;
+        background: #fff1d6;
+        color: #9a5b00;
+        font-size: 12px;
+    }
+
+    .wsc-guide-key {
+        display: inline-flex;
+        max-width: 100%;
+        margin-top: 8px;
+        padding: 4px 8px;
+        border-radius: 8px;
+        background: #fff;
+        color: #9a5b00;
+        overflow-wrap: anywhere;
+    }
+
+    .wsc-guide-template {
+        border-color: #f59e0b;
+        box-shadow: 0 12px 34px rgba(245, 158, 11, .12);
+    }
+
+    .wsc-field-table tbody tr.wsc-guide-target {
+        background: #fff7e6;
+        box-shadow: inset 4px 0 0 #f59e0b;
+    }
+
+    .wsc-field-table tbody tr.wsc-guide-target:hover {
+        background: #fff3d6;
+    }
+
+    .wsc-guide-target-badge {
+        margin-left: 8px;
+        padding: 2px 7px;
+        background: #f59e0b;
+        color: #fff;
+        font-size: 11px;
+        vertical-align: middle;
+    }
+
     .wsc-template-header {
         display: flex;
         align-items: flex-start;
@@ -201,6 +346,27 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
         font-size: 13px;
         white-space: normal;
         overflow-wrap: anywhere;
+    }
+
+    .wsc-adapter-entry {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid #d9e2ef;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 12px 14px;
+    }
+
+    .wsc-adapter-copy {
+        min-width: min(100%, 320px);
+        flex: 1 1 420px;
+    }
+
+    .wsc-adapter-action {
+        flex: 0 0 auto;
     }
 
     .wsc-field-table-wrap {
@@ -295,6 +461,10 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
     }
 
     @media (max-width: 767.98px) {
+        .wsc-guide-card .card-body {
+            grid-template-columns: 1fr;
+        }
+
         .wsc-filter-form {
             grid-template-columns: 1fr;
         }
@@ -334,11 +504,52 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
     </div>
 </div>
 
+<?php if ($guideActive): ?>
+    <div class="row">
+        <div class="col-12">
+            <div class="card wsc-guide-card">
+                <div class="card-body">
+                    <div>
+                        <?php if ($guideStep !== ''): ?>
+                            <span class="wsc-guide-step">
+                                <i class="mdi mdi-map-marker-check-outline"></i>
+                                <?= htmlspecialchars((string)__('引导步骤 %{1}', [$guideStep]), ENT_QUOTES, 'UTF-8') ?>
+                            </span>
+                        <?php endif; ?>
+                        <h5 class="mb-1 mt-2"><?= htmlspecialchars($guideTitle !== '' ? $guideTitle : (string)__('配置引导'), ENT_QUOTES, 'UTF-8') ?></h5>
+                        <?php if ($guideSummary !== ''): ?>
+                            <div class="text-muted"><?= htmlspecialchars($guideSummary, ENT_QUOTES, 'UTF-8') ?></div>
+                        <?php endif; ?>
+                        <?php if ($guideKey !== ''): ?>
+                            <code class="wsc-guide-key"><?= htmlspecialchars($guideKey, ENT_QUOTES, 'UTF-8') ?></code>
+                        <?php endif; ?>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 justify-content-end">
+                        <?php if ($guideKey !== ''): ?>
+                            <a class="btn btn-warning btn-sm" href="#wsc-guide-target">
+                                <i class="mdi mdi-crosshairs-gps me-1"></i><lang>定位配置项</lang>
+                            </a>
+                        <?php endif; ?>
+                        <?php if ($guideReturn !== ''): ?>
+                            <a class="btn btn-outline-warning btn-sm" href="<?= htmlspecialchars($guideReturn, ENT_QUOTES, 'UTF-8') ?>">
+                                <i class="mdi mdi-arrow-left me-1"></i><lang>返回引导</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
                 <form method="get" class="wsc-filter-form">
+                    <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
+                        <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
+                    <?php endforeach; ?>
                     <div>
                         <label class="form-label"><lang>模块</lang></label>
                         <select name="module" class="form-select">
@@ -475,7 +686,14 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                         <div class="mb-3">
                             <div class="fw-semibold mb-2"><?= htmlspecialchars((string)($areaRow['area'] ?? '')) ?></div>
                             <?php foreach (($areaRow['templates'] ?? []) as $template): ?>
-                                <div class="wsc-template-card">
+                                <?php
+                                $templateFields = is_array($template['fields'] ?? null) ? $template['fields'] : [];
+                                $templateHasGuideField = $guideKey !== '' && count(array_filter(
+                                    $templateFields,
+                                    static fn($field): bool => (string)($field['key'] ?? '') === $guideKey
+                                )) > 0;
+                                ?>
+                                <div class="wsc-template-card<?= $templateHasGuideField ? ' wsc-guide-template' : '' ?>">
                                     <div class="wsc-template-header">
                                         <div class="wsc-template-title">
                                             <h6 class="mb-1"><?= htmlspecialchars((string)($template['title'] ?? $template['code'] ?? '')) ?></h6>
@@ -492,6 +710,9 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
                                         <input type="hidden" name="locale" value="<?= htmlspecialchars($locale) ?>">
                                         <input type="hidden" name="search" value="<?= htmlspecialchars($search) ?>">
+                                        <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
+                                            <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?php endforeach; ?>
 
                                     <?php foreach (($template['groups'] ?? []) as $group): ?>
                                         <?php
@@ -533,10 +754,16 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                                             $baseVersion = (int)($field['base_version'] ?? 0);
                                                             $source = is_array($field['effective_source'] ?? null) ? $field['effective_source'] : null;
                                                             $options = $parseOptions((string)($field['options'] ?? ''));
+                                                            $fieldGuideTarget = $guideKey !== '' && $fieldKey === $guideKey;
                                                             ?>
-                                                            <tr>
+                                                            <tr class="<?= $fieldGuideTarget ? 'wsc-guide-target' : '' ?>"<?= $fieldGuideTarget ? ' id="wsc-guide-target" data-guide-key="' . htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
                                                                 <td>
-                                                                    <div class="wsc-field-title"><?= htmlspecialchars((string)($field['label'] ?? $fieldKey)) ?></div>
+                                                                    <div class="wsc-field-title">
+                                                                        <?= htmlspecialchars((string)($field['label'] ?? $fieldKey)) ?>
+                                                                        <?php if ($fieldGuideTarget): ?>
+                                                                            <span class="wsc-guide-target-badge"><lang>引导目标</lang></span>
+                                                                        <?php endif; ?>
+                                                                    </div>
                                                                     <code class="wsc-field-key"><?= htmlspecialchars($fieldKey) ?></code>
                                                                     <input type="hidden" name="base_versions[<?= htmlspecialchars($fieldKey) ?>]" value="<?= $baseVersion ?>">
                                                                 </td>
@@ -592,10 +819,29 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                             <?php endif; ?>
 
                                             <?php foreach ($adapters as $adapter): ?>
-                                                <div class="alert alert-secondary py-2 mb-2">
-                                                    <i class="mdi mdi-open-in-new me-1"></i>
-                                                    <strong><?= htmlspecialchars((string)($adapter['label'] ?? $adapter['code'] ?? '')) ?></strong>
-                                                    <span class="text-muted ms-2"><?= htmlspecialchars((string)($adapter['description'] ?? '')) ?></span>
+                                                <?php
+                                                $adapter = is_array($adapter) ? $adapter : [];
+                                                $adapterLink = $adapterAction($adapter);
+                                                $adapterUrl = (string)($adapterLink['url'] ?? '');
+                                                $adapterTarget = (string)($adapterLink['target'] ?? '');
+                                                $adapterActionLabel = (string)($adapterLink['label'] ?? __('打开'));
+                                                $adapterTargetAttr = $adapterTarget !== ''
+                                                    ? ' target="' . htmlspecialchars($adapterTarget, ENT_QUOTES, 'UTF-8') . '"'
+                                                    : '';
+                                                $adapterRelAttr = $adapterTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
+                                                ?>
+                                                <div class="wsc-adapter-entry mb-2">
+                                                    <div class="wsc-adapter-copy">
+                                                        <i class="mdi mdi-open-in-new me-1"></i>
+                                                        <strong><?= htmlspecialchars((string)($adapter['label'] ?? $adapter['code'] ?? '')) ?></strong>
+                                                        <span class="text-muted ms-2"><?= htmlspecialchars((string)($adapter['description'] ?? '')) ?></span>
+                                                    </div>
+                                                    <?php if ($adapterUrl !== ''): ?>
+                                                        <a class="btn btn-outline-primary btn-sm wsc-adapter-action"
+                                                           href="<?= htmlspecialchars($adapterUrl, ENT_QUOTES, 'UTF-8') ?>"<?= $adapterTargetAttr ?><?= $adapterRelAttr ?>>
+                                                            <i class="mdi mdi-arrow-right me-1"></i><?= htmlspecialchars($adapterActionLabel, ENT_QUOTES, 'UTF-8') ?>
+                                                        </a>
+                                                    <?php endif; ?>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
@@ -651,6 +897,9 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
                                                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
                                                         <input type="hidden" name="locale" value="<?= htmlspecialchars($locale) ?>">
                                                         <input type="hidden" name="search" value="<?= htmlspecialchars($search) ?>">
+                                                        <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
+                                                            <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
+                                                        <?php endforeach; ?>
                                                         <button class="btn btn-outline-warning btn-sm" type="submit">
                                                             <i class="mdi mdi-restore me-1"></i><lang>回滚</lang>
                                                         </button>
@@ -672,3 +921,22 @@ $configUrl = static function (array $params = []) use ($postUrl): string {
     </div>
 </div>
 </div>
+
+<?php if ($guideKey !== ''): ?>
+<script>
+    (function () {
+        var target = document.getElementById('wsc-guide-target');
+        if (!target) {
+            return;
+        }
+        window.setTimeout(function () {
+            target.scrollIntoView({behavior: 'smooth', block: 'center'});
+            target.classList.add('wsc-guide-target--focused');
+            var control = target.querySelector('input:not([type="hidden"]), select, textarea, button');
+            if (control && typeof control.focus === 'function') {
+                control.focus({preventScroll: true});
+            }
+        }, 180);
+    })();
+</script>
+<?php endif; ?>
