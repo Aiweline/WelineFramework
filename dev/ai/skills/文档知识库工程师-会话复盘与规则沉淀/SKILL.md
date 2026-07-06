@@ -17,6 +17,7 @@ version: 1.2.0
 # Load First
 
 - `AI-ENTRY.md`
+- `dev/ai/AI-RULES-PACK.md`
 - `dev/ai/global-constraints.md`
 - `dev/ai/skills/_index.md`
 - `dev/ai/skills/文档知识库工程师-技能索引与知识库/SKILL.md`（仅当要改技能索引或知识库结构）
@@ -113,6 +114,10 @@ Rule:
 
 # Routing
 
+- 项目级自我学习：如果经验只属于某个项目、客户、站点、仓库、模块、设计风格、发布流程或验证入口，必须只写入 owning project root 的 `AGENTS.md`（或该项目已采用的等价 agent 文件）。不要写入父级容器、 sibling project 或全局规则。
+- 全局自我学习：如果经验是跨项目 Codex 行为、工具顺序、安全边界、输出方式、记忆机制或自动化规则，写入 automation memory、全局 memory、`dev/ai/global-constraints.md` 或拥有该行为的共享技能，不要散落到项目 `AGENTS.md`。
+- 归属判断：优先用 session cwd / git root / 最近的 `AGENTS.md` 定位项目；若一个父目录下有多个 sibling projects（如 `Framework-Official` 或 OpsDesk `project-library`），必须定位到具体子项目。归属不明确时只记录 Candidate，不跨项目落盘。
+- 项目规则格式：每条规则应包含 Trigger、Do、Avoid、Why、Verify 和简短 Evidence；同根因规则优先合并更新，不新增同义条目。
 - 跨角色稳定规则：更新 `dev/ai/global-constraints.md`。
 - 专项执行规则：更新对应 `dev/ai/skills/*/SKILL.md`。
 - 技能选择、目录、索引规则：更新 `dev/ai/skills/_index.md` 或知识库技能。
@@ -135,6 +140,7 @@ Rule:
 # Compacting Rules
 
 - 入口文件只做路由，不放规则正文。
+- `dev/ai/AI-RULES-PACK.md` 只放压缩加载契约、权威源映射和交付检查，不放长规则正文。
 - 总则只放跨角色硬约束和默认流程，不放长案例。
 - 技能只放 Role、When To Use、Load First、Responsibilities/Workflow、Validation/Output。
 - 单个技能优先控制在可快速阅读的长度；长案例放 reference/archive，默认不加载。

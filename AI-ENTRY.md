@@ -1,14 +1,15 @@
 # AI-ENTRY.md
 
-Universal AI entry index for WelineFramework development. This file only routes readers; repository-wide rules live in `dev/ai/global-constraints.md`.
+Universal AI entry index for WelineFramework development. This file only routes readers; repository-wide rules live in `dev/ai/global-constraints.md`; the compressed cross-AI loading contract lives in `dev/ai/AI-RULES-PACK.md`.
 
 ## Reading Order
 
-1. `dev/ai/global-constraints.md`
-2. `dev/ai/diagrams/00-INDEX.txt` and relevant architecture diagrams
-3. `dev/ai/diagrams/08-module-docs-index.txt` and relevant module docs
-4. `dev/ai/skills/_index.md` and only the skills matched to the task
-5. Targeted source files for the actual call chain; broad source scans only after docs and indexes are insufficient
+1. `dev/ai/AI-RULES-PACK.md`
+2. `dev/ai/global-constraints.md`
+3. `dev/ai/diagrams/00-INDEX.txt` and relevant architecture diagrams
+4. `dev/ai/diagrams/08-module-docs-index.txt` and relevant module docs
+5. `dev/ai/skills/_index.md` and only the skills matched to the task
+6. Targeted source files for the actual call chain; broad source scans only after docs and indexes are insufficient
 
 ## Quick Commands
 
@@ -34,6 +35,7 @@ git push github HEAD
 
 ## Resources
 
+- AI rules pack: `dev/ai/AI-RULES-PACK.md`
 - AI general rules: `dev/ai/global-constraints.md`
 - Diagrams: `dev/ai/diagrams/00-INDEX.txt`
 - Module docs: `dev/ai/diagrams/08-module-docs-index.txt`

@@ -1,18 +1,20 @@
 # AI 规则与技能
 
-`dev/ai` 是仓库 AI 规则、技能、智能体名录和任务记录目录。默认只加载入口和命中技能，避免历史资料占用上下文。
+`dev/ai` 是仓库 AI 规则、技能、智能体名录和任务记录目录。默认只加载压缩规则包、总则和命中技能，避免历史资料占用上下文。
 
 ## 默认入口
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/skills/_index.md`
-4. 命中的 `dev/ai/skills/*/SKILL.md`
+2. `dev/ai/AI-RULES-PACK.md`
+3. `dev/ai/global-constraints.md`
+4. `dev/ai/skills/_index.md`
+5. 命中的 `dev/ai/skills/*/SKILL.md`
 
 ## 目录边界
 
 | 路径 | 默认加载 | 用途 |
 |---|---:|---|
+| `AI-RULES-PACK.md` | 是 | 所有 AI 的压缩加载契约 |
 | `global-constraints.md` | 是 | 唯一全局规则 |
 | `skills/_index.md` | 是 | 技能路由 |
 | `skills/*/SKILL.md` | 按需 | 专项技能 |
@@ -25,6 +27,7 @@
 ## 维护规则
 
 - 入口文件只做索引，不复制规则正文。
+- `AI-RULES-PACK.md` 只维护加载契约和权威源映射，不承载长案例。
 - 总则只放跨角色硬约束和默认流程。
 - 技能只放触发条件、边界、流程和验证要求。
 - 长案例、历史报告、迁移记录放 `archive/**` 或任务目录，默认不加载。
