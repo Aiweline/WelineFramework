@@ -6,6 +6,9 @@
 请求ID,"Request ID"
 操作人,Operator
 操作名,"Operation name"
+业务对象,业务对象
+业务动作,业务动作
+业务数据,业务数据
 主机,Host
 路径,Path
 模块,Module.
