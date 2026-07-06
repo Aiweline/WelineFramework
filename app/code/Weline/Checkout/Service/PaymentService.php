@@ -16,6 +16,10 @@ use Weline\Checkout\Model\PaymentTransaction;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Event\EventsManager;
+use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Model\PaymentTransaction as CorePaymentTransaction;
+use Weline\Payment\Service\PaymentMethodManager;
+use Weline\Payment\Service\PaymentService as CorePaymentService;
 
 /**
  * 支付服务（基础接口，供支付模块扩展）
@@ -111,6 +115,11 @@ class PaymentService
         if (!$validation['valid']) {
             throw new \Exception(implode(', ', $validation['errors']));
         }
+
+        $corePaymentResult = $this->processWithCorePayment($order, $paymentMethod, $paymentData);
+        if ($corePaymentResult !== null) {
+            return $corePaymentResult;
+        }
         
         // 派遣支付处理前事件
         $this->eventsManager->dispatch('Weline_Checkout::payment::process::before', [
@@ -157,6 +166,141 @@ class PaymentService
     }
 
     /**
+     * Route modern ProviderInterface payment methods through Weline_Payment.
+     * Legacy checkout payment hooks remain available for non-provider methods.
+     */
+    private function processWithCorePayment(Order $order, string $paymentMethod, array $paymentData): ?array
+    {
+        $paymentMethod = strtolower(trim($paymentMethod));
+        if ($paymentMethod === '') {
+            return null;
+        }
+
+        try {
+            /** @var PaymentMethodManager $methodManager */
+            $methodManager = ObjectManager::getInstance(PaymentMethodManager::class);
+            $method = $methodManager->getMethodByCode($paymentMethod);
+            if (!$method instanceof PaymentMethod || !$methodManager->isMethodActiveForScope($method, $paymentData)) {
+                return null;
+            }
+
+            /** @var CorePaymentService $corePaymentService */
+            $corePaymentService = ObjectManager::getInstance(CorePaymentService::class);
+            $context = $this->buildCorePaymentContext($order, $paymentMethod, $paymentData);
+            $coreTransaction = $corePaymentService->createPayment($paymentMethod, $context);
+            $gatewayResponse = [
+                'source' => 'Weline_Payment',
+                'transaction_id' => $coreTransaction->getId(),
+                'transaction_no' => (string)$coreTransaction->getData(CorePaymentTransaction::schema_fields_TRANSACTION_NO),
+                'status' => (string)$coreTransaction->getData(CorePaymentTransaction::schema_fields_STATUS),
+                'response' => $coreTransaction->getResponseData(),
+            ];
+
+            /** @var PaymentTransaction $transaction */
+            $transaction = ObjectManager::getInstance(PaymentTransaction::class);
+            $transaction->setData([
+                PaymentTransaction::schema_fields_ORDER_ID => (int)$order->getId(),
+                PaymentTransaction::schema_fields_PAYMENT_METHOD => $paymentMethod,
+                PaymentTransaction::schema_fields_TRANSACTION_NUMBER => $gatewayResponse['transaction_no'],
+                PaymentTransaction::schema_fields_AMOUNT => $order->getTotalAmount(),
+                PaymentTransaction::schema_fields_CURRENCY => $order->getCurrency(),
+                PaymentTransaction::schema_fields_STATUS => $this->mapCorePaymentStatus($gatewayResponse['status']),
+                PaymentTransaction::schema_fields_GATEWAY_RESPONSE => json_encode($gatewayResponse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                PaymentTransaction::schema_fields_CREATED_TIME => date('Y-m-d H:i:s'),
+                PaymentTransaction::schema_fields_UPDATED_TIME => date('Y-m-d H:i:s'),
+            ]);
+            $transaction->save();
+
+            return [
+                'transaction_id' => $transaction->getId(),
+                'order_id' => (int)$order->getId(),
+                'status' => $transaction->getStatus(),
+                'payment_method' => $paymentMethod,
+                'payment_kernel' => 'Weline_Payment',
+                'core_transaction_id' => $gatewayResponse['transaction_id'],
+                'core_transaction_no' => $gatewayResponse['transaction_no'],
+                'gateway_response' => $gatewayResponse,
+            ];
+        } catch (\Throwable $throwable) {
+            throw new \Exception($throwable->getMessage(), (int)$throwable->getCode(), $throwable);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $paymentData
+     * @return array<string, mixed>
+     */
+    private function buildCorePaymentContext(Order $order, string $paymentMethod, array $paymentData): array
+    {
+        $orderId = (int)$order->getId();
+        $currency = strtoupper((string)($paymentData['currency'] ?? $paymentData['currency_code'] ?? $order->getCurrency() ?: 'CNY'));
+        $amount = (float)$order->getTotalAmount();
+        $shippingAddress = $this->decodeOrderAddress((string)$order->getShippingAddress());
+        $billingAddress = $this->decodeOrderAddress((string)$order->getBillingAddress());
+        $countryCode = strtoupper(trim((string)(
+            $paymentData['country_code']
+            ?? $paymentData['country']
+            ?? $shippingAddress['country_code']
+            ?? $shippingAddress['country']
+            ?? $billingAddress['country_code']
+            ?? $billingAddress['country']
+            ?? ''
+        )));
+
+        return array_replace($paymentData, [
+            'order_id' => $orderId,
+            'payable_type' => 'weline_checkout_order',
+            'payable_id' => (string)$orderId,
+            'payment_method' => $paymentMethod,
+            'method_code' => $paymentMethod,
+            'amount' => $amount,
+            'amount_minor' => (int)round($amount * $this->minorUnit($currency)),
+            'currency' => $currency,
+            'currency_code' => $currency,
+            'country_code' => $countryCode,
+            'customer_id' => (int)$order->getCustomerId(),
+            'subject' => (string)__('Order %{1}', [$order->getOrderNumber() ?: $orderId]),
+            'description' => (string)__('Checkout order %{1}', [$order->getOrderNumber() ?: $orderId]),
+            'idempotency_key' => 'checkout:' . $orderId . ':' . $paymentMethod,
+            'order_number' => (string)$order->getOrderNumber(),
+            'shipping_address' => $shippingAddress,
+            'billing_address' => $billingAddress,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeOrderAddress(string $value): array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function minorUnit(string $currency): int
+    {
+        return in_array(strtoupper($currency), ['BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF'], true)
+            ? 1
+            : 100;
+    }
+
+    private function mapCorePaymentStatus(string $status): string
+    {
+        return match ($status) {
+            CorePaymentTransaction::STATUS_SUCCESS => PaymentTransaction::STATUS_SUCCESS,
+            CorePaymentTransaction::STATUS_FAILED => PaymentTransaction::STATUS_FAILED,
+            CorePaymentTransaction::STATUS_REFUNDED => PaymentTransaction::STATUS_REFUNDED,
+            default => PaymentTransaction::STATUS_PENDING,
+        };
+    }
+
+    /**
      * 处理支付回调
      * 
      * @param array $callbackData
@@ -192,4 +336,3 @@ class PaymentService
         return true;
     }
 }
-
