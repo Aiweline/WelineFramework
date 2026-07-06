@@ -1,4 +1,4 @@
-﻿时间维度参数错误，支持：%{1},"Invalid time dimension parameter; supported: %{1}"
+时间维度参数错误，支持：%{1},"Invalid time dimension parameter; supported: %{1}"
 获取商业价值分析成功,"Business value analysis retrieved successfully"
 获取商业价值分析失败：%{1},"Failed to retrieve business value analysis: %{1}"
 获取大屏数据成功,"Successfully got dashboard data"

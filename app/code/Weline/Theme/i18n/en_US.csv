@@ -1,4 +1,4 @@
-﻿不存在的编译资源类型：%{1}，支持的资源类型：%{2},"Non-existent compiled resource type: %{1}, supported resource type: %{2}"
+不存在的编译资源类型：%{1}，支持的资源类型：%{2},"Non-existent compiled resource type: %{1}, supported resource type: %{2}"
 开始编译器工作。,"Start compiler work."
 编译中...,Compiling...
 编译器工作已完成。,"Compiler Work Completed."
@@ -2190,3 +2190,5 @@ Cookie政策,"Cookie Policy"
 VIP会员,"VIP Member"
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 视频加载中...,"Video loading..."
+该推荐部件已在所有布局身份中,"This recommended widget already exists in all layout identities"
+已应用到所有布局身份,"Applied to all layout identities"

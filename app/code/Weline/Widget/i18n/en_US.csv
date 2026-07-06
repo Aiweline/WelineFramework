@@ -1,4 +1,4 @@
-﻿开始刷新部件注册表...,"Refreshing widget registry..."
+开始刷新部件注册表...,"Refreshing widget registry..."
 "✓ 部件注册表已刷新完成。","✓ Part registry refresh completed."
 位置：generated/widgets.php,"Location: generated/widgets.php"
 "✖ 写入部件注册表失败。","✖ Failed to write to the component registry."
@@ -180,3 +180,8 @@ AI翻译,"AI Translate"
 描述,Description
 操作,Actions
 详情,Details
+普通部件首次入库后,普通部件首次入库后
+"普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。","普通文件 Widget 第一次写入 DB 注册账本且声明默认注入后触发，载荷包含精确 Widget identity。"
+首次入库：%{1}，更新：%{2}，默认注入事件：%{3},首次入库：%{1}，更新：%{2}，默认注入事件：%{3}
+已派发,已派发
+未派发,未派发

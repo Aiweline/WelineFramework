@@ -74,7 +74,7 @@ class ProvideDomainList implements ObserverInterface
             ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE);
         
         // 应用过滤条件
-        if (!empty($filter['website_id'])) {
+        if (\array_key_exists('website_id', $filter) && $filter['website_id'] !== '' && $filter['website_id'] !== null) {
             $query->where(WebsiteDomain::schema_fields_WEBSITE_ID, $filter['website_id']);
         }
         
