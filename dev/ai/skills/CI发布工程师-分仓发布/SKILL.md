@@ -1,11 +1,11 @@
 ---
 name: CI发布工程师-分仓发布
 description: >-
-  口令「分仓」触发：将 DEV-workspace 中 app/code/Weline 模块同步到 E:\WelineFramework\weline 独立 Composer
-  分仓，递增 git tag 后推送 Gitee/GitHub 并刷新 Packagist。
+  口令「分仓」触发：将 DEV-workspace 中 app/code/Weline 模块同步到项目兄弟目录“框架-分仓”
+  下的独立 Composer 分仓；本地缺仓库时自动从 Gitee/GitHub clone，递增 git tag 后推送并刷新 Packagist。
   仅在用户明确说出口令「分仓」时加载；不得因闲聊、发布、部署等相近词自动触发。
   Keywords: 分仓, fencang, split-repo, composer sync, weline mirror.
-version: 1.2.0
+version: 1.3.0
 ---
 
 # 分仓发布（口令门控）
@@ -47,7 +47,11 @@ version: 1.2.0
 
 | 源（开发单体） | 目标（Composer 分仓） |
 |---|---|
-| `E:\WelineFramework\DEV-workspace\app\code\Weline\{Module}\` | `E:\WelineFramework\weline\{repo}\` |
+| `{DEV_ROOT}/app/code/Weline/{Module}/` | `{DEV_ROOT}/../框架-分仓/{repo}/` |
+
+默认不再要求用户指定本机分仓集合路径。脚本从当前 DEV-workspace 反推项目父目录，并使用同级兄弟目录 `框架-分仓` 作为分仓集合；如果用户明确传 `-WelineRoot`，才使用指定路径（例如兼容旧 Windows 本地 `E:\WelineFramework\weline`）。
+
+目标仓库不存在时，脚本自动按下方“远端仓库记录”clone 到 `框架-分仓/{repo}`；目标仓库已存在且有 `.git` 时不重新 clone，只补缺失 remote、fetch、检查工作区并继续原分仓流程。目标目录已存在但不是 git 仓库且非空时，必须停止，禁止覆盖。
 
 分仓完成后，对每个有变更的仓库：
 
@@ -81,7 +85,7 @@ version: 1.2.0
 
 ## 模块 ↔ 分仓目录映射
 
-| DEV 模块目录 | weline 分仓目录 |
+| DEV 模块目录 | 分仓目录 / 远端仓库名 |
 |---|---|
 | `Framework` | `weline-framework` |
 | `ThemeFancy` | `weline-module-theme-francy`（目录名历史拼写，Composer 包名仍为 `weline/module-theme-fancy`） |
@@ -89,9 +93,26 @@ version: 1.2.0
 
 kebab-case 示例：`BackendActivity` → `weline-module-backend-activity`，`CKEditorEditorManager` → `weline-module-ck-editor-editor-manager`。
 
-**仅同步 DEV 中存在且 weline 下有对应独立 git 仓库的模块**；`Base`、`Deploy`、`Ai` 等 DEV 有而 weline 无目录的，跳过并记入报告。
+完整可分仓清单记录在 `dev/tools/fencang/fencang-sync.ps1` 的 `$ModuleRepoMap` 中。`Framework`、`ThemeFancy` 使用历史特例，其余模块按 kebab-case 生成。`Base`、`Deploy`、`Ai` 等未进入映射表的 DEV 模块不自动分仓。
 
 **禁止**用 DEV 内容覆盖 weline 独有仓库（如 `weline-module-ali-ddns-server`）——DEV 无对应模块时不操作。
+
+## 远端仓库记录与自动 clone
+
+脚本按分仓目录名生成双端 remote：
+
+| remote | URL |
+|---|---|
+| `origin`（Gitee） | `https://gitee.com/aiweline/{repo}.git` |
+| `github`（GitHub） | `https://github.com/Aiweline/{repo}.git` |
+
+自动 clone 规则：
+
+- 未传 `-WelineRoot`：先确保 `{DEV_ROOT}/../框架-分仓/` 存在。
+- `{repo}/.git` 已存在：不重新 clone；若缺 `origin` 或 `github` remote，则按上表补齐；已有 remote URL 不强制覆盖。
+- `{repo}` 不存在或为空目录：先 clone Gitee `origin`，失败再尝试 GitHub，并在 clone 后补齐双端 remote。
+- `{repo}` 已存在、非空、但不是 git 仓库：停止并报告，禁止把 DEV 内容镜像进去。
+- 如需保留“缺仓库就报错”的旧行为，显式传 `-NoAutoClone`。
 
 ## 执行流程
 
@@ -100,14 +121,19 @@ kebab-case 示例：`BackendActivity` → `weline-module-backend-activity`，`CK
 - 确认口令 `分仓` 已出现。
 - **解析范围**：用户若指定模块名 → 目标列表**仅含该模块**（或用户列出的多个）；仅 `--all` 时才全量。
 - 未指定模块且未说 `--all` → 停止并询问模块名，**禁止默认全量**。
-- 每个目标分仓：`git status` 干净或用户已确认可覆盖；`git fetch --all`。
+- 未指定 `-WelineRoot` 时，分仓集合默认为 DEV-workspace 兄弟目录 `框架-分仓`。
+- 每个目标分仓：缺仓库先按远端记录自动 clone；已有仓库则不重新 clone。
+- 每个目标分仓：`git status --porcelain` 必须干净；不干净时停止该仓库，禁止镜像覆盖本地未提交改动。
+- 每个目标分仓：逐个 remote 执行 `git fetch <remote> --tags`；fetch 失败记录 warning 但不阻断 dry-run/差异预检，真正 `push origin` / `push github` 仍然严格失败即报。tag 以本地和成功 fetch 后可见的最高语义版本为准。
 
 ### 1. 预检差异（无变更则整仓跳过）
 
-**先**用 `robocopy /L /MIR` 对比 DEV 源目录与分仓目录（排除 `.git`、`vendor` 等，规则与实际同步一致）：
+**先**对比 DEV 源目录与分仓目录（排除 `.git`、`vendor`、`.idea`、`node_modules`、`.DS_Store` 等，规则与实际同步一致）：
 
-- **exit 0（无差异）** → 该仓库**整仓跳过**：不 robocopy、不 `git add/commit/tag/push`、不刷新 Packagist；报告状态 `no-change`。
-- **exit 1–7（有差异）** → 进入下一步实际同步。
+- Windows 有 `robocopy` 时使用 `robocopy /L /MIR` 预检。
+- macOS / Linux / 无 `robocopy` 环境使用 PowerShell 文件索引 + SHA256 hash 预检。
+- 无差异 → 该仓库**整仓跳过**：不镜像、不 `git add/commit/tag/push`、不刷新 Packagist；报告状态 `no-change`。
+- 有差异 → 进入下一步实际同步。
 
 `DryRun` 模式同样先做预检：无差异则报告「无需分仓」；有差异才预览新 tag。
 
@@ -115,9 +141,7 @@ kebab-case 示例：`BackendActivity` → `weline-module-backend-activity`，`CK
 
 将 DEV 模块**内容**镜像到分仓根目录（不是套一层模块名子目录）：
 
-```powershell
-robocopy $src $dst /MIR /XD .git vendor .idea node_modules /XF .DS_Store
-```
+Windows 有 `robocopy` 时使用 `robocopy /MIR`；macOS / Linux / 无 `robocopy` 环境使用脚本内置镜像器（复制新增/变更文件，删除 DEV 已删除且未被排除的文件，保留 `.git`、`vendor` 等排除目录）。
 
 - `/MIR`：DEV 已删除的文件在分仓也删除。
 - 若用户要求非镜像，改用 `/E` 仅覆盖不删除。
@@ -157,7 +181,7 @@ git 推送成功后，**立即主动调用 Packagist API**，不要干等 WebHoo
 ```powershell
 # 由 dev/tools/fencang/refresh-packagist.ps1 自动执行
 POST https://packagist.org/api/update-package
-Authorization: Bearer Aiweline:8f61c746bad05a3dcca0bc40bff955091bd23d46
+Authorization: Bearer {username}:{token}
 Body: {"repository":{"url":"https://github.com/Aiweline/{repo}"}}
 ```
 
@@ -165,9 +189,10 @@ Body: {"repository":{"url":"https://github.com/Aiweline/{repo}"}}
 
 - Weline 分仓包在 **packagist.org** 发布（如 `weline/module-admin`）；Packagist 以 **GitHub 仓库 URL** 为 canonical repository。
 - 分仓 push 完成 → 立刻 `update-package`，让 Packagist 重新抓取 tag/分支元数据。
-- **Packagist 凭据已写死在分仓脚本**（`dev/tools/fencang/refresh-packagist.ps1`）：
-  - 用户名：`Aiweline`
-  - API Token：`8f61c746bad05a3dcca0bc40bff955091bd23d46`
+- Packagist 凭据不写入仓库；脚本按顺序读取：
+  - `WELINE_PACKAGIST_USERNAME` / `WELINE_PACKAGIST_API_TOKEN`
+  - `PACKAGIST_USERNAME` / `PACKAGIST_API_TOKEN`
+  - 本机私有文件 `dev/tools/fencang/packagist.local.json`，格式：`{"username":"...","token":"..."}`
 - Packagist 刷新失败但 git 已推送 → 状态记为 `ok-push-only`，报告中单独提示，不假装 Composer 已更新。
 
 ### 6. 输出报告
@@ -184,7 +209,7 @@ $Fencang = 'dev\tools\fencang'
 # 预览下一个 tag
 .\$Fencang\bump-tag.ps1 -CurrentTag v1.2.9
 
-# 单模块分仓（用户说「分仓 Framework」时用这个，只处理一个）
+# Windows：单模块分仓（默认目标 E:\WelineFramework\框架-分仓\...）
 .\$Fencang\fencang-sync.ps1 -Modules Framework
 
 # 多模块（用户点名多个时）
@@ -193,19 +218,26 @@ $Fencang = 'dev\tools\fencang'
 # 全量（仅用户明确说「分仓 --all」时）
 .\$Fencang\fencang-sync.ps1 -All
 
+# 兼容旧 Windows 本地分仓集合
+.\$Fencang\fencang-sync.ps1 -Modules Framework -WelineRoot E:\WelineFramework\weline
+
+# macOS / Linux：使用 PowerShell Core，默认目标为 DEV-workspace 同级“框架-分仓”
+pwsh ./dev/tools/fencang/fencang-sync.ps1 -Modules Framework
+
 # 仅手动刷新某个分仓的 Packagist 索引（git 已推但 Composer 未更新时）
-.\$Fencang\refresh-packagist.ps1 -RepoPath E:\WelineFramework\weline\weline-module-admin
+.\$Fencang\refresh-packagist.ps1 -RepoPath E:\WelineFramework\框架-分仓\weline-module-admin
 ```
 
 ## 约束
 
 - 遵守 `dev/ai/global-constraints.md`：禁止未经审阅的批量机械改写；本技能是**经口令授权的受控分仓流程**，逐模块执行并审查 diff。
 - 不得在口令缺失时主动建议或执行分仓。
-- Gitee/GitHub 凭据由本机 git remote 提供；Packagist 凭据已写死在 `dev/tools/fencang/refresh-packagist.ps1` 与上文技能正文中。
+- Gitee/GitHub 凭据由本机 git credential/remote 提供；Packagist 凭据只从环境变量或本机私有 `packagist.local.json` 读取，不写入仓库。
 - 用户未要求时，不修改 DEV-workspace 根 `composer.json` 或 `vendor/`。
 
 ## 相关路径
 
-- 开发单体：`E:\WelineFramework\DEV-workspace`
-- 分仓集合：`E:\WelineFramework\weline`
+- 开发单体：当前 DEV-workspace，即 `{DEV_ROOT}`
+- 默认分仓集合：`{DEV_ROOT}/../框架-分仓`
+- 旧 Windows 本地集合：`E:\WelineFramework\weline`（仅显式传 `-WelineRoot` 时使用）
 - Composer 聚合依赖参考：`app/code/Weline/Base/composer.json`
