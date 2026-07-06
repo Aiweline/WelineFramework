@@ -4286,6 +4286,153 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($scheduler->hasPendingTimers());
     }
 
+    public function testResurrectQueueMainLoopTaskIsNotScheduledWhenQueueIsEmpty(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $scheduled = $this->invokePrivateWithArgs($orchestrator, 'scheduleResurrectQueueMainLoopTaskIfDue', [
+            \microtime(true),
+        ]);
+
+        self::assertFalse($scheduled);
+        self::assertSame([], $this->readPrivate($orchestrator, 'mainLoopTasks'));
+        self::assertNull($this->readPrivate($orchestrator, 'mainLoopFiberScheduler'));
+    }
+
+    public function testResurrectQueueMainLoopTaskIsNotScheduledForOnlyFutureWork(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $now = \microtime(true);
+        $this->writePrivate($orchestrator, 'resurrectQueue', [
+            'worker:1' => [
+                'role' => ControlMessage::ROLE_WORKER,
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 30.0,
+                'scheduledAt' => $now + 30.0,
+                'delayed' => false,
+                'pid' => 0,
+                'port' => 18080,
+            ],
+        ]);
+
+        $scheduled = $this->invokePrivateWithArgs($orchestrator, 'scheduleResurrectQueueMainLoopTaskIfDue', [$now]);
+
+        self::assertFalse($scheduled);
+        self::assertSame([], $this->readPrivate($orchestrator, 'mainLoopTasks'));
+        self::assertNull($this->readPrivate($orchestrator, 'mainLoopFiberScheduler'));
+    }
+
+    public function testResurrectQueueMainLoopTaskIsScheduledForDueWork(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $now = \microtime(true);
+        $this->writePrivate($orchestrator, 'resurrectQueue', [
+            'worker:1' => [
+                'role' => ControlMessage::ROLE_WORKER,
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 0.0,
+                'scheduledAt' => $now - 1.0,
+                'delayed' => false,
+                'pid' => 0,
+                'port' => 18080,
+            ],
+        ]);
+
+        try {
+            $scheduled = $this->invokePrivateWithArgs($orchestrator, 'scheduleResurrectQueueMainLoopTaskIfDue', [$now]);
+
+            self::assertTrue($scheduled);
+            $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+            self::assertArrayHasKey('periodic:resurrect_queue', $tasks);
+        } finally {
+            $this->invokePrivate($orchestrator, 'resetMainLoopFiberScheduler');
+        }
+    }
+
+    public function testMaintenanceResurrectQueueCleanupStillRunsWhenMaintenanceModeIsOff(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $now = \microtime(true);
+        $this->writePrivate($orchestrator, 'maintenanceMode', false);
+        $this->writePrivate($orchestrator, 'resurrectQueue', [
+            'maintenance:1' => [
+                'role' => ControlMessage::ROLE_MAINTENANCE,
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 30.0,
+                'scheduledAt' => $now + 30.0,
+                'delayed' => false,
+                'pid' => 0,
+                'port' => 19080,
+            ],
+        ]);
+
+        self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'hasDueResurrectQueueWork', [$now]));
+
+        $this->invokePrivate($orchestrator, 'processResurrectQueue');
+
+        self::assertSame([], $this->readPrivate($orchestrator, 'resurrectQueue'));
+    }
+
+    public function testLaunchingResurrectQueueEntryIsGuardedButDoesNotScheduleDuplicatePeriodicTask(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->invokePrivate($orchestrator, 'initializeMainLoopFiberScheduler');
+
+        $now = \microtime(true);
+        $this->writePrivate($orchestrator, 'resurrectQueue', [
+            'worker:1' => [
+                'role' => ControlMessage::ROLE_WORKER,
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 0.0,
+                'scheduledAt' => $now - 5.0,
+                'delayed' => true,
+                'pid' => 0,
+                'port' => 18080,
+                'launching' => true,
+                'launchingAt' => $now - 40.0,
+            ],
+        ]);
+
+        try {
+            $scheduledLaunch = $this->invokePrivateWithArgs($orchestrator, 'scheduleMainLoopTask', [
+                'resurrect_launch:worker:1',
+                'resurrect_launch',
+                static function (): void {
+                    \Weline\Server\Scheduler\SchedulerSystem::yieldDelay(60000);
+                },
+            ]);
+            self::assertTrue($scheduledLaunch);
+
+            $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+            $tasks['resurrect_launch:worker:1']['startedAt'] = $now - 40.0;
+            $this->writePrivate($orchestrator, 'mainLoopTasks', $tasks);
+
+            $scheduledPeriodic = $this->invokePrivateWithArgs(
+                $orchestrator,
+                'scheduleResurrectQueueMainLoopTaskIfDue',
+                [$now]
+            );
+
+            self::assertFalse($scheduledPeriodic);
+            $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+            self::assertArrayNotHasKey('resurrect_launch:worker:1', $tasks);
+            self::assertArrayNotHasKey('periodic:resurrect_queue', $tasks);
+
+            $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
+            self::assertArrayHasKey('worker:1', $queue);
+            self::assertArrayNotHasKey('launching', $queue['worker:1']);
+            self::assertArrayNotHasKey('launchingAt', $queue['worker:1']);
+            self::assertGreaterThan($now, $queue['worker:1']['scheduledAt']);
+            self::assertFalse((bool) $queue['worker:1']['delayed']);
+        } finally {
+            $this->invokePrivate($orchestrator, 'resetMainLoopFiberScheduler');
+        }
+    }
+
     public function testRecoverFromDispatcherAlertQueuesWorkerResurrectionWhenDispatcherReportsAllWorkersUnavailable(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -4625,5 +4772,4 @@ class ServiceOrchestratorStartupTest extends TestCase
         throw new \ReflectionException(\sprintf('Property %s::%s does not exist', $object::class, $property));
     }
 }
-
 

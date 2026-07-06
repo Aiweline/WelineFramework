@@ -34,6 +34,11 @@ return [
         'description' => __('在渲染页脚主要内容之后触发，允许其他模块在页脚内容结束处注入内容。'),
         'doc' => 'frontend/partials/footer/content-after.md',
     ],
+    'Weline_Theme::frontend::partials::footer::brand' => [
+        'name' => __('页脚品牌内容'),
+        'description' => __('覆盖默认页脚品牌区域，允许站点或业务模块替换页脚品牌名称、标识和说明。'),
+        'doc' => 'frontend/partials/footer/brand.md',
+    ],
     'Weline_Theme::frontend::partials::footer::links' => [
         'name' => __('页脚链接内容'),
         'description' => __('覆盖页脚链接内容，允许其他模块完全替换页脚的链接区域。'),
@@ -69,6 +74,11 @@ return [
         'description' => __('在渲染页脚版权信息之前触发，允许其他模块在版权信息开始处注入内容。'),
         'doc' => 'frontend/partials/footer/copyright-before.md',
     ],
+    'Weline_Theme::frontend::partials::footer::copyright' => [
+        'name' => __('页脚版权信息'),
+        'description' => __('覆盖默认页脚版权信息，允许站点或业务模块输出自定义版权文本。'),
+        'doc' => 'frontend/partials/footer/copyright.md',
+    ],
     'Weline_Theme::frontend::partials::footer::copyright-after' => [
         'name' => __('页脚版权信息之后'),
         'description' => __('在渲染页脚版权信息之后触发，允许其他模块在版权信息结束处注入内容。'),
@@ -91,6 +101,11 @@ return [
         'description' => __('在渲染页头 Logo 之前触发，允许其他模块在 Logo 开始处注入内容。'),
         'doc' => 'frontend/partials/header/logo-before.md',
     ],
+    'Weline_Theme::frontend::partials::header::logo' => [
+        'name' => __('页头 Logo 内容'),
+        'description' => __('覆盖默认页头 Logo 区域，允许站点或业务模块替换品牌标识和首页链接。'),
+        'doc' => 'frontend/partials/header/logo.md',
+    ],
     'Weline_Theme::frontend::partials::header::logo-after' => [
         'name' => __('页头 Logo 之后'),
         'description' => __('在渲染页头 Logo 之后触发，允许其他模块在 Logo 结束处注入内容。'),
@@ -111,6 +126,11 @@ return [
         'description' => __('在渲染页头导航菜单之前触发，允许其他模块在导航菜单开始处注入内容。'),
         'doc' => 'frontend/partials/header/nav-before.md',
     ],
+    'Weline_Theme::frontend::partials::header::navigation' => [
+        'name' => __('页头导航内容'),
+        'description' => __('覆盖默认页头导航列表，允许站点或业务模块提供业务导航。'),
+        'doc' => 'frontend/partials/header/navigation.md',
+    ],
     'Weline_Theme::frontend::partials::header::nav-after' => [
         'name' => __('页头导航之后'),
         'description' => __('在渲染页头导航菜单之后触发，允许其他模块在导航菜单结束处注入内容。'),
@@ -120,6 +140,11 @@ return [
         'name' => __('页头搜索之前'),
         'description' => __('在渲染页头搜索框之前触发，允许其他模块在搜索框开始处注入内容。'),
         'doc' => 'frontend/partials/header/search-before.md',
+    ],
+    'Weline_Theme::frontend::partials::header::search' => [
+        'name' => __('页头搜索内容'),
+        'description' => __('覆盖默认页头搜索表单，允许站点或业务模块提供自己的搜索目标和占位文案。'),
+        'doc' => 'frontend/partials/header/search.md',
     ],
     'Weline_Theme::frontend::partials::header::search-form-before' => [
         'name' => __('页头搜索表单之前'),
@@ -135,6 +160,11 @@ return [
         'name' => __('页头操作按钮之前'),
         'description' => __('在渲染页头操作按钮（如购物车、用户菜单等）之前触发，允许其他模块在操作按钮区域开始处注入内容。'),
         'doc' => 'frontend/partials/header/actions-before.md',
+    ],
+    'Weline_Theme::frontend::partials::header::account' => [
+        'name' => __('页头账户操作'),
+        'description' => __('覆盖默认页头账户入口，允许客户、会员或站点模块接入自己的账户中心地址。'),
+        'doc' => 'frontend/partials/header/account.md',
     ],
     'Weline_Theme::frontend::partials::header::actions-after' => [
         'name' => __('页头操作按钮之后'),
@@ -375,6 +405,11 @@ return [
         'name' => __('默认布局内容之前'),
         'description' => __('在渲染默认布局的主要内容之前触发，允许其他模块在内容开始处注入内容。'),
         'doc' => 'frontend/layouts/default/content-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::default::content' => [
+        'name' => __('默认布局内容'),
+        'description' => __('覆盖默认布局的主内容插槽，允许模块在保留默认布局壳的同时提供完整页面内容。'),
+        'doc' => 'frontend/layouts/default/content.md',
     ],
     'Weline_Theme::frontend::layouts::default::content-after' => [
         'name' => __('默认布局内容之后'),

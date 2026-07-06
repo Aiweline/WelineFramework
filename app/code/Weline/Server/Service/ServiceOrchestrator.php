@@ -65,6 +65,7 @@ class ServiceOrchestrator
     private const BULK_LAUNCH_PORT_REPROBE_ROLES = [
         ControlMessage::ROLE_WORKER => true,
     ];
+    private const MASTER_LEASE_TOUCH_INTERVAL_SEC = 2.0;
 
     private ServiceRegistry $registry;
     private ?ControlPlaneServerInterface $controlServer = null;
@@ -98,6 +99,7 @@ class ServiceOrchestrator
     private const ANSI_BRIGHT_CYAN = "\033[96m";
     private const ANSI_BRIGHT_GREEN = "\033[92m";
     private const ANSI_BRIGHT_ORANGE = "\033[38;5;214m";
+    private float $lastMasterLeaseTouchAt = 0.0;
     private float $lastHealthCheck = 0;
     private float $lastTickMainLoopSlowWarningAt = 0.0;
     private float $healthCheckInterval = 30.0;
@@ -500,6 +502,51 @@ class ServiceOrchestrator
         );
     }
 
+    private function touchMasterLeaseIfDue(float $now): void
+    {
+        if ($this->context === null
+            || $this->masterShutdownIntent
+            || $this->shuttingDown
+            || $this->stopAllInProgress
+        ) {
+            return;
+        }
+        if ($this->context->masterToken === '') {
+            return;
+        }
+        if (($now - $this->lastMasterLeaseTouchAt) < self::MASTER_LEASE_TOUCH_INTERVAL_SEC) {
+            return;
+        }
+
+        try {
+            (new MasterLeaseManager())->touchRunning(
+                $this->context->instanceName,
+                $this->context->masterPid,
+                $this->context->masterToken
+            );
+            $this->lastMasterLeaseTouchAt = $now;
+        } catch (\Throwable $throwable) {
+            WlsLogger::warning_('[Orchestrator] Master lease 心跳刷新失败: ' . $throwable->getMessage());
+        }
+    }
+
+    private function markMasterLeaseStopping(): void
+    {
+        if ($this->context === null || $this->context->masterToken === '') {
+            return;
+        }
+
+        try {
+            (new MasterLeaseManager())->markStopping(
+                $this->context->instanceName,
+                $this->context->masterPid,
+                $this->context->masterToken
+            );
+        } catch (\Throwable $throwable) {
+            WlsLogger::warning_('[Orchestrator] Master lease 标记 stopping 失败: ' . $throwable->getMessage());
+        }
+    }
+
     public function requestStop(
         string $reason = 'shutdown',
         ?int $progressClientId = null,
@@ -517,6 +564,7 @@ class ServiceOrchestrator
         }
 
         $this->masterShutdownIntent = true;
+        $this->markMasterLeaseStopping();
         $this->fullRestartRequested = false;
         $this->fullRestartReason = '';
         $this->resurrectQueue = [];
@@ -1051,6 +1099,52 @@ class ServiceOrchestrator
             $this->resurrectQueue[$key] = $entry;
             WlsLogger::warning_("[Orchestrator] 复活任务 {$key} 卡住，已重新入队等待 1.0s 后重试");
         }
+    }
+
+    private function hasDueResurrectQueueWork(float $now): bool
+    {
+        if ($this->resurrectQueue === [] || $this->isRecoverySuspended()) {
+            return false;
+        }
+
+        foreach ($this->resurrectQueue as $entry) {
+            if (($entry['launching'] ?? false) === true) {
+                continue;
+            }
+
+            $role = (string) ($entry['role'] ?? '');
+            if ($this->childServicesBootstrapInProgress
+                && ($role === ControlMessage::ROLE_WORKER || $role === ControlMessage::ROLE_MAINTENANCE)) {
+                continue;
+            }
+
+            if ($role === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
+                return true;
+            }
+
+            if ((float) ($entry['scheduledAt'] ?? 0.0) <= $now) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function scheduleResurrectQueueMainLoopTaskIfDue(float $now): bool
+    {
+        if ($this->resurrectQueue === []) {
+            return false;
+        }
+
+        $this->guardResurrectQueueTasks($now);
+        if (!$this->hasDueResurrectQueueWork($now)
+            || $this->hasMainLoopTask('periodic:resurrect_queue')) {
+            return false;
+        }
+
+        return $this->scheduleMainLoopTask('periodic:resurrect_queue', 'resurrect_queue', function (): void {
+            $this->processResurrectQueue();
+        });
     }
 
     private function scheduleMainLoopTask(string $key, string $label, callable $task): bool
@@ -1647,6 +1741,7 @@ class ServiceOrchestrator
         $this->pendingStopProgressClientId = null;
         $this->stopStage = self::STOP_STAGE_IDLE;
         $this->masterShutdownIntent = false;
+        $this->lastMasterLeaseTouchAt = 0.0;
         $this->startupFailureReason = null;
         $this->lastControlServerCloseReason = null;
         $this->suppressWorkerEmergencyUntil = 0.0;
@@ -4085,6 +4180,12 @@ class ServiceOrchestrator
         if ($generation > 0) {
             $cmd .= ' --slot-generation=' . \escapeshellarg((string)$generation);
         }
+        if ($this->context !== null && $this->context->masterLeaseFile !== '') {
+            $cmd .= ' --master-lease-file=' . \escapeshellarg($this->context->masterLeaseFile);
+        }
+        if ($this->context !== null && $this->context->masterToken !== '') {
+            $cmd .= ' --master-token=' . \escapeshellarg($this->context->masterToken);
+        }
 
         return $cmd;
     }
@@ -4173,6 +4274,12 @@ class ServiceOrchestrator
         }
         if ($generation > 0) {
             $argv[] = '--slot-generation=' . (string)$generation;
+        }
+        if ($this->context !== null && $this->context->masterLeaseFile !== '') {
+            $argv[] = '--master-lease-file=' . $this->context->masterLeaseFile;
+        }
+        if ($this->context !== null && $this->context->masterToken !== '') {
+            $argv[] = '--master-token=' . $this->context->masterToken;
         }
         if ($processName !== null && $processName !== '') {
             $argv[] = '--name=' . $processName;
@@ -4490,6 +4597,7 @@ class ServiceOrchestrator
         $this->stopAllInProgress = true;
         $this->shuttingDown = true;
         $this->masterShutdownIntent = true;
+        $this->markMasterLeaseStopping();
         $this->stopProgressClientId = $progressClientId;
         $skipDrain = $this->shouldSkipStopAllDrain();
         WlsLogger::info_("[Orchestrator] 开始停止所有服务，原因: {$reason}, skip_drain=" . ($skipDrain ? '1' : '0'));
@@ -4611,6 +4719,8 @@ class ServiceOrchestrator
     public function forceTerminateMasterAndChildren(string $reason = 'force'): void
     {
         WlsLogger::warning_("[Orchestrator] 强制终止 Master 及子进程，原因: {$reason}，阶段: {$this->stopStage}");
+        $this->masterShutdownIntent = true;
+        $this->markMasterLeaseStopping();
         try {
             $this->releaseSharedStateConsumersForStopFlow();
         } catch (\Throwable $throwable) {
@@ -6790,6 +6900,7 @@ class ServiceOrchestrator
 
             // 定期健康检查 - 仅在启动确认完成后启动
             $now = \microtime(true);
+            $this->touchMasterLeaseIfDue($now);
             $this->scheduleSharedStateConsumerRenewalIfReady($now);
             if ($this->startupAcceptanceComplete
                 && $now - $this->lastHealthCheck >= $this->healthCheckInterval
@@ -6859,13 +6970,8 @@ class ServiceOrchestrator
 
             // 启动确认完成后才处理复活队列；启动期只收集 READY，超时直接失败清理。
             if ($this->startupAcceptanceComplete) {
-                $this->guardResurrectQueueTasks($now);
-                if (!$this->hasMainLoopTask('periodic:resurrect_queue')) {
-                    if ($this->scheduleMainLoopTask('periodic:resurrect_queue', 'resurrect_queue', function (): void {
-                        $this->processResurrectQueue();
-                    })) {
-                        continue;
-                    }
+                if ($this->scheduleResurrectQueueMainLoopTaskIfDue($now)) {
+                    continue;
                 }
             }
 
@@ -7779,6 +7885,9 @@ class ServiceOrchestrator
     public function setMasterShutdownIntent(bool $intent): void
     {
         $this->masterShutdownIntent = $intent;
+        if ($intent) {
+            $this->markMasterLeaseStopping();
+        }
     }
 
     /**
@@ -8181,16 +8290,16 @@ class ServiceOrchestrator
                     continue;
                 }
             }
-            if ($this->shouldYieldPeriodicWork(true)) {
-                return;
-            }
             if (($entry['role'] ?? '') === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
                 unset($this->resurrectQueue[$key]);
                 WlsLogger::info_("[Orchestrator] 维护模式已关闭，取消 maintenance#{$entry['instanceId']} 待执行复活");
                 continue;
             }
-            if ($now < $entry['scheduledAt']) {
+            if ($now < (float) ($entry['scheduledAt'] ?? 0.0)) {
                 continue;
+            }
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
             }
 
             $provider = $this->registry->getProvider($entry['role']);
