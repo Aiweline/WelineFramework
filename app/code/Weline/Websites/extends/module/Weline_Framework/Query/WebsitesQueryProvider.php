@@ -16,6 +16,7 @@ use Weline\Websites\Service\DnsSiteHostRules;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
+use Weline\Websites\Service\DefaultWebsiteService;
 use Weline\Websites\Service\ServerIpService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\DnsProviderDetector;
@@ -23,6 +24,8 @@ use Weline\Websites\Service\ProvisioningQueryHandler;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
+    private const DEFAULT_WEBSITE_ID = 0;
+
     public function __construct(
         private readonly DomainRegistrarResolverService $resolver,
         private readonly DomainSyncService $domainSyncService,
@@ -31,6 +34,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
         private readonly Website $websiteModel,
         private readonly WebsiteLanguage $websiteLanguageModel,
         private readonly DnsProviderDetector $dnsProviderDetector,
+        private readonly DefaultWebsiteService $defaultWebsiteService,
     ) {
     }
 
@@ -902,50 +906,62 @@ class WebsitesQueryProvider implements QueryProviderInterface
     private function getWebsiteById(array $params): ?array
     {
         $websiteId = (int)($params['website_id'] ?? 0);
-        if ($websiteId <= 0) {
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return null;
         }
         $website = clone $this->websiteModel;
-        $website->load($websiteId);
-        if (!$website->getId()) {
+        $row = $website->clearQuery()->clearData()
+            ->where(Website::schema_fields_ID, $websiteId)
+            ->find()
+            ->fetchArray();
+        if (!\is_array($row) || !\array_key_exists(Website::schema_fields_ID, $row)) {
             return null;
         }
-        return [
-            'website_id' => (int)$website->getId(),
-            'name' => $website->getData(Website::schema_fields_NAME),
-            'code' => $website->getData(Website::schema_fields_CODE),
-            'url' => $website->getData(Website::schema_fields_URL),
-            'default_currency' => $website->getData(Website::schema_fields_DEFAULT_CURRENCY),
-            'default_language' => $website->getData(Website::schema_fields_DEFAULT_LANGUAGE),
-            'default_timezone' => $website->getData(Website::schema_fields_DEFAULT_TIMEZONE),
-            'scope' => $website->getData(Website::schema_fields_SCOPE),
-        ];
+        return $this->normalizeWebsitePayload($row);
     }
 
     private function getWebsiteList(array $params): array
     {
+        $this->defaultWebsiteService->ensureDefaultWebsite(false);
         $website = clone $this->websiteModel;
         $website->clearQuery();
-        $items = $website->select()->fetch()->getItems();
+        $items = $website->select()->fetchArray();
         $list = [];
         foreach ($items as $w) {
-            if (!$w->getId()) {
+            if (!\is_array($w)) {
                 continue;
             }
-            $list[] = [
-                'website_id' => (int)$w->getId(),
-                'name' => $w->getData(Website::schema_fields_NAME),
-                'code' => $w->getData(Website::schema_fields_CODE),
-                'url' => $w->getData(Website::schema_fields_URL),
-            ];
+            $websiteId = (int)($w[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID);
+            if ($websiteId < self::DEFAULT_WEBSITE_ID) {
+                continue;
+            }
+            $list[] = $this->normalizeWebsitePayload($w);
         }
         return $list;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizeWebsitePayload(array $row): array
+    {
+        return [
+            'website_id' => (int)($row[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID),
+            'name' => (string)($row[Website::schema_fields_NAME] ?? ''),
+            'code' => (string)($row[Website::schema_fields_CODE] ?? ''),
+            'url' => (string)($row[Website::schema_fields_URL] ?? ''),
+            'default_currency' => (string)($row[Website::schema_fields_DEFAULT_CURRENCY] ?? ''),
+            'default_language' => (string)($row[Website::schema_fields_DEFAULT_LANGUAGE] ?? ''),
+            'default_timezone' => (string)($row[Website::schema_fields_DEFAULT_TIMEZONE] ?? ''),
+            'scope' => (string)($row[Website::schema_fields_SCOPE] ?? ''),
+        ];
     }
 
     private function getWebsiteLanguageCodes(array $params): array
     {
         $websiteId = (int)($params['website_id'] ?? 0);
-        if ($websiteId <= 0) {
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
             return [];
         }
         return $this->websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
