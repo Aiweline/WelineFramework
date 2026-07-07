@@ -62,7 +62,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
    - exact commands executed
    - unit test evidence when logic changed
    - E2E or HTTP validation evidence when routes, UI, API, or user flows changed
-   - WLS cleanup proof when runtime was touched
+   - WLS cleanup proof, or manual-acceptance handoff proof, when runtime was touched
    - security / ACL evidence when access control changed
    - documentation update status when behavior, API, architecture, or bug status changed
 11. When implementation evidence exists, hand off to `@Weline-QA测试主管` for independent validation.

@@ -47,7 +47,8 @@ This skill defines the validation strategy for a delivery item. It decides which
 - Read `AI-ENTRY.md` first.
 - Do not use default WLS port `9501` for AI testing.
 - Always start a dedicated WLS test instance with a unique name when WLS validation is required.
-- Always stop the AI test instance after testing.
+- Stop the AI test instance after automated validation.
+- If user manual acceptance is required, require an explicit WLS handoff with URL, instance name, port, status, and stop command, then cleanup after acceptance.
 - Provide real-entry, HTTP, Browser, WLS, existing-command, or documentation evidence where relevant.
 - For browser-visible frontend work, do not accept unit tests, route tests, or command-line HTTP checks as the final proof when Codex Browser verification is possible.
 - Do not require new or rewritten unit tests, E2E specs, fixtures, regression cases, or test data unless the user explicitly asks.

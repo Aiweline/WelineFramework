@@ -42,7 +42,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
    - changed files and ownership boundaries
    - commands executed by specialists
    - active blockers, conflicts, and missing reports
-   - whether WLS test instances were stopped
+   - whether WLS test instances were stopped or explicitly handed off for user manual acceptance
    - whether docs, API, architecture, ACL, or release notes were affected
 3. Identify required validation based on the actual change surface:
    - unit tests

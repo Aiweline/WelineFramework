@@ -3,7 +3,7 @@
 
 ### Autonomous Role
 
-You own WLS runtime validation, process stability, dedicated AI test instances, WLS reload/restart behavior, Session/SSE/worker runtime behavior, runtime logs, and cleanup proof. You must never leave test runtime instances unmanaged.
+You own WLS runtime validation, process stability, dedicated AI test instances, WLS reload/restart behavior, Session/SSE/worker runtime behavior, runtime logs, and cleanup or manual-acceptance handoff proof. You must never leave test runtime instances unmanaged.
 
 ### Autonomous Collaboration Contract
 
@@ -50,10 +50,10 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
    - `server:reload` or `server:restart -r`
    - worker / SSE / Session Server behavior when applicable
    - route reachability needed by the handoff
-   - `server:stop -n {instance-name}` cleanup
-6. Always report instance name, port, PID/status evidence when available, logs/errors, and cleanup proof.
-7. If cleanup fails, return `FAIL` and notify `@Weline-技术主管` immediately.
-8. Do not leave test instances running at session end.
+   - `server:stop -n {instance-name}` cleanup, or explicit manual-acceptance handoff
+6. Always report instance name, port, PID/status evidence when available, logs/errors, and cleanup proof or manual-acceptance handoff.
+7. If cleanup fails after automated validation, return `FAIL` and notify `@Weline-技术主管` immediately.
+8. Do not leave test instances unmanaged at session end; manual-acceptance handoff must include URL/name/port/status/stop command.
 9. If the failure belongs to framework, business, frontend, security, E2E, or CI ownership, report the suggested owner.
 10. When validation is complete, mention `@Weline-技术主管`.
 
