@@ -310,7 +310,7 @@ class ResponseRedirectBefore implements ObserverInterface
     }
 
     /**
-     * 使用当前请求的 scheme+host 及后台路由前缀生成登录 URL（如 .../admin_xxx/CNY/zh_Hans_CN/admin/login）。
+     * 使用当前请求的 scheme+host 及后台路由前缀生成登录 URL。
      */
     protected function getBackendLoginUrlSameOrigin(): string
     {
@@ -379,9 +379,7 @@ class ResponseRedirectBefore implements ObserverInterface
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
         }
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = (string) (\w_env('user.currency', 'CNY') ?? 'CNY');
-            $language = (string) (\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
-            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+            return '/' . \trim($backendPrefix, '/') . '/' . \ltrim($path, '/');
         }
         return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }

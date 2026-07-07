@@ -242,6 +242,16 @@ return [
         'description' => __('在渲染基础布局的主要内容之前触发，允许其他模块在内容开始处注入内容。此 hook 适用于所有使用基础布局的页面。'),
         'doc' => 'frontend/layouts/base/content-before.md',
     ],
+    'Weline_Theme::frontend::layouts::base::breadcrumb-before' => [
+        'name' => __('基础布局面包屑之前'),
+        'description' => __('在基础布局面包屑之前触发，允许模块注入导航辅助内容。'),
+        'doc' => 'frontend/layouts/base/breadcrumb-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::base::breadcrumb-after' => [
+        'name' => __('基础布局面包屑之后'),
+        'description' => __('在基础布局面包屑之后触发，允许模块注入导航辅助内容。'),
+        'doc' => 'frontend/layouts/base/breadcrumb-after.md',
+    ],
     'Weline_Theme::frontend::layouts::base::content-after' => [
         'name' => __('基础布局内容之后'),
         'description' => __('在渲染基础布局的主要内容之后触发，允许其他模块在内容结束处注入内容。此 hook 适用于所有使用基础布局的页面。'),
@@ -288,6 +298,11 @@ return [
         'name' => __('首页内容之前'),
         'description' => __('在渲染首页布局的主要内容之前触发，允许其他模块在内容开始处注入内容。'),
         'doc' => 'frontend/layouts/homepage/content-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::homepage::content' => [
+        'name' => __('首页布局内容'),
+        'description' => __('覆盖首页布局的主内容区域，允许站点或业务模块在保留默认页头、页脚和布局资源的同时提供完整首页内容。'),
+        'doc' => 'frontend/layouts/homepage/content.md',
     ],
     'Weline_Theme::frontend::layouts::homepage::content-after' => [
         'name' => __('首页内容之后'),
@@ -532,6 +547,101 @@ return [
         'description' => __('覆盖产品列表布局的主内容区域，允许商品模块提供列表、筛选、分页或空状态。'),
         'doc' => 'frontend/layouts/product_list/content.md',
     ],
+    'Weline_Theme::frontend::layouts::product-list::header-before' => [
+        'name' => __('产品列表布局页头之前'),
+        'description' => __('在产品列表布局页头之前触发，允许模块注入公告、导航辅助或埋点。'),
+        'doc' => 'frontend/layouts/product_list/header-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::header-after' => [
+        'name' => __('产品列表布局页头之后'),
+        'description' => __('在产品列表布局页头之后触发，允许模块注入横幅、提示或布局辅助内容。'),
+        'doc' => 'frontend/layouts/product_list/header-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::breadcrumb-before' => [
+        'name' => __('产品列表面包屑之前'),
+        'description' => __('在产品列表布局面包屑之前触发。'),
+        'doc' => 'frontend/layouts/product_list/breadcrumb-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::breadcrumb-after' => [
+        'name' => __('产品列表面包屑之后'),
+        'description' => __('在产品列表布局面包屑之后触发。'),
+        'doc' => 'frontend/layouts/product_list/breadcrumb-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::filters-before' => [
+        'name' => __('产品列表筛选之前'),
+        'description' => __('在产品列表筛选区域之前触发。'),
+        'doc' => 'frontend/layouts/product_list/filters-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::filters-after' => [
+        'name' => __('产品列表筛选之后'),
+        'description' => __('在产品列表筛选区域之后触发。'),
+        'doc' => 'frontend/layouts/product_list/filters-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::toolbar-before' => [
+        'name' => __('产品列表工具栏之前'),
+        'description' => __('在产品列表工具栏之前触发。'),
+        'doc' => 'frontend/layouts/product_list/toolbar-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::toolbar-content' => [
+        'name' => __('产品列表工具栏内容'),
+        'description' => __('覆盖或补充产品列表排序、视图切换、分页大小等工具栏内容。'),
+        'doc' => 'frontend/layouts/product_list/toolbar-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::toolbar-after' => [
+        'name' => __('产品列表工具栏之后'),
+        'description' => __('在产品列表工具栏之后触发。'),
+        'doc' => 'frontend/layouts/product_list/toolbar-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::grid-before' => [
+        'name' => __('产品列表网格之前'),
+        'description' => __('在产品列表网格之前触发。'),
+        'doc' => 'frontend/layouts/product_list/grid-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::grid-content' => [
+        'name' => __('产品列表网格内容'),
+        'description' => __('覆盖或补充产品列表网格内容。'),
+        'doc' => 'frontend/layouts/product_list/grid-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::grid-after' => [
+        'name' => __('产品列表网格之后'),
+        'description' => __('在产品列表网格之后触发。'),
+        'doc' => 'frontend/layouts/product_list/grid-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::pagination-before' => [
+        'name' => __('产品列表分页之前'),
+        'description' => __('在产品列表分页之前触发。'),
+        'doc' => 'frontend/layouts/product_list/pagination-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::pagination-content' => [
+        'name' => __('产品列表分页内容'),
+        'description' => __('覆盖或补充产品列表分页内容。'),
+        'doc' => 'frontend/layouts/product_list/pagination-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::pagination-after' => [
+        'name' => __('产品列表分页之后'),
+        'description' => __('在产品列表分页之后触发。'),
+        'doc' => 'frontend/layouts/product_list/pagination-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::recommendations-before' => [
+        'name' => __('产品列表推荐之前'),
+        'description' => __('在产品列表推荐区域之前触发。'),
+        'doc' => 'frontend/layouts/product_list/recommendations-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::recommendations-after' => [
+        'name' => __('产品列表推荐之后'),
+        'description' => __('在产品列表推荐区域之后触发。'),
+        'doc' => 'frontend/layouts/product_list/recommendations-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::footer-before' => [
+        'name' => __('产品列表页脚之前'),
+        'description' => __('在产品列表布局页脚之前触发。'),
+        'doc' => 'frontend/layouts/product_list/footer-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product-list::footer-after' => [
+        'name' => __('产品列表页脚之后'),
+        'description' => __('在产品列表布局页脚之后触发。'),
+        'doc' => 'frontend/layouts/product_list/footer-after.md',
+    ],
     'Weline_Theme::frontend::layouts::product-list::content-after' => [
         'name' => __('产品列表布局内容之后'),
         'description' => __('在渲染产品列表布局的主要内容之后触发，允许其他模块在内容结束处注入内容。'),
@@ -564,6 +674,116 @@ return [
         'description' => __('在渲染产品通用布局的主要内容之前触发，允许其他模块在内容开始处注入内容。适用于所有产品相关页面。'),
         'doc' => 'frontend/layouts/product/content-before.md',
     ],
+    'Weline_Theme::frontend::layouts::product::header-before' => [
+        'name' => __('产品布局页头之前'),
+        'description' => __('在产品布局页头之前触发。'),
+        'doc' => 'frontend/layouts/product/header-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::header-after' => [
+        'name' => __('产品布局页头之后'),
+        'description' => __('在产品布局页头之后触发。'),
+        'doc' => 'frontend/layouts/product/header-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::breadcrumb-before' => [
+        'name' => __('产品布局面包屑之前'),
+        'description' => __('在产品布局面包屑之前触发。'),
+        'doc' => 'frontend/layouts/product/breadcrumb-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::breadcrumb-after' => [
+        'name' => __('产品布局面包屑之后'),
+        'description' => __('在产品布局面包屑之后触发。'),
+        'doc' => 'frontend/layouts/product/breadcrumb-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::main-content-before' => [
+        'name' => __('产品主内容之前'),
+        'description' => __('在产品主内容区域之前触发。'),
+        'doc' => 'frontend/layouts/product/main-content-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::main-content' => [
+        'name' => __('产品主内容'),
+        'description' => __('覆盖或补充产品主内容区域。'),
+        'doc' => 'frontend/layouts/product/main-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::main-content-after' => [
+        'name' => __('产品主内容之后'),
+        'description' => __('在产品主内容区域之后触发。'),
+        'doc' => 'frontend/layouts/product/main-content-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::sidebar-before' => [
+        'name' => __('产品侧栏之前'),
+        'description' => __('在产品侧栏区域之前触发。'),
+        'doc' => 'frontend/layouts/product/sidebar-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::sidebar-after' => [
+        'name' => __('产品侧栏之后'),
+        'description' => __('在产品侧栏区域之后触发。'),
+        'doc' => 'frontend/layouts/product/sidebar-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::tabs-before' => [
+        'name' => __('产品标签之前'),
+        'description' => __('在产品标签区域之前触发。'),
+        'doc' => 'frontend/layouts/product/tabs-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::tabs-content' => [
+        'name' => __('产品标签内容'),
+        'description' => __('覆盖或补充产品描述、规格、评价、问答等标签内容。'),
+        'doc' => 'frontend/layouts/product/tabs-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::tabs-slot-content' => [
+        'name' => __('产品标签插槽内容'),
+        'description' => __('在产品标签插槽中触发，允许模块补充可视化部件内容。'),
+        'doc' => 'frontend/layouts/product/tabs-slot-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::tabs-after' => [
+        'name' => __('产品标签之后'),
+        'description' => __('在产品标签区域之后触发。'),
+        'doc' => 'frontend/layouts/product/tabs-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::related-before' => [
+        'name' => __('产品推荐之前'),
+        'description' => __('在产品推荐区域之前触发。'),
+        'doc' => 'frontend/layouts/product/related-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::recommendations-content' => [
+        'name' => __('产品推荐内容'),
+        'description' => __('覆盖或补充产品推荐、搭配、继续浏览等推荐内容。'),
+        'doc' => 'frontend/layouts/product/recommendations-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::related-products' => [
+        'name' => __('相关产品'),
+        'description' => __('在产品推荐区渲染相关产品内容。'),
+        'doc' => 'frontend/layouts/product/related-products.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::bestsellers' => [
+        'name' => __('热销产品'),
+        'description' => __('在产品推荐区渲染热销产品内容。'),
+        'doc' => 'frontend/layouts/product/bestsellers.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::recently-viewed' => [
+        'name' => __('最近浏览'),
+        'description' => __('在产品推荐区渲染最近浏览内容。'),
+        'doc' => 'frontend/layouts/product/recently-viewed.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::cross-sell' => [
+        'name' => __('交叉销售'),
+        'description' => __('在产品推荐区渲染搭配或交叉销售内容。'),
+        'doc' => 'frontend/layouts/product/cross-sell.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::related-after' => [
+        'name' => __('产品推荐之后'),
+        'description' => __('在产品推荐区域之后触发。'),
+        'doc' => 'frontend/layouts/product/related-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::footer-before' => [
+        'name' => __('产品布局页脚之前'),
+        'description' => __('在产品布局页脚之前触发。'),
+        'doc' => 'frontend/layouts/product/footer-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::product::footer-after' => [
+        'name' => __('产品布局页脚之后'),
+        'description' => __('在产品布局页脚之后触发。'),
+        'doc' => 'frontend/layouts/product/footer-after.md',
+    ],
     'Weline_Theme::frontend::layouts::product::content-after' => [
         'name' => __('产品通用布局内容之后'),
         'description' => __('在渲染产品通用布局的主要内容之后触发，允许其他模块在内容结束处注入内容。适用于所有产品相关页面。'),
@@ -573,6 +793,73 @@ return [
         'name' => __('产品通用布局 Body 结束'),
         'description' => __('在渲染产品通用布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。适用于所有产品相关页面。'),
         'doc' => 'frontend/layouts/product/body-end.md',
+    ],
+
+    // ==================== Theme Frontend Layouts - Cart ====================
+    'Weline_Theme::frontend::layouts::cart::head-after' => [
+        'name' => __('购物车布局头部之后'),
+        'description' => __('在购物车布局 <head> 结束前触发。'),
+        'doc' => 'frontend/layouts/cart/head-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::body-start' => [
+        'name' => __('购物车布局 Body 开始'),
+        'description' => __('在购物车布局 <body> 开始处触发。'),
+        'doc' => 'frontend/layouts/cart/body-start.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::header-before' => [
+        'name' => __('购物车页头之前'),
+        'description' => __('在购物车页头之前触发。'),
+        'doc' => 'frontend/layouts/cart/header-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::header-after' => [
+        'name' => __('购物车页头之后'),
+        'description' => __('在购物车页头之后触发。'),
+        'doc' => 'frontend/layouts/cart/header-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::content-before' => [
+        'name' => __('购物车内容之前'),
+        'description' => __('在购物车内容区域之前触发。'),
+        'doc' => 'frontend/layouts/cart/content-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::content-after' => [
+        'name' => __('购物车内容之后'),
+        'description' => __('在购物车内容区域之后触发。'),
+        'doc' => 'frontend/layouts/cart/content-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::main-before' => [
+        'name' => __('购物车主体之前'),
+        'description' => __('在购物车主体区域之前触发。'),
+        'doc' => 'frontend/layouts/cart/main-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::main-after' => [
+        'name' => __('购物车主体之后'),
+        'description' => __('在购物车主体区域之后触发。'),
+        'doc' => 'frontend/layouts/cart/main-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::recommendations' => [
+        'name' => __('购物车推荐内容'),
+        'description' => __('在购物车推荐区域触发。'),
+        'doc' => 'frontend/layouts/cart/recommendations.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::footer-before' => [
+        'name' => __('购物车页脚之前'),
+        'description' => __('在购物车页脚之前触发。'),
+        'doc' => 'frontend/layouts/cart/footer-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::footer-after' => [
+        'name' => __('购物车页脚之后'),
+        'description' => __('在购物车页脚之后触发。'),
+        'doc' => 'frontend/layouts/cart/footer-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart::body-end' => [
+        'name' => __('购物车布局 Body 结束'),
+        'description' => __('在购物车布局 <body> 结束处触发。'),
+        'doc' => 'frontend/layouts/cart/body-end.md',
+    ],
+    'Weline_Theme::frontend::layouts::cart-empty::recommendations' => [
+        'name' => __('空购物车推荐内容'),
+        'description' => __('在空购物车推荐区域触发。'),
+        'doc' => 'frontend/layouts/cart-empty/recommendations.md',
     ],
 
     // ==================== Theme Frontend Layouts - Category ====================

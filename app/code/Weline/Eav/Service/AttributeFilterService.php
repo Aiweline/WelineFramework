@@ -740,12 +740,7 @@ class AttributeFilterService
 
     private function resolveAttributeId(EavAttribute $attribute): int
     {
-        $attributeId = (int) ($attribute->getData(EavAttribute::schema_fields_attribute_id) ?? 0);
-        if ($attributeId > 0) {
-            return $attributeId;
-        }
-
-        return (int) $attribute->getId();
+        return $attribute->getAttributeId();
     }
 
     public function clearCache(): void

@@ -36,6 +36,8 @@ class State extends DataObject
     /** @var array{currency: string, language: string}|null 单次请求路径前缀解析缓存 */
     private static ?array $pathLocalizationCache = null;
 
+    private static bool $pathLocalizationResolving = false;
+
     public static bool $is_backend = false;
 
     /** 请求级缓存：getLangLocal() 结果，同请求内只触发一次事件，WLS 下由 StateManager 重置 */
@@ -185,7 +187,7 @@ class State extends DataObject
     }
 
     /**
-     * 按固定顺序解析路径前缀：可选 area → currency → language（最多 3 段），其余为业务路由。
+     * 解析路径本地化前缀：可选 area 后，currency / language 可单独出现，也可任意顺序组合。
      *
      * @param list<string> $segments
      * @return array{currency: string, language: string}
@@ -206,20 +208,25 @@ class State extends DataObject
         }
 
         $currency = '';
-        if (isset($segments[$index]) && self::isCurrencySegmentCandidate($segments[$index])) {
-            $code = strtoupper($segments[$index]);
-            if (self::isAllowedCurrencyCode($code)) {
-                $currency = $code;
-                $index++;
-            }
-        }
-
         $language = '';
-        if (isset($segments[$index]) && self::isLanguageSegmentCandidate($segments[$index])) {
-            $code = self::normalizeLanguageSegment($segments[$index]);
-            if (self::isAllowedLanguageCode($code)) {
-                $language = $code;
+        $localizationSegments = 0;
+        while (isset($segments[$index]) && $localizationSegments < 2) {
+            $segment = (string)$segments[$index];
+            if ($currency === '' && self::isCurrencySegmentCandidate($segment)) {
+                $currency = strtoupper($segment);
+                $index++;
+                $localizationSegments++;
+                continue;
             }
+
+            if ($language === '' && self::isLanguageSegmentCandidate($segment)) {
+                $language = self::normalizeLanguageSegment($segment);
+                $index++;
+                $localizationSegments++;
+                continue;
+            }
+
+            break;
         }
 
         return ['currency' => $currency, 'language' => $language];
@@ -234,9 +241,18 @@ class State extends DataObject
             return self::$pathLocalizationCache;
         }
 
-        self::$pathLocalizationCache = self::resolveLocalizationFromPathSegments(
-            self::requestPathPrefixSegments()
-        );
+        if (self::$pathLocalizationResolving) {
+            return ['currency' => '', 'language' => ''];
+        }
+
+        self::$pathLocalizationResolving = true;
+        try {
+            self::$pathLocalizationCache = self::resolveLocalizationFromPathSegments(
+                self::requestPathPrefixSegments()
+            );
+        } finally {
+            self::$pathLocalizationResolving = false;
+        }
 
         return self::$pathLocalizationCache;
     }
@@ -247,6 +263,7 @@ class State extends DataObject
     public static function resetRequestPathLocalizationCache(): void
     {
         self::$pathLocalizationCache = null;
+        self::$pathLocalizationResolving = false;
     }
 
     /**
