@@ -57,18 +57,12 @@ includes `custom:wls-panel-plugin` in addition to the earlier WLS tags.
 
 ## 2026-06-27 True Production Recheck
 
-The previous 2026-06-26 recheck targeted the wrong host/root. The `weline-saas`
-host and `/home/weline` checkout are not the authoritative production AppStore
-for `app.aiweline.com`.
+The previous 2026-06-26 recheck targeted the wrong host/root. Earlier
+environment-specific host and checkout assumptions recorded during diagnosis are
+not authoritative deployment defaults for this repository.
 
-The authoritative production AppStore target for this plan is:
-
-```text
-SSH alias: weline
-Host: 47.92.25.188
-Production root: /www/wwwroot/app.aiweline.com
-Production URL: https://app.aiweline.com
-```
+The authoritative production AppStore target for this plan was the verified
+`app.aiweline.com` production environment used by the evidence run.
 
 A fresh true-production demo install validation was run on 2026-06-27:
 
