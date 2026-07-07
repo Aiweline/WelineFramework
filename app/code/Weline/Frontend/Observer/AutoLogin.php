@@ -54,10 +54,8 @@ class AutoLogin implements ObserverInterface
                 ->find()
                 ->fetch();
 
-            // Token不存在
+            // Token 不属于 FrontendUser（可能属于 Customer/Admin 记住登录），勿清除共享 cookie
             if (!$userToken->getId()) {
-                // 清除无效的cookie
-                $this->clearTokenCookie();
                 return;
             }
 

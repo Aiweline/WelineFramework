@@ -1,49 +1,15 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
-use Weline\Backend\Model\Config as BackendConfig;
-use Weline\FileManager\Helper\Image as ImageHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteBrand;
 
-$backendConfig = ObjectManager::getInstance(BackendConfig::class);
-$template = $this;
-$toBackendLogoUrl = static function (string $path, int $width, int $height): string {
-    $path = trim($path);
-    if ($path === '') {
-        return '';
-    }
-    if (str_starts_with($path, 'http') || str_starts_with($path, '//') || str_starts_with($path, '/static/')) {
-        return $path;
-    }
-
-    $relative = ltrim($path, '/\\');
-    foreach (['pub/media/', 'media/'] as $prefix) {
-        if (str_starts_with($relative, $prefix)) {
-            $relative = substr($relative, strlen($prefix));
-            break;
-        }
-    }
-
-    $mediaFile = defined('PUB') ? PUB . 'media' . DS . str_replace(['/', '\\'], DS, $relative) : '';
-    if ($relative !== '' && $mediaFile !== '' && is_file($mediaFile)) {
-        return '/media/' . str_replace('\\', '/', $relative);
-    }
-
-    return ImageHelper::pathToMediaUrl($path, $width, $height);
-};
-$resolveBackendLogo = static function (string $configKey, string $defaultSource, int $width, int $height) use ($backendConfig, $template, $toBackendLogoUrl): string {
-    $configured = $backendConfig->getConfig($configKey, 'Weline_Backend') ?: '';
-    if ($configured !== '') {
-        return $toBackendLogoUrl($configured, $width, $height);
-    }
-
-    return $template->fetchTagSourceFile('statics', $defaultSource)
-        ?: $template->fetchTagSourceFile('statics', 'Weline_Backend::img/logo.png')
-        ?: '/static/Weline/Admin/assets/images/logo-weline-default.svg';
-};
-
-$logoSm = $resolveBackendLogo('logo_sm', 'Weline_Admin::assets/images/logo-sm.png', 50, 50);
-$logoDark = $resolveBackendLogo('logo_dark', 'Weline_Admin::assets/images/logo-dark.png', 70, 70);
-$logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo-light.png', 70, 70);
+$siteBrand = ObjectManager::getInstance(SiteBrand::class);
+$logoDark = $siteBrand->resolveBackendLogoUrl($this, 'logo_dark', 70, 70);
+$logoLight = $siteBrand->resolveBackendLogoUrl($this, 'logo_light', 70, 70);
+$logoSm = $siteBrand->resolveMediaUrl('logo_sm', 50, 50);
+if ($logoSm === '') {
+    $logoSm = $siteBrand->resolveIconUrl($this, 50);
+}
 ?>
 <style data-no-extract="true" data-admin-topbar-dark-fix="true">
     #page-topbar .navbar-header .header-item,
