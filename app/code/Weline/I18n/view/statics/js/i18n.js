@@ -149,6 +149,24 @@
         return query ? '?' + query : '';
     }
 
+    function getHeaderLanguageCompactLabel(option, langCode) {
+        if (!option) {
+            return getLangDisplay(langCode);
+        }
+
+        const native = String(option.getAttribute('data-native') || '').trim();
+        if (native && native.length <= 12) {
+            return native;
+        }
+
+        const short = String(option.getAttribute('data-short') || '').trim();
+        if (short) {
+            return short;
+        }
+
+        return getLangDisplay(langCode);
+    }
+
     /**
      * 更新当前语言显示
      */
@@ -168,10 +186,7 @@
                 if (sameLang(langCode, currentLang)) {
                     activeOption = option;
                     option.classList.add('active');
-                    const nameEl = option.querySelector('.weline-choice-name');
-                    displayName = nameEl
-                        ? String(nameEl.textContent || '').trim()
-                        : langDisplay;
+                    displayName = getHeaderLanguageCompactLabel(option, langCode);
                 } else {
                     option.classList.remove('active');
                 }
