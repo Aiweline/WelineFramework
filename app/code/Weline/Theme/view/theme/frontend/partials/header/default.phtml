@@ -45,6 +45,13 @@ $showSearch = $boolValue($meta['showSearch'] ?? true, true);
 $showUserMenu = $boolValue($meta['showUserMenu'] ?? true, true);
 $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
+<?php
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteBrand;
+$__siteBrand = ObjectManager::getInstance(SiteBrand::class);
+$__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
+?>
+
 <!-- theme-partial:header option=default -->
 <style data-theme-inline="header-default">
     .weline-header {
@@ -78,6 +85,8 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
         align-items: center;
         gap: 22px;
         min-height: 74px;
+        container-type: inline-size;
+        container-name: weline-header-bar;
     }
 
     .weline-header__brand {
@@ -120,7 +129,7 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 4px;
+        gap: 8px;
         min-width: 0;
     }
 
@@ -128,11 +137,13 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 4px;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 8px 12px;
+        row-gap: 8px;
         margin: 0;
         padding: 0;
         list-style: none;
-        flex-wrap: wrap;
     }
 
     .weline-header__nav-link {
@@ -198,8 +209,42 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
     .weline-header__actions {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         gap: 8px;
         min-width: 0;
+    }
+
+    .weline-header__action-slot {
+        min-width: 0;
+        flex: 0 1 auto;
+    }
+
+    .weline-header__actions .language-switcher.weline-choice-switcher {
+        max-width: 11rem;
+    }
+
+    .weline-header__actions .currency-switcher.weline-choice-switcher {
+        max-width: 9rem;
+        flex-shrink: 0;
+    }
+
+    .weline-header__actions .weline-choice-switcher {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .weline-header__actions .weline-choice-switcher .action-line-2 {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .weline-header__actions .weline-choice-switcher .current-language,
+    .weline-header__actions .weline-choice-switcher .current-currency,
+    .weline-header__actions .weline-choice-switcher .current-currency-symbol {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .weline-header__action {
@@ -232,6 +277,89 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
         background: #fff;
         color: var(--weline-theme-text, #172033);
         cursor: pointer;
+    }
+
+    /*
+     * 桌面端：内容区放不下三列时，导航整行换到 logo/工具栏下方。
+     * 阈值需高于 --weline-theme-container（常见 1440px），否则中间列仍会挤换行。
+     */
+    @media (min-width: 1041px) {
+        .weline-header__nav-list {
+            flex-wrap: nowrap;
+        }
+
+        @container weline-header-bar (max-width: 1560px) {
+            .weline-header__bar {
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-rows: auto auto;
+                row-gap: 10px;
+                padding-bottom: 12px;
+            }
+
+            .weline-header__brand-slot {
+                grid-column: 1;
+                grid-row: 1;
+                min-width: 0;
+            }
+
+            .weline-header__tools {
+                grid-column: 2;
+                grid-row: 1;
+            }
+
+            .weline-header__nav {
+                grid-column: 1 / -1;
+                grid-row: 2;
+                justify-content: flex-start;
+                align-self: stretch;
+                width: 100%;
+                padding-top: 10px;
+                border-top: 1px solid var(--weline-theme-border, #e3e8ef);
+            }
+
+            .weline-header__nav-list {
+                flex-wrap: wrap;
+                justify-content: flex-start;
+                width: 100%;
+            }
+        }
+    }
+
+    /* 不支持 container query 的浏览器：按视口宽度回退到双行导航 */
+    @media (min-width: 1041px) and (max-width: 1560px) {
+        .weline-header__bar {
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-rows: auto auto;
+            row-gap: 10px;
+            padding-bottom: 12px;
+        }
+
+        .weline-header__brand-slot {
+            grid-column: 1;
+            grid-row: 1;
+            min-width: 0;
+        }
+
+        .weline-header__tools {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .weline-header__nav {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-content: flex-start;
+            align-self: stretch;
+            width: 100%;
+            padding-top: 10px;
+            border-top: 1px solid var(--weline-theme-border, #e3e8ef);
+        }
+
+        .weline-header__nav-list {
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            width: 100%;
+        }
     }
 
     @media (max-width: 1040px) {
@@ -539,8 +667,10 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
                          alt="<?= $esc($logoText) ?>"
                          style="max-height: <?= (int)$logoHeight ?>px">
                 <?php else: ?>
-                    <span class="weline-header__mark"><?= $esc(mb_substr($logoText, 0, 1)) ?></span>
-                    <span><?= $esc($logoText) ?></span>
+                    <img class="weline-header__logo"
+                         src="<?= htmlspecialchars($__defaultFrontendLogo, ENT_QUOTES, 'UTF-8') ?>"
+                         alt="<?= $esc($logoText) ?>"
+                         style="max-height: <?= (int)$logoHeight ?>px">
                 <?php endif; ?>
             </a>
             </w:hook>

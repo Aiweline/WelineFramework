@@ -1,33 +1,19 @@
 <?php
 /**
- * 后台 Topbar Logo - 由 Backend 模块配置
+ * 后台 Topbar Logo - 由 Backend 基础配置驱动，未配置时使用 Theme 默认 Logo。
  * Hook：Weline_Theme::backend::partials::topbar::logo
  * @hook-priority 100
  */
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Backend\Model\Config as BackendConfig;
-use Weline\FileManager\Helper\Image as ImageHelper;
+use Weline\Theme\Helper\SiteBrand;
 
 /** @var \Weline\Framework\View\Template $this */
-$backendConfig = ObjectManager::getInstance(BackendConfig::class);
-$logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend') ?: '';
-$logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend') ?: '';
-$logoSm = $backendConfig->getConfig('logo_sm', 'Weline_Backend') ?: '';
-
-if ($logoDark === '') {
-    $logoDark = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png') ?: '/Weline/Backend/view/statics/img/logo.png';
-} else {
-    $logoDark = ImageHelper::pathToMediaUrl($logoDark, 70, 70);
-}
-if ($logoLight === '') {
-    $logoLight = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png') ?: $logoDark;
-} else {
-    $logoLight = ImageHelper::pathToMediaUrl($logoLight, 70, 70);
-}
+$siteBrand = ObjectManager::getInstance(SiteBrand::class);
+$logoDark = $siteBrand->resolveBackendLogoUrl($this, 'logo_dark', 70, 70);
+$logoLight = $siteBrand->resolveBackendLogoUrl($this, 'logo_light', 70, 70);
+$logoSm = $siteBrand->resolveMediaUrl('logo_sm', 50, 50);
 if ($logoSm === '') {
-    $logoSm = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-sm.png') ?: $logoDark;
-} else {
-    $logoSm = ImageHelper::pathToMediaUrl($logoSm, 50, 50);
+    $logoSm = $siteBrand->resolveIconUrl($this, 50);
 }
 
 $homeUrl = $this->getBackendUrl('admin');

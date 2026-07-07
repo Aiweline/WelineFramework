@@ -16,9 +16,7 @@ $theme = $themeData['theme'] ?? null;
 ?>
 <base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
 <w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
-<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
-<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
-<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<template>Weline_Theme::partials/head/site-favicon.phtml</template>
 </w:hook>
 <w:geo slot="head"/>
 <theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
