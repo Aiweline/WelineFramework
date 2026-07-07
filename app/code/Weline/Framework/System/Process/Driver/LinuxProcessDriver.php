@@ -813,8 +813,10 @@ class LinuxProcessDriver extends AbstractProcessDriver
     /**
      * @inheritDoc
      * 
-     * 批量获取进程信息，通过 /proc 文件系统并行读取
-     * Linux 上 /proc 是虚拟文件系统，批量读取开销很小
+     * 批量获取进程信息。
+     *
+     * Linux 上优先读取 /proc；macOS/其他 Unix 没有 /proc 时回退到 ps/posix 检测，
+     * 避免 status/stop 等批量路径把真实运行中的进程误判为停止。
      */
     public function batchGetProcessInfo(array $pids): array
     {
@@ -831,6 +833,15 @@ class LinuxProcessDriver extends AbstractProcessDriver
         
         foreach ($validPids as $pid) {
             if (!\is_dir("/proc/{$pid}")) {
+                $fallbackInfo = $this->getProcessInfo((int)$pid);
+                if (!empty($fallbackInfo['exists'])) {
+                    $result[$pid] = $fallbackInfo;
+                    continue;
+                }
+
+                if ($this->isRunningByPid((int)$pid)) {
+                    $result[$pid]['exists'] = true;
+                }
                 continue;
             }
 

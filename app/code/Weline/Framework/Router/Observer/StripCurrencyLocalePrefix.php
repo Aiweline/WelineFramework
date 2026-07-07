@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Router\Observer;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -24,12 +25,6 @@ use Weline\Framework\Event\ObserverInterface;
  */
 class StripCurrencyLocalePrefix implements ObserverInterface
 {
-    /**
-     * 匹配路径开头的 货币(3字母) + 语言(locale格式)
-     * 例如: cny/zh_hans_cn/ 或 CNY/zh_Hans_CN/
-     */
-    private const PATTERN = '#^([a-zA-Z]{3})/([a-z]{2}_[A-Za-z]+_[A-Z]{2})(/|$)#';
-
     /**
      * @inheritDoc
      */
@@ -51,10 +46,44 @@ class StripCurrencyLocalePrefix implements ObserverInterface
             return;
         }
 
-        if (preg_match(self::PATTERN, $path, $m)) {
-            $rest = substr($path, strlen($m[0]));
-            $rest = trim($rest, '/');
-            $data->setData('path', $rest);
+        $segments = array_values(array_filter(
+            explode('/', $path),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $stripCount = 0;
+        $hasCurrency = false;
+        $hasLanguage = false;
+        foreach (array_slice($segments, 0, 2) as $segment) {
+            if (!$hasCurrency && self::isCurrencySegment($segment)) {
+                $stripCount++;
+                $hasCurrency = true;
+                continue;
+            }
+            if (!$hasLanguage && self::isLocaleSegment($segment)) {
+                $stripCount++;
+                $hasLanguage = true;
+                continue;
+            }
+            break;
         }
+
+        if ($stripCount > 0) {
+            $data->setData('path', implode('/', array_slice($segments, $stripCount)));
+        }
+    }
+
+    private static function isCurrencySegment(string $segment): bool
+    {
+        return strlen($segment) === 3
+            && $segment === strtoupper($segment)
+            && ctype_alpha($segment)
+            && !Env::isAreaRoutePathSegment($segment);
+    }
+
+    private static function isLocaleSegment(string $segment): bool
+    {
+        $segment = str_replace('-', '_', $segment);
+
+        return preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $segment) === 1;
     }
 }

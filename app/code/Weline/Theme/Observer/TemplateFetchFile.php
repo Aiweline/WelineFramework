@@ -31,6 +31,8 @@ use Weline\Theme\Service\ThemeVirtualLayoutService;
  */
 class TemplateFetchFile implements ObserverInterface
 {
+    private const FORCE_MODULE_THEME_SOURCE_KEY = '__weline_force_module_theme_source';
+
     /**
      * @var WelineTheme
      */
@@ -72,6 +74,10 @@ class TemplateFetchFile implements ObserverInterface
 
         $module_file_path = $fileData->getData('filename');
         if (empty($module_file_path)) {
+            return;
+        }
+
+        if ($this->shouldUseModuleThemeSource($fileData)) {
             return;
         }
 
@@ -156,6 +162,13 @@ class TemplateFetchFile implements ObserverInterface
         }
 
         return null;
+    }
+
+    private function shouldUseModuleThemeSource(DataObject $fileData): bool
+    {
+        $template = $fileData->getData('object');
+        return $template instanceof Template
+            && (bool)$template->getData(self::FORCE_MODULE_THEME_SOURCE_KEY);
     }
 
     private function resolveExplicitRequestTheme(string $area): ?WelineTheme

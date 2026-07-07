@@ -19,6 +19,11 @@
     min-height: 80vh;
 }
 
+/* Hook source wrapper: transparent to grid/flex direct-child layouts */
+.weline-hook-source {
+    display: contents;
+}
+
 html[dir="rtl"],
 html[data-dir="rtl"] {
     direction: rtl;

@@ -66,7 +66,7 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
     }
 
     /**
-     * 使用当前请求的 scheme+host 及后台路由前缀生成登录 URL（如 .../admin_xxx/CNY/zh_Hans_CN/admin/login）。
+     * 使用当前请求的 scheme+host 及后台路由前缀生成登录 URL。
      */
     private function getBackendLoginUrlSameOrigin(): string
     {
@@ -88,9 +88,7 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
         }
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = \w_env('user.currency', 'CNY');
-            $language = \w_env('user.lang', 'zh_Hans_CN');
-            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+            return '/' . \trim($backendPrefix, '/') . '/' . \ltrim($path, '/');
         }
         return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }

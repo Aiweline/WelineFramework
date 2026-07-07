@@ -551,7 +551,10 @@ class Core
 
     private function isCurrencySegment(string $segment): bool
     {
-        return State::isAllowedCurrencyCode($segment);
+        return \strlen($segment) === 3
+            && $segment === \strtoupper($segment)
+            && \ctype_alpha($segment)
+            && !Env::isAreaRoutePathSegment($segment);
     }
 
     private function isLocaleSegment(string $segment): bool

@@ -237,7 +237,7 @@ class Attribute extends ApiController
             $attribute->setData('data_has_option', $dataHasOption);
             
             $attribute->save();
-            $attributeId = $attribute->getId();
+            $attributeId = $attribute->getAttributeId();
             
             // 处理属性选项
             $options = $this->request->getPost('options');
