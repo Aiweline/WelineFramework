@@ -710,13 +710,8 @@ class Core extends CommandAbstract
 
         $this->printer->setup(__('刷新反射元数据与编译工厂...'));
 
-        $phpBin = PHP_BINARY ?: 'php';
         $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
-        $command = '"' . $phpBin . '" "' . $binW . '" reflection:compile 2>&1';
-
-        $output = [];
-        $exitCode = 0;
-        exec($command, $output, $exitCode);
+        $exitCode = $this->runPhpCommand([$binW, 'reflection:compile'], 120, $output);
 
         if ($exitCode === 0) {
             $this->printer->success(__('反射工厂刷新完成'));
@@ -1160,6 +1155,79 @@ class Core extends CommandAbstract
             $code
         );
         return $code;
+    }
+
+    /**
+     * @param string[] $arguments
+     */
+    private function runPhpCommand(array $arguments, int $timeoutSeconds, &$output): int
+    {
+        $output = [];
+        $phpBin = PHP_BINARY ?: 'php';
+        $descriptorSpec = [
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = @proc_open(
+            array_merge([$phpBin], $arguments),
+            $descriptorSpec,
+            $pipes,
+            BP,
+            null,
+            $this->isWindows ? ['bypass_shell' => true] : []
+        );
+
+        if (!is_resource($process)) {
+            $escapedArgs = array_map('escapeshellarg', $arguments);
+            exec('"' . $phpBin . '" ' . implode(' ', $escapedArgs) . ' 2>&1', $output, $code);
+            return $code;
+        }
+
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $stdout = '';
+        $stderr = '';
+        $startedAt = time();
+        $exitCode = null;
+
+        while (true) {
+            $stdout .= (string)stream_get_contents($pipes[1]);
+            $stderr .= (string)stream_get_contents($pipes[2]);
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $exitCode = $status['exitcode'];
+                break;
+            }
+            if ((time() - $startedAt) >= $timeoutSeconds) {
+                @proc_terminate($process);
+                $stdout .= (string)stream_get_contents($pipes[1]);
+                $stderr .= (string)stream_get_contents($pipes[2]);
+                $output = $this->splitProcessOutput($stdout, $stderr);
+                $output[] = 'reflection:compile timed out after ' . $timeoutSeconds . ' seconds';
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+                return -1;
+            }
+            usleep(100000);
+        }
+
+        $stdout .= (string)stream_get_contents($pipes[1]);
+        $stderr .= (string)stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $closeCode = proc_close($process);
+        $output = $this->splitProcessOutput($stdout, $stderr);
+        return ($exitCode !== null && $exitCode >= 0) ? $exitCode : $closeCode;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function splitProcessOutput(string $stdout, string $stderr): array
+    {
+        $combined = trim($stdout . "\n" . $stderr);
+        return $combined !== '' ? preg_split('/\R/', $combined) ?: [] : [];
     }
 
     /**
