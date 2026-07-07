@@ -44,7 +44,8 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Provide HTTP, Browser, WLS, existing-command, or documentation validation evidence where relevant; unit/E2E evidence is only expected when explicitly requested by the user or required by an existing external CI gate.
 - A deployment request authorizes delivery flow only. Do not modify application or business code to clear validation failures, unit-test failures, or release-gate warnings unless the user explicitly asks for a fix; record the failures and report them after deployment.
 - Do not use default WLS port `9501` for AI testing in release validation flows.
-- Always stop dedicated WLS instances after validation.
+- Stop dedicated WLS instances after automated validation.
+- If user manual acceptance is required, keep only the dedicated WLS instance running and report URL, instance name, port, status, and stop command; stop it after acceptance.
 - Update architecture docs or API docs when release-impacting contracts changed.
 - For the configured SAAS deployment target, use local OpenSSH with the deployment-workspace SSH config/key and Windows Generic Credential entry; keep SSH commands limited to the documented delivery flow. For online targets without explicit local SSH credentials, use the user's Chrome browser with the JumpServer / Luna Web terminal, BaoTa Web terminal, or other user-authorized web terminal; do not use the Codex built-in browser for deployment.
 - When deployment falls back to browser control, use the Chrome extension tab path: `browser.user.openTabs()` to locate the target tab, `browser.user.claimTab(tabInfo)` to attach, then `tab.cua`, `tab.playwright`, and `tab.clipboard` to operate only the claimed or dedicated tab. The `claimTab + cua` channel is the required control path for terminal interaction; never bring Chrome to the foreground, switch the user's active tab, or rely on OS focus, global keyboard input, or mouse focus.

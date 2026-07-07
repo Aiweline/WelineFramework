@@ -53,7 +53,7 @@ WLS tab 协议：`tabs.wls.contractVersion === "weline-panel-wls/v1"`，`tabs.wl
 3. 运行统一控制台协议发布报告。
 4. 优先看 `tabs.wls.actions`，再看 `requests.groups`、`bottlenecks.slowRequests`、`selectedRequest.trace.spans`、`services`、`workers`。
 5. 静态资源卡慢时，先确认是否普通静态资源；非明确预览不应绕过缓存，缺失静态文件应优先 fast missing。
-6. 修改 WLS 运行时代码后，使用独立 `9502+`、唯一 `ai-test-*` 实例验证，测试结束必须停止实例。
+6. 修改 WLS 运行时代码后，使用独立 `9502+`、唯一 `ai-test-*` 实例验证；自动验证结束必须停止实例。若交付需要用户人工验收，保留该实例并报告 URL/实例名/端口/状态/停止命令，等用户确认验收后再停止。
 
 # Validation
 

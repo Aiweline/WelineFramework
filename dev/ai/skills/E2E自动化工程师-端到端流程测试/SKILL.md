@@ -44,7 +44,8 @@ This skill is disabled by default for E2E case/spec work. Use it only when the c
 - Use `php bin/w e2e:run` for repository-supported browser testing.
 - Do not create or update E2E/Playwright specs, test cases, fixtures, or regression cases unless the user explicitly asks.
 - Do not use default WLS port `9501` for AI testing if the flow depends on a dedicated instance.
-- Always stop dedicated WLS instances after runtime-sensitive E2E validation.
+- Stop dedicated WLS instances after automated runtime-sensitive E2E validation.
+- If user manual acceptance is required, keep only the dedicated WLS instance running and report URL, instance name, port, status, and stop command; stop it after acceptance.
 
 # Inputs Required
 
