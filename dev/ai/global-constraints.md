@@ -66,6 +66,10 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 禁止任何浏览器侧前后端业务接口绕过 bin-query / `weline-api`；不得使用原生 Ajax/XHR、`fetch`、`$.ajax`、`axios`、`EventSource` 或手写接口 URL 直连后台。
 - 禁止用类名白名单、特例分支、路径判断、字符串修补等方式只修症状不修根因。
 - 禁止在使用 AI 能力时由调用方直接硬编码模型名、直接实例化模型客户端、直接按模型字段分支或绕过能力匹配；必须通过已发布的 Provider / Adapter / ModelResolver / CapabilityRouter 等适配器契约，根据任务场景、能力需求、配置、租户/模块上下文匹配正确模型。若当前能力缺少适配层，先补适配器或解析契约与文档，再接入 AI 调用。
+- AI 模型、场景或租户配置一旦在数据库中选定 `supplier` / `model` / `account_id`，该绑定即为当前事实源；排障时只能修复该绑定对应的账号凭据、余额、启用状态、`provider_config`、适配器或能力路由缺陷，禁止为了跑通流程临时切换供应商、模型或账号。确需变更供应商时，必须先得到用户对具体变更的明确授权，并记录原绑定、新绑定和原因。
+- 正式站 AI 建站、部署或发布验收必须以真实浏览器/公网 URL/运行时状态为准；代码端测试、CLI 请求或数据库状态只能作为辅助证据，不得替代用户要求的 browser smoke。未完成真实浏览器验收或验收失败时，不得汇报“已通过/已完成”。
+- AI 建站生成质量失败时不得通过 placeholder、CSS-only、无图 composition、跳过必需图片、降低提示词或改判失败状态来兜底；应保留真实错误并修复供应商账号、能力路由、队列、生成器或 UI 状态判断根因。
+- 用户在会话中明确纠正的生产边界、账号、域名、固定供应商、固定会话和验收口径属于本项目硬约束；后续同类任务应优先按纠正后的事实执行，不得回到旧假设。
 
 ### 4.1 跨模块协作与 w_query（强制）
 
@@ -145,7 +149,7 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 - 在 PowerShell 中执行 PHP `-r`、one-liner 或包含多层引号/JSON/数组字面量的诊断命令时，默认不要临场拼复杂转义；优先使用临时 `.php` 脚本、PowerShell here-string、已有 CLI 命令或封装脚本，并在交付中给出可复制的最终命令。
 - 只有命令足够简单且已确认 PowerShell 解析规则时，才直接使用 `php -r` 内联代码；必要时用 `--%` 停止 PowerShell 参数解析，但必须说明其不适合需要 PowerShell 变量展开的场景。
 - 禁止用未显式指定编码的 PowerShell `Get-Content` 读取中文文档；读取中文/UTF-8 文件必须使用 `Get-Content -Encoding UTF8`，避免再次产生 `AI 鎬诲垯...` 这类乱码输出。
-- 测试结束必须执行 `php bin/w server:stop -n ai-test-{unique-id}`。
+- 自动化验证结束必须执行 `php bin/w server:stop -n ai-test-{unique-id}`。若交付需要用户通过 WLS/Browser 人工验收，不要在最终交付前关闭该专用实例；必须保留唯一 `ai-test-*`、`9502+` 实例，并在交付中写明测试 URL、实例名、端口、当前状态和精确停止命令。用户确认验收后，再执行 `server:stop` 并报告清理结果。禁止留下未说明、未托管或无停止命令的运行实例。
 - WLS 长循环、长连接、批量 I/O、大 JSON、模板渲染和进程心跳/READY/IPC 路径不得同步阻塞；需要等待时使用协程调度、短预算非阻塞轮询或 IPC 回调。
 
 ## 10. 验证底线
@@ -168,6 +172,7 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 - 只更新长期可复用内容，不写无价值流水账。
 - 交付说明必须区分：已改内容、验证证据、未验证项、剩余风险。
 - 每次完成开发、修复、部署或可运行功能交付后，最终交付说明必须优先列出本次相关地址：本地/测试/线上页面 URL、后台入口 URL、API endpoint、文档路径/URL、PR/commit/release 地址，以及曾启动的测试实例地址。
+- 若 WLS 实例保留给用户人工验收，最终交付必须明确写出“WLS 已保留待人工验收”，并列出实例名、端口、URL、状态和停止命令；不得声称已清理。用户确认验收后必须停止实例并反馈清理结果。
 - 若没有可直接打开的 live URL，仍必须列出相关路由/路径地址，并明确访问前置条件（例如需要启动 WLS、需要后台登录 Session、需要部署到指定环境等）；只有确实没有任何可访问地址或相关路径时，才写“无可访问链接”。可点击资源优先使用 Markdown 链接格式。
 - 验收报告必须来自实际执行结果；禁止用“理论上”“应该可以”“看代码推测”冒充证据。
 
@@ -181,13 +186,21 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 4. 同步时从源仓库检查目标仓库需要的同名非 GuoLaiRen 模块是否有变更，并把需要的文件同步到目标仓库；`GuoLaiRen/*` 本体不再从源仓库恢复或同步。
 5. 在发布工作区提交并推送 `master`。
 6. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config ec2-user@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
-7. SSH 登录后通过 `sudo -iu weline` 切换到项目部署账户，并进入线上项目目录 `/home/weline-test` 执行 `git pull origin master` 或按 remote 配置更新。
-8. 在 `/home/weline-test` 下按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
-9. 用 `php bin/w http:request /` 或目标页面/API 验证。
+7. SAAS 服务器上的棋牌部署目录固定区分环境：`/home/weline-test` 是 pre/测试预览环境，`/home/weline` 是正式站/prod 环境，对应 `qipaisaas.com`。用户只说“部署/上线”且未明确正式站时，默认进入 pre；用户明确说“正式站/正式部署/上线正式站/qipaisaas.com:443”时，必须进入 `/home/weline`。
+8. SSH 登录后通过 `sudo -iu weline` 切换到项目部署账户，并进入本次目标目录执行 `git pull origin master` 或按 remote 配置更新。`/home/weline` 即使保留框架仓库 remote 命名或 URL 痕迹，仍是棋牌 SaaS 正式站目录；不要仅凭 remote 名称把它判定为错误仓库，但必须照常检查 HEAD、工作树脏状态和用户改动。
+9. 在本次目标目录下按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
+10. 用 `php bin/w http:request /` 或目标页面/API 验证。
+
+正式站 AI 建站会话的浏览器验收口径：
+
+- 用户要求“正式站浏览器 smoke 一次建站成功”时，必须在正式站后台真实触发并观察 Plan、Build/Visual Edit、Publish，全链路不能靠手工改队列状态或后台脚本伪造通过。
+- 固定测试域名或购买流程一旦进入当前会话，后续推荐、购买、Plan、Build、Publish 都围绕同一域名推进；清理旧会话只允许发生在新会话触发前，不得中途换域名、换 session、换供应商或降低质量。
+- UI 弹窗提示失败但队列/页面实际生成成功时，先查 queue、session、plan_json、publish_status、页面输出和日志；优先修 UI/队列结果判断，不要重复消耗 AI 或把成功结果当失败重跑。
+- 用户要求删除指定模块，例如 `Weline_GenerativeEngineOptimization`，正式站后续部署不得重新同步、恢复或启用该模块。
 
 部署请求只代表执行交付流程，不授权临时修改业务代码来清理验证失败、单元测试失败或发布门禁提示；除非用户明确要求修复，否则仅记录失败项，并在部署完成后的结果中提示。
 
-已配置 SAAS 部署目标允许从 Codex shell 或本机终端使用上述 SSH 配置执行交付流程；SSH 登录账户为 `ec2-user`，项目部署账户为 `weline`，部署命令必须切换到 `weline` 后在 `/home/weline-test` 执行。SSH 只授权用于进入服务器后按既有部署步骤更新代码、执行升级/重载和验证命令，不授权临时修改业务代码、探测其他服务器、批量删除数据或绕过发布门禁。部署线上环境只能使用上述已配置的本机 OpenSSH 路径；SSH 凭据、配置、网络或权限不可用时停止部署并报告阻塞。禁止回退或改用 Chrome 浏览器中的 JumpServer / Luna Web 终端、宝塔 Web 终端；禁止使用 Codex 内置浏览器执行部署。
+已配置 SAAS 部署目标允许从 Codex shell 或本机终端使用上述 SSH 配置执行交付流程；SSH 登录账户为 `ec2-user`，项目部署账户为 `weline`，部署命令必须切换到 `weline` 后在本次目标目录执行：pre/测试预览为 `/home/weline-test`，正式站/prod 为 `/home/weline`。SSH 只授权用于进入服务器后按既有部署步骤更新代码、执行升级/重载和验证命令，不授权临时修改业务代码、探测其他服务器、批量删除数据或绕过发布门禁。部署线上环境只能使用上述已配置的本机 OpenSSH 路径；SSH 凭据、配置、网络或权限不可用时停止部署并报告阻塞。禁止回退或改用 Chrome 浏览器中的 JumpServer / Luna Web 终端、宝塔 Web 终端；禁止使用 Codex 内置浏览器执行部署。
 
 禁止回退到线上部署浏览器操作；Chrome / 浏览器只用于部署后的用户可见功能验证，不得接管 JumpServer / Luna / 宝塔 Web 终端执行部署。
 

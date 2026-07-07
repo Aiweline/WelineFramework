@@ -1046,6 +1046,7 @@ class SharedStateServiceManager
             '--bootstrap-instance=' . $requesterInstanceName,
             '--log-instance-name=' . $sharedLogInstanceName,
             '--shared-service=1',
+            '--memory-limit=' . (string) ($definition['memory_limit'] ?? '256M'),
         ];
 
         if ((string) $definition['role'] === ControlMessage::ROLE_MEMORY_SERVER) {
@@ -1170,6 +1171,9 @@ class SharedStateServiceManager
         $sharedState = \is_array($wlsConfig['shared_state'] ?? null) ? $wlsConfig['shared_state'] : [];
         $ensureTimeoutSec = (float) ($sharedState['ensure_timeout_sec'] ?? self::DEFAULT_ENSURE_TIMEOUT_SEC);
         $ensurePollIntervalMs = (int) ($sharedState['ensure_poll_interval_ms'] ?? self::DEFAULT_ENSURE_POLL_INTERVAL_MS);
+        $memoryLimit = \Weline\Server\Service\Contract\ServiceContext::normalizeMemoryLimit(
+            $config['worker_memory_limit'] ?? $wlsConfig['worker_memory_limit'] ?? '256M'
+        );
 
         if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
@@ -1219,6 +1223,7 @@ class SharedStateServiceManager
                 'requester_instance_name' => $requesterInstanceName,
                 'ensure_timeout_sec' => $ensureTimeoutSec,
                 'ensure_poll_interval_ms' => $ensurePollIntervalMs,
+                'memory_limit' => $memoryLimit,
             ];
         }
 
@@ -1281,6 +1286,7 @@ class SharedStateServiceManager
             'requester_instance_name' => $requesterInstanceName,
             'ensure_timeout_sec' => $ensureTimeoutSec,
             'ensure_poll_interval_ms' => $ensurePollIntervalMs,
+            'memory_limit' => $memoryLimit,
         ];
     }
 

@@ -44,7 +44,7 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
 3. Identify required release gates:
    - unit tests and focused regression evidence
    - E2E or HTTP validation evidence
-   - WLS runtime cleanup proof when runtime was touched
+   - WLS runtime cleanup proof, or manual-acceptance handoff proof, when runtime was touched
    - documentation update status
    - security / ACL evidence when routes, permissions, sessions, tokens, or sensitive data changed
    - migration/setup/schema safety when data structure changed
@@ -86,7 +86,7 @@ Validated gates:
 Missing evidence:
 Release risks:
 Unsafe or skipped commands:
-WLS cleanup proof:
+WLS cleanup or manual-acceptance handoff proof:
 Problems escalated:
 Required follow-up:
 ```

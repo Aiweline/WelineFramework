@@ -30,7 +30,7 @@ php bin/w http:request / # Frontend route test
 php bin/w server:start -p 9502 -n ai-test-{unique-id}  # Start test instance
 php bin/w server:reload # Reload test instance
 php bin/w server:restart -r # Restart test instance when master-level changes require it
-php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance
+php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation, or after user acceptance
 ```
 
 Git commit + dual push（用户明确要求提交时；`origin`=Gitee，`github`=GitHub）：

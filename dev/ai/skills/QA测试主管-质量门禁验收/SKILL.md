@@ -44,7 +44,7 @@ This skill enforces quality gates on returned work. It reviews validation eviden
 - Provide real-entry, HTTP, Browser, WLS, existing-command, or documentation evidence where relevant.
 - Do not require, create, update, or treat missing unit tests, E2E specs, fixtures, or test cases as blockers unless the user explicitly requested those test assets.
 - Do not use default WLS port `9501` for AI testing when runtime evidence is required.
-- Always require dedicated WLS instance cleanup in runtime validation records.
+- Always require dedicated WLS instance cleanup in runtime validation records, or an explicit manual-acceptance handoff with URL, instance name, port, status, and stop command.
 - Update module README, architecture docs, or API docs when the change requires it.
 
 # Inputs Required

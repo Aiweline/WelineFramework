@@ -291,14 +291,15 @@ When tests or validation depend on WLS:
 php bin/w server:start -p 9502 -n ai-test-{unique-id}
 php bin/w setup:upgrade --route
 php bin/w e2e:run --module=Vendor_Module --project=chromium --headless --workers=1
-php bin/w server:stop -n ai-test-{unique-id}
+php bin/w server:stop -n ai-test-{unique-id} # run after automated validation, or after user acceptance
 ```
 
 Rules:
 
 - Never use default WLS port `9501` for AI validation.
 - Use unique `ai-test-*` instance names.
-- Stop every dedicated test instance before finishing.
+- Stop every dedicated test instance after automated validation.
+- If the user needs manual acceptance, keep only the dedicated WLS instance running and report URL, instance name, port, status, and exact stop command; stop it after the user confirms acceptance.
 - Use `server:reload` for ordinary code changes and `server:restart -r` for master/startup/runtime-level changes.
 - If runtime or browser automation is blocked, report the blocker; do not claim visible behavior was verified.
 

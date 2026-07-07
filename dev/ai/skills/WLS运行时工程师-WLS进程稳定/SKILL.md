@@ -38,17 +38,19 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 4. Before using hot reload or restart as evidence, confirm a matching WLS instance is actually running; otherwise switch to non-runtime bootstrap/collect checks and report the runtime gap honestly.
 5. Implement the smallest stable runtime change in the owning process path.
 6. Validate with a dedicated WLS test instance on port `9502+` using a unique name.
-7. Stop the dedicated WLS test instance after validation.
-8. Report lifecycle impact, validation steps, and cleanup confirmation.
+7. Stop the dedicated WLS test instance after automated validation, unless user manual acceptance is required.
+8. If manual acceptance is required, keep the dedicated instance running and report URL, instance name, port, status, and exact stop command; stop it after the user confirms acceptance.
+9. Report lifecycle impact, validation steps, and cleanup or manual-acceptance handoff.
 
 # Weline Rules
 
 - Do not use default WLS port `9501` for AI testing.
 - Always start a dedicated WLS test instance on port `9502+`.
 - Always use a unique AI test instance name.
-- Always stop the AI test instance after testing.
+- Stop the AI test instance after automated validation.
+- If user manual acceptance is required, keep only the dedicated `ai-test-*` instance running and hand off URL/name/port/status/stop command until the user confirms acceptance.
 - Do not reuse test instance names.
-- Do not leave test instances running.
+- Do not leave unmanaged test instances running.
 - Do not use `sleep`, `die`, or `exit` inside WLS runtime-sensitive code.
 - Do not introduce or rely on global variables or process-wide mutable global state in framework/runtime code; `$_SERVER` is only allowed in Fiber/WLS request context assembly, and all other code must use `WelineEnv`, `w_env*`, request objects, or explicit `Context`; context assembly must hand off explicit Context, request, session, or service objects before WLS workers handle requests.
 - Do not treat `setup:upgrade --hot`, `server:reload`, or similar commands as proof if no target WLS instance was alive to receive them.
@@ -66,14 +68,15 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 
 - A runtime-safe change to the owning WLS process path.
 - Evidence from a dedicated WLS test instance.
-- Confirmation that the test instance was stopped after validation.
+- Confirmation that the test instance was stopped after automated validation, or a manual-acceptance handoff with URL, instance name, port, status, and stop command.
 
 # Validation
 
 - Start a unique dedicated test instance on port `9502+`.
 - Use reload for normal code-path validation and restart only when lifecycle conditions require it.
 - Confirm worker behavior, cleanup, and stability after the change.
-- Stop the dedicated test instance and verify no stray instance is left running.
+- Stop the dedicated test instance after automated validation and verify no stray instance is left running.
+- For user manual acceptance, keep the dedicated instance running only with an explicit handoff and stop it after acceptance.
 - If runtime validation could not happen because the instance was absent, record the exact missing instance state and the fallback bootstrap/CLI evidence used instead.
 
 # Constraints
@@ -81,7 +84,7 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 - Do not validate on port `9501`.
 - Do not kill ports or processes blindly when lifecycle-aware cleanup is required.
 - Do not introduce blocking calls into runtime-sensitive worker code.
-- Do not leave runtime test instances behind after the session.
+- Do not leave unmanaged runtime test instances behind after the session; user-acceptance handoff instances must be explicitly named, reachable, and paired with a stop command.
 
 # Shared Collaboration Contract
 
