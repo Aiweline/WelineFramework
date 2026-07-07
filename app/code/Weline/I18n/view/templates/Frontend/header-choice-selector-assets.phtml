@@ -5,6 +5,8 @@
     flex-direction: column;
     justify-content: center;
     min-height: 40px;
+    max-width: 100%;
+    min-width: 0;
     padding: 0.45rem 0.55rem;
     border: 1px solid transparent;
     border-radius: 2px;
@@ -23,12 +25,21 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
     font-size: 0.84rem;
     font-weight: 700;
     line-height: 1.25;
+    overflow: hidden;
 }
 .weline-choice-switcher .current-language {
-    max-width: 9rem;
+    max-width: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weline-choice-switcher .current-currency {
+    max-width: 4.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

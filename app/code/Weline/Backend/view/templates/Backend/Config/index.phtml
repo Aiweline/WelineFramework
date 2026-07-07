@@ -32,7 +32,7 @@ $configs = $configs ?? [];
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4"><lang>外观与 Logo</lang></h4>
-                <p class="text-muted mb-4"><lang>配置后台 Logo（深色/浅色/小图）及站点名称、描述，将显示在顶部栏等位置。</lang></p>
+                <p class="text-muted mb-4"><lang>配置全站 Logo 与站点图标：未填写时使用 Theme 默认资源；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。</lang></p>
                 
                 <form id="configForm">
                     <!-- Logo配置 -->
@@ -100,6 +100,28 @@ $configs = $configs ?? [];
                                                   h='50'/>
                                     <small class="form-text text-muted">
                                         <lang>用于侧边栏折叠时的小尺寸Logo，建议高度50px</lang>
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label"><lang>站点图标（Favicon）</lang></label>
+                                    <input type="hidden" class="form-control" id="site_icon" name="config[site_icon]"
+                                           value="{{configs.site_icon}}">
+                                    <file-manager target='#site_icon'
+                                                  title='@lang(选择站点图标)'
+                                                  vars='configs'
+                                                  preview="1"
+                                                  path='backend/icon/'
+                                                  value='configs.site_icon'
+                                                  multi='0'
+                                                  ext="jpg,jpeg,png,gif,webp,svg,ico"
+                                                  size="1024000"
+                                                  w='128'
+                                                  h='128'/>
+                                    <small class="form-text text-muted">
+                                        <lang>前后台浏览器标签页图标；留空则使用 Theme 默认 icon（与 Logo 同源）。</lang>
                                     </small>
                                 </div>
                             </div>
