@@ -1210,11 +1210,37 @@ if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
 
 // Native WLS HTTPS is a development/runtime convenience path; keep the
 // handshake surface modern and small instead of negotiating legacy protocols.
-$cryptoMethod = STREAM_CRYPTO_METHOD_TLS_SERVER;
-if (\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
-} elseif (\defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+// Production can pin the server protocol list with wls.ssl.protocols, for
+// example ['tls1.2'], when a TLS implementation path proves unstable.
+$cryptoMethod = 0;
+$wlsConfiguredSslProtocols = $wlsSslConfig['protocols'] ?? ($wlsSslConfig['server_protocols'] ?? null);
+if (\is_string($wlsConfiguredSslProtocols)) {
+    $wlsConfiguredSslProtocols = \preg_split('/[\s,|]+/', $wlsConfiguredSslProtocols, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+}
+if (\is_array($wlsConfiguredSslProtocols)) {
+    foreach ($wlsConfiguredSslProtocols as $wlsConfiguredSslProtocol) {
+        $wlsConfiguredSslProtocol = \strtolower(\trim((string)$wlsConfiguredSslProtocol));
+        $wlsConfiguredSslProtocol = \str_replace(['_', '-', ' '], ['.', '.', ''], $wlsConfiguredSslProtocol);
+        $wlsConfiguredSslProtocol = \str_replace('tlsv', 'tls', $wlsConfiguredSslProtocol);
+        if (\in_array($wlsConfiguredSslProtocol, ['1.2', 'tls1.2', 'tls12'], true)
+            && \defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')
+        ) {
+            $cryptoMethod |= STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+        }
+        if (\in_array($wlsConfiguredSslProtocol, ['1.3', 'tls1.3', 'tls13'], true)
+            && \defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')
+        ) {
+            $cryptoMethod |= STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
+        }
+    }
+}
+if ($cryptoMethod === 0) {
+    $cryptoMethod = STREAM_CRYPTO_METHOD_TLS_SERVER;
+    if (\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
+        $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+    } elseif (\defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
+        $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+    }
 }
 $wlsModernTlsCiphers = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:!aNULL:!eNULL:!MD5:!RC4:!DES:!3DES:!DSS:!SHA1:!DHE';
 $wlsModernTlsCurves = 'X25519:prime256v1';

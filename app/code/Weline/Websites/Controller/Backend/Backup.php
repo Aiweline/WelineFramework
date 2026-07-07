@@ -8,6 +8,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Service\WebsiteBackupService;
 
 /**
  * 网站备份控制器
@@ -18,6 +19,14 @@ use Weline\Websites\Model\Website;
 #[Acl('Weline_Websites::website_backup', '网站备份', 'mdi-backup-restore', '网站备份', 'Weline_Websites::website_service')]
 class Backup extends BackendController
 {
+    private WebsiteBackupService $backupService;
+
+    public function __init()
+    {
+        parent::__init();
+        $this->backupService = ObjectManager::getInstance(WebsiteBackupService::class);
+    }
+
     /**
      * 备份管理首页
      * 
@@ -30,12 +39,11 @@ class Backup extends BackendController
             /** @var Website $websiteModel */
             $websiteModel = ObjectManager::getInstance(Website::class);
             $websites = $websiteModel->select()->fetchArray();
-            
-            // 获取备份列表
-            $backups = $this->getBackupList();
+            $backups = $this->backupService->listBackups();
             
             $this->assign('websites', $websites);
             $this->assign('backups', $backups);
+            $this->assign('backup_types', $this->backupService->getTypeOptions());
             
             return $this->fetch();
             
@@ -43,6 +51,7 @@ class Backup extends BackendController
             Message::error(__('加载备份管理失败：%{1}', $e->getMessage()));
             $this->assign('websites', []);
             $this->assign('backups', []);
+            $this->assign('backup_types', []);
             return $this->fetch();
         }
     }
@@ -55,11 +64,22 @@ class Backup extends BackendController
     #[Acl('Weline_Websites::website_backup_create', '创建网站备份', 'mdi-content-save', '创建网站备份')]
     public function create(): string
     {
+        $backupAction = (string)($this->request->getPost('backup_action', $this->request->getGet('backup_action', 'create')) ?: 'create');
+        if ($backupAction === 'download') {
+            $this->sendDownload((string)$this->request->getParam('filename', ''));
+        }
+
         if (!$this->isPost()) {
             return $this->jsonResponse(false, __('无效的请求方法'));
         }
         
         try {
+            if ($backupAction === 'delete') {
+                $filename = (string)$this->request->getPost('filename', '');
+                $this->backupService->deleteBackup($filename);
+                return $this->jsonResponse(true, __('备份已删除'));
+            }
+
             $websiteIdRaw = $this->request->getPost('website_id', null);
             $websiteId = (int)($websiteIdRaw ?? 0);
             $backupType = $this->request->getPost('backup_type', 'full'); // full, database, files
@@ -67,43 +87,30 @@ class Backup extends BackendController
             if ($websiteIdRaw === null || $websiteIdRaw === '' || $websiteId < Website::ID_DEFAULT) {
                 return $this->jsonResponse(false, __('无效的网站ID'));
             }
+
+            $backup = $this->backupService->createBackup(
+                $websiteId,
+                (string)$backupType,
+                (int)$this->session->getLoginUserID()
+            );
             
-            // TODO: 实现备份逻辑
-            $backupFile = $this->performBackup($websiteId, $backupType);
-            
-            return $this->jsonResponse(true, __('备份创建成功'), ['backup_file' => $backupFile]);
+            return $this->jsonResponse(true, __('备份创建成功'), ['backup' => $backup]);
             
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('备份创建失败：%{1}', $e->getMessage()));
         }
     }
-    
-    /**
-     * 执行备份
-     * 
-     * @param int $websiteId
-     * @param string $backupType
-     * @return string
-     */
-    private function performBackup(int $websiteId, string $backupType): string
+
+    private function sendDownload(string $filename): never
     {
-        // TODO: 实现备份逻辑
-        // 1. 数据库备份
-        // 2. 文件备份
-        // 3. 压缩备份文件
-        // 4. 保存备份信息
-        return '';
-    }
-    
-    /**
-     * 获取备份列表
-     * 
-     * @return array
-     */
-    private function getBackupList(): array
-    {
-        // TODO: 从备份目录或数据库获取备份列表
-        return [];
+        try {
+            $path = $this->backupService->getBackupPath($filename);
+        } catch (\Throwable $e) {
+            Message::error(__('下载备份失败：%{1}', $e->getMessage()));
+            $this->request->getResponse()->redirect($this->getBackendUrl('*/backup/index'))->send();
+        }
+
+        $this->request->getResponse()->download($path, $filename);
     }
     
     /**
@@ -121,6 +128,6 @@ class Backup extends BackendController
             'success' => $success,
             'message' => $message,
             'data' => $data,
-        ], JSON_UNESCAPED_UNICODE);
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }
