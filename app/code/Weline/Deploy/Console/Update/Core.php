@@ -1124,9 +1124,8 @@ class Core extends CommandAbstract
 
     /**
      * @param string[] $arguments
-     * @param string[] $output
      */
-    private function runGitCommand(string $workingDirectory, array $arguments, array &$output): int
+    private function runGitCommand(string $workingDirectory, array $arguments, &$output): int
     {
         $output = [];
         $command = array_merge([$this->gitExecutable], $arguments);
