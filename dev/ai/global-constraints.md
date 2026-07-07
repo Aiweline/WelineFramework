@@ -185,10 +185,10 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 3. `app/code/GuoLaiRen` 已整体迁移到发布目标仓库，源仓库不再支持 `GuoLaiRen/*` 下任何模块；后续 GuoLaiRen 供应商模块的开发、验证、提交、上线、模块文档和技能维护必须在目标仓库完成。
 4. 同步时从源仓库检查目标仓库需要的同名非 GuoLaiRen 模块是否有变更，并把需要的文件同步到目标仓库；`GuoLaiRen/*` 本体不再从源仓库恢复或同步。
 5. 在发布工作区提交并推送 `master`。
-6. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config ec2-user@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
-7. SAAS 服务器上的棋牌部署目录固定区分环境：`/home/weline-test` 是 pre/测试预览环境，`/home/weline` 是正式站/prod 环境，对应 `qipaisaas.com`。用户只说“部署/上线”且未明确正式站时，默认进入 pre；用户明确说“正式站/正式部署/上线正式站/qipaisaas.com:443”时，必须进入 `/home/weline`。
-8. SSH 登录后通过 `sudo -iu weline` 切换到项目部署账户，并进入本次目标目录执行 `git pull origin master` 或按 remote 配置更新。`/home/weline` 即使保留框架仓库 remote 命名或 URL 痕迹，仍是棋牌 SaaS 正式站目录；不要仅凭 remote 名称把它判定为错误仓库，但必须照常检查 HEAD、工作树脏状态和用户改动。
-9. 在本次目标目录下按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
+6. 部署或上线请求必须先确认真实目标：仓库、服务器、SSH 配置、部署目录、目标分支和环境（pre/prod）都不能靠默认假设推断。用户未明确目标时，只能先核对本地仓库状态与远端代码分支，不得把固定服务器、域名、目录或凭据当作本仓库默认部署信息。
+7. 只有当仓库文档、用户指令或当前目标工作区明确提供了 SSH 入口、部署账户、部署目录和更新命令时，才允许执行远端部署；否则停止在“待确认部署目标”并报告阻塞。
+8. SSH 登录后的部署目录、Git 更新方式和运行命令以目标项目自己的文档和现场配置为准；不要仅凭某个历史目录、remote 命名或服务器习惯把它认定为本次上线目标。
+9. 在已确认的目标目录下按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
 10. 用 `php bin/w http:request /` 或目标页面/API 验证。
 
 正式站 AI 建站会话的浏览器验收口径：
@@ -200,7 +200,7 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 
 部署请求只代表执行交付流程，不授权临时修改业务代码来清理验证失败、单元测试失败或发布门禁提示；除非用户明确要求修复，否则仅记录失败项，并在部署完成后的结果中提示。
 
-已配置 SAAS 部署目标允许从 Codex shell 或本机终端使用上述 SSH 配置执行交付流程；SSH 登录账户为 `ec2-user`，项目部署账户为 `weline`，部署命令必须切换到 `weline` 后在本次目标目录执行：pre/测试预览为 `/home/weline-test`，正式站/prod 为 `/home/weline`。SSH 只授权用于进入服务器后按既有部署步骤更新代码、执行升级/重载和验证命令，不授权临时修改业务代码、探测其他服务器、批量删除数据或绕过发布门禁。部署线上环境只能使用上述已配置的本机 OpenSSH 路径；SSH 凭据、配置、网络或权限不可用时停止部署并报告阻塞。禁止回退或改用 Chrome 浏览器中的 JumpServer / Luna Web 终端、宝塔 Web 终端；禁止使用 Codex 内置浏览器执行部署。
+当用户明确给出当前仓库可用的 SSH 配置、部署账户、目标目录和发布命令时，允许从 Codex shell 或本机终端执行交付流程。SSH 只授权用于进入该目标环境后按既有部署步骤更新代码、执行升级/重载和验证命令，不授权临时修改业务代码、探测其他服务器、批量删除数据或绕过发布门禁。若 SSH 凭据、配置、网络、目录或权限不可用，停止部署并报告阻塞；不要把其他项目的历史服务器、目录、凭据名称或浏览器终端流程自动套用到当前仓库。
 
 禁止回退到线上部署浏览器操作；Chrome / 浏览器只用于部署后的用户可见功能验证，不得接管 JumpServer / Luna / 宝塔 Web 终端执行部署。
 
