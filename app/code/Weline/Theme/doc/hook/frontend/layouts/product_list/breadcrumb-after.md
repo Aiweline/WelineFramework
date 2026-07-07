@@ -1,0 +1,9 @@
+# 产品列表面包屑之后
+
+Hook: `Weline_Theme::frontend::layouts::product-list::breadcrumb-after`
+
+在产品列表布局面包屑之后触发。
+
+## Implementation
+
+Contributing modules implement this hook under `view/hooks/` by mapping `::` to directories and keeping templates thin.

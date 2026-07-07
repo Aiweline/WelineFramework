@@ -238,9 +238,7 @@ class BackendController extends PcController
         }
 
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = (string)(\w_env('user.currency', 'CNY') ?? 'CNY');
-            $language = (string)(\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
-            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+            return '/' . \trim($backendPrefix, '/') . '/' . \ltrim($path, '/');
         }
 
         return '/' . \ltrim($path, '/');
@@ -267,6 +265,17 @@ class BackendController extends PcController
         $path = '/' . \trim($path, '/');
         $segments = \explode('/', \trim($path, '/'));
         $firstSegment = (string)($segments[0] ?? '');
+        $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+
+        if ($backendPrefix !== ''
+            && isset($segments[0], $segments[1], $segments[2], $segments[3])
+            && \strcasecmp((string)$segments[0], $backendPrefix) === 0
+            && $this->isCurrencySegment($segments[1])
+            && $this->isLocaleSegment($segments[2])
+        ) {
+            \array_splice($segments, 1, 2);
+            return '/' . \implode('/', $segments);
+        }
 
         if (isset($segments[1], $segments[2], $segments[3])
             && $firstSegment !== ''

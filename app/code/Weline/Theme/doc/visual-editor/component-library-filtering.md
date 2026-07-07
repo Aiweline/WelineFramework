@@ -100,8 +100,7 @@ async function filterComponentLibrary(target) {
         )
     });
     
-    const response = await fetch(`/backend/visual/api/component/compatible?${params}`);
-    const data = await response.json();
+    const data = await Weline.Api.get('/backend/visual/api/component/compatible', Object.fromEntries(params));
     
     if (data.success) {
         highlightCompatibleComponents(data.components);

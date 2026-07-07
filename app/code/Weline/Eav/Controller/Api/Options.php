@@ -89,7 +89,7 @@ class Options extends BackendController
 
             // 查询选项
             $query = $this->attributeOption->reset()
-                ->where(Option::schema_fields_attribute_id, $this->eavAttribute->getId());
+                ->where(Option::schema_fields_attribute_id, $this->eavAttribute->getAttributeId());
 
             if ($search) {
                 $query->where(Option::schema_fields_value, ['like', '%' . $search . '%']);
@@ -121,7 +121,7 @@ class Options extends BackendController
                 'success' => true,
                 'data' => [
                     'attribute' => [
-                        'id' => $this->eavAttribute->getId(),
+                        'id' => $this->eavAttribute->getAttributeId(),
                         'code' => $this->eavAttribute->getCode(),
                         'name' => $this->eavAttribute->getName(),
                         'has_option' => $this->eavAttribute->hasOption(),
