@@ -1090,11 +1090,51 @@ class Core extends CommandAbstract
     private function commandExists(string $command): bool
     {
         if ($this->isWindows) {
-            exec("where {$command} 2>nul", $output, $returnCode);
+            $safeCommand = preg_replace('/[^a-zA-Z0-9_.-]/', '', $command) ?: $command;
+            $whereExe = getenv('WINDIR') ?: 'C:\\Windows';
+            $whereExe = rtrim($whereExe, "\\/") . '\\System32\\where.exe';
+
+            if (is_file($whereExe)) {
+                exec('"' . $whereExe . '" ' . escapeshellarg($safeCommand) . ' 2>nul', $output, $returnCode);
+                if ($returnCode === 0) {
+                    return true;
+                }
+            }
+
+            foreach ($this->windowsCommandCandidatePaths($safeCommand) as $candidate) {
+                if (is_file($candidate) && is_executable($candidate)) {
+                    return true;
+                }
+            }
+
+            exec("where {$safeCommand} 2>nul", $output, $returnCode);
         } else {
             exec("which {$command} 2>/dev/null", $output, $returnCode);
         }
         return $returnCode === 0;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function windowsCommandCandidatePaths(string $command): array
+    {
+        $extensions = pathinfo($command, PATHINFO_EXTENSION) !== ''
+            ? ['']
+            : ['.exe', '.cmd', '.bat', '.com'];
+        $directories = [
+            getenv('WINDIR') ? rtrim((string)getenv('WINDIR'), "\\/") . '\\System32' : 'C:\\Windows\\System32',
+            'C:\\Program Files\\Git\\cmd',
+            'C:\\Program Files\\Git\\bin',
+        ];
+
+        $candidates = [];
+        foreach ($directories as $directory) {
+            foreach ($extensions as $extension) {
+                $candidates[] = rtrim($directory, "\\/") . '\\' . $command . $extension;
+            }
+        }
+        return $candidates;
     }
 }
 
