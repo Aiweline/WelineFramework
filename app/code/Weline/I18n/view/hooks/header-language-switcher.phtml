@@ -269,15 +269,18 @@ foreach ($languages as $lang) {
         break;
     }
 }
-$currentLanguageLabel = $currentLanguageName !== ''
+$currentLanguageFullLabel = $currentLanguageName !== ''
     ? $currentLanguageName
     : ($currentLanguageNative !== '' ? $currentLanguageNative : $currentLanguageShort);
+$currentLanguageLabel = $currentLanguageNative !== '' && mb_strlen($currentLanguageNative) <= 12
+    ? $currentLanguageNative
+    : $currentLanguageShort;
 
 // 渲染语言切换器
 // 注意：URL 链接由前端 i18n.js 模块动态生成（通过 updateLanguageSwitcherLinks()）
 // 使用 data-i18n-switcher 属性标记，供 JavaScript 识别和初始化
 ?>
-<div class="language-switcher weline-choice-switcher" data-i18n-switcher="true" data-weline-choice-switcher="language" data-choice-page-size="<?= $selectorPageSize ?>" role="button" tabindex="0" aria-haspopup="menu" aria-label="<?= __('切换语言') ?>">
+<div class="language-switcher weline-choice-switcher" data-i18n-switcher="true" data-weline-choice-switcher="language" data-choice-page-size="<?= $selectorPageSize ?>" data-current-short="<?= $escape($currentLanguageShort) ?>" role="button" tabindex="0" aria-haspopup="menu" aria-label="<?= __('切换语言') ?>">
     <span class="action-line-1"><?= __('语言') ?></span>
     <span class="action-line-2">
         <span class="weline-choice-current-flag" aria-hidden="true">
@@ -287,7 +290,7 @@ $currentLanguageLabel = $currentLanguageName !== ''
                 <i class="fas fa-globe" aria-hidden="true"></i>
             <?php endif; ?>
         </span>
-        <span class="current-language" title="<?= $escape($currentLanguageShort) ?>"><?= $escape($currentLanguageLabel) ?></span>
+        <span class="current-language" title="<?= $escape($currentLanguageFullLabel) ?>"><?= $escape($currentLanguageLabel) ?></span>
         <i class="fas fa-chevron-down" aria-hidden="true"></i>
     </span>
     <div class="language-options weline-choice-panel" data-weline-choice-panel role="menu" aria-label="<?= __('语言选项') ?>">
@@ -311,6 +314,7 @@ $currentLanguageLabel = $currentLanguageName !== ''
                data-language-option="true"
                data-choice-option="true"
                data-lang="<?= $escape($langCode) ?>"
+               data-short="<?= $escape($lang['short'] ?? '') ?>"
                data-native="<?= $escape($langNative) ?>"
                data-search="<?= $escape($lang['search'] ?? $langCode) ?>"
                role="menuitem"

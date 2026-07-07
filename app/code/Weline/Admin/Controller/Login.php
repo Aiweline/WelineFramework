@@ -42,6 +42,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private const SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE = 'need_backend_verification_code';
     private const SESSION_KEY_BACKEND_VERIFICATION_CODE = 'backend_verification_code';
     private const DEFAULT_LOGIN_BG_URL = '/Weline/Admin/view/statics/assets/images/login-lotus-bg.png';
+    private const DEFAULT_LOGIN_LOGO_URL = '/Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
     protected ?string $layoutType = null;
     
     protected BackendUser $adminUser;
@@ -121,8 +122,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $backendConfigs = $backendConfig->getConfigs('Weline_Backend');
         $logoDark = (string)($backendConfigs['logo_dark'] ?? '');
         $logoLight = (string)($backendConfigs['logo_light'] ?? '');
-        $this->assign('login_logo_dark', $logoDark !== '' ? ImageHelper::pathToMediaUrl($logoDark, 125, 125) : '');
-        $this->assign('login_logo_light', $logoLight !== '' ? ImageHelper::pathToMediaUrl($logoLight, 125, 125) : '');
+        $this->assign('login_logo_dark', $this->resolveLoginLogoUrl($logoDark));
+        $this->assign('login_logo_light', $this->resolveLoginLogoUrl($logoLight));
         $siteName = (string)($backendConfigs['site_name'] ?? 'Weline');
         $this->assign('login_site_name', $siteName);
         $this->assign('login_site_description', trim((string)($backendConfigs['site_description'] ?? '')));
@@ -863,5 +864,24 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     {
         $this->session->delete(self::SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE);
         $this->session->delete(self::SESSION_KEY_BACKEND_VERIFICATION_CODE);
+    }
+
+    private function resolveLoginLogoUrl(string $configuredPath): string
+    {
+        if ($this->shouldUseThemeLoginLogo($configuredPath)) {
+            return self::DEFAULT_LOGIN_LOGO_URL;
+        }
+
+        return ImageHelper::pathToMediaUrl($configuredPath, 125, 125);
+    }
+
+    private function shouldUseThemeLoginLogo(string $configuredPath): bool
+    {
+        $configuredPath = trim($configuredPath);
+        if ($configuredPath === '') {
+            return true;
+        }
+
+        return str_contains($configuredPath, 'image/backend/logo/');
     }
 }
