@@ -32,6 +32,13 @@ if (is_object($theme)) {
     }
 }
 $hasTheme = $themeIdValue > 0;
+$paletteConfigUrl = $hasTheme
+    ? $this->getUrl('theme/backend/config/variables', [
+        'theme_id' => $themeIdValue,
+        'area' => $area,
+        'scope' => $scope,
+    ])
+    : '#';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -128,6 +135,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         </div>
         
         <div class="toolbar-center">
+            <div class="theme-palette-shortcut me-3">
+                <a href="<?= $paletteConfigUrl ?>"
+                   class="btn btn-sm btn-outline-secondary <?= $hasTheme ? '' : 'disabled' ?>"
+                   <?= $hasTheme ? 'target="_blank" rel="noopener"' : 'aria-disabled="true"' ?>
+                   title="<?= __('配置当前主题色盘') ?>">
+                    <i class="mdi mdi-palette-outline"></i> <?= __('色盘') ?>
+                </a>
+            </div>
+
             <div class="device-switcher btn-group btn-group-sm">
                 <button type="button" class="btn btn-outline-secondary active" data-device="desktop" title="<?= __('Desktop') ?>">
                     <i class="mdi mdi-monitor"></i>

@@ -2,8 +2,9 @@
 name: 框架核心工程师-路由事件与扩展
 description: >-
   路由、事件、Hook、扩展点。含模块 Controller/Router.php（ModuleRouter）自定义 URL 匹配：
-  随机路径、别名、前缀短路，勿与 etc/env.php 静态路由混淆。
-version: 1.2.0
+  随机路径、别名、前缀短路，勿与 etc/env.php 静态路由混淆；禁止用 URL/query/Router
+  选择 Theme layout，公开页布局由 Controller 或业务上下文决定。
+version: 1.2.2
 ---
 
 # Role
@@ -36,6 +37,17 @@ version: 1.2.0
 
 **不要**用 `routes.xml`。  
 **不要**为「仅改公网路径」再写 Nginx fastcgi 或独立 PHP 监听；优先用模块 `Router.php`。
+
+---
+
+## Theme 布局选择边界（强制）
+
+- `Controller/Router.php` 只负责把公网 URL、短链、随机路径或 SEO 友好路径改写到内部静态 Controller 路由；它不负责选择 Theme layout。
+- 禁止在普通公开页 Router 中设置或依赖 `layout_type`、`page_type`、`layout_option` 等 URL/query 参数来控制 Theme 布局。
+- 禁止把正常 storefront 页面路由到 `theme/frontend/policy` 来借用 Theme layout。`theme/frontend/policy` 和 preview 参数属于 Theme 预览/编辑器场景，不是业务公开页的布局选择机制。
+- 正确方式：公开页命中业务 Controller，由 Controller 通过框架布局设置选择布局，例如 `protected ?string $layoutType = 'homepage.default';`、`product_list.default`、`product.default`。
+- 特殊布局或产品详情布局变体必须由 Controller、事件/Observer、配置或业务上下文决定；不要通过匹配 URL layout 参数实现。
+- Router 可以传递业务上下文参数，如商品 handle、搜索关键字或 public route 标识，但不得传递 Theme layout identity。
 
 ---
 
@@ -94,6 +106,13 @@ public static function process(string &$path, array &$rule): void
 
 改写后的 `$path` 由框架 **generated PC router** 继续匹配到真实 `Controller` 方法。
 
+## 本地化 URL 前缀（强制）
+
+- 公开路径可在可选 area 段后携带本地化前缀。货币与语言可单独出现，也可两者同时出现，并且顺序不固定：`/USD/products`、`/zh_Hans_CN/products`、`/USD/zh_Hans_CN/products`、`/zh_Hans_CN/USD/products` 都必须被视为合法形态。
+- Router、WLS URL parser、`App` 请求预热、canonical redirect、登录回跳和 path strip observer 必须复用同一套路径本地化解析约定；禁止各处复制“先货币再语言”或“必须两个都出现”的局部实现。
+- 路由匹配/路径剥离阶段不得调用 allowed currency/language 作为是否剥离前缀的前置条件。allowed 配置可能依赖本次请求上下文，过早调用会导致漏剥离、404 或递归初始化；使用 3 位大写货币码、locale 形状和 area 排除来识别前缀，再在业务层校验是否允许。
+- 修改本地化路由时必须覆盖四类验证：currency-only、language-only、currency/language、language/currency。
+
 ### 与 Deploy Webhook 的范例
 
 - 公网：`https://域名/~wh~<随机hex>`（`deploy:webhook:setup` 生成）
@@ -139,13 +158,17 @@ ProcessUrlBefore::clearCache();
 
 1. 判断：固定路径 → 控制器 + env；自定义/随机公网 URL → `Controller/Router.php`
 2. Router 方案：定特征前缀 → 实现 `process()` → 改写内部 `$path` → 配置缓存与失效
-3. 控制器方案：改 Controller + `etc/env.php` → `setup:upgrade --route`
-4. HTTP / `http:request` 验证内外路径
+3. 若涉及 Theme 页面布局，先在目标 Controller 设置/检查 `$layoutType` 或业务布局选择逻辑；不要把 layout 塞进 Router 或 URL 参数
+4. 若涉及货币/语言 URL 前缀，先确认是否已复用共享解析逻辑；不要新增只支持固定顺序或双段同时出现的解析代码
+5. 控制器方案：改 Controller + `etc/env.php` → `setup:upgrade --route`
+6. HTTP / `http:request` 验证内外路径
 
 # Validation
 
 - 静态路由变更：`php bin/w setup:upgrade --route`
 - Module Router：`curl` 公网路径 + 确认内部 Controller 被命中
+- Theme 页面：确认响应中没有依赖 `layout_type`、`page_type`、`layout_option` 或 `theme/frontend/policy` 的公开路由残留
+- 本地化 URL：验证 `/USD/...`、`/zh_Hans_CN/...`、`/USD/zh_Hans_CN/...`、`/zh_Hans_CN/USD/...` 均能命中同一业务路由或预期跳转
 - 配置型随机路径：变更后确认 `ProcessUrlBefore::clearCache()` 已执行
 
 # Constraints
@@ -153,6 +176,8 @@ ProcessUrlBefore::clearCache();
 - 禁止 `routes.xml`
 - 禁止用 Observer 替代 `Router.php` 做 URL 别名（应走 ModuleRouter 约定文件）
 - 禁止无特征前缀的全路径遍历匹配
+- 禁止用 Router、URL、query 参数选择 Theme layout；公开页布局必须由 Controller、事件/Observer、配置或业务上下文决定
+- 禁止本地化 URL 新逻辑只兼容单一前缀顺序、只兼容双段同时出现，或在路由剥离阶段依赖 allowed currency/language 配置
 
 # Shared Collaboration Contract
 

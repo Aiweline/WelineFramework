@@ -2607,6 +2607,10 @@ class WlsRuntime implements RuntimeInterface
                 }
                 $globalsEmulator = new GlobalsEmulator();
                 $globalsEmulator->emulate($request);
+                $canonicalBackendRedirect = $this->buildCanonicalLocalizedBackendRedirect($request);
+                if ($canonicalBackendRedirect !== '') {
+                    return $this->buildEarlyRedirectResponse($canonicalBackendRedirect);
+                }
                 $requestMeta = [
                     'method' => (string)($_SERVER['REQUEST_METHOD'] ?? $request->getMethod() ?: 'GET'),
                     'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
@@ -3623,6 +3627,103 @@ class WlsRuntime implements RuntimeInterface
         return \is_scalar($uri) ? (string)$uri : '';
     }
 
+    private function buildCanonicalLocalizedBackendRedirect(Request $request): string
+    {
+        $backendPrefix = \trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        if ($backendPrefix === '') {
+            return '';
+        }
+
+        $uri = (string)($request->getServer('REQUEST_URI') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+        if ($uri === '') {
+            return '';
+        }
+
+        try {
+            $parsed = \parse_url($uri);
+        } catch (\ValueError) {
+            return '';
+        }
+        $path = \is_array($parsed) ? (string)($parsed['path'] ?? '') : '';
+        if ($path === '') {
+            return '';
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if (!isset($segments[0], $segments[1]) || \strcasecmp((string)$segments[0], $backendPrefix) !== 0) {
+            return '';
+        }
+
+        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 3));
+        $currency = (string)($localization['currency'] ?? '');
+        $language = (string)($localization['language'] ?? '');
+        if ($currency === '' && $language === '') {
+            return '';
+        }
+
+        $stripCount = 0;
+        foreach (\array_slice($segments, 1, 2) as $segment) {
+            $segment = (string)$segment;
+            if ($currency !== ''
+                && $this->isBackendLocalizedCurrencySegment($segment)
+                && \strtoupper($segment) === $currency
+            ) {
+                $stripCount++;
+                continue;
+            }
+            if ($language !== ''
+                && $this->isBackendLocalizedLocaleSegment($segment)
+                && \str_replace('-', '_', $segment) === $language
+            ) {
+                $stripCount++;
+                continue;
+            }
+            break;
+        }
+        if ($stripCount === 0) {
+            return '';
+        }
+
+        $canonicalSegments = \array_merge([$backendPrefix], \array_slice($segments, 1 + $stripCount));
+        $canonicalPath = '/' . \implode('/', $canonicalSegments);
+        if ($canonicalPath === $path) {
+            return '';
+        }
+
+        $query = \is_array($parsed) && isset($parsed['query']) && $parsed['query'] !== ''
+            ? '?' . $parsed['query']
+            : '';
+        $scheme = $request->isSecure() ? 'https' : 'http';
+        $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
+
+        return $scheme . '://' . $host . $canonicalPath . $query;
+    }
+
+    private function isBackendLocalizedCurrencySegment(string $segment): bool
+    {
+        return \strlen($segment) === 3
+            && $segment === \strtoupper($segment)
+            && \ctype_alpha($segment);
+    }
+
+    private function isBackendLocalizedLocaleSegment(string $segment): bool
+    {
+        return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
+    }
+
+    private function buildEarlyRedirectResponse(string $location): string
+    {
+        return Response::fromContent('', 302, 'text/plain; charset=utf-8')
+            ->setHeader('Location', $location)
+            ->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->setHeader('Pragma', 'no-cache')
+            ->setHeader('Expires', '0')
+            ->toHttpString(false);
+    }
+
     private function processUrlParse(array $parse): void
     {
         // 防御性检查：如果 parse 缺少 server 字段（如 parserMatchs 早期返回），
@@ -3772,47 +3873,18 @@ class WlsRuntime implements RuntimeInterface
             return;
         }
         
-        $currency = null;
-        $language = null;
-        
-        // 检查前 4 个路径段（足够覆盖 backendKey/currency/language/... 结构）
-        $checkCount = \min(4, \count($segments));
-        for ($i = 0; $i < $checkCount; $i++) {
-            $segment = $segments[$i];
-            if (empty($segment)) {
-                continue;
-            }
-            
-            // 货币识别：必须是当前请求允许的货币码，不能把 ACL 这类后台路由段误当货币。
-            if ($currency === null && State::isAllowedCurrencyCode($segment)) {
-                $currency = $segment;
-                continue;
-            }
-            
-            // 语言识别：xx_Xxxx_XX 或 xx_XX 格式
-            // 例如：zh_Hans_CN, en_US, fr_FR, pt_BR
-            if ($language === null && \strlen($segment) >= 5 && \strlen($segment) <= 11) {
-                // 检查是否符合 locale 格式
-                if (\preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(_[A-Z]{2})?$/', $segment)) {
-                    $language = $segment;
-                    continue;
-                }
-            }
-            
-            // 如果都找到了，提前退出
-            if ($currency !== null && $language !== null) {
-                break;
-            }
-        }
+        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $currency = (string)($localization['currency'] ?? '');
+        $language = (string)($localization['language'] ?? '');
         
         // 设置到 $_SERVER（URL 路径中的值优先级最高）
-        if ($currency !== null) {
+        if ($currency !== '') {
             $_SERVER['WELINE_USER_CURRENCY'] = $currency;
             RequestContext::currency($currency);
             // 同步到 WelineEnv
             WelineEnv::set('user.currency', $currency, 'WlsRuntime parseUrlLangCurrency');
         }
-        if ($language !== null) {
+        if ($language !== '') {
             $_SERVER['WELINE_USER_LANG'] = $language;
             RequestContext::locale($language);
             // 同步到 WelineEnv

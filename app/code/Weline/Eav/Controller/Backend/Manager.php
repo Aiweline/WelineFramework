@@ -414,7 +414,7 @@ class Manager extends BackendController
             return $this->fetchJson([
                 'success' => true,
                 'message' => $id ? __('属性更新成功') : __('属性创建成功'),
-                'data' => ['attribute_id' => $attribute->getId()]
+                'data' => ['attribute_id' => $attribute->getAttributeId()]
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);

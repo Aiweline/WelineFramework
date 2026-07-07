@@ -18,6 +18,9 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 
 - `AI-ENTRY.md`
 - `dev/ai/global-constraints.md`
+- `app/code/Weline/Frontend/doc/AI-INDEX.md`
+- `app/code/Weline/Theme/doc/AI-INDEX.md`
+- `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
 - `app/code/Weline/Theme/doc/Theme.js使用指南.md`
 - `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
 - `dev/ai/skills/前端主题工程师-主题模板开发/SKILL.md`
@@ -34,7 +37,7 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 
 # Workflow
 
-1. Read `AI-ENTRY.md`, `dev/ai/global-constraints.md`, and the Weline API docs before touching browser request code.
+1. Read `AI-ENTRY.md`, `dev/ai/global-constraints.md`, `app/code/Weline/Frontend/doc/AI-INDEX.md`, the owning module's `doc/AI-INDEX.md`, and the Weline API docs before touching browser request code.
 2. Identify the visible surface: theme template, component JS, widget, or route-level frontend script.
 3. Classify the interaction:
    - Provider-style business operation -> `const Api = await Weline.Api.resource('provider')`

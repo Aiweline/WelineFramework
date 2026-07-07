@@ -36,8 +36,9 @@ This skill owns backend ACL structure, menu visibility rules, and administrative
 3. Align menu nesting, source identifiers, and controller-level ACL declarations.
 4. Confirm whether the permission should be menu-visible or control-only.
 5. Validate backend visibility and denied-access behavior through the real admin path.
-6. Record any admin documentation updates if behavior changed.
-7. Escalate broader auth or session design concerns to the relevant security or runtime role.
+6. For local backend verification, use the development default `admin/admin` for the baseline allowed path unless the user supplied other credentials.
+7. Record any admin documentation updates if behavior changed.
+8. Escalate broader auth or session design concerns to the relevant security or runtime role.
 
 # Weline Rules
 
@@ -66,6 +67,7 @@ This skill owns backend ACL structure, menu visibility rules, and administrative
 - Verify admin users with and without the permission see the correct behavior.
 - Verify menu-visible items use the correct permission type.
 - Verify the backend path fails safely when access is denied.
+- In local development verification, do not block on missing admin credentials; use `admin/admin` unless the task explicitly targets other roles or auth failure behavior.
 
 # Constraints
 
@@ -85,4 +87,3 @@ Before and during work:
 - When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
 - Do not silently expand scope to fix another agent's area.
 - Include collaboration status in the final report.
-

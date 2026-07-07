@@ -36,11 +36,12 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 2. Determine whether HTTP-level validation is enough or whether a browser smoke is needed; if the user is discussing visible output and the local site can be served, require Codex in-app Browser proof.
 3. Refresh route registration if the change requires it.
 4. Run `http:request` only as a precheck when helpful, then run the minimal Browser smoke path against any browser-visible affected surface.
-5. In browser automation on this machine, prefer DOM snapshot plus narrow locator checks over assuming a generic Playwright content helper exists on the wrapped tab object.
-6. Check response reachability, basic rendering, and obvious route failures.
-7. If browser access fails while direct HTTP succeeds, separate browser trust / certificate / automation-path problems from application reachability instead of mixing them together.
-8. Re-run the narrow smoke after fixes.
-9. Return the route path, command, and observed result.
+5. If a local backend smoke path lands on the login page, use the development default `admin/admin` and continue unless the task is explicitly about unauthenticated behavior or the user provided other credentials.
+6. In browser automation on this machine, prefer DOM snapshot plus narrow locator checks over assuming a generic Playwright content helper exists on the wrapped tab object.
+7. Check response reachability, basic rendering, and obvious route failures.
+8. If browser access fails while direct HTTP succeeds, separate browser trust / certificate / automation-path problems from application reachability instead of mixing them together.
+9. Re-run the narrow smoke after fixes.
+10. Return the route path, command, and observed result.
 
 # Weline Rules
 
@@ -52,6 +53,7 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 - For browser-visible frontend changes that can be served locally, final smoke validation must use the Codex in-app Browser plugin rather than only route tests, source inspection, or command-line HTTP checks.
 - If WLS or browser automation is down, stop at "runtime blocked" or "browser blocked" and state the concrete blocker instead of converting command success into UI acceptance.
 - For SEO, i18n, and head-output work, require live HTML or DOM evidence for the final visible tags rather than treating hook presence in source as sufficient proof.
+- In this local development workspace, backend login defaults to `admin/admin` for smoke continuation unless the task is explicitly testing auth boundaries or the user overrides the credentials.
 
 # Inputs Required
 
@@ -93,4 +95,3 @@ Before and during work:
 - When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
 - Do not silently expand scope to fix another agent's area.
 - Include collaboration status in the final report.
-

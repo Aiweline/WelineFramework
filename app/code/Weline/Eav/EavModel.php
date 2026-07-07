@@ -345,7 +345,7 @@ abstract class EavModel extends Model implements EavInterface
             $attribute = clone $this->attribute->current_setEntity($this);
             $attribute->load($attribute::schema_fields_code, $code);
             $valueModel = clone $attribute->w_getValueModel();
-            $valueModel->where('attribute_id', $attribute->getId())
+            $valueModel->where('attribute_id', $attribute->getAttributeId())
                 ->where('entity_id', $this->getId())
                 ->delete()->fetch();
             return true;

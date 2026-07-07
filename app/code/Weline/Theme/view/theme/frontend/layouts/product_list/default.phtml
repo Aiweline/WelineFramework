@@ -54,39 +54,39 @@ $this->assign('meta', $meta);
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::product_list::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product-list::head-after</w:hook>
     <w:hook>seo::head</w:hook>
 </head>
 <body>
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::product_list::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product-list::body-start</w:hook>
     
     <div class="weline-page-wrapper">
         <!-- ========== HEADER 区域（使用 partials，内部已配置 widget slot） ========== -->
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
-            <w:hook>Weline_Theme::frontend::layouts::product_list::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::header-before</w:hook>
             
             <!-- Header 通过 Partials Block 加载，slot 已在 partials/header/default.phtml 中配置 -->
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             
-            <w:hook>Weline_Theme::frontend::layouts::product_list::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::header-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
         <!-- 面包屑导航区域 -->
         <if condition="meta.showBreadcrumb">
             <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-            <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::breadcrumb-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
-            <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::breadcrumb-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
         </if>
         
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-            <w:hook>Weline_Theme::frontend::layouts::product_list::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::content-before</w:hook>
 
             <!-- ========== 商品列表页主体区域 ========== -->
             <w:slot id="content"
@@ -96,6 +96,9 @@ $this->assign('meta', $meta);
                     multiple="true"
                     position="content"
                     class="product-list-layout__content-root-slot">
+                <w:hook>
+                    Weline_Theme::frontend::layouts::product-list::content
+                    <else/>
             <main class="product-list-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-list-main" data-layout="product-list" data-columns="<?= (int)$gridColumns ?>">
                 <?php if ($isSearchLayout): ?>
                     <div class="product-list-layout__container product-list-layout__container--search">
@@ -126,7 +129,7 @@ $this->assign('meta', $meta);
                                         accept="layout-product-list-filters,category-filters,attribute-filter,price-filter,category-filter,rating-filter"
                                         multiple="true"
                                         position="sidebar">
-                                    <w:hook>Weline_Theme::frontend::layouts::product_list::filters-before</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product-list::filters-before</w:hook>
                                     <div class="product-list-layout__placeholder" data-placeholder="list-filters">
                                         <div class="product-list-layout__placeholder-icon">
                                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -135,7 +138,7 @@ $this->assign('meta', $meta);
                                         </div>
                                         <span class="product-list-layout__placeholder-text"><lang>筛选器区域 - 拖拽筛选部件到此处</lang></span>
                                     </div>
-                                    <w:hook>Weline_Theme::frontend::layouts::product_list::filters-after</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product-list::filters-after</w:hook>
                                 </w:slot>
                             </div>
                         </aside>
@@ -161,9 +164,9 @@ $this->assign('meta', $meta);
                                     multiple="true"
                                     position="content"
                                     class="product-list-layout__toolbar">
-                                <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-before</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::product-list::toolbar-before</w:hook>
                                 <w:hook>
-                                    Weline_Theme::frontend::layouts::product_list::toolbar-content
+                                    Weline_Theme::frontend::layouts::product-list::toolbar-content
                                     <else/>
                                     <div class="product-list-layout__placeholder" data-placeholder="list-toolbar">
                                         <div class="product-list-layout__placeholder-icon">
@@ -175,7 +178,7 @@ $this->assign('meta', $meta);
                                         <span class="product-list-layout__placeholder-text"><lang>工具栏区域 - 拖拽排序/视图部件到此处</lang></span>
                                     </div>
                                 </w:hook>
-                                <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-after</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::product-list::toolbar-after</w:hook>
                             </w:slot>
                         </if>
 
@@ -187,9 +190,9 @@ $this->assign('meta', $meta);
                                 multiple="false"
                                 position="content"
                                 class="product-list-layout__grid">
-                            <w:hook>Weline_Theme::frontend::layouts::product_list::grid-before</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product-list::grid-before</w:hook>
                             <w:hook>
-                                Weline_Theme::frontend::layouts::product_list::grid-content
+                                Weline_Theme::frontend::layouts::product-list::grid-content
                                 <else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
@@ -204,7 +207,7 @@ $this->assign('meta', $meta);
                                     </div>
                                 </if>
                             </w:hook>
-                            <w:hook>Weline_Theme::frontend::layouts::product_list::grid-after</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product-list::grid-after</w:hook>
                         </w:slot>
 
                         <!-- ========== 分页区域 ========== -->
@@ -215,15 +218,15 @@ $this->assign('meta', $meta);
                                 multiple="false"
                                 position="content"
                                 class="product-list-layout__pagination">
-                            <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-before</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product-list::pagination-before</w:hook>
                             <w:hook>
-                                Weline_Theme::frontend::layouts::product_list::pagination-content
+                                Weline_Theme::frontend::layouts::product-list::pagination-content
                                 <else/>
                                 <div class="product-list-layout__placeholder" data-placeholder="list-pagination">
                                     <span class="product-list-layout__placeholder-text"><lang>分页区域 - 控制器渲染分页组件</lang></span>
                                 </div>
                             </w:hook>
-                            <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-after</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product-list::pagination-after</w:hook>
                         </w:slot>
                     </div>
                 </div>
@@ -239,7 +242,7 @@ $this->assign('meta', $meta);
                     position="content"
                     wrapper="section"
                     class="product-list-layout__recommendations">
-                <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-before</w:hook>
                 <div class="product-list-layout__recommendations-container">
                     <div class="product-list-layout__placeholder" data-placeholder="list-recommendations">
                         <div class="product-list-layout__placeholder-icon">
@@ -250,33 +253,34 @@ $this->assign('meta', $meta);
                         <span class="product-list-layout__placeholder-text"><lang>推荐产品区域 - 拖拽推荐部件到此处</lang></span>
                     </div>
                 </div>
-                <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-after</w:hook>
             </w:slot>
             <?php endif; ?>
 
             <!-- 移动端遮罩层 -->
             <div class="product-list-layout__overlay" id="product-list-overlay" data-overlay hidden></div>
 
+                </w:hook>
             </w:slot>
 
-            <w:hook>Weline_Theme::frontend::layouts::product_list::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
         
         <!-- ========== FOOTER 区域（使用 partials，内部已配置 widget slot） ========== -->
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-            <w:hook>Weline_Theme::frontend::layouts::product_list::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::footer-before</w:hook>
             
             <!-- Footer 通过 Partials Block 加载，slot 已在 partials/footer/default.phtml 中配置 -->
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
             
-            <w:hook>Weline_Theme::frontend::layouts::product_list::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product-list::footer-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
 
-    <w:hook>Weline_Theme::frontend::layouts::product_list::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product-list::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
     <pixel name="weshop_product_list_behavior" enabled="yes" />
 

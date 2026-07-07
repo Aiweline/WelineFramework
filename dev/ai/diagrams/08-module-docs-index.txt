@@ -1,164 +1,155 @@
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    Module Documentation Index                                  ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+===============================================================================
+Module Documentation Index
+===============================================================================
 
-CRITICAL: When working with ANY module, ALWAYS check its doc/ directory FIRST.
-This saves massive token consumption vs reading source code.
+CRITICAL: When working with any module under app/code, read that module's
+doc/AI-INDEX.md before reading source code or implementing changes.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Why Check Module Docs First?                                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Saves 80-90% tokens vs reading source code                                 │
-│ • Contains architecture diagrams, API docs, examples                         │
-│ • Documents events, hooks, extends, APIs                                     │
-│ • Includes development guides and best practices                             │
-│ • Pre-written by developers who know the module best                         │
-└─────────────────────────────────────────────────────────────────────────────┘
+This file is the repository-level routing rule. The per-module AI-INDEX files
+are the actual module doc entrypoints.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Module Documentation Locations (57 modules, 634 docs)                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+Current generated coverage:
 
-Core Framework:
-  Framework         → app/code/Weline/Framework/doc/README.md
-  Framework/Console → app/code/Weline/Framework/Console/doc/README.md
-  Framework/View    → app/code/Weline/Framework/View/doc/README.md
+- Module roots scanned: app/code/{Vendor}/{Module}
+- Modules with AI entrypoints: 91
+- Generated entrypoint pattern: app/code/{Vendor}/{Module}/doc/AI-INDEX.md
+- Generator: dev/ai/scripts/generate-module-ai-indexes.php
+- Last refresh basis: current app/code tree on 2026-07-06
 
-Admin & Backend:
-  Admin             → app/code/Weline/Admin/doc/README.md
-  Acl               → app/code/Weline/Acl/doc/README.md
-  SystemConfig      → app/code/Weline/SystemConfig/doc/README.md
+-------------------------------------------------------------------------------
+Mandatory Module Reading Protocol
+-------------------------------------------------------------------------------
 
-Frontend & Theme:
-  Frontend          → app/code/Weline/Frontend/doc/README.md
-  Theme             → app/code/Weline/Theme/doc/README.md
-  Taglib            → app/code/Weline/Taglib/doc/README.md
-  Widget            → app/code/Weline/Widget/doc/README.md
+1. Identify the owning module.
+   Examples:
+   - app/code/Weline/Theme/...      -> Weline_Theme
+   - app/code/Weline/Frontend/...   -> Weline_Frontend
+   - app/code/WeShop/Product/...    -> WeShop_Product
 
-AI & Automation:
-  Ai                → app/code/Weline/Ai/doc/README.md
-  AiKnowledge       → app/code/Weline/AiKnowledge/doc/README.md
-  AutoLeadAgent     → app/code/Weline/AutoLeadAgent/doc/README.md
-  GenerativeEngineOptimization → app/code/Weline/GenerativeEngineOptimization/doc/README.md
+2. Read the module AI entrypoint first.
+   Pattern:
+   - app/code/{Vendor}/{Module}/doc/AI-INDEX.md
 
-E-commerce:
-  Order             → app/code/Weline/Order/doc/README.md
-  Checkout          → app/code/Weline/Checkout/doc/README.md
-  Payment           → app/code/Weline/Payment/doc/README.md
-  Shipping          → app/code/Weline/Shipping/doc/README.md
+3. Then read module doc/README.md if it exists.
+   The AI-INDEX says whether README exists and lists the task-specific docs
+   currently present under that module's doc/ directory.
 
-Infrastructure:
-  Async             → app/code/Weline/Async/doc/README.md
-  Queue             → app/code/Weline/Queue/doc/README.md
-  CacheManager      → app/code/Weline/CacheManager/doc/README.md
-  Cdn               → app/code/Weline/Cdn/doc/README.md
+4. Then read only the docs and source surfaces matched to the task.
+   Examples:
+   - Controller work -> Controller, route docs, setup:upgrade --route guidance
+   - Theme/view work -> Theme AI-INDEX, theme inheritance docs, source template
+   - Query/API work -> QueryProvider docs/help, Frontend Weline.Api docs
+   - Event/Hook work -> doc/event or doc/hook plus trigger/observer source
 
-Data & Content:
-  Eav               → app/code/Weline/Eav/doc/README.md
-  FileManager       → app/code/Weline/FileManager/doc/README.md
-  I18n              → app/code/Weline/I18n/doc/README.md
-  TranslationService → app/code/Weline/TranslationService/doc/README.md
+5. If AI-INDEX says the module lacks README or task docs, treat it as a code
+   structure map only. Read the relevant source and add/update module docs when
+   the behavior, contract, or convention is stable.
 
-Other:
-  CustomerService   → app/code/Weline/CustomerService/doc/README.md
-  DeveloperWorkspace → app/code/Weline/DeveloperWorkspace/doc/README.md
-  Geo               → app/code/Weline/Geo/doc/README.md
+-------------------------------------------------------------------------------
+High-Risk Module Entrypoints
+-------------------------------------------------------------------------------
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Common Doc Structure (per module)                                            │
-└─────────────────────────────────────────────────────────────────────────────┘
+Frontend and theme work:
 
-{Module}/doc/
-├── README.md              ← Module overview, quick start
-├── API/                   ← API documentation
-├── event/                 ← Event documentation (one file per event)
-├── hook/                  ← Hook documentation (one file per hook)
-├── extends/               ← Extension point documentation
-├── 开发/                  ← Development guides (Chinese)
-└── 用户/                  ← User manuals (Chinese)
+- Weline_Theme
+  app/code/Weline/Theme/doc/AI-INDEX.md
+  Must also read:
+  - app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md
+  - app/code/Weline/Theme/doc/开发/Theme开发总指南.md
+  - app/code/Weline/Frontend/doc/Weline.Api使用指南.md when browser requests exist
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Workflow: How to Use Module Docs                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+- Weline_Frontend
+  app/code/Weline/Frontend/doc/AI-INDEX.md
 
-Step 1: Identify the module you need to work with
-  Example: "Add payment method" → Payment module
+- Weline_Taglib
+  app/code/Weline/Taglib/doc/AI-INDEX.md
 
-Step 2: Read module's doc/README.md FIRST
-  php: Read app/code/Weline/Payment/doc/README.md
+- Weline_Widget
+  app/code/Weline/Widget/doc/AI-INDEX.md
 
-Step 3: Check specific subdirectories as needed
-  • Need to listen to events? → doc/event/
-  • Need to add UI hooks? → doc/hook/
-  • Need to extend classes? → doc/extends/
-  • Need API reference? → doc/API/
+Core framework work:
 
-Step 4: Only read source code if docs are insufficient
+- Weline_Framework
+  app/code/Weline/Framework/doc/AI-INDEX.md
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Token Savings Example                                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+- Weline_Framework Console
+  app/code/Weline/Framework/Console/doc/README.md
 
-Scenario: Understand Payment module architecture
+- Weline_Framework View
+  app/code/Weline/Framework/View/doc/README.md
 
-❌ Without docs (reading source):
-  1. Read Payment/Model/*.php (5 files × 500 tokens = 2500)
-  2. Read Payment/Controller/*.php (3 files × 400 tokens = 1200)
-  3. Read Payment/Service/*.php (4 files × 600 tokens = 2400)
-  Total: ~6100 tokens
+Backend/security/config work:
 
-✅ With docs:
-  1. Read Payment/doc/README.md (~800 tokens)
-  2. Read Payment/doc/API/API.md (~400 tokens)
-  Total: ~1200 tokens
+- Weline_Admin
+  app/code/Weline/Admin/doc/AI-INDEX.md
 
-Savings: 80% tokens, 5x faster understanding
+- Weline_Acl
+  app/code/Weline/Acl/doc/AI-INDEX.md
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Quick Reference: Module → Doc Path Pattern                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
+- Weline_SystemConfig
+  app/code/Weline/SystemConfig/doc/AI-INDEX.md
 
-Pattern: app/code/Weline/{ModuleName}/doc/README.md
+Runtime/infrastructure work:
 
-Examples:
-  Weline_Payment  → app/code/Weline/Payment/doc/README.md
-  Weline_Order    → app/code/Weline/Order/doc/README.md
-  Weline_Ai       → app/code/Weline/Ai/doc/README.md
+- Weline_Server
+  app/code/Weline/Server/doc/AI-INDEX.md
 
-Special cases (multiple doc dirs):
-  Framework       → app/code/Weline/Framework/doc/README.md (main)
-                  → app/code/Weline/Framework/Console/doc/README.md (CLI)
-                  → app/code/Weline/Framework/View/doc/README.md (View)
+- Weline_Queue
+  app/code/Weline/Queue/doc/AI-INDEX.md
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Integration with Framework Diagrams                                          │
-└─────────────────────────────────────────────────────────────────────────────┘
+- Weline_CacheManager
+  app/code/Weline/CacheManager/doc/AI-INDEX.md
 
-Framework-level architecture:
-  → dev/ai/diagrams/01-framework-overview.txt
-  → dev/ai/diagrams/02-wls-architecture.txt
-  → dev/ai/diagrams/03-routing-system.txt
-  → dev/ai/diagrams/04-orm-database.txt
-  → dev/ai/diagrams/05-event-system.txt
-  → dev/ai/diagrams/06-module-lifecycle.txt
-  → dev/ai/diagrams/07-request-flow.txt
+- Weline_Deploy
+  app/code/Weline/Deploy/doc/AI-INDEX.md
 
-Module-specific details:
-  → app/code/Weline/{Module}/doc/
+Commerce examples:
 
-Combined approach:
-  1. Framework diagram for overall understanding
-  2. Module doc for specific implementation
-  3. Source code only if docs are missing
+- Weline_Order
+  app/code/Weline/Order/doc/AI-INDEX.md
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ MANDATORY RULE                                                                │
-└─────────────────────────────────────────────────────────────────────────────┘
+- Weline_Checkout
+  app/code/Weline/Checkout/doc/AI-INDEX.md
 
-Before reading ANY source code in app/code/Weline/{Module}/:
-  1. Check if {Module}/doc/ exists
-  2. If exists, read {Module}/doc/README.md FIRST
-  3. Check relevant subdirectories (event/, hook/, API/)
-  4. Only read source code if docs don't answer your question
+- Weline_Payment
+  app/code/Weline/Payment/doc/AI-INDEX.md
 
-This is NOT optional. Violating this rule wastes tokens and time.
+- Weline_Shipping
+  app/code/Weline/Shipping/doc/AI-INDEX.md
+
+- WeShop_Product
+  app/code/WeShop/Product/doc/AI-INDEX.md
+
+-------------------------------------------------------------------------------
+Regeneration
+-------------------------------------------------------------------------------
+
+Run this after adding/removing modules, adding major module docs, or changing
+module top-level structure:
+
+php dev/ai/scripts/generate-module-ai-indexes.php
+
+Dry run:
+
+php dev/ai/scripts/generate-module-ai-indexes.php --dry-run
+
+The generator only overwrites files that contain the auto-generated marker:
+
+<!-- weline:module-ai-index:auto-generated -->
+
+If a module needs hand-written AI guidance, remove the marker and maintain that
+file manually. The generator will skip it unless --force is passed.
+
+-------------------------------------------------------------------------------
+Non-Negotiable Guardrail
+-------------------------------------------------------------------------------
+
+Before editing app/code/{Vendor}/{Module}/ source:
+
+1. Read app/code/{Vendor}/{Module}/doc/AI-INDEX.md.
+2. Read the module README and task-specific docs listed there.
+3. State the matched code surface and source file path.
+4. Only then read or edit source.
+
+Skipping this rule is treated as an AI workflow defect because it causes generic
+implementation and missed framework conventions.

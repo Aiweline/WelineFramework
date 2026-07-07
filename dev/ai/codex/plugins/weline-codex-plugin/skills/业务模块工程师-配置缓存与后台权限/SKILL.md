@@ -37,7 +37,7 @@ This skill owns module-level configuration, cache usage, backend menu integratio
 3. Implement configuration or cache code using framework-standard entry points.
 4. Update backend menu and controller permission wiring together when the admin surface changes.
 5. Run env, setup, or backend validation commands as needed.
-6. Verify behavior from the real backend or configuration path.
+6. Verify behavior from the real backend or configuration path; for local backend login use `admin/admin` unless the user supplied other credentials or the task is specifically about auth boundaries.
 7. Record any required README or admin-usage notes.
 
 # Weline Rules
@@ -67,6 +67,7 @@ This skill owns module-level configuration, cache usage, backend menu integratio
 - Run setup or route refresh commands when backend wiring changed.
 - Verify backend menu visibility and controller access behavior.
 - Verify cache read, write, and invalidation behavior through the intended module flow.
+- Do not stop local backend verification on the login page; continue with `admin/admin` unless the scenario specifically tests login or permission denial behavior.
 
 # Constraints
 
@@ -86,4 +87,3 @@ Before and during work:
 - When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
 - Do not silently expand scope to fix another agent's area.
 - Include collaboration status in the final report.
-

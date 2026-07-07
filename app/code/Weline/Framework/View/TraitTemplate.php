@@ -669,7 +669,8 @@ trait TraitTemplate
     protected function fetchFile(string $filename): mixed
     {
         $cache_key = $filename . '|' . $this->viewEnvironmentCacheSuffix('fetch-file') . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
-        $skipCache = isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache');
+        $forceModuleThemeSource = (bool)$this->getData('__weline_force_module_theme_source');
+        $skipCache = $forceModuleThemeSource || (isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache'));
         if (!$skipCache) {
             $cache_filename = $this->viewCache->get($cache_key);
             if ($cache_filename && is_file($cache_filename)) {
@@ -683,7 +684,9 @@ trait TraitTemplate
             $fileData
         );
         $event_filename = $fileData->getData('filename');
-        $this->viewCache->set($cache_key, $event_filename);
+        if (!$skipCache) {
+            $this->viewCache->set($cache_key, $event_filename);
+        }
         return $event_filename;
     }
 

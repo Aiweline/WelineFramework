@@ -500,8 +500,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     }
 
     /**
-     * 获取带后台路由前缀的路径（如 /admin_696f02955db39/CNY/zh_Hans_CN/admin），避免重定向丢失后端 key。
-     * 仅当 WELINE_AREA_ROUTE 已含后端 prefix 时使用；否则用 Env backend prefix + 货币 + 语言 拼接。
+     * 获取带后台路由前缀的路径，避免重定向丢失后端 key。
      */
     private function getBackendPathWithPrefix(string $path): string
     {
@@ -512,9 +511,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
         }
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = (string) (\w_env('user.currency', 'CNY') ?? 'CNY');
-            $language = (string) (\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
-            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+            return '/' . \trim($backendPrefix, '/') . '/' . \ltrim($path, '/');
         }
         return $this->_url->getBackendUrlPath($path);
     }
@@ -568,6 +565,17 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $path = '/' . \trim($path, '/');
         $segments = \explode('/', \trim($path, '/'));
         $firstSegment = (string)($segments[0] ?? '');
+        $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+
+        if ($backendPrefix !== ''
+            && isset($segments[0], $segments[1], $segments[2], $segments[3])
+            && \strcasecmp((string)$segments[0], $backendPrefix) === 0
+            && $this->isCurrencySegment($segments[1])
+            && $this->isLocaleSegment($segments[2])
+        ) {
+            \array_splice($segments, 1, 2);
+            return '/' . \implode('/', $segments);
+        }
 
         if (isset($segments[1], $segments[2], $segments[3])
             && $firstSegment !== ''

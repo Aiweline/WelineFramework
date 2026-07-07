@@ -17,6 +17,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 # Source Material
 
 - `AI-ENTRY.md`
+- `dev/ai/diagrams/08-module-docs-index.txt`
 - `CLAUDE.md`
 - `dev/ai/skills/module-development/SKILL.md`
 - `dev/ai/skills/weline-framework-core/SKILL.md`
@@ -33,7 +34,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 
 # Workflow
 
-1. Read `AI-ENTRY.md`, the diagrams, the owning module docs, and then the relevant skills.
+1. Read `AI-ENTRY.md`, `dev/ai/diagrams/08-module-docs-index.txt`, the owning module `doc/AI-INDEX.md`, its README/specialized docs listed there, and then the relevant skills.
 2. Confirm the target module, area, and feature boundary.
 3. Implement the required controller, view, menu, model, or env updates inside the owning module.
 4. Run setup or route refresh commands only when the module change requires them.
@@ -51,7 +52,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 - Keep module boundaries intact.
 - Frontend module scripts must not use direct `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers; request interactions must go through Theme `theme.js` and the built-in `weline-api` worker chain.
 - Browser business APIs should be written as `const Api = await Weline.Api.resource('provider')` and then `await Api.operation(params)`; only pass a resource map when aliases or a method subset are needed.
-- Update module README after fixing bugs.
+- Update module README or module-local doc after fixing bugs or changing stable module behavior; if the module lacks README, update its `doc/AI-INDEX.md` only if it is hand-maintained, otherwise add a proper module doc.
 - When a broad business ask lands in a repo that already has substantial module/page scaffolding, inspect the existing acceptance docs, theme pages, and module matrix first; default to closing the highest-leverage missing chain instead of building a parallel feature set.
 - When data is written successfully but the page still looks unchanged, check the module's template source and page/controller cache path before assuming the provider or database write failed.
 
@@ -97,4 +98,3 @@ Before and during work:
 - When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
 - Do not silently expand scope to fix another agent's area.
 - Include collaboration status in the final report.
-
