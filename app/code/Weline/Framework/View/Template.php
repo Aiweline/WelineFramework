@@ -104,6 +104,7 @@ class Template extends DataObject
     private const STATIC_HOOK_REFRESH_LOCK_TTL = 10;
     private const REUSABLE_TEMPLATE_OUTPUT_CACHE_TTL = 120;
     private const REUSABLE_TEMPLATE_OUTPUT_CACHE_MAX_ITEMS = 32;
+    public const DATA_FORCE_MODULE_THEME_SOURCE = '__weline_force_module_theme_source';
     /** @var array<string, true> */
     private const STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS = [
         'account.sidebar' => true,
@@ -523,7 +524,8 @@ class Template extends DataObject
         $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
         $comFileName = '';
         $tplFile = '';
-        $skipCache = isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache');
+        $forceModuleThemeSource = (bool)$this->getData(self::DATA_FORCE_MODULE_THEME_SOURCE);
+        $skipCache = $forceModuleThemeSource || (isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache'));
         # 让非生产环境实时读取文件
         if (PROD && !$skipCache) {
             $comFileName = $this->viewCache->get($comFileName_cache_key);
@@ -872,6 +874,23 @@ class Template extends DataObject
     {
         /** Get output buffer. */
         return $this->fetchHtml($fileName, $data);
+    }
+
+    public function fetchModuleThemeHtml(string $fileName, array $data = []): string
+    {
+        $previous = $this->getData(self::DATA_FORCE_MODULE_THEME_SOURCE);
+        $this->setData(self::DATA_FORCE_MODULE_THEME_SOURCE, true);
+        try {
+            $comFileName = $this->getFetchFile($fileName);
+        } finally {
+            if ($previous === null) {
+                $this->unsetData(self::DATA_FORCE_MODULE_THEME_SOURCE);
+            } else {
+                $this->setData(self::DATA_FORCE_MODULE_THEME_SOURCE, $previous);
+            }
+        }
+
+        return $this->ob_file($comFileName, $data);
     }
 
     /**
@@ -1994,85 +2013,21 @@ class Template extends DataObject
             $isSolo = ($soloHook === $module);
             $hookMeta = $hookFilesWithMeta[$module] ?? [];
             
+            $hookHtml = $this->applyHookSourceDecoration(
+                $hookHtml,
+                (string)$module,
+                $relativePath,
+                $isSolo,
+                $affectedHooks,
+                $decorateHookOutput
+            );
+
             if ($decorateHookOutput) {
-                // 开发环境：添加注释和data-hook-source属性
-                // 如果hook内容不是空字符串，用span包裹并添加属性
-                if (trim($hookHtml) !== '') {
-                    // 构建data属性
-                    $dataAttrs = 'data-hook-source="' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . '"';
-                    $dataAttrs .= ' data-hook-file="' . htmlspecialchars($relativePath, ENT_QUOTES, 'UTF-8') . '"';
-                    
-                    // 如果是solo hook，添加solo相关属性
-                    if ($isSolo) {
-                        $dataAttrs .= ' data-hook-solo="true"';
-                        if (!empty($affectedHooks)) {
-                            $dataAttrs .= ' data-hook-affected="' . htmlspecialchars(implode(',', $affectedHooks), ENT_QUOTES, 'UTF-8') . '"';
-                        }
-                    }
-                    
-                    // 检查hook内容是否已经是完整的HTML元素（有开始和结束标签）
-                    // 如果是，尝试在第一个元素上添加属性
-                    // 注意：如果Hook内容包含script或style标签，不能用span包裹，否则script/style会被当作文本
-                    $hasScriptOrStyle = preg_match('/<(script|style)[^>]*>/i', $hookHtml);
-                    if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches)) {
-                        // 找到第一个标签，添加data属性
-                        $tagName = $matches[1];
-                        $hookHtml = preg_replace(
-                            '/^(<' . preg_quote($tagName, '/') . '[^>]*)(>)/',
-                            '$1 ' . $dataAttrs . '$2',
-                            $hookHtml,
-                            1
-                        );
-                    } elseif ($hasScriptOrStyle) {
-                        // 如果包含script或style标签，即使没有找到第一个标签，也不要用span包裹
-                        // 直接在内容前添加一个隐藏的span来标记Hook来源
-                        $hookHtml = '<!-- Hook source: ' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . ' -->' . $hookHtml;
-                    } else {
-                        // 如果没有找到标签，用span包裹
-                        $hookHtml = '<span ' . $dataAttrs . '>' . $hookHtml . '</span>';
-                    }
-                }
-                
-                // 添加注释
                 $soloInfo = $isSolo ? ' | 独享模式（已禁用其他' . count($affectedHooks) . '个hook）' : '';
-                $content = "<!-- Hook: {$name} | 模块: {$module} | 文件: {$relativePath}{$soloInfo} -->\n" . 
-                          $hookHtml . 
-                          "\n<!-- /Hook: {$name} | 模块: {$module} -->";
+                $content = "<!-- Hook: {$name} | 模块: {$module} | 文件: {$relativePath}{$soloInfo} -->\n"
+                    . $hookHtml
+                    . "\n<!-- /Hook: {$name} | 模块: {$module} -->";
             } else {
-                // 生产环境：只添加data-hook-source属性（不添加注释）
-                if (trim($hookHtml) !== '') {
-                    // 构建data属性
-                    $dataAttrs = 'data-hook-source="' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . '"';
-                    
-                    // 如果是solo hook，添加solo相关属性
-                    if ($isSolo) {
-                        $dataAttrs .= ' data-hook-solo="true"';
-                        if (!empty($affectedHooks)) {
-                            $dataAttrs .= ' data-hook-affected="' . htmlspecialchars(implode(',', $affectedHooks), ENT_QUOTES, 'UTF-8') . '"';
-                        }
-                    }
-                    
-                    // 检查hook内容是否已经是完整的HTML元素
-                    // 注意：如果Hook内容包含script或style标签，不能用span包裹，否则script/style会被当作文本
-                    $hasScriptOrStyle = preg_match('/<(script|style)[^>]*>/i', $hookHtml);
-                    if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches)) {
-                        // 找到第一个标签，添加data属性
-                        $tagName = $matches[1];
-                        $hookHtml = preg_replace(
-                            '/^(<' . preg_quote($tagName, '/') . '[^>]*)(>)/',
-                            '$1 ' . $dataAttrs . '$2',
-                            $hookHtml,
-                            1
-                        );
-                    } elseif ($hasScriptOrStyle) {
-                        // 如果包含script或style标签，即使没有找到第一个标签，也不要用span包裹
-                        // 直接在内容前添加一个隐藏的span来标记Hook来源
-                        $hookHtml = '<!-- Hook source: ' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . ' -->' . $hookHtml;
-                    } else {
-                        // 如果没有找到标签，用span包裹
-                        $hookHtml = '<span ' . $dataAttrs . '>' . $hookHtml . '</span>';
-                    }
-                }
                 $content = $hookHtml;
             }
             
@@ -2369,6 +2324,54 @@ class Template extends DataObject
         } catch (\Throwable) {
             return 'locale:unknown';
         }
+    }
+
+    /**
+     * Attach hook source metadata without breaking grid/flex direct-child layouts.
+     *
+     * @param array<int, string> $affectedHooks
+     */
+    private function applyHookSourceDecoration(
+        string $hookHtml,
+        string $module,
+        string $relativePath,
+        bool $isSolo,
+        array $affectedHooks,
+        bool $includeHookFile
+    ): string {
+        if (trim($hookHtml) === '') {
+            return $hookHtml;
+        }
+
+        $hookHtml = ltrim($hookHtml);
+        $dataAttrs = 'data-hook-source="' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . '"';
+        if ($includeHookFile && $relativePath !== '') {
+            $dataAttrs .= ' data-hook-file="' . htmlspecialchars($relativePath, ENT_QUOTES, 'UTF-8') . '"';
+        }
+        if ($isSolo) {
+            $dataAttrs .= ' data-hook-solo="true"';
+            if ($affectedHooks !== []) {
+                $dataAttrs .= ' data-hook-affected="' . htmlspecialchars(implode(',', $affectedHooks), ENT_QUOTES, 'UTF-8') . '"';
+            }
+        }
+
+        $hasScriptOrStyle = preg_match('/<(script|style)[^>]*>/i', $hookHtml) === 1;
+        if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches) === 1) {
+            $tagName = $matches[1];
+            $decorated = preg_replace(
+                '/^(<' . preg_quote($tagName, '/') . '[^>]*)(>)/',
+                '$1 ' . $dataAttrs . '$2',
+                $hookHtml,
+                1
+            );
+
+            return is_string($decorated) ? $decorated : $hookHtml;
+        }
+        if ($hasScriptOrStyle) {
+            return '<!-- Hook source: ' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . ' -->' . $hookHtml;
+        }
+
+        return '<span ' . $dataAttrs . ' class="weline-hook-source" style="display:contents">' . $hookHtml . '</span>';
     }
 
     private function getHookCacheContext(): string

@@ -34,10 +34,11 @@ This skill is disabled by default for E2E case/spec work. Use it only when the c
 2. Identify the exact business flow that needs end-to-end proof.
 3. Choose the narrowest existing spec, case id, or grep target that covers the changed behavior.
 4. Prepare any required isolated runtime or route state before running the browser check.
-5. Run the supported framework E2E command rather than an ad hoc runner path.
-6. Inspect failures at the user-flow step where behavior diverges.
-7. Re-run the smallest confirming scope after fixes.
-8. Report the executed scenario, result, and remaining gaps.
+5. If the local backend flow lands on a login page and the task is not explicitly testing unauthenticated behavior, continue with the local development credentials `admin/admin` unless the user supplied different credentials.
+6. Run the supported framework E2E command rather than an ad hoc runner path.
+7. Inspect failures at the user-flow step where behavior diverges.
+8. Re-run the smallest confirming scope after fixes.
+9. Report the executed scenario, result, and remaining gaps.
 
 # Weline Rules
 
@@ -45,6 +46,7 @@ This skill is disabled by default for E2E case/spec work. Use it only when the c
 - Do not create or update E2E/Playwright specs, test cases, fixtures, or regression cases unless the user explicitly asks.
 - Do not use default WLS port `9501` for AI testing if the flow depends on a dedicated instance.
 - Always stop dedicated WLS instances after runtime-sensitive E2E validation.
+- In this local development workspace, backend/admin flow verification defaults to `admin/admin` unless the user overrides the credentials or the task is specifically about auth failures.
 
 # Inputs Required
 
@@ -86,4 +88,3 @@ Before and during work:
 - When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
 - Do not silently expand scope to fix another agent's area.
 - Include collaboration status in the final report.
-

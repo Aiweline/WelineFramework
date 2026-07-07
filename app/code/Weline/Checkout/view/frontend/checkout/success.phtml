@@ -36,13 +36,12 @@ $order = $this->getData('order');
     </div>
     
     <div class="order-actions">
-        <a href="<?= $this->getUrl('checkout/frontend/order/view', ['order_id' => $order->getId()]) ?>" class="btn btn-primary">
+        <a href="<?= $this->getUrl('weline_checkout/frontend/order/view', ['order_id' => $order->getId()]) ?>" class="btn btn-primary">
             <?= __('查看订单详情') ?>
         </a>
-        <a href="<?= $this->getUrl('checkout/frontend/order/list') ?>" class="btn btn-secondary">
+        <a href="<?= $this->getUrl('weline_checkout/frontend/order/list') ?>" class="btn btn-secondary">
             <?= __('返回订单列表') ?>
         </a>
     </div>
     <?php endif; ?>
 </div>
-

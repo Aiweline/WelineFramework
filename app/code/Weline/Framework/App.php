@@ -989,37 +989,17 @@ class App
             return;
         }
 
-        $currency = null;
-        $language = null;
-        $checkCount = \min(4, \count($segments));
-        for ($i = 0; $i < $checkCount; $i++) {
-            $segment = $segments[$i];
-            if ($segment === '') {
-                continue;
-            }
-
-            if ($currency === null && State::isAllowedCurrencyCode($segment)) {
-                $currency = $segment;
-                continue;
-            }
-
-            if ($language === null && \strlen($segment) >= 5 && \strlen($segment) <= 11
-                && \preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(_[A-Z]{2})?$/', $segment)) {
-                $language = $segment;
-            }
-
-            if ($currency !== null && $language !== null) {
-                break;
-            }
-        }
+        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $currency = (string)($localization['currency'] ?? '');
+        $language = (string)($localization['language'] ?? '');
 
         $context = Context::getCurrent();
-        if ($currency !== null) {
+        if ($currency !== '') {
             WelineEnv::set('user.currency', $currency, 'App primeRequestRouteHints');
             $context?->set('route.currency', $currency);
             $context?->set('input.server.WELINE_USER_CURRENCY', $currency);
         }
-        if ($language !== null) {
+        if ($language !== '') {
             WelineEnv::set('user.lang', $language, 'App primeRequestRouteHints');
             $context?->set('route.language', $language);
             $context?->set('input.server.WELINE_USER_LANG', $language);

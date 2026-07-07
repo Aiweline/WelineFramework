@@ -147,7 +147,7 @@ class EavHelper
         } else {
             $attribute->where($attribute::schema_fields_type_id, $type_id)
                 ->where($attribute::schema_fields_eav_entity_id, $eav_entity_id)
-                ->where($attribute::schema_fields_attribute_id, $attribute->getId())
+                ->where($attribute::schema_fields_attribute_id, $attribute->getAttributeId())
                 ->where($attribute::schema_fields_is_system, 1)
                 ->where($attribute::schema_fields_code, $code)
                 ->update([

@@ -15,7 +15,8 @@ Use this skill as the first plugin entry point for WelineFramework work in Codex
 4. Read `dev/ai/global-constraints.md`.
 5. Read `dev/ai/skills/_index.md`.
 6. Load only the 1 to 3 role skills matched to the current task.
-7. Read diagrams, module docs, source files, tests, and configuration only when relevant.
+7. For module work, read `dev/ai/diagrams/08-module-docs-index.txt` and the owning module `doc/AI-INDEX.md` before source files.
+8. Read diagrams, module README/specialized docs, source files, tests, and configuration only when relevant.
 
 ## Routing
 
@@ -23,7 +24,8 @@ Use this skill as the first plugin entry point for WelineFramework work in Codex
 - Skill indexes, knowledge routing, or AI documentation structure: `文档知识库工程师-技能索引与知识库`.
 - CI, release gates, publish readiness, or automation safety: `CI发布工程师-CI与发布门禁`.
 - Runtime, WLS, Session Server, SSE, reload/restart behavior: matching `WLS运行时工程师-*`.
-- UI, browser-visible pages, components, layouts, and visual quality: matching `前端主题工程师-*` plus `ui-ux-pro-max`.
+- UI, browser-visible pages, components, layouts, theme overrides, `app/design`, `view/theme`, `view/tpl` source tracing, widget/slot/taglib work: matching `前端主题工程师-*` plus `ui-ux-pro-max`.
+- Theme inheritance or file-convention questions: read `app/code/Weline/Theme/doc/AI-INDEX.md` and `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md` before implementing.
 - QueryProvider, worker, or frontend API chains: `前端主题工程师-前端API交互`.
 - Code graph exploration, impact analysis, debugging, refactoring, or GitNexus CLI work: matching `gitnexus-*`.
 

@@ -10,7 +10,7 @@
 4. `dev/ai/diagrams/00-INDEX.txt`
 5. `dev/ai/skills/_index.md`
 6. 命中的 1 到 3 个 `dev/ai/skills/*/SKILL.md`
-7. 若涉及模块，再读 `dev/ai/diagrams/08-module-docs-index.txt` 和模块 `doc/README.md`
+7. 若涉及模块，再读 `dev/ai/diagrams/08-module-docs-index.txt` 和模块 `doc/AI-INDEX.md`，然后按该入口继续读 `doc/README.md` 与专项文档
 
 源码、测试、配置和历史材料只能在上述上下文不足或任务明确要求时继续读取。
 
@@ -22,7 +22,7 @@
 | 技能选择和角色路由 | `dev/ai/skills/_index.md` |
 | 专项执行规则 | 对应 `dev/ai/skills/*/SKILL.md` |
 | 智能体名录和协作上报 | `dev/ai/agent/README.md` |
-| 架构和模块入口 | `dev/ai/diagrams/00-INDEX.txt`、`08-module-docs-index.txt`、模块 `doc/README.md` |
+| 架构和模块入口 | `dev/ai/diagrams/00-INDEX.txt`、`08-module-docs-index.txt`、模块 `doc/AI-INDEX.md` |
 | Codex 插件打包 | `dev/ai/codex/plugins/weline-codex-plugin/` |
 | 任务过程证据 | `dev/ai/codex/tasks/**` |
 | 历史规则、旧计划、旧报告 | `dev/ai/archive/**` |

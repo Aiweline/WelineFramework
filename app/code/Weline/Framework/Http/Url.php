@@ -762,7 +762,9 @@ class Url implements UrlInterface
                     $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('backend') . self::getPrefix() . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
+                $backendPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+                $prefixPath = $backendPrefix !== '' ? '/' . $backendPrefix : '';
+                $url = $this->getRequest()->getBaseHost() . $prefixPath . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
             } else {
                 $url = $path;
             }

@@ -15,7 +15,7 @@ and massive token savings.
 │ 05-event-system.txt            Event system (Event + Hook + Extends)          │
 │ 06-module-lifecycle.txt        Module lifecycle (register + install + upgrade)│
 │ 07-request-flow.txt            HTTP request flow (frontend + backend + API)   │
-│ 08-module-docs-index.txt       Module docs index (57 modules, 634 docs) ⭐    │
+│ 08-module-docs-index.txt       Module AI doc index (AI-INDEX first) ⭐        │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -29,11 +29,11 @@ and massive token savings.
 │ • Module development: See 06-module-lifecycle.txt                            │
 │ • HTTP debugging: See 07-request-flow.txt                                    │
 │ • ⭐ ANY module work: MUST check 08-module-docs-index.txt first              │
-│   Then read {Module}/doc/README.md (saves 80% tokens)                        │
+│   Then read {Module}/doc/AI-INDEX.md before source code                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-⚠️  CRITICAL RULE: Before reading source code in app/code/Weline/{Module}/,
-    ALWAYS check {Module}/doc/README.md first. See 08-module-docs-index.txt.
+⚠️  CRITICAL RULE: Before reading source code in app/code/{Vendor}/{Module}/,
+    ALWAYS check {Module}/doc/AI-INDEX.md first. See 08-module-docs-index.txt.
 
 Token savings: Architecture diagrams 2000+ → 300-500 tokens (save 75%)
-               Module docs priority saves 80% (vs reading source code)
+               Module AI entrypoints prevent generic code from ignoring module conventions

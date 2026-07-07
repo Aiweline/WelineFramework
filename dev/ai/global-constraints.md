@@ -7,7 +7,7 @@
 按需加载，避免把整套提示词塞进上下文。
 
 1. 先读 `AI-ENTRY.md` 和本文档。
-2. 再按任务读 `dev/ai/diagrams/00-INDEX.txt`、`dev/ai/diagrams/08-module-docs-index.txt` 中命中的图谱或模块文档。
+2. 再按任务读 `dev/ai/diagrams/00-INDEX.txt`、`dev/ai/diagrams/08-module-docs-index.txt`，涉及模块时必须先读 owning module 的 `doc/AI-INDEX.md`，再读其 README 和专项文档。
 3. 再读 `dev/ai/skills/_index.md`，只加载 1 到 3 个最相关技能；前端可见任务例外，需同时加载命中的前端技能与 `ui-ux-pro-max`。
 4. 最后读取目标源码、现有验证入口和配置；只有用户明确要求测试/用例工作时，才读取或修改测试文件。
 5. 不把 `dev/ai/codex/tasks/**`、`dev/ai/archive/**`、历史计划、历史报告当作默认提示词；只有恢复旧任务、查证历史或用户指定时才读。
@@ -36,12 +36,14 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 
 ## 3. 工程决策原则
 
-- 先理解，再修改：读相关入口、调用链、配置、现有验证入口和模块文档；测试文件只在用户明确要求测试/用例工作时纳入默认阅读范围。
+- 先理解，再修改：读相关入口、调用链、配置、现有验证入口和模块 `doc/AI-INDEX.md`；测试文件只在用户明确要求测试/用例工作时纳入默认阅读范围。
 - 以代码、文档、日志、运行结果和验证证据为准；用户说法与证据冲突时，说明依据并采用可验证结论。
 - GitNexus impact 只用于函数、类、方法等代码符号变更；纯文档、规则或索引文件变更不要把文件路径当 symbol 反复调用 impact。若首次返回 `Target not found`，记录为文档变更无符号影响，改用 `git diff` 和定点阅读验收。
 - 优先最小必要改动，避免无关重构、无关格式化、无关依赖升级。
 - 所有代码、配置、接口、行为、流程、命令、验证方式或规则变更，都必须同步检查相关长期文档是否需要更新；若文档受影响，必须在同一任务内更新对应模块 `doc/`、AI 规则、索引或使用说明，若确认不需要更新，交付时说明判断依据。
 - 优先使用框架已有能力：服务层、事件、Hook、Taglib、配置、队列、权限、i18n、ORM、路由生成、模块文档约定。
+- 先查已有，再谈新增：开发前必须先检索默认模块、Theme、Hook、slot、配置、QueryProvider、变量/色盘、Widget、Taglib、服务契约、文档和现有文件。已有能力能满足或可扩展时，禁止再创造一套平行业务、模板、CSS、变量、路由、API、服务或配置。
+- 新增文件/新增能力必须说明必要性：只有现有能力不存在、不满足通用需求，或缺少可复用扩展点时才新增。能修通用核心抽象时先升级核心，不得用站点/供应商私有重复实现掩盖框架缺口。
 - 公共接口、权限、安全、支付、数据删除、加密、隐私、生产配置等变更必须额外说明风险和验证方式。
 - 不为了“看起来完成”引入假数据、隐藏开关、宽松兼容、静默跳过、临时 fallback 或兜底代码。
 
@@ -107,6 +109,13 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 涉及前端请求、QueryProvider、流式订阅或 worker 链路，必须加载 `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`。
 - 涉及浏览器可见 UI、组件、页面、布局、样式、响应式、状态展示、可用性或审美优化，必须加载命中的 Weline 前端技能和 `dev/ai/skills/ui-ux-pro-max/SKILL.md`。
 - `ui-ux-pro-max` 只补设计系统、信息层级、视觉质量和可用性约束；不得覆盖 Weline 的模板边界、layout 约定、i18n、请求链路和验证要求。
+- 开发或调整供应商主题（如 `WeShop/default`）前必须先加载 `前端主题工程师-主题模板开发`，涉及页面/组件同时加载 `前端主题工程师-组件与页面构建` 与 `ui-ux-pro-max`，涉及请求再加载 `前端主题工程师-前端API交互`；开始写前必须先阅读可继承的核心模板、Hook、slot 和 Theme 组件。
+- 站点/供应商主题开发前必须先盘点 `Weline_Theme` 以及 `Weline_Cart`、`Weline_Checkout`、`Weline_Customer`、`Weline_Payment`、`Weline_Shipping` 等既有能力；已有且满足需求时通过主题继承、Hook、slot、配置或 QueryProvider 接入，不得在供应商模块里平行重写商城、购物车、结账、支付、个人中心或配送链路。
+- Theme/前端新增文件前必须确认默认 Theme 是否已有同路径文件、Hook/slot、变量/色盘、组件或配置入口；已有能力应继承、配置或扩展。新增 active-theme 文件、全局 CSS、变量文件、JS 入口或组件必须有明确业务差异和必要性，不得为了“方便”复制默认实现。
+- URL 本地化前缀必须兼容单独和组合形态：可选 area 段后，货币与语言最多两段，可只出现货币、只出现语言，也可 `currency/language` 或 `language/currency` 任意顺序出现，例如 `/USD/products`、`/zh_Hans_CN/products`、`/USD/zh_Hans_CN/products`、`/zh_Hans_CN/USD/products`。
+- 请求启动、WLS URL 解析、Router 前缀剥离、登录回跳和 canonical redirect 必须复用统一的路径本地化解析约定；禁止在新代码里重新假设固定顺序、只支持“双段同时出现”，或只处理其中一种组合。
+- 路由匹配/路径剥离阶段不得依赖当前 allowed currency/language 配置或缓存来判断前缀是否存在，因为本地化前缀解析本身可能发生在站点、货币、语言上下文完全预热之前；可用形状约定识别前缀，再在业务/配置层校验是否合法。
+- 若既有核心能力不符合业务要求，先说明缺口并让用户确认是否升级核心抽象；核心升级必须保持面向多模块复用，不能只为单个站点写特例。
 
 ## 8. layout 边界
 

@@ -9,17 +9,19 @@
 3. `dev/ai/global-constraints.md`
 4. 本索引
 5. 命中的技能正文
-6. 相关模块文档和源码
+6. 相关模块 `doc/AI-INDEX.md`、README、专项文档和源码
 
 ## 组合触发
 
 - 任意工程任务：遵守 `通用工程师-开发规范与代码质量`。
+- 任意 `app/code/{Vendor}/{Module}` 模块任务：先读 `dev/ai/diagrams/08-module-docs-index.txt`，再读 owning module 的 `doc/AI-INDEX.md`；`AI-INDEX.md` 未读完前不得开始按通用经验开发。
 - 浏览器可见 UI、页面、组件、布局、样式、响应式、状态、可用性或审美：加载命中的 `前端主题工程师-*` + `ui-ux-pro-max`。
+- 主题开发、主题覆盖、`app/design`、`view/theme`、`view/tpl` 溯源、layout shell、partial、slot、widget、taglib：优先加载 `前端主题工程师-主题模板开发`，并先读 `app/code/Weline/Theme/doc/AI-INDEX.md`、`app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`、`app/code/Weline/Theme/doc/开发/Theme开发总指南.md`。
 - 前端请求、QueryProvider、流式订阅、worker 链路：加载 `前端主题工程师-前端API交互`；前后端业务接口只能走 bin-query / `weline-api`，禁止原生 Ajax/XHR/fetch。
-- 测试写法、测试目录、PHPUnit/Pest/Vitest/Playwright 命令、验证分层选择：加载 `testing`；它是测试总入口，不自动授权新增测试产物。
+- 测试写法、测试目录、PHPUnit/Pest/Vitest/Playwright 命令、验证分层选择：加载 `testing`；它是测试总入口，不自动授权新增测试产物。命中本地后台登录页时，默认继续使用开发账号 `admin/admin`，不要因为缺凭据阻塞。
 - 验证策略、质量门禁或验收：加载 `QA测试主管-*`；默认禁止新增或更新单元测试、测试用例、E2E spec、回归用例、fixtures 和测试数据。
 - `单元测试工程师-*` 只在用户明确要求写/补/改/运行单元测试或测试数据时加载；`E2E自动化工程师-端到端流程测试` 只在用户明确要求 E2E 用例或 E2E 执行时加载。
-- 轻量路由、HTTP、Browser 冒烟仍可按验证需要加载 `E2E自动化工程师-路由与UI冒烟验证`，但不得创建或更新 E2E/Playwright 用例文件。
+- 轻量路由、HTTP、Browser 冒烟仍可按验证需要加载 `E2E自动化工程师-路由与UI冒烟验证`，但不得创建或更新 E2E/Playwright 用例文件；本地后台验证遇到登录页时默认用 `admin/admin` 继续，除非任务就是验证未登录态。
 - WLS、Worker、reload/restart、Session Server、SSE：加载 `WLS运行时工程师-*`。
 - Weline 全局面板、输入 `weline`、WLS Performance、`WLS 服务` tab、query-bin 卡慢、静态资源缓存、明确预览才绕过缓存：加载 `WLS运行时工程师-WLS面板性能诊断`。
 - SEO 面板、输入 `weline`、`SEO` tab、SEO inspector、SEO 解析器、head/meta/canonical/hreflang/JSON-LD/H 标签、多搜索平台矩阵、控制台 SEO 报告：加载 `SEO面板诊断`。
@@ -44,7 +46,7 @@
 | 业务模块功能 | `业务模块工程师-模块开发`；`业务模块工程师-服务层与业务逻辑` |
 | 配置、缓存、后台权限 | `业务模块工程师-配置缓存与后台权限` |
 | 第三方支付方式、支付 Provider、支付配置模板、checkout 支付模板 | `.codex/skills/payment-provider-development/SKILL.md` |
-| 主题模板、Taglib、Widget | `前端主题工程师-主题模板开发` |
+| 主题模板、Taglib、Widget、slot、partial、`app/design` 覆盖、`view/tpl` 溯源 | `前端主题工程师-主题模板开发` |
 | GuoLaiRen 供应商模块 | `app/code/GuoLaiRen` 已整体迁移到 `E:\公司\远程\src\weline`；源仓库不再支持该 vendor，切换到目标仓库处理 |
 | 组件、页面、视觉状态 | `前端主题工程师-组件与页面构建`；`ui-ux-pro-max` |
 | 前端 API / worker 请求链 | `前端主题工程师-前端API交互` |

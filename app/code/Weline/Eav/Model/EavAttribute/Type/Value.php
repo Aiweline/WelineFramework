@@ -142,12 +142,12 @@ class Value extends \Weline\Framework\Database\Model
      */
     public function setAttribute(EavAttribute &$attribute): static
     {
-        if (empty($attribute->getId())) {
+        if ($attribute->getAttributeId() <= 0) {
             throw new Exception(__('属性不存在！'));
         }
         $this->attribute = $attribute;
         $this->origin_table_name = '';
-        $this->setData(self::schema_fields_attribute_id, $attribute->getId());
+        $this->setData(self::schema_fields_attribute_id, $attribute->getAttributeId());
         $this->getTable();
         return $this;
     }
@@ -158,27 +158,29 @@ class Value extends \Weline\Framework\Database\Model
             if (isset($this->attributes_type_fields[$attribute_or_id])) {
                 return $this->attributes_type_fields[$attribute_or_id];
             }
-            $attribute = ObjectManager::getInstance(EavAttribute::class)->load($attribute_or_id);
+            $attribute = ObjectManager::getInstance(EavAttribute::class)->loadByAttributeId($attribute_or_id);
         } else {
             $attribute = $attribute_or_id;
-            if (isset($this->attributes_type_fields[$attribute->getId()])) {
-                return $this->attributes_type_fields[$attribute->getId()];
+            $attributeId = $attribute->getAttributeId();
+            if (isset($this->attributes_type_fields[$attributeId])) {
+                return $this->attributes_type_fields[$attributeId];
             }
         }
-        if (empty($attribute->getId())) {
+        $attributeId = $attribute->getAttributeId();
+        if ($attributeId <= 0) {
             throw new Exception(__('属性不存在！无法获取属性类型字段。'));
         }
         $type = $attribute->getTypeModel();
         if (!$type->getId()) {
             throw new Exception(__('属性类型不存在！无法获取属性类型字段。'));
         }
-        $this->attributes_type_fields[$attribute_or_id] = [
+        $this->attributes_type_fields[$attributeId] = [
             $type::schema_fields_is_swatch => $type->getIsSwatch(),
             $type::schema_fields_swatch_image => $type->getSwatchImage(),
             $type::schema_fields_swatch_color => $type->getSwatchColor(),
             $type::schema_fields_swatch_text => $type->getSwatchText(),
         ];
-        return $this->attributes_type_fields[$attribute_or_id];
+        return $this->attributes_type_fields[$attributeId];
     }
 
 

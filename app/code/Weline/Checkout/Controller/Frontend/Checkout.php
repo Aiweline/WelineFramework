@@ -21,6 +21,11 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Checkout extends FrontendController
 {
+    private const LOGIN_PATH = '/customer/account/login';
+    private const CHECKOUT_PATH = '/checkout';
+    private const CART_PATH = '/cart';
+    private const ORDER_LIST_PATH = '/weline_checkout/frontend/order/list';
+
     private CheckoutService $checkoutService;
     private PaymentService $paymentService;
 
@@ -41,13 +46,13 @@ class Checkout extends FrontendController
     {
         // 检查登录状态
         if (!$this->isLoggedIn()) {
-            return $this->redirect($this->getUrl('*/frontend/index'));
+            return $this->redirectToLogin();
         }
 
         $this->assign('page_title', __('结账'));
         $this->layoutType = 'checkout';
         
-        return $this->fetch();
+        return $this->fetch('Weline_Checkout::frontend/checkout/index.phtml');
     }
 
     /**
@@ -96,7 +101,7 @@ class Checkout extends FrontendController
                 'data' => [
                     'order_id' => $order->getId(),
                     'order_number' => $order->getOrderNumber(),
-                    'redirect_url' => $this->getUrl('checkout/frontend/checkout/successPage', ['order_id' => $order->getId()])
+                    'redirect_url' => $this->getUrl('checkout/success-page', ['order_id' => $order->getId()])
                 ]
             ]);
         } catch (\Exception $e) {
@@ -117,7 +122,7 @@ class Checkout extends FrontendController
         $orderId = (int)$this->request->getParam('order_id');
         
         if (!$orderId) {
-            return $this->redirect($this->getUrl('*/frontend/index'));
+            return $this->redirect(self::CART_PATH);
         }
 
         /** @var \Weline\Checkout\Service\OrderService $orderService */
@@ -125,14 +130,14 @@ class Checkout extends FrontendController
         $order = $orderService->getOrder($orderId);
 
         if (!$order) {
-            return $this->redirect($this->getUrl('*/frontend/index'));
+            return $this->redirect(self::ORDER_LIST_PATH);
         }
 
         // 验证订单所有权
         if ($this->isLoggedIn()) {
             $customerId = $this->getLoginUserId();
             if ($order->getCustomerId() != $customerId) {
-                return $this->redirect($this->getUrl('*/frontend/index'));
+                return $this->redirect(self::ORDER_LIST_PATH);
             }
         }
 
@@ -140,7 +145,7 @@ class Checkout extends FrontendController
         $this->assign('order', $order);
         $this->layoutType = 'checkout';
         
-        return $this->fetch();
+        return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
     }
 
     /**
@@ -183,5 +188,9 @@ class Checkout extends FrontendController
             ]);
         }
     }
-}
 
+    private function redirectToLogin(): string
+    {
+        return $this->redirect(self::LOGIN_PATH, ['redirect_url' => self::CHECKOUT_PATH]);
+    }
+}

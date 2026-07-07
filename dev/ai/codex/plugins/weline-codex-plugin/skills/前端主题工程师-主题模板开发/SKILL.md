@@ -1,7 +1,7 @@
 ---
 name: 前端主题工程师-主题模板开发
-description: Frontend theme engineer skill for theme structure, source-template editing, layout-safe styling, and Weline view-layer conventions.
-version: 1.1.1
+description: Frontend theme engineer skill for theme structure, file-convention inheritance, source-template editing, layout-safe styling, and Weline view-layer conventions.
+version: 1.1.3
 ---
 
 # Role
@@ -18,10 +18,15 @@ This skill owns theme-level template work, source-template editing, layout-aware
 # Source Material
 
 - `AI-ENTRY.md`
-- `CLAUDE.md`
-- `dev/ai/skills/theme-development/SKILL.md`
-- `dev/ai/skills/template-source-editing/SKILL.md`
-- `dev/ai/skills/code-generation-standards/SKILL.md`
+- `dev/ai/global-constraints.md`
+- `app/code/Weline/Theme/doc/AI-INDEX.md`
+- `app/code/Weline/Theme/doc/README.md`
+- `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
+- `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
+- `app/code/Weline/Theme/doc/layout-discovery-guide.md`
+- `app/code/Weline/Theme/view/theme/README.md`
+- `app/code/Weline/Theme/doc/Theme.js使用指南.md`
+- `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
 
 # Responsibilities
 
@@ -30,6 +35,27 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Organize layout, partial, widget, and asset changes in the expected theme structure.
 - Keep styles and scripts scoped, reusable, and consistent with theme tokens.
 - Keep frontend request interactions routed through Theme `theme.js` and the built-in `weline-api` worker chain.
+
+# Theme Inheritance Contract
+
+- `Weline_Theme` default theme is the foundation for every site theme. A newly created empty theme must render like the default `Weline_Theme` theme through the normal theme fallback chain.
+- Theme development is file-convention based: to override a default layout, partial, component, or asset, create the same relative path in the active theme, such as `app/design/Vendor/theme/frontend/partials/header/default.phtml` for `Weline_Theme/view/theme/frontend/partials/header/default.phtml`.
+- If the active theme does not provide that same-path file, the resolver must fall back to the `Weline_Theme` default file. Deleting an unnecessary active-theme override is the correct way to restore default behavior.
+- Do not create pass-through wrapper templates whose only purpose is to call `fetchModuleThemeHtml('Weline_Theme::...')` for inheritance. The absence of the active-theme file is the inheritance mechanism; a transparent delegate file is still an override and must be deleted.
+- Only keep active-theme files that intentionally change output. For light branding or business content, prefer the existing Hook, slot, config, page-content, or asset extension point over copying an entire layout or partial.
+- Layout shell ownership stays with `Weline_Theme` unless the requirement explicitly asks for a new shell. Site themes should not copy or rewrite page-wide `homepage`, `product_list`, `product`, `cart`, `checkout`, header, or footer structures just to inherit them.
+- Header/footer partials belong to the default Theme shell. Do not replace them with standalone Tailwind/brand-specific whole partials unless the task explicitly asks for a new shell; customize logo, navigation, search, account, cart, announcement, brand, links, and copyright through the corresponding `Weline_Theme` partial Hooks or slots.
+- `@hook-solo` may replace a content slot such as homepage/product-list/product content, but must not replace the page shell, header, footer, `<html>`, or `<body>`.
+- `meta.showHeader` and `meta.showFooter` must remain true on public pages that inherit the default shell. Set them false only for an explicit headless/embedded page requirement, never as a workaround for a broken theme override.
+- When a same-path override is genuinely required, copy or author only the needed source template in the active theme path and keep it aligned with the default theme contract, including slots, hooks, meta parameters, tokens, and i18n.
+- Commerce themes must inventory existing `Weline_Cart`, `Weline_Checkout`, `Weline_Customer`, `Weline_Payment`, and `Weline_Shipping` surfaces before adding site code. Use those modules through inheritance, Hook, slot, SystemConfig, QueryProvider, or published interfaces; do not rebuild cart, checkout, payment, account, order, or shipping flows inside a supplier/site module unless a confirmed generic core gap is being upgraded.
+
+# Theme Layout Selection Boundary
+
+- Public URL routing must not choose Theme layouts with URL/query parameters such as `layout_type`, `page_type`, `layout_option`, or by routing normal storefront pages into `theme/frontend/policy`.
+- A public page Controller owns layout selection through the framework controller layout setting, for example `protected ?string $layoutType = 'homepage.default';`, `product_list.default`, or `product.default`.
+- Special layout variants, such as product detail layout changes, must be selected by Controller logic, events/observers, configuration, or business context. Never select them by matching arbitrary URL layout parameters.
+- Theme preview/editor URLs may use preview-specific policy parameters. Do not copy that preview mechanism into production storefront routing.
 
 # Default Theme CSS Contract
 
@@ -44,14 +70,16 @@ This skill owns theme-level template work, source-template editing, layout-aware
 
 # Workflow
 
-1. Read `AI-ENTRY.md`, then theme-related docs, then inspect the owning source template path.
+1. Read `AI-ENTRY.md`, `dev/ai/diagrams/08-module-docs-index.txt`, `app/code/Weline/Theme/doc/AI-INDEX.md`, and the owning module's `doc/AI-INDEX.md` before inspecting source templates.
 2. If the symptom appears in `view/tpl`, trace it back to the real source template before editing.
 3. For browser-visible UI work, always run or equivalently execute the `ui-ux-pro-max` design-system search and translate its output into Weline-safe visual constraints.
-4. Implement the minimal source-template or theme-asset change in the owning theme area.
-5. Keep layout-specific CSS or JS with the owning template instead of moving everything into global theme assets.
-6. Use static template tags where possible and keep PHP in templates to the minimum necessary.
-7. Validate through the rendered page or the closest route-level check.
-8. Record affected template paths and any required theme documentation updates.
+4. Before editing an active-theme layout or partial, decide whether the desired result is default inheritance or a real override. If the desired result is inheritance, remove the active-theme file instead of adding a pass-through delegate.
+5. For public page layout changes, inspect the Controller layout setting and relevant Hook/slot hosts before touching routing or theme shell files.
+6. Implement the minimal source-template or theme-asset change in the owning theme area.
+7. Keep layout-specific CSS or JS with the owning template instead of moving everything into global theme assets.
+8. Use static template tags where possible and keep PHP in templates to the minimum necessary.
+9. Validate through the rendered page or the closest route-level check.
+10. Record affected template paths and any required theme documentation updates.
 
 # Weline Rules
 
@@ -63,6 +91,8 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Do not use JavaScript `alert`, `confirm`, or `prompt`.
 - Do not add direct frontend requests with `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers in theme templates or module scripts; declare/register JS behavior and call the built-in `weline-api` through `theme.js` so requests run through the worker path.
 - For station-internal business APIs, use `Weline.Api.resource('provider')`, `Weline.Api.graph()`, or `Weline.Api.stream()`; do not handwrite `/api/framework/query-bin` or REST business URLs in templates.
+- Do not preserve an active-theme override file when its intended behavior is identical to `Weline_Theme`; absence of the file is the correct inheritance state.
+- Do not route public storefront pages to `theme/frontend/policy` or pass layout identity through URL/query parameters to get a Theme layout.
 
 # Inputs Required
 
@@ -80,6 +110,9 @@ This skill owns theme-level template work, source-template editing, layout-aware
 # Validation
 
 - Confirm the edit was applied to source templates, not `view/tpl` output.
+- Confirm unnecessary active-theme same-path overrides were removed so fallback can reach `Weline_Theme`.
+- Confirm public page layouts are selected by Controller or business context, not by URL/query layout parameters.
+- Confirm inherited pages render the default Theme header/footer unless an explicit no-shell requirement exists.
 - Confirm the page renders correctly on the intended route.
 - Confirm styles and scripts stay scoped to the relevant theme surface.
 - Confirm interactive requests use the Theme `theme.js` / `weline-api` worker route instead of direct browser-side HTTP calls.
@@ -103,4 +136,3 @@ Before and during work:
 - When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
 - Do not silently expand scope to fix another agent's area.
 - Include collaboration status in the final report.
-

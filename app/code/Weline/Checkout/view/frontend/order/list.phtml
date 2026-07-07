@@ -45,7 +45,7 @@ $pageSize = $this->getData('page_size') ?: 20;
                 </div>
                 
                 <div class="order-actions">
-                    <a href="<?= $this->getUrl('checkout/frontend/order/view', ['order_id' => $order['order_id']]) ?>" class="btn btn-sm btn-primary">
+                    <a href="<?= $this->getUrl('weline_checkout/frontend/order/view', ['order_id' => $order['order_id']]) ?>" class="btn btn-sm btn-primary">
                         <?= __('查看详情') ?>
                     </a>
                     <?php if ($order['status'] === 'pending' || $order['status'] === 'processing'): ?>
@@ -172,4 +172,3 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-

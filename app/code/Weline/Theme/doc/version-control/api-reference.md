@@ -284,8 +284,10 @@
 ```javascript
 // 加载版本列表
 async function loadVersions() {
-    const response = await fetch(`/backend/theme-editor/versions?theme_id=${themeId}&page_type=${pageType}`);
-    const result = await response.json();
+    const result = await Weline.Api.get('/backend/theme-editor/versions', {
+        theme_id: themeId,
+        page_type: pageType
+    });
     if (result.success) {
         renderVersionPanel(result.data.versions);
     }
@@ -293,16 +295,11 @@ async function loadVersions() {
 
 // 保存新版本
 async function saveVersion(name) {
-    const response = await fetch('/backend/theme-editor/save-version', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            theme_id: themeId,
-            page_type: pageType,
-            version_name: name
-        })
+    return await Weline.Api.post('/backend/theme-editor/save-version', {
+        theme_id: themeId,
+        page_type: pageType,
+        version_name: name
     });
-    return await response.json();
 }
 ```
 

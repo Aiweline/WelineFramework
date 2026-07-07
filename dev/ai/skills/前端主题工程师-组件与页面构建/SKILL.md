@@ -18,11 +18,15 @@ This skill builds frontend components and page assembly units such as blocks, ta
 # Source Material
 
 - `AI-ENTRY.md`
-- `CLAUDE.md`
-- `dev/ai/skills/frontend-components/SKILL.md`
-- `dev/ai/skills/website-to-template/SKILL.md`
-- `dev/ai/skills/visitor-pixel/SKILL.md`
-- `dev/ai/skills/weline-sticker/SKILL.md`
+- `dev/ai/global-constraints.md`
+- `app/code/Weline/Theme/doc/AI-INDEX.md`
+- `app/code/Weline/Theme/doc/README.md`
+- `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
+- `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
+- `app/code/Weline/Theme/doc/部件开发指南.md`
+- `app/code/Weline/Theme/doc/widget-slot-attributes.md`
+- `app/code/Weline/Widget/doc/开发指南.md`
+- `app/code/Weline/Taglib/doc/README.md`
 
 # Responsibilities
 
@@ -36,7 +40,7 @@ This skill builds frontend components and page assembly units such as blocks, ta
 # Workflow
 
 1. Identify whether the task is a block, taglib, widget, or page-conversion request.
-2. Read the matching source skill material and confirm the expected directory layout.
+2. Read `dev/ai/diagrams/08-module-docs-index.txt`, `app/code/Weline/Theme/doc/AI-INDEX.md`, and the owning module's `doc/AI-INDEX.md`, then read the matching source skill material and confirm the expected directory layout.
 3. For browser-visible UI work, always run or equivalently execute the `ui-ux-pro-max` design-system search and translate its output into Weline-safe visual constraints.
 4. Define the attention path before coding: primary information, primary action, secondary actions, empty/error state action, and what should not compete for attention.
 5. Implement the component with the correct registration path, template path, and metadata.

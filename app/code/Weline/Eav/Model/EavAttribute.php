@@ -92,6 +92,22 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return parent::load('main_table.attribute_id', $attribute_id);
     }
 
+    /**
+     * 属性自增主键 attribute_id（值表、选项表外键引用此 ID）。
+     *
+     * 与 getId() / getEavEntityId() 区分：
+     * - getAttributeId() → 本属性行主键
+     * - getEavEntityId() → 所属 EAV 实体（eav_entity 表）外键
+     * - getId()         → 框架联合主键首字段 eav_entity_id（勿用于值表 attribute_id）
+     */
+    public function getAttributeId(): int
+    {
+        return (int)($this->getData(self::schema_fields_attribute_id) ?: 0);
+    }
+
+    /**
+     * 所属 EAV 实体 ID（eav_entity 表主键，对应字段 eav_entity_id）。
+     */
     public function getEavEntityId(): int
     {
         return (int)$this->getData(self::schema_fields_eav_entity_id);
@@ -192,7 +208,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
             return $this->getData('options');
         }
         $this->setData('options', ObjectManager::getInstance(Option::class)->reset()
-            ->where(self::schema_fields_ID, $this->getId())
+            ->where(self::schema_fields_ID, $this->getAttributeId())
             ->select()
             ->fetchArray());
         return $this->getData('options');
@@ -366,7 +382,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
             $valueModel = $this->w_getValueModel();
             $valueModel
                 ->fields(Value::schema_fields_value)
-                ->where(Value::schema_fields_attribute_id, $this->getId())
+                ->where(Value::schema_fields_attribute_id, $this->getAttributeId())
                 ->where(Value::schema_fields_entity_id, $entity_id);
 
             if ($this->getMultipleValued()) {
@@ -499,9 +515,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
         }
         if (is_string($value) || is_int($value)) {
             $valueModel = $this->w_getValueModel();
-            $valueModel->reset()->where(['entity_id' => $entity_id, 'attribute_id' => $this->getId()])
+            $valueModel->reset()->where(['entity_id' => $entity_id, 'attribute_id' => $this->getAttributeId()])
                 ->delete()->fetch();
-            $data = ['entity_id' => $entity_id, 'attribute_id' => $this->getId(), 'value' => $value];
+            $data = ['entity_id' => $entity_id, 'attribute_id' => $this->getAttributeId(), 'value' => $value];
             $bindFieldsData = [];
             if ($swatch_image) {
                 $bindFieldsData['swatch_image'] = $swatch_image;
@@ -528,11 +544,11 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 throw new Exception(__('单值属性只能接收一个值！当前值：%{1}', w_var_export($value, true)));
             }
             $valueModel = $this->w_getValueModel();
-            $valueModel->where(['entity_id' => $entity_id, 'attribute_id' => $this->getId()])->delete()->fetch();
+            $valueModel->where(['entity_id' => $entity_id, 'attribute_id' => $this->getAttributeId()])->delete()->fetch();
             $data = [];
             $bindFieldsData = [];
             foreach ($value as $item) {
-                $data_tmp = ['entity_id' => $entity_id, 'value' => $item, 'attribute_id' => $this->getId()];
+                $data_tmp = ['entity_id' => $entity_id, 'value' => $item, 'attribute_id' => $this->getAttributeId()];
                 if (isset($item['swatch_image'])) {
                     $bindFieldsData['swatch_image'] = $swatch_image;
                 }
@@ -623,7 +639,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
     {
         /**@var \Weline\Eav\Model\EavAttribute\Option $optionModel */
         $optionModel = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Option::class);
-        return clone $optionModel->reset()->clearData()->where($optionModel::schema_fields_attribute_id, $this->getId())
+        return clone $optionModel->reset()->clearData()->where($optionModel::schema_fields_attribute_id, $this->getAttributeId())
             ->where($optionModel::schema_fields_eav_entity_id, $this->getEavEntityId());
     }
 
@@ -748,7 +764,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         } catch (\Exception $e) {
             $options['values'] = [];
         }
-        if ($this->getId()) {
+        if ($this->getAttributeId() > 0) {
             $options['entity'] = $this;
         }
         return $type->getHtml($this, $options);
@@ -823,7 +839,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function getEavEntityAttributeValueTable(): string
     {
-        if (!$this->getId()) {
+        if ($this->getAttributeId() <= 0) {
             return '';
         }
         # 查询属性所属eav实体

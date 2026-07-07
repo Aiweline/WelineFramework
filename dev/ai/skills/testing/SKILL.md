@@ -35,6 +35,24 @@ Load specialist skills only when needed:
 - `dev/ai/skills/E2E自动化工程师-端到端流程测试/SKILL.md` for explicit E2E spec authoring or Playwright execution.
 - `dev/ai/skills/E2E自动化工程师-路由与UI冒烟验证/SKILL.md` for route, HTTP, and lightweight UI smoke validation.
 
+# Local Backend Login Default
+
+For this local development workspace, backend/admin verification defaults to:
+
+- username: `admin`
+- password: `admin`
+
+Use this automatically when:
+
+- browser smoke or E2E verification lands on the backend login page
+- the task needs local backend interaction and the user did not provide different credentials
+
+Do not stop on "missing credentials" in these local backend validation flows. Continue with `admin/admin` unless:
+
+- the user explicitly gave different credentials
+- the task is specifically testing unauthenticated or login-error behavior
+- the environment clearly is not the local development workspace
+
 # Testing Decision Matrix
 
 Use the narrowest proof that matches the risk:

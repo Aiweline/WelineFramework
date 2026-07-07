@@ -39,14 +39,14 @@ $this->assign('title', $title);
                     position="content"
                     class="weshop-product-layout__content">
                 <w:hook>
-                    WeShop_Product::frontend::layouts::product::main-content
+                    Weline_Theme::frontend::layouts::product::main-content
                     <else/>
                     <if condition="meta.content">{{meta.content}}</if>
                 </w:hook>
             </w:slot>
 
             <section class="weshop-product-layout__sections">
-                <w:hook>WeShop_Product::frontend::layouts::product::tabs-content</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::product::tabs-content</w:hook>
             </section>
         </main>
 
