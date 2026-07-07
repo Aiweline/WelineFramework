@@ -96,8 +96,8 @@ $this->assign('meta', $meta);
                                 multiple="true"
                                 position="content"
                                 class="product-detail-layout__main-content">
-                            <w:hook>WeShop_Product::frontend::layouts::product::main-content-before</w:hook>
-                            <w:hook>WeShop_Product::frontend::layouts::product::main-content<else/>
+                            <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product::main-content<else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
                                 <else/>
@@ -111,7 +111,7 @@ $this->assign('meta', $meta);
                                     </div>
                                 </if>
                             </w:hook>
-                            <w:hook>WeShop_Product::frontend::layouts::product::main-content-after</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
                         </w:slot>
 
                         <!-- ========== 产品侧边栏区域 ========== -->
@@ -142,9 +142,9 @@ $this->assign('meta', $meta);
             <!-- ========== 产品详情标签区域 ========== -->
             <if condition="meta.showTabs">
                 <section class="product-detail-layout__tabs">
-                    <w:hook>WeShop_Product::frontend::layouts::product::tabs-before</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
                     <div class="product-detail-layout__tabs-container">
-                        <w:hook>WeShop_Product::frontend::layouts::product::tabs-content<else/>
+                        <w:hook>Weline_Theme::frontend::layouts::product::tabs-content<else/>
                             <div class="product-detail-layout__placeholder" data-placeholder="product-tabs">
                                 <div class="product-detail-layout__placeholder-icon">
                                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -161,10 +161,10 @@ $this->assign('meta', $meta);
                                 position="content"
                                 wrapper="div"
                                 class="product-detail-layout__tabs-slot">
-                            <w:hook>WeShop_Product::frontend::layouts::product::tabs-slot-content</w:hook>
+                            <w:hook>Weline_Theme::frontend::layouts::product::tabs-slot-content</w:hook>
                         </w:slot>
                     </div>
-                    <w:hook>WeShop_Product::frontend::layouts::product::tabs-after</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-after</w:hook>
                 </section>
             </if>
 
@@ -172,8 +172,8 @@ $this->assign('meta', $meta);
             <if condition="meta.showRelatedProducts">
                 <section class="product-detail-layout__related">
                     <div class="product-detail-layout__related-container">
-                        <w:hook>WeShop_Product::frontend::layouts::product::related-before</w:hook>
-                        <w:hook>WeShop_Product::frontend::layouts::product::recommendations-content<else/>
+                        <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::product::recommendations-content<else/>
                             <div class="product-detail-layout__recommendations-stack">
                                 <w:slot id="product-related-products"
                                         name="相关产品列表"
@@ -182,7 +182,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--related">
-                                    <w:hook>WeShop_Product::frontend::layouts::product::related-products</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::related-products</w:hook>
                                 </w:slot>
                                 <w:slot id="product-bestsellers"
                                         name="热销商品"
@@ -191,7 +191,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--bestsellers">
-                                    <w:hook>WeShop_Product::frontend::layouts::product::bestsellers</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::bestsellers</w:hook>
                                 </w:slot>
                                 <w:slot id="product-recently-viewed"
                                         name="最近浏览"
@@ -200,7 +200,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--recently-viewed">
-                                    <w:hook>WeShop_Product::frontend::layouts::product::recently-viewed</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::recently-viewed</w:hook>
                                 </w:slot>
                                 <w:slot id="product-cross-sell"
                                         name="搭配推荐"
@@ -209,11 +209,11 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--cross-sell">
-                                    <w:hook>WeShop_Product::frontend::layouts::product::cross-sell</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::cross-sell</w:hook>
                                 </w:slot>
                             </div>
                         </w:hook>
-                        <w:hook>WeShop_Product::frontend::layouts::product::related-after</w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::product::related-after</w:hook>
                     </div>
                 </section>
             </if>

@@ -8,7 +8,7 @@
 
 ### 1. 创建订单
 
-**URL**: `/checkout/frontend/checkout/createOrder`
+**URL**: `/weline_checkout/frontend/checkout/create-order`
 
 **方法**: `POST`
 
@@ -59,7 +59,7 @@
     "data": {
         "order_id": 1,
         "order_number": "ORD20250101123456",
-        "redirect_url": "/checkout/frontend/checkout/success?order_id=1"
+        "redirect_url": "/weline_checkout/frontend/checkout/success-page?order_id=1"
     }
 }
 ```
@@ -74,7 +74,7 @@
 
 ### 2. 处理支付
 
-**URL**: `/checkout/frontend/checkout/processPayment`
+**URL**: `/weline_checkout/frontend/checkout/process-payment`
 
 **方法**: `POST`
 
@@ -106,7 +106,7 @@
 
 ### 3. 获取订单列表
 
-**URL**: `/checkout/frontend/order/list`
+**URL**: `/weline_checkout/frontend/order/list`
 
 **方法**: `GET`
 
@@ -120,7 +120,7 @@
 
 ### 4. 获取订单详情
 
-**URL**: `/checkout/frontend/order/view`
+**URL**: `/weline_checkout/frontend/order/view`
 
 **方法**: `GET`
 
@@ -134,7 +134,7 @@
 
 ### 5. 取消订单
 
-**URL**: `/checkout/frontend/order/cancel`
+**URL**: `/weline_checkout/frontend/order/cancel`
 
 **方法**: `POST`
 
@@ -541,4 +541,3 @@ echo "支付状态：" . $order->getPaymentStatusText();
 - [使用指南](./使用指南.md)
 - [Hook使用指南](./Hook使用指南.md)
 - [README](./README.md)
-
