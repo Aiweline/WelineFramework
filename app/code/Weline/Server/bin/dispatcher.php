@@ -244,7 +244,7 @@ $_wlsDevMode = (($_wlsSystemConfig['deploy'] ?? $_wlsEnvConfig['deploy'] ?? '') 
 if (!\defined('WLS_DEV_MODE')) {
     \define('WLS_DEV_MODE', $_wlsDevMode);
 }
-unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsSystemConfig, $_wlsDevMode);
+unset($_wlsSystemConfig, $_wlsDevMode);
 $_SERVER['WLS_PROCESS_ROLE'] = 'dispatcher';
 $_ENV['WLS_PROCESS_ROLE'] = 'dispatcher';
 @\putenv('WLS_PROCESS_ROLE=dispatcher');
@@ -303,7 +303,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
 
 // 读取 env 配置
 $envConfig = $_wlsEnvConfig;
-unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
+unset($_wlsEnvFile, $_wlsEnvConfig);
 $dispatcherAlreadyBootstrapped = isset($dispatcher);
 if (!$dispatcherAlreadyBootstrapped) {
 

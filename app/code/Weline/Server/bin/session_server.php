@@ -36,6 +36,31 @@ $tokenFileName = '';
 $bootstrapInstance = '';
 $sharedService = false;
 $logInstanceName = '';
+$wlsMemoryLimit = '256M';
+
+$normalizeMemoryLimit = static function (mixed $value, string $default = '256M'): string {
+    if (\is_int($value) || \is_float($value)) {
+        $value = (string) (int) $value;
+    }
+
+    $value = \strtoupper(\trim((string) $value));
+    $default = \strtoupper(\trim($default)) ?: '256M';
+
+    if ($value === '') {
+        return $default;
+    }
+    if ($value === '-1') {
+        return '-1';
+    }
+    if (\preg_match('/^[1-9]\d*$/', $value)) {
+        return $value . 'M';
+    }
+    if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
+        return $value;
+    }
+
+    return $default;
+};
 
 foreach ($argv as $arg) {
     $arg = (string) $arg;
@@ -66,6 +91,8 @@ foreach ($argv as $arg) {
         $bootstrapInstance = $normalizeArgValue((string)\substr($arg, 21));
     } elseif (\str_starts_with($arg, '--log-instance-name=')) {
         $logInstanceName = $normalizeArgValue((string)\substr($arg, 20));
+    } elseif (\str_starts_with($arg, '--memory-limit=')) {
+        $wlsMemoryLimit = $normalizeMemoryLimit(\substr($arg, 15));
     } elseif ($arg === '--shared-service=1' || $arg === '--shared-service' || $arg === '-shared-service') {
         $sharedService = true;
     } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win' || $arg === '-f') {
@@ -73,6 +100,8 @@ foreach ($argv as $arg) {
     }
 
 }
+
+@\ini_set('memory_limit', $wlsMemoryLimit);
 
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
 if (!\defined('BP')) {
