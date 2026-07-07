@@ -94,6 +94,7 @@ class SessionServerProvider extends AbstractServiceProvider
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
             '--token-file-name=' . $tokenFileName,
+            '--memory-limit=' . $context->getWorkerMemoryLimit(),
         ];
 
         if ($context->windowMode) {

@@ -390,9 +390,17 @@ while (true) {
         $connId = \get_resource_id($conn);
         $data = @\fread($conn, 65535);
 
-        if ($data === false || $data === '') {
+        if ($data === false) {
             @\fclose($conn);
             unset($connections[$connId], $requestBuffers[$connId]);
+            continue;
+        }
+
+        if ($data === '') {
+            if (@\feof($conn)) {
+                @\fclose($conn);
+                unset($connections[$connId], $requestBuffers[$connId]);
+            }
             continue;
         }
 
