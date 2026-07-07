@@ -56,6 +56,7 @@ class Core extends CommandAbstract
     private System $system;
     private bool $isWindows;
     private string $envFilePath;
+    private string $gitExecutable = 'git';
     private string $gitCommand = 'git';
 
     private bool $updateAll = false;  // 是否更新整个项目
@@ -406,14 +407,13 @@ class Core extends CommandAbstract
             
             // 获取当前 HEAD
             $currentHead = '';
-            exec(sprintf('cd %s && %s rev-parse HEAD 2>&1', escapeshellarg($tmpDir), $this->gitCommand), $headOutput, $headCode);
+            $headCode = $this->runGitCommand($tmpDir, ['rev-parse', 'HEAD'], $headOutput);
             if ($headCode === 0 && !empty($headOutput)) {
                 $currentHead = trim($headOutput[0]);
             }
             
             // 获取远程更新
-            $fetchCmd = sprintf('cd %s && %s fetch origin', escapeshellarg($tmpDir), $this->gitCommand);
-            exec($fetchCmd, $output, $fetchCode);
+            $fetchCode = $this->runGitCommand($tmpDir, ['fetch', 'origin'], $output);
             
             if ($fetchCode !== 0) {
                 $this->printer->warning(__('fetch 失败，尝试切换仓库并重新克隆...'));
@@ -431,7 +431,7 @@ class Core extends CommandAbstract
             if ($tag) {
                 // 如果指定了标签，获取所有标签
                 $this->printer->note(__('获取标签...', [$tag]));
-                exec(sprintf('cd %s && %s fetch --tags', escapeshellarg($tmpDir), $this->gitCommand), $output, $tagFetchCode);
+                $tagFetchCode = $this->runGitCommand($tmpDir, ['fetch', '--tags'], $output);
             }
             
             // 获取 Git diff 变化的文件列表（在 reset 之前）
@@ -443,7 +443,7 @@ class Core extends CommandAbstract
             
             if ($tag) {
                 // 切换到标签
-                exec(sprintf('cd %s && %s checkout %s 2>&1', escapeshellarg($tmpDir), $this->gitCommand, escapeshellarg($tag)), $output, $checkoutCode);
+                $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $output);
                 
                 if ($checkoutCode !== 0) {
                     $this->printer->error(__('标签不存在: %{1}', [$tag]));
@@ -455,16 +455,11 @@ class Core extends CommandAbstract
                 $this->printer->note(__('重置到远程分支 %{1} 最新...', [$branch]));
                 
                 // 先切换到目标分支
-                exec(sprintf('cd %s && %s checkout %s 2>&1', escapeshellarg($tmpDir), $this->gitCommand, escapeshellarg($branch)), $output, $checkoutCode);
+                $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', $branch], $output);
                 
                 if ($checkoutCode !== 0) {
                     // 分支不存在，从远程创建
-                    exec(sprintf('cd %s && %s checkout -b %s origin/%s 2>&1',
-                        escapeshellarg($tmpDir), 
-                        $this->gitCommand,
-                        escapeshellarg($branch), 
-                        escapeshellarg($branch)
-                    ), $output, $createBranchCode);
+                    $createBranchCode = $this->runGitCommand($tmpDir, ['checkout', '-b', $branch, 'origin/' . $branch], $output);
                     
                     if ($createBranchCode !== 0) {
                         $this->printer->error(__('分支不存在: %{1}', [$branch]));
@@ -473,12 +468,7 @@ class Core extends CommandAbstract
                 }
                 
                 // 强制重置到远程分支最新
-                $resetCmd = sprintf('cd %s && %s reset --hard origin/%s',
-                    escapeshellarg($tmpDir), 
-                    $this->gitCommand,
-                    escapeshellarg($branch)
-                );
-                exec($resetCmd, $output, $resetCode);
+                $resetCode = $this->runGitCommand($tmpDir, ['reset', '--hard', 'origin/' . $branch], $output);
                 
                 if ($resetCode !== 0) {
                     $this->printer->warning(__('重置失败，尝试切换仓库并重新克隆...'));
@@ -518,15 +508,7 @@ class Core extends CommandAbstract
         $changedFiles = [];
         
         // 使用 git diff --name-status 获取变化的文件及其状态
-        $diffCmd = sprintf(
-            'cd %s && %s diff --name-status %s..%s 2>&1',
-            escapeshellarg($tmpDir),
-            $this->gitCommand,
-            escapeshellarg($fromRef),
-            escapeshellarg($toRef)
-        );
-        
-        exec($diffCmd, $diffOutput, $diffCode);
+        $diffCode = $this->runGitCommand($tmpDir, ['diff', '--name-status', $fromRef . '..' . $toRef], $diffOutput);
         
         if ($diffCode !== 0) {
             $this->printer->warning(__('无法获取 Git diff，将使用全量更新'));
@@ -603,15 +585,7 @@ class Core extends CommandAbstract
     ): bool {
         $this->printer->note(__('克隆仓库：%{1}', [$this->maskRepoUrl($repo)]));
 
-        $command = sprintf(
-            'cd %s && %s clone -b %s --depth 1 %s . 2>&1',
-            escapeshellarg($tmpDir),
-            $this->gitCommand,
-            escapeshellarg($branch),
-            escapeshellarg($repo)
-        );
-
-        exec($command, $output, $returnCode);
+        $returnCode = $this->runGitCommand($tmpDir, ['clone', '-b', $branch, '--depth', '1', $repo, '.'], $output);
         $lastOutput = $output;
 
         if ($returnCode !== 0) {
@@ -619,11 +593,11 @@ class Core extends CommandAbstract
             $this->removeDirectory($tmpDir);
             mkdir($tmpDir, 0755, true);
 
-            exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' init 2>&1', $output, $initCode);
+            $initCode = $this->runGitCommand($tmpDir, ['init'], $output);
             $lastOutput = array_merge($lastOutput, $output);
-            exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' remote add origin ' . escapeshellarg($repo) . ' 2>&1', $output, $remoteCode);
+            $remoteCode = $this->runGitCommand($tmpDir, ['remote', 'add', 'origin', $repo], $output);
             $lastOutput = array_merge($lastOutput, $output);
-            exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' fetch origin 2>&1', $output, $fetchCode);
+            $fetchCode = $this->runGitCommand($tmpDir, ['fetch', 'origin'], $output);
             $lastOutput = array_merge($lastOutput, $output);
 
             if ($fetchCode !== 0) {
@@ -632,7 +606,7 @@ class Core extends CommandAbstract
 
             if ($tag) {
                 $this->printer->note(__('拉取标签 %{1}...', [$tag]));
-                exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' checkout ' . escapeshellarg($tag) . ' 2>&1', $output, $checkoutCode);
+                $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $output);
                 $lastOutput = array_merge($lastOutput, $output);
 
                 if ($checkoutCode !== 0) {
@@ -641,12 +615,7 @@ class Core extends CommandAbstract
                 }
             } else {
                 $this->printer->note(__('拉取分支 %{1}...', [$branch]));
-                exec(
-                    'cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' checkout -b '
-                    . escapeshellarg($branch) . ' origin/' . escapeshellarg($branch) . ' 2>&1',
-                    $output,
-                    $checkoutCode
-                );
+                $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', '-b', $branch, 'origin/' . $branch], $output);
                 $lastOutput = array_merge($lastOutput, $output);
 
                 if ($checkoutCode !== 0) {
@@ -663,15 +632,11 @@ class Core extends CommandAbstract
 
         if ($tag) {
             $this->printer->note(__('切换到标签 %{1}...', [$tag]));
-            $command = sprintf(
-                'cd %s && %s fetch --tags && %s checkout %s 2>&1',
-                escapeshellarg($tmpDir),
-                $this->gitCommand,
-                $this->gitCommand,
-                escapeshellarg($tag)
-            );
-
-            exec($command, $output, $returnCode);
+            $returnCode = $this->runGitCommand($tmpDir, ['fetch', '--tags'], $output);
+            if ($returnCode === 0) {
+                $returnCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $checkoutOutput);
+                $output = array_merge($output, $checkoutOutput);
+            }
             $lastOutput = $output;
 
             if ($returnCode !== 0) {
@@ -690,7 +655,7 @@ class Core extends CommandAbstract
      */
     private function showLatestCommit(string $tmpDir): void
     {
-        exec(sprintf('cd %s && %s log -1 --format="%%h - %%s (%%ci)"', escapeshellarg($tmpDir), $this->gitCommand), $logOutput, $logCode);
+        $logCode = $this->runGitCommand($tmpDir, ['log', '-1', '--format=%h - %s (%ci)'], $logOutput);
         if ($logCode === 0 && !empty($logOutput)) {
             $this->printer->note(__('最新提交：%{1}', [$logOutput[0]]));
         }
@@ -1086,12 +1051,21 @@ class Core extends CommandAbstract
         if (!is_dir($dir)) {
             return;
         }
-        
-        if ($this->isWindows) {
-            exec(sprintf('rmdir /s /q %s', escapeshellarg($dir)));
-        } else {
-            exec(sprintf('rm -rf %s', escapeshellarg($dir)));
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            if ($item->isDir() && !$item->isLink()) {
+                @rmdir($path);
+                continue;
+            }
+            @chmod($path, 0666);
+            @unlink($path);
         }
+        @rmdir($dir);
     }
 
     private function commandExists(string $command): bool
@@ -1143,8 +1117,50 @@ class Core extends CommandAbstract
     private function rememberResolvedWindowsCommand(string $command, string $path): void
     {
         if (strtolower($command) === 'git') {
+            $this->gitExecutable = str_replace('"', '', $path);
             $this->gitCommand = '"' . str_replace('"', '', $path) . '"';
         }
+    }
+
+    /**
+     * @param string[] $arguments
+     * @param string[] $output
+     */
+    private function runGitCommand(string $workingDirectory, array $arguments, array &$output): int
+    {
+        $output = [];
+        $command = array_merge([$this->gitExecutable], $arguments);
+        $descriptorSpec = [
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = @proc_open(
+            $command,
+            $descriptorSpec,
+            $pipes,
+            $workingDirectory,
+            null,
+            $this->isWindows ? ['bypass_shell' => true] : []
+        );
+
+        if (is_resource($process)) {
+            $stdout = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            $code = proc_close($process);
+            $combined = trim((string)$stdout . "\n" . (string)$stderr);
+            $output = $combined !== '' ? preg_split('/\R/', $combined) ?: [] : [];
+            return $code;
+        }
+
+        $escapedArgs = array_map('escapeshellarg', $arguments);
+        exec(
+            sprintf('cd %s && %s %s 2>&1', escapeshellarg($workingDirectory), $this->gitCommand, implode(' ', $escapedArgs)),
+            $output,
+            $code
+        );
+        return $code;
     }
 
     /**
