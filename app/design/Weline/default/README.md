@@ -11,7 +11,7 @@ app/design/Weline/default/
 ├── README.md             # 说明文档
 ├── assets/               # 公共资源
 │   └── images/
-│       └── logo.svg      # Logo 图片
+│       └── logo.png      # Logo 图片（透明背景）
 ├── frontend/             # 前端主题
 │   └── assets/
 │       ├── css/
