@@ -56,6 +56,7 @@ class Core extends CommandAbstract
     private System $system;
     private bool $isWindows;
     private string $envFilePath;
+    private string $gitCommand = 'git';
 
     private bool $updateAll = false;  // 是否更新整个项目
     private bool $forceUpdate = false;  // 是否强制更新（删除本地重新拉取）
@@ -405,13 +406,13 @@ class Core extends CommandAbstract
             
             // 获取当前 HEAD
             $currentHead = '';
-            exec(sprintf('cd %s && git rev-parse HEAD 2>&1', escapeshellarg($tmpDir)), $headOutput, $headCode);
+            exec(sprintf('cd %s && %s rev-parse HEAD 2>&1', escapeshellarg($tmpDir), $this->gitCommand), $headOutput, $headCode);
             if ($headCode === 0 && !empty($headOutput)) {
                 $currentHead = trim($headOutput[0]);
             }
             
             // 获取远程更新
-            $fetchCmd = sprintf('cd %s && git fetch origin', escapeshellarg($tmpDir));
+            $fetchCmd = sprintf('cd %s && %s fetch origin', escapeshellarg($tmpDir), $this->gitCommand);
             exec($fetchCmd, $output, $fetchCode);
             
             if ($fetchCode !== 0) {
@@ -430,7 +431,7 @@ class Core extends CommandAbstract
             if ($tag) {
                 // 如果指定了标签，获取所有标签
                 $this->printer->note(__('获取标签...', [$tag]));
-                exec(sprintf('cd %s && git fetch --tags', escapeshellarg($tmpDir)), $output, $tagFetchCode);
+                exec(sprintf('cd %s && %s fetch --tags', escapeshellarg($tmpDir), $this->gitCommand), $output, $tagFetchCode);
             }
             
             // 获取 Git diff 变化的文件列表（在 reset 之前）
@@ -442,7 +443,7 @@ class Core extends CommandAbstract
             
             if ($tag) {
                 // 切换到标签
-                exec(sprintf('cd %s && git checkout %s 2>&1', escapeshellarg($tmpDir), escapeshellarg($tag)), $output, $checkoutCode);
+                exec(sprintf('cd %s && %s checkout %s 2>&1', escapeshellarg($tmpDir), $this->gitCommand, escapeshellarg($tag)), $output, $checkoutCode);
                 
                 if ($checkoutCode !== 0) {
                     $this->printer->error(__('标签不存在: %{1}', [$tag]));
@@ -454,12 +455,13 @@ class Core extends CommandAbstract
                 $this->printer->note(__('重置到远程分支 %{1} 最新...', [$branch]));
                 
                 // 先切换到目标分支
-                exec(sprintf('cd %s && git checkout %s 2>&1', escapeshellarg($tmpDir), escapeshellarg($branch)), $output, $checkoutCode);
+                exec(sprintf('cd %s && %s checkout %s 2>&1', escapeshellarg($tmpDir), $this->gitCommand, escapeshellarg($branch)), $output, $checkoutCode);
                 
                 if ($checkoutCode !== 0) {
                     // 分支不存在，从远程创建
-                    exec(sprintf('cd %s && git checkout -b %s origin/%s 2>&1', 
+                    exec(sprintf('cd %s && %s checkout -b %s origin/%s 2>&1',
                         escapeshellarg($tmpDir), 
+                        $this->gitCommand,
                         escapeshellarg($branch), 
                         escapeshellarg($branch)
                     ), $output, $createBranchCode);
@@ -471,8 +473,9 @@ class Core extends CommandAbstract
                 }
                 
                 // 强制重置到远程分支最新
-                $resetCmd = sprintf('cd %s && git reset --hard origin/%s', 
+                $resetCmd = sprintf('cd %s && %s reset --hard origin/%s',
                     escapeshellarg($tmpDir), 
+                    $this->gitCommand,
                     escapeshellarg($branch)
                 );
                 exec($resetCmd, $output, $resetCode);
@@ -516,8 +519,9 @@ class Core extends CommandAbstract
         
         // 使用 git diff --name-status 获取变化的文件及其状态
         $diffCmd = sprintf(
-            'cd %s && git diff --name-status %s..%s 2>&1',
+            'cd %s && %s diff --name-status %s..%s 2>&1',
             escapeshellarg($tmpDir),
+            $this->gitCommand,
             escapeshellarg($fromRef),
             escapeshellarg($toRef)
         );
@@ -600,8 +604,9 @@ class Core extends CommandAbstract
         $this->printer->note(__('克隆仓库：%{1}', [$this->maskRepoUrl($repo)]));
 
         $command = sprintf(
-            'cd %s && git clone -b %s --depth 1 %s . 2>&1',
+            'cd %s && %s clone -b %s --depth 1 %s . 2>&1',
             escapeshellarg($tmpDir),
+            $this->gitCommand,
             escapeshellarg($branch),
             escapeshellarg($repo)
         );
@@ -614,11 +619,11 @@ class Core extends CommandAbstract
             $this->removeDirectory($tmpDir);
             mkdir($tmpDir, 0755, true);
 
-            exec('cd ' . escapeshellarg($tmpDir) . ' && git init 2>&1', $output, $initCode);
+            exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' init 2>&1', $output, $initCode);
             $lastOutput = array_merge($lastOutput, $output);
-            exec('cd ' . escapeshellarg($tmpDir) . ' && git remote add origin ' . escapeshellarg($repo) . ' 2>&1', $output, $remoteCode);
+            exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' remote add origin ' . escapeshellarg($repo) . ' 2>&1', $output, $remoteCode);
             $lastOutput = array_merge($lastOutput, $output);
-            exec('cd ' . escapeshellarg($tmpDir) . ' && git fetch origin 2>&1', $output, $fetchCode);
+            exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' fetch origin 2>&1', $output, $fetchCode);
             $lastOutput = array_merge($lastOutput, $output);
 
             if ($fetchCode !== 0) {
@@ -627,7 +632,7 @@ class Core extends CommandAbstract
 
             if ($tag) {
                 $this->printer->note(__('拉取标签 %{1}...', [$tag]));
-                exec('cd ' . escapeshellarg($tmpDir) . ' && git checkout ' . escapeshellarg($tag) . ' 2>&1', $output, $checkoutCode);
+                exec('cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' checkout ' . escapeshellarg($tag) . ' 2>&1', $output, $checkoutCode);
                 $lastOutput = array_merge($lastOutput, $output);
 
                 if ($checkoutCode !== 0) {
@@ -637,7 +642,7 @@ class Core extends CommandAbstract
             } else {
                 $this->printer->note(__('拉取分支 %{1}...', [$branch]));
                 exec(
-                    'cd ' . escapeshellarg($tmpDir) . ' && git checkout -b '
+                    'cd ' . escapeshellarg($tmpDir) . ' && ' . $this->gitCommand . ' checkout -b '
                     . escapeshellarg($branch) . ' origin/' . escapeshellarg($branch) . ' 2>&1',
                     $output,
                     $checkoutCode
@@ -659,8 +664,10 @@ class Core extends CommandAbstract
         if ($tag) {
             $this->printer->note(__('切换到标签 %{1}...', [$tag]));
             $command = sprintf(
-                'cd %s && git fetch --tags && git checkout %s 2>&1',
+                'cd %s && %s fetch --tags && %s checkout %s 2>&1',
                 escapeshellarg($tmpDir),
+                $this->gitCommand,
+                $this->gitCommand,
                 escapeshellarg($tag)
             );
 
@@ -683,7 +690,7 @@ class Core extends CommandAbstract
      */
     private function showLatestCommit(string $tmpDir): void
     {
-        exec(sprintf('cd %s && git log -1 --format="%%h - %%s (%%ci)"', escapeshellarg($tmpDir)), $logOutput, $logCode);
+        exec(sprintf('cd %s && %s log -1 --format="%%h - %%s (%%ci)"', escapeshellarg($tmpDir), $this->gitCommand), $logOutput, $logCode);
         if ($logCode === 0 && !empty($logOutput)) {
             $this->printer->note(__('最新提交：%{1}', [$logOutput[0]]));
         }
@@ -1095,23 +1102,49 @@ class Core extends CommandAbstract
             $whereExe = rtrim($whereExe, "\\/") . '\\System32\\where.exe';
 
             if (is_file($whereExe)) {
+                $output = [];
                 exec('"' . $whereExe . '" ' . escapeshellarg($safeCommand) . ' 2>nul', $output, $returnCode);
                 if ($returnCode === 0) {
+                    foreach ($output as $line) {
+                        $resolvedPath = trim($line);
+                        if ($resolvedPath !== '' && is_file($resolvedPath)) {
+                            $this->rememberResolvedWindowsCommand($safeCommand, $resolvedPath);
+                            break;
+                        }
+                    }
                     return true;
                 }
             }
 
             foreach ($this->windowsCommandCandidatePaths($safeCommand) as $candidate) {
                 if (is_file($candidate) && is_executable($candidate)) {
+                    $this->rememberResolvedWindowsCommand($safeCommand, $candidate);
                     return true;
                 }
             }
 
+            $output = [];
             exec("where {$safeCommand} 2>nul", $output, $returnCode);
+            if ($returnCode === 0) {
+                foreach ($output as $line) {
+                    $resolvedPath = trim($line);
+                    if ($resolvedPath !== '' && is_file($resolvedPath)) {
+                        $this->rememberResolvedWindowsCommand($safeCommand, $resolvedPath);
+                        break;
+                    }
+                }
+            }
         } else {
             exec("which {$command} 2>/dev/null", $output, $returnCode);
         }
         return $returnCode === 0;
+    }
+
+    private function rememberResolvedWindowsCommand(string $command, string $path): void
+    {
+        if (strtolower($command) === 'git') {
+            $this->gitCommand = '"' . str_replace('"', '', $path) . '"';
+        }
     }
 
     /**
