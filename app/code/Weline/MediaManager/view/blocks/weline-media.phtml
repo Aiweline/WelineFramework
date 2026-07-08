@@ -1,5 +1,5 @@
 <!-- 图片预览容器 -->
-@template(Weline_FileManager::image-preview/template.phtml)
+@template(Weline_FileManager::image-preview/template-v3.phtml)
 
 <!-- 触发按钮 -->
 <button type="button" class="btn btn-primary btn-sm waves-effect waves-light"
@@ -29,19 +29,29 @@
 <style>
 /* weline-media 弹窗：使用主题变量，兼容暗色/亮色模式 */
 .wm-modal-overlay {
-    display: none;
+    display: flex;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5));
-    z-index: 9999;
+    z-index: 10050;
     justify-content: center;
     align-items: center;
+    transition: opacity 0.15s ease;
 }
 .wm-modal-overlay.wm-show {
-    display: flex;
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
+body.wm-media-manager-open .file-target-preview,
+body.wm-media-manager-open .file-target-preview * {
+    pointer-events: none !important;
 }
 .wm-modal-container {
     background: var(--backend-color-card-bg, #fff);
@@ -130,16 +140,85 @@
 </style>
 
 <script>
-    document.querySelectorAll('[data-wm-open]').forEach(function(trigger) {
-        if (trigger.getAttribute('data-wm-open') === targetId) {
-            trigger.addEventListener('click', openMediaManager);
+(function() {
+    var targetId = '{{target}}';
+    if (!/^[A-Za-z0-9_-]+$/.test(targetId)) {
+        console.error('Invalid media manager target id');
+        return;
+    }
+
+    window.__wmMediaManagerOpenCount = window.__wmMediaManagerOpenCount || 0;
+
+    function markMediaManagerBodyOpen() {
+        window.__wmMediaManagerOpenCount++;
+        document.body.classList.add('wm-media-manager-open');
+    }
+
+    function markMediaManagerBodyClosed() {
+        window.__wmMediaManagerOpenCount = Math.max(0, window.__wmMediaManagerOpenCount - 1);
+        if (window.__wmMediaManagerOpenCount === 0) {
+            document.body.classList.remove('wm-media-manager-open');
+            document.body.style.overflow = '';
         }
+    }
+
+    var overlayElement = document.getElementById(targetId + '-modal-overlay');
+    if (overlayElement && overlayElement.parentElement !== document.body) {
+        document.body.appendChild(overlayElement);
+    }
+
+    function openMediaManager(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        var overlay = document.getElementById(targetId + '-modal-overlay');
+        var iframe = document.getElementById(targetId + '-file-manager-iframe');
+        if (!overlay) {
+            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+                window.BackendToast.error('<?= __('媒体选择器初始化失败，请刷新页面后重试。') ?>');
+            } else {
+                console.error('Media modal not found');
+            }
+            return;
+        }
+
+        overlay.classList.add('wm-show');
+        if (window.__wmMediaManagerOpenCount === 0) {
+            document.body.style.overflow = 'hidden';
+        }
+        markMediaManagerBodyOpen();
+
+        if (iframe) {
+            var connectorUrl = iframe.getAttribute('data-connector');
+            if (connectorUrl) {
+                var targetEl = document.getElementById(targetId);
+                var currentValue = (targetEl && targetEl.value !== undefined) ? (targetEl.value || '') : '';
+                var sep = connectorUrl.indexOf('?') >= 0 ? '&' : '?';
+                iframe.src = connectorUrl + sep + 'initialValue=' + encodeURIComponent(currentValue);
+            }
+        }
+    }
+
+    function closeMediaManager() {
+        var overlay = document.getElementById(targetId + '-modal-overlay');
+        if (overlay) {
+            overlay.classList.remove('wm-show');
+            markMediaManagerBodyClosed();
+        }
+    }
+
+    document.querySelectorAll('[data-wm-open="' + targetId + '"]').forEach(function(trigger) {
+        trigger.addEventListener('click', openMediaManager);
     });
 
-    document.querySelectorAll('[data-wm-close]').forEach(function(trigger) {
-        if (trigger.getAttribute('data-wm-close') === targetId) {
-            trigger.addEventListener('click', closeMediaManager);
-        }
+    document.querySelectorAll('[data-wm-close="' + targetId + '"]').forEach(function(trigger) {
+        trigger.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeMediaManager();
+        });
     });
 
     var overlayTrigger = document.getElementById(targetId + '-modal-overlay');
@@ -158,89 +237,55 @@
         open: openMediaManager,
         close: closeMediaManager
     };
-    if (!/^[A-Za-z0-9_-]+$/.test(targetId)) {
-        console.error('Invalid media manager target id');
-        return;
-    }
 
-function openMediaManager() {
-    var overlay = document.getElementById(targetId + '-modal-overlay');
-    var iframe = document.getElementById(targetId + '-file-manager-iframe');
-    if (!overlay) {
-        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-            window.BackendToast.error('<?= __('媒体选择器初始化失败，请刷新页面后重试。') ?>');
-        } else {
-            console.error('Media modal not found');
-        }
-        return;
-    }
-    
-    overlay.classList.add('wm-show');
-    document.body.style.overflow = 'hidden';
-    
-    if (iframe) {
-        var connectorUrl = iframe.getAttribute('data-connector');
-        if (connectorUrl) {
-            var targetEl = document.getElementById(targetId);
-            var currentValue = (targetEl && targetEl.value !== undefined) ? (targetEl.value || '') : '';
-            var sep = connectorUrl.indexOf('?') >= 0 ? '&' : '?';
-            iframe.src = connectorUrl + sep + 'initialValue=' + encodeURIComponent(currentValue);
-        }
-    }
-}
-
-function closeMediaManager() {
-    var overlay = document.getElementById(targetId + '-modal-overlay');
-    if (overlay) {
-        overlay.classList.remove('wm-show');
-        document.body.style.overflow = '';
-    }
-}
-
-(function() {
-    var targetId = '{{target}}';
-    
     document.addEventListener('keydown', function(e) {
         var overlay = document.getElementById(targetId + '-modal-overlay');
         if (e.key === 'Escape' && overlay && overlay.classList.contains('wm-show')) {
             closeMediaManager();
         }
     });
-    
+
     window.addEventListener('message', function(e) {
-        if (!e.data) return;
-        
-        // 处理取消消息
+        if (!e.data) {
+            return;
+        }
+
         if (e.data.type === 'weline-media-manager-cancel') {
-            if (e.data.target && e.data.target !== targetId) return;
+            if (e.data.target && e.data.target !== targetId) {
+                return;
+            }
             closeMediaManager();
             return;
         }
-        
-        if (e.data.type !== 'weline-media-manager-select') return;
-        if (e.data.target && e.data.target !== targetId) return;
-        
+
+        if (e.data.type !== 'weline-media-manager-select') {
+            return;
+        }
+        if (e.data.target && e.data.target !== targetId) {
+            return;
+        }
+
         var files = e.data.files || [];
-        if (!files.length) return;
-        
+        if (!files.length) {
+            return;
+        }
+
         var paths = [];
         files.forEach(function(f) {
             var raw = f.path || f.url || f.name || '';
             var relative = raw.replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '');
             paths.push(relative || raw);
         });
-        
+
         var isMulti = e.data.multi;
         var targetEl = document.getElementById(targetId);
-        
+        var value = paths.join(',');
+
         if (targetEl) {
-            var value;
             if (isMulti && targetEl.value) {
                 value = targetEl.value + ',' + paths.join(',');
-            } else {
-                value = paths.join(',');
             }
-            
+
             if (targetEl.tagName === 'INPUT' || targetEl.tagName === 'TEXTAREA') {
                 targetEl.value = value;
                 targetEl.dispatchEvent(new Event('change', { bubbles: true }));
@@ -249,14 +294,14 @@ function closeMediaManager() {
                 targetEl.textContent = value;
             }
         }
-        
+
         function normalizeMediaPreviewUrl(rawValue, allowDataImage) {
-            var value = String(rawValue || '').trim();
-            if (!value) {
+            var normalized = String(rawValue || '').trim();
+            if (!normalized) {
                 return '';
             }
 
-            var compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+            var compactValue = normalized.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
             if (
                 compactValue.indexOf('javascript:') === 0 ||
                 compactValue.indexOf('vbscript:') === 0 ||
@@ -265,7 +310,7 @@ function closeMediaManager() {
                 return '';
             }
 
-            return value;
+            return normalized;
         }
 
         var previewContainer = document.getElementById(targetId + '-preview');
@@ -274,18 +319,15 @@ function closeMediaManager() {
                 previewContainer.innerHTML = '';
             }
             files.forEach(function(f) {
-                // 兼容 FileManager 预览模板的 HTML 结构（drag-item, drag-pic, data-src）
                 var wrapper = document.createElement('div');
                 wrapper.className = 'drag-item';
                 wrapper.draggable = true;
+
                 var closeButton = document.createElement('div');
                 closeButton.className = 'close';
+                closeButton.setAttribute('role', 'button');
+                closeButton.setAttribute('tabindex', '0');
                 closeButton.textContent = 'x';
-                closeButton.addEventListener('click', function(event) {
-                    if (typeof delSelectedImage === 'function') {
-                        delSelectedImage(event);
-                    }
-                });
 
                 var relativePath = normalizeMediaPreviewUrl((f.path || f.url || '').replace(/^\/pub\/media\//, ''), false);
                 var image = document.createElement('img');
@@ -300,43 +342,15 @@ function closeMediaManager() {
                 wrapper.appendChild(image);
                 previewContainer.appendChild(wrapper);
             });
-            // 触发 flushSelectedImage（如果存在）来同步隐藏输入框的值
-            if (typeof flushSelectedImage === 'function') {
-                flushSelectedImage();
+            if (typeof bindFileManagerPreviewThumbnailState === 'function') {
+                bindFileManagerPreviewThumbnailState(previewContainer);
+            }
+            if (typeof markFileManagerPreviewEmptyStates === 'function') {
+                markFileManagerPreviewEmptyStates(previewContainer);
             }
         }
-        
+
         closeMediaManager();
     });
 })();
 </script>
-
-<notempty name="preview">
-<script>
-(function() {
-    var targetId = '{{target}}';
-    if (!/^[A-Za-z0-9_-]+$/.test(targetId)) return;
-
-    var previewContainer = document.getElementById(targetId + '-preview');
-    if (!previewContainer) return;
-    
-    previewContainer.addEventListener('click', function(e) {
-        var img = e.target.closest('.img');
-        if (!img) return;
-        
-        var url = img.dataset.url;
-        if (!url) return;
-        
-        var iframe = document.getElementById(targetId + '-file-manager-iframe');
-        if (iframe) {
-            iframe.src = url;
-            var overlay = document.getElementById('{{target}}-modal-overlay');
-            if (overlay) {
-                overlay.classList.add('wm-show');
-                document.body.style.overflow = 'hidden';
-            }
-        }
-    });
-})();
-</script>
-</notempty>

@@ -254,7 +254,7 @@ final class FiberTaskRunner
                 if ($this->pump?->hasActiveHandles()) {
                     $this->pump->tick(self::PUMP_BLOCKING_TICK_SECONDS);
                 } else {
-                    \usleep($this->idleSleepMicroseconds());
+                    $this->waitForFiberProgress();
                 }
             }
         }
@@ -383,7 +383,7 @@ final class FiberTaskRunner
                     // 既无可推进 Fiber 也无新 chunk：阻塞等 I/O，避免空跑 CPU。
                     $this->pump->tick(self::PUMP_BLOCKING_TICK_SECONDS);
                 } else {
-                    \usleep($this->idleSleepMicroseconds());
+                    $this->waitForFiberProgress();
                 }
             }
         }
@@ -531,5 +531,24 @@ final class FiberTaskRunner
         }
 
         return WelineEnv::getInstance()->capture();
+    }
+
+    /**
+     * 空闲等待：嵌套在 WLS SSE 等已启用 Scheduler 的 Fiber 内时，必须 yield 回 Worker，
+     * 否则 SSE 写队列无法刷到客户端，长连接会被浏览器/代理静默断开。
+     */
+    private function waitForFiberProgress(): void
+    {
+        if (
+            !$this->ownsScheduler
+            && SchedulerSystem::isSchedulerActive()
+            && \class_exists(\Fiber::class)
+            && \Fiber::getCurrent() !== null
+        ) {
+            SchedulerSystem::yield();
+            return;
+        }
+
+        \usleep($this->idleSleepMicroseconds());
     }
 }
