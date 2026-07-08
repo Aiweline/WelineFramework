@@ -28,6 +28,7 @@ class ThumbnailService
         'image/vnd.microsoft.icon',
         'image/tiff',
         'image/avif',
+        'image/svg+xml',
     ];
     
     private ?array $supportedFormats = null;
@@ -516,6 +517,7 @@ class ThumbnailService
             'avif' => 'image/avif',
             'heic' => 'image/heic',
             'heif' => 'image/heif',
+            'svg'  => 'image/svg+xml',
         ];
         
         return $mimeMap[$ext] ?? 'application/octet-stream';

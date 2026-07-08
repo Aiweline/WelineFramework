@@ -42,6 +42,9 @@
             <button class="mmf-btn" id="mmf-btn-refresh" title="Refresh">
                 &#x1F504; <lang>Refresh</lang>
             </button>
+            <button class="mmf-btn mmf-btn-ai" id="mmf-btn-ai-draw" title="AI Draw">
+                &#x2728; <lang>AI 作图</lang>
+            </button>
             <notempty name="is_iframe">
             <button class="mmf-btn mmf-btn-primary" id="mmf-btn-select" title="Select" style="margin-left:auto;">
                 &#x2714; <lang>Select</lang>
@@ -113,6 +116,9 @@
                     </div>
                 </div>
                 <div class="mmf-preview-actions">
+                    <button class="mmf-btn mmf-btn-ai mmf-preview-btn-ai-edit" title="AI Edit" style="display:none;">
+                        &#x2728; <lang>AI 修图</lang>
+                    </button>
                     <button class="mmf-btn mmf-btn-primary mmf-preview-btn-open" title="Open/Preview">
                         &#x1F50D; <lang>Preview</lang>
                     </button>
@@ -140,6 +146,120 @@
     </div>
 </div>
 
+<!-- AI 作图弹窗 -->
+<div class="mmf-ai-draw-overlay" id="mmf-ai-draw-overlay">
+    <div class="mmf-ai-draw-modal" id="mmf-ai-draw-modal">
+        <div class="mmf-ai-draw-header">
+            <div class="mmf-ai-draw-title"><lang>AI 作图</lang></div>
+            <div class="mmf-ai-status" id="mmf-ai-status" aria-live="polite"></div>
+            <div class="mmf-ai-draw-tabs">
+                <button type="button" class="mmf-ai-tab active" data-mode="text2image"><lang>文生图</lang></button>
+                <button type="button" class="mmf-ai-tab" data-mode="image2image"><lang>图生图</lang></button>
+                <button type="button" class="mmf-ai-tab" data-mode="batch"><lang>批量生成</lang></button>
+            </div>
+            <button type="button" class="mmf-ai-draw-close" id="mmf-ai-draw-close" title="@lang{关闭}" aria-label="@lang{关闭}">&times;</button>
+        </div>
+        <div class="mmf-ai-draw-body">
+            <div class="mmf-ai-config-banner" id="mmf-ai-config-banner" style="display:none;"></div>
+            <div class="mmf-ai-draw-workspace" id="mmf-ai-draw-workspace">
+                <div class="mmf-ai-draw-left">
+                    <div class="mmf-ai-ref-panel" id="mmf-ai-ref-panel" style="display:none;">
+                        <div class="mmf-ai-ref-picker-toolbar">
+                            <div class="mmf-ai-ref-picker-label"><lang>当前目录图片</lang></div>
+                            <input type="search" class="mmf-ai-ref-search" id="mmf-ai-ref-search" placeholder="@lang{搜索文件名…}" autocomplete="off">
+                        </div>
+                        <div class="mmf-ai-ref-picker" id="mmf-ai-ref-picker"></div>
+                        <div class="mmf-ai-ref-picker-empty" id="mmf-ai-ref-picker-empty" style="display:none;"><lang>当前目录暂无图片，请先上传或切换到包含图片的文件夹</lang></div>
+                        <div class="mmf-ai-ref-picker-no-match" id="mmf-ai-ref-picker-no-match" style="display:none;"><lang>没有匹配的图片</lang></div>
+                    </div>
+                    <label class="mmf-ai-field-label" for="mmf-ai-prompt"><lang>提示词</lang></label>
+                    <textarea class="mmf-ai-prompt" id="mmf-ai-prompt" rows="5" placeholder=""></textarea>
+                    <div class="mmf-ai-batch-panel" id="mmf-ai-batch-panel" style="display:none;">
+                        <label class="mmf-ai-field-label"><lang>批量提示词（每行一条）</lang></label>
+                        <textarea class="mmf-ai-batch-prompts" id="mmf-ai-batch-prompts" rows="4"></textarea>
+                        <label class="mmf-ai-field-label"><lang>或同提示词生成数量</lang></label>
+                        <input type="number" class="mmf-ai-batch-count" id="mmf-ai-batch-count" min="1" max="8" value="2">
+                    </div>
+                    <div class="mmf-ai-options">
+                        <label><lang>尺寸</lang>
+                            <select id="mmf-ai-size">
+                                <option value="1024x1024">1024x1024</option>
+                                <option value="1792x1024">1792x1024</option>
+                                <option value="1024x1792">1024x1792</option>
+                            </select>
+                        </label>
+                        <label><lang>格式</lang>
+                            <select id="mmf-ai-format">
+                                <option value="png">PNG</option>
+                                <option value="webp">WebP</option>
+                                <option value="jpeg">JPEG</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="mmf-ai-target"><lang>保存目录</lang>：<span id="mmf-ai-target-path"></span></div>
+                    <div class="mmf-ai-history-wrap" id="mmf-ai-history-wrap" style="display:none;">
+                        <div class="mmf-ai-history-label"><lang>本轮对话</lang></div>
+                        <div class="mmf-ai-history" id="mmf-ai-history"></div>
+                    </div>
+                </div>
+                <div class="mmf-ai-draw-ref-side" id="mmf-ai-ref-side" style="display:none;">
+                    <div class="mmf-ai-ref-label"><lang>参考图</lang></div>
+                    <div class="mmf-ai-ref-preview" id="mmf-ai-ref-preview">
+                        <div class="mmf-ai-ref-empty" id="mmf-ai-ref-empty"><lang>请从左侧列表选择一张图片作为参考</lang></div>
+                        <img class="mmf-ai-ref-img" id="mmf-ai-ref-img" src="" alt="" style="display:none;">
+                        <div class="mmf-ai-ref-name" id="mmf-ai-ref-name"></div>
+                        <button type="button" class="mmf-btn mmf-btn-ghost mmf-ai-ref-preview-btn" id="mmf-ai-ref-preview-btn" style="display:none;"><lang>放大预览</lang></button>
+                    </div>
+                </div>
+            </div>
+            <div class="mmf-ai-draw-output">
+                <div class="mmf-ai-output-label"><lang>生成结果</lang></div>
+                <div class="mmf-ai-preview-wrap" id="mmf-ai-preview-wrap">
+                    <div class="mmf-ai-preview-empty" id="mmf-ai-preview-empty"><lang>生成结果将显示在这里</lang></div>
+                    <div class="mmf-ai-error" id="mmf-ai-error" style="display:none;" role="alert"></div>
+                    <div class="mmf-ai-preview-loading" id="mmf-ai-preview-loading" style="display:none;">
+                        <div class="mmf-ai-spinner" aria-hidden="true"></div>
+                        <div class="mmf-ai-loading-text" id="mmf-ai-loading-text"><lang>正在生成…</lang></div>
+                    </div>
+                    <img class="mmf-ai-preview-img" id="mmf-ai-preview-img" src="" alt="" style="display:none;">
+                    <div class="mmf-ai-preview-grid" id="mmf-ai-preview-grid"></div>
+                </div>
+                <div class="mmf-ai-progress" id="mmf-ai-progress"></div>
+            </div>
+        </div>
+        <div class="mmf-ai-draw-footer">
+            <button type="button" class="mmf-btn mmf-btn-ghost" id="mmf-ai-btn-cancel"><lang>取消</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-ai-btn-generate"><lang>开始生成</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-secondary" id="mmf-ai-btn-continue" style="display:none;"><lang>继续修图</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-ai-btn-save" disabled><lang>保存</lang></button>
+        </div>
+    </div>
+</div>
+
+<!-- AI 保存选项 -->
+<div class="mmf-ai-save-overlay" id="mmf-ai-save-overlay">
+    <div class="mmf-ai-save-dialog">
+        <div class="mmf-ai-save-title"><lang>保存图片</lang></div>
+        <div class="mmf-ai-save-options">
+            <label class="mmf-ai-save-option" id="mmf-ai-save-overwrite-wrap" style="display:none;">
+                <input type="radio" name="mmf_ai_save_mode" value="overwrite">
+                <span><lang>覆盖原图</lang></span>
+            </label>
+            <label class="mmf-ai-save-option">
+                <input type="radio" name="mmf_ai_save_mode" value="save_as" checked>
+                <span><lang>另存为新文件</lang></span>
+            </label>
+        </div>
+        <label class="mmf-ai-field-label"><lang>文件名</lang></label>
+        <input type="text" class="mmf-ai-save-filename" id="mmf-ai-save-filename">
+        <div class="mmf-ai-save-error" id="mmf-ai-save-error" role="alert" style="display:none;"></div>
+        <div class="mmf-ai-save-actions">
+            <button type="button" class="mmf-btn" id="mmf-ai-save-cancel"><lang>取消</lang></button>
+            <button type="button" class="mmf-btn mmf-btn-primary" id="mmf-ai-save-confirm"><lang>确认保存</lang></button>
+        </div>
+    </div>
+</div>
+
 <!-- 图片预览 Lightbox -->
 <div class="mmf-lightbox">
     <div class="mmf-lightbox-header">
@@ -162,6 +282,10 @@
         document.addEventListener('DOMContentLoaded', function () {
         WelineMediaManager.init('{{$connector_url}}', '{{$start_path|default:""}}', {
             isIframe: '{{$is_iframe|default:"0"}}' === '1' || '{{$is_iframe|default:"0"}}' === 'true',
+            aiDrawStreamUrl: '{{$ai_draw_stream_url|default:""}}',
+            aiDrawSaveUrl: '{{$ai_draw_save_url|default:""}}',
+            aiDrawConfigUrl: '{{$ai_draw_config_url|default:""}}',
+            aiDrawPreviewUrl: '{{$ai_draw_preview_url|default:""}}',
             target: '{{$target|default:""}}',
             multi: '{{$multi|default:"0"}}' === '1' || '{{$multi|default:"0"}}' === 'true',
             ext: '{{$ext|default:"*"}}',
@@ -212,7 +336,52 @@
                 selectionMode: '@lang{选择模式}',
                 selectFiles: '@lang{选择文件}',
                 invertSelection: '@lang{反选}',
-                uploadWaitDir: '@lang{请等待当前目录加载完成后再上传}'
+                uploadWaitDir: '@lang{请等待当前目录加载完成后再上传}',
+                aiDraw: '@lang{AI 作图}',
+                aiEdit: '@lang{AI 修图}',
+                aiTabText2Image: '@lang{文生图}',
+                aiTabImage2Image: '@lang{图生图}',
+                aiTabBatch: '@lang{批量生成}',
+                aiPrompt: '@lang{提示词}',
+                aiGenerate: '@lang{开始生成}',
+                aiContinue: '@lang{继续修图}',
+                aiSave: '@lang{保存}',
+                aiSaveTitle: '@lang{保存图片}',
+                aiOverwrite: '@lang{覆盖原图}',
+                aiSaveAs: '@lang{另存为新文件}',
+                aiConfirmSave: '@lang{确认保存}',
+                aiGenerating: '@lang{正在生成…}',
+                aiSaved: '@lang{图片保存成功}',
+                aiSaving: '@lang{正在保存…}',
+                aiSaveFailed: '@lang{保存失败}',
+                aiSaveSessionMissing: '@lang{会话已失效，请重新生成后再保存}',
+                aiSaveFilenameRequired: '@lang{请输入文件名}',
+                aiNoPrompt: '@lang{请输入提示词}',
+                aiCloseConfirm: '@lang{有未保存的生成结果，确定关闭吗？}',
+                aiCloseRunningConfirm: '@lang{有任务正在生成，确定要关闭吗？关闭将中断当前任务。}',
+                aiRunningHint: '@lang{生成中}',
+                aiGenerateSuccess: '@lang{生成完成}',
+                aiGenerateFailed: '@lang{生成失败}',
+                aiStreamDisconnected: '@lang{连接已断开，生成未完成。请检查 AI 供应商网络、代理或模型配置后重试}',
+                aiHistoryLabel: '@lang{本轮对话}',
+                aiClose: '@lang{关闭}',
+                aiReference: '@lang{参考图}',
+                aiTargetDir: '@lang{保存目录}',
+                aiPreviewEmpty: '@lang{生成结果将显示在这里}',
+                aiPromptPlaceholder: '@lang{描述你想生成的画面，例如：一只可爱的卡通仓鼠，简约插画风格}',
+                aiPreviewParseFailed: '@lang{预览数据解析失败，请重试}',
+                aiPreviewLoadFailed: '@lang{预览图片加载失败，请重试}',
+                aiMockModeHint: '@lang{当前为 Mock 模式（WELINE_MEDIA_AI_DRAW_MOCK），不会调用真实 AI 模型}',
+                aiModelNotReady: '@lang{文生图模型未就绪，请先在 AI 场景管理中绑定模型}',
+                aiModelLabel: '@lang{当前模型：}',
+                aiNoReference: '@lang{请从当前目录选择一张参考图}',
+                aiRefPickerLabel: '@lang{当前目录图片}',
+                aiRefSearchPlaceholder: '@lang{搜索文件名…}',
+                aiRefNoMatch: '@lang{没有匹配的图片}',
+                aiRefEmpty: '@lang{请从左侧列表选择一张图片作为参考}',
+                aiOutputLabel: '@lang{生成结果}',
+                aiRefDirEmpty: '@lang{当前目录暂无图片，请先上传或切换到包含图片的文件夹}',
+                aiRefPreview: '@lang{放大预览}'
             }
         });
     });

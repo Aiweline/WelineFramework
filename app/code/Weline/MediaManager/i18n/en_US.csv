@@ -1,4 +1,8 @@
-﻿支持的预览格式,"Supported preview formats"
+未登录,未登录
+图片保存成功,"Image saved successfully"
+保存成功,保存成功
+保存失败：%{1},保存失败：%{1}
+支持的预览格式,"Supported preview formats"
 "允许其他模块注册可预览的文件格式。Observer 可向 formats 数组添加 MIME 类型。","Allow other modules to register previewable file formats. Observers can add MIME types to the formats array."
 文件上传前,"Before file upload"
 文件上传到存储之前触发，可用于验证或修改上传参数。,"Triggered before file upload to storage, can be used to validate or modify upload parameters."
@@ -8,7 +12,47 @@
 文件删除前触发，可用于验证或阻止删除。,"Triggered before file deletion, can be used to validate or prevent deletion."
 存储源切换,"Storage source switch"
 用户切换存储源时触发。,"Triggered when the user switches the storage source."
+"媒体管理 AI 作图适配器","媒体管理 AI 作图适配器"
+为后台文件管理器提供文生图、图生图、多轮修图与批量生成的场景约束与模型绑定。,为后台文件管理器提供文生图、图生图、多轮修图与批量生成的场景约束与模型绑定。
+图生图/修图需要有效的参考图,图生图/修图需要有效的参考图
+"批量数量必须在 1 到 8 之间","批量数量必须在 1 到 8 之间"
+"生成 Banner","生成 Banner"
+"在媒体目录中生成一张网站 Banner 背景图。","在媒体目录中生成一张网站 Banner 背景图。"
+"为电商首页生成一张 16:9 的促销 Banner 背景","为电商首页生成一张 16:9 的促销 Banner 背景"
+"返回可保存的 PNG/WebP 图片","返回可保存的 PNG/WebP 图片"
+请输入提示词,"Please enter a prompt"
+"正在准备第 %{1}/%{2} 张…","正在准备第 %{1}/%{2} 张…"
+"正在生成第 %{1}/%{2} 张…","正在生成第 %{1}/%{2} 张…"
+"缺少生成结果 ID","缺少生成结果 ID"
+"缺少会话 ID","缺少会话 ID"
+覆盖原图仅支持单张保存,覆盖原图仅支持单张保存
+缺少源文件,缺少源文件
+生成结果已过期，请重新生成,生成结果已过期，请重新生成
+源文件与生成记录不匹配,源文件与生成记录不匹配
+缺少目标目录,缺少目标目录
+上一轮生成结果已过期,上一轮生成结果已过期
+参考文件必须是图片,参考文件必须是图片
+图片生成未返回有效结果,图片生成未返回有效结果
+图片生成未返回有效字节,图片生成未返回有效字节
+"图片 base64 无效","图片 base64 无效"
+"图片 data URL 无效","图片 data URL 无效"
+无法下载生成的图片,无法下载生成的图片
+"Mock 图片生成失败","Mock 图片生成失败"
+会话无权访问,会话无权访问
+"会话 ID 无效","会话 ID 无效"
 本地存储,"Local Storage"
+媒体根目录无效,媒体根目录无效
+无效路径,无效路径
+参考文件不存在,参考文件不存在
+无法读取参考文件,无法读取参考文件
+文件名无效,文件名无效
+目标目录不存在,目标目录不存在
+同名文件已存在，请更换文件名,同名文件已存在，请更换文件名
+无法写入目标目录,无法写入目标目录
+保存文件失败,保存文件失败
+源文件不存在,源文件不存在
+"不允许覆盖 SVG 矢量文件","不允许覆盖 SVG 矢量文件"
+覆盖原图失败,覆盖原图失败
 允许的文件类型：,"Allowed file types:"
 允许的文件大小：,"Allowed file size:"
 媒体选择器初始化失败，请刷新页面后重试。,媒体选择器初始化失败，请刷新页面后重试。
@@ -21,6 +65,7 @@ Rename,Rename
 Download,Download
 Delete,Delete
 Refresh,Refresh
+"AI 作图","AI Draw"
 Select,Select
 "Drop files here to upload","Drop files here to upload"
 Loading...,Loading...
@@ -35,8 +80,39 @@ Preview,Preview
 Type,Type
 Size,Size
 Dimensions,Dimensions
+"AI 修图","AI Edit"
 Cancel,Cancel
 OK,OK
+文生图,"Text to Image"
+图生图,"Image to Image"
+批量生成,"Batch Generate"
+参考图,"Reference Image"
+请从左侧列表选择一张图片作为参考,"Select an image from the list on the left as reference."
+生成结果,"Generated Result"
+请从下方当前目录选择一张图片作为参考,"Select an image from the current folder below as reference."
+放大预览,Preview
+当前目录图片,"Images in current folder"
+搜索文件名…,"Search filenames…"
+没有匹配的图片,"No matching images"
+当前目录暂无图片，请先上传或切换到包含图片的文件夹,"No images in this folder. Upload images or switch to a folder that contains images."
+提示词,Prompt
+批量提示词（每行一条）,"Batch prompts (one per line)"
+或同提示词生成数量,"Or repeat count for same prompt"
+尺寸,Size
+格式,Format
+保存目录,"Save Directory"
+本轮对话,"This session"
+生成结果将显示在这里,"Generated previews will appear here"
+正在生成…,Generating…
+开始生成,Generate
+继续修图,"Continue Edit"
+保存,Save
+保存图片,"Save Image"
+覆盖原图,"Overwrite Original"
+另存为新文件,"Save As New File"
+文件名,Filename
+确认保存,"Confirm Save"
+关闭,Close
 连接器URL未配置，请刷新页面,"Connector URL not configured, please refresh the page"
 请求超时，服务器可能繁忙,"Request timed out, server may be busy"
 响应JSON格式无效,"Response JSON format is invalid"
@@ -76,3 +152,20 @@ OK,OK
 选择模式,"Selection Mode"
 选择文件,"Select Files"
 请等待当前目录加载完成后再上传,"Please wait for the current folder to load before uploading"
+保存失败,"Save failed"
+正在保存…,"Saving…"
+会话已失效，请重新生成后再保存,"Session expired. Please generate again before saving."
+请输入文件名,"Please enter a filename"
+有未保存的生成结果，确定关闭吗？,"Unsaved results will be discarded. Close anyway?"
+有任务正在生成，确定要关闭吗？关闭将中断当前任务。,"A generation task is running. Close and cancel it?"
+生成中,Generating
+生成完成,Completed
+生成失败,Failed
+连接已断开，生成未完成。请检查 AI 供应商网络、代理或模型配置后重试,"Connection closed before generation finished. Check AI provider network, proxy, or model settings and retry."
+描述你想生成的画面，例如：一只可爱的卡通仓鼠，简约插画风格,"Describe the image you want, e.g. a cute cartoon hamster in a simple illustration style"
+预览数据解析失败，请重试,"Failed to parse preview data. Please try again."
+预览图片加载失败，请重试,"Failed to load preview image. Please try again."
+"当前为 Mock 模式（WELINE_MEDIA_AI_DRAW_MOCK），不会调用真实 AI 模型","Mock mode is enabled (WELINE_MEDIA_AI_DRAW_MOCK); real AI models are not called."
+"文生图模型未就绪，请先在 AI 场景管理中绑定模型","Text-to-image model is not ready. Bind a model in AI scenario management first."
+当前模型：,Model:
+请从当前目录选择一张参考图,"Please select a reference image from the current folder."
