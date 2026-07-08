@@ -47,22 +47,32 @@ class AiDraw extends BackendController
     /**
      * 保存：覆盖原图 / 另存为新文件
      */
-    public function postSave()
+    public function postSave(): string
     {
         try {
             $adminId = (int)($this->getLoginUserId() ?? 0);
             if ($adminId <= 0) {
-                return $this->fetchJson($this->error((string)__('未登录')));
+                return $this->encodeJsonResponse($this->error((string)__('未登录'), '', 401));
             }
             $result = $this->aiDrawService->save($adminId, $this->collectInput());
             MessageManager::success(__('图片保存成功'));
 
-            return $this->fetchJson($this->success(__('保存成功'), $result));
+            return $this->encodeJsonResponse($this->success(__('保存成功'), $result));
         } catch (\Throwable $throwable) {
             MessageManager::error(__('保存失败：%{1}', $throwable->getMessage()));
 
-            return $this->fetchJson($this->error($throwable->getMessage()));
+            return $this->encodeJsonResponse($this->error($throwable->getMessage()));
         }
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function encodeJsonResponse(array $payload): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+
+        return \json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
     /**

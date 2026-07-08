@@ -115,6 +115,7 @@ class AiDrawService
                 $parentGenerationId = $generationId;
 
                 $sse->sendEvent('preview', [
+                    'session_id' => $sessionId,
                     'generation_id' => $generationId,
                     'batch_index' => $batchIndex,
                     'batch_total' => $batchTotal,
@@ -144,10 +145,27 @@ class AiDrawService
             return;
         }
 
+        $lastMeta = [];
+        if ($generationIds !== []) {
+            $lastLoaded = $this->sessionStore->loadGeneration($sessionId, $adminId, $generationIds[\count($generationIds) - 1]);
+            if ($lastLoaded !== null) {
+                $lastMeta = $lastLoaded['meta'];
+            }
+        }
+
         $sse->sendEvent('complete', [
             'session_id' => $sessionId,
             'generation_id' => $generationIds[0],
             'generation_ids' => $generationIds,
+            'preview_token' => (string)($lastMeta['preview_token'] ?? ''),
+            'preview_url' => $generationIds !== []
+                ? $this->buildPreviewUrl(
+                    $sessionId,
+                    $generationIds[0],
+                    (string)($lastMeta['preview_token'] ?? '')
+                )
+                : '',
+            'suggested_filename' => (string)($lastMeta['suggested_filename'] ?? ''),
             'partial' => $failed > 0,
             'failed_count' => $failed,
         ]);
