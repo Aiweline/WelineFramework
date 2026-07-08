@@ -2345,6 +2345,9 @@
             AI_STREAM_TERMINAL = true;
             if (data.session_id) AI_SESSION_ID = data.session_id;
             if (data.generation_id) AI_CURRENT_GENERATION_ID = data.generation_id;
+            if (!AI_GENERATIONS.length && data.generation_id) {
+                addAiPreviewItem(data);
+            }
             AI_HAS_UNSAVED = AI_GENERATIONS.length > 0;
             setAiSaveEnabled(AI_GENERATIONS.length > 0);
             clearAiError();
@@ -2369,13 +2372,14 @@
         if (!data) return '';
         var dataUrl = String(data.data_url || data.dataUrl || data.preview_data_url || '').trim();
         if (dataUrl) return dataUrl;
+        var serverUrl = String(data.preview_url || data.previewUrl || data.url || '').trim();
+        if (serverUrl) return serverUrl;
         if (data.generation_id) {
-            var sessionId = AI_SESSION_ID || data.session_id || '';
+            var sessionId = String(data.session_id || AI_SESSION_ID || '').trim();
             var previewToken = String(data.preview_token || data.previewToken || '').trim();
-            var local = buildAiPreviewUrl(sessionId, data.generation_id, previewToken);
-            if (local) return local;
+            return buildAiPreviewUrl(sessionId, data.generation_id, previewToken);
         }
-        return String(data.preview_url || data.previewUrl || data.url || '').trim();
+        return '';
     }
 
     function applyAiPreviewImage(img, src, onFail) {
@@ -2383,32 +2387,23 @@
             if (typeof onFail === 'function') onFail();
             return;
         }
-        function bindLoad(targetSrc) {
-            img.onload = function () {
-                img.onerror = null;
-            };
-            img.onerror = function () {
-                img.onerror = null;
-                if (typeof onFail === 'function') onFail();
-            };
-            img.src = targetSrc;
-            img.style.display = 'block';
-        }
+        var empty = qs('#mmf-ai-preview-empty');
+        img.onload = function () {
+            img.onerror = null;
+            if (empty) empty.style.display = 'none';
+        };
+        img.onerror = function () {
+            img.onerror = null;
+            if (typeof onFail === 'function') onFail();
+        };
+        if (empty) empty.style.display = 'none';
+        img.style.display = 'block';
         if (src.indexOf('data:') === 0 || src.indexOf('blob:') === 0) {
-            bindLoad(src);
+            img.src = src;
             return;
         }
-        fetch(src, {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function (res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.blob();
-        }).then(function (blob) {
-            bindLoad(URL.createObjectURL(blob));
-        }).catch(function () {
-            bindLoad(src);
-        });
+        var cacheBust = (src.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
+        img.src = src + cacheBust;
     }
 
     function addAiPreviewItem(data) {
@@ -2637,6 +2632,21 @@
         });
     }
 
+    function normalizeApiJsonPayload(body) {
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return body;
+        }
+        var normalized = Object.assign({}, body);
+        if (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
+            Object.keys(body.data).forEach(function (key) {
+                if (!Object.prototype.hasOwnProperty.call(normalized, key)) {
+                    normalized[key] = body.data[key];
+                }
+            });
+        }
+        return normalized;
+    }
+
     function apiPostJson(url, payload, onDone, onErr) {
         var handleErr = function (err) {
             if (onErr) {
@@ -2645,6 +2655,47 @@
             }
             showError(extractApiErrorMessage(err, t('aiSaveFailed')));
         };
+        var finishOk = function (res) {
+            if (res && res.success === false) {
+                handleErr(new Error(res.message || res.msg || t('aiSaveFailed')));
+                return;
+            }
+            onDone(res);
+        };
+        var parseResponse = function (res, text) {
+            var body = {};
+            if (text) {
+                try {
+                    body = JSON.parse(text);
+                } catch (e) {
+                    throw new Error(t('invalidJson'));
+                }
+            }
+            if (!res.ok) {
+                throw new Error((body && (body.message || body.msg)) || ('HTTP ' + res.status));
+            }
+            if (body && body.success === false) {
+                throw new Error(body.message || body.msg || t('aiSaveFailed'));
+            }
+            return normalizeApiJsonPayload(body);
+        };
+        if (typeof window.fetch === 'function') {
+            window.fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            }).then(function (res) {
+                return res.text().then(function (text) {
+                    return parseResponse(res, text);
+                });
+            }).then(finishOk).catch(handleErr);
+            return;
+        }
         if (window.Weline && window.Weline.Api) {
             var apiCall = null;
             if (typeof window.Weline.Api.post === 'function') {
@@ -2658,11 +2709,15 @@
             }
             if (apiCall && typeof apiCall.then === 'function') {
                 apiCall.then(function (res) {
-                    if (res && res.success === false) {
-                        throw new Error(res.message || res.msg || t('aiSaveFailed'));
+                    finishOk(normalizeApiJsonPayload(res && res.data !== undefined ? res.data : res));
+                }).catch(function (err) {
+                    var msg = err && err.message ? String(err.message) : '';
+                    if (/Response terminate with status 200/i.test(msg) && err.response && err.response.data) {
+                        finishOk(normalizeApiJsonPayload(err.response.data));
+                        return;
                     }
-                    onDone(res);
-                }).catch(handleErr);
+                    handleErr(err);
+                });
                 return;
             }
         }
@@ -2672,12 +2727,7 @@
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         xhr.onload = function () {
             try {
-                var res = JSON.parse(xhr.responseText);
-                if (res.error || res.success === false) {
-                    handleErr(new Error(res.message || res.msg || res.error || t('aiSaveFailed')));
-                    return;
-                }
-                onDone(res);
+                finishOk(parseResponse({ ok: xhr.status >= 200 && xhr.status < 300 }, xhr.responseText));
             } catch (e) {
                 handleErr(e);
             }
