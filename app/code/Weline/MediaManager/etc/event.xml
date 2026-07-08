@@ -7,4 +7,8 @@
         <observer name="Weline_MediaManager::router_run_before" instance="Weline\MediaManager\Observer\RouterRunBefore" disabled="false"
                   shared="true" sort="0"/>
     </event>
+    <event name="Weline_Framework_Router::backend_whitelist_url">
+        <observer name="Weline_MediaManager::backend_whitelist_url" instance="Weline\MediaManager\Observer\BackendWhitelistUrl" disabled="false"
+                  shared="true" sort="0"/>
+    </event>
 </config>

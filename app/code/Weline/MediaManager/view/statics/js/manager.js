@@ -134,6 +134,36 @@
         return typeof mime === 'string' && mime.indexOf('image/') === 0;
     }
 
+    function isSvgFile(f) {
+        if (!f) return false;
+        if (f.mime === 'image/svg+xml') return true;
+        return /\.svg$/i.test(String(f.name || ''));
+    }
+
+    function getFileResourceUrl(hash) {
+        if (!CONNECTOR || !hash) return '';
+        var rel = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=file&target=' + encodeURIComponent(hash);
+        try {
+            return new URL(rel, document.baseURI).href;
+        } catch (e) {
+            return rel;
+        }
+    }
+
+    function getThumbnailUrl(f) {
+        if (!f || f.mime === 'directory') return null;
+        if (isSvgFile(f)) {
+            return getFileResourceUrl(f.hash);
+        }
+        if (f.tmb && f.tmb !== '1') {
+            return f.tmb;
+        }
+        if (f.tmb === '1' && CONNECTOR) {
+            return CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=tmb&target=' + encodeURIComponent(f.hash);
+        }
+        return null;
+    }
+
     function fileIcon(mime, isDir) {
         if (isDir) return '\uD83D\uDCC1';
         if (!mime) return '\uD83D\uDCC4';
@@ -145,21 +175,19 @@
         return '\uD83D\uDCC4';
     }
 
-    function getThumbnailUrl(f) {
-        if (!f || f.mime === 'directory') return null;
-        if (f.tmb && f.tmb !== '1') {
-            return f.tmb;
-        }
-        if (f.tmb === '1' && CONNECTOR) {
-            return CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=tmb&target=' + encodeURIComponent(f.hash);
-        }
-        return null;
-    }
-
     /* ─── init ───────────────────────────────────────────────────────── */
 
     var CURRENT_STORAGE = 'local';
     var CONFIG = {};
+    var AI_STREAM_CONTROLLER = null;
+    var AI_GENERATING = false;
+    var AI_SESSION_ID = '';
+    var AI_MODE = 'text2image';
+    var AI_SOURCE_HASH = '';
+    var AI_GENERATIONS = [];
+    var AI_CURRENT_GENERATION_ID = '';
+    var AI_HAS_UNSAVED = false;
+    var AI_STREAM_TERMINAL = false;
 
     function init(connectorUrl, startPath, options) {
         options = options || {};
@@ -196,6 +224,7 @@
         bindDragDrop();
         bindContextMenu();
         bindPreviewPanel();
+        bindAiDraw();
         
         // 只在非 iframe 模式下加载存储选择器
         if (!IFRAME_MODE) {
@@ -540,7 +569,7 @@
             html += '<div class="mmf-item' + (sel ? ' selected' : '') + '" data-hash="' + f.hash + '" data-mime="' + (f.mime || '') + '">';
             html += '<div class="mmf-item-icon">';
             if (thumbUrl) {
-                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy" class="mmf-thumb" data-fallback-icon="' + escAttr(fileIcon(f.mime, isDir)) + '">';
+                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy" class="mmf-thumb' + (isSvgFile(f) ? ' mmf-thumb-svg' : '') + '" data-fallback-icon="' + escAttr(fileIcon(f.mime, isDir)) + '">';
             } else {
                 html += '<span class="mmf-icon-placeholder">' + fileIcon(f.mime, isDir) + '</span>';
             }
@@ -765,8 +794,15 @@
             imageEl.style.display = '';
             var img = qs('.mmf-preview-img');
             if (img) {
-                var thumbUrl = getThumbnailUrl(f) || '';
-                img.src = thumbUrl;
+                var previewUrl = getThumbnailUrl(f) || getFileResourceUrl(f.hash) || '';
+                img.src = previewUrl;
+                if (isSvgFile(f)) {
+                    img.style.background = '#fff';
+                    img.style.padding = '12px';
+                } else {
+                    img.style.background = '';
+                    img.style.padding = '';
+                }
                 img.onload = function () {
                     if (dimensionsRow && dimensionsEl) {
                         dimensionsRow.style.display = '';
@@ -796,6 +832,10 @@
 
         if (btnDownload) {
             btnDownload.style.display = f.mime === 'directory' ? 'none' : '';
+        }
+        var btnAiEdit = qs('.mmf-preview-btn-ai-edit');
+        if (btnAiEdit) {
+            btnAiEdit.style.display = (isImageMime(f.mime) && !IFRAME_MODE) ? '' : 'none';
         }
     }
 
@@ -836,6 +876,17 @@
                 }
             };
         }
+        var btnAiEdit = qs('.mmf-preview-btn-ai-edit');
+        if (btnAiEdit) {
+            btnAiEdit.onclick = function () {
+                if (SELECTED.length === 1) {
+                    var f = FILES[SELECTED[0]];
+                    if (f && isImageMime(f.mime)) {
+                        openAiDrawModal({ mode: 'image2image', sourceHash: f.hash, sourceName: f.name });
+                    }
+                }
+            };
+        }
     }
 
     /* ─── toolbar ────────────────────────────────────────────────────── */
@@ -864,6 +915,10 @@
         if (btnRefresh) btnRefresh.addEventListener('click', function () { openDir(CWD_HASH); });
         if (btnDownload) btnDownload.addEventListener('click', function () {
             if (SELECTED.length === 1) downloadFile(SELECTED[0]);
+        });
+        var btnAiDraw = qs('#mmf-btn-ai-draw');
+        if (btnAiDraw) btnAiDraw.addEventListener('click', function () {
+            openAiDrawModal(getAiDrawLaunchOptions());
         });
 
         /* tree delegation */
@@ -1034,17 +1089,6 @@
         document.body.removeChild(a);
     }
 
-    /** 浏览器可打开的媒体文件直链（不含 download=1） */
-    function getFileResourceUrl(hash) {
-        if (!CONNECTOR || !hash) return '';
-        var rel = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=file&target=' + encodeURIComponent(hash);
-        try {
-            return new URL(rel, document.baseURI).href;
-        } catch (e) {
-            return rel;
-        }
-    }
-
     function copyTextToClipboard(text, onOk, onErr) {
         if (!text) {
             (onErr || showError)(t('copyUrlFailed'));
@@ -1125,6 +1169,9 @@
             html += '<div class="mmf-context-sep"></div>';
         }
         
+        if (f && isImage && !IFRAME_MODE) {
+            html += '<div class="mmf-context-item" data-action="ai-edit">\u2728 ' + t('aiEdit') + '</div>';
+        }
         if (f && isImage) {
             html += '<div class="mmf-context-item" data-action="preview">\uD83D\uDD0D ' + t('preview') + '</div>';
         }
@@ -1157,6 +1204,12 @@
                 else if (action === 'clear-selection') clearSelection();
                 else if (action === 'confirm-selection') confirmSelection();
                 else if (action === 'preview' && SELECTED.length === 1) openLightbox(SELECTED[0]);
+                else if (action === 'ai-edit' && SELECTED.length === 1) {
+                    var sf = FILES[SELECTED[0]];
+                    if (sf && isImageMime(sf.mime)) {
+                        openAiDrawModal({ mode: 'image2image', sourceHash: sf.hash, sourceName: sf.name });
+                    }
+                }
                 else if (action === 'download' && SELECTED.length === 1) downloadFile(SELECTED[0]);
                 else if (action === 'copy-url' && SELECTED.length === 1) copyFileUrl(SELECTED[0]);
                 else if (action === 'open' && SELECTED.length === 1) openDir(SELECTED[0]);
@@ -1461,7 +1514,14 @@
             if (f.url) {
                 imgUrl = f.url;
             } else if (CONNECTOR) {
-                imgUrl = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=file&target=' + encodeURIComponent(f.hash);
+                imgUrl = getFileResourceUrl(f.hash);
+            }
+            if (isSvgFile(f)) {
+                img.style.background = '#fff';
+                img.style.padding = '24px';
+            } else {
+                img.style.background = '';
+                img.style.padding = '';
             }
             img.onload = function () { img.style.opacity = '1'; };
             img.src = imgUrl;
@@ -1480,14 +1540,11 @@
 
         var html = '';
         LIGHTBOX_IMAGES.forEach(function (f, i) {
-            var thumbUrl = f.tmb && f.tmb !== '1' ? f.tmb : '';
-            if (!thumbUrl && CONNECTOR) {
-                thumbUrl = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=tmb&target=' + encodeURIComponent(f.hash);
-            }
+            var thumbUrl = getThumbnailUrl(f) || '';
             var activeClass = i === LIGHTBOX_INDEX ? ' active' : '';
             html += '<div class="mmf-lightbox-thumb' + activeClass + '" data-index="' + i + '">';
             if (thumbUrl) {
-                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy">';
+                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy"' + (isSvgFile(f) ? ' style="background:#fff;padding:4px;"' : '') + '>';
             } else {
                 html += '<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#333;">\uD83D\uDDBC</span>';
             }
@@ -1583,6 +1640,1050 @@
 
     function showConfirm(msg, onOk) {
         showDialog(t('confirm'), '', msg, function (val) { onOk(); });
+    }
+
+    /* ─── AI 作图 ───────────────────────────────────────────────────── */
+
+    function getAiDrawLaunchOptions() {
+        if (SELECTED.length === 1) {
+            var f = FILES[SELECTED[0]];
+            if (f && isImageMime(f.mime)) {
+                return { mode: 'image2image', sourceHash: f.hash, sourceName: f.name };
+            }
+        }
+        return { mode: 'text2image' };
+    }
+
+    function bindAiDraw() {
+        if (!CONFIG.aiDrawStreamUrl) return;
+        qsa('.mmf-ai-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                if (isAiGenerating()) return;
+                setAiMode(tab.dataset.mode || 'text2image');
+            });
+        });
+        var closeBtn = qs('#mmf-ai-draw-close');
+        var cancelBtn = qs('#mmf-ai-btn-cancel');
+        var overlay = qs('#mmf-ai-draw-overlay');
+        if (closeBtn) closeBtn.addEventListener('click', requestCloseAiDrawModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', requestCloseAiDrawModal);
+        if (overlay) {
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) requestCloseAiDrawModal();
+            });
+        }
+        var modal = qs('#mmf-ai-draw-modal');
+        if (modal) {
+            modal.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+        }
+        var genBtn = qs('#mmf-ai-btn-generate');
+        if (genBtn) genBtn.addEventListener('click', startAiGeneration);
+        var contBtn = qs('#mmf-ai-btn-continue');
+        if (contBtn) contBtn.addEventListener('click', continueAiEdit);
+        var saveBtn = qs('#mmf-ai-btn-save');
+        if (saveBtn) saveBtn.addEventListener('click', openAiSaveDialog);
+        var refPreviewBtn = qs('#mmf-ai-ref-preview-btn');
+        if (refPreviewBtn) {
+            refPreviewBtn.addEventListener('click', function () {
+                if (AI_SOURCE_HASH) openLightbox(AI_SOURCE_HASH);
+            });
+        }
+        var refImg = qs('#mmf-ai-ref-img');
+        if (refImg) {
+            refImg.addEventListener('click', function () {
+                if (AI_SOURCE_HASH) openLightbox(AI_SOURCE_HASH);
+            });
+        }
+        var saveCancel = qs('#mmf-ai-save-cancel');
+        var saveConfirm = qs('#mmf-ai-save-confirm');
+        if (saveCancel) saveCancel.addEventListener('click', closeAiSaveDialog);
+        if (saveConfirm) saveConfirm.addEventListener('click', confirmAiSave);
+        var refSearch = qs('#mmf-ai-ref-search');
+        if (refSearch) {
+            refSearch.addEventListener('input', function () {
+                renderAiRefPicker();
+            });
+        }
+    }
+
+    function isAiGenerating() {
+        return AI_GENERATING || !!AI_STREAM_CONTROLLER;
+    }
+
+    function setAiBusy(busy) {
+        AI_GENERATING = !!busy;
+        var modal = qs('#mmf-ai-draw-modal');
+        if (modal) {
+            modal.classList.toggle('is-busy', AI_GENERATING);
+            modal.setAttribute('aria-busy', AI_GENERATING ? 'true' : 'false');
+        }
+        setAiPreviewLoading(AI_GENERATING);
+        setAiStatus(AI_GENERATING ? t('aiRunningHint') : '', AI_GENERATING ? 'running' : '');
+
+        ['#mmf-ai-btn-generate', '#mmf-ai-btn-continue', '#mmf-ai-btn-save'].forEach(function (sel) {
+            var el = qs(sel);
+            if (!el) return;
+            if (AI_GENERATING) {
+                el.disabled = true;
+            } else if (sel === '#mmf-ai-btn-save') {
+                el.disabled = !AI_GENERATIONS.length;
+            } else {
+                el.disabled = false;
+            }
+        });
+
+        qsa('.mmf-ai-tab').forEach(function (tab) {
+            tab.disabled = AI_GENERATING;
+        });
+
+        ['#mmf-ai-prompt', '#mmf-ai-batch-prompts', '#mmf-ai-batch-count', '#mmf-ai-size', '#mmf-ai-format'].forEach(function (sel) {
+            var el = qs(sel);
+            if (el) el.disabled = AI_GENERATING;
+        });
+    }
+
+    function setAiPreviewLoading(visible) {
+        var loading = qs('#mmf-ai-preview-loading');
+        var empty = qs('#mmf-ai-preview-empty');
+        var loadingText = qs('#mmf-ai-loading-text');
+        if (loading) {
+            loading.classList.toggle('is-visible', !!visible);
+            loading.style.display = visible ? 'flex' : 'none';
+        }
+        if (loadingText && visible) {
+            loadingText.textContent = t('aiGenerating');
+        }
+        if (empty) {
+            empty.style.display = visible ? 'none' : (AI_GENERATIONS.length ? 'none' : '');
+        }
+    }
+
+    function updateAiConfigBanner(cfg) {
+        cfg = cfg || {};
+        var el = qs('#mmf-ai-config-banner');
+        if (!el) return;
+        if (cfg.mock) {
+            el.textContent = t('aiMockModeHint');
+            el.className = 'mmf-ai-config-banner is-mock';
+            el.style.display = '';
+            return;
+        }
+        if (!cfg.ready) {
+            el.textContent = cfg.message || t('aiModelNotReady');
+            el.className = 'mmf-ai-config-banner is-warn';
+            el.style.display = '';
+            return;
+        }
+        var model = String(cfg.model || '').trim();
+        if (!model) {
+            el.style.display = 'none';
+            el.textContent = '';
+            return;
+        }
+        el.textContent = t('aiModelLabel') + model;
+        el.className = 'mmf-ai-config-banner is-ready';
+        el.style.display = '';
+    }
+
+    function refreshAiDrawConfig() {
+        if (!CONFIG.aiDrawConfigUrl) return;
+        fetch(CONFIG.aiDrawConfigUrl, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        }).then(function (res) {
+            var data = res && res.data ? res.data : res;
+            updateAiConfigBanner(data || {});
+        }).catch(function () {});
+    }
+
+    function buildAiPreviewUrl(sessionId, generationId, previewToken) {
+        if (!CONFIG.aiDrawPreviewUrl || !sessionId || !generationId) return '';
+        var base = String(CONFIG.aiDrawPreviewUrl);
+        var sep = base.indexOf('?') >= 0 ? '&' : '?';
+        var url = base + sep + 'session_id=' + encodeURIComponent(sessionId) + '&generation_id=' + encodeURIComponent(generationId);
+        if (previewToken) {
+            url += '&preview_token=' + encodeURIComponent(previewToken);
+        }
+        return url;
+    }
+
+    function setAiStatus(text, state) {
+        var el = qs('#mmf-ai-status');
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.remove('is-running', 'is-success', 'is-error');
+        if (state) el.classList.add('is-' + state);
+        el.style.display = text ? 'inline-flex' : 'none';
+    }
+
+    function resolveAiErrorMessage(data) {
+        if (!data) return t('networkError');
+        if (typeof data === 'string') return data.trim() || t('networkError');
+        var msg = String(data.message || data.error || '').trim();
+        if (!msg && data.code) {
+            msg = String(data.code);
+        }
+        return msg || t('networkError');
+    }
+
+    function clearAiError() {
+        var errorEl = qs('#mmf-ai-error');
+        if (errorEl) {
+            errorEl.innerHTML = '';
+            errorEl.style.display = 'none';
+        }
+        var progressEl = qs('#mmf-ai-progress');
+        if (progressEl) progressEl.classList.remove('is-error');
+    }
+
+    function setAiError(message) {
+        var msg = String(message || '').trim();
+        var errorEl = qs('#mmf-ai-error');
+        var empty = qs('#mmf-ai-preview-empty');
+        if (!msg) {
+            clearAiError();
+            if (empty && !AI_GENERATIONS.length) empty.style.display = '';
+            return;
+        }
+        if (errorEl) {
+            errorEl.innerHTML = '<div class="mmf-ai-error-title">' + escHtml(t('aiGenerateFailed')) + '</div>' +
+                '<div class="mmf-ai-error-message">' + escHtml(msg) + '</div>';
+            errorEl.style.display = 'block';
+        }
+        if (empty) empty.style.display = 'none';
+        setAiPreviewLoading(false);
+        setAiStatus(t('aiGenerateFailed'), 'error');
+    }
+
+    function reportAiError(data) {
+        var msg = resolveAiErrorMessage(data);
+        setAiError(msg);
+        setAiProgress(msg, true);
+        showError(msg);
+    }
+
+    function requestCloseAiDrawModal() {
+        if (isAiGenerating()) {
+            showConfirm(t('aiCloseRunningConfirm'), function () {
+                finishAiDrawClose();
+            });
+            return;
+        }
+        if (AI_HAS_UNSAVED) {
+            showConfirm(t('aiCloseConfirm'), function () {
+                finishAiDrawClose();
+            });
+            return;
+        }
+        finishAiDrawClose();
+    }
+
+    function finishAiDrawClose() {
+        abortAiStream();
+        setAiBusy(false);
+        setAiStatus('');
+        clearAiError();
+        var overlay = qs('#mmf-ai-draw-overlay');
+        if (overlay) overlay.classList.remove('visible');
+        closeAiSaveDialog();
+    }
+
+    function aiModeNeedsReferencePicker(mode) {
+        return mode === 'image2image' || mode === 'batch';
+    }
+
+    function resolveDefaultAiReferenceHash() {
+        if (SELECTED.length === 1) {
+            var selected = FILES[SELECTED[0]];
+            if (selected && isImageMime(selected.mime)) {
+                return selected.hash;
+            }
+        }
+        var images = getImagesInCurrentDir();
+        return images.length === 1 ? images[0].hash : '';
+    }
+
+    function selectAiReference(hash, sourceName) {
+        if (isAiGenerating()) return;
+        AI_SOURCE_HASH = hash || '';
+        updateAiReferencePreview(sourceName || '');
+        renderAiRefPicker();
+    }
+
+    function updateAiReferencePreview(sourceName) {
+        var refImg = qs('#mmf-ai-ref-img');
+        var refName = qs('#mmf-ai-ref-name');
+        var refEmpty = qs('#mmf-ai-ref-empty');
+        var previewBtn = qs('#mmf-ai-ref-preview-btn');
+        if (!AI_SOURCE_HASH) {
+            if (refImg) {
+                refImg.style.display = 'none';
+                refImg.removeAttribute('src');
+            }
+            if (refEmpty) refEmpty.style.display = '';
+            if (refName) refName.textContent = '';
+            if (previewBtn) previewBtn.style.display = 'none';
+            return;
+        }
+        var file = FILES[AI_SOURCE_HASH];
+        var previewUrl = file ? (getThumbnailUrl(file) || getFileResourceUrl(AI_SOURCE_HASH)) : getFileResourceUrl(AI_SOURCE_HASH);
+        if (refImg) {
+            refImg.src = previewUrl;
+            refImg.style.display = previewUrl ? 'block' : 'none';
+        }
+        if (refEmpty) refEmpty.style.display = previewUrl ? 'none' : '';
+        if (refName) refName.textContent = sourceName || (file ? file.name : '');
+        if (previewBtn) previewBtn.style.display = previewUrl ? '' : 'none';
+    }
+
+    function getAiRefSearchQuery() {
+        var el = qs('#mmf-ai-ref-search');
+        return el ? String(el.value || '').trim().toLowerCase() : '';
+    }
+
+    function filterImagesForRefPicker(images, query) {
+        if (!query) return images;
+        return images.filter(function (file) {
+            return String(file.name || '').toLowerCase().indexOf(query) >= 0;
+        });
+    }
+
+    function resetAiRefSearch() {
+        var el = qs('#mmf-ai-ref-search');
+        if (el) el.value = '';
+    }
+
+    function renderAiRefPicker() {
+        var picker = qs('#mmf-ai-ref-picker');
+        var pickerEmpty = qs('#mmf-ai-ref-picker-empty');
+        var pickerNoMatch = qs('#mmf-ai-ref-picker-no-match');
+        if (!picker) return;
+        if (!aiModeNeedsReferencePicker(AI_MODE)) {
+            picker.innerHTML = '';
+            if (pickerEmpty) pickerEmpty.style.display = 'none';
+            if (pickerNoMatch) pickerNoMatch.style.display = 'none';
+            return;
+        }
+        var images = getImagesInCurrentDir();
+        var query = getAiRefSearchQuery();
+        var filtered = filterImagesForRefPicker(images, query);
+        if (!images.length) {
+            picker.innerHTML = '';
+            if (pickerEmpty) pickerEmpty.style.display = '';
+            if (pickerNoMatch) pickerNoMatch.style.display = 'none';
+            return;
+        }
+        if (!filtered.length) {
+            picker.innerHTML = '';
+            if (pickerEmpty) pickerEmpty.style.display = 'none';
+            if (pickerNoMatch) pickerNoMatch.style.display = '';
+            return;
+        }
+        if (pickerEmpty) pickerEmpty.style.display = 'none';
+        if (pickerNoMatch) pickerNoMatch.style.display = 'none';
+        picker.innerHTML = filtered.map(function (file) {
+            var thumb = getThumbnailUrl(file) || getFileResourceUrl(file.hash);
+            var selected = file.hash === AI_SOURCE_HASH;
+            return '<button type="button" class="mmf-ai-ref-item' + (selected ? ' selected' : '') + '" data-hash="' + escAttr(file.hash) + '" title="' + escAttr(file.name || '') + '">' +
+                '<img src="' + escAttr(thumb) + '" alt="' + escAttr(file.name || '') + '">' +
+                '<span class="mmf-ai-ref-item-name">' + escHtml(file.name || '') + '</span>' +
+                '</button>';
+        }).join('');
+        qsa('.mmf-ai-ref-item', picker).forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                selectAiReference(btn.getAttribute('data-hash') || '', btn.getAttribute('title') || '');
+            });
+        });
+    }
+
+    function syncAiReferencePanel(sourceName) {
+        var refPanel = qs('#mmf-ai-ref-panel');
+        var refSide = qs('#mmf-ai-ref-side');
+        var workspace = qs('#mmf-ai-draw-workspace');
+        var needsRef = aiModeNeedsReferencePicker(AI_MODE);
+        if (workspace) {
+            workspace.classList.toggle('is-text2image', !needsRef);
+        }
+        if (refPanel) {
+            refPanel.style.display = needsRef ? '' : 'none';
+        }
+        if (refSide) {
+            refSide.style.display = needsRef ? '' : 'none';
+        }
+        if (!needsRef) {
+            return;
+        }
+        if (!AI_SOURCE_HASH) {
+            AI_SOURCE_HASH = resolveDefaultAiReferenceHash();
+        }
+        updateAiReferencePreview(sourceName || '');
+        renderAiRefPicker();
+    }
+
+    function setAiMode(mode) {
+        if (isAiGenerating()) return;
+        AI_MODE = mode || 'text2image';
+        qsa('.mmf-ai-tab').forEach(function (tab) {
+            tab.classList.toggle('active', tab.dataset.mode === AI_MODE);
+        });
+        var batchPanel = qs('#mmf-ai-batch-panel');
+        if (batchPanel) batchPanel.style.display = AI_MODE === 'batch' ? '' : 'none';
+        syncAiReferencePanel();
+        var contBtn = qs('#mmf-ai-btn-continue');
+        if (contBtn) contBtn.style.display = (AI_MODE === 'image2image' || AI_CURRENT_GENERATION_ID) ? '' : 'none';
+    }
+
+    function openAiDrawModal(options) {
+        options = options || {};
+        if (!CONFIG.aiDrawStreamUrl) {
+            showError(t('connectorNotConfigured'));
+            return;
+        }
+        AI_SESSION_ID = '';
+        AI_GENERATIONS = [];
+        AI_CURRENT_GENERATION_ID = '';
+        AI_HAS_UNSAVED = false;
+        AI_SOURCE_HASH = options.sourceHash || '';
+        AI_MODE = options.mode || (AI_SOURCE_HASH ? 'image2image' : 'text2image');
+        resetAiRefSearch();
+        setAiMode(AI_MODE);
+        resetAiPreview();
+        clearAiError();
+        updateAiTargetPath();
+        syncAiReferencePanel(options.sourceName || '');
+        setAiProgress('');
+        setAiSaveEnabled(false);
+        setAiBusy(false);
+        setAiStatus('');
+        var overlay = qs('#mmf-ai-draw-overlay');
+        if (overlay) overlay.classList.add('visible');
+        refreshAiDrawConfig();
+        var prompt = qs('#mmf-ai-prompt');
+        if (prompt) {
+            prompt.value = '';
+            prompt.placeholder = t('aiPromptPlaceholder') || '';
+        }
+        var history = qs('#mmf-ai-history');
+        var historyWrap = qs('#mmf-ai-history-wrap');
+        if (history) history.innerHTML = '';
+        if (historyWrap) historyWrap.style.display = 'none';
+    }
+
+    function closeAiDrawModal() {
+        requestCloseAiDrawModal();
+    }
+
+    function formatAiTargetPath() {
+        var parts = [];
+        var cur = CWD_HASH;
+        while (cur && FILES[cur]) {
+            parts.unshift(FILES[cur].name);
+            cur = FILES[cur].phash;
+        }
+        if (parts.length) {
+            return parts.join(' / ');
+        }
+        if (CWD_INFO && CWD_INFO.path) {
+            return String(CWD_INFO.path).split('/').filter(Boolean).join(' / ') || (CWD_INFO.name || '/');
+        }
+        return (CWD_INFO && CWD_INFO.name) || CWD_HASH || '/';
+    }
+
+    function updateAiTargetPath() {
+        var el = qs('#mmf-ai-target-path');
+        if (!el) return;
+        el.textContent = formatAiTargetPath();
+    }
+
+    function resetAiPreview() {
+        var empty = qs('#mmf-ai-preview-empty');
+        var img = qs('#mmf-ai-preview-img');
+        var grid = qs('#mmf-ai-preview-grid');
+        var loading = qs('#mmf-ai-preview-loading');
+        if (loading) {
+            loading.classList.remove('is-visible');
+            loading.style.display = 'none';
+        }
+        if (empty) empty.style.display = '';
+        if (img) { img.style.display = 'none'; img.removeAttribute('src'); }
+        if (grid) {
+            grid.innerHTML = '';
+            grid.style.display = 'none';
+        }
+    }
+
+    function normalizeSseText(text) {
+        return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    }
+
+    function parseSseBlock(block, onEvent) {
+        var eventName = 'message';
+        var dataLines = [];
+
+        function flush() {
+            if (!dataLines.length) return;
+            var raw = dataLines.join('\n').trim();
+            if (!raw) return;
+            var data;
+            try {
+                data = JSON.parse(raw);
+            } catch (e) {
+                data = { message: raw, _sse_parse_failed: true };
+            }
+            onEvent(eventName, data);
+            dataLines = [];
+        }
+
+        normalizeSseText(block).split('\n').forEach(function (line) {
+            if (!line) return;
+            if (line.indexOf('event:') === 0) {
+                flush();
+                eventName = line.slice(6).trim();
+                return;
+            }
+            if (line.indexOf('data:') === 0) {
+                dataLines.push(line.slice(5).replace(/^\s/, ''));
+            }
+        });
+        flush();
+    }
+
+    function parseSseText(text, onEvent) {
+        var normalized = normalizeSseText(text);
+        normalized.split('\n\n').forEach(function (block) {
+            if (!block.trim()) return;
+            parseSseBlock(block, onEvent);
+        });
+    }
+
+    function setAiProgress(msg, isError) {
+        var el = qs('#mmf-ai-progress');
+        if (!el) return;
+        el.textContent = msg || '';
+        el.classList.toggle('is-error', !!isError);
+    }
+
+    function setAiSaveEnabled(enabled) {
+        var btn = qs('#mmf-ai-btn-save');
+        if (btn) btn.disabled = !enabled;
+    }
+
+    function collectAiPayload(modeOverride) {
+        var mode = modeOverride || AI_MODE;
+        var promptEl = qs('#mmf-ai-prompt');
+        var prompt = promptEl ? promptEl.value.trim() : '';
+        var sizeEl = qs('#mmf-ai-size');
+        var formatEl = qs('#mmf-ai-format');
+        var batchPromptsEl = qs('#mmf-ai-batch-prompts');
+        var batchCountEl = qs('#mmf-ai-batch-count');
+        var payload = {
+            mode: mode,
+            prompt: prompt,
+            target: CWD_HASH,
+            session_id: AI_SESSION_ID,
+            source_file_hash: AI_SOURCE_HASH,
+            parent_generation_id: mode === 'edit_turn' ? AI_CURRENT_GENERATION_ID : '',
+            size: sizeEl ? sizeEl.value : '1024x1024',
+            output_format: formatEl ? formatEl.value : 'png',
+            aspect_ratio: '1:1'
+        };
+        if (mode === 'image2image' && !AI_SOURCE_HASH) {
+            return null;
+        }
+        if (mode === 'batch') {
+            var lines = (batchPromptsEl ? batchPromptsEl.value : '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+            payload.prompts = lines;
+            payload.batch_count = batchCountEl ? parseInt(batchCountEl.value, 10) || 2 : 2;
+            if (lines.length === 0 && !prompt) {
+                return null;
+            }
+            if (lines.length === 0) payload.prompt = prompt;
+        } else if (!prompt) {
+            return null;
+        }
+        return payload;
+    }
+
+    function startAiGeneration() {
+        if (isAiGenerating()) return;
+        var payload = collectAiPayload(AI_MODE);
+        if (!payload) {
+            if (AI_MODE === 'image2image' && !AI_SOURCE_HASH) {
+                showError(t('aiNoReference'));
+            } else {
+                showError(t('aiNoPrompt'));
+            }
+            return;
+        }
+        runAiStream(payload, false);
+    }
+
+    function continueAiEdit() {
+        if (isAiGenerating()) return;
+        if (!AI_CURRENT_GENERATION_ID) {
+            showError(t('aiNoPrompt'));
+            return;
+        }
+        var payload = collectAiPayload('edit_turn');
+        if (!payload || !payload.prompt) {
+            showError(t('aiNoPrompt'));
+            return;
+        }
+        runAiStream(payload, true);
+    }
+
+    function abortAiStream() {
+        if (AI_STREAM_CONTROLLER) {
+            try { AI_STREAM_CONTROLLER.abort(); } catch (e) {}
+            AI_STREAM_CONTROLLER = null;
+        }
+    }
+
+    function runAiStream(payload, isContinue) {
+        if (isAiGenerating()) return;
+        abortAiStream();
+        if (!isContinue) {
+            if (payload.mode !== 'edit_turn') resetAiPreview();
+            if (payload.mode !== 'batch') AI_GENERATIONS = [];
+        }
+        setAiBusy(true);
+        clearAiError();
+        setAiProgress(t('aiGenerating'));
+        setAiSaveEnabled(false);
+        setAiPreviewLoading(true);
+        AI_STREAM_TERMINAL = false;
+        AI_STREAM_CONTROLLER = new AbortController();
+        fetch(CONFIG.aiDrawStreamUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload),
+            credentials: 'same-origin',
+            signal: AI_STREAM_CONTROLLER.signal
+        }).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return consumeSseResponse(res, handleAiSseEvent);
+        }).then(function () {
+            if (!AI_STREAM_TERMINAL) {
+                reportAiError(t('aiStreamDisconnected'));
+            }
+        }).catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            reportAiError(err && err.message ? err.message : t('networkError'));
+        }).finally(function () {
+            AI_STREAM_CONTROLLER = null;
+            setAiBusy(false);
+            setAiPreviewLoading(false);
+            if (!AI_GENERATIONS.length) {
+                var empty = qs('#mmf-ai-preview-empty');
+                if (empty) empty.style.display = '';
+            }
+        });
+    }
+
+    function consumeSseResponse(res, onEvent) {
+        if (!res.body || !res.body.getReader) {
+            return res.text().then(function (text) {
+                parseSseText(text, onEvent);
+            });
+        }
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        function pump() {
+            return reader.read().then(function (chunk) {
+                buffer = normalizeSseText(buffer + decoder.decode(chunk.value, { stream: true }));
+                if (chunk.done) {
+                    if (buffer.trim()) parseSseBlock(buffer, onEvent);
+                    return;
+                }
+                var parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+                parts.forEach(function (block) {
+                    if (block.trim()) parseSseBlock(block, onEvent);
+                });
+                return pump();
+            });
+        }
+        return pump();
+    }
+
+    function handleAiSseEvent(eventName, data) {
+        data = data || {};
+        if (eventName === 'start') {
+            if (data.session_id) AI_SESSION_ID = data.session_id;
+            updateAiConfigBanner({
+                mock: !!data.mock,
+                ready: data.ready !== false,
+                model: data.model || '',
+                message: data.message || ''
+            });
+            return;
+        }
+        if (eventName === 'progress') {
+            var progressMsg = data.message || t('aiGenerating');
+            setAiProgress(progressMsg, false);
+            var loadingText = qs('#mmf-ai-loading-text');
+            if (loadingText) loadingText.textContent = progressMsg;
+            return;
+        }
+        if (eventName === 'preview') {
+            setAiPreviewLoading(false);
+            addAiPreviewItem(data);
+            setAiProgress('');
+            return;
+        }
+        if (eventName === 'complete') {
+            AI_STREAM_TERMINAL = true;
+            if (data.session_id) AI_SESSION_ID = data.session_id;
+            if (data.generation_id) AI_CURRENT_GENERATION_ID = data.generation_id;
+            AI_HAS_UNSAVED = AI_GENERATIONS.length > 0;
+            setAiSaveEnabled(AI_GENERATIONS.length > 0);
+            clearAiError();
+            setAiStatus(t('aiGenerateSuccess'), 'success');
+            setAiProgress('');
+            appendAiHistory(data);
+            return;
+        }
+        if (eventName === 'error') {
+            AI_STREAM_TERMINAL = true;
+            reportAiError(data);
+            if (data.partial && AI_GENERATIONS.length) {
+                AI_HAS_UNSAVED = true;
+                setAiSaveEnabled(true);
+            } else {
+                setAiSaveEnabled(false);
+            }
+        }
+    }
+
+    function resolveAiPreviewSrc(data) {
+        if (!data) return '';
+        var dataUrl = String(data.data_url || data.dataUrl || data.preview_data_url || '').trim();
+        if (dataUrl) return dataUrl;
+        if (data.generation_id) {
+            var sessionId = AI_SESSION_ID || data.session_id || '';
+            var previewToken = String(data.preview_token || data.previewToken || '').trim();
+            var local = buildAiPreviewUrl(sessionId, data.generation_id, previewToken);
+            if (local) return local;
+        }
+        return String(data.preview_url || data.previewUrl || data.url || '').trim();
+    }
+
+    function applyAiPreviewImage(img, src, onFail) {
+        if (!img || !src) {
+            if (typeof onFail === 'function') onFail();
+            return;
+        }
+        function bindLoad(targetSrc) {
+            img.onload = function () {
+                img.onerror = null;
+            };
+            img.onerror = function () {
+                img.onerror = null;
+                if (typeof onFail === 'function') onFail();
+            };
+            img.src = targetSrc;
+            img.style.display = 'block';
+        }
+        if (src.indexOf('data:') === 0 || src.indexOf('blob:') === 0) {
+            bindLoad(src);
+            return;
+        }
+        fetch(src, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.blob();
+        }).then(function (blob) {
+            bindLoad(URL.createObjectURL(blob));
+        }).catch(function () {
+            bindLoad(src);
+        });
+    }
+
+    function addAiPreviewItem(data) {
+        if (!data || !data.generation_id) {
+            if (data && data._sse_parse_failed) {
+                showError(t('aiPreviewParseFailed'));
+            }
+            return;
+        }
+        var previewSrc = resolveAiPreviewSrc(data);
+        if (!previewSrc) {
+            showError(t('aiPreviewEmpty'));
+            return;
+        }
+        var item = {
+            id: data.generation_id,
+            previewSrc: previewSrc,
+            filename: data.suggested_filename || '',
+            selected: AI_MODE !== 'batch'
+        };
+        AI_GENERATIONS.push(item);
+        AI_CURRENT_GENERATION_ID = data.generation_id;
+        if (AI_MODE === 'batch') {
+            var grid = qs('#mmf-ai-preview-grid');
+            if (grid) grid.style.display = '';
+            renderAiPreviewGrid();
+        } else {
+            var empty = qs('#mmf-ai-preview-empty');
+            var img = qs('#mmf-ai-preview-img');
+            if (empty) empty.style.display = 'none';
+            if (img) {
+                img.style.display = 'block';
+                applyAiPreviewImage(img, previewSrc, function () {
+                    showError(t('aiPreviewLoadFailed'));
+                    img.style.display = 'none';
+                    if (empty) empty.style.display = '';
+                });
+            }
+        }
+    }
+
+    function renderAiPreviewGrid() {
+        var grid = qs('#mmf-ai-preview-grid');
+        var empty = qs('#mmf-ai-preview-empty');
+        if (!grid) return;
+        if (empty) empty.style.display = AI_GENERATIONS.length ? 'none' : '';
+        grid.style.display = AI_GENERATIONS.length ? '' : 'none';
+        grid.innerHTML = AI_GENERATIONS.map(function (item) {
+            return '<label class="mmf-ai-grid-item' + (item.selected ? ' selected' : '') + '">' +
+                '<input type="checkbox"' + (item.selected ? ' checked' : '') + ' data-id="' + escAttr(item.id) + '">' +
+                '<img src="' + escAttr(item.previewSrc || item.dataUrl || '') + '" alt="">' +
+                '</label>';
+        }).join('');
+        qsa('input[type="checkbox"]', grid).forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var id = cb.getAttribute('data-id');
+                AI_GENERATIONS.forEach(function (g) { if (g.id === id) g.selected = cb.checked; });
+                cb.closest('.mmf-ai-grid-item').classList.toggle('selected', cb.checked);
+            });
+        });
+    }
+
+    function appendAiHistory(data) {
+        var history = qs('#mmf-ai-history');
+        var historyWrap = qs('#mmf-ai-history-wrap');
+        var promptEl = qs('#mmf-ai-prompt');
+        if (!history || !promptEl) return;
+        var prompt = promptEl.value.trim();
+        if (!prompt) return;
+        if (historyWrap) historyWrap.style.display = '';
+        var div = document.createElement('div');
+        div.className = 'mmf-ai-history-item';
+        div.textContent = prompt;
+        history.appendChild(div);
+        history.scrollTop = history.scrollHeight;
+    }
+
+    function promptToAltFilenameStem(prompt) {
+        var text = String(prompt || '').trim();
+        if (!text) return '';
+        var firstLine = text.split(/\r?\n/)[0].trim();
+        if (!firstLine) return '';
+        firstLine = firstLine.replace(/\s+/g, ' ');
+        if (firstLine.length > 36) firstLine = firstLine.slice(0, 36);
+        var stem = firstLine.replace(/[<>:"|?*\\\/\x00-\x1F\x7F]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+        if (!stem || stem === '.' || stem === '..') return '';
+        return stem.length > 48 ? stem.slice(0, 48) : stem;
+    }
+
+    function openAiSaveDialog() {
+        if (isAiGenerating()) return;
+        var selected = AI_GENERATIONS.filter(function (g) { return g.selected; });
+        if (!selected.length) selected = AI_GENERATIONS.slice(-1);
+        if (!selected.length) return;
+        clearAiSaveError();
+        setAiSaveBusy(false);
+        var overwriteWrap = qs('#mmf-ai-save-overwrite-wrap');
+        if (overwriteWrap) {
+            overwriteWrap.style.display = (AI_SOURCE_HASH && selected.length === 1) ? '' : 'none';
+        }
+        var filename = qs('#mmf-ai-save-filename');
+        if (filename) {
+            filename.value = selected[0].filename || '';
+            if (!filename.value) {
+                var promptEl = qs('#mmf-ai-prompt');
+                var promptStem = promptToAltFilenameStem(promptEl ? promptEl.value : '');
+                if (promptStem) filename.value = promptStem + '.png';
+            }
+        }
+        var overlay = qs('#mmf-ai-save-overlay');
+        if (overlay) overlay.classList.add('visible');
+    }
+
+    function closeAiSaveDialog() {
+        setAiSaveBusy(false);
+        clearAiSaveError();
+        var overlay = qs('#mmf-ai-save-overlay');
+        if (overlay) overlay.classList.remove('visible');
+    }
+
+    function setAiSaveError(message) {
+        var el = qs('#mmf-ai-save-error');
+        if (!el) return;
+        var text = String(message || '').trim();
+        if (!text) {
+            el.textContent = '';
+            el.style.display = 'none';
+            return;
+        }
+        el.textContent = text;
+        el.style.display = '';
+    }
+
+    function clearAiSaveError() {
+        setAiSaveError('');
+    }
+
+    function setAiSaveBusy(busy) {
+        var confirmBtn = qs('#mmf-ai-save-confirm');
+        var cancelBtn = qs('#mmf-ai-save-cancel');
+        if (confirmBtn) {
+            confirmBtn.disabled = !!busy;
+            confirmBtn.classList.toggle('is-loading', !!busy);
+            if (!confirmBtn.dataset.defaultLabel) {
+                confirmBtn.dataset.defaultLabel = confirmBtn.textContent || t('aiConfirmSave');
+            }
+            confirmBtn.textContent = busy ? t('aiSaving') : confirmBtn.dataset.defaultLabel;
+        }
+        if (cancelBtn) cancelBtn.disabled = !!busy;
+    }
+
+    function extractApiErrorMessage(err, fallback) {
+        var fb = fallback || t('aiSaveFailed');
+        if (!err) return fb;
+        if (typeof err === 'string' && err.trim()) return err;
+        var response = err.response || null;
+        var data = response && response.data !== undefined ? response.data : null;
+        if (data && typeof data === 'object') {
+            return data.message || data.msg || (data.error && data.error.message) || fb;
+        }
+        if (typeof data === 'string' && data.trim()) return data;
+        if (err.message) return err.message;
+        return fb;
+    }
+
+    function resolveAiSaveResult(res) {
+        var data = res && res.data ? res.data : res;
+        if (!data || typeof data !== 'object') {
+            return [];
+        }
+        if (Array.isArray(data.added) && data.added.length) return data.added;
+        if (Array.isArray(data.updated) && data.updated.length) return data.updated;
+        if (res && Array.isArray(res.added) && res.added.length) return res.added;
+        if (res && Array.isArray(res.updated) && res.updated.length) return res.updated;
+        return [];
+    }
+
+    function confirmAiSave() {
+        var selected = AI_GENERATIONS.filter(function (g) { return g.selected; });
+        if (!selected.length) selected = AI_GENERATIONS.slice(-1);
+        if (!selected.length || !CONFIG.aiDrawSaveUrl) return;
+        if (!AI_SESSION_ID) {
+            setAiSaveError(t('aiSaveSessionMissing'));
+            return;
+        }
+        var modeInput = document.querySelector('input[name="mmf_ai_save_mode"]:checked');
+        var saveMode = modeInput ? modeInput.value : 'save_as';
+        if (saveMode !== 'overwrite' && !CWD_HASH) {
+            setAiSaveError(t('uploadWaitDir'));
+            return;
+        }
+        var filenameEl = qs('#mmf-ai-save-filename');
+        var filename = filenameEl ? filenameEl.value.trim() : '';
+        if (saveMode !== 'overwrite' && !filename) {
+            setAiSaveError(t('aiSaveFilenameRequired') || t('aiSaveFailed'));
+            return;
+        }
+        clearAiSaveError();
+        setAiSaveBusy(true);
+        var payload = {
+            session_id: AI_SESSION_ID,
+            save_mode: saveMode,
+            target: CWD_HASH,
+            source_file_hash: AI_SOURCE_HASH,
+            filename: filename,
+            generation_id: selected.length === 1 ? selected[0].id : '',
+            generation_ids: selected.map(function (g) { return g.id; })
+        };
+        apiPostJson(CONFIG.aiDrawSaveUrl, payload, function (res) {
+            setAiSaveBusy(false);
+            var saved = resolveAiSaveResult(res);
+            closeAiSaveDialog();
+            finishAiDrawClose();
+            AI_HAS_UNSAVED = false;
+            showSuccess(t('aiSaved'));
+            openDir(CWD_HASH);
+            if (saved.length && saved[0].hash) {
+                SELECTED = [saved[0].hash];
+                updatePreviewPanel();
+            }
+        }, function (err) {
+            setAiSaveBusy(false);
+            var msg = extractApiErrorMessage(err, t('aiSaveFailed'));
+            setAiSaveError(msg);
+            showError(msg);
+        });
+    }
+
+    function apiPostJson(url, payload, onDone, onErr) {
+        var handleErr = function (err) {
+            if (onErr) {
+                onErr(err);
+                return;
+            }
+            showError(extractApiErrorMessage(err, t('aiSaveFailed')));
+        };
+        if (window.Weline && window.Weline.Api) {
+            var apiCall = null;
+            if (typeof window.Weline.Api.post === 'function') {
+                apiCall = window.Weline.Api.post(url, payload);
+            } else if (typeof window.Weline.Api.request === 'function') {
+                apiCall = window.Weline.Api.request(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload
+                });
+            }
+            if (apiCall && typeof apiCall.then === 'function') {
+                apiCall.then(function (res) {
+                    if (res && res.success === false) {
+                        throw new Error(res.message || res.msg || t('aiSaveFailed'));
+                    }
+                    onDone(res);
+                }).catch(handleErr);
+                return;
+            }
+        }
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.onload = function () {
+            try {
+                var res = JSON.parse(xhr.responseText);
+                if (res.error || res.success === false) {
+                    handleErr(new Error(res.message || res.msg || res.error || t('aiSaveFailed')));
+                    return;
+                }
+                onDone(res);
+            } catch (e) {
+                handleErr(e);
+            }
+        };
+        xhr.onerror = function () { handleErr(new Error(t('networkError'))); };
+        xhr.send(JSON.stringify(payload));
     }
 
     /* ─── util ───────────────────────────────────────────────────────── */

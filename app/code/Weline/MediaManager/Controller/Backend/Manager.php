@@ -17,6 +17,10 @@ class Manager extends BackendController
         $startPath = $this->request->getParam('startPath') ?? $this->request->getParam('path') ?? '';
         $connectorUrl = $this->_url->getBackendUrl('media/backend/connector');
         $this->assign('connector_url', $connectorUrl);
+        $this->assign('ai_draw_stream_url', $this->_url->getBackendUrl('media/backend/ai-draw/stream'));
+        $this->assign('ai_draw_save_url', $this->_url->getBackendUrl('media/backend/ai-draw/save'));
+        $this->assign('ai_draw_config_url', $this->_url->getBackendUrl('media/backend/ai-draw/config'));
+        $this->assign('ai_draw_preview_url', $this->_url->getBackendUrl('media/backend/ai-draw/preview'));
         $this->assign('start_path', $startPath);
         $this->assign('is_iframe', '0');
         return $this->fetch('manager.phtml');
@@ -46,6 +50,10 @@ class Manager extends BackendController
             }
         }
         $this->assign('connector_url', $connectorUrl);
+        $this->assign('ai_draw_stream_url', $this->_url->getBackendUrl('media/backend/ai-draw/stream'));
+        $this->assign('ai_draw_save_url', $this->_url->getBackendUrl('media/backend/ai-draw/save'));
+        $this->assign('ai_draw_config_url', $this->_url->getBackendUrl('media/backend/ai-draw/config'));
+        $this->assign('ai_draw_preview_url', $this->_url->getBackendUrl('media/backend/ai-draw/preview'));
         $this->assign('start_path', $startPath);
         $this->assign('initial_value', $initialValue);
         $this->assign('is_iframe', '1');
