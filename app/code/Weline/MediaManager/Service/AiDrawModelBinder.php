@@ -23,8 +23,10 @@ class AiDrawModelBinder
         'pagebuilder_ai_site_assets',
     ];
 
-    /** 适配器扫描时的占位默认模型，应在升级时替换为环境真实模型 */
-    private const PLACEHOLDER_MODEL_CODE = 'gemini-3.1-flash-image-preview';
+    /** 适配器扫描时的占位默认模型，应在升级时替换为环境真实模型（勿与真实 model_code 重合） */
+    private const PLACEHOLDER_MODEL_CODE = '__media_manager_ai_draw_unbound__';
+
+    private const OPENAI_SUPPLIER = 'openai';
 
     private DefaultModelManager $defaultModelManager;
     private AiModel $aiModel;
@@ -97,6 +99,44 @@ class AiDrawModelBinder
             }
         }
 
+        return $this->pickPreferredModelCode($usableCodes);
+    }
+
+    /**
+     * @param list<string> $usableCodes
+     */
+    private function pickPreferredModelCode(array $usableCodes): ?string
+    {
+        if ($usableCodes === []) {
+            return null;
+        }
+
+        $referenceCodes = [];
+        foreach (self::REFERENCE_SCENARIO_CODES as $scenarioCode) {
+            $referenceCode = $this->resolveScenarioBinding($scenarioCode);
+            if ($referenceCode !== null) {
+                $referenceCodes[$referenceCode] = true;
+            }
+        }
+
+        foreach ($usableCodes as $modelCode) {
+            if ($modelCode === self::PLACEHOLDER_MODEL_CODE) {
+                continue;
+            }
+            if (isset($referenceCodes[$modelCode])) {
+                return $modelCode;
+            }
+        }
+
+        foreach ($usableCodes as $modelCode) {
+            if ($modelCode === self::PLACEHOLDER_MODEL_CODE) {
+                continue;
+            }
+            if (!$this->isOpenAiSupplier($modelCode)) {
+                return $modelCode;
+            }
+        }
+
         foreach ($usableCodes as $modelCode) {
             if ($modelCode !== self::PLACEHOLDER_MODEL_CODE) {
                 return $modelCode;
@@ -122,11 +162,7 @@ class AiDrawModelBinder
             ];
         }
 
-        $adapter = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::schema_fields_CODE, self::SCENARIO_CODE)
-            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
+        $adapter = $this->fetchActiveScenarioAdapter(self::SCENARIO_CODE);
 
         if (!$adapter || !$adapter->getId()) {
             return [
@@ -148,6 +184,16 @@ class AiDrawModelBinder
         }
 
         $this->ensureModelProviderAccount($targetModelCode);
+        $adapter = $this->fetchActiveScenarioAdapter(self::SCENARIO_CODE);
+        if (!$adapter || !$adapter->getId()) {
+            return [
+                'bound' => false,
+                'model_code' => $targetModelCode,
+                'reason' => 'scenario_adapter_not_found',
+            ];
+        }
+
+        $bindings = $adapter->getModelBindings();
         $bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_IMAGE] = $targetModelCode;
         $adapter->setModelBindings($bindings);
         $adapter->save();
@@ -182,7 +228,21 @@ class AiDrawModelBinder
             return true;
         }
 
+        if ($this->isOpenAiSupplier($currentCode) && !$this->isOpenAiSupplier($targetModelCode)) {
+            return true;
+        }
+
         return false;
+    }
+
+    private function isOpenAiSupplier(string $modelCode): bool
+    {
+        $model = $this->loadActiveText2ImageModel($modelCode);
+        if ($model === null) {
+            return false;
+        }
+
+        return \strtolower((string)$model->getData(AiModel::schema_fields_SUPPLIER)) === self::OPENAI_SUPPLIER;
     }
 
     private function isReferenceScenarioModel(string $modelCode): bool
@@ -203,11 +263,7 @@ class AiDrawModelBinder
 
     private function resolveScenarioBinding(string $scenarioCode): ?string
     {
-        $adapter = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::schema_fields_CODE, $scenarioCode)
-            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
+        $adapter = $this->fetchActiveScenarioAdapter($scenarioCode);
 
         if (!$adapter || !$adapter->getId()) {
             return null;
@@ -275,11 +331,7 @@ class AiDrawModelBinder
         }
 
         foreach (self::REFERENCE_SCENARIO_CODES as $scenarioCode) {
-            $adapter = $this->scenarioAdapter->reset()
-                ->where(AiScenarioAdapter::schema_fields_CODE, $scenarioCode)
-                ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
-                ->find()
-                ->fetch();
+            $adapter = $this->fetchActiveScenarioAdapter($scenarioCode);
             if (!$adapter || !$adapter->getId()) {
                 continue;
             }
@@ -300,6 +352,27 @@ class AiDrawModelBinder
         }
 
         return 0;
+    }
+
+    private function fetchActiveScenarioAdapter(string $scenarioCode): ?AiScenarioAdapter
+    {
+        $scenarioCode = \trim($scenarioCode);
+        if ($scenarioCode === '') {
+            return null;
+        }
+
+        $adapter = ObjectManager::getInstance(AiScenarioAdapter::class);
+        if (\method_exists($adapter, 'clearData')) {
+            $adapter->clearData();
+        }
+
+        $adapter = $adapter->reset()
+            ->where(AiScenarioAdapter::schema_fields_CODE, $scenarioCode)
+            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+
+        return ($adapter && $adapter->getId()) ? $adapter : null;
     }
 
     private function isModelBackendReady(string $modelCode): bool
