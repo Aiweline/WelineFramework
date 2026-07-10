@@ -1000,9 +1000,14 @@ HTML;
             $node['offers'] = $offers;
         }
 
+        $reviewNodes = $this->productReviewNodes($context, (string) $name, $url);
+        if ($reviewNodes !== []) {
+            $node['review'] = count($reviewNodes) === 1 ? $reviewNodes[0] : $reviewNodes;
+        }
+
         $rating = $this->readNonEmpty($product, ['rating', 'rating_value']);
         $reviewCount = (int) ($this->readNonEmpty($product, ['review_count', 'reviewCount']) ?: 0);
-        if ($rating && $reviewCount > 0) {
+        if ($rating && $reviewCount > 0 && $reviewNodes !== []) {
             $node['aggregateRating'] = [
                 '@type' => 'AggregateRating',
                 'ratingValue' => (string) $rating,
@@ -1017,6 +1022,90 @@ HTML;
                 $node['aggregateRating']['worstRating'] = (string) $worstRating;
             }
         }
+        return $node;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<int, array<string, mixed>>
+     */
+    private function productReviewNodes(array $context, string $productName, string $productUrl): array
+    {
+        $reviews = $this->readList($context['reviews'] ?? []);
+        if ($reviews === []) {
+            $reviews = $this->readList($this->read($context['product'] ?? null, ['reviews']));
+        }
+
+        $nodes = [];
+        foreach ($reviews as $review) {
+            if (!is_array($review)) {
+                continue;
+            }
+            $node = $this->buildProductReviewNode($review, $productName, $productUrl);
+            if ($node !== []) {
+                $nodes[] = $node;
+            }
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * @param array<string, mixed> $review
+     * @return array<string, mixed>
+     */
+    private function buildProductReviewNode(array $review, string $productName, string $productUrl): array
+    {
+        $body = $this->cleanText((string) ($this->readNonEmpty($review, [
+            'reviewBody',
+            'body',
+            'content',
+            'text',
+        ]) ?: $this->readNonEmpty($review, ['title']) ?: ''));
+        $authorName = trim((string) ($this->readNonEmpty($review, [
+            'author',
+            'author_name',
+            'reviewer',
+            'customer_name',
+            'name',
+        ]) ?: ''));
+        $rating = $this->readNonEmpty($review, ['ratingValue', 'rating', 'score']);
+        $published = $this->readNonEmpty($review, ['datePublished', 'published_at', 'created_at']);
+
+        if ($body === '' && $rating === null) {
+            return [];
+        }
+
+        $node = [
+            '@type' => 'Review',
+            'itemReviewed' => [
+                '@type' => 'Product',
+                'name' => $productName,
+                'url' => $productUrl,
+            ],
+        ];
+
+        if ($authorName !== '') {
+            $node['author'] = [
+                '@type' => 'Person',
+                'name' => $authorName,
+            ];
+        }
+        if ($body !== '') {
+            $node['reviewBody'] = $body;
+        }
+        if ($rating !== null) {
+            $node['reviewRating'] = [
+                '@type' => 'Rating',
+                'ratingValue' => (string) $rating,
+                'bestRating' => (string) ($this->readNonEmpty($review, ['best_rating', 'bestRating']) ?: '5'),
+                'worstRating' => (string) ($this->readNonEmpty($review, ['worst_rating', 'worstRating']) ?: '1'),
+            ];
+        }
+        if ($published !== null) {
+            $node['datePublished'] = $this->formatDate($published);
+        }
+
         return $node;
     }
 
