@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedStateServiceRegistry;
@@ -257,6 +258,74 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertTrue($status['healthy'] ?? false);
         self::assertSame(19970, $status['port'] ?? null);
         self::assertSame('session_server.token', $status['token_file_name'] ?? null);
+    }
+
+    public function testRegistryPidIsCorrectedFromLivePortOwner(): void
+    {
+        $errno = 0;
+        $errstr = '';
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if (!\is_resource($server)) {
+            self::markTestSkipped('Unable to open a local TCP listener for port owner detection: ' . $errstr);
+        }
+
+        try {
+            $socketName = (string) \stream_socket_get_name($server, false);
+            $port = (int) \substr((string) \strrchr($socketName, ':'), 1);
+            if ($port <= 0) {
+                self::markTestSkipped('Unable to resolve local listener port.');
+            }
+
+            Processer::clearPortCache($port);
+            $ownerPid = Processer::getProcessIdByPort($port);
+            if ($ownerPid <= 0) {
+                $occupant = Processer::inspectPortOccupantWithHistory($port);
+                $ownerPid = (int) ($occupant['pid'] ?? 0);
+            }
+            if ($ownerPid <= 0) {
+                self::markTestSkipped('Port owner detection is unavailable in this environment.');
+            }
+
+            $stalePid = $ownerPid + 999999;
+            $registry = new class extends SharedStateServiceRegistry {
+                public array $updatedRecord = [];
+
+                public function updateRecord(string $role, callable $updater): array
+                {
+                    $this->updatedRecord = $updater([
+                        'role' => $role,
+                        'pid' => 1,
+                    ]);
+
+                    return $this->updatedRecord;
+                }
+            };
+            $manager = new class extends SharedStateServiceManager {
+                public function reconcileForTest(string $role, array $runtime, SharedStateServiceRegistry $registry): array
+                {
+                    return $this->reconcileRuntimeWithLivePortOwner($role, $runtime, $registry);
+                }
+            };
+
+            $runtime = $manager->reconcileForTest(
+                ControlMessage::ROLE_SESSION_SERVER,
+                [
+                    'port' => $port,
+                    'pid' => $stalePid,
+                    'registered' => true,
+                ],
+                $registry
+            );
+
+            self::assertSame($ownerPid, $runtime['pid'] ?? null);
+            self::assertTrue((bool) ($runtime['registry_pid_stale'] ?? false));
+            self::assertSame($stalePid, $runtime['registry_pid_stale_previous'] ?? null);
+            self::assertSame($ownerPid, $registry->updatedRecord['pid'] ?? null);
+        } finally {
+            if (\is_resource($server)) {
+                \fclose($server);
+            }
+        }
     }
 
     public function testEnsureRestartsUnhealthyReusableService(): void

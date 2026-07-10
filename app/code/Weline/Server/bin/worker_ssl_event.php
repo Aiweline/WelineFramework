@@ -781,7 +781,8 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
         }
     }
 
-    if ($masterPid > 0
+    if (!$childMasterGuard->isEnabled()
+        && $masterPid > 0
         && !$ipcReceivedShutdown
         && ($now - $lastMasterProcessCheck) >= 2.0) {
         $lastMasterProcessCheck = $now;

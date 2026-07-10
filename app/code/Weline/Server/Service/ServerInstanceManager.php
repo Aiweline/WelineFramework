@@ -294,6 +294,50 @@ class ServerInstanceManager
      *
      * @return string[] 已清理的实例名称列表
      */
+    public function cleanupStaleInstancesForStartup(?string $excludeName = null, float $budgetMs = 500.0): int
+    {
+        $cleaned = 0;
+        $deadline = $budgetMs > 0.0 ? \microtime(true) + ($budgetMs / 1000.0) : 0.0;
+        $now = \time();
+
+        foreach ($this->listRawInstanceNames() as $name) {
+            if ($excludeName !== null && $name === $excludeName) {
+                continue;
+            }
+            if ($deadline > 0.0 && \microtime(true) >= $deadline) {
+                break;
+            }
+            $rawData = $this->getRawInstanceData((string)$name);
+            if (!\is_array($rawData) || $rawData === []) {
+                continue;
+            }
+            if ($this->isStartLockHeld((string)$name)) {
+                continue;
+            }
+
+            $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
+            if (\in_array($lifecycleState, ['stopped', 'stale_cleanup', 'master_exited'], true)) {
+                continue;
+            }
+
+            $updatedAt = (int)($rawData['updated_at'] ?? $rawData['started_timestamp'] ?? 0);
+            $staleAfterSec = (int)(Env::get('wls.master.startup_stale_instance_age_sec', 60) ?? 60);
+            if ($staleAfterSec < 1) {
+                $staleAfterSec = 1;
+            }
+            if ($updatedAt > 0 && ($now - $updatedAt) < $staleAfterSec) {
+                continue;
+            }
+
+            if (!$this->hasTrackedRunningProcess((string)$name, $rawData, null)) {
+                $this->cleanupStaleInstanceArtifacts((string)$name, $rawData);
+                $cleaned++;
+            }
+        }
+
+        return $cleaned;
+    }
+
     public function cleanupInactiveInstances(): array
     {
         $cleanedNames = [];
@@ -969,6 +1013,9 @@ class ServerInstanceManager
         $ipcStatus = $ipcTimeout > 0.0 ? $this->getMasterIpcStatus($name, $ipcTimeout) : null;
         $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData);
         $services = $ipcStatus === null ? [] : $this->buildServiceInfoListFromIpcStatus($ipcStatus);
+        if ($services === []) {
+            $services = $this->buildServiceInfoListFromRuntimeFallback($name, $runtimeData);
+        }
         $services = $this->mergeSharedStateServiceInfo($services, $runtimeData);
 
         return new ServerInstanceInfo(
@@ -1114,6 +1161,193 @@ class ServerInstanceManager
         }
 
         return $services;
+    }
+
+    /**
+     * Rebuild a read-only service view from durable startup events and live
+     * port owners when Master IPC is busy or returns an incomplete status
+     * payload. The instance file remains endpoint/config-only.
+     *
+     * @return list<ServiceInfo>
+     */
+    private function buildServiceInfoListFromRuntimeFallback(string $name, array $runtimeData): array
+    {
+        $services = [];
+        if ((bool)($runtimeData['dispatcher_enabled'] ?? false)) {
+            $dispatcher = $this->buildDispatcherServiceInfoFromPortOwner($name, $runtimeData);
+            if ($dispatcher !== null) {
+                $services[] = $dispatcher;
+            }
+        }
+
+        foreach ($this->buildWorkerServiceInfoFromStartupEvents($name, $runtimeData) as $worker) {
+            $services[] = $worker;
+        }
+
+        if (!$this->hasServiceRole($services, 'worker')) {
+            foreach ($this->buildWorkerServiceInfoFromExpectedPorts($name, $runtimeData) as $worker) {
+                $services[] = $worker;
+            }
+        }
+
+        return $services;
+    }
+
+    private function buildDispatcherServiceInfoFromPortOwner(string $name, array $runtimeData): ?ServiceInfo
+    {
+        $port = (int)($runtimeData['port'] ?? $runtimeData['main_port'] ?? 0);
+        if ($port <= 0) {
+            return null;
+        }
+
+        $processName = MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name);
+        $owner = $this->inspectExpectedWlsPortOwner($port, $processName);
+        if ($owner === null) {
+            return null;
+        }
+
+        return new ServiceInfo(
+            role: 'dispatcher',
+            displayName: self::ROLE_DISPLAY_NAMES['dispatcher'],
+            instanceId: 1,
+            pid: $owner['pid'],
+            port: $port,
+            state: ServiceInstance::STATE_READY,
+            priority: 20,
+            metadata: [
+                'process_name' => $processName,
+                'status_source' => 'runtime_fallback',
+            ],
+            rootPid: $owner['pid'],
+            launcherPid: $owner['pid'],
+        );
+    }
+
+    /**
+     * @return list<ServiceInfo>
+     */
+    private function buildWorkerServiceInfoFromStartupEvents(string $name, array $runtimeData): array
+    {
+        $events = \is_array($runtimeData['startup_events'] ?? null) ? $runtimeData['startup_events'] : [];
+        if ($events === []) {
+            return [];
+        }
+
+        $latestByWorker = [];
+        foreach ($events as $event) {
+            if (!\is_array($event) || (string)($event['kind'] ?? '') !== 'worker_ready') {
+                continue;
+            }
+
+            $workerId = (int)($event['worker_id'] ?? $event['instance_id'] ?? 0);
+            $port = (int)($event['port'] ?? 0);
+            if ($workerId <= 0 || $port <= 0) {
+                continue;
+            }
+
+            $latestByWorker[$workerId] = $event;
+        }
+
+        \ksort($latestByWorker);
+        $services = [];
+        foreach ($latestByWorker as $workerId => $event) {
+            $port = (int)($event['port'] ?? 0);
+            $processName = MasterProcess::buildScopedProcessName('weline-wls-worker', $name, (int)$workerId);
+            $owner = $this->inspectExpectedWlsPortOwner($port, $processName);
+            $pid = $owner['pid'] ?? (int)($event['pid'] ?? 0);
+            if ($pid <= 0) {
+                continue;
+            }
+
+            $services[] = new ServiceInfo(
+                role: 'worker',
+                displayName: self::ROLE_DISPLAY_NAMES['worker'],
+                instanceId: (int)$workerId,
+                pid: $pid,
+                port: $port,
+                state: ServiceInstance::STATE_READY,
+                priority: 30,
+                metadata: [
+                    'process_name' => $processName,
+                    'status_source' => 'startup_events',
+                ],
+                rootPid: $pid,
+                launcherPid: $pid,
+            );
+        }
+
+        return $services;
+    }
+
+    /**
+     * @return list<ServiceInfo>
+     */
+    private function buildWorkerServiceInfoFromExpectedPorts(string $name, array $runtimeData): array
+    {
+        $count = (int)($runtimeData['count'] ?? 0);
+        $basePort = (int)($runtimeData['worker_port'] ?? 0);
+        if ($count <= 0 || $basePort <= 0) {
+            return [];
+        }
+
+        $services = [];
+        for ($workerId = 1; $workerId <= $count; $workerId++) {
+            $port = $basePort + $workerId - 1;
+            $processName = MasterProcess::buildScopedProcessName('weline-wls-worker', $name, $workerId);
+            $owner = $this->inspectExpectedWlsPortOwner($port, $processName);
+            if ($owner === null) {
+                continue;
+            }
+
+            $services[] = new ServiceInfo(
+                role: 'worker',
+                displayName: self::ROLE_DISPLAY_NAMES['worker'],
+                instanceId: $workerId,
+                pid: $owner['pid'],
+                port: $port,
+                state: ServiceInstance::STATE_READY,
+                priority: 30,
+                metadata: [
+                    'process_name' => $processName,
+                    'status_source' => 'port_owner',
+                ],
+                rootPid: $owner['pid'],
+                launcherPid: $owner['pid'],
+            );
+        }
+
+        return $services;
+    }
+
+    /**
+     * @return array{pid:int, process_name:string}|null
+     */
+    private function inspectExpectedWlsPortOwner(int $port, string $expectedProcessName): ?array
+    {
+        if ($port <= 0 || $expectedProcessName === '') {
+            return null;
+        }
+
+        try {
+            $inspect = Processer::inspectPortOccupantWithHistory($port);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $pid = (int)($inspect['pid'] ?? 0);
+        if ($pid <= 0 || !($inspect['pid_running'] ?? false) || !($inspect['is_weline'] ?? false)) {
+            return null;
+        }
+
+        $ownerName = \trim((string)($inspect['pname'] ?? ''));
+        if ($ownerName !== '' && $ownerName !== '--name=' . $expectedProcessName) {
+            return null;
+        }
+
+        return [
+            'pid' => $pid,
+            'process_name' => $expectedProcessName,
+        ];
     }
 
     private function resolveHttpRedirectPort(array $rawData): int
