@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Deploy\Controller\Backend;
 
 use Weline\Deploy\Service\DeployConfigService;
+use Weline\Deploy\Service\DeployWebhookSetupService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
@@ -13,7 +14,8 @@ use Weline\Framework\Manager\MessageManager;
 class Config extends BackendController
 {
     public function __construct(
-        private readonly DeployConfigService $deployConfigService
+        private readonly DeployConfigService $deployConfigService,
+        private readonly DeployWebhookSetupService $deployWebhookSetupService
     ) {
     }
 
@@ -30,6 +32,7 @@ class Config extends BackendController
 
         $this->assign('settings', $settings);
         $this->assign('saveUrl', $this->_url->getBackendUrl('deploy/backend/config/save'));
+        $this->assign('webhookMeta', $this->buildWebhookMeta($this->deployConfigService->getSettings()));
 
         return (string)$this->fetch();
     }
@@ -68,5 +71,82 @@ class Config extends BackendController
 
         $this->redirect($this->_url->getBackendUrl('deploy/backend/config'));
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     * @return array{
+     *     url:string,
+     *     version_url:string,
+     *     path:string,
+     *     base_url:string,
+     *     base_url_source:string,
+     *     setup_command:string,
+     *     rotate_path_command:string,
+     *     ready:bool
+     * }
+     */
+    private function buildWebhookMeta(array $settings): array
+    {
+        $baseUrl = $this->resolveCurrentSiteRootUrl();
+        $baseUrlSource = $baseUrl !== '' ? (string)__('当前站点请求域名') : '';
+
+        if ($baseUrl === '') {
+            $baseInfo = $this->deployWebhookSetupService->resolveSiteBaseUrlInfo(null);
+            $baseUrl = $this->normalizeSiteRootUrl(trim((string)($baseInfo['url'] ?? '')));
+            $baseUrlSource = (string)($baseInfo['source'] ?? '');
+        }
+
+        $webhookUrl = $this->deployWebhookSetupService->buildWebhookUrl(
+            $settings,
+            null,
+            $baseUrl !== '' ? $baseUrl : null
+        );
+        $versionUrl = $this->deployWebhookSetupService->buildVersionUrl(
+            $settings,
+            $baseUrl !== '' ? $baseUrl : null
+        );
+        $path = trim((string)($settings['webhook_path'] ?? ''));
+        $setupBase = $baseUrl !== '' ? $baseUrl : 'https://你的域名';
+
+        return [
+            'url' => $webhookUrl,
+            'version_url' => $versionUrl,
+            'path' => $path,
+            'base_url' => $baseUrl,
+            'base_url_source' => $baseUrlSource,
+            'setup_command' => 'php bin/w deploy:webhook:setup --base-url=' . $setupBase,
+            'rotate_path_command' => 'php bin/w deploy:webhook:setup --rotate-path -y --base-url=' . $setupBase,
+            'ready' => $webhookUrl !== '',
+        ];
+    }
+
+    private function resolveCurrentSiteRootUrl(): string
+    {
+        $host = trim((string)($this->request->getServer('HTTP_HOST') ?? ''));
+        if ($host === '') {
+            return '';
+        }
+
+        $scheme = $this->request->getSsl() ? 'https' : 'http';
+
+        return $scheme . '://' . $host;
+    }
+
+    private function normalizeSiteRootUrl(string $url): string
+    {
+        if ($url === '') {
+            return '';
+        }
+
+        $parsed = parse_url($url);
+        if (!is_array($parsed) || !isset($parsed['host'])) {
+            return rtrim($url, '/');
+        }
+
+        $scheme = (string)($parsed['scheme'] ?? 'https');
+        $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+
+        return $scheme . '://' . $parsed['host'] . $port;
     }
 }
