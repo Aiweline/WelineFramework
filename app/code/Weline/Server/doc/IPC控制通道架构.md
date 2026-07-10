@@ -1,301 +1,121 @@
 # WLS IPC 控制通道架构
 
-## 概述
+> 状态：现行协议摘要，2026-07-10。消息常量以 `IPC/ControlMessage.php` 为准。
 
-WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker、HTTP Redirect Worker 之间的进程间通信（IPC）。所有进程控制信号（重载、停止、排水、缓存清理等）均通过此通道传递，不使用文件信号。
+WLS 使用 NDJSON 控制通道连接 CLI、Master、Dispatcher、Worker 和其它子服务。控制面传递身份、READY、路由快照、排水、重载、停止与遥测；用户 HTTP/TLS 流量始终走独立数据面。
 
-## 架构图
+## 1. 控制面与数据面
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                     Control Plane (TCP 控制通道)                      │
-│                                                                      │
-│  ┌─────────────────────────────┐                                     │
-│  │  Master Control Server      │◄──── CLI (server:stop/reload/...)   │
-│  │  port: control_port         │                                     │
-│  └──┬──────┬──────┬──────┬─────┘                                     │
-│     │      │      │      │                                           │
-│     ▼      ▼      ▼      ▼                                           │
-│  Worker1 Worker2 Disp  Redirect                                      │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────┐
-│                     Data Plane (用户流量)                             │
-│                                                                      │
-│  Client ──► Dispatcher :443 ──┬──► Worker1 :19981                    │
-│                               └──► Worker2 :19982                    │
-│  Client ──► HTTP Redirect :80 ──► 301 → https://...                  │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  CLI["CLI"] <-->|"command / progress / result"| MASTER["MasterControlServer\nServiceOrchestrator"]
+  MASTER <-->|"REGISTER / READY / lease / heartbeat"| DISP["Dispatcher"]
+  MASTER <-->|"REGISTER / READY / drain / shutdown"| WORKER["Worker / Maintenance"]
+  MASTER <-->|"REGISTER / READY / shutdown"| SIDE["Session / Memory / Redirect / Gateway"]
+  CLIENT["Client"] --> DISP
+  DISP --> WORKER
 ```
 
-## 通信协议
+控制 endpoint 由 Master 启动时分配，只监听本机并写入实例元数据供 CLI/子进程发现。`instance.json` 不是运行时共识；已连接会话、lease token、epoch、launch id 和 Master Registry 才是控制事实。
 
-### 格式：NDJSON（Newline-Delimited JSON）
+## 2. 帧格式
 
-每条消息为一行 JSON 字符串 + `\n` 换行符。示例：
-
-```
-{"type":"register","role":"worker","pid":12345,"port":19981,"worker_id":1}\n
-{"type":"ack","resurrection_priority":3}\n
-```
-
-### 消息类型
-
-| 类型 | 方向 | 说明 |
-|------|------|------|
-| `register` | 子进程 → Master | 进程启动后注册身份（角色、PID、端口） |
-| `ack` | Master → 子进程 | 注册确认，附带复活优先级 |
-| `ready` | 子进程 → Master | 框架初始化 + 端口监听完成，可接收流量 |
-| `shutdown` | Master → 子进程 | 通知优雅退出（主动终结） |
-| `reload` | Master → Worker | 通知代码重载（Worker 需优雅退出后重启） |
-| `cache_clear` | Master → Worker | 通知清缓存（原地执行，不重启） |
-| `ssl_cert_reload` | Master → Worker | 热重载 SSL 证书映射（不重启，重新读取 ssl_certificate_map.json） |
-| `drain` | Master → Dispatcher | 将指定端口加入黑名单，不再路由新流量 |
-| `undrain` | Master → Dispatcher | 将指定端口从黑名单移除，恢复路由 |
-| `add_worker` | Master → Dispatcher | 动态添加 Worker 端口到负载均衡池 |
-| `remove_worker` | Master → Dispatcher | 从负载均衡池移除端口 |
-| `draining_complete` | Worker → Master | Worker 处理完所有请求，准备退出 |
-| `status_report` | 子进程 → Master | 上报运行状态（连接数、内存、请求量） |
-| `command` | CLI → Master | CLI 命令（stop/reload/cache_clear/ssl_cert_reload/status） |
-| `command_result` | Master → CLI | CLI 命令执行结果 |
-
-### 消息格式详情
+每条消息是一行 JSON 加换行符：
 
 ```json
-// register（框架进程，省略 process_kind，默认 framework）
-{"type":"register","role":"worker|dispatcher|redirect|maintenance","pid":123,"port":19981,"worker_id":2}
-// register（模块自定义进程，携带 process_kind=module 和 module_code）
-{"type":"register","role":"my_queue","pid":456,"port":0,"worker_id":1,"process_kind":"module","module_code":"Weline_Payment"}
-
-// ack
-{"type":"ack","resurrection_priority":0}
-// resurrection_priority: 0=不参与复活, 1=HTTP Redirect(1秒), 2=Dispatcher(3秒), 3=Worker#1(6秒)
-
-// ready
-{"type":"ready","role":"worker","worker_id":2,"port":19981}
-
-// shutdown
-{"type":"shutdown","reason":"server:stop"}
-
-// reload
-{"type":"reload","reload_type":"code"}
-
-// cache_clear
-{"type":"cache_clear"}
-
-// ssl_cert_reload（热重载 SSL 证书映射，Worker 重新读取 ssl_certificate_map.json）
-// 全量重载（清除所有域名的内存缓存，重新读取 map 文件）
-{"type":"ssl_cert_reload"}
-// 针对特定域名（清除指定域名的负缓存 + 内存正缓存，重新读取 map 文件）
-{"type":"ssl_cert_reload","domains":["example.com","www.example.com"]}
-
-// drain / undrain
-{"type":"drain","ports":[19981]}
-{"type":"undrain","ports":[19981]}
-
-// add_worker / remove_worker
-{"type":"add_worker","ports":[19990]}
-{"type":"remove_worker","ports":[19990]}
-
-// draining_complete
-{"type":"draining_complete","worker_id":2,"port":19981}
-
-// status_report
-{"type":"status_report","connections":5,"memory":1234567,"requests":100}
-
-// command (CLI)
-{"type":"command","action":"stop|reload|cache_clear|ssl_cert_reload|status","reload_type":"code|cache"}
-
-// command_result
-{"type":"command_result","success":true,"data":{}}
+{"type":"register","role":"worker","worker_id":2,"pid":12345,"port":19982}
+{"type":"ready","role":"worker","worker_id":2,"port":19982}
 ```
 
-## 控制端口
+接收方必须按 NDJSON 增量解析，不能假设一次 socket read 等于一条完整消息。未知类型记录后忽略；非法身份、过期 epoch/launch id 或不匹配 lease 的消息不得改变 Registry。
 
-- 默认值：`main_port + 10000`（如主端口 443 → 控制端口 10443）
-- 可通过 `env.php` 的 `server.control_port` 覆盖
-- 控制端口写入 `var/server/instances/{name}.json`，供 CLI 命令和子进程读取
-- 仅监听 `127.0.0.1`（本机回环），不暴露到外部
+## 3. 启动闭环
 
-## Worker 生命周期状态
+```mermaid
+sequenceDiagram
+  participant C as Child
+  participant M as Master
+  participant D as Dispatcher
 
-```
-进程启动
-   │
-   ▼
-[registered] ── connect Master + 发送 register
-   │
-   ▼
-框架初始化 + 端口监听
-   │
-   ▼
-[ready] ── 发送 ready → Master 通知 Dispatcher undrain → 接收流量
-   │
-   ▼ (收到 reload)
-[draining] ── 关闭监听 socket，处理剩余连接
-   │
-   ▼ (所有连接处理完)
-[draining_complete] ── 发送 draining_complete → 优雅退出
+  C->>M: register(role, slot, pid, port, epoch, launch_id)
+  M-->>C: ack + lease_assign
+  C->>C: listen + bootstrap + READY gate warmup
+  C->>M: ready
+  M-->>C: ack_ready / ready_ack
+  M->>D: set_route_table(version, epoch, checksum)
+  D-->>M: route_table_ack / worker_pool_ack
+  C->>M: worker_loop_started + heartbeat
 ```
 
-## 重载策略
+语义：
 
-### 缓存重载（cache）
+- `REGISTER` 证明进程身份已接入控制面，不代表可服务。
+- `READY` 必须晚于端口监听、框架初始化与 READY gate。
+- Worker 只有进入 Master Registry 的 READY 状态后才可出现在路由快照中。
+- `route_table_ack`/`worker_pool_ack` 关闭 Master 到 Dispatcher 的发布闭环。
+- PID 为 0 仅表示尚未观察到 PID，不是生命周期状态。
 
-原地清理，零停机，不重启：
-1. Master 广播 `cache_clear` 给所有 Worker
-2. Worker 执行 `opcache_reset()` + 清静态缓存 + 清对象缓存
-3. 完成
+## 4. 路由与重载闭环
 
-### SSL 证书热重载（ssl_cert_reload）
+逐端口 `add_worker/remove_worker` 不再是运行时权威。业务池只使用版本化 `set_route_table` 全量快照。
 
-零停机，不重启，动态生效新证书：
-1. 后台添加域名/导入证书 → `SslCertificateService::clearServerCache()` 重新生成 `ssl_certificate_map.json`
-2. 通过 IPC 发送 `ssl_cert_reload` 命令给 Master（可携带 `domains` 字段指定域名）
-3. Master 广播 `ssl_cert_reload` 给所有 SSL Worker（含 `domains` 字段）
-4. Worker 处理逻辑：
-   - 若携带 `domains`：清除这些域名的 DB 回退负缓存（`$_wlsRestoreAttempted`）+ 清除内存正缓存（`$sniServerCerts`）
-   - 无论是否携带 `domains`：重新读取 `ssl_certificate_map.json`，完整替换 `$sniServerCerts`
-5. 后续 TLS 握手使用新证书（通过 ClientHello SNI 匹配）
+```mermaid
+sequenceDiagram
+  participant M as Master
+  participant W as Worker batch
+  participant D as Dispatcher
 
-**负缓存清除**：当某域名首次访问时磁盘+DB 均无证书，Worker 会记录负缓存避免重复查库。
-证书申请成功后，通过 `IpcControlGateway::reloadSslCert($instance, [$domain])` 携带域名清除该负缓存，
-WLS 下次访问该域名时将重新读取已写入的证书，无需重启。
-
-### 代码重载（code）—— 滚动重启
-
-逐个重启 Worker，保证始终有 Worker 在线：
-
-1. Master 收到 `reload(code)` 命令
-2. 对每个 Worker 依次执行：
-   a. 发送 `drain(port)` 给 Dispatcher → 停止向该 Worker 路由新流量
-   b. 发送 `reload` 给 Worker → Worker 关闭监听 socket
-   c. Worker 处理完所有进行中的请求
-   d. Worker 发送 `draining_complete` → 优雅退出
-   e. Master 启动新 Worker
-   f. 新 Worker 发送 `register` + `ready`
-   g. Master 发送 `undrain(port)` 给 Dispatcher → 恢复路由
-3. 所有 Worker 重启完成
-
-### 单 Worker / 全 Worker 不可用 —— 维护 Worker 兜底
-
-当没有可用 Worker 时，Master 启动维护 Worker：
-- 维护 Worker 数量 = `ceil(正常 Worker 数 / 10)`，至少 1 个
-- 维护 Worker 启动后自动开启框架维护模式
-- 正常 Worker 恢复后，Master 关闭维护 Worker
-
-### 三级降级链
-
-```
-正常 Worker（业务响应）
-    │ 不可用
-    ▼
-维护 Worker（框架维护页 503）
-    │ 也不可用
-    ▼
-Dispatcher 硬编码维护页（纯内存 503）
+  M->>M: 实时校验 min_ready
+  M->>M: 整批状态置 DRAINING
+  M->>W: drain(timeout)
+  M->>D: set_route_table(摘批后的 READY 池)
+  D-->>M: route ACK
+  W-->>M: draining_complete / exited
+  M->>W: 并发拉起 replacement batch
+  W-->>M: register + ready
+  M->>D: set_route_table(整批加回)
+  D-->>M: route ACK
 ```
 
-只要 Dispatcher 活着，用户就能看到维护页而不是浏览器连接拒绝错误。
+批内 READY 期间 Master 抑制逐个路由发布。成功时整批加回；失败/中止时解除抑制并把已 READY 的部分容量重新收敛。
 
-## Master 复活机制
+## 5. 主要消息族
 
-### 区分主动终结和意外死亡
+| 消息族 | 方向 | 用途 |
+|---|---|---|
+| `register`、`ack`、`lease_assign` | Child ↔ Master | 身份、槽位、租约 |
+| `ready`、`ack_ready`、`ready_ack`、`worker_loop_started` | Child ↔ Master | 可服务验收 |
+| `heartbeat`、`ping`、`pong`、`status_report` | 双向 | 存活与状态 |
+| `set_route_table`、`route_table_ack`、`worker_pool_ack` | Master ↔ Dispatcher | 路由快照闭环 |
+| `drain`、`draining_complete`、`shutdown`、`exited`、`exit_reason` | Master ↔ Child | 排水与终结 |
+| `command`、`command_accept`、`command_done`、`command_result` | CLI ↔ Master | 运维命令 |
+| `reload_progress`、`reload_completed`、`reload_failed` | Master → CLI | 长操作进度 |
+| `dispatcher_alert`、`telemetry`、`route_observation` | Child → Master | 自愈与观测 |
+| `set_maintenance_mode`、`maintenance_mode_ack` | Master ↔ Worker | 维护状态确认 |
 
-- **主动终结**：Master 先发送 `shutdown` 消息，再断开 TCP → 子进程收到 shutdown 后优雅退出，不复活
-- **意外死亡**：Master 进程崩溃/被杀 → TCP 连接异常断开，子进程未收到 shutdown → 触发复活
+完整的证书、Fiber、扩缩容、Gateway 和安全消息不在本文重复枚举，直接查 `ControlMessage`。
 
-### 复活优先级
+## 6. 主动终结与意外掉线
 
-| 优先级 | 角色 | 延迟 | 说明 |
-|--------|------|------|------|
-| 1 | HTTP Redirect Worker | 1 秒 | 最轻量，不处理业务流量 |
-| 2 | Dispatcher | 3 秒 | 次选，有全局视角 |
-| 3 | Worker #1 | 6 秒 | 兜底 |
-| 0 | Worker #2+ | 不参与 | 只等待新 Master 上线后重连 |
+- Master 先发 `shutdown`：属于计划终结，子进程排水并退出，不触发错误复活。
+- IPC 意外断开且 lease/Master 仍有效：子进程尝试重连并重新闭合 REGISTER/READY。
+- lease 失效或 Master 身份不匹配：子进程按 `ChildMasterGuard` 自治退出，避免孤儿继续占端口。
+- Master 以 Registry、PID/端口实时校验和角色策略决定单槽复活或升级；status/peek 查询不得写回这些状态。
 
-### 复活流程
+## 7. 不变量
 
-1. 子进程检测到控制连接断开且未收到 `shutdown`
-2. 按优先级等待指定秒数
-3. 检查控制端口是否已有人在监听（Master 已被更高优先级进程复活）
-4. 如果无人监听 → 启动新 Master 进程
-5. 所有子进程重新连接新 Master 并 register
+1. 任何消息只有通过实例、role、slot、epoch、launch id 和 lease 校验后才能改变生命周期。
+2. READY 与路由是两个闭环；收到 READY 不等于 Dispatcher 已确认入池。
+3. Dispatcher 不反向修改 Master Registry，也不从旧端口表恢复 Worker。
+4. stop/reload/route/recovery 控制消息不能被持续 accept 流量永久饿死。
+5. 所有 IPC 等待都有总 deadline；超时进入明确失败/降级路径，不叠加无界等待。
+6. CLI 发现文件、PID 索引与端口历史都可重建，不可覆盖实时身份事实。
 
-## 日志系统
+## 8. 代码锚点
 
-所有进程使用 `WlsLogger` 统一管理日志：
-- **自动日志级别**：支持 DEBUG、INFO、NOTICE、WARNING、ERROR、FATAL
-- **缓冲输出**：缓冲到内存，每 5 秒批量写磁盘
-- **即时刷新**：ERROR/FATAL 级别立即刷新
-- **进程退出**：自动 flush 所有缓冲日志
-- **配置**：通过 `env.php` 的 `wls.log` 配置
-
-### env.php 日志配置示例
-
-```php
-return [
-    'wls' => [
-        'log' => [
-            'enabled' => true,               // 是否启用日志
-            'path' => 'var/log/wls/',        // 日志目录
-            'level' => 'INFO',               // 最小日志级别
-            // 开发环境：DEBUG（记录所有）
-            // 生产环境：WARNING（只记录警告和错误）
-            'stdout' => 'auto',              // 终端输出：auto | true | false
-            'rotate' => 'daily',             // 日志轮转：daily | size | none
-            'max_files' => 7,                // 保留文件数
-            'max_size' => 52428800,          // 单文件最大 50MB
-        ],
-    ],
-];
-```
-
-### 日志级别说明
-
-| 级别 | 环境 | 说明 |
-|------|------|------|
-| DEBUG | 开发 | 详细调试信息，包括 IPC 消息、连接状态 |
-| INFO | 开发 | 一般信息，启动/停止/重载等事件 |
-| WARNING | 生产 | 警告，非致命问题但需关注 |
-| ERROR | 生产 | 错误，需要处理的问题 |
-| FATAL | 生产 | 致命错误，进程崩溃 |
-
-**生产环境推荐配置**：`'level' => 'WARNING'`，只记录警告和错误，减少磁盘 I/O
-
-## 文件结构
-
-```
-app/code/Weline/Server/
-├── Log/
-│   ├── WlsLogger.php           # 统一日志器（单例）
-│   ├── LogLevel.php            # 日志级别定义
-│   ├── LogConfig.php           # 日志配置读取
-│   ├── Error/                  # 错误捕获层
-│   │   ├── ErrorBootstrap.php  # 错误捕获初始化
-│   │   ├── ErrorHandler.php    # Layer 1: set_error_handler
-│   │   ├── ExceptionHandler.php# Layer 2: set_exception_handler
-│   │   ├── ShutdownHandler.php # Layer 3: register_shutdown_function
-│   │   ├── ErrorContext.php    # 进程上下文
-│   │   └── ErrorCollector.php  # 错误收集与格式化
-│   └── Master/                 # Master 层捕获
-│       ├── PipeCapture.php     # Layer 4: 子进程输出捕获
-│       ├── ProcessMonitor.php  # Layer 5: 进程异常退出检测
-│       └── LogAggregator.php   # 日志聚合
-├── IPC/
-│   ├── ControlMessage.php      # NDJSON 协议编解码 + 消息类型常量
-│   ├── ControlClient.php       # 子进程端 TCP 控制客户端
-│   ├── MasterControlServer.php # Master 端 TCP 控制服务器
-│   └── MasterResurrector.php   # Master 复活逻辑
-├── bin/
-│   ├── worker.php              # HTTP Worker（集成 ControlClient）
-│   ├── worker_ssl.php          # HTTPS Worker（集成 ControlClient）
-│   ├── http_redirect_worker.php# HTTP→HTTPS 重定向（集成 ControlClient）
-│   └── dispatcher.php          # Dispatcher 入口
-├── Dispatcher/
-│   └── Dispatcher.php          # Dispatcher（集成 ControlClient）
-└── Service/
-    └── MasterProcess.php       # Master 进程（集成 MasterControlServer）
-```
+- `IPC/ControlMessage.php`：消息与 action 常量。
+- `IPC/MasterControlServer.php`：Master 监听与会话。
+- `IPC/ChildControl/*`：子进程会话、lease 与 Master guard。
+- `Service/ServiceOrchestrator.php`：消息处理、Registry、路由与恢复。
+- `Dispatcher/Dispatcher.php`：Dispatcher IPC 和路由 ACK。
+- `Console/Server/*`：CLI command/progress/result。

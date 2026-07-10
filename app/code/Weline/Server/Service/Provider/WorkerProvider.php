@@ -96,6 +96,9 @@ class WorkerProvider extends AbstractServiceProvider
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
         $arguments[] = '--worker-count=' . $this->getInstanceCount($context);
+        // READY 首页预热使用启动时固化的对外 origin，避免 Windows 替换 instance.json 时的短暂空窗。
+        // 保持为离散 argv，不使用 environment，以便 Windows 继续走快速批量启动路径。
+        $arguments[] = '--public-origin=' . $this->buildPublicOrigin($context);
 
         if ($context->windowMode) {
             $arguments[] = '--win';
@@ -230,6 +233,12 @@ class WorkerProvider extends AbstractServiceProvider
                 . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
             );
         }
+        if ($engine === 'event_buffer' && $context->mode === 'linux-direct') {
+            throw new \InvalidArgumentException(
+                'wls.ssl.engine=event_buffer requires the Dispatcher+TLS topology and does not support linux-direct mode. '
+                . 'Use wls.ssl.engine=stream for direct mode.'
+            );
+        }
 
         return match ($engine) {
             'stream' => $scriptDir . DS . 'worker_ssl.php',
@@ -238,5 +247,44 @@ class WorkerProvider extends AbstractServiceProvider
                 'Unsupported WLS SSL engine "' . $engine . '"; expected stream or event_buffer'
             ),
         };
+    }
+
+    private function buildPublicOrigin(ServiceContext $context): string
+    {
+        $scheme = $context->sslEnabled ? 'https' : 'http';
+        $rawHost = \trim((string)($context->publicHost ?: $context->host ?: '127.0.0.1'));
+        $rawIpv6 = \trim($rawHost, '[]');
+        if (!\str_contains($rawHost, '://')
+            && \filter_var($rawIpv6, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
+        ) {
+            $parts = ['host' => $rawIpv6];
+        } else {
+            $candidate = \str_contains($rawHost, '://') ? $rawHost : $scheme . '://' . $rawHost;
+            try {
+                $parts = \parse_url($candidate);
+            } catch (\ValueError) {
+                $parts = [];
+            }
+        }
+        if (!\is_array($parts)) {
+            $parts = [];
+        }
+
+        $host = \trim((string)($parts['host'] ?? ''));
+        if ($host === '') {
+            $host = '127.0.0.1';
+        }
+        $authority = \filter_var($host, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
+            ? '[' . \trim($host, '[]') . ']'
+            : $host;
+        $port = isset($parts['port'])
+            ? (int)$parts['port']
+            : $context->mainPort;
+        $defaultPort = $context->sslEnabled ? 443 : 80;
+        if ($port > 0 && $port <= 65535 && $port !== $defaultPort) {
+            $authority .= ':' . $port;
+        }
+
+        return $scheme . '://' . $authority;
     }
 }

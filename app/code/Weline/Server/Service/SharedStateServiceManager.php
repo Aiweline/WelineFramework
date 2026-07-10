@@ -470,9 +470,9 @@ class SharedStateServiceManager
         $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
         $definition = $this->buildStatusProbeDefinition($role, $config, $envConfig, $runtime);
         $healthy = $this->probeRunningSharedService($definition, (string) $definition['token_file_name']);
-        $pid = $healthy
-            ? $this->resolveLivePortOwnerPid($definition)
-            : (int) ($runtime['pid'] ?? 0);
+        // `pid` remains the persisted/registry authority. Live process
+        // observation is reported separately only after strict identity checks.
+        $pid = (int) ($runtime['pid'] ?? 0);
         $runtime = \array_merge(
             $runtime,
             $this->buildRuntimeMetadata(
@@ -494,6 +494,10 @@ class SharedStateServiceManager
             'healthy_at' => $runtime['healthy_at'] ?? null,
             'process_name' => (string) ($runtime['process_name'] ?? $definition['process_name']),
             'instance_name' => (string) ($runtime['instance_name'] ?? $definition['service_instance_name']),
+            'live_observation' => \is_array($runtime['live_observation'] ?? null)
+                ? $runtime['live_observation']
+                : null,
+            'registry_pid_stale' => (bool)($runtime['registry_pid_stale'] ?? false),
             'message' => $healthy ? 'Shared service is healthy.' : 'Shared service is not responding.',
             'shared_service' => true,
         ];
@@ -740,9 +744,16 @@ class SharedStateServiceManager
         $healthy = $this->probeRunningSharedService($definition, $configuredTokenFileName);
 
         if ($healthy) {
-            $runtimePid = $this->resolveLivePortOwnerPid($definition);
-            if ((int) ($runtimeFile['port'] ?? 0) === (int) $definition['port']) {
-                $runtimePid = $runtimePid > 0 ? $runtimePid : (int) ($runtimeFile['pid'] ?? 0);
+            $runtimePid = 0;
+            $runtimeFilePid = (int)($runtimeFile['pid'] ?? 0);
+            $sameRuntimePort = (int)($runtimeFile['port'] ?? 0) === (int)$definition['port'];
+            if ($sameRuntimePort && $runtimeFilePid > 0 && Processer::isRunningByPid($runtimeFilePid)) {
+                // A successful authenticated protocol probe plus the live PID
+                // already persisted for this exact port is sufficient. Avoid a
+                // second process-table/command-line inspection on every ensure.
+                $runtimePid = $runtimeFilePid;
+            } else {
+                $runtimePid = $this->resolveValidatedLivePortOwnerPid($definition);
             }
             $runtime = $this->buildRuntimeMetadata(
                 $definition,
@@ -984,6 +995,20 @@ class SharedStateServiceManager
             if ($pid > 0) {
                 return $pid;
             }
+        }
+
+        if (!(\defined('IS_WIN') && IS_WIN) && !$frontend) {
+            $pids = Processer::batchCreate([
+                'shared-state' => [
+                    'command' => $cmdLineForRegistry,
+                    'block' => false,
+                    'foreground' => false,
+                    'enableLog' => true,
+                    'childOwnsPid' => false,
+                ],
+            ]);
+
+            return (int)($pids['shared-state'] ?? 0);
         }
 
         // enableLog=true：失败原因写入 Processer 进程日志。
@@ -1472,6 +1497,10 @@ class SharedStateServiceManager
         array $runtime,
         SharedStateServiceRegistry $registry
     ): array {
+        // Kept in the signature for extension compatibility. Reconciliation is
+        // intentionally observation-only; authenticated ensure/start paths own
+        // all registry and runtime-file writes.
+        unset($registry);
         $port = (int) ($runtime['port'] ?? 0);
         if ($port <= 0) {
             return $runtime;
@@ -1480,36 +1509,49 @@ class SharedStateServiceManager
         Processer::clearPortCache($port);
         $occupant = Processer::inspectPortOccupantWithHistory($port);
         $ownerPid = (int) ($occupant['pid'] ?? 0);
-        $runtimePid = (int) ($runtime['pid'] ?? 0);
-        if ($ownerPid <= 0 || $ownerPid === $runtimePid) {
+        if ($ownerPid <= 0
+            || !($occupant['pid_running'] ?? false)
+            || !($occupant['is_weline'] ?? false)) {
             return $runtime;
         }
 
-        $now = \date('c');
-        $runtime['pid'] = $ownerPid;
-        $runtime['registry_pid_stale'] = true;
-        $runtime['registry_pid_stale_previous'] = $runtimePid;
-        $runtime['registry_pid_corrected_at'] = $now;
-
-        $ownerProcessName = (string) ($occupant['pname'] ?? '');
-        if ($ownerProcessName !== '') {
-            $runtime['live_process_name'] = $ownerProcessName;
+        $expectedRole = $this->normalizeRoleName($role);
+        $inspection = (new SharedSidecarInspector())->inspect(
+            $port,
+            $expectedRole,
+            (string)($runtime['token_file_name'] ?? $this->defaultTokenForRole($expectedRole))
+        );
+        $observedPid = (int)($inspection['pid'] ?? 0);
+        $observedRole = (string)($inspection['role'] ?? '');
+        $observedProcessName = \trim((string)($inspection['process_name'] ?? ''));
+        $expectedProcessName = \trim((string)($runtime['process_name'] ?? ''));
+        if (!(bool)($inspection['reusable'] ?? false)
+            || $observedPid !== $ownerPid
+            || $observedRole !== $expectedRole
+            || !$this->isInspectionOwnedByCurrentProject($inspection)
+            || ($expectedProcessName !== '' && $observedProcessName !== $expectedProcessName)) {
+            return $runtime;
         }
 
-        if ((bool) ($runtime['registered'] ?? false)) {
-            $registry->updateRecord(
-                $role,
-                static function (array $record) use ($ownerPid, $runtimePid, $ownerProcessName, $now): array {
-                    $record['pid'] = $ownerPid;
-                    $record['registry_pid_stale'] = true;
-                    $record['registry_pid_stale_previous'] = $runtimePid;
-                    $record['registry_pid_corrected_at'] = $now;
-                    if ($ownerProcessName !== '') {
-                        $record['live_process_name'] = $ownerProcessName;
-                    }
-
-                    return $record;
-                }
+        $runtimePid = (int)($runtime['pid'] ?? 0);
+        $observedAt = \date('c');
+        $runtime['live_observation'] = [
+            'pid' => $observedPid,
+            'role' => $observedRole,
+            'process_name' => $observedProcessName,
+            'instance_name' => (string)($inspection['instance_name'] ?? ''),
+            'validated_at' => $observedAt,
+        ];
+        $registryPidStale = $runtimePid > 0 && $runtimePid !== $observedPid;
+        $runtime['registry_pid_stale'] = $registryPidStale;
+        if ($registryPidStale) {
+            $runtime['registry_pid_stale_previous'] = $runtimePid;
+            $runtime['registry_pid_observed_at'] = $observedAt;
+        } else {
+            unset(
+                $runtime['registry_pid_stale_previous'],
+                $runtime['registry_pid_corrected_at'],
+                $runtime['registry_pid_observed_at']
             );
         }
 
@@ -1517,24 +1559,37 @@ class SharedStateServiceManager
     }
 
     /**
+     * Authenticated ensure/probe paths may adopt a live PID, but only after the
+     * same role, process-name, project-scope and liveness checks used by the
+     * read-only observation path.
+     *
      * @param array<string, mixed> $definition
      */
-    private function resolveLivePortOwnerPid(array $definition): int
+    private function resolveValidatedLivePortOwnerPid(array $definition): int
     {
-        $port = (int) ($definition['port'] ?? 0);
+        $port = (int)($definition['port'] ?? 0);
+        $role = $this->normalizeRoleName((string)($definition['role'] ?? ''));
         if ($port <= 0) {
             return 0;
         }
 
-        Processer::clearPortCache($port);
-        $pid = Processer::getProcessIdByPort($port);
-        if ($pid > 0) {
-            return $pid;
+        $inspection = $this->inspectRunningSharedService(
+            $definition,
+            (string)($definition['token_file_name'] ?? $this->defaultTokenForRole($role))
+        );
+        $pid = (int)($inspection['pid'] ?? 0);
+        $expectedProcessName = \trim((string)($definition['process_name'] ?? ''));
+        $observedProcessName = \trim((string)($inspection['process_name'] ?? ''));
+        if (!(bool)($inspection['reusable'] ?? false)
+            || $pid <= 0
+            || !Processer::isRunningByPid($pid)
+            || (string)($inspection['role'] ?? '') !== $role
+            || !$this->isInspectionOwnedByCurrentProject($inspection)
+            || ($expectedProcessName !== '' && $observedProcessName !== $expectedProcessName)) {
+            return 0;
         }
 
-        $occupant = Processer::inspectPortOccupantWithHistory($port);
-        $pid = (int) ($occupant['pid'] ?? 0);
-        return $pid > 0 ? $pid : 0;
+        return $pid;
     }
 
     /**

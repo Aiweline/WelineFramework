@@ -313,15 +313,15 @@ class Dispatcher
     /**
      * Route-table and worker health jobs are resumed by the main loop in Fiber slices.
      *
-     * @var list<array{type: 'set_pool'|'homepage_warmup'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], workers?: array, role?: string, source?: string, route_version?: int}>
+     * @var list<array{type: 'set_pool'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], workers?: array, role?: string, source?: string, route_version?: int}>
      */
     private array $deferredWorkerPoolJobs = [];
 
     private ?\Fiber $deferredWorkerPoolFiber = null;
 
-    /** @var 'set_pool'|'homepage_warmup'|'probe_blacklisted_workers'|'audit_worker_health'|null */
+    /** @var 'set_pool'|'probe_blacklisted_workers'|'audit_worker_health'|null */
     private ?string $deferredWorkerPoolFiberKind = null;
-    /** @var array{type: 'set_pool'|'homepage_warmup'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], workers?: array, role?: string, source?: string, route_version?: int}|null */
+    /** @var array{type: 'set_pool'|'probe_blacklisted_workers'|'audit_worker_health', ports?: int[], workers?: array, role?: string, source?: string, route_version?: int}|null */
     private ?array $deferredWorkerPoolFiberJob = null;
     private bool $spinWaitTickInProgress = false;
     private int $maintenanceTakeoverRetryTicks = 3;
@@ -894,13 +894,13 @@ class Dispatcher
     /**
      * 在 PassthroughCore 自旋等待阶段推进控制面：
      * - 先处理 IPC 收发（含 SET_ROUTE_TABLE）
-     * - 再推进 deferred warmup Fiber 一个步进
+     * - 再推进 deferred 路由/健康 Fiber 一个步进
      *
-     * 避免「handleNewConnection 自旋中」主循环被占用时，预热任务得不到推进。
+     * 避免「handleNewConnection 自旋中」主循环被占用时，控制任务得不到推进。
      */
     private function pumpSpinWaitControlTick(): void
     {
-        // 防重入：warmup Fiber 里可能再次触发回调，避免递归 tick。
+        // 防重入：deferred Fiber 里可能再次触发回调，避免递归 tick。
         if ($this->spinWaitTickInProgress) {
             return;
         }
@@ -914,22 +914,27 @@ class Dispatcher
     }
 
     /**
-     * 每轮事件循环最多推进一次 suspend/resume，使探活/预热不霸占 IPC 回调栈。
+     * 每轮事件循环最多推进一次 suspend/resume。Accept 压力只延后低优先
+     * 探活；路由切换和故障审计必须持续推进，避免控制面被流量饿死。
      */
     private function pumpDeferredWorkerPoolJobs(bool $deferWhenAcceptPending = false): void
     {
-        if ($deferWhenAcceptPending && $this->hasPendingAccept()) {
-            return;
-        }
+        $acceptPending = $deferWhenAcceptPending && $this->hasPendingAccept();
 
         if ($this->deferredWorkerPoolFiber === null) {
-            if ($this->deferredWorkerPoolJobs === []) {
+            $job = $this->dequeueNextDeferredWorkerPoolJob($acceptPending);
+            if ($job === null) {
                 return;
             }
-            $job = \array_shift($this->deferredWorkerPoolJobs);
             $this->deferredWorkerPoolFiber = $this->createDeferredWorkerPoolFiber($job);
-            $this->deferredWorkerPoolFiberKind = $job['type'];
+            $this->deferredWorkerPoolFiberKind = (string)($job['type'] ?? 'unknown');
             $this->deferredWorkerPoolFiberJob = $job;
+        }
+
+        if ($acceptPending
+            && $this->isLowPriorityDeferredWorkerPoolJob($this->deferredWorkerPoolFiberKind)
+            && !$this->hasHighPriorityDeferredWorkerPoolJobQueued()) {
+            return;
         }
 
         $fiber = $this->deferredWorkerPoolFiber;
@@ -956,6 +961,45 @@ class Dispatcher
         }
     }
 
+    /**
+     * High-priority control jobs may overtake queued probes. When accept is
+     * pending, a queue containing probes only is left untouched for an idle turn.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function dequeueNextDeferredWorkerPoolJob(bool $acceptPending): ?array
+    {
+        if ($this->deferredWorkerPoolJobs === []) {
+            return null;
+        }
+
+        foreach ($this->deferredWorkerPoolJobs as $index => $job) {
+            if ($this->isLowPriorityDeferredWorkerPoolJob((string)($job['type'] ?? ''))) {
+                continue;
+            }
+            \array_splice($this->deferredWorkerPoolJobs, $index, 1);
+            return $job;
+        }
+
+        return $acceptPending ? null : \array_shift($this->deferredWorkerPoolJobs);
+    }
+
+    private function isLowPriorityDeferredWorkerPoolJob(?string $type): bool
+    {
+        return $type === 'probe_blacklisted_workers';
+    }
+
+    private function hasHighPriorityDeferredWorkerPoolJobQueued(): bool
+    {
+        foreach ($this->deferredWorkerPoolJobs as $job) {
+            if (!$this->isLowPriorityDeferredWorkerPoolJob((string)($job['type'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function hasPendingAccept(): bool
     {
         if (!$this->serverSocket) {
@@ -971,10 +1015,9 @@ class Dispatcher
 
     /**
      * @param array{
-     *   type: 'set_pool'|'homepage_warmup'|'probe_blacklisted_workers'|'audit_worker_health',
+     *   type: 'set_pool'|'probe_blacklisted_workers'|'audit_worker_health',
      *   ports?: int[],
      *   role?: string,
-     *   claims?: array<int, array{port?: int, ticket?: int}>,
      *   source?: string
      * } $job
      */
@@ -1006,26 +1049,21 @@ class Dispatcher
             });
         }
 
-        if ($job['type'] === 'homepage_warmup') {
-            $claims = \is_array($job['claims'] ?? null) ? $job['claims'] : [];
-
-            return new \Fiber(function () use ($claims): array {
+        if ($job['type'] === 'probe_blacklisted_workers') {
+            return new \Fiber(function (): array {
                 $this->passthroughCore->setWarmupCooperativeYield($this->createWarmupCooperativeYieldCallback());
                 try {
-                    return $this->passthroughCore->warmupJoinedWorkersViaHomepage($claims);
+                    return $this->passthroughCore->probeBlacklistedWorkers();
                 } finally {
                     $this->passthroughCore->setWarmupCooperativeYield(null);
                 }
             });
         }
 
-        return new \Fiber(function (): array {
-            $this->passthroughCore->setWarmupCooperativeYield($this->createWarmupCooperativeYieldCallback());
-            try {
-                return $this->passthroughCore->probeBlacklistedWorkers();
-            } finally {
-                $this->passthroughCore->setWarmupCooperativeYield(null);
-            }
+        $type = (string)($job['type'] ?? 'unknown');
+        return new \Fiber(function () use ($type): array {
+            $this->log('Ignoring unsupported deferred worker-pool job: ' . $type, 'WARN');
+            return [];
         });
     }
 
@@ -1196,13 +1234,12 @@ class Dispatcher
                 foreach ($rejectedPorts as $port => $reason) {
                     $items[] = "{$port}: {$reason}";
                 }
-                $this->log($source . ' warmup rejected ports: ' . \implode('; ', $items), 'ERROR');
+                $this->log($source . ' admission rejected ports: ' . \implode('; ', $items), 'ERROR');
             }
             if ($role === ControlMessage::ROLE_WORKER) {
                 $requestedPorts = \is_array($job['ports'] ?? null) ? $job['ports'] : [];
                 $requestedWorkers = \is_array($job['workers'] ?? null) ? $job['workers'] : [];
                 $this->sendWorkerPoolAckForPorts($requestedPorts, $requestedWorkers);
-                $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
             }
 
             return;
@@ -1219,40 +1256,6 @@ class Dispatcher
             return;
         }
 
-        if ($kind === 'homepage_warmup') {
-            $warmed = \is_array($payload['warmed'] ?? null) ? $payload['warmed'] : [];
-            $failed = \is_array($payload['failed'] ?? null) ? $payload['failed'] : [];
-            $skipped = \is_array($payload['skipped'] ?? null) ? $payload['skipped'] : [];
-            $source = (string)($job['source'] ?? 'homepage_warmup');
-
-            if ($warmed !== []) {
-                $this->log(
-                    $source . ' 宸插畬鎴?Worker 棣栭〉棰勭儹: ' . \implode(',', \array_map('intval', $warmed)),
-                    'INFO'
-                );
-            }
-            if ($failed !== []) {
-                $items = [];
-                foreach ($failed as $port => $reason) {
-                    $items[] = (int)$port . ': ' . (string)$reason;
-                }
-                $this->log(
-                    $source . ' Worker 棣栭〉棰勭儹澶辫触锛堜笉褰卞搷宸插叆姹狅級: ' . \implode('; ', $items),
-                    'WARN'
-                );
-            }
-            if ($skipped !== []) {
-                $this->log(
-                    $source . ' Worker 棣栭〉棰勭儹宸茶烦杩囨棫绁ㄦ嵁/宸查€€姹? ' . \implode(',', \array_map('intval', $skipped)),
-                    'DEBUG'
-                );
-            }
-            if (\array_key_exists('ack_ports', $job)) {
-                $ackPorts = \is_array($job['ack_ports'] ?? null) ? $job['ack_ports'] : [];
-                $ackWorkers = \is_array($job['ack_workers'] ?? null) ? $job['ack_workers'] : [];
-                $this->sendWorkerPoolAckForPorts($ackPorts, $ackWorkers);
-            }
-        }
     }
 
     /**
@@ -1394,7 +1397,6 @@ class Dispatcher
             'INFO'
         );
         $this->sendWorkerPoolAckForPorts($ports, $workers);
-        $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
     }
 
     /**
@@ -1474,38 +1476,6 @@ class Dispatcher
             "{$source} applied Master READY route table: candidates=" . \count($ports) . ', role=' . ControlMessage::ROLE_WORKER . ', version=' . $version,
             'INFO'
         );
-    }
-
-    /**
-     * @param int[] $ports
-     * @param int[]|null $ackPorts
-     * @param array<int, array<string, mixed>>|null $ackWorkers
-     */
-    private function queueJoinedWorkerHomepageWarmup(
-        array $ports,
-        string $source,
-        ?array $ackPorts = null,
-        ?array $ackWorkers = null
-    ): bool
-    {
-        $claims = $this->passthroughCore->claimJoinedWorkerHomepageWarmup($ports);
-        if ($claims === []) {
-            return false;
-        }
-
-        $job = [
-            'type' => 'homepage_warmup',
-            'claims' => $claims,
-            'source' => $source,
-        ];
-        if ($ackPorts !== null) {
-            $job['ack_ports'] = $ackPorts;
-            $job['ack_workers'] = $ackWorkers ?? [];
-        }
-
-        $this->deferredWorkerPoolJobs[] = $job;
-
-        return true;
     }
 
     /**
@@ -1795,7 +1765,7 @@ class Dispatcher
                 // Worker 健康探活只负责入队，真正网络探活交由 deferred Fiber 分片执行。
                 $this->probeWorkerHealth();
 
-                // Worker 入池预热 / 黑名单探活：Fiber 分片推进，避免阻塞 IPC 与 accept
+                // Worker 入池健康检查 / 黑名单探活：Fiber 分片推进，避免阻塞 IPC 与 accept
                 $this->pumpDeferredWorkerPoolJobs(true);
 
                 // SSL worker cold preconnect refill is incremental; never refill
@@ -2393,7 +2363,7 @@ class Dispatcher
                 if ($this->tryRouteToMaintenanceWorker($clientSocket, $clientIp, $connId)) {
                     $accepted++;
                     if (($accepted % 10) === 0) {
-                        // 高并发 accept 风暴下也要周期推进 IPC/预热，避免主循环“看似活着但控制面饥饿”。
+                        // 高并发 accept 风暴下也要周期推进 IPC/控制任务，避免主循环“看似活着但控制面饥饿”。
                         $this->pumpSpinWaitControlTick();
                     }
                     continue;
@@ -2443,7 +2413,7 @@ class Dispatcher
             
             $accepted++;
             if (($accepted % 10) === 0) {
-                // 高并发 accept 风暴下也要周期推进 IPC/预热，避免主循环“看似活着但控制面饥饿”。
+                // 高并发 accept 风暴下也要周期推进 IPC/控制任务，避免主循环“看似活着但控制面饥饿”。
                 $this->pumpSpinWaitControlTick();
             }
         } while ($accepted < $maxAcceptPerLoop);
