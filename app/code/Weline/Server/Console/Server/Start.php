@@ -3300,7 +3300,13 @@ class Start extends CommandAbstract
         $this->traceStartupPhase($instanceName, 'hosts:after');
 
         // 开发环境：确保 *.weline.test 泛域名证书存在，避免 hosts 中其他子域 TLS 主机名不匹配
-        $this->ensureManagedLocalWildcardCertificate();
+        if (empty($config['no_ssl'])) {
+            $this->traceStartupPhase($instanceName, 'wildcard-certificate:before');
+            $this->ensureManagedLocalWildcardCertificate();
+            $this->traceStartupPhase($instanceName, 'wildcard-certificate:after');
+        } else {
+            $this->traceStartupPhase($instanceName, 'wildcard-certificate:skipped-http-only');
+        }
 
         // 生成多域名证书映射文件（用于 SNI 支持）
         if (empty($config['no_ssl'])) {

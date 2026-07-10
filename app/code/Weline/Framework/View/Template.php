@@ -1676,6 +1676,9 @@ class Template extends DataObject
         if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
             return;
         }
+        if (!(bool)Env::get('wls.performance.template_cooperative_yield_enabled', false)) {
+            return;
+        }
 
         $fiber = \Fiber::getCurrent();
         if (!$fiber instanceof \Fiber) {
