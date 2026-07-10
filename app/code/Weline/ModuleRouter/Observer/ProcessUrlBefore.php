@@ -142,6 +142,10 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
             return false;
         }
 
+        if (self::isDynamicMediaProcessorPath($normalized)) {
+            return false;
+        }
+
         if (preg_match('#^api\d*(?:/|$)#', $normalized)) {
             return true;
         }
@@ -180,6 +184,12 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
             '#\.(?:js|css|mjs|map|jpg|jpeg|png|gif|svg|ico|webp|avif|woff|woff2|ttf|eot)$#i',
             $normalized
         );
+    }
+
+    private static function isDynamicMediaProcessorPath(string $normalized): bool
+    {
+        return str_starts_with($normalized, 'media/image/')
+            || str_starts_with($normalized, 'media/file/');
     }
 
     private static function normalizeBypassPath(string $path): string
