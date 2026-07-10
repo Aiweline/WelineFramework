@@ -1,0 +1,628 @@
+<?php
+$previewWidth = filter_var($this->getData('width'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewHeight = filter_var($this->getData('height'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewWidth = $previewWidth === false ? 50 : $previewWidth;
+$previewHeight = $previewHeight === false ? 50 : $previewHeight;
+?>
+<!-- 图片预览 -->
+<style media="screen">
+    .file-target-preview {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem
+    }
+
+    .drag-item {
+        display: block;
+        position: relative;
+        float: left;
+        width: <?= $previewWidth ?>px;
+        height: <?= $previewHeight ?>px;
+        border: 1px solid #CCC;
+    }
+
+    .close {
+        position: absolute;
+        right: 0;
+        width: 17px;
+        height: 17px;
+        z-index: 1;
+        text-align: center;
+        line-height: 17px;
+        background: transparent;
+        opacity: 0.5
+    }
+
+    .drag-item:hover .close {
+        opacity: 1;
+        color: red;
+    }
+
+    .drag-pic {
+        max-width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        margin: auto;
+        object-fit: contain;
+    }
+
+    /* SVG specific styles */
+    .drag-pic[src$=".svg"] {
+        padding: 5px;
+        background: #fff;
+    }
+
+    .file-target-preview-zoom-body {
+        text-align: center;
+    }
+
+    .file-target-preview-zoom-body img {
+        display: inline-block;
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+    }
+
+    .drag-item.is-preview-empty {
+        cursor: default;
+    }
+
+    .drag-item.is-preview-empty::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+</style>
+<div id="{{target}}-preview" class="file-target-preview">
+    <foreach name="value_items" key="k">
+        <div class="drag-item" draggable="true">
+            <div class="close" role="button" tabindex="0">x</div>
+            <img data-src="{{v.path}}" src="{{v.url}}" alt="{{v.pathInfo.name}}"
+                 title="{{v.pathInfo.name}}({{v.pathInfo.size}})"
+                 class="drag-pic img-responsive"
+                 draggable="false"
+                 data-file="">
+        </div>
+    </foreach>
+</div>
+<!-- 图片放大modal -->
+<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
+     aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-zoom-modal">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <lang>预览</lang>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-zoom-close-modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body file-target-preview-zoom-body" id="{{target}}-zoom-preview-image-body">
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<js:part name="drag-sort"/>
+<script type="text/javascript">
+    var previewZoomModal = document.getElementById('{{target}}-zoom-modal');
+    if (previewZoomModal && previewZoomModal.parentElement !== document.body) {
+        document.body.appendChild(previewZoomModal);
+    }
+
+    function normalizeFileManagerPreviewSource(rawSrc, fallbackSrc) {
+        var src = String(rawSrc || '').trim();
+        if (!src && fallbackSrc) {
+            src = String(fallbackSrc || '').trim();
+        }
+        if (!src) {
+            return '';
+        }
+
+        var compactSrc = src.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+        if (compactSrc.indexOf('javascript:') === 0 || compactSrc.indexOf('vbscript:') === 0) {
+            return '';
+        }
+        if (compactSrc.indexOf('data:') === 0) {
+            return compactSrc.indexOf('data:image/') === 0 ? src : '';
+        }
+        if (compactSrc.indexOf('blob:') === 0 || /^(https?:)?\/\//i.test(src)) {
+            return src;
+        }
+
+        var cleanSrc = src.replace(/\\/g, '/');
+        var suffix = '';
+        var suffixIndex = cleanSrc.search(/[?#]/);
+        if (suffixIndex >= 0) {
+            suffix = cleanSrc.substring(suffixIndex);
+            cleanSrc = cleanSrc.substring(0, suffixIndex);
+        }
+
+        if (cleanSrc.indexOf('/pub/media/') === 0) {
+            return cleanSrc + suffix;
+        }
+        if (cleanSrc.indexOf('pub/media/') === 0) {
+            return '/' + cleanSrc + suffix;
+        }
+        if (cleanSrc.indexOf('/media/image/') === 0) {
+            cleanSrc = cleanSrc.substring('/media/image/'.length);
+            suffix = '';
+        } else if (cleanSrc.indexOf('media/image/') === 0) {
+            cleanSrc = cleanSrc.substring('media/image/'.length);
+            suffix = '';
+        }
+
+        cleanSrc = cleanSrc.replace(/^\/media\//, '').replace(/^media\//, '').replace(/^\/+/, '');
+        if (!cleanSrc) {
+            return '';
+        }
+
+        return '/pub/media/' + cleanSrc + suffix;
+    }
+
+    var fileManagerPreviewEmptyMessage = <?= json_encode(__('暂无缩略图'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    function notifyFileManagerPreviewEmpty() {
+        if (window.BackendToast && typeof window.BackendToast.warning === 'function') {
+            window.BackendToast.warning(fileManagerPreviewEmptyMessage);
+            return;
+        }
+        if (window.BackendToast && typeof window.BackendToast.info === 'function') {
+            window.BackendToast.info(fileManagerPreviewEmptyMessage);
+            return;
+        }
+        console.warn(fileManagerPreviewEmptyMessage);
+    }
+
+    function hasFileManagerPreviewSource(rawSrc, fallbackSrc) {
+        return normalizeFileManagerPreviewSource(rawSrc, fallbackSrc) !== '';
+    }
+
+    function isSvgPreviewSource(src) {
+        return /\.svg(?:[?#]|$)/i.test(String(src || ''));
+    }
+
+    function previewImageReady(imageElement) {
+        if (!imageElement || !imageElement.complete) {
+            return false;
+        }
+        if (imageElement.getAttribute('data-preview-broken') === '1') {
+            return false;
+        }
+        var previewSrc = normalizeFileManagerPreviewSource(
+            imageElement.getAttribute('data-src'),
+            imageElement.getAttribute('src')
+        );
+        if (!previewSrc) {
+            return false;
+        }
+        if (isSvgPreviewSource(previewSrc)) {
+            return true;
+        }
+        return imageElement.naturalWidth > 0 && imageElement.naturalHeight > 0;
+    }
+
+    function imageElementHasPreviewSource(imageElement) {
+        if (!imageElement) {
+            return false;
+        }
+        var rawSrc = imageElement.getAttribute('data-src');
+        var fallbackSrc = imageElement.getAttribute('src');
+        var normalizedFromPath = normalizeFileManagerPreviewSource(rawSrc, '');
+        if (normalizedFromPath) {
+            return true;
+        }
+        if (!hasFileManagerPreviewSource(rawSrc, fallbackSrc)) {
+            return false;
+        }
+        if (imageElement.getAttribute('data-preview-broken') === '1') {
+            return false;
+        }
+        if (imageElement.complete && imageElement.naturalWidth === 0 && imageElement.naturalHeight === 0) {
+            return false;
+        }
+        return true;
+    }
+
+    function markFileManagerPreviewEmptyStates(previewElement) {
+        if (!previewElement) {
+            return;
+        }
+        previewElement.querySelectorAll('.drag-item').forEach(function (item) {
+            var imageElement = item.querySelector('img');
+            if (imageElementHasPreviewSource(imageElement)) {
+                item.classList.remove('is-preview-empty');
+            } else {
+                item.classList.add('is-preview-empty');
+            }
+        });
+    }
+
+    function getFileManagerJQuery() {
+        return typeof window.jQuery === 'function'
+            ? window.jQuery
+            : (typeof window.$ === 'function' ? window.$ : null);
+    }
+
+    function getFileManagerBootstrapModal(zoomModalElement) {
+        var BootstrapModal = window.bootstrap && window.bootstrap.Modal ? window.bootstrap.Modal : null;
+        if (!BootstrapModal) {
+            return null;
+        }
+
+        if (typeof BootstrapModal.getOrCreateInstance === 'function') {
+            return BootstrapModal.getOrCreateInstance(zoomModalElement);
+        }
+
+        if (typeof BootstrapModal.getInstance === 'function') {
+            var existingModal = BootstrapModal.getInstance(zoomModalElement);
+            if (existingModal) {
+                return existingModal;
+            }
+        }
+
+        if (typeof BootstrapModal === 'function') {
+            try {
+                return new BootstrapModal(zoomModalElement);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    function toggleFileManagerPreviewModal(zoomModalElement, action) {
+        var bootstrapModal = getFileManagerBootstrapModal(zoomModalElement);
+        if (!bootstrapModal || typeof bootstrapModal[action] !== 'function') {
+            return false;
+        }
+
+        try {
+            bootstrapModal[action]();
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function dispatchFileManagerEvent(targetElement, eventName) {
+        var event;
+        if (typeof Event === 'function') {
+            event = new Event(eventName, {bubbles: true});
+        } else {
+            event = document.createEvent('Event');
+            event.initEvent(eventName, true, true);
+        }
+        targetElement.dispatchEvent(event);
+    }
+
+    function triggerFileManagerTargetEvents(targetElement) {
+        var fileManagerJQuery = getFileManagerJQuery();
+        if (fileManagerJQuery) {
+            var targetHandle = fileManagerJQuery(targetElement);
+            if (targetHandle && typeof targetHandle.trigger === 'function') {
+                targetHandle.trigger('change').trigger('input');
+                return;
+            }
+        }
+
+        dispatchFileManagerEvent(targetElement, 'change');
+        dispatchFileManagerEvent(targetElement, 'input');
+    }
+
+    function revealFileManagerPreviewModal(targetId, zoomModalElement) {
+        if (toggleFileManagerPreviewModal(zoomModalElement, 'show')) {
+            return true;
+        }
+        var fileManagerJQuery = getFileManagerJQuery();
+        if (fileManagerJQuery) {
+            var modalHandle = fileManagerJQuery(zoomModalElement);
+            if (modalHandle && typeof modalHandle.modal === 'function') {
+                modalHandle.modal('show');
+                return true;
+            }
+        }
+
+        zoomModalElement.style.display = 'block';
+        zoomModalElement.classList.add('show');
+        zoomModalElement.removeAttribute('aria-hidden');
+        document.body.classList.add('modal-open');
+        return true;
+    }
+
+    function finalizeFileManagerPreviewModal(targetId, zoomModalElement, previewImage, previewSrc) {
+        if (!previewImage) {
+            notifyFileManagerPreviewEmpty();
+            return false;
+        }
+        if (isSvgPreviewSource(previewSrc || previewImage.currentSrc || previewImage.src)) {
+            return revealFileManagerPreviewModal(targetId, zoomModalElement);
+        }
+        if (previewImage.naturalWidth === 0 || previewImage.naturalHeight === 0) {
+            notifyFileManagerPreviewEmpty();
+            return false;
+        }
+        return revealFileManagerPreviewModal(targetId, zoomModalElement);
+    }
+
+    function showFileManagerPreviewModal(targetId, rawSrc, fallbackSrc, altText) {
+        var fullSrc = normalizeFileManagerPreviewSource(rawSrc, fallbackSrc);
+        var zoomModalElement = document.getElementById(targetId + '-zoom-modal');
+        var zoomPreviewImageBody = document.getElementById(targetId + '-zoom-preview-image-body');
+        if (!fullSrc || !zoomModalElement || !zoomPreviewImageBody) {
+            notifyFileManagerPreviewEmpty();
+            return false;
+        }
+
+        zoomPreviewImageBody.innerHTML = '';
+        var previewImage = document.createElement('img');
+        previewImage.className = 'img-fluid';
+        previewImage.alt = String(altText || '');
+        if (/\.svg(?:[?#]|$)/i.test(fullSrc)) {
+            previewImage.style.background = '#fff';
+            previewImage.style.padding = '20px';
+        }
+        previewImage.addEventListener('load', function () {
+            finalizeFileManagerPreviewModal(targetId, zoomModalElement, previewImage, fullSrc);
+        }, { once: true });
+        previewImage.addEventListener('error', function () {
+            notifyFileManagerPreviewEmpty();
+        }, { once: true });
+        zoomPreviewImageBody.appendChild(previewImage);
+        previewImage.src = fullSrc;
+        if (previewImage.complete) {
+            return finalizeFileManagerPreviewModal(targetId, zoomModalElement, previewImage, fullSrc);
+        }
+        return true;
+    }
+
+    function hideFileManagerPreviewModal(targetId) {
+        var zoomModalElement = document.getElementById(targetId + '-zoom-modal');
+        if (!zoomModalElement) {
+            return false;
+        }
+
+        if (toggleFileManagerPreviewModal(zoomModalElement, 'hide')) {
+            return true;
+        }
+        var fileManagerJQuery = getFileManagerJQuery();
+        if (fileManagerJQuery) {
+            var modalHandle = fileManagerJQuery(zoomModalElement);
+            if (modalHandle && typeof modalHandle.modal === 'function') {
+                modalHandle.modal('hide');
+                return true;
+            }
+        }
+
+        zoomModalElement.style.display = 'none';
+        zoomModalElement.classList.remove('show');
+        zoomModalElement.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('modal-open');
+        return true;
+    }
+
+    function bindFileManagerPreviewModalClose(targetId) {
+        var zoomModalElement = document.getElementById(targetId + '-zoom-modal');
+        if (!zoomModalElement || zoomModalElement.getAttribute('data-file-manager-modal-close-bound') === '1') {
+            return;
+        }
+        zoomModalElement.setAttribute('data-file-manager-modal-close-bound', '1');
+        var hidePreviewModal = hideFileManagerPreviewModal;
+
+        zoomModalElement.addEventListener('click', function (event) {
+            var closeButton = event.target.closest ? event.target.closest('[data-bs-dismiss="modal"], [data-dismiss="modal"], .btn-close') : null;
+            if (closeButton && zoomModalElement.contains(closeButton)) {
+                event.preventDefault();
+                hidePreviewModal(targetId);
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && zoomModalElement.classList.contains('show')) {
+                hidePreviewModal(targetId);
+            }
+        });
+    }
+
+    if (typeof DragSort === 'function') {
+        var dragSort = new DragSort({
+        id: '{{target}}-preview', // 拖动父级div框的ID
+        drag: 'drag-item', //拖动元素
+        times: '1000', // 动画时长（默认一秒钟）
+        callback: function () {
+            flushSelectedImage();
+        }
+        })
+    }
+
+    function addSelectedImage(event) {
+        var node = document.getElementById('{{target}}-preview')
+        var item = document.createElement('div');
+        item.className = 'drag-item';
+        item.draggable = true;
+
+        var close = document.createElement('div');
+        close.className = 'close';
+        close.setAttribute('role', 'button');
+        close.setAttribute('tabindex', '0');
+        close.textContent = 'x';
+
+        var img = document.createElement('img');
+        img.setAttribute('data-src', '');
+        img.src = '';
+        img.alt = '';
+        img.className = 'drag-pic img-responsive';
+        img.draggable = false;
+        img.setAttribute('data-file', '');
+
+        item.appendChild(close);
+        item.appendChild(img);
+        node.appendChild(item)
+    }
+
+    function delSelectedImage(event) {
+        // 点击删除当前元素的父级元素
+        event.preventDefault();
+        event.stopPropagation();
+        removeSelectedImage(event.currentTarget);
+        // 刷新目标value
+
+    }
+
+    function removeSelectedImage(closeElement) {
+        if (!closeElement || !closeElement.parentElement || !closeElement.parentElement.parentElement) {
+            return;
+        }
+        closeElement.parentElement.parentElement.removeChild(closeElement.parentElement);
+        flushSelectedImage();
+    }
+
+    function flushSelectedImage() {
+        // 刷新目标value
+        var urls = [];
+        var previewElement = document.getElementById('{{target}}-preview');
+        var imgs = previewElement ? previewElement.querySelectorAll('img') : [];
+        for (let i = 0; i < imgs.length; i++) {
+            let imagePath = imgs[i].getAttribute('data-src') || '';
+            if (!imagePath) {
+                continue;
+            }
+            urls.push(imagePath);
+        }
+        var targetElement = document.getElementById('{{target}}');
+        if (!targetElement) {
+            return;
+        }
+        var value = urls.join(',');
+        switch ('{{params.setAttr}}') {
+            case 'text':
+                targetElement.textContent = value;
+                break;
+            default:
+                if ('value' in targetElement) {
+                    targetElement.value = value;
+                } else {
+                    targetElement.setAttribute('value', value);
+                }
+        }
+
+        triggerFileManagerTargetEvents(targetElement);
+        bindFileManagerPreviewThumbnailState(previewElement);
+        markFileManagerPreviewEmptyStates(previewElement);
+    }
+
+    function bindFileManagerPreviewThumbnailState(previewElement) {
+        if (!previewElement) {
+            return;
+        }
+        previewElement.querySelectorAll('.drag-item img').forEach(function (imageElement) {
+            if (imageElement.getAttribute('data-file-manager-thumb-state-bound') === '1') {
+                return;
+            }
+            imageElement.setAttribute('data-file-manager-thumb-state-bound', '1');
+            imageElement.addEventListener('error', function () {
+                if (!normalizeFileManagerPreviewSource(imageElement.getAttribute('data-src'), '')) {
+                    imageElement.setAttribute('data-preview-broken', '1');
+                }
+                markFileManagerPreviewEmptyStates(previewElement);
+            });
+            imageElement.addEventListener('load', function () {
+                imageElement.removeAttribute('data-preview-broken');
+                markFileManagerPreviewEmptyStates(previewElement);
+            });
+        });
+    }
+
+    function openFileManagerPreviewFromThumbnail(targetId, imageElement) {
+        if (!imageElementHasPreviewSource(imageElement)) {
+            notifyFileManagerPreviewEmpty();
+            return;
+        }
+        showFileManagerPreviewModal(
+            targetId,
+            imageElement.getAttribute('data-src'),
+            imageElement.getAttribute('src'),
+            imageElement.getAttribute('alt')
+        );
+    }
+
+    function bindFileManagerPreviewEvents(targetId) {
+        var previewElement = document.getElementById(targetId + '-preview');
+        if (!previewElement || previewElement.getAttribute('data-file-manager-preview-bound') === '1') {
+            return;
+        }
+        previewElement.setAttribute('data-file-manager-preview-bound', '1');
+        var removeImage = removeSelectedImage;
+
+        previewElement.addEventListener('click', function (event) {
+            if (document.body.classList.contains('wm-media-manager-open')) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+
+            var closeElement = event.target.closest ? event.target.closest('.close') : null;
+            if (closeElement && previewElement.contains(closeElement)) {
+                event.preventDefault();
+                event.stopPropagation();
+                removeImage(closeElement);
+                return;
+            }
+
+            var dragItem = event.target.closest ? event.target.closest('.drag-item') : null;
+            if (!dragItem || !previewElement.contains(dragItem)) {
+                return;
+            }
+
+            var imageElement = dragItem.querySelector('img');
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (dragItem.classList.contains('is-preview-empty')) {
+                notifyFileManagerPreviewEmpty();
+                return;
+            }
+
+            if (!imageElement || !imageElementHasPreviewSource(imageElement)) {
+                notifyFileManagerPreviewEmpty();
+                return;
+            }
+
+            if (imageElement.complete) {
+                openFileManagerPreviewFromThumbnail(targetId, imageElement);
+                return;
+            }
+
+            var resolved = false;
+            var resolvePreviewClick = function () {
+                if (resolved) {
+                    return;
+                }
+                resolved = true;
+                openFileManagerPreviewFromThumbnail(targetId, imageElement);
+            };
+            imageElement.addEventListener('load', resolvePreviewClick, { once: true });
+            imageElement.addEventListener('error', resolvePreviewClick, { once: true });
+        });
+        previewElement.addEventListener('keydown', function (event) {
+            var closeElement = event.target.closest ? event.target.closest('.close') : null;
+            if (closeElement && previewElement.contains(closeElement) && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault();
+                event.stopPropagation();
+                removeImage(closeElement);
+            }
+        });
+        bindFileManagerPreviewThumbnailState(previewElement);
+        markFileManagerPreviewEmptyStates(previewElement);
+    }
+
+    flushSelectedImage();
+    bindFileManagerPreviewEvents('{{target}}');
+    bindFileManagerPreviewModalClose('{{target}}');
+</script>

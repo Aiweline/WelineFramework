@@ -180,6 +180,11 @@ class DeployReleaseHistoryService
         return (int)$result;
     }
 
+    public function findById(string $releaseId): ?DeployRelease
+    {
+        return $this->loadById($releaseId);
+    }
+
     private function loadById(string $releaseId): ?DeployRelease
     {
         /** @var DeployRelease $model */

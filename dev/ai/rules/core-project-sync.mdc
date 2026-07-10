@@ -1,0 +1,14 @@
+---
+description: 框架核心修改必须同步到 E:\WelineFramework\DEV-workspace
+alwaysApply: true
+---
+
+# 核心项目同步（强制）
+
+权威全文见 `dev/ai/global-constraints.md` §15。
+
+- 在 `E:\公司\远程\src\weline` 修改 `app/code/Weline/**` 下框架/WLS/路由/运行时等**核心能力**后，同一任务内必须同步到 `E:\WelineFramework\DEV-workspace` 的**同相对路径**。
+- 核心修改包括但不限于：`Framework`、`Server`、`ModuleRouter`、`MediaManager`、`FileManager` 等跨项目复用的 Weline 模块。
+- 同步方式：保持相对路径一致，逐文件覆盖或等价 diff；禁止只改 SaaS 发布仓而不回写核心项目。
+- 同步完成后在交付说明中列出：源路径、目标路径、已同步文件清单；若 DEV-workspace 暂不可写则报告阻塞。
+- 业务仓独有模块（如 `GuoLaiRen/*`）不在此规则范围内，除非用户明确要求纳入核心项目。
