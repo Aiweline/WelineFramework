@@ -37,6 +37,27 @@ if (!\function_exists('wlsEventNormalizeMemoryLimit')) {
     }
 }
 
+if (!\function_exists('wlsEventMemoryLimitToBytes')) {
+    function wlsEventMemoryLimitToBytes(string $value): int
+    {
+        $value = \strtoupper(\trim($value));
+        if ($value === '' || $value === '-1') {
+            return 0;
+        }
+        if (!\preg_match('/^(\d+)([KMG])?$/', $value, $matches)) {
+            return 0;
+        }
+
+        $bytes = (int)$matches[1];
+        return match ((string)($matches[2] ?? '')) {
+            'K' => $bytes * 1024,
+            'M' => $bytes * 1024 * 1024,
+            'G' => $bytes * 1024 * 1024 * 1024,
+            default => $bytes,
+        };
+    }
+}
+
 if (!\function_exists('wlsEventMakeAbsolutePath')) {
     function wlsEventMakeAbsolutePath(string $path, string $basePath): string
     {
@@ -87,6 +108,7 @@ $masterPid = 0;
 $workerCount = 1;
 $masterLeaseFile = '';
 $masterToken = '';
+$publicOrigin = '';
 
 $positionalArgs = [];
 foreach ($argv as $i => $arg) {
@@ -140,6 +162,8 @@ foreach ($argv as $arg) {
         $wlsMemoryLimit = wlsEventNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--worker-count=')) {
         $workerCount = \max(1, (int)\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--public-origin=')) {
+        $publicOrigin = (string)\substr($arg, 16);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -185,6 +209,11 @@ $_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
+if ($publicOrigin !== '') {
+    $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
+    $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
+    @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);
 }
@@ -196,7 +225,7 @@ if (!\defined('WLS_DEV_MODE')) {
     $_wlsSystemConfig = \is_array($_wlsEnvConfig['system'] ?? null) ? $_wlsEnvConfig['system'] : [];
     \define('WLS_DEV_MODE', (($_wlsSystemConfig['deploy'] ?? $_wlsEnvConfig['deploy'] ?? '') === 'dev'));
 }
-unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsSystemConfig);
+unset($_wlsEnvFile, $_wlsSystemConfig);
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
@@ -222,6 +251,7 @@ if ($processName !== '') {
 }
 
 $envConfig = $_wlsEnvConfig;
+unset($_wlsEnvConfig);
 $sharedStateRuntime = \Weline\Server\Service\SharedStateRuntimeOptions::fromCliArgs($argv, $instanceName, $envConfig);
 $envOverrides = $sharedStateRuntime->toEnvOverrides();
 $envConfig = \array_replace_recursive($envConfig, $envOverrides);
@@ -351,6 +381,10 @@ $connections = [];
 $nextConnectionId = 0;
 $requestCount = 0;
 $activeRequests = 0;
+$maxMemoryBytes = wlsEventMemoryLimitToBytes($wlsMemoryLimit);
+if ($maxMemoryBytes <= 0) {
+    $maxMemoryBytes = 256 * 1024 * 1024;
+}
 $startTime = \time();
 $shouldExit = false;
 $ipcDraining = false;
@@ -366,6 +400,7 @@ $stats = [
     'requests' => 0,
 ];
 $diagnosticLogBudget = 32;
+$homepageKeepWarmFiber = null;
 
 $listener = null;
 $listener = new \EventListener(
@@ -719,13 +754,27 @@ if ($controlPort > 0 || $supervisorEnabled) {
         (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
         $instanceName
     );
-    if ($kernel->connectAndRegister($controlPort)) {
+    $registered = $kernel->connectAndRegister($controlPort, false);
+    $readyReported = false;
+    if ($registered) {
         $ipcClient = $kernel->getClient();
+        if (!$isMaintenanceWorker
+            && $runtimeError === null
+            && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        ) {
+            \Weline\Server\Log\WlsLogger::info_("[WorkerWarmup] EventBuffer READY-gate warmup start worker={$workerId}");
+            $runtime->runReadyGateWorkerBootstrapWarmup();
+            \Weline\Server\Log\WlsLogger::info_("[WorkerWarmup] EventBuffer READY-gate warmup done worker={$workerId}");
+        }
+        $readyReported = $kernel->sendReady();
+    }
+    if ($registered && $readyReported) {
         $waitingForAck = !($ipcClient?->isReadyStateConfirmed() ?? false);
         $readySentTime = \microtime(true);
-        \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker registered with Master control port {$controlPort}");
+        \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker registered and sent READY to Master control port {$controlPort}");
     } else {
-        \Weline\Server\Log\WlsLogger::error_("EventBuffer SSL worker failed to register with Master control port {$controlPort}");
+        $failureStage = $registered ? 'send READY after bootstrap warmup' : 'register with Master';
+        \Weline\Server\Log\WlsLogger::error_("EventBuffer SSL worker failed to {$failureStage} control_port={$controlPort} worker_id={$workerId} port={$port}");
         exit(2);
     }
 }
@@ -752,7 +801,13 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     $base,
     $masterPid,
     &$ipcReceivedShutdown,
-    $childMasterGuard
+    $childMasterGuard,
+    $fiberScheduler,
+    &$homepageKeepWarmFiber,
+    $runtime,
+    $isMaintenanceWorker,
+    &$activeRequests,
+    $maxMemoryBytes
 ): void {
     if ($kernel !== null) {
         $kernel->tick();
@@ -791,6 +846,45 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
             $shouldExit = true;
             $ipcDraining = true;
             $drainStartTime = $now;
+        }
+    }
+
+    $homepageMemoryPressure = \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
+    $homepageKeepWarmMayRun = !$shouldExit
+        && !$isMaintenanceWorker
+        && !$ipcDraining
+        && !$ipcReceivedShutdown
+        && $workerLoopStartedSent
+        && $connections === []
+        && $activeRequests === 0
+        && !$homepageMemoryPressure;
+    if ($homepageKeepWarmMayRun) {
+        // EventBuffer owns the libevent loop. Advance cooperative timers only
+        // while the worker remains idle so keep-warm never competes with traffic.
+        $fiberScheduler->tick(null, 2.0);
+        if ($homepageKeepWarmFiber instanceof \Fiber && $homepageKeepWarmFiber->isTerminated()) {
+            $homepageKeepWarmFiber = null;
+        }
+    }
+    if ($homepageKeepWarmMayRun
+        && $homepageKeepWarmFiber === null
+        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && $runtime->shouldScheduleHomepageKeepWarm(0, false, false)
+    ) {
+        $fiberScheduler->registerFiber();
+        $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
+            try {
+                $runtime->runHomepageKeepWarmCycle();
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $homepageKeepWarmFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            $homepageKeepWarmFiber = null;
+            \Weline\Server\Log\WlsLogger::warning_('[WorkerWarmup] EventBuffer homepage keep-warm start failed: ' . $e->getMessage());
         }
     }
 
@@ -1070,6 +1164,13 @@ function wlsEventInjectProcessTimeHeader(string $response, float $durationMs): s
     return \substr_replace($response, $headers, $pos + 2, 0);
 }
 
+function wlsEventBadRequestResponse(): string
+{
+    $body = 'Bad Request';
+    return "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
+        . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+}
+
 function wlsEventHandleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -1090,10 +1191,15 @@ function wlsEventHandleRequest(
 ): string {
     $method = 'GET';
     $uri = '/';
+    $requestTarget = '/';
     if (\preg_match('/^([A-Z]+)\s+([^\s]+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $m)) {
         $method = \strtoupper((string)$m[1]);
-        $path = \parse_url((string)$m[2], PHP_URL_PATH);
-        $uri = \is_string($path) && $path !== '' ? $path : '/';
+        $requestTarget = (string)$m[2];
+        if (\Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget) === null) {
+            return wlsEventBadRequestResponse();
+        }
+        $rawPath = \parse_url($requestTarget, PHP_URL_PATH);
+        $uri = \is_string($rawPath) && $rawPath !== '' ? $rawPath : '/';
     }
 
     if ($uri === '/_wls/health') {
@@ -1137,13 +1243,16 @@ function wlsEventHandleRequest(
         }
     }
 
-    $staticResponse = wlsEventHandleStaticFile($uri, $rawRequest);
+    $staticResponse = wlsEventHandleStaticFile($requestTarget, $rawRequest);
     if ($staticResponse !== null) {
         return $staticResponse;
     }
 
     $fastPathResponse = wlsEventTryServeFormattedFpcFastResponse($rawRequest, wlsEventIsKeepAlive($rawRequest));
     if ($fastPathResponse !== null) {
+        if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+            $runtime->noteHomepageNaturalHit($requestTarget);
+        }
         return $fastPathResponse;
     }
 
@@ -1368,13 +1477,13 @@ function wlsEventTryServeFormattedFpcFastResponse(string $rawRequest, bool $keep
     }
 }
 
-function wlsEventHandleStaticFile(string $uri, string $rawRequest): ?string
+function wlsEventHandleStaticFile(string $requestTarget, string $rawRequest): ?string
 {
-    if ($uri === '/' || $uri === '') {
-        return null;
+    $path = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget);
+    if ($path === null) {
+        return wlsEventBadRequestResponse();
     }
-    $path = \rawurldecode((string)\parse_url($uri, PHP_URL_PATH));
-    if ($path === '' || \str_contains($path, "\0") || \str_contains($path, '..')) {
+    if ($path === '/') {
         return null;
     }
     $relative = \ltrim(\str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);

@@ -204,6 +204,7 @@ $orchestratorLaunchId = '';
 $workerCount = 1;
 $masterLeaseFile = '';
 $masterToken = '';
+$publicOrigin = '';
 
 // 先提取位置参数（跳过以 -- 开头的参数）
 $positionalArgs = [];
@@ -259,6 +260,8 @@ foreach ($argv as $arg) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--worker-count=')) {
         $workerCount = \max(1, (int)\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--public-origin=')) {
+        $publicOrigin = (string)\substr($arg, 16);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -325,6 +328,11 @@ $_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
+if ($publicOrigin !== '') {
+    $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
+    $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
+    @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
 
 // 将相对路径转换为绝对路径
 if ($sslCert && !\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $sslCert)) {
@@ -2137,6 +2145,7 @@ $deferredWorkerBootstrapWarmupStarted = false;
 $deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
 $sharedRuntimeConnectionWarmupStarted = false;
 $sharedRuntimeConnectionWarmupNotBefore = \microtime(true);
+$homepageKeepWarmFiber = null;
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
@@ -2331,6 +2340,33 @@ while (true) {
         } catch (\Throwable $e) {
             $fiberScheduler->unregisterFiber();
             WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+
+    // ========== Homepage keep-warm (idle, low priority) ==========
+    $homepageMemoryPressure = $maxMemoryBytes > 0
+        && \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
+    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && $workerLoopStartedSent
+        && !$isMaintenanceWorker
+        && !$ipcReceivedShutdown
+        && empty($pendingHandshakes)
+        && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null)
+        && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)
+    ) {
+        $fiberScheduler->registerFiber();
+        $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
+            try {
+                $runtime->runHomepageKeepWarmCycle();
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $homepageKeepWarmFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_('[WorkerWarmup] homepage keep-warm start failed: ' . $e->getMessage());
         }
     }
 
@@ -2833,6 +2869,7 @@ while (true) {
     // Fiber tick may enqueue SSE/static response bytes; drain writable
     // responses before reading more request data to avoid response head blocking.
     wlsSslFlushQueuedWrites(
+        $activeRequests,
         $writableConnections,
         $writeBuffers,
         $connections,
@@ -3058,6 +3095,15 @@ while (true) {
         
         $rawRequest = $requestBuffers[$connId];
         $requestBuffers[$connId] = '';
+        $uri = '/';
+        if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
+            $_p = \parse_url($matches[1], PHP_URL_PATH);
+            $uri = (\is_string($_p) && $_p !== '') ? $_p : '/';
+        }
+        $method = 'GET';
+        if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
+            $method = $matches[1];
+        }
         if (!isset($requestLogged[$connId])) {
             $requestCount++;
         }
@@ -3092,15 +3138,6 @@ while (true) {
         
         // 非开发模式：在请求完整后输出路径日志（开发模式已在接收首行时提前输出）
         if (!$isDev) {
-            $uri = '/';
-            if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
-                $_p = \parse_url($matches[1], PHP_URL_PATH);
-                $uri = (\is_string($_p) && $_p !== '') ? $_p : '/';
-            }
-            $method = 'GET';
-            if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
-                $method = $matches[1];
-            }
             $requestLogPrefix = InternalRequestLabel::buildLogPrefix($rawRequest);
             if ($requestLogPrefix !== '') {
                 $method = $requestLogPrefix . $method;
@@ -3162,6 +3199,11 @@ while (true) {
         if (!$isLongLived) {
             $fastPathResponse = wlsTryServeFormattedFpcFastResponse($rawRequest, isKeepAlive($rawRequest));
             if ($fastPathResponse !== null) {
+                if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+                    && \preg_match('/^[A-Z]+\s+(\S+)\s+HTTP\//i', $rawRequest, $fastPathRequestLine)
+                ) {
+                    $runtime->noteHomepageNaturalHit((string)($fastPathRequestLine[1] ?? '/'));
+                }
                 $fastPathElapsedMs = (string)\round((\microtime(true) - $handleStartTime) * 1000, 2);
                 $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-Wls-Performance-Total', $fastPathElapsedMs);
                 $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-Wls-Performance-Fpc-Fastpath', 'worker');
@@ -3492,6 +3534,7 @@ while (true) {
 
     // 处理可写连接
     wlsSslFlushQueuedWrites(
+        $activeRequests,
         $writableConnections,
         $writeBuffers,
         $connections,
@@ -4056,6 +4099,7 @@ function wlsSslAdvanceHandshakeState(
  * @param array<int|string, string> $writeBuffers
  */
 function wlsSslFlushQueuedWrites(
+    int $activeRequests,
     array &$writableConnections,
     array &$writeBuffers,
     array &$connections,
@@ -6040,7 +6084,17 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     ];
     
     // 解析文件扩展名（去除查询字符串；URL 解码以支持中文等非 ASCII 文件名）
-    $uriPath = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($uri);
+    $uriPath = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget);
+    if ($uriPath === null) {
+        \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
+            'status' => 'rejected',
+            'uri' => $requestTarget,
+        ]);
+        $body = 'Bad Request';
+        return "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
+            . \strlen($body)
+            . "\r\nConnection: close\r\n\r\n{$body}";
+    }
     $extension = \strtolower(\pathinfo($uriPath, PATHINFO_EXTENSION));
     
     // 不是静态文件，交给框架处理
@@ -6048,9 +6102,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         return null;
     }
     
-    // 安全检查：防止目录遍历，并兼容带 backend key / 货币 / 语言前缀的静态资源 URL
-    $normalizedUri = \str_replace(['../', '..\\'], '', $uriPath);
-    $normalizedUri = \trim(\str_replace('\\', '/', $normalizedUri), '/\\');
+    // URI resolver 已按 segment 完成单次解码和目录边界校验。
+    $normalizedUri = \trim($uriPath, '/');
     if ($normalizedUri === '') {
         return null;
     }

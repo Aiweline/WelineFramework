@@ -202,6 +202,12 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
                 . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
             );
         }
+        if ($engine === 'event_buffer' && $context->mode === 'linux-direct') {
+            throw new \InvalidArgumentException(
+                'wls.ssl.engine=event_buffer requires the Dispatcher+TLS topology and does not support linux-direct mode. '
+                . 'Use wls.ssl.engine=stream for direct mode.'
+            );
+        }
 
         return match ($engine) {
             'stream' => $scriptDir . DS . 'worker_ssl.php',
