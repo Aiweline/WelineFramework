@@ -33,6 +33,11 @@ final class StaticRequestBypassDecider
             return false;
         }
 
+        if (self::isDynamicMediaProcessorRequest($candidateUri)
+            || self::isDynamicMediaProcessorRequest($requestUri)) {
+            return true;
+        }
+
         $isThemeViewAsset = \str_contains($candidateUri, '/view/theme/frontend/')
             || \str_contains($candidateUri, '/view/theme/backend/');
         if (!$isThemeViewAsset) {
@@ -48,6 +53,10 @@ final class StaticRequestBypassDecider
     {
         $candidateUri = \trim(\str_replace('\\', '/', $candidateUri), '/');
         if ($candidateUri === '') {
+            return false;
+        }
+
+        if (self::isDynamicMediaProcessorRequest($candidateUri)) {
             return false;
         }
 
@@ -68,6 +77,20 @@ final class StaticRequestBypassDecider
         }
 
         return \preg_match('#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/view/(?:templates/.+/asset|statics)/#', $candidateUri) === 1;
+    }
+
+    private static function isDynamicMediaProcessorRequest(string $uri): bool
+    {
+        $uri = \trim(\str_replace('\\', '/', $uri), '/');
+        if ($uri === '') {
+            return false;
+        }
+
+        $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $path = \trim(\str_replace('\\', '/', $path), '/');
+
+        return \str_starts_with($path, 'media/image/')
+            || \str_starts_with($path, 'media/file/');
     }
 
     private static function isExplicitPreviewRequest(string $uri): bool

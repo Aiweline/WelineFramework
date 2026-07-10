@@ -22,9 +22,44 @@ class LongRunningPhpRuntime
 
     protected function initConsoleEncoding(): void
     {
-        if (\PHP_SAPI === 'cli') {
-            ConsoleEncoding::initForCli();
+        if (\PHP_SAPI !== 'cli') {
+            return;
         }
+        if ($this->isWindows() && $this->isWlsDaemonProcess()) {
+            return;
+        }
+        $this->initializeConsoleEncoding();
+    }
+
+    protected function initializeConsoleEncoding(): void
+    {
+        ConsoleEncoding::initForCli();
+    }
+
+    protected function isWindows(): bool
+    {
+        return \PHP_OS_FAMILY === 'Windows';
+    }
+
+    protected function isWlsDaemonProcess(): bool
+    {
+        $roleValue = $_SERVER['WLS_PROCESS_ROLE']
+            ?? $_ENV['WLS_PROCESS_ROLE']
+            ?? \getenv('WLS_PROCESS_ROLE');
+        $role = \is_string($roleValue) ? $roleValue : '';
+        if ($role !== '') {
+            return true;
+        }
+
+        $script = \basename((string)($_SERVER['argv'][0] ?? $_SERVER['SCRIPT_FILENAME'] ?? ''));
+        return \in_array($script, [
+            'dispatcher.php',
+            'http_redirect_worker.php',
+            'session_server.php',
+            'worker.php',
+            'worker_ssl.php',
+            'worker_ssl_event.php',
+        ], true);
     }
 
     protected function setIniValue(string $key, string $value): void

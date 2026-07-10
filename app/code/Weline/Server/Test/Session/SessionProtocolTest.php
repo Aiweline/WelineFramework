@@ -183,4 +183,25 @@ class SessionProtocolTest extends TestCase
         $decoded = \json_decode(\trim($request), true);
         $this->assertEquals(SessionProtocol::CMD_STATS, $decoded['cmd']);
     }
+
+    public function testExtractMessagesDropsOversizedFrameAndKeepsFollowingValidFrame(): void
+    {
+        $buffer = \str_repeat('x', 1_048_577) . "\n{\"cmd\":\"ping\"}\n";
+
+        $messages = SessionProtocol::extractMessages($buffer);
+
+        $this->assertCount(1, $messages);
+        $this->assertEquals('ping', $messages[0]['cmd']);
+        $this->assertEquals('', $buffer);
+    }
+
+    public function testExtractMessagesClearsOversizedUnterminatedBuffer(): void
+    {
+        $buffer = \str_repeat('x', 16_777_217);
+
+        $messages = SessionProtocol::extractMessages($buffer);
+
+        $this->assertSame([], $messages);
+        $this->assertEquals('', $buffer);
+    }
 }

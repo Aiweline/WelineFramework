@@ -19,6 +19,14 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertTrue((bool)($config['no_ssl'] ?? false));
     }
 
+    public function testNoSslSkipsManagedWildcardCertificatePreparation(): void
+    {
+        $start = $this->createProbe();
+        $start->resolveConfig('default', ['no-ssl' => true]);
+
+        self::assertSame(0, $start->managedWildcardCertificateCalls);
+    }
+
     public function testHttpOnlyAliasAlsoForcesHttpOnlyMode(): void
     {
         $start = $this->createProbe();
@@ -239,6 +247,8 @@ final class StartCommandArgsSolidificationTest extends TestCase
 
 final class StartConfigProbe extends Start
 {
+    public int $managedWildcardCertificateCalls = 0;
+
     public function __construct(
         private readonly ?array $savedConfig = null,
         private readonly array $envConfig = []
@@ -297,8 +307,14 @@ final class StartConfigProbe extends Start
         unset($host);
     }
 
-    protected function ensureLocalSelfSignedCertificates(): void
+    protected function ensureLocalSelfSignedCertificates(array $config = []): void
     {
+        unset($config);
+    }
+
+    protected function ensureManagedLocalWildcardCertificate(): void
+    {
+        $this->managedWildcardCertificateCalls++;
     }
 
     protected function generateCertificateMap(): void
@@ -341,8 +357,9 @@ final class StartBaseEnvConfigProbe extends Start
         unset($host);
     }
 
-    protected function ensureLocalSelfSignedCertificates(): void
+    protected function ensureLocalSelfSignedCertificates(array $config = []): void
     {
+        unset($config);
     }
 
     protected function generateCertificateMap(): void
@@ -378,7 +395,6 @@ final class StartInstanceInfoProbe extends Start
             true,
             '/tmp/cert.pem',
             '/tmp/key.pem',
-            [101, 102],
             true,
             19443,
             80,
@@ -403,7 +419,6 @@ final class StartInstanceInfoProbe extends Start
             true,
             '/tmp/cert.pem',
             '/tmp/key.pem',
-            [],
             true,
             19443,
             80,

@@ -46,7 +46,7 @@ final class ChildMasterGuardTest extends TestCase
         ]);
 
         self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('token', $guard->getLastExitReason());
+        self::assertStringContainsString('token mismatch', $guard->getLastExitReason());
     }
 
     public function testChildMasterGuardExitsWhenLeasePidOrInstanceDoesNotMatch(): void
@@ -56,14 +56,14 @@ final class ChildMasterGuardTest extends TestCase
         ]);
 
         self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('PID 不匹配', $guard->getLastExitReason());
+        self::assertStringContainsString('PID mismatch', $guard->getLastExitReason());
 
         $guard = $this->guardForLease([
             'instance' => 'other-instance',
         ]);
 
         self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('instance 不匹配', $guard->getLastExitReason());
+        self::assertStringContainsString('instance mismatch', $guard->getLastExitReason());
     }
 
     public function testChildMasterGuardAllowsMatchingRunningLease(): void
@@ -72,6 +72,51 @@ final class ChildMasterGuardTest extends TestCase
 
         self::assertFalse($guard->shouldExit(true));
         self::assertSame('', $guard->getLastExitReason());
+    }
+
+    public function testChildMasterGuardTrustsFreshMatchingLeaseBeforeSlowPidProbe(): void
+    {
+        $missingPid = $this->missingPid();
+        $path = $this->writeLease([
+            'master_pid' => $missingPid,
+        ]);
+        $guard = new ChildMasterGuard(
+            $missingPid,
+            $path,
+            'unit-token',
+            'UT-Child',
+            'unit-instance',
+            7,
+            0.0
+        );
+
+        self::assertFalse($guard->shouldExit(true));
+        self::assertSame('', $guard->getLastExitReason());
+        self::assertFalse($guard->shouldExit(true));
+        self::assertSame('', $guard->getLastExitReason());
+        self::assertFalse($guard->shouldExit(true));
+        self::assertSame('', $guard->getLastExitReason());
+    }
+
+    public function testChildMasterGuardExitsWhenLeaseIsStaleAndPidIsMissing(): void
+    {
+        $missingPid = $this->missingPid();
+        $path = $this->writeLease([
+            'master_pid' => $missingPid,
+            'updated_at' => \microtime(true) - MasterLeaseManager::HEARTBEAT_STALE_SEC - 1,
+        ]);
+        $guard = new ChildMasterGuard(
+            $missingPid,
+            $path,
+            'unit-token',
+            'UT-Child',
+            'unit-instance',
+            7,
+            0.0
+        );
+
+        self::assertTrue($guard->shouldExit(true));
+        self::assertStringContainsString('heartbeat stale', $guard->getLastExitReason());
     }
 
     /**

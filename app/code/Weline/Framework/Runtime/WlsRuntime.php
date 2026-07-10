@@ -211,7 +211,7 @@ class WlsRuntime implements RuntimeInterface
         }
 
         if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            return true;
+            $rawFlag = '0';
         }
 
         $flag = \strtolower(\trim((string)$rawFlag));
@@ -334,7 +334,7 @@ class WlsRuntime implements RuntimeInterface
 
         $rawFlag = \getenv('WLS_WORKER_READY_GATE_BOOTSTRAP_WARMUP');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.ready_gate_bootstrap_warmup', '0');
+            $rawFlag = Env::get('wls.worker.ready_gate_bootstrap_warmup', '1');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
@@ -466,7 +466,7 @@ class WlsRuntime implements RuntimeInterface
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '0');
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '1');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
@@ -489,7 +489,7 @@ class WlsRuntime implements RuntimeInterface
             $raw = Env::get('wls.worker.dynamic_ready_gate_max_paths', null);
         }
         if ($raw === null || \trim((string)$raw) === '') {
-            $raw = Env::get('wls.worker.dynamic_ready_gate_max', 32);
+            $raw = Env::get('wls.worker.dynamic_ready_gate_max', 1);
         }
 
         return \max(1, \min(128, (int)$raw));
@@ -561,14 +561,19 @@ class WlsRuntime implements RuntimeInterface
         }
 
         $workerIndex = ($workerId - 1) % $workerCount;
+        $common = [];
         $shard = [];
         foreach (\array_values($paths) as $index => $path) {
+            if ($index === 0 && $path === '/') {
+                $common[] = $path;
+                continue;
+            }
             if (($index % $workerCount) === $workerIndex) {
                 $shard[] = $path;
             }
         }
 
-        return $shard;
+        return \array_values(\array_unique([...$common, ...$shard]));
     }
 
     private function shouldShardReadyGateWarmupPaths(): bool
@@ -980,8 +985,17 @@ class WlsRuntime implements RuntimeInterface
             return false;
         }
 
-        // This warmup is part of the WLS startup contract. Do not gate it
-        // behind an enable flag; only one owner worker runs it to avoid duplicate load.
+        $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
+        }
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '0');
+        }
+        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
+            return false;
+        }
+
         return $this->isDynamicFirstRenderWarmupOwnerWorker(
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID',
             'wls.worker.backend_deferred_warmup_owner_worker_id',
@@ -1589,8 +1603,7 @@ class WlsRuntime implements RuntimeInterface
                 return;
             }
 
-            SchedulerSystem::yield();
-            \usleep(50_000);
+            SchedulerSystem::yieldDelay(50);
         } while (\microtime(true) < $deadline);
     }
 
@@ -1670,7 +1683,7 @@ class WlsRuntime implements RuntimeInterface
         }
 
         if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            return true;
+            $rawFlag = '0';
         }
 
         $flag = \strtolower(\trim((string)$rawFlag));
@@ -1703,7 +1716,7 @@ class WlsRuntime implements RuntimeInterface
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '1');
+            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0');
         }
 
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
