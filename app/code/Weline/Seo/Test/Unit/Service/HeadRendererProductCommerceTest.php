@@ -72,6 +72,21 @@ class HeadRendererProductCommerceTest extends TestCase
                 'rating' => 4.6,
                 'review_count' => 27,
             ],
+            'reviews' => [
+                [
+                    'customer_name' => 'Alex Rider',
+                    'rating' => 5,
+                    'title' => 'Great fit',
+                    'content' => 'Comfortable linen dress with accurate sizing.',
+                    'created_at' => '2026-03-01 10:15:00',
+                ],
+                [
+                    'customer_name' => 'Jamie',
+                    'rating' => 4,
+                    'content' => 'Good quality for the price.',
+                    'created_at' => '2026-02-20 08:00:00',
+                ],
+            ],
         ]);
 
         $html = (new HeadRenderer($resolver))->render(new ProductCommerceHeadTemplateStub());
@@ -89,6 +104,39 @@ class HeadRendererProductCommerceTest extends TestCase
         self::assertStringContainsString('"hasMerchantReturnPolicy": {', $html);
         self::assertStringContainsString('"mainEntity": {', $html);
         self::assertStringContainsString('"aggregateRating": {', $html);
+        self::assertStringContainsString('"review": {', $html);
+        self::assertStringContainsString('"reviewBody": "Comfortable linen dress with accurate sizing."', $html);
+    }
+
+    public function testSkipsAggregateRatingWhenProductHasNoReviewFacts(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'product',
+            'site_name' => 'Shop',
+            'title' => 'Linen Dress',
+            'description' => 'Sleeveless linen dress.',
+            'canonical_url' => 'https://shop.test/product/linen-dress',
+            'url' => 'https://shop.test/product/linen-dress',
+            'product' => [
+                'name' => 'Linen Dress',
+                'sku' => 'DRS-001',
+                'price' => '29.99',
+                'price_currency' => 'USD',
+                'stock_status' => 'in_stock',
+                'rating' => 4.6,
+                'review_count' => 27,
+            ],
+            'reviews' => [],
+        ]);
+
+        $html = (new HeadRenderer($resolver))->render(new ProductCommerceHeadTemplateStub());
+
+        self::assertStringNotContainsString('"aggregateRating": {', $html);
+        self::assertStringNotContainsString('"review": {', $html);
     }
 }
 

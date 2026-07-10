@@ -193,6 +193,10 @@ class PageSeoContextResolver
                 $this->readTemplate($template, 'qa_list'),
                 $this->read($page, ['qa_list']),
             ])),
+            'reviews' => $this->normalizeReviews($this->firstNonEmpty([
+                $this->readTemplate($template, 'reviews'),
+                $this->read($seo, ['reviews']),
+            ])),
             'organization' => $this->normalizeOrganization($seo, $meta, $template, (string) $siteName),
             '_slot' => $slot,
             '_options' => $options,
@@ -836,6 +840,18 @@ class PageSeoContextResolver
      * @return array<int, array<string, mixed>>
      */
     private function normalizeQaList(mixed $items): array
+    {
+        if (!is_array($items) || !$this->isList($items)) {
+            return [];
+        }
+
+        return array_values(array_filter($items, static fn ($item): bool => is_array($item)));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeReviews(mixed $items): array
     {
         if (!is_array($items) || !$this->isList($items)) {
             return [];
