@@ -8,11 +8,30 @@
           parent="Weline_Backend::system_maintenance"
           icon="mdi mdi-source-branch"
           order="70"/>
-    <menu source="Weline_Deploy::deploy_release"
-          name="deploy_release"
-          title="发布历史"
-          action="deploy/backend/release"
+    <menu source="Weline_Deploy::release_management"
+          name="release_management"
+          title="发布管理"
+          action=""
           parent="Weline_Backend::system_maintenance"
-          icon="mdi mdi-rocket-launch"
-          order="71"/>
+          icon="mdi mdi-rocket-launch-outline"
+          order="71">
+        <menu source="Weline_Deploy::release_control"
+              name="release_control"
+              title="发布控制"
+              action="deploy/backend/release-control"
+              icon="mdi mdi-source-branch-sync"
+              order="10"/>
+        <menu source="Weline_Deploy::deploy_release"
+              name="deploy_release"
+              title="发布历史"
+              action="deploy/backend/release"
+              icon="mdi mdi-history"
+              order="20"/>
+        <menu source="Weline_Deploy::core_update"
+              name="core_update"
+              title="核心更新"
+              action="deploy/backend/core-update"
+              icon="mdi mdi-update"
+              order="30"/>
+    </menu>
 </menus>
