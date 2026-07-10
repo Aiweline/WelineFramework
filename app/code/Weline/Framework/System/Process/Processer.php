@@ -46,7 +46,7 @@ class Processer
      * 否则局部变量析构时可能触发阻塞性的 proc_close()。统一在后续调用或
      * 进程退出前做最佳努力回收，避免重新退回 cmd.exe 中间层。
      *
-     * @var array<int, array{process: resource, started_at: float, script_path: string, result_path: string, error_path: string, launch_items?: array<int, array<string, mixed>>}>
+     * @var array<int, array{process: resource, started_at: float, termination_requested_at?: float, script_path: string, result_path: string, error_path: string, launch_items?: array<int, array<string, mixed>>}>
      */
     private static array $windowsDetachedBatchHelpers = [];
 
@@ -2623,7 +2623,7 @@ class Processer
      * 适用于需要同时启动多个进程的场景（如 WLS 启动多个 Worker）。
      * 使用 Fiber 并发执行 proc_open，减少串行等待时间。
      * 
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
      *        键为标识符，值为命令配置数组
      * @return array<string, int> 标识符 => PID（0 表示启动失败）
      */
@@ -2636,6 +2636,23 @@ class Processer
         if (\count($commands) === 1) {
             $key = \array_key_first($commands);
             $config = $commands[$key];
+            if (!IS_WIN || (bool) ($config['childOwnsPid'] ?? false)) {
+                $optimizedResults = self::tryBatchCreateOptimized($commands);
+                if ($optimizedResults !== null) {
+                    return $optimizedResults;
+                }
+
+                if ((bool) ($config['childOwnsPid'] ?? false)) {
+                    if (!IS_WIN) {
+                        throw new \RuntimeException(
+                            'Unix batch process creation is unavailable; refusing to register a child-owned PID in the parent.'
+                        );
+                    }
+                    throw new \RuntimeException(
+                        'Windows batch process creation is unavailable; refusing to register a child-owned PID in the parent.'
+                    );
+                }
+            }
             $pid = self::create(
                 $config['command'],
                 $config['block'] ?? false,
@@ -2656,6 +2673,13 @@ class Processer
                 'Windows batch process creation is unavailable; refusing to fall back to serial create() startup.'
             );
         }
+        foreach ($commands as $config) {
+            if ((bool) ($config['childOwnsPid'] ?? false)) {
+                throw new \RuntimeException(
+                    'Unix batch process creation is unavailable; refusing to register a child-owned PID in the parent.'
+                );
+            }
+        }
 
         $results = [];
         foreach ($commands as $key => $config) {
@@ -2675,7 +2699,7 @@ class Processer
     }
 
     /**
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
      * @return array<string, int>|null
      */
     private static function tryBatchCreateOptimized(array $commands): ?array
@@ -2684,16 +2708,436 @@ class Processer
             return self::batchCreateWindows($commands);
         }
 
+        return self::batchCreateUnix($commands);
+    }
+
+    /**
+     * Launch a whole Unix batch through one short-lived PHP/pcntl launcher.
+     * The launcher forks isolated sessions, redirects stdio, execs strict PHP
+     * argv and reports the real grandchild PIDs before it exits. Master file
+     * descriptors above 2 are replaced in the launcher descriptor map, and no
+     * shell or long-lived proc resource remains in the Master.
+     *
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
+     * @return array<string, int>|null
+     */
+    private static function batchCreateUnix(array $commands): ?array
+    {
+        $requiredFunctions = ['proc_open', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'];
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        foreach ($requiredFunctions as $function) {
+            if (!\function_exists($function) || \in_array($function, $disabledFunctions, true)) {
+                return null;
+            }
+        }
+        foreach ($commands as $config) {
+            if ((bool) ($config['foreground'] ?? false)) {
+                return null;
+            }
+        }
+        $openFileDescriptors = self::listUnixOpenFileDescriptors();
+        if ($openFileDescriptors === null) {
+            return null;
+        }
+
+        $startedAt = \microtime(true);
+        $results = [];
+        $prepared = [];
+        // Strict preflight: every non-empty command must be a safely parsed PHP
+        // argv before the launcher is allowed to create any child.
+        foreach ($commands as $key => $config) {
+            $command = (string) ($config['command'] ?? '');
+            if ($command === '') {
+                $results[$key] = 0;
+                continue;
+            }
+            $processInfo = self::ensureProcessName($command);
+            $processCommand = (string) $processInfo['command'];
+            $argv = self::parseUnixManagedPhpArgv($processCommand);
+            if ($argv === []) {
+                return null;
+            }
+            $enableLog = $config['enableLog'] ?? null;
+            if ($enableLog === null) {
+                $enableLog = self::isLogEnabled();
+            }
+            $prepared[$key] = [
+                'argv' => $argv,
+                'command' => $processCommand,
+                'process_name' => (string) ($processInfo['name'] ?? ''),
+                'block' => (bool) ($config['block'] ?? false),
+                'enable_log' => (bool) $enableLog,
+                'child_owns_pid' => (bool) ($config['childOwnsPid'] ?? false),
+            ];
+        }
+
+        $launchItems = [];
+        foreach ($prepared as $key => $item) {
+            if (self::shouldTryManagedProcessReuse((bool) $item['block'], false)) {
+                $processCommand = (string) $item['command'];
+                $existingPid = (int) self::getData($processCommand, 'pid');
+                if ($existingPid > 0 && self::isManagedProcessRunning(
+                    $existingPid,
+                    $item['process_name'] !== '' ? (string) $item['process_name'] : null,
+                    '',
+                    $processCommand
+                )) {
+                    $results[$key] = $existingPid;
+                    continue;
+                }
+                if ($existingPid > 0) {
+                    self::removePidFile($processCommand);
+                }
+            }
+            $enableLog = (bool) $item['enable_log'];
+            $processCommand = (string) $item['command'];
+            $logFile = $enableLog ? self::getLogFile($processCommand) : '';
+            if ($enableLog && !self::prepareProcessLogFileForWrite($logFile)) {
+                self::logLifecycleEvent('log_unwritable', $processCommand, 0, 'path=' . $logFile);
+                $enableLog = false;
+                $logFile = '';
+            }
+            if ($enableLog) {
+                self::setOutput(
+                    $processCommand,
+                    PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . ' ---' . PHP_EOL
+                    . '[INFO] unix isolated pcntl batch launcher' . PHP_EOL . $processCommand . PHP_EOL,
+                    true
+                );
+            }
+            $id = \base64_encode((string) $key);
+            $launchItems[$id] = [
+                'id' => $id,
+                'argv' => $item['argv'],
+                'cwd' => BP,
+                'stdout' => $enableLog ? $logFile : '/dev/null',
+                'stderr' => $enableLog ? $logFile : '/dev/null',
+                'command' => $processCommand,
+                'child_owns_pid' => (bool) $item['child_owns_pid'],
+                'result_key' => $key,
+            ];
+        }
+        if ($launchItems === []) {
+            return $results;
+        }
+
+        $payload = \json_encode(\array_values($launchItems), \JSON_UNESCAPED_SLASHES);
+        if (!\is_string($payload)) {
+            return null;
+        }
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        foreach ($openFileDescriptors as $fd) {
+            if ($fd > 2) {
+                $descriptors[$fd] = ['file', '/dev/null', 'r'];
+            }
+        }
+        \ksort($descriptors, \SORT_NUMERIC);
+
+        $submitStartedAt = \microtime(true);
+        $launcher = @\proc_open(
+            [
+                PHP_BINARY,
+                '-r',
+                self::unixBatchLauncherCode(),
+                \base64_encode($payload),
+                \base64_encode((string) \json_encode($openFileDescriptors)),
+            ],
+            $descriptors,
+            $pipes,
+            BP,
+            null,
+            ['bypass_shell' => true]
+        );
+        if (!\is_resource($launcher)) {
+            return null;
+        }
+        @\stream_set_blocking($pipes[1], false);
+        @\stream_set_blocking($pipes[2], false);
+        $submitSeconds = \microtime(true) - $submitStartedAt;
+
+        $stdout = '';
+        $stderr = '';
+        $resultStartedAt = \microtime(true);
+        $deadline = $resultStartedAt + self::resolveUnixBatchCreateResultTimeout(\count($launchItems));
+        do {
+            $stdout .= (string) (@\fread($pipes[1], 8192) ?: '');
+            $stderr .= (string) (@\fread($pipes[2], 8192) ?: '');
+            $status = @\proc_get_status($launcher);
+            if (\substr_count($stdout, "\n") >= \count($launchItems)
+                || ($status['running'] ?? false) !== true) {
+                break;
+            }
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
+        } while (\microtime(true) < $deadline);
+
+        $stdout .= (string) (@\stream_get_contents($pipes[1]) ?: '');
+        $stderr .= (string) (@\stream_get_contents($pipes[2]) ?: '');
+        @\fclose($pipes[1]);
+        @\fclose($pipes[2]);
+        self::finishUnixBatchLauncher($launcher);
+        $pidMap = self::parseUnixBatchLauncherPidMap($stdout);
+
+        foreach ($launchItems as $id => $item) {
+            $key = $item['result_key'];
+            $pid = (int) ($pidMap[$id] ?? 0);
+            $results[$key] = $pid > 0
+                ? ((bool) $item['child_owns_pid'] ? $pid : self::setPid((string) $item['command'], $pid))
+                : 0;
+        }
+        foreach ($commands as $key => $config) {
+            unset($config);
+            $results[$key] ??= 0;
+        }
+        if (\trim($stderr) !== '') {
+            \error_log('[Processer] unix batch launcher: ' . \trim($stderr));
+        }
+
+        $timing = \json_encode([
+            'item_count' => \count($commands),
+            'submitted_count' => \count($launchItems),
+            'fallback_count' => 0,
+            'submit_ms' => \round($submitSeconds * 1000, 3),
+            'result_ms' => \round((\microtime(true) - $resultStartedAt) * 1000, 3),
+            'total_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
+        ], \JSON_UNESCAPED_SLASHES);
+        \error_log('[Processer] batchCreateUnix timing ' . ($timing !== false ? $timing : '{}'));
+
+        return $results;
+    }
+
+    private static function resolveUnixBatchCreateResultTimeout(int $pendingCount): float
+    {
+        if ($pendingCount <= 0) {
+            return 0.0;
+        }
+
+        $configured = (float) (Env::get('system.processer.unix_batch_create_result_timeout_sec', 0) ?? 0);
+        if ($configured > 0.0) {
+            return \max(0.05, \min(1.0, $configured));
+        }
+
+        return \min(0.5, \max(0.15, 0.1 + ($pendingCount * 0.015)));
+    }
+
+    /**
+     * @return list<int>|null
+     */
+    private static function listUnixOpenFileDescriptors(): ?array
+    {
+        foreach (['/proc/self/fd', '/dev/fd'] as $directory) {
+            if (!\is_dir($directory)) {
+                continue;
+            }
+            $entries = @\scandir($directory);
+            if (!\is_array($entries)) {
+                continue;
+            }
+            $fds = [];
+            foreach ($entries as $entry) {
+                if (\ctype_digit($entry) && (int) $entry > 2) {
+                    $fds[(int) $entry] = (int) $entry;
+                }
+            }
+            \sort($fds, \SORT_NUMERIC);
+
+            return \array_values($fds);
+        }
+
         return null;
     }
 
     /**
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
+     * Parse only a managed PHP command. Shell operators outside quotes are
+     * rejected because the optimized launcher never delegates to a shell.
+     *
+     * @return list<string>
+     */
+    private static function parseUnixManagedPhpArgv(string $command): array
+    {
+        $tokens = [];
+        $token = '';
+        $quote = '';
+        $started = false;
+        $length = \strlen($command);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $command[$index];
+            if ($quote !== '') {
+                if ($char === $quote) {
+                    $quote = '';
+                } elseif ($char === '\\' && $quote === '"' && $index + 1 < $length) {
+                    $token .= $command[++$index];
+                } else {
+                    $token .= $char;
+                }
+                $started = true;
+                continue;
+            }
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+                $started = true;
+                continue;
+            }
+            if ($char === '\\') {
+                if (++$index >= $length) {
+                    return [];
+                }
+                $token .= $command[$index];
+                $started = true;
+                continue;
+            }
+            if (\ctype_space($char)) {
+                if ($started) {
+                    $tokens[] = $token;
+                    $token = '';
+                    $started = false;
+                }
+                continue;
+            }
+            if (\str_contains("|&;<>()`\$\r\n", $char)) {
+                return [];
+            }
+            $token .= $char;
+            $started = true;
+        }
+        if ($quote !== '') {
+            return [];
+        }
+        if ($started) {
+            $tokens[] = $token;
+        }
+        if (\count($tokens) < 2) {
+            return [];
+        }
+        $expectedPhp = \realpath(PHP_BINARY);
+        $actualPhp = \realpath((string) $tokens[0]);
+        if ($expectedPhp === false || $actualPhp === false || $expectedPhp !== $actualPhp) {
+            return [];
+        }
+
+        return \array_values(\array_map('strval', $tokens));
+    }
+
+    private static function unixBatchLauncherCode(): string
+    {
+        return <<<'PHP'
+(static function (array $arguments): void {
+    $decoded = base64_decode((string)($arguments[1] ?? ''), true);
+    $items = is_string($decoded) ? json_decode($decoded, true) : null;
+    $closeFdsDecoded = base64_decode((string)($arguments[2] ?? ''), true);
+    $closeFds = is_string($closeFdsDecoded) ? json_decode($closeFdsDecoded, true) : [];
+    $closeFds = is_array($closeFds)
+        ? array_values(array_filter(array_map('intval', $closeFds), static fn (int $fd): bool => $fd > 2))
+        : [];
+    if (!is_array($items)) {
+        return;
+    }
+    foreach ($items as $item) {
+        if (!is_array($item) || !is_array($item['argv'] ?? null)) {
+            continue;
+        }
+        $id = (string)($item['id'] ?? '');
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            fwrite(STDOUT, $id . "\t0\n");
+            fwrite(STDERR, $id . ": pcntl_fork failed\n");
+            continue;
+        }
+        if ($pid === 0) {
+            @posix_setsid();
+            @chdir((string)($item['cwd'] ?? getcwd()));
+            // proc_open has no POSIX close_fds option. The parent descriptor
+            // map already replaced every Master resource with /dev/null; close
+            // those replacement slots as well when the local PHP build exposes
+            // FFI, so long-running Workers do not retain redundant descriptors.
+            if ($closeFds !== [] && class_exists('FFI')) {
+                try {
+                    $libc = FFI::cdef('int close(int fd);');
+                    foreach ($closeFds as $fd) {
+                        $libc->close($fd);
+                    }
+                } catch (Throwable) {
+                    // FFI may be disabled by policy. The descriptors remain
+                    // harmless /dev/null replacements, never Master resources.
+                }
+            }
+            @fclose(STDIN);
+            @fclose(STDOUT);
+            @fclose(STDERR);
+            $stdin = @fopen('/dev/null', 'rb');
+            $stdout = @fopen((string)($item['stdout'] ?? '/dev/null'), 'ab');
+            if (!is_resource($stdout)) {
+                $stdout = @fopen('/dev/null', 'ab');
+            }
+            $stderr = @fopen((string)($item['stderr'] ?? '/dev/null'), 'ab');
+            if (!is_resource($stderr)) {
+                $stderr = @fopen('/dev/null', 'ab');
+            }
+            $argv = array_values(array_map('strval', $item['argv']));
+            $php = (string)array_shift($argv);
+            @pcntl_exec($php, $argv);
+            return;
+        }
+        fwrite(STDOUT, $id . "\t" . $pid . "\n");
+        fflush(STDOUT);
+    }
+})($argv);
+PHP;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private static function parseUnixBatchLauncherPidMap(string $output): array
+    {
+        $result = [];
+        foreach (\preg_split('/\r\n|\r|\n/', \trim($output)) ?: [] as $line) {
+            [$id, $pid] = \array_pad(\explode("\t", $line, 2), 2, '');
+            if ($id !== '' && \ctype_digit($pid)) {
+                $result[$id] = (int) $pid;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param resource $launcher
+     */
+    private static function finishUnixBatchLauncher($launcher): void
+    {
+        if (!\is_resource($launcher)) {
+            return;
+        }
+        $status = @\proc_get_status($launcher);
+        if (($status['running'] ?? false) === true) {
+            @\proc_terminate($launcher);
+            $deadline = \microtime(true) + 0.05;
+            do {
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
+                $status = @\proc_get_status($launcher);
+            } while (($status['running'] ?? false) === true && \microtime(true) < $deadline);
+        }
+        if (($status['running'] ?? false) === true && (int)($status['pid'] ?? 0) > 0) {
+            @\posix_kill((int)$status['pid'], \SIGKILL);
+        }
+        @\proc_close($launcher);
+    }
+
+    /**
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
      * @return array<string, int>|null
      */
     private static function batchCreateWindows(array $commands): ?array
     {
+        $timingStartedAt = \microtime(true);
+        $timings = [];
+        $phaseStartedAt = $timingStartedAt;
         self::reapWindowsDetachedBatchHelpers();
+        $timings['reap'] = \microtime(true) - $phaseStartedAt;
 
         $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
         $procOpenAvailable = \function_exists('proc_open') && !\in_array('proc_open', $disabledFunctions, true);
@@ -2704,6 +3148,7 @@ class Processer
 
         $results = [];
         $batchLaunchItems = [];
+        $phaseStartedAt = \microtime(true);
 
         foreach ($commands as $key => $config) {
             $command = (string) ($config['command'] ?? '');
@@ -2772,6 +3217,7 @@ class Processer
                 'stderr_log' => $stderrLog,
                 'block' => $block,
                 'foreground' => $foreground,
+                'child_owns_pid' => (bool) ($config['childOwnsPid'] ?? false),
             ];
 
             $batchLaunchItems[] = $item;
@@ -2781,188 +3227,103 @@ class Processer
             return $results;
         }
 
-        $resultPath = null;
-        $errorPath = null;
-        $scriptPath = null;
-        $psProcess = null;
-        $diagnostic = '';
-        $output = '';
-        $stderr = '';
-        $waitForResults = false;
+        $timings['prepare'] = \microtime(true) - $phaseStartedAt;
 
-        if ($batchLaunchItems !== []) {
-            $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
-            $splitDetachedHelpers = (bool) (Env::get('system.processer.windows_batch_create_split_helpers', true) ?? true);
-            if (!$waitForResults && $splitDetachedHelpers) {
-                return self::batchCreateWindowsDetachedHelpers($batchLaunchItems, $results);
-            }
-
-            $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
-            $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
-            if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
-                self::logWindowsBatchCreateUnavailable($batchLaunchItems, 'temp file allocation failed');
-                return null;
-            }
-            $scriptPath = self::writeWindowsBatchCreateScript($batchLaunchItems, $resultPath, $errorPath);
-            if ($scriptPath === null) {
-                self::logWindowsBatchCreateUnavailable($batchLaunchItems, 'PowerShell script write failed');
-                @\unlink($resultPath);
-                @\unlink($errorPath);
-                return null;
-            }
-
-            $nullDevice = 'NUL';
-            $batchCommand = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
-                . \escapeshellarg($scriptPath);
-            $lastError = null;
-
-            if ($procOpenAvailable) {
-                $descriptorspec = [
-                    0 => ['file', $nullDevice, 'r'],
-                    1 => ['file', $nullDevice, 'w'],
-                    2 => ['file', $errorPath, 'a'],
-                ];
-
-                \set_error_handler(function ($type, $msg) use (&$lastError) {
-                    $lastError = $msg;
-                    return true;
-                });
-                try {
-                    $psProcess = @\proc_open(
-                        self::buildWindowsPowerShellProcOpenCommand($scriptPath),
-                        $descriptorspec,
-                        $psPipes,
-                        BP,
-                        null,
-                        ['bypass_shell' => true]
-                    );
-                } finally {
-                    \restore_error_handler();
-                }
-
-                if (!\is_resource($psProcess)) {
-                    self::logWindowsBatchCreateUnavailable(
-                        $batchLaunchItems,
-                        'proc_open PowerShell helper failed' . ($lastError !== null ? ': ' . $lastError : '')
-                    );
-                    @\unlink($scriptPath);
-                    @\unlink($resultPath);
-                    @\unlink($errorPath);
-                    if ($lastError !== null) {
-                        foreach ($batchLaunchItems as $item) {
-                            if (!empty($item['enable_log'])) {
-                                self::setOutput($item['command'], "[ERROR] batchCreate(proc_open powershell) failed: {$lastError}" . PHP_EOL, true);
-                            }
-                        }
-                    }
-
-                    return null;
-                }
-            }
-        }
-
-        if ($batchLaunchItems !== []) {
-            if (\is_resource($psProcess) && $resultPath !== null) {
-                // 对于 Master 的并发启动场景，不要等待所有进程完成报告，PowerShell 脚本已经启动了所有进程。
-                // 快速返回让 Master 立即进入主循环和 IPC 监听，否则子进程启动后无法连接 Master。
-                if (!$waitForResults) {
-                    // 非等待模式必须让 Master 立刻回到 IPC/control loop。
-                    // PID 回填由子进程 register/ready 完成；需要兼容旧环境时可通过
-                    // system.processer.windows_batch_create_nonblocking_pid_resolution_timeout_sec
-                    // 显式打开短等待。
-                    $resultRowTimeout = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout(\count($batchLaunchItems));
-                    if ($resultRowTimeout > 0.0) {
-                        self::waitForWindowsBatchCreateResultRows(
-                            $psProcess,
-                            (string) $resultPath,
-                            \count($batchLaunchItems),
-                            $resultRowTimeout
-                        );
-                    }
-                    self::rememberWindowsDetachedBatchHelper(
-                        $psProcess,
-                        (string) $scriptPath,
-                        (string) $resultPath,
-                        (string) $errorPath,
-                        $batchLaunchItems
-                    );
-                    $psProcess = null;
-                } else {
-                    // 等待模式：同步等待所有进程启动完成（仅在需要时启用）
-                    self::waitForWindowsBatchCreateHelper($psProcess, $resultPath, \count($batchLaunchItems));
-                }
-            }
-
-            // 在非等待模式下，不要尝试读取结果，因为 PowerShell 脚本还在运行
-            if ($waitForResults) {
-                $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $resultPath) ?: ''));
-                $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $errorPath) ?: ''));
-            } else {
-                $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $resultPath) ?: ''));
-                $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $errorPath) ?: ''));
-            }
-            if ($waitForResults) {
-                @\unlink((string) $scriptPath);
-                @\unlink((string) $resultPath);
-                @\unlink((string) $errorPath);
-            }
-            $diagnostic = \trim(\implode(' | ', \array_filter([$output, $stderr], static fn (string $text): bool => $text !== '')));
-        }
-
-        if (!$waitForResults) {
-            $pidMap = self::parseWindowsBatchCreatePidMap($output);
-            $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution(
+        $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
+        $splitDetachedHelpers = (bool) (Env::get('system.processer.windows_batch_create_split_helpers', true) ?? true);
+        if (!$waitForResults && $splitDetachedHelpers) {
+            return self::batchCreateWindowsDetachedHelpers(
                 $batchLaunchItems,
-                $pidMap,
-                false
+                $results,
+                $timingStartedAt,
+                $timings,
+                self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
             );
-            $resolvedPidMap = [];
-            $pidResolutionTimeout = self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems));
-            if ($pidResolutionTimeout > 0.0) {
-                $resolvedPidMap = self::waitForManagedProcessLaunchBatch(
-                    $pidResolutionItems,
-                    $pidResolutionTimeout
-                );
-            }
-
-            foreach ($batchLaunchItems as $item) {
-                $pid = (int) ($pidMap[$item['key']] ?? $resolvedPidMap[$item['key']] ?? 0);
-                if ($pid <= 0 && !empty($item['enable_log']) && $diagnostic !== '') {
-                    self::setOutput($item['command'], "[ERROR] batchCreate(raw output) {$diagnostic}" . PHP_EOL, true);
-                }
-                $results[$item['key']] = $pid > 0 ? self::setPid($item['command'], $pid) : 0;
-            }
-            foreach ($commands as $key => $config) {
-                unset($config);
-                if (!\array_key_exists($key, $results)) {
-                    $results[$key] = 0;
-                }
-            }
-
-            return $results;
+        }
+        if (!$waitForResults) {
+            return self::batchCreateWindowsDetachedHelpers(
+                $batchLaunchItems,
+                $results,
+                $timingStartedAt,
+                $timings,
+                1
+            );
         }
 
-        $pidMap = self::parseWindowsBatchCreatePidMap($output);
+        $phaseStartedAt = \microtime(true);
+        $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
+        $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
+        if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
+            self::logWindowsBatchCreateUnavailable($batchLaunchItems, 'temp file allocation failed');
+            return null;
+        }
+        $scriptPath = self::writeWindowsBatchCreateScript($batchLaunchItems, $resultPath, $errorPath);
+        if ($scriptPath === null) {
+            self::logWindowsBatchCreateUnavailable($batchLaunchItems, 'PowerShell script write failed');
+            @\unlink($resultPath);
+            @\unlink($errorPath);
+            return null;
+        }
 
-        $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution(
-            $batchLaunchItems,
-            $pidMap,
-            true
-        );
-        $resolvedPidMap = self::waitForManagedProcessLaunchBatch(
-            $pidResolutionItems,
-            5.0
-        );
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = $msg;
+
+            return true;
+        });
+        try {
+            $psProcess = @\proc_open(
+                self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                [
+                    0 => ['file', 'NUL', 'r'],
+                    1 => ['file', 'NUL', 'w'],
+                    2 => ['file', $errorPath, 'a'],
+                ],
+                $psPipes,
+                BP,
+                null,
+                ['bypass_shell' => true]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+
+        if (!\is_resource($psProcess)) {
+            self::logWindowsBatchCreateUnavailable(
+                $batchLaunchItems,
+                'proc_open PowerShell helper failed' . ($lastError !== null ? ': ' . $lastError : '')
+            );
+            @\unlink($scriptPath);
+            @\unlink($resultPath);
+            @\unlink($errorPath);
+            return null;
+        }
+
+        $phaseStartedAt = \microtime(true);
+        self::waitForWindowsBatchCreateHelper($psProcess, $resultPath, \count($batchLaunchItems));
+        $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents($resultPath) ?: ''));
+        $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents($errorPath) ?: ''));
+        @\unlink($scriptPath);
+        @\unlink($resultPath);
+        @\unlink($errorPath);
+        $timings['result'] = \microtime(true) - $phaseStartedAt;
+
+        $phaseStartedAt = \microtime(true);
+        $diagnostic = \trim(\implode(' | ', \array_filter([$output, $stderr], static fn (string $text): bool => $text !== '')));
+        $pidMap = self::parseWindowsBatchCreatePidMap($output);
+        $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap, true);
+        $resolvedPidMap = self::waitForManagedProcessLaunchBatch($pidResolutionItems, 5.0);
 
         foreach ($batchLaunchItems as $item) {
-            $pid = (int) ($pidMap[$item['key']] ?? $resolvedPidMap[$item['key']] ?? 0);
-            if ($pid <= 0 && !empty($item['enable_log'])) {
-                if ($diagnostic !== '') {
-                    self::setOutput($item['command'], "[ERROR] batchCreate(raw output) {$diagnostic}" . PHP_EOL, true);
-                }
+            $key = (string) $item['key'];
+            $pid = (int) ($pidMap[$key] ?? $resolvedPidMap[$key] ?? 0);
+            if ($pid <= 0 && !empty($item['enable_log']) && $diagnostic !== '') {
+                self::setOutput($item['command'], "[ERROR] batchCreate(raw output) {$diagnostic}" . PHP_EOL, true);
             }
-            $results[$item['key']] = $pid > 0 ? self::setPid($item['command'], $pid) : 0;
+            $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
         }
+        $timings['pid_record'] = \microtime(true) - $phaseStartedAt;
 
         foreach ($commands as $key => $config) {
             unset($config);
@@ -2971,145 +3332,158 @@ class Processer
             }
         }
 
+        self::logWindowsBatchCreateTiming(
+            'wait',
+            $timingStartedAt,
+            $timings,
+            1,
+            \count($batchLaunchItems)
+        );
+
         return $results;
     }
 
     /**
-     * Start one PowerShell helper per child in the default non-blocking Windows path.
+     * Start a bounded number of PowerShell helpers in the default non-blocking Windows path.
      *
      * A single helper that calls Start-Process repeatedly can serialize several
-     * seconds of Windows console startup overhead per child. Running small
-     * detached helpers lets that overhead overlap and lets WLS children register
-     * through IPC without holding the master in batchCreate().
+     * seconds of Windows console startup overhead per child. A fixed launcher
+     * pool overlaps that overhead without spawning one PowerShell process per
+     * child. WLS children can then register through IPC without holding the
+     * master in batchCreate().
      *
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, stdout_log: string, stderr_log: string, block: bool, foreground: bool}> $batchLaunchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, stdout_log: string, stderr_log: string, block: bool, foreground: bool, child_owns_pid: bool}> $batchLaunchItems
      * @param array<string, int> $results
+     * @param array<string, float> $timings
      * @return array<string, int>
      */
-    private static function batchCreateWindowsDetachedHelpers(array $batchLaunchItems, array $results): array
-    {
-        $helpers = [];
+    private static function batchCreateWindowsDetachedHelpers(
+        array $batchLaunchItems,
+        array $results,
+        ?float $timingStartedAt = null,
+        array $timings = [],
+        ?int $parallelism = null
+    ): array {
+        $timingStartedAt ??= \microtime(true);
+        $itemCount = \count($batchLaunchItems);
+        $resultBudgetSeconds = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout($itemCount);
+        $parallelism ??= self::resolveWindowsBatchCreateHelperParallelism($itemCount);
+        $parallelism = \min(\max(1, $itemCount), \max(1, \min(8, $parallelism)));
+        $groups = \array_fill(0, $parallelism, []);
 
-        foreach ($batchLaunchItems as $item) {
+        foreach ($batchLaunchItems as $index => $item) {
             $key = (string) ($item['key'] ?? '');
             if ($key === '') {
                 continue;
             }
-
-            $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
-            $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
-            if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
-                self::logWindowsBatchCreateUnavailable([$item], 'temp file allocation failed');
-                $results[$key] = 0;
-                continue;
-            }
-
-            $scriptPath = self::writeWindowsBatchCreateScript([$item], $resultPath, $errorPath);
-            if ($scriptPath === null) {
-                self::logWindowsBatchCreateUnavailable([$item], 'PowerShell script write failed');
-                @\unlink($resultPath);
-                @\unlink($errorPath);
-                $results[$key] = 0;
-                continue;
-            }
-
-            $lastError = null;
-            \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
-                $lastError = $msg;
-
-                return true;
-            });
-            try {
-                $psProcess = @\proc_open(
-                    self::buildWindowsPowerShellProcOpenCommand($scriptPath),
-                    [
-                        0 => ['file', 'NUL', 'r'],
-                        1 => ['file', 'NUL', 'w'],
-                        2 => ['file', $errorPath, 'a'],
-                    ],
-                    $psPipes,
-                    BP,
-                    null,
-                    ['bypass_shell' => true]
-                );
-            } finally {
-                \restore_error_handler();
-            }
-
-            if (!\is_resource($psProcess)) {
-                self::logWindowsBatchCreateUnavailable(
-                    [$item],
-                    'proc_open PowerShell helper failed' . ($lastError !== null ? ': ' . $lastError : '')
-                );
-                @\unlink($scriptPath);
-                @\unlink($resultPath);
-                @\unlink($errorPath);
-                $results[$key] = 0;
-                continue;
-            }
-
-            $helpers[] = [
-                'process' => $psProcess,
-                'script_path' => (string) $scriptPath,
-                'result_path' => (string) $resultPath,
-                'error_path' => (string) $errorPath,
-                'launch_items' => [$item],
-                'key' => $key,
-                'item' => $item,
-            ];
+            $groups[$index % $parallelism][] = $item;
             $results[$key] = 0;
         }
 
-        if ($helpers === []) {
-            return $results;
+        $phaseStartedAt = \microtime(true);
+        $helpers = [];
+        foreach ($groups as $launchItems) {
+            if ($launchItems === []) {
+                continue;
+            }
+
+            $attempt = self::openWindowsDetachedBatchHelper($launchItems);
+            if (\is_array($attempt['helper'])) {
+                $helpers[] = $attempt['helper'];
+                continue;
+            }
+
+            \error_log(
+                '[Processer] batchCreateWindows lane fallback items=' . \count($launchItems)
+                . ' reason=' . $attempt['reason']
+            );
+            $fallbackDeadline = \microtime(true) + self::resolveWindowsBatchCreateLaneFallbackBudget(\count($launchItems));
+            $fallbackLimit = \min(8, \count($launchItems));
+            foreach ($launchItems as $index => $item) {
+                if ($index >= $fallbackLimit || \microtime(true) >= $fallbackDeadline) {
+                    self::logWindowsBatchCreateUnavailable(
+                        [$item],
+                        'per-item lane fallback budget exhausted after: ' . $attempt['reason']
+                    );
+                    continue;
+                }
+
+                $itemAttempt = self::openWindowsDetachedBatchHelper([$item]);
+                if (\is_array($itemAttempt['helper'])) {
+                    $helpers[] = $itemAttempt['helper'];
+                    continue;
+                }
+
+                self::logWindowsBatchCreateUnavailable(
+                    [$item],
+                    'per-item lane fallback failed: ' . $itemAttempt['reason']
+                );
+            }
         }
+        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+        $deadline = \microtime(true) + $resultBudgetSeconds;
 
-        $deadline = \microtime(true) + self::resolveWindowsBatchCreateNonBlockingResultRowTimeout(\count($helpers));
-        do {
-            $pending = 0;
-            foreach ($helpers as $helperKey => $helper) {
-                $key = (string) ($helper['key'] ?? '');
-                if ($key === '' || (int) ($results[$key] ?? 0) > 0) {
-                    continue;
+        $phaseStartedAt = \microtime(true);
+        $pidMap = [];
+        if ($helpers !== []) {
+            do {
+                $pendingHelpers = 0;
+                foreach ($helpers as $helper) {
+                    $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $helper['result_path']) ?: ''));
+                    $pidMap += self::parseWindowsBatchCreatePidMap($output);
+
+                    $allRowsReady = true;
+                    foreach ($helper['launch_items'] as $item) {
+                        if ((int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0) {
+                            $allRowsReady = false;
+                            break;
+                        }
+                    }
+                    if ($allRowsReady) {
+                        continue;
+                    }
+
+                    $process = $helper['process'] ?? null;
+                    $status = \is_resource($process) ? @\proc_get_status($process) : [];
+                    if (($status['running'] ?? false) === true) {
+                        $pendingHelpers++;
+                    }
                 }
 
-                $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['result_path'] ?? '')) ?: ''));
-                $pidMap = self::parseWindowsBatchCreatePidMap($output);
-                $pid = (int) ($pidMap[$key] ?? 0);
-                if ($pid > 0) {
-                    $item = \is_array($helper['item'] ?? null) ? $helper['item'] : [];
-                    $command = (string) ($item['command'] ?? '');
-                    $results[$key] = $command !== '' ? self::setPid($command, $pid) : $pid;
-                    continue;
+                if ($pendingHelpers <= 0 || \microtime(true) >= $deadline) {
+                    break;
                 }
 
-                $process = $helper['process'] ?? null;
-                $status = \is_resource($process) ? @\proc_get_status($process) : [];
-                if (($status['running'] ?? false) === true) {
-                    $pending++;
-                }
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
+            } while (true);
+
+            foreach ($helpers as $helper) {
+                $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $helper['result_path']) ?: ''));
+                $pidMap += self::parseWindowsBatchCreatePidMap($output);
             }
+        }
+        $timings['result'] = \microtime(true) - $phaseStartedAt;
 
-            if ($pending <= 0) {
-                break;
-            }
-
-            \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
-        } while (\microtime(true) < $deadline);
+        $phaseStartedAt = \microtime(true);
+        $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap, false);
+        $pidResolutionTimeout = self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems));
+        $remainingSeconds = \max(0.0, $deadline - \microtime(true));
+        $resolvedPidMap = $pidResolutionTimeout > 0.0 && $remainingSeconds > 0.0
+            ? self::waitForManagedProcessLaunchBatch($pidResolutionItems, \min($pidResolutionTimeout, $remainingSeconds))
+            : [];
 
         foreach ($helpers as $helper) {
-            $key = (string) ($helper['key'] ?? '');
-            $item = \is_array($helper['item'] ?? null) ? $helper['item'] : [];
-            $command = (string) ($item['command'] ?? '');
-            if ($key !== '' && $command !== '' && (int) ($results[$key] ?? 0) <= 0) {
-                $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['result_path'] ?? '')) ?: ''));
-                $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['error_path'] ?? '')) ?: ''));
-                $pidMap = self::parseWindowsBatchCreatePidMap($output);
-                $pid = (int) ($pidMap[$key] ?? 0);
-                if ($pid > 0) {
-                    $results[$key] = self::setPid($command, $pid);
-                } elseif (!empty($item['enable_log']) && \trim($stderr) !== '') {
-                    self::setOutput($command, '[ERROR] batchCreate(raw output) ' . \trim($stderr) . PHP_EOL, true);
+            $stderr = \trim(self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) $helper['error_path']) ?: '')));
+            $rememberLaunchItems = [];
+            foreach ($helper['launch_items'] as $item) {
+                $key = (string) ($item['key'] ?? '');
+                $pid = (int) ($pidMap[$key] ?? $resolvedPidMap[$key] ?? 0);
+                $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
+                $item['launcher_pid_recorded'] = !(bool) ($item['child_owns_pid'] ?? false)
+                    && (int) $results[$key] > 0;
+                $rememberLaunchItems[] = $item;
+                if ($pid <= 0 && !empty($item['enable_log']) && $stderr !== '') {
+                    self::setOutput($item['command'], '[ERROR] batchCreate(raw output) ' . $stderr . PHP_EOL, true);
                 }
             }
 
@@ -3120,7 +3494,7 @@ class Processer
                     (string) ($helper['script_path'] ?? ''),
                     (string) ($helper['result_path'] ?? ''),
                     (string) ($helper['error_path'] ?? ''),
-                    \is_array($helper['launch_items'] ?? null) ? $helper['launch_items'] : []
+                    $rememberLaunchItems
                 );
             }
         }
@@ -3131,8 +3505,101 @@ class Processer
                 $results[$key] = 0;
             }
         }
+        $timings['pid_record'] = \microtime(true) - $phaseStartedAt;
+
+        self::logWindowsBatchCreateTiming(
+            'parallel_helpers',
+            $timingStartedAt,
+            $timings,
+            \count($helpers),
+            $itemCount
+        );
 
         return $results;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $launchItems
+     * @return array{helper: array{process: resource, script_path: string, result_path: string, error_path: string, launch_items: array<int, array<string, mixed>>}|null, reason: string}
+     */
+    private static function openWindowsDetachedBatchHelper(array $launchItems): array
+    {
+        $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
+        $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
+        if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
+            if (\is_string($resultPath) && $resultPath !== '') {
+                @\unlink($resultPath);
+            }
+            if (\is_string($errorPath) && $errorPath !== '') {
+                @\unlink($errorPath);
+            }
+
+            return ['helper' => null, 'reason' => 'temp file allocation failed'];
+        }
+
+        $scriptPath = self::writeWindowsBatchCreateScript($launchItems, $resultPath, $errorPath);
+        if ($scriptPath === null) {
+            @\unlink($resultPath);
+            @\unlink($errorPath);
+
+            return ['helper' => null, 'reason' => 'PowerShell script write failed'];
+        }
+
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = $msg;
+
+            return true;
+        });
+        try {
+            $psProcess = @\proc_open(
+                self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                [
+                    0 => ['file', 'NUL', 'r'],
+                    1 => ['file', 'NUL', 'w'],
+                    2 => ['file', $errorPath, 'a'],
+                ],
+                $psPipes,
+                BP,
+                null,
+                ['bypass_shell' => true]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+
+        if (!\is_resource($psProcess)) {
+            @\unlink($scriptPath);
+            @\unlink($resultPath);
+            @\unlink($errorPath);
+
+            return [
+                'helper' => null,
+                'reason' => 'proc_open PowerShell helper failed'
+                    . ($lastError !== null ? ': ' . $lastError : ''),
+            ];
+        }
+
+        return [
+            'helper' => [
+                'process' => $psProcess,
+                'script_path' => $scriptPath,
+                'result_path' => $resultPath,
+                'error_path' => $errorPath,
+                'launch_items' => $launchItems,
+            ],
+            'reason' => '',
+        ];
+    }
+
+    private static function resolveWindowsBatchCreateLaneFallbackBudget(int $itemCount): float
+    {
+        $configured = (float) (Env::get('system.processer.windows_batch_create_lane_fallback_timeout_sec', 0) ?? 0);
+        if ($configured > 0.0) {
+            return \max(0.1, \min(2.0, $configured));
+        }
+
+        return \min(1.0, \max(0.2, \max(1, $itemCount) * 0.1));
     }
 
     /**
@@ -3169,6 +3636,62 @@ class Processer
         }
 
         \error_log('[Processer] batchCreateWindows unavailable: ' . $reason . ($logged ? '' : ' (no command log target)'));
+    }
+
+    private static function resolveWindowsBatchCreateHelperParallelism(int $itemCount): int
+    {
+        $splitHelpers = (bool) (Env::get('system.processer.windows_batch_create_split_helpers', true) ?? true);
+        if (!$splitHelpers) {
+            return 1;
+        }
+
+        $configured = (int) (Env::get('system.processer.windows_batch_create_helper_parallelism', 4) ?? 4);
+
+        return \min(\max(1, $itemCount), \max(1, \min(8, $configured)));
+    }
+
+    /**
+     * @param array{command?: string, child_owns_pid?: bool} $item
+     */
+    private static function recordWindowsBatchCreatePid(array $item, int $pid): int
+    {
+        if ($pid <= 0) {
+            return 0;
+        }
+        if ((bool) ($item['child_owns_pid'] ?? false)) {
+            return $pid;
+        }
+
+        $command = (string) ($item['command'] ?? '');
+
+        return $command !== '' ? self::setPid($command, $pid) : $pid;
+    }
+
+    /**
+     * @param array<string, float> $timings
+     */
+    private static function logWindowsBatchCreateTiming(
+        string $mode,
+        float $startedAt,
+        array $timings,
+        int $helperCount,
+        int $itemCount
+    ): void {
+        $milliseconds = static fn (float $seconds): float => \round(\max(0.0, $seconds) * 1000, 3);
+        $payload = [
+            'mode' => $mode,
+            'helper_count' => \max(0, $helperCount),
+            'item_count' => \max(0, $itemCount),
+            'prepare_ms' => $milliseconds((float) ($timings['prepare'] ?? 0.0)),
+            'submit_ms' => $milliseconds((float) ($timings['submit'] ?? 0.0)),
+            'result_ms' => $milliseconds((float) ($timings['result'] ?? 0.0)),
+            'pid_record_ms' => $milliseconds((float) ($timings['pid_record'] ?? 0.0)),
+            'reap_ms' => $milliseconds((float) ($timings['reap'] ?? 0.0)),
+            'total_ms' => $milliseconds(\microtime(true) - $startedAt),
+        ];
+        $encoded = \json_encode($payload, \JSON_UNESCAPED_SLASHES);
+
+        \error_log('[Processer] batchCreateWindows timing ' . ($encoded !== false ? $encoded : '{}'));
     }
 
     /**
@@ -3475,7 +3998,7 @@ class Processer
                         continue;
                     }
 
-                    $resolved[$key] = self::setPid($item['command'], $candidatePid);
+                    $resolved[$key] = $candidatePid;
                     unset($pending[$key]);
                     break;
                 }
@@ -4144,24 +4667,52 @@ POWERSHELL;
         }
 
         $now = \microtime(true);
+        $helperTtlSeconds = self::resolveWindowsDetachedBatchHelperTtl();
+        $forceDeadline = $force ? $now + 0.1 : null;
         foreach (self::$windowsDetachedBatchHelpers as $key => $helper) {
             $process = $helper['process'] ?? null;
             if (!\is_resource($process)) {
+                self::recordCompletedWindowsDetachedHelperPids($helper);
+                self::flushWindowsDetachedBatchHelperDiagnostics($helper, 'complete');
                 self::cleanupWindowsDetachedBatchHelperFiles($helper);
                 unset(self::$windowsDetachedBatchHelpers[$key]);
                 continue;
             }
 
             $status = @\proc_get_status($process);
-            $age = $now - (float) ($helper['started_at'] ?? $now);
-            if (!$force && ($status['running'] ?? false) === true && $age < 10.0) {
-                continue;
+            if (($status['running'] ?? false) === true) {
+                $age = \max(0.0, $now - (float) ($helper['started_at'] ?? $now));
+                if (!$force && $age < $helperTtlSeconds) {
+                    continue;
+                }
+
+                $lastTerminateAt = (float) ($helper['termination_requested_at'] ?? 0.0);
+                if ($force || $lastTerminateAt <= 0.0 || ($now - $lastTerminateAt) >= 0.1) {
+                    @\proc_terminate($process);
+                    self::$windowsDetachedBatchHelpers[$key]['termination_requested_at'] = \microtime(true);
+                }
+                $status = @\proc_get_status($process);
+
+                if ($force) {
+                    while (($status['running'] ?? false) === true && \microtime(true) < (float) $forceDeadline) {
+                        \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+                        $status = @\proc_get_status($process);
+                    }
+                }
+
+                // A termination request stops the helper from launching more
+                // children. Keep its files/resource until exit is observable so
+                // late PID rows and diagnostics are not destroyed prematurely.
+                if (($status['running'] ?? false) === true) {
+                    continue;
+                }
             }
 
+            self::recordCompletedWindowsDetachedHelperPids($helper);
             self::finishWindowsDetachedHelperProcess($process, $status);
             self::flushWindowsDetachedBatchHelperDiagnostics(
                 $helper,
-                ($status['running'] ?? false) === true ? 'timeout' : 'complete'
+                'complete'
             );
             self::cleanupWindowsDetachedBatchHelperFiles($helper);
             unset(self::$windowsDetachedBatchHelpers[$key]);
@@ -4169,6 +4720,38 @@ POWERSHELL;
 
         if (self::$windowsDetachedBatchHelpers !== []) {
             self::$windowsDetachedBatchHelpers = \array_values(self::$windowsDetachedBatchHelpers);
+        }
+    }
+
+    private static function resolveWindowsDetachedBatchHelperTtl(): float
+    {
+        $configured = (float) (Env::get('system.processer.windows_batch_create_detached_helper_ttl_sec', 10) ?? 10);
+
+        return \max(1.0, \min(60.0, $configured > 0.0 ? $configured : 10.0));
+    }
+
+    /**
+     * @param array{result_path?: string, launch_items?: array<int, array<string, mixed>>} $helper
+     */
+    private static function recordCompletedWindowsDetachedHelperPids(array $helper): void
+    {
+        $launchItems = \is_array($helper['launch_items'] ?? null) ? $helper['launch_items'] : [];
+        if ($launchItems === []) {
+            return;
+        }
+
+        $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['result_path'] ?? '')) ?: ''));
+        $pidMap = self::parseWindowsBatchCreatePidMap($output);
+        foreach ($launchItems as $item) {
+            if ((bool) ($item['child_owns_pid'] ?? false) || (bool) ($item['launcher_pid_recorded'] ?? false)) {
+                continue;
+            }
+
+            $key = (string) ($item['key'] ?? '');
+            $pid = (int) ($pidMap[$key] ?? 0);
+            if ($key !== '' && $pid > 0) {
+                self::recordWindowsBatchCreatePid($item, $pid);
+            }
         }
     }
 

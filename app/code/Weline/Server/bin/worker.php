@@ -140,6 +140,7 @@ $orchestratorLaunchId = '';
 $workerCount = 1;
 $masterLeaseFile = '';
 $masterToken = '';
+$publicOrigin = '';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -168,6 +169,8 @@ foreach ($argv as $arg) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--worker-count=')) {
         $workerCount = \max(1, (int)\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--public-origin=')) {
+        $publicOrigin = (string)\substr($arg, 16);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -233,6 +236,11 @@ $_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
+if ($publicOrigin !== '') {
+    $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
+    $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
+    @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
 
 // 定义前端模式常量（供 WlsRuntime 使用）
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
@@ -1496,6 +1504,7 @@ $sharedRuntimeConnectionWarmupStarted = false;
 $sharedRuntimeConnectionWarmupNotBefore = \microtime(true);
 $deferredWorkerBootstrapWarmupStarted = false;
 $deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
+$homepageKeepWarmFiber = null;
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
@@ -1678,6 +1687,32 @@ while (true) {
         } catch (\Throwable $e) {
             $fiberScheduler->unregisterFiber();
             WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+
+    // ========== Homepage keep-warm (idle, low priority) ==========
+    $homepageMemoryPressure = $maxMemoryBytes > 0
+        && \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
+    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && $workerLoopStartedSent
+        && !$isMaintenanceWorker
+        && !$ipcReceivedShutdown
+        && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null)
+        && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)
+    ) {
+        $fiberScheduler->registerFiber();
+        $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
+            try {
+                $runtime->runHomepageKeepWarmCycle();
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $homepageKeepWarmFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_('[WorkerWarmup] homepage keep-warm start failed: ' . $e->getMessage());
         }
     }
 
@@ -2015,6 +2050,7 @@ while (true) {
 
     // Fiber tick 后尽早刷写队列，减轻 SSE 与同 Worker 其它请求之间的写方向头阻塞（与 worker_ssl 一致）
     wlsHttpFlushQueuedWrites(
+        $activeRequests,
         $writableConnections,
         $writeBuffers,
         $connections,
@@ -2506,6 +2542,7 @@ function wlsAcceptHttpConnections(
  * @param array<int, string> $writeBuffers
  */
 function wlsHttpFlushQueuedWrites(
+    int $activeRequests,
     array &$writableConnections,
     array &$writeBuffers,
     array &$connections,
@@ -5025,7 +5062,17 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     ];
     
     // 解析文件扩展名（去除查询字符串；URL 解码以支持中文等非 ASCII 文件名）
-    $uriPath = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($uri);
+    $uriPath = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget);
+    if ($uriPath === null) {
+        \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
+            'status' => 'rejected',
+            'uri' => $requestTarget,
+        ]);
+        $body = 'Bad Request';
+        return "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
+            . \strlen($body)
+            . "\r\nConnection: close\r\n\r\n{$body}";
+    }
     $extension = \strtolower(\pathinfo($uriPath, PATHINFO_EXTENSION));
     
     // 不是静态文件，交给框架处理
@@ -5033,9 +5080,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         return null;
     }
     
-    // 安全检查：防止目录遍历，并兼容带 backend key / 货币 / 语言前缀的静态资源 URL
-    $normalizedUri = \str_replace(['../', '..\\'], '', $uriPath);
-    $normalizedUri = \trim(\str_replace('\\', '/', $normalizedUri), '/\\');
+    // URI resolver 已按 segment 完成单次解码和目录边界校验。
+    $normalizedUri = \trim($uriPath, '/');
     if ($normalizedUri === '') {
         return null;
     }

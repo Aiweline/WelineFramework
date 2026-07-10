@@ -119,6 +119,13 @@ class ServiceOrchestrator
     private int $routeTableVersion = 0;
 
     /**
+     * Worker 批次切换期间暂不向 Dispatcher 发布的槽位。
+     *
+     * @var array<int, true>
+     */
+    private array $workerRoutePublishSuppressedInstanceIds = [];
+
+    /**
      * B-i 阶段：最近一次成功发布的版本化路由表快照。
      *
      * key: "{role}:{epoch}"，避免不同 role / 不同 epoch 之间互相覆盖。
@@ -202,6 +209,8 @@ class ServiceOrchestrator
      * @var array{request_id: string, expected: array<int|string, true>, acked: array<int|string, true>, kind?: string}|null
      */
     private ?array $pendingMaintenanceModeAck = null;
+    /** 维护池是否已由当前 Dispatcher 拓扑完整确认。 */
+    private bool $maintenanceDispatcherPoolConfirmed = false;
     private float $lastMaintenanceOperationLogAt = 0.0;
     private string $lastMaintenanceOperationSignature = '';
 
@@ -1749,6 +1758,7 @@ class ServiceOrchestrator
         $this->ipcExclusiveClientId = null;
         $this->ipcImperialEpoch = 0;
         $this->pendingMaintenanceModeAck = null;
+        $this->maintenanceDispatcherPoolConfirmed = false;
         $this->resetServerReadyNotificationState();
         $this->initializeMainLoopFiberScheduler();
         $this->haMode = (bool)$context->getConfig('wls.orchestrator.ha_mode', true);
@@ -1896,6 +1906,7 @@ class ServiceOrchestrator
 
         $maintenanceProvider->enable($nMaint);
         $this->maintenanceMode = true;
+        $this->maintenanceDispatcherPoolConfirmed = false;
         $this->maintenanceSticky = $sticky;
         $this->desiredState[ControlMessage::ROLE_MAINTENANCE] = $nMaint;
         // 供 sticky 维护与就绪判断使用，避免 desiredState 未写入 worker 时误用默认 desired=1
@@ -2417,10 +2428,15 @@ class ServiceOrchestrator
 
         foreach ($startupAcceptance as $role => $rule) {
             $role = (string)$role;
+            foreach ($this->registry->getInstancesByRole($role) as $instance) {
+                if ($instance->state === ServiceInstance::STATE_FAILED) {
+                    return "{$role}#{$instance->instanceId} failed before READY";
+                }
+            }
             if (!$this->requiresStartupPortPreflight($role)) {
                 continue;
             }
-            if ($this->countRoleReadyInstances($role) >= $rule['minReady']) {
+            if ($this->countRoleStartupReadyInstances($role) >= $rule['minReady']) {
                 continue;
             }
 
@@ -2501,7 +2517,7 @@ class ServiceOrchestrator
     {
         $pending = [];
         foreach ($startupAcceptance as $role => $rule) {
-            $readyCount = $this->countRoleReadyInstances((string)$role);
+            $readyCount = $this->countRoleStartupReadyInstances((string)$role);
             if ($readyCount < $rule['minReady']) {
                 $pending[] = "{$role}:{$readyCount}/{$rule['minReady']}";
             }
@@ -2920,6 +2936,29 @@ class ServiceOrchestrator
             if ($instance->state === ServiceInstance::STATE_READY) {
                 $readyCount++;
             }
+        }
+
+        return $readyCount;
+    }
+
+    /**
+     * Startup READY must mean publicly routable, not only process-local READY.
+     * In Dispatcher topology a business Worker becomes routable only after the
+     * Dispatcher has acknowledged that exact slot/lease in its active pool.
+     */
+    private function countRoleStartupReadyInstances(string $role): int
+    {
+        $requiresDispatcherAck = $role === ControlMessage::ROLE_WORKER
+            && $this->startupRequiresDispatcherPoolConfirmation();
+        $readyCount = 0;
+        foreach ($this->registry->getInstancesByRole($role) as $instance) {
+            if ($instance->state !== ServiceInstance::STATE_READY) {
+                continue;
+            }
+            if ($requiresDispatcherAck && $instance->getMeta('dispatcher_pool_confirmed_at') === null) {
+                continue;
+            }
+            $readyCount++;
         }
 
         return $readyCount;
@@ -3358,6 +3397,10 @@ class ServiceOrchestrator
                 'block' => false,
                 'foreground' => $foreground,
                 'enableLog' => $this->resolveChildProcessLogFlag($provider, $context),
+                // Windows framework children persist their own authoritative PID
+                // after startup; the launcher PID is only a transient transport PID.
+                'childOwnsPid' => $this->isWindowsRuntime()
+                    && $provider->getProcessKind() === ControlMessage::PROCESS_KIND_FRAMEWORK,
             ];
             WlsLogger::info_(
                 '[Orchestrator][StartupTiming] role=' . $role
@@ -4217,6 +4260,23 @@ class ServiceOrchestrator
                 $command->getWorkingDir(),
                 $cmd
             );
+        }
+
+        if (!$this->isWindowsRuntime() && !$foreground) {
+            // 单槽故障补位/扩容也必须经过 POSIX 短命 launcher：
+            // 返回真实 PHP PID，并隔离 Master 的 control/listen FD。
+            $instance->setMeta('spawn_transport', 'processer_batch_create_unix');
+            $pids = Processer::batchCreate([
+                'single' => [
+                    'command' => $cmd,
+                    'block' => false,
+                    'foreground' => false,
+                    'enableLog' => null,
+                    'childOwnsPid' => false,
+                ],
+            ]);
+
+            return (int)($pids['single'] ?? 0);
         }
 
         // 必须 block=false，否则会阻塞 Master 主循环。
@@ -6145,10 +6205,23 @@ class ServiceOrchestrator
                 $this->sendReloadWaitTerminalOutcome(ControlMessage::reloadCompleted(0.0, 0));
                 return;
             }
-            $batches = $this->getWorkerRestartBatches($ids, $forceReload);
+            $forceSingleBatch = $forceReload && $this->hasConfirmedAlternateWorkerCapacity();
+            if ($forceReload && !$forceSingleBatch) {
+                WlsLogger::warning_(
+                    '[Orchestrator][WorkerBatchPlan] force requested but no confirmed maintenance/standby capacity; '
+                    . 'degrading to availability-safe batches'
+                );
+            }
+            $batches = $this->getWorkerRestartBatches($ids, $forceSingleBatch);
             $batchTotal = \count($batches);
+            $minReady = $forceSingleBatch ? 0 : $this->resolveWorkerReloadMinReady(\count($ids));
             WlsLogger::info_(
-                "[Orchestrator] Worker 分批重载共 {$batchTotal} 批（三批策略阈值见 wls.orchestrator.worker_three_batch_min_count）"
+                '[Orchestrator][WorkerBatchPlan] reason=reload'
+                . ', force=' . ($forceReload ? 'true' : 'false')
+                . ', force_single_batch=' . ($forceSingleBatch ? 'true' : 'false')
+                . ', workers=' . \count($ids)
+                . ', batches=' . $batchTotal
+                . ', min_ready=' . $minReady
             );
 
             $done = 0;
@@ -6181,8 +6254,6 @@ class ServiceOrchestrator
                 }
                 $done += \count($batch);
             }
-
-            $this->syncDispatcherFullWorkerPoolFromRegistry(true);
 
             $elapsedMs = (\microtime(true) - $startTime) * 1000;
             $this->sendReloadWaitTerminalOutcome(ControlMessage::reloadCompleted($elapsedMs, $done));
@@ -6218,8 +6289,9 @@ class ServiceOrchestrator
 
     /**
      * Worker 批次策略：
-     * - force 重载：全部 Worker 合并为 1 批，直接切换。
-     * - 非 force：Worker 数 ≥ min_count 时均分为三批；否则逐个一批（每批 1 个）。
+     * - 显式 forceSingleBatch：全部 Worker 合并为 1 批（调用方须先确认备用容量）。
+     * - Worker 数 ≥ min_count：默认三批，并受 min_ready 下限约束。
+     * - 小规模池：逐个一批，避免一次摘除过多容量。
      *
      * @param int[] $orderedInstanceIds
      * @return array<int, int[]>
@@ -6245,14 +6317,15 @@ class ServiceOrchestrator
 
             return $out;
         }
-        $batchCount = (int)($this->context?->getConfig('wls.orchestrator.worker_reload_batch_count', 1) ?? 1);
+        $batchCount = (int)($this->context?->getConfig('wls.orchestrator.worker_reload_batch_count', 3) ?? 3);
         if ($batchCount < 1) {
-            $batchCount = 1;
-        }
-        if ($batchCount > 3) {
             $batchCount = 3;
         }
-        $batchCount = \min($batchCount, $n);
+
+        $minReady = $this->resolveWorkerReloadMinReady($n);
+        $maxBatchSize = \max(1, $n - $minReady);
+        $requiredBatchCount = (int)\ceil($n / $maxBatchSize);
+        $batchCount = \min($n, \max($batchCount, $requiredBatchCount));
 
         $base = intdiv($n, $batchCount);
         $rem = $n % $batchCount;
@@ -6271,12 +6344,136 @@ class ServiceOrchestrator
     }
 
     /**
+     * Resolve the number of business workers that must remain routable while a
+     * batch is being replaced. Default is floor(2/3 * N), which keeps the
+     * default three-way split valid for pools starting at seven workers.
+     */
+    private function resolveWorkerReloadMinReady(int $workerCount): int
+    {
+        if ($workerCount <= 1) {
+            return 0;
+        }
+
+        $default = \max(1, intdiv($workerCount * 2, 3));
+        $configured = $this->context?->getConfig('wls.orchestrator.worker_reload_min_ready', $default) ?? $default;
+        $minReady = $default;
+
+        if (\is_string($configured)) {
+            $value = \strtolower(\trim($configured));
+            if ($value === '' || $value === 'auto' || $value === 'default') {
+                $minReady = $default;
+            } elseif (\str_ends_with($value, '%') && \is_numeric(\substr($value, 0, -1))) {
+                $ratio = \max(0.0, \min(100.0, (float)\substr($value, 0, -1))) / 100.0;
+                $minReady = (int)\floor($workerCount * $ratio);
+            } elseif (\is_numeric($value)) {
+                $numeric = (float)$value;
+                $minReady = $numeric > 0.0 && $numeric <= 1.0
+                    ? (int)\floor($workerCount * $numeric)
+                    : (int)$numeric;
+            }
+        } elseif (\is_int($configured) || \is_float($configured)) {
+            $numeric = (float)$configured;
+            $minReady = $numeric > 0.0 && $numeric <= 1.0
+                ? (int)\floor($workerCount * $numeric)
+                : (int)$numeric;
+        }
+
+        return \max(1, \min($workerCount - 1, $minReady));
+    }
+
+    /**
+     * A full-pool batch is safe only while all connected Dispatchers have
+     * confirmed a non-business maintenance pool with live READY capacity.
+     */
+    private function hasConfirmedAlternateWorkerCapacity(): bool
+    {
+        if (!$this->maintenanceMode || !$this->maintenanceDispatcherPoolConfirmed) {
+            return false;
+        }
+        if ($this->collectReadyMaintenancePortsSorted() === []) {
+            return false;
+        }
+
+        $dispatchers = $this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER);
+        if ($dispatchers === []) {
+            return false;
+        }
+        foreach ($dispatchers as $dispatcher) {
+            if ($dispatcher->state !== ServiceInstance::STATE_READY || $dispatcher->ipcClientId === null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * 整批：Dispatcher 摘除 → 排水 → 停 → 拉齐 → 批内全部 READY → 发布完整路由表。
      *
      * @param int[] $instanceIds
      * @return 'ok'|'aborted'|'failed'
      */
     private function restartWorkerBatchDispatcherAware(
+        array $instanceIds,
+        ?int $imperialEpochSnap,
+        string $rollingOrReload,
+        int $completedBefore = 0,
+        int $totalWorkers = 0,
+        int $batchIndex = 0,
+        int $batchTotal = 0,
+        bool $skipDrain = false,
+    ): string {
+        $normalizedIds = \array_values(\array_unique(\array_map('intval', $instanceIds)));
+        \sort($normalizedIds, \SORT_NUMERIC);
+        if ($normalizedIds === []) {
+            return 'ok';
+        }
+
+        foreach ($normalizedIds as $instanceId) {
+            $this->workerRoutePublishSuppressedInstanceIds[$instanceId] = true;
+        }
+
+        $result = null;
+        try {
+            $result = $this->restartWorkerBatchDispatcherAwareActive(
+                $normalizedIds,
+                $imperialEpochSnap,
+                $rollingOrReload,
+                $completedBefore,
+                $totalWorkers,
+                $batchIndex,
+                $batchTotal,
+                $skipDrain
+            );
+            return $result;
+        } finally {
+            foreach ($normalizedIds as $instanceId) {
+                unset($this->workerRoutePublishSuppressedInstanceIds[$instanceId]);
+            }
+            // Failure/abort may leave a partially READY replacement batch. Once
+            // the atomic-batch gate is released, converge that usable capacity
+            // without forcing a duplicate version. Successful normal-mode paths
+            // are signature-idempotent; sticky maintenance already has its own
+            // authoritative pool and needs no extra publication.
+            if ($result !== 'ok' || !$this->maintenanceMode) {
+                try {
+                    $this->syncDispatcherFullWorkerPoolFromRegistry();
+                } catch (\Throwable $e) {
+                    WlsLogger::error_(
+                        '[Orchestrator][RouteTransition] reason=batch_finally_convergence_failed'
+                        . ', batch_ids=[' . \implode(',', $normalizedIds) . ']'
+                        . ', error=' . $e->getMessage()
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * @param int[] $instanceIds
+     * @return 'ok'|'aborted'|'failed'
+     */
+    private function restartWorkerBatchDispatcherAwareActive(
         array $instanceIds,
         ?int $imperialEpochSnap,
         string $rollingOrReload,
@@ -6311,64 +6508,96 @@ class ServiceOrchestrator
         $batchLabel = ($batchIndex > 0 && $batchTotal > 0) ? "Batch {$batchIndex}/{$batchTotal}" : 'Batch';
         $batchList = '[' . \implode(',', $instanceIds) . ']';
         $leadWorkerId = $instanceIds[0] ?? 0;
+        $hasConfirmedAlternateCapacity = $this->hasConfirmedAlternateWorkerCapacity();
+        $batchMinReady = $skipDrain
+            && $hasConfirmedAlternateCapacity
+            && \count($instanceIds) >= $totalWorkers
+            ? 0
+            : $this->resolveWorkerReloadMinReady($totalWorkers);
         $batchMeta = [
             'batch_index' => $batchIndex,
             'batch_total' => $batchTotal,
             'batch_size' => \count($instanceIds),
             'batch_ids' => $instanceIds,
+            'min_ready' => $batchMinReady,
         ];
         $reloadDrainTimeout = $this->resolveWorkerReloadDrainTimeout();
 
-        if (!$skipDrain) {
-            $this->sendReloadProgressMessage(
-                "{$batchLabel}: removing workers {$batchList} from dispatcher",
-                $completedBefore,
-                $totalWorkers,
-                'removing_from_dispatcher',
-                $leadWorkerId,
-                $batchMeta
-            );
-            foreach ($instanceIds as $instanceId) {
-                if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
-                    return 'aborted';
-                }
-                $worker = $this->registry->getInstance('worker', $instanceId);
-                if ($worker !== null) {
-                    $this->notifyDispatcherRemoveWorker($worker->port);
-                }
+        $oldRoutePorts = $this->collectReadyWorkerPortsSorted();
+        $batchReadyCount = 0;
+        foreach ($instanceIds as $instanceId) {
+            $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+            if ($worker !== null
+                && $worker->state === ServiceInstance::STATE_READY
+                && $worker->port !== null
+                && $worker->port > 0) {
+                $batchReadyCount++;
             }
-            $this->yieldControlPlane(20000);
-        } else {
-            $this->sendReloadProgressMessage(
-                "{$batchLabel}: force mode skips dispatcher drain for workers {$batchList}",
-                $completedBefore,
-                $totalWorkers,
-                'removing_from_dispatcher',
-                $leadWorkerId,
-                $batchMeta
+        }
+        $remainingReady = \count($oldRoutePorts) - $batchReadyCount;
+        $minReady = (int)$batchMeta['min_ready'];
+        if (!$hasConfirmedAlternateCapacity && $remainingReady < $minReady) {
+            $reason = 'runtime_min_ready_guard';
+            WlsLogger::error_(
+                '[Orchestrator][RouteTransition] reason=' . $reason
+                . ', batch=' . $batchIndex . '/' . $batchTotal
+                . ', batch_ids=' . $batchList
+                . ', min_ready=' . $minReady
+                . ', current_ready=' . \count($oldRoutePorts)
+                . ', batch_ready=' . $batchReadyCount
+                . ', remaining_ready=' . $remainingReady
+                . ', route_old=[' . \implode(',', $oldRoutePorts) . ']'
+                . ', route_new=[' . \implode(',', $oldRoutePorts) . ']'
             );
+            $this->failWorkerBatchNotify(
+                $rollingOrReload,
+                "Batch {$batchList} blocked by min-ready guard ({$remainingReady}<{$minReady})"
+            );
+
+            return 'failed';
         }
 
-        if (!$skipDrain) {
-            $drainRefs = [];
-            $this->sendReloadProgressMessage(
-                "{$batchLabel}: draining workers {$batchList}",
-                $completedBefore,
-                $totalWorkers,
-                'draining',
-                $leadWorkerId,
-                $batchMeta
-            );
-            foreach ($instanceIds as $instanceId) {
-                if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
-                    return 'aborted';
-                }
-                $worker = $this->registry->getInstance('worker', $instanceId);
-                if ($worker !== null && $worker->ipcClientId !== null) {
-                    $this->sendDrainToInstance($worker, $reloadDrainTimeout);
-                    $drainRefs[] = $instanceId;
-                }
+        $drainRefs = [];
+        $this->sendReloadProgressMessage(
+            "{$batchLabel}: draining and atomically removing workers {$batchList}",
+            $completedBefore,
+            $totalWorkers,
+            'draining',
+            $leadWorkerId,
+            $batchMeta
+        );
+        // First fence the whole batch in Registry, then send DRAIN to every
+        // connected child. Only after all slots are fenced is one complete
+        // route-table snapshot published.
+        foreach ($instanceIds as $instanceId) {
+            if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
+                return 'aborted';
             }
+            $worker = $this->registry->getInstance('worker', $instanceId);
+            if ($worker === null) {
+                continue;
+            }
+            $worker->state = ServiceInstance::STATE_DRAINING;
+            $this->registry->updateInstance($worker);
+            if ($worker->ipcClientId !== null) {
+                $this->sendDrainToInstance($worker, $reloadDrainTimeout);
+                $drainRefs[] = $instanceId;
+            }
+        }
+
+        $newRoutePorts = $this->collectReadyWorkerPortsSorted();
+        $this->syncDispatcherFullWorkerPoolFromRegistry(true);
+        WlsLogger::info_(
+            '[Orchestrator][RouteTransition] reason=worker_batch_draining'
+            . ', batch=' . $batchIndex . '/' . $batchTotal
+            . ', batch_ids=' . $batchList
+            . ', min_ready=' . $batchMeta['min_ready']
+            . ', route_old=[' . \implode(',', $oldRoutePorts) . ']'
+            . ', route_new=[' . \implode(',', $newRoutePorts) . ']'
+        );
+        $this->yieldControlPlane(20000);
+
+        if (!$skipDrain) {
             if ($drainRefs !== []) {
                 $instancesForDrain = [];
                 foreach ($drainRefs as $id) {
@@ -6427,7 +6656,7 @@ class ServiceOrchestrator
             }
         } else {
             $this->sendReloadProgressMessage(
-                "{$batchLabel}: force mode skip draining workers {$batchList}",
+                "{$batchLabel}: force mode sent DRAIN and skips drain waiting for workers {$batchList}",
                 $completedBefore,
                 $totalWorkers,
                 'draining',
@@ -6679,8 +6908,16 @@ class ServiceOrchestrator
             $leadWorkerId,
             $batchMeta
         );
+        foreach ($instanceIds as $instanceId) {
+            unset($this->workerRoutePublishSuppressedInstanceIds[$instanceId]);
+        }
         // 滚动重启批次 READY：用版本化全量路由表一次性广播给所有 Dispatcher。
-        // 仅在非维护模式下广播；维护模式中业务流量仍走维护 Worker，新 Worker 留到 disableMaintenance 时一次性入池。
+        // 非 sticky 维护可在整批 READY 后一次性切回；sticky 维护继续持有流量。
+        $routePublishedByMaintenanceDisable = false;
+        if ($this->maintenanceMode) {
+            $this->checkAndDisableMaintenanceIfReady();
+            $routePublishedByMaintenanceDisable = !$this->maintenanceMode;
+        }
         if (!$this->maintenanceMode) {
             $anyEligible = false;
             foreach ($instanceIds as $instanceId) {
@@ -6691,9 +6928,23 @@ class ServiceOrchestrator
                 }
             }
             if ($anyEligible) {
-                $this->syncDispatcherFullWorkerPoolFromRegistry();
+                if ($routePublishedByMaintenanceDisable) {
+                    $this->lastDispatcherRouteTableSignature = \implode(',', $this->collectReadyWorkerPortsSorted());
+                } else {
+                    $this->syncDispatcherFullWorkerPoolFromRegistry();
+                }
             }
         }
+        $readyRoutePorts = $this->collectReadyWorkerPortsSorted();
+        WlsLogger::info_(
+            '[Orchestrator][RouteTransition] reason='
+            . ($this->maintenanceMode ? 'worker_batch_ready_held_by_maintenance' : 'worker_batch_ready')
+            . ', batch=' . $batchIndex . '/' . $batchTotal
+            . ', batch_ids=' . $batchList
+            . ', min_ready=' . $batchMeta['min_ready']
+            . ', route_old=[' . \implode(',', $newRoutePorts) . ']'
+            . ', route_new=[' . \implode(',', $readyRoutePorts) . ']'
+        );
         $this->broadcastRoutingPolicyToWorkers();
         if ($this->maintenanceMode) {
             WlsLogger::info_(
@@ -9311,7 +9562,10 @@ class ServiceOrchestrator
                     $this->getInstanceGeneration($instance)
                 )
             );
-            if ($instance->role === ControlMessage::ROLE_WORKER && $instance->port !== null && $instance->port > 0) {
+            if ($instance->role === ControlMessage::ROLE_WORKER
+                && $instance->port !== null
+                && $instance->port > 0
+                && !isset($this->workerRoutePublishSuppressedInstanceIds[$instance->instanceId])) {
                 $this->convergeDispatcherRouteTableAfterWorkerReady();
             } elseif ($instance->role === ControlMessage::ROLE_DISPATCHER) {
                 $this->syncDispatcherFullWorkerPoolFromRegistry(true);
@@ -9391,7 +9645,9 @@ class ServiceOrchestrator
 
         // Worker 就绪：通过 Registry 单一事实源 + 版本化全量路由表向所有 Dispatcher 收敛。
         // SET_ROUTE_TABLE 是默认权威，Master 仅在 Worker 状态变化时统一广播，不再按"是否首次/重复 READY"分支化。
-        if ($instance->role === 'worker' && $instance->port !== null) {
+        if ($instance->role === 'worker'
+            && $instance->port !== null
+            && !isset($this->workerRoutePublishSuppressedInstanceIds[$instance->instanceId])) {
             $this->convergeDispatcherRouteTableAfterWorkerReady();
         } elseif ($instance->role === ControlMessage::ROLE_DISPATCHER) {
             $this->syncDispatcherFullWorkerPoolFromRegistry(true);
@@ -9436,12 +9692,14 @@ class ServiceOrchestrator
             && $this->maintenanceMode
             && $instance->port !== null
             && $instance->port > 0) {
+            $this->maintenanceDispatcherPoolConfirmed = false;
             $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
         }
 
         // Dispatcher 就绪：维护模式下发维护池；否则用 Registry 同步业务 Worker 池，并下发 HTTP Redirect 端口。
         if ($instance->role === 'dispatcher') {
             if ($this->maintenanceMode) {
+                $this->maintenanceDispatcherPoolConfirmed = false;
                 $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
             } else {
                 $this->syncDispatcherFullWorkerPoolFromRegistry();
@@ -9496,6 +9754,11 @@ class ServiceOrchestrator
             }
 
             $this->pendingMaintenanceModeAck['acked'][$ackKey] = true;
+            $expectedCount = \count($this->pendingMaintenanceModeAck['expected'] ?? []);
+            $ackedCount = \count($this->pendingMaintenanceModeAck['acked'] ?? []);
+            if ($expectedCount > 0 && $ackedCount >= $expectedCount) {
+                $this->maintenanceDispatcherPoolConfirmed = true;
+            }
             $this->logMaintenanceOperation(
                 'Dispatcher 维护池确认: client=' . $clientId . ', port=' . $port
                 . '，' . $this->formatMaintenanceOperationContext(),
@@ -9707,7 +9970,7 @@ class ServiceOrchestrator
         // planned business worker has crossed that gate.
         $workerInstances = $this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER);
         $requiredWorkerReady = $this->resolveRequiredWorkerReadyCount(\count($workerInstances));
-        if ($workerInstances !== [] && $this->countRoleReadyInstances(ControlMessage::ROLE_WORKER) < $requiredWorkerReady) {
+        if ($workerInstances !== [] && $this->countRoleStartupReadyInstances(ControlMessage::ROLE_WORKER) < $requiredWorkerReady) {
             return;
         }
 
@@ -10596,6 +10859,9 @@ class ServiceOrchestrator
 
         $ports = [];
         foreach ($this->registry->getInstancesByRole('worker') as $w) {
+            if (isset($this->workerRoutePublishSuppressedInstanceIds[$w->instanceId])) {
+                continue;
+            }
             if ($w->state === ServiceInstance::STATE_READY && $w->port !== null && $w->port > 0) {
                 $ports[] = (int) $w->port;
             }
@@ -10621,8 +10887,13 @@ class ServiceOrchestrator
         WlsLogger::info_('[Orchestrator] Dispatcher route table is aligned with Registry: ' . $signature);
     }
 
+    /**
+     * @deprecated Runtime transitions must update Registry for the whole batch
+     *             and call syncDispatcherFullWorkerPoolFromRegistry() once.
+     */
     private function notifyDispatcherRemoveWorker(?int $port): void
     {
+        unset($port);
         $this->syncDispatcherFullWorkerPoolFromRegistry(true);
     }
 
@@ -12050,6 +12321,7 @@ class ServiceOrchestrator
                     ];
                 }
                 if ($expectedDispatcherAcks !== []) {
+                    $this->maintenanceDispatcherPoolConfirmed = false;
                     $this->pendingMaintenanceModeAck = [
                         'kind' => 'dispatcher_pool',
                         'request_id' => 'dispatcher_pool_' . \bin2hex(\random_bytes(6)),
@@ -12287,6 +12559,7 @@ class ServiceOrchestrator
                 ];
             }
             if ($expectedDispatcherAcks !== []) {
+                $this->maintenanceDispatcherPoolConfirmed = false;
                 $this->pendingMaintenanceModeAck = [
                     'kind' => 'dispatcher_pool',
                     'request_id' => 'dispatcher_pool_' . \bin2hex(\random_bytes(6)),
@@ -12406,6 +12679,9 @@ class ServiceOrchestrator
         $this->pendingMaintenanceModeAck = null;
         $this->maintenanceMode = $enabled;
         $this->maintenanceSticky = $enabled;
+        // This compatibility path has no per-Dispatcher ACK transaction, so it
+        // must never authorize a full-pool Worker restart.
+        $this->maintenanceDispatcherPoolConfirmed = false;
 
         if ($this->context !== null) {
             $this->persistServicesInfo($this->context);
@@ -12493,6 +12769,7 @@ class ServiceOrchestrator
         // 仅退出"维护流量态"，下次切换可直接复用已就绪维护池，减少抖动。
         $this->maintenanceMode = false;
         $this->maintenanceSticky = false;
+        $this->maintenanceDispatcherPoolConfirmed = false;
         $this->deactivateMaintenanceCapacity();
 
         if ($this->context !== null) {
@@ -13300,6 +13577,10 @@ class ServiceOrchestrator
         
         $provider = $this->registry->getProvider($instance->role);
         $displayName = $provider?->getDisplayName() ?? $instance->role;
+        if ($instance->role === ControlMessage::ROLE_DISPATCHER
+            || $instance->role === ControlMessage::ROLE_MAINTENANCE) {
+            $this->maintenanceDispatcherPoolConfirmed = false;
+        }
 
         $peer = (string) ($clientInfo['address'] ?? 'unknown');
         $clientState = (string) ($clientInfo['state'] ?? '');
@@ -13461,9 +13742,9 @@ class ServiceOrchestrator
         $instance->setMeta('last_known_pid_set', $instance->getManagedPids());
         $this->registry->updateInstance($instance);
 
-        $this->notifyDispatcherRemoveWorker($port);
-        $this->lastDispatcherRouteTableSignature = '';
-        $this->syncDispatcherFullWorkerPoolFromRegistry();
+        // A genuine fault may legitimately publish an empty table. Publish one
+        // authoritative snapshot after the failed state is visible in Registry.
+        $this->syncDispatcherFullWorkerPoolFromRegistry(true);
         WlsLogger::warning_(
             "[Orchestrator] Worker IPC 断开，已先从 Dispatcher 摘池再进入复活判断: "
             . "{$instance->role}#{$instance->instanceId}, slot_id={$this->getInstanceSlotId($instance)}, port={$port}"

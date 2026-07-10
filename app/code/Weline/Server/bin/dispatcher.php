@@ -453,17 +453,23 @@ if (!\function_exists('wlsDispatcherApplyWarmupPathObservers')) {
         }
     }
 }
-$homepageWarmupPaths = $dispatcherConfig['homepage_warmup_paths']
-    ?? $wlsConfig['homepage_warmup_paths']
-    ?? ['/'];
-$homepageWarmupPaths = wlsDispatcherNormalizeWarmupPaths($homepageWarmupPaths);
-$homepageWarmupVariants = $dispatcherConfig['homepage_warmup_variants']
-    ?? $wlsConfig['homepage_warmup_variants']
-    ?? [];
-$warmupPathObserversEnabled = (bool)(
+$homepageWarmupEnabled = (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? false);
+$homepageWarmupPaths = ['/'];
+$homepageWarmupVariants = [];
+if ($homepageWarmupEnabled) {
+    $homepageWarmupPaths = wlsDispatcherNormalizeWarmupPaths(
+        $dispatcherConfig['homepage_warmup_paths']
+            ?? $wlsConfig['homepage_warmup_paths']
+            ?? ['/']
+    );
+    $homepageWarmupVariants = $dispatcherConfig['homepage_warmup_variants']
+        ?? $wlsConfig['homepage_warmup_variants']
+        ?? [];
+}
+$warmupPathObserversEnabled = $homepageWarmupEnabled && (bool)(
     $dispatcherConfig['warmup_path_observers_enabled']
-    ?? $wlsConfig['dispatcher_warmup_path_observers_enabled']
-    ?? true
+        ?? $wlsConfig['dispatcher_warmup_path_observers_enabled']
+        ?? true
 );
 if ($warmupPathObserversEnabled) {
     $homepageWarmupPaths = wlsDispatcherApplyWarmupPathObservers(
@@ -494,7 +500,7 @@ $dispatcher->configure([
     'worker_connect_select_timeout_sec' => (float)($dispatcherConfig['worker_connect_select_timeout_sec'] ?? 0.02),
     'worker_busy_penalty_after_ms' => (float)($dispatcherConfig['worker_busy_penalty_after_ms'] ?? 120),
     'ssl_backend_preconnect_per_worker' => (int)($dispatcherConfig['ssl_backend_preconnect_per_worker'] ?? 0),
-    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? false),
+    'homepage_warmup_enabled' => $homepageWarmupEnabled,
     'homepage_warmup_hosts' => \array_values($warmupHosts),
     'homepage_warmup_paths' => $homepageWarmupPaths,
     'homepage_warmup_variants' => $homepageWarmupVariants,
