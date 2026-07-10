@@ -591,7 +591,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame(1.0, $core->healthCalls[0]['response_timeout']);
     }
 
-    public function testTrustingMasterReadyWarmupRunsHomepageWarmupByDefault(): void
+    public function testTrustingMasterReadyWarmupDefersHomepageWarmupByDefault(): void
     {
         $core = $this->createTrustingMasterReadyWarmupCore(
             [
@@ -607,12 +607,36 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertTrue($result['success'], 'health probe success should still admit the worker');
         self::assertSame('', $result['error']);
         self::assertCount(1, $core->healthCalls);
+        self::assertSame([], $core->homepageCalls);
+    }
+
+    public function testWarmupJoinedWorkersViaHomepageUsesShortBestEffortBudgetAndCooldown(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [
+            19982 => true,
+        ], [
+            'homepage_warmup_enabled' => true,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $claims = $core->claimJoinedWorkerHomepageWarmup([19982]);
+        $result = $core->warmupJoinedWorkersViaHomepage($claims);
+        $second = $core->claimJoinedWorkerHomepageWarmup([19982]);
+
+        self::assertSame([19982], $result['warmed']);
+        self::assertSame([], $result['failed']);
+        self::assertSame([], $second);
         self::assertCount(1, $core->homepageCalls);
+        self::assertSame(1.2, $core->homepageCalls[0]['read_timeout']);
+        self::assertSame(1, $core->homepageCalls[0]['max_targets']);
+        self::assertFalse($core->homepageCalls[0]['require_all_targets']);
     }
 
     public function testClaimJoinedWorkerHomepageWarmupOnlyOncePerMembership(): void
     {
-        $core = $this->createTrustingMasterReadyWarmupCore([], []);
+        $core = $this->createTrustingMasterReadyWarmupCore([], [], [
+            'homepage_warmup_enabled' => true,
+        ]);
 
         $core->setWorkerPortsFromMasterReady([19982]);
 

@@ -23,6 +23,10 @@ final class SessionProtocol
     
     /** 当前序列化器 */
     private static string $serializer = self::SERIALIZER_JSON;
+
+    private const MAX_FRAME_BYTES = 1_048_576;
+    private const MAX_BUFFER_BYTES = 16_777_216;
+    private const MAX_MESSAGES_PER_EXTRACT = 1024;
     
     /**
      * 设置序列化器
@@ -280,18 +284,59 @@ final class SessionProtocol
     public static function extractMessages(string &$buffer): array
     {
         $messages = [];
-        
-        while (($pos = \strpos($buffer, "\n")) !== false) {
-            $line = \substr($buffer, 0, $pos);
-            $buffer = \substr($buffer, $pos + 1);
+        $bufferLength = \strlen($buffer);
+        if ($bufferLength > self::MAX_BUFFER_BYTES && \strpos($buffer, "\n") === false) {
+            self::recordProtocolReject('buffer_without_delimiter', $bufferLength);
+            $buffer = '';
+            return [];
+        }
+
+        $offset = 0;
+        while (($pos = \strpos($buffer, "\n", $offset)) !== false) {
+            $lineLength = $pos - $offset;
+            if ($lineLength > self::MAX_FRAME_BYTES) {
+                self::recordProtocolReject('frame_too_large', $lineLength);
+                $offset = $pos + 1;
+                continue;
+            }
+
+            $line = \substr($buffer, $offset, $lineLength);
             
             $decoded = self::decode($line);
             if ($decoded !== null) {
                 $messages[] = $decoded;
             }
+
+            $offset = $pos + 1;
+            if (\count($messages) >= self::MAX_MESSAGES_PER_EXTRACT) {
+                break;
+            }
+        }
+
+        if ($offset > 0) {
+            $buffer = \substr($buffer, $offset);
+        }
+
+        if (\strlen($buffer) > self::MAX_BUFFER_BYTES) {
+            self::recordProtocolReject('remaining_buffer_too_large', \strlen($buffer));
+            $buffer = '';
         }
         
         return $messages;
+    }
+
+    private static function recordProtocolReject(string $reason, int $bytes): void
+    {
+        try {
+            \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->incrementCounter(
+                'wls_protocol_rejected_total',
+                1,
+                ['reason' => $reason]
+            );
+        } catch (\Throwable) {
+        }
+
+        \error_log('[WLS SessionProtocol] rejected ' . $reason . ' bytes=' . $bytes);
     }
 
     // ==================== 请求构建器 ====================

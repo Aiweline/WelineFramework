@@ -42,7 +42,7 @@ final class CoroutineRuntimeTest extends TestCase
         self::assertSame('select', $runtime->getLoopBackend());
     }
 
-    public function testReadyFiberTimerDoesNotForceBusyPoll(): void
+    public function testReadyFiberTimerReturnsImmediatelyForResume(): void
     {
         $loop = new class implements EventLoopInterface {
             public array $captured = [];
@@ -77,7 +77,7 @@ final class CoroutineRuntimeTest extends TestCase
         $runtime->wait($read, $write, $except, 100000);
 
         self::assertSame(0, $loop->captured['timeout_sec']);
-        self::assertSame(1000, $loop->captured['timeout_usec']);
+        self::assertSame(0, $loop->captured['timeout_usec']);
     }
 }
 

@@ -83,6 +83,8 @@ final class ProcesserWindowsForegroundWindowTitleTest extends TestCase
                 'process_name' => 'weline-wls-worker-default-1',
                 'cwd' => 'E:\\WelineFramework\\DEV-workspace',
                 'enable_log' => true,
+                'stdout_log' => 'E:\\WelineFramework\\DEV-workspace\\var\\process\\worker.stdout.log',
+                'stderr_log' => 'E:\\WelineFramework\\DEV-workspace\\var\\process\\worker.stderr.log',
                 'block' => false,
                 'foreground' => true,
             ],
@@ -94,6 +96,8 @@ final class ProcesserWindowsForegroundWindowTitleTest extends TestCase
                 'process_name' => 'weline-wls-session-default',
                 'cwd' => 'E:\\WelineFramework\\DEV-workspace',
                 'enable_log' => true,
+                'stdout_log' => 'E:\\WelineFramework\\DEV-workspace\\var\\process\\session.stdout.log',
+                'stderr_log' => 'E:\\WelineFramework\\DEV-workspace\\var\\process\\session.stderr.log',
                 'block' => false,
                 'foreground' => false,
             ],
@@ -103,7 +107,67 @@ final class ProcesserWindowsForegroundWindowTitleTest extends TestCase
         self::assertStringNotContainsString('cmd.exe', $script);
         self::assertStringNotContainsString('cmd /d /c', $script);
         self::assertStringContainsString('Start-Process @startArgs', $script);
+        self::assertStringNotContainsString('[int]$pid', $script);
+        self::assertStringContainsString('[int]$welineProcessId', $script);
+        self::assertStringContainsString('RedirectStandardOutput', $script);
+        self::assertStringContainsString('RedirectStandardError', $script);
         self::assertStringContainsString("WindowStyle = 'Normal'", $script);
         self::assertStringContainsString("WindowStyle = 'Hidden'", $script);
+        self::assertStringContainsString('[batch-start-error] ', $script);
+    }
+
+    public function testWindowsBatchCreateDoesNotScanProcessTableByDefault(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'resolveWindowsBatchCreateNonBlockingPidResolutionTimeout');
+        $method->setAccessible(true);
+
+        $file = $method->getFileName();
+        self::assertIsString($file);
+        $lines = \file($file);
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        self::assertStringContainsString(
+            'system.processer.windows_batch_create_nonblocking_pid_resolution_timeout_sec',
+            $source
+        );
+        self::assertStringContainsString('return 0.0;', $source);
+    }
+
+    public function testWindowsBatchCreateWaitsBrieflyForHelperRowsByDefault(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'resolveWindowsBatchCreateNonBlockingResultRowTimeout');
+        $method->setAccessible(true);
+
+        $timeout = $method->invoke(null, 7);
+
+        self::assertIsFloat($timeout);
+        self::assertGreaterThan(0.0, $timeout);
+        self::assertLessThanOrEqual(0.6, $timeout);
+    }
+
+    public function testWindowsBatchCreateUsesSplitHelpersByDefault(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'batchCreateWindows');
+        $method->setAccessible(true);
+
+        $file = $method->getFileName();
+        self::assertIsString($file);
+        $lines = \file($file);
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        self::assertStringContainsString('system.processer.windows_batch_create_split_helpers', $source);
+        self::assertStringContainsString('!$waitForResults && $splitDetachedHelpers', $source);
+        self::assertStringContainsString('return self::batchCreateWindowsDetachedHelpers', $source);
+        self::assertStringContainsString("Env::get('system.processer.windows_batch_create_split_helpers', true)", $source);
     }
 }

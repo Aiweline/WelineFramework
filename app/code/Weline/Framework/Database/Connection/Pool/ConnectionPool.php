@@ -28,6 +28,9 @@ class ConnectionPool
      */
     private static array $pools = [];
 
+    /** @var array<int, true> PDO object ids known to be unusable. */
+    private static array $unhealthyConnections = [];
+
     /**
      * 获取连接池键名
      */
@@ -41,6 +44,68 @@ class ConnectionPool
             'path' => method_exists($configProvider, 'getData') ? (string)$configProvider->getData('path') : '',
             'username' => $configProvider->getUsername(),
         ]));
+    }
+
+    public static function isDisconnectException(\Throwable $exception): bool
+    {
+        $message = \strtolower((string) $exception->getMessage());
+
+        return \str_contains($message, 'no connection to the server')
+            || \str_contains($message, 'server closed the connection')
+            || \str_contains($message, 'terminating connection')
+            || \str_contains($message, 'ssl connection has been closed')
+            || \str_contains($message, 'connection not open')
+            || \str_contains($message, 'lost connection')
+            || \str_contains($message, 'could not connect to server')
+            || \str_contains($message, 'connection refused')
+            || \str_contains($message, 'broken pipe')
+            || \str_contains($message, 'connection reset by peer');
+    }
+
+    public static function markConnectionUnhealthy(PDO $connection): void
+    {
+        self::$unhealthyConnections[\spl_object_id($connection)] = true;
+    }
+
+    public static function isConnectionMarkedUnhealthy(PDO $connection): bool
+    {
+        return isset(self::$unhealthyConnections[\spl_object_id($connection)]);
+    }
+
+    public static function discardConnection(PDO $connection, ConfigProviderInterface $configProvider): void
+    {
+        $poolKey = self::getPoolKey($configProvider);
+        $connectionId = \spl_object_id($connection);
+        unset(self::$unhealthyConnections[$connectionId]);
+
+        if (!isset(self::$pools[$poolKey])) {
+            return;
+        }
+
+        $pool = &self::$pools[$poolKey];
+        $removed = false;
+        if (isset($pool['in_use'][$connectionId])) {
+            unset($pool['in_use'][$connectionId]);
+            $removed = true;
+        }
+
+        if (!$pool['pool']->isEmpty()) {
+            $queue = new \SplQueue();
+            while (!$pool['pool']->isEmpty()) {
+                $item = $pool['pool']->dequeue();
+                $itemConnection = \is_array($item) ? ($item['connection'] ?? null) : $item;
+                if ($itemConnection instanceof PDO && \spl_object_id($itemConnection) === $connectionId) {
+                    $removed = true;
+                    continue;
+                }
+                $queue->enqueue($item);
+            }
+            $pool['pool'] = $queue;
+        }
+
+        if ($removed) {
+            $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+        }
     }
 
     /**
@@ -74,14 +139,20 @@ class ConnectionPool
             $lastUsed = is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
             $connectionValid = false;
             // 仅当空闲超过阈值时做 SELECT 1 验证，减少高频验证
-            if ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
+            if (!$connection instanceof PDO) {
+                $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+            } elseif (self::isConnectionMarkedUnhealthy($connection)) {
+                $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                unset(self::$unhealthyConnections[\spl_object_id($connection)]);
+            } elseif ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
                 $connectionValid = true;
             } else {
                 try {
                     $connection->query('SELECT 1');
                     $connectionValid = true;
-                } catch (\PDOException $e) {
-                    $pool['current_size']--;
+                } catch (\Throwable $e) {
+                    $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                    unset(self::$unhealthyConnections[\spl_object_id($connection)]);
                 }
             }
             if ($connectionValid && $connection instanceof PDO) {
@@ -107,14 +178,22 @@ class ConnectionPool
                 $item = $pool['pool']->dequeue();
                 $connection = is_array($item) ? $item['connection'] : $item;
                 $lastUsed = is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
-                if ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
+                if (!$connection instanceof PDO) {
+                    $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                    $connectionValid = false;
+                } elseif (self::isConnectionMarkedUnhealthy($connection)) {
+                    $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                    unset(self::$unhealthyConnections[\spl_object_id($connection)]);
+                    $connectionValid = false;
+                } elseif ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
                     $connectionValid = true;
                 } else {
                     try {
                         $connection->query('SELECT 1');
                         $connectionValid = true;
-                    } catch (\PDOException $e) {
-                        $pool['current_size']--;
+                    } catch (\Throwable $e) {
+                        $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                        unset(self::$unhealthyConnections[\spl_object_id($connection)]);
                         $connectionValid = false;
                     }
                 }
@@ -149,6 +228,11 @@ class ConnectionPool
         // 如果连接在使用列表中，归还到池中（带 last_used 供取出时按需验证）
         if (isset($pool['in_use'][$connectionId])) {
             unset($pool['in_use'][$connectionId]);
+            if (isset(self::$unhealthyConnections[$connectionId])) {
+                unset(self::$unhealthyConnections[$connectionId]);
+                $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                return;
+            }
             $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
             
             // 注释掉归还时的验证，改为在获取时验证
@@ -185,6 +269,7 @@ class ConnectionPool
                 }
             }
             self::$pools = [];
+            self::$unhealthyConnections = [];
         } else {
             // 关闭指定配置的连接池
             $poolKey = self::getPoolKey($configProvider);
@@ -308,16 +393,24 @@ class ConnectionPool
     {
         foreach (self::$pools as $poolKey => &$pool) {
             foreach ($pool['in_use'] as $connectionId => $connection) {
+                $reusable = true;
                 try {
                     // 回滚未提交的事务
                     if ($connection->inTransaction()) {
                         $connection->rollBack();
                     }
                 } catch (\Throwable $e) {
+                    $reusable = false;
+                    self::markConnectionUnhealthy($connection);
                     // 连接可能已断开，忽略回滚错误
                 }
                 unset($pool['in_use'][$connectionId]);
-                $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
+                if ($reusable && !isset(self::$unhealthyConnections[$connectionId])) {
+                    $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
+                    continue;
+                }
+                unset(self::$unhealthyConnections[$connectionId]);
+                $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
             }
         }
         unset($pool);

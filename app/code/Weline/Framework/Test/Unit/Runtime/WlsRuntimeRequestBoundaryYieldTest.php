@@ -8,6 +8,7 @@ use ReflectionMethod;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\Router\Core as RouterCore;
 use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Framework\View\Template;
 
 final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
 {
@@ -43,6 +44,55 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
         );
     }
 
+    public function testTemplateCooperativeYieldIsOptIn(): void
+    {
+        $method = new ReflectionMethod(Template::class, 'cooperativeTemplateYield');
+        $file = $method->getFileName();
+
+        self::assertIsString($file);
+
+        $lines = \file($file);
+        self::assertIsArray($lines);
+
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        self::assertStringContainsString(
+            'wls.performance.template_cooperative_yield_enabled',
+            $source,
+            'Template-level cooperative yield must remain opt-in for normal WLS requests.'
+        );
+    }
+
+    public function testWorkerRequestFiberDoesNotYieldBeforeNormalRequestHandling(): void
+    {
+        foreach ($this->workerEntryFiles() as $file) {
+            $source = \file_get_contents($file);
+            self::assertIsString($source);
+            self::assertDoesNotMatchRegularExpression(
+                '/wlsFiberRequestContextEnter\([^)]+\);\s*try\s*\{\s*\\\\Weline\\\\Framework\\\\Runtime\\\\SchedulerSystem::yield\(\);/s',
+                $source,
+                $file . ' must not suspend a new request fiber before normal request handling starts.'
+            );
+        }
+    }
+
+    public function testWorkerConnectionLoopCleansEofAndBatchesAccepts(): void
+    {
+        $worker = \file_get_contents($this->workerEntryFiles()[0]);
+        $workerSsl = \file_get_contents($this->workerEntryFiles()[1]);
+
+        self::assertIsString($worker);
+        self::assertIsString($workerSsl);
+        self::assertStringContainsString('$maxAcceptPerLoop = 64;', $worker);
+        self::assertStringContainsString('while ($accepted < $maxAcceptPerLoop)', $worker);
+        self::assertStringContainsString('if (@\feof($conn))', $worker);
+        self::assertStringContainsString('if (@\feof($conn))', $workerSsl);
+    }
+
     private function assertMethodDoesNotYield(string $className, string $methodName, string $message): void
     {
         $method = new ReflectionMethod($className, $methodName);
@@ -64,5 +114,18 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
             $source,
             $message
         );
+    }
+
+    /**
+     * @return string[]
+     */
+    private function workerEntryFiles(): array
+    {
+        $bp = \dirname(__DIR__, 7);
+
+        return [
+            $bp . '/app/code/Weline/Server/bin/worker.php',
+            $bp . '/app/code/Weline/Server/bin/worker_ssl.php',
+        ];
     }
 }

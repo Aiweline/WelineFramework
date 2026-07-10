@@ -552,7 +552,15 @@ class MasterProcess
     private function cleanupStaleInstanceFiles(): void
     {
         try {
-            $cleaned = (new ServerInstanceManager())->cleanupStaleInstances();
+            $budgetMs = (float)(Env::get('wls.master.startup_stale_cleanup_budget_ms', 500) ?? 500);
+            if ($budgetMs < 0.0) {
+                $budgetMs = 0.0;
+            }
+            $cleaned = (new ServerInstanceManager())->cleanupStaleInstancesForStartup($this->instanceName, $budgetMs);
+            $this->traceStartupPhase('master-stale-cleanup:budget', [
+                'budget_ms' => (int)\round($budgetMs),
+                'cleaned' => $cleaned,
+            ]);
             if ($cleaned > 0) {
                 $this->log(__('共清理 %{1} 个孤儿 endpoint 记录', [$cleaned]));
             }

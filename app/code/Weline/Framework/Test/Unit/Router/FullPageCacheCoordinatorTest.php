@@ -11,6 +11,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Runtime\Runtime;
 
 final class FullPageCacheCoordinatorTest extends TestCase
 {
@@ -20,22 +21,32 @@ final class FullPageCacheCoordinatorTest extends TestCase
     {
         $this->originalServer = $_SERVER;
         $_SERVER = [];
+        Runtime::setMode(Runtime::WLS);
+        FullPageCacheCoordinator::clearProcessCache();
         WelineEnv::getInstance()->reset();
         WelineEnv::set('full_request_uri', 'https://example.test/', 'unit-test');
+        WelineEnv::setServer('WELINE_FULL_REQUEST_URI', 'https://example.test/', 'unit-test');
+        WelineEnv::set('request.uri', '/', 'unit-test');
+        WelineEnv::set('request.method', 'GET', 'unit-test');
+        WelineEnv::set('is_backend', false, 'unit-test');
+        WelineEnv::set('is_static_file', false, 'unit-test');
         WelineEnv::set('response.from_cache', false, 'unit-test');
     }
 
     protected function tearDown(): void
     {
         WelineEnv::getInstance()->reset();
+        FullPageCacheCoordinator::clearProcessCache();
+        Runtime::resetModeCache();
         $_SERVER = $this->originalServer;
     }
 
     public function testGetCachedResponseRestoresLegacyHeadersAndStatus(): void
     {
         $pool = new InMemoryCachePool();
+        $coordinator = new FullPageCacheCoordinator(null, $pool);
         $pool->set(
-            KeyBuilder::buildUnifiedRequestCacheKey('', 'GET'),
+            $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET'),
             [
                 KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 201,
                 KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>cached</body></html>',
@@ -47,7 +58,6 @@ final class FullPageCacheCoordinatorTest extends TestCase
             ]
         );
 
-        $coordinator = new FullPageCacheCoordinator(null, $pool);
         $response = $coordinator->getCachedResponse('GET');
 
         self::assertInstanceOf(Response::class, $response);
@@ -58,6 +68,27 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertNull($response->getHeader('Content-Length'));
         self::assertSame('HIT', $response->getHeader('X-Weline-FPC'));
         self::assertTrue((bool)WelineEnv::get('response.from_cache', false));
+    }
+
+    public function testCooperativeFpcYieldIsOptInForPersistentRequests(): void
+    {
+        $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'cooperativeBuildYield');
+        $file = $method->getFileName();
+
+        self::assertIsString($file);
+
+        $lines = \file($file);
+        self::assertIsArray($lines);
+
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        self::assertStringContainsString('wls.performance.fpc_cooperative_yield_enabled', $source);
+        self::assertStringContainsString('false', $source);
+        self::assertStringContainsString('SchedulerSystem::yield()', $source);
     }
 
     public function testBuildLockAllowsSinglePublisherAndFollowersReadPublishedResponse(): void
@@ -112,6 +143,20 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $lockC = $coordinator->acquireBuildLock('GET');
         self::assertNotNull($lockC);
         $coordinator->releaseBuildLock($lockC);
+    }
+
+    private function buildCurrentUnifiedFpcCacheKey(FullPageCacheCoordinator $coordinator, string $method): string
+    {
+        $variantMethod = new \ReflectionMethod($coordinator, 'buildCurrentFpcVariant');
+        $variantMethod->setAccessible(true);
+        $variant = $variantMethod->invoke($coordinator);
+
+        self::assertIsArray($variant);
+
+        $keyMethod = new \ReflectionMethod($coordinator, 'buildUnifiedFpcCacheKey');
+        $keyMethod->setAccessible(true);
+
+        return (string)$keyMethod->invoke($coordinator, 'https://example.test/', $method, $variant);
     }
 }
 

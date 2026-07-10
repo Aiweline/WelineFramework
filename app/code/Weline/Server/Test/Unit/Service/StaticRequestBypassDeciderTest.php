@@ -50,4 +50,32 @@ class StaticRequestBypassDeciderTest extends TestCase
             )
         );
     }
+
+    public function testDynamicMediaImageRequestIsDeferredToFramework(): void
+    {
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'media/image/backend/logo/logo.png'
+            )
+        );
+        self::assertFalse(
+            StaticRequestBypassDecider::shouldReturnFastMissingStatic(
+                'media/image/backend/logo/logo.png'
+            )
+        );
+    }
+
+    public function testDynamicMediaFileRequestIsDeferredToFramework(): void
+    {
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'media/file/backend/logo/logo.pdf'
+            )
+        );
+        self::assertFalse(
+            StaticRequestBypassDecider::shouldReturnFastMissingStatic(
+                'media/file/backend/logo/logo.pdf'
+            )
+        );
+    }
 }
