@@ -322,7 +322,7 @@ while (true) {
     }
 
     // ========== 孤儿检测（IPC 优先） ==========
-    if ($orphanGuard->shouldExit(
+    if (!$childMasterGuard->isEnabled() && $orphanGuard->shouldExit(
         $masterPid,
         $kernel !== null && $kernel->isConnected(),
         $ipcReceivedShutdown,

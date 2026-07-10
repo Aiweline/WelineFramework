@@ -75,9 +75,12 @@ class PassthroughCore
     private const IPC_READY_HOMEPAGE_CONNECT_TIMEOUT_SEC = 2.0;
     private const IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC = 3.0;
     private const IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC = 2.0;
-    private const IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC = 30.0;
-    private const IPC_READY_HOMEPAGE_ROUTE_GATE_TARGETS = 6;
-    private const HOMEPAGE_WARMUP_MAX_TARGETS = 96;
+    private const IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC = 1.2;
+    private const IPC_READY_HOMEPAGE_ROUTE_GATE_TARGETS = 1;
+    private const HOMEPAGE_WARMUP_MAX_TARGETS = 16;
+    private const HOMEPAGE_WARMUP_RECENT_SUCCESS_GRACE_SEC = 300.0;
+    private const HOMEPAGE_WARMUP_BODY_DRAIN_SEC = 0.05;
+    private const HOMEPAGE_WARMUP_BODY_DRAIN_BYTES = 16384;
     
     /**
      * Worker 黑名单恢复时间（秒）
@@ -147,7 +150,7 @@ class PassthroughCore
      * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
      */
     private ?\Closure $warmupCooperativeYield = null;
-    private bool $homepageWarmupEnabled = true;
+    private bool $homepageWarmupEnabled = false;
     /** @var string[] */
     private array $homepageWarmupHosts = ['localhost'];
     /** @var string[] */
@@ -157,6 +160,8 @@ class PassthroughCore
     private int $homepageWarmupRouteGateTargets = self::IPC_READY_HOMEPAGE_ROUTE_GATE_TARGETS;
     /** @var array<int, int> port => warmup ticket */
     private array $workerHomepageWarmupTickets = [];
+    /** @var array<int, float> port => last successful best-effort homepage warmup timestamp */
+    private array $workerHomepageWarmupCompletedAt = [];
     private int $nextWorkerHomepageWarmupTicket = 1;
     private ?int $activeHomepageWarmupPort = null;
 
@@ -1868,7 +1873,14 @@ class PassthroughCore
                 if (isset($this->workerHealth[$port])) {
                     $this->workerHealth[$port]['last_success'] = \microtime(true);
                 }
-                if (!$this->homepageWarmupEnabled) {
+                if ($this->shouldAdmitWorkerAfterHealthProbeOnly()) {
+                    $this->logWarmup(
+                        $this->homepageWarmupEnabled
+                            ? "Worker:{$port} health probe passed; homepage warmup deferred"
+                            : "Worker:{$port} health probe passed; homepage warmup disabled",
+                        'INFO'
+                    );
+                    return ['success' => true, 'error' => ''];
                     $this->logWarmup(
                         "Worker:{$port} IPC 入池健康探活已通过，配置已关闭首页预热",
                         'INFO'
@@ -1910,6 +1922,11 @@ class PassthroughCore
         }
 
         return ['success' => false, 'error' => $lastError];
+    }
+
+    protected function shouldAdmitWorkerAfterHealthProbeOnly(): bool
+    {
+        return true;
     }
 
     private function shouldContinueTrustingMasterReadyWarmup(int $attempt, float $startedAt): bool
@@ -2425,7 +2442,16 @@ class PassthroughCore
 
                 // 2xx：正常业务；503：维护/过载页仍表示 HTTP 栈与路由可用（维护 Worker 常见）
                 if ($response && \preg_match('/HTTP\/1\.[01]\s+(?:2\d{2}|503)\b/', $response)) {
-                    $bodyBytes = $this->drainWarmupResponseBody($conn, $response, $readDeadline);
+                    $bodyDrainDeadline = \min(
+                        $readDeadline,
+                        \microtime(true) + self::HOMEPAGE_WARMUP_BODY_DRAIN_SEC
+                    );
+                    $bodyBytes = $this->drainWarmupResponseBody(
+                        $conn,
+                        $response,
+                        $bodyDrainDeadline,
+                        self::HOMEPAGE_WARMUP_BODY_DRAIN_BYTES
+                    );
                     $elapsed = \round(\microtime(true) - $startTime, 2);
                     $this->writeStderr("[PassthroughCore] Worker:{$port} 预热成功 ✓ (耗时 {$elapsed}s, 尝试 {$attempt}/{$maxRetries})\n");
                     if (isset($this->workerHealth[$port])) {
@@ -2472,11 +2498,19 @@ class PassthroughCore
      *
      * @param resource $conn
      */
-    private function drainWarmupResponseBody($conn, string $initialResponse, float $deadline): int
+    private function drainWarmupResponseBody(
+        $conn,
+        string $initialResponse,
+        float $deadline,
+        int $maxBodyBytes = self::HOMEPAGE_WARMUP_BODY_DRAIN_BYTES
+    ): int
     {
         $headerEnd = \strpos($initialResponse, "\r\n\r\n");
         $headerBytes = $headerEnd === false ? \strlen($initialResponse) : $headerEnd + 4;
         $bodyBytes = \max(0, \strlen($initialResponse) - $headerBytes);
+        if ($maxBodyBytes <= 0 || $bodyBytes >= $maxBodyBytes) {
+            return $bodyBytes;
+        }
         $contentLength = null;
         if (\preg_match('/\r\nContent-Length:\s*(\d+)/i', $initialResponse, $match) === 1) {
             $contentLength = (int)$match[1];
@@ -2486,9 +2520,10 @@ class PassthroughCore
             && !\feof($conn)
             && \microtime(true) < $deadline
             && ($contentLength === null || $bodyBytes < $contentLength)
+            && $bodyBytes < $maxBodyBytes
         ) {
             $this->warmupYield();
-            $chunk = @\fread($conn, 8192);
+            $chunk = @\fread($conn, \min(8192, $maxBodyBytes - $bodyBytes));
             if (\is_string($chunk) && $chunk !== '') {
                 $bodyBytes += \strlen($chunk);
                 continue;
@@ -2875,6 +2910,7 @@ class PassthroughCore
         foreach ($prev as $p) {
             if (!\in_array($p, $newPorts, true)) {
                 $this->clearJoinedWorkerHomepageWarmupTicket((int) $p);
+                unset($this->workerHomepageWarmupCompletedAt[(int) $p]);
                 $this->closeIdleSocketsByPort((int) $p);
             }
         }
@@ -2914,6 +2950,12 @@ class PassthroughCore
                 continue;
             }
             if (isset($this->workerHomepageWarmupTickets[$port])) {
+                continue;
+            }
+            $lastWarmedAt = (float)($this->workerHomepageWarmupCompletedAt[$port] ?? 0.0);
+            if ($lastWarmedAt > 0.0
+                && \microtime(true) - $lastWarmedAt < self::HOMEPAGE_WARMUP_RECENT_SUCCESS_GRACE_SEC
+            ) {
                 continue;
             }
 
@@ -2977,6 +3019,7 @@ class PassthroughCore
             }
 
             $warmed[] = $port;
+            $this->workerHomepageWarmupCompletedAt[$port] = \microtime(true);
             $this->clearJoinedWorkerHomepageWarmupTicket($port);
         }
 

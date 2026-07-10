@@ -42,6 +42,37 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         );
     }
 
+    public function testAllWorkersUnavailableRecoveryQueuesSingleDeferredAudit(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'ipcClient', null);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', null);
+        $this->setProperty($dispatcher, 'spinWaitTickInProgress', true);
+        $this->setProperty($dispatcher, 'lastAllWorkersUnavailableRecoveryAt', 0.0);
+        $this->setProperty($dispatcher, 'lastWorkerProbeTime', 123.0);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'scheduleAllWorkersUnavailableRecovery');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, 'unit-test');
+        $method->invoke($dispatcher, 'unit-test-duplicate');
+
+        self::assertSame(0.0, $this->getProperty($dispatcher, 'lastWorkerProbeTime'));
+        self::assertSame(
+            [[
+                'type' => 'audit_worker_health',
+                'source' => 'unit-test',
+            ]],
+            $this->getProperty($dispatcher, 'deferredWorkerPoolJobs')
+        );
+    }
+
     public function testPumpDeferredWorkerPoolJobsProcessesDeferredHealthAuditFiber(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();

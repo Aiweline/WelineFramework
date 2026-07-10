@@ -42,6 +42,7 @@ final class ServerInstanceManagerRunningStatsTest extends TestCase
         self::assertSame([
             'instance_running' => true,
             'workers' => 2,
+            'desired_workers' => 0,
             'dispatchers' => 1,
             'ports' => [19982, 19984],
         ], $stats);

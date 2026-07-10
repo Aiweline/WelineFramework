@@ -164,6 +164,28 @@ final class Connector extends Query implements ConnectorInterface
         return $this->wrappedConnection;
     }
 
+    protected function reconnectAfterDisconnect(\PDOException $exception): bool
+    {
+        unset($exception);
+
+        if ($this->link instanceof PDO && $this->fromPool) {
+            ConnectionPool::discardConnection($this->link, $this->configProvider);
+        } elseif ($this->link instanceof PDO) {
+            ConnectionPool::markConnectionUnhealthy($this->link);
+        }
+
+        $this->link = null;
+        $this->wrappedConnection = null;
+        $this->fromPool = false;
+
+        try {
+            $this->create();
+            return $this->link instanceof PDO;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function close(): void
     {
         // 如果连接来自连接池，归还到池中；否则直接释放

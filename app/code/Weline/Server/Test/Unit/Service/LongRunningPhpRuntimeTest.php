@@ -44,4 +44,35 @@ final class LongRunningPhpRuntimeTest extends TestCase
         self::assertSame([0], $runtime->timeLimits);
         self::assertSame([true], $runtime->abortFlags);
     }
+
+    public function testWindowsWlsDaemonSkipsConsoleEncodingInitialization(): void
+    {
+        $runtime = new class extends LongRunningPhpRuntime {
+            public int $consoleEncodingInitCount = 0;
+
+            public function runConsoleEncodingInit(): void
+            {
+                $this->initConsoleEncoding();
+            }
+
+            protected function initializeConsoleEncoding(): void
+            {
+                $this->consoleEncodingInitCount++;
+            }
+
+            protected function isWindows(): bool
+            {
+                return true;
+            }
+
+            protected function isWlsDaemonProcess(): bool
+            {
+                return true;
+            }
+        };
+
+        $runtime->runConsoleEncodingInit();
+
+        self::assertSame(0, $runtime->consoleEncodingInitCount);
+    }
 }
