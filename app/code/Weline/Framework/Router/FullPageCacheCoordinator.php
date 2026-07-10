@@ -223,11 +223,19 @@ final class FullPageCacheCoordinator
             SchedulerSystem::yieldDelay(\min(self::LOCK_WAIT_STEP_MS, $remainingMs));
         } while (\microtime(true) < $deadline);
 
-        return $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method);
+        $response = $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method);
+        if ($response === null && $this->internalFpcWarmupMode() === 'prime') {
+            throw new \RuntimeException('Homepage warmup peer timed out waiting for the shared FPC publisher.');
+        }
+
+        return $response;
     }
 
     private function resolvePublishedResponseWaitTimeoutMs(int $timeoutMs): int
     {
+        if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS && $this->internalFpcWarmupMode() === 'prime') {
+            return \max(250, \min(10000, (int)Env::get('wls.worker.homepage_warmup_peer_wait_ms', 3000)));
+        }
         if ($timeoutMs !== self::LOCK_WAIT_TIMEOUT_MS || !Runtime::isPersistent()) {
             return \max(0, $timeoutMs);
         }
@@ -394,7 +402,9 @@ final class FullPageCacheCoordinator
 
     public function canServeCachedResponse(string $method = 'GET'): bool
     {
-        if ($this->shouldBypassForDynamicFirstRender()
+        $warmupMode = $this->internalFpcWarmupMode();
+        if (($this->shouldBypassForDynamicFirstRender()
+                && $warmupMode !== 'prime')
             || $this->shouldBypassCachedResponseForClientCacheControl()
         ) {
             return false;
@@ -409,7 +419,7 @@ final class FullPageCacheCoordinator
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
     {
-        if ($this->shouldBypassForDynamicFirstRender()
+        if (($this->shouldBypassForDynamicFirstRender() && $this->internalFpcWarmupMode() !== 'prime')
             || $this->shouldSkipCacheBuildForClientCacheControl()
         ) {
             return false;
@@ -454,6 +464,20 @@ final class FullPageCacheCoordinator
         }
 
         return false;
+    }
+
+    private function internalFpcWarmupMode(): string
+    {
+        if ((string)WelineEnv::server('WLS_INTERNAL_WARMUP', '') !== '1'
+            || (string)WelineEnv::server('WLS_INTERNAL_DYNAMIC_WARMUP', '') !== '1'
+        ) {
+            return '';
+        }
+
+        if ((string)WelineEnv::server('HTTP_X_WLS_FPC_PRIME', '') === '1') {
+            return 'prime';
+        }
+        return '';
     }
 
     public function shouldBypassCachedResponseForClientCacheControl(): bool
@@ -554,6 +578,9 @@ final class FullPageCacheCoordinator
         if (!$this->canServeCachedResponse($method)) {
             return null;
         }
+        if ($this->internalFpcWarmupMode() === 'prime') {
+            return null;
+        }
         if ($this->canUsePrivateSessionFpc()) {
             return null;
         }
@@ -643,35 +670,46 @@ final class FullPageCacheCoordinator
         return $this->getStaleCachedResponse($this->normalizeCacheMethod($method));
     }
 
-    public function warmProcessCacheForFullUri(string $fullUri, string $method = 'GET'): bool
+    /**
+     * Rehydrates the anonymous process cache from the fresh shared key.
+     * forceSharedRead never falls back to stale data and never renders.
+     */
+    public function warmProcessCacheForFullUri(
+        string $fullUri,
+        string $method = 'GET',
+        string $cookieHeader = '',
+        bool $forceSharedRead = false
+    ): bool
     {
-        $fullUri = \trim($fullUri);
-        $method = \strtoupper(\trim($method) ?: 'GET');
-        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
+        $method = $this->normalizeCacheMethod(\trim($method) ?: 'GET');
+        if ($method !== 'GET'
+            || !KeyBuilder::isValidFullPageCacheKey($fullUri)
+            || $this->isEditorOrPreviewRequest($fullUri)
+            || $this->isExcludedFrontendPath($fullUri)
+        ) {
             return false;
         }
 
-        $variant = $this->buildCurrentFpcVariant();
+        $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
         $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $method, $variant);
-        if ($this->getProcessCachedPayload($cacheKey) !== null) {
+        if (!$forceSharedRead && $this->getProcessCachedPayload($cacheKey) !== null) {
             return true;
         }
 
         $cached = $this->cache()->get($cacheKey);
-        if (!\is_array($cached)) {
-            return false;
+        if (\is_array($cached)) {
+            $cached = $this->hydrateSharedPayload($cached);
         }
-        $cached = $this->hydrateSharedPayload($cached);
-        if (!\is_array($cached)) {
-            return false;
-        }
-
-        $body = (string)($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '');
-        if ($body === '') {
+        $body = \is_array($cached) ? ($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null) : null;
+        if (!\is_string($body) || $body === '') {
+            // SharedState 短断或单次读失败时保留仍在自身 TTL 内的 process FPC；
+            // 显式 cache-clear IPC 仍会立即清理进程缓存，不用一次瞬时故障制造下一个冷请求。
             return false;
         }
 
         $this->setProcessCachedPayload($cacheKey, $cached);
+        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey));
         return $this->getProcessCachedPayload($cacheKey) !== null;
     }
 
@@ -692,6 +730,9 @@ final class FullPageCacheCoordinator
     ): ?array {
         $method = \strtoupper(\trim($method) ?: 'GET');
         if ($method !== 'GET' && $method !== 'HEAD') {
+            return null;
+        }
+        if (!$this->acceptHeaderAllowsHtml($acceptHeader)) {
             return null;
         }
         $cacheMethod = $this->normalizeCacheMethod($method);
@@ -942,7 +983,10 @@ final class FullPageCacheCoordinator
             return false;
         }
 
-        if ($this->requestHasSseAcceptHeader() || $this->isEditorOrPreviewRequest($rawFullUri)) {
+        if (!$this->requestAcceptsFrontendHtml()
+            || $this->requestHasSseAcceptHeader()
+            || $this->isEditorOrPreviewRequest($rawFullUri)
+        ) {
             return false;
         }
 
@@ -998,6 +1042,17 @@ final class FullPageCacheCoordinator
         $path = \strtolower($this->stripLocaleAndCurrencyPrefixes('/' . \trim($path, '/')));
         if ($path === '/') {
             return false;
+        }
+
+        foreach (['/_wls', '/.well-known', '/static', '/media', '/pub/static', '/pub/media'] as $prefix) {
+            if ($path === $prefix || \str_starts_with($path, $prefix . '/')) {
+                return true;
+            }
+        }
+        if (\in_array($path, ['/favicon.ico', '/robots.txt', '/sitemap.xml', '/sitemap_index.xml'], true)
+            || \preg_match('/\.(?:avif|bmp|css|csv|docx?|eot|gif|gz|html?|ico|jpe?g|js|json|m3u8|map|mp3|mp4|ogg|otf|pdf|png|pptx?|rar|svg|tar|ttf|txt|wasm|webmanifest|webm|webp|woff2?|xlsx?|xml|zip|7z)$/i', $path) === 1
+        ) {
+            return true;
         }
 
         $firstSegment = \explode('/', \trim($path, '/'))[0] ?? '';
@@ -1059,6 +1114,21 @@ final class FullPageCacheCoordinator
     {
         $accept = (string)(WelineEnv::server('HTTP_ACCEPT', '') ?: WelineEnv::get('server.http_accept', ''));
         return \stripos($accept, 'text/event-stream') !== false;
+    }
+
+    private function requestAcceptsFrontendHtml(): bool
+    {
+        $accept = (string)(WelineEnv::server('HTTP_ACCEPT', '') ?: WelineEnv::get('server.http_accept', ''));
+        return $this->acceptHeaderAllowsHtml($accept);
+    }
+
+    private function acceptHeaderAllowsHtml(string $accept): bool
+    {
+        $accept = \strtolower(\trim($accept));
+        return $accept === ''
+            || $accept === '*/*'
+            || \str_contains($accept, 'text/html')
+            || \str_contains($accept, 'application/xhtml+xml');
     }
 
     private function hasLoggedInFrontendSession(): bool
