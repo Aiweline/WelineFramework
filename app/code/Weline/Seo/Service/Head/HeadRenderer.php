@@ -1003,26 +1003,69 @@ HTML;
         $reviewNodes = $this->productReviewNodes($context, (string) $name, $url);
         if ($reviewNodes !== []) {
             $node['review'] = count($reviewNodes) === 1 ? $reviewNodes[0] : $reviewNodes;
+            $aggregateRating = $this->buildProductAggregateRating($product, $reviewNodes);
+            if ($aggregateRating !== []) {
+                $node['aggregateRating'] = $aggregateRating;
+            }
+        }
+
+        return $node;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $reviewNodes
+     * @return array<string, mixed>
+     */
+    private function buildProductAggregateRating(mixed $product, array $reviewNodes): array
+    {
+        if ($reviewNodes === []) {
+            return [];
         }
 
         $rating = $this->readNonEmpty($product, ['rating', 'rating_value']);
         $reviewCount = (int) ($this->readNonEmpty($product, ['review_count', 'reviewCount']) ?: 0);
-        if ($rating && $reviewCount > 0 && $reviewNodes !== []) {
-            $node['aggregateRating'] = [
-                '@type' => 'AggregateRating',
-                'ratingValue' => (string) $rating,
-                'reviewCount' => $reviewCount,
-            ];
-            $bestRating = $this->readNonEmpty($product, ['best_rating', 'bestRating']);
-            $worstRating = $this->readNonEmpty($product, ['worst_rating', 'worstRating']);
-            if ($bestRating !== null) {
-                $node['aggregateRating']['bestRating'] = (string) $bestRating;
+
+        if (($rating === null || (float) $rating <= 0)) {
+            $ratings = [];
+            foreach ($reviewNodes as $reviewNode) {
+                $value = $reviewNode['reviewRating']['ratingValue'] ?? null;
+                if ($value !== null && trim((string) $value) !== '') {
+                    $ratings[] = (float) $value;
+                }
             }
-            if ($worstRating !== null) {
-                $node['aggregateRating']['worstRating'] = (string) $worstRating;
+            if ($ratings !== []) {
+                $rating = round(array_sum($ratings) / count($ratings), 1);
             }
         }
-        return $node;
+
+        if ($reviewCount <= 0) {
+            $reviewCount = count($reviewNodes);
+        }
+
+        if ($rating === null || (float) $rating <= 0 || $reviewCount <= 0) {
+            return [];
+        }
+
+        $aggregateRating = [
+            '@type' => 'AggregateRating',
+            'ratingValue' => (string) $rating,
+            'reviewCount' => $reviewCount,
+        ];
+
+        $bestRating = $this->readNonEmpty($product, ['best_rating', 'bestRating']);
+        $worstRating = $this->readNonEmpty($product, ['worst_rating', 'worstRating']);
+        if ($bestRating !== null) {
+            $aggregateRating['bestRating'] = (string) $bestRating;
+        } else {
+            $aggregateRating['bestRating'] = '5';
+        }
+        if ($worstRating !== null) {
+            $aggregateRating['worstRating'] = (string) $worstRating;
+        } else {
+            $aggregateRating['worstRating'] = '1';
+        }
+
+        return $aggregateRating;
     }
 
     /**

@@ -106,6 +106,54 @@ class HeadRendererProductCommerceTest extends TestCase
         self::assertStringContainsString('"aggregateRating": {', $html);
         self::assertStringContainsString('"review": {', $html);
         self::assertStringContainsString('"reviewBody": "Comfortable linen dress with accurate sizing."', $html);
+        self::assertStringContainsString('"ratingValue": "4.6"', $html);
+        self::assertStringContainsString('"reviewCount": 27', $html);
+    }
+
+    public function testDerivesAggregateRatingFromReviewNodesWhenProductRatingMissing(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'product',
+            'site_name' => 'Shop',
+            'title' => 'Linen Dress',
+            'description' => 'Sleeveless linen dress.',
+            'canonical_url' => 'https://shop.test/product/linen-dress',
+            'url' => 'https://shop.test/product/linen-dress',
+            'product' => [
+                'name' => 'Linen Dress',
+                'sku' => 'DRS-001',
+                'price' => '29.99',
+                'price_currency' => 'USD',
+                'stock_status' => 'in_stock',
+                'rating' => 0,
+                'review_count' => 0,
+            ],
+            'reviews' => [
+                [
+                    'customer_name' => 'Alex Rider',
+                    'rating' => 5,
+                    'content' => 'Excellent quality.',
+                    'created_at' => '2026-03-01 10:15:00',
+                ],
+                [
+                    'customer_name' => 'Jamie',
+                    'rating' => 3,
+                    'content' => 'Acceptable overall.',
+                    'created_at' => '2026-02-20 08:00:00',
+                ],
+            ],
+        ]);
+
+        $html = (new HeadRenderer($resolver))->render(new ProductCommerceHeadTemplateStub());
+
+        self::assertStringContainsString('"review": [', $html);
+        self::assertStringContainsString('"aggregateRating": {', $html);
+        self::assertStringContainsString('"ratingValue": "4"', $html);
+        self::assertStringContainsString('"reviewCount": 2', $html);
     }
 
     public function testSkipsAggregateRatingWhenProductHasNoReviewFacts(): void
