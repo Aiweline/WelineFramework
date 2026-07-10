@@ -26,6 +26,7 @@ use Weline\Framework\Http\WlsRequest;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\Framework\Router\Core as Router;
+use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Preload\WorkerPreloadManager;
 use Weline\Framework\Runtime\StateManager;
@@ -80,6 +81,14 @@ class WlsRuntime implements RuntimeInterface
     private bool $readyGateWorkerRegistryWarmupCompleted = false;
 
     private bool $readyGateDynamicFirstRenderWarmupCompleted = false;
+
+    private bool $homepageKeepWarmRunning = false;
+
+    private float $homepageKeepWarmNextAt = 0.0;
+
+    private float $homepageLastNaturalHitAt = 0.0;
+
+    private string $homepageCacheFullUri = '';
 
     /**
      * 请求计数
@@ -225,6 +234,7 @@ class WlsRuntime implements RuntimeInterface
         }
         if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
             $this->readyGateWorkerBootstrapWarmupCompleted = true;
+            $this->scheduleNextHomepageKeepWarm();
             return;
         }
 
@@ -313,6 +323,7 @@ class WlsRuntime implements RuntimeInterface
         }
 
         $this->readyGateWorkerBootstrapWarmupCompleted = true;
+        $this->scheduleNextHomepageKeepWarm();
         if (\function_exists('w_log_info')) {
             \w_log_info('[WlsRuntime] ready-gate bootstrap warmup done worker=' . $workerId
                 . ' backend_warmed=' . (int)($backendResult['warmed'] ?? 0)
@@ -369,6 +380,116 @@ class WlsRuntime implements RuntimeInterface
         \w_log_info('[WlsRuntime] ready-gate ' . $step
             . ' worker=' . $workerId
             . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+    }
+
+    public function shouldScheduleHomepageKeepWarm(
+        int $activeRequests,
+        bool $draining,
+        bool $memoryPressure
+    ): bool {
+        if (!$this->readyGateWorkerBootstrapWarmupCompleted
+            || !$this->homepageKeepWarmEnabled()
+            || $this->homepageKeepWarmRunning
+            || $activeRequests > 0
+            || $draining
+            || $memoryPressure
+        ) {
+            return false;
+        }
+
+        $now = \microtime(true);
+        if ($this->homepageKeepWarmNextAt <= 0.0) {
+            $this->scheduleNextHomepageKeepWarm($now);
+            return false;
+        }
+        if ($this->homepageLastNaturalHitAt > 0.0
+            && ($now - $this->homepageLastNaturalHitAt) < $this->homepageKeepWarmIntervalSeconds()
+        ) {
+            $this->scheduleNextHomepageKeepWarm($this->homepageLastNaturalHitAt);
+            return false;
+        }
+
+        return $now >= $this->homepageKeepWarmNextAt;
+    }
+
+    public function noteHomepageNaturalHit(string $requestTarget): void
+    {
+        if (!$this->isRootRequestUri($requestTarget)) {
+            return;
+        }
+
+        $this->homepageLastNaturalHitAt = \microtime(true);
+        $this->scheduleNextHomepageKeepWarm($this->homepageLastNaturalHitAt);
+    }
+
+    /**
+     * @return array{ok:bool,reason:string,host:string,elapsed_ms:float}
+     */
+    public function runHomepageKeepWarmCycle(): array
+    {
+        if ($this->homepageKeepWarmRunning) {
+            return ['ok' => false, 'reason' => 'already-running', 'host' => '', 'elapsed_ms' => 0.0];
+        }
+
+        $this->homepageKeepWarmRunning = true;
+        $startedAt = \microtime(true);
+        $host = ($this->homepageCacheFullUri !== ''
+            ? $this->normalizeInternalWarmupHost($this->homepageCacheFullUri)
+            : null)
+            ?? $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
+        $result = ['ok' => false, 'reason' => 'not-run', 'host' => $host, 'elapsed_ms' => 0.0];
+        try {
+            $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, false);
+            $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
+            $result['ok'] = (bool)($validation['ok'] ?? false);
+            $result['reason'] = (string)($validation['reason'] ?? 'validation-missing');
+        } catch (\Throwable $e) {
+            $result['reason'] = $e->getMessage();
+        } finally {
+            $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+            $this->homepageKeepWarmRunning = false;
+            $this->scheduleNextHomepageKeepWarm();
+        }
+
+        if (\function_exists($result['ok'] ? 'w_log_info' : 'w_log_warning')) {
+            $message = '[WlsRuntime] homepage keep-warm ' . ($result['ok'] ? 'done' : 'degraded')
+                . ' worker=' . $this->currentWorkerId()
+                . ' host=' . $host
+                . ' reason=' . $result['reason']
+                . ' elapsed_ms=' . $result['elapsed_ms'];
+            $result['ok'] ? \w_log_info($message) : \w_log_warning($message);
+        }
+
+        return $result;
+    }
+
+    private function homepageKeepWarmEnabled(): bool
+    {
+        $raw = \getenv('WLS_WORKER_HOMEPAGE_KEEP_WARM_ENABLED');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.homepage_keep_warm_enabled', '1');
+        }
+
+        return \in_array(\strtolower(\trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function homepageKeepWarmIntervalSeconds(): int
+    {
+        $raw = \getenv('WLS_WORKER_HOMEPAGE_KEEP_WARM_INTERVAL_SEC');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.homepage_keep_warm_interval_sec', 300);
+        }
+
+        return \max(30, \min(3600, (int)$raw));
+    }
+
+    private function scheduleNextHomepageKeepWarm(?float $from = null): void
+    {
+        $interval = $this->homepageKeepWarmIntervalSeconds();
+        $maxJitter = \max(0, \min(30, (int)\floor($interval / 4)));
+        $workerId = \max(1, $this->currentWorkerId());
+        $jitter = $maxJitter > 0 ? (($workerId * 7919) % ($maxJitter * 1000 + 1)) / 1000 : 0.0;
+        $this->homepageKeepWarmNextAt = ($from ?? \microtime(true)) + $interval + $jitter;
     }
 
     public function runDeferredWorkerBootstrapWarmup(): void
@@ -1110,26 +1231,14 @@ class WlsRuntime implements RuntimeInterface
      */
     private function resolveCurrentInstanceWarmupHosts(): array
     {
-        $instance = (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE_NAME'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: '');
-        if ($instance === '') {
-            return [];
-        }
-
-        $file = \defined('BP')
-            ? BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instance . '.json'
-            : '';
-        if ($file === '' || !\is_file($file)) {
-            return [];
-        }
-
-        $data = \json_decode((string)@\file_get_contents($file), true);
-        if (!\is_array($data)) {
+        $data = $this->readCurrentInstanceWarmupMetadata();
+        if ($data === []) {
             return [];
         }
 
         $port = (int)($data['main_port'] ?? $data['port'] ?? 0);
         $hosts = [];
-        foreach ([$data['host'] ?? null, $data['public_host'] ?? null] as $host) {
+        foreach ([$data['public_host'] ?? null, $data['host'] ?? null] as $host) {
             if (!\is_scalar($host)) {
                 continue;
             }
@@ -1145,6 +1254,27 @@ class WlsRuntime implements RuntimeInterface
         }
 
         return $hosts;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function readCurrentInstanceWarmupMetadata(): array
+    {
+        $instance = (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE_NAME'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: '');
+        if ($instance === '') {
+            return [];
+        }
+
+        $file = \defined('BP')
+            ? BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instance . '.json'
+            : '';
+        if ($file === '' || !\is_file($file)) {
+            return [];
+        }
+
+        $data = \json_decode((string)@\file_get_contents($file), true);
+        return \is_array($data) ? $data : [];
     }
 
     /**
@@ -1330,6 +1460,9 @@ class WlsRuntime implements RuntimeInterface
         }
 
         $hosts = $this->resolveDynamicFirstRenderWarmupHosts();
+        if ($paths === ['/'] && $hosts !== []) {
+            $hosts = [$this->resolveCanonicalHomepageWarmupHost($hosts)];
+        }
         $result['paths'] = $paths;
         $result['hosts'] = $hosts;
         if ($paths === [] || $hosts === []) {
@@ -1343,25 +1476,37 @@ class WlsRuntime implements RuntimeInterface
         foreach ($hosts as $host) {
             foreach ($paths as $path) {
                 $sequence++;
+                $isHomepage = $path === '/';
                 $pathKey = $this->dynamicWarmupPathKey($host, $path);
                 $ownsPathLock = false;
                 try {
-                    $ownsPathLock = $this->acquireDynamicWarmupPathLock($pathKey);
-                    if (!$ownsPathLock) {
-                        $this->waitForDynamicWarmupPathReady($pathKey);
-                    }
-
-                    $attempts = 0;
-                    do {
-                        $attempts++;
-                        $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
-                        $validation = $this->validateDynamicFirstRenderWarmup($warmupMeta, $targetMs);
-                        if ($validation['ok'] || $attempts >= $maxAttempts) {
-                            break;
+                    if ($isHomepage) {
+                        // Every worker verifies a process-local homepage hit;
+                        // the shared FPC lock still prevents duplicate rendering.
+                        $attempts = 1;
+                        $transaction = $this->runHomepageFpcWarmupTransaction($host, $sequence);
+                        $warmupMeta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
+                        $validation = \is_array($transaction['validation'] ?? null)
+                            ? $transaction['validation']
+                            : ['ok' => false, 'reason' => 'homepage validation missing', 'cache' => ''];
+                    } else {
+                        $ownsPathLock = $this->acquireDynamicWarmupPathLock($pathKey);
+                        if (!$ownsPathLock) {
+                            $this->waitForDynamicWarmupPathReady($pathKey);
                         }
-                        $sequence++;
-                        SchedulerSystem::yield();
-                    } while (true);
+
+                        $attempts = 0;
+                        do {
+                            $attempts++;
+                            $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
+                            $validation = $this->validateDynamicFirstRenderWarmup($warmupMeta, $targetMs);
+                            if ($validation['ok'] || $attempts >= $maxAttempts) {
+                                break;
+                            }
+                            $sequence++;
+                            SchedulerSystem::yield();
+                        } while (true);
+                    }
                     if (\count($result['samples']) < 8 || $path === '/') {
                         $result['samples'][] = [
                             'host' => $host,
@@ -1382,20 +1527,26 @@ class WlsRuntime implements RuntimeInterface
                         $result['failed']++;
                         $message = $host . $path . ': ' . $validation['reason'];
                         $result['errors'][] = $message;
-                        $this->markDynamicWarmupPathReady($pathKey, false, $validation['reason']);
+                        if (!$isHomepage) {
+                            $this->markDynamicWarmupPathReady($pathKey, false, $validation['reason']);
+                        }
                         if (\function_exists('w_log_warning')) {
                             \w_log_warning('[WlsRuntime] dynamic first-render warmup not ready ' . $message);
                         }
                         continue;
                     }
 
-                    $this->markDynamicWarmupPathReady($pathKey, true, $validation['reason']);
+                    if (!$isHomepage) {
+                        $this->markDynamicWarmupPathReady($pathKey, true, $validation['reason']);
+                    }
                     $result['warmed']++;
                 } catch (\Throwable $e) {
                     $result['failed']++;
                     $message = $host . $path . ': ' . $e->getMessage();
                     $result['errors'][] = $message;
-                    $this->markDynamicWarmupPathReady($pathKey, false, $e->getMessage());
+                    if (!$isHomepage) {
+                        $this->markDynamicWarmupPathReady($pathKey, false, $e->getMessage());
+                    }
                     if (\function_exists('w_log_warning')) {
                         \w_log_warning('[WlsRuntime] dynamic first-render warmup failed ' . $message);
                     }
@@ -1419,6 +1570,143 @@ class WlsRuntime implements RuntimeInterface
         }
 
         return $result;
+    }
+
+    /**
+     * @return array{meta:array<string,mixed>,validation:array{ok:bool,reason:string,cache:string}}
+     */
+    private function runHomepageFpcWarmupTransaction(
+        string $host,
+        int $sequence,
+        bool $allowPrime = true
+    ): array {
+        $host = $this->normalizeInternalWarmupHost($host)
+            ?? throw new \InvalidArgumentException('Invalid homepage warmup host.');
+        $fullUri = $this->resolveInternalWarmupScheme() . '://' . $host . '/';
+        $cacheFullUri = $this->homepageCacheFullUri !== '' ? $this->homepageCacheFullUri : $fullUri;
+
+        // READY may elect one shared publisher. Runtime keep-warm cycles only
+        // refresh from an existing fresh shared entry and never cold-render.
+        $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+        $pulledFromShared = $coordinator->warmProcessCacheForFullUri(
+            $cacheFullUri,
+            'GET',
+            '',
+            !$allowPrime
+        );
+        if (!$pulledFromShared) {
+            if (!$allowPrime) {
+                return [
+                    'meta' => [],
+                    'validation' => ['ok' => false, 'reason' => 'shared-fpc-miss', 'cache' => ''],
+                ];
+            }
+            $primeMeta = $this->runInternalWarmupRequest(
+                $host,
+                '/',
+                $sequence,
+                'homepage-fpc-prime',
+                [
+                    'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
+                ],
+                [
+                    'User-Agent' => 'WLS-Homepage-Warmup/1.0',
+                    'Accept-Encoding' => 'identity',
+                    'X-WLS-Dynamic-Warmup' => '1',
+                    'X-WLS-FPC-Prime' => '1',
+                ]
+            );
+            $primeValidation = $this->validateHomepageWarmupResponse($primeMeta, false);
+            if (!$primeValidation['ok']) {
+                return ['meta' => $primeMeta, 'validation' => $primeValidation];
+            }
+            if (\is_string($primeMeta['full_uri'] ?? null) && $primeMeta['full_uri'] !== '') {
+                $cacheFullUri = $primeMeta['full_uri'];
+            }
+        }
+
+        $cached = $coordinator->getFormattedCachedResponseForFullUri(
+            $cacheFullUri,
+            'GET',
+            'text/html,application/xhtml+xml',
+            'identity',
+            '',
+            false,
+            true
+        );
+        if (!\is_array($cached) || !\is_string($cached['response'] ?? null)) {
+            return [
+                'meta' => [],
+                'validation' => ['ok' => false, 'reason' => 'process-cache-miss', 'cache' => ''],
+            ];
+        }
+
+        $formatted = $this->parseFormattedWarmupResult($cached['response']);
+        $headers = $formatted['headers'];
+        $headers['X-WLS-Performance-FPC-Source'] = (string)($cached['source'] ?? '');
+        $probeMeta = [
+            'headers' => $headers,
+            'status_code' => (int)$formatted['status_code'],
+            'body_length' => (int)$formatted['body_length'],
+            'formatted_http' => true,
+            'set_cookie_count' => 0,
+            'elapsed_ms' => 0.0,
+            'full_uri' => $cacheFullUri,
+        ];
+
+        $validation = $this->validateHomepageWarmupResponse($probeMeta, true);
+        if ($validation['ok']) {
+            $this->homepageCacheFullUri = $cacheFullUri;
+        }
+
+        return [
+            'meta' => $probeMeta,
+            'validation' => $validation,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     * @return array{ok:bool,reason:string,cache:string}
+     */
+    private function validateHomepageWarmupResponse(array $meta, bool $requireProcessHit): array
+    {
+        $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
+        $statusCode = (int)($meta['status_code'] ?? 0);
+        $bodyLength = (int)($meta['body_length'] ?? 0);
+        $source = \strtolower($this->warmupHeaderValue($headers, 'X-WLS-Performance-FPC-Source'));
+        if ($statusCode < 200 || $statusCode >= 400) {
+            return ['ok' => false, 'reason' => 'status=' . $statusCode, 'cache' => $source];
+        }
+        if ($bodyLength <= 0) {
+            return ['ok' => false, 'reason' => 'empty-body', 'cache' => $source];
+        }
+        if ((int)($meta['set_cookie_count'] ?? 0) > 0
+            || $this->warmupHeaderValue($headers, 'Set-Cookie') !== ''
+        ) {
+            return ['ok' => false, 'reason' => 'set-cookie', 'cache' => $source];
+        }
+
+        $cacheControl = \strtolower($this->warmupHeaderValue($headers, 'Cache-Control'));
+        if (\preg_match('/(?:^|,)\s*(?:private|no-store)\b/', $cacheControl) === 1) {
+            return ['ok' => false, 'reason' => 'cache-control=' . $cacheControl, 'cache' => $source];
+        }
+        if (!$requireProcessHit) {
+            return ['ok' => true, 'reason' => 'published-or-shared-ready', 'cache' => $source];
+        }
+
+        $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+            ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
+        if ($fpcStatus !== 'HIT' || !\str_starts_with($source, 'process')) {
+            return [
+                'ok' => false,
+                'reason' => 'process-hit-required fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
+                    . ' source=' . ($source !== '' ? $source : 'missing'),
+                'cache' => $source,
+            ];
+        }
+
+        return ['ok' => true, 'reason' => 'ready:process-hit', 'cache' => $source];
     }
 
     /**
@@ -2106,6 +2394,96 @@ class WlsRuntime implements RuntimeInterface
     }
 
     /**
+     * @param list<string> $candidates
+     */
+    private function resolveCanonicalHomepageWarmupHost(array $candidates): string
+    {
+        $configured = Env::get('wls.worker.homepage_warmup_host', null);
+        if (\is_scalar($configured) && \trim((string)$configured) !== '') {
+            $host = $this->normalizeInternalWarmupHost((string)$configured);
+            if ($host !== null) {
+                return $host;
+            }
+        }
+
+        $publicOrigin = $this->resolveWorkerPublicOrigin();
+        if ($publicOrigin !== null) {
+            return $publicOrigin['host'];
+        }
+
+        $fallback = null;
+        foreach ($candidates as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $host = $this->normalizeInternalWarmupHost((string)$candidate);
+            if ($host === null) {
+                continue;
+            }
+            $fallback ??= $host;
+            $lower = \strtolower($host);
+            if (!\str_starts_with($lower, '127.')
+                && !\str_starts_with($lower, '[::1]')
+                && $lower !== 'localhost'
+                && !\str_starts_with($lower, 'localhost:')
+            ) {
+                return $host;
+            }
+        }
+
+        return $fallback ?? '127.0.0.1';
+    }
+
+    /**
+     * @return array{scheme:'http'|'https',host:string}|null
+     */
+    private function resolveWorkerPublicOrigin(): ?array
+    {
+        $raw = (string)(
+            $_SERVER['WLS_PUBLIC_ORIGIN']
+            ?? $_ENV['WLS_PUBLIC_ORIGIN']
+            ?? \getenv('WLS_PUBLIC_ORIGIN')
+            ?: ''
+        );
+        if ($raw === '') {
+            return null;
+        }
+
+        $parts = $this->parseWarmupUrl($raw);
+        $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+        $host = $this->normalizeInternalWarmupHost($raw);
+        if (!\in_array($scheme, ['http', 'https'], true) || $host === null) {
+            return null;
+        }
+
+        return ['scheme' => $scheme, 'host' => $host];
+    }
+
+    private function resolveInternalWarmupScheme(): string
+    {
+        $configured = Env::get('wls.worker.homepage_warmup_host', null);
+        if (\is_scalar($configured) && \str_contains((string)$configured, '://')) {
+            $parts = $this->parseWarmupUrl((string)$configured);
+            $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+            if (\in_array($scheme, ['http', 'https'], true)) {
+                return $scheme;
+            }
+        }
+
+        $publicOrigin = $this->resolveWorkerPublicOrigin();
+        if ($publicOrigin !== null) {
+            return $publicOrigin['scheme'];
+        }
+
+        $instance = $this->readCurrentInstanceWarmupMetadata();
+        if (\array_key_exists('ssl_enabled', $instance)) {
+            return (bool)$instance['ssl_enabled'] ? 'https' : 'http';
+        }
+
+        return 'https';
+    }
+
+    /**
      * @return list<string>
      */
     private function resolveDynamicFirstRenderWarmupHosts(): array
@@ -2300,14 +2678,15 @@ class WlsRuntime implements RuntimeInterface
         }
         $rawRequest .= "\r\n";
 
+        $scheme = $this->resolveInternalWarmupScheme();
         $server = \array_merge([
             'WLS_INSTANCE' => (string)($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''),
             'WLS_WORKER_ID' => (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: ''),
             'WLS_PORT' => (string)($_SERVER['WLS_PORT'] ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: ''),
             'WLS_REQUEST_COUNT' => 'warmup-' . $sequence,
             'WLS_INTERNAL_WARMUP' => '1',
-            'HTTPS' => 'on',
-            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => $scheme === 'https' ? 'on' : '',
+            'REQUEST_SCHEME' => $scheme,
         ], $serverOverrides);
 
         $request = WlsRequest::fromRaw($rawRequest, $server);
@@ -2321,7 +2700,7 @@ class WlsRuntime implements RuntimeInterface
         }
         $pendingStatus = $this->consumePendingResponseStatus();
         $pendingHeaders = $this->consumePendingHeaders();
-        $this->consumePendingCookies();
+        $pendingCookies = $this->consumePendingCookies();
         foreach ($pendingHeaders as $name => $value) {
             if ($value === '' || $value === null) {
                 continue;
@@ -2342,6 +2721,8 @@ class WlsRuntime implements RuntimeInterface
                 ? $formattedResult['body_length']
                 : \strlen((string)$result),
             'formatted_http' => $formattedResult['status_code'] > 0,
+            'set_cookie_count' => \count($pendingCookies),
+            'full_uri' => (string)($request->getServer('WELINE_FULL_REQUEST_URI') ?: ''),
             'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
         ];
         unset($result, $request, $response);
@@ -2545,6 +2926,9 @@ class WlsRuntime implements RuntimeInterface
             return self::buildRawBenchmarkResponse();
         }
 
+        $isInternalWarmup = (string)($request->getServer('WLS_INTERNAL_WARMUP') ?? '') === '1';
+        $requestOriginalUri = (string)($request->getUri() ?: '/');
+
         // 确保已初始化
         if (!$this->bootstrapped) {
             $this->bootstrap();
@@ -2570,10 +2954,12 @@ class WlsRuntime implements RuntimeInterface
             'worker_id' => '',
             'worker_port' => '',
             'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
-            'request_count' => $this->requestCount + 1,
+            'request_count' => $this->requestCount + ($isInternalWarmup ? 0 : 1),
         ];
-        
-        $this->requestCount++;
+
+        if (!$isInternalWarmup) {
+            $this->requestCount++;
+        }
         
         // 性能统计：仅当请求耗时 > 1 秒时写入 var/log/wls/timing.log，便于定位 TTFB 瓶颈
         $t0 = \microtime(true);
@@ -2683,7 +3069,7 @@ class WlsRuntime implements RuntimeInterface
             // 请求日志：默认始终写入 runtime.log（由 shouldWriteRequestLog 控制），全量调试见 -log
             $isDev = \defined('DEV') && DEV;
             $isFrontend = \defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE;
-            if ($request !== null) {
+            if ($request !== null && !$isInternalWarmup) {
                 $this->logWlsRequest($request, $isFrontend);
             }
             
@@ -3156,6 +3542,9 @@ class WlsRuntime implements RuntimeInterface
             $t7 = \microtime(true);
             $timing['reset_ms'] = \round(($t7 - $t6) * 1000, 2);
             $timing['total_ms'] = \round(($t7 - $t0) * 1000, 2);
+            if (!$isInternalWarmup && $this->isRootRequestUri($requestOriginalUri)) {
+                $this->noteHomepageNaturalHit($requestOriginalUri);
+            }
             // 性能监控：记录所有超过500ms的请求，或DEV模式下记录所有请求
             $isDev = \defined('DEV') && DEV;
             // 添加请求方法、IP等信息
@@ -3192,7 +3581,9 @@ class WlsRuntime implements RuntimeInterface
             WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
             WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
             WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
-            $this->recordPerformanceTiming($timing, $isDev);
+            if (!$isInternalWarmup) {
+                $this->recordPerformanceTiming($timing, $isDev);
+            }
             if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
                 \Weline\Server\Log\WlsLogger::flush_(true);
             }
@@ -3200,6 +3591,7 @@ class WlsRuntime implements RuntimeInterface
             unset(
                 $timing,
                 $requestMeta,
+                $requestOriginalUri,
                 $hc,
                 $app,
                 $request,

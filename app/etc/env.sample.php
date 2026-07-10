@@ -27,6 +27,18 @@ return [
         'maintenance' => false,     // 维护模式（true=显示维护页面）
         'lang' => 'zh_Hans_CN',     // 默认语言：zh_Hans_CN, en_US, zh_Hant_TW
         'currency' => 'CNY',        // 默认货币：CNY, USD, EUR
+        'processer' => [
+            // macOS/Linux 先并发提交全部子进程，再共享一个 PID 回显窗口；0 表示按数量自动计算。
+            'unix_batch_create_result_timeout_sec' => 0,
+            // Windows 批量拉起使用固定 K 路 PowerShell launcher；范围 1-8。
+            'windows_batch_create_helper_parallelism' => 4,
+            // 兼容开关：false 会退化成单 launcher，仅用于问题隔离。
+            'windows_batch_create_split_helpers' => true,
+            // helper 超时后只发终止并在确认退出后清理，避免句柄和临时文件泄漏。
+            'windows_batch_create_detached_helper_ttl_sec' => 10,
+            // 某一 launcher 提交失败时，逐项降级重试所用的有界预算。
+            'windows_batch_create_lane_fallback_timeout_sec' => 1.0,
+        ],
     ],
     
     // ==================== 主数据库配置 ====================
@@ -226,15 +238,6 @@ return [
             'runtime_log_file' => 'var/log/wls/runtime.log',
             'timing_log_file' => 'var/log/wls/timing.log',
         ],
-        // Dispatcher startup must not cold-render many frontend pages. Keep this
-        // explicit for manual FPC prebuild flows; default dispatcher warmup is
-        // cheap TLS/health only.
-        'homepage_warmup_paths' => ['/'],
-        'homepage_warmup_variants' => [
-            ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
-            ['lang' => 'en_US', 'currency' => 'USD'],
-            ['lang' => 'hi_IN', 'currency' => 'INR'],
-        ],
         // WLS worker READY 后错峰预载 router/hook/event/extends/query/i18n 等进程级注册表。
         // 显式设为 false/0/off 可关闭；默认开启，避免首个用户请求承担扫描成本。
         // 设为 sync 才会在 READY 前同步预热；默认不允许任何预热卡住启动。
@@ -243,9 +246,18 @@ return [
         'worker_deferred_bootstrap_warmup' => true,
         'worker_bootstrap_observer_warmup' => false,
         'worker_deferred_bootstrap_roles' => ['maintenance'],
-        // Worker #1 READY 前先构建少量首访关键 FPC，避免 reload 后第一位用户承担分类/产品冷渲染。
+        // 首页由 Worker READY gate 预热：共享锁只允许一个 Worker 冷构建，其他 Worker 拉取到进程缓存。
+        // 运行期保温只读取仍有效的 shared FPC，不会在业务 Worker 内触发冷渲染。
         'worker' => [
             'fpc_buildahead_roles' => ['maintenance'],
+            'dynamic_ready_gate_enabled' => true,
+            'dynamic_ready_gate_paths' => ['/'],
+            'dynamic_ready_gate_max_paths' => 1,
+            'dynamic_ready_gate_fail_open' => true,
+            'homepage_warmup_host' => null,
+            'homepage_warmup_peer_wait_ms' => 3000,
+            'homepage_keep_warm_enabled' => true,
+            'homepage_keep_warm_interval_sec' => 300,
         ],
         'worker_count' => 'auto',
         // Worker/维护 Worker 子进程 PHP memory_limit。纯数字按 MB 处理；支持 512M、1G、-1。
@@ -263,7 +275,8 @@ return [
             'worker_memory_limit' => '512M',
         ],
         'ssl' => [
-            'engine' => 'stream', // stream|event_buffer; native Windows only supports stream
+            // stream 是 Windows/macOS/Linux 默认；event_buffer 仅支持 macOS/Linux Dispatcher+TLS，direct 模式会拒绝启动。
+            'engine' => 'stream', // stream|event_buffer
             'protocols' => ['tls1.2', 'tls1.3'],
             'event_buffer_enabled' => false,
             'event_buffer_max_connections_per_worker' => 0,
@@ -282,7 +295,8 @@ return [
             'max_accept_per_loop' => 16,
             'worker_connect_select_timeout_sec' => 0.02,
             'ssl_backend_preconnect_per_worker' => 0,
-            'homepage_warmup_enabled' => true,
+            // 首页渲染预热已归 Worker 所有；此兼容开关保持关闭。
+            'homepage_warmup_enabled' => false,
         ],
         'mode' => 'io',
         'max_connections' => 10000,
@@ -344,6 +358,12 @@ return [
                 'port' => 19970,
             ],
         ],
+        'memory_service' => [
+            'enabled' => true,
+            'host' => '127.0.0.1',
+            'port' => 19971,
+            'token_file_name' => 'memory_server.token',
+        ],
         // Session/Memory 共享服务：实例停机只卸载本实例令牌；令牌为空后由共享服务自治退出。
         'shared_service' => [
             'empty_token_exit_grace_sec' => 30,
@@ -396,8 +416,10 @@ return [
             // worker_three_batch_min_count：Worker 槽位数 ≥ 此值时，滚动重启/代码重载均分为三批并行摘流量；
             //   每批内全部 READY 后再通知 Dispatcher 加回端口；低于此值则逐个槽位重启（每批 1 个）。
             'worker_three_batch_min_count' => 7,
-            // worker_reload_batch_count：达到 worker_three_batch_min_count 后的 reload 批次数；默认 1 批，避免本地 reload 被串行批次拖到几十秒。
-            'worker_reload_batch_count' => 1,
+            // 默认三批；运行时仍会依据 min-ready 自动增加批次数，不能突破容量下限。
+            'worker_reload_batch_count' => 3,
+            // auto = floor(2/3 * Worker 总数)；也可填数量、0-1 比例或百分比字符串。
+            'worker_reload_min_ready' => 'auto',
             // drain_timeout_sec：滚动重启/单实例 DRAIN 时 Master 等待 draining_complete 的上限（秒）；下发给 Worker 作强制收尾上限。
             'drain_timeout_sec' => 5,
             // reload_drain_timeout_sec：代码重载专用 DRAIN 上限。长连接会主动断开重连，不允许把滚动重载拖到分钟级。
@@ -424,7 +446,7 @@ return [
         ],
         // WLS 常驻 Worker 下的开发面板统一由 Weline Panel 注入；生产环境见 dev_tool.panel token 门禁。
         'debug' => [
-            // 闈炲父楂樺紑閿€锛氫細璁板綍 Session / Router / URL 瑙ｆ瀽绛夌儹璺粏绮掑害鏃ュ織锛屽彧搴旂煭鏃舵墜鍔ㄦ墦寮€
+            // 高开销调试开关：记录 Session/Router/URL 等热路径细节，只应短时手动开启。
             'hot_path_logs' => false,
         ],
     ],
