@@ -1,0 +1,347 @@
+<?php
+/**
+ * @var \Weline\Deploy\Controller\Backend\ReleaseControl $this
+ */
+$pageContext = is_array($this->getData('pageContext')) ? $this->getData('pageContext') : [];
+$settings = is_array($pageContext['settings'] ?? null) ? $pageContext['settings'] : [];
+$current = is_array($pageContext['current'] ?? null) ? $pageContext['current'] : null;
+$branchesUrl = (string)($this->getData('branchesUrl') ?: '');
+$commitsUrl = (string)($this->getData('commitsUrl') ?: '');
+$tagsUrl = (string)($this->getData('tagsUrl') ?: '');
+$previewUrl = (string)($this->getData('previewUrl') ?: '');
+$runUrl = (string)($this->getData('runUrl') ?: '');
+$configUrl = (string)($this->getData('configUrl') ?: '');
+$defaultBranch = (string)($settings['project_branch'] ?? 'master');
+$repoConfigured = !empty($this->getData('repoConfigured'));
+$isProduction = !empty($this->getData('isProduction'));
+$attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+?>
+<style>
+    .weline-release-control .wrc-alert {
+        background: var(--backend-color-bg-secondary, #1e293b);
+        border: 1px solid var(--backend-color-border, #334155);
+        color: var(--backend-color-text, #e2e8f0);
+    }
+    .weline-release-control .wrc-code {
+        background: var(--backend-color-bg-tertiary, #0f172a);
+        color: var(--backend-color-text, #e2e8f0);
+        border-radius: .25rem;
+        padding: .1rem .35rem;
+    }
+    .weline-release-control .table td,
+    .weline-release-control .table th {
+        vertical-align: middle;
+    }
+</style>
+
+<w:backend:card class="weline-release-control">
+    <w:slot:header>
+        <h5 class="mb-0"><?= __('发布控制') ?></h5>
+    </w:slot:header>
+    <w:slot:body>
+        <notempty name="current">
+            <div class="alert wrc-alert mb-3">
+                <strong><?= __('当前版本') ?>:</strong>
+                <code class="wrc-code"><?= $attr((string)($current['deploy_version'] ?? '')) ?></code>
+                <span class="badge bg-secondary ms-2"><?= $attr((string)($current['git_ref_type'] ?? '')) ?></span>
+                <code class="wrc-code ms-2"><?= $attr(substr((string)($current['git_commit'] ?? ''), 0, 8)) ?></code>
+                <span class="text-muted ms-2"><?= !empty($current['deployed_at']) ? date('Y-m-d H:i:s', (int)$current['deployed_at']) : '-' ?></span>
+            </div>
+        </notempty>
+        <empty name="current">
+            <div class="alert wrc-alert mb-3"><?= __('尚未发布过') ?></div>
+        </empty>
+
+        <if condition="!$repoConfigured">
+            <div class="alert wrc-alert mb-3">
+                <?= __('请先在部署配置中填写项目仓库信息。') ?>
+                <a href="<?= $attr($configUrl) ?>" class="alert-link"><?= __('前往部署配置') ?></a>
+            </div>
+        </if>
+
+        <if condition="$isProduction">
+            <div class="alert wrc-alert mb-3">
+                <?= __('正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。') ?>
+            </div>
+        </if>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label"><?= __('查看分支') ?></label>
+                <select id="wrc-branch" class="form-select" data-default-branch="<?= $attr($defaultBranch) ?>">
+                    <option value="<?= $attr($defaultBranch) ?>"><?= $attr($defaultBranch) ?></option>
+                </select>
+            </div>
+            <div class="col-md-8 d-flex align-items-end gap-2">
+                <button type="button" class="btn btn-outline-primary" id="wrc-refresh-commits"><?= __('刷新提交') ?></button>
+                <button type="button" class="btn btn-outline-secondary" id="wrc-refresh-tags"><?= __('刷新 Tags') ?></button>
+                <span class="text-muted small" id="wrc-status"></span>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="wrc-tab-commits" data-bs-toggle="tab" data-bs-target="#wrc-panel-commits" type="button" role="tab"><?= __('分支提交') ?></button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="wrc-tab-tags" data-bs-toggle="tab" data-bs-target="#wrc-panel-tags" type="button" role="tab">Tags</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="wrc-panel-commits" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0" id="wrc-commits-table">
+                        <thead>
+                            <tr>
+                                <th><?= __('时间') ?></th>
+                                <th>Commit</th>
+                                <th><?= __('作者') ?></th>
+                                <th><?= __('说明') ?></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="wrc-panel-tags" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0" id="wrc-tags-table">
+                        <thead>
+                            <tr>
+                                <th>Tag</th>
+                                <th>Commit</th>
+                                <th><?= __('时间') ?></th>
+                                <th><?= __('说明') ?></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </w:slot:body>
+</w:backend:card>
+
+<div class="modal fade" id="wrc-release-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('确认发布') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="wrc-release-summary"></p>
+                <div class="alert alert-warning d-none" id="wrc-older-warning">
+                    <?= __('目标版本早于当前版本，回退可能导致数据迁移、配置或代码不兼容。') ?>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="wrc-confirm-release" value="1">
+                    <label class="form-check-label" for="wrc-confirm-release"><?= __('我确认要执行发布') ?></label>
+                </div>
+                <div class="form-check d-none" id="wrc-older-confirm-wrap">
+                    <input class="form-check-input" type="checkbox" id="wrc-confirm-older" value="1">
+                    <label class="form-check-label" for="wrc-confirm-older"><?= __('我确认要发布到更旧版本') ?></label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-danger" id="wrc-run-release" disabled><?= __('立即发布') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const branchesUrl = <?= json_encode($branchesUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const commitsUrl = <?= json_encode($commitsUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const tagsUrl = <?= json_encode($tagsUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const previewUrl = <?= json_encode($previewUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const runUrl = <?= json_encode($runUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const branchSelect = document.getElementById('wrc-branch');
+    const statusEl = document.getElementById('wrc-status');
+    const commitsBody = document.querySelector('#wrc-commits-table tbody');
+    const tagsBody = document.querySelector('#wrc-tags-table tbody');
+    const modalEl = document.getElementById('wrc-release-modal');
+    const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    const summaryEl = document.getElementById('wrc-release-summary');
+    const olderWarning = document.getElementById('wrc-older-warning');
+    const olderWrap = document.getElementById('wrc-older-confirm-wrap');
+    const confirmRelease = document.getElementById('wrc-confirm-release');
+    const confirmOlder = document.getElementById('wrc-confirm-older');
+    const runBtn = document.getElementById('wrc-run-release');
+    let pendingRelease = null;
+
+    function setStatus(text) {
+        if (statusEl) statusEl.textContent = text || '';
+    }
+
+    function postForm(url, data) {
+        const body = new URLSearchParams();
+        Object.keys(data).forEach((key) => body.append(key, data[key]));
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+            body: body.toString(),
+            credentials: 'same-origin'
+        }).then((res) => res.json());
+    }
+
+    function loadBranches() {
+        if (!branchesUrl) return;
+        setStatus('<?= $attr((string)__('加载分支中...')) ?>');
+        fetch(branchesUrl, {credentials: 'same-origin'})
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.success) throw new Error(data.message || '<?= $attr((string)__('加载分支失败')) ?>');
+                const current = branchSelect.value || branchSelect.dataset.defaultBranch;
+                branchSelect.innerHTML = '';
+                (data.branches || []).forEach((branch) => {
+                    const opt = document.createElement('option');
+                    opt.value = branch;
+                    opt.textContent = branch;
+                    if (branch === current) opt.selected = true;
+                    branchSelect.appendChild(opt);
+                });
+                if (!branchSelect.value && branchSelect.dataset.defaultBranch) {
+                    const opt = document.createElement('option');
+                    opt.value = branchSelect.dataset.defaultBranch;
+                    opt.textContent = branchSelect.dataset.defaultBranch;
+                    opt.selected = true;
+                    branchSelect.appendChild(opt);
+                }
+                setStatus('');
+                loadCommits();
+            })
+            .catch((err) => setStatus(err.message || String(err)));
+    }
+
+    function loadCommits() {
+        if (!commitsUrl || !branchSelect) return;
+        setStatus('<?= $attr((string)__('加载提交中...')) ?>');
+        const url = commitsUrl + (commitsUrl.indexOf('?') >= 0 ? '&' : '?') + 'branch=' + encodeURIComponent(branchSelect.value);
+        fetch(url, {credentials: 'same-origin'})
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.success) throw new Error(data.message || '<?= $attr((string)__('加载提交失败')) ?>');
+                commitsBody.innerHTML = '';
+                (data.commits || []).forEach((item) => {
+                    const tr = document.createElement('tr');
+                    const time = item.committed_at ? new Date(item.committed_at * 1000).toLocaleString() : '-';
+                    const badges = [];
+                    if (item.is_current) badges.push('<span class="badge bg-primary ms-1"><?= $attr((string)__('当前')) ?></span>');
+                    if (item.is_older) badges.push('<span class="badge bg-warning text-dark ms-1"><?= $attr((string)__('更旧')) ?></span>');
+                    tr.innerHTML = '<td class="text-nowrap">' + time + '</td>'
+                        + '<td><code>' + (item.short_sha || '') + '</code>' + badges.join('') + '</td>'
+                        + '<td>' + (item.author || '') + '</td>'
+                        + '<td>' + (item.subject || '') + '</td>'
+                        + '<td class="text-end"><button type="button" class="btn btn-sm btn-primary" data-action="release-commit" data-ref="' + (item.sha || '') + '"><?= $attr((string)__('发布')) ?></button></td>';
+                    commitsBody.appendChild(tr);
+                });
+                setStatus('');
+            })
+            .catch((err) => setStatus(err.message || String(err)));
+    }
+
+    function loadTags() {
+        if (!tagsUrl) return;
+        setStatus('<?= $attr((string)__('加载 Tags 中...')) ?>');
+        fetch(tagsUrl, {credentials: 'same-origin'})
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.success) throw new Error(data.message || '<?= $attr((string)__('加载 Tags 失败')) ?>');
+                tagsBody.innerHTML = '';
+                (data.tags || []).forEach((item) => {
+                    const tr = document.createElement('tr');
+                    const time = item.committed_at ? new Date(item.committed_at * 1000).toLocaleString() : '-';
+                    const badges = [];
+                    if (item.is_current) badges.push('<span class="badge bg-primary ms-1"><?= $attr((string)__('当前')) ?></span>');
+                    if (item.is_older) badges.push('<span class="badge bg-warning text-dark ms-1"><?= $attr((string)__('更旧')) ?></span>');
+                    tr.innerHTML = '<td><code>' + (item.name || '') + '</code>' + badges.join('') + '</td>'
+                        + '<td><code>' + (item.short_sha || '') + '</code></td>'
+                        + '<td class="text-nowrap">' + time + '</td>'
+                        + '<td>' + (item.subject || '') + '</td>'
+                        + '<td class="text-end"><button type="button" class="btn btn-sm btn-primary" data-action="release-tag" data-ref="' + (item.name || '') + '"><?= $attr((string)__('发布')) ?></button></td>';
+                    tagsBody.appendChild(tr);
+                });
+                setStatus('');
+            })
+            .catch((err) => setStatus(err.message || String(err)));
+    }
+
+    function updateRunButtonState() {
+        const needOlder = !olderWrap.classList.contains('d-none');
+        const ok = confirmRelease.checked && (!needOlder || confirmOlder.checked);
+        runBtn.disabled = !ok;
+    }
+
+    function openReleaseModal(refType, ref, label) {
+        pendingRelease = {ref_type: refType, ref: ref, branch: branchSelect ? branchSelect.value : ''};
+        summaryEl.textContent = label;
+        confirmRelease.checked = false;
+        confirmOlder.checked = false;
+        olderWarning.classList.add('d-none');
+        olderWrap.classList.add('d-none');
+        updateRunButtonState();
+        postForm(previewUrl, {ref_type: refType, ref: ref})
+            .then((data) => {
+                if (data.success && data.preview && data.preview.requires_older_confirm) {
+                    olderWarning.classList.remove('d-none');
+                    olderWrap.classList.remove('d-none');
+                }
+                updateRunButtonState();
+                if (modal) modal.show();
+            })
+            .catch((err) => setStatus(err.message || String(err)));
+    }
+
+    document.getElementById('wrc-refresh-commits')?.addEventListener('click', loadCommits);
+    document.getElementById('wrc-refresh-tags')?.addEventListener('click', loadTags);
+    branchSelect?.addEventListener('change', loadCommits);
+
+    document.body.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-action]');
+        if (!btn) return;
+        if (btn.dataset.action === 'release-commit') {
+            openReleaseModal('commit', btn.dataset.ref || '', '<?= $attr((string)__('发布 commit')) ?> ' + (btn.dataset.ref || ''));
+        }
+        if (btn.dataset.action === 'release-tag') {
+            openReleaseModal('tag', btn.dataset.ref || '', '<?= $attr((string)__('发布 tag')) ?> ' + (btn.dataset.ref || ''));
+        }
+    });
+
+    confirmRelease?.addEventListener('change', updateRunButtonState);
+    confirmOlder?.addEventListener('change', updateRunButtonState);
+
+    runBtn?.addEventListener('click', () => {
+        if (!pendingRelease) return;
+        runBtn.disabled = true;
+        setStatus('<?= $attr((string)__('发布执行中...')) ?>');
+        postForm(runUrl, {
+            ref_type: pendingRelease.ref_type,
+            ref: pendingRelease.ref,
+            branch: pendingRelease.branch || '',
+            confirm_release: confirmRelease.checked ? '1' : '0',
+            confirm_older_version: confirmOlder.checked ? '1' : '0'
+        }).then((data) => {
+            if (modal) modal.hide();
+            if (data.success) {
+                setStatus(data.message || '<?= $attr((string)__('发布成功')) ?>');
+                window.location.reload();
+                return;
+            }
+            setStatus(data.message || '<?= $attr((string)__('发布失败')) ?>');
+            runBtn.disabled = false;
+        }).catch((err) => {
+            setStatus(err.message || String(err));
+            runBtn.disabled = false;
+        });
+    });
+
+    loadBranches();
+    loadTags();
+})();
+</script>

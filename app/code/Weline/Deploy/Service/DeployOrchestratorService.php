@@ -16,6 +16,17 @@ class DeployOrchestratorService
     private const LOCAL_APPSTORE_PLATFORM_URL = 'https://app.weline.test:9523';
     private const PRODUCTION_APPSTORE_PLATFORM_URL = 'https://app.aiweline.com';
 
+    /**
+     * @var list<string>
+     */
+    private const DEPLOY_PROTECTED_RELATIVE_PATHS = [
+        'pub',
+        'var/generated',
+        'var/cache',
+        'var/session',
+        'var/log',
+    ];
+
     private bool $isWindows;
 
     public function __construct(
@@ -24,6 +35,7 @@ class DeployOrchestratorService
         private readonly DeployReleaseHistoryService $historyService,
         private readonly DeployGitMetadataService $gitService,
         private readonly DeployProjectCommandPolicyService $commandPolicyService,
+        private readonly DeploySiteBackupService $siteBackupService,
     ) {
         $this->isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
     }
@@ -38,6 +50,7 @@ class DeployOrchestratorService
      *     git_tag:string|null,
      *     force:bool,
      *     no_backup:bool,
+     *     backup_trigger?:string,
      *     context?:array<string,mixed>,
      *     config?:array<string,mixed>,
      *     printer:Printing|null
@@ -54,6 +67,7 @@ class DeployOrchestratorService
         $gitTag = $params['git_tag'] ?? null;
         $force = $params['force'] ?? false;
         $noBackup = $params['no_backup'] ?? false;
+        $backupTrigger = trim((string)($params['backup_trigger'] ?? 'release'));
         $runtimeConfig = is_array($params['config'] ?? null) ? $params['config'] : [];
         $releaseContext = $this->releaseContextFromParams($params, $runtimeConfig);
         /** @var Printing|null $printer */
@@ -74,9 +88,13 @@ class DeployOrchestratorService
             $deployRoot = $this->resolveDeployRoot($config);
             $releaseContext['deploy_root'] = $deployRoot;
 
-            if (!$noBackup && ($config['BACKUP_BEFORE_DEPLOY'] ?? 'true') !== 'false') {
+            if ($this->shouldRunBackup($noBackup)) {
                 $log(__('备份中...'));
-                $this->backupProject($config, $deployRoot);
+                $this->runDeployBackup($config, $deployRoot, $backupTrigger, [
+                    'git_commit' => $this->runtimeService->getCurrent($deployRoot)['git_commit'] ?? '',
+                    'deploy_version' => $this->runtimeService->getDeployVersion($deployRoot),
+                    'ref' => $ref,
+                ]);
             }
 
             $log(__('Git 更新中...'));
@@ -161,6 +179,7 @@ class DeployOrchestratorService
      *     context?:array<string,mixed>,
      *     config?:array<string,mixed>,
      *     no_backup?:bool,
+     *     backup_trigger?:string,
      *     printer?:Printing|null
      * } $params
      * @return array{success:bool, release_id:string, deploy_version:string, message:string}
@@ -170,6 +189,7 @@ class DeployOrchestratorService
         $runtimeConfig = is_array($params['config'] ?? null) ? $params['config'] : [];
         $releaseContext = $this->releaseContextFromParams($params, $runtimeConfig);
         $noBackup = (bool)($params['no_backup'] ?? false);
+        $backupTrigger = trim((string)($params['backup_trigger'] ?? 'rollback'));
         /** @var Printing|null $printer */
         $printer = $params['printer'] ?? null;
         $log = static function (string $message) use ($printer): void {
@@ -197,19 +217,23 @@ class DeployOrchestratorService
         $releaseId = $this->runtimeService->generateReleaseId('rollback-' . $versionHint);
         $gitTag = $refType === 'tag' ? $this->rollbackTagName($rollbackRef) : null;
         $this->historyService->start($releaseId, 'rollback', $refType, $rollbackRef, $versionHint, $gitTag, $releaseContext);
-        $log(__('寮€濮嬪洖婊氾細%{1}', [$releaseId]));
+        $log(__('开始回滚：%{1}', [$releaseId]));
 
         try {
             $config = $this->loadConfig($runtimeConfig);
             $deployRoot = $this->resolveDeployRoot($config);
             $releaseContext['deploy_root'] = $deployRoot;
 
-            if (!$noBackup && ($config['BACKUP_BEFORE_DEPLOY'] ?? 'true') !== 'false') {
-                $log(__('鍥炴粴鍓嶅浠戒腑...'));
-                $this->backupProject($config, $deployRoot);
+            if ($this->shouldRunBackup($noBackup)) {
+                $log(__('回滚前备份中...'));
+                $this->runDeployBackup($config, $deployRoot, $backupTrigger, [
+                    'git_commit' => $this->runtimeService->getCurrent($deployRoot)['git_commit'] ?? '',
+                    'deploy_version' => $this->runtimeService->getDeployVersion($deployRoot),
+                    'ref' => $rollbackRef,
+                ]);
             }
 
-            $log(__('Git 鍥炴粴涓?..'));
+            $log(__('Git 回滚中...'));
             $rollbackMeta = $this->executeGitRollback($rollbackRef, $refType, $config, $deployRoot);
             $gitCommit = $this->gitService->getFullCommit($deployRoot);
             $gitBranch = (string)($rollbackMeta['git_branch'] ?? $this->gitService->getCurrentBranch($deployRoot));
@@ -247,15 +271,15 @@ class DeployOrchestratorService
             }
             $this->runtimeService->saveCurrent($currentPayload, $deployRoot);
             $this->runtimeService->syncEnv($deployVersion, $workerBuildId);
-            $log(__('鍥炴粴鐗堟湰宸插啓鍏ワ細%{1}', [$deployVersion]));
+            $log(__('回滚版本已写入：%{1}', [$deployVersion]));
 
-            $log(__('閲嶈浇鏈嶅姟...'));
+            $log(__('重载服务...'));
             $this->reloadServer($deployRoot);
 
             $this->historyService->markSuccess($releaseId, $deployVersion, $workerBuildId, $gitCommit, $gitBranch);
             $this->dispatchReleaseAfter($releaseId, $deployVersion, $refType, $gitTag, $gitCommit, $releaseContext);
 
-            $log(__('鍥炴粴鎴愬姛锛?{1}', [$deployVersion]));
+            $log(__('回滚成功：%{1}', [$deployVersion]));
 
             return [
                 'success' => true,
@@ -266,7 +290,7 @@ class DeployOrchestratorService
         } catch (\Throwable $throwable) {
             $error = $throwable->getMessage();
             $this->historyService->markFailed($releaseId, $error);
-            $log(__('鍥炴粴澶辫触锛?{1}', [$error]));
+            $log(__('回滚失败：%{1}', [$error]));
 
             return [
                 'success' => false,
@@ -379,20 +403,30 @@ class DeployOrchestratorService
         $updateMode = (string)$config['GIT_UPDATE_MODE'];
         $remote = (string)($config['GIT_REMOTE_NAME'] ?? 'origin');
         $remote = trim($remote) !== '' ? trim($remote) : 'origin';
+        $snapshotId = $this->snapshotProtectedPaths($deployRoot);
 
-        if ($refType === 'tag' && $gitTag !== null) {
-            $this->gitService->checkoutTag($gitTag, $remote, $deployRoot);
-            return;
+        try {
+            if ($refType === 'commit' && $gitCheckout !== null && trim($gitCheckout) !== '') {
+                $this->gitService->checkoutCommit(trim($gitCheckout), $remote, $deployRoot);
+                return;
+            }
+
+            if ($refType === 'tag' && $gitTag !== null) {
+                $this->gitService->checkoutTag($gitTag, $remote, $deployRoot);
+                return;
+            }
+
+            $this->gitService->fetch(false, $remote, $deployRoot);
+
+            if ($force || $updateMode === 'reset') {
+                $this->gitService->resetHard($branch, $remote, $deployRoot);
+                return;
+            }
+
+            $this->gitService->pullFastForward($branch, $remote, $deployRoot);
+        } finally {
+            $this->restoreProtectedPaths($deployRoot, $snapshotId);
         }
-
-        $this->gitService->fetch(false, $remote, $deployRoot);
-
-        if ($force || $updateMode === 'reset') {
-            $this->gitService->resetHard($branch, $remote, $deployRoot);
-            return;
-        }
-
-        $this->gitService->pullFastForward($branch, $remote, $deployRoot);
     }
 
     /**
@@ -402,30 +436,35 @@ class DeployOrchestratorService
     private function executeGitRollback(string $rollbackRef, string $refType, array $config, string $deployRoot): array
     {
         $remote = trim((string)($config['GIT_REMOTE_NAME'] ?? 'origin')) ?: 'origin';
+        $snapshotId = $this->snapshotProtectedPaths($deployRoot);
 
-        if ($refType === 'tag') {
-            $tag = $this->rollbackTagName($rollbackRef);
-            $this->gitService->checkoutTag($tag, $remote, $deployRoot);
+        try {
+            if ($refType === 'tag') {
+                $tag = $this->rollbackTagName($rollbackRef);
+                $this->gitService->checkoutTag($tag, $remote, $deployRoot);
+                return [
+                    'deploy_version' => $tag,
+                    'git_branch' => '',
+                ];
+            }
+
+            if ($refType === 'branch') {
+                $branch = $this->rollbackBranchName($rollbackRef);
+                $this->gitService->checkoutRemoteBranch($branch, $remote, $deployRoot);
+                return [
+                    'deploy_version' => $this->gitService->getShortCommit($deployRoot),
+                    'git_branch' => $branch,
+                ];
+            }
+
+            $this->gitService->checkoutCommit($rollbackRef, $remote, $deployRoot);
             return [
-                'deploy_version' => $tag,
+                'deploy_version' => $this->gitService->getShortCommit($deployRoot) ?: $rollbackRef,
                 'git_branch' => '',
             ];
+        } finally {
+            $this->restoreProtectedPaths($deployRoot, $snapshotId);
         }
-
-        if ($refType === 'branch') {
-            $branch = $this->rollbackBranchName($rollbackRef);
-            $this->gitService->checkoutRemoteBranch($branch, $remote, $deployRoot);
-            return [
-                'deploy_version' => $this->gitService->getShortCommit($deployRoot),
-                'git_branch' => $branch,
-            ];
-        }
-
-        $this->gitService->checkoutCommit($rollbackRef, $remote, $deployRoot);
-        return [
-            'deploy_version' => $this->gitService->getShortCommit($deployRoot) ?: $rollbackRef,
-            'git_branch' => '',
-        ];
     }
 
     private function rollbackVersionHint(string $rollbackRef, string $refType): string
@@ -480,6 +519,179 @@ class DeployOrchestratorService
         }
 
         return str_starts_with($path, '/') || str_starts_with($path, '\\\\');
+    }
+
+    private function shouldRunBackup(bool $noBackup): bool
+    {
+        if ($this->isProductionDeploy()) {
+            return true;
+        }
+
+        return !$noBackup;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $meta
+     */
+    private function runDeployBackup(array $config, string $deployRoot, string $trigger, array $meta = []): void
+    {
+        if ($this->isProductionDeploy()) {
+            $this->siteBackupService->createSiteBackup($deployRoot, $trigger, array_merge($meta, [
+                'environment' => 'prod',
+            ]));
+            return;
+        }
+
+        if (($config['BACKUP_BEFORE_DEPLOY'] ?? 'true') === 'false') {
+            return;
+        }
+
+        $this->backupProject($config, $deployRoot);
+    }
+
+    private function isProductionDeploy(): bool
+    {
+        $envFile = Env::path_ENV_FILE;
+        if (is_file($envFile)) {
+            try {
+                $config = include $envFile;
+                if (is_array($config)) {
+                    $system = is_array($config['system'] ?? null) ? $config['system'] : [];
+                    foreach ([$system['deploy'] ?? null, $config['deploy'] ?? null] as $mode) {
+                        $mode = strtolower(trim((string)$mode));
+                        if ($mode === 'prod' || $mode === 'production') {
+                            return true;
+                        }
+                        if (in_array($mode, ['dev', 'local', 'pre', 'staging', 'test'], true)) {
+                            return false;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $effectiveMode = strtolower(trim((string)Env::system('deploy', '')));
+        if ($effectiveMode !== '') {
+            if (in_array($effectiveMode, ['dev', 'local', 'pre', 'staging', 'test'], true)) {
+                return false;
+            }
+            return !in_array($effectiveMode, ['dev', 'local'], true);
+        }
+
+        return true;
+    }
+
+    private function snapshotProtectedPaths(string $deployRoot): string
+    {
+        $snapshotId = 'snap_' . date('Y-m-d_H-i-s') . '_' . substr(md5((string)microtime(true)), 0, 8);
+        $snapshotRoot = Env::backup_dir . 'deploy' . DS . 'protected_snapshots' . DS . $snapshotId . DS;
+        if (!is_dir($snapshotRoot) && !mkdir($snapshotRoot, 0755, true) && !is_dir($snapshotRoot)) {
+            throw new \RuntimeException((string)__('无法创建发布保护快照目录。'));
+        }
+
+        foreach (self::DEPLOY_PROTECTED_RELATIVE_PATHS as $relativePath) {
+            $source = $deployRoot . DS . str_replace('/', DS, $relativePath);
+            if (!file_exists($source)) {
+                continue;
+            }
+            $target = $snapshotRoot . str_replace('/', DS, $relativePath);
+            $this->copyPath($source, $target);
+        }
+
+        return $snapshotId;
+    }
+
+    private function restoreProtectedPaths(string $deployRoot, string $snapshotId): void
+    {
+        if ($snapshotId === '') {
+            return;
+        }
+
+        $snapshotRoot = Env::backup_dir . 'deploy' . DS . 'protected_snapshots' . DS . $snapshotId . DS;
+        if (!is_dir($snapshotRoot)) {
+            return;
+        }
+
+        foreach (self::DEPLOY_PROTECTED_RELATIVE_PATHS as $relativePath) {
+            $source = $snapshotRoot . str_replace('/', DS, $relativePath);
+            if (!file_exists($source)) {
+                continue;
+            }
+            $target = $deployRoot . DS . str_replace('/', DS, $relativePath);
+            if (is_dir($source)) {
+                $this->removePath($target);
+            }
+            $this->copyPath($source, $target);
+        }
+
+        $this->removePath($snapshotRoot);
+    }
+
+    private function copyPath(string $source, string $target): void
+    {
+        if (is_file($source)) {
+            $targetDir = dirname($target);
+            if (!is_dir($targetDir)) {
+                mkdir($targetDir, 0755, true);
+            }
+            copy($source, $target);
+            return;
+        }
+
+        if (!is_dir($source)) {
+            return;
+        }
+
+        if (!is_dir($target) && !mkdir($target, 0755, true) && !is_dir($target)) {
+            throw new \RuntimeException((string)__('无法创建目录：%{1}', [$target]));
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($iterator as $item) {
+            $relative = substr($item->getPathname(), strlen($source));
+            $destination = $target . $relative;
+            if ($item->isDir()) {
+                if (!is_dir($destination)) {
+                    mkdir($destination, 0755, true);
+                }
+                continue;
+            }
+            $destinationDir = dirname($destination);
+            if (!is_dir($destinationDir)) {
+                mkdir($destinationDir, 0755, true);
+            }
+            copy($item->getPathname(), $destination);
+        }
+    }
+
+    private function removePath(string $path): void
+    {
+        if (!file_exists($path)) {
+            return;
+        }
+
+        if (is_file($path) || is_link($path)) {
+            @unlink($path);
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                @rmdir($item->getPathname());
+                continue;
+            }
+            @unlink($item->getPathname());
+        }
+        @rmdir($path);
     }
 
     /**
