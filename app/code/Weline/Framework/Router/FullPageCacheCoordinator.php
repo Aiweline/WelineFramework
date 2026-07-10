@@ -361,6 +361,10 @@ final class FullPageCacheCoordinator
 
     private static function cooperativeBuildYield(): void
     {
+        if (!(bool)Env::get('wls.performance.fpc_cooperative_yield_enabled', false)) {
+            return;
+        }
+
         if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
             return;
         }

@@ -200,6 +200,7 @@ class Dispatcher
      * 上次输出「所有 Worker 不可用」日志时间（节流，避免启动期刷屏）
      */
     private float $lastAllWorkersUnavailableLogAt = 0.0;
+    private float $lastAllWorkersUnavailableRecoveryAt = 0.0;
     private int $lastAllWorkersDownReported = 0;
     /** @var array<string, float> */
     private array $masterBackendAlertLoggedAt = [];
@@ -678,6 +679,41 @@ class Dispatcher
         }
     }
 
+    private function scheduleAllWorkersUnavailableRecovery(string $source): void
+    {
+        $now = \microtime(true);
+        if (($now - $this->lastAllWorkersUnavailableRecoveryAt) < 1.0) {
+            return;
+        }
+        $this->lastAllWorkersUnavailableRecoveryAt = $now;
+
+        if (!$this->hasPendingWorkerHealthAuditJob()) {
+            $this->deferredWorkerPoolJobs[] = [
+                'type' => 'audit_worker_health',
+                'source' => $source,
+            ];
+        }
+
+        $this->lastWorkerProbeTime = 0.0;
+        $this->pumpSpinWaitControlTick();
+        $this->reportAllWorkersUnavailableToMaster();
+    }
+
+    private function hasPendingWorkerHealthAuditJob(): bool
+    {
+        if ($this->deferredWorkerPoolFiberKind === 'audit_worker_health') {
+            return true;
+        }
+
+        foreach ($this->deferredWorkerPoolJobs as $job) {
+            if (($job['type'] ?? '') === 'audit_worker_health') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function updateMaintenanceFallbackState(bool $active, string $reason): void
     {
         $previous = $this->maintenanceFallbackActive;
@@ -880,8 +916,12 @@ class Dispatcher
     /**
      * 每轮事件循环最多推进一次 suspend/resume，使探活/预热不霸占 IPC 回调栈。
      */
-    private function pumpDeferredWorkerPoolJobs(): void
+    private function pumpDeferredWorkerPoolJobs(bool $deferWhenAcceptPending = false): void
     {
+        if ($deferWhenAcceptPending && $this->hasPendingAccept()) {
+            return;
+        }
+
         if ($this->deferredWorkerPoolFiber === null) {
             if ($this->deferredWorkerPoolJobs === []) {
                 return;
@@ -914,6 +954,19 @@ class Dispatcher
         if ($fiber->isTerminated()) {
             $this->finalizeDeferredWorkerPoolFiber();
         }
+    }
+
+    private function hasPendingAccept(): bool
+    {
+        if (!$this->serverSocket) {
+            return false;
+        }
+
+        $read = [$this->serverSocket];
+        $write = [];
+        $except = [];
+        $changed = @\socket_select($read, $write, $except, 0, 0);
+        return $changed > 0 && \in_array($this->serverSocket, $read, true);
     }
 
     /**
@@ -1736,13 +1789,14 @@ class Dispatcher
                 $this->pumpIpcOnce();
 
                 // 孤儿检测：定期检查 Master PID 是否存活
+                $this->selectAndProcess();
                 $this->checkMasterPidAlive();
                 
                 // Worker 健康探活只负责入队，真正网络探活交由 deferred Fiber 分片执行。
                 $this->probeWorkerHealth();
 
                 // Worker 入池预热 / 黑名单探活：Fiber 分片推进，避免阻塞 IPC 与 accept
-                $this->pumpDeferredWorkerPoolJobs();
+                $this->pumpDeferredWorkerPoolJobs(true);
 
                 // SSL worker cold preconnect refill is incremental; never refill
                 // synchronously inside a client accept hot path.
@@ -1755,8 +1809,6 @@ class Dispatcher
                 $this->pumpPendingMaintenancePageQueue();
 
                 // 事件处理
-                $this->selectAndProcess();
-                
                 // 定期统计
                 $this->printStats();
                 WlsLogger::tick_();
@@ -1793,6 +1845,11 @@ class Dispatcher
         if ($this->masterGuard !== null && $this->masterGuard->shouldExit()) {
             $this->log('Master lease/PID 已失效，Dispatcher 自行退出: ' . $this->masterGuard->getLastExitReason(), 'ERROR');
             $this->running = false;
+            return;
+        }
+
+        if ($this->masterGuard !== null && $this->masterGuard->isEnabled()) {
+            $this->masterDeadCount = 0;
             return;
         }
 
@@ -2301,7 +2358,7 @@ class Dispatcher
             } else {
                 $allWorkersUnavailable = $this->passthroughCore->lastNewConnectionEndedInAllWorkersDown();
                 if ($allWorkersUnavailable) {
-                    $this->reportAllWorkersUnavailableToMaster();
+                    $this->scheduleAllWorkersUnavailableRecovery('handle_new_connection_all_workers_down');
                     if (!$this->tryRespondWithStartupProtection($clientSocket, true, $clientIp, $connId)) {
                         @\socket_close($clientSocket);
                     }
@@ -2353,6 +2410,7 @@ class Dispatcher
                     && $uptime >= 0
                     && $uptime <= (int) $this->startupProtectionWindowSec);
                 if (!$suppressEmptyPoolNoise) {
+                    $this->scheduleAllWorkersUnavailableRecovery('maintenance_fallback_all_workers_down');
                     $now = \microtime(true);
                     if ($now - $this->lastAllWorkersUnavailableLogAt >= 10.0) {
                         $logLevel = $total <= 0 ? 'WARN' : 'ERROR';

@@ -1551,7 +1551,7 @@ while (true) {
     }
 
     // ========== 孤儿检测（IPC 优先） ==========
-    if ($orphanGuard->shouldExit(
+    if (!$childMasterGuard->isEnabled() && $orphanGuard->shouldExit(
         $masterPid,
         $ipcClient && $ipcClient->isConnected(),
         $ipcReceivedShutdown,
@@ -2465,8 +2465,14 @@ function wlsAcceptHttpConnections(
         return;
     }
 
-    $conn = @\stream_socket_accept($socket, 0);
-    if ($conn) {
+    $maxAcceptPerLoop = 64;
+    $accepted = 0;
+    while ($accepted < $maxAcceptPerLoop) {
+        $conn = @\stream_socket_accept($socket, 0);
+        if (!$conn) {
+            break;
+        }
+        $accepted++;
         \stream_set_blocking($conn, false);
         $connId = \get_resource_id($conn);
         if ($ipcDraining) {
@@ -2581,11 +2587,7 @@ function wlsHttpFlushQueuedWrites(
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
                 }
-                if (\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
-                    \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
-                        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8)
-                    );
-                }
+                wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
                 break;
             }
         }
@@ -2675,7 +2677,7 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
     array &$pendingClose
 ): bool {
     if ($data === '') {
-        return true;
+        return !@\feof($conn);
     }
 
     $streamOk = isset($connections[$connId])
@@ -2820,6 +2822,29 @@ function wlsHttpReadStep(
         return ['closed' => true, 'request_ready' => false];
     }
     if ($data === '') {
+        if (@\feof($conn)) {
+            @\fclose($conn);
+            unset(
+                $connections[$connId],
+                $requestBuffers[$connId],
+                $connectionLastActivity[$connId],
+                $requestLogged[$connId],
+                $writeBuffers[$connId],
+                $writableConnections[$connId],
+                $pendingClose[$connId]
+            );
+            if (isset($longLivedConnections[$connId])) {
+                unset($longLivedConnections[$connId]);
+            }
+            if (isset($activeFibers[$connId])) {
+                $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
+                $fiberScheduler->unregisterFiber();
+                unset($activeFibers[$connId]);
+            }
+            $activeRequests = \max(0, $activeRequests - 1);
+            return ['closed' => true, 'request_ready' => false];
+        }
         // 非阻塞 socket 空读只表示“当前无数据可读”，并不等于连接断开。
         // 若在此直接关闭，会导致 SSE 长连接被误杀并触发浏览器重连。
         return ['closed' => false, 'request_ready' => false];
@@ -3048,7 +3073,6 @@ function wlsDispatchRequestFiberStep(
     ) {
         wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
         try {
-            \Weline\Framework\Runtime\SchedulerSystem::yield();
             if ($isSseProtocolRequest) {
                 \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                     static function (string $data) use (
@@ -3679,15 +3703,58 @@ function wlsFiberRequestContextLeave(): void
     }
 }
 
-function wlsDrainPostResponseTasks(): void
+function wlsDrainPostResponseTasks(
+    int $activeRequests = 0,
+    array $requestBuffers = [],
+    array $writeBuffers = [],
+    ?int $currentConnId = null
+): void
 {
     if (!\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
         return;
     }
 
+    $deferWhenBusy = (bool)(\Weline\Framework\App\Env::get('wls.post_response_task_defer_when_busy', true) ?? true);
+    if ($deferWhenBusy && wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, $currentConnId)) {
+        return;
+    }
+
+    $maxTasks = (int)(\Weline\Framework\App\Env::get('wls.post_response_task_max_per_drain', 1) ?: 1);
     \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
-        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8)
+        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8),
+        \max(1, $maxTasks)
     );
+}
+
+function wlsWorkerHasPendingRequestWork(
+    int $activeRequests,
+    array $requestBuffers,
+    array $writeBuffers,
+    ?int $currentConnId
+): bool {
+    if ($activeRequests > 0) {
+        return true;
+    }
+
+    foreach ($requestBuffers as $connId => $buffer) {
+        if ($currentConnId !== null && (int)$connId === $currentConnId) {
+            continue;
+        }
+        if (\is_string($buffer) && $buffer !== '') {
+            return true;
+        }
+    }
+
+    foreach ($writeBuffers as $connId => $buffer) {
+        if ($currentConnId !== null && (int)$connId === $currentConnId) {
+            continue;
+        }
+        if (\is_string($buffer) && $buffer !== '') {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -3910,7 +3977,7 @@ function sendResponseAndCleanup(
     unset($response, $rawRequest);
 
     if (!$isSseMode && $responseFullyWritten) {
-        wlsDrainPostResponseTasks();
+        wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
     }
 
     $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse || $responseRequestsClose;
@@ -4957,8 +5024,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'gz' => 'application/gzip',
     ];
     
-    // 解析文件扩展名（去除查询字符串）
-    $uriPath = \parse_url($uri, PHP_URL_PATH) ?? $uri;
+    // 解析文件扩展名（去除查询字符串；URL 解码以支持中文等非 ASCII 文件名）
+    $uriPath = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($uri);
     $extension = \strtolower(\pathinfo($uriPath, PATHINFO_EXTENSION));
     
     // 不是静态文件，交给框架处理

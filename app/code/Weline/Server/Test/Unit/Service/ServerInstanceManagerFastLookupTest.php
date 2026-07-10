@@ -160,6 +160,77 @@ final class ServerInstanceManagerFastLookupTest extends TestCase
         self::assertStringContainsString('Memory:19971', $info->getPortRangeDescription());
     }
 
+    public function testPersistedInstanceInfoRecoversWorkersFromStartupEventsWhenIpcIsUnavailable(): void
+    {
+        $manager = $this->createManager([
+            'master_pid' => \getmypid(),
+            'control_port' => 19999,
+            'host' => '127.0.0.1',
+            'port' => 9502,
+            'ssl_enabled' => false,
+            'dispatcher_enabled' => true,
+            'count' => 2,
+            'worker_port' => 19982,
+            'http_redirect_port' => 0,
+            'started_at' => '2026-03-23 00:00:00',
+            'started_timestamp' => 1774195200,
+            'startup_events' => [
+                [
+                    'kind' => 'worker_ready',
+                    'worker_id' => 1,
+                    'pid' => 1111,
+                    'port' => 19982,
+                ],
+                [
+                    'kind' => 'worker_ready',
+                    'worker_id' => 2,
+                    'pid' => 2222,
+                    'port' => 19983,
+                ],
+            ],
+        ]);
+
+        $info = $manager->getPersistedInstanceInfo('default');
+
+        self::assertNotNull($info);
+        $workers = \array_values($info->getWorkers());
+        self::assertCount(2, $workers);
+        self::assertSame(1111, $workers[0]->pid);
+        self::assertSame(19982, $workers[0]->port);
+        self::assertSame('startup_events', $workers[0]->metadata['status_source'] ?? null);
+        self::assertStringContainsString('Workers:19982,19983', $info->getPortRangeDescription());
+    }
+
+    public function testStartupStaleCleanupSkipsStoppedRecords(): void
+    {
+        $dir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-startup-cleanup-' . \str_replace('.', '', \uniqid('', true)) . DIRECTORY_SEPARATOR;
+        \mkdir($dir, 0777, true);
+        \file_put_contents($dir . 'already-stopped.json', (string)\json_encode([
+            'lifecycle_state' => 'stopped',
+            'master_pid' => 999999,
+            'updated_at' => 1,
+        ], JSON_THROW_ON_ERROR));
+
+        try {
+            $manager = new class($dir) extends ServerInstanceManager {
+                public function __construct(private readonly string $dir)
+                {
+                }
+
+                public function getInstanceDir(): string
+                {
+                    return $this->dir;
+                }
+            };
+
+            self::assertSame(0, $manager->cleanupStaleInstancesForStartup(null, 100));
+            self::assertFileExists($dir . 'already-stopped.json');
+        } finally {
+            @\unlink($dir . 'already-stopped.json');
+            @\rmdir($dir);
+        }
+    }
+
     private function createManager(array $rawData): ServerInstanceManager
     {
         return new class($rawData) extends ServerInstanceManager {

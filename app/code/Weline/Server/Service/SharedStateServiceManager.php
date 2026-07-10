@@ -740,9 +740,9 @@ class SharedStateServiceManager
         $healthy = $this->probeRunningSharedService($definition, $configuredTokenFileName);
 
         if ($healthy) {
-            $runtimePid = 0;
+            $runtimePid = $this->resolveLivePortOwnerPid($definition);
             if ((int) ($runtimeFile['port'] ?? 0) === (int) $definition['port']) {
-                $runtimePid = (int) ($runtimeFile['pid'] ?? 0);
+                $runtimePid = $runtimePid > 0 ? $runtimePid : (int) ($runtimeFile['pid'] ?? 0);
             }
             $runtime = $this->buildRuntimeMetadata(
                 $definition,
@@ -1459,6 +1459,59 @@ class SharedStateServiceManager
         $runtime['registered'] = $record !== [];
         $runtime['consumer_count'] = \count($consumers);
         $runtime['shutdown_due_at'] = $record['shutdown_due_at'] ?? null;
+
+        return $this->reconcileRuntimeWithLivePortOwner($role, $runtime, $registry);
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     * @return array<string, mixed>
+     */
+    protected function reconcileRuntimeWithLivePortOwner(
+        string $role,
+        array $runtime,
+        SharedStateServiceRegistry $registry
+    ): array {
+        $port = (int) ($runtime['port'] ?? 0);
+        if ($port <= 0) {
+            return $runtime;
+        }
+
+        Processer::clearPortCache($port);
+        $occupant = Processer::inspectPortOccupantWithHistory($port);
+        $ownerPid = (int) ($occupant['pid'] ?? 0);
+        $runtimePid = (int) ($runtime['pid'] ?? 0);
+        if ($ownerPid <= 0 || $ownerPid === $runtimePid) {
+            return $runtime;
+        }
+
+        $now = \date('c');
+        $runtime['pid'] = $ownerPid;
+        $runtime['registry_pid_stale'] = true;
+        $runtime['registry_pid_stale_previous'] = $runtimePid;
+        $runtime['registry_pid_corrected_at'] = $now;
+
+        $ownerProcessName = (string) ($occupant['pname'] ?? '');
+        if ($ownerProcessName !== '') {
+            $runtime['live_process_name'] = $ownerProcessName;
+        }
+
+        if ((bool) ($runtime['registered'] ?? false)) {
+            $registry->updateRecord(
+                $role,
+                static function (array $record) use ($ownerPid, $runtimePid, $ownerProcessName, $now): array {
+                    $record['pid'] = $ownerPid;
+                    $record['registry_pid_stale'] = true;
+                    $record['registry_pid_stale_previous'] = $runtimePid;
+                    $record['registry_pid_corrected_at'] = $now;
+                    if ($ownerProcessName !== '') {
+                        $record['live_process_name'] = $ownerProcessName;
+                    }
+
+                    return $record;
+                }
+            );
+        }
 
         return $runtime;
     }

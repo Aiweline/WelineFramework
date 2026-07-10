@@ -32,13 +32,15 @@ final class PostResponseTaskQueue
         ];
     }
 
-    public static function drain(float $budgetMs = 8.0): int
+    public static function drain(float $budgetMs = 8.0, ?int $maxTasks = null): int
     {
         if (self::$tasks === []) {
             return 0;
         }
 
         $startedAt = \microtime(true);
+        $slowTaskMs = (float)(Env::get('wls.post_response_task_slow_ms', \max(25.0, $budgetMs)) ?: \max(25.0, $budgetMs));
+        $taskLimit = $maxTasks === null ? PHP_INT_MAX : \max(1, $maxTasks);
         $processed = 0;
         foreach (\array_keys(self::$tasks) as $key) {
             $task = self::$tasks[$key] ?? null;
@@ -52,12 +54,25 @@ final class PostResponseTaskQueue
                 if ($context instanceof WlsFiberContext) {
                     $context->restore(false);
                 }
+                $taskStartedAt = \microtime(true);
                 ($task['task'])();
+                $taskElapsedMs = (\microtime(true) - $taskStartedAt) * 1000;
+                if ($slowTaskMs > 0 && $taskElapsedMs >= $slowTaskMs) {
+                    Env::log_warning(
+                        'runtime/post_response_task',
+                        'Slow post-response task: key=' . self::formatTaskKey($key)
+                        . ' elapsed_ms=' . \round($taskElapsedMs, 2)
+                    );
+                }
             } catch (\Throwable $throwable) {
                 Env::log_error('runtime/post_response_task', $throwable->getMessage());
             } finally {
                 $processed++;
                 self::cleanupRestoredContext();
+            }
+
+            if ($processed >= $taskLimit) {
+                break;
             }
 
             if ($budgetMs > 0 && ((\microtime(true) - $startedAt) * 1000) >= $budgetMs) {
@@ -71,6 +86,15 @@ final class PostResponseTaskQueue
     public static function pendingCount(): int
     {
         return \count(self::$tasks);
+    }
+
+    private static function formatTaskKey(string $key): string
+    {
+        if (\strlen($key) <= 160) {
+            return $key;
+        }
+
+        return \substr($key, 0, 157) . '...';
     }
 
     private static function cleanupRestoredContext(): void

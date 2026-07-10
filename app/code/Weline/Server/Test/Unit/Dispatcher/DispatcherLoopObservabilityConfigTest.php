@@ -70,6 +70,26 @@ class DispatcherLoopObservabilityConfigTest extends TestCase
         self::assertSame(0, $this->getProperty($dispatcher, 'mainLoopUnblockedLogEvery'));
     }
 
+    public function testDispatcherMainLoopProcessesNetworkBeforeControlPlaneMaintenance(): void
+    {
+        $source = \file_get_contents(
+            BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'Dispatcher' . DIRECTORY_SEPARATOR . 'Dispatcher.php'
+        );
+
+        self::assertIsString($source);
+
+        $selectPos = \strpos($source, '$this->selectAndProcess();');
+        $masterCheckPos = \strpos($source, '$this->checkMasterPidAlive();');
+        $deferredPos = \strpos($source, '$this->pumpDeferredWorkerPoolJobs(true);');
+
+        self::assertNotFalse($selectPos, 'Dispatcher main loop should process socket IO.');
+        self::assertNotFalse($masterCheckPos, 'Dispatcher main loop should still run Master guard.');
+        self::assertNotFalse($deferredPos, 'Dispatcher deferred worker jobs should respect pending accepts.');
+        self::assertLessThan($masterCheckPos, $selectPos, 'Socket IO must run before control-plane checks.');
+        self::assertLessThan($deferredPos, $selectPos, 'Socket IO must run before deferred worker jobs.');
+    }
+
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);

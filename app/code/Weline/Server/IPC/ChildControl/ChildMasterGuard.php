@@ -8,7 +8,7 @@ use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\MasterLeaseManager;
 
 /**
- * 子进程自治守卫：PID + Master lease 双重判断当前 Master 是否仍有效。
+ * Child process liveness guard for the current Master.
  */
 class ChildMasterGuard
 {
@@ -48,7 +48,7 @@ class ChildMasterGuard
         $message = $this->lastExitReason !== ''
             ? $this->lastExitReason
             : 'Master lease/PID check failed';
-        $this->log('warning', "[{$this->selfTag}] {$reason}: {$message}，子进程自行退出");
+        $this->log('warning', "[{$this->selfTag}] {$reason}: {$message}; child exits");
         exit(0);
     }
 
@@ -77,52 +77,57 @@ class ChildMasterGuard
 
     private function evaluateExitReason(): string
     {
-        if ($this->masterPid > 0 && !Processer::isRunningByPid($this->masterPid)) {
-            return "Master PID {$this->masterPid} 不存在";
-        }
-
         if ($this->leaseFile === '' || $this->masterToken === '') {
-            return '';
+            return $this->isMasterPidMissing() ? "Master PID {$this->masterPid} missing" : '';
         }
 
         $lease = $this->leaseManager->read($this->leaseFile);
         if ($lease === null) {
-            return 'Master lease 文件不存在或不可解析: ' . $this->leaseFile;
+            return 'Master lease file missing or invalid: ' . $this->leaseFile;
         }
 
         $state = (string)($lease['state'] ?? '');
         if ($state !== MasterLeaseManager::STATE_RUNNING) {
-            return "Master lease state={$state}，不是 running";
+            return "Master lease state={$state}; expected running";
         }
 
         $leasePid = (int)($lease['master_pid'] ?? 0);
         if ($this->masterPid > 0 && $leasePid !== $this->masterPid) {
-            return "Master lease PID 不匹配: lease={$leasePid}, expected={$this->masterPid}";
+            return "Master lease PID mismatch: lease={$leasePid}, expected={$this->masterPid}";
         }
 
         $leaseToken = (string)($lease['master_token'] ?? '');
         if ($leaseToken === '' || !\hash_equals($leaseToken, $this->masterToken)) {
-            return 'Master lease token 不匹配';
+            return 'Master lease token mismatch';
         }
 
         $leaseInstance = (string)($lease['instance'] ?? '');
         if ($this->instance !== '' && $leaseInstance !== $this->instance) {
-            return "Master lease instance 不匹配: lease={$leaseInstance}, expected={$this->instance}";
+            return "Master lease instance mismatch: lease={$leaseInstance}, expected={$this->instance}";
         }
 
         $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
         if ($this->masterEpoch > 0 && $leaseEpoch > 0 && $leaseEpoch !== $this->masterEpoch) {
-            return "Master lease epoch 不匹配: lease={$leaseEpoch}, expected={$this->masterEpoch}";
+            return "Master lease epoch mismatch: lease={$leaseEpoch}, expected={$this->masterEpoch}";
         }
 
         $updatedAt = (float)($lease['updated_at'] ?? 0.0);
-        if ($updatedAt > 0.0 && (\microtime(true) - $updatedAt) > MasterLeaseManager::HEARTBEAT_STALE_SEC) {
-            if ($this->masterPid <= 0 || !Processer::isRunningByPid($this->masterPid)) {
-                return 'Master lease 心跳超时且 Master PID 不存在';
-            }
+        $leaseFresh = $updatedAt <= 0.0
+            || (\microtime(true) - $updatedAt) <= MasterLeaseManager::HEARTBEAT_STALE_SEC;
+        if ($leaseFresh) {
+            return '';
+        }
+
+        if ($this->masterPid <= 0 || $this->isMasterPidMissing()) {
+            return 'Master lease heartbeat stale and Master PID missing';
         }
 
         return '';
+    }
+
+    private function isMasterPidMissing(): bool
+    {
+        return $this->masterPid > 0 && !Processer::isRunningByPid($this->masterPid);
     }
 
     private function log(string $level, string $message): void

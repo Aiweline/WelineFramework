@@ -18,6 +18,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Compiler\PgsqlCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
@@ -80,6 +81,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public array $pagination = ['page' => 1, 'pageSize' => 20, 'totalSize' => 0, 'lastPage' => 0];
 
     public string $backup_file = '';
+
+    private bool $disconnectRetryAttempted = false;
 
     /**
      * 获取数据库连接
@@ -1625,6 +1628,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             // when PDO reports no active transaction, so try one cleanup rollback.
             $pdo->rollBack();
         } catch (\PDOException $exception) {
+            if (ConnectionPool::isDisconnectException($exception)) {
+                ConnectionPool::markConnectionUnhealthy($pdo);
+            }
             if (!$this->isIgnorableRollbackFailure($exception)) {
                 throw $exception;
             }
@@ -1636,10 +1642,38 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $message = strtolower($exception->getMessage());
 
         return str_contains($message, 'no active transaction')
-            || str_contains($message, 'no connection to the server')
-            || str_contains($message, 'server closed the connection')
-            || str_contains($message, 'terminating connection')
-            || str_contains($message, 'ssl connection has been closed');
+            || ConnectionPool::isDisconnectException($exception);
+    }
+
+    protected function reconnectAfterDisconnect(\PDOException $exception): bool
+    {
+        unset($exception);
+
+        return false;
+    }
+
+    private function markCurrentConnectionUnhealthy(): void
+    {
+        try {
+            ConnectionPool::markConnectionUnhealthy($this->getLink());
+        } catch (\Throwable) {
+        }
+    }
+
+    private function shouldRetryDisconnectedRead(\PDOException $exception): bool
+    {
+        if ($this->disconnectRetryAttempted || !ConnectionPool::isDisconnectException($exception)) {
+            return false;
+        }
+
+        if ($this->batch || \in_array($this->fetch_type, ['insert', 'update', 'delete'], true)) {
+            return false;
+        }
+
+        $sql = \ltrim($this->sql);
+        $sql = (string) \preg_replace('/\A(?:--[^\r\n]*(?:\r?\n)|\/\*.*?\*\/\s*)+/s', '', $sql);
+
+        return \preg_match('/\A(?:SELECT|WITH|SHOW)\b/i', $sql) === 1;
     }
 
     public function commit(): void
@@ -2811,6 +2845,20 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         } catch (\PDOException $e) {
             // PostgreSQL：任意 SQL 失败后连接进入 aborted 状态，必须 ROLLBACK 才能恢复；
             // 否则后续操作（含 BEGIN）均报 25P02。在 rethrow 前统一 rollBack 以恢复连接。
+            if (ConnectionPool::isDisconnectException($e)) {
+                $this->markCurrentConnectionUnhealthy();
+                if ($this->shouldRetryDisconnectedRead($e)) {
+                    $this->disconnectRetryAttempted = true;
+                    if ($this->reconnectAfterDisconnect($e)) {
+                        try {
+                            return $this->fetch($model_class);
+                        } finally {
+                            $this->disconnectRetryAttempted = false;
+                        }
+                    }
+                    $this->disconnectRetryAttempted = false;
+                }
+            }
             $this->rollBack();
             throw $e;
         }

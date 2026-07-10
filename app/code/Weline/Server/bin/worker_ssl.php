@@ -2181,7 +2181,7 @@ while (true) {
         $gracefulExit('Master lease/PID 自治退出');
     }
 
-    if ($masterPid > 0 && ($now - $lastMasterPidHardCheck) >= 5) {
+    if (!$childMasterGuard->isEnabled() && $masterPid > 0 && ($now - $lastMasterPidHardCheck) >= 5) {
         $lastMasterPidHardCheck = $now;
         if (!\Weline\Framework\System\Process\Processer::isRunningByPid($masterPid)) {
             WlsLogger::warning_("Master PID {$masterPid} 已不存在，SSL Worker 自行退出");
@@ -2190,7 +2190,7 @@ while (true) {
     }
     
     // ========== 孤儿检测（IPC 优先） ==========
-    if ($orphanGuard->shouldExit(
+    if (!$childMasterGuard->isEnabled() && $orphanGuard->shouldExit(
         $masterPid,
         $ipcClient && $ipcClient->isConnected(),
         $ipcReceivedShutdown,
@@ -2972,6 +2972,27 @@ while (true) {
         }
         
         if ($data === '') {
+            if (@\feof($conn)) {
+                safeCloseStream($conn);
+                unset($connections[$connId]);
+                unset($requestBuffers[$connId]);
+                unset($connectionLastActivity[$connId]);
+                unset($requestLogged[$connId]);
+                unset($writeBuffers[$connId]);
+                unset($writableConnections[$connId]);
+                unset($pendingClose[$connId]);
+                if (isset($longLivedConnections[$connId])) {
+                    unset($longLivedConnections[$connId]);
+                }
+                if (isset($activeFibers[$connId])) {
+                    $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
+                    $fiberScheduler->unregisterFiber();
+                    unset($activeFibers[$connId]);
+                }
+                $activeRequests = \max(0, $activeRequests - 1);
+                continue;
+            }
             // 暂无数据，不要立即检查 feof()，因为 SSL 连接上 feof() 不可靠
             // 让 Keep-Alive 超时机制来处理真正的空闲连接
             continue;
@@ -3291,7 +3312,6 @@ while (true) {
         ) {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             try {
-                \Weline\Framework\Runtime\SchedulerSystem::yield();
                 if ($isSseProtocolRequest) {
                     \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                         static function (string $data) use (
@@ -4118,11 +4138,7 @@ function wlsSslFlushQueuedWrites(
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
                 }
-                if (\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
-                    \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
-                        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8)
-                    );
-                }
+                wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
                 break;
             }
         }
@@ -4794,6 +4810,60 @@ function wlsDrainAfterResponseIfRequested(
     }
 }
 
+function wlsDrainPostResponseTasks(
+    int $activeRequests = 0,
+    array $requestBuffers = [],
+    array $writeBuffers = [],
+    ?int $currentConnId = null
+): void
+{
+    if (!\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
+        return;
+    }
+
+    $deferWhenBusy = (bool)(\Weline\Framework\App\Env::get('wls.post_response_task_defer_when_busy', true) ?? true);
+    if ($deferWhenBusy && wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, $currentConnId)) {
+        return;
+    }
+
+    $maxTasks = (int)(\Weline\Framework\App\Env::get('wls.post_response_task_max_per_drain', 1) ?: 1);
+    \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
+        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8),
+        \max(1, $maxTasks)
+    );
+}
+
+function wlsWorkerHasPendingRequestWork(
+    int $activeRequests,
+    array $requestBuffers,
+    array $writeBuffers,
+    ?int $currentConnId
+): bool {
+    if ($activeRequests > 0) {
+        return true;
+    }
+
+    foreach ($requestBuffers as $connId => $buffer) {
+        if ($currentConnId !== null && (int)$connId === $currentConnId) {
+            continue;
+        }
+        if (\is_string($buffer) && $buffer !== '') {
+            return true;
+        }
+    }
+
+    foreach ($writeBuffers as $connId => $buffer) {
+        if ($currentConnId !== null && (int)$connId === $currentConnId) {
+            continue;
+        }
+        if (\is_string($buffer) && $buffer !== '') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function sslFinalizeHttpResponseAfterHandle(
     mixed $conn,
     int $connId,
@@ -4972,10 +5042,8 @@ function sslFinalizeHttpResponseAfterHandle(
 
     WlsLogger::tick_();
 
-    if (!$isSseMode && $responseFullyWritten && \class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
-        \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
-            (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8)
-        );
+    if (!$isSseMode && $responseFullyWritten) {
+        wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
     }
 
     $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
@@ -5971,9 +6039,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'gz' => 'application/gzip',
     ];
     
-    // 解析文件扩展名（去除查询字符串）
-    $_up = \parse_url($uri, PHP_URL_PATH);
-    $uriPath = (\is_string($_up) && $_up !== '') ? $_up : $uri;
+    // 解析文件扩展名（去除查询字符串；URL 解码以支持中文等非 ASCII 文件名）
+    $uriPath = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($uri);
     $extension = \strtolower(\pathinfo($uriPath, PATHINFO_EXTENSION));
     
     // 不是静态文件，交给框架处理
