@@ -2055,6 +2055,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function homepageWarmupCoordinationPool(string $fullUri): string
     {
+        $identity = $this->warmupGenerationIdentity() . '|' . \strtolower(\trim($fullUri));
+
+        return self::HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX . \hash('sha256', $identity);
+    }
+
+    private function warmupGenerationIdentity(): string
+    {
         $metadata = $this->readCurrentInstanceWarmupMetadata();
         $instance = \trim((string)($metadata['instance_name'] ?? $metadata['name'] ?? (
             $_SERVER['WLS_INSTANCE_NAME']
@@ -2079,15 +2086,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     ?? \getenv('WLS_CACHE_EPOCH')
                     ?: '0'
             ));
-        $identity = \implode('|', [
+        return \implode('|', [
             $instance !== '' ? $instance : 'default',
             $epoch,
             $policyDigest,
             $cacheEpoch,
-            \strtolower(\trim($fullUri)),
         ]);
-
-        return self::HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX . \hash('sha256', $identity);
     }
 
     private function workerArgValue(string $name): string
@@ -2595,7 +2599,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function dynamicWarmupPathKey(string $host, string $path): string
     {
-        return \sha1(\strtolower(\trim($host)) . '|' . $this->normalizeInternalWarmupPath($path));
+        return \sha1(\implode('|', [
+            $this->warmupGenerationIdentity(),
+            \strtolower(\trim($host)),
+            $this->normalizeInternalWarmupPath($path),
+        ]));
     }
 
     private function acquireDynamicWarmupPathLock(string $pathKey): bool
@@ -2665,6 +2673,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 )) {
                     return $token;
                 }
+
+                $currentToken = $coordinator->get(
+                    self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                    'render.' . $pathKey
+                );
+                if (\is_string($currentToken) && $this->isDeadDynamicWarmupRenderOwner($currentToken)) {
+                    if ($coordinator->cas(
+                        self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                        'render.' . $pathKey,
+                        $currentToken,
+                        $token,
+                        30
+                    )) {
+                        return $token;
+                    }
+                }
             } catch (\Throwable) {
                 // Shared state is an optimization boundary. A transient IPC
                 // failure must not deadlock Worker startup.
@@ -2675,6 +2699,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         } while (\microtime(true) < $deadline);
 
         return null;
+    }
+
+    private function isDeadDynamicWarmupRenderOwner(string $token): bool
+    {
+        $separator = \strpos($token, ':');
+        $ownerPid = (int)($separator === false ? $token : \substr($token, 0, $separator));
+        if ($ownerPid <= 0 || $ownerPid === (int)\getmypid() || !\function_exists('posix_kill')) {
+            return false;
+        }
+
+        return !@\posix_kill($ownerPid, 0);
     }
 
     private function releaseDynamicWarmupRenderLock(string $pathKey, string $token): void

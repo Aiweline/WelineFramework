@@ -42,6 +42,9 @@ use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
+use Weline\Server\Service\Runtime\ProtocolEdgeDependencyBootstrapper;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
 use Weline\Server\Service\Runtime\TlsProcessProfileConfigurator;
@@ -495,6 +498,45 @@ class Start extends CommandAbstract
         $dispatcherEnabled = (bool)$runtimeStrategy['dispatcher_enabled'];
         $supportsReusePort = $runtimeProfile->supportsReusePort();
         $useDirectMode = (string)$runtimeStrategy['topology'] === 'direct';
+        try {
+            $httpProtocolSelection = HttpProtocolSelection::fromConfig($config, $sslEnabled);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error(__('WLS HTTP 协议配置无效：%{1}', [$exception->getMessage()]));
+            return;
+        }
+        $protocolEdgeBinary = '';
+        if ($httpProtocolSelection->isProtocolEdgeEnabled()) {
+            $protocolEdgeDependency = (new ProtocolEdgeDependencyBootstrapper())->ensureAvailable(
+                $args,
+                $config,
+                $httpProtocolSelection,
+            );
+            if ((string)($protocolEdgeDependency['status'] ?? 'failed') === 'failed') {
+                $this->printer->error(__('WLS HTTP/3、HTTP/2 协商依赖预检失败：%{1}', [
+                    (string)($protocolEdgeDependency['message'] ?? ''),
+                ]));
+                if (!empty($protocolEdgeDependency['output'])) {
+                    $this->printer->note((string)$protocolEdgeDependency['output']);
+                }
+                return;
+            }
+            $protocolEdgeBinary = (string)($protocolEdgeDependency['binary'] ?? '');
+            $this->printer->note((string)($protocolEdgeDependency['message'] ?? ''));
+        }
+        $config['http'] = \array_merge(
+            \is_array($config['http'] ?? null) ? $config['http'] : [],
+            $httpProtocolSelection->toConfig(),
+            ['protocol_edge_binary' => $protocolEdgeBinary],
+        );
+        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled();
+        $runtimeStrategy['http_protocol_selection'] = $httpProtocolSelection->toArray();
+        $runtimeStrategy['protocol_edge_enabled'] = $protocolEdgeEnabled;
+        $runtimeStrategy['protocol_edge_binary'] = $protocolEdgeBinary;
+        $this->printer->note(__('HTTP 自动协商：%{1}（优先 %{2}，TLS 会话复用：%{3}）', [
+            \implode(' -> ', $httpProtocolSelection->protocols),
+            $httpProtocolSelection->preferred,
+            $httpProtocolSelection->tlsSessionResumption ? __('开启') : __('关闭'),
+        ]));
         foreach ((new RuntimeDiagnosticsFormatter())->formatStartupSummary($runtimeProfile, $runtimeStrategy) as $runtimeLine) {
             if (\str_starts_with($runtimeLine, 'WARNING:') || \str_starts_with($runtimeLine, 'Warning:')) {
                 $this->printer->warning($runtimeLine);
@@ -761,7 +803,7 @@ class Start extends CommandAbstract
         // Worker 端口计算移至端口冲突检测之后，避免重复计算
         // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
-        $workerSslEnabled = $sslEnabled;
+        $workerSslEnabled = $sslEnabled && !$protocolEdgeEnabled;
         
         // ========== HTTP Redirect：固定规则：仅 HTTPS=443 时启用 80；非 443 不启独立 Worker ==========
         $httpRedirectPort = 0;
@@ -833,8 +875,15 @@ class Start extends CommandAbstract
             'in_use' => (bool)($mainPortInspect['in_use'] ?? false),
         ]);
 
-        $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts($port, $dispatcherEnabled);
-        $requiresWorkerPortAllocationLock = !$useDirectMode && $count > 1;
+        $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts(
+            $port,
+            $dispatcherEnabled || $protocolEdgeEnabled,
+        );
+        if ($protocolEdgeEnabled) {
+            $reservedWorkerPorts[] = ProtocolEdgeRuntime::adminPortForInstance($instanceName, $port);
+            $reservedWorkerPorts = \array_values(\array_unique($reservedWorkerPorts));
+        }
+        $requiresWorkerPortAllocationLock = $protocolEdgeEnabled || (!$useDirectMode && $count > 1);
         $workerPortAllocationLocked = false;
         if ($requiresWorkerPortAllocationLock) {
             $this->traceStartupPhase($instanceName, 'worker-port-lock:before', [
@@ -856,7 +905,13 @@ class Start extends CommandAbstract
                 'dispatcher' => $dispatcherEnabled,
                 'direct' => $useDirectMode,
             ]);
-            $workerPort = $this->resolveInitialWorkerPort($port, $workerBasePort, $count, $dispatcherEnabled, $useDirectMode);
+            $workerPort = $this->resolveInitialWorkerPort(
+                $port,
+                $workerBasePort,
+                $count,
+                $dispatcherEnabled || $protocolEdgeEnabled,
+                $useDirectMode && !$protocolEdgeEnabled,
+            );
 
             if ($forceRestart && !$forceSwitch && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
                 $this->printer->error(__('强制重启前仍检测到旧实例 [%{1}] 的残留 WLS 进程或端口，已中止启动。', [$instanceName]));
@@ -868,13 +923,15 @@ class Start extends CommandAbstract
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
         // - WLS 进程占用的端口：释放后分配给新进程
         // - 非 WLS 进程占用的端口：跳过，使用下一个可用端口
-        if (!$forceRestart && ($dispatcherEnabled || (!$useDirectMode && $count > 1))) {
+        if (!$forceRestart && ($dispatcherEnabled || $protocolEdgeEnabled || (!$useDirectMode && $count > 1))) {
             $nextWorkerPort = $this->findAvailableWorkerPortBase(
                 $workerPort,
                 $count,
                 500,
                 $instanceName,
-                $reservedWorkerPorts
+                $reservedWorkerPorts,
+                $protocolEdgeEnabled,
+                $dispatcherEnabled,
             );
             if ($nextWorkerPort !== $workerPort) {
                 $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}', [
@@ -1000,6 +1057,12 @@ class Start extends CommandAbstract
         if (!$dispatcherEnabled && !$useDirectMode && $count > 1) {
             // 独立端口模式
             $this->printer->note(__('提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。', [$count, $workerPort, $workerPort + $count - 1]));
+        } elseif ($useDirectMode && $protocolEdgeEnabled) {
+            $this->printer->note(__('提示：当前为 Direct + 协议边缘模式；公开端口 %{1} 自动协商 h3/h2/h1，Worker 使用本机端口 %{2}-%{3}。', [
+                $port,
+                $workerPort,
+                $workerPort + $count - 1,
+            ]));
         } elseif ($useDirectMode && $count > 1) {
             // 直连模式
             $listenerLabel = (string)$runtimeStrategy['direct_listener_mode'] === 'shared_fd'
@@ -1016,7 +1079,29 @@ class Start extends CommandAbstract
             'dispatcher' => $dispatcherEnabled,
             'skipped' => $skipPostStopPortInspection,
         ]);
-        if (!$skipPostStopPortInspection && $dispatcherEnabled) {
+        if (!$skipPostStopPortInspection && $protocolEdgeEnabled) {
+            if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'HTTP Protocol Edge', $instanceName)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                    $this->disableMaintenanceMode($instanceName);
+                }
+                return;
+            }
+            if (!$this->checkAndReleasePorts('127.0.0.1', $workerPort, $count, $forceRestart, $instanceName)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                    $this->disableMaintenanceMode($instanceName);
+                }
+                return;
+            }
+            if ($dispatcherEnabled) {
+                $edgeDispatcherPort = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
+                if (!$this->checkAndReleasePort('127.0.0.1', $edgeDispatcherPort, $forceRestart, 'Internal Dispatcher', $instanceName)) {
+                    if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                        $this->disableMaintenanceMode($instanceName);
+                    }
+                    return;
+                }
+            }
+        } elseif (!$skipPostStopPortInspection && $dispatcherEnabled) {
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
             if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
@@ -1694,8 +1779,32 @@ class Start extends CommandAbstract
         }
         $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
         $dispatcherEnabled = (bool)($data['dispatcher_enabled'] ?? false);
-        // Dispatcher 只做 TCP 透传，SSL 握手始终由 Worker 处理
-        $workerScript = $this->ensureWorkerScript($sslEnabled);
+        try {
+            $httpProtocolSelection = \is_array($data['http_protocol_selection'] ?? null)
+                ? HttpProtocolSelection::fromArray($data['http_protocol_selection'])
+                : HttpProtocolSelection::fromConfig([
+                    'http' => [
+                        'protocols' => [HttpProtocolSelection::HTTP_1],
+                        'preferred' => HttpProtocolSelection::HTTP_1,
+                        'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                    ],
+                ], $sslEnabled);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error(__('master-only 启动已拒绝：HTTP 协议选择无效（%{1}）。', [
+                $exception->getMessage(),
+            ]));
+            return;
+        }
+        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled();
+        $protocolEdgeBinary = \trim((string)($data['protocol_edge_binary'] ?? ''));
+        if ($protocolEdgeEnabled
+            && ($protocolEdgeBinary === '' || !\is_file($protocolEdgeBinary) || !\is_executable($protocolEdgeBinary))
+        ) {
+            $this->printer->error(__('master-only 启动已拒绝：预检通过的 HTTP 协议边缘二进制已不可用。'));
+            return;
+        }
+        // 协议边缘启用时由 Caddy 终止 TLS，Worker 保持私有 HTTP/1.1 长连接。
+        $workerScript = $this->ensureWorkerScript($sslEnabled && !$protocolEdgeEnabled);
         $port = (int)($data['port'] ?? 443);
         $workerPort = (int)($data['worker_port'] ?? $port);
         // 默认端口 10000 + 项目偏移量，确保多项目不冲突
@@ -1739,6 +1848,9 @@ class Start extends CommandAbstract
             ],
             'direct_listener_mode' => (string)($data['direct_listener_mode'] ?? ''),
             'ssl' => ['engine' => (string)($data['ssl_engine'] ?? 'stream')],
+            'http' => \array_merge($httpProtocolSelection->toConfig(), [
+                'protocol_edge_binary' => $protocolEdgeBinary,
+            ]),
             'dispatcher_enabled' => $dispatcherEnabled,
             'worker_port' => $workerPort,
             'worker_base_port' => $workerBasePort,
@@ -3350,6 +3462,14 @@ class Start extends CommandAbstract
             'runtime' => ['strategy' => 'auto', 'topology' => 'auto'],
             'event_loop' => 'auto',
             'loop' => ['driver' => 'auto'],
+            'http' => [
+                'protocols' => HttpProtocolSelection::DEFAULT_PROTOCOLS,
+                'preferred' => HttpProtocolSelection::HTTP_3,
+                'protocol_edge' => 'auto',
+                'protocol_edge_binary' => '',
+                'tls_session_resumption' => true,
+                'alt_svc' => true,
+            ],
             'supervisor' => ['enabled' => 'auto'],
             'source' => __('默认值'),
         ];
@@ -5000,6 +5120,12 @@ class Start extends CommandAbstract
         $cpuCores = $this->getCpuCoreCount();
         $protocol = $sslEnabled ? 'https' : 'http';
         $workerPort = $workerPort ?: $port;
+        $endpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
+        $endpoint = \is_array($endpoint) ? $endpoint : [];
+        $protocolEdgeEnabled = (bool)($endpoint['protocol_edge_enabled'] ?? false);
+        $httpProtocols = \is_array($endpoint['http_protocols'] ?? null)
+            ? \array_values(\array_filter(\array_map('strval', $endpoint['http_protocols'])))
+            : [];
         
         $this->printer->note('╔══════════════════════════════════════════════════════════════╗');
         $this->printer->note('║                   服务器启动配置                               ║');
@@ -5008,7 +5134,24 @@ class Start extends CommandAbstract
         $this->printer->note(\sprintf('║  监听地址：%-50s║', "{$protocol}://{$host}:{$port}"));
         $this->printer->note(\sprintf('║  Worker 数：%-49s║', "{$count} (CPU: {$cpuCores} 核)"));
         
-        if ($dispatcherEnabled) {
+        if ($protocolEdgeEnabled) {
+            $protocolLabel = $httpProtocols !== []
+                ? \strtoupper(\implode('/', $httpProtocols))
+                : 'H3/H2/H1';
+            $transportLabel = \in_array(HttpProtocolSelection::HTTP_3, $httpProtocols, true)
+                ? 'TCP + UDP/QUIC'
+                : 'TCP';
+            $this->printer->note(\sprintf('║  HTTP 协商：%-49s║', $protocolLabel . ' (' . $transportLabel . ')'));
+            if ($dispatcherEnabled) {
+                $dispatcherPort = (int)($endpoint['dispatcher_port'] ?? 0);
+                $dispatcherLabel = $dispatcherPort > 0
+                    ? 'Dispatcher ' . $dispatcherPort . ' → Worker '
+                    : 'Dispatcher → Worker ';
+                $this->printer->note(\sprintf('║  内部拓扑：%-49s║', $dispatcherLabel . $workerPort . ' - ' . ($workerPort + $count - 1)));
+            } else {
+                $this->printer->note(\sprintf('║  Worker 端口：%-47s║', $workerPort . ' - ' . ($workerPort + $count - 1) . ' (loopback)'));
+            }
+        } elseif ($dispatcherEnabled) {
             $this->printer->note(\sprintf('║  流量分发：%-50s║', __('Dispatcher 模式（TCP 透传）')));
             $dispatcherProtocol = $sslEnabled ? 'TCP→SSL' : 'TCP';
             $this->printer->note(\sprintf('║  Dispatcher：%-48s║', "端口 {$port} ({$dispatcherProtocol})"));
@@ -6170,7 +6313,9 @@ class Start extends CommandAbstract
         int $count,
         int $maxScan = 500,
         ?string $ignoreInstanceName = null,
-        array $extraReservedPorts = []
+        array $extraReservedPorts = [],
+        bool $protocolEdgeEnabled = false,
+        bool $protocolEdgeDispatcherEnabled = false,
     ): int
     {
         $reservedPorts = $this->getReservedWorkerPortsFromOtherInstances($ignoreInstanceName);
@@ -6185,7 +6330,12 @@ class Start extends CommandAbstract
         $base = \max($startPort, 1);
         for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
             $hasConflict = false;
-            foreach ($this->buildWorkerAllocationCandidatePorts($base, $count) as $port) {
+            foreach ($this->buildWorkerAllocationCandidatePorts(
+                $base,
+                $count,
+                $protocolEdgeEnabled,
+                $protocolEdgeDispatcherEnabled,
+            ) as $port) {
                 if ($this->isWorkerPortAllocated($port) || isset($reservedPortLookup[$port])) {
                     $hasConflict = true;
                     break;
@@ -6201,7 +6351,12 @@ class Start extends CommandAbstract
     /**
      * @return list<int>
      */
-    protected function buildWorkerAllocationCandidatePorts(int $workerPort, int $count): array
+    protected function buildWorkerAllocationCandidatePorts(
+        int $workerPort,
+        int $count,
+        bool $protocolEdgeEnabled = false,
+        bool $protocolEdgeDispatcherEnabled = false,
+    ): array
     {
         if ($workerPort <= 0) {
             return [];
@@ -6216,7 +6371,20 @@ class Start extends CommandAbstract
             $ports[] = $maintenancePort + $i;
         }
 
-        return \array_values(\array_unique($ports));
+        if ($protocolEdgeEnabled) {
+            $ports = \array_merge(
+                $ports,
+                ProtocolEdgeRuntime::directReloadSurgePortsFromWorkerRange($workerPort, $count),
+            );
+            if ($protocolEdgeDispatcherEnabled) {
+                $ports[] = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
+            }
+        }
+
+        return \array_values(\array_filter(
+            \array_unique($ports),
+            static fn (int $port): bool => $port > 0 && $port <= 65535,
+        ));
     }
 
     protected function resolveInitialWorkerPort(
@@ -6358,7 +6526,10 @@ class Start extends CommandAbstract
     protected function extractReservedWorkerPortsFromInstanceData(array $instanceData): array
     {
         $masterMode = (string) ($instanceData['master_mode'] ?? MasterProcess::MODE_LEGACY);
-        if (($instanceData['topology'] ?? '') === 'direct' || MasterProcess::isDirectMode($masterMode)) {
+        $protocolEdgeEnabled = (bool)($instanceData['protocol_edge_enabled'] ?? false);
+        if (!$protocolEdgeEnabled
+            && (($instanceData['topology'] ?? '') === 'direct' || MasterProcess::isDirectMode($masterMode))
+        ) {
             return [];
         }
 
@@ -6369,7 +6540,15 @@ class Start extends CommandAbstract
 
         $count = \max(1, (int) ($instanceData['count'] ?? 1));
 
-        return $this->buildWorkerAllocationCandidatePorts($workerPort, $count);
+        $protocolEdgeDispatcherEnabled = $protocolEdgeEnabled
+            && (bool)($instanceData['dispatcher_enabled'] ?? false);
+
+        return $this->buildWorkerAllocationCandidatePorts(
+            $workerPort,
+            $count,
+            $protocolEdgeEnabled,
+            $protocolEdgeDispatcherEnabled,
+        );
     }
 
     /**
@@ -6396,6 +6575,11 @@ class Start extends CommandAbstract
         $effectiveTopology = $selection->effectiveTopology->value;
         $dispatcherEnabled = $selection->isDispatcher();
         $useDirectMode = $selection->isDirect();
+        $httpProtocolSelection = \is_array($runtimeSelection['http_protocol_selection'] ?? null)
+            ? HttpProtocolSelection::fromArray($runtimeSelection['http_protocol_selection'])
+            : HttpProtocolSelection::fromConfig([], $sslEnabled);
+        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled();
+        $protocolEdgeBinary = \trim((string)($runtimeSelection['protocol_edge_binary'] ?? ''));
         $instanceData = [
             'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
             'name' => $instanceName,
@@ -6407,6 +6591,12 @@ class Start extends CommandAbstract
             'ssl_enabled' => $sslEnabled,
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
+            'http_protocol_selection' => $httpProtocolSelection->toArray(),
+            'http_protocols' => $httpProtocolSelection->protocols,
+            'http_preferred_protocol' => $httpProtocolSelection->preferred,
+            'protocol_edge_enabled' => $protocolEdgeEnabled,
+            'protocol_edge_binary' => $protocolEdgeBinary,
+            'tls_session_resumption' => $httpProtocolSelection->tlsSessionResumption,
             'runtime_selection' => $selectionData,
             'topology' => $effectiveTopology,
             'requested_topology' => $selection->requestedTopology->value,
@@ -6450,7 +6640,11 @@ class Start extends CommandAbstract
             'stopped_timestamp' => 0,
             // Dispatcher 模式信息
             'dispatcher_enabled' => $dispatcherEnabled,
-            'dispatcher_port' => $dispatcherEnabled ? $port : 0,
+            'dispatcher_port' => $dispatcherEnabled
+                ? ($protocolEdgeEnabled
+                    ? ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort ?: $port, $count)
+                    : $port)
+                : 0,
             'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
             'worker_base_port' => $workerBasePort,   // Worker 基础端口（用于计算各 Worker 端口）
             'worker_memory_limit' => ServiceContext::normalizeMemoryLimit($workerMemoryLimit),
@@ -7712,9 +7906,9 @@ PHP;
                 '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability/compatibility（默认 auto）'),
                 '--topology <mode>' => __('拓扑：auto/direct/dispatcher（默认 auto；independent 已禁止启动）'),
                 '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
-                '--no-auto-deps' => __('显式禁用启动前依赖自动安装；Direct 仍 fail-closed，Dispatcher 可使用有界 select'),
+                '--no-auto-deps' => __('显式禁用启动前依赖自动安装；Direct 与 h2/h3 协议边缘仍 fail-closed，Dispatcher event 可使用有界 select'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
-                '--direct' => __('直连模式：Linux 使用 SO_REUSEPORT，macOS 使用 Master 共享监听 FD'),
+                '--direct' => __('直连拓扑：不启动 WLS Dispatcher；默认 HTTPS 协议边缘直达私有 Worker'),
                 '--no-dispatcher' => __('已禁用：independent 尚不具备完整 READY/策略保证，请使用 direct 或 --dispatcher'),
                 '--dispatcher' => __('Linux/macOS 显式改用 Dispatcher；Windows 默认且只能使用此模式'),
                 '--help' => __('显示帮助信息'),
@@ -7729,6 +7923,9 @@ PHP;
                 __('默认拓扑') => __('Linux 在 SO_REUSEPORT 真实分流探测通过后 direct；macOS 在共享 FD 真实 accept 分布探测通过后 direct；Windows 固定 Dispatcher'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
+                __('HTTP 自动协商') => __('HTTPS 默认 h3/h2/h1：QUIC HTTP/3、ALPN HTTP/2、HTTP/1.1 自动回退；状态由 server:status/doctor 展示'),
+                __('连接复用') => __('默认开启 TLS session ticket；HTTP/2/3 多路复用与协议边缘到 Worker 的私有 keep-alive 连接池'),
+                __('协议边缘依赖') => __('h2/h3 使用 WLS-owned Caddy；启动前自动安装并验证 reverse proxy + QUIC，失败不静默降级'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
                 __('SSL 协议') => __('仅支持 TLS 1.2/1.3；空值或无效 wls.ssl.protocols 会在启动前被拒绝'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),

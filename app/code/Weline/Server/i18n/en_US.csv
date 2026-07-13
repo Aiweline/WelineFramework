@@ -2016,6 +2016,7 @@ unknown,unknown
 实际运行时选择：,"Effective runtime selection:"
 拓扑：,Topology:
 数据面：,"Data plane:"
+HTTP 协议：,"HTTP protocols:"
 策略：,Policy:
 Endpoint：,Endpoint:
 选择原因：,"Selection reason:"
