@@ -37,10 +37,10 @@ WLS 的翻译所有权统一在 `Weline\Framework\Phrase\Parser`，`Weline\I18n\
 
 运行时按以下两级常驻数据工作：
 
-1. 请求涉及的模块 CSV：`Worker 模块 L1 -> phrase Shared Memory 模块快照 -> 本模块 i18n CSV`。只有 Worker L1 失效才访问共享内存，只有共享 miss 才解析文件。
+1. 请求涉及的模块 CSV：`Worker 模块 L1 -> phrase Shared Memory 模块快照 -> 本模块 i18n CSV`。只有 Worker L1 失效才访问共享内存，只有共享 miss 才解析文件；常驻 L1 命中不读取模块元数据，也不执行 `filemtime/filesize`。
 2. 最终词查询：先查 Worker 的 `locale + 模块集合 + word` 常驻哈希；模块 CSV miss 后，再按 `Worker 全局单词 L1 -> Shared Memory 单词记录 -> md5(word + locale) 精确数据库查询` 回源。
 
-因此 Worker 只会把自己实际遇到的词不断加入常驻内存，不会一次装载 21,055 条全 locale 数据。最终词哈希最多 32,768 项并有界裁剪；普通请求清理不影响它，翻译发布/cache epoch 才统一失效。新增词条仍建议保存正确 `source_module` 以便维护、导出和模块归属，但无归属的历史词条也能通过精确单词回源生效，不会迫使 WLS 加载整张词典。
+因此 Worker 只会把自己实际遇到的词不断加入常驻内存，不会一次装载 21,055 条全 locale 数据。最终词哈希最多 32,768 项并有界裁剪；普通请求清理不影响它，翻译发布/cache epoch 才统一失效。失效后的首次读取才重新计算文件版本并访问 Shared Memory，后续请求恢复为纯进程数组查询。新增词条仍建议保存正确 `source_module` 以便维护、导出和模块归属，但无归属的历史词条也能通过精确单词回源生效，不会迫使 WLS 加载整张词典。
 
 ```php
 use Weline\Framework\Runtime\RuntimeProviderResolver;

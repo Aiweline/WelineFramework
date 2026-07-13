@@ -414,13 +414,25 @@ class Parser
 
     private static function buildLayeredWordsCacheKey(string $lang, array $modules, bool $includeGlobalDictionary = true): string
     {
+        $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], \array_filter($modules))));
+        \sort($modules);
+
+        if (Runtime::isPersistent()) {
+            // A running Worker owns this immutable scope until cache epoch
+            // invalidation. Keep the first lookup entirely in process memory;
+            // file versions are only needed when the module L1 itself misses.
+            return 'phrase_worker_scope|' . $lang . '|' . \implode(',', $modules)
+                . '|' . ($includeGlobalDictionary ? 'db' : 'file');
+        }
+
         return self::buildWordsCacheKey($lang, $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
     }
 
     private static function getLayeredWords(string $lang, array $modules, bool $includeGlobalDictionary = true): array
     {
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], \array_filter($modules))));
-        $cacheKey = self::buildWordsCacheKey($lang, $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
+        \sort($modules);
+        $cacheKey = self::buildLayeredWordsCacheKey($lang, $modules, $includeGlobalDictionary);
         if (isset(self::$workerLayeredWordsCache[$cacheKey])) {
             return self::$workerLayeredWordsCache[$cacheKey];
         }
@@ -654,22 +666,29 @@ class Parser
     protected static function loadModuleWords(string $module_name, string $lang): array
     {
         $module_name = self::getFullModuleName($module_name);
+        $worker_scope_key = 'worker|' . $lang . '|' . $module_name;
+        if (Runtime::isPersistent() && isset(self::$workerModuleWordsCache[$worker_scope_key])) {
+            return self::$workerModuleWordsCache[$worker_scope_key];
+        }
+
         $cache_key = $lang . '|' . $module_name . '|unresolved';
+        $worker_cache_key = Runtime::isPersistent() ? $worker_scope_key : $cache_key;
         try {
             // 获取模块信息
             $module_info = Env::getInstance()->getModuleInfo($module_name);
             $module_i18n_file = ($module_info['base_path'] ?? '') . '/i18n/' . $lang . '.csv';
             $cache_key = $lang . '|' . $module_name . '|' . self::getFileVersion($module_i18n_file);
-            if (isset(self::$workerModuleWordsCache[$cache_key])) {
-                return self::$workerModuleWordsCache[$cache_key];
+            $worker_cache_key = Runtime::isPersistent() ? $worker_scope_key : $cache_key;
+            if (isset(self::$workerModuleWordsCache[$worker_cache_key])) {
+                return self::$workerModuleWordsCache[$worker_cache_key];
             }
 
             if (!$module_info || !isset($module_info['base_path'])) {
-                return self::$workerModuleWordsCache[$cache_key] = [];
+                return self::$workerModuleWordsCache[$worker_cache_key] = [];
             }
 
             if (!is_file($module_i18n_file)) {
-                return self::$workerModuleWordsCache[$cache_key] = [];
+                return self::$workerModuleWordsCache[$worker_cache_key] = [];
             }
 
             $sharedCacheKey = 'module_dictionary|v1|' . \sha1($cache_key);
@@ -677,7 +696,7 @@ class Parser
                 try {
                     $cached = self::getSharedPhraseCachePool()?->get($sharedCacheKey);
                     if (\is_array($cached)) {
-                        return self::$workerModuleWordsCache[$cache_key] = $cached;
+                        return self::$workerModuleWordsCache[$worker_cache_key] = $cached;
                     }
                 } catch (\Throwable) {
                     // Shared cache is an optimization only; local CSV is authoritative.
@@ -687,7 +706,7 @@ class Parser
             $words = [];
             $handle = @fopen($module_i18n_file, 'r');
             if ($handle === false) {
-                return self::$workerModuleWordsCache[$cache_key] = [];
+                return self::$workerModuleWordsCache[$worker_cache_key] = [];
             }
 
             try {
@@ -729,12 +748,12 @@ class Parser
                 }
             }
 
-            return self::$workerModuleWordsCache[$cache_key] = $words;
+            return self::$workerModuleWordsCache[$worker_cache_key] = $words;
         } catch (\Throwable) {
             // 静默处理错误
         }
 
-        return self::$workerModuleWordsCache[$cache_key] = [];
+        return self::$workerModuleWordsCache[$worker_cache_key] = [];
     }
     
     /**
@@ -780,16 +799,23 @@ class Parser
     {
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], $modules)));
         \sort($modules);
+
+        if (Runtime::isPersistent()) {
+            $cache_key = 'worker|' . $lang . '|' . \implode(',', $modules)
+                . '|' . ($includeGlobalDictionary ? 'db' : 'file');
+            if (isset(self::$workerLocaleWordsCache[$cache_key])) {
+                return self::$workerLocaleWordsCache[$cache_key];
+            }
+
+            // WLS resolves the database dictionary one exact word at a time,
+            // only after the current route/module CSV layers miss. The empty
+            // locale layer is process-resident until cache epoch invalidation.
+            return self::$workerLocaleWordsCache[$cache_key] = [];
+        }
+
         $cache_key = $lang . '|' . self::getWordsCacheVersion($lang, $modules) . '|' . \implode(',', $modules) . '|' . ($includeGlobalDictionary ? 'db' : 'file');
         if (isset(self::$workerLocaleWordsCache[$cache_key])) {
             return self::$workerLocaleWordsCache[$cache_key];
-        }
-
-        if (Runtime::isPersistent()) {
-            // WLS resolves the database dictionary one exact word at a time,
-            // only after the current route/module CSV layers miss. This keeps
-            // both startup and Worker RSS independent of the locale size.
-            return self::$workerLocaleWordsCache[$cache_key] = [];
         }
 
         $global_dictionary_words = $includeGlobalDictionary ? self::loadGlobalDictionaryWords($lang, $modules) : [];
