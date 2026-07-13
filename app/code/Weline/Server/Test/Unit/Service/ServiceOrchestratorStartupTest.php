@@ -19,12 +19,14 @@ use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
 
 class ServiceOrchestratorStartupTest extends TestCase
 {
     private const TEST_POLICY_DIGEST = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    private const TEST_CONTAINER_DIGEST = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
     protected function setUp(): void
     {
@@ -561,6 +563,9 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'wls' => [
                     'orchestrator' => [
                         'ipc_windows_native_socket_bridge' => true,
+                    ],
+                    'runtime' => [
+                        'container_registry_digest' => self::TEST_CONTAINER_DIGEST,
                     ],
                 ],
             ],
@@ -1982,6 +1987,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'serverReadyNotificationArmed', false);
+        $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
+        $this->writePrivate($orchestrator, 'containerRegistryDigest', self::TEST_CONTAINER_DIGEST);
 
         $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
 
@@ -2008,6 +2015,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'launch_id' => 'test-launch',
             'port' => $context->mainPort,
             'role' => ControlMessage::ROLE_DISPATCHER,
+            'policy_digest' => self::TEST_POLICY_DIGEST,
         ], 201]);
 
         $poolSent = null;
@@ -2362,6 +2370,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'maintenanceMode', true);
         $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
+        $this->writePrivate($orchestrator, 'containerRegistryDigest', self::TEST_CONTAINER_DIGEST);
 
         $registry->addInstance(new ServiceInstance(
             role: 'dispatcher',
@@ -2389,6 +2398,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'launch_id' => 'late-maint',
             'port' => $context->mainPort,
             'role' => 'dispatcher',
+            'policy_digest' => self::TEST_POLICY_DIGEST,
         ], 201]);
 
         foreach ($mockControl->sent as $entry) {
@@ -2454,6 +2464,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'maintenanceMode', true);
         $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
+        $this->writePrivate($orchestrator, 'containerRegistryDigest', self::TEST_CONTAINER_DIGEST);
 
         $dispatcher = new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -2539,6 +2550,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
+        $this->writePrivate($orchestrator, 'containerRegistryDigest', self::TEST_CONTAINER_DIGEST);
 
         $dispatcher = new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -4712,6 +4724,9 @@ class ServiceOrchestratorStartupTest extends TestCase
                         'port' => 19971,
                         'token_file_name' => 'memory_server.token',
                     ],
+                    'runtime' => [
+                        'container_registry_digest' => self::TEST_CONTAINER_DIGEST,
+                    ],
                 ],
             ],
             dispatcherEnabled: true,
@@ -4752,9 +4767,18 @@ class ServiceOrchestratorStartupTest extends TestCase
     /** @return array<string, mixed> */
     private function readyCapabilityPayload(ServiceContext $context, string $role): array
     {
+        $topology = $context->getEffectiveTopology()->value;
+        $direct = $topology === 'direct';
+
         return [
-            'topology' => $context->getEffectiveTopology()->value,
+            'readiness_protocol_version' => WorkerReadinessState::READINESS_PROTOCOL_VERSION,
+            'readiness_capabilities' => [
+                WorkerReadinessState::CAPABILITY_DYNAMIC_FIRST_RENDER_PROOF,
+                WorkerReadinessState::CAPABILITY_COMPILED_CONTAINER_DIGEST,
+            ],
+            'topology' => $topology,
             'policy_digest' => self::TEST_POLICY_DIGEST,
+            'container_registry_digest' => self::TEST_CONTAINER_DIGEST,
             'warmup_state' => $role === ControlMessage::ROLE_MAINTENANCE ? 'ready' : 'hot',
             'homepage_fpc' => [
                 'hit' => true,
@@ -4763,9 +4787,23 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'full_uri' => 'http://example.test/',
                 'http_status' => 200,
             ],
+            'dynamic_first_render' => [
+                'ready' => true,
+                'host' => 'example.test',
+                'path' => '/',
+                'status_code' => 200,
+                'body_length' => 1024,
+                'elapsed_ms' => 5.0,
+                'target_ms' => 70.0,
+                'attempts' => 1,
+                'fpc_status' => 'MISS',
+                'cache' => 'bypass',
+                'reason' => 'rendered',
+            ],
             'listen_capabilities' => [
                 'bound' => true,
-                'mode' => 'single',
+                'reuseport' => $direct,
+                'mode' => $direct ? 'reuseport' : 'single',
                 'event_loop' => 'select',
                 'ssl_engine' => 'stream',
             ],
