@@ -782,8 +782,8 @@ class WlsPanelSecurityDataService
             'rate_limit' => [
                 'enabled' => $this->ruleEnabled($rules, 'rate_limit', true),
                 'window' => $this->ruleInt($rules, 'rate_limit', 'window', 60),
-                'max_requests' => $this->ruleInt($rules, 'rate_limit', 'max_requests', 200),
-                'block_duration' => $this->ruleInt($rules, 'rate_limit', 'block_duration', 300),
+                'max_requests' => $this->ruleInt($rules, 'rate_limit', 'max_requests', 3000),
+                'block_duration' => $this->ruleInt($rules, 'rate_limit', 'block_duration', 0),
             ],
             'path_rate_limits' => $this->buildPathRateLimitEditor($rules),
             'path_scan' => [
@@ -1053,8 +1053,8 @@ class WlsPanelSecurityDataService
             'rate_limit' => [
                 'enabled' => $this->sanitizeCheckbox($rateLimit['enabled'] ?? '0'),
                 'window' => $this->sanitizeInt($rateLimit['window'] ?? 60, 1, 86400, 60),
-                'max_requests' => $this->sanitizeInt($rateLimit['max_requests'] ?? 200, 1, 1000000, 200),
-                'block_duration' => $this->sanitizeInt($rateLimit['block_duration'] ?? 300, 0, 86400, 300),
+                'max_requests' => $this->sanitizeInt($rateLimit['max_requests'] ?? 3000, 1, 1000000, 3000),
+                'block_duration' => $this->sanitizeInt($rateLimit['block_duration'] ?? 0, 0, 86400, 0),
             ],
             'path_rate_limits' => $this->buildPathRateLimitOverrideRules($pathRateLimits),
             'path_scan' => [
