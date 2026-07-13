@@ -171,6 +171,8 @@ accept/TLS -> 单次请求解析 -> 真实客户端身份
 
 Transport Adapter 的 HTTP wire 辅助统一由 `bin/worker_http_message.php` 提供。HTTP 与 stream-TLS Worker 直接加载同一份 request-complete、keep-alive、Header/Cookie、格式化响应 Header、gzip、状态码和请求行实现，不再各自复制函数体；EventBuffer 保留自己的连接与 libevent 状态机，但 Header 读取通过原签名 wrapper 复用同一实现。共享文件不持有 listener、socket、TLS 或 event-loop 状态，Transport 主循环、调用点签名、重复 Header 处理、HTTP/1.0 keep-alive、Connection token 与 CRLF 语义均保持不变。其余仍有 transport 差异的握手、写缓冲和连接关闭逻辑继续留在各 Adapter，不能为了表面去重强行合并。
 
+Worker 进程记账与请求收尾辅助统一由 `bin/worker_runtime_common.php` 提供，三个入口共同复用 memory-limit 解析、长驻进程执行时限、Fiber admission 计数、请求上下文清理、响应后任务排水和内存诊断/压缩。该文件同样不持有 socket、TLS、EventBase 或连接表，避免把 Transport 状态重新聚合成另一个巨型脚本；EventBuffer 仍是不可启用的实验 Adapter，但其启动参数解析已使用同一运行时事实。
+
 如果 Worker 的 Framework runtime 初始化失败，数据面只返回通用 500、`request_id` 和 `X-Weline-Request-Id`；`$runtimeError`、异常文件/行号与内部连接细节只进入 WLS 日志。该错误契约在 HTTP、TLS stream 和 EventBuffer 之间保持一致。
 
 因此缓存命中不会绕过 mandatory guard；裸 `/admin/login` 在 FPC 和 Router 前 404，只允许 `/{backend_key}/admin/login`。详细策略 stage 见 [WLS 安全与规则配置推演](WLS安全与规则配置推演.md)。
@@ -508,7 +510,27 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 
 独立实例 `ai-test-wls-regression-20260713-1710` 在 macOS 上以 `auto -> direct/shared_fd/event/stream`、4 Worker 完整 READY 约 2 秒；公开动态首页 BYPASS-FPC first-render 为 46.52ms，首页 200、裸 `/admin/login` 404、带后台 Key 登录页 200，TLS 实际协商为 TLS 1.3 / `TLS_AES_256_GCM_SHA384`。Browser 可见性来自同一代码和策略的前一独立实例 `ai-test-wls-regression-20260713-1645`：首页和带 Key 登录表单正常可见，Console error/warn 为 0；Chrome 对后续 9882 端口返回客户端拦截，因此没有把 1645 的可见性伪记为 1710 的结果。测试白名单已恢复为关闭，两个实例及其共享 Session/Memory 进程均已停止。
 
-本审计不把尚未完成的工作包装成已完成：三个 Worker 入口仍分别为 5,484 / 6,472 / 2,103 行，当前只统一了 HTTP wire helper、策略内核、FPC/static fast path、控制面和 telemetry；它们还不是计划所述的“薄 Transport Adapter + 单一主循环”。Linux/Windows 原生矩阵也没有可用本机 runner 或现有 WLS CI，仍属于独立交付缺口。
+本审计不把尚未完成的工作包装成已完成：公共运行时抽取后的三个 Worker 入口仍分别为 5,158 / 6,147 / 2,059 行，当前已统一 HTTP wire helper、运行时记账/清理、策略内核、FPC/static fast path、控制面和 telemetry；它们还不是计划所述的“薄 Transport Adapter + 单一主循环”。Linux/Windows 原生矩阵也没有可用本机 runner 或现有 WLS CI，仍属于独立交付缺口。
+
+### 3.8.7 2026-07-13 Worker 公共运行时抽取与当前代回归
+
+本轮在不改 listener、TLS handshake、EventBase、连接表和写缓冲语义的前提下，将三个 Worker 重复的运行时记账与清理函数迁入 `bin/worker_runtime_common.php`。入口行数变为 HTTP 5,158、stream TLS 6,147、EventBuffer 2,059，公共运行时 339 行；EventBuffer 仍按 RuntimeSelection 在 Direct 和认证 Dispatcher 启动前拒绝，不能把语法加载通过解释为生产可用。
+
+验证使用当前 macOS 主机、PHP 8.4.22、4 Worker、`direct/shared_fd/event/stream`。压测时安全策略全部执行，实例级 limiter 保持启用，只将专用测试实例的额度临时提高以避免计划内的 3,000 请求上限产生 429；测试完成后恢复默认 3,000/60s。
+
+| 场景 | 结果 |
+| --- | --- |
+| HTTPS 首页 TLS 1.3，c32 × 10,000，策略开启 5 轮 | 全部 0 错误；QPS 中位 9,237.41，p95 中位 5.965ms；主机 load average 约 10–12，不用该轮单独证明 5.5ms 绝对线 |
+| HTTPS 首页 TLS 1.3，c128 × 100,000 | 100,000/100,000，0 错误，9,170.95 QPS，p95 19.982ms、p99 27.007ms、max 61.857ms；4/4 Worker PID 不变 |
+| HTTPS health fresh TLS 1.3，c128 × 20,000 | 20,000/20,000，0 错误，1,707.16 QPS，p95 109.52ms、p99 156.335ms、max 245.737ms；分流 `max/min=1.019` |
+| HTTPS 动态首页绕过 FPC | rolling reload 收敛后 16 次覆盖 4 个 Worker，12.32–42.41ms，全部 `<70ms` |
+| HTTP 首页，c32 × 10,000 | 10,000/10,000，0 错误，14,575.29 QPS，p95 4.025ms、p99 5.086ms、max 8.791ms |
+| HTTP 动态首页绕过 FPC | 连续 8 次 13.58–37.65ms，全部 `<70ms` |
+| Worker RSS | HTTPS 100,000 请求前约 26.5–26.7MiB，压测后约 22.3–22.7MiB；无持续增长、无 Worker restart |
+
+TLS 探针实际协商为 TLS 1.3、`AEAD-AES256-GCM-SHA384`、X25519。READY 元数据中四个 Worker 均为 `warmup_state=hot`，首页 `FPC HIT + source=process`，policy/container digest 一致。Browser 对当前 HTTPS 首页和带 backend key 登录页均可见，Console error 为 0；裸 `/admin/login` 继续返回 404。
+
+对应报告：`benchmark_report_20260713_093206_421483_root_pid11896.json` 至 `benchmark_report_20260713_093227_859717_root_pid22071.json`、`benchmark_report_20260713_093253_918691_wls-health_pid27852.json`、`benchmark_report_20260713_093346_308912_root_pid47746.json`、`benchmark_report_20260713_093014_503325_root_pid66025.json`。本轮仍不替代 Linux/Windows 原生矩阵，也不把公共 helper 抽取等同于“单一主循环”已经完成。
 
 ## 4. 实施映射
 
@@ -524,7 +546,7 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 | 已落地 | READY 后单槽恢复闭环 | `ServiceOrchestrator`、`ChildMasterGuard` | REGISTER 不取消复活；仅同租约 READY 且 IPC 会话仍存在时提交恢复 |
 | 已落地 | 重复预热与 PID 事实源回归收口 | `WlsRuntime`、`ServiceOrchestrator`、readiness v3 测试夹具 | READY 后不再默认重复 bootstrap；service/tracking PID 分离；116 项定向测试通过 |
 | P2 | 统一分段指标与慢请求归因 | telemetry / worker / dispatcher | p50/p95/p99/max 可定位到具体阶段 |
-| P4 待完成 | Worker 入口收敛为薄 Transport Adapter | `bin/worker*.php`、共享 Worker 主循环 | 三种 Transport 只保留 socket/TLS/event 差异，策略、解析、缓存、动态管线不再复制 |
+| P4 进行中 | Worker 入口收敛为薄 Transport Adapter | `bin/worker*.php`、`worker_runtime_common.php`、共享 Worker 主循环 | 运行时记账/清理已统一；后续继续收敛策略、解析、缓存和动态主循环，仅保留 socket/TLS/event 差异 |
 | 平台待完成 | Linux/Windows 原生矩阵 | 独立 runner / CI | Linux SO_REUSEPORT；Windows Dispatcher、批量启动、TLS、恢复和长稳实测 |
 
 ## 5. 验收门槛
