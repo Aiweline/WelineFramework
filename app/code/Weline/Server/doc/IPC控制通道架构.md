@@ -137,6 +137,7 @@ Dispatcher 维护启用的提交条件为：
 - IPC 意外断开且 lease/Master 仍有效：子进程尝试重连并重新闭合 REGISTER/READY。
 - lease 失效或 Master 身份不匹配：子进程按 `ChildMasterGuard` 自治退出，避免孤儿继续占端口。
 - Master 以 Registry、PID/端口实时校验和角色策略决定单槽复活或升级；status/peek 查询不得写回这些状态。
+- REGISTER 只证明控制连接重新建立，不能清除单槽复活队列。只有 Worker 通过完整 READY 能力校验、Registry 状态为 READY，且该 IPC client 仍存在于当前 Control Server 时，Orchestrator 才提交恢复并清除队列。否则“注册后立刻掉线”的子进程会继续沿原 deadline/退避收敛，不能靠反复 REGISTER 把重启计数推到整组重启阈值。
 
 ## 7. 不变量
 
@@ -150,6 +151,7 @@ Dispatcher 维护启用的提交条件为：
 8. Master 在一个总 deadline 内必须收齐快照中每个 Worker 的同代际、同租约 ACK；发送失败、会话换代、Worker 拒绝或超时都是结构化失败，不得回报清理成功。
 9. Shared L2 namespace 清理是幂等操作：共享状态服务明确返回 `not_found` / `Session not found` 代表目标状态已经满足，尤其适用于多个 Worker 并发清同一池；传输、鉴权、超时或其他协议错误仍是硬失败。普通、TLS 与 EventBuffer Worker 统一通过 `WorkerCachePoolResetter` 检查每个池，任一真实失败都不提交 epoch。
 10. 初次启动和 Direct surge 重载必须复用同一 dynamic first-render 校验器；不能出现初启严格、replacement 宽松或反向漂移。验收后的证明保存到 Registry metadata，`server:status <instance>` 在每个业务 Worker 下展示动态首渲染耗时、目标、状态、正文长度、尝试数、FPC 和实际 host/path。
+11. 复活队列的完成条件是 READY + 当前 IPC 会话双重事实；REGISTERED、历史 client id、发现文件或仍存活 PID 都不能单独取消恢复。
 
 ## 8. 代码锚点
 
