@@ -149,11 +149,11 @@ READY 时序是硬门禁：
 1. Supervisor 验证 HELLO 的 instance/channel、签名、role/slot 和当前 lease，再分配 `lease_id + generation`。
 2. Hybrid 先把 REGISTER 交给 Master/Orchestrator；只有当前会话仍存活才会进入 `masterAccepted`。
 3. Worker 上报 READY 后，Supervisor 只保存 `pendingReady`，不会先把槽位变为 READY。
-4. Master 验证 readiness protocol v2/capabilities、topology、policy digest、warmup、首页 Process FPC、动态首页非 FPC 回执和 listener capabilities；返回与 `msg_id + slot + lease + generation` 一致的 ACK 后，Supervisor 才提交本地 READY 并回复 Worker。动态首渲染目标仍是发布性能门禁；默认不再因单次冷启动受主机负载影响超过 `target_ms` 就杀掉已经正确返回页面的 Worker。如需把目标恢复为启动硬门禁，显式开启 `wls.worker.dynamic_warmup_block_on_target_ms`。Maintenance Worker 不要求业务动态首渲染证明。
+4. Master 验证 readiness protocol v2/capabilities、topology、policy digest、warmup、首页 Process FPC、动态首页非 FPC 回执和 listener capabilities；返回与 `msg_id + slot + lease + generation` 一致的 ACK 后，Supervisor 才提交本地 READY 并回复 Worker。动态首渲染目标仍是发布性能门禁：冷链第一次有效渲染若超过 `target_ms`，Worker 会在同一个有界预热事务内立即复验已经填充的进程缓存，并以复验结果作为 READY 性能证明；只有尝试预算耗尽后仍慢，才记录最终 `ready:slow`，默认不会把一次主机抖动放大为重启风暴。如需把目标恢复为启动硬门禁，显式开启 `wls.worker.dynamic_warmup_block_on_target_ms`。Maintenance Worker 不要求业务动态首渲染证明。
 
 这意味着 `server:status` 中的 READY 不是“子进程自报启动完成”，而是 Master 已验收当前精确 lease 的结果。旧连接、旧 generation 或不匹配 ACK 都不能改变新槽位状态。
 
-`php bin/w server:status <instance>` 会在每个业务 Worker 下显示动态首渲染的 `ready`、`elapsed/target`、HTTP status、body、attempts、FPC 和实际 host/path。业务 Worker 缺少 v2/能力/回执、动态证明反而命中 FPC、HTTP 失败或正文为空时不会 READY；`elapsed >= target` 默认记为 `ready:slow` 供发布门禁和观测使用，不作为 Worker 存活失败。缺字段不会静默按旧版放行。若 Master IPC 在查询窗口内繁忙，CLI 只读回退会把持久化 `worker_ready` 事件裁剪到当前 canonical `1..count`，历史 surge Worker 不会让健康的 4/4 实例误报为 4/5。
+`php bin/w server:status <instance>` 会在每个业务 Worker 下显示动态首渲染的 `ready`、`elapsed/target`、HTTP status、body、attempts、FPC 和实际 host/path。业务 Worker 缺少 v2/能力/回执、动态证明反而命中 FPC、HTTP 失败或正文为空时不会 READY；慢的第一次有效渲染会继续使用剩余 attempt 复验热链，只有最后一次仍满足 `elapsed >= target` 才显示 `ready:slow`。缺字段不会静默按旧版放行。若 Master IPC 在查询窗口内繁忙，CLI 只读回退会把持久化 `worker_ready` 事件裁剪到当前 canonical `1..count`，历史 surge Worker 不会让健康的 4/4 实例误报为 4/5。
 
 控制面是有界的：HELLO 必须在5秒内完成，已注册会话60秒无活动会被关闭，子进程每5秒发送心跳。心跳在事件循环每轮构造控制 socket 写集合前调度，不依赖 Master 先发来可读消息；当前不可写时只进入有界缓冲，不同步等待。单会话读写缓冲各2 MiB；Hybrid 转发队列最多1024条/2 MiB，单条最大512 KiB。生命周期、策略 ACK 和路由 ACK 等关键消息遇到背压会关闭源会话并交由 Master 收敛；普通 log/telemetry 采用可损、批量上报，不得因输出洪峰拖断生命周期通道。
 
@@ -283,6 +283,17 @@ curl -k --http2 https://example.com/
 curl -k --http3-only https://example.com/
 php bin/w server:status <instance>
 ```
+
+### 5.1.1 翻译词典按请求模块加载
+
+WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理某条路由时，从 Request 已登记的 Controller、Layout、Query 等模块建立范围：先查最终译文的进程内词哈希；模块词典 L1 缺失时才查 `phrase` Shared Memory 的模块 CSV 快照；Shared miss 才解析本模块 CSV 并回填。
+
+若模块 CSV 没有该词，Worker 不会加载全 locale 数据，而是继续执行 `Worker 单词 L1 -> Shared Memory 单词记录 -> md5(word + locale) 精确数据库查询`。这兼容没有 `source_module` 的历史词条，同时保证共享内存帧和每次数据库结果都只包含一个词。
+
+- 普通请求结束不会清 Worker 翻译 L1；同一个词的后续查找是进程内哈希读取。
+- 翻译发布会清理 `phrase/i18n` cache epoch，使所有 Worker 在下一次访问时获取新模块快照或单词记录。
+- 后台发布记录应带正确的 `source_module`，便于模块归属、维护和导出；旧的无归属记录由精确单词索引兼容，不会全局批量加载。
+- 若日志出现 `SessionProtocol frame_too_large`，先检查是否又把全 locale 词典写入 Shared Memory；正确实现只允许模块 CSV 快照或单词级小记录。
 
 ### 5.2 TLS 1.3 与密钥交换 profile
 
