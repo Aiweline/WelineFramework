@@ -1,6 +1,6 @@
 # 进度
 
-状态：`published_windows_fpm_pending`
+状态：`published_windows_pending`
 
 - 已建立隔离分支和 worktree，代码智能上下文已初始化。
 - 已冻结原始脏工作区；只在 `/Users/weline/Project/Official/.codex-wls-release-20260713` 修改，原分支未删除。
@@ -95,3 +95,9 @@
 - 最终静态门禁：8 个 PHP 文件语法通过，benchmark 定向测试 8 项通过（1 项按既有条件跳过），Semgrep 以 `HEAD` 为基线扫描 85 条规则后新增 finding 为 0；`git diff --check`、`architecture:check`（83 模块/4045 PHP/7171 引用）、`framework:compile`（39 Provider/0 延迟）和 `server:policy:check`（12 条规则）全部通过。
 - 最终状态核对中 macOS 专用实例仍为 Direct 4/4 Worker + Protocol Edge READY，四个动态首页回执 9.35–9.50ms。自动验收结束后已用统一 stop flow 停止 `ai-test-wls-final-mac-20260714-0320`；9930 TCP/UDP、28133–28136 私有端口、38133 控制端口及对应 PID 全部释放。另一智能体 9890 实例仍保持运行，未触碰。
 - 核心提交 `848c2c0f9` 已以纯 fast-forward 推送至 Gitee/GitHub 的 `codex/wls-tls13-extreme-performance` 与 `master`，四个远端引用核对为同一完整 SHA；本地未检出的 master 引用也只做原子快进。没有 force、reset、merge commit、分支/worktree 删除或文件恢复，`AGENTS.md/CLAUDE.md` 继续保持未暂存。
+- FPM 对照已在同一 macOS/PHP 8.4.22/代码代上补齐：PHP-FPM 4 static children + Caddy h1/h2c，WLS 为 4 Worker `auto -> direct/shared_fd/event/stream`。带同一默认站点/语言/币种 Cookie 的首页仅 `data-request-id` 不同，归一后 SHA-256 完全一致；静态 SVG 响应也完全一致。FPM/WLS 裸 `/admin/login` 均为 404，带合法 backend key 的登录页均为 200。
+- FPM c32×1,000 五轮全部 0 错误，QPS 中位 73.09、p95 472ms、p99 496ms、max 500ms；c1×200 为 23.20 QPS / p95 44ms，c128×1,000 为 77.32 QPS / p95 1,690ms。同代 WLS 在不突破默认 `3000/60s/IP` 限流窗口的正式轮中，c32×400 五轮中位 15,784.70 QPS / p95 3ms / p99 6ms / max 7ms；c1×200 为 4,535.87 QPS，c128×500 为 13,987.19 QPS / p95 32ms，全部 0 错误且无非 2xx。早先超出限流预算的 AB 轮次明确作废，不计入 QPS 证据。
+- Browser 真实验收 FPM `:9940` 与 WLS `:9941`：标题、H1、7 个主体区块、18 个链接均一致，两页 Console error/warn 均为 0。FPM 对照项因此从剩余矩阵移除；全计划现只保留 Windows 原生 Dispatcher/event DLL/启动与长稳门禁，不用 macOS/Linux/FPM 结果代替。
+- Windows 定向静态门禁首轮暴露 `Stop::isWindowsPlatform()` 为 private，现有测试无法注入 Windows 平台，误走 POSIX/`Processer::killProcessTreeByPid()` 分支。GitNexus 上游影响为 LOW（2 个直接调用、8 个总符号、1 个模块、0 条识别流程）；只将可见性改为 protected，默认 `PHP_OS` 判定和停止语义不变。Runtime/Start/Windows taskkill/socket 定向集现为 30/30、81 assertions。
+- 修复后专用 `ai-test-stop-platform-20260714-0407` 在 9942 以 Direct 2 Worker 约 2 秒 READY，两个动态首渲染为 9.40/9.54ms，首页 200、裸 `/admin/login` 404。统一 `server:stop` 流程完整退出 Master/Worker，9942/38145 和稍后自治退出的 28173/28174 均无监听；9890/9981 未触碰。
+- 本轮最终门禁：Stop PHP 语法、30/30 定向测试（81 assertions）、Semgrep 85 条规则 0 finding、`git diff --check`、architecture:check（83 模块/4045 PHP/7171 引用）、framework:compile（39 Provider/0 延迟）、policy check（12 条）全部通过。GitNexus 强制重建后 staged 检测为 4 文件/5 符号、0 影响流程、LOW；未暂存的 `AGENTS.md/CLAUDE.md` 明确排除。

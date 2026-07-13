@@ -280,3 +280,20 @@ Linux 最终实例实际返回 HTTP/1.1、HTTP/2、HTTP/3，TLS 1.3 首连为 `N
 macOS 最终代码代使用 PHP 8.4.22、4 Worker、`auto -> direct/shared_fd/event/stream` 和 Caddy 2.11.4。强制 h1/h2/h3 均为 200 且实际版本为 1.1/2/3；Alt-Svc 首次为 h2、后续自动升级 h3。TLS 1.3 ticket 跨 rolling reload 仍为 `Reused`，HTTP/2 与 HTTP/3 各 16 路请求均只建立一条公开连接。首页 c32×2,500 为 0 错误、11,093.33 QPS、p95 4.225ms、p99 11.871ms、max 11.949ms；health c128×100,000 为 0 错误、8,371.54 QPS、p95 24.677ms、p99 31.880ms、max 48.858ms；fresh TLS 1.3 c32×2,000 为 0 错误、3,186.85 QPS、p95 12.114ms、p99 13.135ms、max 15.248ms。完整停启约 2.424s READY，动态首页首渲染 2.05ms，后台 Key 继续为 404/200。
 
 本轮还确认 `var/` 必须是节点本地运行目录，不能由两个内核或主机并发共享：跨节点共享会让 Session/Memory sidecar 竞争同一 token 文件。该部署约束不属于数据面降级，也不通过扩大共享服务符号的高风险改动绕过。Windows 原生与 FPM 仍未取得本轮权威证据，因此总计划继续保持未完全发布状态。
+
+## 2026-07-14 macOS FPM / WLS 同机对照
+
+环境：macOS、PHP 8.4.22、同一代码与 Host。FPM 使用 4 个 static PHP-FPM child + Caddy HTTP/1.1/HTTP/2 cleartext；WLS 使用 4 Worker `auto -> direct/shared_fd/event/stream`。同一默认站点、语言和币种 Cookie 下，两端首页除 `data-request-id` 外归一后 SHA-256 均为 `9d3ca35b12559fe68be8c3a4505d551d3accc164355c45f54532c8385fd99638`；静态 SVG 均为 `f431101ec4cd3812fb2450bf364d952c052bba4e97eb0a158e888efef50913dc`。裸 `/admin/login` 两端均 404，合法 backend key 登录页两端均 200。
+
+| Runtime / 并发 / 每轮样本 | 轮次 | 错误 / 非 2xx | QPS 中位 | p95 中位 | p99 中位 | max 中位 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| FPM / 1 / 200 | 1 | 0 / 0 | 23.20 | 44ms | 45ms | 46ms |
+| FPM / 32 / 1,000 | 5 | 0 / 0 | 73.09 | 472ms | 496ms | 500ms |
+| FPM / 128 / 1,000 | 1 | 0 / 0 | 77.32 | 1,690ms | 1,701ms | 1,712ms |
+| WLS / 1 / 200 | 1 | 0 / 0 | 4,535.87 | 0ms | 0ms | 1ms |
+| WLS / 32 / 400 | 5 | 0 / 0 | 15,784.70 | 3ms | 6ms | 7ms |
+| WLS / 128 / 500 | 1 | 0 / 0 | 13,987.19 | 32ms | 33ms | 34ms |
+
+WLS 正式轮严格控制在当前 `3000/60s/IP` 实例限流窗口内。早先用 ApacheBench 连续超出预算的轮次虽然 `Failed requests=0`，但存在 429 `Non-2xx responses`，已全部作废，不计入性能证据。Browser 实际打开 FPM `:9940` 和 WLS `:9941`，两端标题、H1、7 个主体区块、18 个入口链接完全一致，Console error/warn 均为 0。
+
+该结果关闭 FPM 对照缺口，但不代替 Windows 原生矩阵。当前唯一剩余的跨平台发布证据为 Windows `auto -> dispatcher`、Direct/independent 拒绝、event DLL ABI 与启动/长稳验收。
