@@ -8,6 +8,7 @@ use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
 use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
@@ -19,22 +20,18 @@ use Weline\Framework\View\Template;
  */
 class Login extends \Weline\Framework\App\Controller\FrontendController
 {
-    /** 登录后不允许作为跳转目标的认证相关路径前缀（相对路径，无首尾 /） */
-    private const AUTH_REDIRECT_PATH_PREFIXES = [
-        'customer/account/login',
-        'customer/account/register',
-        'customer/account/forgot-password',
-        'customer/account/challenge',
-        'customer/account/logout',
-    ];
-
     private Template $template;
+    private CustomerAuthReturnUrlService $authReturnUrlService;
 
     protected ?string $layoutType = 'account.auth';
 
-    public function __construct(Template $template)
-    {
+    public function __construct(
+        Template $template,
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null
+    ) {
         $this->template = $template;
+        $this->authReturnUrlService = $authReturnUrlService
+            ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
     }
 
     public function getIndex()
@@ -43,21 +40,19 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             return $this->redirect('/customer/account');
         }
 
-        $refererRaw = $this->request->getParam('referer') ?: $this->request->getReferer();
-        $refererStored = is_string($refererRaw) && $refererRaw !== ''
-            ? $this->normalizeRedirectTarget($refererRaw)
-            : '';
-        if ($refererStored !== '') {
-            $this->session->set('login_referer', $refererStored);
-        }
-
-        $redirectUrl = trim((string) ($this->request->getParam('redirect_url') ?? $this->request->getParam('redirect') ?? ''));
-        if ($redirectUrl === '' && $refererStored !== '') {
-            $redirectUrl = $refererStored;
-        }
-        $redirectUrl = $this->normalizeRedirectTarget($redirectUrl);
+        $explicitTarget = $this->request->getParam('redirect_url') ?? $this->request->getParam('redirect') ?? '';
+        $referer = $this->request->getParam('referer') ?: $this->request->getReferer();
+        $redirectUrl = $this->authReturnUrlService->capture(
+            $this->session,
+            is_string($explicitTarget) ? $explicitTarget : '',
+            is_string($referer) ? $referer : ''
+        );
 
         $this->assign('redirect_url', $redirectUrl);
+        $this->assign(
+            'register_url',
+            $this->authReturnUrlService->buildAuthPageUrl('customer/account/register', $redirectUrl)
+        );
         $this->assign('title', __('登录'));
         $this->assign('meta', [
             'showHeader' => false,
@@ -104,7 +99,10 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if ($redirectUrl === null) {
             $redirectUrl = $this->request->getPost('redirect_url', '');
         }
-        $redirectUrl = $this->normalizeRedirectTarget(is_string($redirectUrl) ? $redirectUrl : '');
+        $redirectUrl = $this->authReturnUrlService->resolve(
+            $this->session,
+            is_string($redirectUrl) ? $redirectUrl : ''
+        );
 
         if ($username === '' || $password === '') {
             return $this->respondFailure(
@@ -194,15 +192,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             ]);
             $eventManager->dispatch('Weline_Customer_Account_Login::login_after', $eventData);
 
-            $referer = $this->session->get('login_referer');
-            $this->session->delete('login_referer');
-
-            $redirectTarget = '/customer/account';
-            if ($redirectUrl !== '') {
-                $redirectTarget = $this->formatClientRedirect($redirectUrl);
-            } elseif (is_string($referer) && $referer !== '' && $this->isValidReferer($referer)) {
-                $redirectTarget = $this->formatClientRedirect($referer);
-            }
+            $redirectTarget = $this->authReturnUrlService->consume($this->session, $redirectUrl);
 
             return $this->respondSuccess(
                 (string) __('登录成功.'),
@@ -264,94 +254,6 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
     }
 
-    private function normalizeRedirectTarget(string $redirectUrl): string
-    {
-        $redirectUrl = $this->decodeRedirectTarget($redirectUrl);
-        if ($redirectUrl === '' || str_starts_with($redirectUrl, '//')) {
-            return '';
-        }
-
-        if ((bool) preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
-            $absoluteUrl = $redirectUrl;
-            if (!$this->isValidReferer($redirectUrl)) {
-                return '';
-            }
-
-            $path = trim((string) (parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
-            if ($path === '') {
-                return '';
-            }
-
-            $redirectUrl = $path;
-            $query = trim((string) (parse_url($absoluteUrl, PHP_URL_QUERY) ?? ''));
-            if ($query !== '') {
-                $redirectUrl .= '?' . $query;
-            }
-        } else {
-            $redirectUrl = ltrim($redirectUrl, '/');
-        }
-
-        $redirectUrl = ltrim($redirectUrl, '/');
-        if ($redirectUrl === '') {
-            return '';
-        }
-
-        foreach (self::AUTH_REDIRECT_PATH_PREFIXES as $blocked) {
-            if (preg_match('#^' . preg_quote($blocked, '#') . '(\\?|$)#', $redirectUrl) === 1) {
-                return '';
-            }
-        }
-
-        return $redirectUrl;
-    }
-
-    private function formatClientRedirect(string $redirectUrl): string
-    {
-        $redirectUrl = $this->decodeRedirectTarget($redirectUrl);
-        if ($redirectUrl === '') {
-            return '/customer/account';
-        }
-
-        if (str_contains($redirectUrl, '://') && $this->isValidReferer($redirectUrl)) {
-            return $redirectUrl;
-        }
-
-        $normalized = ltrim($redirectUrl, '/');
-        if ($normalized === '' || $normalized === 'customer/account/index') {
-            return '/customer/account';
-        }
-
-        return '/' . $normalized;
-    }
-
-    private function decodeRedirectTarget(string $redirectUrl): string
-    {
-        $redirectUrl = trim($redirectUrl);
-        if ($redirectUrl === '') {
-            return '';
-        }
-
-        for ($i = 0; $i < 2; $i++) {
-            $decoded = rawurldecode($redirectUrl);
-            if ($decoded === $redirectUrl) {
-                break;
-            }
-            $redirectUrl = trim($decoded);
-        }
-
-        return $redirectUrl;
-    }
-
-    private function buildLoginPageUrl(string $redirectUrl = ''): string
-    {
-        $target = $this->normalizeRedirectTarget($redirectUrl);
-        if ($target === '') {
-            return '/customer/account/login';
-        }
-
-        return '/customer/account/login?redirect_url=' . rawurlencode($target);
-    }
-
     private function expectsJsonResponse(): bool
     {
         if ($this->request->isAjax()) {
@@ -364,7 +266,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
     private function respondSuccess(string $message, string $redirectUrl, array $extra = []): string
     {
-        $formattedRedirect = $this->formatClientRedirect($redirectUrl);
+        $formattedRedirect = $this->authReturnUrlService->formatRedirect($redirectUrl);
         if ($this->expectsJsonResponse()) {
             return $this->json(array_merge([
                 'success' => true,
@@ -382,7 +284,10 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
     private function respondChallenge(string $message, string $redirectUrl, array $extra = []): string
     {
-        $formattedRedirect = $this->formatClientRedirect($redirectUrl);
+        $formattedRedirect = $this->authReturnUrlService->formatInternalNavigation(
+            $redirectUrl,
+            '/customer/account/login'
+        );
         if ($this->expectsJsonResponse()) {
             return $this->json(array_merge([
                 'success' => true,
@@ -409,70 +314,9 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
 
         $this->getMessageManager()->addError($message);
-        return (string) $this->redirect($this->buildLoginPageUrl($redirectUrl));
-    }
-
-    private function isValidReferer(string $referer): bool
-    {
-        $referer = trim($referer);
-        if ($referer === '') {
-            return false;
-        }
-
-        if (str_starts_with($referer, '//')
-            || str_contains($referer, '\\')
-            || preg_match('/[\x00-\x1F\x7F]/', $referer) === 1
-        ) {
-            return false;
-        }
-
-        if (str_starts_with($referer, '/')) {
-            return true;
-        }
-
-        if ((bool) preg_match('/^[a-z][a-z0-9+.-]*:/i', $referer)) {
-            return $this->isSameOriginUrl($referer);
-        }
-
-        $path = parse_url($referer, PHP_URL_PATH);
-        return is_string($path) && trim($path, '/') !== '';
-    }
-
-    private function isSameOriginUrl(string $url): bool
-    {
-        $baseUrl = (string) (Env::getInstance()->getBaseUrl() ?? '');
-        if ($baseUrl === '') {
-            return false;
-        }
-
-        $target = parse_url($url);
-        $base = parse_url($baseUrl);
-        if (!is_array($target) || !is_array($base)) {
-            return false;
-        }
-
-        $targetScheme = strtolower((string) ($target['scheme'] ?? ''));
-        $baseScheme = strtolower((string) ($base['scheme'] ?? ''));
-        $targetHost = strtolower((string) ($target['host'] ?? ''));
-        $baseHost = strtolower((string) ($base['host'] ?? ''));
-
-        if ($targetScheme === '' || $targetHost === '' || $targetScheme !== $baseScheme || $targetHost !== $baseHost) {
-            return false;
-        }
-
-        $targetPort = (int) ($target['port'] ?? $this->defaultPortForScheme($targetScheme));
-        $basePort = (int) ($base['port'] ?? $this->defaultPortForScheme($baseScheme));
-
-        return $targetPort === $basePort;
-    }
-
-    private function defaultPortForScheme(string $scheme): int
-    {
-        return match ($scheme) {
-            'http' => 80,
-            'https' => 443,
-            default => 0,
-        };
+        return (string) $this->redirect(
+            $this->authReturnUrlService->buildAuthPageUrl('customer/account/login', $redirectUrl)
+        );
     }
 
     private function json(array $data): string
