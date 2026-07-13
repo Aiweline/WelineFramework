@@ -33,6 +33,7 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation,
 - Schema: `#[Col]` + `setup:upgrade` (NEVER edit `generated/` or `Setup/Upgrade.php`)
 - Websites: `website_id=0`/`code=default` is auto-installed system default site; NEVER treat 0 as empty/invalid/no site.
 - Frontend API: browser frontend-backend business interfaces **MUST** use bin-query / `weline-api` (`Weline.Api.*`) | NEVER native Ajax/XHR/fetch/axios
+- Frontend account center: all mall personal/customer features **MUST** use the official `Weline_Customer` account layout; menus go through `account.sidebar`, content goes through `account.sidebar.content` or an official account-layout Hook | NEVER create a standalone personal-center page
 - WLS Testing: **ALWAYS** start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`) | Default port 9501 is PRODUCTION (DO NOT TOUCH) | **Stop after automated validation; if user manual acceptance is required, keep the dedicated instance running and report URL/name/port/stop command until the user confirms acceptance**
 - WLS Lifecycle: code→`reload` | master→`restart -r` | NO `sleep/die/exit`
 - I18n: `__('text')` or `<lang>text</lang>` | Placeholders: `%{1}` or `%{name}`
@@ -41,6 +42,8 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation,
 **NEVER:** Edit `generated/` | Use `routes.xml` | Native Ajax/XHR/fetch/axios for frontend-backend business APIs | JS `alert/confirm` | Hardcode text | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | **Test on default port 9501 or reuse instance names** | **Leave unmanaged test instances running; manual-acceptance WLS handoff must include URL/name/port/stop command**
 
 **ALWAYS:** Use bin-query / `weline-api` (`Weline.Api.resource()/graph()/stream()`) for browser business requests | Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{unique-id}`) | **Stop after automated validation, or keep only for user acceptance with explicit handoff and stop after acceptance (`server:stop -n {instance-name}`)**
+
+**EVERY MODIFICATION:** Create a task record, verify the modified result with Codex built-in Browser, record URL/steps/visible result/console/WLS state, then synchronize the current affected documentation in the same task and re-verify the complete change set. This also applies to rules, indexes, and documentation; pure documentation may use a `file://` Browser target.
 
 ## Delivery
 - After every development/fix/deploy delivery, always give the user the related addresses in the final response: runnable page URLs, backend/admin URLs, API endpoints, doc paths/URLs, PR/commit/release URLs, and the test instance URL when one was started.
@@ -65,7 +68,7 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation,
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **WelineFramework** (119551 symbols, 311386 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **WelineFramework** (125837 symbols, 324856 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

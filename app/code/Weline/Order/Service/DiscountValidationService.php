@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Order\Service;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Payment\Service\DiscountActionSupportService;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Payment\Api\Discount\DiscountActionSupportInterface;
 
 /**
  * 优惠方式验证服务
@@ -23,11 +23,11 @@ use Weline\Payment\Service\DiscountActionSupportService;
  */
 class DiscountValidationService
 {
-    private DiscountActionSupportService $discountActionSupportService;
+    private ?DiscountActionSupportInterface $discountActionSupport = null;
 
-    public function __construct(ObjectManager $objectManager)
-    {
-        $this->discountActionSupportService = $objectManager->getInstance(DiscountActionSupportService::class);
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
+    ) {
     }
 
     /**
@@ -43,7 +43,7 @@ class DiscountValidationService
             return false;
         }
 
-        return $this->discountActionSupportService->checkSupport($paymentMethodCode, $actionCode);
+        return $this->discountActionSupport()->checkSupport($paymentMethodCode, $actionCode);
     }
 
     /**
@@ -59,7 +59,7 @@ class DiscountValidationService
             return [];
         }
 
-        return $this->discountActionSupportService->validateActions($paymentMethodCode, $actionCodes);
+        return $this->discountActionSupport()->validateActions($paymentMethodCode, $actionCodes);
     }
 
     /**
@@ -74,7 +74,7 @@ class DiscountValidationService
             return [];
         }
 
-        return $this->discountActionSupportService->getSupportedActions($paymentMethodCode);
+        return $this->discountActionSupport()->getSupportedActions($paymentMethodCode);
     }
 
     /**
@@ -118,7 +118,7 @@ class DiscountValidationService
             $result['unsupported'] = $unsupported;
             
             // 获取动作名称
-            $allActions = $this->discountActionSupportService->getAllDiscountActions();
+            $allActions = $this->discountActionSupport()->getAllDiscountActions();
             foreach ($unsupported as $code) {
                 $actionName = $allActions[$code]['name'] ?? $code;
                 $result['messages'][] = sprintf(__('支付方式不支持优惠方式：%s'), $actionName);
@@ -127,5 +127,18 @@ class DiscountValidationService
 
         return $result;
     }
-}
 
+    private function discountActionSupport(): DiscountActionSupportInterface
+    {
+        if ($this->discountActionSupport instanceof DiscountActionSupportInterface) {
+            return $this->discountActionSupport;
+        }
+
+        $provider = $this->runtimeProviderResolver->resolve(DiscountActionSupportInterface::class);
+        if (!$provider instanceof DiscountActionSupportInterface) {
+            throw new \RuntimeException('payment_discount_action_support_provider_missing');
+        }
+
+        return $this->discountActionSupport = $provider;
+    }
+}

@@ -11,8 +11,10 @@ use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
-use Weline\Ai\Service\Style\StyleService;
-use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Ai\Api\AiRuntimeInterface;
+use Weline\Ai\Api\StyleRuntimeInterface;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderSession;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -30,6 +32,16 @@ use Weline\Websites\Service\WebsiteAgentService;
 class SiteBuilderAgent extends BackendController
 {
     private const DEV_SIM_DOMAIN = 'weline-dev.local';
+
+    private bool $aiRuntimeResolved = false;
+    private ?AiRuntimeInterface $aiRuntime = null;
+    private bool $aiStyleRuntimeResolved = false;
+    private ?StyleRuntimeInterface $aiStyleRuntime = null;
+
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
+    ) {
+    }
 
     #[Acl('Weline_Websites::site_builder_agent_index', 'AI Site Workbench', 'mdi mdi-robot', 'AI site workbench hub')]
     public function index(): string
@@ -421,7 +433,8 @@ class SiteBuilderAgent extends BackendController
         string $providerCode,
         int $accountId
     ): array {
-        if (!\class_exists(\Weline\Ai\Service\AiService::class)) {
+        $aiService = $this->getAiRuntime();
+        if ($aiService === null) {
             return [];
         }
 
@@ -447,8 +460,6 @@ class SiteBuilderAgent extends BackendController
         ]);
 
         try {
-            /** @var \Weline\Ai\Service\AiService $aiService */
-            $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
             $result = $aiService->executeAgent('website_builder', $prompt, null, ['account_id' => $accountId], null);
             if (!$result->success || !\is_string($result->content) || \trim($result->content) === '') {
                 return [];
@@ -742,7 +753,7 @@ class SiteBuilderAgent extends BackendController
             return;
         }
 
-        if (!\class_exists(\Weline\Ai\Service\AiService::class)) {
+        if ($this->getAiRuntime() === null) {
             $sse->sendError((string)__('AI 服务未启用，无法执行智能域名推荐。'));
             $sse->complete(['success' => false]);
             return;
@@ -885,7 +896,8 @@ class SiteBuilderAgent extends BackendController
         int $minLabelLength,
         int $targetCount = 20
     ): array {
-        if (!\class_exists(\Weline\Ai\Service\AiService::class)) {
+        $aiService = $this->getAiRuntime();
+        if ($aiService === null) {
             return [];
         }
 
@@ -908,8 +920,6 @@ class SiteBuilderAgent extends BackendController
         ]);
 
         try {
-            /** @var \Weline\Ai\Service\AiService $aiService */
-            $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
             $result = $aiService->executeAgent('website_builder', $prompt, null, [], null);
             if (!$result->success || $result->content === '') {
                 return [];
@@ -1196,10 +1206,9 @@ class SiteBuilderAgent extends BackendController
         if ($styleSnapshot !== [] && \trim((string)($draft['theme_style_direction'] ?? '')) === '') {
             $draft['theme_style_direction'] = (string)($styleSnapshot['name'] ?? $styleSnapshot['code'] ?? '');
         }
-        if (\class_exists(\Weline\Ai\Service\AiService::class)) {
+        $ai = $this->getAiRuntime();
+        if ($ai !== null) {
             try {
-                /** @var \Weline\Ai\Service\AiService $ai */
-                $ai = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
                 $promptLines = [
                     'You are a website theme planner.',
                     'Return only one JSON object.',
@@ -1537,7 +1546,7 @@ class SiteBuilderAgent extends BackendController
                 return;
             }
 
-            if ($useAi && \class_exists(\Weline\Ai\Service\AiService::class)) {
+            if ($useAi && $this->getAiRuntime() !== null) {
                 $this->runAiAgent($sse, $description, $domain, $accountId);
                 return;
             }
@@ -1664,8 +1673,10 @@ class SiteBuilderAgent extends BackendController
         };
 
         try {
-            /** @var \Weline\Ai\Service\AiService $aiService */
-            $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
+            $aiService = $this->getAiRuntime();
+            if ($aiService === null) {
+                throw new \RuntimeException((string)__('AI 服务未启用'));
+            }
             $result = $aiService->executeAgent('website_builder', $prompt, null, $params, $mapEvent);
 
             if ($result->success && $result->content !== '' && !$hasAiChunkStream) {
@@ -2289,12 +2300,13 @@ class SiteBuilderAgent extends BackendController
     {
         try {
             $styleScope = \array_replace($scope, [
-                'design_direction_mode' => (string)($scope['design_direction_mode'] ?? StyleService::MODE_AUTO),
+                'design_direction_mode' => (string)($scope['design_direction_mode'] ?? StyleRuntimeInterface::MODE_AUTO),
                 'site_title' => (string)($scope['site_title'] ?? ''),
                 'brief_description' => (string)($scope['brief_description'] ?? $scope['user_description'] ?? ''),
             ]);
 
-            return $this->getAiStyleService()->resolveSelectionForScope($styleScope, $this->getAdminId(), false, $adapterCode);
+            $styleRuntime = $this->getAiStyleRuntime();
+            return $styleRuntime?->resolveSelectionForScope($styleScope, $this->getAdminId(), false, $adapterCode) ?? [];
         } catch (\Throwable $throwable) {
             if (\function_exists('w_log_error')) {
                 w_log_error('Website AI style resolve failed: ' . $throwable->getMessage());
@@ -2757,7 +2769,8 @@ class SiteBuilderAgent extends BackendController
 
     private function isLocalWelineSubdomain(string $domain): bool
     {
-        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
+        return \class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     private function isTruthyFlag(mixed $value): bool
@@ -2805,7 +2818,9 @@ class SiteBuilderAgent extends BackendController
         }
         $digits = \preg_replace('/\D/', '', (string)\microtime(true)) ?? '';
         $ts = \substr($digits !== '' ? $digits : (string)\random_int(10000000, 99999999), -8);
-        $rootDomain = LocalDomainPolicy::currentRootDomain();
+        $rootDomain = \class_exists(LocalDomainPolicy::class)
+            ? LocalDomainPolicy::currentRootDomain()
+            : 'weline.test';
         $out = [];
         for ($i = 0; $i < \max(1, $count); $i += 1) {
             $suffix = $i === 0 ? $ts : $ts . '-' . $i;
@@ -2953,11 +2968,26 @@ class SiteBuilderAgent extends BackendController
         return $service;
     }
 
-    private function getAiStyleService(): StyleService
+    private function getAiRuntime(): ?AiRuntimeInterface
     {
-        /** @var StyleService $service */
-        $service = ObjectManager::getInstance(StyleService::class);
-        return $service;
+        if (!$this->aiRuntimeResolved) {
+            $resolved = $this->runtimeProviderResolver->resolve(AiRuntimeInterface::class);
+            $this->aiRuntime = $resolved instanceof AiRuntimeInterface ? $resolved : null;
+            $this->aiRuntimeResolved = true;
+        }
+
+        return $this->aiRuntime;
+    }
+
+    private function getAiStyleRuntime(): ?StyleRuntimeInterface
+    {
+        if (!$this->aiStyleRuntimeResolved) {
+            $resolved = $this->runtimeProviderResolver->resolve(StyleRuntimeInterface::class);
+            $this->aiStyleRuntime = $resolved instanceof StyleRuntimeInterface ? $resolved : null;
+            $this->aiStyleRuntimeResolved = true;
+        }
+
+        return $this->aiStyleRuntime;
     }
 
     private function ensureWebsiteDomainPersisted(AiSiteBuilderSession $session): void

@@ -11,7 +11,6 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Acl\Model\Acl as AclModel;
 use Weline\Framework\Acl\Acl;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\OptimizationGuideService;
@@ -164,7 +163,7 @@ class ServerManager extends BackendController
     /**
      * API: 启动服务器
      */
-    #[Acl('Weline_Server::server_manager_start', '启动 Weline Server', 'mdi-play', '启动 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_start', '启动 Weline Server', 'mdi-play', '启动 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postStart(): array
     {
         $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
@@ -184,7 +183,7 @@ class ServerManager extends BackendController
     /**
      * API: 停止服务器
      */
-    #[Acl('Weline_Server::server_manager_stop', '停止 Weline Server', 'mdi-stop', '停止 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_stop', '停止 Weline Server', 'mdi-stop', '停止 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postStop(): array
     {
         $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
@@ -203,7 +202,7 @@ class ServerManager extends BackendController
     /**
      * API: 重启服务器
      */
-    #[Acl('Weline_Server::server_manager_restart', '重启 Weline Server', 'mdi-restart', '强制重启 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_restart', '重启 Weline Server', 'mdi-restart', '强制重启 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postRestart(): array
     {
         $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
@@ -218,7 +217,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_reload', '热重载 Weline Server', 'mdi-refresh', '热重载 Weline Server 代码', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_reload', '热重载 Weline Server', 'mdi-refresh', '热重载 Weline Server 代码', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postReload(): array
     {
         $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
@@ -233,7 +232,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_maintenance', '切换 Weline Server 维护模式', 'mdi-tools', '启用 Weline Server 维护模式', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_maintenance', '切换 Weline Server 维护模式', 'mdi-tools', '启用 Weline Server 维护模式', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postMaintenanceEnable(): array
     {
         $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
@@ -248,7 +247,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_maintenance', '切换 Weline Server 维护模式', 'mdi-tools', '禁用 Weline Server 维护模式', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_maintenance', '切换 Weline Server 维护模式', 'mdi-tools', '禁用 Weline Server 维护模式', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postMaintenanceDisable(): array
     {
         $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
@@ -263,7 +262,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'mdi-list-box-outline', '查看 Weline Server Session 列表', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'mdi-list-box-outline', '查看 Weline Server Session 列表', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSessionList(): array
     {
         $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '50'), 1, 500, 50);
@@ -274,7 +273,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'mdi-list-box-outline', '查看 Weline Server Session 详情', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'mdi-list-box-outline', '查看 Weline Server Session 详情', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
     public function getSessionDetail(): array
     {
         $sessionId = $this->getValidatedOpaqueKey((string)$this->request->getGet('session_id', ''), 128);
@@ -293,7 +292,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_session_destroy', '销毁 Weline Server Session', 'mdi-delete-outline', '销毁指定 Weline Server Session', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_session_destroy', '销毁 Weline Server Session', 'mdi-delete-outline', '销毁指定 Weline Server Session', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postSessionDestroy(): array
     {
         $sessionId = $this->getValidatedOpaqueKey((string)$this->request->getPost('session_id', ''), 128);
@@ -312,7 +311,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_session_persist', '持久化 Weline Server Session', 'mdi-content-save-outline', '持久化 Weline Server Session 数据', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_session_persist', '持久化 Weline Server Session', 'mdi-content-save-outline', '持久化 Weline Server Session 数据', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postSessionPersist(): array
     {
         $ok = $this->sharedStateAdminService->persistSession();
@@ -324,7 +323,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_session_gc', '回收 Weline Server Session', 'mdi-delete-sweep-outline', '执行 Weline Server Session 垃圾回收', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_session_gc', '回收 Weline Server Session', 'mdi-delete-sweep-outline', '执行 Weline Server Session 垃圾回收', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postSessionGc(): array
     {
         $maxLifetime = $this->getValidatedInt((string)$this->request->getPost('max_lifetime', '3600'), 60, 2592000, 3600);
@@ -337,7 +336,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'mdi-database-eye-outline', '查看 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'mdi-database-eye-outline', '查看 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
     public function getMemoryNamespaces(): array
     {
         $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '200'), 1, 1000, 200);
@@ -348,7 +347,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'mdi-database-eye-outline', '查看 Weline Server 内存命名空间详情', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'mdi-database-eye-outline', '查看 Weline Server 内存命名空间详情', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
     public function getMemoryNamespaceDetail(): array
     {
         $namespace = $this->getValidatedOpaqueKey((string)$this->request->getGet('namespace', ''), 160);
@@ -367,7 +366,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_memory_clear', '清理 Weline Server 内存命名空间', 'mdi-broom', '清理 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_memory_clear', '清理 Weline Server 内存命名空间', 'mdi-broom', '清理 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postMemoryNamespaceClear(): array
     {
         $namespace = $this->getValidatedOpaqueKey((string)$this->request->getPost('namespace', ''), 160);
@@ -386,7 +385,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_memory_key_delete', '删除 Weline Server 内存键', 'mdi-key-remove-outline', '删除 Weline Server 内存服务键', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_memory_key_delete', '删除 Weline Server 内存键', 'mdi-key-remove-outline', '删除 Weline Server 内存服务键', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postMemoryKeyDelete(): array
     {
         $namespace = $this->getValidatedOpaqueKey((string)$this->request->getPost('namespace', ''), 160);
@@ -406,7 +405,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_memory_persist', '持久化 Weline Server 内存服务', 'mdi-content-save-outline', '持久化 Weline Server 内存服务数据', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_memory_persist', '持久化 Weline Server 内存服务', 'mdi-content-save-outline', '持久化 Weline Server 内存服务数据', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postMemoryPersist(): array
     {
         $ok = $this->sharedStateAdminService->persistMemory();
@@ -418,7 +417,7 @@ class ServerManager extends BackendController
         ];
     }
 
-    #[Acl('Weline_Server::server_manager_memory_gc', '回收 Weline Server 内存服务', 'mdi-delete-sweep-outline', '执行 Weline Server 内存服务垃圾回收', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::server_manager_memory_gc', '回收 Weline Server 内存服务', 'mdi-delete-sweep-outline', '执行 Weline Server 内存服务垃圾回收', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postMemoryGc(): array
     {
         $maxLifetime = $this->getValidatedInt((string)$this->request->getPost('max_lifetime', '3600'), 60, 2592000, 3600);

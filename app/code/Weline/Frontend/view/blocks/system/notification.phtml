@@ -21,9 +21,9 @@
         </div>
         <div data-simplebar style="max-height: 230px;">
             <?php
-            /**@var \Weline\Admin\Block\System\Notification $block */
-            $block = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Block\System\Notification::class);
-            /**@var \Weline\Admin\Model\System\SystemNotification $notice */
+            /** @var \Weline\Frontend\Block\System\Notification $block */
+            $block = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Block\System\Notification::class);
+            /** @var \Weline\Admin\Api\Notification\SystemNotificationRecord $notice */
             foreach ($block->getNotices() as $notice) {
                 ?>
                 <a href="" class="text-reset notification-item">

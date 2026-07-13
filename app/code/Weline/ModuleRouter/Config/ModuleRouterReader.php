@@ -15,10 +15,11 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Register\Register;
 use Weline\Framework\System\File\Scanner;
+use Weline\ModuleRouter\Api\RouterRulesReaderInterface;
 
 use function p;
 
-class ModuleRouterReader extends \Weline\Framework\System\ModuleFileReader
+class ModuleRouterReader extends \Weline\Framework\System\ModuleFileReader implements RouterRulesReaderInterface
 {
     private CachePoolInterface $moduleRouterCache;
 

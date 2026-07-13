@@ -14,13 +14,14 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'i18n词典')]
+#[Index(name: 'unq_word', columns: ['word'], type: 'UNIQUE', comment: '词唯一索引')]
 #[Index(name: 'idx_module', columns: ['module'], comment: '模组索引')]
 #[Index(name: 'idx_is_backend', columns: ['is_backend'], comment: '前后端标识索引')]
 class Dictionary extends Model
 {
     public const schema_table = 'i18n_dictionary';
     public const schema_primary_key = 'word';
-    #[Col('text', nullable: false, comment: '词')]
+    #[Col('text', primaryKey: true, nullable: false, unique: true, comment: '词')]
     public const schema_fields_ID = 'word';
     #[Col('text', nullable: false, comment: '词')]
     public const schema_fields_WORD = 'word';

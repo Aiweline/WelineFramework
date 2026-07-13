@@ -11,7 +11,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locale\Dictionary;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 
 /**
  * Meta翻译辅助类
@@ -82,19 +83,17 @@ class MetaTranslation
 
     private static function loadTranslation(string $translationKey, string $locale): string
     {
-        /** @var Dictionary $localeDict */
-        $localeDict = clone ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $rows = $localeDict->clearData()->clearQuery()
-            ->where(Dictionary::schema_fields_MD5, $md5)
-            ->select()
-            ->fetchArray();
-        if (!is_array($rows) || $rows === []) {
-            return '';
-        }
+        return self::dictionaryRepository()->getEntry($translationKey, $locale)?->translation ?? '';
+    }
 
-        $row = is_array($rows[0] ?? null) ? $rows[0] : $rows;
-        return (string)($row[Dictionary::schema_fields_TRANSLATE] ?? '');
+    private static function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+        return $provider;
     }
 
     /**
@@ -119,17 +118,6 @@ class MetaTranslation
             $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
         }
 
-        // 保存到I18n Dictionary
-        /** @var Dictionary $localeDict */
-        $localeDict = clone ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        return (bool)$localeDict->clearData()->clearQuery()
-            ->insert([
-                Dictionary::schema_fields_MD5 => $md5,
-                Dictionary::schema_fields_WORD => $translationKey,
-                Dictionary::schema_fields_LOCALE_CODE => $locale,
-                Dictionary::schema_fields_TRANSLATE => $value,
-            ], Dictionary::schema_fields_MD5)
-            ->fetch();
+        return self::dictionaryRepository()->upsert($translationKey, $locale, $value);
     }
 }

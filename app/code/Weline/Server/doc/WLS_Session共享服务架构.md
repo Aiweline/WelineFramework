@@ -81,7 +81,14 @@ sequenceDiagram
 ## 4. Worker 访问路径
 
 - Session：框架 Session 层 → `SessionStateFacade` → WLS/Redis/Memcached Backend。
-- Memory/FPC：Cache Pool → `WlsMemoryAdapter` → `MemoryStateFacade` → Memory sidecar。
+- Memory/FPC：Cache Pool → Framework `AdapterFactory` → 编译 Provider → Server
+  `WlsMemoryAdapter` → `MemoryStateFacade` → Memory sidecar。Framework 不引用 Server 具体类。
+- 模块 KV/批缓冲：Framework `SharedCacheStateFactoryInterface` / `SharedBufferStateFactoryInterface`
+  → Server Api Provider → `MemoryStateFacade`。Currency、Visitor 等调用方只依赖 Framework 契约；
+  Server 缺失时由调用模块执行进程缓存或数据库持久化降级。
+- `WlsMemoryAdapter` 构造只装配配置与本地 L1，不连接共享态；首次远端操作才惰性建立 L2
+  连接。远端失败进入短 cooldown：读降级 miss、写/CAS/clear 返回失败，删除保持幂等，
+  避免每个请求重复等待。
 - Worker 启动后以低优先 Fiber 预连 Session/Memory；失败不阻断事件循环，真实请求仍按连接超时与重连策略处理。
 - sidecar 断开是基础设施故障，Master 优先单服务复活；不能把一次 status 查询变成“修正 PID”的副作用。
 

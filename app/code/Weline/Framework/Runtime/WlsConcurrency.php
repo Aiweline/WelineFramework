@@ -49,6 +49,30 @@ final class WlsConcurrency
     }
 
     /**
+     * Process-wide caches may only be compacted when no request Fiber can
+     * still observe them. The worker-owned provider is the sole concurrency
+     * fact source. An unregistered provider keeps FPM/non-WLS compatibility;
+     * a registered provider that throws or reports an invalid negative count
+     * fails closed and postpones compaction.
+     *
+     * Some transports conservatively include the current resumed Fiber in
+     * their active set. In that case compaction is postponed until the set is
+     * empty, which is safer than clearing caches visible to a peer request.
+     */
+    public static function canCompactProcessCaches(): bool
+    {
+        if (self::$otherSuspendedFiberCountProvider === null) {
+            return true;
+        }
+
+        try {
+            return (int)(self::$otherSuspendedFiberCountProvider)() === 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * {@see StateManager::reset()} 可按名跳过的回调（供实验或后续 peer 感知策略使用）。
      *
      * @return list<string>
@@ -56,7 +80,6 @@ final class WlsConcurrency
     public static function callbackNamesOmittableWithPeerFibers(): array
     {
         return [
-            'template_instance',
             'request_scoped_objects',
             'state_instance',
             'router_core_instance',

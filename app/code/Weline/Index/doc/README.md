@@ -18,6 +18,7 @@
 - 模块代码：`Weline_Index`
 - 目录：`app/code/Weline/Index`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 首页 Sitemap Provider 位于 `extends/module/Weline_Seo`，Seo 是可选扩展目标；未安装 Seo 时 Index 仍须独立加载。
 
 ## 代码面概览
 

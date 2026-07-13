@@ -71,6 +71,10 @@ class Processer
      * WLS 框架内置进程名前缀（如 weline-wls-worker-1）
      */
     public const WLS_PROCESS_PREFIX = 'weline-wls-';
+    public const PROCESS_STATE_RUNNING = ProcessDriverInterface::PROCESS_STATE_RUNNING;
+    public const PROCESS_STATE_EXITED = ProcessDriverInterface::PROCESS_STATE_EXITED;
+    public const PROCESS_STATE_UNKNOWN = ProcessDriverInterface::PROCESS_STATE_UNKNOWN;
+    public const PROCESS_STATE_IDENTITY_MISMATCH = 'identity_mismatch';
     private const PROCESS_RECORD_VERSION = 2;
     
     /**
@@ -224,14 +228,32 @@ class Processer
             return '';
         }
 
-        foreach ([
-            (string)($record['pname'] ?? ''),
-            (string)($record['process_name'] ?? ''),
-            (string)($record['task_name'] ?? ''),
-        ] as $candidate) {
-            if (self::looksLikeWelineProcessName($candidate)) {
-                return $candidate;
-            }
+        $pname = (string) ($record['pname'] ?? '');
+        $jsonPath = (string) ($record['jsonPath'] ?? '');
+        $identity = $jsonPath !== '' && \is_file($jsonPath)
+            ? \json_decode((string) (@\file_get_contents($jsonPath) ?: ''), true)
+            : null;
+        if (!\is_array($identity)) {
+            return '';
+        }
+
+        $recordedPname = (string) ($identity['pname'] ?? $pname);
+        $processName = \trim((string) ($identity['process_name'] ?? ''));
+        $launchId = \trim((string) ($identity['launch_id'] ?? ''));
+        if ($recordedPname === '' || $processName === '' || $launchId === ''
+            || !self::looksLikeWelineProcessName($recordedPname)) {
+            return '';
+        }
+
+        $probe = self::probeManagedProcessIdentity(
+            $pid,
+            $processName,
+            $launchId,
+            $recordedPname,
+            false
+        );
+        if ((string) ($probe['state'] ?? self::PROCESS_STATE_UNKNOWN) === self::PROCESS_STATE_RUNNING) {
+            return $recordedPname;
         }
 
         return '';
@@ -299,13 +321,16 @@ class Processer
             return $inspect;
         }
 
-        $inspect['is_weline'] = true;
-        $inspect['state'] = 'weline';
-        if (!isset($inspect['pname']) || $inspect['pname'] === '') {
-            $inspect['pname'] = $hintedPname;
-        }
-        if (!isset($inspect['scope']) || $inspect['scope'] === '') {
-            $inspect['scope'] = self::extractProjectScopeFromProcessName($hintedPname);
+        // Historical indexes are diagnostic hints, never authority to classify
+        // a live kernel PID as Weline. Promoting this hint used to let an old
+        // Worker pname be combined with a new/foreign listener PID and then
+        // killed as one fabricated identity.
+        $inspect['historical_weline_hint'] = true;
+        $inspect['port_index_advisory_pname'] = (string) (
+            $inspect['port_index_advisory_pname'] ?? $hintedPname
+        );
+        if (!isset($inspect['advisory_scope']) || $inspect['advisory_scope'] === '') {
+            $inspect['advisory_scope'] = self::extractProjectScopeFromProcessName($hintedPname);
         }
 
         return $inspect;
@@ -438,7 +463,9 @@ class Processer
         }
         
         // 没有 name 参数，生成一个并添加到命令中
-        $name = self::generateNameFromCommand($command);
+        // Generated names must be stable across secret rotation and must never
+        // derive their hash from credential values.
+        $name = self::generateNameFromCommand(self::redactSensitiveProcessText($command));
         $command = $command . ' --name=' . $name;
         
         return [
@@ -865,10 +892,13 @@ class Processer
         # ===== Linux/Mac 后台模式：proc_open + nohup =====
         if (!IS_WIN && $availableFunctions['proc_open']) {
             $escapedBp = \escapeshellarg(BP);
+            // The backgrounded `cd && ...` list runs in a subshell. `exec`
+            // replaces that exact PID with nohup/PHP so `$!` is the managed
+            // process, not a short-lived launcher that pollutes pid_index.
             if ($enableLog) {
-                $command = 'cd ' . $escapedBp . ' && nohup ' . $pname . ' >> "' . $logFile . '" 2>&1 & echo $!';
+                $command = 'cd ' . $escapedBp . ' && exec nohup ' . $pname . ' >> "' . $logFile . '" 2>&1 & echo $!';
             } else {
-                $command = 'cd ' . $escapedBp . ' && nohup ' . $pname . ' > /dev/null 2>&1 & echo $!';
+                $command = 'cd ' . $escapedBp . ' && exec nohup ' . $pname . ' > /dev/null 2>&1 & echo $!';
             }
             
             if ($enableLog) {
@@ -1127,17 +1157,27 @@ class Processer
      */
     public static function setPid(string $pname, int $pid): int
     {
-        $pname = self::normalizeWindowsCommandLineEncoding($pname);
+        $identitySource = self::normalizeWindowsCommandLineEncoding($pname);
+        $pname = self::buildManagedIdentity($identitySource);
         $pid_file  = self::getPidFile($pname, $pid);
         $task_name = self::getTaskName($pname);
 
+        $identityRecord = self::buildProcessIdentityRecord($pname, $pid, $task_name);
+        $sourceLaunchId = self::getManagedIdentityLaunchId($identitySource);
+        if ($sourceLaunchId !== '') {
+            $identityRecord['launch_id'] = $sourceLaunchId;
+        }
+        $sourceEpoch = \trim(self::extractCommandLineArg($identitySource, 'epoch'));
+        if ($sourceEpoch !== '' && \ctype_digit($sourceEpoch)) {
+            $identityRecord['epoch'] = (int) $sourceEpoch;
+        }
         $payloadData = \array_merge([
             'pid' => $pid,
             'time' => time(),
             'date' => date('Y-m-d H:i:s'),
             'pname' => $pname,
             'task_name' => $task_name,
-        ], self::buildProcessIdentityRecord($pname, $pid, $task_name));
+        ], $identityRecord);
         $jsonFlags = \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES;
         if (\defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
             $jsonFlags |= \JSON_INVALID_UTF8_SUBSTITUTE;
@@ -1156,17 +1196,20 @@ class Processer
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0777, true);
         }
-        // 带 PID 的记录文件天然是一进程一文件，使用原子写可避免 Windows
-        // 上阻塞 flock 把 Master 启动链卡死在 registerMasterPid()。
-        self::atomicWrite($pid_file, $payload);
-        
-        // 更新索引（写顺序：先 *-pid.json 已完成，再 name_index，再 pid_index）
-        self::updateIndexes($pname, $pid, $pid_file);
-        
-        // 标记为受信任 PID（后续操作跳过命令行校验）
-        self::markPidAsTrusted($pid);
-        
-        // 记录进程创建日志
+
+        self::withManagedIndexLock(static function () use ($pid_file, $payload, $pname, $pid): void {
+            // 带 PID 的记录文件天然是一进程一文件，使用原子写可避免 Windows
+            // 上阻塞 flock 把 Master 启动链卡死在 registerMasterPid()。
+            self::atomicWrite($pid_file, $payload);
+
+            // 更新索引（写顺序：先 *-pid.json 已完成，再 name_index，再 pid_index）
+            self::updateIndexes($pname, $pid, $pid_file);
+
+            // 标记为受信任 PID（后续操作跳过命令行校验）
+            self::markPidAsTrusted($pid);
+        });
+
+        // 记录进程创建日志；只允许 canonical identity 跨日志边界。
         self::logLifecycleEvent('create', $pname, $pid);
         
         return $pid;
@@ -1288,6 +1331,262 @@ class Processer
 
         $data = self::getData($pname);
         return \is_array($data) ? $data : [];
+    }
+
+    /**
+     * 三态探测 PID，保留 unknown 以便生命周期控制面 fail closed。
+     *
+     * @return string self::PROCESS_STATE_RUNNING、EXITED 或 UNKNOWN
+     */
+    public static function probeProcessState(int $pid, bool $fresh = false): string
+    {
+        if ($pid <= 0) {
+            return self::PROCESS_STATE_EXITED;
+        }
+
+        return self::getDriver()->probeProcessState($pid, $fresh);
+    }
+
+    /**
+     * 对冻结的受管进程 lease 做身份感知三态探测。
+     *
+     * expectedProcessName 是 drain 前冻结的真实 OS command/title；expectedPname
+     * 是 Processer 注册记录中的 canonical --name 身份。两者职责不同，不要求
+     * 字符串相同。launch_id 必须同时存在于冻结 lease 与受管记录并精确一致。
+     *
+     * @return array{
+     *     state: string,
+     *     reason: string,
+     *     pid: int,
+     *     expected_process_name: string,
+     *     expected_pname: string,
+     *     expected_launch_id: string,
+     *     recorded_process_name?: string,
+     *     recorded_launch_id?: string,
+     *     expected_identity_hash?: string,
+     *     live_identity_hash?: string
+     * }
+     */
+    public static function probeManagedProcessIdentity(
+        int $pid,
+        string $expectedProcessName,
+        string $expectedLaunchId = '',
+        ?string $expectedPname = null,
+        bool $fresh = false
+    ): array {
+        $expectedProcessName = \trim($expectedProcessName);
+        $expectedLaunchId = \trim($expectedLaunchId);
+        $expectedPname = \trim((string) $expectedPname);
+        $result = [
+            'state' => self::PROCESS_STATE_UNKNOWN,
+            'reason' => 'process_probe_unknown',
+            'pid' => $pid,
+            'expected_process_name' => $expectedProcessName,
+            'expected_pname' => $expectedPname,
+            'expected_launch_id' => $expectedLaunchId,
+        ];
+
+        $processState = self::probeProcessState($pid, $fresh);
+        if ($processState === self::PROCESS_STATE_EXITED) {
+            $result['state'] = self::PROCESS_STATE_EXITED;
+            $result['reason'] = 'process_exited';
+            return $result;
+        }
+        if ($processState !== self::PROCESS_STATE_RUNNING) {
+            return $result;
+        }
+
+        if ($expectedProcessName === '') {
+            $result['reason'] = 'expected_live_identity_missing';
+            return $result;
+        }
+        if ($expectedPname === '') {
+            $result['reason'] = 'expected_pname_missing';
+            return $result;
+        }
+        if ($expectedLaunchId === '') {
+            $result['reason'] = 'expected_launch_id_missing';
+            return $result;
+        }
+
+        $record = self::getProcessRecordByPid($pid);
+        if ($record === []) {
+            $result['reason'] = 'managed_record_missing';
+            return $result;
+        }
+
+        $recordedPid = (int) ($record['pid'] ?? 0);
+        if ($recordedPid <= 0) {
+            $result['reason'] = 'recorded_pid_missing';
+            return $result;
+        }
+        if ($recordedPid !== $pid) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'recorded_pid_mismatch';
+            return $result;
+        }
+
+        $recordedLaunchId = \trim((string) ($record['launch_id'] ?? ''));
+        $recordedProcessName = self::getRecordedProcessName($record);
+        $result['recorded_launch_id'] = $recordedLaunchId;
+        $result['recorded_process_name'] = $recordedProcessName;
+        if ($recordedLaunchId === '') {
+            $result['reason'] = 'recorded_launch_id_missing';
+            return $result;
+        }
+        if (!\hash_equals($expectedLaunchId, $recordedLaunchId)) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'recorded_launch_id_mismatch';
+            return $result;
+        }
+
+        $recordedPname = \trim((string) ($record['pname'] ?? ''));
+        if ($recordedPname === '') {
+            $result['reason'] = 'recorded_pname_missing';
+            return $result;
+        }
+        if (self::buildPnameKey($recordedPname) !== self::buildPnameKey($expectedPname)) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'recorded_pname_mismatch';
+            return $result;
+        }
+
+        $expectedCanonicalName = self::getTaskName($expectedPname);
+        if ($recordedProcessName === '' || $expectedCanonicalName === '') {
+            $result['reason'] = 'recorded_process_name_missing';
+            return $result;
+        }
+        if ($recordedProcessName !== $expectedCanonicalName) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'recorded_process_name_mismatch';
+            return $result;
+        }
+
+        $driver = self::getDriver();
+        if ($fresh) {
+            // Windows command-line 查询有独立 TTL 缓存；身份围栏必须绕过。
+            $driver->clearPortCache();
+        }
+        $liveIdentity = \trim($driver->getProcessCommandLine($pid));
+        if ($liveIdentity === '') {
+            $result['reason'] = 'live_identity_unavailable';
+            return $result;
+        }
+
+        $result['expected_identity_hash'] = \hash('sha256', $expectedProcessName);
+        $result['live_identity_hash'] = \hash('sha256', $liveIdentity);
+        if (!\hash_equals($expectedProcessName, $liveIdentity)) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'live_identity_mismatch';
+            return $result;
+        }
+
+        // Linux/Windows 的完整 argv 可提供第二份 live 身份证据；macOS 在
+        // cli_set_process_title 后只暴露 title，因此缺少参数时仍以记录 launch_id 为准。
+        $liveLaunchId = self::extractCommandLineArg($liveIdentity, 'launch-id');
+        if ($liveLaunchId !== '' && !\hash_equals($expectedLaunchId, $liveLaunchId)) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'live_launch_id_mismatch';
+            return $result;
+        }
+        $liveCanonicalName = self::extractCommandLineArg($liveIdentity, 'name');
+        if ($liveCanonicalName !== ''
+            && self::normalizeName($liveCanonicalName) !== $expectedCanonicalName) {
+            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+            $result['reason'] = 'live_pname_mismatch';
+            return $result;
+        }
+
+        $result['state'] = self::PROCESS_STATE_RUNNING;
+        $result['reason'] = 'identity_match';
+        return $result;
+    }
+
+    /**
+     * 身份安全地结束冻结进程 lease。
+     *
+     * 只有 fresh probe 得到 running + identity_match 才会发送终止信号。
+     * identity_mismatch 表示原 lease 已不再占有该 PID，视为 released，但绝不
+     * 对当前 PID 发信号；unknown 始终 fail closed。
+     *
+     * @return array{
+     *     state: string,
+     *     reason: string,
+     *     pid: int,
+     *     terminated: bool,
+     *     released: bool,
+     *     initial_reason?: string
+     * }
+     */
+    public static function terminateManagedProcessLease(
+        int $pid,
+        string $expectedProcessName,
+        string $expectedLaunchId = '',
+        ?string $expectedPname = null,
+        bool $tree = true
+    ): array {
+        $probe = self::probeManagedProcessIdentity(
+            $pid,
+            $expectedProcessName,
+            $expectedLaunchId,
+            $expectedPname,
+            true
+        );
+        $state = (string) ($probe['state'] ?? self::PROCESS_STATE_UNKNOWN);
+        if ($state === self::PROCESS_STATE_EXITED
+            || $state === self::PROCESS_STATE_IDENTITY_MISMATCH) {
+            // The frozen lease no longer owns this PID. Never retain a trust
+            // shortcut across exit/PID reuse, even though no signal is sent.
+            self::untrustPid($pid);
+            $probe['terminated'] = false;
+            $probe['released'] = true;
+            return $probe;
+        }
+        if ($state !== self::PROCESS_STATE_RUNNING) {
+            $probe['terminated'] = false;
+            $probe['released'] = false;
+            return $probe;
+        }
+
+        $initialReason = (string) ($probe['reason'] ?? 'identity_match');
+        $driver = self::getDriver();
+        // 只允许一次信号动作；若仍未退出，由调用方下一轮重新 fresh 验证身份后再决定。
+        // 禁止复用传统驱动内部的 wait + retry，否则等待期间 PID 被复用时可能误杀新进程。
+        $terminated = $driver->killProcessOnce($pid, $tree);
+
+        $verifyDeadline = \microtime(true) + 0.05;
+        do {
+            $verified = self::probeManagedProcessIdentity(
+                $pid,
+                $expectedProcessName,
+                $expectedLaunchId,
+                $expectedPname,
+                true
+            );
+            $verifiedState = (string) ($verified['state'] ?? self::PROCESS_STATE_UNKNOWN);
+            if ($verifiedState === self::PROCESS_STATE_EXITED
+                || $verifiedState === self::PROCESS_STATE_IDENTITY_MISMATCH
+                || \microtime(true) >= $verifyDeadline) {
+                break;
+            }
+            // 仅等待 OS 回收，不会再次发信号；PID 若被复用，下一次身份探测会返回 mismatch。
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
+        } while (true);
+
+        $verified['initial_reason'] = $initialReason;
+        $verified['terminated'] = $terminated;
+        $verified['released'] = $verifiedState === self::PROCESS_STATE_EXITED
+            || $verifiedState === self::PROCESS_STATE_IDENTITY_MISMATCH;
+        if ($verified['released']) {
+            self::untrustPid($pid);
+        }
+        if (!$verified['released']) {
+            $verified['reason'] = $verifiedState === self::PROCESS_STATE_RUNNING
+                ? 'termination_failed_process_running'
+                : 'termination_result_unverified';
+        }
+
+        return $verified;
     }
 
     /**
@@ -1444,6 +1743,7 @@ class Processer
      */
     public static function getLogFile(string $pname): string
     {
+        $pname = self::buildManagedIdentity($pname);
         $task_name = self::getTaskName($pname);
         $path      = Env::VAR_DIR . 'process' . DS . $task_name . '.log';
         if (!is_file($path)) {
@@ -1625,6 +1925,7 @@ class Processer
      */
     public static function getPidFile(string $pname, int $pid = 0): string
     {
+        $pname = self::buildManagedIdentity($pname);
         $task_name = self::getTaskName($pname);
         $dir       = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
         if ($pid > 0) {
@@ -1635,11 +1936,13 @@ class Processer
             return $path;
         }
         // pid=0: 从 name_index 查找已有条目的 jsonPath
-        $entries = (self::readNameIndex())[$pname] ?? [];
-        foreach ($entries as $entry) {
-            $entryPath = $entry['jsonPath'] ?? '';
-            if ($entryPath && \is_file($entryPath)) {
-                return $entryPath;
+        $nameIndex = self::readNameIndex();
+        foreach (self::findManagedIdentityKeys($pname, $nameIndex) as $identityKey) {
+            foreach ((array) ($nameIndex[$identityKey] ?? []) as $entry) {
+                $entryPath = $entry['jsonPath'] ?? '';
+                if ($entryPath && \is_file($entryPath)) {
+                    return $entryPath;
+                }
             }
         }
         // 无已有条目，返回默认路径（不创建文件）
@@ -1694,80 +1997,229 @@ class Processer
      * 删除 *-pid.json 文件并从 name_index/pid_index/port_index 移除对应项
      *
      * @param string $pname 进程名
-     * @return true
+     * @return bool Whether the indexes were inspected under the global lock
      */
-    public static function removePidFile(string $pname)
+    public static function removePidFile(string $pname): bool
     {
-        // 读取 name_index 获取该 pname 的所有条目
-        $nameIndex = self::readNameIndex();
-        $entries = $nameIndex[$pname] ?? [];
-        
-        $allPids = [];
-        $allPorts = [];
-        
-        // 遍历所有条目，收集 PID / 端口，删除各自的 JSON 文件
-        foreach ($entries as $entry) {
-            $entryPid = (int) ($entry['pid'] ?? 0);
-            $jsonPath = $entry['jsonPath'] ?? '';
-            
-            if ($entryPid > 0) {
-                $allPids[] = $entryPid;
+        $identity = self::buildManagedIdentity($pname);
+        $processInfo = self::snapshotIndexedProcessInfo();
+        $result = self::withManagedIndexLock(static function () use ($identity, $processInfo): bool {
+            $nameIndex = self::readNameIndex();
+            $identityKeys = self::findManagedIdentityKeys($identity, $nameIndex);
+            if ($identityKeys === []) {
+                return true;
             }
-            
-            if ($jsonPath && \is_file($jsonPath)) {
-                $raw = @\file_get_contents($jsonPath);
-                if ($raw !== false) {
-                    $data = \json_decode($raw, true);
-                    if (isset($data['ports'])) {
-                        foreach ((array) $data['ports'] as $port) {
-                            $allPorts[] = $port;
+
+            $pidIndex = self::readPidIndex();
+            $portIndex = self::readPortIndex();
+            $pidsToRemove = [];
+            $portsByOwner = [];
+            $jsonPathsToRemove = [];
+
+            foreach ($identityKeys as $ownerPname) {
+                foreach ((array) ($nameIndex[$ownerPname] ?? []) as $entry) {
+                    $entryPid = (int) ($entry['pid'] ?? 0);
+                    $jsonPath = (string) ($entry['jsonPath'] ?? '');
+                    $data = [];
+                    if ($jsonPath !== '' && \is_file($jsonPath)) {
+                        $raw = @\file_get_contents($jsonPath);
+                        $decoded = \json_decode($raw !== false ? $raw : '', true);
+                        $data = \is_array($decoded) ? $decoded : [];
+                    }
+
+                    foreach ((array) ($data['ports'] ?? []) as $port) {
+                        $portsByOwner[$ownerPname][(string) $port] = true;
+                    }
+
+                    $currentEntry = $entryPid > 0 ? ($pidIndex[$entryPid] ?? null) : null;
+                    $currentOwner = \is_array($currentEntry) ? (string) ($currentEntry['pname'] ?? '') : '';
+                    $currentPath = \is_array($currentEntry) ? (string) ($currentEntry['jsonPath'] ?? '') : '';
+                    if ($entryPid > 0 && $currentOwner === $ownerPname
+                        && ($currentPath === '' || $jsonPath === '' || $currentPath === $jsonPath)) {
+                        $pidsToRemove[$entryPid] = $ownerPname;
+                        if ($jsonPath !== '') {
+                            $jsonPathsToRemove[$jsonPath] = true;
                         }
+                        continue;
+                    }
+
+                    // An orphaned legacy name entry may have no pid_index row;
+                    // only remove its file when the record itself still owns it.
+                    if ($entryPid > 0 && $jsonPath !== ''
+                        && ($currentOwner === '' || $currentPath !== $jsonPath)
+                        && (int) ($data['pid'] ?? 0) === $entryPid
+                        && self::buildManagedIdentity((string) ($data['pname'] ?? ''))
+                            === self::buildManagedIdentity($ownerPname)) {
+                        $jsonPathsToRemove[$jsonPath] = true;
                     }
                 }
-                @\unlink($jsonPath);
             }
-        }
-        
-        // 从 name_index 移除整个 key（原子操作）
-        if (!empty($entries)) {
-            self::atomicUpdateNameIndex(function (array $idx) use ($pname): array {
-                unset($idx[$pname]);
-                return $idx;
-            });
-        }
-        
-        // 从 pid_index 移除所有相关 PID
-        if (!empty($allPids)) {
-            $pidIndex = self::readPidIndex();
-            $changed = false;
-            foreach ($allPids as $pid) {
-                if (isset($pidIndex[$pid])) {
-                    unset($pidIndex[$pid]);
-                    $changed = true;
+
+            self::atomicUpdateNameIndex(static function (array $index) use ($identityKeys): array {
+                foreach ($identityKeys as $identityKey) {
+                    unset($index[$identityKey]);
                 }
+
+                return $index;
+            });
+
+            $pidChanged = false;
+            foreach ($pidsToRemove as $pid => $ownerPname) {
+                if ((string) ($pidIndex[$pid]['pname'] ?? '') !== $ownerPname) {
+                    continue;
+                }
+                unset($pidIndex[$pid]);
+                self::untrustPid((int) $pid);
+                $pidChanged = true;
             }
-            if ($changed) {
+            if ($pidChanged) {
                 self::writePidIndex($pidIndex);
             }
-        }
-        
-        // 从 port_index 移除所有相关端口
-        if (!empty($allPorts)) {
-            $portIndex = self::readPortIndex();
-            $changed = false;
-            foreach ($allPorts as $port) {
-                $key = (string) $port;
-                if (isset($portIndex[$key])) {
-                    unset($portIndex[$key]);
-                    $changed = true;
+
+            // A stale generation is never allowed to delete a port that has
+            // already been reassigned. When the removed generation was still
+            // the scalar representative, promote another live shared owner.
+            $portChanged = false;
+            foreach ($portsByOwner as $ownerPname => $ports) {
+                foreach (\array_keys($ports) as $port) {
+                    $portChanged = self::releasePortIndexRepresentative(
+                        $portIndex,
+                        (int) $port,
+                        (string) $ownerPname,
+                        $pidIndex,
+                        $processInfo
+                    ) || $portChanged;
                 }
             }
-            if ($changed) {
+            if ($portChanged) {
                 self::writePortIndex($portIndex);
             }
+
+            foreach (\array_keys($jsonPathsToRemove) as $jsonPath) {
+                if (\is_file($jsonPath)) {
+                    @\unlink($jsonPath);
+                }
+            }
+
+            return true;
+        }, true);
+
+        return $result === true;
+    }
+
+    /**
+     * Atomically unregister one frozen managed-process generation without
+     * signaling the OS process. Every identity field is a compare-and-swap
+     * precondition; mismatch leaves all records untouched.
+     */
+    public static function removeManagedProcessLeaseRecord(
+        int $pid,
+        string $expectedProcessName,
+        string $expectedLaunchId
+    ): bool {
+        $expectedLaunchId = \trim($expectedLaunchId);
+        if ($pid <= 0 || \trim($expectedProcessName) === '' || $expectedLaunchId === '') {
+            return false;
         }
-        
-        return true;
+
+        $expectedName = self::getTaskName(self::buildManagedIdentity($expectedProcessName));
+        $processInfo = self::snapshotIndexedProcessInfo();
+        $result = self::withManagedIndexLock(static function () use (
+            $pid,
+            $expectedName,
+            $expectedLaunchId,
+            $processInfo
+        ): bool {
+            $pidIndex = self::readPidIndex();
+            $pidEntry = $pidIndex[$pid] ?? null;
+            if (!\is_array($pidEntry)) {
+                return false;
+            }
+
+            $indexedPname = (string) ($pidEntry['pname'] ?? '');
+            $jsonPath = (string) ($pidEntry['jsonPath'] ?? '');
+            if ($indexedPname === '' || $jsonPath === '' || !\is_file($jsonPath)) {
+                return false;
+            }
+            $canonicalPname = self::buildManagedIdentity($indexedPname);
+            if (self::getTaskName($canonicalPname) !== $expectedName
+                || !\hash_equals($expectedLaunchId, self::getManagedIdentityLaunchId($canonicalPname))) {
+                return false;
+            }
+
+            $record = [];
+            $recordHandle = @\fopen($jsonPath, 'rb');
+            if (!\is_resource($recordHandle) || !@\flock($recordHandle, \LOCK_SH)) {
+                if (\is_resource($recordHandle)) {
+                    @\fclose($recordHandle);
+                }
+                return false;
+            }
+            try {
+                $decoded = \json_decode((string) \stream_get_contents($recordHandle), true);
+                $record = \is_array($decoded) ? $decoded : [];
+            } finally {
+                @\flock($recordHandle, \LOCK_UN);
+                @\fclose($recordHandle);
+            }
+
+            if ((int) ($record['pid'] ?? 0) !== $pid
+                || self::normalizeName((string) ($record['process_name'] ?? '')) !== $expectedName
+                || !\hash_equals($expectedLaunchId, (string) ($record['launch_id'] ?? ''))
+                || self::buildManagedIdentity((string) ($record['pname'] ?? '')) !== $canonicalPname) {
+                return false;
+            }
+
+            $nameIndex = self::readNameIndex();
+            $entries = (array) ($nameIndex[$indexedPname] ?? []);
+            $matchingEntryFound = false;
+            foreach ($entries as $entry) {
+                if ((int) ($entry['pid'] ?? 0) === $pid
+                    && (string) ($entry['jsonPath'] ?? '') === $jsonPath) {
+                    $matchingEntryFound = true;
+                    break;
+                }
+            }
+            if (!$matchingEntryFound) {
+                return false;
+            }
+
+            $nameIndex[$indexedPname] = \array_values(\array_filter(
+                $entries,
+                static fn(array $entry): bool => (int) ($entry['pid'] ?? 0) !== $pid
+                    || (string) ($entry['jsonPath'] ?? '') !== $jsonPath
+            ));
+            if ($nameIndex[$indexedPname] === []) {
+                unset($nameIndex[$indexedPname]);
+            }
+            unset($pidIndex[$pid]);
+
+            $portIndex = self::readPortIndex();
+            foreach ((array) ($record['ports'] ?? []) as $port) {
+                self::releasePortIndexRepresentative(
+                    $portIndex,
+                    (int) $port,
+                    $indexedPname,
+                    $pidIndex,
+                    $processInfo,
+                    [$pid => true]
+                );
+            }
+
+            if (!self::writePortIndex($portIndex)
+                || !self::writeNameIndex($nameIndex)
+                || !self::writePidIndex($pidIndex)) {
+                return false;
+            }
+            if (\is_file($jsonPath) && !@\unlink($jsonPath)) {
+                return false;
+            }
+
+            self::untrustPid($pid);
+            return true;
+        }, true);
+
+        return $result === true;
     }
 
     /**
@@ -1783,86 +2235,88 @@ class Processer
         if (!\is_dir($dir)) {
             return 0;
         }
-        $removed = 0;
-        $recordsByPid = [];
-
-        // 清理陈旧的 *-pid.json 文件（进程不存活的）
         $files = \glob($dir . '*-pid.json');
+        $candidatePids = [];
         foreach ($files ?? [] as $path) {
-            $raw = @\file_get_contents($path);
-            if ($raw === false) {
-                continue;
+            $data = \json_decode((string) (@\file_get_contents($path) ?: ''), true);
+            $pid = \is_array($data) ? (int) ($data['pid'] ?? 0) : 0;
+            if ($pid > 0) {
+                $candidatePids[$pid] = true;
             }
-            $data = \json_decode($raw, true);
-            if (!\is_array($data)) {
-                continue;
-            }
-            $pid = isset($data['pid']) ? (int) $data['pid'] : 0;
-            if ($pid <= 0) {
-                continue;
-            }
-
-            $recordsByPid[$pid][] = [
-                'path' => $path,
-                'data' => $data,
-            ];
         }
-        
-        // 同步清理 pid_index.json 中的陈旧记录
-        if ($recordsByPid !== []) {
-            $pidInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($recordsByPid)));
-            $pidIndex = self::readPidIndex();
-            $pidIndexChanged = false;
 
-            foreach ($recordsByPid as $pid => $records) {
-                $info = \is_array($pidInfo[$pid] ?? null) ? $pidInfo[$pid] : [];
-                if ((bool)($info['exists'] ?? false)) {
+        $removed = self::cleanupStalePidFilesForPids(\array_keys($candidatePids));
+        $initialPidIndex = self::readPidIndex();
+        $initialPortIndex = self::readPortIndex();
+        $processInfo = self::snapshotIndexedProcessInfo($initialPidIndex);
+        $orphanRemoved = self::withManagedIndexLock(static function () use (
+            $files,
+            $processInfo,
+            $initialPortIndex
+        ): int {
+            $pidIndex = self::filterPidIndexExistingJsonPaths(self::readPidIndex());
+            $nameIndex = self::filterNameIndexByPidIndex(self::readNameIndex(), $pidIndex);
+            $portIndex = self::readPortIndex();
+            $extraRemoved = 0;
+
+            foreach ($files ?? [] as $path) {
+                if (!\is_file($path)) {
                     continue;
                 }
-
-                foreach ($records as $record) {
-                    $path = (string)($record['path'] ?? '');
-                    if ($path !== '' && \is_file($path)) {
-                        @\unlink($path);
-                        $removed++;
+                $data = \json_decode((string) (@\file_get_contents($path) ?: ''), true);
+                $pid = \is_array($data) ? (int) ($data['pid'] ?? 0) : 0;
+                if ($pid > 0) {
+                    $current = \is_array($pidIndex[$pid] ?? null) ? $pidIndex[$pid] : [];
+                    if ((string) ($current['jsonPath'] ?? '') === $path
+                        || (bool) (($processInfo[$pid]['exists'] ?? false))) {
+                        continue;
                     }
                 }
 
-                if (isset($pidIndex[$pid])) {
-                    unset($pidIndex[$pid]);
-                    $pidIndexChanged = true;
+                if (@\unlink($path)) {
+                    $extraRemoved++;
                 }
-                self::untrustPid((int)$pid);
             }
 
-            if ($pidIndexChanged) {
-                self::writePidIndex($pidIndex);
+            $portChanged = false;
+            foreach ($portIndex as $port => $owner) {
+                $port = (int) $port;
+                if ($port <= 0 || $owner === ''
+                    || (string) ($initialPortIndex[(string) $port] ?? '') !== (string) $owner) {
+                    continue;
+                }
+                $representative = self::findLivePortIndexRepresentative(
+                    $port,
+                    $pidIndex,
+                    $processInfo
+                );
+                if ($representative === $owner) {
+                    continue;
+                }
+                if (!self::managedPortOwnerMatches((string) $owner, $representative)) {
+                    $portChanged = self::releasePortIndexRepresentative(
+                        $portIndex,
+                        $port,
+                        (string) $owner,
+                        $pidIndex,
+                        $processInfo
+                    ) || $portChanged;
+                    continue;
+                }
+                $portIndex[(string) $port] = $representative;
+                $portChanged = true;
             }
-        }
 
-        foreach ($files ?? [] as $path) {
-            if (!\is_file($path)) {
-                continue;
+            if (!self::writeNameIndex($nameIndex)
+                || !self::writePidIndex($pidIndex)
+                || ($portChanged && !self::writePortIndex($portIndex))) {
+                return 0;
             }
 
-            $raw = @\file_get_contents($path);
-            $data = \json_decode($raw === false ? '' : $raw, true);
-            $pid = \is_array($data) ? (int)($data['pid'] ?? 0) : 0;
-            if ($pid > 0) {
-                continue;
-            }
+            return $extraRemoved;
+        }, true);
 
-            @\unlink($path);
-            $removed++;
-        }
-
-        $pidIndex = self::filterPidIndexExistingJsonPaths(self::readPidIndex());
-        self::writePidIndex($pidIndex);
-        self::atomicUpdateNameIndex(
-            static fn(array $nameIndex): array => self::filterNameIndexByPidIndex($nameIndex, $pidIndex)
-        );
-        
-        return $removed;
+        return $removed + (\is_int($orphanRemoved) ? $orphanRemoved : 0);
     }
 
     /**
@@ -1885,92 +2339,110 @@ class Processer
             return 0;
         }
 
-        $pidIndex = self::readPidIndex();
-        if ($pidIndex === []) {
+        $initialPidIndex = self::readPidIndex();
+        if ($initialPidIndex === []) {
             return 0;
         }
 
-        $processInfo = self::batchGetProcessInfo($uniquePids);
-        $removed = 0;
-        $removedPids = [];
-        $removedPorts = [];
-
-        foreach ($uniquePids as $pid) {
-            $record = \is_array($pidIndex[$pid] ?? null) ? $pidIndex[$pid] : [];
-            $jsonPath = (string) ($record['jsonPath'] ?? '');
-            if ($jsonPath === '' || !\is_file($jsonPath)) {
-                continue;
-            }
-
-            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
-            if ((bool) ($info['exists'] ?? false)) {
-                continue;
-            }
-
-            $raw = @\file_get_contents($jsonPath);
-            if ($raw !== false) {
-                $data = \json_decode($raw, true);
-                if (\is_array($data)) {
-                    foreach ((array) ($data['ports'] ?? []) as $port) {
-                        $port = (int) $port;
-                        if ($port > 0) {
-                            $removedPorts[$port] = true;
-                        }
-                    }
-                }
-            }
-
-            @\unlink($jsonPath);
-            unset($pidIndex[$pid]);
-            $removedPids[$pid] = true;
-            self::untrustPid($pid);
-            $removed++;
-        }
-
-        if ($removed === 0) {
-            return 0;
-        }
-
-        self::writePidIndex($pidIndex);
-
-        $removedPidMap = $removedPids;
-        self::atomicUpdateNameIndex(
-            static function (array $nameIndex) use ($removedPidMap): array {
-                foreach ($nameIndex as $pname => $entries) {
-                    $kept = [];
-                    foreach ((array) $entries as $entry) {
-                        $pid = (int) ($entry['pid'] ?? 0);
-                        if ($pid > 0 && !isset($removedPidMap[$pid])) {
-                            $kept[] = $entry;
-                        }
-                    }
-                    if ($kept === []) {
-                        unset($nameIndex[$pname]);
-                    } else {
-                        $nameIndex[$pname] = \array_values($kept);
-                    }
-                }
-
-                return $nameIndex;
-            }
-        );
-
-        if ($removedPorts !== []) {
+        // Probe every indexed PID once outside the lock. Besides the explicit
+        // stale candidates, this snapshot is used to promote a surviving owner
+        // when a shared port's scalar representative is removed.
+        $processInfo = self::snapshotIndexedProcessInfo($initialPidIndex);
+        $result = self::withManagedIndexLock(static function () use (
+            $uniquePids,
+            $initialPidIndex,
+            $processInfo
+        ): int {
+            $pidIndex = self::readPidIndex();
+            $nameIndex = self::readNameIndex();
             $portIndex = self::readPortIndex();
-            $changed = false;
-            foreach (\array_keys($removedPorts) as $port) {
-                $key = (string) $port;
-                if (isset($portIndex[$key])) {
-                    unset($portIndex[$key]);
-                    $changed = true;
+            $removed = [];
+            $removedOwnersByPort = [];
+
+            foreach ($uniquePids as $pid) {
+                $expectedEntry = \is_array($initialPidIndex[$pid] ?? null)
+                    ? $initialPidIndex[$pid]
+                    : [];
+                $currentEntry = \is_array($pidIndex[$pid] ?? null) ? $pidIndex[$pid] : [];
+                $expectedOwner = (string) ($expectedEntry['pname'] ?? '');
+                $expectedPath = (string) ($expectedEntry['jsonPath'] ?? '');
+                if ($expectedOwner === '' || $expectedPath === ''
+                    || (string) ($currentEntry['pname'] ?? '') !== $expectedOwner
+                    || (string) ($currentEntry['jsonPath'] ?? '') !== $expectedPath
+                    || !\is_file($expectedPath)) {
+                    continue;
+                }
+
+                $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+                if ((bool) ($info['exists'] ?? false)) {
+                    continue;
+                }
+
+                $data = \json_decode((string) (@\file_get_contents($expectedPath) ?: ''), true);
+                if (!\is_array($data)
+                    || (int) ($data['pid'] ?? 0) !== $pid
+                    || !self::managedPortOwnerMatches((string) ($data['pname'] ?? ''), $expectedOwner)) {
+                    continue;
+                }
+
+                unset($pidIndex[$pid]);
+                foreach ($nameIndex as $owner => $entries) {
+                    $nameIndex[$owner] = \array_values(\array_filter(
+                        (array) $entries,
+                        static fn(array $entry): bool => (int) ($entry['pid'] ?? 0) !== $pid
+                            || (string) ($entry['jsonPath'] ?? '') !== $expectedPath
+                    ));
+                    if ($nameIndex[$owner] === []) {
+                        unset($nameIndex[$owner]);
+                    }
+                }
+                foreach ((array) ($data['ports'] ?? []) as $port) {
+                    $port = (int) $port;
+                    if ($port > 0) {
+                        $removedOwnersByPort[$port][$expectedOwner] = true;
+                    }
+                }
+                $removed[$pid] = [
+                    'jsonPath' => $expectedPath,
+                ];
+            }
+
+            if ($removed === []) {
+                return 0;
+            }
+
+            $portChanged = false;
+            foreach ($removedOwnersByPort as $port => $owners) {
+                foreach (\array_keys($owners) as $owner) {
+                    $portChanged = self::releasePortIndexRepresentative(
+                        $portIndex,
+                        (int) $port,
+                        (string) $owner,
+                        $pidIndex,
+                        $processInfo,
+                        \array_fill_keys(\array_map('intval', \array_keys($removed)), true)
+                    ) || $portChanged;
                 }
             }
-            if ($changed) {
-                self::writePortIndex($portIndex);
-            }
-        }
 
-        return $removed;
+            if (($portChanged && !self::writePortIndex($portIndex))
+                || !self::writeNameIndex($nameIndex)
+                || !self::writePidIndex($pidIndex)) {
+                return 0;
+            }
+
+            foreach ($removed as $pid => $record) {
+                $jsonPath = (string) ($record['jsonPath'] ?? '');
+                if ($jsonPath !== '' && \is_file($jsonPath)) {
+                    @\unlink($jsonPath);
+                }
+                self::untrustPid((int) $pid);
+            }
+
+            return \count($removed);
+        }, true);
+
+        return \is_int($result) ? $result : 0;
     }
 
     /**
@@ -2106,10 +2578,16 @@ class Processer
      */
     public static function setOutput(string $pname, string $content, bool $append = true): false|int
     {
-        $path = self::getLogFile($pname);
+        $managedIdentity = self::buildManagedIdentity($pname);
+        $path = self::getLogFile($managedIdentity);
         if (!self::prepareProcessLogFileForWrite($path)) {
             return false;
         }
+
+        if ($pname !== '' && $pname !== $managedIdentity) {
+            $content = \str_replace($pname, $managedIdentity, $content);
+        }
+        $content = self::redactSensitiveProcessText($content);
 
         return @file_put_contents($path, $content, $append ? FILE_APPEND : 0);
     }
@@ -2623,7 +3101,7 @@ class Processer
      * 适用于需要同时启动多个进程的场景（如 WLS 启动多个 Worker）。
      * 使用 Fiber 并发执行 proc_open，减少串行等待时间。
      * 
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, inheritDescriptors?: array<int, resource>}> $commands
      *        键为标识符，值为命令配置数组
      * @return array<string, int> 标识符 => PID（0 表示启动失败）
      */
@@ -2652,6 +3130,11 @@ class Processer
                         'Windows batch process creation is unavailable; refusing to register a child-owned PID in the parent.'
                     );
                 }
+                if (self::hasInheritedDescriptors($commands)) {
+                    throw new \RuntimeException(
+                        'Unix inherited-descriptor process creation is unavailable; refusing to launch without the required descriptor.'
+                    );
+                }
             }
             $pid = self::create(
                 $config['command'],
@@ -2671,6 +3154,11 @@ class Processer
         if (IS_WIN) {
             throw new \RuntimeException(
                 'Windows batch process creation is unavailable; refusing to fall back to serial create() startup.'
+            );
+        }
+        if (self::hasInheritedDescriptors($commands)) {
+            throw new \RuntimeException(
+                'Unix inherited-descriptor batch creation is unavailable; refusing to launch without the required descriptors.'
             );
         }
         foreach ($commands as $config) {
@@ -2699,7 +3187,7 @@ class Processer
     }
 
     /**
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, inheritDescriptors?: array<int, resource>}> $commands
      * @return array<string, int>|null
      */
     private static function tryBatchCreateOptimized(array $commands): ?array
@@ -2718,7 +3206,7 @@ class Processer
      * descriptors above 2 are replaced in the launcher descriptor map, and no
      * shell or long-lived proc resource remains in the Master.
      *
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, inheritDescriptors?: array<int, resource>}> $commands
      * @return array<string, int>|null
      */
     private static function batchCreateUnix(array $commands): ?array
@@ -2734,6 +3222,38 @@ class Processer
             if ((bool) ($config['foreground'] ?? false)) {
                 return null;
             }
+        }
+
+        // A launcher descriptor map applies to every child it forks. Split
+        // mixed batches by descriptor identity so a listener inherited by WLS
+        // Workers can never leak into unrelated Session/Memory/Dispatcher
+        // processes, even when FFI close(2) is unavailable.
+        $descriptorGroups = self::groupUnixCommandsByInheritedDescriptors($commands);
+        if (\count($descriptorGroups) > 1) {
+            $groupedResults = [];
+            foreach ($descriptorGroups as $group) {
+                $groupResults = self::batchCreateUnix($group);
+                if ($groupResults === null) {
+                    return null;
+                }
+                foreach ($groupResults as $key => $pid) {
+                    $groupedResults[$key] = $pid;
+                }
+            }
+            foreach ($commands as $key => $config) {
+                unset($config);
+                $groupedResults[$key] ??= 0;
+            }
+
+            return $groupedResults;
+        }
+
+        $inheritedDescriptors = [];
+        if ($commands !== []) {
+            $firstConfig = $commands[\array_key_first($commands)];
+            $inheritedDescriptors = self::normalizeUnixInheritedDescriptors(
+                $firstConfig['inheritDescriptors'] ?? []
+            );
         }
         $openFileDescriptors = self::listUnixOpenFileDescriptors();
         if ($openFileDescriptors === null) {
@@ -2768,6 +3288,9 @@ class Processer
                 'block' => (bool) ($config['block'] ?? false),
                 'enable_log' => (bool) $enableLog,
                 'child_owns_pid' => (bool) ($config['childOwnsPid'] ?? false),
+                'preserve_fds' => \array_keys(self::normalizeUnixInheritedDescriptors(
+                    $config['inheritDescriptors'] ?? []
+                )),
             ];
         }
 
@@ -2814,6 +3337,7 @@ class Processer
                 'stderr' => $enableLog ? $logFile : '/dev/null',
                 'command' => $processCommand,
                 'child_owns_pid' => (bool) $item['child_owns_pid'],
+                'preserve_fds' => $item['preserve_fds'],
                 'result_key' => $key,
             ];
         }
@@ -2831,11 +3355,20 @@ class Processer
             2 => ['pipe', 'w'],
         ];
         foreach ($openFileDescriptors as $fd) {
-            if ($fd > 2) {
+            if ($fd > 2 && !isset($inheritedDescriptors[$fd])) {
                 $descriptors[$fd] = ['file', '/dev/null', 'r'];
             }
         }
+        foreach ($inheritedDescriptors as $fd => $resource) {
+            $descriptors[$fd] = $resource;
+        }
         \ksort($descriptors, \SORT_NUMERIC);
+
+        $launcherFileDescriptors = \array_values(\array_unique(\array_merge(
+            $openFileDescriptors,
+            \array_keys($inheritedDescriptors)
+        )));
+        \sort($launcherFileDescriptors, \SORT_NUMERIC);
 
         $submitStartedAt = \microtime(true);
         $launcher = @\proc_open(
@@ -2844,7 +3377,7 @@ class Processer
                 '-r',
                 self::unixBatchLauncherCode(),
                 \base64_encode($payload),
-                \base64_encode((string) \json_encode($openFileDescriptors)),
+                \base64_encode((string) \json_encode($launcherFileDescriptors)),
             ],
             $descriptors,
             $pipes,
@@ -2862,18 +3395,27 @@ class Processer
         $stdout = '';
         $stderr = '';
         $resultStartedAt = \microtime(true);
-        $deadline = $resultStartedAt + self::resolveUnixBatchCreateResultTimeout(\count($launchItems));
+        $resultTimeout = self::resolveUnixBatchCreateResultTimeout(\count($launchItems));
+        $deadline = $resultStartedAt + $resultTimeout;
+        $launcherStatus = [];
         do {
             $stdout .= (string) (@\fread($pipes[1], 8192) ?: '');
             $stderr .= (string) (@\fread($pipes[2], 8192) ?: '');
-            $status = @\proc_get_status($launcher);
+            $launcherStatus = @\proc_get_status($launcher) ?: [];
             if (\substr_count($stdout, "\n") >= \count($launchItems)
-                || ($status['running'] ?? false) !== true) {
+                || ($launcherStatus['running'] ?? false) !== true) {
                 break;
             }
             \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
         } while (\microtime(true) < $deadline);
 
+        // Keep the result pipes open while reaping the short-lived launcher.
+        // Closing them first can deliver SIGPIPE before a scheduler-delayed
+        // launcher has flushed its last PID records. The launcher is still
+        // bounded by resultTimeout and finishUnixBatchLauncher's hard grace;
+        // already-forked children are never launched a second time.
+        $launcherRunningAfterCollection = ($launcherStatus['running'] ?? false) === true;
+        self::finishUnixBatchLauncher($launcher, false);
         $stdout .= (string) (@\stream_get_contents($pipes[1]) ?: '');
         $stderr .= (string) (@\stream_get_contents($pipes[2]) ?: '');
         @\fclose($pipes[1]);
@@ -2893,13 +3435,17 @@ class Processer
             $results[$key] ??= 0;
         }
         if (\trim($stderr) !== '') {
-            \error_log('[Processer] unix batch launcher: ' . \trim($stderr));
+            \error_log('[Processer] unix batch launcher: ' . self::redactSensitiveProcessText(\trim($stderr)));
         }
 
         $timing = \json_encode([
             'item_count' => \count($commands),
             'submitted_count' => \count($launchItems),
+            'returned_count' => \count($pidMap),
+            'missing_count' => \max(0, \count($launchItems) - \count($pidMap)),
             'fallback_count' => 0,
+            'result_timeout_ms' => \round($resultTimeout * 1000, 3),
+            'launcher_running_after_collection' => $launcherRunningAfterCollection,
             'submit_ms' => \round($submitSeconds * 1000, 3),
             'result_ms' => \round((\microtime(true) - $resultStartedAt) * 1000, 3),
             'total_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
@@ -2907,6 +3453,67 @@ class Processer
         \error_log('[Processer] batchCreateUnix timing ' . ($timing !== false ? $timing : '{}'));
 
         return $results;
+    }
+
+    /**
+     * @param array<string|int, array<string, mixed>> $commands
+     */
+    private static function hasInheritedDescriptors(array $commands): bool
+    {
+        foreach ($commands as $config) {
+            if (self::normalizeUnixInheritedDescriptors($config['inheritDescriptors'] ?? []) !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string|int, array<string, mixed>> $commands
+     * @return array<string, array<string|int, array<string, mixed>>>
+     */
+    private static function groupUnixCommandsByInheritedDescriptors(array $commands): array
+    {
+        $groups = [];
+        foreach ($commands as $key => $config) {
+            $descriptors = self::normalizeUnixInheritedDescriptors($config['inheritDescriptors'] ?? []);
+            $signatureParts = [];
+            foreach ($descriptors as $fd => $resource) {
+                $signatureParts[] = $fd . ':' . \get_resource_id($resource);
+            }
+            $signature = $signatureParts === [] ? 'none' : \implode(',', $signatureParts);
+            $groups[$signature][$key] = $config;
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @return array<int, resource>
+     */
+    private static function normalizeUnixInheritedDescriptors(mixed $value): array
+    {
+        if ($value === null || $value === []) {
+            return [];
+        }
+        if (!\is_array($value)) {
+            throw new \InvalidArgumentException('inheritDescriptors must be an fd => stream resource map.');
+        }
+
+        $normalized = [];
+        foreach ($value as $fd => $resource) {
+            $fd = (int)$fd;
+            if ($fd < 3 || $fd > 255 || !\is_resource($resource)) {
+                throw new \InvalidArgumentException(
+                    'inheritDescriptors accepts only stream resources mapped to file descriptors 3..255.'
+                );
+            }
+            $normalized[$fd] = $resource;
+        }
+        \ksort($normalized, \SORT_NUMERIC);
+
+        return $normalized;
     }
 
     private static function resolveUnixBatchCreateResultTimeout(int $pendingCount): float
@@ -2917,10 +3524,16 @@ class Processer
 
         $configured = (float) (Env::get('system.processer.unix_batch_create_result_timeout_sec', 0) ?? 0);
         if ($configured > 0.0) {
-            return \max(0.05, \min(1.0, $configured));
+            return \max(0.1, \min(5.0, $configured));
         }
 
-        return \min(0.5, \max(0.15, 0.1 + ($pendingCount * 0.015)));
+        // Fork/exec is normally far below 100ms, but a busy host can defer the
+        // short-lived launcher for several scheduler quanta. This deadline is
+        // only a failure bound: successful batches return immediately. Keep at
+        // least one second so rolling reload cannot terminate the launcher
+        // before it emits its first PID, and scale to a still-bounded window
+        // for larger batches.
+        return \min(3.0, \max(1.0, 0.5 + ($pendingCount * 0.05)));
     }
 
     /**
@@ -3049,6 +3662,9 @@ class Processer
         if ($pid === 0) {
             @posix_setsid();
             @chdir((string)($item['cwd'] ?? getcwd()));
+            $preserveFds = is_array($item['preserve_fds'] ?? null)
+                ? array_fill_keys(array_map('intval', $item['preserve_fds']), true)
+                : [];
             // proc_open has no POSIX close_fds option. The parent descriptor
             // map already replaced every Master resource with /dev/null; close
             // those replacement slots as well when the local PHP build exposes
@@ -3057,6 +3673,9 @@ class Processer
                 try {
                     $libc = FFI::cdef('int close(int fd);');
                     foreach ($closeFds as $fd) {
+                        if (isset($preserveFds[$fd])) {
+                            continue;
+                        }
                         $libc->close($fd);
                     }
                 } catch (Throwable) {
@@ -3079,6 +3698,20 @@ class Processer
             $argv = array_values(array_map('strval', $item['argv']));
             $php = (string)array_shift($argv);
             @pcntl_exec($php, $argv);
+            $errorCode = function_exists('pcntl_get_last_error') ? pcntl_get_last_error() : 0;
+            $errorText = function_exists('pcntl_strerror')
+                ? pcntl_strerror($errorCode)
+                : 'unknown';
+            $script = (string)($argv[0] ?? '');
+            @fwrite(
+                $stderr,
+                '[ERROR] pcntl_exec failed errno=' . $errorCode
+                . ' message=' . $errorText
+                . ' executable=' . basename($php)
+                . ' script=' . basename($script)
+                . PHP_EOL
+            );
+            @fflush($stderr);
             return;
         }
         fwrite(STDOUT, $id . "\t" . $pid . "\n");
@@ -3107,7 +3740,7 @@ PHP;
     /**
      * @param resource $launcher
      */
-    private static function finishUnixBatchLauncher($launcher): void
+    private static function finishUnixBatchLauncher($launcher, bool $closeProcess = true): void
     {
         if (!\is_resource($launcher)) {
             return;
@@ -3115,7 +3748,7 @@ PHP;
         $status = @\proc_get_status($launcher);
         if (($status['running'] ?? false) === true) {
             @\proc_terminate($launcher);
-            $deadline = \microtime(true) + 0.05;
+            $deadline = \microtime(true) + 0.1;
             do {
                 \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
                 $status = @\proc_get_status($launcher);
@@ -3124,7 +3757,9 @@ PHP;
         if (($status['running'] ?? false) === true && (int)($status['pid'] ?? 0) > 0) {
             @\posix_kill((int)$status['pid'], \SIGKILL);
         }
-        @\proc_close($launcher);
+        if ($closeProcess) {
+            @\proc_close($launcher);
+        }
     }
 
     /**
@@ -3230,23 +3865,13 @@ PHP;
         $timings['prepare'] = \microtime(true) - $phaseStartedAt;
 
         $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
-        $splitDetachedHelpers = (bool) (Env::get('system.processer.windows_batch_create_split_helpers', true) ?? true);
-        if (!$waitForResults && $splitDetachedHelpers) {
-            return self::batchCreateWindowsDetachedHelpers(
-                $batchLaunchItems,
-                $results,
-                $timingStartedAt,
-                $timings,
-                self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
-            );
-        }
         if (!$waitForResults) {
             return self::batchCreateWindowsDetachedHelpers(
                 $batchLaunchItems,
                 $results,
                 $timingStartedAt,
                 $timings,
-                1
+                self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
             );
         }
 
@@ -3640,11 +4265,6 @@ PHP;
 
     private static function resolveWindowsBatchCreateHelperParallelism(int $itemCount): int
     {
-        $splitHelpers = (bool) (Env::get('system.processer.windows_batch_create_split_helpers', true) ?? true);
-        if (!$splitHelpers) {
-            return 1;
-        }
-
         $configured = (int) (Env::get('system.processer.windows_batch_create_helper_parallelism', 4) ?? 4);
 
         return \min(\max(1, $itemCount), \max(1, \min(8, $configured)));
@@ -5960,6 +6580,36 @@ POWERSHELL;
         @\unlink($tmpPath);
         return false;
     }
+
+    /**
+     * Serialize managed PID/name/port index transactions across parent and child
+     * registration paths. The callback fallback preserves historical best-effort
+     * registration when the lock file cannot be created; security-sensitive CAS
+     * removals opt into fail-closed behavior.
+     */
+    private static function withManagedIndexLock(callable $callback, bool $failClosed = false): mixed
+    {
+        $dir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0777, true);
+        }
+
+        $lock = @\fopen($dir . 'managed_index.lock', 'c+');
+        if (!\is_resource($lock)) {
+            return $failClosed ? null : $callback();
+        }
+        if (!@\flock($lock, \LOCK_EX)) {
+            @\fclose($lock);
+            return $failClosed ? null : $callback();
+        }
+
+        try {
+            return $callback();
+        } finally {
+            @\flock($lock, \LOCK_UN);
+            @\fclose($lock);
+        }
+    }
     
     /**
      * 读取 name_index.json
@@ -6116,11 +6766,13 @@ POWERSHELL;
      */
     public static function isAliveByName(string $pname): bool
     {
-        $entries = (self::readNameIndex())[$pname] ?? [];
-        foreach ($entries as $entry) {
-            $pid = (int) ($entry['pid'] ?? 0);
-            if ($pid > 0 && self::isRunningByPid($pid)) {
-                return true;
+        $nameIndex = self::readNameIndex();
+        foreach (self::findManagedIdentityKeys($pname, $nameIndex) as $identityKey) {
+            foreach ((array) ($nameIndex[$identityKey] ?? []) as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid > 0 && self::isRunningByPid($pid)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -6132,15 +6784,17 @@ POWERSHELL;
      */
     public static function getAllPidsByName(string $pname): array
     {
-        $entries = (self::readNameIndex())[$pname] ?? [];
         $pids = [];
-        foreach ($entries as $entry) {
-            $pid = (int) ($entry['pid'] ?? 0);
-            if ($pid > 0) {
-                $pids[] = $pid;
+        $nameIndex = self::readNameIndex();
+        foreach (self::findManagedIdentityKeys($pname, $nameIndex) as $identityKey) {
+            foreach ((array) ($nameIndex[$identityKey] ?? []) as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid > 0) {
+                    $pids[$pid] = $pid;
+                }
             }
         }
-        return $pids;
+        return \array_values($pids);
     }
     
     /**
@@ -6415,8 +7069,269 @@ POWERSHELL;
 
         return '';
     }
+
+    /**
+     * Build the only identity that may cross the managed-process persistence and
+     * logging boundary. Executable argv deliberately remains unchanged.
+     *
+     * Field order is fixed so the parent launcher and child self-registration
+     * converge on one name_index key even when their executable argv order differs.
+     */
+    private static function buildManagedIdentity(string $source): string
+    {
+        $source = self::normalizeWindowsCommandLineEncoding($source);
+        $name = self::extractCommandLineArg($source, 'name');
+        if ($name === ''
+            && \preg_match("/(?:^|\\s)-name(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s]+))/i", $source, $matches) === 1) {
+            foreach ([1, 2, 3] as $index) {
+                if (!empty($matches[$index])) {
+                    $name = (string) $matches[$index];
+                    break;
+                }
+            }
+        }
+
+        if ($name === '') {
+            $redacted = \trim(self::redactSensitiveProcessText($source));
+            if ($redacted !== '' && \preg_match('/^[a-zA-Z0-9_.:@-]+$/D', $redacted) === 1) {
+                $name = $redacted;
+            } else {
+                $name = self::generateNameFromCommand($redacted !== '' ? $redacted : 'process');
+            }
+        }
+
+        $parts = ['--name=' . self::normalizeName($name)];
+        $launchId = self::extractCommandLineArg($source, 'launch-id');
+        if ($launchId !== '') {
+            // rawurldecode + rawurlencode makes the representation idempotent,
+            // whitespace/control bytes safe, and platform-neutral.
+            $parts[] = '--launch-id=' . \rawurlencode(\rawurldecode($launchId));
+        }
+        $epoch = \trim(self::extractCommandLineArg($source, 'epoch'));
+        if ($epoch !== '' && \ctype_digit($epoch) && (int) $epoch > 0) {
+            $parts[] = '--epoch=' . (int) $epoch;
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    /**
+     * Return the decoded launch generation from a canonical or legacy identity.
+     */
+    private static function getManagedIdentityLaunchId(string $identity): string
+    {
+        $launchId = self::extractCommandLineArg($identity, 'launch-id');
+
+        return $launchId !== '' ? \rawurldecode($launchId) : '';
+    }
+
+    /**
+     * Resolve exact canonical, legacy command-key, and name-only generation keys.
+     * Name-only callers intentionally address every generation of that process;
+     * generation-aware callers address only the canonical-equivalent lease.
+     *
+     * @param array<string, mixed> $nameIndex
+     * @return list<string>
+     */
+    private static function findManagedIdentityKeys(string $source, array $nameIndex): array
+    {
+        $canonical = self::buildManagedIdentity($source);
+        $targetName = self::getTaskName($canonical);
+        $hasGeneration = self::getManagedIdentityLaunchId($canonical) !== ''
+            || self::extractCommandLineArg($canonical, 'epoch') !== '';
+        $keys = [];
+
+        foreach (\array_keys($nameIndex) as $candidate) {
+            if (!\is_string($candidate) || $candidate === '') {
+                continue;
+            }
+            $candidateCanonical = self::buildManagedIdentity($candidate);
+            if ($candidateCanonical === $canonical
+                || (!$hasGeneration && self::getTaskName($candidateCanonical) === $targetName)) {
+                $keys[$candidate] = true;
+            }
+        }
+
+        return \array_keys($keys);
+    }
+
+    /**
+     * Remove known secret option values from diagnostics without changing argv.
+     */
+    private static function redactSensitiveProcessText(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        $names = '(?:master[_-]?token|proxy[_-]?protocol[_-]?v2[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|session[_-]?token|api[_-]?key|password|passwd|pwd|secret|token|credential|cookie)';
+        $value = '(?:"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|[^\\s]+)';
+        $redacted = \preg_replace(
+            '/((?:--?|\/)' . $names . '(?:=|:|\\s+))' . $value . '/i',
+            '$1[REDACTED]',
+            $text
+        );
+        if (!\is_string($redacted)) {
+            $redacted = $text;
+        }
+
+        $envRedacted = \preg_replace(
+            '/\\b(' . $names . ')\\s*=\\s*' . $value . '/i',
+            '$1=[REDACTED]',
+            $redacted
+        );
+
+        return \is_string($envRedacted) ? $envRedacted : $redacted;
+    }
     
     /*----------------------------------------索引更新区域------------------------------------------*/
+
+    /**
+     * Capture a best-effort liveness snapshot before entering the managed index
+     * transaction. OS probes can be comparatively slow on Windows and must not
+     * hold the global index lock. Entries registered after this snapshot are
+     * never selected as replacement representatives; their own setProcessPorts()
+     * call remains authoritative.
+     *
+     * @param array<int, array{pname:string,jsonPath:string}>|null $pidIndex
+     * @return array<int, array<string, mixed>>
+     */
+    private static function snapshotIndexedProcessInfo(?array $pidIndex = null): array
+    {
+        $pidIndex ??= self::readPidIndex();
+        $pids = \array_values(\array_filter(\array_map(
+            'intval',
+            \array_keys($pidIndex)
+        ), static fn(int $pid): bool => $pid > 0));
+
+        return $pids !== [] ? self::batchGetProcessInfo($pids) : [];
+    }
+
+    /**
+     * Port-index values are advisory canonical process identities. Equality must
+     * include launch_id/epoch; name-only comparison lets an old generation erase
+     * a new generation that reused the same slot.
+     */
+    private static function managedPortOwnerMatches(string $currentOwner, string $expectedOwner): bool
+    {
+        if ($currentOwner === '' || $expectedOwner === '') {
+            return false;
+        }
+
+        return self::buildManagedIdentity($currentOwner) === self::buildManagedIdentity($expectedOwner);
+    }
+
+    /**
+     * Find a live managed record that still declares the shared port. The caller
+     * passes pidIndex after deleting the old lease, so a removed generation can
+     * never immediately nominate itself again.
+     *
+     * @param array<int, array{pname:string,jsonPath:string}> $pidIndex
+     * @param array<int, array<string,mixed>> $processInfo
+     * @param array<int, true> $excludedPids
+     */
+    private static function findLivePortIndexRepresentative(
+        int $port,
+        array $pidIndex,
+        array $processInfo,
+        array $excludedPids = []
+    ): string {
+        if ($port <= 0) {
+            return '';
+        }
+
+        $selectedOwner = '';
+        $selectedTime = PHP_INT_MIN;
+        $selectedPid = 0;
+        foreach ($pidIndex as $candidatePid => $entry) {
+            $candidatePid = (int) $candidatePid;
+            if ($candidatePid <= 0 || isset($excludedPids[$candidatePid])) {
+                continue;
+            }
+            $info = \is_array($processInfo[$candidatePid] ?? null) ? $processInfo[$candidatePid] : [];
+            if (!(bool) ($info['exists'] ?? false)) {
+                continue;
+            }
+
+            $owner = (string) ($entry['pname'] ?? '');
+            $jsonPath = (string) ($entry['jsonPath'] ?? '');
+            if ($owner === '' || $jsonPath === '' || !\is_file($jsonPath)) {
+                continue;
+            }
+            $decoded = \json_decode((string) (@\file_get_contents($jsonPath) ?: ''), true);
+            if (!\is_array($decoded)
+                || (int) ($decoded['pid'] ?? 0) !== $candidatePid
+                || !self::managedPortOwnerMatches((string) ($decoded['pname'] ?? ''), $owner)) {
+                continue;
+            }
+
+            $declaresPort = false;
+            foreach ((array) ($decoded['ports'] ?? []) as $candidatePort) {
+                if ((int) $candidatePort === $port) {
+                    $declaresPort = true;
+                    break;
+                }
+            }
+            if (!$declaresPort) {
+                continue;
+            }
+
+            $recordTime = (int) ($decoded['time'] ?? 0);
+            if ($selectedOwner === '' || $recordTime > $selectedTime
+                || ($recordTime === $selectedTime && $candidatePid > $selectedPid)) {
+                $selectedOwner = $owner;
+                $selectedTime = $recordTime;
+                $selectedPid = $candidatePid;
+            }
+        }
+
+        return $selectedOwner;
+    }
+
+    /**
+     * Compare-and-swap release of one advisory port representative. If another
+     * live managed lease still declares the port, atomically point the scalar
+     * index at that lease instead of deleting the port mapping.
+     *
+     * @param array<string,string> $portIndex
+     * @param array<int, array{pname:string,jsonPath:string}> $pidIndex
+     * @param array<int, array<string,mixed>> $processInfo
+     * @param array<int, true> $excludedPids
+     */
+    private static function releasePortIndexRepresentative(
+        array &$portIndex,
+        int $port,
+        string $expectedOwner,
+        array $pidIndex,
+        array $processInfo,
+        array $excludedPids = []
+    ): bool {
+        if ($port <= 0) {
+            return false;
+        }
+        $portKey = (string) $port;
+        $currentOwner = (string) ($portIndex[$portKey] ?? '');
+        if (!self::managedPortOwnerMatches($currentOwner, $expectedOwner)) {
+            return false;
+        }
+
+        $replacement = self::findLivePortIndexRepresentative(
+            $port,
+            $pidIndex,
+            $processInfo,
+            $excludedPids
+        );
+        if ($replacement !== '') {
+            if ($replacement === $currentOwner) {
+                return false;
+            }
+            $portIndex[$portKey] = $replacement;
+            return true;
+        }
+
+        unset($portIndex[$portKey]);
+        return true;
+    }
     
     /**
      * 更新索引（setPid 调用后同步更新 name_index 和 pid_index）
@@ -6472,62 +7387,6 @@ POWERSHELL;
     }
     
     /**
-     * 从索引中移除进程信息（仅由 GC / 定时清理调用，不调用其他查询方法避免 loop）
-     * 
-     * name_index 按 PID 精确移除（一对多结构），数组为空则删除整个 key
-     * 
-     * @param string|null $pname 进程名（可选）
-     * @param int|null $pid 进程 ID（可选，用于从 name_index 精确移除）
-     * @param array|null $ports 进程端口列表（可选）
-     */
-    private static function removeFromIndexes(?string $pname, ?int $pid, ?array $ports = null): void
-    {
-        // 移除 name_index 中的项（按 PID 精确移除）
-        if ($pname !== null) {
-            self::atomicUpdateNameIndex(function (array $nameIndex) use ($pname, $pid): array {
-                if (!isset($nameIndex[$pname])) {
-                    return $nameIndex;
-                }
-                if ($pid !== null && $pid > 0) {
-                    $nameIndex[$pname] = \array_values(\array_filter(
-                        $nameIndex[$pname],
-                        fn(array $e): bool => (int) ($e['pid'] ?? 0) !== $pid
-                    ));
-                } else {
-                    $nameIndex[$pname] = [];
-                }
-                return $nameIndex;
-            });
-        }
-        
-        // 移除 pid_index 中的项
-        if ($pid !== null && $pid > 0) {
-            $pidIndex = self::readPidIndex();
-            if (isset($pidIndex[$pid])) {
-                unset($pidIndex[$pid]);
-                self::writePidIndex($pidIndex);
-            }
-            self::untrustPid($pid);
-        }
-        
-        // 移除 port_index 中的相关项
-        if ($ports !== null && !empty($ports)) {
-            $portIndex = self::readPortIndex();
-            $changed = false;
-            foreach ($ports as $port) {
-                $portKey = (string) $port;
-                if (isset($portIndex[$portKey])) {
-                    unset($portIndex[$portKey]);
-                    $changed = true;
-                }
-            }
-            if ($changed) {
-                self::writePortIndex($portIndex);
-            }
-        }
-    }
-    
-    /**
      * 设置进程监听端口（更新 PID 文件的 ports 字段，并同步 port_index）
      * 
      * 调用时机：进程启动并确认监听端口后调用
@@ -6537,63 +7396,85 @@ POWERSHELL;
      */
     public static function setProcessPorts(string $pname, array $ports): void
     {
-        $pidFile = self::getPidFile($pname, (int) \getmypid());
-        if (!\is_file($pidFile)) {
-            return;
-        }
-        
-        // 读取现有 PID 文件
-        $data = [];
-        $fp = @\fopen($pidFile, 'rb');
-        if ($fp && \flock($fp, \LOCK_SH)) {
-            $content = \stream_get_contents($fp);
-            \flock($fp, \LOCK_UN);
-            $data = \json_decode($content ?: '', true) ?: [];
-        }
-        if ($fp) {
-            \fclose($fp);
-        }
-        
-        if (empty($data)) {
-            return;
-        }
-        
-        // 获取旧端口列表
-        $oldPorts = isset($data['ports']) ? (array) $data['ports'] : [];
-        
-        // 更新 port_index：先移除旧端口，再添加新端口
-        $portIndex = self::readPortIndex();
-        
-        // 移除旧端口
-        foreach ($oldPorts as $oldPort) {
-            $key = (string) $oldPort;
-            if (isset($portIndex[$key]) && $portIndex[$key] === $pname) {
-                unset($portIndex[$key]);
+        $pname = self::buildManagedIdentity($pname);
+        $processInfo = self::snapshotIndexedProcessInfo();
+        self::withManagedIndexLock(static function () use ($pname, $ports, $processInfo): void {
+            $pidFile = self::getPidFile($pname, (int) \getmypid());
+            if (!\is_file($pidFile)) {
+                return;
             }
-        }
-        
-        // 添加新端口
-        foreach ($ports as $port) {
-            $key = (string) $port;
-            $portIndex[$key] = $pname;
-        }
-        
-        self::writePortIndex($portIndex);
-        
-        // 更新 PID 文件
-        $data['ports'] = $ports;
-        $fp = @\fopen($pidFile, 'cb');
-        if ($fp && \flock($fp, \LOCK_EX)) {
-            \ftruncate($fp, 0);
-            \fwrite($fp, \json_encode($data));
-            \flock($fp, \LOCK_UN);
-            \fclose($fp);
-        } else {
+
+            // 读取现有 PID 文件
+            $data = [];
+            $fp = @\fopen($pidFile, 'rb');
+            if ($fp && \flock($fp, \LOCK_SH)) {
+                $content = \stream_get_contents($fp);
+                \flock($fp, \LOCK_UN);
+                $data = \json_decode($content ?: '', true) ?: [];
+            }
             if ($fp) {
                 \fclose($fp);
             }
-            @\file_put_contents($pidFile, \json_encode($data));
-        }
+
+            if (empty($data)) {
+                return;
+            }
+
+            // 获取旧端口列表
+            $oldPorts = isset($data['ports']) ? (array) $data['ports'] : [];
+            $pid = (int) ($data['pid'] ?? \getmypid());
+            $newPortMap = [];
+            foreach ($ports as $port) {
+                $port = (int) $port;
+                if ($port > 0) {
+                    $newPortMap[$port] = true;
+                }
+            }
+
+            // 更新 port_index：先移除旧端口，再添加新端口
+            $portIndex = self::readPortIndex();
+            $pidIndex = self::readPidIndex();
+
+            // 只释放本进程不再声明的旧端口；若共享端口仍有其它
+            // live lease，CAS 改指存活代表成员而不是直接删除。
+            foreach ($oldPorts as $oldPort) {
+                $oldPort = (int) $oldPort;
+                if ($oldPort <= 0 || isset($newPortMap[$oldPort])) {
+                    continue;
+                }
+                self::releasePortIndexRepresentative(
+                    $portIndex,
+                    $oldPort,
+                    $pname,
+                    $pidIndex,
+                    $processInfo,
+                    $pid > 0 ? [$pid => true] : []
+                );
+            }
+
+            // 添加新端口
+            foreach (\array_keys($newPortMap) as $port) {
+                $key = (string) (int) $port;
+                $portIndex[$key] = $pname;
+            }
+
+            self::writePortIndex($portIndex);
+
+            // 更新 PID 文件
+            $data['ports'] = \array_map('intval', \array_keys($newPortMap));
+            $fp = @\fopen($pidFile, 'cb');
+            if ($fp && \flock($fp, \LOCK_EX)) {
+                \ftruncate($fp, 0);
+                \fwrite($fp, \json_encode($data));
+                \flock($fp, \LOCK_UN);
+                \fclose($fp);
+            } else {
+                if ($fp) {
+                    \fclose($fp);
+                }
+                @\file_put_contents($pidFile, \json_encode($data));
+            }
+        });
     }
     
     /**
@@ -6608,84 +7489,59 @@ POWERSHELL;
      */
     public static function getPidByPort(int $port): int
     {
+        if ($port <= 0) {
+            return 0;
+        }
         $portKey = (string) $port;
-        
+
         // 1. 优选路径：从 port_index 获取 pname
         $portIndex = self::readPortIndex();
         if (isset($portIndex[$portKey])) {
-            $pname = $portIndex[$portKey];
-            
-            // 从 name_index 遍历该 pname 的所有 PID，找到第一个存活的
+            $pname = (string) $portIndex[$portKey];
             $nameIndex = self::readNameIndex();
-            $entries = $nameIndex[$pname] ?? [];
-            
-            if (!empty($entries)) {
-                foreach ($entries as $entry) {
-                    $pid = (int) ($entry['pid'] ?? 0);
-                    if ($pid > 0) {
-                        return $pid;
-                    }
+            $entries = (array) ($nameIndex[$pname] ?? []);
+            $candidatePids = [];
+            foreach ($entries as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid > 0) {
+                    $candidatePids[$pid] = true;
                 }
-                
-                // 所有 PID 都不存活，清理索引项
-                $deadPids = [];
-                $portsToClean = [$port];
-                foreach ($entries as $entry) {
-                    $deadPid = (int) ($entry['pid'] ?? 0);
-                    $jsonPath = $entry['jsonPath'] ?? '';
-                    if ($deadPid > 0) {
-                        $deadPids[] = $deadPid;
-                    }
-                    if ($jsonPath && \is_file($jsonPath)) {
-                        $raw = @\file_get_contents($jsonPath);
-                        if ($raw !== false) {
-                            $data = \json_decode($raw, true);
-                            if (isset($data['ports'])) {
-                                foreach ((array) $data['ports'] as $p) {
-                                    $portsToClean[] = $p;
-                                }
-                            }
-                        }
-                        @\unlink($jsonPath);
-                    }
-                }
-                
-                // 原子移除 name_index 整个 key
-                self::atomicUpdateNameIndex(function (array $idx) use ($pname): array {
-                    unset($idx[$pname]);
-                    return $idx;
-                });
-                
-                // 清理 pid_index
-                $pidIndex = self::readPidIndex();
-                $pidChanged = false;
-                foreach ($deadPids as $deadPid) {
-                    if (isset($pidIndex[$deadPid])) {
-                        unset($pidIndex[$deadPid]);
-                        self::untrustPid($deadPid);
-                        $pidChanged = true;
-                    }
-                }
-                if ($pidChanged) {
-                    self::writePidIndex($pidIndex);
-                }
-                
-                // 清理 port_index
-                $portsToClean = \array_unique($portsToClean);
-                foreach ($portsToClean as $p) {
-                    $pk = (string) $p;
-                    if (isset($portIndex[$pk])) {
-                        unset($portIndex[$pk]);
-                    }
-                }
-                self::writePortIndex($portIndex);
-            } else {
-                // name_index 中没有该 pname，清理 port_index 中的脏项
-                unset($portIndex[$portKey]);
-                self::writePortIndex($portIndex);
             }
+            $processInfo = $candidatePids !== []
+                ? self::batchGetProcessInfo(\array_keys($candidatePids))
+                : [];
+            foreach ($entries as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid > 0 && (bool) ($processInfo[$pid]['exists'] ?? false)) {
+                    return $pid;
+                }
+            }
+
+            // Delegate stale record removal to the generation-safe CAS path.
+            // Then repair only the same advisory owner observed above; a new
+            // generation that replaced the mapping in the meantime is untouched.
+            self::cleanupStalePidFilesForPids(\array_keys($candidatePids));
+            $replacementPidIndex = self::readPidIndex();
+            $replacementProcessInfo = self::snapshotIndexedProcessInfo($replacementPidIndex);
+            self::withManagedIndexLock(static function () use (
+                $port,
+                $pname,
+                $replacementPidIndex,
+                $replacementProcessInfo
+            ): void {
+                $currentPortIndex = self::readPortIndex();
+                if (self::releasePortIndexRepresentative(
+                    $currentPortIndex,
+                    $port,
+                    $pname,
+                    $replacementPidIndex,
+                    $replacementProcessInfo
+                )) {
+                    self::writePortIndex($currentPortIndex);
+                }
+            }, true);
         }
-        
+
         // 2. 回退路径：使用系统命令
         return self::getProcessIdByPort($port);
     }
@@ -6717,13 +7573,19 @@ POWERSHELL;
         
         // ISO 8601 时间戳
         $timestamp = \date('c'); // e.g. 2025-02-04T12:00:00+08:00
-        $eventUpper = \strtoupper($event);
+        $eventUpper = \strtoupper(self::redactSensitiveProcessText($event));
+        $managedIdentity = self::buildManagedIdentity($pname);
         $taskName = '';
         try {
-            $taskName = self::getTaskName($pname);
+            $taskName = self::getTaskName($managedIdentity);
         } catch (\Exception $e) {
             $taskName = 'unknown';
         }
+
+        if ($pname !== '' && $pname !== $managedIdentity) {
+            $message = \str_replace($pname, $managedIdentity, $message);
+        }
+        $message = self::redactSensitiveProcessText($message);
         
         $logLine = "{$timestamp} [{$eventUpper}] pname={$taskName} pid={$pid}";
         if ($message !== '') {
@@ -6859,79 +7721,28 @@ POWERSHELL;
      */
     private static function cleanupStaleIndexEntries(): array
     {
-        $removed = 0;
-        $jsonRemoved = 0;
-        
-        // 读取所有索引
-        $nameIndex = self::readNameIndex();
-        $pidIndex = self::readPidIndex();
-        $portIndex = self::readPortIndex();
-        
-        $nameIndexChanged = false;
-        $pidIndexChanged = false;
-        $portIndexChanged = false;
-        
-        foreach ($nameIndex as $pname => $entries) {
-            $aliveEntries = [];
-            
-            foreach ($entries as $entry) {
+        $candidatePids = [];
+        foreach (self::readNameIndex() as $entries) {
+            foreach ((array) $entries as $entry) {
                 $pid = (int) ($entry['pid'] ?? 0);
-                $jsonPath = $entry['jsonPath'] ?? null;
-                
-                if ($pid > 0 && self::isRunningByPid($pid)) {
-                    $aliveEntries[] = $entry;
-                    continue;
-                }
-                
-                // 进程不存活，清理
-                $removed++;
-                
-                if ($pid > 0 && isset($pidIndex[$pid])) {
-                    unset($pidIndex[$pid]);
-                    $pidIndexChanged = true;
-                }
-                
-                $ports = [];
-                if ($jsonPath && \is_file($jsonPath)) {
-                    $raw = @\file_get_contents($jsonPath);
-                    if ($raw !== false) {
-                        $data = \json_decode($raw, true);
-                        if (isset($data['ports'])) {
-                            $ports = (array) $data['ports'];
-                        }
-                    }
-                    @\unlink($jsonPath);
-                    $jsonRemoved++;
-                }
-                
-                foreach ($ports as $port) {
-                    $portKey = (string) $port;
-                    if (isset($portIndex[$portKey]) && $portIndex[$portKey] === $pname) {
-                        unset($portIndex[$portKey]);
-                        $portIndexChanged = true;
-                    }
+                if ($pid > 0) {
+                    $candidatePids[$pid] = true;
                 }
             }
-            
-            if (empty($aliveEntries)) {
-                unset($nameIndex[$pname]);
-            } else {
-                $nameIndex[$pname] = $aliveEntries;
+        }
+        foreach (\array_keys(self::readPidIndex()) as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $candidatePids[$pid] = true;
             }
-            $nameIndexChanged = true;
         }
-        
-        if ($nameIndexChanged) {
-            self::writeNameIndex($nameIndex);
-        }
-        if ($pidIndexChanged) {
-            self::writePidIndex($pidIndex);
-        }
-        if ($portIndexChanged) {
-            self::writePortIndex($portIndex);
-        }
-        
-        return ['removed' => $removed, 'json_removed' => $jsonRemoved];
+
+        // One generation-safe implementation owns stale pid/name/port removal.
+        // The subsequent cleanupStalePidFiles() pass still removes malformed or
+        // legacy orphan files that have no pid_index authority.
+        $removed = self::cleanupStalePidFilesForPids(\array_keys($candidatePids));
+
+        return ['removed' => $removed, 'json_removed' => $removed];
     }
     
     /**
@@ -6940,14 +7751,20 @@ POWERSHELL;
      * 委托给系统驱动实现，确保跨平台兼容
      *
      * @param int $pid 进程 ID
+     * @param bool $fresh 是否先失效驱动缓存再读取
      * @return string 命令行，获取失败返回空字符串
      */
-    public static function getProcessCommandLine(int $pid): string
+    public static function getProcessCommandLine(int $pid, bool $fresh = false): string
     {
         if ($pid <= 0) {
             return '';
         }
-        return self::getDriver()->getProcessCommandLine($pid);
+        $driver = self::getDriver();
+        if ($fresh) {
+            $driver->clearPortCache();
+        }
+
+        return $driver->getProcessCommandLine($pid);
     }
     
     /**
@@ -7080,18 +7897,32 @@ POWERSHELL;
             }
         }
         
-        // 策略2：通过 pid_index.json 判断（命令行获取失败时的回退方案）
-        // 进程正在终止时，命令行可能无法读取，但 pid_index 中仍有记录
-        $pname = self::getNameByPid($pid);
-        if ($pname !== 'unknown' && $pname !== '') {
-            // 检查进程名是否以 weline- 开头（通过 --name= 参数提取）
-            // 进程名格式：--name=weline-dispatcher-default 或 --name=weline-master-default-worker-1
-            if (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false) {
-                return true;
-            }
-            // 直接检查进程名是否包含 weline- 前缀
-            if (\strpos($pname, self::WELINE_PROCESS_PREFIX) !== false) {
-                return true;
+        // 策略2：pid_index 只能定位冻结 lease，不能凭 PID 数字本身
+        // 证明当前内核进程身份。PID 复用或旧索引必须通过完整 identity
+        // probe；缺 process_name/launch_id/canonical pname 时 fail closed。
+        $pidEntry = self::readPidIndex()[$pid] ?? null;
+        if (\is_array($pidEntry)) {
+            $jsonPath = (string) ($pidEntry['jsonPath'] ?? '');
+            $indexedPname = (string) ($pidEntry['pname'] ?? '');
+            $record = $jsonPath !== '' && \is_file($jsonPath)
+                ? \json_decode((string) (@\file_get_contents($jsonPath) ?: ''), true)
+                : null;
+            if (\is_array($record)) {
+                $processName = \trim((string) ($record['process_name'] ?? ''));
+                $launchId = \trim((string) ($record['launch_id'] ?? ''));
+                $recordedPname = (string) ($record['pname'] ?? $indexedPname);
+                if ($processName !== '' && $launchId !== '' && $recordedPname !== ''
+                    && self::looksLikeWelineProcessName($recordedPname)) {
+                    $probe = self::probeManagedProcessIdentity(
+                        $pid,
+                        $processName,
+                        $launchId,
+                        $recordedPname,
+                        true
+                    );
+                    return (string) ($probe['state'] ?? self::PROCESS_STATE_UNKNOWN)
+                        === self::PROCESS_STATE_RUNNING;
+                }
             }
         }
         
@@ -7124,8 +7955,10 @@ POWERSHELL;
      *
      * 返回字段：
      * - in_use / pid / pid_running / is_weline / state（既有契约，向后兼容）
-     * - pname  从 port_index / cmdline / pid_index 还原出的最完整进程标识，便于上层识别归属
+     * - pname  与 kernel listener PID 对应的进程标识；只有无法确认 PID 身份时才回退 advisory 值
      * - scope  WLS 进程的项目作用域 token（如 p16330cac），命中 weline 时尽量填；非 weline 或无法识别时为空字符串
+     * - kernel_listener_pid / kernel_listener_pname  内核监听 owner，必须一起解释
+     * - port_index_advisory_pname  scalar port_index 的代表成员，只作诊断，不能与 kernel PID 拼成进程身份
      *
      * @return array{
      *   in_use:bool,
@@ -7134,7 +7967,14 @@ POWERSHELL;
      *   is_weline:bool,
      *   state:string,
      *   pname:string,
-     *   scope:string
+     *   scope:string,
+     *   kernel_listener_pid:int,
+     *   kernel_listener_pname:string,
+     *   port_index_advisory_pname:string,
+     *   pid_index_pname:string,
+     *   pname_source:string,
+     *   kernel_is_weline:bool,
+     *   historical_weline_hint:bool
      * }
      */
     public static function inspectPortOccupant(int $port): array
@@ -7148,6 +7988,15 @@ POWERSHELL;
                 'state' => 'free',
                 'pname' => '',
                 'scope' => '',
+                'process_name' => '',
+                'kernel_listener_pid' => 0,
+                'kernel_listener_pname' => '',
+                'port_index_advisory_pname' => '',
+                'pid_index_pname' => '',
+                'pname_source' => '',
+                'kernel_is_weline' => false,
+                'historical_weline_hint' => false,
+                'advisory_scope' => '',
             ];
         }
 
@@ -7170,6 +8019,15 @@ POWERSHELL;
                 'state' => 'orphan',
                 'pname' => $portIndexPname,
                 'scope' => self::extractProjectScopeFromProcessName($portIndexPname),
+                'process_name' => '',
+                'kernel_listener_pid' => 0,
+                'kernel_listener_pname' => '',
+                'port_index_advisory_pname' => $portIndexPname,
+                'pid_index_pname' => '',
+                'pname_source' => $portIndexPname !== '' ? 'port_index_advisory' : '',
+                'kernel_is_weline' => false,
+                'historical_weline_hint' => $portIndexSuggestsWeline,
+                'advisory_scope' => self::extractProjectScopeFromProcessName($portIndexPname),
             ];
         }
 
@@ -7183,27 +8041,49 @@ POWERSHELL;
                 'state' => 'orphan',
                 'pname' => $portIndexPname,
                 'scope' => self::extractProjectScopeFromProcessName($portIndexPname),
+                'process_name' => '',
+                'kernel_listener_pid' => $pid,
+                'kernel_listener_pname' => '',
+                'port_index_advisory_pname' => $portIndexPname,
+                'pid_index_pname' => '',
+                'pname_source' => $portIndexPname !== '' ? 'port_index_advisory' : '',
+                'kernel_is_weline' => false,
+                'historical_weline_hint' => $portIndexSuggestsWeline,
+                'advisory_scope' => self::extractProjectScopeFromProcessName($portIndexPname),
             ];
         }
 
         $pidIndexPname = self::resolveWelinePnameByPidHint($pid);
-        $isWeline = $portIndexSuggestsWeline
-            || $pidIndexPname !== ''
-            || self::isWelineServerProcess($pid);
+        $kernelIsWeline = $pidIndexPname !== '' || self::isWelineServerProcess($pid);
+        $isWeline = $kernelIsWeline;
 
-        // 命中 weline 时尽量补齐 pname，便于上层按项目作用域辨别归属。
-        $pname = $portIndexPname !== '' ? $portIndexPname : $pidIndexPname;
-        if ($pname === '' && $isWeline) {
+        // Kernel PID identity is authoritative. The scalar port index may name
+        // a Worker representative while the actual shared listener belongs to
+        // Master, so it is exposed separately and never preferred here.
+        $pname = $pidIndexPname;
+        $pnameSource = $pname !== '' ? 'pid_index' : '';
+        if ($pname === '' && $kernelIsWeline) {
             $cmdLine = self::getProcessCommandLine($pid);
-            if ($cmdLine !== '') {
+            if ($cmdLine !== '' && self::looksLikeWelineProcessName($cmdLine)) {
                 $pname = $cmdLine;
+                $pnameSource = 'kernel_command_line';
             } else {
                 $indexed = self::getNameByPid($pid);
-                if ($indexed !== 'unknown' && $indexed !== '') {
+                if ($indexed !== 'unknown' && $indexed !== ''
+                    && self::looksLikeWelineProcessName($indexed)) {
                     $pname = $indexed;
+                    $pnameSource = 'pid_name_index';
                 }
             }
         }
+        if ($pname === '' && $portIndexPname !== '') {
+            $pname = $portIndexPname;
+            $pnameSource = 'port_index_advisory';
+        }
+
+        $scope = $kernelIsWeline
+            ? self::extractProjectScopeFromProcessName($pname)
+            : '';
 
         return [
             'in_use' => true,
@@ -7212,7 +8092,16 @@ POWERSHELL;
             'is_weline' => $isWeline,
             'state' => $isWeline ? 'weline' : 'foreign',
             'pname' => $pname,
-            'scope' => self::extractProjectScopeFromProcessName($pname),
+            'scope' => $scope,
+            'process_name' => $pname,
+            'kernel_listener_pid' => $pid,
+            'kernel_listener_pname' => $kernelIsWeline ? $pname : '',
+            'port_index_advisory_pname' => $portIndexPname,
+            'pid_index_pname' => $pidIndexPname,
+            'pname_source' => $pnameSource,
+            'kernel_is_weline' => $kernelIsWeline,
+            'historical_weline_hint' => $portIndexSuggestsWeline && !$kernelIsWeline,
+            'advisory_scope' => self::extractProjectScopeFromProcessName($portIndexPname),
         ];
     }
     

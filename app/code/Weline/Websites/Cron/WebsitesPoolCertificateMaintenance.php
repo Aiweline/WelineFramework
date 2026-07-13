@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\Attribute\CronTestHelp;
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\Attribute\CronTestHelp;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(

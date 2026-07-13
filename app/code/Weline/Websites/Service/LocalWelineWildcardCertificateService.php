@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
-use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
 
 class LocalWelineWildcardCertificateService
 {
-    public const WILDCARD_DOMAIN = LocalDomainPolicy::TEST_WILDCARD_DOMAIN;
+    public const WILDCARD_DOMAIN = '*.weline.test';
 
     /**
      * @var null|\Closure(string, string, array<string, mixed>): mixed
@@ -24,7 +24,8 @@ class LocalWelineWildcardCertificateService
 
     public function isEligibleDomain(string $domain): bool
     {
-        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
+        return \class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     /**
@@ -33,7 +34,10 @@ class LocalWelineWildcardCertificateService
     public function ensureWildcardCertificateForDomain(string $domain, int $websiteId = 0): array
     {
         $domain = \strtolower(\trim($domain));
-        $wildcardDomain = $this->resolveWildcardDomain($domain) ?? LocalDomainPolicy::currentWildcardDomain();
+        $wildcardDomain = $this->resolveWildcardDomain($domain)
+            ?? (\class_exists(LocalDomainPolicy::class)
+                ? LocalDomainPolicy::currentWildcardDomain()
+                : self::WILDCARD_DOMAIN);
         if (!$this->isEligibleDomain($domain)) {
             return [
                 'success' => false,
@@ -81,7 +85,9 @@ class LocalWelineWildcardCertificateService
 
     public function resolveWildcardDomain(string $domain): ?string
     {
-        return LocalDomainPolicy::resolveWildcardDomain($domain);
+        return \class_exists(LocalDomainPolicy::class)
+            ? LocalDomainPolicy::resolveWildcardDomain($domain)
+            : null;
     }
 
     /**

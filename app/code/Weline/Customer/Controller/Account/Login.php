@@ -6,6 +6,7 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
+use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
@@ -142,8 +143,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
             /** @var CustomerLoginChallengeHandlerInterface $challengeHandler */
             $challengeHandler = ObjectManager::getInstance(CustomerLoginChallengeHandlerInterface::class);
-            if (method_exists($challengeHandler, 'createChallenge')) {
-                $challenge = $challengeHandler->createChallenge($user, $redirectUrl, $rememberDuration);
+            if ($challengeHandler instanceof CustomerLoginChallengeCreatorInterface) {
+                $challenge = $challengeHandler->createChallenge((int)$user->getId(), $redirectUrl, $rememberDuration);
                 if (is_array($challenge) && !empty($challenge['redirect'])) {
                     return $this->respondChallenge(
                         (string)__('请完成两步验证。'),

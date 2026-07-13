@@ -8,6 +8,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
+use Weline\Theme\Api\Asset\StaticAssetPublisherInterface;
 
 class RouterRunBefore implements ObserverInterface
 {
@@ -172,13 +173,13 @@ class RouterRunBefore implements ObserverInterface
 
     private function publishThemeOverrideStaticPath(string $requestPath): ?string
     {
-        if (!class_exists(\Weline\Theme\Service\ThemeStaticAssetPublisher::class)) {
+        if (!interface_exists(StaticAssetPublisherInterface::class)) {
             return null;
         }
 
         try {
-            /** @var \Weline\Theme\Service\ThemeStaticAssetPublisher $publisher */
-            $publisher = ObjectManager::getInstance(\Weline\Theme\Service\ThemeStaticAssetPublisher::class);
+            /** @var StaticAssetPublisherInterface $publisher */
+            $publisher = ObjectManager::getInstance(StaticAssetPublisherInterface::class);
             $publicPath = $publisher->publishForRequestPath($requestPath);
             return is_string($publicPath) && $publicPath !== '' ? $publicPath : null;
         } catch (\Throwable) {

@@ -830,6 +830,27 @@ class WindowsProcessDriver extends AbstractProcessDriver
 
         return false;
     }
+
+    /**
+     * @inheritDoc
+     */
+    public function killProcessOnce(int $pid, bool $tree = false): bool
+    {
+        if (!$this->isValidPid($pid)) {
+            return false;
+        }
+
+        $output = [];
+        $exitCode = 0;
+        $treeFlag = $tree ? '/T ' : '';
+        $executed = $this->executeCommand(
+            "taskkill /F {$treeFlag}/PID {$pid} 2>NUL",
+            $output,
+            $exitCode
+        );
+
+        return $executed && $exitCode === 0;
+    }
     
     /**
      * @inheritDoc
@@ -1091,57 +1112,73 @@ class WindowsProcessDriver extends AbstractProcessDriver
      */
     public function isRunningByPid(int $pid): bool
     {
+        return $this->probeProcessState($pid) === self::PROCESS_STATE_RUNNING;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function probeProcessState(int $pid, bool $fresh = false): string
+    {
         if (!$this->isValidPid($pid)) {
-            return false;
+            return self::PROCESS_STATE_EXITED;
         }
 
-        // 方案1：复用进程内 tasklist 全表快照（短 TTL）。
-        // status / stop / 自愈检测等路径上需要批量判定一组 PID 是否存活；
-        // 全表查询 O(1)，且与 batchGetProcessInfo / processExists 共用同一份缓存，
-        // 把过去每次单独跑 PowerShell（~1s）或单条 tasklist /FI（~2.6s）压成 1 次。
-        $taskListMap = $this->fetchTaskListPidMap();
-        if ($taskListMap !== null && $taskListMap !== []) {
-            return isset($taskListMap[$pid]);
+        if ($fresh) {
+            $this->clearPortCache();
+        } else {
+            // 普通状态查询保留全表缓存快路径；全表非空才可把未命中解释为 exited。
+            $taskListMap = $this->fetchTaskListPidMap();
+            if ($taskListMap !== null && $taskListMap !== []) {
+                return isset($taskListMap[$pid])
+                    ? self::PROCESS_STATE_RUNNING
+                    : self::PROCESS_STATE_EXITED;
+            }
         }
-        // 全表为空（exec 失败/权限缺失等异常）时落回逐 PID 检测路径，保持原语义不变。
 
-        // 方案2：PowerShell Get-Process（兜底）
+        // 身份围栏必须使用 targeted fresh probe。输出仅接受本命令生成的稳定 token，
+        // 不解析本地化错误消息。
         if ($this->isPowerShellAvailable()) {
             $output = [];
             $exitCode = 0;
-            $this->executeCommand(
-                "powershell -NoProfile -Command \"if(Get-Process -Id {$pid} -ErrorAction SilentlyContinue){echo 1}else{echo 0}\" 2>NUL",
+            $executed = $this->executeCommand(
+                "powershell -NoProfile -Command \"\$probeError=@(); \$p=Get-Process -Id {$pid} -ErrorAction SilentlyContinue -ErrorVariable +probeError; if(\$null -ne \$p){[Console]::Out.Write('WELINE_RUNNING')}elseif(\$probeError.Count -gt 0 -and \$probeError[0].FullyQualifiedErrorId -like 'NoProcessFoundForGivenId*'){[Console]::Out.Write('WELINE_EXITED')}else{[Console]::Out.Write('WELINE_UNKNOWN')}\" 2>NUL",
                 $output,
                 $exitCode
             );
-            
-            if ($exitCode === 0 && !empty($output[0])) {
-                return \trim($output[0]) === '1';
+
+            if ($executed && $exitCode === 0) {
+                $token = \trim(\implode('', $output));
+                if ($token === 'WELINE_RUNNING') {
+                    return self::PROCESS_STATE_RUNNING;
+                }
+                if ($token === 'WELINE_EXITED') {
+                    return self::PROCESS_STATE_EXITED;
+                }
             }
         }
-        
-        // 方案3：tasklist /FI（最末端兜底）
+
+        // tasklist /FI 是所有受支持 Windows 的兼容回退。命令成功但没有目标 PID
+        // 才能确定 exited；执行失败或非零退出码保持 unknown。
         $output = [];
         $exitCode = 0;
-        $this->executeCommand("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $exitCode);
-        
-        if (!empty($output)) {
-            foreach ($output as $line) {
-                $line = \trim($line);
-                if ($line === '') {
-                    continue;
-                }
-                $parts = \str_getcsv($line, ',', '"', '');
-                if (\count($parts) >= 2) {
-                    $parsedPid = $this->sanitizePid($parts[1]);
-                    if ($parsedPid === $pid) {
-                        return true;
-                    }
-                }
+        $executed = $this->executeCommand(
+            "tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL",
+            $output,
+            $exitCode
+        );
+        if (!$executed || $exitCode !== 0) {
+            return self::PROCESS_STATE_UNKNOWN;
+        }
+
+        foreach ($output as $line) {
+            $parts = \str_getcsv(\trim((string) $line), ',', '"', '');
+            if (\count($parts) >= 2 && $this->sanitizePid($parts[1]) === $pid) {
+                return self::PROCESS_STATE_RUNNING;
             }
         }
-        
-        return false;
+
+        return self::PROCESS_STATE_EXITED;
     }
     
     /**

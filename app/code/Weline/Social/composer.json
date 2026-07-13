@@ -1,0 +1,21 @@
+{
+    "name": "weline/module-social",
+    "description": "WelineFramework Social module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-admin": "@dev",
+        "weline/module-ai": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-frontend": "@dev",
+        "weline/module-i18n": "@dev",
+        "weline/module-queue": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Social\\": ""
+        }
+    }
+}

@@ -12,8 +12,8 @@ declare(strict_types=1);
  */
 namespace Weline\Websites\Extends\Module\Weline_Ai\Adapter;
 
-use Weline\Ai\Interface\AdapterStyleBindingInterface;
-use Weline\Ai\Interface\ScenarioAdapterInterface;
+use Weline\Ai\Api\AdapterStyleBindingInterface;
+use Weline\Ai\Api\ScenarioAdapterInterface;
 
 class WebsiteBuilderAdapter implements ScenarioAdapterInterface, AdapterStyleBindingInterface
 {

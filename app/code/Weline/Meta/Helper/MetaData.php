@@ -14,7 +14,8 @@ namespace Weline\Meta\Helper;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Model\Meta;
 
 /**
@@ -73,7 +74,7 @@ class MetaData
     /** @var array 静态缓存：文件路径到 identify 的映射 [filePath => identify] */
     protected static array $filePathCache = [];
     
-    /** @var array 静态缓存：翻译字典缓存 [locale => [md5 => translation]] */
+    /** @var array 静态缓存：翻译字典缓存 [locale => [translationKey => translation]] */
     protected static array $translationCache = [];
     
     /** @var array 批量翻译键收集器 [locale => [md5 => translationKey]] */
@@ -273,30 +274,18 @@ class MetaData
                 
                 // 从I18n Dictionary获取翻译
                 try {
-                    /** @var LocaleDictionary $localeDict */
-                    $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-                    
+                    $dictionary = self::dictionaryRepository();
                     // 先尝试当前语言
-                    $md5 = LocaleDictionary::generateMd5($translationKey, $currentLocale);
-                    $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-                    
-                    if ($localeDict->getId()) {
-                        $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                        if (!empty($translation)) {
-                            return $translation;
-                        }
+                    $translation = $dictionary->getEntry($translationKey, $currentLocale)?->translation;
+                    if (!empty($translation)) {
+                        return $translation;
                     }
                     
                     // 如果当前语言没有翻译，尝试默认语言
                     if ($currentLocale !== $defaultLocale) {
-                        $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
-                        
-                        if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                            if (!empty($translation)) {
-                                return $translation;
-                            }
+                        $translation = $dictionary->getEntry($translationKey, $defaultLocale)?->translation;
+                        if (!empty($translation)) {
+                            return $translation;
                         }
                     }
                 } catch (\Exception $e) {
@@ -339,9 +328,10 @@ class MetaData
                         
                         // 获取主题ID
                         try {
-                            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
-                            $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-                            $theme = $themeContext->resolveTheme($area);
+                            $themeContext = ObjectManager::getInstance(
+                                \Weline\Framework\Runtime\RuntimeProviderResolver::class,
+                            )->resolve(\Weline\Framework\Runtime\ThemeContextProviderInterface::class);
+                            $theme = $themeContext?->resolveTheme($area);
                             
                             if ($theme && $theme->getId()) {
                                 $configValue = $metaConfig->getConfig($theme->getId(), $namespace, $configKey, 'default', $locale);
@@ -472,30 +462,18 @@ class MetaData
                     
                     // 从I18n Dictionary获取翻译
                     try {
-                        /** @var LocaleDictionary $localeDict */
-                        $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-                        
+                        $dictionary = self::dictionaryRepository();
                         // 先尝试当前语言
-                        $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-                        
-                        if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                            if (!empty($translation)) {
-                                return $translation;
-                            }
+                        $translation = $dictionary->getEntry($translationKey, $locale)?->translation;
+                        if (!empty($translation)) {
+                            return $translation;
                         }
                         
                         // 如果当前语言没有翻译，尝试默认语言
                         if ($locale !== $defaultLocale) {
-                            $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
-                            
-                            if ($localeDict->getId()) {
-                                $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                                if (!empty($translation)) {
-                                    return $translation;
-                                }
+                            $translation = $dictionary->getEntry($translationKey, $defaultLocale)?->translation;
+                            if (!empty($translation)) {
+                                return $translation;
                             }
                         }
                     } catch (\Exception $e) {
@@ -913,27 +891,22 @@ class MetaData
         
         // 先检查缓存
         foreach ($translationKeys as $translationKey => $info) {
-            $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-            
             // 检查当前语言缓存
-            if (isset(self::$translationCache[$locale][$md5])) {
-                $translations[$translationKey] = self::$translationCache[$locale][$md5];
+            if (isset(self::$translationCache[$locale][$translationKey])) {
+                $translations[$translationKey] = self::$translationCache[$locale][$translationKey];
                 continue;
             }
             
             // 检查默认语言缓存
             if ($locale !== $defaultLocale) {
-                $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                if (isset(self::$translationCache[$defaultLocale][$md5Default])) {
-                    $translations[$translationKey] = self::$translationCache[$defaultLocale][$md5Default];
+                if (isset(self::$translationCache[$defaultLocale][$translationKey])) {
+                    $translations[$translationKey] = self::$translationCache[$defaultLocale][$translationKey];
                     continue;
                 }
             }
             
             // 需要查询数据库
             $missingKeys[$translationKey] = [
-                'md5' => $md5,
-                'md5Default' => $locale !== $defaultLocale ? LocaleDictionary::generateMd5($translationKey, $defaultLocale) : null,
                 'fallback' => $info['value']
             ];
         }
@@ -941,66 +914,39 @@ class MetaData
         // 批量查询数据库（只查询缓存中没有的）
         if (!empty($missingKeys)) {
             try {
-                /** @var LocaleDictionary $localeDict */
-                $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-                
-                // 收集所有需要查询的 MD5
-                $md5sToQuery = [];
+                $repository = self::dictionaryRepository();
+                $words = array_keys($missingKeys);
+                $localeEntries = $repository->getEntries($words, $locale);
+                $defaultWords = [];
+
                 foreach ($missingKeys as $translationKey => $info) {
-                    $md5sToQuery[$info['md5']] = ['key' => $translationKey, 'locale' => $locale];
-                    if ($info['md5Default']) {
-                        $md5sToQuery[$info['md5Default']] = ['key' => $translationKey, 'locale' => $defaultLocale];
+                    $translation = $localeEntries[$translationKey]->translation ?? '';
+                    if (!empty($translation)) {
+                        self::$translationCache[$locale][$translationKey] = $translation;
+                        $translations[$translationKey] = $translation;
+                        continue;
+                    }
+
+                    if ($locale !== $defaultLocale) {
+                        $defaultWords[] = $translationKey;
+                    } else {
+                        $translations[$translationKey] = $info['fallback'];
                     }
                 }
-                
-                // 批量查询（使用 IN 查询）
-                if (!empty($md5sToQuery)) {
-                    $md5List = array_keys($md5sToQuery);
-                    
-                    // 使用 select() 和 fetchArray() 批量获取结果
-                    $results = [];
-                    try {
-                        $queryResults = $localeDict->reset()
-                            ->where(LocaleDictionary::schema_fields_MD5, $md5List, 'IN')
-                            ->select()
-                            ->fetchArray();
-                        
-                        // 处理查询结果
-                        foreach ($queryResults as $row) {
-                            $md5 = $row[LocaleDictionary::schema_fields_MD5] ?? '';
-                            $localeCode = $row[LocaleDictionary::schema_fields_LOCALE_CODE] ?? '';
-                            $translate = $row[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
-                            
-                            if (!empty($md5) && !empty($translate)) {
-                                $results[$md5] = [
-                                    'locale' => $localeCode,
-                                    'translate' => $translate
-                                ];
-                                
-                                // 更新缓存
-                                if (!isset(self::$translationCache[$localeCode])) {
-                                    self::$translationCache[$localeCode] = [];
-                                }
-                                self::$translationCache[$localeCode][$md5] = $translate;
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        // 查询失败，使用回退值
+
+                // 当前语言缺失时才批量查询默认语言，常态仅一次查询。
+                $defaultEntries = $defaultWords !== []
+                    ? $repository->getEntries($defaultWords, $defaultLocale)
+                    : [];
+                foreach ($defaultWords as $translationKey) {
+                    $translation = $defaultEntries[$translationKey]->translation ?? '';
+                    if (!empty($translation)) {
+                        self::$translationCache[$defaultLocale][$translationKey] = $translation;
+                        $translations[$translationKey] = $translation;
+                        continue;
                     }
-                    
-                    // 应用查询结果
-                    foreach ($missingKeys as $translationKey => $info) {
-                        // 优先使用当前语言的翻译
-                        if (isset($results[$info['md5']]) && $results[$info['md5']]['locale'] === $locale) {
-                            $translations[$translationKey] = $results[$info['md5']]['translate'];
-                        } elseif ($info['md5Default'] && isset($results[$info['md5Default']])) {
-                            // 使用默认语言的翻译
-                            $translations[$translationKey] = $results[$info['md5Default']]['translate'];
-                        } else {
-                            // 使用回退值
-                            $translations[$translationKey] = $info['fallback'];
-                        }
-                    }
+
+                    $translations[$translationKey] = $missingKeys[$translationKey]['fallback'];
                 }
             } catch (\Exception $e) {
                 // 如果查询失败，使用回退值
@@ -1152,9 +1098,10 @@ class MetaData
             // 获取主题ID
             if ($themeId === null) {
                 try {
-                    /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
-                    $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-                    $theme = $themeContext->resolveTheme($area);
+                    $themeContext = ObjectManager::getInstance(
+                        \Weline\Framework\Runtime\RuntimeProviderResolver::class,
+                    )->resolve(\Weline\Framework\Runtime\ThemeContextProviderInterface::class);
+                    $theme = $themeContext?->resolveTheme($area);
                     
                     if (!$theme || !$theme->getId()) {
                         return false;
@@ -1239,28 +1186,13 @@ class MetaData
                     
                     // 设置翻译值
                     try {
-                        /** @var LocaleDictionary $localeDict */
-                        $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-                        
-                        $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-                        
-                        if ($localeDict->getId()) {
-                            // 更新
-                            $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $value)
-                                      ->save();
-                        } else {
-                            // 插入
-                            $localeDict->setData(LocaleDictionary::schema_fields_MD5, $md5)
-                                      ->setData(LocaleDictionary::schema_fields_WORD, $translationKey)
-                                      ->setData(LocaleDictionary::schema_fields_LOCALE_CODE, $locale)
-                                      ->setData(LocaleDictionary::schema_fields_TRANSLATE, $value)
-                                      ->save();
+                        if (!self::dictionaryRepository()->upsert($translationKey, $locale, $value)) {
+                            return false;
                         }
                         
                         // 清除翻译缓存
                         if (isset(self::$translationCache[$locale])) {
-                            unset(self::$translationCache[$locale][$md5]);
+                            unset(self::$translationCache[$locale][$translationKey]);
                         }
                         
                         return true;
@@ -1470,6 +1402,17 @@ class MetaData
         }
 
         return null;
+    }
+
+    private static function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+
+        return $provider;
     }
     
     /**

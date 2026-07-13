@@ -455,6 +455,7 @@ final class SessionServer
             return 0;
         }
 
+        $this->store->relieveMemoryPressure();
         $this->clients[$clientId]['buffer'] .= $data;
 
         $messages = SessionProtocol::extractMessages($this->clients[$clientId]['buffer']);
@@ -758,6 +759,7 @@ final class SessionServer
      */
     private function doMaintenance(): void
     {
+        $this->store->relieveMemoryPressure();
         $this->store->checkPersist();
 
         $now = \time();
@@ -1114,9 +1116,12 @@ final class SessionServer
         $count = 0;
         $sessionNamespaceStateId = '__ns__:sess:__kv__:sess';
         $domain = (string)($filter['__domain'] ?? '');
+        $summaryOnly = $this->serviceRole === 'memory_server'
+            || (bool)($filter['__summary_only'] ?? false);
         if ($domain !== '') {
             unset($filter['__domain']);
         }
+        unset($filter['__summary_only']);
         
         foreach ($sessionIds as $sessionId) {
             if ($count >= $limit) {
@@ -1128,6 +1133,12 @@ final class SessionServer
             }
             
             $data = $this->store->getAll($sessionId);
+
+            if ($summaryOnly) {
+                $result[] = $this->summarizeListEntry($sessionId, $data);
+                $count++;
+                continue;
+            }
 
             // 新架构：Session 数据聚合在 sess 命名空间，需要展开为真实 session 列表。
             if ($sessionId === $sessionNamespaceStateId) {
@@ -1188,6 +1199,30 @@ final class SessionServer
         }
         
         return $result;
+    }
+
+    /**
+     * MemoryService 的 list 只返回有界元数据；详情必须通过 getAll(namespace) 显式读取。
+     * 这里不调用 array_keys()，避免大命名空间为了诊断再复制一份完整键数组。
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function summarizeListEntry(string $sessionId, array $data): array
+    {
+        $sampleKeys = [];
+        foreach ($data as $key => $_value) {
+            $sampleKeys[] = (string)$key;
+            if (\count($sampleKeys) >= 8) {
+                break;
+            }
+        }
+
+        return [
+            'session_id' => $sessionId,
+            'data_count' => \count($data),
+            'keys' => $sampleKeys,
+        ];
     }
 
     private function isSessionDomainStateId(string $stateId, string $sessionNamespaceStateId): bool

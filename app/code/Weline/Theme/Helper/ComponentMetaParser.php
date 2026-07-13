@@ -10,7 +10,8 @@
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Meta\Service\ParamDefinitionNormalizer;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 
 class ComponentMetaParser
 {
@@ -130,8 +131,12 @@ class ComponentMetaParser
         }
         
         // 提取参数定义 @param name {type=string, default=..., name=..., description=...}
-        /** @var ParamDefinitionNormalizer $normalizer */
-        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        /** @var ParamDefinitionNormalizerInterface $normalizer */
+        $normalizer = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ParamDefinitionNormalizerInterface::class);
+        if (!$normalizer instanceof ParamDefinitionNormalizerInterface) {
+            throw new \RuntimeException('Weline_Meta param normalizer provider is unavailable.');
+        }
         $paramDefinitions = $normalizer->extractParamAnnotations($content);
         if (!empty($paramDefinitions)) {
             foreach ($paramDefinitions as $paramName => $definition) {
@@ -371,4 +376,3 @@ class ComponentMetaParser
         return $doc;
     }
 }
-

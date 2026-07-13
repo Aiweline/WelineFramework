@@ -1,0 +1,14 @@
+{
+    "name": "weline/module-storage",
+    "description": "WelineFramework Storage module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Storage\\": ""
+        }
+    }
+}

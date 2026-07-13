@@ -67,7 +67,13 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
                         <p class="i18n-admin-lead"><?= __('根据地区翻译来自前端采集到的词.') ?></p>
                     </div>
                     <div class="i18n-admin-actions">
-                        <a class="btn btn-outline-primary" href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>" data-confirm-href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>" data-confirm-message="<?= htmlspecialchars(__('更新（收集）'), ENT_QUOTES, 'UTF-8') ?>" data-confirm-type="info"><?= __('更新') ?></a>
+                        <a class="btn btn-outline-primary"
+                           href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>"
+                           data-async-href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>"
+                           data-async-action="word-collect"
+                           data-async-success-message="<?= htmlspecialchars(__('词典已更新，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
+                           data-confirm-message="<?= htmlspecialchars(__('更新（收集）'), ENT_QUOTES, 'UTF-8') ?>"
+                           data-confirm-type="info"><?= __('更新') ?></a>
                         <button type="button" class="btn btn-outline-success" id="locale-word-publish-btn"><?= __('发布') ?></button>
                         <button type="button" class="btn btn-primary" id="locale-word-add-btn"><?= __('添加翻译') ?></button>
                         <a class="btn btn-outline-secondary" href="@backend-url('*/backend/dictionary')?locale_code=<?= urlencode($localeCode) ?>"><?= __('全局词典') ?></a>
@@ -230,11 +236,11 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
 <script>
 (function () {
     var endpoints = {
-        translate: "@backend-url('*/backend/countries/locale/words/translate')",
-        restore: "@backend-url('*/backend/countries/locale/words/restore')",
-        push: "@backend-url('*/backend/countries/locale/words/push')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>",
-        enable: "@backend-url('*/backend/countries/locale/words/enable')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>",
-        disable: "@backend-url('*/backend/countries/locale/words/disable')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>"
+        translate: 'word-translate',
+        restore: 'word-restore',
+        push: 'word-push',
+        enable: 'word-enable',
+        disable: 'word-disable'
     };
 
     var modalElement = document.getElementById('locale-word-edit-modal');
@@ -242,16 +248,14 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
     var currentRow = null;
 
     function postForm(url, payload) {
-        return fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'same-origin',
-            body: new URLSearchParams(payload)
-        }).then(function (response) {
-            return response.json();
+        return Promise.resolve(window.Weline.Api.resource('i18n_admin')).then(function (api) {
+            return api.action({
+                action: url,
+                payload: Object.assign({
+                    country_code: "<?= addslashes($countryCode) ?>",
+                    code: "<?= addslashes($localeCode) ?>"
+                }, payload || {})
+            }, {silent: true});
         });
     }
 
@@ -349,9 +353,6 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
 
             if (currentRow) {
                 updateRowTranslation(currentRow, payload.translate);
-            } else {
-                window.location.reload();
-                return;
             }
             I18nAdminUI.toast('success', result.msg || result.message || '<?= addslashes(__('成功保存！')) ?>');
             if (modal) {
@@ -379,7 +380,14 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
                 return;
             }
 
-            window.location.href = endpoints.push;
+            postForm(endpoints.push, {}).then(function (result) {
+                if (!result.success) {
+                    throw new Error(result.msg || result.message || '<?= addslashes(__('发布失败')) ?>');
+                }
+                I18nAdminUI.toast('success', result.msg || result.message || '<?= addslashes(__('发布成功')) ?>');
+            }).catch(function (error) {
+                I18nAdminUI.toast('error', error.message || '<?= addslashes(__('请求错误！')) ?>');
+            });
         });
     });
 
@@ -391,7 +399,18 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
                     return;
                 }
 
-                window.location.href = mode === 'online' ? endpoints.enable : endpoints.disable;
+                postForm(mode === 'online' ? endpoints.enable : endpoints.disable, {}).then(function (result) {
+                    if (!result.success) {
+                        throw new Error(result.msg || result.message || '<?= addslashes(__('操作失败')) ?>');
+                    }
+                    var modeLabel = mode === 'online' ? '<?= addslashes(__('实时')) ?>' : '<?= addslashes(__('缓存')) ?>';
+                    document.querySelectorAll('[data-mode-switch]').forEach(function (modeButton) {
+                        modeButton.classList.toggle('active', modeButton.getAttribute('data-mode-switch') === mode);
+                    });
+                    I18nAdminUI.toast('success', result.msg || result.message || '<?= addslashes(__('操作成功')) ?>' + '：' + modeLabel);
+                }).catch(function (error) {
+                    I18nAdminUI.toast('error', error.message || '<?= addslashes(__('请求错误！')) ?>');
+                });
             });
         });
     });

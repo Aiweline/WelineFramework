@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Ai\Adapter;
 
-use Weline\Ai\Interface\AdapterModelBindingInterface;
-use Weline\Ai\Interface\ScenarioAdapterInterface;
+use Weline\Ai\Api\AdapterModelBindingInterface;
+use Weline\Ai\Api\ScenarioAdapterInterface;
 
 class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInterface
 {

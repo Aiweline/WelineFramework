@@ -227,8 +227,13 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                     
                     if (form !== undefined && form.length > 0) {
                         for (var i = 0; i < form.length; i++) {
-                            let sub_form = $(form[i])
-                            sub_form.find(':submit').click()
+                            // 使用原生 requestSubmit 触发 submit 事件，兼容 iframe 内由 JS 接管的 AJAX 表单。
+                            // 直接模拟按钮 click 在表单调用 preventDefault 时可能只触发按钮事件而不进入提交处理。
+                            if (typeof form[i].requestSubmit === 'function') {
+                                form[i].requestSubmit();
+                            } else {
+                                $(form[i]).trigger('submit');
+                            }
                             showLoading();
                         }
                         hideLoading();

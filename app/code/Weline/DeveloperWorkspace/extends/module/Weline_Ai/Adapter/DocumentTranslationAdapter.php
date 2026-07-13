@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Extends\Module\Weline_Ai\Adapter;
 
-use Weline\Ai\Interface\ScenarioAdapterInterface;
-use Weline\Ai\Model\AiModel;
+use Weline\Ai\Api\ScenarioAdapterInterface;
+use Weline\Ai\Api\AiModel;
 
 class DocumentTranslationAdapter implements ScenarioAdapterInterface
 {

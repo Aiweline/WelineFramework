@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Cron;
 
 use Weline\Ai\Service\Provider\ModelSyncService;
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 /**

@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\Multipass\Service;
 
-use Weline\Customer\Model\Customer;
+use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
+use Weline\Customer\Api\Auth\CustomerIdentity;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\AccountBinding;
 use Weline\Multipass\Model\AuthorizationCode;
 use Weline\Multipass\Model\IdentityToken;
 use Weline\Multipass\Model\TrustedApp;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
 
 class IdentityBridgeService
 {
@@ -33,6 +34,11 @@ class IdentityBridgeService
         'appstore.account' => ['label' => '应用商城账号', 'description' => '创建或关联应用商城账号', 'risk' => 'medium'],
         'community.account' => ['label' => '社区账号', 'description' => '创建或关联论坛/社区账号', 'risk' => 'medium'],
     ];
+
+    public function __construct(
+        private ?CustomerAccountFacadeInterface $customerAccounts = null,
+    ) {
+    }
 
     protected function newTrustedAppModel(): TrustedApp
     {
@@ -140,7 +146,7 @@ class IdentityBridgeService
     }
 
     public function createDeveloperApplication(
-        Customer $customer,
+        CustomerIdentity $customer,
         string $name,
         string $redirectUri,
         string $trustedDomain = '',
@@ -265,7 +271,7 @@ class IdentityBridgeService
     public function authorizeCustomer(
         string $clientId,
         string $redirectUri,
-        Customer $customer,
+        CustomerIdentity $customer,
         array $requestedScopes = [],
         string $state = ''
     ): AuthorizationCode {
@@ -414,8 +420,8 @@ class IdentityBridgeService
         $app = $context['app'];
         $scopes = (array) $context['scopes'];
 
-        $customer = ObjectManager::getInstance(Customer::class, [], false)->load($binding->getLocalCustomerId());
-        if (!$customer->getId()) {
+        $customer = $this->customerAccounts()->find($binding->getLocalCustomerId());
+        if ($customer === null) {
             return null;
         }
 
@@ -611,7 +617,7 @@ class IdentityBridgeService
             ->count();
     }
 
-    private function findOrCreateBinding(TrustedApp $app, Customer $customer): AccountBinding
+    private function findOrCreateBinding(TrustedApp $app, CustomerIdentity $customer): AccountBinding
     {
         $binding = $this->newBindingModel()
             ->where(AccountBinding::schema_fields_APP_ID, $app->getId())
@@ -782,6 +788,11 @@ class IdentityBridgeService
         if ($existing instanceof TrustedApp && $existing->getId()) {
             throw new \InvalidArgumentException((string) __('该回调地址已经提交过 Multipass 管理申请'));
         }
+    }
+
+    private function customerAccounts(): CustomerAccountFacadeInterface
+    {
+        return $this->customerAccounts ??= ObjectManager::getInstance(AccountFacadeResolver::class)->customer();
     }
 
     private function normalizeConfigFlag(mixed $value): bool

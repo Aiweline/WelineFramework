@@ -11,17 +11,18 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Helper;
 
-use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Api\Auth\BackendInteractiveAuthInterface;
+use Weline\Backend\Api\Auth\BackendLoginAccount;
 use Weline\Framework\Http\Request;
 
 class Data extends \Weline\Framework\App\Helper
 {
     protected Request $request;
-    private BackendUser $adminUser;
+    private BackendInteractiveAuthInterface $adminUser;
 
     public function __construct(
-        Request     $_request,
-        BackendUser $adminUser
+        Request $_request,
+        BackendInteractiveAuthInterface $adminUser
     )
     {
         $this->request   = $_request;
@@ -35,21 +36,18 @@ class Data extends \Weline\Framework\App\Helper
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/11/9 14:06
      * 参数区：
-     * @return BackendUser
+     * @return BackendLoginAccount
      */
-    public function getRequestBackendUser(): BackendUser
+    public function getRequestBackendUser(): BackendLoginAccount
     {
         // WLS 兼容：从 ObjectManager 获取当前请求的 Request 实例
         // 不使用缓存的 $this->request，因为在 WLS 中它可能指向旧请求
         $currentRequest = \Weline\Framework\Manager\ObjectManager::getInstance(Request::class);
         $username = $currentRequest->getParam('username');
         try {
-            // 使用 where 查询，确保大小写不敏感匹配
-            $user = clone $this->adminUser->clear();
-            $user->where('username', $username)->find()->fetch();
-            return $user;
+            return $this->adminUser->findByUsername((string)$username) ?? BackendLoginAccount::empty();
         } catch (\Exception $exception) {
-            return $this->adminUser;
+            return BackendLoginAccount::empty();
         }
     }
     /**
@@ -59,14 +57,14 @@ class Data extends \Weline\Framework\App\Helper
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/11/9 14:06
      * 参数区：
-     * @return BackendUser
+     * @return BackendLoginAccount
      */
-    public function getSessionUser(string $sess_id): BackendUser
+    public function getSessionUser(string $sess_id): BackendLoginAccount
     {
         try {
-            return clone $this->adminUser->clear()->load($this->adminUser::schema_fields_sess_id, $sess_id);
+            return $this->adminUser->findBySessionId($sess_id) ?? BackendLoginAccount::empty();
         } catch (\Exception $exception) {
-            return $this->adminUser;
+            return BackendLoginAccount::empty();
         }
     }
     /**
@@ -76,14 +74,14 @@ class Data extends \Weline\Framework\App\Helper
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/11/9 14:06
      * 参数区：
-     * @return BackendUser
+     * @return BackendLoginAccount
      */
-    public function getUser(int $user_id): BackendUser
+    public function getUser(int $user_id): BackendLoginAccount
     {
         try {
-            return clone $this->adminUser->clear()->load($user_id);
+            return $this->adminUser->find($user_id) ?? BackendLoginAccount::empty();
         } catch (\Exception $exception) {
-            return $this->adminUser;
+            return BackendLoginAccount::empty();
         }
     }
 }

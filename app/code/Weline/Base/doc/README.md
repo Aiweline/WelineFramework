@@ -15,7 +15,7 @@
 
 - 模块代码：`Weline_Base`
 - 目录：`app/code/Weline/Base`
-- 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 当前状态：非运行时注册模块，作为根项目安装默认发行模块集的 Composer 聚合包。
 
 ## 代码面概览
 
@@ -26,7 +26,10 @@
 
 ## 开发关注点
 
-- 当前主要依赖源码结构理解模块边界；如本模块后续承担稳定业务能力，建议继续把职责和接口沉淀到 `doc/`。
+- PHP 平台要求与全部注册 Weline 模块保持一致，当前为 `^8.4`。
+- 模块 Composer 包名使用 `weline/module-{kebab-case-module}`，仅 Framework 使用 `weline/framework`。
+- 模块包更名时必须同步本聚合包，不得继续依赖旧别名。
+- Path repository 只负责发现本地包；是否纳入默认发行集以 Base `composer.json` 的 `require` 为准。
 
 ## 本模块文档资产
 

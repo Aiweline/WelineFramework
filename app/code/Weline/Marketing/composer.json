@@ -1,0 +1,17 @@
+{
+    "name": "weline/module-marketing",
+    "description": "WelineFramework Marketing module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-i18n": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Marketing\\": ""
+        }
+    }
+}

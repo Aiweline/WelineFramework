@@ -110,7 +110,21 @@ class FrameworkDbBootstrapStage extends AbstractStage
         if ($schema === null) {
             return;
         }
-        $needCols = ['forward_ddl', 'rollback_ddl', 'schema_table_name', 'connection_name'];
+        $needCols = [
+            'forward_ddl',
+            'rollback_ddl',
+            'schema_table_name',
+            'connection_name',
+            'batch_id',
+            'sequence_no',
+            'migration_type',
+            'operation_kind',
+            'model_class',
+            'schema_before_checksum',
+            'schema_after_checksum',
+            'operation_id',
+            'operation_payload',
+        ];
         foreach ($schema->columns as $col) {
             if (!in_array($col->name, $needCols, true)) {
                 continue;

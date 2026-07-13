@@ -469,7 +469,7 @@ if (!function_exists('w_msg')) {
             ]
         ];
 
-        $eventsManager->dispatch('Weline_Backend::application::system_notification', $eventData);
+        $eventsManager->dispatch('Weline_Framework_Message::system_notification', $eventData);
     }
 }
 if (!function_exists('w_cache')) {

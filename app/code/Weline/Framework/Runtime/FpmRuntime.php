@@ -5,6 +5,7 @@ namespace Weline\Framework\Runtime;
 
 use Weline\Framework\App;
 use Weline\Framework\Context;
+use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Sse\SseContext;
@@ -23,6 +24,9 @@ class FpmRuntime implements RuntimeInterface
             return;
         }
 
+        if (\defined('PROD') && PROD) {
+            ContainerRuntime::preflight();
+        }
         App::init();
         $this->bootstrapped = true;
     }
@@ -52,20 +56,24 @@ class FpmRuntime implements RuntimeInterface
 
             return $response->getBody();
         } finally {
+            // Cleanup callbacks are stored on the active Context. Leaving the
+            // Context first makes RequestContext::cleanup() a no-op and leaks
+            // request-scoped resources on every FPM exit path.
+            RequestContext::cleanup();
             Context::leave();
         }
     }
 
     public function reset(): void
     {
-        Context::leave();
         RequestContext::cleanup();
+        Context::leave();
     }
 
     public function terminate(): void
     {
-        Context::leave();
         RequestContext::cleanup();
+        Context::leave();
         $this->bootstrapped = false;
     }
 

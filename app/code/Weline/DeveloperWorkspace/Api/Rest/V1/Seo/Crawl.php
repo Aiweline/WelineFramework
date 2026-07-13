@@ -8,7 +8,7 @@ use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Seo\Interface\SiteCrawlerAuditInterface;
+use Weline\Seo\Api\SiteCrawlerAuditInterface;
 
 class Crawl extends DevToolRestController
 {

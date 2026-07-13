@@ -9,19 +9,20 @@
 
 namespace Weline\Theme\Block;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
-use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
@@ -62,7 +63,7 @@ class Partials extends Block
     private const PARTIAL_OUTPUT_REFRESH_LOCK_TTL = 10;
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $partialOutputCache = [];
-    private static ?MemoryStateFacade $runtimeCache = null;
+    private static ?SharedCacheStateInterface $runtimeCache = null;
     private static bool $runtimeCacheResolved = false;
 
     public static function clearMetaCache(): void
@@ -138,7 +139,7 @@ class Partials extends Block
         string $defaultOption
     ): string {
         if (!isset(self::CACHEABLE_PARTIAL_TYPES[$type])) {
-            return $this->fetchHtml($fileName, $dictionary);
+            return $this->renderCompiledPartial($fileName, $dictionary);
         }
 
         $cacheContext = $this->resolvePartialOutputCacheContext($area, $type, $defaultOption, $dictionary);
@@ -149,7 +150,7 @@ class Partials extends Block
         $comFileName = $this->getFetchFile($fileName);
         $stat = @stat($comFileName);
         if (!\is_array($stat)) {
-            return $this->ob_file($comFileName, $dictionary);
+            return $this->renderCompiledPartial($fileName, $dictionary);
         }
 
         $cacheKey = \sha1($fileName . '|' . $comFileName . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . $cacheContext);
@@ -189,7 +190,7 @@ class Partials extends Block
             }
         }
 
-        $html = $this->ob_file($comFileName, $dictionary);
+        $html = $this->renderCompiledPartial($fileName, $dictionary, $comFileName);
         if ($this->isEmptyPartialHtml($html)) {
             $this->logPartialCacheDiagnostic('skip_empty_partial_output_store', [
                 'file' => $fileName,
@@ -509,6 +510,9 @@ class Partials extends Block
         }
 
         PostResponseTaskQueue::enqueue('theme-partial-output:' . $cacheKey, function () use ($cacheKey, $comFileName, $dictionary): void {
+            if (!\is_file($comFileName)) {
+                return;
+            }
             $html = $this->ob_file($comFileName, $dictionary);
             if (!\is_string($html)) {
                 return;
@@ -693,24 +697,21 @@ class Partials extends Block
         }
     }
 
-    private static function runtimeCache(): ?MemoryStateFacade
+    private static function runtimeCache(): ?SharedCacheStateInterface
     {
         if (self::$runtimeCacheResolved) {
             return self::$runtimeCache;
         }
         self::$runtimeCacheResolved = true;
 
-        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
             return null;
         }
 
         try {
-            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
-                'consumer_code' => 'theme_runtime_partial',
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]));
+            $cache = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(SharedCacheStateInterface::class);
+            self::$runtimeCache = $cache instanceof SharedCacheStateInterface ? $cache : null;
         } catch (\Throwable) {
             self::$runtimeCache = null;
         }
@@ -900,9 +901,36 @@ class Partials extends Block
      */
     public function fetchHtml(string $fileName, array $dictionary = []): string
     {
-        // 直接使用 Template 的 getFetchFile 方法，而不是 Block 的 fetchTagSource('blocks', ...)
-        $comFileName = $this->getFetchFile($fileName);
-        return $this->ob_file($comFileName, $dictionary);
+        return $this->renderCompiledPartial($fileName, $dictionary);
+    }
+
+    /**
+     * Compile the partial immediately before rendering it.
+     *
+     * Partial output caches may outlive view/tpl files (for example after a
+     * deploy or a manual cache cleanup). Never pass a cached compiled path to
+     * ob_file() unless it still exists. Re-resolving here also closes the
+     * small race where another worker removes the compiled file between the
+     * first lookup and include().
+     *
+     * @param array<string, mixed> $dictionary
+     */
+    private function renderCompiledPartial(
+        string $fileName,
+        array $dictionary = [],
+        ?string $compiledFile = null
+    ): string {
+        $compiledFile ??= $this->getFetchFile($fileName);
+        if (!\is_file($compiledFile)) {
+            $compiledFile = $this->getFetchFile($fileName);
+        }
+        if (!\is_file($compiledFile)) {
+            throw new \RuntimeException(
+                (string)__('模板编译文件生成失败：%{1}', $fileName)
+            );
+        }
+
+        return $this->ob_file($compiledFile, $dictionary);
     }
     
     /**

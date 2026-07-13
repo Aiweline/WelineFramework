@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Weline\Social\Queue;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
+use Weline\Queue\Api\QueueConsumerInterface;
+use Weline\Queue\Api\QueueTaskContextInterface;
 use Weline\Social\Service\SocialPublishService;
 
-class SocialPublishQueue implements QueueInterface
+class SocialPublishQueue implements QueueConsumerInterface
 {
     public function name(): string
     {
@@ -26,7 +26,7 @@ class SocialPublishQueue implements QueueInterface
         return (string)__('按 SocialPublishTarget 执行单个平台发布。');
     }
 
-    public function validate(Queue &$queue): bool
+    public function validate(QueueTaskContextInterface $queue): bool
     {
         $content = \json_decode((string)$queue->getContent(), true);
         if (!\is_array($content) || (int)($content['target_id'] ?? 0) <= 0) {
@@ -37,7 +37,7 @@ class SocialPublishQueue implements QueueInterface
         return true;
     }
 
-    public function execute(Queue &$queue): string
+    public function execute(QueueTaskContextInterface $queue): string
     {
         $content = \json_decode((string)$queue->getContent(), true);
         $targetId = (int)($content['target_id'] ?? 0);
@@ -46,4 +46,3 @@ class SocialPublishQueue implements QueueInterface
         return \json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: (string)__('社媒发布完成');
     }
 }
-

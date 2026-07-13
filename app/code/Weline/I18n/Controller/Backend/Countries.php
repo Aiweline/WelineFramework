@@ -64,9 +64,9 @@ class Countries extends BaseController
         parent::__init();
 
         if ($search = trim((string)$this->request->getGet('search', ''))) {
-            $code = $this->countries::schema_fields_CODE;
-            $name = Name::schema_fields_DISPLAY_NAME;
-            $this->countries->concat_like('main_table.' . $code . ',cln.' . $name, '%' . $search . '%');
+            // Country names live in the localized name table. Resolve the
+            // search term to country codes before pagination so the count
+            // query does not depend on a joined display_name column.
         }
 
         if ($searchCode = trim((string)$this->request->getGet('search_code', ''))) {
@@ -84,14 +84,39 @@ class Countries extends BaseController
 
     public function index()
     {
-        $filter = (string)$this->request->getGet('filter', 'active');
+        $filter = (string)$this->request->getGet('filter', 'all');
         $search = (string)$this->request->getGet('search', '');
+
+        // Searching is an intent to find a country, not to search only inside
+        // the currently selected lifecycle state. This lets operators find an
+        // uninstalled country such as India and install it in one step.
+        $displayFilter = trim($search) !== '' ? 'all' : $filter;
 
         $this->ensureCountryData();
         $this->autoUpdateMissingCountryNames();
 
         $query = clone $this->countries;
-        $this->applyFilter($query, $filter);
+        // Apply the search condition to the listing clone as well. The base
+        // model is also used by lifecycle helpers during page initialization,
+        // so relying only on the controller init query can lose the condition.
+        if (trim($search) !== '') {
+            $needle = mb_strtolower(trim($search));
+            $countryNames = $this->i18n->getCountries($this->getSafeCurrentLocaleCode());
+            $matchedCodes = [];
+            foreach ($countryNames as $code => $countryName) {
+                if (str_contains(mb_strtolower((string)$code), $needle)
+                    || str_contains(mb_strtolower((string)$countryName), $needle)) {
+                    $matchedCodes[] = (string)$code;
+                }
+            }
+
+            if (empty($matchedCodes)) {
+                $query->where('main_table.' . CountriesModel::schema_fields_CODE, '__no_country_match__');
+            } else {
+                $query->where('main_table.' . CountriesModel::schema_fields_CODE, $matchedCodes, 'IN');
+            }
+        }
+        $this->applyFilter($query, $displayFilter);
         $result = $query->pagination()->select()->fetch();
         $countries = $result->getItems();
 
@@ -108,12 +133,12 @@ class Countries extends BaseController
         $isJsonRequest = $isAjax || str_contains($acceptHeader, 'application/json') || $format === 'json';
 
         if ($isJsonRequest) {
-            return $this->jsonResponse($countries, $result->getPagination(), $filter, $search, $stats, $recommendations);
+            return $this->jsonResponse($countries, $result->getPagination(), $displayFilter, $search, $stats, $recommendations);
         }
 
         $this->assign('countries', $countries);
         $this->assign('countries_pagination', $result->getPagination());
-        $this->assign('current_filter', $filter);
+        $this->assign('current_filter', $displayFilter);
         $this->assign('search', $search);
         $this->assign('stats', $stats);
         $this->assign('recommendations', $recommendations);
@@ -123,10 +148,21 @@ class Countries extends BaseController
 
     public function getUpdate()
     {
-        if ($this->countryDataUpdateService->updateCountryData()) {
-            Message::success(__('国家数据同步完成'));
-        } else {
-            Message::error(__('国家数据同步失败，请检查日志'));
+        $isJsonRequest = $this->isJsonRequest();
+        try {
+            $updated = $this->countryDataUpdateService->updateCountryData();
+            $message = $updated
+                ? (string)__('国家数据同步完成')
+                : (string)__('国家数据同步失败，请检查日志');
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse($updated, $message);
+            }
+            $updated ? Message::success($message) : Message::error($message);
+        } catch (\Throwable $throwable) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $throwable->getMessage());
+            }
+            Message::exception($throwable);
         }
 
         return $this->redirect('*/backend/countries');
@@ -141,40 +177,78 @@ class Countries extends BaseController
 
         $code = (string)$this->request->getPost('code', '');
         $filter = $this->getRequestFilter('all');
+        $isJsonRequest = $this->isJsonRequest();
         if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择要安装的国家！'));
+            }
             Message::warning(__('请选择要安装的国家！'));
             return $this->redirect($this->buildListUrl($filter));
         }
 
         try {
             $summary = $this->lifecycle->installCountry($code);
-            Message::success(__('国家 %{1} 已安装，可用地区 %{2} 个', [
+            $message = (string)__('国家 %{1} 已安装，可用地区 %{2} 个', [
                 $summary['display_name'] ?? $summary['country_code'],
                 $summary['locale_count'] ?? 0,
-            ]));
+            ]);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, $summary);
+            }
+            Message::success($message);
         } catch (\Exception $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
         return $this->redirect($this->buildListUrl($filter));
     }
 
+    private function isJsonRequest(): bool
+    {
+        $accept = strtolower((string)($this->request->getHeader('Accept') ?? ''));
+        return $this->request->isAjax() || str_contains($accept, 'application/json');
+    }
+
+    private function jsonActionResponse(bool $success, string $message, array $data = []): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        return json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     public function postActive()
     {
         $code = (string)$this->request->getPost('code', '');
         $filter = $this->getRequestFilter('active');
+        $isJsonRequest = $this->isJsonRequest();
         if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择国家激活！'));
+            }
             Message::warning(__('请选择国家激活！'));
             return $this->redirect($this->buildListUrl($filter));
         }
 
         try {
             $summary = $this->lifecycle->activateCountry($code);
-            Message::success(__('国家 %{1} 已启用，推荐地区 %{2} 已同步启用', [
+            $message = (string)__('国家 %{1} 已启用，推荐地区 %{2} 已同步启用', [
                 $summary['display_name'] ?? $summary['country_code'],
                 $summary['preferred_locale'] ?? __('默认地区'),
-            ]));
+            ]);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, $summary);
+            }
+            Message::success($message);
         } catch (\Exception $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -185,17 +259,28 @@ class Countries extends BaseController
     {
         $code = (string)$this->request->getPost('code', '');
         $filter = $this->getRequestFilter('active');
+        $isJsonRequest = $this->isJsonRequest();
         if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择国家禁用！'));
+            }
             Message::warning(__('请选择国家禁用！'));
             return $this->redirect($this->buildListUrl($filter));
         }
 
         try {
             $summary = $this->lifecycle->deactivateCountry($code);
-            Message::success(__('国家 %{1} 已停用，关联地区已一并停用', [
+            $message = (string)__('国家 %{1} 已停用，关联地区已一并停用', [
                 $summary['display_name'] ?? $summary['country_code'],
-            ]));
-        } catch (\Exception $exception) {
+            ]);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, $summary);
+            }
+            Message::success($message);
+        } catch (\Throwable $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -206,18 +291,29 @@ class Countries extends BaseController
     {
         $code = (string)$this->request->getPost('code', '');
         $filter = $this->getRequestFilter('all');
+        $isJsonRequest = $this->isJsonRequest();
         if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择要卸载的国家！'));
+            }
             Message::warning(__('请选择要卸载的国家！'));
             return $this->redirect($this->buildListUrl($filter));
         }
 
         try {
             $summary = $this->lifecycle->uninstallCountry($code);
-            Message::success(__('国家 %{1} 已卸载，关联地区 %{2} 个已同步卸载', [
+            $message = (string)__('国家 %{1} 已卸载，关联地区 %{2} 个已同步卸载', [
                 $summary['display_name'] ?? $summary['country_code'],
                 $summary['locale_count'] ?? 0,
-            ]));
-        } catch (\Exception $exception) {
+            ]);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, $summary);
+            }
+            Message::success($message);
+        } catch (\Throwable $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -288,8 +384,16 @@ class Countries extends BaseController
         string $errorMessage,
         string $filter
     ) {
+        $isJsonRequest = $this->isJsonRequest();
         $codes = array_values(array_unique(array_filter(array_map('strval', $codes))));
         if (empty($codes)) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $emptyMessage, [
+                    'success_count' => 0,
+                    'error_count' => 0,
+                    'errors' => [],
+                ]);
+            }
             Message::warning($emptyMessage);
             return $this->redirect($this->buildListUrl($filter));
         }
@@ -306,11 +410,27 @@ class Countries extends BaseController
         }
 
         if ($successCount > 0) {
-            Message::success(__($successMessage, [$successCount]));
+            $message = (string)__($successMessage, [$successCount]);
+            if (!$isJsonRequest) {
+                Message::success($message);
+            }
         }
         if (!empty($errors)) {
-            Message::warning(__($errorMessage, [count($errors)]));
-            Message::warning(implode('<br>', array_slice($errors, 0, 5)));
+            if (!$isJsonRequest) {
+                Message::warning(__($errorMessage, [count($errors)]));
+                Message::warning(implode('<br>', array_slice($errors, 0, 5)));
+            }
+        }
+
+        if ($isJsonRequest) {
+            $message = $successCount > 0
+                ? (string)__($successMessage, [$successCount])
+                : (string)__($errorMessage, [count($errors)]);
+            return $this->jsonActionResponse($successCount > 0 && empty($errors), $message, [
+                'success_count' => $successCount,
+                'error_count' => count($errors),
+                'errors' => array_slice($errors, 0, 5),
+            ]);
         }
 
         return $this->redirect($this->buildListUrl($filter));
@@ -370,10 +490,9 @@ class Countries extends BaseController
 
     private function ensureCountryData(): void
     {
-        $countryCount = (int)(clone ObjectManager::getInstance(CountriesModel::class))->reset()->count();
-        if ($countryCount === 0) {
-            $this->countryDataUpdateService->updateCountryData();
-        }
+        // 每次进入页面都校验并补齐全球目录；服务只插入缺失国家，
+        // 不会覆盖已有国家的安装和激活状态。
+        $this->countryDataUpdateService->updateCountryData();
     }
 
     private function autoUpdateMissingCountryNames(): void
@@ -390,16 +509,24 @@ class Countries extends BaseController
                 return;
             }
 
+            $nameModel = ObjectManager::make(Name::class);
+            $existingNames = $nameModel->reset()
+                ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLang)
+                ->select()
+                ->fetch()
+                ->getItems();
+            $existingCountryCodes = [];
+            foreach ($existingNames as $existingName) {
+                $existingCode = (string)$existingName->getData(Name::schema_fields_COUNTRY_CODE);
+                if ($existingCode !== '') {
+                    $existingCountryCodes[$existingCode] = true;
+                }
+            }
+
             $missingData = [];
             foreach ($allCountries as $country) {
                 $countryCode = (string)$country->getData(CountriesModel::schema_fields_CODE);
-                $existingName = (clone ObjectManager::getInstance(Name::class))->reset()
-                    ->where(Name::schema_fields_COUNTRY_CODE, $countryCode)
-                    ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLang)
-                    ->find()
-                    ->fetch();
-
-                if ($existingName->getId() || !isset($countryNames[$countryCode])) {
+                if (isset($existingCountryCodes[$countryCode]) || !isset($countryNames[$countryCode])) {
                     continue;
                 }
 
@@ -411,7 +538,7 @@ class Countries extends BaseController
             }
 
             if (!empty($missingData)) {
-                (clone ObjectManager::getInstance(Name::class))->reset()->insert($missingData, [
+                $nameModel->reset()->insert($missingData, [
                     Name::schema_fields_COUNTRY_CODE,
                     Name::schema_fields_DISPLAY_LOCALE_CODE,
                 ])->fetch();

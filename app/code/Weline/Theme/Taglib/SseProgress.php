@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * SSE 进度组件（带步骤指示器和日志终端）
@@ -71,7 +71,7 @@ class SseProgress implements TaglibInterface
             $t_clear = addslashes((string)__('清空'));
             $t_copied = addslashes((string)__('已复制'));
 
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';

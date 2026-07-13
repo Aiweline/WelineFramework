@@ -18,10 +18,12 @@ use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\System\File\Compress;
 use Weline\Framework\System\File\Io\File;
 use Weline\Framework\Uninstall\UninstallService;
-use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\I18n\Api\Translation\TranslationCollectorInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Register\Installer;
 
@@ -1497,15 +1499,11 @@ USAGE;
             $untranslatedWords = [];
             
             try {
-                /** @var LocaleDictionary $localeDictionary */
-                $localeDictionary = ObjectManager::getInstance(LocaleDictionary::class);
-                
+                $translations = $this->dictionaryRepository()->getEntries($allThemeWords, $targetLocale);
                 foreach ($allThemeWords as $word) {
-                    $md5 = LocaleDictionary::generateMd5($word, $targetLocale);
-                    $translation = $localeDictionary->clearData()->load(LocaleDictionary::schema_fields_MD5, $md5);
-                    
-                    if ($translation->getId() && !empty($translation->getData(LocaleDictionary::schema_fields_TRANSLATE))) {
-                        $translatedWords[$word] = $translation->getData(LocaleDictionary::schema_fields_TRANSLATE);
+                    $entry = $translations[$word] ?? null;
+                    if ($entry !== null && $entry->translation !== '') {
+                        $translatedWords[$word] = $entry->translation;
                     } else {
                         $untranslatedWords[] = $word;
                     }
@@ -1663,13 +1661,33 @@ USAGE;
      */
     private function collectModuleWords(string $modulePath): array
     {
-        $collector = ObjectManager::getInstance(\Weline\I18n\Service\TranslationCollector::class);
+        $collector = $this->translationCollector();
         $pathParts = explode(DS, trim($modulePath, DS));
         $moduleName = count($pathParts) >= 2 ? $pathParts[count($pathParts) - 2] . '_' . $pathParts[count($pathParts) - 1] : basename($modulePath);
         $collectedStrings = $collector->collect($modulePath, $moduleName);
         
         // 转换为简单的数组格式（只返回原文）
         return array_keys($collectedStrings);
+    }
+
+    private function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+        return $provider;
+    }
+
+    private function translationCollector(): TranslationCollectorInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(TranslationCollectorInterface::class);
+        if (!$provider instanceof TranslationCollectorInterface) {
+            throw new \RuntimeException('Weline_I18n translation collector provider is unavailable.');
+        }
+        return $provider;
     }
     
     /**
@@ -1796,13 +1814,13 @@ USAGE;
         
         try {
             // 尝试获取AI翻译服务
-            if (!class_exists(\Weline\Ai\Service\TranslationService::class)) {
+            if (!class_exists(\Weline\Ai\Api\TranslationService::class)) {
                 $this->printing->warning(__('AI翻译服务未找到，请确保AI模块已安装'));
                 return $translations;
             }
             
-            /** @var \Weline\Ai\Service\TranslationService $translationService */
-            $translationService = ObjectManager::getInstance(\Weline\Ai\Service\TranslationService::class);
+            /** @var \Weline\Ai\Api\TranslationService $translationService */
+            $translationService = ObjectManager::getInstance(\Weline\Ai\Api\TranslationService::class);
             
             $this->printing->note(__('正在使用AI翻译服务翻译 %{1} 条词汇...', [count($words)]));
             
@@ -1811,7 +1829,7 @@ USAGE;
                 $words,
                 $targetLocale,
                 'auto',
-                \Weline\Ai\Service\TranslationService::STRATEGY_LIGHT
+                \Weline\Ai\Api\TranslationService::STRATEGY_LIGHT
             );
             
             // 过滤掉翻译失败的（返回原文的）
@@ -3006,4 +3024,3 @@ USAGE;
         }
     }
 }
-

@@ -926,6 +926,13 @@ flowchart LR
 
 Runtime apply rule:
 
+> Current topology contract: `wls.runtime.topology` is the only authoritative
+> setting. The `gateway_traffic_mode` UI field, `wls.gateway.traffic_mode`,
+> `WLS_GATEWAY_TRAFFIC_MODE`, `direct_listen`, and `passthrough` below document
+> the historical Stage 2 implementation. They are read-only migration inputs
+> that may be mapped only when no explicit authoritative topology exists; new
+> saves and restarts must write/use `wls.runtime.topology`.
+
 - The registry save/delete flow persists data, synchronizes `ReverseProxy`, and attempts runtime apply through `IpcControlGateway::proxyApply()`.
 - If the target WLS Master is reachable but no Gateway role is connected, the panel shows the runtime warning and keeps the saved project/proxy state visible.
 - Full Gateway-role E2E routing is now proven for the first slice: a Gateway process can register with the Master, receive `TYPE_PROXY_RELOAD`, update its in-memory route table, and route a real TLS SNI request to a child HTTPS WLS backend without a full restart.

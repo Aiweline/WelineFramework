@@ -38,6 +38,8 @@ amount_in_target = target == base ? amount_in_base : amount_in_base / target_rat
 - 汇率模式配置模型：`Weline\Currency\Model\Config`
 - 前台换算服务：`Weline\Currency\Service\CurrencyRateService`
 - 静态格式化入口：`Weline\Currency\Helper\CurrencyFormatter`
+- WLS 共享缓存：通过 Framework `SharedCacheStateFactoryInterface` 解析可选 Provider；
+  Currency 不引用 Server 实现，Provider 缺失或不可用时继续使用进程内定义缓存。
 
 ## 注意
 

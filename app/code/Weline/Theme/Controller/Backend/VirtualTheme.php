@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Controller\Backend;
 
-use Weline\Ai\Model\AiStyle;
-use Weline\Ai\Service\Skill\AdapterSkillResolver;
-use Weline\Ai\Service\Style\AdapterStyleResolver;
-use Weline\Ai\Service\Style\StyleRegistry;
-use Weline\Ai\Service\Style\StyleService;
+use Weline\Ai\Api\StyleRuntimeInterface;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\ThemeVirtualLayoutVersion;
@@ -28,6 +24,7 @@ class VirtualTheme extends BackendController
         private readonly WelineTheme $welineTheme,
         private readonly ThemeVirtualThemeManifestService $manifestService,
         private readonly ThemeVirtualLayoutService $virtualLayoutService,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
     ) {
     }
 
@@ -674,7 +671,7 @@ class VirtualTheme extends BackendController
             'layout_option' => $layoutOption,
             'selected_skill_codes' => $skillCodes,
             'temporary_skill_codes' => $skillCodes,
-            'design_direction_mode' => $styleSnapshot !== [] ? StyleService::MODE_MANUAL : (string)($payload['design_direction_mode'] ?? $payload['style_mode'] ?? StyleService::MODE_AUTO),
+            'design_direction_mode' => $styleSnapshot !== [] ? StyleRuntimeInterface::MODE_MANUAL : (string)($payload['design_direction_mode'] ?? $payload['style_mode'] ?? StyleRuntimeInterface::MODE_AUTO),
             'design_direction_snapshot' => $styleSnapshot,
             'style_snapshot' => $styleSnapshot,
             'site_title' => (string)($payload['site_title'] ?? $payload['title'] ?? ''),
@@ -924,9 +921,11 @@ class VirtualTheme extends BackendController
     private function buildSkillCatalog(string $adapterCode, array $temporarySkillCodes): array
     {
         try {
-            /** @var AdapterSkillResolver $resolver */
-            $resolver = ObjectManager::getInstance(AdapterSkillResolver::class);
-            return $resolver->buildSkillCatalog($adapterCode, $temporarySkillCodes, false);
+            $runtime = $this->styleRuntime();
+            if (!$runtime) {
+                throw new \RuntimeException((string)__('AI 查询入口不可用。'));
+            }
+            return $runtime->buildSkillCatalog($adapterCode, $temporarySkillCodes, false);
         } catch (\Throwable $throwable) {
             return [
                 'items' => [],
@@ -943,9 +942,11 @@ class VirtualTheme extends BackendController
     private function buildStyleCatalog(string $adapterCode, array $temporaryStyleCodes, int $adminId): array
     {
         try {
-            /** @var AdapterStyleResolver $resolver */
-            $resolver = ObjectManager::getInstance(AdapterStyleResolver::class);
-            return $resolver->buildStyleCatalog($adapterCode, $temporaryStyleCodes, $adminId, false);
+            $runtime = $this->styleRuntime();
+            if (!$runtime) {
+                throw new \RuntimeException((string)__('AI 查询入口不可用。'));
+            }
+            return $runtime->buildStyleCatalog($adapterCode, $temporaryStyleCodes, $adminId, false);
         } catch (\Throwable $throwable) {
             return [
                 'items' => [],
@@ -967,19 +968,21 @@ class VirtualTheme extends BackendController
             return [];
         }
         try {
-            /** @var StyleRegistry $registry */
-            $registry = ObjectManager::getInstance(StyleRegistry::class);
-            $style = $registry->getStyle($styleCode, $adminId, false);
-            if (empty($style['exists']) || (string)($style['status'] ?? '') !== AiStyle::STATUS_ACTIVE) {
-                return [];
-            }
-
-            /** @var StyleService $styleService */
-            $styleService = ObjectManager::getInstance(StyleService::class);
-            return $styleService->buildSnapshot($style, 'Theme visual editor selection');
+            return $this->styleRuntime()?->resolveStyleSnapshot(
+                $styleCodes,
+                $adminId,
+                'Theme visual editor selection',
+            ) ?? [];
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    private function styleRuntime(): ?StyleRuntimeInterface
+    {
+        $runtime = $this->runtimeProviderResolver->resolve(StyleRuntimeInterface::class);
+
+        return $runtime instanceof StyleRuntimeInterface ? $runtime : null;
     }
 
     private function truthy(mixed $value): bool

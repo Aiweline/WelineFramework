@@ -48,6 +48,8 @@
 
 ## 维护规则
 
+- 跨模块只通过 `StorageCatalogInterface` 获取数据化存储源清单；`StorageManager` 和驱动实例不跨模块暴露。
+
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。

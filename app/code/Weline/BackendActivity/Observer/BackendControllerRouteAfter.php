@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\BackendActivity\Observer;
 
+use Weline\Acl\Api\Authorization\AuthorizationServiceInterface;
 use Weline\BackendActivity\Model\BackendActivityLog;
 use Weline\BackendActivity\Service\BusinessContextService;
-use Weline\Acl\Model\Acl;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
@@ -123,28 +123,23 @@ class BackendControllerRouteAfter implements ObserverInterface
      */
     private static function createDeferredActivityLog(array $payload, int $responseCode, float $responseTime): void
     {
-        /** @var Acl $acl */
-        $acl = ObjectManager::getInstance(Acl::class)
-            ->where(Acl::schema_fields_CLASS, (string)($payload['class_name'] ?? ''))
-            ->where(Acl::schema_fields_METHOD, (string)($payload['method'] ?? ''))
-            ->where(Acl::schema_fields_ROUTE, (string)($payload['path'] ?? ''))
-            ->find()
-            ->fetch();
-
-        if (!$acl->getId()) {
+        /** @var AuthorizationServiceInterface $authorizationService */
+        $authorizationService = ObjectManager::getInstance(AuthorizationServiceInterface::class);
+        $resource = $authorizationService->findRouteResource(
+            (string)($payload['class_name'] ?? ''),
+            (string)($payload['method'] ?? ''),
+            (string)($payload['path'] ?? ''),
+        );
+        $name = $resource?->getSourceName();
+        if (empty($name)) {
             $name = __('Unnamed Access');
-        } else {
-            $name = $acl->getSourceName();
-            if (empty($name)) {
-                $name = __('Unnamed Access');
-            }
         }
 
         /** @var BackendActivityLog $activityLogger */
         $activityLogger = ObjectManager::getInstance(BackendActivityLog::class);
         $activityLogger->setName($name)
             ->setUserId((int)($payload['user_id'] ?? 0))
-            ->setAclId((int)$acl->getAclId())
+            ->setAclId($resource?->getAclId() ?? 0)
             ->setPath((string)($payload['path'] ?? ''))
             ->setModule((string)($payload['module'] ?? ''))
             ->setHost((string)($payload['host'] ?? ''))

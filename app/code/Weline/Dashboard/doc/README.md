@@ -18,6 +18,7 @@
 - 模块代码：`Weline_Dashboard`
 - 目录：`app/code/Weline/Dashboard`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- Dashboard 统计服务通过 Acl `MenuStatisticsInterface` 与 Websites `WebsiteCatalogInterface` 读取汇总；视图服务通过 Theme `LayoutWorkspaceInterface` 交换不可变布局身份并完成版本、复制、发布和清理，不直接查询其他模块 ORM。Acl 与现有 Backend、Theme、Websites、Widget 均为必需依赖。
 
 ## 代码面概览
 
@@ -38,6 +39,8 @@
 
 ## 开发关注点
 
+- Dashboard 只能引用 `Weline\Theme\Api\*` 与 `Weline\Websites\Api\*`；不得把 Theme/Websites 的 Model 或 Service 重新注入 `DashboardViewService`。
+- `LayoutIdentity::targetId=0` 与 `WebsiteSummary::id=0` 都是系统默认站点的有效身份，不能按空值过滤。
 - 存在 `Controller/`，说明模块有 HTTP 入口；控制器变更后记得同步路由升级和最接近的真实入口验证。
 - 存在 `Controller/Backend`，后台页面/行为变更时应同时检查菜单、ACL、返回地址和用户提示。
 - 存在 `Model/`，字段或索引变更需走模型 attribute + `setup:upgrade`，不要手改生成物。

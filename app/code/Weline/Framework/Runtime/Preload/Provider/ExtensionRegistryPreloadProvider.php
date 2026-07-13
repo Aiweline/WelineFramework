@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime\Preload\Provider;
 
+use Weline\Framework\Compilation\CompiledExtensionRegistry;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Manager\ObjectManager;
@@ -11,9 +12,6 @@ use Weline\Framework\Plugin\PluginRegistry;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Preload\WorkerPreloadProviderInterface;
 use Weline\Framework\Runtime\Preload\WorkerPreloadResult;
-use Weline\Hook\HookRegistry;
-use Weline\Taglib\TaglibRegistry;
-use Weline\Widget\Service\WidgetRegistry;
 
 final class ExtensionRegistryPreloadProvider implements WorkerPreloadProviderInterface
 {
@@ -48,15 +46,11 @@ final class ExtensionRegistryPreloadProvider implements WorkerPreloadProviderInt
 
         $extendsRegistry = ExtendsData::getRegistry();
         $stats['extends'] = \is_array($extendsRegistry) ? \count($extendsRegistry) : 0;
-        foreach (['Weline_Framework', 'Weline_Frontend', 'Weline_Theme', 'Weline_Ai', 'WeShop_Catalog'] as $moduleName) {
-            ExtendsData::getModuleExtends($moduleName);
-            ExtendsData::getExtendedBy($moduleName);
-        }
 
         $stats['plugins'] = $this->countRegistryRows(PluginRegistry::class, 'plugins');
-        $stats['hooks'] = $this->countRegistryRows(HookRegistry::class, 'hooks');
-        $stats['taglibs'] = $this->countRegistryRows(TaglibRegistry::class, 'tags');
-        $stats['widgets'] = $this->countRegistryRows(WidgetRegistry::class, null);
+        $stats['hooks'] = CompiledExtensionRegistry::count('hooks.php', 'hooks');
+        $stats['taglibs'] = CompiledExtensionRegistry::count('taglibs.php', 'tags');
+        $stats['widgets'] = CompiledExtensionRegistry::count('widgets.php', 'widgets');
 
         $items = 0;
         foreach ($stats as $value) {

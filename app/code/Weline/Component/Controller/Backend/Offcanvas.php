@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Component\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -16,7 +16,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 使用主题布局：默认 default.blank（无菜单/边栏，含 head 与 BackendToast），
  * 可通过请求参数 layout 指定非 blank，如 layout=default 使用 default.default。
  */
-class Offcanvas extends BaseController
+class Offcanvas extends BackendPageController
 {
     /**
      * 设置布局类型：默认 blank，否则走主题配置（支持 layout 参数区分 blank/非blank）

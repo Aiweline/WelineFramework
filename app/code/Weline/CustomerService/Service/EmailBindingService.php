@@ -11,12 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Service;
 
+use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
 use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\CustomerLanguage;
-use Weline\Customer\Model\Customer;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\System\Text;
-use Weline\Smtp\Helper\SmtpSender;
+use Weline\Smtp\Api\MailSenderInterface;
 
 /**
  * 邮件绑定服务
@@ -24,10 +25,10 @@ use Weline\Smtp\Helper\SmtpSender;
  */
 class EmailBindingService
 {
-    private SmtpSender $smtpSender;
+    private MailSenderInterface $smtpSender;
 
     public function __construct(
-        SmtpSender $smtpSender
+        MailSenderInterface $smtpSender
     ) {
         $this->smtpSender = $smtpSender;
     }
@@ -134,15 +135,10 @@ class EmailBindingService
             }
 
             // 尝试通过邮箱查找客户
-            /** @var Customer $customer */
-            $customer = ObjectManager::getInstance(Customer::class);
-            // 注意：Customer模型可能没有email字段，这里假设有
-            // 如果没有，需要根据实际情况调整
-            $customer->where('email', $email)
-                ->find()
-                ->fetch();
+            $customer = $this->customerAccounts()->findByEmail($email);
 
-            if ($customer->getId()) {
+            if ($customer !== null) {
+                $resolvedCustomerId = $customer->getId();
                 // 找到客户，绑定到会话
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
@@ -151,12 +147,12 @@ class EmailBindingService
                     ->fetch();
                 
                 if ($session->getId()) {
-                    $session->setCustomerId($customer->getId())
+                    $session->setCustomerId($resolvedCustomerId)
                         ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                         ->save();
                     
                     // 更新客户语言配置
-                    $this->updateCustomerLanguageFromSession($customer->getId(), $sessionToken);
+                    $this->updateCustomerLanguageFromSession($resolvedCustomerId, $sessionToken);
                     
                     return true;
                 }
@@ -223,6 +219,17 @@ class EmailBindingService
             
             $customerLanguage->save();
         }
+    }
+
+    private function customerAccounts(): CustomerAccountFacadeInterface
+    {
+        $accounts = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CustomerAccountFacadeInterface::class);
+        if (!$accounts instanceof CustomerAccountFacadeInterface) {
+            throw new \RuntimeException('Weline_Customer account provider is unavailable.');
+        }
+
+        return $accounts;
     }
 
     /**
@@ -311,4 +318,3 @@ class EmailBindingService
 HTML;
     }
 }
-

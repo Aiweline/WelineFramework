@@ -25,11 +25,4 @@
         <observer name="Weline_Seo::protocol_route_rewrite" instance="Weline\Seo\Observer\ProtocolRouteRewrite" disabled="false" shared="true" sort="-100" />
     </event>
 
-    <event name="Weline_Seo::integration::head_context_resolve">
-        <observer name="Weline_Theme::seo_faq_head_context_resolve"
-                  instance="Weline\Theme\Observer\SeoFaqHeadContextResolve"
-                  disabled="false"
-                  shared="true"
-                  sort="20"/>
-    </event>
 </config>

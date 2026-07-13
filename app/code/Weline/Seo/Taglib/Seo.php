@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Seo implements TaglibInterface
 {

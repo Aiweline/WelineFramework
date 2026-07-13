@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Service;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
+use Weline\Framework\Cache\Contract\SharedCacheStateFactoryInterface;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Currency\Model\Config as CurrencyConfig;
 use Weline\Currency\Model\Currency;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
-use Weline\Server\Service\MemoryStateFacade;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class CurrencyRateService
 {
@@ -19,7 +21,7 @@ class CurrencyRateService
     /** @var array<string, array<string, mixed>|null> */
     private static array $definitionCache = [];
     private static ?string $baseCurrencyCache = null;
-    private static ?MemoryStateFacade $runtimeCache = null;
+    private static ?SharedCacheStateInterface $runtimeCache = null;
     private static bool $runtimeCacheResolved = false;
 
     /**
@@ -334,26 +336,33 @@ class CurrencyRateService
         }
     }
 
-    private static function runtimeCache(): ?MemoryStateFacade
+    private static function runtimeCache(): ?SharedCacheStateInterface
     {
         if (self::$runtimeCacheResolved) {
             return self::$runtimeCache;
         }
         self::$runtimeCacheResolved = true;
 
-        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+        if (!Runtime::isPersistent()) {
             return null;
         }
 
         try {
+            $factory = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(SharedCacheStateFactoryInterface::class);
+            if (!$factory instanceof SharedCacheStateFactoryInterface) {
+                return null;
+            }
+
             /** @var RuntimeCachePolicy $policy */
             $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
-            self::$runtimeCache = new MemoryStateFacade($policy->memoryOptions([
+            $cache = $factory->create($policy->memoryOptions([
                 'consumer_code' => self::CACHE_NAMESPACE,
                 'prefer_direct_connect' => true,
                 'persistent' => true,
                 'lazy_connect' => true,
             ]));
+            self::$runtimeCache = $cache instanceof SharedCacheStateInterface ? $cache : null;
         } catch (\Throwable) {
             self::$runtimeCache = null;
         }

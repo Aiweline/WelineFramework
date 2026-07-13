@@ -131,9 +131,9 @@ $buildQuery = static function (array $overrides = []) use (
                         <td>
                             <div class="hook-status">
                                 <?php if ($hookInfo['is_registered'] ?? false): ?>
-                                    <span class="badge badge-success" title="已在 HookInterface 中注册">已注册</span>
+                                    <span class="badge badge-success" title="已进入编译 Hook 注册表">已注册</span>
                                 <?php else: ?>
-                                    <span class="badge badge-danger" title="未在 HookInterface 中注册">未注册</span>
+                                    <span class="badge badge-danger" title="未进入编译 Hook 注册表">未注册</span>
                                 <?php endif; ?>
                                 <?php if ($hookInfo['has_files'] ?? false): ?>
                                     <span class="badge badge-info" title="存在 Hook 文件">有文件</span>

@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Api\Setup;
 
-use Weline\Acl\Model\WhiteAclSource;
+use Weline\Acl\Api\Resource\WhitelistServiceInterfaceFactory;
 use Weline\Api\Model\ApiUser;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -124,9 +124,6 @@ class Install implements InstallInterface
             ->create();
 
         // 插入API白名单路径
-         /** @var WhiteAclSource $whiteAclSource */
-         $whiteAclSource = ObjectManager::getInstance(WhiteAclSource::class);
-        
          // API认证接口白名单路径（前端API）
          $apiWhiteListPaths = [
              'api/rest/v1/auth/login',
@@ -146,13 +143,8 @@ class Install implements InstallInterface
              'api/rest/v1/backend/auth/token-info',
          ];
          
-         // 使用模型进行写入及更新操作
-         foreach (array_merge($apiWhiteListPaths, $backendApiWhiteListPaths) as $path) {
-             $whiteAclSource->clear()
-             ->setData('path', $path)
-             ->setData('type', WhiteAclSource::type_API)
-             ->save();
-         }
+         $whitelist = ObjectManager::getInstance(WhitelistServiceInterfaceFactory::class)->create();
+         $whitelist->upsertPaths(array_merge($apiWhiteListPaths, $backendApiWhiteListPaths), 'api');
 
          // 调用ApiUser模型，插入初始数据
          /**@var ApiUser $apiUser */
@@ -180,4 +172,3 @@ class Install implements InstallInterface
          }
     }
 }
-

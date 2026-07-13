@@ -16,7 +16,6 @@ Register::register(
     '1.0.0',
     '文件管理器管理.提供file-manager标签，快速调用文件管理器。',
     [
-        'Weline_Backend',
-        'Weline_MediaManager'
+        'Weline_Backend'
     ]
 );

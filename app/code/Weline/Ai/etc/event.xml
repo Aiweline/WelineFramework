@@ -11,5 +11,14 @@
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Ai::setup_upgrade_after" instance="Weline\Ai\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="200"/>
     </event>
-</config>
 
+    <!-- I18n owns the request contract; Ai supplies the optional implementation. -->
+    <event name="Weline_I18n::machine_translate">
+        <observer name="Weline_Ai::machine_translation" instance="Weline\Ai\Observer\TranslationRequestObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+
+    <!-- Backward-compatible event name for third-party callers. -->
+    <event name="Weline_Ai::translate">
+        <observer name="Weline_Ai::legacy_translation" instance="Weline\Ai\Observer\TranslationRequestObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+</config>

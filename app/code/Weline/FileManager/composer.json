@@ -1,25 +1,27 @@
 {
-  "name": "weline/module-file-manager",
-  "description": "WelineFramework 文件管理器控制插件",
-  "minimum-stability": "stable",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "weline/module-media-manager": "*"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\FileManager\\": ""
+    "name": "weline/module-file-manager",
+    "description": "WelineFramework 文件管理器控制插件",
+    "minimum-stability": "stable",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-eav": "@dev",
+        "weline/module-queue": "@dev"
     },
-    "psr-0": {
-      "Weline\\FileManager\\": ""
-    }
-  },
-  "license": "MIT"
+    "suggest": {
+        "weline/module-server": "Adds the File Manager capability to the WLS panel."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\FileManager\\": ""
+        }
+    },
+    "license": "MIT"
 }

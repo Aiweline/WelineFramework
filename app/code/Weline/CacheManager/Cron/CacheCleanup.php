@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\CacheManager\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Cache\Console\Cache\Flush;
 

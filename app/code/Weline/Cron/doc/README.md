@@ -19,6 +19,12 @@
 - 目录：`app/code/Weline/Cron`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 
+## 公共 PHP 契约
+
+跨模块定时任务只读展示使用 `Weline\Cron\Api\Task\CronTaskCatalogInterface`。实现返回不可变 `CronTaskRecord`，只暴露任务代码、名称、表达式、说明与上次运行时间，不暴露 `CronTask` ORM Model、字段常量或查询对象。调用模块应在 `etc/module.php.optional/requires` 与 Composer `suggest/require` 中声明 Cron，并通过编译 Provider 解析接口。
+
+跨模块进程控制使用 `Weline\Cron\Api\Process\ProcessControlInterface`。它只发布任务名规范化、PID 存活检查、指定 PID 终止和 Cron 日志清理；平台差异和 `Helper\Process` 细节由 Cron 内部 Provider 封装。
+
 ## 代码面概览
 
 入口文件：

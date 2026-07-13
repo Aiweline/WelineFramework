@@ -12,8 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Cron;
 
-use Weline\Cron\CronTaskInterface;
-use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\SslCertificateService;
@@ -237,21 +236,24 @@ class CertificateAutoRenew implements CronTaskInterface
     protected function sendExpiryNotice(string $domain, int $daysLeft, string $expiresAt): void
     {
         try {
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch('Weline_Backend::application::system_notification', [
-                'data' => [
-                    'topic' => 'system_warning',
-                    'type' => $daysLeft <= 3 ? 'warning' : 'info',
-                    'title' => __('SSL 证书即将过期'),
-                    'content' => __('域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。', [
-                        $domain,
-                        (string)$daysLeft,
-                        $expiresAt,
-                    ]),
+            w_msg(
+                'system_warning',
+                $daysLeft <= 3 ? 'warning' : 'info',
+                __('SSL 证书即将过期'),
+                __('域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。', [
+                    $domain,
+                    (string)$daysLeft,
+                    $expiresAt,
+                ]),
+                [
                     'source_module' => 'Weline_Server',
-                    'metadata' => ['domain' => $domain, 'days_left' => $daysLeft, 'expires_at' => $expiresAt],
-                ],
-            ]);
+                    'metadata' => [
+                        'domain' => $domain,
+                        'days_left' => $daysLeft,
+                        'expires_at' => $expiresAt,
+                    ],
+                ]
+            );
         } catch (\Throwable $e) {
             w_log_warning('[CertificateAutoRenew] 发送过期通知失败: ' . $e->getMessage(), [], 'server_ssl');
         }

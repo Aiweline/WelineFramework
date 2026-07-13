@@ -117,18 +117,14 @@ class ExtensionInstallStrategyMap
     }
 
     /**
-     * 获取回退策略（非当前平台或通用策略，用于优先策略均失败后逐个尝试）
+     * 获取当前平台的安全回退策略。
+     *
+     * 所有当前平台策略已由 getPreferredStrategies() 按顺序返回；禁止在
+     * macOS 上回退执行 apt/yum 或在 Linux 上执行 brew。
      */
     public function getFallbackStrategies(string $platform, string $ext, string $phpVersion): array
     {
-        $strategies = $this->buildAllStrategies($ext, $phpVersion);
-        $fallback = [];
-        foreach ($strategies as $s) {
-            if (!in_array($platform, $s['platforms'], true)) {
-                $fallback[] = $s;
-            }
-        }
-        return $fallback;
+        return [];
     }
 
     /**
@@ -204,30 +200,63 @@ class ExtensionInstallStrategyMap
     }
 
     /**
-     * 构建全部策略：每条含 cmd, name, check, platforms
+     * 构建全部策略：每条含 cmd, name, check, platforms, elevated。
+     *
+     * elevated 只表示系统包管理命令是否需要 root/sudo。Homebrew 和其
+     * PECL 必须以当前 Homebrew 用户运行，禁止添加 sudo。
      */
     private function buildAllStrategies(string $ext, string $phpVersion): array
     {
         $extQ = escapeshellarg($ext);
         $pkg = $this->getDistroPackageName($ext);
         $pkgQ = escapeshellarg($pkg);
+        $peclInstall = 'pecl install ' . $extQ;
+        $eventPeclLinux = 'pecl install -D '
+            . escapeshellarg(
+                'enable-event-debug="no" '
+                . 'enable-event-sockets="yes" '
+                . 'with-event-libevent-dir="/usr" '
+                . 'with-event-pthreads="no" '
+                . 'with-event-extra="yes" '
+                . 'with-event-openssl="yes" '
+                . 'with-event-ns="no" '
+                . 'with-openssl-dir="/usr"'
+            )
+            . ' ' . $extQ;
+        $eventPeclDarwin = 'LIBEVENT_PREFIX="$(brew --prefix libevent)" '
+            . 'OPENSSL_PREFIX="$(brew --prefix openssl@3)" '
+            . 'pecl install -D "enable-event-debug=\\"no\\" '
+            . 'enable-event-sockets=\\"yes\\" '
+            . 'with-event-libevent-dir=\\"$LIBEVENT_PREFIX\\" '
+            . 'with-event-pthreads=\\"no\\" '
+            . 'with-event-extra=\\"yes\\" '
+            . 'with-event-openssl=\\"yes\\" '
+            . 'with-event-ns=\\"no\\" '
+            . 'with-openssl-dir=\\"$OPENSSL_PREFIX\\"" ' . $extQ;
         $list = [];
 
         // Docker（优先在容器内识别）
+        $dockerEventInstall = 'if command -v apk >/dev/null 2>&1; then '
+            . 'apk add --no-cache libevent-dev openssl-dev pkgconf $PHPIZE_DEPS; '
+            . 'else apt-get update && apt-get install -y --no-install-recommends '
+            . 'libevent-dev libssl-dev pkg-config $PHPIZE_DEPS; fi && '
+            . $eventPeclLinux . ' && docker-php-ext-enable event';
         $list[] = [
-            'cmd'       => 'docker-php-ext-install ' . $extQ,
-            'name'      => 'docker-php-ext-install',
+            'cmd'       => $ext === 'event' ? $dockerEventInstall : 'docker-php-ext-install ' . $extQ,
+            'name'      => $ext === 'event' ? 'docker build deps + pecl' : 'docker-php-ext-install',
             'check'     => 'docker-php-ext-install',
             'platforms' => [self::PLATFORM_DOCKER],
+            'elevated'  => false,
         ];
 
         // macOS (Homebrew)
         if ($ext === 'event') {
             $list[] = [
-                'cmd'       => 'brew install libevent && pecl install event',
-                'name'      => 'brew libevent + pecl',
+                'cmd'       => 'brew install libevent pkgconf openssl@3 && ' . $eventPeclDarwin,
+                'name'      => 'brew libevent/pkgconf + pecl',
                 'check'     => 'brew',
                 'platforms' => [self::PLATFORM_DARWIN],
+                'elevated'  => false,
             ];
         }
         $list[] = [
@@ -235,6 +264,7 @@ class ExtensionInstallStrategyMap
             'name'      => 'brew (php-' . $pkg . ')',
             'check'     => 'brew',
             'platforms' => [self::PLATFORM_DARWIN],
+            'elevated'  => false,
         ];
 
         // phpenmod (Debian/Ubuntu 已安装未启用)，使用 PHP 扩展名
@@ -243,6 +273,7 @@ class ExtensionInstallStrategyMap
             'name'      => 'phpenmod',
             'check'     => 'phpenmod',
             'platforms' => [self::PLATFORM_LINUX_APT],
+            'elevated'  => true,
         ];
 
         // apt (Debian/Ubuntu)，使用发行版包名（如 pdo_pgsql → pgsql）
@@ -252,6 +283,7 @@ class ExtensionInstallStrategyMap
                 'name'      => 'apt (' . $pkgName . ')',
                 'check'     => 'apt-get',
                 'platforms' => [self::PLATFORM_LINUX_APT],
+                'elevated'  => true,
             ];
         }
 
@@ -262,6 +294,7 @@ class ExtensionInstallStrategyMap
                 'name'      => 'dnf (' . $pkgName . ')',
                 'check'     => 'dnf',
                 'platforms' => [self::PLATFORM_LINUX_DNF],
+                'elevated'  => true,
             ];
         }
 
@@ -272,6 +305,7 @@ class ExtensionInstallStrategyMap
                 'name'      => 'yum (' . $pkgName . ')',
                 'check'     => 'yum',
                 'platforms' => [self::PLATFORM_LINUX_YUM],
+                'elevated'  => true,
             ];
         }
 
@@ -281,23 +315,78 @@ class ExtensionInstallStrategyMap
             'name'      => 'apk',
             'check'     => 'apk',
             'platforms' => [self::PLATFORM_LINUX_APK],
+            'elevated'  => true,
         ];
 
         // pacman (Arch)
         $list[] = [
-            'cmd'       => 'pacman -S --noconfirm php-' . $pkg,
+            'cmd'       => 'pacman -S --noconfirm ' . escapeshellarg('php-' . $pkg),
             'name'      => 'pacman',
             'check'     => 'pacman',
             'platforms' => [self::PLATFORM_LINUX_PACMAN],
+            'elevated'  => true,
         ];
 
-        // pecl（通用，所有 Unix 平台都可作为回退）
+        if ($ext === 'event') {
+            $linuxBuildStrategies = [
+                [
+                    'cmd' => 'apt-get install -y php-pear php-dev libevent-dev libssl-dev pkg-config build-essential && '
+                        . $eventPeclLinux,
+                    'name' => 'apt build deps + pecl',
+                    'check' => 'apt-get',
+                    'platforms' => [self::PLATFORM_LINUX_APT],
+                ],
+                [
+                    'cmd' => 'dnf install -y php-pear php-devel libevent-devel openssl-devel gcc make autoconf pkgconf-pkg-config && '
+                        . $eventPeclLinux,
+                    'name' => 'dnf build deps + pecl',
+                    'check' => 'dnf',
+                    'platforms' => [self::PLATFORM_LINUX_DNF],
+                ],
+                [
+                    'cmd' => 'yum install -y php-pear php-devel libevent-devel openssl-devel gcc make autoconf pkgconfig && '
+                        . $eventPeclLinux,
+                    'name' => 'yum build deps + pecl',
+                    'check' => 'yum',
+                    'platforms' => [self::PLATFORM_LINUX_YUM],
+                ],
+                [
+                    'cmd' => 'apk add --no-cache php-dev php-pear libevent-dev openssl-dev pkgconf build-base && '
+                        . $eventPeclLinux,
+                    'name' => 'apk build deps + pecl',
+                    'check' => 'apk',
+                    'platforms' => [self::PLATFORM_LINUX_APK],
+                ],
+                [
+                    'cmd' => 'pacman -S --needed --noconfirm php libevent openssl pkgconf base-devel && '
+                        . $eventPeclLinux,
+                    'name' => 'pacman build deps + pecl',
+                    'check' => 'pacman',
+                    'platforms' => [self::PLATFORM_LINUX_PACMAN],
+                ],
+            ];
+            foreach ($linuxBuildStrategies as $strategy) {
+                $strategy['cmd'] = 'sh -c ' . escapeshellarg($strategy['cmd']);
+                $strategy['elevated'] = true;
+                $list[] = $strategy;
+            }
+        }
+
+        // macOS Homebrew PHP 的 PECL 目录归当前用户所有，绝不能用 sudo。
         $list[] = [
-            'cmd'       => 'pecl install ' . $extQ,
+            'cmd'       => $ext === 'event' ? $eventPeclDarwin : $peclInstall,
+            'name'      => 'pecl',
+            'check'     => 'pecl',
+            'platforms' => [self::PLATFORM_DARWIN],
+            'elevated'  => false,
+        ];
+
+        // Linux PECL 通常需要写入系统 extension_dir，使用非交互 sudo -n。
+        $list[] = [
+            'cmd'       => $ext === 'event' ? $eventPeclLinux : $peclInstall,
             'name'      => 'pecl',
             'check'     => 'pecl',
             'platforms' => [
-                self::PLATFORM_DARWIN,
                 self::PLATFORM_LINUX_APT,
                 self::PLATFORM_LINUX_DNF,
                 self::PLATFORM_LINUX_YUM,
@@ -305,6 +394,7 @@ class ExtensionInstallStrategyMap
                 self::PLATFORM_LINUX_PACMAN,
                 self::PLATFORM_LINUX_GENERIC,
             ],
+            'elevated'  => true,
         ];
 
         return $list;

@@ -12,7 +12,11 @@ Provider 不能只为后台展示服务。`seo_sitemap_submit` cron 会自动发
 app/code/{Vendor}/{Module}/extends/module/Weline_Seo/SitemapUrlProvider/{Name}Provider.php
 ```
 
-Provider 实现 `Weline\Seo\Interface\SitemapUrlProviderInterface`，推荐继承 `Weline\Seo\Provider\AbstractSitemapUrlProvider`。
+Provider 推荐继承公开契约 `Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider`，
+站点枚举只注入 `Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface`。业务模块不得引用
+Seo 的 `Provider`、`Service` 或旧 `Interface` 内部命名空间。
+
+系统默认站点 `website_id=0 / code=default` 是合法且自动安装的站点，`WebsiteDirectoryInterface::all()`、`get(0)` 和 Provider 的 `getWebsiteIds()` 都必须保留它；只有缺失身份字段或负数 ID 才表示无效站点。
 
 ## 返回数据契约
 

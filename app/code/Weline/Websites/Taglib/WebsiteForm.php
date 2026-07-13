@@ -24,7 +24,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class WebsiteForm implements TaglibInterface
 {
@@ -87,7 +87,7 @@ class WebsiteForm implements TaglibInterface
             $hasCancelUrl = array_key_exists('cancel_url', $attributes);
 
             // 解析所有属性
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
 

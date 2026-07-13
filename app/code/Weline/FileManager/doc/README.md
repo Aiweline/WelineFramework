@@ -4,6 +4,27 @@
 
 Weline FileManager 是系统的文件管理模块，提供了完整的文件上传、下载、存储、管理功能，支持多种存储方式和文件类型。
 
+文件选择字段实现并注册 Eav 属性类型，因此 Eav 是必需依赖；跨模块消费者仍只能引用下述 `Weline\FileManager\Api\*` 契约。
+该字段与 Eav 协作时仅使用 `Weline\Eav\Api\*` 公开契约，不引用 Eav 内部模型命名空间：
+
+- 运行时实体能力使用 `EavModelInterface` 与 `EavAttribute`。
+- 安装阶段以不可变 `AttributeTypeDefinition` 描述 `select_file`，通过
+  `AttributeTypeRegistryInterface` 注册；Provider 由 Framework
+  `RuntimeProviderResolver` 解析，FileManager 不感知 Eav 的 ORM 实现。
+
+## 公开扩展契约
+
+跨模块扩展只引用 `Weline\FileManager\Api\*`：
+
+- `Api\FileManagerInterface`：文件管理器能力契约。
+- `Api\FileManager`：ElFinder、MediaManager 等实现的公开抽象基类。
+- `Api\Block\FileManager`：文件选择器 Block 的公开扩展基类。
+- `Api\Image`：媒体路径与预览数据格式化工具。
+- `Api\MimeTypes`：扩展名到 MIME 的只读目录。
+
+旧的 `Weline\FileManager\FileManager*`、`Block\FileManager`、`Helper\Image` 和
+`Helper\MimeTypes` 名称保留为兼容别名；新模块不得继续引用这些旧命名空间。
+
 ## 主要功能
 
 ### 1. 文件上传
@@ -172,7 +193,10 @@ $result = $manager->copyFile('uploads/images/file.jpg', 'uploads/backup/file.jpg
 
 ## 依赖关系
 
-- Weline_Framework
+- 必需：`Weline_Backend`、`Weline_Eav`、`Weline_Queue`。
+- 可选：`Weline_Server`，仅提供 WLS 面板操作定义。
+- `Weline_MediaManager` 是 FileManager 公共抽象基类的消费者；依赖方向是
+  `MediaManager -> FileManager`，FileManager 不得反向依赖具体媒体实现。
 
 ## 版本信息
 

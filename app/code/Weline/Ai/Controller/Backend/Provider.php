@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
  * @package Weline_Ai
  */
 #[Acl('Weline_Ai::ai_provider_account', 'AI供应商账户', 'mdi-account-key', 'AI供应商账户管理', 'Weline_Backend::ai_group')]
-class Provider extends BaseController
+class Provider extends BackendPageController
 {
     /**
      * @var AccountService

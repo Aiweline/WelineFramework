@@ -20,6 +20,16 @@
 - 目录：`app/code/Weline/EditorManager`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 
+## Dependency Inventory
+
+- Backend 与 MediaManager 是必需依赖。
+- 第三方编辑器模块单向依赖 EditorManager，并通过 `etc/module.php.provides` 的 `editor_manager.<Module>` 能力键注册实现。
+- EditorManager 只读取 `framework:compile` 生成的 Provider 索引，不得按类名反向检测 CKEditor 或其他具体模块。
+
+## 公共扩展契约
+
+第三方编辑器只能继承 `Weline\EditorManager\Api\Editor\EditorManager` 与 `EditorBlock`，或实现同目录的 `EditorManagerInterface`。这些 Api 基类的继承边界只落到 Framework 数据对象/Block，不继承 EditorManager 内部具体类；`Block/EditorManager.php`、根命名空间兼容类与 Taglib 属于模块内部实现，不是新的跨模块入口。
+
 ## 代码面概览
 
 入口文件：

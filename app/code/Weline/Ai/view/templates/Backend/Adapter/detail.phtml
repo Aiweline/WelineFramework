@@ -253,9 +253,7 @@
         },
         
         performToggleStatus: function(id) {
-            var url = '<?= $this->_url->getBackendUrl('*/backend/adapter/toggleStatus') ?>';
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) };
-            var req = window.Weline.Api.request(url, opts);
+            var req = window.Weline.Api.resource('ai').adapterToggleStatus({ id: id });
             req.then(function(res) {
                 var data = (res && res.data) || res;
                 if (data && data.success) {

@@ -1,20 +1,36 @@
 {
-  "name": "weline/module-theme",
-  "description": "WelineFramework theme module",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.0"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Theme\\": ""
-    }
-  },
-  "license": "MIT"
+    "name": "weline/module-theme",
+    "description": "WelineFramework theme module",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-i18n": "@dev",
+        "weline/module-meta": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-widget": "@dev"
+    },
+    "suggest": {
+        "weline/module-ai": "Enables optional AI theme adapters, agents, and tools.",
+        "weline/module-cdn": "Publishes preview cache-bypass rules when CDN integration is installed.",
+        "weline/module-eav": "Enables EAV-backed option metadata in Theme query operations.",
+        "weline/module-file-manager": "Resolves configured brand media paths through the public media API.",
+        "weline/module-module-router": "Preloads the compiled module router cache in persistent workers.",
+        "weline/module-seo": "Enables optional SEO head-context integration for theme FAQ facts.",
+        "weline/module-server": "Enables WLS shared-state-aware worker warmup integration.",
+        "weline/module-websites": "Enables website target types and the AI virtual-theme workbench integration."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Theme\\": ""
+        }
+    },
+    "license": "MIT"
 }

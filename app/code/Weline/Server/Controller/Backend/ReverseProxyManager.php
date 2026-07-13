@@ -10,11 +10,11 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendController;
 use Weline\Server\Model\ReverseProxy;
 use Weline\Server\Service\Control\IpcControlGateway;
 
-class ReverseProxyManager extends BaseController
+class ReverseProxyManager extends BackendController
 {
     protected ReverseProxy $proxyModel;
     protected IpcControlGateway $ipcGateway;
@@ -54,7 +54,7 @@ class ReverseProxyManager extends BaseController
         $this->assign('stats', $stats);
         $this->assign('title', __('反向代理配置'));
 
-        return $this->fetch('index');
+        return $this->fetch('Weline_Server::templates/Backend/ReverseProxy/index.phtml');
     }
 
     /**
@@ -82,14 +82,14 @@ class ReverseProxyManager extends BaseController
 
             if (!$proxy->getData(ReverseProxy::schema_fields_ID)) {
                 $this->assign('error', __('代理规则不存在'));
-                return $this->fetch('edit');
+                return $this->fetch('Weline_Server::templates/Backend/ReverseProxy/edit.phtml');
             }
         }
 
         $this->assign('proxy', $proxy);
         $this->assign('title', $proxyId > 0 ? __('编辑代理规则') : __('新建代理规则'));
 
-        return $this->fetch('edit');
+        return $this->fetch('Weline_Server::templates/Backend/ReverseProxy/edit.phtml');
     }
 
     /**

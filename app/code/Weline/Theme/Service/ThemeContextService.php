@@ -7,11 +7,12 @@ namespace Weline\Theme\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ThemeContextProviderInterface;
 use Weline\Framework\Session\Session;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Model\WelineTheme;
 
-class ThemeContextService
+class ThemeContextService implements ThemeContextProviderInterface
 {
     public const DEFAULT_SCOPE = 'default';
     public const AREA_FRONTEND = 'frontend';
@@ -187,8 +188,11 @@ class ThemeContextService
         return $theme->getId() ? $theme : null;
     }
 
-    public function resolveTheme(?string $area = null, ?WelineTheme $theme = null, bool $allowPreview = true): ?WelineTheme
+    public function resolveTheme(?string $area = null, ?object $theme = null, bool $allowPreview = true): ?WelineTheme
     {
+        if ($theme !== null && !$theme instanceof WelineTheme) {
+            throw new \TypeError('Theme context resolution requires a WelineTheme instance when a theme is provided.');
+        }
         if ($theme && $theme->getId()) {
             return $theme;
         }

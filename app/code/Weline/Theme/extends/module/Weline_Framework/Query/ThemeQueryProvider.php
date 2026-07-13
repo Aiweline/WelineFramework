@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
-use Weline\Admin\Controller\BaseController as AdminBaseController;
-use Weline\Backend\Block\ThemeConfig as BackendThemeConfig;
+use Weline\Backend\Api\View\BackendThemeConfigInterface;
+use Weline\Eav\Api\Options\EavOptionsQueryInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry;
+use Weline\Framework\Runtime\ProcessCacheResetContext;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
@@ -14,7 +17,10 @@ use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
+use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
+use Weline\Widget\Api\Param\ParamFormRendererInterface;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
  * 主题查询器
@@ -28,6 +34,9 @@ class ThemeQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly WelineTheme $welineTheme,
         private readonly ThemeContextService $themeContext,
+        private readonly BackendThemeConfigInterface $backendThemeConfig,
+        private readonly RuntimeProviderResolver $runtimeProviders,
+        private readonly ParamFormRendererInterface $paramFormRenderer,
         ?ThemeVirtualLayoutService $virtualLayoutService = null,
     ) {
         $this->virtualLayoutService = $virtualLayoutService;
@@ -103,10 +112,24 @@ class ThemeQueryProvider implements QueryProviderInterface
         if ($layoutOption === '') {
             $layoutOption = 'default';
         }
-        $themeTargetType = trim((string)($params['theme_layout_target_type'] ?? $params['target_type'] ?? ''));
-        $themeTargetId = (int)($params['theme_layout_target_id'] ?? $params['target_id'] ?? 0);
+        /** @var ThemeTargetIdentityResolver $identityResolver */
+        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        [$themeTargetType, $themeTargetId] = $identityResolver->resolveFirst([
+            [
+                'target_type' => $params['theme_layout_target_type'] ?? null,
+                'target_id' => $params['theme_layout_target_id'] ?? null,
+            ],
+            [
+                'target_type' => $params['theme_layout_source_target_type'] ?? null,
+                'target_id' => $params['theme_layout_source_target_id'] ?? null,
+            ],
+            [
+                'target_type' => $params['target_type'] ?? null,
+                'target_id' => $params['target_id'] ?? null,
+            ],
+        ]);
         $targetValue = trim((string)($params['target_value'] ?? ''));
-        if ($targetValue === '' && $themeTargetType !== '' && $themeTargetId > 0) {
+        if ($targetValue === '' && $themeTargetType !== '') {
             $targetValue = $themeTargetType . ':' . $themeTargetId;
         }
         if ($targetValue === '') {
@@ -220,9 +243,20 @@ class ThemeQueryProvider implements QueryProviderInterface
             }
         }
 
-        $expectedTargetId = (int)($params['theme_layout_target_id'] ?? 0);
-        if ($expectedTargetId > 0 && (int)($context['theme_layout_target_id'] ?? 0) !== $expectedTargetId) {
-            return false;
+        if (array_key_exists('theme_layout_target_id', $params)) {
+            if ($expectedTargetType === '') {
+                return false;
+            }
+            /** @var ThemeTargetIdentityResolver $identityResolver */
+            $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+            [$validatedTargetType, $expectedTargetId] = $identityResolver->resolveFirst([[
+                'target_type' => $expectedTargetType,
+                'target_id' => $params['theme_layout_target_id'],
+            ]]);
+            if ($validatedTargetType === ''
+                || (int)($context['theme_layout_target_id'] ?? 0) !== $expectedTargetId) {
+                return false;
+            }
         }
 
         return true;
@@ -235,11 +269,8 @@ class ThemeQueryProvider implements QueryProviderInterface
             throw new \InvalidArgumentException((string)__('Invalid backend theme mode: %{1}', $mode));
         }
 
-        /** @var BackendThemeConfig $themeConfig */
-        $themeConfig = ObjectManager::getInstance(BackendThemeConfig::class);
-        if (method_exists($themeConfig, '__init')) {
-            $themeConfig->__init();
-        }
+        $themeConfig = $this->backendThemeConfig;
+        $themeConfig->reloadForCurrentUser();
 
         $originConfig = $themeConfig->getOriginThemeConfig();
         if (!is_array($originConfig)) {
@@ -264,7 +295,13 @@ class ThemeQueryProvider implements QueryProviderInterface
         $nextConfig['layouts'] = $layouts;
 
         $themeConfig->setThemeConfig($nextConfig);
-        AdminBaseController::clearRuntimeFullPageCache();
+        ObjectManager::getInstance(ModuleProcessCacheResetterRegistry::class)->reset(
+            new ProcessCacheResetContext(ProcessCacheResetContext::REASON_CACHE_CLEAR, true),
+        );
+        ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
+            null,
+            'backend_theme_mode',
+        );
 
         return [
             'success' => true,
@@ -480,8 +517,18 @@ class ThemeQueryProvider implements QueryProviderInterface
         $targetTargetType = (string)($params['target_target_type'] ?? $params['target_type_to'] ?? '');
         $targetTargetId = (int)($params['target_target_id'] ?? $params['target_id_to'] ?? 0);
 
-        if ($themeId <= 0 || trim($layoutType) === '' || $sourceTargetType === '' || $targetTargetType === ''
-            || $sourceTargetId <= 0 || $targetTargetId <= 0) {
+        /** @var ThemeTargetIdentityResolver $identityResolver */
+        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        [$sourceTargetType, $sourceTargetId] = $identityResolver->resolveFirst([[
+            'target_type' => $sourceTargetType,
+            'target_id' => $sourceTargetId,
+        ]]);
+        [$targetTargetType, $targetTargetId] = $identityResolver->resolveFirst([[
+            'target_type' => $targetTargetType,
+            'target_id' => $targetTargetId,
+        ]]);
+
+        if ($themeId <= 0 || trim($layoutType) === '' || $sourceTargetType === '' || $targetTargetType === '') {
             return [
                 'success' => false,
                 'status' => 'invalid_identity',
@@ -710,6 +757,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         }
         $bodyParams = $this->parseEditorRequestBody($body, $headers);
         $this->injectEditorRequestParams($queryParams, $bodyParams, $body);
+        $requestParams = array_merge($queryParams, $bodyParams);
         $themeEditor = null;
 
         try {
@@ -763,9 +811,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/virtual-theme/publish-version' => $this->createDirectVirtualTheme()->postPublishVersion(),
                 '/theme/backend/virtual-theme/rollback-version' => $this->createDirectVirtualTheme()->postRollbackVersion(),
                 '/theme/backend/widget/paramrender/form' => $this->createDirectParamRender()->postForm(),
-                '/weline/eav/api/options' => $this->createDirectEavOptions()->getIndex(),
-                '/weline/eav/api/options/attributes' => $this->createDirectEavOptions()->getAttributes(),
-                '/weline/eav/api/options/entities' => $this->createDirectEavOptions()->getEntities(),
+                '/weline/eav/api/options' => $this->eavOptionsQuery()->queryOptions($requestParams),
+                '/weline/eav/api/options/attributes' => $this->eavOptionsQuery()->queryAttributes($requestParams),
+                '/weline/eav/api/options/entities' => $this->eavOptionsQuery()->queryEntities(),
                 default => null,
             };
         } catch (\Throwable $e) {
@@ -798,11 +846,12 @@ class ThemeQueryProvider implements QueryProviderInterface
             ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class),
             ObjectManager::getInstance(\Weline\Theme\Service\ThemeCacheGenerator::class),
             ObjectManager::getInstance(\Weline\Theme\Service\WidgetPositionResolver::class),
-            ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class),
+            ObjectManager::getInstance(WidgetRegistryInterface::class),
             ObjectManager::getInstance(\Weline\Theme\Model\ThemeLayout::class),
-            ObjectManager::getInstance(\Weline\Meta\Model\Meta::class),
+            null,
             ObjectManager::getInstance(\Weline\Theme\Service\PreviewTokenService::class),
-            ObjectManager::getInstance(\Weline\Theme\Service\EditorLockService::class)
+            ObjectManager::getInstance(\Weline\Theme\Service\EditorLockService::class),
+            $this->paramFormRenderer,
         );
         $this->injectRequestIntoController($controller);
         return $controller;
@@ -826,15 +875,14 @@ class ThemeQueryProvider implements QueryProviderInterface
         return $controller;
     }
 
-    private function createDirectEavOptions(): \Weline\Eav\Controller\Api\Options
+    private function eavOptionsQuery(): EavOptionsQueryInterface
     {
-        $controller = new \Weline\Eav\Controller\Api\Options(
-            ObjectManager::getInstance(\Weline\Eav\Model\EavEntity::class),
-            ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute::class),
-            ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Option::class)
-        );
-        $this->injectRequestIntoController($controller);
-        return $controller;
+        $provider = $this->runtimeProviders->resolve(EavOptionsQueryInterface::class);
+        if (!$provider instanceof EavOptionsQueryInterface) {
+            throw new \RuntimeException('Weline_Eav options query provider is unavailable.');
+        }
+
+        return $provider;
     }
 
     private function injectRequestIntoController(object $controller): void

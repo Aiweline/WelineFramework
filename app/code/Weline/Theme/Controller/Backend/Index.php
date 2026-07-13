@@ -14,7 +14,7 @@ use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Meta\Helper\MetaData;
+use Weline\I18n\Api\Localization\LocaleCatalogInterface;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\ConfigLoader;
 use Weline\Theme\Helper\MetaTranslation;
@@ -777,17 +777,9 @@ class Index extends BackendController
             }
         }
 
-        // 获取所有可用语言
-        /** @var \Weline\I18n\Model\Locale $localeModel */
-        $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-        $locales = $localeModel->select()->fetch()->getItems();
-        $localeList = [];
-        foreach ($locales as $loc) {
-            $localeList[] = [
-                'code' => $loc->getCode(),
-                'name' => $loc->getName(),
-            ];
-        }
+        /** @var LocaleCatalogInterface $localeCatalog */
+        $localeCatalog = ObjectManager::getInstance(LocaleCatalogInterface::class);
+        $localeList = $localeCatalog->all((string)$locale);
 
         return $this->fetchJson($this->success('', [
             'meta' => $metaData,
@@ -1037,4 +1029,3 @@ class Index extends BackendController
             || is_dir($basePath . DS . 'theme' . DS . $area);
     }
 }
-
