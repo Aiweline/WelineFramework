@@ -604,6 +604,14 @@ TLS 会话票据已用同一 SNI 的首连 `New`、二连 `Reused` 验证；HTTP
 
 修复非 Weline vendor 的模块名规范化后又执行一次 16 Worker rolling reload，最终 16 个 READY 动态首渲染为 10.81–21.77ms。当前精确代码代的正式策略首页 c32×2,500 为 0 错误、7,090.55 QPS、p95 8.963ms；health c128×100,000 为 0 错误、12,286.74 QPS、p95 18.541ms、p99 30.351ms、max 119.856ms，Master 与 16 Worker PID 均保持运行。Browser 重载后的首页和带 Key 登录页仍可见且 Console 0 error/warn；h1/h2/h3、Process FPC 和后台 Key 404/200 重新通过。报告为 `benchmark_report_20260713_165208_619313_root_pid4416.json`、`benchmark_report_20260713_165226_865387_wls-health_pid5879.json`。
 
+### 3.8.10 2026-07-14 macOS / Linux 启动探测与协议边缘收口
+
+跨平台启动探测不再依赖版本字符串猜测。Linux ext-event 使用排在 sockets 之后的 `30-event.ini`，安装完成后由新的同一 PHP 二进制重新验证；SO_REUSEPORT 通过真实双 socket bind/listen 与 512 次分流采样确认。Caddy 同时接受 `2.x` 和 `v2.x` 版本输出，对发行包裁剪 build-info 的情况执行隔离目录内的有界 HTTP/3 listener probe。协议边缘 readiness 最多重启 3 次并保留 32KiB 诊断输出，避免无界重试或吞掉启动错误。
+
+每实例 Caddy admin 端口固定映射到 10000–16999，避免系统临时端口范围冲突；启动、探测、benchmark 和内部 warmup 统一使用 `hrtime()` 单调时钟，系统时间调整不再制造假超时。Linux Ubuntu 24.04.4 / PHP 8.4.23 的 10 次 16 Worker 冷启动为 4.231–5.810s，`batchCreate` 120–383ms；1,000,000 请求 0 错误、11,237.76 QPS、p95 21.118ms，单槽恢复 856ms。macOS 最终实例约 2.424s READY，h1/h2/h3、TLS 1.3 session reuse、h2/h3 单连接多路复用、Process FPC 与后台 Key 404/200 全部通过；首页 2,500 请求 0 错误、11,093.33 QPS、p95 4.225ms。
+
+Linux 把动态预热复验从 3 次降为 1 次的实验会把冷启动退化到约 11–16s，已经完整回退，未把失败实验包装成优化。部署上 `var/` 是节点本地运行目录，不允许不同内核/主机并发共享 sidecar token。Windows 原生 Dispatcher/event DLL 与 FPM 矩阵仍待对应 runner 验证，不能用 macOS/Linux 数据代替。
+
 ## 4. 实施映射
 
 | 阶段 | 目标 | 主要代码锚点 | 核心验证 |
