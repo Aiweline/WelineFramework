@@ -18,6 +18,10 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'Database migrations')]
 class Migration extends Model implements ModelInterface
 {
+    public const SCHEMA_CHECKPOINT_FILE = 'schema_checkpoint';
+    public const SCHEMA_CHECKPOINT_TYPE = 'schema_checkpoint';
+    public const SCHEMA_CHECKPOINT_OPERATION = 'checkpoint';
+
     public const schema_table = 'weline_database_migrations';
     public const schema_primary_key = 'migration_id';
 
@@ -137,13 +141,23 @@ class Migration extends Model implements ModelInterface
 
     public function updateStatus(string $status): bool
     {
+        $migrationId = (int)$this->getId();
         $this->setData(self::schema_fields_STATUS, $status);
 
         if ($status === self::STATUS_ROLLED_BACK) {
             $this->setData(self::schema_fields_ROLLBACK_AT, date('Y-m-d H:i:s'));
         }
 
-        return (bool) $this->save();
+        $this->save();
+        if ($migrationId <= 0) {
+            return false;
+        }
+
+        // 不依赖驱动的 affected-row 返回值，以持久化状态回读为准。
+        return (clone $this)->reset()
+            ->where(self::schema_fields_ID, $migrationId)
+            ->where(self::schema_fields_STATUS, $status)
+            ->total() === 1;
     }
 
     /**
@@ -193,6 +207,193 @@ class Migration extends Model implements ModelInterface
         ]);
         $saved = $this->save();
         return $saved ? (int) $this->getId() : 0;
+    }
+
+    /**
+     * Ensure an immutable semantic checkpoint can be written before any DDL is
+     * executed. A module version is not allowed to describe two schemas.
+     *
+     * @param array<string, string> $tableFingerprints
+     * @return array{migration_id: int, module_name: string, version: string, checksum: string, tables: array<string, string>}|null
+     */
+    public function assertSchemaCheckpointCompatible(
+        string $moduleName,
+        string $moduleVersion,
+        array $tableFingerprints,
+    ): ?array {
+        $expected = $this->buildSchemaCheckpointPayload($tableFingerprints);
+        $existing = $this->getSchemaCheckpoint($moduleName, $moduleVersion);
+        if ($existing !== null && !hash_equals($existing['checksum'], $expected['checksum'])) {
+            throw new \RuntimeException(__(
+                '模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本',
+                [$moduleName, $moduleVersion]
+            ));
+        }
+
+        return $existing;
+    }
+
+    /**
+     * Record a versioned module schema checkpoint after all DDL has completed.
+     * Repeated setup runs reuse the same immutable record.
+     *
+     * @param array<string, string> $tableFingerprints
+     */
+    public function recordSchemaCheckpoint(
+        string $moduleName,
+        string $moduleVersion,
+        array $tableFingerprints,
+        string $operationId = '',
+    ): int {
+        $existing = $this->assertSchemaCheckpointCompatible($moduleName, $moduleVersion, $tableFingerprints);
+        if ($existing !== null) {
+            return $existing['migration_id'];
+        }
+
+        $payload = $this->buildSchemaCheckpointPayload($tableFingerprints);
+        return $this->recordMigration([
+            'module_name' => $moduleName,
+            'version' => $moduleVersion,
+            'migration_file' => self::SCHEMA_CHECKPOINT_FILE,
+            'description' => sprintf('Schema checkpoint %s %s', $moduleName, $moduleVersion),
+            'status' => self::STATUS_INSTALLED,
+            'dependencies' => [],
+            'checksum' => $payload['checksum'],
+            'migration_type' => self::SCHEMA_CHECKPOINT_TYPE,
+            'operation_kind' => self::SCHEMA_CHECKPOINT_OPERATION,
+            'schema_after_checksum' => $payload['checksum'],
+            'operation_id' => $operationId,
+            'operation_payload' => $payload['json'],
+            'executed_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * @return array{migration_id: int, module_name: string, version: string, checksum: string, tables: array<string, string>}|null
+     */
+    public function getSchemaCheckpoint(string $moduleName, string $moduleVersion): ?array
+    {
+        if (!$this->isSemanticVersion($moduleVersion)) {
+            throw new \InvalidArgumentException(__('无效的模块语义版本: %{1}', $moduleVersion));
+        }
+
+        $items = (clone $this)->reset()
+            ->where(self::schema_fields_MODULE, $moduleName)
+            ->where(self::schema_fields_VERSION, $moduleVersion)
+            ->where(self::schema_fields_FILE, self::SCHEMA_CHECKPOINT_FILE)
+            ->select()
+            ->fetch()
+            ->getItems();
+        if ($items === []) {
+            return null;
+        }
+
+        $checkpoint = null;
+        foreach ($items as $item) {
+            if ((string)$item->getData(self::schema_fields_STATUS) !== self::STATUS_INSTALLED
+                || (string)$item->getData(self::schema_fields_MIGRATION_TYPE) !== self::SCHEMA_CHECKPOINT_TYPE
+                || (string)$item->getData(self::schema_fields_OPERATION_KIND) !== self::SCHEMA_CHECKPOINT_OPERATION) {
+                throw new \RuntimeException(__(
+                    '模块 %{1} 版本 %{2} 的 Schema checkpoint 状态或类型无效',
+                    [$moduleName, $moduleVersion]
+                ));
+            }
+
+            $decoded = json_decode((string)$item->getData(self::schema_fields_OPERATION_PAYLOAD), true);
+            if (!is_array($decoded) || !is_array($decoded['tables'] ?? null)) {
+                throw new \RuntimeException(__(
+                    '模块 %{1} 版本 %{2} 的 Schema checkpoint 数据损坏',
+                    [$moduleName, $moduleVersion]
+                ));
+            }
+            $payload = $this->buildSchemaCheckpointPayload($decoded['tables']);
+            $storedChecksum = trim((string)$item->getData(self::schema_fields_CHECKSUM));
+            $storedSchemaChecksum = trim((string)$item->getData(self::schema_fields_SCHEMA_AFTER_CHECKSUM));
+            if ($storedChecksum === ''
+                || !hash_equals($storedChecksum, $payload['checksum'])
+                || !hash_equals($storedSchemaChecksum, $payload['checksum'])) {
+                throw new \RuntimeException(__(
+                    '模块 %{1} 版本 %{2} 的 Schema checkpoint 校验和不一致',
+                    [$moduleName, $moduleVersion]
+                ));
+            }
+            if ($checkpoint !== null && !hash_equals($checkpoint['checksum'], $payload['checksum'])) {
+                throw new \RuntimeException(__(
+                    '模块 %{1} 版本 %{2} 存在冲突的 Schema checkpoints',
+                    [$moduleName, $moduleVersion]
+                ));
+            }
+            $checkpoint ??= [
+                'migration_id' => (int)$item->getId(),
+                'module_name' => $moduleName,
+                'version' => $moduleVersion,
+                'checksum' => $payload['checksum'],
+                'tables' => $payload['tables'],
+            ];
+        }
+
+        return $checkpoint;
+    }
+
+    /**
+     * @return array{migration_id: int, module_name: string, version: string, checksum: string, tables: array<string, string>}|null
+     */
+    public function getLatestSchemaCheckpointBefore(string $moduleName, string $moduleVersion): ?array
+    {
+        if (!$this->isSemanticVersion($moduleVersion)) {
+            throw new \InvalidArgumentException(__('无效的模块语义版本: %{1}', $moduleVersion));
+        }
+
+        $items = (clone $this)->reset()
+            ->where(self::schema_fields_MODULE, $moduleName)
+            ->where(self::schema_fields_FILE, self::SCHEMA_CHECKPOINT_FILE)
+            ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
+            ->select(self::schema_fields_VERSION)
+            ->fetchArray();
+        $versions = [];
+        foreach ($items as $item) {
+            $version = trim((string)($item[self::schema_fields_VERSION] ?? ''));
+            if ($this->isSemanticVersion($version) && version_compare($version, $moduleVersion, '<')) {
+                $versions[$version] = true;
+            }
+        }
+        $versions = array_keys($versions);
+        usort($versions, static fn(string $left, string $right): int => version_compare($right, $left));
+
+        return $versions === [] ? null : $this->getSchemaCheckpoint($moduleName, $versions[0]);
+    }
+
+    /**
+     * @param array<string, mixed> $tableFingerprints
+     * @return array{json: string, checksum: string, tables: array<string, string>}
+     */
+    private function buildSchemaCheckpointPayload(array $tableFingerprints): array
+    {
+        $normalized = [];
+        foreach ($tableFingerprints as $tableName => $fingerprint) {
+            $tableName = trim((string)$tableName);
+            $fingerprint = strtolower(trim((string)$fingerprint));
+            if ($tableName === '' || preg_match('/^[a-f0-9]{64}$/', $fingerprint) !== 1) {
+                throw new \InvalidArgumentException(__('Schema checkpoint 包含无效的表或指纹'));
+            }
+            $normalized[$tableName] = $fingerprint;
+        }
+        ksort($normalized);
+        $json = (string)json_encode(
+            ['format' => 1, 'tables' => $normalized],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        );
+
+        return [
+            'json' => $json,
+            'checksum' => hash('sha256', $json),
+            'tables' => $normalized,
+        ];
+    }
+
+    private function isSemanticVersion(string $version): bool
+    {
+        return preg_match('/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/', $version) === 1;
     }
 
     public function findMigrationId(string $moduleName, string $migrationFile): int

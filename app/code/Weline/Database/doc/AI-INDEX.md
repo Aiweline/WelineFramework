@@ -49,6 +49,7 @@
 - `app/code/Weline/Database/doc/开发/task.md`
 - `app/code/Weline/Database/doc/开发/数据库管理后台路由烟测.md`
 - `app/code/Weline/Database/doc/开发/数据库迁移系统开发文档.md`
+- `app/code/Weline/Database/doc/开发/模块代码与数据库一致性回滚.md`
 - `app/code/Weline/Database/doc/用户/数据库迁移系统使用手册.md`
 
 ## 开发前门禁

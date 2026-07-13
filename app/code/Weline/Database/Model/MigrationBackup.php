@@ -7,6 +7,6 @@ namespace Weline\Database\Model;
 /**
  * @deprecated Use \Weline\Framework\Setup\Model\MigrationBackup.
  */
-class MigrationBackup extends \Weline\Framework\Setup\Model\MigrationBackup
+class MigrationBackup extends \Weline\Framework\Setup\Model\MigrationBackup implements \Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface
 {
 }

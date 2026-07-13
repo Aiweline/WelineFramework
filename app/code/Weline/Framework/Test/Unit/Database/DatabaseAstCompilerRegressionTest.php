@@ -17,7 +17,6 @@ use Weline\Framework\Database\Connection\Adapter\Sqlite\Query as SqliteQuery;
 use Weline\Framework\Database\Connection\Api\Sql\QueryAst;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
-use Weline\Framework\Database\Exception\DbException;
 
 final class FakePdoStatement extends \PDOStatement
 {
@@ -35,6 +34,11 @@ final class FakePdo extends PDO
     public function prepare(string $query, array $options = []): \PDOStatement|false
     {
         return new FakePdoStatement();
+    }
+
+    public function exec(string $statement): int|false
+    {
+        return 0;
     }
 
     public function errorInfo(): array
@@ -301,17 +305,13 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
         $this->assertStringContainsString('DERIVED', $sql);
     }
 
-    /**
-     * @dataProvider sqliteUnsupportedDdlProvider
-     */
-    public function testSqliteConnectorUnsupportedDdlThrows(string $method, array $args): void
+    public function testSqliteTableCommentIsAnExplicitNoOp(): void
     {
         $reflection = new ReflectionClass(SqliteConnector::class);
         /** @var SqliteConnector $connector */
         $connector = $reflection->newInstanceWithoutConstructor();
 
-        $this->expectException(DbException::class);
-        $connector->{$method}(...$args);
+        $this->assertSame('', $connector->buildAlterTableCommentSql('users', 'comment'));
     }
 
     public function testSqliteConnectorIsEnabledAndSelfReferencesLikePgsql(): void
@@ -359,12 +359,4 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
         ];
     }
 
-    public static function sqliteUnsupportedDdlProvider(): array
-    {
-        return [
-            'table comment' => ['buildAlterTableCommentSql', ['users', 'comment']],
-            'add foreign key' => ['buildAddForeignKeySql', ['users', ['name' => 'fk_users_role']]],
-            'drop foreign key' => ['buildDropForeignKeySql', ['users', 'fk_users_role']],
-        ];
-    }
 }

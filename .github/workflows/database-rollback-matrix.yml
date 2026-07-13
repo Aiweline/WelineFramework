@@ -1,0 +1,111 @@
+name: Database rollback adapter matrix
+
+on:
+  pull_request:
+    paths:
+      - "app/code/Weline/Database/**"
+      - "app/code/Weline/Framework/Database/**"
+      - "app/code/Weline/Framework/Setup/**"
+      - ".github/workflows/database-rollback-matrix.yml"
+  push:
+    paths:
+      - "app/code/Weline/Database/**"
+      - "app/code/Weline/Framework/Database/**"
+      - "app/code/Weline/Framework/Setup/**"
+      - ".github/workflows/database-rollback-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  destructive-round-trip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: weline_matrix
+          MYSQL_ROOT_PASSWORD: matrix
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pmatrix"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: weline_matrix
+          MARIADB_ROOT_PASSWORD: matrix
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: weline_matrix
+          POSTGRES_USER: weline
+          POSTGRES_PASSWORD: matrix
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U weline -d weline_matrix"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_sqlite, pdo_mysql, pdo_pgsql, iconv, json, exif, fileinfo, simplexml, dom, xml, zip, gd, curl
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: SQLite destructive round-trip
+        env:
+          WELINE_DB_MATRIX_DRIVER: sqlite
+        run: vendor/bin/phpunit --bootstrap app/bootstrap.php app/code/Weline/Database/test/DatabaseAdapterRollbackMatrixTest.php
+
+      - name: PostgreSQL 16 destructive round-trip
+        env:
+          WELINE_DB_MATRIX_DRIVER: pgsql
+          WELINE_DB_MATRIX_HOST: 127.0.0.1
+          WELINE_DB_MATRIX_PORT: 5432
+          WELINE_DB_MATRIX_DATABASE: weline_matrix
+          WELINE_DB_MATRIX_USERNAME: weline
+          WELINE_DB_MATRIX_PASSWORD: matrix
+        run: vendor/bin/phpunit --bootstrap app/bootstrap.php app/code/Weline/Database/test/DatabaseAdapterRollbackMatrixTest.php
+
+      - name: MySQL 8.4 destructive round-trip
+        env:
+          WELINE_DB_MATRIX_DRIVER: mysql
+          WELINE_DB_MATRIX_HOST: 127.0.0.1
+          WELINE_DB_MATRIX_PORT: 3306
+          WELINE_DB_MATRIX_DATABASE: weline_matrix
+          WELINE_DB_MATRIX_USERNAME: root
+          WELINE_DB_MATRIX_PASSWORD: matrix
+        run: vendor/bin/phpunit --bootstrap app/bootstrap.php app/code/Weline/Database/test/DatabaseAdapterRollbackMatrixTest.php
+
+      - name: MariaDB 11.4 destructive round-trip
+        env:
+          WELINE_DB_MATRIX_DRIVER: mariadb
+          WELINE_DB_MATRIX_HOST: 127.0.0.1
+          WELINE_DB_MATRIX_PORT: 3307
+          WELINE_DB_MATRIX_DATABASE: weline_matrix
+          WELINE_DB_MATRIX_USERNAME: root
+          WELINE_DB_MATRIX_PASSWORD: matrix
+        run: vendor/bin/phpunit --bootstrap app/bootstrap.php app/code/Weline/Database/test/DatabaseAdapterRollbackMatrixTest.php

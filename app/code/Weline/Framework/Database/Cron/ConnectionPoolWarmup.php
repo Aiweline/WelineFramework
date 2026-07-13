@@ -131,11 +131,12 @@ class ConnectionPoolWarmup implements CronTaskInterface
     private function warmupConfig(ConfigProvider $configProvider): array
     {
         $dbType = $configProvider->getDbType();
+        $pdoDriver = $dbType === 'mariadb' ? 'mysql' : $dbType;
         
         // 直接创建 PDO 连接，避免通过 Connector（防止循环依赖）
-        $createConnection = function () use ($dbType, $configProvider) {
-            if (!in_array($dbType, \PDO::getAvailableDrivers())) {
-                throw new \Exception(__("数据库驱动 %{1} 不存在", $dbType));
+        $createConnection = function () use ($dbType, $pdoDriver, $configProvider) {
+            if (!in_array($pdoDriver, \PDO::getAvailableDrivers(), true)) {
+                throw new \Exception(__("数据库驱动 %{1} 不存在", $pdoDriver));
             }
             
             // 根据数据库类型构建 DSN
@@ -146,9 +147,14 @@ class ConnectionPoolWarmup implements CronTaskInterface
                 }
             } elseif ($dbType === 'sqlite') {
                 $dsn = "{$dbType}:{$configProvider->getData('path')}";
+            } elseif ($dbType === 'mysql' || $dbType === 'mariadb') {
+                // MySQL 与 MariaDB 均使用 PDO mysql 驱动。
+                $dsn = "mysql:host={$configProvider->getHostName()}"
+                    . ";port={$configProvider->getHostPort()}"
+                    . ";dbname={$configProvider->getDatabase()}"
+                    . ";charset={$configProvider->getCharset()}";
             } else {
-                // MySQL 和其他数据库
-                $dsn = "{$dbType}:host={$configProvider->getHostName()}:{$configProvider->getHostPort()};dbname={$configProvider->getDatabase()};charset={$configProvider->getCharset()};collate={$configProvider->getCollate()}";
+                throw new \Exception(__("不支持的数据库驱动 %{1}", $dbType));
             }
             
             try {

@@ -1,6 +1,15 @@
-﻿"表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。","表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。"
+﻿"不支持的模块回滚操作: %{1}","不支持的模块回滚操作: %{1}"
+模块版本回滚,模块版本回滚
+"ModuleManager 对 Weline_Database 联动回滚能力的后台适配器","ModuleManager 对 Weline_Database 联动回滚能力的后台适配器"
+确认的根模块或目标版本与预检计划不一致,确认的根模块或目标版本与预检计划不一致
+请先登录后台,请先登录后台
+后台操作员不可用,后台操作员不可用
+无权执行模块回滚操作,无权执行模块回滚操作
+"表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。","表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。"
 "【冲突模组：%{1} 和 %{2}】：表 %{3} 已被模块 %{4} 的模型 %{5} 使用。请为当前模型更换表名或联系管理员。","[Conflicting modules: %{1} and %{2}]: Table %{3} is used by model %{5} of module %{4}. Please change the table name for the current model or contact the administrator."
 "【冲突模组：%{1}和%{2}】：你当前安装的模型 %{3} 和模型 %{4} 的表名（%{5}）重复。请修改当前重复模型【%{6}】的表名(table)属性或者重命名模型名。","[Conflicting modules: %{1} and %{2}]: The table names (%{5}) of your currently installed model %{3} and model %{4} are duplicated. Please modify the table name (table) attribute of the current duplicate model [%{6}] or rename the model name."
+"模块 %{1} 缺少 ModuleManager 查询投影","模块 %{1} 缺少 ModuleManager 查询投影"
+"模块 %{1} 的 ModuleManager 投影版本 %{2} 与代码版本 %{3} 不一致","模块 %{1} 的 ModuleManager 投影版本 %{2} 与代码版本 %{3} 不一致"
 "表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model %{3}. If you confirm the need to remove the table, please visit the module_table table and delete it manually."
 "表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model."
 "模块状态变更后注册表更新失败: %{1}","Registry update failed after module status change: %{1}"
@@ -16,6 +25,10 @@ ID,ID
 基础路径,"Base Path"
 上一个版本,"Previous version"
 当前版本,"Current version"
+代码版本,代码版本
+数据库版本,数据库版本
+Schema状态,Schema状态
+漂移警告,漂移警告
 路由,Route
 创建时间,"Create time"
 更新时间,"Update time"
@@ -27,8 +40,39 @@ Composer,Composer
 模组管理,"Module management"
 模组控制器,"Module controller"
 操作,Operation
+未验证,未验证
+无,无
 开启,Enable
 关闭,Close
+回滚,回滚
+正在读取可用目标版本...,正在读取可用目标版本...
+没有可用的精确版本制品，或当前状态不允许回滚,没有可用的精确版本制品，或当前状态不允许回滚
+选择目标版本,选择目标版本
+生成只读预检计划,生成只读预检计划
+取消,取消
+继续预检,继续预检
+级联模块,级联模块
+代码制品,代码制品
+"Schema DDL","Schema DDL"
+脚本迁移,脚本迁移
+备份,备份
+预计停机,预计停机
+秒,秒
+阻断项,阻断项
+警告,警告
+请分别输入根模块名和目标版本后启动,请分别输入根模块名和目标版本后启动
+输入根模块名,输入根模块名
+输入目标版本,输入目标版本
+确认并启动回滚,确认并启动回滚
+输入内容与计划不一致,输入内容与计划不一致
+回滚任务已入队,回滚任务已入队
+当前阶段,当前阶段
+模块代码与数据库已一致回滚,模块代码与数据库已一致回滚
+回滚失败，但已完成自动补偿,回滚失败，但已完成自动补偿
+自动补偿失败，系统保持维护状态,自动补偿失败，系统保持维护状态
+恢复命令,恢复命令
+操作失败,操作失败
+"后台业务 API 尚未加载","后台业务 API 尚未加载"
 模块名称不能为空,"Module name cannot be empty"
 无法创建数据包目录：%{1},"Unable to create data package directory: %{1}"
 "导出表 %{1}（分块）失败：%{2}","Export table %{1} (chunked) failed: %{2}"
@@ -250,7 +294,6 @@ Acl名称不能为空，使用默认值：%{1},"Acl name cannot be empty, use de
 扫描PHP文件时出错：%{1},"Error scanning PHP file: %{1}"
 扫描PHTML文件时出错：%{1},"Error scanning PHTML file: %{1}"
 AI模块未找到，跳过AI翻译,"AI module not found, skipping AI translation"
-翻译缓存,"Translation cache"
 找到AI翻译服务，开始翻译...,"Found AI translation service, starting translation..."
 所有字符串都已翻译，无需AI翻译,"All strings are already translated, no AI translation needed"
 "需要翻译 %{1} 个字符串（已过滤已翻译的）","Need to translate %{1} strings (filtered out already translated)"

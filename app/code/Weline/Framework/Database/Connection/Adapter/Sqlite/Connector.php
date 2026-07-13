@@ -31,6 +31,7 @@ use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\DatabaseRetryTimeoutException;
 use Weline\Framework\Database\Exception\LinkException;
+use Weline\Framework\Database\Helper\Standar;
 use Weline\Framework\Database\Retry\RetryBudget;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
@@ -38,6 +39,9 @@ use Weline\Framework\Runtime\SchedulerSystem;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    public const REBUILD_MARKER = '/* WELINE_SQLITE_REBUILD */';
+    public const DDL_STATEMENT_SEPARATOR = "\n-- WELINE_DDL_STATEMENT\n";
+
     private const MAX_BOOTSTRAP_ATTEMPTS = 32;
     private const DEFAULT_REQUEST_BOOTSTRAP_BUDGET_MS = 50;
     private const MAX_REQUEST_BOOTSTRAP_BUDGET_MS = 150;
@@ -436,7 +440,7 @@ final class Connector extends Query implements ConnectorInterface
 
     public function getIndexFields(string $table): array
     {
-        $table = self::processName($table);
+        $table = $this->resolveSqliteTable($table);
         // 鑾峰彇琛ㄧ殑绱㈠紩鍒楄〃
         $indexList = $this->query("PRAGMA index_list('$table')")->fetch();
 
@@ -519,15 +523,29 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
      */
     public function getCreateTableSql(string $table_name): string
     {
-        $table_name = self::processName($table_name);
+        $table_name = $this->resolveSqliteTable($table_name);
         // 鑾峰彇琛ㄧ殑鍏冩暟鎹?
         $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
 
         if ($tableMeta === false) {
             throw new \Exception("Table '$table_name' does not exist.");
         }
-        // 杩斿洖 CREATE TABLE 璇彞
-        return $tableMeta[0]['sql'] ?? '';
+        $createSql = trim((string)($tableMeta[0]['sql'] ?? ''));
+        if ($createSql === '') {
+            return '';
+        }
+        $statement = $this->getWrappedConnection()->prepare(
+            "SELECT sql FROM sqlite_master WHERE tbl_name = :table AND type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, name"
+        );
+        $statement->execute([':table' => $table_name]);
+        $statements = [$createSql];
+        foreach ($statement->fetchAll(PDO::FETCH_COLUMN, 0) ?: [] as $sql) {
+            $sql = trim((string)$sql);
+            if ($sql !== '') {
+                $statements[] = $sql;
+            }
+        }
+        return implode(self::DDL_STATEMENT_SEPARATOR, $statements);
     }
 
     public function getConfigProvider(): ConfigProviderInterface
@@ -547,13 +565,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function dropTableIfExists(string $table): void
     {
-        $quoted = $this->quoteTable(self::processName($table));
+        $quoted = $this->quoteTable($this->resolveSqliteTable($table));
         $this->query("DROP TABLE IF EXISTS {$quoted}")->fetch();
     }
 
     public function tableExist(string $table_name): bool
     {
-        $table_name = self::processName($table_name);
+        $table_name = $this->resolveSqliteTable($table_name);
         try {
             $res = $this->query("SELECT name FROM sqlite_master WHERE type='table' AND name='{$table_name}'; ")->fetch();
             if (empty($res)) {
@@ -568,11 +586,32 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getExistingTables(array $tableNames): array
     {
-        // Keep behavior aligned with MySQL/Pgsql: normalize input names and check each table safely.
-        return array_values(array_filter(
-            array_map(fn($t) => trim(str_replace(['`', '"'], '', (string) $t)), $tableNames),
-            fn($t) => $t !== '' && $this->tableExist($t)
-        ));
+        $physicalToLookup = [];
+        foreach ($tableNames as $input) {
+            $lookup = trim(str_replace(['`', '"'], '', (string)$input));
+            if (str_contains($lookup, '.')) {
+                $parts = explode('.', $lookup);
+                $lookup = trim((string)end($parts));
+            }
+            if ($lookup !== '') {
+                $physicalToLookup[$this->resolveSqliteTable((string)$input)][] = $lookup;
+            }
+        }
+        if ($physicalToLookup === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($physicalToLookup), '?'));
+        $statement = $this->getWrappedConnection()->prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ({$placeholders})"
+        );
+        $statement->execute(array_keys($physicalToLookup));
+        $existing = [];
+        foreach ($statement->fetchAll(PDO::FETCH_COLUMN, 0) ?: [] as $physical) {
+            foreach ($physicalToLookup[(string)$physical] ?? [] as $lookup) {
+                $existing[] = $lookup;
+            }
+        }
+        return array_values(array_unique($existing));
     }
 
     public function getVersion(): string
@@ -583,7 +622,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function hasField(string $table, string $field): bool
     {
-        $table = self::processName($table);
+        $table = $this->resolveSqliteTable($table);
         $field = self::processName($field);
         $sql = "SELECT name FROM pragma_table_info('{$table}') WHERE name LIKE '{$field}';";
         $res = $this->query($sql)->fetch();
@@ -592,11 +631,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function hasIndex(string $table, string $idx_name): bool
     {
-        $table = self::processName($table);
+        $table = $this->resolveSqliteTable($table);
         $idx_name = self::processName($idx_name);
-        $sql = "SELECT name FROM pragma_index_list('{$table}') WHERE name LIKE '{$idx_name}';";
-        $res = $this->query($sql)->fetch();
-        return !empty($res);
+        $standardName = Standar::getIndexName($this->formatTableName($table), $idx_name);
+        $statement = $this->getWrappedConnection()->prepare(
+            "SELECT name FROM pragma_index_list(:table) WHERE name IN (:raw, :standard) LIMIT 1"
+        );
+        $statement->execute([':table' => $table, ':raw' => $idx_name, ':standard' => $standardName]);
+        return $statement->fetchColumn() !== false;
     }
 
     public function getQuery(): QueryInterface
@@ -613,11 +655,18 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getTableColumns(string $table): array
     {
-        $table = self::processName($table);
+        $table = $this->resolveSqliteTable($table);
         $rows = $this->query("PRAGMA table_info(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($rows)) {
             return [];
         }
+        $uniqueColumns = [];
+        foreach ($this->getTableIndexes($table) as $index) {
+            if (!empty($index['unique']) && count((array)($index['columns'] ?? [])) === 1) {
+                $uniqueColumns[(string)$index['columns'][0]] = true;
+            }
+        }
+        $primaryKeyCount = count(array_filter($rows, static fn(array $row): bool => (int)($row['pk'] ?? 0) > 0));
         $list = [];
         foreach ($rows as $row) {
             $name = $row['name'] ?? '';
@@ -631,10 +680,10 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                 'length' => $typeInfo['length'],
                 'nullable' => $pk > 0 ? false : $notnull === 0,
                 'primary_key' => $pk > 0,
-                'auto_increment' => $pk > 0 && in_array($typeInfo['type'], ['integer', 'int'], true),
+                'auto_increment' => $primaryKeyCount === 1 && $pk > 0 && in_array($typeInfo['type'], ['integer', 'int'], true),
                 'default' => $this->normalizeSqliteDefault($default),
                 'comment' => '',
-                'unique' => false,
+                'unique' => isset($uniqueColumns[$name]),
             ];
         }
         return $list;
@@ -681,7 +730,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getTableIndexes(string $table): array
     {
-        $table = self::processName($table);
+        $table = $this->resolveSqliteTable($table);
         $indexList = $this->query("PRAGMA index_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($indexList)) {
             return [];
@@ -729,7 +778,33 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string
     {
-        return '';
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        $columnName = (string)($col['name'] ?? '');
+        $replacement = $this->sqliteColumnDef($col);
+        $hasTablePrimaryKey = false;
+        foreach ($definitions as $definition) {
+            if (preg_match('/^\s*(?:CONSTRAINT\s+[^\s]+\s+)?PRIMARY\s+KEY\b/i', $definition) === 1) {
+                $hasTablePrimaryKey = true;
+                break;
+            }
+        }
+        if ($hasTablePrimaryKey && !empty($col['primaryKey'])) {
+            $replacement = trim((string)preg_replace('/\s+PRIMARY\s+KEY(?:\s+AUTOINCREMENT)?\b/i', '', $replacement));
+        }
+
+        $replaced = false;
+        foreach ($definitions as $index => $definition) {
+            if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $columnName) === 0) {
+                $definitions[$index] = $replacement;
+                $replaced = true;
+                break;
+            }
+        }
+        if (!$replaced) {
+            throw new \RuntimeException(__("SQLite 表 %{1} 不存在待修改列 %{2}", [$table, $columnName]));
+        }
+
+        return $this->sqliteBuildRecreateTableSql($table, $definitions, $suffix);
     }
 
     /** @inheritDoc */
@@ -772,13 +847,217 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAddForeignKeySql(string $table, array $fk): string
     {
-        return '';
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        $constraintName = trim((string)($fk['name'] ?? ''));
+        foreach ($definitions as $definition) {
+            if (strcasecmp((string)$this->sqliteForeignKeyConstraintName($definition), $constraintName) === 0) {
+                return $this->sqliteBuildRecreateTableSql($table, $definitions, $suffix);
+            }
+        }
+
+        $d = $this->getDialect();
+        $columns = array_map(fn(string $column): string => $d->quoteIdentifier($column), (array)($fk['columns'] ?? []));
+        $referenceColumns = array_map(
+            fn(string $column): string => $d->quoteIdentifier($column),
+            (array)($fk['referencesColumns'] ?? [])
+        );
+        if ($constraintName === '' || $columns === [] || $referenceColumns === []) {
+            throw new \InvalidArgumentException(__('SQLite 外键定义不完整'));
+        }
+        $referenceTable = $this->formatTableName((string)($fk['referencesTable'] ?? ''));
+        $definition = 'CONSTRAINT ' . $d->quoteIdentifier($constraintName)
+            . ' FOREIGN KEY (' . implode(',', $columns) . ')'
+            . ' REFERENCES ' . $referenceTable . ' (' . implode(',', $referenceColumns) . ')';
+        if (!empty($fk['onDeleteCascade'])) {
+            $definition .= ' ON DELETE CASCADE';
+        }
+        if (!empty($fk['onUpdateCascade'])) {
+            $definition .= ' ON UPDATE CASCADE';
+        }
+        $definitions[] = $definition;
+
+        return $this->sqliteBuildRecreateTableSql($table, $definitions, $suffix);
     }
 
     /** @inheritDoc */
     public function buildDropForeignKeySql(string $table, string $fkName): string
     {
-        return '';
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        $removed = false;
+        foreach ($definitions as $index => $definition) {
+            if (strcasecmp((string)$this->sqliteForeignKeyConstraintName($definition), $fkName) === 0) {
+                unset($definitions[$index]);
+                $removed = true;
+                break;
+            }
+        }
+
+        // 旧 SQLite 表可能没有保存约束名，DbSchemaReader 会以 fk_<id> 表示。
+        if (!$removed && preg_match('/^fk_(\d+)$/', $fkName, $matches) === 1) {
+            $foreignKeys = $this->getTableForeignKeys($table);
+            $target = null;
+            foreach ($foreignKeys as $foreignKey) {
+                if (($foreignKey['name'] ?? '') === $fkName) {
+                    $target = $foreignKey;
+                    break;
+                }
+            }
+            if (is_array($target)) {
+                foreach ($definitions as $index => $definition) {
+                    if ($this->sqliteForeignKeyDefinitionMatches($definition, $target)) {
+                        unset($definitions[$index]);
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $this->sqliteBuildRecreateTableSql($table, array_values($definitions), $suffix);
+    }
+
+    /** @return array{0:list<string>,1:string} */
+    private function sqliteTableDefinitions(string $table): array
+    {
+        $createSql = $this->getCreateTableSql(self::processName($table));
+        if (str_contains($createSql, self::DDL_STATEMENT_SEPARATOR)) {
+            $createSql = explode(self::DDL_STATEMENT_SEPARATOR, $createSql, 2)[0];
+        }
+        $open = strpos($createSql, '(');
+        $close = strrpos($createSql, ')');
+        if ($open === false || $close === false || $close <= $open) {
+            throw new \RuntimeException(__('SQLite 表结构无法解析: %{1}', $table));
+        }
+
+        return [
+            $this->sqliteSplitDefinitions(substr($createSql, $open + 1, $close - $open - 1)),
+            trim(substr($createSql, $close + 1)),
+        ];
+    }
+
+    /** @return list<string> */
+    private function sqliteSplitDefinitions(string $body): array
+    {
+        $definitions = [];
+        $buffer = '';
+        $depth = 0;
+        $quote = null;
+        $length = strlen($body);
+        for ($index = 0; $index < $length; $index++) {
+            $char = $body[$index];
+            if ($quote !== null) {
+                $buffer .= $char;
+                $endQuote = $quote === '[' ? ']' : $quote;
+                if ($char === $endQuote) {
+                    if ($quote !== '[' && $index + 1 < $length && $body[$index + 1] === $endQuote) {
+                        $buffer .= $body[++$index];
+                    } else {
+                        $quote = null;
+                    }
+                }
+                continue;
+            }
+            if (in_array($char, ["'", '"', '`', '['], true)) {
+                $quote = $char;
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === '(') {
+                $depth++;
+            } elseif ($char === ')') {
+                $depth = max(0, $depth - 1);
+            }
+            if ($char === ',' && $depth === 0) {
+                if (trim($buffer) !== '') {
+                    $definitions[] = trim($buffer);
+                }
+                $buffer = '';
+                continue;
+            }
+            $buffer .= $char;
+        }
+        if (trim($buffer) !== '') {
+            $definitions[] = trim($buffer);
+        }
+        return $definitions;
+    }
+
+    private function sqliteDefinitionColumnName(string $definition): ?string
+    {
+        if (preg_match('/^\s*(?:CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN)\b/i', $definition) === 1) {
+            return null;
+        }
+        if (preg_match('/^\s*(?:"((?:""|[^"])*)"|`((?:``|[^`])*)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/', $definition, $matches) !== 1) {
+            return null;
+        }
+        $name = $matches[1] !== '' ? str_replace('""', '"', $matches[1])
+            : ($matches[2] !== '' ? str_replace('``', '`', $matches[2])
+                : ($matches[3] !== '' ? $matches[3] : $matches[4]));
+        return $name !== '' ? $name : null;
+    }
+
+    private function sqliteForeignKeyConstraintName(string $definition): ?string
+    {
+        if (preg_match('/^\s*CONSTRAINT\s+(?:"((?:""|[^"])*)"|`((?:``|[^`])*)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))\s+FOREIGN\s+KEY\b/i', $definition, $matches) !== 1) {
+            return null;
+        }
+        return $matches[1] !== '' ? str_replace('""', '"', $matches[1])
+            : ($matches[2] !== '' ? str_replace('``', '`', $matches[2])
+                : ($matches[3] !== '' ? $matches[3] : $matches[4]));
+    }
+
+    /** @param array<string,mixed> $foreignKey */
+    private function sqliteForeignKeyDefinitionMatches(string $definition, array $foreignKey): bool
+    {
+        if (stripos($definition, 'FOREIGN KEY') === false) {
+            return false;
+        }
+        $normalized = strtolower(str_replace(['`', '"', '[', ']', ' ', "\n", "\r", "\t"], '', $definition));
+        $columns = strtolower(implode(',', (array)($foreignKey['columns'] ?? [])));
+        $referenceTable = strtolower(self::processName((string)($foreignKey['ref_table'] ?? '')));
+        $referenceColumns = strtolower(implode(',', (array)($foreignKey['ref_columns'] ?? [])));
+        return str_contains($normalized, 'foreignkey(' . $columns . ')')
+            && str_contains($normalized, 'references' . $referenceTable . '(' . $referenceColumns . ')');
+    }
+
+    /** @param list<string> $definitions */
+    private function sqliteBuildRecreateTableSql(string $table, array $definitions, string $suffix): string
+    {
+        $rawTable = $this->resolveSqliteTable($table);
+        $quotedTable = $this->quoteIdentifier($rawTable);
+        $temporary = $rawTable . '__weline_rebuild_' . bin2hex(random_bytes(6));
+        $quotedTemporary = $this->quoteIdentifier($temporary);
+        $columns = [];
+        foreach ($this->getTableColumns($rawTable) as $column) {
+            $name = trim((string)($column['name'] ?? $column['Field'] ?? ''));
+            if ($name !== '') {
+                $columns[] = $name;
+            }
+        }
+        if ($columns === []) {
+            throw new \RuntimeException(__('SQLite 表 %{1} 没有可复制列', $table));
+        }
+        $quotedColumns = array_map(fn(string $column): string => $this->quoteIdentifier($column), $columns);
+        $suffixSql = $suffix !== '' ? ' ' . rtrim($suffix, ';') : '';
+        $statements = [
+            "CREATE TABLE {$quotedTemporary} (\n  " . implode(",\n  ", $definitions) . "\n){$suffixSql}",
+            "INSERT INTO {$quotedTemporary} (" . implode(',', $quotedColumns) . ") SELECT " . implode(',', $quotedColumns) . " FROM {$quotedTable}",
+            "DROP TABLE {$quotedTable}",
+            "ALTER TABLE {$quotedTemporary} RENAME TO {$quotedTable}",
+        ];
+
+        $connection = $this->getWrappedConnection();
+        $statement = $connection->prepare(
+            "SELECT type, name, sql FROM sqlite_master WHERE tbl_name = :table AND type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, name"
+        );
+        $statement->execute([':table' => $rawTable]);
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $schemaObject) {
+            $sql = trim((string)($schemaObject['sql'] ?? ''));
+            if ($sql !== '') {
+                $statements[] = rtrim($sql, ';');
+            }
+        }
+
+        return self::REBUILD_MARKER . "\n" . implode(self::DDL_STATEMENT_SEPARATOR, $statements);
     }
 
     private function sqliteColumnDef(array $col): string
@@ -786,7 +1065,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $c = $this->getDialect()->quoteIdentifier($col['name'] ?? '');
         $type = strtoupper($col['type'] ?? 'TEXT');
         $len = $col['length'] ?? null;
-        $typeLen = $len ? "{$type}({$len})" : $type;
+        $sqliteAutoIncrementPrimary = !empty($col['autoIncrement']) && !empty($col['primaryKey']);
+        // SQLite only permits AUTOINCREMENT on the exact token INTEGER PRIMARY KEY.
+        $typeLen = $sqliteAutoIncrementPrimary ? 'INTEGER' : ($len ? "{$type}({$len})" : $type);
         $opts = [];
         if (!empty($col['primaryKey'])) {
             $opts[] = 'PRIMARY KEY';
@@ -803,6 +1084,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                 ? "DEFAULT (datetime('now'))"
                 : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
         }
+        if (!empty($col['unique']) && empty($col['primaryKey'])) {
+            $opts[] = 'UNIQUE';
+        }
         $optStr = implode(' ', $opts);
         return "{$c} {$typeLen} {$optStr}";
     }
@@ -810,28 +1094,57 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getTableForeignKeys(string $table): array
     {
-        $table = self::processName($table);
+        $table = $this->resolveSqliteTable($table);
         $rows = $this->query("PRAGMA foreign_key_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($rows)) {
             return [];
         }
-        $list = [];
+        $grouped = [];
         foreach ($rows as $row) {
-            $list[] = [
-                'name' => 'fk_' . ($row['id'] ?? 0),
-                'columns' => [$row['from'] ?? ''],
-                'ref_table' => $row['table'] ?? '',
-                'ref_columns' => [$row['to'] ?? ''],
-                'on_delete_cascade' => strtoupper($row['on_delete'] ?? '') === 'CASCADE',
-                'on_update_cascade' => strtoupper($row['on_update'] ?? '') === 'CASCADE',
+            $id = (int)($row['id'] ?? 0);
+            $sequence = (int)($row['seq'] ?? 0);
+            $grouped[$id] ??= [
+                'name' => 'fk_' . $id,
+                'columns' => [],
+                'ref_table' => (string)($row['table'] ?? ''),
+                'ref_columns' => [],
+                'on_delete_cascade' => strtoupper((string)($row['on_delete'] ?? '')) === 'CASCADE',
+                'on_update_cascade' => strtoupper((string)($row['on_update'] ?? '')) === 'CASCADE',
             ];
+            $grouped[$id]['columns'][$sequence] = (string)($row['from'] ?? '');
+            $grouped[$id]['ref_columns'][$sequence] = (string)($row['to'] ?? '');
         }
-        return $list;
+        [$definitions] = $this->sqliteTableDefinitions($table);
+        foreach ($grouped as $id => &$foreignKey) {
+            ksort($foreignKey['columns']);
+            ksort($foreignKey['ref_columns']);
+            $foreignKey['columns'] = array_values($foreignKey['columns']);
+            $foreignKey['ref_columns'] = array_values($foreignKey['ref_columns']);
+            foreach ($definitions as $definition) {
+                $constraintName = $this->sqliteForeignKeyConstraintName($definition);
+                if ($constraintName !== null && $this->sqliteForeignKeyDefinitionMatches($definition, $foreignKey)) {
+                    $foreignKey['name'] = $constraintName;
+                    break;
+                }
+            }
+        }
+        unset($foreignKey);
+        return array_values($grouped);
     }
 
     /** @inheritDoc */
     public function getDefaultTableAdditional(): string
     {
         return '';
+    }
+
+    private function resolveSqliteTable(string $table): string
+    {
+        $formatted = self::processName($this->formatTableName($table));
+        if (str_contains($formatted, '.')) {
+            $parts = explode('.', $formatted);
+            return trim((string)end($parts));
+        }
+        return trim($formatted);
     }
 }

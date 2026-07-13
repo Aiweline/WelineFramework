@@ -11,6 +11,7 @@ use Weline\Database\Service\VersionService;
 use Weline\Database\Model\Migration;
 use Weline\Database\Model\MigrationBackup;
 use Weline\Database\Model\ModuleVersion;
+use Weline\Database\Model\ModuleVersionHistory;
 
 /**
  * 数据库迁移系统综合测试
@@ -33,16 +34,18 @@ class DatabaseMigrationSystemTest extends TestCore
         $this->migrationModel = ObjectManager::getInstance(Migration::class);
         $this->backupModel = ObjectManager::getInstance(MigrationBackup::class);
         $this->versionModel = ObjectManager::getInstance(ModuleVersion::class);
+        $this->cleanupVersionFixture();
     }
     
     public function tearDown(): void
     {
-        parent::tearDown();
         // 清理测试数据
         $this->migrationModel->reset()
             ->where(Migration::schema_fields_MODULE, 'Weline_SystemTest')
             ->delete()
             ->fetch();
+        $this->cleanupVersionFixture();
+        parent::tearDown();
     }
     
     /**
@@ -103,13 +106,13 @@ class DatabaseMigrationSystemTest extends TestCore
         $currentVersion = $this->versionService->getModuleVersionString($moduleName);
         $this->assertEquals('1.1.0', $currentVersion);
         
-        // 回滚版本
+        // 旧 API 不得跳过代码、Schema 与迁移编排直接改游标
         $rollbackResult = $this->versionService->rollbackModuleVersion($moduleName, '1.0.0');
-        $this->assertTrue($rollbackResult, '回滚版本应该成功');
+        $this->assertFalse($rollbackResult, '单独修改版本游标应该被拒绝');
         
-        // 验证回滚后版本
+        // 验证版本保持在升级后的值
         $afterRollback = $this->versionService->getModuleVersionString($moduleName);
-        $this->assertEquals('1.0.0', $afterRollback);
+        $this->assertEquals('1.1.0', $afterRollback);
     }
     
     /**
@@ -220,5 +223,18 @@ class DatabaseMigrationSystemTest extends TestCore
         
         $versionString = $this->versionService->getModuleVersionString($moduleName);
         $this->assertNull($versionString, '不存在的模块版本字符串应该返回 null');
+    }
+
+    private function cleanupVersionFixture(): void
+    {
+        $moduleName = 'Weline_SystemTest';
+        ObjectManager::getInstance(ModuleVersion::class, [], false)
+            ->where(ModuleVersion::schema_fields_MODULE_NAME, $moduleName)
+            ->delete()
+            ->fetch();
+        ObjectManager::getInstance(ModuleVersionHistory::class, [], false)
+            ->where(ModuleVersionHistory::schema_fields_MODULE_NAME, $moduleName)
+            ->delete()
+            ->fetch();
     }
 }

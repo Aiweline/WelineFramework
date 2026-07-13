@@ -11,6 +11,7 @@ use Weline\Database\Service\Artifact\LocalModuleArtifactProvider;
 final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInterface
 {
     private const INSTALL_RECORD_DIR = BP . 'var' . DS . 'appstore' . DS . 'install-records';
+    private const TEMP_DIR = BP . 'var' . DS . 'appstore' . DS . 'temp';
 
     public function __construct(
         private readonly AppStoreInstalledModule $installedModule,
@@ -124,7 +125,7 @@ final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInte
                 $this->recursiveDelete($extractDir);
             }
             if ($zipPath !== '' && is_file($zipPath)) {
-                @unlink($zipPath);
+                $this->deleteTemporaryFile($zipPath);
             }
         }
     }
@@ -136,7 +137,7 @@ final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInte
 
     private function findInstalledModule(string $moduleName): ?AppStoreInstalledModule
     {
-        $items = $this->installedModule->reset()
+        $items = (clone $this->installedModule)->reset()
             ->where(AppStoreInstalledModule::schema_fields_module_name, $moduleName)
             ->limit(1)
             ->select()
@@ -186,13 +187,46 @@ final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInte
 
     private function recursiveDelete(string $path): void
     {
+        $root = realpath(self::TEMP_DIR);
+        $resolved = realpath($path);
+        if ($root === false
+            || $resolved === false
+            || !is_dir($resolved)
+            || !str_starts_with($resolved, rtrim($root, '/\\') . DS)
+            || preg_match('/^extract_[A-Za-z0-9_.-]+$/', basename($resolved)) !== 1
+        ) {
+            throw new \RuntimeException(__('拒绝删除非受管 AppStore 解压目录: %{1}', $path));
+        }
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            new \RecursiveDirectoryIterator($resolved, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($iterator as $item) {
-            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+            if ($item->isDir() && !$item->isLink()) {
+                @rmdir($item->getPathname());
+                continue;
+            }
+            // nosemgrep: php.lang.security.unlink-use.unlink-use -- the parent is a validated AppStore extract directory and links are not followed.
+            @unlink($item->getPathname());
         }
-        @rmdir($path);
+        @rmdir($resolved);
+    }
+
+    private function deleteTemporaryFile(string $path): void
+    {
+        $root = realpath(self::TEMP_DIR);
+        $resolved = realpath($path);
+        if ($root === false
+            || $resolved === false
+            || !is_file($resolved)
+            || !str_starts_with($resolved, rtrim($root, '/\\') . DS)
+            || strtolower(pathinfo($resolved, PATHINFO_EXTENSION)) !== 'zip'
+        ) {
+            throw new \RuntimeException(__('拒绝删除非受管 AppStore 下载文件: %{1}', $path));
+        }
+        // nosemgrep: php.lang.security.unlink-use.unlink-use -- realpath and extension are restricted to the AppStore temp root.
+        if (!@unlink($resolved) && is_file($resolved)) {
+            throw new \RuntimeException(__('无法清理 AppStore 下载文件: %{1}', $resolved));
+        }
     }
 }
