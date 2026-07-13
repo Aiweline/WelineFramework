@@ -91,12 +91,13 @@ class AttackDetector
      * 默认规则
      */
     private array $defaultRules = [
-        // 频率限制（登录重定向循环会导致同一 IP 短时间内大量请求，max_requests 不宜过低以免误封）
+        // 实例级兜底限流。现代后台页面一次加载可能并发请求数百个静态资源，
+        // 这里必须给正常突发流量留足空间；API 由 path_rate_limits 单独约束。
         'rate_limit' => [
             'enabled' => true,
             'window' => 60,           // 时间窗口（秒）
-            'max_requests' => 200,    // 最大请求数（原 100，提高以避免 admin↔login 重定向循环误封）
-            'block_duration' => 300,  // 封禁时长（秒）
+            'max_requests' => 3000,   // 50 req/s/IP 的分钟突发预算
+            'block_duration' => 0,    // 超额只返回 429，不升级为共享 IP 封禁
         ],
         // 路径级限流（可精细控制 Query API 等路径）
         'path_rate_limits' => [
@@ -161,14 +162,10 @@ class AttackDetector
         'bad_user_agents' => [
             'enabled' => true,
             'patterns' => [
-                '/^$/i',                          // 空 UA
-                '/^-$/i',                         // 单破折号
                 '/sqlmap/i',                      // SQLMap
                 '/nikto/i',                       // Nikto
                 '/nmap/i',                        // Nmap
                 '/masscan/i',                     // Masscan
-                '/python-requests.*\d\.\d/i',     // 默认 Python requests（可选）
-                '/curl\/\d/i',                    // curl（可选，生产环境酌情启用）
             ],
             'block_duration' => 300,
         ],
