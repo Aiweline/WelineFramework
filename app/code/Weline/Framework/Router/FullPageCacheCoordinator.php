@@ -1958,6 +1958,12 @@ final class FullPageCacheCoordinator
         }
 
         unset($payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY]);
+        // The gzip copy can still be close to the original HTML size (and is
+        // base64-expanded inside the NDJSON shared-state frame). Keeping it
+        // here defeats body externalization and can exceed the bounded Memory
+        // Service protocol frame. Each Worker rebuilds this optional variant
+        // once after hydrating the shared body and retains it in Process L1.
+        unset($payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY]);
         $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
             'path' => $file,
             'bytes' => \strlen($body),
