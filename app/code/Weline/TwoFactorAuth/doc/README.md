@@ -27,6 +27,14 @@
 - 挑战完成时仅使用 `CustomerAccountFacadeInterface` 查找 data-only `CustomerIdentity`、建立登录态并委托 remember token。CustomerToken ORM、旧 token 清理、新 token 持久化及 `w_ut` Cookie 全部由 Customer 模块所有。
 - 固定时序为：挑战校验 → TOTP/备份码校验 → 客户存在性 → 登录 → remember token → 移除挑战。
 
+## 客户账户中心契约
+
+- 两步验证是客户主动启用的可选能力，不得在注册或普通登录时强制开启。
+- 设置入口必须挂载到 `Weline_Customer` 官方个人中心的 `account.sidebar` 与 `account.sidebar.content`，路由地址为 `/customer/account/index#twofa`；不得另建独立个人中心。
+- 已启用客户可在该入口输入当前 6 位动态验证码并调用 `Weline.Api.resource('twoFactor').disable()` 关闭两步验证。
+- 关闭后 `TwoFactorAuthService::isEnabled()` 必须立即返回 `false`。新密码登录不得创建两步 challenge，TOTP 与备份码也都不得完成关闭前已创建的 challenge。
+- 再次启用前按普通 Customer 密码登录；若登录携带合法来源页，仍由 Customer 的统一认证回跳契约返回该网页。
+
 ## 代码面概览
 
 入口文件：

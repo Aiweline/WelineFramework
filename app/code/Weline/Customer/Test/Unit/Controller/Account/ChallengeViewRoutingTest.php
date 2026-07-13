@@ -8,7 +8,6 @@ use PHPUnit\Framework\TestCase;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Controller\Account\Challenge;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\View\Template;
 
 class ChallengeViewRoutingTest extends TestCase
@@ -20,12 +19,9 @@ class ChallengeViewRoutingTest extends TestCase
 
         $controller = $this->getMockBuilder(Challenge::class)
             ->setConstructorArgs([$this->createMock(Template::class), $handler])
-            ->onlyMethods(['redirect', 'getMessageManager'])
+            ->onlyMethods(['redirect'])
             ->getMock();
 
-        $messageManager = $this->createMock(MessageManager::class);
-        $messageManager->expects($this->once())->method('addError');
-        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
         $controller->expects($this->once())->method('redirect')->with('/customer/account/login')->willReturn('redirected');
 
         $request = $this->createMock(Request::class);
