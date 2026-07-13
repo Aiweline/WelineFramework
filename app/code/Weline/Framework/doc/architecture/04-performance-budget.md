@@ -12,7 +12,7 @@
 
 性能结论必须同时提供平台、PHP 版本、运行模式、Worker 数、样本量、冷/热状态和原始数据路径。不使用单次请求作为验收依据。
 
-当前状态：静态架构门禁已经全绿；性能与稳定性矩阵尚未全部完成。下面的 macOS 数据是阶段性证据，不得外推为 Linux、Windows、FPM、冷启动或所有业务路由均已通过。
+当前状态：静态架构门禁已经全绿；macOS 与 Linux VM 已取得 WLS Direct、TLS 1.3、HTTP/1.1/2/3、冷启动和长稳证据。Windows 原生 runner、FPM 以及完整业务路由矩阵尚未全部完成；任何单个平台的数据都不得外推为其它平台已经通过。
 
 ## 发布门槛
 
@@ -266,6 +266,17 @@ Direct QPS 相对提升 20.26%，两组 0 错误。默认策略恢复后，裸 `
 
 仍需原生完成的发布矩阵：
 
-- Linux：`auto -> direct` 的真实 `SO_REUSEPORT`、ext-event/TLS、策略对等、故障恢复和长稳性能。
 - Windows：`auto -> dispatcher`、Direct/independent 启动前拒绝、event DLL ABI 匹配、批量启动与长稳性能。
-- 跨 Runtime：FPM 对照、16 Worker 冷启动分布、DI/Event/Router/Template/BinQuery 分项基线，以及 Linux/Windows 的 100,000/1,000,000 请求稳定性门禁。
+- 跨 Runtime：FPM 对照、DI/Event/Router/Template/BinQuery 分项基线，以及完整业务路由矩阵。
+
+## 2026-07-14 macOS / Linux 协议边缘最终复核
+
+Linux 证据来自 Colima Ubuntu 24.04.4、Linux 6.8 arm64、PHP 8.4.23。启动前自动安装 ext-event 3.1.4，并写入排在 sockets 之后的 `30-event.ini`；安装后由新的同一 PHP 二进制重新验证。系统 Caddy 2.6.2 虽没有完整 build-info，真实有界 HTTP/3 listener probe 仍证明 QUIC 可用，避免把裁剪过的发行包误判为不支持。
+
+16 Worker 共执行 10 次冷启动，CLI 耗时为 4.231–5.810s；`batchCreate` 为 120–383ms，内部全部 READY 为 2.827–3.752s。曾尝试把动态预热复验默认次数从 3 降为 1，五轮反而退化到约 11–16s；该实验已回退，不计入通过数据。回退后的三轮为 4.511/6.233/4.403s，`batchCreate` 为 123/297/136ms。
+
+Linux 最终实例实际返回 HTTP/1.1、HTTP/2、HTTP/3，TLS 1.3 首连为 `New`、二连为 `Reused`；HTTP/2 和 HTTP/3 各 16 路请求均复用一条公开连接。动态首页首渲染 1.60ms，首页为 Process FPC HIT。持续 1,000,000 请求为 0 错误、11,237.76 QPS、p95 21.118ms、p99 26.373ms、max 50.927ms；追加 100,000 请求后 PID/RSS 保持稳定。压测中单 Worker 恢复 READY 为 856ms，裸/带 Key 后台登录为 404/200。
+
+macOS 最终代码代使用 PHP 8.4.22、4 Worker、`auto -> direct/shared_fd/event/stream` 和 Caddy 2.11.4。强制 h1/h2/h3 均为 200 且实际版本为 1.1/2/3；Alt-Svc 首次为 h2、后续自动升级 h3。TLS 1.3 ticket 跨 rolling reload 仍为 `Reused`，HTTP/2 与 HTTP/3 各 16 路请求均只建立一条公开连接。首页 c32×2,500 为 0 错误、11,093.33 QPS、p95 4.225ms、p99 11.871ms、max 11.949ms；health c128×100,000 为 0 错误、8,371.54 QPS、p95 24.677ms、p99 31.880ms、max 48.858ms；fresh TLS 1.3 c32×2,000 为 0 错误、3,186.85 QPS、p95 12.114ms、p99 13.135ms、max 15.248ms。完整停启约 2.424s READY，动态首页首渲染 2.05ms，后台 Key 继续为 404/200。
+
+本轮还确认 `var/` 必须是节点本地运行目录，不能由两个内核或主机并发共享：跨节点共享会让 Session/Memory sidecar 竞争同一 token 文件。该部署约束不属于数据面降级，也不通过扩大共享服务符号的高风险改动绕过。Windows 原生与 FPM 仍未取得本轮权威证据，因此总计划继续保持未完全发布状态。
