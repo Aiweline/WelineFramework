@@ -422,7 +422,33 @@ class Core extends CommandAbstract
 
     private function getBranch(array $args, array $config): string
     {
-        $branch = $args['branch'] ?? $args['b'] ?? $args[0] ?? $config['branch_default'] ?? null;
+        $branch = $args['branch'] ?? $args['b'] ?? null;
+        if (empty($branch)) {
+            $skipNextValue = false;
+            foreach ($args as $key => $value) {
+                if (!is_int($key) || !is_string($value) || $value === '') {
+                    continue;
+                }
+                if ($skipNextValue) {
+                    $skipNextValue = false;
+                    continue;
+                }
+                if (in_array($value, ['-b', '--branch', '-t', '--tag', '--repo'], true)) {
+                    $skipNextValue = true;
+                    continue;
+                }
+                if (
+                    $value === 'core:update'
+                    || $value === 'update:core'
+                    || str_starts_with($value, '-')
+                ) {
+                    continue;
+                }
+                $branch = $value;
+                break;
+            }
+        }
+        $branch = $branch ?: ($config['branch_default'] ?? null);
         if (empty($branch)) {
             $this->printer->error(__('错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default'));
             $this->printer->note(__('php bin/w update:core -b <分支名>'));
