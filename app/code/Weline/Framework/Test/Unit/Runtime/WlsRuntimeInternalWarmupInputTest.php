@@ -61,7 +61,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         $result = $method->invoke($runtime, [
             'headers' => [
                 'X-WLS-FPC-Status' => 'BYPASS',
-                'X-WLS-Category-View-Cache' => 'local',
+                'X-WLS-Controller-Cache' => 'local',
             ],
             'status_code' => 200,
             'elapsed_ms' => 120.0,
@@ -84,7 +84,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
             $result = $method->invoke($runtime, [
                 'headers' => [
                     'X-WLS-FPC-Status' => 'BYPASS',
-                    'X-WLS-Category-View-Cache' => 'local',
+                    'X-WLS-Controller-Cache' => 'local',
                 ],
                 'status_code' => 200,
                 'elapsed_ms' => 120.0,
@@ -217,11 +217,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
             $runtime = new WlsRuntime();
             $paths = $this->invokePrivate($runtime, 'resolveReadyGateDynamicWarmupPaths');
 
-            self::assertSame([
-                '/',
-                '/catalog/category/clothing',
-                '/en_US/catalog/category/clothing',
-            ], $paths);
+            self::assertSame(['/'], $paths);
         });
     }
 
@@ -251,12 +247,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
             $runtime = new WlsRuntime();
             $paths = $this->invokePrivate($runtime, 'resolveReadyGateDynamicWarmupPaths');
 
-            self::assertSame([
-                '/',
-                '/catalog/category/clothing',
-                '/zh_Hans_CN/catalog/category/clothing',
-                '/en_US/product/demo-category-81-sports',
-            ], $paths);
+            self::assertSame(['/'], $paths);
         });
     }
 
