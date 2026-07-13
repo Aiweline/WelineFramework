@@ -59,3 +59,9 @@ READY 动态首页的旧失败也已收口：冷链第一次有效渲染超过 7
 最终收口门禁全部通过：PHP 语法、8 项 benchmark 定向测试、Semgrep 新增 0 finding、架构检查、框架编译和 12 条运行时策略检查。专用 macOS 实例停止前仍为 Direct 4/4 READY，动态首渲染 9.35–9.50ms；随后通过标准 stop flow 完整释放 9930、28133–28136、38133 和全部关联 PID。另一智能体 9890 实例仍在，未被操作。
 
 核心代码与架构文档提交 `848c2c0f9` 已同步到 Gitee/GitHub 的功能分支和 master，四个远端引用一致且全部是 fast-forward。本地 master 在未被任何 worktree 检出的前提下原子快进；功能分支、隔离 worktree和其他智能体的未暂存文件全部保留。
+
+2026-07-14 补齐了当前代码的 FPM/WLS 同机对照。同一 Host 与默认站点 Cookie 下，首页除请求 ID 外归一为完全相同的字节，静态 SVG 的 SHA-256 也一致；裸后台登录路径两端均 404，合法 Key 路径均 200。FPM c32 五轮 QPS 中位 73.09 / p95 472ms，WLS c32 五轮 QPS 中位 15,784.70 / p95 3ms，全部正式轮均 0 错误、0 非 2xx。Browser 下两端首页的标题、H1、7 个区块、18 个入口链接一致，Console error/warn 为 0。
+
+FPM 对照因此已关闭。跨平台总计划仍不能标记完成：当前没有可用的 Windows 原生 VM、主机或 CI runner，尚无法真实验证 `auto -> dispatcher`、Direct/independent 启动前拒绝、event DLL ABI 匹配、批量启动和长稳。这是唯一剩余的发布证据缺口，没有用静态 Windows 分支检查或 macOS/Linux 数据伪装通过。
+
+同轮 Windows 静态门禁发现停止命令的平台判定是 private，导致定向测试不能覆写平台驱动。修复仅放宽为 protected；GitNexus 评估 LOW，30 项 Windows/Runtime/Socket 定向测试全通过。随后真实启动 Direct 2 Worker 实例，首页 200、裸后台 404，再用实际 `server:stop` 完整释放 Master、Worker、控制端口和自治共享 sidecar。这关闭了一个可静态发现的 Windows 分支缺口，但仍不把 macOS 上的模拟覆写当成 Windows 原生验收。

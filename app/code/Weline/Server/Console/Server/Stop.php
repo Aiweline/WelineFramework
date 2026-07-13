@@ -2375,7 +2375,7 @@ class Stop extends CommandAbstract
             || \str_contains($name, 'pwsh');
     }
 
-    private function isWindowsPlatform(): bool
+    protected function isWindowsPlatform(): bool
     {
         return \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
     }
