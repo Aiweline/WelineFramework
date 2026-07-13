@@ -34,6 +34,39 @@ final class WorkerPolicyKernel
 
     private const MAX_ATTACK_SUBJECT_BYTES = 65536;
 
+    /**
+     * Normal browser asset fan-out must not look like a path scanner. Sensitive
+     * dot paths and executable/server-side extensions intentionally remain in
+     * the scan budget and are still evaluated by protected-path rules.
+     *
+     * @var array<string, true>
+     */
+    private const PATH_SCAN_STATIC_EXTENSIONS = [
+        'avif' => true,
+        'css' => true,
+        'eot' => true,
+        'gif' => true,
+        'ico' => true,
+        'jpeg' => true,
+        'jpg' => true,
+        'js' => true,
+        'map' => true,
+        'mjs' => true,
+        'mp3' => true,
+        'mp4' => true,
+        'ogg' => true,
+        'otf' => true,
+        'png' => true,
+        'svg' => true,
+        'ttf' => true,
+        'wasm' => true,
+        'wav' => true,
+        'webm' => true,
+        'webp' => true,
+        'woff' => true,
+        'woff2' => true,
+    ];
+
     /** @var list<string> */
     private const SAFE_ATTACK_SCAN_HEADERS = [
         'origin',
@@ -483,11 +516,10 @@ final class WorkerPolicyKernel
                     && !$this->rateLimiter->allow(
                         'global',
                         $envelope->peerIp,
-                        (int)($config['max_requests'] ?? 200),
+                        (int)($config['max_requests'] ?? 3000),
                         (int)($config['window'] ?? 60),
                     )
                 ) {
-                    $this->rateLimiter->ban($envelope->peerIp, (int)($config['block_duration'] ?? 60));
                     return $this->deny($parsed, $envelope->peerIp, (bool)$envelope->attributes['trusted_proxy'], 429, $descriptor->id);
                 }
                 return null;
@@ -508,6 +540,7 @@ final class WorkerPolicyKernel
                         ? $descriptor->matcher['path_scan']
                         : [];
                     if (($pathScan['enabled'] ?? false)
+                        && $this->shouldTrackPathForScan($envelope)
                         && !$this->rateLimiter->allowUniquePath(
                             $envelope->peerIp,
                             $envelope->path,
@@ -604,11 +637,31 @@ final class WorkerPolicyKernel
                 (int)($rule['max_requests'] ?? 120),
                 (int)($rule['window'] ?? 60),
             )) {
-                $this->rateLimiter->ban($envelope->peerIp, (int)($rule['block_duration'] ?? 60));
                 return $this->deny($parsed, $envelope->peerIp, (bool)$envelope->attributes['trusted_proxy'], 429, $descriptor->id);
             }
         }
         return null;
+    }
+
+    private function shouldTrackPathForScan(RequestEnvelope $envelope): bool
+    {
+        if (!\in_array($envelope->method, ['GET', 'HEAD'], true)) {
+            return true;
+        }
+
+        $path = \strtolower($envelope->path);
+        $slash = \strrpos($path, '/');
+        $basename = $slash === false ? $path : \substr($path, $slash + 1);
+        if ($basename === '' || \str_starts_with($basename, '.')) {
+            return true;
+        }
+
+        $dot = \strrpos($basename, '.');
+        if ($dot === false || $dot === \strlen($basename) - 1) {
+            return true;
+        }
+
+        return !isset(self::PATH_SCAN_STATIC_EXTENSIONS[\substr($basename, $dot + 1)]);
     }
 
     /**
