@@ -66,6 +66,10 @@
                                             <th>
                                                 <lang>当前版本</lang>
                                             </th>
+                                            <th><lang>代码版本</lang></th>
+                                            <th><lang>数据库版本</lang></th>
+                                            <th><lang>Schema状态</lang></th>
+                                            <th><lang>漂移警告</lang></th>
                                             <th>
                                                 <lang>路由</lang>
                                             </th>
@@ -121,6 +125,17 @@
                                                 <td><var>$module->getBasePath()</var></td>
                                                 <td><var>$module->getLastVersion()</var></td>
                                                 <td><var>$module->getVersion()</var></td>
+                                                <td><var>$module->getCodeVersion()</var></td>
+                                                <td><var>$module->getDatabaseVersion()</var></td>
+                                                <td>
+                                                    <?php $schemaStatus = (string)$module->getSchemaStatus(); ?>
+                                                    <span class="badge <?= $schemaStatus === 'consistent' ? 'bg-success' : ($schemaStatus === 'drifted' ? 'bg-danger' : 'bg-warning') ?>">
+                                                        {{$schemaStatus ?: __('未验证')}}
+                                                    </span>
+                                                </td>
+                                                <td style="max-width:240px;white-space:normal">
+                                                    {{$module->getDriftWarning() ?: __('无')}}
+                                                </td>
                                                 <td><var>$module->getRouter()</var></td>
                                                 <td><var>$module->getCreateTime()</var></td>
                                                 <td>{{$module->getUpdateTime()}}</td>
@@ -133,6 +148,14 @@
                                                            data-on-label='<?= __('开启') ?>'
                                                            data-off-label='<?= __('关闭') ?>'>
                                                     </label>
+                                                    <?php $rollbackProtected = in_array((string)$module->getName(), ['Weline_Framework', 'Weline_Database', 'Weline_ModuleManager'], true); ?>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger ms-2 module-rollback-action"
+                                                            data-module="@var{$module->getName()}"
+                                                            data-current-version="@var{$module->getCodeVersion()}"
+                                                            <?= $rollbackProtected ? 'disabled' : '' ?>>
+                                                        <i class="mdi mdi-backup-restore"></i> <?= __('回滚') ?>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         </foreach>
@@ -152,3 +175,202 @@
 <script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <js>Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js</js>
+<script>
+(function () {
+    'use strict';
+    const messages = <?= json_encode([
+        'title' => __('模块版本回滚'),
+        'loadingTargets' => __('正在读取可用目标版本...'),
+        'noTargets' => __('没有可用的精确版本制品，或当前状态不允许回滚'),
+        'selectTarget' => __('选择目标版本'),
+        'preflight' => __('生成只读预检计划'),
+        'cancel' => __('取消'),
+        'next' => __('继续预检'),
+        'cascade' => __('级联模块'),
+        'artifact' => __('代码制品'),
+        'schema' => __('Schema DDL'),
+        'scripts' => __('脚本迁移'),
+        'backup' => __('备份'),
+        'downtime' => __('预计停机'),
+        'seconds' => __('秒'),
+        'blockers' => __('阻断项'),
+        'warnings' => __('警告'),
+        'confirmHelp' => __('请分别输入根模块名和目标版本后启动'),
+        'modulePlaceholder' => __('输入根模块名'),
+        'versionPlaceholder' => __('输入目标版本'),
+        'execute' => __('确认并启动回滚'),
+        'confirmMismatch' => __('输入内容与计划不一致'),
+        'queued' => __('回滚任务已入队'),
+        'phase' => __('当前阶段'),
+        'status' => __('状态'),
+        'success' => __('模块代码与数据库已一致回滚'),
+        'recovered' => __('回滚失败，但已完成自动补偿'),
+        'manual' => __('自动补偿失败，系统保持维护状态'),
+        'recoveryCommand' => __('恢复命令'),
+        'error' => __('操作失败'),
+        'apiUnavailable' => __('后台业务 API 尚未加载'),
+        'close' => __('关闭'),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function api() {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error(messages.apiUnavailable));
+        }
+        return Promise.resolve(window.Weline.Api.resource('moduleRollback'));
+    }
+
+    function errorMessage(error) {
+        return error && error.message ? error.message : String(error || messages.error);
+    }
+
+    function planHtml(plan) {
+        const items = Array.isArray(plan.cascade_modules) ? plan.cascade_modules : [];
+        const blockers = Array.isArray(plan.blockers) ? plan.blockers : [];
+        const warnings = Array.isArray(plan.warnings) ? plan.warnings : [];
+        let html = '<div class="text-start">';
+        html += '<h6>' + escapeHtml(messages.cascade) + '</h6><ol>';
+        items.forEach(function (item) {
+            const artifact = item.artifact || {};
+            html += '<li><strong>' + escapeHtml(item.module_name) + '</strong> '
+                + escapeHtml(item.from_version) + ' &rarr; ' + escapeHtml(item.to_version)
+                + '<br><small>' + escapeHtml(messages.artifact) + ': ' + escapeHtml(artifact.source || '-')
+                + ' / ' + escapeHtml((artifact.checksum || '').slice(0, 16)) + '</small>'
+                + '<br><small>' + escapeHtml(messages.schema) + ': '
+                + escapeHtml((item.schema_operations || []).length) + ' | ' + escapeHtml(messages.scripts) + ': '
+                + escapeHtml((item.script_migrations || []).length) + '</small></li>';
+        });
+        html += '</ol><p><strong>' + escapeHtml(messages.backup) + ':</strong> '
+            + escapeHtml(JSON.stringify(plan.backup_summary || {})) + '</p>';
+        html += '<p><strong>' + escapeHtml(messages.downtime) + ':</strong> '
+            + escapeHtml(plan.estimated_downtime_seconds || 0) + ' ' + escapeHtml(messages.seconds) + '</p>';
+        if (blockers.length) {
+            html += '<div class="alert alert-danger"><strong>' + escapeHtml(messages.blockers) + '</strong><ul>';
+            blockers.forEach(function (item) { html += '<li>' + escapeHtml(item) + '</li>'; });
+            html += '</ul></div>';
+        }
+        if (warnings.length) {
+            html += '<div class="alert alert-warning"><strong>' + escapeHtml(messages.warnings) + '</strong><ul>';
+            warnings.forEach(function (item) { html += '<li>' + escapeHtml(item) + '</li>'; });
+            html += '</ul></div>';
+        }
+        return html + '</div>';
+    }
+
+    async function chooseTarget(moduleName) {
+        Swal.fire({title: messages.title, text: messages.loadingTargets, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); }});
+        const resource = await api();
+        const response = await resource.listTargets({module_name: moduleName});
+        const items = Array.isArray(response.items) ? response.items : [];
+        if (!items.length) {
+            await Swal.fire({icon: 'info', title: messages.title, text: messages.noTargets});
+            return null;
+        }
+        const options = {};
+        items.forEach(function (item) {
+            options[item.target_version] = item.target_version + ' (' + (item.source || '-') + ')'
+                + (item.rollbackable ? '' : ' ⚠');
+        });
+        const selected = await Swal.fire({
+            icon: 'question', title: messages.selectTarget, input: 'select', inputOptions: options,
+            showCancelButton: true, confirmButtonText: messages.next, cancelButtonText: messages.cancel,
+            inputValidator: function (value) { return value ? undefined : messages.selectTarget; }
+        });
+        return selected.isConfirmed ? selected.value : null;
+    }
+
+    async function confirmAndStart(resource, plan) {
+        const blocked = Array.isArray(plan.blockers) && plan.blockers.length > 0;
+        const result = await Swal.fire({
+            icon: blocked ? 'error' : 'warning',
+            title: messages.preflight,
+            html: planHtml(plan) + (blocked ? '' : '<hr><p>' + escapeHtml(messages.confirmHelp) + '</p>'
+                + '<input id="rollback-confirm-module" class="swal2-input" placeholder="' + escapeHtml(messages.modulePlaceholder) + '">'
+                + '<input id="rollback-confirm-version" class="swal2-input" placeholder="' + escapeHtml(messages.versionPlaceholder) + '">'),
+            width: 780,
+            showCancelButton: !blocked,
+            showConfirmButton: !blocked,
+            confirmButtonText: messages.execute,
+            cancelButtonText: messages.cancel,
+            preConfirm: function () {
+                const moduleValue = document.getElementById('rollback-confirm-module').value.trim();
+                const versionValue = document.getElementById('rollback-confirm-version').value.trim();
+                if (moduleValue !== plan.root_module || versionValue !== plan.target_version) {
+                    Swal.showValidationMessage(messages.confirmMismatch);
+                    return false;
+                }
+                return {module: moduleValue, version: versionValue};
+            }
+        });
+        if (!result.isConfirmed || blocked) return null;
+        return resource.start({
+            plan_id: plan.plan_id,
+            plan_hash: plan.plan_hash,
+            confirm_module: result.value.module,
+            confirm_version: result.value.version
+        });
+    }
+
+    async function monitor(resource, operationId) {
+        const terminal = ['succeeded', 'failed_recovered', 'manual_recovery_required'];
+        while (true) {
+            const response = await resource.getOperation({operation_id: operationId});
+            const operation = response.operation || response;
+            Swal.fire({
+                title: messages.queued,
+                html: '<p><strong>' + escapeHtml(messages.status) + ':</strong> ' + escapeHtml(operation.status) + '</p>'
+                    + '<p><strong>' + escapeHtml(messages.phase) + ':</strong> ' + escapeHtml(operation.phase) + '</p>',
+                allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); }
+            });
+            if (terminal.indexOf(operation.status) !== -1) {
+                if (operation.status === 'succeeded') {
+                    await Swal.fire({icon: 'success', title: messages.success, confirmButtonText: messages.close});
+                    window.location.reload();
+                    return;
+                }
+                if (operation.status === 'failed_recovered') {
+                    await Swal.fire({icon: 'warning', title: messages.recovered, text: operation.error || '', confirmButtonText: messages.close});
+                    window.location.reload();
+                    return;
+                }
+                const recovery = operation.recovery || {};
+                await Swal.fire({
+                    icon: 'error', title: messages.manual,
+                    html: '<p>' + escapeHtml(operation.error || '') + '</p><p><strong>'
+                        + escapeHtml(messages.recoveryCommand) + ':</strong><br><code>'
+                        + escapeHtml(recovery.manual_command || '') + '</code></p>',
+                    confirmButtonText: messages.close
+                });
+                return;
+            }
+            await new Promise(function (resolve) { window.setTimeout(resolve, 2000); });
+        }
+    }
+
+    document.addEventListener('click', async function (event) {
+        const button = event.target.closest('.module-rollback-action');
+        if (!button || button.disabled) return;
+        button.disabled = true;
+        try {
+            const moduleName = button.getAttribute('data-module') || '';
+            const target = await chooseTarget(moduleName);
+            if (!target) return;
+            const resource = await api();
+            Swal.fire({title: messages.preflight, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); }});
+            const response = await resource.createPlan({module_name: moduleName, target_version: target});
+            const plan = response.plan || response;
+            const started = await confirmAndStart(resource, plan);
+            if (started && started.operation_id) await monitor(resource, started.operation_id);
+        } catch (error) {
+            await Swal.fire({icon: 'error', title: messages.error, text: errorMessage(error)});
+        } finally {
+            button.disabled = false;
+        }
+    });
+})();
+</script>

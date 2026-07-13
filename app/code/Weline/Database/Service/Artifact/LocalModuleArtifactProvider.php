@@ -124,31 +124,63 @@ final class LocalModuleArtifactProvider implements ModuleArtifactProviderInterfa
                 . DS . $this->safeSegment($version)
                 . DS . $checksum;
             $target = $targetRoot . DS . 'module';
-            if (!is_dir($target)) {
+            if (is_dir($target)) {
+                $existingChecksum = $this->directoryChecksum($target);
+                $manifest = json_decode((string)@file_get_contents($targetRoot . DS . 'manifest.json'), true);
+                if (!hash_equals($checksum, $existingChecksum)
+                    || !is_array($manifest)
+                    || (string)($manifest['module_name'] ?? '') !== $moduleName
+                    || (string)($manifest['version'] ?? '') !== $version
+                    || !hash_equals($checksum, (string)($manifest['checksum'] ?? ''))) {
+                    throw new \RuntimeException(__('已有不可变快照校验失败: %{1} %{2}', [$moduleName, $version]));
+                }
+            } else {
+                if (is_dir($targetRoot)) {
+                    throw new \RuntimeException(__('模块快照目录不完整，禁止覆盖: %{1}', $targetRoot));
+                }
                 $temporary = $targetRoot . '.tmp-' . $this->safeSegment($operationId) . '-' . bin2hex(random_bytes(4));
-                $this->recursiveCopy($source, $temporary . DS . 'module');
-                $copiedChecksum = $this->directoryChecksum($temporary . DS . 'module');
-                if (!hash_equals($checksum, $copiedChecksum)) {
+                try {
+                    $this->recursiveCopy($source, $temporary . DS . 'module');
+                    $copiedChecksum = $this->directoryChecksum($temporary . DS . 'module');
+                    if (!hash_equals($checksum, $copiedChecksum)) {
+                        throw new \RuntimeException(__('模块代码快照校验失败: %{1}', $moduleName));
+                    }
+                    $manifest = [
+                        'module_name' => $moduleName,
+                        'version' => $version,
+                        'checksum' => $checksum,
+                        'operation_id' => $operationId,
+                        'source' => $sourceName,
+                        'created_at' => date('c'),
+                    ];
+                    $written = file_put_contents(
+                        $temporary . DS . 'manifest.json',
+                        json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        LOCK_EX
+                    );
+                    if ($written === false) {
+                        throw new \RuntimeException(__('无法写入模块快照 manifest: %{1}', $moduleName));
+                    }
+                    if (!@rename($temporary, $targetRoot)) {
+                        // A concurrent writer may have committed the exact same immutable snapshot.
+                        if (!is_dir($target)
+                            || !hash_equals($checksum, $this->directoryChecksum($target))) {
+                            throw new \RuntimeException(__('无法提交模块代码快照: %{1}', $moduleName));
+                        }
+                    }
+                } finally {
                     $this->recursiveDelete($temporary);
-                    throw new \RuntimeException(__('模块代码快照校验失败: %{1}', $moduleName));
                 }
-                if (!is_dir($targetRoot) && !@rename($temporary, $targetRoot)) {
-                    $this->recursiveDelete($temporary);
-                    throw new \RuntimeException(__('无法提交模块代码快照: %{1}', $moduleName));
-                }
-                $manifest = [
-                    'module_name' => $moduleName,
-                    'version' => $version,
-                    'checksum' => $checksum,
-                    'operation_id' => $operationId,
-                    'source' => $sourceName,
-                    'created_at' => date('c'),
-                ];
-                file_put_contents(
-                    $targetRoot . DS . 'manifest.json',
-                    json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    LOCK_EX
-                );
+            }
+
+            $committedManifest = json_decode((string)@file_get_contents($targetRoot . DS . 'manifest.json'), true);
+            if (!is_dir($target)
+                || !hash_equals($checksum, $this->directoryChecksum($target))
+                || !is_array($committedManifest)
+                || (string)($committedManifest['module_name'] ?? '') !== $moduleName
+                || (string)($committedManifest['version'] ?? '') !== $version
+                || !hash_equals($checksum, (string)($committedManifest['checksum'] ?? ''))) {
+                throw new \RuntimeException(__('模块快照提交后验证失败: %{1} %{2}', [$moduleName, $version]));
             }
 
             return [
@@ -243,13 +275,29 @@ final class LocalModuleArtifactProvider implements ModuleArtifactProviderInterfa
         if (!is_dir($path)) {
             return;
         }
+
+        $root = realpath($this->artifactRoot());
+        $resolved = realpath($path);
+        if ($root === false
+            || $resolved === false
+            || !str_starts_with($resolved, rtrim($root, '/\\') . DS)
+            || !str_contains(basename($resolved), '.tmp-')
+        ) {
+            throw new \RuntimeException(__('拒绝删除非受管模块制品临时目录: %{1}', $path));
+        }
+
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            new \RecursiveDirectoryIterator($resolved, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($iterator as $item) {
-            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+            if ($item->isDir() && !$item->isLink()) {
+                @rmdir($item->getPathname());
+                continue;
+            }
+            // nosemgrep: php.lang.security.unlink-use.unlink-use -- the parent is a validated artifact .tmp directory and links are not followed.
+            @unlink($item->getPathname());
         }
-        @rmdir($path);
+        @rmdir($resolved);
     }
 }

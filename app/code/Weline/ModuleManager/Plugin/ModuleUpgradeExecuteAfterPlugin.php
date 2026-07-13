@@ -12,12 +12,17 @@ declare(strict_types=1);
 
 namespace Weline\ModuleManager\Plugin;
 
+use Weline\Database\Api\ModuleRollbackManagerInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\ModuleManager\Model\Module;
 
 class ModuleUpgradeExecuteAfterPlugin
 {
+    public function __construct(private readonly ModuleRollbackManagerInterface $rollbackManager)
+    {
+    }
+
     function afterExecute($object, $result)
     {
         # 获取modules
@@ -34,6 +39,21 @@ class ModuleUpgradeExecuteAfterPlugin
             $moduleModel->clearData()
                 ->setModelFieldsData($module)
                 ->save(true, Module::schema_fields_NAME);
+            try {
+                $state = $this->rollbackManager->getModuleState((string)$module['name']);
+                $blockers = (array)($state['blockers'] ?? []);
+                $moduleModel->setData([
+                    Module::schema_fields_CODE_VERSION => (string)($state['code_version'] ?? ''),
+                    Module::schema_fields_DATABASE_VERSION => (string)($state['database_version'] ?? ''),
+                    Module::schema_fields_SCHEMA_STATUS => $blockers === [] ? 'consistent' : 'drifted',
+                    Module::schema_fields_DRIFT_WARNING => implode("\n", $blockers),
+                ])->save();
+            } catch (\Throwable $e) {
+                $moduleModel->setData([
+                    Module::schema_fields_SCHEMA_STATUS => 'unverified',
+                    Module::schema_fields_DRIFT_WARNING => $e->getMessage(),
+                ])->save();
+            }
         }
     }
 }
