@@ -5,18 +5,25 @@ declare(strict_types=1);
 namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\MessageManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
 class Challenge extends \Weline\Framework\App\Controller\FrontendController
 {
     protected ?string $layoutType = 'account.auth';
 
+    private readonly CustomerAuthReturnUrlService $authReturnUrlService;
+
     public function __construct(
         private readonly Template $template,
-        private readonly CustomerLoginChallengeHandlerInterface $challengeHandler
+        private readonly CustomerLoginChallengeHandlerInterface $challengeHandler,
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null
     ) {
+        $this->authReturnUrlService = $authReturnUrlService
+            ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
     }
 
     public function getIndex(): string
@@ -67,7 +74,8 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
 
     private function respondSuccess(string $message, string $redirectUrl): string
     {
-        $redirect = $this->normalizeRedirectPath($redirectUrl);
+        $target = $this->authReturnUrlService->consume($this->session, $redirectUrl);
+        $redirect = $this->authReturnUrlService->formatRedirect($target);
         if ($this->expectsJsonResponse()) {
             return $this->fetchJson([
                 'success' => true,
@@ -102,26 +110,5 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
 
         $acceptHeader = strtolower((string)($this->request->getHeader('Accept') ?? ''));
         return str_contains($acceptHeader, 'application/json');
-    }
-
-    private function normalizeRedirectPath(string $redirectUrl): string
-    {
-        $redirectUrl = trim($redirectUrl);
-        if ($redirectUrl === '') {
-            return '/customer/account';
-        }
-
-        if ((bool)preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
-            $path = trim((string)(parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
-            $query = trim((string)(parse_url($redirectUrl, PHP_URL_QUERY) ?? ''));
-            $redirectUrl = $path . ($query !== '' ? '?' . $query : '');
-        }
-
-        $normalized = ltrim($redirectUrl, '/');
-        if ($normalized === '' || $normalized === 'customer/account/index') {
-            return '/customer/account';
-        }
-
-        return '/' . $normalized;
     }
 }

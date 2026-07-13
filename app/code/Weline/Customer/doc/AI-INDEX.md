@@ -53,6 +53,7 @@
 ## doc 目录
 
 - `app/code/Weline/Customer/doc/README.md`
+- `app/code/Weline/Customer/doc/storefront-auth-return.md`
 - `app/code/Weline/Customer/doc/hook/frontend/account/index/orders.md`
 - `app/code/Weline/Customer/doc/hook/frontend/account/index/subscriptions.md`
 - `app/code/Weline/Customer/doc/hook/frontend/account/login/providers.md`
