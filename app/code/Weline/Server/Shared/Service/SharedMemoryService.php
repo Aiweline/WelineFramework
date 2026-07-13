@@ -139,7 +139,21 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
             'ns' => $ns,
             'sid' => $this->sid($ns),
         ]);
-        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+        if (!\is_array($resp)) {
+            return false;
+        }
+        if (SessionProtocol::isSuccess($resp)) {
+            return true;
+        }
+
+        // Namespace clearing is idempotent. Multiple Workers clear the same
+        // shared L2 pools, so the authoritative "not found" response means the
+        // desired postcondition is already true. Authentication, transport and
+        // every other protocol error remain hard failures.
+        $errorCode = \strtolower(\trim((string)($resp['code'] ?? $resp['error_code'] ?? '')));
+
+        return $errorCode === 'not_found'
+            || SessionProtocol::getError($resp) === 'Session not found';
     }
 
     public function incr(string $ns, string $key, int $delta = 1, int $ttl = 0): ?int

@@ -15,9 +15,7 @@ use Weline\Frontend\Model\FrontendUserConfig;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Theme\Helper\LayoutScanner;
-use Weline\Theme\Service\PreviewContextService;
-use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Api\View\PreviewThemeModeResolverInterface;
 
 class ThemeConfig extends \Weline\Framework\View\Block
 {
@@ -83,22 +81,10 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function getThemeModel()
     {
         try {
-            /** @var PreviewContextService $previewContextService */
-            $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
-            if ($previewContextService->shouldUseStoredContext()) {
-                $context = $previewContextService->getCurrentContext();
-                $previewThemeId = $previewContextService->getThemeIdForArea('frontend', $context, false);
-                if ($previewThemeId > 0) {
-                    /** @var ThemeContextService $themeContext */
-                    $themeContext = ObjectManager::getInstance(ThemeContextService::class);
-                    $previewTheme = $themeContext->resolveTheme('frontend');
-                    if ($previewTheme && $previewTheme->getId()) {
-                        $previewColor = LayoutScanner::getColorConfig($previewTheme, 'frontend');
-                        if ($previewColor) {
-                            return $previewColor === 'light' ? '' : $previewColor;
-                        }
-                    }
-                }
+            $previewMode = ObjectManager::getInstance(PreviewThemeModeResolverInterface::class)
+                ->resolveFrontendMode();
+            if ($previewMode !== null) {
+                return $previewMode;
             }
         } catch (\Throwable) {
         }

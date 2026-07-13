@@ -16,10 +16,9 @@ use Weline\Checkout\Model\PaymentTransaction;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Event\EventsManager;
-use Weline\Payment\Model\PaymentMethod;
-use Weline\Payment\Model\PaymentTransaction as CorePaymentTransaction;
-use Weline\Payment\Service\PaymentMethodManager;
-use Weline\Payment\Service\PaymentService as CorePaymentService;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Payment\Api\Data\PaymentTransactionRecord;
+use Weline\Payment\Api\PaymentFacadeInterface;
 
 /**
  * 支付服务（基础接口，供支付模块扩展）
@@ -28,10 +27,12 @@ class PaymentService
 {
     private ConnectionFactory $connectionFactory;
     private EventsManager $eventsManager;
+    private ?PaymentFacadeInterface $paymentFacade = null;
 
     public function __construct(
         ConnectionFactory $connectionFactory,
-        EventsManager $eventsManager
+        EventsManager $eventsManager,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
     ) {
         $this->connectionFactory = $connectionFactory;
         $this->eventsManager = $eventsManager;
@@ -177,23 +178,18 @@ class PaymentService
         }
 
         try {
-            /** @var PaymentMethodManager $methodManager */
-            $methodManager = ObjectManager::getInstance(PaymentMethodManager::class);
-            $method = $methodManager->getMethodByCode($paymentMethod);
-            if (!$method instanceof PaymentMethod || !$methodManager->isMethodActiveForScope($method, $paymentData)) {
+            $context = $this->buildCorePaymentContext($order, $paymentMethod, $paymentData);
+            $coreTransaction = $this->paymentFacade()->tryCreatePayment($paymentMethod, $context);
+            if (!$coreTransaction instanceof PaymentTransactionRecord) {
                 return null;
             }
 
-            /** @var CorePaymentService $corePaymentService */
-            $corePaymentService = ObjectManager::getInstance(CorePaymentService::class);
-            $context = $this->buildCorePaymentContext($order, $paymentMethod, $paymentData);
-            $coreTransaction = $corePaymentService->createPayment($paymentMethod, $context);
             $gatewayResponse = [
                 'source' => 'Weline_Payment',
-                'transaction_id' => $coreTransaction->getId(),
-                'transaction_no' => (string)$coreTransaction->getData(CorePaymentTransaction::schema_fields_TRANSACTION_NO),
-                'status' => (string)$coreTransaction->getData(CorePaymentTransaction::schema_fields_STATUS),
-                'response' => $coreTransaction->getResponseData(),
+                'transaction_id' => $coreTransaction->id,
+                'transaction_no' => $coreTransaction->transactionNumber,
+                'status' => $coreTransaction->status,
+                'response' => $coreTransaction->response,
             ];
 
             /** @var PaymentTransaction $transaction */
@@ -293,11 +289,25 @@ class PaymentService
     private function mapCorePaymentStatus(string $status): string
     {
         return match ($status) {
-            CorePaymentTransaction::STATUS_SUCCESS => PaymentTransaction::STATUS_SUCCESS,
-            CorePaymentTransaction::STATUS_FAILED => PaymentTransaction::STATUS_FAILED,
-            CorePaymentTransaction::STATUS_REFUNDED => PaymentTransaction::STATUS_REFUNDED,
+            PaymentTransactionRecord::STATUS_SUCCESS => PaymentTransaction::STATUS_SUCCESS,
+            PaymentTransactionRecord::STATUS_FAILED => PaymentTransaction::STATUS_FAILED,
+            PaymentTransactionRecord::STATUS_REFUNDED => PaymentTransaction::STATUS_REFUNDED,
             default => PaymentTransaction::STATUS_PENDING,
         };
+    }
+
+    private function paymentFacade(): PaymentFacadeInterface
+    {
+        if ($this->paymentFacade instanceof PaymentFacadeInterface) {
+            return $this->paymentFacade;
+        }
+
+        $provider = $this->runtimeProviderResolver->resolve(PaymentFacadeInterface::class);
+        if (!$provider instanceof PaymentFacadeInterface) {
+            throw new \RuntimeException('payment_facade_provider_missing');
+        }
+
+        return $this->paymentFacade = $provider;
     }
 
     /**

@@ -3,12 +3,26 @@
     "description": "WelineFramework 媒体管理器：图片链接裁剪、缓存及 WLS 兼容的文件浏览/上传/下载",
     "type": "weline-module",
     "require": {
-        "php": "^8.1"
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-file-manager": "@dev"
     },
-    "authors": [{"name": "Weline", "email": "aiweline@qq.com"}],
+    "suggest": {
+        "weline/module-ai": "Enables the optional AI media-generation adapter.",
+        "weline/module-storage": "Enables optional configured storage sources in the media connector.",
+        "weline/module-theme": "Publishes requested development-theme override assets through the Theme integration."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
     "autoload": {
-        "psr-4": {"Weline\\MediaManager\\": ""},
-        "psr-0": {"Weline\\MediaManager\\": ""}
+        "psr-4": {
+            "Weline\\MediaManager\\": ""
+        }
     },
     "license": "MIT"
 }

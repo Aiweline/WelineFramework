@@ -30,6 +30,7 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\LongRunningPhpRuntime;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\SslCertificateService;
 
 class MasterProcess
@@ -39,7 +40,12 @@ class MasterProcess
      * 运行模式常量
      */
     public const MODE_LEGACY = 'legacy';
+    public const MODE_DIRECT = 'direct';
+    public const MODE_DISPATCHER = 'dispatcher';
+    public const MODE_INDEPENDENT = 'independent';
+    /** @deprecated 仅用于读取旧实例元数据 */
     public const MODE_LINUX_DIRECT = 'linux-direct';
+    /** @deprecated 仅用于读取旧实例元数据 */
     public const MODE_WINDOWS_DISPATCHER = 'windows-dispatcher';
 
     /**
@@ -131,11 +137,21 @@ class MasterProcess
 
     public function setMode(string $mode): self
     {
-        $validModes = [self::MODE_LEGACY, self::MODE_LINUX_DIRECT, self::MODE_WINDOWS_DISPATCHER];
+        $mode = match ($mode) {
+            self::MODE_LINUX_DIRECT => self::MODE_DIRECT,
+            self::MODE_WINDOWS_DISPATCHER => self::MODE_DISPATCHER,
+            default => $mode,
+        };
+        $validModes = [self::MODE_LEGACY, self::MODE_DIRECT, self::MODE_DISPATCHER, self::MODE_INDEPENDENT];
         if (\in_array($mode, $validModes, true)) {
             $this->mode = $mode;
         }
         return $this;
+    }
+
+    public static function isDirectMode(string $mode): bool
+    {
+        return \in_array($mode, [self::MODE_DIRECT, self::MODE_LINUX_DIRECT], true);
     }
 
     public function getMode(): string
@@ -717,9 +733,20 @@ class MasterProcess
             $wls['gateway'] = \array_merge(\is_array($wls['gateway'] ?? null) ? $wls['gateway'] : [], $this->config['gateway']);
         }
         if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
+            $configuredRuntime = \is_array($this->config['runtime'] ?? null)
+                ? $this->config['runtime']
+                : [];
+            $listenerMode = (string)($this->config['direct_listener_mode']
+                ?? ($configuredRuntime['listener_mode'] ?? ($wls['runtime']['listener_mode'] ?? '')));
+            if ($listenerMode === '' && self::isDirectMode($this->mode)) {
+                $listenerMode = PHP_OS_FAMILY === 'Darwin' ? 'shared_fd' : 'reuseport';
+            }
             $wls['runtime'] = \array_merge(\is_array($wls['runtime'] ?? null) ? $wls['runtime'] : [], [
                 'strategy' => (string)($this->config['runtime_strategy'] ?? ($wls['runtime']['strategy'] ?? 'auto')),
                 'topology' => (string)($this->config['topology'] ?? ($wls['runtime']['topology'] ?? 'auto')),
+                'listener_mode' => $listenerMode,
+                'container_registry_digest' => (string)($configuredRuntime['container_registry_digest']
+                    ?? ($this->config['container_registry_digest'] ?? ($wls['runtime']['container_registry_digest'] ?? ''))),
             ]);
         }
 
@@ -1042,7 +1069,7 @@ class MasterProcess
         // Master data is merged under the instance lock below.
         // Master 进程的状态信息
         $masterData = [
-            'schema_version' => 2,
+            'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
             'master_pid' => \getmypid(),
             'pid' => \getmypid(),
             'master_enabled' => true,
@@ -1073,6 +1100,13 @@ class MasterProcess
         }
 
         $mergeMasterData = static function (array $existingData) use ($masterData): array {
+            $existingSchemaVersion = (int)($existingData['schema_version'] ?? 2);
+            // A legacy endpoint stays v2 until a new Start preflight publishes a
+            // complete RuntimeSelection. Never label inferred legacy data as v3.
+            $masterData['schema_version'] = $existingSchemaVersion >= RuntimeSelection::ENDPOINT_SCHEMA_VERSION
+                ? $existingSchemaVersion
+                : 2;
+
             return self::normalizeMasterEndpointRecord($existingData, $masterData);
         };
 
@@ -1127,12 +1161,32 @@ class MasterProcess
     private static function normalizeMasterEndpointRecord(array $existingData, array $masterData): array
     {
         $allowedExistingFields = [
+            'schema_version',
             'name',
             'instance_name',
             'host',
             'public_host',
             'port',
             'main_port',
+            'master_mode',
+            'runtime_selection',
+            'topology',
+            'requested_topology',
+            'effective_topology',
+            'topology_source',
+            'topology_reason',
+            'topology_reason_codes',
+            'runtime_strategy',
+            'os_family',
+            'event_loop_driver',
+            'direct_listener_mode',
+            'listener_strategy',
+            'ssl_engine',
+            'policy_compatible',
+            'policy_digest',
+            'container_registry_digest',
+            'supervisor_enabled',
+            'supervisor_reason',
             'count',
             'daemon',
             'ssl_enabled',

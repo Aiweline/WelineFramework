@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Observer;
 
-use Weline\Acl\Model\WhiteAclSource;
+use Weline\Acl\Api\Resource\WhitelistServiceInterface;
 use Weline\Framework\App\Debug;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
@@ -28,18 +28,15 @@ class BackendWhitelistUrl implements \Weline\Framework\Event\ObserverInterface
         ['path' => 'admin/login/logout'],
     ];
     private Url $url;
-    /**
-     * @var \Weline\Acl\Model\WhiteAclSource
-     */
-    private WhiteAclSource $whiteAclSource;
+    private WhitelistServiceInterface $whitelistService;
 
     public function __construct(
-        Url            $url,
-        WhiteAclSource $whiteAclSource
+        Url $url,
+        WhitelistServiceInterface $whitelistService
     )
     {
         $this->url = $url;
-        $this->whiteAclSource = $whiteAclSource;
+        $this->whitelistService = $whitelistService;
     }
 
     /**
@@ -47,15 +44,11 @@ class BackendWhitelistUrl implements \Weline\Framework\Event\ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        $white_acl_sources = self::white_urls;
-        $this->whiteAclSource->insert($white_acl_sources, 'path')->fetch();
+        $whiteUrls = array_column(self::white_urls, 'path');
+        $this->whitelistService->upsertPaths($whiteUrls);
         $data = $event->getData('data');
         if ($data) {
-            $white_urls = [];
-            foreach (self::white_urls as $item) {
-                $white_urls[] = $item['path'];
-            }
-            $data->setData('whitelist_url', $white_urls);
+            $data->setData('whitelist_url', $whiteUrls);
         }
     }
 }

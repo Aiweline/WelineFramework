@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-server",
+    "description": "WelineFramework Server module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev"
+    },
+    "suggest": {
+        "weline/module-app-store": "Enables the optional WLS Panel marketplace endpoint resolver.",
+        "weline/module-backend": "Enables optional backend ACL/menu, theme configuration integration, and certificate expiry notifications."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Server\\": ""
+        }
+    }
+}

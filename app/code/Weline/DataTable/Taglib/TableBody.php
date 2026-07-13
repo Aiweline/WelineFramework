@@ -5,7 +5,7 @@ namespace Weline\DataTable\Taglib;
 use Weline\DataTable\Helper\FrontendAccess;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\App\Exception;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class TableBody implements TaglibInterface
 {

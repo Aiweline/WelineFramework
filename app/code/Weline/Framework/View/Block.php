@@ -51,7 +51,7 @@ class Block extends Template implements BlockInterface
             $template = $this->_template;
         }
         if (is_bool(strpos($template, '::'))) {
-            throw new Exception(__('模板文件设置错误：%{1},正确示例：Weline_System::demo.phtml'));
+            throw new Exception(__('模板文件设置错误：%{1},正确示例：Vendor_Module::demo.phtml'));
         }
         $template_arr = explode('::', $template);
         $template_module_name = array_shift($template_arr);

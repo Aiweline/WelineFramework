@@ -7,8 +7,8 @@ use Weline\Cms\Model\Page as CmsPage;
 use Weline\Cms\Service\PageService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Theme\Model\ThemeLayout;
-use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Api\Layout\LayoutStatus;
+use Weline\Theme\Api\Preview\PreviewContext;
 
 class Page extends FrontendController
 {
@@ -52,7 +52,7 @@ class Page extends FrontendController
         $layoutOption = (string)($layout['layout_option'] ?? 'default');
         $scope = (string)($page['scope'] ?? 'default');
         $pageId = (int)($page['page_id'] ?? 0);
-        $layoutStatus = $preview ? ThemeLayout::STATUS_DRAFT : ThemeLayout::STATUS_PUBLISHED;
+        $layoutStatus = $preview ? LayoutStatus::DRAFT->value : LayoutStatus::PUBLISHED->value;
 
         $this->layoutType = CmsPage::LAYOUT_TYPE . '.' . ($layoutOption !== '' ? $layoutOption : 'default');
         $this->request->setGet('page_type', CmsPage::LAYOUT_TYPE);
@@ -61,9 +61,10 @@ class Page extends FrontendController
         $this->request->setGet('scope', $scope);
         $this->request->setGet('status', $layoutStatus);
         if ($preview) {
-            $this->request->setGet('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE);
-            $this->request->setGet('shell', PreviewContextService::SHELL_PREVIEW);
-            $this->request->setGet('editor_area', PreviewContextService::AREA_FRONTEND);
+            $previewContext = PreviewContext::frontend();
+            $this->request->setGet('preview_mode', $previewContext->previewMode);
+            $this->request->setGet('shell', $previewContext->shell);
+            $this->request->setGet('editor_area', $previewContext->editorArea);
         } else {
             $this->clearPreviewContextParams();
         }

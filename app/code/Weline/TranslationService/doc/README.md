@@ -21,6 +21,12 @@
 
 模块自动识别和转换不同格式的语言代码，确保兼容性。
 
+## Dependency Inventory
+
+- Backend、Framework 和 I18n 是必需依赖。
+- ISO 639/BCP 47 转换的权威实现位于 `Weline\I18n\Api\Localization\LanguageCodeConverter`，依赖方向固定为 `TranslationService -> I18n -> Framework`。
+- `Weline\TranslationService\Helper\LanguageCodeConverter` 仅是向后兼容别名；新跨模块代码不得继续引用 Helper 内部类。
+
 ### 3. 功能特性
 - 单文本翻译
 - 批量文本翻译
@@ -235,4 +241,3 @@ class YourProvider extends AbstractProvider implements ProviderInterface
 - 邮箱：aiweline@qq.com
 - 网址：aiweline.com
 - 论坛：https://bbs.aiweline.com
-

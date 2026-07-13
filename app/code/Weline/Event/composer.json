@@ -1,0 +1,16 @@
+{
+    "name": "weline/module-event",
+    "description": "WelineFramework Event module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-admin": "@dev",
+        "weline/framework": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Event\\": ""
+        }
+    }
+}

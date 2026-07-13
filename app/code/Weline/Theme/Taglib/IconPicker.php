@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * 图标选择器组件
@@ -63,7 +63,7 @@ class IconPicker implements TaglibInterface
             $required = isset($attributes['required']) && ($attributes['required'] === 'true' || $attributes['required'] === '1');
 
             // 解析属性
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             // 翻译文本
             $t_search = addslashes(__('搜索图标...'));

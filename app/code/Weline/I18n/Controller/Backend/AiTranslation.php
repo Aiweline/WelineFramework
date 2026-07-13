@@ -53,7 +53,11 @@ class AiTranslation extends BaseController
 
     public function postSave()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         if (!$this->request->isPost()) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请求方式错误。'));
+            }
             MessageManager::error(__('请求方式错误。'));
             return $this->redirect('*/backend/ai-translation');
         }
@@ -65,8 +69,15 @@ class AiTranslation extends BaseController
                 $queueIds = $this->queueService->enqueueEnabledLocales('config_save');
             }
 
-            MessageManager::success(__('AI翻译配置已保存，已入队 %{1} 个语言。', [(string)count($queueIds)]));
+            $message = (string)__('AI翻译配置已保存，已入队 %{1} 个语言。', [(string)count($queueIds)]);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, ['queue_count' => count($queueIds)]);
+            }
+            MessageManager::success($message);
         } catch (\Throwable $throwable) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('保存 AI翻译配置失败：%{1}', [$throwable->getMessage()]));
+            }
             MessageManager::error(__('保存 AI翻译配置失败：%{1}', [$throwable->getMessage()]));
         }
 
@@ -75,7 +86,11 @@ class AiTranslation extends BaseController
 
     public function postEnqueue()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         if (!$this->request->isPost()) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请求方式错误。'));
+            }
             MessageManager::error(__('请求方式错误。'));
             return $this->redirect('*/backend/ai-translation');
         }
@@ -84,16 +99,30 @@ class AiTranslation extends BaseController
             $localeCode = trim((string)$this->request->getPost('locale_code', ''));
             if ($localeCode === '') {
                 $queueIds = $this->queueService->enqueueEnabledLocales('manual');
-                MessageManager::success(__('已为 %{1} 个启用语言创建 AI 翻译队列。', [(string)count($queueIds)]));
+                $message = (string)__('已为 %{1} 个启用语言创建 AI 翻译队列。', [(string)count($queueIds)]);
+                if ($isAsyncRequest) {
+                    return $this->asyncJsonResponse(true, $message, ['queue_count' => count($queueIds)]);
+                }
+                MessageManager::success($message);
             } else {
                 $queueId = $this->queueService->enqueueLocale($localeCode, [], 'manual', true);
                 if ($queueId > 0) {
-                    MessageManager::success(__('AI 翻译队列已创建：#%{1}', [(string)$queueId]));
+                    $message = (string)__('AI 翻译队列已创建：#%{1}', [(string)$queueId]);
+                    if ($isAsyncRequest) {
+                        return $this->asyncJsonResponse(true, $message, ['queue_id' => $queueId, 'locale_code' => $localeCode]);
+                    }
+                    MessageManager::success($message);
                 } else {
+                    if ($isAsyncRequest) {
+                        return $this->asyncJsonResponse(false, (string)__('语言 %{1} 未安装启用或为源语言，未创建队列。', [$localeCode]));
+                    }
                     MessageManager::warning(__('语言 %{1} 未安装启用或为源语言，未创建队列。', [$localeCode]));
                 }
             }
         } catch (\Throwable $throwable) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('创建 AI 翻译队列失败：%{1}', [$throwable->getMessage()]));
+            }
             MessageManager::error(__('创建 AI 翻译队列失败：%{1}', [$throwable->getMessage()]));
         }
 
@@ -102,7 +131,11 @@ class AiTranslation extends BaseController
 
     public function postExportModules()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         if (!$this->request->isPost()) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请求方式错误。'));
+            }
             MessageManager::error(__('请求方式错误。'));
             return $this->redirect('*/backend/ai-translation');
         }
@@ -111,15 +144,22 @@ class AiTranslation extends BaseController
         try {
             $result = $this->exportService->exportAiTranslationsToModules($localeCode);
             $moduleCount = count((array)($result['modules'] ?? []));
-            MessageManager::success(__('已增量导出 %{1} 条 AI 译文到 %{2} 个模块语言包，跳过 %{3} 条。', [
+            $message = (string)__('已增量导出 %{1} 条 AI 译文到 %{2} 个模块语言包，跳过 %{3} 条。', [
                 (string)($result['exported'] ?? 0),
                 (string)$moduleCount,
                 (string)($result['skipped'] ?? 0),
-            ]));
+            ]);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, $result);
+            }
+            MessageManager::success($message);
             foreach ((array)($result['errors'] ?? []) as $error) {
                 MessageManager::warning($error);
             }
         } catch (\Throwable $throwable) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('导出 AI 译文到模块失败：%{1}', [$throwable->getMessage()]));
+            }
             MessageManager::error(__('导出 AI 译文到模块失败：%{1}', [$throwable->getMessage()]));
         }
 

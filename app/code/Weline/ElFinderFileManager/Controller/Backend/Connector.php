@@ -6,7 +6,7 @@ namespace Weline\ElFinderFileManager\Controller\Backend;
 
 use elFinder;
 use Weline\ElFinderFileManager\Service\ConnectorOptionsBuilder;
-use Weline\FileManager\Helper\MimeTypes;
+use Weline\FileManager\Api\MimeTypes;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;

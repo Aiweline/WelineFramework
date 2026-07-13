@@ -11,7 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Model;
 
-use Weline\Acl\Model\Role;
+use Weline\Acl\Api\Role\RoleCatalogInterface;
+use Weline\Acl\Api\Role\RoleRecord;
 use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
@@ -191,16 +192,21 @@ class BackendUser extends Model implements AuthenticableInterface
         }
         /**@var \Weline\Backend\Model\Backend\Acl\UserRole $userRole */
         $userRole = ObjectManager::getInstance(UserRole::class);
-        try {
-            $userRole->clear()->joinModel(Role::class, 'r', 'main_table.role_id=r.role_id')
-                ->where('main_table.' . self::schema_fields_ID, $this->getId())
-                ->find()->fetch();
-        } catch (\Throwable $e) {
-            throw $e;
-        }
+        $userRole->clear()
+            ->where(UserRole::schema_fields_USER_ID, $this->getId())
+            ->find()->fetch();
         // user_id=1 视为超管：若关联表无记录则虚拟为 role_id=1，保证菜单与权限逻辑一致
         if ((int) $this->getId() === 1 && !$userRole->getRoleId()) {
             $userRole->setUserId((int) $this->getId())->setRoleId(1);
+        }
+        $roleId = (int)($userRole->getRoleId() ?: 0);
+        if ($roleId > 0) {
+            $role = $this->roleCatalog()->find($roleId);
+            if ($role === null) {
+                $userRole->setRoleId(0);
+            } else {
+                $this->setData('role', $role);
+            }
         }
         $this->setData('user_role', $userRole);
         return $userRole;
@@ -280,16 +286,23 @@ class BackendUser extends Model implements AuthenticableInterface
         self::$aclContextCache = [];
     }
 
-    public function getRoleModel(): Role
+    public function getRoleModel(): RoleRecord
     {
         if ($role = $this->getData('role')) {
             return $role;
         }
-        /**@var Role $role */
-        $role = clone ObjectManager::getInstance(Role::class);
-        $role = $role->load($this->getRole()->getRoleId() ?: 0);
-        if ($role->getId()) $this->setData('role', $role);
-        return $role;
+        $roleId = (int)($this->getRole()->getRoleId() ?: 0);
+        $role = $roleId > 0 ? $this->roleCatalog()->find($roleId) : null;
+        if ($role !== null) {
+            $this->setData('role', $role);
+            return $role;
+        }
+        return new RoleRecord(0, '', '');
+    }
+
+    private function roleCatalog(): RoleCatalogInterface
+    {
+        return ObjectManager::getInstance(RoleCatalogInterface::class);
     }
 
     public function assignRole(int $role_id)
@@ -372,4 +385,3 @@ class BackendUser extends Model implements AuthenticableInterface
         return self::class;
     }
 }
-

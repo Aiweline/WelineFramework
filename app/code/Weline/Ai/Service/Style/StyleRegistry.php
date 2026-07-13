@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Style;
 
-use Weline\Ai\Interface\StyleProviderInterface;
+use Weline\Ai\Api\StyleProviderInterface;
 use Weline\Ai\Model\AiStyle;
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;

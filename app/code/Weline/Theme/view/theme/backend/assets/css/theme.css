@@ -462,10 +462,10 @@ body[data-layout-mode="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
 body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
 body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img,
 body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo .logo-sm img {
-    padding: 4px !important;
-    border-radius: var(--backend-border-radius-lg) !important;
-    background: rgba(255, 255, 255, 0.92) !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
 }
 
 body[data-theme-mode="dark"] #page-topbar .noti-icon i,

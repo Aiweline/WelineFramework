@@ -18,10 +18,11 @@ CLI_E;
     exit(1);
 }
 try {
-    (new Weline\Framework\Console\Cli('M?? CLI', $argv))->run();
-     if(PHP_CS){
-         (new Weline\Framework\Console\Cli('M?? CLI', ['bin/m','dev:tool:phpcsfixer','no-show','.']))->run();
-     }
+    $exitCode = (new Weline\Framework\Console\Cli('M?? CLI', $argv))->run();
+    if (PHP_CS && $exitCode === 0) {
+        $exitCode = (new Weline\Framework\Console\Cli('M?? CLI', ['bin/m','dev:tool:phpcsfixer','no-show','.']))->run();
+    }
+    exit($exitCode);
 } catch (Exception $e) {
     $chr = chr(27);
     $root = $e;

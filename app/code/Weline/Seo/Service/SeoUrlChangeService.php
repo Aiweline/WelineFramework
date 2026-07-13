@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Weline\Seo\Service;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Seo\Api\Url\UrlChangeNotifierInterface;
 
-class SeoUrlChangeService
+class SeoUrlChangeService implements UrlChangeNotifierInterface
 {
     public const EVENT_URL_CHANGED = 'Weline_Seo::integration::url_changed';
     public const EVENT_URL_CHANGE_PROCESSED = 'Weline_Seo::integration::url_change_processed';

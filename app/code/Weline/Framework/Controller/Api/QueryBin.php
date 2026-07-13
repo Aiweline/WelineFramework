@@ -5,6 +5,8 @@ namespace Weline\Framework\Controller\Api;
 
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\App\State;
+use Weline\Framework\Binary\EmergencyPacket;
+use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Runtime\RequestContext;
@@ -61,9 +63,16 @@ class QueryBin extends FrontendRestController
             $this->assertContentType();
             $markPhase('assert_content_type');
 
+            $contentLength = (int)$this->request->getServer('CONTENT_LENGTH');
+            if ($contentLength > Limits::PACKET_BYTES) {
+                throw new \InvalidArgumentException(Limits::PACKET_ERROR);
+            }
             $rawBody = $this->request->getParameterBag()->getRawBody();
             if ($rawBody === '') {
                 throw new FrontendQueryException('protocol_error', 'Empty binary request body.', 400);
+            }
+            if (\strlen($rawBody) > Limits::PACKET_BYTES) {
+                throw new \InvalidArgumentException(Limits::PACKET_ERROR);
             }
             $markPhase('read_raw_body', ['bytes' => \strlen($rawBody)]);
 
@@ -130,12 +139,13 @@ class QueryBin extends FrontendRestController
             $markPhase('throwable_exception', [
                 'class' => \get_class($throwable),
             ]);
+            $this->logUnexpectedFailure($throwable, $requestId, $requestSummary);
             $payload = [
                 'ok' => false,
                 'data' => null,
                 'error' => [
-                    'code' => 'business_error',
-                    'message' => $throwable->getMessage(),
+                    'code' => EmergencyPacket::ERROR_CODE,
+                    'message' => EmergencyPacket::ERROR_MESSAGE,
                 ],
                 'request_id' => $requestId,
             ];
@@ -160,7 +170,7 @@ class QueryBin extends FrontendRestController
         ]);
         $this->logSlowQueryBin($requestId, $requestSummary, $statusCode, $elapsedMs);
 
-        return $this->binaryResponse(\is_array($payload) ? $payload : [
+        $responsePayload = \is_array($payload) ? $payload : [
             'ok' => false,
             'data' => null,
             'error' => [
@@ -168,7 +178,29 @@ class QueryBin extends FrontendRestController
                 'message' => 'Empty query-bin payload.',
             ],
             'request_id' => $requestId,
-        ], $statusCode, $requestSummary, $elapsedMs);
+        ];
+
+        try {
+            return $this->binaryResponse($responsePayload, $statusCode, $requestSummary, $elapsedMs);
+        } catch (\Throwable $throwable) {
+            $this->logUnexpectedFailure($throwable, $requestId, $requestSummary, 'response_encode');
+            $emptySummary = ['type' => '', 'provider' => '', 'operation' => ''];
+            try {
+                return $this->binaryResponse([
+                    'ok' => false,
+                    'data' => null,
+                    'error' => [
+                        'code' => EmergencyPacket::ERROR_CODE,
+                        'message' => EmergencyPacket::ERROR_MESSAGE,
+                    ],
+                    'request_id' => $requestId,
+                ], 500, $emptySummary, $elapsedMs);
+            } catch (\Throwable $fallbackThrowable) {
+                $this->logUnexpectedFailure($fallbackThrowable, $requestId, $requestSummary, 'fallback_encode');
+
+                return $this->emergencyBinaryResponse($requestId, $elapsedMs);
+            }
+        }
     }
 
     /**
@@ -383,6 +415,52 @@ class QueryBin extends FrontendRestController
             'status' => $statusCode,
             'duration_ms' => $elapsedMs,
         ], 'query_bin');
+    }
+
+    /**
+     * @param array{type:string,provider:string,operation:string} $summary
+     */
+    private function logUnexpectedFailure(
+        \Throwable $throwable,
+        string $requestId,
+        array $summary,
+        string $stage = 'request'
+    ): void
+    {
+        if (!\function_exists('w_log_error')) {
+            return;
+        }
+
+        $context = \function_exists('w_log_exception_build_context')
+            ? \w_log_exception_build_context($throwable)
+            : [
+                'exception_class' => $throwable::class,
+                'exception_message' => $throwable->getMessage(),
+                'exception_file' => $throwable->getFile(),
+                'exception_line' => $throwable->getLine(),
+                '_exception_trace' => $throwable->getTraceAsString(),
+            ];
+        $context['request_id'] = $requestId;
+        $context['type'] = $summary['type'];
+        $context['provider'] = $summary['provider'];
+        $context['operation'] = $summary['operation'];
+        $context['stage'] = $stage;
+
+        \w_log_error('[QueryBin] Unexpected request failure', $context, 'query_bin');
+    }
+
+    private function emergencyBinaryResponse(string $requestId, float $elapsedMs): Response
+    {
+        $response = Response::fromContent(
+            EmergencyPacket::internalServerError($requestId),
+            500,
+            WelineBinaryCodec::CONTENT_TYPE
+        );
+        $response->setHeader('Cache-Control', 'no-store');
+        $response->setHeader('X-Content-Type-Options', 'nosniff');
+        $response->setHeader('X-Weline-Query-Bin-Time', (string)$elapsedMs);
+
+        return $response;
     }
 
     /**

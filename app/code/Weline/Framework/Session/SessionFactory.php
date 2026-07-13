@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Framework\Session;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\RuntimeRoutingPolicyInterface;
 use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\Auth\AuthenticatedSession;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
@@ -128,8 +131,13 @@ class SessionFactory
         if ($wlsManaged === false) {
             return false;
         }
-        if (\class_exists(\Weline\Server\Service\Runtime\RoutingPolicyRegistry::class)) {
-            return \Weline\Server\Service\Runtime\RoutingPolicyRegistry::shouldHijackSessionFile();
+        try {
+            $policy = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(RuntimeRoutingPolicyInterface::class);
+            if ($policy instanceof RuntimeRoutingPolicyInterface) {
+                return $policy->shouldHijackSessionFile();
+            }
+        } catch (\Throwable) {
         }
         return true;
     }

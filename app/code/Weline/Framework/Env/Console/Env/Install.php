@@ -47,6 +47,9 @@ class Install extends CommandAbstract
     /** @var bool 是否有 sudo 可用 */
     private bool $hasSudo = false;
 
+    /** @var bool 是否禁止任何密码/配置交互 */
+    private bool $nonInteractive = false;
+
     public function __construct()
     {
         $this->collector = ObjectManager::getInstance(EnvRequirementsCollector::class);
@@ -94,13 +97,13 @@ class Install extends CommandAbstract
     /**
      * 获取带 sudo 前缀的命令（如果需要且可用）
      */
-    private function getSudoCommand(string $cmd): string
+    private function getSudoCommand(string $cmd, bool $requiresElevation = true): string
     {
-        if ($this->isRoot) {
+        if (!$requiresElevation || $this->isRoot) {
             return $cmd;
         }
         if ($this->hasSudo) {
-            return 'sudo ' . $cmd;
+            return ($this->nonInteractive ? 'sudo -n ' : 'sudo ') . $cmd;
         }
         return $cmd;
     }
@@ -122,9 +125,11 @@ class Install extends CommandAbstract
             $currentUser = posix_getpwuid(posix_getuid())['name'] ?? __('未知');
             if ($this->isRoot) {
                 $this->printer->success(__('当前以 root 身份运行 ✔'));
-            } elseif ($this->hasSudo) {
+            } elseif ($this->hasSudo && PHP_OS_FAMILY !== 'Darwin') {
                 $this->printer->note(__('当前用户: %{user}（非 root，但有 sudo 可用）', ['user' => $currentUser]));
-                $this->printer->note(__('  将自动使用 sudo 执行需要权限的操作'));
+                $this->printer->note(__('  将自动使用 sudo 执行需要系统权限的操作'));
+            } elseif (PHP_OS_FAMILY === 'Darwin') {
+                $this->printer->note(__('当前用户: %{user}（macOS Homebrew/PECL 将以当前用户运行）', ['user' => $currentUser]));
             } else {
                 $this->printer->warning(__('当前用户: %{user}（非 root，且无 sudo 可用）', ['user' => $currentUser]));
                 $this->printer->warning(__('  部分操作可能失败，建议切换到 root 或具有 sudo 权限的用户'));
@@ -146,6 +151,8 @@ class Install extends CommandAbstract
         $this->printPrivilegeStatus();
 
         $skipConfirm = !empty($args['y']) || !empty($args['yes']) || !empty($args['-y']);
+        $this->nonInteractive = $skipConfirm
+            || (\function_exists('stream_isatty') && !@\stream_isatty(STDIN));
         // 仅当第一个参数不是选项（不以 - 开头）时才视为推荐项名称，避免 env:install -y 被当成安装名为 -y 的推荐项
         $target = null;
         if (isset($args[1]) && is_string($args[1]) && $args[1] !== '' && !str_starts_with(trim($args[1]), '-')) {
@@ -935,7 +942,9 @@ class Install extends CommandAbstract
         ]));
 
         // 显示权限状态
-        if (!$this->isRoot && $this->hasSudo) {
+        if ($platform === ExtensionInstallStrategyMap::PLATFORM_DARWIN) {
+            $this->printer->note(__('    Homebrew/PECL 将以当前用户非交互执行（不使用 sudo）'));
+        } elseif (!$this->isRoot && $this->hasSudo) {
             $this->printer->note(__('    将使用 sudo 执行安装命令'));
         } elseif (!$this->isRoot && !$this->hasSudo) {
             $this->printer->warning(__('    非 root 且无 sudo，安装可能失败'));
@@ -949,7 +958,7 @@ class Install extends CommandAbstract
                 $this->printer->note(__('    尝试: %{name}...', ['name' => $s['name']]));
                 
                 // 为安装命令添加 sudo 前缀（如果需要）
-                $cmd = $this->getSudoCommand($s['cmd']);
+                $cmd = $this->getSudoCommand($s['cmd'], (bool)($s['elevated'] ?? true));
                 
                 $output = [];
                 $returnCode = 0;
@@ -993,7 +1002,7 @@ class Install extends CommandAbstract
             return true;
         }
 
-        $this->printer->note(__('    优先方式未成功，回退尝试其他安装命令（仅尝试已存在的命令）...'));
+        $this->printer->note(__('    当前平台优先方式未成功，继续检查当前平台安全回退策略...'));
         $fallback = $map->getFallbackStrategies($platform, $ext, $phpVersion);
         if ($tryStrategies($fallback)) {
             return true;

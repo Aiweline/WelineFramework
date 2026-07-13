@@ -7,7 +7,7 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 namespace Weline\Api\Model;
-use Weline\Acl\Model\Role;
+use Weline\Acl\Api\Role;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;

@@ -4,22 +4,20 @@ declare(strict_types=1);
 
 namespace Weline\TwoFactorAuth\Service;
 
+use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
+use Weline\Customer\Api\Auth\CustomerIdentity;
+use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
-use Weline\Customer\Model\Customer;
-use Weline\Customer\Model\CustomerToken;
-use Weline\Customer\Service\CustomerAccountService;
-use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
-class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHandlerInterface
+class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHandlerInterface, CustomerLoginChallengeCreatorInterface
 {
     private const SESSION_KEY = 'weline_customer_2fa_login_challenges';
     private const EXPIRES_IN = 300;
 
     public function __construct(
         private readonly TwoFactorAuthService $twoFactorAuthService,
-        private readonly CustomerAccountService $customerAccountService,
+        private readonly CustomerAccountFacadeInterface $customerAccounts,
         private readonly SessionFactory $sessionFactory
     ) {
     }
@@ -30,9 +28,8 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
      *
      * @return array{challenge_token: string, redirect: string, expires_at: int}|null
      */
-    public function createChallenge(Customer $customer, string $redirectUrl = '', int $rememberDuration = 0): ?array
+    public function createChallenge(int $customerId, string $redirectUrl = '', int $rememberDuration = 0): ?array
     {
-        $customerId = (int)$customer->getId();
         if ($customerId <= 0 || !$this->twoFactorAuthService->isEnabled($customerId)) {
             return null;
         }
@@ -94,14 +91,12 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
             throw new \RuntimeException((string)__('Verification code is incorrect.'));
         }
 
-        /** @var Customer $customer */
-        $customer = ObjectManager::getInstance(Customer::class);
-        $customer->load($customerId);
-        if (!$customer->getId()) {
+        $customer = $this->customerAccounts->find($customerId);
+        if ($customer === null) {
             throw new \RuntimeException((string)__('The login challenge is invalid or has expired.'));
         }
 
-        $this->customerAccountService->loginCustomer($customer);
+        $this->customerAccounts->login($customer);
         $this->persistRememberToken($customer, (int)($challenge['remember_duration'] ?? 0));
         $this->removeChallenge($challengeToken);
 
@@ -163,29 +158,8 @@ class CustomerTwoFactorLoginChallengeHandler implements CustomerLoginChallengeHa
         return $redirectUrl !== '' ? $redirectUrl : 'customer/account';
     }
 
-    private function persistRememberToken(Customer $customer, int $rememberDuration): void
+    private function persistRememberToken(CustomerIdentity $customer, int $rememberDuration): void
     {
-        if ($rememberDuration <= 0) {
-            return;
-        }
-
-        $token = CustomerToken::generateToken();
-        $expireTime = time() + $rememberDuration;
-
-        /** @var CustomerToken $userToken */
-        $userToken = ObjectManager::getInstance(CustomerToken::class);
-        $userToken->reset()
-            ->where(CustomerToken::schema_fields_user_id, $customer->getId())
-            ->where(CustomerToken::schema_fields_type, 'remember_me')
-            ->delete();
-
-        $userToken->reset()
-            ->setUserId($customer->getId())
-            ->setToken($token)
-            ->setType('remember_me')
-            ->setTokenExpireTime($expireTime)
-            ->save();
-
-        Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
+        $this->customerAccounts->issueRememberToken($customer, $rememberDuration);
     }
 }

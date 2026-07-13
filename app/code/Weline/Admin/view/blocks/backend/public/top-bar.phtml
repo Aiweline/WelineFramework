@@ -8,7 +8,7 @@ $logoDark = $siteBrand->resolveBackendLogoUrl($this, 'logo_dark', 70, 70);
 $logoLight = $siteBrand->resolveBackendLogoUrl($this, 'logo_light', 70, 70);
 $logoSm = $siteBrand->resolveMediaUrl('logo_sm', 50, 50);
 if ($logoSm === '') {
-    $logoSm = $siteBrand->resolveIconUrl($this, 50);
+    $logoSm = $siteBrand->resolveBackendLogoUrl($this, 'logo_dark', 50, 50);
 }
 ?>
 <style data-no-extract="true" data-admin-topbar-dark-fix="true">
@@ -49,10 +49,10 @@ if ($logoSm === '') {
     body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo img,
     body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo img,
     body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
-        padding: 4px !important;
-        border-radius: 12px !important;
-        background: rgba(255, 255, 255, 0.92) !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
     }
 </style>
 <header id="page-topbar">

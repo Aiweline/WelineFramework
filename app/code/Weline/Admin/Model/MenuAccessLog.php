@@ -11,7 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Model;
 
-use Weline\Acl\Model\Acl;
+use Weline\Acl\Api\Resource\MenuResourceServiceInterface;
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -171,36 +172,19 @@ class MenuAccessLog extends Model
             return [];
         }
 
-        // 验证这些source_id对应的ACL资源是否还存在且类型为menus，并检查用户权限
-        /** @var Acl $aclModel */
-        $aclModel = ObjectManager::getInstance(Acl::class);
-        
-        // 获取用户角色和权限
-        /** @var \Weline\Backend\Model\BackendUser $userModel */
-        $userModel = ObjectManager::getInstance(\Weline\Backend\Model\BackendUser::class);
-        $user = $userModel->load($userId);
-        if (!$user->getId()) {
+        /** @var BackendUserContextProviderInterface $userContextProvider */
+        $userContextProvider = ObjectManager::getInstance(BackendUserContextProviderInterface::class);
+        $user = $userContextProvider->find($userId);
+        if ($user === null || $user->getRoleId() <= 0) {
             return [];
         }
-        
-        $role = $user->getRoleModel();
         $frequentMenus = [];
-        
-        // 获取用户有权限访问的source_id列表
-        $userAccessSources = [];
-        if ($role->getId() !== 1) {
-            // 非超级管理员需要检查权限
-            /** @var \Weline\Acl\Model\RoleAccess $roleAccessModel */
-            $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
-            $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID, $role->getId())
-                ->select()
-                ->fetchArray();
-            if (is_array($roleAccess)) {
-                foreach ($roleAccess as $access) {
-                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID];
-                }
-            }
-        }
+        /** @var MenuResourceServiceInterface $menuResourceService */
+        $menuResourceService = ObjectManager::getInstance(MenuResourceServiceInterface::class);
+        $menuResources = $menuResourceService->getAccessibleMenuResources(
+            $user->getRoleId(),
+            array_column($results, self::schema_fields_source_id)
+        );
         
         foreach ($results as $result) {
             if (count($frequentMenus) >= $limit) {
@@ -209,24 +193,11 @@ class MenuAccessLog extends Model
             
             $sourceId = $result[self::schema_fields_source_id];
             
-            // 检查权限（超级管理员跳过权限检查）
-            if ($role->getId() !== 1 && !in_array($sourceId, $userAccessSources)) {
-                continue;
-            }
-            
-            // 验证ACL资源是否存在且类型为menus
-            $acl = $aclModel->clearData()
-                ->where(Acl::schema_fields_SOURCE_ID, $sourceId)
-                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-                ->where(Acl::schema_fields_IS_ENABLE, 1)
-                ->find()
-                ->fetch();
-            
-            if ($acl->getId()) {
+            if (isset($menuResources[$sourceId])) {
                 $frequentMenus[] = [
                     'source_id' => $sourceId,
                     'access_count' => intval($result['access_count']),
-                    'acl_data' => $acl->getData()
+                    'acl_data' => $menuResources[$sourceId]
                 ];
             }
         }
@@ -287,36 +258,19 @@ class MenuAccessLog extends Model
             return [];
         }
 
-        // 验证这些source_id对应的ACL资源是否还存在且类型为menus，并检查用户权限
-        /** @var Acl $aclModel */
-        $aclModel = ObjectManager::getInstance(Acl::class);
-        
-        // 获取用户角色和权限
-        /** @var \Weline\Backend\Model\BackendUser $userModel */
-        $userModel = ObjectManager::getInstance(\Weline\Backend\Model\BackendUser::class);
-        $user = $userModel->load($userId);
-        if (!$user->getId()) {
+        /** @var BackendUserContextProviderInterface $userContextProvider */
+        $userContextProvider = ObjectManager::getInstance(BackendUserContextProviderInterface::class);
+        $user = $userContextProvider->find($userId);
+        if ($user === null || $user->getRoleId() <= 0) {
             return [];
         }
-        
-        $role = $user->getRoleModel();
         $recentMenus = [];
-        
-        // 获取用户有权限访问的source_id列表
-        $userAccessSources = [];
-        if ($role->getId() !== 1) {
-            // 非超级管理员需要检查权限
-            /** @var \Weline\Acl\Model\RoleAccess $roleAccessModel */
-            $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
-            $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID, $role->getId())
-                ->select()
-                ->fetchArray();
-            if (is_array($roleAccess)) {
-                foreach ($roleAccess as $access) {
-                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID];
-                }
-            }
-        }
+        /** @var MenuResourceServiceInterface $menuResourceService */
+        $menuResourceService = ObjectManager::getInstance(MenuResourceServiceInterface::class);
+        $menuResources = $menuResourceService->getAccessibleMenuResources(
+            $user->getRoleId(),
+            array_column($results, self::schema_fields_source_id)
+        );
         
         foreach ($results as $result) {
             if (count($recentMenus) >= $limit) {
@@ -325,24 +279,11 @@ class MenuAccessLog extends Model
             
             $sourceId = $result[self::schema_fields_source_id];
             
-            // 检查权限（超级管理员跳过权限检查）
-            if ($role->getId() !== 1 && !in_array($sourceId, $userAccessSources)) {
-                continue;
-            }
-            
-            // 验证ACL资源是否存在且类型为menus
-            $acl = $aclModel->clearData()
-                ->where(Acl::schema_fields_SOURCE_ID, $sourceId)
-                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-                ->where(Acl::schema_fields_IS_ENABLE, 1)
-                ->find()
-                ->fetch();
-            
-            if ($acl->getId()) {
+            if (isset($menuResources[$sourceId])) {
                 $recentMenus[] = [
                     'source_id' => $sourceId,
                     'last_access_time' => intval($result['last_access_time']),
-                    'acl_data' => $acl->getData()
+                    'acl_data' => $menuResources[$sourceId]
                 ];
             }
         }
@@ -353,4 +294,3 @@ class MenuAccessLog extends Model
         return $recentMenus;
     }
 }
-

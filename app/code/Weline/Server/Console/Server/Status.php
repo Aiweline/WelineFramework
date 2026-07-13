@@ -21,6 +21,8 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
+use Weline\Server\Service\Policy\RuntimePolicyStore;
+use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -172,6 +174,7 @@ class Status extends CommandAbstract
             // 详细信息
             $scheme = $info->sslEnabled ? 'https' : 'http';
             $this->printer->note($childPrefix . '  ├─ ' . __('地址：') . $scheme . '://' . $host . ':' . $port);
+            $this->showRuntimeMetadata($name, $childPrefix . '  ├─ ', true);
             
             // 显示实际 Worker 端口范围
             $workerPorts = [];
@@ -259,6 +262,7 @@ class Status extends CommandAbstract
         $selfHealMode = $this->resolveSelfHealMode();
         $this->printer->note(\sprintf('║  ' . __('Master 自愈：') . '%-46s║', $selfHealMode));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+        $this->showRuntimeMetadata($name);
         if ((string) ($masterRuntimeState['message'] ?? '') !== '') {
             $this->printer->warning((string) $masterRuntimeState['message']);
         }
@@ -300,6 +304,96 @@ class Status extends CommandAbstract
         echo "\n";
         $this->printer->note(__('测试请求：curl %{1}/', [$this->buildTestCurlTarget($info)]));
         $this->printer->note(__('停止服务：php bin/w server:stop %{1}', [$name]));
+    }
+
+    private function showRuntimeMetadata(string $instanceName, string $prefix = '  ', bool $compact = false): void
+    {
+        $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
+        if (!\is_array($raw)) {
+            return;
+        }
+
+        $runtime = RuntimeEndpointMetadata::fromEndpoint($raw)->toArray();
+        $schemaVersion = (int)($runtime['endpoint_schema_version'] ?? 0);
+        $selectionValid = $runtime['runtime_selection_valid'] ?? null;
+        if ($schemaVersion >= 3 && $selectionValid !== true) {
+            $message = __('运行时选择：endpoint schema v%{1} 校验失败，已拒绝从兼容字段重新推导拓扑。', [$schemaVersion]);
+            $error = \trim((string)($runtime['runtime_selection_error'] ?? ''));
+            $this->printer->warning($prefix . $message . ($error !== '' ? ' ' . $error : ''));
+            return;
+        }
+
+        $effective = (string)($runtime['effective_topology'] ?? '');
+        $listener = (string)($runtime['listener_strategy'] ?? '');
+        $eventLoop = (string)($runtime['event_loop_driver'] ?? '');
+        $sslEngine = (string)($runtime['ssl_engine'] ?? '');
+        $digest = \strtolower(\trim((string)($runtime['policy_digest'] ?? '')));
+        $digestSource = 'endpoint';
+        try {
+            // RuntimeSelection in endpoint metadata is the immutable startup
+            // topology fact. Policy activation is independently hot-swappable,
+            // so its current digest must come from the authoritative policy
+            // store instead of the startup snapshot.
+            $activePolicy = (new RuntimePolicyStore())->active($instanceName);
+            if ($activePolicy !== null) {
+                $digest = $activePolicy->digest;
+                $digestSource = 'active-store';
+            }
+        } catch (\Throwable) {
+            // Status stays available during a partial policy-store failure and
+            // explicitly labels the endpoint fallback below.
+        }
+        $digestShort = $digest !== '' ? \substr($digest, 0, 12) : '-';
+        $containerDigest = \strtolower(\trim((string)($runtime['container_registry_digest'] ?? '')));
+        $containerDigestShort = $containerDigest !== '' ? \substr($containerDigest, 0, 12) : '-';
+
+        if ($compact) {
+            if ($effective === '' && $listener === '' && $eventLoop === '' && $sslEngine === '') {
+                return;
+            }
+            $summary = ($effective !== '' ? $effective : '-')
+                . ' / ' . ($listener !== '' ? $listener : '-')
+                . ' / ' . ($eventLoop !== '' ? $eventLoop : '-')
+                . ' / ' . ($sslEngine !== '' ? $sslEngine : '-')
+                . ' / policy=' . $digestShort
+                . ' / container=' . $containerDigestShort;
+            $this->printer->note($prefix . __('实际运行时：') . $summary);
+            return;
+        }
+
+        echo "\n";
+        $this->printer->note(__('实际运行时选择：'));
+        $requested = (string)($runtime['requested_topology'] ?? '');
+        $source = (string)($runtime['topology_source'] ?? '');
+        $this->printer->note($prefix . __('拓扑：')
+            . ($requested !== '' ? $requested : '-')
+            . ' -> '
+            . ($effective !== '' ? $effective : '-')
+            . ($source !== '' ? ' (source=' . $source . ')' : ''));
+        $this->printer->note($prefix . __('数据面：')
+            . 'listener=' . ($listener !== '' ? $listener : '-')
+            . ', event=' . ($eventLoop !== '' ? $eventLoop : '-')
+            . ', ssl=' . ($sslEngine !== '' ? $sslEngine : '-'));
+        $compatible = $runtime['policy_compatible'] ?? null;
+        $compatibleText = \is_bool($compatible) ? ($compatible ? 'true' : 'false') : '-';
+        $this->printer->note($prefix . __('策略：')
+            . 'compatible=' . $compatibleText
+            . ', digest=' . ($digest !== '' ? $digest : '-')
+            . ', source=' . $digestSource);
+        $this->printer->note($prefix . __('Endpoint：')
+            . 'schema=v' . $schemaVersion
+            . ', metadata=' . (string)($runtime['metadata_source'] ?? '-')
+            . ', container=' . ($containerDigest !== '' ? $containerDigest : '-'));
+
+        $reasonCodes = \is_array($runtime['topology_reason_codes'] ?? null)
+            ? \array_values($runtime['topology_reason_codes'])
+            : [];
+        $reason = \trim((string)($runtime['topology_reason'] ?? ''));
+        if ($reasonCodes !== [] || $reason !== '') {
+            $this->printer->note($prefix . __('选择原因：')
+                . ($reasonCodes !== [] ? '[' . \implode(', ', $reasonCodes) . '] ' : '')
+                . $reason);
+        }
     }
 
     protected function showStartupFailureSummary(ServerInstanceInfo $info): void
@@ -475,13 +569,39 @@ class Status extends CommandAbstract
         $this->printer->$color("  │");
         $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");
         
+        $runtimeDetails = [];
         if ($isRunning && $trackingPid > 0) {
             $memPrefix = $isLast ? '   ' : '│  ';
             // 使用预取的内存信息（避免逐个查询）
             $memory = (string) ($processInfoMap[$trackingPid]['memory'] ?? '');
             if ($memory !== '') {
-                $this->printer->note('  ' . $memPrefix . '  └─ ' . __('内存：') . $memory);
+                $runtimeDetails[] = __('内存：') . $memory;
             }
+        }
+
+        if ($service->role === ControlMessage::ROLE_WORKER) {
+            $proof = \is_array($service->metadata['dynamic_first_render'] ?? null)
+                ? $service->metadata['dynamic_first_render']
+                : [];
+            if ($proof !== []) {
+                $runtimeDetails[] = __('动态首渲染：')
+                    . 'ready=' . (($proof['ready'] ?? false) === true ? 'true' : 'false')
+                    . ', elapsed=' . \round((float)($proof['elapsed_ms'] ?? 0.0), 2)
+                    . '/' . \round((float)($proof['target_ms'] ?? 0.0), 2) . 'ms'
+                    . ', status=' . (int)($proof['status_code'] ?? 0)
+                    . ', body=' . (int)($proof['body_length'] ?? 0)
+                    . ', attempts=' . (int)($proof['attempts'] ?? 0)
+                    . ', fpc=' . (string)($proof['fpc_status'] ?? '-')
+                    . ', route=' . (string)($proof['host'] ?? '-') . (string)($proof['path'] ?? '')
+                    . ', reason=' . (string)($proof['reason'] ?? '-');
+            }
+        }
+
+        $runtimeDetailCount = \count($runtimeDetails);
+        foreach ($runtimeDetails as $runtimeDetailIndex => $runtimeDetail) {
+            $memPrefix = $isLast ? '   ' : '│  ';
+            $connector = $runtimeDetailIndex === $runtimeDetailCount - 1 ? '└─ ' : '├─ ';
+            $this->printer->note('  ' . $memPrefix . '  ' . $connector . $runtimeDetail);
         }
     }
     

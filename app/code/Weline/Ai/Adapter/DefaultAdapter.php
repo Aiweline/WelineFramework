@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Adapter;
 
-use Weline\Ai\Interface\ScenarioAdapterInterface;
+use Weline\Ai\Api\ScenarioAdapterInterface;
 
 /**
  * 默认通用适配器

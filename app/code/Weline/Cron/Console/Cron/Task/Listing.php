@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
-use Weline\Backend\Model\Config;
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Cron\Console\Cron\BaseCommand;
 use Weline\Cron\Model\CronTask;
 use Weline\Cron\Schedule\Schedule;
@@ -22,7 +22,7 @@ class Listing extends BaseCommand
 {
     private CronTask $cronTask;
 
-    public function __construct(Config $config, Printing $printing, Schedule $schedule, CronTask $cronTask)
+    public function __construct(BackendConfigStore $config, Printing $printing, Schedule $schedule, CronTask $cronTask)
     {
         parent::__construct($config, $printing, $schedule);
         $this->cronTask = $cronTask;

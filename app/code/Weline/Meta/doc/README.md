@@ -13,6 +13,7 @@
 4. `app/code/Weline/Theme/doc/AI-INDEX.md`
 5. `app/code/Weline/Frontend/doc/AI-INDEX.md`
 6. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+7. `app/code/Weline/Meta/doc/public-repository-contract.md`
 
 ## 模块定位
 
@@ -26,6 +27,7 @@
 - `app/code/Weline/Meta/etc/module.xml`
 - `app/code/Weline/Meta/etc/backend/menu.xml`
 
+- `Api`：元数据/MetaConfig Repository、参数归一化接口和只读 DTO。
 - `Console`：php bin/w 命令入口。 文件数：1
 - `Controller`：前后台 HTTP 控制器与路由入口。 文件数：4
 - `Controller/Backend`：后台控制器入口；变更前同步检查 ACL、菜单和返回路径。 文件数：4
@@ -56,6 +58,11 @@
 - `app/code/Weline/Meta/doc/w-meta标签使用说明.md`
 - `app/code/Weline/Meta/doc/使用指南.md`
 - `app/code/Weline/Meta/doc/完整实现方案.md`
+- `app/code/Weline/Meta/doc/public-repository-contract.md`
+
+## 跨模块契约
+
+其他模块读写 Meta 数据时，只能依赖 `Weline\Meta\Api` 的 Repository/DTO，禁止引用 `Weline\Meta\Model`、内部 Service 或 Query Builder。详见 [`public-repository-contract.md`](./public-repository-contract.md)。
 
 ## 维护规则
 

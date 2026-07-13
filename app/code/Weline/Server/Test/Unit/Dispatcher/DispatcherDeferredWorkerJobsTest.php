@@ -48,9 +48,11 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $core = $this->getMockBuilder(PassthroughCore::class)
             ->disableOriginalConstructor()
             ->getMock();
+        $client = $this->createMock(ChildControlClientInterface::class);
+        $client->expects(self::never())->method('send');
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
-        $this->setProperty($dispatcher, 'ipcClient', null);
+        $this->setProperty($dispatcher, 'ipcClient', $client);
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', null);
@@ -116,16 +118,8 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ->onlyMethods(['setWarmupCooperativeYield', 'warmupJoinedWorkersViaHomepage'])
             ->getMock();
 
-        $yieldCallbacks = [];
-        $core->expects(self::exactly(2))
-            ->method('setWarmupCooperativeYield')
-            ->willReturnCallback(function (?callable $yield) use (&$yieldCallbacks): void {
-                $yieldCallbacks[] = $yield;
-            });
-        $core->expects(self::once())
-            ->method('warmupJoinedWorkersViaHomepage')
-            ->with([['port' => 19001, 'ticket' => 7]])
-            ->willReturn(['warmed' => [19001], 'failed' => [], 'skipped' => []]);
+        $core->expects(self::never())->method('setWarmupCooperativeYield');
+        $core->expects(self::never())->method('warmupJoinedWorkersViaHomepage');
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', [[
@@ -140,9 +134,6 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $method->setAccessible(true);
         $method->invoke($dispatcher);
 
-        self::assertCount(2, $yieldCallbacks);
-        self::assertInstanceOf(\Closure::class, $yieldCallbacks[0]);
-        self::assertNull($yieldCallbacks[1]);
         self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiber'));
         self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiberKind'));
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
@@ -382,10 +373,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ->method('setWorkerPortsFromMasterReady')
             ->with([19001, 19002])
             ->willReturn(['accepted' => [19001, 19002], 'rejected' => []]);
-        $core->expects(self::once())
-            ->method('claimJoinedWorkerHomepageWarmup')
-            ->with([19001, 19002])
-            ->willReturn([]);
+        $core->expects(self::never())->method('claimJoinedWorkerHomepageWarmup');
         $core->method('getWorkerCount')->willReturn(2);
         $core->method('getWorkerPorts')->willReturn([19001, 19002]);
         $core->method('getMaintenanceWorkerPorts')->willReturn([]);
@@ -446,13 +434,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ->method('setWorkerPortsFromMasterReady')
             ->with([19001, 19002])
             ->willReturn(['accepted' => [19001, 19002], 'rejected' => []]);
-        $core->expects(self::once())
-            ->method('claimJoinedWorkerHomepageWarmup')
-            ->with([19001, 19002])
-            ->willReturn([
-                ['port' => 19001, 'ticket' => 1],
-                ['port' => 19002, 'ticket' => 2],
-            ]);
+        $core->expects(self::never())->method('claimJoinedWorkerHomepageWarmup');
         $core->method('getWorkerCount')->willReturn(2);
         $core->method('getWorkerPorts')->willReturn([19001, 19002]);
         $core->method('getMaintenanceWorkerPorts')->willReturn([]);
@@ -485,14 +467,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ],
         ]);
 
-        self::assertSame([[
-            'type' => 'homepage_warmup',
-            'claims' => [
-                ['port' => 19001, 'ticket' => 1],
-                ['port' => 19002, 'ticket' => 2],
-            ],
-            'source' => 'SET_ROUTE_TABLE',
-        ]], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
         self::assertCount(3, $sent);
     }
 

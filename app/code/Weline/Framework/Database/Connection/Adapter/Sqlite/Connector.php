@@ -16,6 +16,7 @@ namespace Weline\Framework\Database\Connection\Adapter\Sqlite;
 
 use PDO;
 use PDOException;
+use Weline\Framework\App\Env;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Dialect\SqliteIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Compiler\Dialect\SqliteDialect;
@@ -24,15 +25,24 @@ use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionLease;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
-use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Exception\DatabaseRetryTimeoutException;
 use Weline\Framework\Database\Exception\LinkException;
+use Weline\Framework\Database\Retry\RetryBudget;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    private const MAX_BOOTSTRAP_ATTEMPTS = 32;
+    private const DEFAULT_REQUEST_BOOTSTRAP_BUDGET_MS = 50;
+    private const MAX_REQUEST_BOOTSTRAP_BUDGET_MS = 150;
+    private const MAX_CLI_BOOTSTRAP_BUDGET_MS = 30_000;
+
     public function __construct(
         private readonly ConfigProvider $configProvider
     ) {
@@ -67,7 +77,7 @@ final class Connector extends Query implements ConnectorInterface
     protected ?PDO $link = null;
     protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
-    protected bool $fromPool = false; // 鏍囪杩炴帴鏄惁鏉ヨ嚜杩炴帴姹?
+    private ?ConnectionLease $lease = null;
 
     private ?SqliteDialect $dialect = null;
 
@@ -83,8 +93,11 @@ final class Connector extends Query implements ConnectorInterface
 
     public function create(): static
     {
-        if ($this->link !== null) {
+        if ($this->link !== null && $this->lease?->isActive()) {
             return $this;
+        }
+        if ($this->link !== null || $this->lease !== null) {
+            $this->close();
         }
 
         $db_type = $this->configProvider->getDbType();
@@ -95,11 +108,22 @@ final class Connector extends Query implements ConnectorInterface
                 : ' Linux: install/enable the pdo_sqlite and sqlite3 PHP extensions, then restart PHP.';
             throw new LinkException(__('SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}', [$db_type, $availableDrivers, $installHint]));
         }
+
+        $bootstrapBudget = null;
+        $bootstrapBusyAttempts = 0;
+        $bootstrapLastBusyException = null;
+        $bootstrapCompletionReserveMicroseconds = 8_000;
         
         // 浠庤繛鎺ユ睜鑾峰彇杩炴帴
-        $this->link = ConnectionPool::getConnection(
+        $lease = ConnectionPool::acquire(
             $this->configProvider,
-            function () use ($db_type) {
+            function () use (
+                $db_type,
+                &$bootstrapBudget,
+                &$bootstrapBusyAttempts,
+                &$bootstrapLastBusyException,
+                &$bootstrapCompletionReserveMicroseconds
+            ) {
                 $path = (string)($this->configProvider->getData('path') ?: $this->configProvider->getDatabase() ?: ':memory:');
                 if ($path !== ':memory:') {
                     $dir = dirname($path);
@@ -108,35 +132,224 @@ final class Connector extends Query implements ConnectorInterface
                     }
                 }
                 $dsn = "{$db_type}:{$path}";
-                try {
-                    $options = $this->configProvider->getOptions();
-                    // SQLite 涔熸敮鎸佹寔涔呰繛鎺ワ紝浣嗛渶瑕佺‘淇濋敊璇ā寮忚缃?
-                    $connection = new PDO($dsn, null, null, $options);
-                    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                    # PRAGMA case_sensitive_like = ON;  -- 寮€鍚ぇ灏忓啓鏁忔劅鐨凩IKE鏌ヨ
-                    $connection->exec('PRAGMA case_sensitive_like = OFF; -- 鍏抽棴澶у皬鍐欐晱鎰熺殑LIKE鏌ヨ锛堥粯璁わ級');
-                    $connection->exec('PRAGMA foreign_keys = ON;');
-                    if ($busyTimeout = (int)$this->configProvider->getData('busy_timeout')) {
-                        $connection->exec('PRAGMA busy_timeout = ' . $busyTimeout);
+                $options = $this->configProvider->getOptions();
+                $connection = new PDO($dsn, null, null, $options);
+                $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $bootstrapBudget = $this->newBootstrapBudget();
+
+                // PDO SQLite's native busy handler blocks the whole PHP/WLS
+                // thread. Disable it before any file-touching bootstrap SQL;
+                // all busy/locked waits below are owned by one RetryBudget.
+                $this->disableNativeBootstrapBusyTimeout($connection);
+                $this->executeBootstrapOperation(
+                    static fn() => $connection->exec('PRAGMA case_sensitive_like = OFF;'),
+                    $bootstrapBudget,
+                    $bootstrapBusyAttempts,
+                    $bootstrapLastBusyException,
+                    $bootstrapCompletionReserveMicroseconds
+                );
+                $this->executeBootstrapOperation(
+                    static fn() => $connection->exec('PRAGMA foreign_keys = ON;'),
+                    $bootstrapBudget,
+                    $bootstrapBusyAttempts,
+                    $bootstrapLastBusyException,
+                    $bootstrapCompletionReserveMicroseconds
+                );
+
+                $preSql = $this->normalizeBootstrapPreSql($this->configProvider->getPreSql());
+                if ($preSql !== '') {
+                    // Execute one statement at a time so a busy failure never
+                    // replays an earlier statement that already committed.
+                    foreach ($this->splitSqlStatements($preSql) as $statement) {
+                        $this->executeBootstrapOperation(
+                            static fn() => $connection->exec($statement),
+                            $bootstrapBudget,
+                            $bootstrapBusyAttempts,
+                            $bootstrapLastBusyException,
+                            $bootstrapCompletionReserveMicroseconds
+                        );
                     }
-                    if ($this->configProvider->getPreSql()) {
-                        $connection->exec($this->configProvider->getPreSql());
-                    }
-                    return $connection;
-                } catch (PDOException $e) {
-                    throw new LinkException($e->getMessage());
                 }
+
+                // A legacy pre_sql may contain PRAGMA busy_timeout=N. Ensure
+                // no pooled connection can retain a native blocking handler.
+                $this->disableNativeBootstrapBusyTimeout($connection);
+                return $connection;
             }
         );
-        $this->fromPool = true;
+        $this->lease = $lease;
+        $this->link = $lease->getConnection();
         try {
-            $version = (string)$this->link->query('SELECT sqlite_version()')->fetchColumn();
-            $this->getDialect()->validateVersion($version);
+            $bootstrapBudget ??= $this->newBootstrapBudget();
+            try {
+                $this->disableNativeBootstrapBusyTimeout($this->link);
+                $version = (string)$this->executeBootstrapOperation(
+                    fn() => $this->link->query('SELECT sqlite_version()')->fetchColumn(),
+                    $bootstrapBudget,
+                    $bootstrapBusyAttempts,
+                    $bootstrapLastBusyException,
+                    $bootstrapCompletionReserveMicroseconds
+                );
+                $this->getDialect()->validateVersion($version);
+            } catch (DatabaseRetryTimeoutException $e) {
+                throw $e;
+            } catch (PDOException $e) {
+                // Busy/locked is already a structured timeout; every other
+                // PDO failure keeps its original type and stack.
+                throw $e;
+            } catch (\Throwable $e) {
+                w_log_warning(__('SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}', [$e->getMessage()]), [], 'database_version.log');
+            }
+            $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
         } catch (\Throwable $e) {
-            w_log_warning(__('SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}', [$e->getMessage()]), [], 'database_version.log');
+            $this->discardCurrentConnection();
+            throw $e;
         }
-        $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
         return $this;
+    }
+
+    /**
+     * Run one bootstrap operation inside the immutable connection deadline.
+     * Native SQLite waiting is disabled before this method is entered, so a
+     * busy/locked call returns immediately and can yield cooperatively in WLS.
+     */
+    private function executeBootstrapOperation(
+        callable $operation,
+        RetryBudget $budget,
+        int &$busyAttempts,
+        ?PDOException &$lastBusyException,
+        int &$completionReserveMicroseconds
+    ): mixed
+    {
+        $stageAttempts = 0;
+
+        while ($busyAttempts < self::MAX_BOOTSTRAP_ATTEMPTS) {
+            if ($budget->remainingMicroseconds() <= $completionReserveMicroseconds) {
+                throw $this->newBootstrapTimeoutException(
+                    'deadline_exhausted',
+                    $busyAttempts,
+                    $budget,
+                    $lastBusyException
+                );
+            }
+
+            $stageAttempts++;
+            $attemptStartedAtNanoseconds = (float)\hrtime(true);
+            try {
+                return $operation();
+            } catch (PDOException $e) {
+                if (!$this->isDatabaseLockedError($e)) {
+                    throw $e;
+                }
+
+                $lastBusyException = $e;
+                $busyAttempts++;
+                $lastAttemptMicroseconds = (int)\max(
+                    1,
+                    \ceil(((float)\hrtime(true) - $attemptStartedAtNanoseconds) / 1_000)
+                );
+                $completionReserveMicroseconds = \max(
+                    8_000,
+                    ($lastAttemptMicroseconds * 2) + 2_000
+                );
+                if ($budget->isExpired()) {
+                    throw $this->newBootstrapTimeoutException(
+                        'deadline_exhausted',
+                        $busyAttempts,
+                        $budget,
+                        $e
+                    );
+                }
+                if ($busyAttempts >= self::MAX_BOOTSTRAP_ATTEMPTS) {
+                    throw $this->newBootstrapTimeoutException(
+                        'attempt_limit',
+                        $busyAttempts,
+                        $budget,
+                        $e
+                    );
+                }
+
+                $this->waitBeforeRetry(
+                    $stageAttempts,
+                    $budget,
+                    $e,
+                    $completionReserveMicroseconds
+                );
+            }
+        }
+
+        throw new \LogicException('SQLite bootstrap retry loop terminated without a result.');
+    }
+
+    private function disableNativeBootstrapBusyTimeout(PDO $connection): void
+    {
+        $connection->exec('PRAGMA busy_timeout = 0');
+    }
+
+    private function normalizeBootstrapPreSql(string $preSql): string
+    {
+        $preSql = \trim($preSql);
+        if ($preSql === '') {
+            return '';
+        }
+
+        // Preserve legacy PRAGMA position while forcing a non-blocking handler
+        // before any later journal/schema statement in the same pre_sql batch.
+        $normalized = \preg_replace_callback(
+            '/(\bPRAGMA\s+(?:[a-zA-Z0-9_]+\.)?busy_timeout\s*(?:=|\()\s*)\d+(\s*\)?)/i',
+            static fn(array $matches): string => $matches[1] . '0' . $matches[2],
+            $preSql
+        );
+        if ($normalized === null) {
+            throw new \RuntimeException(
+                'Unable to normalize SQLite bootstrap pre_sql: ' . \preg_last_error_msg()
+            );
+        }
+
+        return $normalized;
+    }
+
+    private function newBootstrapBudget(): RetryBudget
+    {
+        $requestBudget = (int)Env::get(
+            'db.retry.sqlite.request_budget_ms',
+            self::DEFAULT_REQUEST_BOOTSTRAP_BUDGET_MS
+        );
+        $requestBudget = \max(1, \min(self::MAX_REQUEST_BOOTSTRAP_BUDGET_MS, $requestBudget));
+
+        if (!Runtime::isCli()) {
+            return RetryBudget::fromMilliseconds($requestBudget);
+        }
+
+        $configuredCliBudget = Env::get('db.retry.sqlite.cli_budget_ms', null);
+        if ($configuredCliBudget === null || $configuredCliBudget === '') {
+            return RetryBudget::fromMilliseconds($requestBudget);
+        }
+
+        return RetryBudget::fromMilliseconds(
+            \max(1, \min(self::MAX_CLI_BOOTSTRAP_BUDGET_MS, (int)$configuredCliBudget))
+        );
+    }
+
+    private function newBootstrapTimeoutException(
+        string $reason,
+        int $attempts,
+        RetryBudget $budget,
+        ?PDOException $previous
+    ): DatabaseRetryTimeoutException
+    {
+        $cooperativeWaitAvailable = !Runtime::isPersistent()
+            || (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() instanceof \Fiber);
+
+        return new DatabaseRetryTimeoutException(
+            driver: 'sqlite',
+            reason: $reason,
+            attempts: $attempts,
+            budgetMilliseconds: $budget->budgetMilliseconds(),
+            elapsedMilliseconds: $budget->elapsedMilliseconds(),
+            cooperativeWaitAvailable: $cooperativeWaitAvailable,
+            previous: $previous
+        );
     }
 
     public function getWrappedConnection(): DbConnectionInterface
@@ -150,22 +363,39 @@ final class Connector extends Query implements ConnectorInterface
 
     public function query(string $sql): QueryInterface
     {
-        if ($this->link === null) {
-            $this->create();
-        }
+        $this->create();
         return parent::query($sql);
     }
 
     public function close(): void
     {
-        if ($this->link !== null) {
-            if ($this->fromPool) {
-                ConnectionPool::releaseConnection($this->link, $this->configProvider);
-            }
-            $this->link = null;
-            $this->wrappedConnection = null;
-            $this->fromPool = false;
-        }
+        $lease = $this->detachCurrentConnection();
+        $lease?->release();
+    }
+
+    private function discardCurrentConnection(): void
+    {
+        $lease = $this->detachCurrentConnection();
+        $lease?->discard();
+    }
+
+    private function detachCurrentConnection(): ?ConnectionLease
+    {
+        $lease = $this->lease;
+        $this->lease = null;
+        $this->link = null;
+        $this->wrappedConnection = null;
+        return $lease;
+    }
+
+    public function __clone()
+    {
+        // Clones are query objects, not aliases for a checked-out PDO.
+        $this->lease = null;
+        $this->link = null;
+        $this->wrappedConnection = null;
+        $this->query = null;
+        $this->PDOStatement = null;
     }
 
     /**

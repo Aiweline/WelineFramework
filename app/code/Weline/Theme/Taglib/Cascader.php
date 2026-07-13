@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\Http\Url;
 
 /**
@@ -123,7 +123,7 @@ class Cascader implements TaglibInterface
             }
 
             // 解析属性
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             // 翻译文本
             $t_no_data = addslashes(__('暂无数据'));

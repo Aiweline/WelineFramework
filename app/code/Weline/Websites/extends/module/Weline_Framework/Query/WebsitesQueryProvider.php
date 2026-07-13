@@ -10,6 +10,7 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Service\DomainOriginMatchService;
 use Weline\Websites\Service\DnsSiteHostRules;
@@ -79,7 +80,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'syncDomains'            => $this->syncDomains($params),
             'batchOperateDomains'    => $this->batchOperateDomains($params),
             'getWebsiteById'         => $this->getWebsiteById($params),
+            'getWebsiteByCode'       => $this->getWebsiteByCode($params),
             'getWebsiteList'         => $this->getWebsiteList($params),
+            'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
@@ -267,9 +270,23 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name'        => 'getWebsiteByCode',
+                    'description' => __('根据代码获取站点信息'),
+                    'params'      => [
+                        ['name' => 'code', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
                     'name'        => 'getWebsiteList',
                     'description' => __('获取所有站点列表'),
                     'params'      => [],
+                ],
+                [
+                    'name'        => 'getActiveWebsiteDomains',
+                    'description' => __('获取已启用的站点域名，无独立域名时回退到站点 URL'),
+                    'params'      => [
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ],
                 ],
                 [
                     'name'        => 'getWebsiteLanguageCodes',
@@ -284,6 +301,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'params'      => [
                         ['name' => 'status', 'type' => 'int|string|null', 'required' => false],
                         ['name' => 'limit', 'type' => 'int', 'required' => false],
+                        ['name' => 'root_domain', 'type' => 'string', 'required' => false],
                     ],
                 ],
                 [
@@ -920,6 +938,24 @@ class WebsitesQueryProvider implements QueryProviderInterface
         return $this->normalizeWebsitePayload($row);
     }
 
+    private function getWebsiteByCode(array $params): ?array
+    {
+        $code = \trim((string)($params['code'] ?? ''));
+        if ($code === '') {
+            return null;
+        }
+
+        $website = clone $this->websiteModel;
+        $row = $website->clearQuery()->clearData()
+            ->where(Website::schema_fields_CODE, $code)
+            ->find()
+            ->fetchArray();
+        if (!\is_array($row) || !\array_key_exists(Website::schema_fields_ID, $row)) {
+            return null;
+        }
+        return $this->normalizeWebsitePayload($row);
+    }
+
     private function getWebsiteList(array $params): array
     {
         $this->defaultWebsiteService->ensureDefaultWebsite(false);
@@ -938,6 +974,50 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $list[] = $this->normalizeWebsitePayload($w);
         }
         return $list;
+    }
+
+    /**
+     * @return list<array{domain:string,website_id:int}>
+     */
+    private function getActiveWebsiteDomains(array $params): array
+    {
+        $limit = \max(1, \min(2000, (int)($params['limit'] ?? 2000)));
+        $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+        $rows = $domainModel->clearQuery()
+            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+            ->pagination(1, $limit)
+            ->select()
+            ->fetchArray();
+
+        $domains = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $domain = \strtolower(\trim((string)($row[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+            $websiteId = (int)($row[WebsiteDomain::schema_fields_WEBSITE_ID] ?? self::DEFAULT_WEBSITE_ID);
+            $identity = $domain . '|' . $websiteId;
+            if ($domain === '' || isset($seen[$identity])) {
+                continue;
+            }
+            $seen[$identity] = true;
+            $domains[] = ['domain' => $domain, 'website_id' => $websiteId];
+        }
+        if ($domains !== []) {
+            return $domains;
+        }
+
+        foreach ($this->getWebsiteList([]) as $website) {
+            $domain = \parse_url((string)($website['url'] ?? ''), PHP_URL_HOST);
+            $domain = \is_string($domain) ? \strtolower(\trim($domain)) : '';
+            $websiteId = (int)($website['website_id'] ?? self::DEFAULT_WEBSITE_ID);
+            $identity = $domain . '|' . $websiteId;
+            if ($domain === '' || isset($seen[$identity])) {
+                continue;
+            }
+            $seen[$identity] = true;
+            $domains[] = ['domain' => $domain, 'website_id' => $websiteId];
+        }
+
+        return $domains;
     }
 
     /**
@@ -971,6 +1051,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
     {
         $status = $params['status'] ?? DomainPool::STATUS_ACTIVE;
         $limit = (int)($params['limit'] ?? 500);
+        $rootDomain = \strtolower(\trim((string)($params['root_domain'] ?? '')));
         $excludeSiteCreated = ($params['exclude_site_created'] ?? false);
         if ($limit <= 0) {
             $limit = 500;
@@ -982,6 +1063,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $pool->clearQuery();
         if ($status !== null && $status !== '') {
             $pool->where(DomainPool::schema_fields_STATUS, (string)$status);
+        }
+        if ($rootDomain !== '') {
+            $pool->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain);
         }
         if ($excludeSiteCreated) {
             $pool->where(DomainPool::schema_fields_SITE_CREATED, 0);

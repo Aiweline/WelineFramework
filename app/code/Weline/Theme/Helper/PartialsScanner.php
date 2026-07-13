@@ -188,27 +188,6 @@ class PartialsScanner
             }
         }
         
-        // 2. 如果当前模块没有，尝试查找 Weline_Frontend 模块（前端默认模块）
-        if ($area === 'frontend' && isset($modules['Weline_Frontend'])) {
-            $frontendModule = $modules['Weline_Frontend'];
-            $frontendPartialsPath = rtrim($frontendModule['base_path'], DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'partials' . DS . $type . DS . $option . '.phtml';
-            if (file_exists($frontendPartialsPath)) {
-                $relativePath = 'theme/' . $area . '/partials/' . $type . '/' . $option . '.phtml';
-                return 'Weline_Frontend::' . $relativePath;
-            }
-        }
-        
-        // 3. 如果前端模块没有，尝试查找 Weline_Backend 模块（后端默认模块）
-        if ($area === 'backend' && isset($modules['Weline_Backend'])) {
-            $backendModule = $modules['Weline_Backend'];
-            $backendPartialsPath = rtrim($backendModule['base_path'], DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'partials' . DS . $type . DS . $option . '.phtml';
-            if (file_exists($backendPartialsPath)) {
-                $relativePath = 'theme/' . $area . '/partials/' . $type . '/' . $option . '.phtml';
-                return 'Weline_Backend::' . $relativePath;
-            }
-        }
-        
         return null;
     }
 }
-

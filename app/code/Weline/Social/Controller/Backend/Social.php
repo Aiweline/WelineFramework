@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Social\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Admin\Api\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Social\Service\SocialAccountService;
 use Weline\Social\Service\SocialCreativeService;

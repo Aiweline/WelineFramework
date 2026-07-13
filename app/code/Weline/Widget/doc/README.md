@@ -12,6 +12,34 @@
 
 当前推荐注册路径是 `app/code/{Vendor}/{Module}/extends/module/Weline_Widget/{ModuleName}/widget.php`。旧式 `extends/Weline_Widget/...` 只作为兼容扫描存在，不要作为新开发首选。
 
+## 公开 PHP 边界
+
+跨模块 PHP 代码只能引用 `Weline\Widget\Api\*`。编辑器的数据注册表使用
+`WidgetRegistryInterface`；参数定义/表单能力使用 `WidgetConfigService`；安全预览渲染使用
+`WidgetPreviewService`。后两者是一版命名空间迁移的精确运行时别名，保持旧
+`Service` 类对象、构造参数和扩展类容。新模块不得再直接引用
+`Weline\Widget\Service\*`。
+
+Theme/编辑器需要参数表单时使用 `Api\Param\ParamFormRendererInterface`，需要判断参数
+是否可翻译时使用纯函数 `Api\Param\ParamDefinition::isTranslatable()`。运行期渲染内联
+Widget 模板使用 `Api\Rendering\RuntimeTemplateRendererInterface`。三个边界只交换字符串、
+标量和数组；参数 UI 类型类、`ParamTypeRenderer` 与 `WidgetRuntimeTemplateRenderer` 都是
+Widget 内部实现，由模块 `provides` 编译注册。
+
+Widget 向 Ai 模块发布的 Agent 扩展只使用 `Weline\Ai\Api\AgentInterface`、
+`AgentResult`、`AiModel` 与 `AgentModelExecutorInterface`。供应商工厂和具体
+Provider 属于 Ai 内部实现，不得在 Widget 扩展中查找或注入。
+
+AI Widget 生成服务仅注入 `Weline\Ai\Api\AiRuntimeInterface`，并通过其
+`executeAgent()` 公开契约执行 `widget_builder`。Widget 不得引用
+`Weline\Ai\Service\AiService` 或其他 Ai 内部类。
+
+## 依赖清单
+
+Ai、Backend、Extends、Framework、Meta 与 Taglib 是当前 Widget 装配的必需依赖。
+`WidgetQueryProvider` 固定装配 AI 生成服务，因此 Ai 仍是 `requires`；装配时由
+`AiRuntimeInterfaceFactory` 解析具体实现，缺失必需依赖必须在编译/启动预检阶段失败。
+
 ## 📚 文档目录
 
 ### 用户文档

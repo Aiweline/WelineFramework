@@ -20,32 +20,31 @@ return [
     'extends' => [
         'Adapter' => [
             'path' => 'extends/module/Weline_Ai/Adapter',
-            'interface' => 'Weline\Ai\Interface\ScenarioAdapterInterface',
+            'interface' => 'Weline\Ai\Api\ScenarioAdapterInterface',
             'description' => '场景适配器扩展点，用于扩展 AI 场景适配功能',
             'required' => true, // 是否必须实现接口
             'multiple' => true  // 是否允许多个实现
         ],
         'Agent' => [
             'path' => 'extends/module/Weline_Ai/Agent',
-            'interface' => 'Weline\Ai\Interface\AgentInterface',
+            'interface' => 'Weline\Ai\Api\AgentInterface',
             'description' => '智能体扩展点，用于扩展 AI 智能体功能（支持 Tool 调用编排）',
             'required' => true,
             'multiple' => true
         ],
         'Skill' => [
             'path' => 'extends/module/Weline_Ai/Skill',
-            'interface' => 'Weline\Ai\Interface\SkillProviderInterface',
+            'interface' => 'Weline\Ai\Api\SkillProviderInterface',
             'description' => 'AI skill provider extension point for governed prompt skills',
             'required' => false,
             'multiple' => true
         ],
         'Style' => [
             'path' => 'extends/module/Weline_Ai/Style',
-            'interface' => 'Weline\Ai\Interface\StyleProviderInterface',
+            'interface' => 'Weline\Ai\Api\StyleProviderInterface',
             'description' => 'AI style provider extension point for governed website style directions',
             'required' => false,
             'multiple' => true
         ]
     ]
 ];
-

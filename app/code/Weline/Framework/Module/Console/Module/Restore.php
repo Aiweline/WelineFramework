@@ -48,7 +48,7 @@ class Restore extends CommandAbstract
         }
 
         if (!$moduleName) {
-            throw new ConsoleException(__('缺少模块名参数。示例：php bin/w module:restore -m Weline_Demo'));
+            throw new ConsoleException(__('缺少模块名参数。示例：php bin/w module:restore -m Vendor_Module'));
         }
 
         $modules = Env::getInstance()->getModuleList();
@@ -112,15 +112,13 @@ class Restore extends CommandAbstract
             [
                 '安全提示'   => '恢复操作会删除当前模块表并用备份表覆盖，执行前请确认当前数据不再需要',
                 '备份来源'   => '备份数据来自模块卸载时的表重命名备份记录',
-                '模块依赖'   => '需要 Weline_ModuleManager 模块提供的 ModuleBackupService 和备份记录表',
+                '能力依赖'   => '需要启用模块备份能力提供者及其备份记录存储',
             ],
             [
-                '恢复最新备份'     => 'php bin/w module:restore -m Weline_Demo',
-                '恢复指定备份批次' => 'php bin/w module:restore -m Weline_Demo --backup=20250127_143000',
+                '恢复最新备份'     => 'php bin/w module:restore -m Vendor_Module',
+                '恢复指定备份批次' => 'php bin/w module:restore -m Vendor_Module --backup=20250127_143000',
             ],
             'php bin/w module:restore -m <模块名> [--backup=<时间戳>]'
         );
     }
 }
-
-

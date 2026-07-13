@@ -59,6 +59,13 @@
 ## 维护规则
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
+- 本地化描述强依赖 `Weline_I18n`；运行时汇率缓存只依赖 Framework 的
+  `SharedCacheStateFactoryInterface`，`Weline_Server` 是可选 Provider，缺失时必须正常回退到进程缓存。
+- 对外启用货币列表由 `Weline\Currency\Api\CurrencyCatalogInterface` 返回不可变 `CurrencyRecord`；
+  公开投影包含 `code/name/symbol/active/format/position/rate`，供站点列表和价格展示读取，
+  不暴露主键、Query 或可变 ORM 状态。新增字段保留默认值，已有四参数构造调用继续兼容。
+  跨模块不得读取 Currency Model 或 Query。
+- 后台本地化名称表单通过 `Weline\I18n\Api\Localization\LocaleRepositoryInterface` 获取语言 DTO，不依赖 I18n Service/Model。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。

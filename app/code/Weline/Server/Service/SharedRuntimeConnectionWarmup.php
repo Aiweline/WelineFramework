@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\IPC\ControlMessage;

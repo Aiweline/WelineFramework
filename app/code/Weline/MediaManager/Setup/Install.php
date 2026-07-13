@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Setup;
 
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\InstallInterface;
 
 class Install implements InstallInterface
 {
-    private BackendUserConfig $backendUserConfig;
+    private BackendUserConfigStore $backendUserConfig;
 
-    public function __construct(BackendUserConfig $backendUserConfig)
+    public function __construct(BackendUserConfigStore $backendUserConfig)
     {
         $this->backendUserConfig = $backendUserConfig;
     }

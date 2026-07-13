@@ -8,7 +8,7 @@
  * 注意：Hook系统用于视图层（前端布局页面），用于在主题布局页面中推送模板内容。
  * 事件系统用于服务层（业务逻辑），两者不冲突，可以同时使用。
  * 
- * 所有 Hook 必须在 Weline\Framework\Hook\HookInterface 中定义为常量
+ * 本文件是 Checkout Hook 的唯一事实源；PHP 常量如有需要应发布在本模块 Api 中。
  */
 return [
     // ==================== Frontend Checkout Layout ====================
@@ -223,4 +223,3 @@ return [
         'doc' => 'backend/order/view/after.md',
     ],
 ];
-

@@ -1,0 +1,21 @@
+{
+    "name": "weline/module-seo",
+    "description": "WelineFramework Seo module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-ai": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-url-manager": "@dev"
+    },
+    "suggest": {
+        "weline/module-websites": "Adds the Websites target label to embedded SEO administration.",
+        "weshop/module-store": "Optional integration for WeShop_Store"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Seo\\": ""
+        }
+    }
+}

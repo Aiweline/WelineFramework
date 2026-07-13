@@ -9,8 +9,11 @@
 
 namespace Weline\Framework\App;
 
+use Weline\Framework\Cache\Contract\CacheStatusProviderInterface;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+
 use Weline\Framework\DataObject\DataObject;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Output\PrintInterface;
@@ -695,19 +698,9 @@ class Env extends DataObject
     private const MAINTENANCE_CHECK_INTERVAL = 1.0;
     
     /**
-     * 事件名：WLS 下由 Server 模块通过 IPC 查询 Orchestrator 并回写 data['result']
-     */
-    private const EVENT_MAINTENANCE_CHECK = 'Weline_Server::integration::maintenance_check';
-
-    /**
-     * 事件名：WLS 下由 Server 模块通过 IPC 通知 Orchestrator 开/关维护，并设置 data['handled']
-     */
-    private const EVENT_MAINTENANCE_SET = 'Weline_Server::integration::maintenance_set';
-
-    /**
      * 检查维护模式状态（带缓存优化）
      * 
-     * WLS 下优先通过事件由 Server 模块走 IPC 查询 Orchestrator 状态；
+     * 常驻运行时优先通过编译 Provider 契约查询当前状态；
      * FPM/CLI 下直接使用配置（getConfig 分支）。
      * 性能说明：
      * - 使用进程内缓存，每秒最多只检查一次 IPC 查询
@@ -744,14 +737,13 @@ class Env extends DataObject
         self::$maintenanceLastCheck = $now;
 
         if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
-            $data = ['result' => null];
             try {
-                $this->getEventsManager()->dispatch(self::EVENT_MAINTENANCE_CHECK, $data);
+                $maintenanceMode = $this->runtimeControlBroadcaster()?->maintenanceMode();
             } catch (\Throwable) {
-                $data = ['result' => null];
+                $maintenanceMode = null;
             }
-            if (isset($data['result']) && \is_bool($data['result'])) {
-                self::$maintenanceCached = $data['result'];
+            if (\is_bool($maintenanceMode)) {
+                self::$maintenanceCached = $maintenanceMode;
                 return self::$maintenanceCached;
             }
         }
@@ -762,9 +754,11 @@ class Env extends DataObject
         return self::$maintenanceCached;
     }
 
-    private function getEventsManager(): EventsManager
+    private function runtimeControlBroadcaster(): ?RuntimeControlBroadcasterInterface
     {
-        return ObjectManager::getInstance(EventsManager::class);
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(RuntimeControlBroadcasterInterface::class);
+        return $provider instanceof RuntimeControlBroadcasterInterface ? $provider : null;
     }
     
     /**
@@ -855,30 +849,18 @@ class Env extends DataObject
      */
     private function mergeCacheStatusFromDb(array $cacheConfig): array
     {
-        if (!class_exists(\Weline\CacheManager\Model\Cache::class)) {
-            return $cacheConfig;
-        }
         static $merging = false;
         if ($merging) {
             return $cacheConfig;
         }
         $merging = true;
         try {
-            $status = $cacheConfig['status'] ?? [];
-            $hasRows = false;
-            /** @var \Weline\CacheManager\Model\Cache $cacheModel */
-            $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
-            foreach ($cacheModel->select()->fetchIterator() as $item) {
-                $hasRows = true;
-                $identity = is_array($item) ? ($item['identity'] ?? null) : $item->getData('identity');
-                if ($identity !== null && $identity !== '') {
-                    $status[$identity] = (int)(is_array($item) ? ($item['status'] ?? 0) : $item->getData('status'));
-                }
-            }
-            if (!$hasRows) {
+            $provider = $this->cacheStatusProvider();
+            $databaseStatus = $provider?->all() ?? [];
+            if ($databaseStatus === []) {
                 return $cacheConfig;
             }
-            $cacheConfig['status'] = $status;
+            $cacheConfig['status'] = array_replace($cacheConfig['status'] ?? [], $databaseStatus);
         } catch (\Throwable $e) {
             // 表不存在或未安装时忽略，继续使用 env 配置
         } finally {
@@ -915,20 +897,19 @@ class Env extends DataObject
      */
     private function getCacheStatusByIdentityFromDb(string $identity): ?int
     {
-        if (!class_exists(\Weline\CacheManager\Model\Cache::class)) {
-            return null;
-        }
         try {
-            /** @var \Weline\CacheManager\Model\Cache $cacheModel */
-            $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
-            $model = $cacheModel->where('identity', $identity)->find()->fetch();
-            if ($model && $model->getId()) {
-                return (int)$model->getData('status');
-            }
+            return $this->cacheStatusProvider()?->get($identity);
         } catch (\Throwable $e) {
             // 表不存在或未安装时忽略
         }
         return null;
+    }
+
+    private function cacheStatusProvider(): ?CacheStatusProviderInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CacheStatusProviderInterface::class);
+        return $provider instanceof CacheStatusProviderInterface ? $provider : null;
     }
 
     public function getTheme()
@@ -948,17 +929,16 @@ class Env extends DataObject
      */
     public function setConfig(string $key, $value = null): bool
     {
-        // 维护模式特殊处理：WLS 下通过事件走 IPC 通知 Orchestrator；FPM/CLI 仅更新配置
+        // 维护模式特殊处理：常驻运行时通过 Provider 契约通知控制面；FPM/CLI 仅更新配置
         if ($key === 'maintenance' || $key === 'system.maintenance') {
             $enabled = (bool) $value;
             if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
-                $data = ['value' => $enabled, 'handled' => false];
                 try {
-                    $this->getEventsManager()->dispatch(self::EVENT_MAINTENANCE_SET, $data);
+                    $result = $this->runtimeControlBroadcaster()?->setMaintenanceMode($enabled);
                 } catch (\Throwable) {
-                    $data['handled'] = false;
+                    $result = null;
                 }
-                if (!empty($data['handled'])) {
+                if (\is_array($result) && !empty($result['success'])) {
                     self::$maintenanceCached = $enabled;
                     self::$maintenanceLastCheck = \microtime(true);
                     // 已由 IPC 通知 Orchestrator，后续状态以 Orchestrator 为准

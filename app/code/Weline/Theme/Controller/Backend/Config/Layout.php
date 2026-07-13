@@ -9,11 +9,18 @@
 
 namespace Weline\Theme\Controller\Backend\Config;
 
+use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Url;
-use Weline\Meta\Model\Meta;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Meta\Api\Data\MetaConfigIdentity;
+use Weline\Meta\Api\Data\MetaConfigWrite;
+use Weline\Meta\Api\Data\MetadataSearch;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
+use Weline\Meta\Api\MetadataRepositoryInterface;
 use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Helper\ThemeConfigManager;
 use Weline\Theme\Helper\ThemeData;
@@ -294,12 +301,8 @@ class Layout extends BackendController
         }
 
         // Check theme mode from Backend Config
-        /** @var \Weline\Backend\Block\ThemeConfig $themeConfigBlock */
-        $themeConfigBlock = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-        // Ensure init is called to load user config
-        if (method_exists($themeConfigBlock, '__init')) {
-            $themeConfigBlock->__init();
-        }
+        $themeConfigBlock = ObjectManager::getInstance(BackendThemeConfigInterface::class);
+        $themeConfigBlock->reloadForCurrentUser();
         
         $backendThemeMode = $themeConfigBlock->getThemeConfig('theme-mode-switch');
         $themeMode = $backendThemeMode ?: 'light';
@@ -555,398 +558,243 @@ class Layout extends BackendController
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
         
-        // 获取当前配置
-        $baseIdentify = "dir-config.{$path}";
-        $currentConfig = [];
-        
-        // 根据类型加载已保存的配置
+        $runtimeProviders = ObjectManager::getInstance(RuntimeProviderResolver::class);
+        $metadataRepository = $runtimeProviders->resolve(MetadataRepositoryInterface::class);
+        $metaConfigRepository = $runtimeProviders->resolve(MetaConfigRepositoryInterface::class);
+        if (!$metadataRepository instanceof MetadataRepositoryInterface
+            || !$metaConfigRepository instanceof MetaConfigRepositoryInterface
+        ) {
+            throw new \RuntimeException('Meta repositories are unavailable.');
+        }
+
+        /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+        $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
+        $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
+        $namespace = "theme.{$area}";
+        $locale = Cookie::getLang() ?? 'zh_Hans_CN';
+
+        // 目录数据、文件字段和目录 Meta 一次读取，避免每个选项四次回表。
+        $flatCategory = ($type === 'colors' && $path === 'colors')
+            || ($type === 'variable' && $path === 'variables');
+        $metadataPrefix = $flatCategory
+            ? "theme.{$area}.{$typeForStorage}."
+            : "theme.{$area}.{$typeForStorage}.{$path}";
+        $metadataRecords = $metadataRepository->search(new MetadataSearch(
+            namespace: 'theme',
+            identifyPrefix: $metadataPrefix,
+            area: $area,
+        ));
+
+        $fieldRecords = [];
+        $optionRecords = [];
+        $configMetaIdentify = "theme.{$area}.{$typeForStorage}.{$path}";
+        $configMetaRecord = null;
+        foreach ($metadataRecords as $record) {
+            if ($record->identify === $configMetaIdentify && $configMetaRecord === null) {
+                $configMetaRecord = $record;
+            }
+            if ($record->type === 'field') {
+                $fieldRecords[$record->identify] = $record;
+                continue;
+            }
+            if ($record->type !== $type) {
+                continue;
+            }
+
+            $category = $record->category;
+            if ($flatCategory) {
+                if ($category !== null && $category !== '' && $category !== $path) {
+                    continue;
+                }
+            } elseif ($category !== $path) {
+                continue;
+            }
+            $optionRecords[] = $record;
+        }
+
+        $directoryNameData = $fieldRecords[$configMetaIdentify . '.name']->metaData ?? [];
+        $directoryDescriptionData = $fieldRecords[$configMetaIdentify . '.description']->metaData ?? [];
+        $directoryName = $directoryNameData['attributes']['default']
+            ?? $directoryNameData['attributes']['name']
+            ?? '';
+        $directoryDescription = $directoryDescriptionData['attributes']['default']
+            ?? $directoryDescriptionData['attributes']['name']
+            ?? '';
+
+        $options = [];
+        $variableNames = [];
+        foreach ($optionRecords as $record) {
+            $identifyParts = explode('.', $record->identify);
+            $fileName = (string)end($identifyParts);
+            $metaData = $record->metaData;
+            if (array_key_exists('file_name', $metaData)) {
+                $fileName = (string)$metaData['file_name'];
+            }
+
+            $nameData = $fieldRecords[
+                "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.name"
+            ]->metaData ?? [];
+            $itemName = $nameData['attributes']['default']
+                ?? $nameData['attributes']['name']
+                ?? '';
+            if (empty($itemName)) {
+                $itemName = $directoryName;
+            }
+            if (empty($itemName)) {
+                $itemName = ucfirst($fileName);
+            }
+
+            $descriptionData = $fieldRecords[
+                "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.description"
+            ]->metaData ?? [];
+            $itemDescription = $descriptionData['attributes']['default']
+                ?? $descriptionData['attributes']['name']
+                ?? '';
+            if (empty($itemDescription)) {
+                $itemDescription = $directoryDescription;
+            }
+
+            $themeIdentifier = '';
+            $primaryColor = '';
+            $secondaryColor = '';
+            if ($type === 'colors') {
+                if (isset($metaData['theme'])) {
+                    $themeIdentifier = (string)$metaData['theme'];
+                }
+
+                if ($record->fileFullPath && file_exists($record->fileFullPath)) {
+                    $cssContent = file_get_contents($record->fileFullPath);
+                    if (is_string($cssContent)) {
+                        if (preg_match('/--color-primary:\s*([^;]+);/', $cssContent, $matches)) {
+                            $primaryColor = trim($matches[1]);
+                        }
+                        if (empty($primaryColor)
+                            && preg_match('/--color-bg-primary:\s*([^;]+);/', $cssContent, $matches)
+                        ) {
+                            $primaryColor = trim($matches[1]);
+                        }
+                        if (preg_match('/--color-bg-secondary:\s*([^;]+);/', $cssContent, $matches)) {
+                            $secondaryColor = trim($matches[1]);
+                        }
+                        if (empty($secondaryColor)
+                            && preg_match('/--color-text-primary:\s*([^;]+);/', $cssContent, $matches)
+                        ) {
+                            $secondaryColor = trim($matches[1]);
+                        }
+                    }
+                }
+
+                if (empty($primaryColor) && isset($metaData['primary_color'])) {
+                    $primaryColor = (string)$metaData['primary_color'];
+                }
+                if (empty($secondaryColor) && isset($metaData['secondary_color'])) {
+                    $secondaryColor = (string)$metaData['secondary_color'];
+                }
+                if (empty($themeIdentifier)) {
+                    $themeIdentifier = $fileName;
+                }
+                if (empty($primaryColor) || empty($secondaryColor)) {
+                    [$defaultPrimary, $defaultSecondary] = match (strtolower($themeIdentifier)) {
+                        'light' => ['#ffffff', '#f8f9fa'],
+                        'dark' => ['#1a1a1a', '#2d2d2d'],
+                        'amazon' => ['#ff9900', '#131921'],
+                        default => ['#0d6efd', '#6c757d'],
+                    };
+                    $primaryColor = $primaryColor ?: $defaultPrimary;
+                    $secondaryColor = $secondaryColor ?: $defaultSecondary;
+                }
+            }
+
+            $option = [
+                'value' => $fileName,
+                'label' => $itemName,
+                'file' => basename($record->filePath ?: $record->fileFullPath),
+                'meta' => [
+                    'name' => $itemName,
+                    'description' => $itemDescription,
+                ],
+            ];
+            if ($type === 'colors') {
+                $option['meta']['theme'] = $themeIdentifier;
+                $option['meta']['primary_color'] = $primaryColor;
+                $option['meta']['secondary_color'] = $secondaryColor;
+            }
+            if ($type === 'variable') {
+                $variableNames[] = $fileName;
+            }
+            $options[] = $option;
+        }
+
+        // 所有配置候选用一次 resolveBatch 解析 locale；无 `.value` 键保持优先。
+        $currentConfig = $type === 'variable' ? ['variables' => []] : [];
         if ($type === 'variable') {
-            // 变量类型：读取所有变量配置
-            $variables = [];
-            try {
-                /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
-                $metaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
-                $namespace = "theme.{$area}";
-                
-                // 获取该目录下所有变量的配置
-                // 这里先获取所有变量选项，然后在循环中读取每个变量的值
-                // 为了简化，我们将在获取 options 后再读取配置值
-                $currentConfig['variables'] = [];
-            } catch (\Exception $e) {
-                // 忽略错误
+            $identities = [];
+            foreach ($variableNames as $fileName) {
+                $baseConfigKey = "variables.{$path}.{$fileName}";
+                $identities[] = new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $baseConfigKey,
+                    scope: $effectiveScope,
+                    locale: $locale,
+                    identifyId: (string)$theme->getId(),
+                );
+                $identities[] = new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $baseConfigKey . '.value',
+                    scope: $effectiveScope,
+                    locale: $locale,
+                    identifyId: (string)$theme->getId(),
+                );
+            }
+            $resolved = $metaConfigRepository->resolveBatch($identities);
+            foreach ($variableNames as $index => $fileName) {
+                $record = $resolved[$index * 2] ?? $resolved[$index * 2 + 1] ?? null;
+                if ($record !== null) {
+                    $currentConfig['variables'][$fileName] = $record->value;
+                }
             }
         } else {
-            // 其他类型：读取单个配置值
-            // 直接使用 MetaConfig 读取，确保使用正确的 scope
-            $configIdentify = "{$typeForStorage}.{$path}.value";
-            $currentValue = null;
-            
-            try {
-                // 方法1：通过 ThemeData 读取（会自动处理主题和区域）
-                $currentValue = ThemeData::get($configIdentify, null);
-                
-                // 方法2：如果 ThemeData 读取失败，直接使用 MetaConfig 读取（确保使用正确的 scope）
-                if (empty($currentValue)) {
-                    /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
-                    $metaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
-                    $namespace = "theme.{$area}";
-                    $configKey = "{$typeForStorage}.{$path}.value";
-                    /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
-                    $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
-                    $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
-                    $currentValue = $metaConfig->getConfig($theme->getId(), $namespace, $configKey, $effectiveScope);
-                }
-            } catch (\Exception $e) {
-                // 如果读取失败，记录错误但不影响后续流程（如果 logger 可用）
-                try {
-                    $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
-                    if ($logger) {
-                        $logger->error('getDirConfigForm: 读取配置失败', [
-                            'error' => $e->getMessage(),
-                            'themeId' => $theme->getId(),
-                            'area' => $area,
-                            'scope' => $scope,
-                            'path' => $path,
-                            'type' => $type
-                        ]);
-                    }
-                } catch (\Exception $logError) {
-                    // 忽略日志错误
-                }
-            }
-            
-            // 调试：记录读取到的配置（如果 logger 可用）
-            try {
-                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
-                if ($logger) {
-                    $logger->debug('getDirConfigForm', [
-                        'themeId' => $theme->getId(),
-                        'area' => $area,
-                        'scope' => $scope,
-                        'path' => $path,
-                        'type' => $type,
-                        'configIdentify' => $configIdentify,
-                        'currentValue' => $currentValue
-                    ]);
-                }
-            } catch (\Exception $e) {
-                // 忽略日志错误
-            }
-            
-            if ($currentValue) {
+            $baseConfigKey = "{$typeForStorage}.{$path}";
+            $resolved = $metaConfigRepository->resolveBatch([
+                new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $baseConfigKey,
+                    scope: $effectiveScope,
+                    locale: $locale,
+                    identifyId: (string)$theme->getId(),
+                ),
+                new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $baseConfigKey . '.value',
+                    scope: $effectiveScope,
+                    locale: $locale,
+                    identifyId: (string)$theme->getId(),
+                ),
+            ]);
+            $currentValue = $resolved[0]?->value ?? $resolved[1]?->value ?? null;
+            if ($currentValue !== null && $currentValue !== '') {
                 $currentConfig[$type] = $currentValue;
             }
         }
-        
-        // 从数据库 Meta 表获取该目录下可用的文件列表（根据类型）
-        $options = [];
-        
-        /** @var \Weline\Meta\Model\Meta $metaModel */
-        $metaModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-        
-        // 查询条件：namespace=theme, meta_type={type}, category=path, area=area
-        // 对于 color 和 variable 类型，category 可能为空（因为这些目录本身就是类型目录）
-        $metasResult = $metaModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                 ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, $type)
-                                 ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area);
-        
-        // 对于 colors 和 variable 类型，category 可能为空（因为这些目录本身就是类型目录）
-        // 使用 OR 条件：category IS NULL OR category = '' OR category = path
-        if (($type === 'colors' && $path === 'colors') || ($type === 'variable' && $path === 'variables')) {
-            $categoryField = \Weline\Meta\Model\Meta::schema_fields_CATEGORY;
-            $metasResult->where($categoryField, '', '=', 'OR')
-                ->where($categoryField, $path, '=');
-        } else {
-            $metasResult->where(\Weline\Meta\Model\Meta::schema_fields_CATEGORY, $path);
+
+        if ($configMetaRecord === null && $optionRecords !== []) {
+            $configMetaRecord = $optionRecords[0];
         }
-        
-        $metasResult = $metasResult->select()->fetch();
-        
-        $metas = $metasResult ? $metasResult->getItems() : [];
-        
-        // 调试：记录查询结果（如果 logger 可用）
-        try {
-            $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
-            if ($logger) {
-                $logger->debug('getDirConfigForm: 查询 Meta 结果', [
-                    'type' => $type,
-                    'path' => $path,
-                    'area' => $area,
-                    'metas_count' => count($metas),
-                    'metas' => array_map(function($meta) {
-                        return [
-                            'id' => $meta->getId(),
-                            'meta_identify' => $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY),
-                            'category' => $meta->getData(\Weline\Meta\Model\Meta::schema_fields_CATEGORY),
-                            'meta_type' => $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_TYPE),
-                        ];
-                    }, $metas)
-                ]);
-            }
-        } catch (\Exception $e) {
-            // 忽略日志错误
-        }
-        
-        if (!empty($metas)) {
-            foreach ($metas as $meta) {
-                // 从 meta_identify 中提取文件名
-                // 格式：theme.frontend.{type}s.category.default
-                $metaIdentify = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY);
-                $identifyParts = explode('.', $metaIdentify);
-                $fileName = end($identifyParts); // 最后一个部分就是文件名
-                
-                // 解析 meta_data JSON
-                $metaData = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA);
-                $metaDataArray = [];
-                if (!empty($metaData)) {
-                    $metaDataArray = json_decode($metaData, true) ?: [];
-                    // 从 meta_data 中获取 file_name（备用）
-                    if (isset($metaDataArray['file_name'])) {
-                        $fileName = $metaDataArray['file_name'];
-                    }
-                }
-                
-                // 查询该文件的 name 字段
-                $nameFieldModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                $nameField = $nameFieldModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
-                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.name")
-                                            ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
-                                            ->find()
-                                            ->fetch();
-                
-                $itemName = '';
-                if ($nameField && $nameField->getId()) {
-                    $nameMetaData = json_decode($nameField->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
-                    $itemName = $nameMetaData['attributes']['default'] ?? $nameMetaData['attributes']['name'] ?? '';
-                }
-                
-                // 如果 name 字段不存在，尝试查询目录级别的 name（兼容旧数据）
-                if (empty($itemName)) {
-                    $nameFieldModel2 = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                    $nameField2 = $nameFieldModel2->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
-                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.name")
-                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
-                                                  ->find()
-                                                  ->fetch();
-                    
-                    if ($nameField2 && $nameField2->getId()) {
-                        $nameMetaData2 = json_decode($nameField2->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
-                        $itemName = $nameMetaData2['attributes']['default'] ?? $nameMetaData2['attributes']['name'] ?? '';
-                    }
-                }
-                
-                // 如果还是没有，使用默认值
-                if (empty($itemName)) {
-                    $itemName = ucfirst($fileName);
-                }
-                
-                // 查询该文件的 description 字段
-                $descFieldModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                $descField = $descFieldModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
-                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.description")
-                                            ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
-                                            ->find()
-                                            ->fetch();
-                
-                $itemDescription = '';
-                if ($descField && $descField->getId()) {
-                    $descMetaData = json_decode($descField->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
-                    $itemDescription = $descMetaData['attributes']['default'] ?? $descMetaData['attributes']['name'] ?? '';
-                }
-                
-                // 如果 description 字段不存在，尝试查询目录级别的 description（兼容旧数据）
-                if (empty($itemDescription)) {
-                    $descFieldModel2 = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                    $descField2 = $descFieldModel2->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
-                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.description")
-                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
-                                                  ->find()
-                                                  ->fetch();
-                    
-                    if ($descField2 && $descField2->getId()) {
-                        $descMetaData2 = json_decode($descField2->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
-                        $itemDescription = $descMetaData2['attributes']['default'] ?? $descMetaData2['attributes']['name'] ?? '';
-                    }
-                }
-                
-                $filePath = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_PATH);
-                $fileFullPath = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_FULL_PATH);
-                
-                // 对于色系类型，尝试从 meta_data 或 CSS 文件中提取主题标识和主要颜色
-                $themeIdentifier = '';
-                $primaryColor = '';
-                $secondaryColor = '';
-                if ($type === 'colors') {
-                    // 尝试从 meta_data 中获取 theme 标识
-                    if (!empty($metaDataArray) && isset($metaDataArray['theme'])) {
-                        $themeIdentifier = $metaDataArray['theme'];
-                    }
-                    
-                    // 尝试从 CSS 文件中读取主要颜色
-                    if ($fileFullPath && file_exists($fileFullPath)) {
-                        try {
-                            $cssContent = file_get_contents($fileFullPath);
-                            
-                            // 提取 --color-primary（优先）
-                            if (preg_match('/--color-primary:\s*([^;]+);/', $cssContent, $matches)) {
-                                $primaryColor = trim($matches[1]);
-                            } 
-                            // 如果没有 --color-primary，尝试 --color-bg-primary
-                            if (empty($primaryColor) && preg_match('/--color-bg-primary:\s*([^;]+);/', $cssContent, $matches)) {
-                                $primaryColor = trim($matches[1]);
-                            }
-                            
-                            // 提取 --color-bg-secondary（优先）
-                            if (preg_match('/--color-bg-secondary:\s*([^;]+);/', $cssContent, $matches)) {
-                                $secondaryColor = trim($matches[1]);
-                            }
-                            // 如果没有 --color-bg-secondary，尝试 --color-text-primary
-                            if (empty($secondaryColor) && preg_match('/--color-text-primary:\s*([^;]+);/', $cssContent, $matches)) {
-                                $secondaryColor = trim($matches[1]);
-                            }
-                        } catch (\Exception $e) {
-                            // 忽略文件读取错误
-                        }
-                    }
-                    
-                    // 如果从 CSS 文件中没有提取到，尝试从 meta_data 中获取
-                    if (empty($primaryColor) && !empty($metaDataArray)) {
-                        if (isset($metaDataArray['primary_color'])) {
-                            $primaryColor = $metaDataArray['primary_color'];
-                        }
-                    }
-                    if (empty($secondaryColor) && !empty($metaDataArray)) {
-                        if (isset($metaDataArray['secondary_color'])) {
-                            $secondaryColor = $metaDataArray['secondary_color'];
-                        }
-                    }
-                    
-                    // 如果还是没有，根据主题标识设置默认颜色
-                    if (empty($primaryColor) || empty($secondaryColor)) {
-                        if (empty($themeIdentifier) && !empty($metaDataArray) && isset($metaDataArray['theme'])) {
-                            $themeIdentifier = $metaDataArray['theme'];
-                        }
-                        if (empty($themeIdentifier)) {
-                            $themeIdentifier = $fileName; // 使用文件名作为标识
-                        }
-                        
-                        switch (strtolower($themeIdentifier)) {
-                            case 'light':
-                                if (empty($primaryColor)) $primaryColor = '#ffffff';
-                                if (empty($secondaryColor)) $secondaryColor = '#f8f9fa';
-                                break;
-                            case 'dark':
-                                if (empty($primaryColor)) $primaryColor = '#1a1a1a';
-                                if (empty($secondaryColor)) $secondaryColor = '#2d2d2d';
-                                break;
-                            case 'amazon':
-                                if (empty($primaryColor)) $primaryColor = '#ff9900';
-                                if (empty($secondaryColor)) $secondaryColor = '#131921';
-                                break;
-                            default:
-                                if (empty($primaryColor)) $primaryColor = '#0d6efd';
-                                if (empty($secondaryColor)) $secondaryColor = '#6c757d';
-                        }
-                    }
-                }
-                
-                $optionData = [
-                    'value' => $fileName,
-                    'label' => $itemName,
-                    'file' => basename($filePath ?: $fileFullPath),
-                    'meta' => [
-                        'name' => $itemName,
-                        'description' => $itemDescription
-                    ]
-                ];
-                
-                // 对于色系类型，添加颜色信息
-                if ($type === 'colors') {
-                    $optionData['meta']['theme'] = $themeIdentifier;
-                    $optionData['meta']['primary_color'] = $primaryColor;
-                    $optionData['meta']['secondary_color'] = $secondaryColor;
-                }
-                
-                // 对于变量类型，读取当前配置值
-                if ($type === 'variable') {
-                    try {
-                        /** @var \Weline\Meta\Model\MetaConfig $varMetaConfig */
-                        $varMetaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
-                        $varNamespace = "theme.{$area}";
-                        $varConfigKey = "variables.{$path}.{$fileName}.value";
-                        /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
-                        $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
-                        $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
-                        $varValue = $varMetaConfig->getConfig($theme->getId(), $varNamespace, $varConfigKey, $effectiveScope);
-                        if ($varValue !== null) {
-                            $currentConfig['variables'][$fileName] = $varValue;
-                        }
-                    } catch (\Exception $e) {
-                        // 忽略错误
-                    }
-                }
-                
-                $options[] = $optionData;
-            }
-        }
-        
-        // 查找配置对应的 Meta 记录（用于保存时设置 meta_id 和 meta_identify）
-        // 配置的 Meta identify 格式：theme.{area}.{type}s.{path}
-        // 注意：这是目录级别的 Meta，不是具体文件的 Meta
-        $configMetaIdentify = "theme.{$area}.{$type}s.{$path}";
-        $configMetaId = null;
-        $configMetaIdentifyValue = null;
-        
-        try {
-            /** @var \Weline\Meta\Model\Meta $configMetaModel */
-            $configMetaModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-            
-            // 先尝试精确匹配目录级别的 Meta 记录
-            $configMeta = $configMetaModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                          ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $configMetaIdentify)
-                                          ->find()
-                                          ->fetch();
-            
-            // 如果找不到精确匹配，尝试查找该目录下任意一个文件的 Meta 记录（作为备用）
-            if (!$configMeta || !$configMeta->getId()) {
-                // 查找该目录下的第一个文件 Meta 记录
-                $fileMetasResult = $configMetaModel->reset()
-                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, $type)
-                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_CATEGORY, $path)
-                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
-                                                   ->select()
-                                                   ->fetch();
-                
-                $fileMetas = $fileMetasResult ? $fileMetasResult->getItems() : [];
-                
-                // 如果找到了文件的 Meta，使用第一个记录的 meta_id，但使用目录级别的 identify
-                if (!empty($fileMetas)) {
-                    $firstFileMeta = reset($fileMetas);
-                    if ($firstFileMeta && $firstFileMeta->getId()) {
-                        $configMetaId = (int)$firstFileMeta->getId();
-                        // 使用目录级别的 identify（去掉文件名部分）
-                        $configMetaIdentifyValue = $configMetaIdentify;
-                    }
-                }
-            } else {
-                // 如果找到了精确匹配
-                $configMetaId = (int)$configMeta->getId();
-                $configMetaIdentifyValue = $configMeta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY) ?: $configMetaIdentify;
-            }
-        } catch (\Exception $e) {
-            // 忽略错误
-        }
-        
-        // 确保 $theme 是对象，如果不是则重新加载
-        if (!is_object($theme) || !method_exists($theme, 'getId')) {
-            /** @var WelineTheme $theme */
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme->load($themeId);
+        $configMetaId = $configMetaRecord?->id;
+        $configMetaIdentifyValue = $configMetaRecord === null ? null : $configMetaIdentify;
+
+        $logger = Env::getInstance()->getLogger();
+        if ($logger) {
+            $logger->debug('getDirConfigForm', [
+                'themeId' => $theme->getId(),
+                'area' => $area,
+                'scope' => $scope,
+                'effectiveScope' => $effectiveScope,
+                'path' => $path,
+                'type' => $type,
+                'metas_count' => count($optionRecords),
+                'currentConfig' => $currentConfig,
+            ]);
         }
         
         $this->assign('theme', $theme);
@@ -1017,6 +865,16 @@ class Layout extends BackendController
         // 设置当前主题和区域
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
+
+        $metaConfigRepository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetaConfigRepositoryInterface::class);
+        if (!$metaConfigRepository instanceof MetaConfigRepositoryInterface) {
+            throw new \RuntimeException('Meta config repository is unavailable.');
+        }
+        /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
+        $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
+        $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
+        $namespace = "theme.{$area}";
         
         // 保存配置（根据类型：layout, partial, color, component）
         // 对于 variable 类型，需要特殊处理
@@ -1025,27 +883,22 @@ class Layout extends BackendController
             $variables = $config['variables'] ?? [];
             if (!empty($variables)) {
                 foreach ($variables as $varName => $varValue) {
-                    $varConfigKey = "variables.{$path}.{$varName}.value";
+                    $varConfigKey = "variables.{$path}.{$varName}";
                     $varBaseIdentify = "theme.{$area}.variables.{$path}.{$varName}";
-                    $namespace = "theme.{$area}";
                     
                     try {
-                        /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
-                        $metaConfig = ObjectManager::make(\Weline\Meta\Model\MetaConfig::class);
-                        /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
-                        $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
-                        $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
-                        $metaConfig->setConfig(
-                            $theme->getId(),
-                            $namespace,
-                            $varConfigKey,
-                            (string)$varValue,
-                            $effectiveScope,
-                            null,
-                            null,
-                            $varBaseIdentify
-                        );
-                    } catch (\Exception $e) {
+                        $metaConfigRepository->upsert(new MetaConfigWrite(
+                            identity: new MetaConfigIdentity(
+                                namespace: $namespace,
+                                configKey: $varConfigKey,
+                                scope: $effectiveScope,
+                                locale: null,
+                                identifyId: (string)$theme->getId(),
+                                metaIdentify: $varBaseIdentify,
+                            ),
+                            value: (string)$varValue,
+                        ));
+                    } catch (\Throwable) {
                         // 回退到 ThemeData
                         ThemeData::set("variables.{$path}.{$varName}.value", (string)$varValue, $scope);
                     }
@@ -1071,7 +924,7 @@ class Layout extends BackendController
                 // 忽略日志错误
             }
             
-            if (empty($configValue)) {
+            if ($configValue === null || $configValue === '') {
                 return $this->fetchJson($this->error(__('请选择' . ($type === 'partial' ? '部件' : ($type === 'colors' ? '色系' : ($type === 'component' ? '组件' : '布局'))))));
             }
             
@@ -1086,15 +939,11 @@ class Layout extends BackendController
             // 构建完整的 baseIdentify（用于查找 Meta 记录）
             // 格式：theme.{area}.{typeForStorage}.{path}
             $baseIdentify = "theme.{$area}.{$typeForStorage}.{$path}";
-            $namespace = "theme.{$area}";
-            // config_key 格式：{typeForStorage}.{path}.value（例如：layouts.homepage.value 或 partials.header.value）
-            $configKey = "{$typeForStorage}.{$path}.value";
+            // 新写入使用无 `.value` 后缀的 canonical config_key。
+            $configKey = "{$typeForStorage}.{$path}";
             
-            // 使用 MetaConfig 直接保存，传递 meta_id 和 meta_identify
+            // 通过 Meta 公开 Repository 精确写入，传递 meta_id 和 meta_identify。
             try {
-                /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
-                $metaConfig = ObjectManager::getInstance(\Weline\Meta\Model\MetaConfig::class);
-                
                 // 转换 meta_id
                 $metaIdInt = null;
                 if ($metaId) {
@@ -1103,25 +952,23 @@ class Layout extends BackendController
                 
                 // 如果没有提供 meta_identify，使用 baseIdentify
                 $metaIdentifyValue = $metaIdentify ?: $baseIdentify;
-                
-                // 直接调用 setConfig，传递 meta_id 和 meta_identify
-                /** @var \Weline\Theme\Service\PreviewThemeScopeService $previewThemeScopeService */
-                $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
-                $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
-                $metaConfig->setConfig(
-                    $theme->getId(),
-                    $namespace,
-                    $configKey,
-                    (string)$configValue,
-                    $effectiveScope,
-                    null, // locale
-                    $metaIdInt,
-                    $metaIdentifyValue
-                );
+
+                $metaConfigRepository->upsert(new MetaConfigWrite(
+                    identity: new MetaConfigIdentity(
+                        namespace: $namespace,
+                        configKey: $configKey,
+                        scope: $effectiveScope,
+                        locale: null,
+                        identifyId: (string)$theme->getId(),
+                        metaId: $metaIdInt,
+                        metaIdentify: $metaIdentifyValue,
+                    ),
+                    value: (string)$configValue,
+                ));
                 
                 // 清除缓存，确保立即生效
                 ThemeData::clearCache();
-            } catch (\Exception $e) {
+            } catch (\Throwable) {
                 // 如果直接保存失败，回退到 ThemeData::set()
                 // 格式：{typeForStorage}.{path}.value（例如：layouts.homepage.value 或 partials.header.value）
                 $configIdentify = "{$typeForStorage}.{$path}.value";
@@ -1134,7 +981,7 @@ class Layout extends BackendController
         // 格式：dir-config.{path}.{key}.value
         $baseIdentify = "dir-config.{$path}";
         foreach ($config as $key => $value) {
-            if ($key === $type) {
+            if ($key === $type || ($type === 'variable' && $key === 'variables')) {
                 continue; // 已经单独处理了
             }
             $identify = "{$baseIdentify}.{$key}.value";
@@ -3611,4 +3458,3 @@ class Layout extends BackendController
         return $this->fetch('Weline_Theme::templates/backend/config/modals/component-params.phtml');
     }
 }
-

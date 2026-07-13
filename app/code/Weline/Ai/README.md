@@ -73,6 +73,7 @@ AiService::generateTextStream('写文章', function($chunk) {
 
 #### 🌍 多语言支持
 - 集成I18n模块
+- 只通过可选的 `Weline\I18n\Api\Localization\LocaleNameCatalogInterface` 读取语言名称，不直接依赖 I18n ORM
 - 支持内容本地化
 - 自动语言检测
 

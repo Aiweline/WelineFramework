@@ -110,33 +110,17 @@ class RouteUpdateStage extends AbstractStage
                 }
             }
         } else {
-            // 全量模式：启用批量模式，收集所有模块路由后一次性写入
-            // 启用批量模式（只在首次准备时启用）
-            // 注意：如果批量模式已经启用，不要再次调用 enableBatchMode()，因为会清空已收集的路由
-            if (!$this->routerHelper->isBatchMode()) {
-                $this->routerHelper->enableBatchMode();
-            } else {
-                // 批量模式已经启用，说明路由可能已经在注册过程中被收集
-                // 这种情况下，我们需要确保不会丢失已收集的路由
-                // 从批量缓存中读取现有路由并备份
-                foreach ($this->routerFilePaths as $path) {
-                    $routers = $this->routerHelper->getBatchRouters($path);
-                    if (!empty($routers)) {
-                        // 如果批量缓存中已有路由，说明路由已经在注册过程中被收集
-                        // 将这些路由也备份到 originalRouteData 中（作为当前状态）
-                        if (!isset($this->originalRouteData[$path])) {
-                            $this->originalRouteData[$path] = $routers;
-                        }
-                    }
-                }
-            }
-
             // 备份原始路由数据（从文件读取）
             $this->backupOriginalRoutes();
 
-            // 清除指定模块的旧路由（在内存中操作）
-            if (!empty($this->modulesToClear)) {
-                $this->clearModuleRoutersInMemory();
+            // 全量模式必须从空快照重建。即使同一进程已留有批量缓存，
+            // 也不能继承它，否则已删除、改名或 area 变更的路由会继续残留。
+            $this->routerHelper->enableBatchMode();
+
+            // 预置所有路由文件为空快照，确保某个 area 已无路由时，
+            // commit() 仍会用空数组覆盖旧文件，而不是保留陈旧内容。
+            foreach ($this->routerFilePaths as $path) {
+                $this->routerHelper->getBatchRouters($path);
             }
         }
         

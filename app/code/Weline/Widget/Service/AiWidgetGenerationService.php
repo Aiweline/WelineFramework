@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Service;
 
-use Weline\Ai\Service\AiService;
+use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Widget\Model\AiWidget;
 
 class AiWidgetGenerationService
@@ -21,7 +21,7 @@ class AiWidgetGenerationService
     ];
 
     public function __construct(
-        private readonly AiService $aiService,
+        private readonly AiRuntimeInterface $aiService,
         private readonly AiWidget $aiWidget,
         private readonly WidgetRegistry $widgetRegistry,
         private readonly WidgetConfigService $widgetConfigService,

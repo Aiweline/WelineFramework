@@ -460,7 +460,7 @@ PHP);
         self::assertStringNotContainsString('!$sharedService && $orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$sharedServiceUsesTokenLifecycle = $sharedService && $masterPid <= 0 && $kernel === null;', $sessionSource);
-        self::assertStringContainsString('if (!$sharedServiceUsesTokenLifecycle && $orphanGuard->shouldExit(', $sessionSource);
+        self::assertStringContainsString('if (!$childMasterGuard->isEnabled() && !$sharedServiceUsesTokenLifecycle && $orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$server->isSharedConsumerIdleWindowOpen()', $sessionSource);
         self::assertStringContainsString('$shouldResolveControlPort = !$sharedService || $controlPort > 0 || $supervisorEnabled;', $sessionSource);
         self::assertStringContainsString("\\in_array('--frontend', \$argv, true) || \\in_array('-frontend', \$argv, true)", $redirectSource);
@@ -609,4 +609,3 @@ PHP);
         }
     }
 }
-

@@ -26,6 +26,7 @@ class Parser
 
     public static bool $loaded = false;
     public const PARSER_WORDS_CACHE_KEY = 'PARSER_WORDS_CACHE_KEY';
+    private const GLOBAL_DICTIONARY_SINGLE_FLIGHT_TIMEOUT_MS = 40;
     private const WLS_HEAVY_LOCALE_HEADROOM_BYTES = 100663296;
     private const WLS_HEAVY_LOCALE_PRESSURE_THRESHOLD = 0.70;
     protected static array $words = [];
@@ -830,8 +831,7 @@ class Parser
             return self::$workerGlobalDictionaryWordsCache[$lang];
         }
 
-        $dictionaryClass = '\\Weline\\I18n\\Model\\Locale\\Dictionary';
-        if (!class_exists($dictionaryClass)) {
+        if (self::globalDictionaryProvider() === null) {
             return self::$workerGlobalDictionaryWordsCache[$lang] = [];
         }
 
@@ -847,13 +847,14 @@ class Parser
                 $words = $cachePool->remember(
                     $cacheKey,
                     3600,
-                    static fn(): ?array => self::loadGlobalDictionaryWordsFromDatabase($lang, $dictionaryClass),
+                    static fn(): ?array => self::loadGlobalDictionaryWordsFromDatabase($lang),
                     new RememberOptions(
                         nullTtl: 5,
                         jitter: true,
                         jitterRatio: 0.10,
                         singleFlight: true,
-                        singleFlightTimeoutMs: 10000
+                        singleFlightTimeoutMs: self::GLOBAL_DICTIONARY_SINGLE_FLIGHT_TIMEOUT_MS,
+                        computeOnSingleFlightTimeout: !Runtime::isPersistent(),
                     )
                 );
 
@@ -871,7 +872,7 @@ class Parser
         }
 
         return self::$workerGlobalDictionaryWordsCache[$lang] =
-            self::loadGlobalDictionaryWordsFromDatabase($lang, $dictionaryClass) ?? [];
+            self::loadGlobalDictionaryWordsFromDatabase($lang) ?? [];
     }
 
     private static function getSharedPhraseCachePool(): ?\Weline\Framework\Cache\Contract\CachePoolInterface
@@ -886,19 +887,12 @@ class Parser
     }
 
     /**
-     * @param class-string $dictionaryClass
      * @return array<string,string>|null null means the DB read failed and should only be cached briefly.
      */
-    private static function loadGlobalDictionaryWordsFromDatabase(string $lang, string $dictionaryClass): ?array
+    private static function loadGlobalDictionaryWordsFromDatabase(string $lang): ?array
     {
         try {
-            /** @var object $localeDictionary */
-            $localeDictionary = ObjectManager::getInstance($dictionaryClass);
-            $rows = $localeDictionary->reset()
-                ->where($dictionaryClass::schema_fields_LOCALE_CODE, $lang)
-                ->where($dictionaryClass::schema_fields_TRANSLATE, '', '!=')
-                ->select()
-                ->fetchArray();
+            return self::globalDictionaryProvider()?->words($lang) ?? [];
         } catch (\Throwable $throwable) {
             if (\function_exists('w_log_warning')) {
                 \w_log_warning('[Phrase] global dictionary DB load failed: ' . $throwable->getMessage(), [
@@ -908,16 +902,17 @@ class Parser
             return null;
         }
 
-        $words = [];
-        foreach ($rows as $row) {
-            $word = $row[$dictionaryClass::schema_fields_WORD] ?? '';
-            $translate = $row[$dictionaryClass::schema_fields_TRANSLATE] ?? '';
-            if (is_string($word) && is_string($translate) && $word !== '' && $translate !== '') {
-                $words[$word] = $translate;
-            }
-        }
+    }
 
-        return $words;
+    private static function globalDictionaryProvider(): ?GlobalDictionaryProviderInterface
+    {
+        try {
+            $provider = ObjectManager::getInstance(\Weline\Framework\Runtime\RuntimeProviderResolver::class)
+                ->resolve(GlobalDictionaryProviderInterface::class);
+            return $provider instanceof GlobalDictionaryProviderInterface ? $provider : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

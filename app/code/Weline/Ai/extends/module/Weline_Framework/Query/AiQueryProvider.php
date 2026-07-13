@@ -6,6 +6,12 @@ namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
 
 use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Service\AiService;
+use Weline\Ai\Model\AiModel;
+use Weline\Ai\Model\AiScenarioAdapter;
+use Weline\Ai\Model\Provider\Account;
+use Weline\Ai\Service\DefaultModelManager;
+use Weline\Ai\Service\Provider\AccountService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -42,11 +48,28 @@ class AiQueryProvider implements QueryProviderInterface
             'providerListAccounts' => $this->providerAccountQueryProvider()->execute('listAccounts', $params),
             'providerGetAccount' => $this->providerAccountQueryProvider()->execute('getAccount', $params),
             'providerSaveAccount' => $this->providerAccountQueryProvider()->execute('saveAccount', $params),
+            'providerSaveModel' => $this->saveModel($params),
             'providerTestConnection' => $this->providerAccountQueryProvider()->execute('testConnection', $params),
             'providerRemoteModelsForSelect' => $this->providerAccountQueryProvider()->execute('remoteModelsForSelect', $params),
             'providerGetUsageList' => $this->providerAccountQueryProvider()->execute('getUsageList', $params),
             'providerToggleActive' => $this->providerAccountQueryProvider()->execute('toggleActive', $params),
             'providerDeleteAccount' => $this->providerAccountQueryProvider()->execute('deleteAccount', $params),
+            'modelDelete' => $this->modelDelete($params),
+            'modelBulkDelete' => $this->modelBulkDelete($params),
+            'modelToggleStatus' => $this->modelToggleStatus($params),
+            'modelBulkToggleStatus' => $this->modelBulkToggleStatus($params),
+            'modelTestConnection' => $this->modelTestConnection($params),
+            'modelBulkTestConnection' => $this->modelBulkTestConnection($params),
+            'modelTestSelfConfig' => $this->modelTestSelfConfig($params),
+            'adapterToggleStatus' => $this->adapterToggleStatus($params),
+            'adapterDelete' => $this->adapterDelete($params),
+            'adapterBulkDelete' => $this->adapterBulkDelete($params),
+            'adapterBulkToggle' => $this->adapterBulkToggle($params),
+            'defaultSet' => $this->defaultSet($params),
+            'defaultBatchSet' => $this->defaultBatchSet($params),
+            'defaultClearCache' => $this->defaultClearCache(),
+            'defaultInitialize' => $this->defaultInitialize(),
+            'defaultProtected' => $this->defaultProtected(),
             default => throw new \InvalidArgumentException(
                 (string)__('Ai 查询器不支持的操作：%{1}', $operation)
             ),
@@ -305,8 +328,344 @@ class AiQueryProvider implements QueryProviderInterface
                     'returns' => ['type' => 'array'],
                     'summary' => 'Send storefront AI chat message',
                 ],
-            ], $this->getProviderAccountOperationDescriptors()),
+            ], array_merge([
+                [
+                    'name' => 'providerSaveModel',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'auth' => 'backend',
+                    'params' => ['payload' => ['type' => 'map', 'required' => true]],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Backend AI model save operation',
+                ],
+                [
+                    'name' => 'modelDelete',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'auth' => 'backend',
+                    'params' => ['id' => ['type' => 'int', 'required' => true, 'min' => 1]],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Backend AI model delete operation',
+                ],
+                [
+                    'name' => 'modelBulkDelete',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'auth' => 'backend',
+                    'params' => ['ids' => ['type' => 'array', 'required' => true]],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Backend AI model bulk delete operation',
+                ],
+                ...array_map(
+                    fn(string $name, string $summary, array $params): array => [
+                        'name' => $name,
+                        'frontend' => true,
+                        'mode' => 'write',
+                        'graph' => false,
+                        'cost' => 2,
+                        'auth' => 'backend',
+                        'params' => $params,
+                        'returns' => ['type' => 'array'],
+                        'summary' => $summary,
+                    ],
+                    ['adapterToggleStatus', 'adapterDelete', 'adapterBulkDelete', 'adapterBulkToggle'],
+                    ['Toggle backend AI adapter status', 'Delete backend AI adapter', 'Bulk delete backend AI adapters', 'Bulk toggle backend AI adapters'],
+                    [
+                        ['id' => ['type' => 'int', 'required' => true, 'min' => 1]],
+                        ['id' => ['type' => 'int', 'required' => true, 'min' => 1]],
+                        ['ids' => ['type' => 'array', 'required' => true]],
+                        ['ids' => ['type' => 'array', 'required' => true], 'status' => ['type' => 'int', 'required' => true, 'min' => 0, 'max' => 1]],
+                    ]
+                ),
+                ['name' => 'defaultSet', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 1, 'auth' => 'backend', 'params' => ['service_type' => ['type' => 'string', 'required' => true], 'model_code' => ['type' => 'string', 'required' => true], 'priority' => ['type' => 'int'], 'is_active' => ['type' => 'int']], 'returns' => ['type' => 'array'], 'summary' => 'Set an AI default model'],
+                ['name' => 'defaultBatchSet', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 2, 'auth' => 'backend', 'params' => ['configurations' => ['type' => 'array', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Set AI default models in batch'],
+                ['name' => 'defaultClearCache', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 1, 'auth' => 'backend', 'params' => [], 'returns' => ['type' => 'array'], 'summary' => 'Clear AI default model cache'],
+                ['name' => 'defaultInitialize', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 1, 'auth' => 'backend', 'params' => [], 'returns' => ['type' => 'array'], 'summary' => 'Initialize AI default models'],
+                ['name' => 'defaultProtected', 'frontend' => true, 'mode' => 'read', 'graph' => false, 'cost' => 1, 'auth' => 'backend', 'params' => [], 'returns' => ['type' => 'array'], 'summary' => 'List protected AI default models'],
+                ['name' => 'modelToggleStatus', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 1, 'auth' => 'backend', 'params' => ['id' => ['type' => 'int', 'min' => 1], 'model_code' => ['type' => 'string']], 'returns' => ['type' => 'array'], 'summary' => 'Toggle an AI model status'],
+                ['name' => 'modelBulkToggleStatus', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 1, 'auth' => 'backend', 'params' => ['ids' => ['type' => 'array', 'required' => true], 'status' => ['type' => 'int', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Toggle AI model statuses in batch'],
+                ['name' => 'modelTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test an AI model connection'],
+                ['name' => 'modelBulkTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 5, 'auth' => 'backend', 'params' => ['model_ids' => ['type' => 'array', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model connections in batch'],
+                ['name' => 'modelTestSelfConfig', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model self configuration'],
+            ], $this->getProviderAccountOperationDescriptors())),
         ];
+    }
+
+    private function defaultModelManager(): DefaultModelManager
+    {
+        return ObjectManager::getInstance(DefaultModelManager::class);
+    }
+
+    private function defaultSet(array $params): array
+    {
+        $this->assertBackendSession();
+        $serviceType = $this->requireNonEmptyString($params, 'service_type');
+        $modelCode = $this->requireNonEmptyString($params, 'model_code');
+        $success = $this->defaultModelManager()->setDefaultModel($serviceType, $modelCode, (int)($params['priority'] ?? 100), (int)($params['is_active'] ?? 1));
+        return ['success' => $success, 'message' => $success ? (string)__('默认模型设置成功') : (string)__('默认模型设置失败')];
+    }
+
+    private function defaultBatchSet(array $params): array
+    {
+        $this->assertBackendSession();
+        $configurations = is_array($params['configurations'] ?? null) ? $params['configurations'] : [];
+        $saved = 0;
+        foreach ($configurations as $configuration) {
+            if (!is_array($configuration) || trim((string)($configuration['service_type'] ?? '')) === '' || trim((string)($configuration['model_code'] ?? '')) === '') {
+                continue;
+            }
+            if ($this->defaultModelManager()->setDefaultModel((string)$configuration['service_type'], (string)$configuration['model_code'], (int)($configuration['priority'] ?? 100), (int)($configuration['is_active'] ?? 1))) {
+                $saved++;
+            }
+        }
+        return ['success' => $saved > 0, 'saved' => $saved, 'message' => $saved > 0 ? (string)__('默认模型配置保存成功') : (string)__('没有可保存的默认模型配置')];
+    }
+
+    private function defaultClearCache(): array
+    {
+        $this->assertBackendSession();
+        $this->defaultModelManager()->clearCache();
+        return ['success' => true, 'message' => (string)__('默认模型缓存清除成功')];
+    }
+
+    private function defaultInitialize(): array
+    {
+        $this->assertBackendSession();
+        $initialized = $this->defaultModelManager()->initializeDefaults();
+        return ['success' => $initialized, 'message' => $initialized ? (string)__('默认配置初始化成功') : (string)__('默认配置已存在，无需初始化')];
+    }
+
+    private function defaultProtected(): array
+    {
+        $this->assertBackendSession();
+        $grouped = [];
+        foreach ($this->defaultModelManager()->getAllDefaultModels() as $defaultModel) {
+            $modelCode = (string)$defaultModel->getData('model_code');
+            $serviceType = (string)$defaultModel->getData('service_type');
+            if ($modelCode !== '' && $serviceType !== '') {
+                $grouped[$modelCode][] = $serviceType;
+            }
+        }
+        $data = [];
+        foreach ($grouped as $modelCode => $serviceTypes) {
+            $model = ObjectManager::getInstance(AiModel::class)->reset()->where(AiModel::schema_fields_MODEL_CODE, $modelCode)->find()->fetch();
+            if ($model && $model->getId()) {
+                $data[] = ['model_code' => $modelCode, 'model_name' => $model->getName(), 'vendor' => $model->getSupplier(), 'service_types' => $serviceTypes];
+            }
+        }
+        return ['success' => true, 'data' => $data];
+    }
+
+    private function modelDelete(array $params): array
+    {
+        $this->assertBackendSession();
+        $id = (int)($params['id'] ?? 0);
+        if ($id <= 0) {
+            return ['success' => false, 'message' => (string)__('模型 ID 无效')];
+        }
+
+        $model = \Weline\Framework\Manager\ObjectManager::getInstance(AiModel::class)->reset()->load($id);
+        if (!$model->getId()) {
+            return ['success' => false, 'message' => (string)__('模型不存在')];
+        }
+        if (!$model->canDelete()) {
+            return ['success' => false, 'message' => (string)__('该模型受保护，只有复制模型或自定义模型可以删除')];
+        }
+
+        $model->delete()->fetch();
+        return ['success' => true, 'message' => (string)__('模型删除成功')];
+    }
+
+    private function modelBulkDelete(array $params): array
+    {
+        $this->assertBackendSession();
+        $ids = is_array($params['ids'] ?? null) ? $params['ids'] : [];
+        if ($ids === []) {
+            return ['success' => false, 'message' => (string)__('请选择要删除的模型')];
+        }
+
+        $deleted = 0;
+        $skipped = 0;
+        foreach ($ids as $id) {
+            $model = \Weline\Framework\Manager\ObjectManager::getInstance(AiModel::class)->reset()->load((int)$id);
+            if (!$model->getId()) {
+                continue;
+            }
+            if (!$model->canDelete()) {
+                $skipped++;
+                continue;
+            }
+            $model->delete()->fetch();
+            $deleted++;
+        }
+
+        $message = $deleted > 0 ? (string)__('成功删除 %{1} 个模型', $deleted) : (string)__('没有模型被删除');
+        if ($skipped > 0) {
+            $message .= '；' . (string)__('跳过 %{1} 个受保护模型（仅复制/自定义模型可删除）', $skipped);
+        }
+        return ['success' => $deleted > 0, 'message' => $message, 'deleted' => $deleted, 'skipped' => $skipped];
+    }
+
+    private function modelToggleStatus(array $params): array
+    {
+        $this->assertBackendSession();
+        $model = ObjectManager::getInstance(AiModel::class)->reset();
+        if (trim((string)($params['model_code'] ?? '')) !== '') {
+            $model = $model->where(AiModel::schema_fields_MODEL_CODE, (string)$params['model_code'])->find()->fetch();
+        } else {
+            $model = $model->load((int)($params['id'] ?? 0));
+        }
+        if (!$model || !$model->getId()) {
+            return ['success' => false, 'message' => (string)__('模型不存在')];
+        }
+        $status = $model->isActive() ? 0 : 1;
+        $model->setData(AiModel::schema_fields_IS_ACTIVE, $status)->save();
+        return ['success' => true, 'status' => $status, 'message' => (string)__('状态更新成功')];
+    }
+
+    private function modelBulkToggleStatus(array $params): array
+    {
+        $this->assertBackendSession();
+        $ids = is_array($params['ids'] ?? null) ? $params['ids'] : [];
+        $status = (int)($params['status'] ?? 0) === 1 ? 1 : 0;
+        $updated = 0;
+        foreach ($ids as $id) {
+            $model = ObjectManager::getInstance(AiModel::class)->reset()->load((int)$id);
+            if ($model->getId()) {
+                $model->setData(AiModel::schema_fields_IS_ACTIVE, $status)->save();
+                $updated++;
+            }
+        }
+        return ['success' => true, 'updated' => $updated, 'message' => (string)__('成功更新 %{1} 个模型', $updated)];
+    }
+
+    private function modelTestConnection(array $params): array
+    {
+        $this->assertBackendSession();
+        $modelCode = $this->requireNonEmptyString($params, 'model_code');
+        $accountService = ObjectManager::getInstance(AccountService::class);
+        /** @var AiModel $model */
+        $model = ObjectManager::getInstance(AiModel::class)->reset()
+            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+            ->find()
+            ->fetch();
+        $providerCode = $model && $model->getId()
+            ? $accountService->getProviderByModel($model)
+            : $accountService->getProviderByModelCode($modelCode);
+        if (!$providerCode) {
+            return ['success' => false, 'message' => (string)__('无法识别模型供应商')];
+        }
+
+        $providerConfig = $model && $model->getId() ? $model->getProviderConfig() : [];
+        $accountId = (int)($providerConfig['account_id'] ?? 0);
+        if ($accountId > 0) {
+            /** @var Account $account */
+            $account = ObjectManager::getInstance(Account::class)->clear()->load($accountId);
+            if (!$account->getId()
+                || strtolower(trim((string)$account->getData(Account::schema_fields_PROVIDER_CODE))) !== $providerCode) {
+                return ['success' => false, 'message' => (string)__('模型绑定的供应商账户无效')];
+            }
+            if ((int)$account->getData(Account::schema_fields_IS_ACTIVE) !== 1) {
+                return ['success' => false, 'message' => (string)__('模型绑定的供应商账户未启用')];
+            }
+        } else {
+            // 连通测试不消费余额；余额为零的已连通账户仍应允许实际测试。
+            $account = $accountService->getAvailableAccount($providerCode, true);
+        }
+        if (!$account || !$account->getId()) {
+            return ['success' => false, 'message' => (string)__('没有可用的供应商账户')];
+        }
+        $result = $this->providerAccountQueryProvider()->execute('testConnection', [
+            'payload' => ['id' => $account->getId(), 'model_code' => $modelCode],
+        ]);
+        if ($model && $model->getId()) {
+            $model->setData(AiModel::schema_fields_PROVIDER_TEST_STATUS, !empty($result['success']) ? 'success' : 'failed');
+            $model->setData(AiModel::schema_fields_PROVIDER_TEST_TIME, time());
+            $model->setData(AiModel::schema_fields_CONNECTION_TEST_STATUS, !empty($result['success']) ? 'success' : 'failed');
+            $model->setData(AiModel::schema_fields_CONNECTION_TEST_TIME, time());
+            $model->save();
+        }
+        return ['success' => !empty($result['success']), 'data' => ['results' => ['self_config' => ['tested' => false, 'success' => false, 'message' => (string)__('该模型未配置独立 API Key，未执行自配置测试')], 'provider_account' => array_merge($result, ['tested' => true, 'account_name' => (string)$account->getData(Account::schema_fields_ACCOUNT_NAME)])]], 'message' => $result['message'] ?? ''];
+    }
+
+    private function modelBulkTestConnection(array $params): array
+    {
+        $this->assertBackendSession();
+        $results = [];
+        foreach ((array)($params['model_ids'] ?? []) as $id) {
+            $model = ObjectManager::getInstance(AiModel::class)->reset()->load((int)$id);
+            $modelCode = $model && $model->getId() ? (string)$model->getModelCode() : '';
+            $result = $modelCode !== '' ? $this->modelTestConnection(['model_code' => $modelCode]) : ['success' => false, 'message' => (string)__('模型不存在')];
+            $results[] = ['model_id' => (int)$id, 'model_code' => $modelCode, 'success' => !empty($result['success']), 'message' => $result['message'] ?? ''];
+        }
+        $success = count(array_filter($results, static fn(array $result): bool => $result['success']));
+        return ['success' => true, 'results' => $results, 'summary' => ['total' => count($results), 'success' => $success, 'failed' => count($results) - $success]];
+    }
+
+    private function modelTestSelfConfig(array $params): array
+    {
+        $this->assertBackendSession();
+        return ['success' => false, 'message' => (string)__('当前模型没有可独立测试的自配置通道')];
+    }
+
+    private function adapterToggleStatus(array $params): array
+    {
+        $this->assertBackendSession();
+        $adapter = ObjectManager::getInstance(AiScenarioAdapter::class)->reset()->load((int)($params['id'] ?? 0));
+        if (!$adapter->getId()) {
+            return ['success' => false, 'message' => (string)__('适配器不存在')];
+        }
+        $status = $adapter->isActive() ? 0 : 1;
+        $adapter->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, $status)->save();
+        return ['success' => true, 'status' => $status, 'message' => (string)__('状态更新成功')];
+    }
+
+    private function adapterDelete(array $params): array
+    {
+        $this->assertBackendSession();
+        $adapter = ObjectManager::getInstance(AiScenarioAdapter::class)->reset()->load((int)($params['id'] ?? 0));
+        if (!$adapter->getId()) {
+            return ['success' => false, 'message' => (string)__('适配器不存在')];
+        }
+        $adapter->delete()->fetch();
+        return ['success' => true, 'message' => (string)__('删除成功')];
+    }
+
+    private function adapterBulkDelete(array $params): array
+    {
+        $this->assertBackendSession();
+        $ids = is_array($params['ids'] ?? null) ? $params['ids'] : [];
+        $deleted = 0;
+        foreach ($ids as $id) {
+            $adapter = ObjectManager::getInstance(AiScenarioAdapter::class)->reset()->load((int)$id);
+            if ($adapter->getId()) {
+                $adapter->delete()->fetch();
+                $deleted++;
+            }
+        }
+        return ['success' => true, 'message' => (string)__('成功删除 %{1} 个适配器', $deleted), 'deleted' => $deleted];
+    }
+
+    private function adapterBulkToggle(array $params): array
+    {
+        $this->assertBackendSession();
+        $ids = is_array($params['ids'] ?? null) ? $params['ids'] : [];
+        $status = (int)($params['status'] ?? 0) === 1 ? 1 : 0;
+        $updated = 0;
+        foreach ($ids as $id) {
+            $adapter = ObjectManager::getInstance(AiScenarioAdapter::class)->reset()->load((int)$id);
+            if ($adapter->getId()) {
+                $adapter->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, $status)->save();
+                $updated++;
+            }
+        }
+        return ['success' => true, 'message' => (string)__('成功更新 %{1} 个适配器', $updated), 'updated' => $updated];
     }
 
     private function getProviderAccountOperationDescriptors(): array
@@ -316,6 +675,7 @@ class AiQueryProvider implements QueryProviderInterface
             'listAccounts' => 'providerListAccounts',
             'getAccount' => 'providerGetAccount',
             'saveAccount' => 'providerSaveAccount',
+            'saveModel' => 'providerSaveModel',
             'testConnection' => 'providerTestConnection',
             'remoteModelsForSelect' => 'providerRemoteModelsForSelect',
             'getUsageList' => 'providerGetUsageList',
@@ -333,6 +693,82 @@ class AiQueryProvider implements QueryProviderInterface
             $operations[] = $operation;
         }
         return $operations;
+    }
+
+    /** Persist a model from the backend model offcanvas without a native form POST. */
+    private function saveModel(array $params): array
+    {
+        $this->assertBackendSession();
+        $data = is_array($params['payload'] ?? null) ? $params['payload'] : $params;
+        $supplier = trim((string)($data['supplier'] ?? $data['supplier_value'] ?? $data['vendor'] ?? ''));
+        $modelCode = trim((string)($data['model_code'] ?? ''));
+        $name = trim((string)($data['model_name'] ?? $data['name'] ?? $modelCode));
+        if ($supplier === '' || $modelCode === '' || $name === '') {
+            return ['success' => false, 'message' => (string)__('供应商、模型代码和模型名称不能为空')];
+        }
+
+        $model = ObjectManager::getInstance(AiModel::class)->reset();
+        $id = (int)($data['id'] ?? 0);
+        $isNewModel = $id <= 0;
+        if ($id > 0) {
+            $model->load($id);
+        }
+        if (!$model->getId()) {
+            $existing = $model->reset()->where(AiModel::schema_fields_MODEL_CODE, $modelCode)->find()->fetch();
+            if ($existing && $existing->getId()) {
+                $model = $existing;
+                $isNewModel = false;
+            }
+        }
+        $model->setData(AiModel::schema_fields_SUPPLIER, $supplier);
+        $model->setData(AiModel::schema_fields_MODEL_CODE, $modelCode);
+        $model->setData(AiModel::schema_fields_NAME, $name);
+        $model->setData(AiModel::schema_fields_VERSION, (string)($data['model_version'] ?? $data['version'] ?? '1.0'));
+        $model->setPrimaryModality((string)($data['primary_modality'] ?? AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT));
+        $model->setData(AiModel::schema_fields_CONFIG, $this->jsonField($data['config_json'] ?? ($data['config'] ?? [])));
+        $providerConfig = $this->jsonField($data['provider_config_json'] ?? ($data['provider_config'] ?? []), true);
+        $accountId = (int)($data['quick_provider_account_id'] ?? $data['provider_account_id'] ?? ($providerConfig['account_id'] ?? 0));
+        if ($accountId > 0) {
+            /** @var Account $account */
+            $account = ObjectManager::getInstance(Account::class)->clear()->load($accountId);
+            if (!$account->getId()
+                || strtolower(trim((string)$account->getData(Account::schema_fields_PROVIDER_CODE))) !== strtolower($supplier)) {
+                return ['success' => false, 'message' => (string)__('所选供应商账户不存在或不属于当前供应商')];
+            }
+            $providerConfig['account_id'] = $accountId;
+        }
+        if (!isset($providerConfig['model']) && !isset($providerConfig['provider_model_code'])) {
+            $providerConfig['model'] = (string)($data['provider_model_code'] ?? $modelCode);
+        }
+        $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        if ($isNewModel) {
+            // 通过后台自定义/快速新增保存的模型属于本地可管理模型，可删除。
+            $model->setData(AiModel::schema_fields_MODEL_SOURCE, AiModel::SOURCE_LOCAL);
+        }
+        $model->setData(AiModel::schema_fields_IS_ACTIVE, 0);
+        $model->setData(AiModel::schema_fields_STATUS, (string)($data['status'] ?? AiModel::STATUS_ACTIVE));
+        if (isset($data['token_price_input'])) $model->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, $data['token_price_input']);
+        if (isset($data['token_price_output'])) $model->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, $data['token_price_output']);
+        $model->save();
+        return ['success' => true, 'message' => (string)__('模型保存成功'), 'model_id' => $model->getId()];
+    }
+
+    private function jsonField(mixed $value, bool $asArray = false): array|string
+    {
+        if (is_array($value)) return $asArray ? $value : json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (is_string($value) && trim($value) !== '') {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) return $asArray ? $decoded : json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        return $asArray ? [] : '{}';
+    }
+
+    private function assertBackendSession(): void
+    {
+        $session = $this->sessionFactory->createBackendSession();
+        if (!$session->isLoggedIn() || (int)($session->getUserId() ?? 0) <= 0) {
+            throw new \RuntimeException('Backend login required.');
+        }
     }
 
     private function providerAccountQueryProvider(): AiProviderAccountQueryProvider

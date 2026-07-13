@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\Http\Url;
 
 /**
@@ -84,7 +84,7 @@ class Manager implements TaglibInterface
             }
 
             // 解析属性值
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';

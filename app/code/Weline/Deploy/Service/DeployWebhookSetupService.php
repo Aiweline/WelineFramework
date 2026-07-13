@@ -7,6 +7,7 @@ namespace Weline\Deploy\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Api\DefaultWebsiteUrl;
 
 /**
  * 协助生成框架 Webhook 访问密钥、部署 SSH 密钥，并输出 curl 测试命令与配置指引。
@@ -240,25 +241,15 @@ class DeployWebhookSetupService
 
     private function guessWebsiteUrlFromStore(): string
     {
-        if (!class_exists(\Weline\Websites\Model\Website::class)) {
+        if (!class_exists(DefaultWebsiteUrl::class)) {
             return '';
         }
 
         try {
-            /** @var \Weline\Websites\Model\Website $website */
-            $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $row = $website->clear()
-                ->where(\Weline\Websites\Model\Website::schema_fields_URL, '', '!=')
-                ->order(\Weline\Websites\Model\Website::schema_fields_ID, 'ASC')
-                ->find()
-                ->fetch();
-            if ($row && $row->getId()) {
-                return (string) $row->getUrl();
-            }
+            return DefaultWebsiteUrl::resolve();
         } catch (\Throwable) {
+            return '';
         }
-
-        return '';
     }
 
     public function buildWebhookUrl(array $settings, ?string $urlOverride, ?string $baseUrlOverride): string

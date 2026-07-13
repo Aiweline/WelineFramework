@@ -9,7 +9,7 @@ use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\Acl\Acl;
 
 #[Acl('Weline_CacheManager::cache_policy', '缓存策略', 'mdi mdi-tune-variant', '运行时缓存 TTL 与共享 Memory 策略', 'Weline_CacheManager::cache_service')]
-class CachePolicy extends \Weline\Admin\Controller\BaseController
+class CachePolicy extends \Weline\Framework\App\Controller\BackendPageController
 {
     public function __construct(
         private readonly RuntimeCachePolicy $runtimeCachePolicy,

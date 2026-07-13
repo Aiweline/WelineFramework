@@ -121,6 +121,12 @@ Stage 2 has a working project registry and Gateway runtime-apply slice:
 - Gateway Settings browser smoke passed on `ai-test-wls-panel-gateway-9684` / port `9684`; POST apply correctly surfaces the "no connected Gateway process" warning when the selected WLS instance has no Gateway role attached.
 - Gateway Settings now has an explicit runtime action selector: save only,
   worker reload, or target instance restart for listener/Gateway-role changes.
+- Current topology contract supersedes the historical panel field described
+  below: `wls.runtime.topology` (`auto/direct/dispatcher/independent`) is the
+  only authoritative setting. `wls.gateway.traffic_mode`,
+  `WLS_GATEWAY_TRAFFIC_MODE`, `direct_listen`, and `passthrough` are read-only
+  migration aliases; they may be mapped only when no explicit authoritative
+  topology exists. New panel/instance writes must use `wls.runtime.topology`.
 - Gateway Settings now includes a traffic mode selector. The saved
   `wls.gateway.traffic_mode` supports `auto`, `direct_listen`, and
   `passthrough`; `WLS_GATEWAY_TRAFFIC_MODE` can override it at process level.

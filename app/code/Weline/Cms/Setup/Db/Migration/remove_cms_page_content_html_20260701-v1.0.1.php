@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Cms\Setup\Db\Migration;
 
 use Weline\Cms\Model\Page;
-use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 

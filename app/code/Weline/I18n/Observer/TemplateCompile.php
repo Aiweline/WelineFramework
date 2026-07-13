@@ -12,12 +12,9 @@ namespace Weline\I18n\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Helper\JsModuleParser;
 use Weline\I18n\Helper\JsTranslationsExtractor;
 use Weline\I18n\Helper\JsWordsRegistry;
-use Weline\Framework\App\Env;
-use Weline\I18n\Model\I18n;
 
 /**
  * 模板编译观察者
@@ -44,11 +41,10 @@ class TemplateCompile implements ObserverInterface
         // 判断当前区域（根据文件路径判断）
         $area = JsModuleParser::detectAreaFromPath($tplFile);
         
-        // 从 modules.map.json 读取模块的翻译词
-        $moduleTranslations = $this->loadModuleTranslationsFromMap($declaredModules, $area);
-        
         // 解析这些模块的 JS 文件，提取翻译词（用于合并到i18n词库）
         $jsWords = JsTranslationsExtractor::extractWordsFromModules($declaredModules, $area);
+        // 直接从当前编译字典解析该页面已声明模块的词，避免中间 map 文件。
+        $moduleTranslations = $this->resolveTranslations($jsWords);
         
         // 将收集到的JS翻译词合并到i18n词库中
         if (!empty($jsWords)) {
@@ -65,7 +61,7 @@ class TemplateCompile implements ObserverInterface
         if (!empty($moduleTranslations)) {
             $dictionaryJson = json_encode($moduleTranslations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             $i18nDictionaryCode = "\n<script>\n" .
-                "// 从 modules.map.json 加载当前页面模块的翻译词\n" .
+                "// 加载当前页面已声明模块的编译翻译词\n" .
                 "(function() {\n" .
                 "    if (window.Weline && window.Weline.i18n && window.Weline.i18n.setDictionary) {\n" .
                 "        var moduleTranslations = {$dictionaryJson};\n" .
@@ -87,6 +83,27 @@ class TemplateCompile implements ObserverInterface
         
         // 更新内容
         $event->setData('content', $content);
+    }
+
+    /**
+     * @param array<string,string> $words
+     * @return array<string,string>
+     */
+    private function resolveTranslations(array $words): array
+    {
+        $translations = [];
+        try {
+            $dictionary = \Weline\Framework\Phrase\Parser::getWords();
+            foreach ($words as $word => $_original) {
+                $translations[$word] = (string)($dictionary[$word] ?? $word);
+            }
+        } catch (\Throwable) {
+            foreach ($words as $word => $_original) {
+                $translations[$word] = $word;
+            }
+        }
+
+        return $translations;
     }
     
     /**
@@ -211,79 +228,4 @@ class TemplateCompile implements ObserverInterface
         return '';
     }
     
-    /**
-     * 从 modules.map.json 加载模块的翻译词
-     * 
-     * @param array $declaredModules 声明的模块列表
-     * @param string $area 区域（frontend/backend）
-     * @return array 翻译词典 [原文 => 翻译]
-     */
-    private function loadModuleTranslationsFromMap(array $declaredModules, string $area): array
-    {
-        $translations = [];
-        
-        try {
-            // 确定 modules.map.json 文件路径
-            $modulesMapFile = null;
-            if ($area === 'frontend') {
-                $moduleInfo = \Weline\Framework\App\Env::getInstance()->getModuleInfo('Weline_Frontend');
-                if (isset($moduleInfo['base_path'])) {
-                    $modulesMapFile = rtrim($moduleInfo['base_path'], '/\\') . DS . 'view' . DS . 'statics' . DS . 'base' . DS . 'modules.map.json';
-                }
-            } elseif ($area === 'backend') {
-                $moduleInfo = \Weline\Framework\App\Env::getInstance()->getModuleInfo('Weline_Backend');
-                if (isset($moduleInfo['base_path'])) {
-                    $modulesMapFile = rtrim($moduleInfo['base_path'], '/\\') . DS . 'view' . DS . 'statics' . DS . 'base' . DS . 'modules.map.json';
-                }
-            }
-            
-            if (!$modulesMapFile || !is_file($modulesMapFile)) {
-                return $translations;
-            }
-            
-            // 读取 modules.map.json 文件
-            $modulesMapContent = file_get_contents($modulesMapFile);
-            if (empty($modulesMapContent)) {
-                return $translations;
-            }
-            
-            $modulesMap = json_decode($modulesMapContent, true);
-            if (!is_array($modulesMap)) {
-                return $translations;
-            }
-            
-            // 遍历声明的模块，提取翻译词
-            foreach ($declaredModules as $moduleName) {
-                if (isset($modulesMap[$moduleName]) && is_array($modulesMap[$moduleName])) {
-                    $moduleData = $modulesMap[$moduleName];
-                    
-                    // 提取翻译词
-                    // 新格式：翻译词直接作为模块对象的属性（排除 paths 字段）
-                    // 兼容旧格式：翻译词在 i18n 字段中
-                    if (isset($moduleData['i18n']) && is_array($moduleData['i18n'])) {
-                        // 旧格式：从 i18n 字段提取
-                        foreach ($moduleData['i18n'] as $word => $translation) {
-                            if (is_string($translation)) {
-                                $translations[$word] = $translation;
-                            }
-                        }
-                    } else {
-                        // 新格式：翻译词直接作为模块对象的属性
-                        foreach ($moduleData as $key => $value) {
-                            if ($key !== 'paths' && is_string($value)) {
-                                // 这是翻译词：key 是原文，value 是翻译
-                                $translations[$key] = $value;
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            // 静默处理错误，避免影响模板编译
-            w_log_error('从 modules.map.json 加载模块翻译词失败: ' . $e->getMessage(), [], 'i18n');
-        }
-        
-        return $translations;
-    }
 }
-

@@ -1,23 +1,24 @@
 {
-  "name": "weline/module-cache-manager",
-  "description": "WelineFramework 缓存管理（cache manager）",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\CacheManager\\": ""
+    "name": "weline/module-cache-manager",
+    "description": "WelineFramework 缓存管理（cache manager）",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-admin": "@dev"
     },
-    "psr-0": {
-      "Weline\\CacheManager\\": ""
-    }
-  },
-  "license": "MIT"
+    "suggest": {
+        "weline/module-cron": "Shows cache-related scheduled tasks in the cache dashboard."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\CacheManager\\": ""
+        }
+    },
+    "license": "MIT"
 }

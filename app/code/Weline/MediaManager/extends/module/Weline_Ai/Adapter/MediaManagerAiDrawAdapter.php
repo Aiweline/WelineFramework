@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Extends\Module\Weline_Ai\Adapter;
 
-use Weline\Ai\Interface\AdapterModelBindingInterface;
-use Weline\Ai\Interface\ScenarioAdapterInterface;
-use Weline\Ai\Model\AiModel;
+use Weline\Ai\Api\AdapterModelBindingInterface;
+use Weline\Ai\Api\AiModel;
+use Weline\Ai\Api\ScenarioAdapterInterface;
 
 class MediaManagerAiDrawAdapter implements ScenarioAdapterInterface, AdapterModelBindingInterface
 {

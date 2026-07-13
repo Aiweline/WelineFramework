@@ -13,12 +13,13 @@ namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
  * 部件注册表管理
  * 管理 generated/widgets.php 文件的读取和写入
  */
-class WidgetRegistry
+class WidgetRegistry implements WidgetRegistryInterface
 {
     private const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'widgets.php';
 

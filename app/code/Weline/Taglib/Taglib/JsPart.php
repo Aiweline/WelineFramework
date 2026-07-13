@@ -21,7 +21,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
-class JsPart implements \Weline\Taglib\TaglibInterface
+class JsPart implements \Weline\Framework\Taglib\TaglibInterface
 {
     public static Request|null $request = null;
 

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Extends\Module\Weline_Ai\Agent;
 
-use Weline\Ai\Agent\AgentResult;
-use Weline\Ai\Interface\AgentInterface;
-use Weline\Ai\Model\AiModel;
-use Weline\Ai\Service\Provider\ProviderFactory;
+use Weline\Ai\Api\AgentInterface;
+use Weline\Ai\Api\AgentModelExecutorInterface;
+use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Api\AiModel;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class WidgetBuilderAgent implements AgentInterface
 {
@@ -129,32 +130,17 @@ PROMPT;
         ];
 
         try {
-            /** @var ProviderFactory $providerFactory */
-            $providerFactory = $params['provider_factory'] ?? ObjectManager::getInstance(ProviderFactory::class);
-            $provider = $providerFactory->getProvider($model);
-            $request = [
-                'messages' => $messages,
+            $executor = $params['model_executor'] ?? ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(AgentModelExecutorInterface::class);
+            if (!$executor instanceof AgentModelExecutorInterface) {
+                throw new \RuntimeException((string)__('AI 模型执行契约未注册'));
+            }
+            $response = $executor->generate($model, $messages, [
                 'temperature' => (float)($params['temperature'] ?? 0.3),
                 'max_tokens' => (int)($params['max_tokens'] ?? 12000),
                 'timeout' => (int)($params['timeout'] ?? 180),
                 'response_format' => ['type' => 'json_object'],
-            ];
-
-            if (method_exists($provider, 'generateStreamFull')) {
-                $response = $provider->generateStreamFull($model, '', array_merge($request, [
-                    'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback): bool {
-                        return $streamCallback('thinking', ['content' => $chunk, 'streaming' => true]) !== false;
-                    } : null,
-                    'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback): bool {
-                        return $streamCallback('chunk', ['content' => $chunk, 'streaming' => true]) !== false;
-                    } : null,
-                    'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
-                        return $streamCallback('heartbeat', ['ts' => time()]) !== false;
-                    } : null,
-                ]));
-            } else {
-                $response = $provider->generate($model, '', $request);
-            }
+            ], $streamCallback);
         } catch (\Throwable $throwable) {
             return AgentResult::failure(
                 (string)__('AI Widget 生成调用失败：%{1}', $throwable->getMessage()),

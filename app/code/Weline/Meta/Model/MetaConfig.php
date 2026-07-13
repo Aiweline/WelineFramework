@@ -203,9 +203,10 @@ class MetaConfig extends AbstractModel
         
         // 回退：获取当前激活的主题，使用 identify_id
         try {
-            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
-            $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-            $theme = $themeContext->resolveTheme($area);
+            $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Runtime\RuntimeProviderResolver::class,
+            )->resolve(\Weline\Framework\Runtime\ThemeContextProviderInterface::class);
+            $theme = $themeContext?->resolveTheme($area);
             
             if ($theme && $theme->getId()) {
                 return $this->getConfig($theme->getId(), $namespace, $configKey, 'default', $locale);

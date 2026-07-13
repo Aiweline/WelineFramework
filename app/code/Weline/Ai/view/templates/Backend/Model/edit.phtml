@@ -97,6 +97,15 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                             <small class="form-text text-muted"><?= __('先选供应商，模型列表只显示该供应商可用模型。') ?></small>
                         </div>
                         <div class="col-md-4">
+                            <label for="common_provider_account" class="form-label">
+                                <?= __('供应商账户') ?> <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="common_provider_account" name="provider_account_id" disabled>
+                                <option value=""><?= __('先选择供应商') ?></option>
+                            </select>
+                            <small class="form-text text-muted"><?= __('选择账户后才可加载并绑定模型。') ?></small>
+                        </div>
+                        <div class="col-md-4">
                             <label for="common_model_preset" class="form-label">
                                 <?= __('模型') ?> <span class="text-danger">*</span>
                             </label>
@@ -112,15 +121,10 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                         </div>
                         <div class="col-md-4">
                             <label for="api_key_input" class="form-label">
-                                <?= __('API Key') ?>
+                                <?= __('账户配置') ?>
                             </label>
-                            <input type="password"
-                                   class="form-control"
-                                   id="api_key_input"
-                                   name="api_key_input"
-                                   autocomplete="off"
-                                   placeholder="<?= __('常见模型填 API Key 即可保存') ?>">
-                            <small class="form-text text-muted"><?= __('也可以留空，后续使用供应商账户。') ?></small>
+                            <input type="text" class="form-control" value="<?= __('使用所选账户') ?>" readonly>
+                            <small class="form-text text-muted"><?= __('快速新增会固定绑定所选账户。') ?></small>
                         </div>
                     </div>
                     <div class="alert alert-light border mt-3 mb-0">
@@ -753,29 +757,29 @@ if (!empty($displayConfig)) {
 
     var remoteModelOptions = [];
 
-    function fillModelPresetOptions(providerCode) {
+    function fillModelPresetOptions(providerCode, accountId) {
         var select = document.getElementById('common_model_preset');
         if (!select) return;
 
         select.innerHTML = '';
         var placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = providerCode ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('先选择供应商')) ?>';
+        placeholder.textContent = providerCode && accountId ? '<?= addslashes(__('选择模型')) ?>' : '<?= addslashes(__('请先选择供应商账户')) ?>';
         select.appendChild(placeholder);
-        select.disabled = !providerCode;
+        select.disabled = !providerCode || !accountId;
 
         var searchInput = document.getElementById('common_model_search');
         if (searchInput) {
             searchInput.value = '';
-            searchInput.disabled = !providerCode;
+            searchInput.disabled = !providerCode || !accountId;
         }
         remoteModelOptions = [];
-        if (!providerCode) return;
+        if (!providerCode || !accountId) return;
 
         placeholder.textContent = '正在从供应商 models 接口加载...';
         select.disabled = true;
         if (searchInput) searchInput.disabled = true;
-        loadProviderRemoteModels(providerCode).then(function(models) {
+        loadProviderRemoteModels(providerCode, accountId).then(function(models) {
             remoteModelOptions = models;
             renderRemoteModelOptions('');
             select.disabled = false;
@@ -809,36 +813,20 @@ if (!empty($displayConfig)) {
         }
     }
 
-    function loadProviderRemoteModels(providerCode) {
-        var params = new URLSearchParams({
-            provider_code: providerCode,
-            require_remote: '1'
-        });
-        var apiKeyInput = document.getElementById('api_key_input');
-        if (apiKeyInput && apiKeyInput.value.trim()) {
-            params.set('api_key', apiKeyInput.value.trim());
+    function loadProviderRemoteModels(providerCode, accountId) {
+        var payload = { provider_code: providerCode, account_id: parseInt(accountId || '0', 10) || 0 };
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error('Weline.Api.resource is unavailable.'));
         }
-        var url = '<?= addslashes($this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect')) ?>?' + params.toString();
-        return fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function(response) {
-            return response.text().then(function(text) {
-                var json = {};
-                try {
-                    json = text ? JSON.parse(text) : {};
-                } catch (e) {
-                    throw new Error('models endpoint returned non-JSON response');
-                }
-                if (!response.ok || !json.success) {
-                    throw new Error(json.message || ('models endpoint HTTP ' + response.status));
-                }
-                if (!Array.isArray(json.data) || !json.data.length) {
-                    throw new Error('models endpoint returned empty list');
-                }
-                return json.data;
-            });
+        return window.Weline.Api.resource('ai').providerRemoteModelsForSelect(payload).then(function(data) {
+            if (!data || data.success === false) {
+                throw new Error((data && data.message) || 'models endpoint failed');
+            }
+            var models = Array.isArray(data.data) ? data.data : (Array.isArray(data.items) ? data.items : []);
+            if (!models.length) {
+                throw new Error('models endpoint returned empty list');
+            }
+            return models;
         });
     }
 
@@ -888,6 +876,7 @@ if (!empty($displayConfig)) {
     function applyRemoteModelOption(option) {
         if (!option || !option.value) return;
         var providerSelect = document.getElementById('common_provider_preset');
+        var accountSelect = document.getElementById('common_provider_account');
         var providerCode = providerSelect ? providerSelect.value : '';
         var code = option.value;
         var maxTokens = parseInt(option.dataset.maxTokens || '4096', 10) || 4096;
@@ -903,6 +892,7 @@ if (!empty($displayConfig)) {
             token_price_input: 0,
             token_price_output: 0,
             config: {
+                account_id: accountSelect ? parseInt(accountSelect.value || '0', 10) || 0 : 0,
                 model: code,
                 model_id: code,
                 max_tokens: maxTokens,
@@ -926,8 +916,9 @@ if (!empty($displayConfig)) {
 
     (function initQuickCreate() {
         var providerSelect = document.getElementById('common_provider_preset');
+        var accountSelect = document.getElementById('common_provider_account');
         var modelSelect = document.getElementById('common_model_preset');
-        if (!providerSelect || !modelSelect || !Array.isArray(commonModelPresets)) return;
+        if (!providerSelect || !accountSelect || !modelSelect || !Array.isArray(commonModelPresets)) return;
 
         var providers = {};
         commonModelPresets.forEach(function(preset) {
@@ -944,8 +935,46 @@ if (!empty($displayConfig)) {
             providerSelect.appendChild(option);
         });
 
+        function resetQuickModels(message) {
+            modelSelect.innerHTML = '<option value="">' + message + '</option>';
+            modelSelect.disabled = true;
+            var search = document.getElementById('common_model_search');
+            if (search) { search.value = ''; search.disabled = true; }
+            remoteModelOptions = [];
+        }
+
+        function loadQuickAccounts(providerCode) {
+            accountSelect.innerHTML = '<option value="">' + (providerCode ? '<?= addslashes(__('选择供应商账户')) ?>' : '<?= addslashes(__('先选择供应商')) ?>') + '</option>';
+            accountSelect.disabled = !providerCode;
+            resetQuickModels(providerCode ? '<?= addslashes(__('请先选择供应商账户')) ?>' : '<?= addslashes(__('先选择供应商')) ?>');
+            if (!providerCode) return;
+            window.Weline.Api.resource('ai').providerListAccounts({ provider_code: providerCode, limit: 100 }).then(function(response) {
+            var data = response;
+            while (data && data.success === undefined && data.data && !Array.isArray(data.data)) data = data.data;
+                var accounts = data && Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+                accounts.forEach(function(account) {
+                    var option = document.createElement('option');
+                    option.value = String(account.id || '');
+                    option.textContent = (account.account_name || '<?= addslashes(__('未命名账户')) ?>') + ' (' + (account.connection_status_text || account.connection_status || 'pending') + ')';
+                    option.disabled = Number(account.is_active || 0) !== 1;
+                    accountSelect.appendChild(option);
+                });
+            }).catch(function() {
+                accountSelect.innerHTML = '<option value=""><?= addslashes(__('账户加载失败')) ?></option>';
+                accountSelect.disabled = true;
+            });
+        }
+
         providerSelect.addEventListener('change', function() {
-            fillModelPresetOptions(this.value || '');
+            loadQuickAccounts(this.value || '');
+        });
+
+        accountSelect.addEventListener('change', function() {
+            if (!this.value) {
+                resetQuickModels('<?= addslashes(__('请先选择供应商账户')) ?>');
+                return;
+            }
+            fillModelPresetOptions(providerSelect.value || '', this.value);
         });
 
         modelSelect.addEventListener('change', function() {
@@ -960,18 +989,13 @@ if (!empty($displayConfig)) {
             });
         }
 
-        var apiKeyInput = document.getElementById('api_key_input');
-        if (apiKeyInput) {
-            apiKeyInput.addEventListener('change', function() {
-                if (providerSelect.value) fillModelPresetOptions(providerSelect.value);
-            });
-        }
     })();
     
     document.getElementById('model-form').addEventListener('submit', function(e) {
         var vendor = document.getElementById('vendor').value.trim();
         var modelCode = document.getElementById('model_code').value.trim();
         var modelName = document.getElementById('model_name').value.trim();
+        var quickAccount = document.getElementById('common_provider_account');
         
         if (!vendor || !modelCode || !modelName) {
             e.preventDefault();
@@ -984,6 +1008,13 @@ if (!empty($displayConfig)) {
                 });
             } else {
                 console.error('<?= __('请填写必填项：供应商、模型代码、模型名称') ?>');
+            }
+            return false;
+        }
+        if (quickAccount && !quickAccount.value) {
+            e.preventDefault();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'warning', title: '<?= __('提示') ?>', text: '<?= __('快速新增请按顺序选择供应商、供应商账户和模型') ?>', confirmButtonText: '<?= __('确定') ?>' });
             }
             return false;
         }
@@ -1058,11 +1089,10 @@ if (!empty($displayConfig)) {
         }
         
         var formData = form ? new FormData(form) : new FormData();
-        formData.set('id', String(modelId));
-        formData.set('prompt', prompt);
-        formData.set('test_only', '1');
-        
-        var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
+        var testPayload = Object.fromEntries(formData.entries());
+        testPayload.id = String(modelId);
+        testPayload.prompt = prompt;
+        testPayload.test_only = '1';
         var escapeHtml = function(value) {
             return String(value === undefined || value === null ? '' : value)
                 .replace(/&/g, '&amp;')
@@ -1081,9 +1111,10 @@ if (!empty($displayConfig)) {
             }
             return '';
         };
-        var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });
+        var tcReq = window.Weline.Api.resource('ai').providerTestConnection({ payload: testPayload });
         tcReq.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res;
+            while (data && data.success === undefined && data.data && !Array.isArray(data.data)) data = data.data;
             testModelBtn.disabled = false;
             testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>';
             

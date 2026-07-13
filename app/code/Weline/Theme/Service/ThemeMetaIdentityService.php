@@ -6,7 +6,12 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\State;
-use Weline\Meta\Model\MetaConfig;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Api\Data\MetaConfigIdentity;
+use Weline\Meta\Api\Data\MetaConfigSearch;
+use Weline\Meta\Api\Data\MetaConfigWrite;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
@@ -40,7 +45,7 @@ class ThemeMetaIdentityService
         if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
             return '';
         }
-        if ($targetType !== 'website' && $targetId <= 0) {
+        if ($targetId < 0) {
             return '';
         }
 
@@ -170,61 +175,26 @@ class ThemeMetaIdentityService
         string $scope,
         string $locale
     ): array {
-        $locales = array_values(array_unique(array_filter([$locale, 'zh_Hans_CN'], static fn($value) => trim((string)$value) !== '')));
-        $rows = $this->loadStoredConfigRowsForLocale($themeId, $namespace, $identify, $scope, null);
-        foreach (array_reverse($locales) as $localeCode) {
-            $rows = array_merge($rows, $this->loadStoredConfigRowsForLocale($themeId, $namespace, $identify, $scope, $localeCode));
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @return array<string,string>
-     */
-    private function loadStoredConfigRowsForLocale(
-        int $themeId,
-        string $namespace,
-        string $identify,
-        string $scope,
-        ?string $locale
-    ): array {
-        /** @var MetaConfig $metaConfig */
-        $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-        $query = $metaConfig->reset()
-            ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
-            ->where(MetaConfig::schema_fields_META_IDENTIFY, $identify)
-            ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
-            ->where(MetaConfig::schema_fields_SCOPE, $scope);
-
-        if ($locale === null) {
-            $query->where(MetaConfig::schema_fields_LOCALE, null, 'IS NULL');
-        } else {
-            $query->where(MetaConfig::schema_fields_LOCALE, $locale);
-        }
-
-        $rows = [];
-        foreach ($query->select()->fetchArray() as $row) {
-            $configKey = $this->readRowValue($row, MetaConfig::schema_fields_CONFIG_KEY);
-            if ($configKey === '') {
+        $records = $this->metaConfigRepository()->search(new MetaConfigSearch(
+            namespace: $namespace,
+            scope: $scope,
+            allLocales: true,
+            identifyId: (string)$themeId,
+            metaIdentify: $identify,
+        ));
+        $localeOrder = array_values(array_unique([$locale, 'zh_Hans_CN', null], SORT_REGULAR));
+        $values = [];
+        $ranks = [];
+        foreach ($records as $record) {
+            $rank = array_search($record->locale, $localeOrder, true);
+            if ($rank === false || (isset($ranks[$record->configKey]) && $ranks[$record->configKey] <= $rank)) {
                 continue;
             }
-            $rows[$configKey] = $this->readRowValue($row, MetaConfig::schema_fields_CONFIG_VALUE);
+            $ranks[$record->configKey] = $rank;
+            $values[$record->configKey] = $record->value;
         }
 
-        return $rows;
-    }
-
-    private function readRowValue(mixed $row, string $key): string
-    {
-        if (is_array($row)) {
-            return (string)($row[$key] ?? '');
-        }
-        if (is_object($row) && method_exists($row, 'getData')) {
-            return (string)$row->getData($key);
-        }
-
-        return '';
+        return $values;
     }
 
     private function getStoredParamTranslation(string $identify, string $paramName, string $scope, string $locale): ?string
@@ -235,21 +205,38 @@ class ThemeMetaIdentityService
             $translationKey .= '|scope:' . $scope;
         }
 
-        /** @var \Weline\I18n\Model\Locale\Dictionary $dict */
-        $dict = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Dictionary::class);
-        $md5 = \Weline\I18n\Model\Locale\Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(\Weline\I18n\Model\Locale\Dictionary::schema_fields_MD5, $md5);
-        if ($dict->getId()) {
-            return (string)$dict->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_TRANSLATE);
+        $repository = $this->dictionaryRepository();
+        $entry = $repository->getEntry($translationKey, $locale);
+        if ($entry !== null) {
+            return $entry->translation;
         }
 
         if ($scope === 'default') {
             return null;
         }
 
-        $defaultMd5 = \Weline\I18n\Model\Locale\Dictionary::generateMd5('@meta::' . $metaKey, $locale);
-        $dict->clearData()->clearQuery()->load(\Weline\I18n\Model\Locale\Dictionary::schema_fields_MD5, $defaultMd5);
-        return $dict->getId() ? (string)$dict->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_TRANSLATE) : null;
+        return $repository->getEntry('@meta::' . $metaKey, $locale)?->translation;
+    }
+
+    private function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+        return $provider;
+    }
+
+    private function metaConfigRepository(): MetaConfigRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetaConfigRepositoryInterface::class);
+        if (!$provider instanceof MetaConfigRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta config repository provider is unavailable.');
+        }
+
+        return $provider;
     }
 
     private function resolveLocale(?string $locale): string
@@ -293,18 +280,17 @@ class ThemeMetaIdentityService
         [$namespace, $configKey] = $this->resolveNamespaceAndConfigKey($normalizedIdentify, 'param.' . $paramName . '.value');
         $effectiveScope = $this->resolveEffectiveScope($scope, $area, (int)$theme->getId());
 
-        /** @var MetaConfig $metaConfig */
-        $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-        $metaConfig->setConfig(
-            (int)$theme->getId(),
-            $namespace,
-            $configKey,
-            $value,
-            $effectiveScope,
-            $locale,
-            null,
-            $normalizedIdentify
-        );
+        $this->metaConfigRepository()->upsert(new MetaConfigWrite(
+            identity: new MetaConfigIdentity(
+                namespace: $namespace,
+                configKey: $configKey,
+                scope: $effectiveScope,
+                locale: $locale,
+                identifyId: (string)$theme->getId(),
+                metaIdentify: $normalizedIdentify,
+            ),
+            value: $value,
+        ));
         ThemeData::clearCache();
     }
 

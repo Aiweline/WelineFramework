@@ -15,7 +15,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
-use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
@@ -824,7 +824,11 @@ class WebsiteAgentService
         }
         $suffix = \substr(\md5($base . '-' . \microtime(true)), 0, 6);
 
-        return $base . '-' . $suffix . '.' . LocalDomainPolicy::TEST_ROOT_DOMAIN;
+        $rootDomain = \class_exists(LocalDomainPolicy::class)
+            ? LocalDomainPolicy::TEST_ROOT_DOMAIN
+            : 'weline.test';
+
+        return $base . '-' . $suffix . '.' . $rootDomain;
     }
 
     /**
@@ -987,7 +991,8 @@ class WebsiteAgentService
         if ($domain === 'localhost') {
             return true;
         }
-        return LocalDomainPolicy::isManagedLocalDomain($domain);
+        return \class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isManagedLocalDomain($domain);
     }
 
     private function getLocalWelineWildcardCertificateService(): LocalWelineWildcardCertificateService

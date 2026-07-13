@@ -11,15 +11,15 @@
 
 ## Item Resolution
 
-Cart add/update can optionally resolve the requested item through a catalog-style Query Provider before mutating the cart.
+Cart add/update can optionally resolve the requested item through a catalog-owned snapshot provider before mutating the cart.
 
-- Default resolver: `w_query('product', 'get', ['product_id' => ...], 'frontend')`
-- Override per request with `item_provider` / `catalog_provider` and `item_operation` / `catalog_operation`.
-- Disable resolver for trusted prebuilt payloads with `item_provider=none`.
-- Resolver payloads may return the item in `product`, `item`, `data.product`, `data.item`, or `data`.
+- Public contract: `Weline\Cart\Api\CartItemSnapshotProviderInterface`.
+- Provider path: `extends/module/Weline_Cart/CartItemSnapshotProvider/{ProviderName}.php`.
+- Providers are discovered from the compiled Extends registry; after adding one, run `php bin/w setup:upgrade` before serving traffic.
+- A provider returns `null` when it does not own the requested product. The first provider returning an array owns the snapshot.
 - Sync add forms may pass source context with `source_app`, `source_module`, `business_module`, `business_code`, `business_name`, and `product_type`; Cart stores these fields on the item and Checkout can carry them into orders.
 
-When the resolver returns stock/status fields, Cart blocks unavailable items and caps requested quantity to available stock. Cart does not directly depend on any product module classes; cross-module item reads go through `w_query`.
+When the provider returns stock/status fields, Cart blocks unavailable items and caps requested quantity to available stock. Cart does not directly depend on product-module classes; a catalog provider may use its own service or published Query contract to build the snapshot.
 
 ## Returned Item Shape
 

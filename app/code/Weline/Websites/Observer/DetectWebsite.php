@@ -11,7 +11,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeContext;
-use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
@@ -24,6 +24,7 @@ class DetectWebsite implements ObserverInterface
     private const CACHE_KEY_WEBSITE_DOMAINS = 'websites.detect.website_domains.v1';
     private const CACHE_KEY_EXPANDED_SITES = 'websites.detect.expanded_sites.v1';
     private const CACHE_KEY_MATCHED_SITE_PREFIX = 'websites.detect.matched_site.';
+    private const PROCESS_VALUE_CACHE_MAX_ENTRIES = 256;
 
     private ?CachePoolInterface $cache = null;
 
@@ -126,11 +127,15 @@ class DetectWebsite implements ObserverInterface
     private function isReservedProjectHost(string $host): bool
     {
         $host = \strtolower(\trim($host));
-        if (\str_starts_with($host, 'www.')) {
-            $host = (string)\substr($host, 4);
-        }
+        return \class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isStandardProjectHost($host);
+    }
 
-        return LocalDomainPolicy::isStandardProjectHost($host);
+    private function isReservedProjectHostAlias(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        return \str_starts_with($host, 'www.')
+            && $this->isReservedProjectHost((string)\substr($host, 4));
     }
 
     /**
@@ -382,7 +387,24 @@ class DetectWebsite implements ObserverInterface
      */
     private function resolveMatchedSite(string $requestUrl, Website $websiteModel): ?array
     {
-        $requestKey = self::REQUEST_CACHE_PREFIX . 'match.' . sha1($requestUrl);
+        $matchContext = $this->parseHttpMatchContext($requestUrl);
+        if ($matchContext === null) {
+            return null;
+        }
+        if ($this->isReservedProjectHostAlias($matchContext['host'])) {
+            return null;
+        }
+
+        $cachePath = $this->isReservedProjectHost($matchContext['host'])
+            ? '/'
+            : $matchContext['path'];
+        $cacheIdentity = \implode("\n", [
+            $matchContext['scheme'],
+            $matchContext['host'],
+            (string)$matchContext['port'],
+            $cachePath,
+        ]);
+        $requestKey = self::REQUEST_CACHE_PREFIX . 'match.' . sha1($cacheIdentity);
         if (RequestContext::has($requestKey)) {
             $cached = RequestContext::get($requestKey);
             if (\is_array($cached)) {
@@ -391,7 +413,7 @@ class DetectWebsite implements ObserverInterface
             RequestContext::remove($requestKey);
         }
 
-        $processKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($requestUrl);
+        $processKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($cacheIdentity);
         $processCached = $this->getProcessValueCache($processKey);
         if ($processCached !== null || $this->hasProcessValueCache($processKey)) {
             if (\is_array($processCached)) {
@@ -402,22 +424,101 @@ class DetectWebsite implements ObserverInterface
         }
 
         $matchedSite = null;
-        $currentHost = \parse_url($requestUrl, PHP_URL_HOST);
-        if (\is_string($currentHost) && $currentHost !== '') {
-            $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
-        }
+        $currentHost = $matchContext['host'];
+        $matchedSite = $this->isReservedProjectHost($currentHost)
+            ? $this->findDefaultSiteForProjectHost($requestUrl, $currentHost, $websiteModel)
+            : $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
         if ($matchedSite === null) {
             $matchedSite = $this->findSiteByWebsiteUrl($requestUrl, $websiteModel);
         }
-        if ($matchedSite === null && \is_string($currentHost) && $currentHost !== '') {
+        if ($matchedSite === null) {
             $matchedSite = $this->findSiteByWebsiteDomainDirect($requestUrl, $currentHost, $websiteModel);
         }
 
         $cachedValue = $matchedSite ?? false;
         RequestContext::set($requestKey, $cachedValue);
-        $this->setProcessValueCache($processKey, $cachedValue);
+        if ($matchedSite !== null) {
+            $this->setProcessValueCache($processKey, $matchedSite);
+        }
 
         return $matchedSite;
+    }
+
+    /**
+     * Query strings and fragments never participate in website selection. The
+     * normalized identity keeps hot-path lookups reusable while rejecting
+     * non-HTTP schemes before they can be rewritten as HTTPS accidentally.
+     *
+     * @return array{scheme: string, host: string, port: int, path: string}|null
+     */
+    private function parseHttpMatchContext(string $requestUrl): ?array
+    {
+        $parsed = \parse_url(\trim($requestUrl));
+        if (!\is_array($parsed)) {
+            return null;
+        }
+
+        $scheme = \strtolower(\trim((string)($parsed['scheme'] ?? '')));
+        if (!\in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        $host = \strtolower(\trim((string)($parsed['host'] ?? '')));
+        if ($host === '') {
+            return null;
+        }
+
+        $path = (string)($parsed['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+
+        return [
+            'scheme' => $scheme,
+            'host' => $host,
+            'port' => isset($parsed['port']) ? (int)$parsed['port'] : 0,
+            'path' => $path,
+        ];
+    }
+
+    /**
+     * Standard p<8hex> project hosts are the local entry for the system default
+     * website. Keep arbitrary unmatched hosts unbound; only the reserved project
+     * host pattern may resolve to website_id=0/code=default.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findDefaultSiteForProjectHost(
+        string $requestUrl,
+        string $currentHost,
+        Website $websiteModel,
+    ): ?array {
+        $matchContext = $this->parseHttpMatchContext($requestUrl);
+        if ($matchContext === null || !$this->isReservedProjectHost($currentHost)) {
+            return null;
+        }
+
+        foreach ($this->getWebsiteRows($websiteModel) as $site) {
+            if (!\array_key_exists(Website::schema_fields_ID, $site)) {
+                continue;
+            }
+            if ((int)$site[Website::schema_fields_ID] !== Website::ID_DEFAULT) {
+                continue;
+            }
+            if ((string)($site[Website::schema_fields_CODE] ?? '') !== Website::CODE_DEFAULT) {
+                continue;
+            }
+
+            $host = LocalDomainPolicy::normalizeDomain($currentHost);
+            if ($host === '') {
+                return null;
+            }
+            $port = $matchContext['port'] > 0 ? ':' . $matchContext['port'] : '';
+            $site[Website::schema_fields_URL] = $matchContext['scheme'] . '://' . $host . $port;
+            return $site;
+        }
+
+        return null;
     }
 
     /**
@@ -681,6 +782,16 @@ class DetectWebsite implements ObserverInterface
 
     private function setProcessValueCache(string $cacheKey, mixed $value): void
     {
+        if (!\array_key_exists($cacheKey, self::$processValueCache)) {
+            while (\count(self::$processValueCache) >= self::PROCESS_VALUE_CACHE_MAX_ENTRIES) {
+                $oldestKey = \array_key_first(self::$processValueCache);
+                if ($oldestKey === null) {
+                    break;
+                }
+                unset(self::$processValueCache[$oldestKey], self::$processValueCacheExpiresAt[$oldestKey]);
+            }
+        }
+
         self::$processValueCache[$cacheKey] = $value;
         self::$processValueCacheExpiresAt[$cacheKey] = \time() + self::CACHE_TTL;
     }

@@ -12,7 +12,11 @@ declare(strict_types=1);
 
 namespace Weline\Taglib;
 
-interface TaglibInterface
+/**
+ * @deprecated Implement \Weline\Framework\Taglib\TaglibInterface directly.
+ *             This bridge remains for third-party module compatibility.
+ */
+interface TaglibInterface extends \Weline\Framework\Taglib\TaglibInterface
 {
     /**
      * @DESC          # 标签名

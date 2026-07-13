@@ -18,7 +18,7 @@ class Info extends CommandAbstract
     {
         $moduleName = $this->resolveModuleName($args);
         if ($moduleName === '') {
-            $this->printer->error(__('请提供模块名称，例如：php bin/w module:info Weline_AppStore'));
+            $this->printer->error(__('请提供模块名称，例如：php bin/w module:info Vendor_Module'));
             return;
         }
 
@@ -85,11 +85,11 @@ class Info extends CommandAbstract
             'module:info',
             $this->tip(),
             [
-                'module' => '模块名称，例如 Weline_AppStore',
+                'module' => '模块名称，例如 Vendor_Module',
                 '-l, --locale' => '输出本地化标签的 locale，默认使用 user.lang',
             ],
             [
-                'php bin/w module:info Weline_AppStore --locale=en_US' => '查看模块 meta/tag 信息',
+                'php bin/w module:info Vendor_Module --locale=en_US' => '查看模块 meta/tag 信息',
             ],
             []
         );

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Setup;
 
-use Weline\Acl\Model\Role;
+use Weline\Acl\Api\Role\RoleAdministrationInterface;
 use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Manager\ObjectManager;
@@ -16,8 +16,9 @@ class EnsureAdmin
 {
     public function __construct(
         private readonly ?BackendUser $backendUserModel = null,
-        private readonly ?Role $roleModel = null,
+        private readonly ?object $legacyRoleModel = null,
         private readonly ?UserRole $userRoleModel = null,
+        private readonly ?RoleAdministrationInterface $roleAdministration = null,
     ) {
     }
 
@@ -38,18 +39,12 @@ class EnsureAdmin
                 ->save();
         }
 
-        $role = $this->createRoleModel()->load(1);
-        if (!$role->getId()) {
-            $role->clear()
-                ->setRoleName('Super Admin')
-                ->setRoleDescription('System built-in super admin role')
-                ->save();
-        }
+        $roleId = $this->ensureSuperAdminRole();
 
         $userRole = $this->createUserRoleModel();
         $existingRelation = $userRole->reset()
             ->where(UserRole::schema_fields_USER_ID, (int) $user->getId())
-            ->where(UserRole::schema_fields_ROLE_ID, (int) $role->getId())
+            ->where(UserRole::schema_fields_ROLE_ID, $roleId)
             ->find()
             ->fetch();
 
@@ -59,7 +54,7 @@ class EnsureAdmin
 
         $userRole->clearData()
             ->setUserId((int) $user->getId())
-            ->setRoleId((int) $role->getId())
+            ->setRoleId($roleId)
             ->save(true);
     }
 
@@ -68,9 +63,23 @@ class EnsureAdmin
         return clone ($this->backendUserModel ?? ObjectManager::getInstance(BackendUser::class));
     }
 
-    private function createRoleModel(): Role
+    private function ensureSuperAdminRole(): int
     {
-        return clone ($this->roleModel ?? ObjectManager::getInstance(Role::class));
+        if ($this->legacyRoleModel !== null) {
+            $role = clone $this->legacyRoleModel;
+            $role->load(1);
+            if (!$role->getId()) {
+                $role->clear()
+                    ->setRoleName('Super Admin')
+                    ->setRoleDescription('System built-in super admin role')
+                    ->save();
+            }
+            return (int)($role->getId() ?: 1);
+        }
+
+        $administration = $this->roleAdministration
+            ?? ObjectManager::getInstance(RoleAdministrationInterface::class);
+        return $administration->ensure(1, 'Super Admin', 'System built-in super admin role');
     }
 
     private function createUserRoleModel(): UserRole

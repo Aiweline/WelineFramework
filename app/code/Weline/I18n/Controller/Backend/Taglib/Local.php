@@ -127,6 +127,7 @@ class Local extends \Weline\Framework\App\Controller\BackendController
 
     public function post()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         $modelName = $this->request->getGet('model');
         if (empty($modelName)) {
             $this->getMessageManager()->addError(__('请设置local标签model属性！'));
@@ -194,9 +195,33 @@ class Local extends \Weline\Framework\App\Controller\BackendController
             }
             $model->reset()->insert($insertDesriptions, $model::schema_fields_ID . ',local_code', $field)->fetch();
         }
+
+        if ($isAsyncRequest) {
+            return $this->asyncJsonResponse(true, (string)__('翻译完成!'), [
+                'model' => $modelName,
+                'id' => $id,
+                'field' => $field,
+            ]);
+        }
         
         $this->getMessageManager()->addSuccess(__('翻译完成!'));
         return $this->get();
+    }
+
+    private function isAsyncRequest(): bool
+    {
+        $accept = strtolower((string)($this->request->getHeader('Accept') ?? ''));
+        return $this->request->isAjax() || str_contains($accept, 'application/json');
+    }
+
+    private function asyncJsonResponse(bool $success, string $message, array $data = []): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        return json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
     
     /**

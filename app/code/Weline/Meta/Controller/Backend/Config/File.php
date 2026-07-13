@@ -6,6 +6,7 @@ namespace Weline\Meta\Controller\Backend\Config;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Api\Localization\InstalledLocaleCatalog;
 use Weline\Meta\Helper\MetaTranslation;
 use Weline\Meta\Model\MetaLocal;
 use Weline\Meta\Model\Meta as MetaModel;
@@ -668,7 +669,6 @@ class File extends BackendController
                     return $this->fetchJson($this->error(__('该字段未启用多语言：%{param}', ['param' => $paramName])));
                 }
 
-                $translationKey = $metaIdentify . '.' . $paramName;
             } else {
                 // 处理普通参数
                 /** @var MetaModel $metaModel */
@@ -693,55 +693,34 @@ class File extends BackendController
                 }
 
                 $defaultValue = is_array($definition) ? ($definition['default'] ?? null) : $definition;
-                $translationKey = $metaIdentify . '.param.' . $paramName . '.value';
                 $attributes = is_array($definition) ? $definition : [];
             }
 
-            // 获取所有已安装的语言
-            /** @var \Weline\I18n\Model\Locale $localeModel */
-            $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            $locales = $localeModel->reset()
-                ->where(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
-                ->order(\Weline\I18n\Model\Locale::schema_fields_CODE, 'ASC')
-                ->select()
+            $locales = ObjectManager::getInstance(InstalledLocaleCatalog::class)->list($currentLocale);
+
+            /** @var MetaModel $metaModelForId */
+            $metaModelForId = ObjectManager::getInstance(MetaModel::class);
+            $metaForId = $metaModelForId->reset()
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
+                ->find()
                 ->fetch();
+            $metaId = $metaForId->getId() ? (int)$metaForId->getId() : null;
+
+            $configKey = $paramName;
+            if ($paramName !== 'name' && $paramName !== 'description') {
+                $configKey = 'param.' . $paramName;
+            }
             
             $translations = [];
             $currentLocaleValue = null;
-            foreach ($locales->getItems() as $locale) {
-                $localeCode = (string)$locale->getData(\Weline\I18n\Model\Locale::schema_fields_CODE);
+            foreach ($locales as $locale) {
+                $localeCode = (string)($locale['code'] ?? '');
                 if ($localeCode) {
-                    // 获取语言名称
-                    /** @var \Weline\I18n\Model\Locale\Name $nameModel */
-                    $nameModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
-                    $nameRecord = $nameModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $localeCode)
-                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLocale)
-                        ->find()
-                        ->fetch();
-                    
-                    $localeName = $nameRecord->getId() 
-                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME)
-                        : $localeCode;
+                    $localeName = (string)($locale['name'] ?? $localeCode);
                     
                     // 从 w_meta_local 表获取翻译值
                     /** @var MetaLocal $localModel */
                     $localModel = ObjectManager::getInstance(MetaLocal::class);
-                    
-                    // 获取 meta_id
-                    /** @var MetaModel $metaModelForId */
-                    $metaModelForId = ObjectManager::getInstance(MetaModel::class);
-                    $metaForId = $metaModelForId->reset()
-                        ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
-                        ->find()
-                        ->fetch();
-                    $metaId = $metaForId->getId() ? (int)$metaForId->getId() : null;
-                    
-                    // 确定配置键
-                    $configKey = $paramName;
-                    if ($paramName !== 'name' && $paramName !== 'description') {
-                        $configKey = 'param.' . $paramName;
-                    }
                     
                     $translatedValue = '';
                     if ($metaId) {
@@ -873,37 +852,8 @@ class File extends BackendController
     public function getLocales()
     {
         try {
-            /** @var \Weline\I18n\Model\Locale $localeModel */
-            $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            $locales = $localeModel->reset()
-                ->where(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
-                ->order(\Weline\I18n\Model\Locale::schema_fields_CODE, 'ASC')
-                ->select()
-                ->fetch();
-            
-            $localeList = [];
-            foreach ($locales->getItems() as $locale) {
-                $code = (string)$locale->getData(\Weline\I18n\Model\Locale::schema_fields_CODE);
-                if ($code) {
-                    // 获取语言名称
-                    /** @var \Weline\I18n\Model\Locale\Name $nameModel */
-                    $nameModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
-                    $nameRecord = $nameModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $code)
-                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal() ?? 'zh_Hans_CN')
-                        ->find()
-                        ->fetch();
-                    
-                    $name = $nameRecord->getId() 
-                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME)
-                        : $code;
-                    
-                    $localeList[] = [
-                        'code' => $code,
-                        'name' => $name,
-                    ];
-                }
-            }
+            $localeList = ObjectManager::getInstance(InstalledLocaleCatalog::class)
+                ->list(Cookie::getLangLocal() ?? 'zh_Hans_CN');
             
             return $this->fetchJson($this->success('', ['locales' => $localeList]));
         } catch (\Throwable $e) {
@@ -960,31 +910,14 @@ class File extends BackendController
                 return $this->fetchJson($this->error(__('该字段未启用多语言：%{field}', ['field' => $field])));
             }
             
-            // 获取所有已安装的语言
-            /** @var \Weline\I18n\Model\Locale $localeModel */
-            $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            $locales = $localeModel->reset()
-                ->where(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
-                ->order(\Weline\I18n\Model\Locale::schema_fields_CODE, 'ASC')
-                ->select()
-                ->fetch();
+            $locales = ObjectManager::getInstance(InstalledLocaleCatalog::class)
+                ->list(Cookie::getLangLocal() ?? 'zh_Hans_CN');
             
             $translations = [];
-            foreach ($locales->getItems() as $locale) {
-                $localeCode = (string)$locale->getData(\Weline\I18n\Model\Locale::schema_fields_CODE);
+            foreach ($locales as $locale) {
+                $localeCode = (string)($locale['code'] ?? '');
                 if ($localeCode) {
-                    // 获取语言名称
-                    /** @var \Weline\I18n\Model\Locale\Name $nameModel */
-                    $nameModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
-                    $nameRecord = $nameModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $localeCode)
-                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal() ?? 'zh_Hans_CN')
-                        ->find()
-                        ->fetch();
-                    
-                    $localeName = $nameRecord->getId() 
-                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME)
-                        : $localeCode;
+                    $localeName = (string)($locale['name'] ?? $localeCode);
                     
                     // 从 w_meta_local 表获取翻译值
                     /** @var MetaLocal $metaLocalModel */
@@ -1240,4 +1173,3 @@ class File extends BackendController
         return $result;
     }
 }
-

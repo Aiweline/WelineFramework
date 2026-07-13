@@ -534,6 +534,12 @@ foreach ($adapters as $a) {
     'use strict';
     
     var WelineAdapterManager = {
+        aiApi: function() {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                return Promise.reject(new Error('Weline.Api.resource is unavailable.'));
+            }
+            return Promise.resolve(window.Weline.Api.resource('ai'));
+        },
         urls: {
             scan: '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>',
             toggleStatus: '<?= $this->getBackendUrl('*/backend/adapter/toggleStatus') ?>',
@@ -576,10 +582,7 @@ foreach ($adapters as $a) {
 
         _doToggleStatus: function(id) {
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({id: id}) };
-            var req = window.Weline.Api.request(this.urls.toggleStatus, opts);
-            req.then(function(res) {
-                var data = (res && res.data) || res;
+            this.aiApi().then(function(api) { return api.adapterToggleStatus({id: id}); }).then(function(data) {
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message || '<?= __('状态更新成功') ?>');
@@ -609,10 +612,7 @@ foreach ($adapters as $a) {
 
         _doDelete: function(id) {
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({id: id}) };
-            var req = window.Weline.Api.request(this.urls.delete, opts);
-            req.then(function(res) {
-                var data = (res && res.data) || res;
+            this.aiApi().then(function(api) { return api.adapterDelete({id: id}); }).then(function(data) {
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message || '<?= __('删除成功') ?>');
@@ -691,10 +691,7 @@ foreach ($adapters as $a) {
 
         _doBatchDelete: function(ids) {
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ids: ids}) };
-            var req = window.Weline.Api.request(this.urls.batchDelete, opts);
-            req.then(function(res) {
-                var data = (res && res.data) || res;
+            this.aiApi().then(function(api) { return api.adapterBulkDelete({ids: ids}); }).then(function(data) {
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message);
@@ -731,10 +728,7 @@ foreach ($adapters as $a) {
 
         _doBatchToggle: function(ids, status) {
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ids: ids, status: status}) };
-            var req = window.Weline.Api.request(this.urls.batchToggle, opts);
-            req.then(function(res) {
-                var data = (res && res.data) || res;
+            this.aiApi().then(function(api) { return api.adapterBulkToggle({ids: ids, status: status}); }).then(function(data) {
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message);

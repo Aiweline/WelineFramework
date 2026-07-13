@@ -8,7 +8,7 @@
 
 namespace Weline\Ai\Setup\Db\Migration;
 
-use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Manager\ObjectManager;

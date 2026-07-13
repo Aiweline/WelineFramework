@@ -3,13 +3,13 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Queue;
 
+use Weline\Framework\Async\TaskConsumerInterface;
+use Weline\Framework\Async\TaskContextInterface;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\AiTranslationService;
-use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
 
-class AiTranslateQueue implements QueueInterface
+class AiTranslateQueue implements TaskConsumerInterface
 {
     public function __construct(
         private readonly AiTranslationConfig $config,
@@ -33,7 +33,7 @@ class AiTranslateQueue implements QueueInterface
         return '按语言批量执行 I18n AI 自动翻译';
     }
 
-    public function validate(Queue &$queue): bool
+    public function validate(TaskContextInterface $queue): bool
     {
         $content = $this->decodeContent($queue);
         $localeCode = (string)($content['locale_code'] ?? '');
@@ -62,7 +62,7 @@ class AiTranslateQueue implements QueueInterface
         return true;
     }
 
-    public function execute(Queue &$queue): string
+    public function execute(TaskContextInterface $queue): string
     {
         $content = $this->decodeContent($queue);
         $localeCode = (string)$content['locale_code'];
@@ -116,7 +116,7 @@ class AiTranslateQueue implements QueueInterface
     /**
      * @return array<string, mixed>
      */
-    private function decodeContent(Queue $queue): array
+    private function decodeContent(TaskContextInterface $queue): array
     {
         $content = $queue->getContent();
         if (is_array($content)) {

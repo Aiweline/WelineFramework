@@ -61,13 +61,7 @@ class AiTranslationPublisher
         PhraseParser::clearWorkerCaches();
         I18nParser::clearWorkerCaches();
 
-        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
-        if (class_exists($dispatchClass)) {
-            try {
-                ObjectManager::getInstance($dispatchClass)->cacheClear();
-            } catch (\Throwable) {
-            }
-        }
+        ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
     }
 
     /**

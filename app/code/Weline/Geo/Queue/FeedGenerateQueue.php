@@ -14,15 +14,16 @@ namespace Weline\Geo\Queue;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Service\FeedGeneratorService;
-use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
+use Weline\Queue\Api\QueueConsumerInterface;
+use Weline\Queue\Api\QueueStatus;
+use Weline\Queue\Api\QueueTaskContextInterface;
 
 /**
  * Feed生成队列处理器
  * 
  * @package Weline_Geo
  */
-class FeedGenerateQueue implements QueueInterface
+class FeedGenerateQueue implements QueueConsumerInterface
 {
     /**
      * 队列名称
@@ -58,18 +59,18 @@ class FeedGenerateQueue implements QueueInterface
     /**
      * 执行队列任务
      * 
-     * @param Queue $queue
+     * @param QueueTaskContextInterface $queue
      * @return string
      */
-    public function execute(Queue &$queue): string
+    public function execute(QueueTaskContextInterface $queue): string
     {
         try {
             $content = json_decode($queue->getContent(), true);
             
             if (empty($content['feed_id'])) {
                 $queue->setResult('错误：缺少feed_id参数');
-                $queue->setStatus(Queue::status_error);
-                $queue->save();
+                $queue->setStatus(QueueStatus::ERROR);
+                $queue->persist();
                 return '错误：缺少feed_id参数';
             }
 
@@ -83,8 +84,8 @@ class FeedGenerateQueue implements QueueInterface
 
             if (!$feed->getId()) {
                 $queue->setResult("错误：Feed ID {$feedId} 不存在");
-                $queue->setStatus(Queue::status_error);
-                $queue->save();
+                $queue->setStatus(QueueStatus::ERROR);
+                $queue->persist();
                 return "错误：Feed ID {$feedId} 不存在";
             }
 
@@ -94,8 +95,8 @@ class FeedGenerateQueue implements QueueInterface
                 $feedUrl = $feed->getData(Feed::schema_fields_FEED_URL);
                 if ($lastGenerated > 0 && !empty($feedUrl)) {
                     $queue->setResult("Feed已存在，跳过生成。URL: {$feedUrl}");
-                    $queue->setStatus(Queue::status_done);
-                    $queue->save();
+                    $queue->setStatus(QueueStatus::DONE);
+                    $queue->persist();
                     return "Feed已存在，跳过生成";
                 }
             }
@@ -105,14 +106,14 @@ class FeedGenerateQueue implements QueueInterface
             $relativeUrl = $feedGenerator->generateAndSaveFeed($feed, $format);
 
             $queue->setResult("Feed生成成功。URL: {$relativeUrl}");
-            $queue->setStatus(Queue::status_done);
-            $queue->save();
+            $queue->setStatus(QueueStatus::DONE);
+            $queue->persist();
 
             return "Feed生成成功：{$relativeUrl}";
         } catch (\Exception $e) {
             $queue->setResult("错误：" . $e->getMessage());
-            $queue->setStatus(Queue::status_error);
-            $queue->save();
+            $queue->setStatus(QueueStatus::ERROR);
+            $queue->persist();
             return "错误：" . $e->getMessage();
         }
     }
@@ -120,10 +121,10 @@ class FeedGenerateQueue implements QueueInterface
     /**
      * 验证任务数据
      * 
-     * @param Queue $queue
+     * @param QueueTaskContextInterface $queue
      * @return bool
      */
-    public function validate(Queue &$queue): bool
+    public function validate(QueueTaskContextInterface $queue): bool
     {
         $content = json_decode($queue->getContent(), true);
         
@@ -140,4 +141,3 @@ class FeedGenerateQueue implements QueueInterface
         return true;
     }
 }
-

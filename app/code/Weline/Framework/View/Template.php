@@ -9,13 +9,14 @@
 
 namespace Weline\Framework\View;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\KeyBuilder;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Context;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
@@ -31,10 +32,11 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Runtime\WlsRuntimeAdapterResolver;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
-use Weline\Server\Service\MemoryStateFacade;
+use Weline\Framework\View\Cache\TemplateCachePolicyRegistry;
 
 class Template extends DataObject
 {
@@ -90,14 +92,6 @@ class Template extends DataObject
     private static array $scopedInstances = [];
     /** @var array<string, array{compiled_mtime: int, compiled_size: int, template_mtime: int, template_size: int, force: string, result: bool}> */
     private static array $compiledTemplateFreshnessCache = [];
-    /** @var array<string, true> */
-    private const REQUEST_CACHEABLE_HOOKS = [
-        'header-account-links' => true,
-    ];
-    private const DIAGNOSTIC_HOOKS = [
-        'account.sidebar' => true,
-        'account.sidebar.content' => true,
-    ];
     private const STATIC_HOOK_OUTPUT_CACHE_TTL = 60.0;
     private const STATIC_HOOK_AGGREGATE_CACHE_TTL = 30.0;
     private const STATIC_HOOK_STALE_TTL = 300;
@@ -105,42 +99,15 @@ class Template extends DataObject
     private const REUSABLE_TEMPLATE_OUTPUT_CACHE_TTL = 120;
     private const REUSABLE_TEMPLATE_OUTPUT_CACHE_MAX_ITEMS = 32;
     public const DATA_FORCE_MODULE_THEME_SOURCE = '__weline_force_module_theme_source';
-    /** @var array<string, true> */
-    private const STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS = [
-        'account.sidebar' => true,
-        'header-account-links' => true,
-        'header-orders' => true,
-        'header-language-switcher' => true,
-        'header-currency-switcher' => true,
-        'Weline_Customer::frontend::account::login::providers' => true,
-        'Weline_Theme::frontend::layouts::base::body-end' => true,
-    ];
-    private const STATIC_HOOK_OUTPUT_CACHEABLE_FILES = [
-        'Weline_Customer::hooks/header-account-links.phtml' => true,
-        'WeShop_Order::hooks/header-account-links.phtml' => true,
-        'Weline_Shipping::hooks/header-account-links.phtml' => true,
-        'WeShop_Subscription::hooks/header-account-links.phtml' => true,
-        'Weline_I18n::hooks/header-language-switcher.phtml' => true,
-        'Weline_I18n::hooks/header-currency-switcher.phtml' => true,
-        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml' => true,
-        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => true,
-        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => true,
-        'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => true,
-        'WeShop_GoogleAuth::hooks/Weline_Customer/frontend/account/login/providers.phtml' => true,
-        'Weline_CustomerService::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
-        'Weline_Location::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
-        'WeShop_Product::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
-        'Weline_Shipping::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
-        'WeShop_Filters::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => true,
-    ];
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $staticHookOutputCache = [];
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $staticHookAggregateOutputCache = [];
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $reusableTemplateOutputCache = [];
-    private static ?MemoryStateFacade $staticHookRuntimeCache = null;
+    private static ?SharedCacheStateInterface $staticHookRuntimeCache = null;
     private static bool $staticHookRuntimeCacheResolved = false;
+    private static ?TemplateCachePolicyRegistry $templateCachePolicyRegistry = null;
 
     private function __clone()
     {
@@ -213,6 +180,7 @@ class Template extends DataObject
         self::$reusableTemplateOutputCache = [];
         self::$staticHookRuntimeCache = null;
         self::$staticHookRuntimeCacheResolved = false;
+        self::$templateCachePolicyRegistry = null;
     }
 
     private static function currentScopeKey(): ?string
@@ -947,16 +915,17 @@ class Template extends DataObject
     {
         $this->addSourceModuleToRequest('hooks', $hookFile);
 
-        $analyticsRenderFlag = $this->analyticsHookRenderFlag($hookFile);
-        if ($analyticsRenderFlag !== null && !empty($GLOBALS[$analyticsRenderFlag])) {
+        $templateCachePolicies = self::templateCachePolicies();
+        $cachePolicy = $templateCachePolicies->output($hookFile);
+        if ($cachePolicy === null) {
+            return $this->fetchTagHtml('hooks', $hookFile);
+        }
+        $renderOnceGroup = \trim((string)($cachePolicy['render_once_group'] ?? ''));
+        if ($renderOnceGroup !== '' && $this->isTemplateCacheRenderOnceComplete($renderOnceGroup)) {
             return '';
         }
 
-        if (!isset(self::STATIC_HOOK_OUTPUT_CACHEABLE_FILES[$hookFile])) {
-            return $this->fetchTagHtml('hooks', $hookFile);
-        }
-
-        $cacheContext = $this->resolveStaticHookOutputCacheContext($hookFile);
+        $cacheContext = $this->resolveTemplateCachePolicyContext($cachePolicy, $hookFile);
         if ($cacheContext === null) {
             return $this->fetchTagHtml('hooks', $hookFile);
         }
@@ -979,6 +948,7 @@ class Template extends DataObject
             'cache_version' => '20260528-template-manifest-tempfile',
             'base_url' => $baseUrl,
             'hook_context' => $cacheContext,
+            'policy_digest' => $templateCachePolicies->digest(),
         ]));
         $cached = $this->readStaticHookOutputCache($cacheKey, $ttl);
         if ($cached['status'] !== 'miss') {
@@ -990,12 +960,10 @@ class Template extends DataObject
                     'status' => (string)$cached['status'],
                 ]);
             } else {
-            if ($cached['status'] === 'stale') {
+            if ($cached['status'] === 'stale' && ($cachePolicy['allow_async_refresh'] ?? false)) {
                 $this->queueStaticHookOutputRefresh($cacheKey, $compiledFile, $ttl);
             }
-            if ($analyticsRenderFlag !== null) {
-                $GLOBALS[$analyticsRenderFlag] = true;
-            }
+            $this->markTemplateCacheRenderOnceComplete($renderOnceGroup);
             return (string)$cached['html'];
             }
         }
@@ -1011,12 +979,10 @@ class Template extends DataObject
                 ]);
             } else {
             $this->rememberStaticHookOutput($cacheKey, (string)$runtimeCached['html'], $ttl, (string)$runtimeCached['status']);
-            if ($runtimeCached['status'] === 'stale') {
+            if ($runtimeCached['status'] === 'stale' && ($cachePolicy['allow_async_refresh'] ?? false)) {
                 $this->queueStaticHookOutputRefresh($cacheKey, $compiledFile, $ttl);
             }
-            if ($analyticsRenderFlag !== null) {
-                $GLOBALS[$analyticsRenderFlag] = true;
-            }
+            $this->markTemplateCacheRenderOnceComplete($renderOnceGroup);
             return (string)$runtimeCached['html'];
             }
         }
@@ -1031,6 +997,7 @@ class Template extends DataObject
         }
         $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
         self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+        $this->markTemplateCacheRenderOnceComplete($renderOnceGroup);
 
         return $html;
     }
@@ -1082,52 +1049,45 @@ class Template extends DataObject
         });
     }
 
-    private function resolveStaticHookOutputCacheContext(string $hookFile): ?string
+    /**
+     * @param array<string, mixed> $policy
+     */
+    private function resolveTemplateCachePolicyContext(array $policy, string $subject): ?string
     {
-        return match ($hookFile) {
-            'Weline_Customer::hooks/header-account-links.phtml',
-            'WeShop_Order::hooks/header-account-links.phtml',
-            'Weline_Shipping::hooks/header-account-links.phtml',
-            'WeShop_Subscription::hooks/header-account-links.phtml' => $this->frontendAuthStaticHookCacheContext(),
-            'Weline_I18n::hooks/header-language-switcher.phtml' => $this->i18nStaticHookCacheContext('Weline_I18n::header-language-switcher-data', 'language'),
-            'Weline_I18n::hooks/header-currency-switcher.phtml' => $this->i18nStaticHookCacheContext('Weline_I18n::header-currency-switcher-data', 'currency'),
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml',
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => $this->analyticsStaticHookCacheContext('head'),
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => $this->analyticsStaticHookCacheContext('body'),
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => $this->analyticsStaticHookCacheContext('footer'),
-            'WeShop_GoogleAuth::hooks/Weline_Customer/frontend/account/login/providers.phtml' => $this->loginProviderHookCacheContext(),
-            'Weline_CustomerService::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => $this->bodyEndStaticHookCacheContext(),
-            default => 'static',
-        };
-    }
-
-    private function analyticsHookRenderFlag(string $hookFile): ?string
-    {
-        return match ($hookFile) {
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-before.phtml',
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/head-after.phtml' => '__weshop_analytics_hook_head_rendered',
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/body-start.phtml' => '__weshop_analytics_hook_body_rendered',
-            'WeShop_Analytics::hooks/Weline_Theme/frontend/layouts/base/footer-after.phtml' => '__weshop_analytics_hook_footer_rendered',
+        return match ((string)($policy['context'] ?? '')) {
+            'static' => 'static',
+            'frontend_auth' => $this->frontendAuthStaticHookCacheContext(),
+            'body_end' => $this->bodyEndStaticHookCacheContext(),
+            'account_sidebar' => $this->accountSidebarStaticHookCacheContext(),
+            'header_action' => $this->headerActionStaticHookCacheContext($subject),
+            'i18n' => $this->resolveI18nTemplateCachePolicyContext($policy),
             default => null,
         };
     }
 
-    private function analyticsStaticHookCacheContext(string $slot): ?string
+    /**
+     * @param array<string, mixed> $policy
+     */
+    private function resolveI18nTemplateCachePolicyContext(array $policy): ?string
     {
-        try {
-            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
-            if ($this->isAccountAuthRequestPath($requestPath)) {
-                return null;
-            }
-
-            $envFile = BP . 'app' . DS . 'etc' . DS . 'env.php';
-            return 'analytics:' . $slot . ':' . \sha1(\implode('|', [
-                (string)@filemtime($envFile),
-                (string)@filesize($envFile),
-                (string)(\function_exists('w_env_http_host') ? \w_env_http_host() : ''),
-            ]));
-        } catch (\Throwable) {
+        $eventName = \trim((string)($policy['event'] ?? ''));
+        $scope = \trim((string)($policy['scope'] ?? ''));
+        if ($eventName === '' || $scope === '') {
             return null;
+        }
+
+        return $this->i18nStaticHookCacheContext($eventName, $scope);
+    }
+
+    private function isTemplateCacheRenderOnceComplete(string $group): bool
+    {
+        return RequestContext::get('view.hook.render_once.' . $group) === true;
+    }
+
+    private function markTemplateCacheRenderOnceComplete(string $group): void
+    {
+        if ($group !== '') {
+            RequestContext::set('view.hook.render_once.' . $group, true);
         }
     }
 
@@ -1151,35 +1111,6 @@ class Template extends DataObject
 
             $context = 'frontend-auth:1:' . \sha1($userId . '|' . $username);
             RequestContext::set($requestCacheKey, $context);
-            return $context;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function loginProviderHookCacheContext(): ?string
-    {
-        $requestCacheKey = 'view.static_hook.login_provider_context';
-        $cached = RequestContext::get($requestCacheKey);
-        if (\is_string($cached)) {
-            return $cached;
-        }
-
-        try {
-            $redirectUrl = (string)($this->getData('redirect_url')
-                ?? $this->request->getGet('redirect_url', '')
-                ?? $this->request->getGet('redirect', '')
-                ?? (\function_exists('w_env_get') ? \w_env_get('redirect_url', '') : ''));
-            $clientId = trim((string)(Env::getInstance()->getConfig('google_auth.client_id', '') ?: \getenv('WESHOP_GOOGLE_CLIENT_ID') ?: ''));
-            $clientSecret = trim((string)(Env::getInstance()->getConfig('google_auth.client_secret', '') ?: \getenv('WESHOP_GOOGLE_CLIENT_SECRET') ?: ''));
-            $context = 'login-providers:' . \sha1(\implode('|', [
-                Url::getPrefix(),
-                $redirectUrl,
-                $clientId !== '' ? 'client:1' : 'client:0',
-                $clientSecret !== '' ? 'secret:1' : 'secret:0',
-            ]));
-            RequestContext::set($requestCacheKey, $context);
-
             return $context;
         } catch (\Throwable) {
             return null;
@@ -1778,7 +1709,8 @@ class Template extends DataObject
         }
         $requestCacheKey = null;
         $aggregateCacheKey = null;
-        if (!$forceRefresh && isset(self::REQUEST_CACHEABLE_HOOKS[$name])) {
+        $templateCachePolicies = self::templateCachePolicies();
+        if (!$forceRefresh && $templateCachePolicies->isRequestCacheable($name)) {
             $context = Context::current();
             $requestId = RequestContext::getId();
             if ($requestId === null || $requestId === '') {
@@ -1798,10 +1730,14 @@ class Template extends DataObject
             }
         }
 
-        if (isset(self::STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS[$name]) && !$this->shouldDecorateHookOutput()) {
-            $aggregateContext = $this->resolveStaticHookAggregateCacheContext($name);
+        $aggregatePolicy = $templateCachePolicies->aggregate($name);
+        if ($aggregatePolicy !== null && !$this->shouldDecorateHookOutput()) {
+            $aggregateContext = $this->resolveTemplateCachePolicyContext($aggregatePolicy, $name);
             if ($aggregateContext !== null) {
-                $aggregateCacheKey = 'view.hook.aggregate.' . \sha1($name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext . '|' . $this->hookLocaleCacheContext());
+                $aggregateCacheKey = 'view.hook.aggregate.' . \sha1(
+                    $name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext . '|'
+                    . $this->hookLocaleCacheContext() . '|' . $templateCachePolicies->aggregateDigest($name)
+                );
                 $aggregateTtl = $this->staticHookAggregateCacheTtl();
                 if (!$forceRefresh) {
                     $cachedAggregateHtml = $this->readStaticHookAggregateCache($aggregateCacheKey, $aggregateTtl);
@@ -1814,7 +1750,7 @@ class Template extends DataObject
                                 'status' => (string)$cachedAggregateHtml['status'],
                             ]);
                         } else {
-                        if ($cachedAggregateHtml['status'] === 'stale') {
+                        if ($cachedAggregateHtml['status'] === 'stale' && ($aggregatePolicy['allow_async_refresh'] ?? false)) {
                             $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
                         }
                         if ($requestCacheKey !== null) {
@@ -1843,7 +1779,7 @@ class Template extends DataObject
                             ]);
                         } else {
                         $this->rememberStaticHookAggregate($aggregateCacheKey, (string)$runtimeCachedAggregate['html'], $aggregateTtl, (string)$runtimeCachedAggregate['status']);
-                        if ($runtimeCachedAggregate['status'] === 'stale') {
+                        if ($runtimeCachedAggregate['status'] === 'stale' && ($aggregatePolicy['allow_async_refresh'] ?? false)) {
                             $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
                         }
                         if ($requestCacheKey !== null) {
@@ -2205,7 +2141,7 @@ class Template extends DataObject
 
     private function shouldLogHookDiagnostics(string $name): bool
     {
-        if (isset(self::DIAGNOSTIC_HOOKS[$name])) {
+        if (self::templateCachePolicies()->isDiagnostic($name)) {
             return true;
         }
 
@@ -2270,20 +2206,6 @@ class Template extends DataObject
         $localLocks[$lockKey] = $now + $this->staticHookRefreshLockTtl();
 
         return true;
-    }
-
-    private function resolveStaticHookAggregateCacheContext(string $name): ?string
-    {
-        return match ($name) {
-            'account.sidebar' => $this->accountSidebarStaticHookCacheContext(),
-            'header-account-links' => $this->frontendAuthStaticHookCacheContext(),
-            'header-orders' => $this->headerActionStaticHookCacheContext($name),
-            'header-language-switcher' => $this->i18nStaticHookCacheContext('Weline_I18n::header-language-switcher-data', 'language'),
-            'header-currency-switcher' => $this->i18nStaticHookCacheContext('Weline_I18n::header-currency-switcher-data', 'currency'),
-            'Weline_Customer::frontend::account::login::providers' => $this->loginProviderHookCacheContext(),
-            'Weline_Theme::frontend::layouts::base::body-end' => $this->bodyEndStaticHookCacheContext(),
-            default => null,
-        };
     }
 
     private function accountSidebarStaticHookCacheContext(): ?string
@@ -2485,19 +2407,20 @@ class Template extends DataObject
         }
     }
 
-    private static function runtimeHookCache(): ?MemoryStateFacade
+    private static function runtimeHookCache(): ?SharedCacheStateInterface
     {
         if (self::$staticHookRuntimeCacheResolved) {
             return self::$staticHookRuntimeCache;
         }
         self::$staticHookRuntimeCacheResolved = true;
 
-        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
             return null;
         }
 
         try {
-            self::$staticHookRuntimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+            $adapter = ObjectManager::getInstance(WlsRuntimeAdapterResolver::class)->resolve();
+            self::$staticHookRuntimeCache = $adapter?->createSharedState(self::cachePolicy()->memoryOptions([
                 'consumer_code' => 'theme_runtime_hook',
                 'prefer_direct_connect' => true,
                 'pool_size' => 1,
@@ -2513,6 +2436,11 @@ class Template extends DataObject
     private static function cachePolicy(): RuntimeCachePolicy
     {
         return ObjectManager::getInstance(RuntimeCachePolicy::class);
+    }
+
+    private static function templateCachePolicies(): TemplateCachePolicyRegistry
+    {
+        return self::$templateCachePolicyRegistry ??= new TemplateCachePolicyRegistry();
     }
 
     public function getRequest(): Request

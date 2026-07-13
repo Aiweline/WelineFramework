@@ -6,12 +6,15 @@ namespace Weline\Framework\Service\Query\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Service\Query\Auth\BinQueryAuthenticationMetadataProviderInterface;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
 
 class BinQueryApiDocContributor implements ObserverInterface
 {
     public function __construct(
-        private readonly QueryProviderRegistry $queryProviderRegistry
+        private readonly QueryProviderRegistry $queryProviderRegistry,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
     ) {
     }
 
@@ -59,6 +62,7 @@ class BinQueryApiDocContributor implements ObserverInterface
      */
     private function generateDocs(): array
     {
+        $authentication = $this->authenticationMetadata();
         $externalOperations = 0;
         foreach ($this->queryProviderRegistry->getAllDescriptors() as $providerDescriptor) {
             foreach (($providerDescriptor['operations'] ?? []) as $operationDescriptor) {
@@ -97,14 +101,14 @@ class BinQueryApiDocContributor implements ObserverInterface
                 'method' => 'overview',
                 'document' => [
                     'summary' => 'BinQuery official gateway and SDK capability',
-                    'description' => 'External SDKs derive https://{domain}/bin/query from domain, default to area=frontend, and use temporary Weline_Api app access_token as apiKey.',
+                    'description' => $authentication['overview_description'],
                     'tags' => ['BinQuery SDK'],
                     'category' => 'BinQuery SDK',
                     'deprecated' => false,
                 ],
                 'parameters' => [
                     ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => 'Site domain, for example example.com.'],
-                    ['name' => 'apiKey', 'type' => 'string', 'required' => true, 'description' => 'Weline_Api third-party app access_token; temporary, default TTL 3600 seconds.'],
+                    ['name' => 'apiKey', 'type' => 'string', 'required' => true, 'description' => $authentication['api_key_description']],
                 ],
                 'example' => [
                     'domain' => 'example.com',
@@ -116,10 +120,10 @@ class BinQueryApiDocContributor implements ObserverInterface
                     'guide_url' => '/dev/tool/docs/api/sdk-guide?doc=sdk',
                     'derived_path' => '/bin/query',
                     'protocol' => 'binquery-v1',
-                    'api_key_source' => 'Create/authorize a Weline_Api third-party app, then exchange code through POST /api/rest/v1/apps/token.',
-                    'api_key_type' => 'temporary access_token',
-                    'api_key_ttl' => '3600 seconds',
-                    'refresh_token_ttl' => '2592000 seconds',
+                    'api_key_source' => $authentication['api_key_source'],
+                    'api_key_type' => $authentication['api_key_type'],
+                    'api_key_ttl' => $authentication['api_key_ttl'],
+                    'refresh_token_ttl' => $authentication['refresh_token_ttl'],
                     'scope' => 'Weline_Framework::binquery or Weline_Framework::binquery::post',
                     'external_operation_count' => $externalOperations,
                 ],
@@ -187,5 +191,40 @@ class BinQueryApiDocContributor implements ObserverInterface
                 ],
             ],
         ];
+    }
+
+    /**
+     * @return array{
+     *     overview_description: string,
+     *     api_key_description: string,
+     *     api_key_source: string,
+     *     api_key_type: string,
+     *     api_key_ttl: string,
+     *     refresh_token_ttl: string
+     * }
+     */
+    private function authenticationMetadata(): array
+    {
+        $metadata = [
+            'overview_description' => 'External SDKs derive https://{domain}/bin/query from domain, default to area=frontend, and use an apiKey issued by the configured authentication provider.',
+            'api_key_description' => 'Credential issued by the configured BinQuery authentication provider.',
+            'api_key_source' => 'Obtain a credential from the configured BinQuery authentication provider.',
+            'api_key_type' => 'bearer credential',
+            'api_key_ttl' => 'provider-defined',
+            'refresh_token_ttl' => 'provider-defined',
+        ];
+
+        $provider = $this->runtimeProviderResolver->resolve(BinQueryAuthenticationMetadataProviderInterface::class);
+        if (!$provider instanceof BinQueryAuthenticationMetadataProviderInterface) {
+            return $metadata;
+        }
+
+        foreach ($provider->metadata() as $key => $value) {
+            if (\array_key_exists($key, $metadata) && \is_string($value) && $value !== '') {
+                $metadata[$key] = $value;
+            }
+        }
+
+        return $metadata;
     }
 }

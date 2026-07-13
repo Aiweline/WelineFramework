@@ -1,0 +1,15 @@
+{
+    "name": "weline/module-extends",
+    "description": "WelineFramework Extends module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Extends\\": ""
+        }
+    }
+}

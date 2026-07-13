@@ -4,25 +4,22 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Service\WlsPerformanceTraceStore;
 
 class Trace extends DevToolRestController
 {
     private const TRACE_TTL_SECONDS = 60;
 
     private DevToolPayloadStore $payloadStore;
-    private ?WlsPerformanceTraceStore $wlsTraceStore;
 
-    public function __construct(?DevToolPayloadStore $payloadStore = null, ?WlsPerformanceTraceStore $wlsTraceStore = null)
+    public function __construct(?DevToolPayloadStore $payloadStore = null)
     {
         parent::__construct();
         $this->payloadStore = $payloadStore ?? new DevToolPayloadStore();
-        $this->wlsTraceStore = $wlsTraceStore;
     }
 
     public function getIndex()
@@ -63,18 +60,35 @@ class Trace extends DevToolRestController
     private function wlsTracePayload(string $requestId): ?array
     {
         try {
-            $store = $this->wlsTraceStore ?? new WlsPerformanceTraceStore();
-            $record = $requestId !== '' ? $store->getDetail($requestId) : [];
+            $record = $requestId !== '' ? $this->wlsTraceDetail($requestId) : [];
             if ($record === []) {
-                $rows = $store->requests(1, $this->wlsTraceWindow());
+                $response = \w_query('server', 'wlsPerformanceRequests', [
+                    'limit' => 1,
+                    'since' => $this->wlsTraceWindow(),
+                ]);
+                $rows = \is_array($response) && \is_array($response['requests'] ?? null)
+                    ? $response['requests']
+                    : [];
                 $latestRequestId = (string)($rows[0]['request_id'] ?? '');
-                $record = $latestRequestId !== '' ? $store->getDetail($latestRequestId) : [];
+                $record = $latestRequestId !== '' ? $this->wlsTraceDetail($latestRequestId) : [];
             }
 
             return $record !== [] ? $this->compactWlsTraceRecord($record) : null;
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /** @return array<string, mixed> */
+    private function wlsTraceDetail(string $requestId): array
+    {
+        $response = \w_query('server', 'wlsPerformanceRequestDetail', [
+            'request_id' => $requestId,
+        ]);
+
+        return \is_array($response) && \is_array($response['request'] ?? null)
+            ? $response['request']
+            : [];
     }
 
     /**

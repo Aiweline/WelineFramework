@@ -6,15 +6,15 @@ namespace Weline\Cms\Extends\Module\Weline_Seo\SitemapUrlProvider;
 
 use Weline\Cms\Model\Page;
 use Weline\Cms\Service\PageService;
-use Weline\Seo\Provider\AbstractSitemapUrlProvider;
-use Weline\Seo\Service\SeoWebsiteDirectory;
+use Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider;
+use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
 
 class CmsPageProvider extends AbstractSitemapUrlProvider
 {
     public function __construct(
         private readonly Page $pageModel,
         private readonly PageService $pageService,
-        private readonly SeoWebsiteDirectory $websiteDirectory
+        private readonly WebsiteDirectoryInterface $websiteDirectory
     ) {
         parent::__construct();
     }
@@ -32,9 +32,9 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
     public function getWebsiteIds(): array
     {
         $ids = [];
-        foreach ($this->websiteDirectory->listWebsites() as $website) {
-            $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
-            if ($websiteId > 0) {
+        foreach ($this->websiteDirectory->all() as $website) {
+            $websiteId = $website->id;
+            if ($websiteId >= 0) {
                 $ids[$websiteId] = $websiteId;
             }
         }
@@ -44,7 +44,7 @@ class CmsPageProvider extends AbstractSitemapUrlProvider
 
     public function getUrlsForWebsite(int $websiteId): array
     {
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return [];
         }
 

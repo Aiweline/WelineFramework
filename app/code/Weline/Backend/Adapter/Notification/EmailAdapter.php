@@ -31,7 +31,6 @@ class EmailAdapter implements ChannelAdapterInterface
             'to' => $toEmail,
             'subject' => $message['subject'],
             'content' => $message['body'],
-            'module' => 'Weline_Smtp',
         ];
         $senderCode = $config['sender_code'] ?? $config['code'] ?? null;
         if ($senderCode !== null && $senderCode !== '') {

@@ -426,6 +426,9 @@ final class AiProviderAccountQueryProvider implements QueryProviderInterface
                 ];
             }
 
+            // WLS bin-query 单次列表传输最多 200 项，避免供应商模型全集触发 422。
+            $models = array_slice($models, 0, 200);
+
             return [
                 'success' => true,
                 'data' => $models,

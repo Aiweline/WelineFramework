@@ -17,7 +17,7 @@ use Weline\Eav\Model\EavAttribute;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\I18n\LocalModel;
+use Weline\I18n\Api\Localization\LocalModel;
 
 class LocalDescription extends LocalModel
 {

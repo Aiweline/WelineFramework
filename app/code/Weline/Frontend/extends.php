@@ -8,7 +8,7 @@ return [
     'extends' => [
         'HeadContextProvider' => [
             'path' => 'extends/module/Weline_Frontend/HeadContextProvider',
-            'interface' => 'Weline\Frontend\Interface\HeadContextProviderInterface',
+            'interface' => 'Weline\Framework\View\Head\HeadContextProviderInterface',
             'description' => 'Frontend head context provider for title input data.',
             'required' => false,
             'multiple' => true,

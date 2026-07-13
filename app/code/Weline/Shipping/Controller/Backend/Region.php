@@ -13,21 +13,19 @@ namespace Weline\Shipping\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\Message;
-use Weline\I18n\Model\Countries;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\CountryRepositoryInterface;
 use Weline\Shipping\Service\RegionService;
 
 #[Acl('Weline_Shipping::region', '地区管理', 'mdi-map-marker', '地区管理', 'Weline_Backend::shipping_group')]
 class Region extends BackendController
 {
-    private RegionService $regionService;
-    private Countries $countries;
-
-    public function __construct(ObjectManager $objectManager)
-    {
-        $this->regionService = $objectManager->getInstance(RegionService::class);
-        $this->countries = $objectManager->getInstance(Countries::class);
+    public function __construct(
+        private readonly RegionService $regionService,
+        private readonly RuntimeProviderResolver $runtimeProviders,
+    ) {
     }
 
     /**
@@ -37,18 +35,12 @@ class Region extends BackendController
     public function index()
     {
         // 获取所有已安装国家列表
-        $countries = $this->countries->reset()
-            ->where(Countries::schema_fields_IS_INSTALL, 1)
-            ->select()
-            ->fetch()
-            ->getItems();
+        $countries = $this->countryRows();
 
         $countryCode = (string)$this->request->getParam('country_code', '');
 
         if (!$countryCode && !empty($countries)) {
-            /** @var Countries $firstCountry */
-            $firstCountry = $countries[0];
-            $countryCode = $firstCountry->getData(Countries::schema_fields_CODE);
+            $countryCode = (string)($countries[0]['code'] ?? '');
         }
 
         $regionTree = [];
@@ -82,17 +74,11 @@ class Region extends BackendController
     {
         try {
             // 获取所有已安装国家
-            $installedCountries = $this->countries->reset()
-                ->where(Countries::schema_fields_IS_INSTALL, 1)
-                ->select('code')
-                ->fetch()
-                ->getItems();
-
             $countries = [];
-            foreach ($installedCountries as $country) {
+            foreach ($this->countryRows() as $country) {
                 $countries[] = [
-                    'code' => $country->getData(Countries::schema_fields_CODE),
-                    'name' => $country->getData(Countries::schema_fields_CODE),
+                    'code' => $country['code'],
+                    'name' => $country['code'],
                 ];
             }
 
@@ -104,6 +90,26 @@ class Region extends BackendController
 
         $this->redirect('*/index');
     }
-}
 
+    /** @return list<array{code:string,name:string,flag:string,is_active:int}> */
+    private function countryRows(): array
+    {
+        $repository = $this->runtimeProviders->resolve(CountryRepositoryInterface::class);
+        if (!$repository instanceof CountryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n country repository provider is unavailable.');
+        }
+
+        $rows = [];
+        foreach ($repository->installed(Cookie::getLangLocal()) as $country) {
+            $rows[] = [
+                'code' => $country->code,
+                'name' => $country->displayName,
+                'flag' => $country->flag,
+                'is_active' => $country->active ? 1 : 0,
+            ];
+        }
+
+        return $rows;
+    }
+}
 

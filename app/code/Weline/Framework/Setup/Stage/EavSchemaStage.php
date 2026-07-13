@@ -10,6 +10,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 /**
@@ -19,9 +20,6 @@ use Weline\Framework\Setup\Db\ModelSetup;
 class EavSchemaStage extends AbstractStage
 {
     public const EVENT_TABLE_DDL_AFTER = 'Weline_Framework_Schema::table_ddl_after';
-
-    private const EAV_REGISTRY_CLASS = \Weline\Eav\Schema\SchemaRegistry::class;
-    private const EAV_MODULE_NAME = 'Weline_Eav';
 
     public function __construct(
         private readonly EventsManager $eventsManager,
@@ -58,29 +56,25 @@ class EavSchemaStage extends AbstractStage
             return;
         }
 
-        if (!class_exists(self::EAV_REGISTRY_CLASS)) {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(EavSchemaProviderInterface::class);
+        if (!$provider instanceof EavSchemaProviderInterface) {
             $this->committed = true;
             return;
         }
-
-        /** @var \Weline\Eav\Schema\SchemaRegistry $registry */
-        $registry = ObjectManager::getInstance(self::EAV_REGISTRY_CLASS);
-        $registry->registerClasses($registry::getDefaultSchemas());
 
         /** @var ModelSetup $setup */
         $setup = ObjectManager::getInstance(ModelSetup::class, ['printing' => $this->printing]);
         $setup->putModel($this->migrationModel);
 
-        $sortedSchemas = $registry->getSortedSchemas();
         $connection = $this->migrationModel->getConnection();
         $prefix = $connection->getConfigProvider()->getPrefix();
+        $ownerModuleName = $provider->ownerModuleName();
 
-        foreach ($sortedSchemas as $schema) {
-            $registry->createTable($setup, $schema);
-            $tableName = $schema->getTableName();
+        foreach ($provider->createTables($setup) as $tableName) {
             $fullTableName = $prefix . $tableName;
             $eventData = new DataObject([
-                'module_name' => self::EAV_MODULE_NAME,
+                'module_name' => $ownerModuleName,
                 'table_name' => $fullTableName,
                 'model_class' => null,
             ]);

@@ -6,12 +6,11 @@ namespace Weline\SystemConfig\Controller\Backend;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Backend\Model\BackendUser;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Service\SystemConfigCenterService;
 use Weline\SystemConfig\Service\SystemConfigTemplateService;
 
-#[Acl('Weline_SystemConfig::config_center', '统一配置中心', 'mdi-tune-variant', '统一配置中心', 'Weline_Backend::system_config_group')]
+#[Acl('Weline_SystemConfig::config_center', '统一配置中心', 'mdi-tune-variant', '统一配置中心', '')]
 class Config extends BackendController
 {
     #[Acl('Weline_SystemConfig::config_center_index', '查看统一配置中心', 'mdi-tune-variant', '查看统一配置中心')]
@@ -168,10 +167,17 @@ class Config extends BackendController
      */
     private function actorOptions(): array
     {
-        /** @var BackendUser|null $backendUser */
         $backendUser = $this->session->getUser();
-        $actorId = $backendUser && (int)$backendUser->getId() ? (string)$backendUser->getId() : '';
-        $actorName = $backendUser ? (string)($backendUser->getUsername() ?: $backendUser->getEmail() ?: $actorId) : '';
+        $actorId = $backendUser && \method_exists($backendUser, 'getId') && (int)$backendUser->getId()
+            ? (string)$backendUser->getId()
+            : '';
+        $username = $backendUser && \method_exists($backendUser, 'getUsername')
+            ? (string)$backendUser->getUsername()
+            : '';
+        $email = $backendUser && \method_exists($backendUser, 'getEmail')
+            ? (string)$backendUser->getEmail()
+            : '';
+        $actorName = $username !== '' ? $username : ($email !== '' ? $email : $actorId);
         $reason = trim((string)$this->request->getPost('reason', ''));
 
         return [

@@ -11,6 +11,8 @@ use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class QueryProviderRegistry
 {
+    public const COMPILED_REGISTRY_FILE = BP . 'generated' . DS . 'framework' . DS . 'query_providers.php';
+
     /** @var array<string, QueryProviderInterface> */
     private array $providers = [];
 
@@ -28,6 +30,26 @@ class QueryProviderRegistry
     /** @var array<string, array<string, array<string, mixed>>> */
     private static array $operationDescriptorCache = [];
 
+    /** @var array<string, array{providers:array, operations:array, summaries:array}> */
+    private static array $externalAreaCache = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $compiledDescriptors = [];
+
+    /** @var list<array<string, mixed>> */
+    private array $compiledDescriptorList = [];
+
+    /** @var array<string, array<string, array<string, mixed>>> */
+    private array $compiledOperations = [];
+
+    /** @var array<string, array{providers:array, operations:array, summaries:array}> */
+    private array $compiledExternalAreas = [];
+
+    /** @var array<string, list<array<string, mixed>>> */
+    private array $compiledExternalDescriptorLists = [];
+
+    private bool $compiledDescriptorIndexLoaded = false;
+
     private ?BinQueryDescriptorAttributeResolver $binQueryAttributeResolver = null;
 
     private function loadDefinitions(): void
@@ -35,11 +57,34 @@ class QueryProviderRegistry
         if ($this->definitionsLoaded) {
             return;
         }
-        $this->definitionsLoaded = true;
 
-        /** @var DefaultCrudProvider $crud */
-        $crud = ObjectManager::getInstance(DefaultCrudProvider::class);
-        $this->providers[$crud->getProviderName()] = $crud;
+        $compiled = $this->loadCompiledDefinitions();
+        if ($compiled !== null) {
+            $this->providerDefinitions = $compiled['providers'];
+            $this->deferredDefinitions = $compiled['deferred'];
+            $this->compiledDescriptors = $compiled['descriptors'];
+            $this->compiledDescriptorList = \array_values($compiled['descriptors']);
+            $this->compiledOperations = $compiled['operations'];
+            $this->compiledExternalAreas = $compiled['external_areas'];
+            foreach ($compiled['external_areas'] as $area => $areaIndex) {
+                $this->compiledExternalDescriptorLists[$area] = \array_values($areaIndex['providers']);
+            }
+            $this->compiledDescriptorIndexLoaded = true;
+            $this->definitionsLoaded = true;
+            return;
+        }
+        if ($this->compiledRegistryRequired()) {
+            throw new \RuntimeException(
+                'Compiled QueryProvider registry is required. Run: php bin/w framework:compile',
+            );
+        }
+
+        // Development/migration bridge only. Compiled registries include this
+        // definition, so PROD/WLS descriptor reads never instantiate it.
+        $this->providerDefinitions['crud'] = [
+            'class_name' => DefaultCrudProvider::class,
+            'source_file' => __DIR__ . DS . 'Provider' . DS . 'DefaultCrudProvider.php',
+        ];
 
         $queryPathPrefix = 'extends/module/weline_framework/query/';
         $extendedBy = ExtendsData::getExtendedBy('Weline_Framework');
@@ -70,6 +115,75 @@ class QueryProviderRegistry
                 $this->providerDefinitions[$providerName] = $definition;
             }
         }
+
+        $this->definitionsLoaded = true;
+    }
+
+    /**
+     * @return array{
+     *     providers:array<string, array{class_name:string, source_file:string}>,
+     *     deferred:list<array{class_name:string, source_file:string}>,
+     *     descriptors:array<string, array<string, mixed>>,
+     *     operations:array<string, array<string, array<string, mixed>>>,
+     *     external_areas:array<string, array{providers:array, operations:array, summaries:array}>
+     * }|null
+     */
+    private function loadCompiledDefinitions(): ?array
+    {
+        if (!is_file(self::COMPILED_REGISTRY_FILE)) {
+            return null;
+        }
+        $registry = require self::COMPILED_REGISTRY_FILE;
+        $valid = is_array($registry)
+            && ($registry['format'] ?? null) === QueryProviderCompiler::FORMAT_VERSION
+            && is_array($registry['providers'] ?? null)
+            && is_array($registry['deferred'] ?? null)
+            && is_array($registry['descriptors'] ?? null)
+            && is_array($registry['operations'] ?? null)
+            && is_array($registry['external_areas'] ?? null);
+        if (!$valid) {
+            if (!$this->compiledRegistryRequired()) {
+                return null;
+            }
+            throw new \RuntimeException(
+                'Compiled QueryProvider registry is invalid. Re-run: php bin/w framework:compile',
+            );
+        }
+
+        foreach (['frontend', 'backend'] as $area) {
+            $areaIndex = $registry['external_areas'][$area] ?? null;
+            if (!is_array($areaIndex)
+                || !is_array($areaIndex['providers'] ?? null)
+                || !is_array($areaIndex['operations'] ?? null)
+                || !is_array($areaIndex['summaries'] ?? null)
+            ) {
+                if (!$this->compiledRegistryRequired()) {
+                    return null;
+                }
+                throw new \RuntimeException(
+                    'Compiled QueryProvider area index is invalid. Re-run: php bin/w framework:compile',
+                );
+            }
+        }
+
+        return [
+            'providers' => $registry['providers'],
+            'deferred' => array_values($registry['deferred']),
+            'descriptors' => $registry['descriptors'],
+            'operations' => $registry['operations'],
+            'external_areas' => $registry['external_areas'],
+        ];
+    }
+
+    private function compiledRegistryRequired(): bool
+    {
+        if (defined('WLS_MODE') && WLS_MODE) {
+            return true;
+        }
+        if (defined('PROD') && PROD) {
+            return true;
+        }
+        return defined('DEV') && !DEV;
     }
 
     private function resolveClassName(array $extension): ?string
@@ -289,6 +403,11 @@ class QueryProviderRegistry
 
     public function getAllDescriptors(): array
     {
+        $this->loadDefinitions();
+        if ($this->compiledDescriptorIndexLoaded) {
+            return $this->compiledDescriptorList;
+        }
+
         $scope = $this->descriptorCacheScope();
         if (isset(self::$descriptorCache[$scope])) {
             return self::$descriptorCache[$scope];
@@ -335,6 +454,12 @@ class QueryProviderRegistry
             return null;
         }
 
+        $this->loadDefinitions();
+        if ($this->compiledDescriptorIndexLoaded) {
+            $descriptor = $this->compiledOperations[$providerName][$operationName] ?? null;
+            return \is_array($descriptor) ? $descriptor : null;
+        }
+
         $scope = $this->descriptorCacheScope();
         $cached = self::$operationDescriptorCache[$scope][$providerName][$operationName] ?? null;
         if (\is_array($cached)) {
@@ -378,10 +503,159 @@ class QueryProviderRegistry
         return \is_array($descriptor) ? $descriptor : null;
     }
 
+    /**
+     * Descriptor lookup used by help/introspection paths. In PROD/WLS this is
+     * an immutable hash lookup; the linear fallback exists only for DEV
+     * migration before framework:compile has been run.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getProviderDescriptor(string $providerName): ?array
+    {
+        if ($providerName === '') {
+            return null;
+        }
+
+        $this->loadDefinitions();
+        if ($this->compiledDescriptorIndexLoaded) {
+            $descriptor = $this->compiledDescriptors[$providerName] ?? null;
+            return \is_array($descriptor) ? $descriptor : null;
+        }
+
+        foreach ($this->getAllDescriptors() as $descriptor) {
+            if (\is_array($descriptor) && (string)($descriptor['provider'] ?? '') === $providerName) {
+                return $descriptor;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getExternalDescriptorsForArea(string $area): array
+    {
+        $area = \strtolower(\trim($area));
+        $this->loadDefinitions();
+        if ($this->compiledDescriptorIndexLoaded) {
+            return $this->compiledExternalDescriptorLists[$area] ?? [];
+        }
+        $index = $this->externalAreaIndex($area);
+        return \array_values($index['providers']);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getExternalProviderSummariesForArea(string $area): array
+    {
+        return $this->externalAreaIndex($area)['summaries'];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getExternalProviderDescriptorForArea(string $area, string $providerName): ?array
+    {
+        if ($providerName === '') {
+            return null;
+        }
+        $descriptor = $this->externalAreaIndex($area)['providers'][$providerName] ?? null;
+        return \is_array($descriptor) ? $descriptor : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getExternalOperationDescriptorForArea(
+        string $area,
+        string $providerName,
+        string $operationName,
+    ): ?array {
+        if ($providerName === '' || $operationName === '') {
+            return null;
+        }
+        $descriptor = $this->externalAreaIndex($area)['operations'][$providerName][$operationName] ?? null;
+        return \is_array($descriptor) ? $descriptor : null;
+    }
+
+    /**
+     * @return array{providers:array, operations:array, summaries:array}
+     */
+    private function externalAreaIndex(string $area): array
+    {
+        $area = \strtolower(\trim($area));
+        if (!\in_array($area, ['frontend', 'backend'], true)) {
+            return ['providers' => [], 'operations' => [], 'summaries' => []];
+        }
+
+        $this->loadDefinitions();
+        if ($this->compiledDescriptorIndexLoaded) {
+            return $this->compiledExternalAreas[$area]
+                ?? ['providers' => [], 'operations' => [], 'summaries' => []];
+        }
+
+        $scope = $this->descriptorCacheScope() . "\0" . $area;
+        if (isset(self::$externalAreaCache[$scope])) {
+            return self::$externalAreaCache[$scope];
+        }
+
+        $providers = [];
+        $operations = [];
+        $summaries = [];
+        foreach ($this->getAllDescriptors() as $descriptor) {
+            if (!\is_array($descriptor)) {
+                continue;
+            }
+            $providerName = (string)($descriptor['provider'] ?? '');
+            if ($providerName === '') {
+                continue;
+            }
+
+            $areaOperations = [];
+            foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
+                if (!\is_array($operationDescriptor)
+                    || ($operationDescriptor['external'] ?? false) !== true
+                    || ($operationDescriptor[$area] ?? false) !== true
+                ) {
+                    continue;
+                }
+                $operationName = (string)($operationDescriptor['name'] ?? '');
+                if ($operationName !== '') {
+                    $areaOperations[$operationName] = $operationDescriptor;
+                }
+            }
+            if ($areaOperations === []) {
+                continue;
+            }
+
+            $areaDescriptor = $descriptor;
+            $areaDescriptor['operations'] = \array_values($areaOperations);
+            $areaDescriptor['operation_count'] = \count($areaOperations);
+            $providers[$providerName] = $areaDescriptor;
+            $operations[$providerName] = $areaOperations;
+            $summaries[] = [
+                'provider' => $providerName,
+                'name' => (string)($areaDescriptor['name'] ?? ''),
+                'description' => (string)($areaDescriptor['description'] ?? ''),
+                'module' => (string)($areaDescriptor['module'] ?? ''),
+                'operation_count' => \count($areaOperations),
+            ];
+        }
+
+        return self::$externalAreaCache[$scope] = [
+            'providers' => $providers,
+            'operations' => $operations,
+            'summaries' => $summaries,
+        ];
+    }
+
     public static function resetDescriptorCaches(): void
     {
         self::$descriptorCache = [];
         self::$operationDescriptorCache = [];
+        self::$externalAreaCache = [];
     }
 
     private function descriptorCacheScope(): string

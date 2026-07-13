@@ -875,7 +875,7 @@ class DomainPool extends Model
     /**
      * 获取「具备申请证书业务前置条件」的域名池行（**不**按域名池 https_status 过滤）。
      *
-     * 是否已有可用证书由 {@see \Weline\Server\Service\SslCertificateService::isManagedCertificateHealthyForHostname} 在定时任务中判断；
+     * 是否已有可用证书由 Server Query 的 isManagedCertificateHealthy 在定时任务中判断；
      * 避免池子字段与 SSL 证书管理器不一致时漏申请或误跳过。
      *
      * @param int $limit SQL 拉取条数（调用方宜略放大再在 PHP 侧按管理器健康过滤后截断）

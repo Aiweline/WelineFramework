@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Api\Param\ParamFormRendererInterface;
 use Weline\Widget\Ui\ParamType\ArrayType;
 use Weline\Widget\Ui\ParamType\BoolType;
 use Weline\Widget\Ui\ParamType\ColorType;
@@ -23,7 +24,7 @@ use Weline\Widget\Ui\ParamType\WidgetParamTypeInterface;
 /**
  * Widget 参数类型渲染服务（类型归一：未识别的 type 视为 text）
  */
-class ParamTypeRenderer
+class ParamTypeRenderer implements ParamFormRendererInterface
 {
     private array $typeRenderers = [];
 

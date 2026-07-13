@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Setup\Db\Migration;
 
-use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;

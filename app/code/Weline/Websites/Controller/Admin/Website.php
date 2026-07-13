@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Controller\Admin;
 
-use Weline\Backend\Config\KeysInterface;
-use Weline\Currency\Model\Currency;
+use Weline\Backend\Api\Config\KeysInterface;
+use Weline\Currency\Api\CurrencyCatalogInterface;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locals;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -27,8 +28,10 @@ class Website extends BackendController
 
     private \Weline\Websites\Model\Website $website;
 
-    public function __construct(\Weline\Websites\Model\Website $website)
-    {
+    public function __construct(
+        \Weline\Websites\Model\Website $website,
+        private readonly RuntimeProviderResolver $runtimeProviders,
+    ) {
         $this->website = $website;
     }
 
@@ -832,24 +835,16 @@ class Website extends BackendController
     private function getAllCurrencies(): array
     {
         try {
-            $currencyModel = ObjectManager::getInstance(Currency::class);
-            $currencies = $currencyModel->clearQuery()
-                ->where(Currency::schema_fields_STATUS, 1)
-                ->order(Currency::schema_fields_CODE, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-            
             $result = [];
-            foreach ($currencies as $currency) {
+            foreach ($this->currencyCatalog()->active() as $currency) {
                 $result[] = [
-                    'code' => $currency->getCode(),
-                    'name' => $currency->getName(),
+                    'code' => $currency->code,
+                    'name' => $currency->name,
                 ];
             }
-            
+
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable) {
             return [];
         }
     }
@@ -862,62 +857,43 @@ class Website extends BackendController
     private function getAllLocales(): array
     {
         $targetCode = Cookie::getLangLocal();
-        $localsModel = ObjectManager::getInstance(Locals::class);
-        $locales = $localsModel
-            ->clearQuery()
-            ->where(Locals::schema_fields_TARGET_CODE, $targetCode)
-            ->where(Locals::schema_fields_IS_ACTIVE, 1)
-            ->select()
-            ->fetchArray();
-        
-        $i18n = ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
-        
-        // 如果根据 target_code 查不到数据，则查询所有已安装的语言（不限制 target_code）
-        if (!$locales) {
-            $allLocales = $localsModel
-                ->clearQuery()
-                ->where(Locals::schema_fields_IS_INSTALL, 1)
-                ->where(Locals::schema_fields_IS_ACTIVE, 1)
-                ->order(Locals::schema_fields_CODE, 'ASC')
-                ->select()
-                ->fetchArray();
-            
-            if (!$allLocales) {
-                MessageManager::error(__('当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新', $targetCode));
-                return [];
-            } else {
-                // 按 code 去重，获取唯一的语言代码列表
-                $uniqueCodes = [];
-                foreach ($allLocales as $locale) {
-                    $code = $locale['code'];
-                    if (!in_array($code, $uniqueCodes)) {
-                        $uniqueCodes[] = $code;
-                    }
-                }
-                
-                // 使用 Symfony Intl 获取当前界面语言下的语言名称
-                $locales = [];
-                foreach ($uniqueCodes as $code) {
-                    $locales[] = [
-                        'code' => $code,
-                        'name' => $i18n->getLocaleName($code, $targetCode),
-                        'target_code' => $targetCode,
-                        'is_active' => 1,
-                        'is_install' => 1
-                    ];
-                }
-            }
-        } else {
-            // 即使查询成功，也确保名称是当前界面语言下的名称
-            foreach ($locales as &$locale) {
-                // 如果 target_code 匹配，使用数据库中的名称；否则使用 Symfony Intl 获取
-                if ($locale['target_code'] !== $targetCode) {
-                    $locale['name'] = $i18n->getLocaleName($locale['code'], $targetCode);
-                }
-            }
+        $locales = [];
+        foreach ($this->localeRepository()->installedActive($targetCode) as $locale) {
+            $locales[] = [
+                'code' => $locale->code,
+                'name' => $locale->displayName,
+                'target_code' => $locale->displayLocale,
+                'flag' => $locale->flag,
+                'is_active' => $locale->active ? 1 : 0,
+                'is_install' => $locale->installed ? 1 : 0,
+            ];
         }
-        
-        return $locales ?: [];
+
+        if ($locales === []) {
+            MessageManager::error(__('当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新', $targetCode));
+        }
+
+        return $locales;
+    }
+
+    private function localeRepository(): LocaleRepositoryInterface
+    {
+        $repository = $this->runtimeProviders->resolve(LocaleRepositoryInterface::class);
+        if (!$repository instanceof LocaleRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n locale repository provider is unavailable.');
+        }
+
+        return $repository;
+    }
+
+    private function currencyCatalog(): CurrencyCatalogInterface
+    {
+        $catalog = $this->runtimeProviders->resolve(CurrencyCatalogInterface::class);
+        if (!$catalog instanceof CurrencyCatalogInterface) {
+            throw new \RuntimeException('Weline_Currency catalog provider is unavailable.');
+        }
+
+        return $catalog;
     }
 
     /**

@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View\Taglib\Compiler;
 
+use Weline\Framework\Compilation\CompiledExtensionRegistry;
+
 use Weline\Framework\View\Taglib\Ast\TagNode;
 use Weline\Framework\View\Taglib\Registry\TagDefinition;
 use Weline\Framework\View\Taglib\Registry\TagRegistry;
@@ -152,8 +154,7 @@ final class StageResolver
     {
         // 获取 TaglibRegistry 中的标签定义
         try {
-            $taglibRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Taglib\TaglibRegistry::class);
-            $tags = $taglibRegistry->getTags();
+            $tags = CompiledExtensionRegistry::tags();
             
             // 直接匹配
             if (isset($tags[$tagName]) && !empty($tags[$tagName]['is_custom'])) {

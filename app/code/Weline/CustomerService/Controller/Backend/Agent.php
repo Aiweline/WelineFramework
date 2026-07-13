@@ -11,12 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Controller\Backend;
 
-use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Api\Auth\BackendUserDirectoryInterface;
 use Weline\CustomerService\Model\ServiceAgent;
 use Weline\CustomerService\Service\StatisticsService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * 客服人员管理控制器
@@ -47,12 +48,15 @@ class Agent extends BackendController
                 ->getItems();
 
             // 获取关联的用户信息和统计数据
+            $userDirectory = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(BackendUserDirectoryInterface::class);
+            if (!$userDirectory instanceof BackendUserDirectoryInterface) {
+                throw new \RuntimeException('Weline_Backend user directory provider is unavailable.');
+            }
             foreach ($agents as &$agentData) {
                 if ($agentData['user_id']) {
-                    /** @var BackendUser $user */
-                    $user = ObjectManager::getInstance(BackendUser::class);
-                    $user->load($agentData['user_id']);
-                    if ($user->getId()) {
+                    $user = $userDirectory->find((int)$agentData['user_id']);
+                    if ($user !== null) {
                         $agentData['user_name'] = $user->getUsername();
                     }
                 }
@@ -220,4 +224,3 @@ class Agent extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 }
-

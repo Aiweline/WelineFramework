@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service\AI\Tool;
 
-use Weline\Ai\Interface\ToolInterface;
+use Weline\Ai\Api\ToolInterface;
 
 /**
  * AI 推荐域名工具

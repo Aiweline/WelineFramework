@@ -80,7 +80,7 @@ class Upgrade extends CommandAbstract
             ],
             [
                 '全量更新' => 'php bin/w command:upgrade',
-                '增量更新指定模块' => 'php bin/w command:upgrade -m Weline_Admin',
+                '增量更新指定模块' => 'php bin/w command:upgrade -m Vendor_Module',
             ],
             'php bin/w command:upgrade [-m|--module=<模块名>]'
         );

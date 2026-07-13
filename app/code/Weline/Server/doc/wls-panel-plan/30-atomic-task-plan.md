@@ -66,6 +66,11 @@ The 2026-06-29 humanized redesign supersedes the earlier shared `wls-panel-plugi
   rendered `网关路由已应用。`, preserved B as selected, and the post-submit route
   check proved B served `wls-gw-ui-selected.local` while A did not.
 - The Gateway Settings slice now persists `wls.gateway.enabled` and `wls.gateway.listen` through `Env::setConfig()` from `WlsPanel::postGatewaySave()`.
+- Current topology contract supersedes the historical Stage 2 field below:
+  `wls.runtime.topology` is authoritative. `wls.gateway.traffic_mode`,
+  `WLS_GATEWAY_TRAFFIC_MODE`, `direct_listen`, and `passthrough` are read-only
+  migration aliases and may be mapped only when no explicit authoritative
+  topology exists; new panel/instance writes must not persist them.
 - `WLS-GATEWAY-010` has its first implementation slice: Gateway Settings now
   persists `wls.gateway.traffic_mode`, supports `auto`, `direct_listen`, and
   `passthrough`, shows saved versus effective traffic mode, warns when

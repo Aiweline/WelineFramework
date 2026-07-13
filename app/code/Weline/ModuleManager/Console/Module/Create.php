@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\ModuleManager\Console\Module;
 
+use Weline\Ai\Api\TranslationService as AiTranslationService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
@@ -20,6 +21,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\Register;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\I18n\Api\Translation\TranslationCollectorInterface;
 
 class Create extends CommandAbstract
 {
@@ -1239,21 +1242,14 @@ class Create extends CommandAbstract
      */
     private function extractI18nStrings(string $modulePath): array
     {
-        $collector = ObjectManager::getInstance(\Weline\I18n\Service\TranslationCollector::class);
+        if (!interface_exists(TranslationCollectorInterface::class)) {
+            return [];
+        }
+
+        /** @var TranslationCollectorInterface $collector */
+        $collector = ObjectManager::getInstance(TranslationCollectorInterface::class);
         $moduleName = str_replace(DS, '_', str_replace(APP_CODE_PATH, '', $modulePath));
         return $collector->collect($modulePath, $moduleName);
-    }
-    
-    /**
-     * 验证字符串是否为有效的翻译字符串
-     * 使用统一的 I18n 收集服务
-     * @param string $str
-     * @return bool
-     */
-    private function isValidTranslationString(string $str): bool
-    {
-        $collector = ObjectManager::getInstance(\Weline\I18n\Service\TranslationCollector::class);
-        return $collector->isValidTranslationString($str);
     }
 
     /**
@@ -1332,26 +1328,13 @@ class Create extends CommandAbstract
         
         try {
             // 使用 TranslationService 进行翻译（这是标准方式）
-            if (!class_exists('Weline\Ai\Service\TranslationService')) {
+            if (!class_exists(AiTranslationService::class)) {
                 $this->printer->warning(__('AI模块未找到，跳过AI翻译'));
                 return $translated;
             }
-            
-            // 手动创建 TranslationService 实例，因为需要正确的依赖注入
-            $aiService = ObjectManager::getInstance('Weline\Ai\Service\AiService');
-            // 使用 CacheFactory 创建缓存实例
-            $cacheFactory = new \Weline\Framework\Cache\CacheFactory('translation', __('翻译缓存'), false);
-            $cache = $cacheFactory->create();
-            $i18nIntegration = ObjectManager::getInstance('Weline\Ai\Service\I18nIntegration');
-            $defaultModelManager = ObjectManager::getInstance('Weline\Ai\Service\DefaultModelManager');
-            
-            /** @var \Weline\Ai\Service\TranslationService $translationService */
-            $translationService = new \Weline\Ai\Service\TranslationService(
-                $aiService,
-                $cache,
-                $i18nIntegration,
-                $defaultModelManager
-            );
+
+            /** @var AiTranslationService $translationService */
+            $translationService = ObjectManager::getInstance(AiTranslationService::class);
             
             $this->printer->note(__('找到AI翻译服务，开始翻译...'));
             
@@ -1556,14 +1539,13 @@ class Create extends CommandAbstract
         $translated = [];
         
         try {
-            // 使用本地词典模型
-            if (!class_exists('Weline\I18n\Model\Locale\Dictionary')) {
-                $this->printer->note(__('本地词典模型未找到，跳过数据库翻译'));
+            if (!interface_exists(DictionaryRepositoryInterface::class)) {
+                $this->printer->note(__('本地词典契约未找到，跳过数据库翻译'));
                 return $translated;
             }
-            
-            /** @var \Weline\I18n\Model\Locale\Dictionary $dictionaryModel */
-            $dictionaryModel = ObjectManager::getInstance('Weline\I18n\Model\Locale\Dictionary');
+
+            /** @var DictionaryRepositoryInterface $dictionary */
+            $dictionary = ObjectManager::getInstance(DictionaryRepositoryInterface::class);
             
             $originalStrings = array_keys($strings);
             
@@ -1573,19 +1555,9 @@ class Create extends CommandAbstract
             
             foreach ($batches as $batch) {
                 try {
-                    $results = $dictionaryModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Dictionary::schema_fields_WORD, $batch, 'IN')
-                        ->where(\Weline\I18n\Model\Locale\Dictionary::schema_fields_LOCALE_CODE, $targetLanguage)
-                        ->fetch()
-                        ->getItems();
-                    
-                    if (!empty($results)) {
-                        foreach ($results as $result) {
-                            $word = $result->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_WORD) ?? '';
-                            $translation = $result->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_TRANSLATE) ?? '';
-                            if (!empty($word) && !empty($translation)) {
-                                $translated[$word] = $translation;
-                            }
+                    foreach ($dictionary->getEntries($batch, $targetLanguage) as $word => $entry) {
+                        if ($entry->translation !== '') {
+                            $translated[$word] = $entry->translation;
                         }
                     }
                 } catch (\Exception $e) {
@@ -5814,4 +5786,3 @@ XML;
         return $emptyDirs;
     }
 }
-

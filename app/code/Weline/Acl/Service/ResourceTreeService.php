@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Service;
 
+use Weline\Acl\Api\RoleIdentityInterface;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\AclNode;
-use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -40,10 +40,10 @@ class ResourceTreeService implements ResourceTreeServiceInterface
     /**
      * 获取后台菜单树（运行时使用）
      * 
-     * @param Role $role 角色
+     * @param RoleIdentityInterface $role 角色
      * @return array 菜单树
      */
-    public function getBackendMenuTree(Role $role): array
+    public function getBackendMenuTree(RoleIdentityInterface $role): array
     {
         $roleId = (int)$role->getId();
         if ($roleId <= 0) {
@@ -98,10 +98,10 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      * 使用 fetchArray() + AclNode 替代 fetch()->getItems()，
      * 避免为每行创建完整 Acl Model（含反射/Schema 解析），提升约 100 倍构造速度。
      * 
-     * @param Role $role 角色
+     * @param RoleIdentityInterface $role 角色
      * @return AclNode[] 权限树
      */
-    public function getAclAssignmentTree(Role $role): array
+    public function getAclAssignmentTree(RoleIdentityInterface $role): array
     {
         $roleId = (int) $role->getId();
         
@@ -134,11 +134,11 @@ class ResourceTreeService implements ResourceTreeServiceInterface
     /**
      * 获取角色有权限的菜单 source_id 列表
      * 
-     * @param Role $role
+     * @param RoleIdentityInterface $role
      * @param array $menuSourceIds
      * @return array
      */
-    private function getAllowedMenuSources(Role $role, array $menuSourceIds): array
+    private function getAllowedMenuSources(RoleIdentityInterface $role, array $menuSourceIds): array
     {
         $roleAccessModel = $this->newRoleAccessModel();
         $roleAccess = $roleAccessModel->clear()

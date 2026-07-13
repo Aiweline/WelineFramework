@@ -1,0 +1,25 @@
+{
+    "name": "weline/module-payment",
+    "description": "WelineFramework Payment module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-eav": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-frontend": "@dev",
+        "weline/module-hook": "@dev",
+        "weline/module-i18n": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-theme": "@dev"
+    },
+    "suggest": {
+        "weline/module-marketing": "Supplies discount-action metadata for payment compatibility checks."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Payment\\": ""
+        }
+    }
+}

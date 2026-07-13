@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Service;
 
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Marketing\Api\Rule\ActionCatalogInterface;
+use Weline\Marketing\Api\Rule\ActionDescriptor;
+use Weline\Payment\Api\Discount\DiscountActionSupportInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Marketing\Service\RuleEngine;
 use Weline\Payment\Model\PaymentMethod;
 
 /**
@@ -22,9 +25,14 @@ use Weline\Payment\Model\PaymentMethod;
  * 
  * @package Weline_Payment
  */
-class DiscountActionSupportService
+class DiscountActionSupportService implements DiscountActionSupportInterface
 {
     private ?array $allActionsCache = null;
+
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
+    ) {
+    }
     
     /**
      * 获取所有可用的优惠方式
@@ -39,14 +47,24 @@ class DiscountActionSupportService
             return $this->allActionsCache;
         }
         
-        try {
-            /** @var RuleEngine $ruleEngine */
-            $ruleEngine = ObjectManager::getInstance(RuleEngine::class);
-            $this->allActionsCache = $ruleEngine->getAvailableActions();
-        } catch (\Exception $e) {
-            // 如果营销模块不可用，返回空数组
-            $this->allActionsCache = [];
+        $catalog = $this->runtimeProviderResolver->resolve(ActionCatalogInterface::class);
+        if (!$catalog instanceof ActionCatalogInterface) {
+            return $this->allActionsCache = [];
         }
+
+        $actions = [];
+        foreach ($catalog->all() as $descriptor) {
+            if (!$descriptor instanceof ActionDescriptor || $descriptor->code === '') {
+                continue;
+            }
+            $actions[$descriptor->code] = [
+                'code' => $descriptor->code,
+                'name' => $descriptor->name,
+                'description' => $descriptor->description,
+                'form_fields' => $descriptor->formFields,
+            ];
+        }
+        $this->allActionsCache = $actions;
         
         return $this->allActionsCache;
     }
@@ -137,4 +155,3 @@ class DiscountActionSupportService
         return $unsupported;
     }
 }
-

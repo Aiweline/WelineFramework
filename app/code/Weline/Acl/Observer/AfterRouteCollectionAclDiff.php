@@ -11,7 +11,7 @@ namespace Weline\Acl\Observer;
 
 use Weline\Acl\Service\AclOrphanCleanupService;
 use Weline\Acl\Service\CollectedAclSourceIdsRegistry;
-use Weline\Backend\Config\MenuXmlReader;
+use Weline\Acl\Service\MenuSourceIds;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -25,7 +25,7 @@ use Weline\Framework\Event\ObserverInterface;
 class AfterRouteCollectionAclDiff implements ObserverInterface
 {
     public function __construct(
-        private MenuXmlReader $menuReader,
+        private MenuSourceIds $menuSourceIds,
         private AclOrphanCleanupService $aclOrphanCleanupService
     ) {
     }
@@ -50,18 +50,7 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
      */
     private function getCollectedMenuSourceIds(): array
     {
-        $moduleMenus = $this->menuReader->read();
-        $sources = [];
-        foreach ($moduleMenus as $menus) {
-            $data = $menus['data'] ?? [];
-            foreach ($data as $menu) {
-                $source = $menu['source'] ?? '';
-                if ($source !== '') {
-                    $sources[] = $source;
-                }
-            }
-        }
-        return $sources;
+        return $this->menuSourceIds->all();
     }
 
 }

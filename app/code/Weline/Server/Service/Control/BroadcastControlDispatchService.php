@@ -256,12 +256,22 @@ class BroadcastControlDispatchService
 
         $instances = [];
         foreach ($this->serverInstanceManager->listPersistedInstanceNames() as $name) {
-            if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
-                $instances[] = $name;
+            $instance = $this->serverInstanceManager->getRawInstanceData($name);
+            if ($instance === null) {
+                if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
+                    $instances[] = $name;
+                    continue;
+                }
+                if ($this->serverInstanceManager->hasInstance($name)) {
+                    $skippedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
+                }
                 continue;
             }
-
-            if (!$this->serverInstanceManager->hasInstance($name)) {
+            if ($this->isStoppedInstanceRecord($instance)) {
+                continue;
+            }
+            if ($this->mayAcceptControlCommand($instance)) {
+                $instances[] = $name;
                 continue;
             }
 
@@ -269,6 +279,31 @@ class BroadcastControlDispatchService
         }
 
         return $instances;
+    }
+
+    /** @param array<string, mixed> $instance */
+    private function mayAcceptControlCommand(array $instance): bool
+    {
+        return !$this->isStoppedInstanceRecord($instance)
+            && (int)($instance['control_port'] ?? 0) > 0;
+    }
+
+    /** @param array<string, mixed> $instance */
+    private function isStoppedInstanceRecord(array $instance): bool
+    {
+        $lifecycleState = \strtolower(\trim((string)($instance['lifecycle_state'] ?? '')));
+        $startupPhase = \strtolower(\trim((string)($instance['startup_phase'] ?? '')));
+        $terminalStates = [
+            'stopped',
+            'stale_cleanup',
+            'master_exited',
+            'master_exited_children_retained',
+            'startup_failed',
+            'failed',
+        ];
+
+        return \in_array($lifecycleState, $terminalStates, true)
+            || \in_array($startupPhase, $terminalStates, true);
     }
 
     /**

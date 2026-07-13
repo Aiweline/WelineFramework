@@ -20,7 +20,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
-class CssPart implements \Weline\Taglib\TaglibInterface
+class CssPart implements \Weline\Framework\Taglib\TaglibInterface
 {
     public static Request|null $request = null;
 

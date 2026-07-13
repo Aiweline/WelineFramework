@@ -2,7 +2,7 @@
 
 namespace Weline\EditorManager\Setup;
 
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\InstallInterface;
 
@@ -11,9 +11,9 @@ class Install implements InstallInterface
     /**
      * @var \Weline\EditorManager\Model\BackendUserConfig
      */
-    private BackendUserConfig $backendUserConfig;
+    private BackendUserConfigStore $backendUserConfig;
 
-    public function __construct(BackendUserConfig $backendUserConfig)
+    public function __construct(BackendUserConfigStore $backendUserConfig)
     {
         $this->backendUserConfig = $backendUserConfig;
     }

@@ -12,7 +12,7 @@ declare(strict_types=1);
  * 描述：此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
  * 
  * 维护模式拦截器：
- * - 监听 Weline_Framework::App::run_before 事件（最早时机）
+ * - 监听 Weline_Framework::App::pre_route_gate 事件（最早时机）
  * - 此时 URL 未解析，无数据库连接，无第三方服务请求
  * - 从 generated/language 读取翻译，不依赖数据库
  * - 在 pub/errors/maintenance/ 下生成静态文件，可被 nginx 直接返回
@@ -34,7 +34,7 @@ use Weline\Maintenance\Helper\UrlParser;
 /**
  * 维护模式拦截器
  * 
- * 在应用启动最早期拦截请求，检查维护模式状态
+ * 在 URL/FPC 前的强制门禁阶段拦截请求，检查维护模式状态
  * 如果处于维护模式，直接返回维护页面，避免任何数据库或第三方服务请求
  * 
  * 性能优化：
@@ -714,7 +714,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         // 获取 Logo URL（后台配置，维护页为深色背景，优先用 logo_light）
         $maintenance_logo_url = '';
         try {
-            $backendConfig = ObjectManager::getInstance(\Weline\Backend\Model\Config::class);
+            $backendConfig = ObjectManager::getInstance(\Weline\Backend\Api\Config\BackendConfigStore::class);
             $logoLight = trim((string) ($backendConfig->getConfig('logo_light', 'Weline_Backend') ?? ''));
             if ($logoLight === '') {
                 $logoLight = trim((string) ($backendConfig->getConfig('logo_dark', 'Weline_Backend') ?? ''));

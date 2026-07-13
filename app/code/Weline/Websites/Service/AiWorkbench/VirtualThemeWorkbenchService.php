@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace Weline\Websites\Service\AiWorkbench;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Websites\Api\AiWorkbench\VirtualThemeStoreInterface;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderSession;
 
 class VirtualThemeWorkbenchService
 {
+    private bool $themeStoreResolved = false;
+    private ?VirtualThemeStoreInterface $themeStore = null;
+
     public function __construct(
         private readonly SessionService $sessionService,
         private readonly EventStreamService $eventStreamService,
@@ -39,28 +44,28 @@ class VirtualThemeWorkbenchService
             $themeName = 'ai-site-' . $session->getId();
         }
 
-        $theme = $this->loadOrCreateTheme($themeId, $session->getId(), $themeName);
-        if ($theme === null) {
+        $themeStore = $this->themeStore();
+        if ($themeStore === null) {
             return ['success' => false, 'message' => (string)__('当前环境未启用主题模块，无法保存虚拟主题')];
         }
 
-        $config = \is_array($theme->getConfig()) ? $theme->getConfig() : [];
-        $config['virtual_theme_name'] = $themeName;
-        $config['theme_style_direction'] = $styleDirection;
-        $config['theme_color_scheme'] = $colorScheme;
-        $config['selected_page_types'] = $pageTypes;
-        $config['virtual_page_layouts'] = $pageLayouts;
-        $config['source'] = 'ai_site_workbench';
-        $config['scope_public_id'] = $session->getPublicId();
-        $config['scope_session_id'] = $session->getId();
-
-        $theme->setName($themeName);
-        $theme->setModuleName('Weline_Websites');
-        $theme->setConfig($config);
-        $theme->save();
+        $themeResult = $themeStore->saveTheme($themeId, $session->getId(), $themeName, [
+            'virtual_theme_name' => $themeName,
+            'theme_style_direction' => $styleDirection,
+            'theme_color_scheme' => $colorScheme,
+            'selected_page_types' => $pageTypes,
+            'virtual_page_layouts' => $pageLayouts,
+            'source' => 'ai_site_workbench',
+            'scope_public_id' => $session->getPublicId(),
+            'scope_session_id' => $session->getId(),
+        ]);
+        if ($themeResult === null || (int)($themeResult['theme_id'] ?? 0) <= 0) {
+            return ['success' => false, 'message' => (string)__('无法保存虚拟主题')];
+        }
+        $savedThemeId = (int)$themeResult['theme_id'];
 
         $scopePatch = [
-            'weline_theme_id' => (int)$theme->getId(),
+            'weline_theme_id' => $savedThemeId,
             'virtual_theme_name' => $themeName,
             'theme_style_direction' => $styleDirection,
             'theme_color_scheme' => $colorScheme,
@@ -72,7 +77,7 @@ class VirtualThemeWorkbenchService
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminUserId) ?? $session;
         $this->appendEvent($fresh, $adminUserId, 'virtual_theme_saved', [
-            'weline_theme_id' => (int)$theme->getId(),
+            'weline_theme_id' => $savedThemeId,
             'virtual_theme_name' => $themeName,
             'page_types' => $pageTypes,
         ]);
@@ -81,7 +86,7 @@ class VirtualThemeWorkbenchService
             'success' => true,
             'message' => (string)__('虚拟主题已保存到数据库'),
             'data' => [
-                'weline_theme_id' => (int)$theme->getId(),
+                'weline_theme_id' => $savedThemeId,
                 'virtual_theme_name' => $themeName,
                 'page_types' => $pageTypes,
                 'page_type_layouts' => $pageLayouts,
@@ -118,16 +123,18 @@ class VirtualThemeWorkbenchService
             $themeId = (int)($saveResult['data']['weline_theme_id'] ?? 0);
         }
 
-        $theme = $this->loadOrCreateTheme($themeId, $session->getId(), $themeName !== '' ? $themeName : ('ai-site-' . $session->getId()));
-        if ($theme === null || (int)$theme->getId() <= 0) {
+        $themeStore = $this->themeStore();
+        $themeResult = $themeStore?->savePageTypeLayout(
+            $themeId,
+            $session->getId(),
+            $themeName !== '' ? $themeName : ('ai-site-' . $session->getId()),
+            $pageType,
+            $layoutPayload,
+        );
+        if ($themeResult === null || (int)($themeResult['theme_id'] ?? 0) <= 0) {
             return ['success' => false, 'message' => (string)__('无法加载虚拟主题')];
         }
-
-        $config = \is_array($theme->getConfig()) ? $theme->getConfig() : [];
-        $layouts = $this->normalizeArray($config['virtual_page_layouts'] ?? []);
-        $layouts[$pageType] = $layoutPayload;
-        $config['virtual_page_layouts'] = $layouts;
-        $theme->setConfig($config)->save();
+        $themeId = (int)$themeResult['theme_id'];
 
         $scopeLayouts = $this->normalizeArray($scope['page_type_layouts'] ?? []);
         $scopeLayouts[$pageType] = $layoutPayload;
@@ -136,14 +143,14 @@ class VirtualThemeWorkbenchService
             $scopePageTypes[] = $pageType;
         }
         $this->sessionService->mergeScope($session->getId(), $adminUserId, [
-            'weline_theme_id' => (int)$theme->getId(),
+            'weline_theme_id' => $themeId,
             'page_types' => \array_values(\array_unique($scopePageTypes)),
             'page_type_layouts' => $scopeLayouts,
         ]);
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminUserId) ?? $session;
         $this->appendEvent($fresh, $adminUserId, 'page_type_layout_saved', [
-            'weline_theme_id' => (int)$theme->getId(),
+            'weline_theme_id' => $themeId,
             'page_type' => $pageType,
         ]);
 
@@ -151,7 +158,7 @@ class VirtualThemeWorkbenchService
             'success' => true,
             'message' => (string)__('页面类型布局已保存到数据库虚拟主题'),
             'data' => [
-                'weline_theme_id' => (int)$theme->getId(),
+                'weline_theme_id' => $themeId,
                 'page_type' => $pageType,
                 'layout' => $layoutPayload,
             ],
@@ -175,7 +182,8 @@ class VirtualThemeWorkbenchService
             return ['success' => false, 'message' => (string)__('请先保存虚拟主题，再保存组件')];
         }
 
-        if (!\class_exists(\Weline\Theme\Service\ThemeAiDraftService::class)) {
+        $themeStore = $this->themeStore();
+        if ($themeStore === null) {
             return ['success' => false, 'message' => (string)__('主题 AI 草稿服务不可用')];
         }
 
@@ -187,32 +195,23 @@ class VirtualThemeWorkbenchService
             return ['success' => false, 'message' => (string)__('组件模板内容不能为空')];
         }
 
-        /** @var \Weline\Theme\Service\ThemeAiDraftService $draftService */
-        $draftService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeAiDraftService::class);
-        $draftVersion = $draftService->saveDraft([
-            'theme_id' => $themeId,
-            'area' => 'frontend',
+        $componentResult = $themeStore->saveComponent($themeId, [
             'category' => $category,
             'component_code' => $componentCode,
             'name' => $componentName,
             'description' => (string)($payload['description'] ?? ''),
             'meta' => $this->normalizeArray($payload['meta'] ?? []),
-            'is_ai_generated' => true,
-            'source_type' => 'virtual',
-        ], [
             'template_content' => $templateContent,
-            'generation_meta' => [
-                'source' => 'ai_site_workbench',
-                'public_id' => $session->getPublicId(),
-            ],
-        ]);
-        $component = $draftService->publishDraft((int)$draftVersion->getId());
+        ], $session->getPublicId());
+        if ($componentResult === null) {
+            return ['success' => false, 'message' => (string)__('主题 AI 草稿服务不可用')];
+        }
 
         $this->appendEvent($session, $adminUserId, 'virtual_component_saved', [
             'weline_theme_id' => $themeId,
-            'component_code' => $component->getComponentCode(),
-            'component_id' => $component->getId(),
-            'version_id' => $draftVersion->getId(),
+            'component_code' => (string)$componentResult['component_code'],
+            'component_id' => (int)$componentResult['component_id'],
+            'version_id' => (int)$componentResult['version_id'],
         ]);
 
         return [
@@ -220,37 +219,23 @@ class VirtualThemeWorkbenchService
             'message' => (string)__('AI 组件已保存并发布到虚拟主题'),
             'data' => [
                 'weline_theme_id' => $themeId,
-                'component_id' => (int)$component->getId(),
-                'component_code' => $component->getComponentCode(),
-                'version_id' => (int)$draftVersion->getId(),
+                'component_id' => (int)$componentResult['component_id'],
+                'component_code' => (string)$componentResult['component_code'],
+                'version_id' => (int)$componentResult['version_id'],
             ],
         ];
     }
 
-    private function loadOrCreateTheme(int $themeId, int $sessionId, string $themeName): ?object
+    private function themeStore(): ?VirtualThemeStoreInterface
     {
-        if (!\class_exists(\Weline\Theme\Model\WelineTheme::class)) {
-            return null;
+        if ($this->themeStoreResolved) {
+            return $this->themeStore;
         }
-
-        /** @var object $theme */
-        $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-        $theme->clearData()->clearQuery();
-        if ($themeId > 0) {
-            $theme->load($themeId);
-        }
-
-        if ((int)$theme->getId() <= 0) {
-            $slug = $this->slugify($themeName !== '' ? $themeName : ('ai-site-' . $sessionId));
-            $theme->setPath('ai/workbench-' . $sessionId . '-' . $slug . '-' . \substr(\md5((string)\microtime(true)), 0, 8));
-            $theme->setIsActive(false);
-            if (\method_exists($theme, 'setData')) {
-                $theme->setData('is_active_frontend', 0);
-                $theme->setData('is_active_backend', 0);
-            }
-        }
-
-        return $theme;
+        $this->themeStoreResolved = true;
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(VirtualThemeStoreInterface::class);
+        $this->themeStore = $provider instanceof VirtualThemeStoreInterface ? $provider : null;
+        return $this->themeStore;
     }
 
     /**
@@ -276,13 +261,6 @@ class VirtualThemeWorkbenchService
         }
 
         return (string)\preg_replace('/[^a-z0-9_\\-]+/', '', $pageType);
-    }
-
-    private function slugify(string $value): string
-    {
-        $value = \strtolower(\trim($value));
-        $value = (string)\preg_replace('/[^a-z0-9]+/', '-', $value);
-        return \trim($value, '-') !== '' ? \trim($value, '-') : 'theme';
     }
 
     /**
@@ -331,4 +309,3 @@ class VirtualThemeWorkbenchService
         return $result;
     }
 }
-

@@ -1,18 +1,9 @@
-﻿获取支付方式列表成功,获取支付方式列表成功
-缺少必需参数,缺少必需参数
-订单支付,订单支付
-"订单号: %{1}","订单号: %{1}"
-支付订单创建成功,支付订单创建成功
-"创建支付订单失败: %{1}","创建支付订单失败: %{1}"
-缺少交易号,缺少交易号
-交易记录不存在,交易记录不存在
-查询成功,查询成功
-"查询失败: %{1}","查询失败: %{1}"
-支付统计驾驶舱,支付统计驾驶舱
-缺少支付方式代码,缺少支付方式代码
-支付方式不存在,支付方式不存在
-缺少交易ID,缺少交易ID
-支付状态查询成功,支付状态查询成功
+﻿"Payment query provider does not support operation: %{1}","Payment query provider does not support operation: %{1}"
+"已有 %{1} 个可用于结账的支付方式。","已有 %{1} 个可用于结账的支付方式。"
+"暂无可用于结账的支付方式，请启用并配置至少一个 Weline_Payment 支付 Provider。","暂无可用于结账的支付方式，请启用并配置至少一个 Weline_Payment 支付 Provider。"
+"支付 Provider 实例不可用。","支付 Provider 实例不可用。"
+"Payment methods","Payment methods"
+"Weline_Payment payment method registry and checkout availability provider.","Weline_Payment payment method registry and checkout availability provider."
 "Payment method, payable ID and amount are required.","Payment method, payable ID and amount are required."
 Payment,Payment
 "Payment transaction created.","Payment transaction created."
@@ -21,30 +12,56 @@ Payment,Payment
 "Payment succeeded.","Payment succeeded."
 "Payment failed or is still processing.","Payment failed or is still processing."
 "Query payment status failed: %{message}","Query payment status failed: %{message}"
+缺少支付方式代码,缺少支付方式代码
+缺少交易ID,缺少交易ID
+交易记录不存在,交易记录不存在
+支付状态查询成功,支付状态查询成功
+"查询失败: %{1}","查询失败: %{1}"
+支付统计驾驶舱,支付统计驾驶舱
+支付方式不存在,支付方式不存在
+获取支付方式列表成功,获取支付方式列表成功
+缺少必需参数,缺少必需参数
+订单支付,订单支付
+"订单号: %{1}","订单号: %{1}"
+支付订单创建成功,支付订单创建成功
+"创建支付订单失败: %{1}","创建支付订单失败: %{1}"
+缺少交易号,缺少交易号
+查询成功,查询成功
 支付成功,支付成功
 支付待处理,支付待处理
 支付处理中,支付处理中
-该支付方式不允许当前可支付对象。,该支付方式不允许当前可支付对象。
-该支付方式未开放给当前可支付对象。,该支付方式未开放给当前可支付对象。
-该支付方式要求付款人先登录或完成身份识别。,该支付方式要求付款人先登录或完成身份识别。
-当前付款人类型不能使用该支付方式。,当前付款人类型不能使用该支付方式。
-当前付款人不能使用该支付方式。,当前付款人不能使用该支付方式。
-当前金额低于该支付方式最低可支付金额。,当前金额低于该支付方式最低可支付金额。
-当前金额超过该支付方式最高可支付金额。,当前金额超过该支付方式最高可支付金额。
-该支付方式不支持当前支付货币。,该支付方式不支持当前支付货币。
-该支付方式不支持当前国家或地区。,该支付方式不支持当前国家或地区。
-当前业务标签不能使用该支付方式。,当前业务标签不能使用该支付方式。
-当前业务对象缺少该支付方式要求的业务标签。,当前业务对象缺少该支付方式要求的业务标签。
-"支付提供商 method_code 不能为空","支付提供商 method_code 不能为空"
-"支付方式 %{code} 不存在","支付方式 %{code} 不存在"
-支付提供商实例化失败,支付提供商实例化失败
-"支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。","支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。"
-"支付方式 %{code} 不存在或未启用","支付方式 %{code} 不存在或未启用"
+"Fake Card","Fake Card"
+"Used by browser verification only.","Used by browser verification only."
+您的订单已支付成功,您的订单已支付成功
+交易号,交易号
+支付金额,支付金额
+支付失败,支付失败
+支付未完成，请重试,支付未完成，请重试
+返回首页,返回首页
+"Credit Asset","Credit Asset"
+"Requires exchange ratio and payable permission before checkout.","Requires exchange ratio and payable permission before checkout."
+"This asset is not enabled for payment.","This asset is not enabled for payment."
+"Payment method","Payment method"
+"Reward Points","Reward Points"
+"Can be configured as discount, payment, or both.","Can be configured as discount, payment, or both."
+"Current currency is not supported.","Current currency is not supported."
+"Discount or payment","Discount or payment"
+"W Coin","W Coin"
+"Can partially deduct payable amount when enabled.","Can partially deduct payable amount when enabled."
+"Current customer country is not supported.","Current customer country is not supported."
+"Payment provider is not ready.","Payment provider is not ready."
+取消,取消
+已退款,已退款
+"Select a payment method to continue.","Select a payment method to continue."
+"Please agree to the payment terms before continuing.","Please agree to the payment terms before continuing."
+"Selected payment method:","Selected payment method:"
+状态,状态
+支付方式,支付方式
+"No payment method is available for the current payable object.","No payment method is available for the current payable object."
 支付方式当前不可用,支付方式当前不可用
-创建支付订单失败,创建支付订单失败
-签名验证失败,签名验证失败
-回调数据中缺少交易号,回调数据中缺少交易号
-"交易记录不存在: %{no}","交易记录不存在: %{no}"
+"I agree to the payment terms.","I agree to the payment terms."
+支付状态,支付状态
+More,More
 失败率,失败率
 "优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径","优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径"
 未完成支付,未完成支付
@@ -71,7 +88,6 @@ Payment,Payment
 来源,来源
 只读统计,只读统计
 按状态统计,按状态统计
-状态,状态
 "Intent 数量","Intent 数量"
 "Attempt 数量","Attempt 数量"
 需求缺口,需求缺口
@@ -88,15 +104,43 @@ Payment,Payment
 生成时间,生成时间
 交易成功金额,交易成功金额
 退款金额,退款金额
+交易记录管理,交易记录管理
+交易号/订单ID,交易号/订单ID
+全部状态,全部状态
+待支付,待支付
+处理中,处理中
+搜索,搜索
+订单ID,订单ID
+创建时间,创建时间
+操作,操作
+暂无交易记录,暂无交易记录
+查看,查看
+查询状态,查询状态
+查询失败,查询失败
+查询失败，请重试,查询失败，请重试
+交易记录详情,交易记录详情
+更新时间,更新时间
+支付完成时间,支付完成时间
+请求数据,请求数据
+响应数据,响应数据
+回调数据,回调数据
+返回,返回
+支付方式管理,支付方式管理
+支付方式名称,支付方式名称
+支付提供商,支付提供商
+是否启用,是否启用
+排序,排序
+暂无支付方式,暂无支付方式
+启用,启用
+禁用,禁用
+查看配置,查看配置
 编辑支付方式,编辑支付方式
 支付方式配置入口,支付方式配置入口
 打开系统配置中心,打开系统配置中心
 "支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。","支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。"
-支付方式名称,支付方式名称
 "配置 scope","配置 scope"
 环境,环境
 "Provider 元数据","Provider 元数据"
-支付提供商,支付提供商
 模块,模块
 结账模板代码,结账模板代码
 配置模板代码,配置模板代码
@@ -107,61 +151,23 @@ Payment,Payment
 是,是
 否,否
 当前运行时配置摘要,当前运行时配置摘要
-返回,返回
-支付方式管理,支付方式管理
-是否启用,是否启用
-排序,排序
-操作,操作
-暂无支付方式,暂无支付方式
-启用,启用
-禁用,禁用
-查看配置,查看配置
-交易记录管理,交易记录管理
-交易号/订单ID,交易号/订单ID
-全部状态,全部状态
-待支付,待支付
-处理中,处理中
-支付失败,支付失败
-已退款,已退款
-搜索,搜索
-交易号,交易号
-订单ID,订单ID
-支付方式,支付方式
-创建时间,创建时间
-暂无交易记录,暂无交易记录
-查看,查看
-查询状态,查询状态
-查询失败,查询失败
-查询失败，请重试,查询失败，请重试
-交易记录详情,交易记录详情
-支付金额,支付金额
-支付状态,支付状态
-更新时间,更新时间
-支付完成时间,支付完成时间
-请求数据,请求数据
-响应数据,响应数据
-回调数据,回调数据
-"Fake Card","Fake Card"
-"Used by browser verification only.","Used by browser verification only."
-"Credit Asset","Credit Asset"
-"Requires exchange ratio and payable permission before checkout.","Requires exchange ratio and payable permission before checkout."
-"This asset is not enabled for payment.","This asset is not enabled for payment."
-"Payment method","Payment method"
-"Reward Points","Reward Points"
-"Can be configured as discount, payment, or both.","Can be configured as discount, payment, or both."
-"Current currency is not supported.","Current currency is not supported."
-"Discount or payment","Discount or payment"
-"W Coin","W Coin"
-"Can partially deduct payable amount when enabled.","Can partially deduct payable amount when enabled."
-"Current customer country is not supported.","Current customer country is not supported."
-"Payment provider is not ready.","Payment provider is not ready."
-支付未完成，请重试,支付未完成，请重试
-取消,取消
-"Select a payment method to continue.","Select a payment method to continue."
-"Please agree to the payment terms before continuing.","Please agree to the payment terms before continuing."
-"Selected payment method:","Selected payment method:"
-"No payment method is available for the current payable object.","No payment method is available for the current payable object."
-"I agree to the payment terms.","I agree to the payment terms."
-More,More
-您的订单已支付成功,您的订单已支付成功
-返回首页,返回首页
+"支付方式 %{code} 不存在或未启用","支付方式 %{code} 不存在或未启用"
+支付提供商实例化失败,支付提供商实例化失败
+创建支付订单失败,创建支付订单失败
+"支付方式 %{code} 不存在","支付方式 %{code} 不存在"
+签名验证失败,签名验证失败
+回调数据中缺少交易号,回调数据中缺少交易号
+"交易记录不存在: %{no}","交易记录不存在: %{no}"
+"支付提供商 method_code 不能为空","支付提供商 method_code 不能为空"
+该支付方式不允许当前可支付对象。,该支付方式不允许当前可支付对象。
+该支付方式未开放给当前可支付对象。,该支付方式未开放给当前可支付对象。
+该支付方式要求付款人先登录或完成身份识别。,该支付方式要求付款人先登录或完成身份识别。
+当前付款人类型不能使用该支付方式。,当前付款人类型不能使用该支付方式。
+当前付款人不能使用该支付方式。,当前付款人不能使用该支付方式。
+当前金额低于该支付方式最低可支付金额。,当前金额低于该支付方式最低可支付金额。
+当前金额超过该支付方式最高可支付金额。,当前金额超过该支付方式最高可支付金额。
+该支付方式不支持当前支付货币。,该支付方式不支持当前支付货币。
+该支付方式不支持当前国家或地区。,该支付方式不支持当前国家或地区。
+当前业务标签不能使用该支付方式。,当前业务标签不能使用该支付方式。
+当前业务对象缺少该支付方式要求的业务标签。,当前业务对象缺少该支付方式要求的业务标签。
+"支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。","支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。"

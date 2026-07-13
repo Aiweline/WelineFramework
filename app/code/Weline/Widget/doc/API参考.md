@@ -3,10 +3,11 @@
 ## 📖 目录
 
 1. [w:widget 标签](#wwidget-标签)
-2. [WidgetScanner 服务](#widgetscanner-服务)
-3. [Page 模型](#page-模型)
-4. [控制器API](#控制器api)
-5. [JavaScript API](#javascript-api)
+2. [WidgetRegistry 公共契约](#widgetregistry-公共契约)
+3. [WidgetScanner 内部服务](#widgetscanner-内部服务)
+4. [Page 模型](#page-模型)
+5. [控制器API](#控制器api)
+6. [JavaScript API](#javascript-api)
 
 ## 🏷️ w:widget 标签
 
@@ -69,7 +70,36 @@
 <!-- Widget 错误: 未找到部件 header/default -->
 ```
 
-## 🔍 WidgetScanner 服务
+## 🧩 WidgetRegistry 公共契约
+
+跨模块需要在 PHP 热路径读取已经编译的 Widget 注册表时，使用只读公共契约：
+
+```php
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Api\WidgetRegistryInterface;
+
+/** @var WidgetRegistryInterface $registry */
+$registry = ObjectManager::getInstance(WidgetRegistryInterface::class);
+$widgetsByType = $registry->getRegistry();
+```
+
+调用模块必须在自己的 `etc/module.php` 中声明 `Weline_Widget` 为 `requires`。禁止跨模块引用 `Weline\Widget\Service\WidgetRegistry`；刷新、扫描和持久化仍属于 Widget 模块内部职责。普通跨模块数据查询优先使用 `w_query('widget', ...)`，本契约只用于必须复用进程内注册表缓存的服务端热路径。
+
+### getRegistry()
+
+```php
+public function getRegistry(bool $forceReload = false): array;
+```
+
+- 默认命中 Widget 进程内注册表缓存，不增加适配层复制或数组转换。
+- 返回结构为 `type => code => widget metadata`。
+- `$forceReload=true` 会重新加载编译注册表，只应在明确的控制面刷新流程中使用。
+
+契约由 `Weline\Widget\Service\WidgetRegistry` 实现，并通过模块 `provides` 与同名 Factory 解析；调用方只依赖 `Weline\Widget\Api\WidgetRegistryInterface`。
+
+## 🔍 WidgetScanner 内部服务
+
+`WidgetScanner` 是 Widget 模块内部扫描能力，不是跨模块公共 API。其他模块需要读取部件数据时使用上面的 `WidgetRegistryInterface` 或 `w_query('widget', ...)`。
 
 ### 类名
 
@@ -417,4 +447,3 @@ document.addEventListener('page:saved', function(e) {
 - [快速开始指南](./快速开始.md)
 - [开发指南](./开发指南.md)
 - [使用手册](./使用手册.md)
-

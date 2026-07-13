@@ -4,6 +4,16 @@
 
 Shipping模块是WelineFramework的配送管理系统，提供完整的配送服务配置、费用计算、免邮规则和物流跟踪功能。支持全球地区管理、配送区域配置、快递公司管理、费用模板配置、免邮规则配置和物流跟踪等功能。
 
+I18n 为国家目录的必需提供方；Shipping 只通过
+`Weline\I18n\Api\Localization\CountryRepositoryInterface` 读取不可变国家 DTO，后台模板接收普通数组，
+不接触 I18n Model/Query。地区表为空时的国家 fallback 使用 `installedActive(currentLocale)`，继续保持
+国家码升序、当前 locale 名称回退以及既有九字段地区数组。
+
+Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
+`Weline\Frontend\Api\Auth\FrontendAccountFacadeInterface::search('', 1, 1000)` 读取不可变身份 DTO，
+再投影为既有 `id/customer_id/name/email/username` 五字段数组。该可选 Provider 缺失或查询异常时列表
+仍为空，配送核心能力保持可用；Shipping 不得引用 Frontend User Model、Token 或内部 Service。
+
 ## 文档导航
 
 - **[使用指南](使用指南.md)** - 详细的功能使用说明和操作指南
@@ -252,4 +262,3 @@ fetch('/shipping/frontend/tracking/query', {
 - [使用指南](使用指南.md) - 详细的功能使用说明和操作指南
 - [API文档](API文档.md) - 前端和后端API接口文档
 - [配置说明](配置说明.md) - 详细的配置说明和最佳实践
-

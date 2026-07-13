@@ -8,7 +8,7 @@ use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Dto\ThemeRenderable;
 use Weline\Theme\Interface\ThemeComponentSourceInterface;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
 {
@@ -39,7 +39,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
     ];
 
     public function __construct(
-        private readonly WidgetRegistry $widgetRegistry,
+        private readonly WidgetRegistryInterface $widgetRegistry,
     ) {
     }
 

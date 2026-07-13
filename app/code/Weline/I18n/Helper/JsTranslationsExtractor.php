@@ -12,7 +12,7 @@ namespace Weline\I18n\Helper;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Template;
+use Weline\I18n\Service\JavascriptModuleConfigProviderRegistry;
 use Weline\I18n\Service\TranslationCollector;
 
 /**
@@ -32,10 +32,8 @@ class JsTranslationsExtractor
         $modules = [];
         
         try {
-            // 读取所有模块的 weline.modules.js 文件
-            /**@var \Weline\Theme\Config\Reader\WelineModules $reader */
-            $reader = ObjectManager::getInstance(\Weline\Theme\Config\Reader\WelineModules::class);
-            $content     = $reader->getResourceFileContent($area);
+            // 由已编译 Provider 提供 weline.modules.js，I18n 不感知 Theme 实现。
+            $content = ObjectManager::getInstance(JavascriptModuleConfigProviderRegistry::class)->content($area);
             if (!$content) {
                 return $modules;
             }
@@ -458,4 +456,3 @@ class JsTranslationsExtractor
         return $allWords;
     }
 }
-

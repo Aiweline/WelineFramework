@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 
@@ -17,9 +17,13 @@ class WlsPerformanceTraceStore
     private const DEFAULT_MAX_RECENT = 200;
     private const DEFAULT_MAX_SPANS = 600;
     private const DEFAULT_MAX_META_BYTES = 1024;
+    private const DEFAULT_SAMPLE_RATE = 0.02;
+    private const DEFAULT_SLOW_SAMPLE_RATE = 0.05;
+    private const DEFAULT_ERROR_SAMPLE_RATE = 0.10;
 
     private ?MemoryStateFacade $memory = null;
     private bool $memoryResolved = false;
+    private float $memoryRetryAt = 0.0;
 
     /**
      * @param array<string, mixed> $config
@@ -34,6 +38,13 @@ class WlsPerformanceTraceStore
      */
     public function record(array $telemetry = [], array $timing = []): bool
     {
+        $request = \is_array($telemetry['request'] ?? null) ? $telemetry['request'] : [];
+        $summary = \is_array($telemetry['summary'] ?? null) ? $telemetry['summary'] : [];
+        $candidateRequestId = (string)($timing['request_id'] ?? $request['request_id'] ?? $summary['request_id'] ?? '');
+        if ($candidateRequestId !== '' && !$this->shouldCapture($candidateRequestId, $request, $summary, $timing)) {
+            return true;
+        }
+
         $record = $this->buildRecord($telemetry, $timing);
         $requestId = (string)($record['request_id'] ?? '');
         if ($requestId === '') {
@@ -46,11 +57,18 @@ class WlsPerformanceTraceStore
         }
 
         $ttl = $this->ttl();
-        $stored = $this->setPayload('request:' . $requestId, $record, $ttl);
+        $stored = $this->setPayload($this->detailKey($requestId), $record, $ttl);
         $recent = $this->recent($this->maxRecent() * 2, 0, false);
         $recent = $this->upsertRecent($recent, $this->summaryRow($record));
+        $evictedRows = \array_slice($recent, $this->maxRecent());
         $recent = \array_slice($recent, 0, $this->maxRecent());
         $this->setPayload(self::KEY_RECENT, $recent, $ttl);
+        foreach ($evictedRows as $evictedRow) {
+            $evictedRequestId = (string)($evictedRow['request_id'] ?? '');
+            if ($evictedRequestId !== '' && $evictedRequestId !== $requestId) {
+                $this->deletePayload('request:' . $evictedRequestId);
+            }
+        }
 
         return $stored;
     }
@@ -129,9 +147,17 @@ class WlsPerformanceTraceStore
         if (!\preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $requestId)) {
             return [];
         }
+        $payload = $this->getPayload($this->detailKey($requestId));
+        if (\is_array($payload) && (string)($payload['request_id'] ?? '') === $requestId) {
+            return $payload;
+        }
+
+        // 兼容升级前按 request-id 直接存储的详情；新写入只使用固定槽位。
         $payload = $this->getPayload('request:' . $requestId);
 
-        return \is_array($payload) ? $payload : [];
+        return \is_array($payload) && (string)($payload['request_id'] ?? '') === $requestId
+            ? $payload
+            : [];
     }
 
     /**
@@ -187,6 +213,7 @@ class WlsPerformanceTraceStore
         foreach ($recent as $row) {
             $requestId = (string)($row['request_id'] ?? '');
             if ($requestId !== '') {
+                $this->deletePayload($this->detailKey($requestId));
                 $this->deletePayload('request:' . $requestId);
             }
         }
@@ -742,7 +769,7 @@ class WlsPerformanceTraceStore
                     return true;
                 }
             } catch (\Throwable) {
-                $this->memory = null;
+                $this->markMemoryUnavailable();
             }
         }
 
@@ -759,7 +786,7 @@ class WlsPerformanceTraceStore
                     return $value;
                 }
             } catch (\Throwable) {
-                $this->memory = null;
+                $this->markMemoryUnavailable();
             }
         }
 
@@ -773,7 +800,7 @@ class WlsPerformanceTraceStore
             try {
                 $memory->delete(self::NAMESPACE, $key);
             } catch (\Throwable) {
-                $this->memory = null;
+                $this->markMemoryUnavailable();
             }
         }
         $path = $this->filePath($key);
@@ -785,7 +812,11 @@ class WlsPerformanceTraceStore
     private function memory(): ?MemoryStateFacade
     {
         if ($this->memoryResolved) {
-            return $this->memory;
+            if ($this->memory === null && \microtime(true) >= $this->memoryRetryAt) {
+                $this->memoryResolved = false;
+            } else {
+                return $this->memory;
+            }
         }
         $this->memoryResolved = true;
 
@@ -810,6 +841,19 @@ class WlsPerformanceTraceStore
         }
 
         return $this->memory;
+    }
+
+    private function markMemoryUnavailable(): void
+    {
+        if ($this->memory !== null) {
+            try {
+                $this->memory->disconnect();
+            } catch (\Throwable) {
+            }
+        }
+        $this->memory = null;
+        $this->memoryResolved = true;
+        $this->memoryRetryAt = \microtime(true) + 1.0;
     }
 
     private function writePayloadFile(string $key, mixed $value, int $ttl): bool
@@ -864,10 +908,63 @@ class WlsPerformanceTraceStore
 
     private function filePath(string $key): string
     {
-        $type = \str_starts_with($key, 'request:') ? 'request' : 'index';
+        $type = \str_starts_with($key, 'request:') || \str_starts_with($key, 'slot:')
+            ? 'request'
+            : 'index';
         $hash = \sha1($key);
 
         return $this->baseDir() . $type . \DIRECTORY_SEPARATOR . \substr($hash, 0, 2) . \DIRECTORY_SEPARATOR . $hash . '.json';
+    }
+
+    private function detailKey(string $requestId): string
+    {
+        $hashPrefix = \substr(\hash('sha256', $requestId), 0, 8);
+        $slot = (int)(\hexdec($hashPrefix) % $this->maxRecent());
+
+        return 'slot:' . $slot;
+    }
+
+    /**
+     * 调试详情采用确定性采样：同一 request-id 的多阶段记录要么全部保留，要么全部跳过。
+     * 错误和服务端慢请求提高采样率，但仍保持上限，避免故障时遥测反向放大业务延迟。
+     *
+     * @param array<string, mixed> $request
+     * @param array<string, mixed> $summary
+     * @param array<string, mixed> $timing
+     */
+    private function shouldCapture(string $requestId, array $request, array $summary, array $timing): bool
+    {
+        $status = (int)($timing['status'] ?? $request['status'] ?? 0);
+        $totalMs = (float)($timing['total_ms'] ?? $summary['total_ms'] ?? $summary['total_duration_ms'] ?? 0.0);
+        $slowThreshold = (float)($this->config['slow_request_threshold_ms']
+            ?? $this->envValue('dev_tool.panel.wls_performance.slow_request_threshold_ms', 500));
+        $defaultRate = ($this->config['force_file'] ?? false) === true ? 1.0 : self::DEFAULT_SAMPLE_RATE;
+        $rate = (float)($this->config['sample_rate']
+            ?? $this->envValue('dev_tool.panel.wls_performance.sample_rate', $defaultRate));
+        if ($status >= 500) {
+            $defaultErrorRate = ($this->config['force_file'] ?? false) === true
+                ? 1.0
+                : self::DEFAULT_ERROR_SAMPLE_RATE;
+            $rate = (float)($this->config['error_sample_rate']
+                ?? $this->envValue('dev_tool.panel.wls_performance.error_sample_rate', $defaultErrorRate));
+        } elseif ($totalMs > 0.0 && $totalMs >= $slowThreshold) {
+            $defaultSlowRate = ($this->config['force_file'] ?? false) === true
+                ? 1.0
+                : self::DEFAULT_SLOW_SAMPLE_RATE;
+            $rate = (float)($this->config['slow_sample_rate']
+                ?? $this->envValue('dev_tool.panel.wls_performance.slow_sample_rate', $defaultSlowRate));
+        }
+        $rate = \max(0.0, \min(1.0, $rate));
+        if ($rate <= 0.0) {
+            return false;
+        }
+        if ($rate >= 1.0) {
+            return true;
+        }
+
+        $bucket = (int)(\hexdec(\substr(\hash('sha256', $requestId), 0, 8)) % 10000);
+
+        return $bucket < (int)\round($rate * 10000);
     }
 
     private function baseDir(): string

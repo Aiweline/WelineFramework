@@ -27,7 +27,7 @@
 - `app/code/Weline/Admin/etc/backend/menu.xml`
 - `app/code/Weline/Admin/composer.json`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：1
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：5
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：6
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：12
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2

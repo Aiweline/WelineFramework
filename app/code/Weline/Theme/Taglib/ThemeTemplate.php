@@ -12,10 +12,12 @@ declare(strict_types=1);
 namespace Weline\Theme\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Theme\Helper\ThemeData;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * 主题模板标签
@@ -249,18 +251,10 @@ class ThemeTemplate implements TaglibInterface
                         // 获取当前语言
                         $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
 
-                        // 从I18n Dictionary获取翻译
-                        /** @var \Weline\I18n\Model\Locale\Dictionary $localeDict */
-                        $localeDict = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Dictionary::class);
-                        $md5 = \Weline\I18n\Model\Locale\Dictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load($md5, \Weline\I18n\Model\Locale\Dictionary::schema_fields_MD5);
-                        
-                        if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_TRANSLATE);
-                            if (!empty($translation)) {
-                                $path = str_replace($fullMatch, $translation, $path);
-                                continue;
-                            }
+                        $translation = self::dictionaryRepository()->getEntry($translationKey, $locale)?->translation;
+                        if (!empty($translation)) {
+                            $path = str_replace($fullMatch, $translation, $path);
+                            continue;
                         }
                     }
                 }
@@ -273,6 +267,16 @@ class ThemeTemplate implements TaglibInterface
         }
 
         return $path;
+    }
+
+    private static function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+        return $provider;
     }
 
     private static function readThemeTemplateSource(Template $template, string $filePath): string|false
@@ -316,4 +320,3 @@ class ThemeTemplate implements TaglibInterface
         return \Weline\Framework\Runtime\Runtime::isPersistent();
     }
 }
-

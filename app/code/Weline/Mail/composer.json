@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-mail",
+    "description": "WelineFramework Mail module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-admin": "@dev",
+        "weline/module-cron": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/module-queue": "@dev",
+        "weline/module-system-config": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Mail\\": ""
+        }
+    }
+}

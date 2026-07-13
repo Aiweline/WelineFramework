@@ -5,15 +5,14 @@ namespace Weline\PhpManager\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\PhpManager\Model\WlsPhpProfile;
-use Weline\Server\IPC\ControlMessage;
-use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Api\Control\RuntimeReloadGateway;
 
 class WlsPhpProfileService
 {
     private const AUDIT_FILE = 'php-manager-audit.jsonl';
 
     public function __construct(
-        private readonly IpcControlGateway $ipcControlGateway
+        private readonly RuntimeReloadGateway $runtimeReloadGateway
     ) {
     }
 
@@ -385,10 +384,10 @@ class WlsPhpProfileService
             ];
         }
 
-        $result = $this->ipcControlGateway->reloadAsync($runtimeInstance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
+        $result = $this->runtimeReloadGateway->forceReloadAsync($runtimeInstance, 8.0);
         return [
-            'success' => !empty($result['success']),
-            'message' => \mb_substr((string)($result['message'] ?? __('WLS reload request failed.')), 0, 220),
+            'success' => $result->success,
+            'message' => \mb_substr($result->message, 0, 220),
         ];
     }
 

@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Hook\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Admin\Api\Controller\BaseController;
+use Weline\Framework\Log\LoggerFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Hook\Service\HookListingService;
 
@@ -399,7 +400,7 @@ class Hook extends BaseController
      */
     private function logPerformance(string $stage, float $startedAt, array $context = []): void
     {
-        if (!defined('DEV') || !DEV || !class_exists(\Weline\Server\Log\WlsLogger::class)) {
+        if (!defined('DEV') || !DEV) {
             return;
         }
 
@@ -408,7 +409,7 @@ class Hook extends BaseController
         }
 
         $context['elapsed_ms'] = round((microtime(true) - $startedAt) * 1000, 2);
-        \Weline\Server\Log\WlsLogger::warning_('[HookController::index] ' . $stage, $context);
+        LoggerFactory::create('hook-performance')->warning('[HookController::index] ' . $stage, $context);
     }
 
     private function renderHookPage(): string

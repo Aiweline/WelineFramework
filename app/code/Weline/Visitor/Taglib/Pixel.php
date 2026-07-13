@@ -7,7 +7,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Pixel implements TaglibInterface
 {

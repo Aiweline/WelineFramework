@@ -31,26 +31,28 @@ class CheckLogin extends FrontendRestController
     public function execute()
     {
         if ($this->session->isLoggedIn()) {
-            $user = $this->session->getLoginUser(\Weline\Frontend\Model\FrontendUser::class);
+            $user = $this->session->getUser();
+            $email = $user !== null && method_exists($user, 'getEmail')
+                ? (string)$user->getEmail()
+                : '';
             
-            return $this->success([
+            return $this->success(__('已登录'), [
                 'logged_in' => true,
                 'user' => [
-                    'id' => $user ? $user->getId() : 0,
-                    'username' => $user ? $user->getUsername() : '',
-                    'email' => $user ? $user->getEmail() : '',
+                    'id' => $user ? $user->getAuthIdentifier() : 0,
+                    'username' => $user ? $user->getAuthUsername() : '',
+                    'email' => $email,
                 ]
-            ], __('已登录'));
+            ]);
         }
         
         return $this->error(
             __('未登录，请先登录'),
-            401,
             [
                 'logged_in' => false,
                 'login_url' => '/frontend/account/login'
-            ]
+            ],
+            401
         );
     }
 }
-

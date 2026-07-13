@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Setup\Db\Migration;
 
-use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\DomainRegistrar;
 

@@ -413,6 +413,17 @@ if ($dataLayout !== 'horizontal'):
             transform: translateX(2px);
         }
 
+        .search-result-item .search-result-group {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.56rem 0.8rem;
+            color: var(--backend-color-text-secondary);
+            border-radius: var(--backend-border-radius-md);
+            cursor: default;
+            opacity: 0.72;
+        }
+
         body.vertical-collpsed .vertical-menu {
             overflow: visible;
         }
@@ -2169,12 +2180,14 @@ if ($dataLayout !== 'horizontal'):
                 var icon = $link.find('i').first().attr('class') || 'mdi mdi-circle';
                 var href = $link.attr('href') || '#';
                 var pad = d.level > 0 ? 'padding-left:' + (20 + d.level * 20) + 'px;' : '';
+                var isActionable = href && href !== '#' && href.charAt(0) !== '#';
+                var $result = $('<div>', { 'class': 'search-result-item px-3 py-2', style: pad });
+                var $content = isActionable
+                    ? $('<a>', { href: href, 'class': 'd-flex align-items-center waves-effect search-result-link' })
+                    : $('<span>', { 'class': 'search-result-group', 'aria-disabled': 'true' });
 
-                $list.append(
-                    '<div class="search-result-item px-3 py-2" style="' + pad + '">' +
-                    '<a href="' + href + '" class="d-flex align-items-center waves-effect search-result-link">' +
-                    '<i class="' + icon + ' me-2"></i><span>' + text + '</span></a></div>'
-                );
+                $content.append($('<i>', { 'class': icon + ' me-2' }), $('<span>').text(text));
+                $list.append($result.append($content));
             });
         }
 
@@ -2225,7 +2238,6 @@ if ($dataLayout !== 'horizontal'):
                 var $link = items[idx].$item.find('a').first();
                 var href = $link.attr('href');
                 if (href && href !== '#' && href.charAt(0) !== '#') window.location.href = href;
-                else $link.trigger('click');
             }
         }
 

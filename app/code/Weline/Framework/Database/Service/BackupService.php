@@ -172,6 +172,108 @@ class BackupService
         }
     }
 
+    /**
+     * Restore a column backup without overwriting values written after the
+     * column was recreated. Conflicting and missing rows remain recoverable as
+     * TYPE_CONFLICT backup records.
+     *
+     * @return array{restored: int, unchanged: int, conflicts: int}
+     */
+    public function restoreColumnDataConflictSafe(
+        string $tableName,
+        string $columnName,
+        int $migrationId,
+        ?ConnectorInterface $connector = null,
+        ?string $modelClass = null,
+        mixed $defaultValue = null,
+    ): array {
+        $result = ['restored' => 0, 'unchanged' => 0, 'conflicts' => 0];
+        $backup = $this->getBackupData($migrationId, $tableName, MigrationBackup::TYPE_COLUMN);
+        if ($backup === null) {
+            return $result;
+        }
+
+        $rows = json_decode((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
+        if (!is_array($rows) || $rows === []) {
+            return $result;
+        }
+
+        $conn = $connector ?? $this->connectionFactory->getConnector();
+        $rawTable = $this->toRawTableName($tableName);
+        $conflicts = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row) || !array_key_exists($columnName, $row)) {
+                continue;
+            }
+            $pkColumns = $this->inferPrimaryKeyColumnsFromRow($row, $columnName);
+            if ($pkColumns === []) {
+                $conflicts[] = ['reason' => 'missing_primary_key', 'backup' => $row];
+                $result['conflicts']++;
+                continue;
+            }
+
+            $select = $conn->getQuery()->clearQuery()->table($rawTable)->fields(array_merge($pkColumns, [$columnName]));
+            $update = $conn->getQuery()->clearQuery()->table($rawTable);
+            foreach ($pkColumns as $primaryKey) {
+                if (!array_key_exists($primaryKey, $row)) {
+                    continue 2;
+                }
+                $select = $select->where($primaryKey, $row[$primaryKey]);
+                $update = $update->where($primaryKey, $row[$primaryKey]);
+            }
+            $currentRows = $select->limit(1)->select()->fetch();
+            $current = $currentRows[0] ?? null;
+            if (!is_array($current)) {
+                $conflicts[] = ['reason' => 'row_missing', 'backup' => $row];
+                $result['conflicts']++;
+                continue;
+            }
+
+            $currentValue = $current[$columnName] ?? null;
+            $backupValue = $row[$columnName];
+            if ($currentValue === $backupValue || (string)$currentValue === (string)$backupValue) {
+                $result['unchanged']++;
+                continue;
+            }
+            $isDefault = $currentValue === null
+                || $currentValue === $defaultValue
+                || ($defaultValue !== null && (string)$currentValue === (string)$defaultValue);
+            if (!$isDefault) {
+                $conflicts[] = [
+                    'reason' => 'value_conflict',
+                    'backup' => $row,
+                    'current' => $current,
+                ];
+                $result['conflicts']++;
+                continue;
+            }
+
+            $update->update([$columnName => $backupValue])->fetch();
+            $result['restored']++;
+        }
+
+        if ($conflicts !== []) {
+            $this->backupModel->reset()->setData([
+                MigrationBackup::schema_fields_MIGRATION_ID => $migrationId,
+                MigrationBackup::schema_fields_TABLE_NAME => $tableName,
+                MigrationBackup::schema_fields_BACKUP_DATA => json_encode(
+                    ['column' => $columnName, 'items' => $conflicts],
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR
+                ),
+                MigrationBackup::schema_fields_BACKUP_TYPE => MigrationBackup::TYPE_CONFLICT,
+                MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
+            ])->save();
+        }
+
+        $this->printing->info(__(
+            '表 %{1} 列 %{2} 安全恢复完成：恢复 %{3}，无变化 %{4}，冲突 %{5}',
+            [$tableName, $columnName, $result['restored'], $result['unchanged'], $result['conflicts']]
+        ));
+
+        return $result;
+    }
+
     private function getBackupData(int $migrationId, string $tableName, string $backupType): ?MigrationBackup
     {
         $items = $this->backupModel->reset()

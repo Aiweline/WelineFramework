@@ -9,19 +9,22 @@ declare(strict_types=1);
  * 日期：11/7/2023 09:15:50
  */
 namespace Weline\Queue\Model;
-use Weline\Eav\EavModel;
-use Weline\Eav\EavModelInterface;
-use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Api\EavAttribute;
+use Weline\Eav\Api\EavAttributeType;
+use Weline\Eav\Api\EavModel;
+use Weline\Eav\Api\EavModelInterface;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Queue\Api\QueueStatus;
+use Weline\Queue\Api\QueueTaskContextInterface;
 use Weline\Queue\Model\Queue\Type;
 #[Table(comment: '任务队列')]
 #[Index(name: 'type_id', columns: ['type_id'])]
 #[Index(name: 'idx_finished', columns: ['finished'])]
 #[Index(name: 'idx_biz_key', columns: ['biz_key'])]
-class Queue extends EavModel
+class Queue extends EavModel implements QueueTaskContextInterface
 {
     const entity_code = 'queue';
     const entity_name = '队列实体';
@@ -58,11 +61,11 @@ class Queue extends EavModel
     /** 业务侧自定义检索键（如会话/幂等标识），可建索引精确定位；留空表示未使用 */
     #[Col('varchar', 191, nullable: true, comment: '业务检索键')]
     public const schema_fields_BIZ_KEY = 'biz_key';
-    public const status_pending = 'pending';
-    public const status_running = 'running';
-    public const status_done = 'done';
-    public const status_stop = 'stop';
-    public const status_error = 'error';
+    public const status_pending = QueueStatus::PENDING;
+    public const status_running = QueueStatus::RUNNING;
+    public const status_done = QueueStatus::DONE;
+    public const status_stop = QueueStatus::STOP;
+    public const status_error = QueueStatus::ERROR;
     public array $_unit_primary_keys = ['queue_id'];
     public array $_index_sort_keys = ['queue_id', 'type_id', 'finished'];
     private ?Type $type = null;
@@ -201,6 +204,41 @@ public function getTypeId(): int
     {
         $this->setProcess('');
     }
+
+    public function resetTaskProgress(): void
+    {
+        $this->init();
+    }
+
+    public function taskData(string $key = '', mixed $index = null): mixed
+    {
+        return $this->getData($key, $index);
+    }
+
+    public function taskAttributes(array $options = []): array
+    {
+        return $this->getAttributes($options);
+    }
+
+    public function validateTaskAttribute(mixed $attribute): bool|string
+    {
+        if (!$attribute instanceof EavAttribute) {
+            return false;
+        }
+
+        return $this->validateAttribute($attribute);
+    }
+
+    public function setExecutionArgs(array $args): void
+    {
+        $this->setData('args', $args);
+    }
+
+    public function persist(): void
+    {
+        $this->save();
+    }
+
     public function setResult(string $result_msg): static
     {
         return $this->setData(self::schema_fields_result, $this->normalizeUtf8StorageText($result_msg));
@@ -328,7 +366,7 @@ public function getTypeId(): int
         $attributes = $this->getType()->getAttributes($options_data);
         /**@var EavAttribute $attr */
         foreach ($attributes as &$attr) {
-            /**@var \Weline\Eav\Model\EavAttribute\Type $attrType */
+            /** @var EavAttributeType $attrType */
             $attrType = $attr->getType();
             $eav_model_class = $attrType->getModelClass();
             $value = $attr->getValue();

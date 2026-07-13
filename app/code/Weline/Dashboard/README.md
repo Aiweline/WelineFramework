@@ -25,6 +25,13 @@ target_id     = website_id（默认站点为 0）
 scope         = dashboard_view:{view_id}
 ```
 
+跨模块边界固定为数据契约：站点列表与默认站点通过
+`Weline\Websites\Api\Catalog\WebsiteCatalogInterface` 读取；后台主题身份、布局存在性、
+版本初始化、复制、发布和删除通过
+`Weline\Theme\Api\Layout\LayoutWorkspaceInterface` 执行。Dashboard 不引用 Theme 或
+Websites 的 ORM Model / 内部 Service，布局身份只交换不可变 `LayoutIdentity`；其中
+`target_id=0` 会被原样保留，表示系统默认站点。
+
 当安装或升级时站点表为空，`Weline_Websites` 会先自动补齐 `website_id=0/code=default` 的零号默认站点，Dashboard 再为该站点创建 `system/default` 默认视图。因此后台 Dashboard 不应因站点列表为空显示“当前没有可用站点，无法初始化 Dashboard”。Dashboard 相关查询、布局身份、Theme target 和 Widget 注入都必须把 `target_id=0` 视为系统默认站点，而不是空值。
 
 Dashboard 不提供自由画布，而是固定几个后台报表区域 slot：

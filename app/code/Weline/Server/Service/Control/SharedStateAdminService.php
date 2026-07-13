@@ -169,10 +169,14 @@ class SharedStateAdminService
             }
 
             $data = \is_array($item['data'] ?? null) ? $item['data'] : [];
+            $dataCount = isset($item['data_count']) ? (int)$item['data_count'] : \count($data);
+            $sampleKeys = \is_array($item['keys'] ?? null)
+                ? \array_values(\array_map('strval', $item['keys']))
+                : \array_slice(\array_keys($data), 0, 6);
             $result[$namespace] = [
                 'namespace' => $namespace,
-                'keys' => \count($data),
-                'sample_keys' => \array_slice(\array_keys($data), 0, 6),
+                'keys' => $dataCount,
+                'sample_keys' => \array_slice($sampleKeys, 0, 6),
             ];
         }
 

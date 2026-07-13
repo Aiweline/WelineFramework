@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
-use Weline\Api\Data\ApiAppTokenContext;
-use Weline\Api\Service\ApiAppTokenService;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\Auth\BinQueryAuthContext;
+use Weline\Framework\Service\Query\Auth\BinQueryAuthenticatorInterface;
 
 final class BinQueryGateway
 {
@@ -15,15 +14,12 @@ final class BinQueryGateway
     private const GRAPH_MAX_OPERATIONS = 10;
     private const DEFAULT_AREA = 'frontend';
 
-    private ?ApiAppTokenService $apiAppTokenService;
-
     public function __construct(
         private readonly FrameworkQueryService $queryService,
         private readonly QueryProviderRegistry $registry,
         private readonly BinQueryCachePolicy $cachePolicy,
-        ?ApiAppTokenService $apiAppTokenService = null
+        private readonly BinQueryAuthenticatorInterface $authenticator,
     ) {
-        $this->apiAppTokenService = $apiAppTokenService;
     }
 
     /**
@@ -57,7 +53,7 @@ final class BinQueryGateway
         };
     }
 
-    private function authenticate(string $apiKey): ApiAppTokenContext
+    private function authenticate(string $apiKey): BinQueryAuthContext
     {
         $token = \trim($apiKey);
         if ($token === '') {
@@ -68,11 +64,11 @@ final class BinQueryGateway
         }
 
         try {
-            $context = $this->getApiAppTokenService()->resolveAccessToken($token);
+            $context = $this->authenticator->authenticate($token);
         } catch (\Throwable $throwable) {
             throw new FrontendQueryException('auth_error', 'Unable to validate BinQuery API key.', 401, $throwable);
         }
-        if (!$context instanceof ApiAppTokenContext) {
+        if (!$context instanceof BinQueryAuthContext) {
             throw new FrontendQueryException('auth_error', 'BinQuery API key is invalid or expired.', 401);
         }
         if (!$this->hasBinQueryScope($context, 'read')) {
@@ -82,19 +78,15 @@ final class BinQueryGateway
         return $context;
     }
 
-    private function getApiAppTokenService(): ApiAppTokenService
-    {
-        if (!$this->apiAppTokenService instanceof ApiAppTokenService) {
-            $this->apiAppTokenService = ObjectManager::getInstance(ApiAppTokenService::class);
-        }
-
-        return $this->apiAppTokenService;
-    }
-
-    private function connect(string $area, ApiAppTokenContext $context): array
+    private function connect(string $area, BinQueryAuthContext $context): array
     {
         return [
             'protocol' => self::PROTOCOL,
+            'negotiation' => [
+                'selected' => self::PROTOCOL,
+                'supported' => [self::PROTOCOL],
+                'reserved' => ['binquery-v2'],
+            ],
             'binary' => [
                 'magic' => 'WQB1',
                 'version' => 1,
@@ -115,7 +107,7 @@ final class BinQueryGateway
     /**
      * @param array<string, mixed> $payload
      */
-    private function query(array $payload, string $area, ApiAppTokenContext $context): mixed
+    private function query(array $payload, string $area, BinQueryAuthContext $context): mixed
     {
         $this->assertScope($context, 'read');
         $what = (string)($payload['what'] ?? $payload['query'] ?? 'providers');
@@ -136,7 +128,7 @@ final class BinQueryGateway
      * @param array<string, mixed> $payload
      * @return array{data:mixed,status:int,headers:array<string, string>}
      */
-    private function call(array $payload, string $area, ApiAppTokenContext $context, string $cacheMarker): array
+    private function call(array $payload, string $area, BinQueryAuthContext $context, string $cacheMarker): array
     {
         $provider = (string)($payload['provider'] ?? '');
         $operation = (string)($payload['operation'] ?? '');
@@ -166,7 +158,7 @@ final class BinQueryGateway
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
-    private function graph(array $payload, string $area, ApiAppTokenContext $context): array
+    private function graph(array $payload, string $area, BinQueryAuthContext $context): array
     {
         $this->assertScope($context, 'read');
         $operations = $this->normalizeGraphOperations($payload['graph'] ?? $payload['operations'] ?? []);
@@ -206,13 +198,7 @@ final class BinQueryGateway
      */
     private function providerSummaries(string $area): array
     {
-        return \array_map(static fn(array $descriptor): array => [
-            'provider' => (string)($descriptor['provider'] ?? ''),
-            'name' => (string)($descriptor['name'] ?? ''),
-            'description' => (string)($descriptor['description'] ?? ''),
-            'module' => (string)($descriptor['module'] ?? ''),
-            'operation_count' => \count($descriptor['operations'] ?? []),
-        ], $this->externalDescriptors($area));
+        return $this->registry->getExternalProviderSummariesForArea($area);
     }
 
     /**
@@ -223,10 +209,9 @@ final class BinQueryGateway
         if ($provider === '') {
             throw new FrontendQueryException('validation_error', 'Provider is required.', 422);
         }
-        foreach ($this->externalDescriptors($area) as $descriptor) {
-            if ((string)($descriptor['provider'] ?? '') === $provider) {
-                return $descriptor;
-            }
+        $descriptor = $this->registry->getExternalProviderDescriptorForArea($area, $provider);
+        if (\is_array($descriptor)) {
+            return $descriptor;
         }
 
         throw new FrontendQueryException('not_found', 'Provider does not exist or is not external.', 404);
@@ -254,9 +239,8 @@ final class BinQueryGateway
             return ['provider' => false, 'operation' => false];
         }
 
-        try {
-            $descriptor = $this->providerDescriptor($provider, $area);
-        } catch (FrontendQueryException) {
+        $descriptor = $this->registry->getExternalProviderDescriptorForArea($area, $provider);
+        if (!\is_array($descriptor)) {
             return ['provider' => false, 'operation' => false];
         }
 
@@ -264,13 +248,12 @@ final class BinQueryGateway
             return ['provider' => true, 'operation' => false];
         }
 
-        foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
-            if (\is_array($operationDescriptor) && (string)($operationDescriptor['name'] ?? '') === $operation) {
-                return ['provider' => true, 'operation' => true];
-            }
-        }
-
-        return ['provider' => true, 'operation' => false];
+        return [
+            'provider' => true,
+            'operation' => \is_array(
+                $this->registry->getExternalOperationDescriptorForArea($area, $provider, $operation),
+            ),
+        ];
     }
 
     /**
@@ -282,15 +265,9 @@ final class BinQueryGateway
             throw new FrontendQueryException('validation_error', 'Provider and operation are required.', 422);
         }
 
-        foreach ($this->externalDescriptors($area) as $descriptor) {
-            if ((string)($descriptor['provider'] ?? '') !== $provider) {
-                continue;
-            }
-            foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
-                if (\is_array($operationDescriptor) && (string)($operationDescriptor['name'] ?? '') === $operation) {
-                    return $operationDescriptor;
-                }
-            }
+        $descriptor = $this->registry->getExternalOperationDescriptorForArea($area, $provider, $operation);
+        if (\is_array($descriptor)) {
+            return $descriptor;
         }
 
         throw new FrontendQueryException('capability_denied', 'BinQuery operation is not external.', 403);
@@ -301,49 +278,7 @@ final class BinQueryGateway
      */
     private function externalDescriptors(string $area): array
     {
-        $descriptors = [];
-        foreach ($this->registry->getAllDescriptors() as $descriptor) {
-            if (!\is_array($descriptor)) {
-                continue;
-            }
-
-            $operations = [];
-            foreach (($descriptor['operations'] ?? []) as $operation) {
-                if (!\is_array($operation) || !$this->isOperationExternalForArea($operation, $area)) {
-                    continue;
-                }
-                $operations[] = $operation;
-            }
-            if ($operations === []) {
-                continue;
-            }
-
-            $descriptor['operations'] = $operations;
-            $descriptor['operation_count'] = \count($operations);
-            $descriptors[] = $descriptor;
-        }
-
-        return $descriptors;
-    }
-
-    /**
-     * @param array<string, mixed> $operation
-     */
-    private function isOperationExternalForArea(array $operation, string $area): bool
-    {
-        if (($operation['external'] ?? false) !== true) {
-            return false;
-        }
-
-        if ($area === 'frontend') {
-            return ($operation['frontend'] ?? false) === true;
-        }
-
-        if ($area === 'backend') {
-            return ($operation['backend'] ?? false) === true;
-        }
-
-        return false;
+        return $this->registry->getExternalDescriptorsForArea($area);
     }
 
     private function normalizeArea(mixed $area): string
@@ -359,14 +294,14 @@ final class BinQueryGateway
         return $normalized;
     }
 
-    private function assertScope(ApiAppTokenContext $context, string $requiredMode): void
+    private function assertScope(BinQueryAuthContext $context, string $requiredMode): void
     {
         if (!$this->hasBinQueryScope($context, $requiredMode)) {
             throw new FrontendQueryException('scope_denied', 'API key scope does not allow this BinQuery operation.', 403);
         }
     }
 
-    private function hasBinQueryScope(ApiAppTokenContext $context, string $requiredMode): bool
+    private function hasBinQueryScope(BinQueryAuthContext $context, string $requiredMode): bool
     {
         $requiresEdit = \strtolower($requiredMode) !== 'read';
         foreach ($context->getAccessSources() as $source) {

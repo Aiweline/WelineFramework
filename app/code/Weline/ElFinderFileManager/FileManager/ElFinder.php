@@ -2,7 +2,7 @@
 
 namespace Weline\ElFinderFileManager\FileManager;
 
-use Weline\FileManager\FileManager;
+use Weline\FileManager\Api\FileManager;
 use Weline\Framework\Http\Request;
 
 class ElFinder extends FileManager

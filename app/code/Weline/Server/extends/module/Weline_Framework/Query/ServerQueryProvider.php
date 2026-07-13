@@ -5,9 +5,9 @@ namespace Weline\Server\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Runtime\DeveloperAccessPolicy;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Console\Server\Hosts\Add as HostsAddCommand;
 use Weline\Server\Model\AttackLog;
@@ -1282,7 +1282,7 @@ class ServerQueryProvider implements QueryProviderInterface
 
     private function isWlsPerformancePanelAllowed(): bool
     {
-        return ObjectManager::getInstance(PanelAccessService::class)->canAccessApi();
+        return ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessApi();
     }
 
     private function wlsPerformanceDenied(): array

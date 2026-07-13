@@ -13,7 +13,10 @@ use Weline\Database\Interface\MigrationInterface;
  * 旧脚本如果直接实现 MigrationInterface 且未定义新方法，
  * MigrationService 会通过 method_exists 回退到默认值，不会报错。
  */
-abstract class AbstractMigration implements MigrationInterface
+/**
+ * @deprecated Extend \Weline\Framework\Database\Migration\AbstractMigration.
+ */
+abstract class AbstractMigration extends \Weline\Framework\Database\Migration\AbstractMigration implements MigrationInterface
 {
     public function getInfo(): array
     {

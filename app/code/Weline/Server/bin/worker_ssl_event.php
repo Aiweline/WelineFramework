@@ -106,6 +106,7 @@ $orchestratorLaunchId = '';
 $controlPort = 0;
 $masterPid = 0;
 $workerCount = 1;
+$wlsRuntimeTopology = 'auto';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
@@ -162,6 +163,8 @@ foreach ($argv as $arg) {
         $wlsMemoryLimit = wlsEventNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--worker-count=')) {
         $workerCount = \max(1, (int)\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--wls-runtime-topology=')) {
+        $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
     }
@@ -177,6 +180,7 @@ if (!\defined('DS')) {
 }
 
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
@@ -206,6 +210,10 @@ $_ENV['WLS_WORKER_ID'] = (string)$workerId;
 $_SERVER['WLS_WORKER_COUNT'] = (string)$workerCount;
 $_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
 @\putenv('WLS_WORKER_COUNT=' . (string)$workerCount);
+$_SERVER['WLS_RUNTIME_TOPOLOGY'] = $wlsRuntimeTopology;
+$_ENV['WLS_RUNTIME_TOPOLOGY'] = $wlsRuntimeTopology;
+@\putenv('WLS_RUNTIME_TOPOLOGY=' . $wlsRuntimeTopology);
+\Weline\Server\Service\Runtime\WorkerReadinessState::reset($wlsRuntimeTopology);
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
@@ -232,7 +240,14 @@ unset($_wlsEnvFile, $_wlsSystemConfig);
 $processTag = \Weline\Server\Service\WorkerProcessLabel::buildLogTag(true, $isMaintenanceWorker, $workerId, $port, $instanceName);
 if (\function_exists('cli_set_process_title')) {
     @\cli_set_process_title(
-        \Weline\Server\Service\WorkerProcessLabel::buildProcessTitle(true, $isMaintenanceWorker, $workerId, $port, $instanceName)
+        \Weline\Server\Service\WorkerProcessLabel::buildProcessTitle(
+            true,
+            $isMaintenanceWorker,
+            $workerId,
+            $port,
+            $instanceName,
+            $orchestratorLaunchId
+        )
     );
 }
 
@@ -286,6 +301,19 @@ if (!$eventBufferEnabled) {
     \Weline\Server\Log\WlsLogger::error_('EventBuffer SSL worker is disabled; set wls.ssl.event_buffer_enabled=true to run this experimental engine');
     exit(2);
 }
+if ($wlsRuntimeTopology === 'dispatcher') {
+    \Weline\Server\Log\WlsLogger::error_(
+        'EventBuffer SSL worker cannot consume the authenticated Dispatcher PROXY v2 preface before TLS. '
+        . 'Use wls.ssl.engine=stream; WLS will not silently corrupt the TLS connection.'
+    );
+    exit(2);
+}
+if ($wlsRuntimeTopology === 'direct') {
+    \Weline\Server\Log\WlsLogger::error_(
+        'EventBuffer SSL worker is not supported in direct topology. Use wls.ssl.engine=stream.'
+    );
+    exit(2);
+}
 if (PHP_OS_FAMILY === 'Windows') {
     \Weline\Server\Log\WlsLogger::error_(
         'EventBuffer SSL worker is not supported on native Windows: PHP event SSL bufferevent server exits during TLS accept. '
@@ -308,24 +336,33 @@ if (!wlsEventEnsureRuntimeFileReadable($sslCert, 0644) || !wlsEventEnsureRuntime
 }
 
 if ($processName !== '') {
-    \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
+    $managedProcessIdentity = '--name=' . $processName;
+    if ($orchestratorLaunchId !== '') {
+        $managedProcessIdentity .= ' --launch-id=' . $orchestratorLaunchId;
+    }
+    if ($orchestratorEpoch > 0) {
+        $managedProcessIdentity .= ' --epoch=' . $orchestratorEpoch;
+    }
+    \Weline\Framework\System\Process\Processer::setPid($managedProcessIdentity, \getmypid());
     if ($port > 0) {
-        \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
+        \Weline\Framework\System\Process\Processer::setProcessPorts($managedProcessIdentity, [$port]);
     }
 }
 
-\Weline\Server\Service\RouteHintService::init($port, true, 3600);
+\Weline\Server\Service\RouteHintService::init($port, $wlsRuntimeTopology === 'dispatcher', 3600);
 
 $runtime = null;
 $runtimeError = null;
+$fpcFastPath = null;
 try {
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
-    try {
-        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Router\FullPageCacheCoordinator::class);
-    } catch (\Throwable $fpcPreloadError) {
-        \Weline\Server\Log\WlsLogger::warning_('EventBuffer SSL worker FPC coordinator preload failed: ' . $fpcPreloadError->getMessage());
-    }
+    $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
+        \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Router\FullPageCacheCoordinator::class
+        ),
+        $runtime,
+    );
     \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker runtime bootstrapped on {$host}:{$port}");
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
@@ -362,6 +399,35 @@ if ($isMaintenanceWorker) {
     \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(false);
 }
 
+try {
+    $workerPolicyKernel = \Weline\Server\Security\WorkerPolicyKernel::boot(
+        $instanceName,
+        $wlsRuntimeTopology,
+        $workerCount
+    );
+    $workerPolicyKernel->setMaintenanceMode($isMaintenanceWorker);
+    \Weline\Server\Service\Runtime\WorkerReadinessState::markPolicyLoaded(
+        $workerPolicyKernel->policyDigest()
+    );
+    $requestFramingLimits = $workerPolicyKernel->framingLimits();
+    $WLS_EVENT_MAX_REQUEST_HEADER_BYTES = $requestFramingLimits['max_header_bytes'];
+    $WLS_EVENT_MAX_REQUEST_BODY_BYTES = $requestFramingLimits['max_body_bytes'];
+    \Weline\Server\Log\WlsLogger::info_('[PolicyKernel] ready topology=' . $wlsRuntimeTopology
+        . ' digest=' . $workerPolicyKernel->policyDigest());
+    if ($wlsRuntimeTopology === 'direct') {
+        $workerOrdinal = ($workerId - 1) % \max(1, $workerCount);
+        $workerPolicyKernel->bootConnectionAcceptGatePool(\max(0, $workerOrdinal));
+        \Weline\Server\Log\WlsLogger::info_(
+            '[AcceptGate] direct public accept enabled ordinal=' . \max(0, $workerOrdinal)
+        );
+    }
+} catch (\Throwable $policyError) {
+    \Weline\Server\Log\WlsLogger::error_('[PolicyKernel] bootstrap failed: ' . $policyError->getMessage());
+    throw $policyError;
+}
+$workerTelemetryReporter = \Weline\Server\Service\Telemetry\WorkerTelemetryReporter::boot($instanceName);
+$workerHealthAccessPolicy = \Weline\Server\Service\WorkerHealthAccessPolicy::boot($instanceName);
+
 $base = new \EventBase();
 $sslContext = wlsEventBuildSslContext($sslCert, $sslKey);
 $maxConnections = (int)($sslConfig['event_buffer_max_connections_per_worker'] ?? 0);
@@ -381,6 +447,8 @@ $connections = [];
 $nextConnectionId = 0;
 $requestCount = 0;
 $activeRequests = 0;
+$maintenanceDrainState = new \Weline\Server\Service\Runtime\WorkerMaintenanceDrainState($isMaintenanceWorker);
+$waitingForAck = $controlPort > 0 || $supervisorEnabled;
 $maxMemoryBytes = wlsEventMemoryLimitToBytes($wlsMemoryLimit);
 if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
@@ -419,6 +487,7 @@ $listener = new \EventListener(
         &$activeRequests,
         $runtime,
         $runtimeError,
+        $fpcFastPath,
         $asyncBizAdapters,
         $instanceName,
         $workerId,
@@ -430,7 +499,8 @@ $listener = new \EventListener(
         $originTokenAllowLocal,
         &$ipcDraining,
         &$ipcClient,
-        &$diagnosticLogBudget
+        &$diagnosticLogBudget,
+        $workerTelemetryReporter,
     ): void {
         if (\count($connections) >= $maxConnections) {
             wlsEventCloseAcceptedSocket($socket);
@@ -440,6 +510,17 @@ $listener = new \EventListener(
 
         $id = ++$nextConnectionId;
         $acceptedAt = \microtime(true);
+        $peer = wlsEventDescribeAddress($address);
+        $acceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
+        if ($acceptGates !== null) {
+            $decision = $acceptGates->accept((string)$id, $peer, $acceptedAt);
+            if (!$decision->allowed) {
+                wlsEventCloseAcceptedSocket($socket);
+                $stats['errors']++;
+                return;
+            }
+            $peer = $decision->peerIp;
+        }
         if ($diagnosticLogBudget > 0) {
             $diagnosticLogBudget--;
             wlsEventDiagnosticLog(
@@ -465,6 +546,7 @@ $listener = new \EventListener(
 
         $connections[$id] = [
             'bev' => $bev,
+            'peer' => $peer,
             'buffer' => '',
             'accepted_at' => $acceptedAt,
             'first_read_at' => 0.0,
@@ -486,6 +568,7 @@ $listener = new \EventListener(
                 &$stats,
                 $runtime,
                 $runtimeError,
+                $fpcFastPath,
                 $asyncBizAdapters,
                 $instanceName,
                 $workerId,
@@ -497,9 +580,14 @@ $listener = new \EventListener(
                 $originTokenAllowLocal,
                 &$ipcDraining,
                 &$ipcClient,
-                $hotPathLogs
+                $hotPathLogs,
+                $workerTelemetryReporter,
             ): void {
                 if (!isset($connections[$id])) {
+                    return;
+                }
+                if (!\Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()) {
+                    $bev->disable(\EventBufferEvent::READING);
                     return;
                 }
                 $length = (int)($bev->getInput()->length ?? 0);
@@ -521,73 +609,97 @@ $listener = new \EventListener(
 
                 $connections[$id]['buffer'] .= $chunk;
                 $connections[$id]['last_activity'] = \time();
+                \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest((string)$id);
 
-                $processedThisCallback = 0;
                 while (isset($connections[$id])) {
-                    $extracted = wlsEventExtractCompleteRequest((string)$connections[$id]['buffer']);
-                    if ($extracted === null) {
+                    $frame = wlsEventExtractCompleteRequest((string)$connections[$id]['buffer']);
+                    if (($frame['status'] ?? '') === 'incomplete') {
+                        break;
+                    }
+                    if (($frame['status'] ?? '') === 'error') {
+                        \Weline\Server\Log\WlsLogger::warning_(
+                            'Invalid EventBuffer HTTP request framing, reject connection (connId=' . $id
+                            . ', reason=' . (string)($frame['error'] ?? 'invalid_framing') . ')'
+                        );
+                        $connections[$id]['buffer'] = '';
+                        $connections[$id]['close_after_write'] = true;
+                        $stats['errors']++;
+                        $bev->write(wlsHttpFramingErrorResponse((int)($frame['status_code'] ?? 400)));
+                        $bev->disable(\EventBufferEvent::READING);
                         break;
                     }
 
-                    [$rawRequest, $remaining] = $extracted;
+                    $rawRequest = (string)($frame['request'] ?? '');
+                    $remaining = \substr(
+                        (string)$connections[$id]['buffer'],
+                        (int)($frame['consumed'] ?? 0),
+                    );
+                    \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->markRequestComplete(
+                        (string)$id
+                    );
                     $connections[$id]['buffer'] = $remaining;
+                    if ($remaining !== '') {
+                        \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest(
+                            (string)$id
+                        );
+                    }
                     $requestCount++;
                     $activeRequests++;
                     $stats['requests']++;
                     $connections[$id]['requests'] = ((int)($connections[$id]['requests'] ?? 0)) + 1;
                     $handleStart = \microtime(true);
+                    $servedFromFpc = false;
 
-                    if ($ipcDraining) {
-                        $body = 'WLS worker is draining';
-                        $response = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
-                            . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
-                    } else {
-                        $response = wlsEventHandleRequest(
-                            $rawRequest,
-                            $runtime,
-                            $runtimeError,
-                            $asyncBizAdapters,
-                            $instanceName,
-                            $workerId,
-                            $port,
-                            $requestCount,
-                            $activeRequests,
-                            \count($connections),
-                            $startTime,
-                            $originToken,
-                            $originTokenValidationEnabled,
-                            $originTokenHeader,
-                            $originTokenAllowLocal,
-                            $id
-                        );
-                    }
+                    $response = wlsEventHandleRequest(
+                        $rawRequest,
+                        $runtime,
+                        $runtimeError,
+                        $fpcFastPath,
+                        $handleStart,
+                        $servedFromFpc,
+                        $asyncBizAdapters,
+                        $instanceName,
+                        $workerId,
+                        $port,
+                        $requestCount,
+                        $activeRequests,
+                        \count($connections),
+                        $startTime,
+                        $originToken,
+                        $originTokenValidationEnabled,
+                        $originTokenHeader,
+                        $originTokenAllowLocal,
+                        $id,
+                        (string)($connections[$id]['peer'] ?? ''),
+                        $frame,
+                    );
 
                     $durationMs = \round((\microtime(true) - $handleStart) * 1000, 2);
-                    $response = wlsEventInjectProcessTimeHeader($response, $durationMs);
+                    $isFpcHit = $servedFromFpc;
+                    if (!$isFpcHit || wlsExplicitPerformanceDiagnosticsRequested($rawRequest)) {
+                        $response = wlsEventInjectProcessTimeHeader($response, $durationMs);
+                    }
+                    $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
                     $bev->write($response);
 
                     $activeRequests = \max(0, $activeRequests - 1);
-                    if ($ipcClient !== null && $ipcClient->isConnected()) {
-                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
-                            $instanceName,
+                    $isStaticL1Hit = \str_contains($response, "\r\nX-WLS-Static-Cache: HIT\r\n");
+                    if (!$isStaticL1Hit && !$isFpcHit) {
+                        $workerTelemetryReporter->record(
+                            $ipcClient instanceof \Weline\Server\IPC\ChildControl\ChildControlClientInterface ? $ipcClient : null,
                             wlsEventRequestHost($rawRequest),
                             wlsEventResponseStatus($response),
                             (int)$durationMs,
-                            \strlen($response)
-                        ));
+                            \strlen($response),
+                        );
                     }
 
                     $close = $ipcDraining
-                        || !wlsEventIsKeepAlive($rawRequest)
-                        || wlsEventResponseRequestsClose($response);
+                        || wlsEventResponseRequestsClose($response)
+                        || (!$isStaticL1Hit && !$isFpcHit && !wlsEventIsKeepAlive($rawRequest));
                     if ($close) {
                         $connections[$id]['close_after_write'] = true;
                         $bev->disable(\EventBufferEvent::READING);
-                        break;
-                    }
-
-                    $processedThisCallback++;
-                    if ($processedThisCallback >= 4) {
                         break;
                     }
                 }
@@ -640,13 +752,32 @@ $listener->setErrorCallback(static function () use (&$stats): void {
     $stats['errors']++;
     \Weline\Server\Log\WlsLogger::error_('EventBuffer SSL listener error');
 });
+$eventPolicyGateOpen = !$waitingForAck
+    && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen();
+if (!$eventPolicyGateOpen) {
+    $listener->disable();
+}
+\Weline\Server\Service\Runtime\WorkerReadinessState::markListenerBound(
+    false,
+    (string)($eventLoopMeta['resolved'] ?? $wlsLoopDriver),
+    'event_buffer',
+    'single',
+);
 
 \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL listener ready tcp://{$host}:{$port}");
 \Weline\Server\Log\WlsLogger::flush_(true);
 
 $kernel = null;
 $ipcClient = null;
-$waitingForAck = false;
+$cacheClearEpoch = 0;
+\Weline\Server\Security\GlobalRateLimiter::setBanDeltaPublisher(
+    static function (string $deltaInstance, string $ip, int $expiresAt) use (&$ipcClient): void {
+        if ($ipcClient !== null && $ipcClient->isConnected()) {
+            $ipcClient->send(\Weline\Server\IPC\ControlMessage::policyStateDelta($deltaInstance, $ip, $expiresAt), false);
+        }
+    }
+);
+$waitingForAck = $waitingForAck ?? false;
 $readySentTime = 0.0;
 $ackRetryCount = 0;
 $ipcRole = $isMaintenanceWorker
@@ -675,8 +806,14 @@ if ($controlPort > 0 || $supervisorEnabled) {
             $sslKey,
             &$stats,
             &$ipcClient,
+            &$waitingForAck,
             $workerId,
-            $port
+            $port,
+            $isMaintenanceWorker,
+            $wlsRuntimeTopology,
+            $instanceName,
+            &$cacheClearEpoch,
+            $maintenanceDrainState,
         ): void {
             $type = (string)($msg['type'] ?? '');
             switch ($type) {
@@ -695,6 +832,18 @@ if ($controlPort > 0 || $supervisorEnabled) {
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
                 case \Weline\Server\IPC\ControlMessage::TYPE_READY_ACK:
+                    $accepted = !\array_key_exists('accepted', $msg) || (bool)($msg['accepted'] ?? false);
+                    if (!$accepted) {
+                        $shouldExit = true;
+                        $ipcDraining = true;
+                        $drainStartTime = \microtime(true);
+                        $listener?->disable();
+                        \Weline\Server\Log\WlsLogger::warning_(
+                            'EventBuffer SSL worker READY rejected: ' . (string)($msg['reason'] ?? 'ready_rejected')
+                        );
+                        break;
+                    }
+                    $waitingForAck = false;
                     \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker READY acknowledged worker_id={$workerId} port={$port}");
                     break;
 
@@ -709,21 +858,93 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $drainStartTime = \microtime(true);
                     if ($listener instanceof \EventListener) {
                         $listener->disable();
+                        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
                     \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker entering drain for {$type}");
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:
-                    if (\function_exists('opcache_reset')) {
-                        \opcache_reset();
+                    $requestedCacheEpoch = \max(0, (int)($msg['cache_epoch'] ?? 0));
+                    if ($requestedCacheEpoch > 0 && $requestedCacheEpoch < $cacheClearEpoch) {
+                        $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                            $requestedCacheEpoch,
+                            false,
+                            'stale_cache_epoch',
+                            $workerId,
+                            false,
+                            $cacheClearEpoch,
+                        ));
+                        \Weline\Server\Log\WlsLogger::warning_(
+                            "EventBuffer SSL worker rejected stale cache epoch {$requestedCacheEpoch}; current={$cacheClearEpoch}"
+                        );
+                        break;
                     }
-                    \clearstatcache(true);
-                    wlsEventClearFrameworkCachePools();
-                    \Weline\Framework\Manager\ObjectManager::clearInstances();
-                    if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
-                        \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+                    if ($requestedCacheEpoch > 0 && $requestedCacheEpoch === $cacheClearEpoch) {
+                        $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                            $requestedCacheEpoch,
+                            true,
+                            '',
+                            $workerId,
+                            false,
+                            $cacheClearEpoch,
+                        ));
+                        break;
                     }
-                    \Weline\Server\Log\WlsLogger::info_('EventBuffer SSL worker cache cleared');
+
+                    try {
+                        if (\function_exists('opcache_reset')) {
+                            \opcache_reset();
+                        }
+                        \clearstatcache(true);
+                        $cachePoolResults = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::clearFrameworkPools();
+                        $failedCachePools = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::failedPools(
+                            $cachePoolResults
+                        );
+                        if ($failedCachePools !== []) {
+                            throw new \RuntimeException(
+                                'cache_pool_clear_failed:' . \implode(',', $failedCachePools)
+                            );
+                        }
+                        \Weline\Framework\Manager\ObjectManager::clearInstances();
+                        \Weline\Framework\Manager\ObjectManager::getInstance(
+                            \Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry::class
+                        )->reset(new \Weline\Framework\Runtime\ProcessCacheResetContext(
+                            \Weline\Framework\Runtime\ProcessCacheResetContext::REASON_CACHE_CLEAR,
+                            true
+                        ));
+                        if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
+                            \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+                        }
+                        \Weline\Server\Service\WorkerStaticResponseL1::clear();
+                        if ($requestedCacheEpoch > 0) {
+                            $cacheClearEpoch = $requestedCacheEpoch;
+                            $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                                $requestedCacheEpoch,
+                                true,
+                                '',
+                                $workerId,
+                                true,
+                                $cacheClearEpoch,
+                            ));
+                        }
+                        \Weline\Server\Log\WlsLogger::info_(
+                            "EventBuffer SSL worker cache cleared epoch={$cacheClearEpoch}"
+                        );
+                    } catch (\Throwable $throwable) {
+                        if ($requestedCacheEpoch > 0) {
+                            $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                                $requestedCacheEpoch,
+                                false,
+                                'cache_reset_failed',
+                                $workerId,
+                                false,
+                                $cacheClearEpoch,
+                            ));
+                        }
+                        \Weline\Server\Log\WlsLogger::error_(
+                            'EventBuffer SSL worker cache clear failed: ' . $throwable->getMessage()
+                        );
+                    }
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
@@ -739,6 +960,31 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $policyData = $msg['data'] ?? [];
                     if (\is_array($policyData)) {
                         \Weline\Server\Service\Runtime\RoutingPolicyRegistry::update($policyData);
+                    }
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_SET_MAINTENANCE_MODE:
+                    $mEnabled = $isMaintenanceWorker ? true : (bool)($msg['enabled'] ?? false);
+                    \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode($mEnabled);
+                    \Weline\Server\Security\WorkerPolicyKernel::instance()->setMaintenanceMode($mEnabled);
+                    $requestId = (string)($msg['request_id'] ?? '');
+                    $maintenanceDrainState->modeApplied($mEnabled, $requestId);
+                    \Weline\Server\Log\WlsLogger::info_(
+                        'EventBuffer Worker 已应用维护模式 enabled=' . ($mEnabled ? 'true' : 'false')
+                        . ' request_id=' . $requestId
+                        . ' pinned_role=' . ($isMaintenanceWorker ? 'maintenance' : 'business')
+                    );
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_SECURITY_UNBLOCK:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_STATE_DELTA:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_PREPARE:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_ACTIVATE:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_COMMIT:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_ROLLBACK:
+                    $policyReply = \Weline\Server\Service\Policy\WorkerPolicyControl::handle($msg, $wlsRuntimeTopology, $instanceName);
+                    if ($policyReply !== null) {
+                        $ipcClient?->send($policyReply);
                     }
                     break;
             }
@@ -763,8 +1009,14 @@ if ($controlPort > 0 || $supervisorEnabled) {
             && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
         ) {
             \Weline\Server\Log\WlsLogger::info_("[WorkerWarmup] EventBuffer READY-gate warmup start worker={$workerId}");
-            $runtime->runReadyGateWorkerBootstrapWarmup();
+            $homepageFpcProof = $runtime->runReadyGateWorkerBootstrapWarmup();
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markBusinessHomepageHot($homepageFpcProof);
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markDynamicFirstRenderProof(
+                $runtime->readyGateDynamicFirstRenderProof()
+            );
             \Weline\Server\Log\WlsLogger::info_("[WorkerWarmup] EventBuffer READY-gate warmup done worker={$workerId}");
+        } elseif ($isMaintenanceWorker) {
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markMaintenanceReady();
         }
         $readyReported = $kernel->sendReady();
     }
@@ -798,6 +1050,7 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     &$connections,
     &$stats,
     &$listener,
+    &$eventPolicyGateOpen,
     $base,
     $masterPid,
     &$ipcReceivedShutdown,
@@ -805,9 +1058,20 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     $fiberScheduler,
     &$homepageKeepWarmFiber,
     $runtime,
+    $runtimeError,
+    $asyncBizAdapters,
+    $instanceName,
+    &$requestCount,
+    $startTime,
+    $originToken,
+    $originTokenValidationEnabled,
+    $originTokenHeader,
+    $originTokenAllowLocal,
     $isMaintenanceWorker,
     &$activeRequests,
-    $maxMemoryBytes
+    $maxMemoryBytes,
+    $workerTelemetryReporter,
+    $maintenanceDrainState,
 ): void {
     if ($kernel !== null) {
         $kernel->tick();
@@ -821,6 +1085,136 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
             $ackRetryCount++;
             $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
             $readySentTime = \microtime(true);
+        }
+    }
+    $workerTelemetryReporter->tick($ipcClient);
+
+    if ($maintenanceDrainState->isWaitingForRequestDrain() && $activeRequests === 0) {
+        wlsEventDrainBufferedMaintenanceRequests(
+            $connections,
+            $stats,
+            $runtime,
+            $runtimeError,
+            $fpcFastPath,
+            $asyncBizAdapters,
+            $instanceName,
+            $workerId,
+            $port,
+            $requestCount,
+            $activeRequests,
+            $startTime,
+            $originToken,
+            $originTokenValidationEnabled,
+            $originTokenHeader,
+            $originTokenAllowLocal,
+            $workerTelemetryReporter,
+            $ipcClient,
+        );
+    }
+
+    $maintenanceRequestWorkDrained = $activeRequests === 0;
+    if ($maintenanceRequestWorkDrained) {
+        foreach ($connections as $maintenanceConnection) {
+            $maintenanceBev = $maintenanceConnection['bev'] ?? null;
+            if ($maintenanceBev instanceof \EventBufferEvent
+                && (int)($maintenanceBev->getOutput()->length ?? 0) > 0
+            ) {
+                $maintenanceRequestWorkDrained = false;
+                break;
+            }
+            // A complete pipelined request already in the PHP-side buffer is
+            // admitted work. Partial input remains pre-dispatch and cannot let
+            // a slowloris connection hold the maintenance barrier.
+            $maintenanceInput = (string)($maintenanceConnection['buffer'] ?? '');
+            if ($maintenanceInput !== '') {
+                $maintenanceFrame = wlsEventExtractCompleteRequest($maintenanceInput);
+                if (($maintenanceFrame['status'] ?? '') !== 'incomplete') {
+                    $maintenanceRequestWorkDrained = false;
+                    break;
+                }
+            }
+        }
+    }
+    $maintenanceAckRequestId = $maintenanceDrainState->nextAcknowledgement($maintenanceRequestWorkDrained);
+    if ($maintenanceAckRequestId !== null
+        && $ipcClient !== null
+        && $ipcClient->isConnected()
+        && $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
+            'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+            'request_id' => $maintenanceAckRequestId,
+            'worker_id' => $workerId,
+        ]))
+    ) {
+        $maintenanceDrainState->markAcknowledged($maintenanceAckRequestId);
+        \Weline\Server\Log\WlsLogger::info_(
+            'EventBuffer 维护排水已完成，已上报 Master ACK request_id=' . $maintenanceAckRequestId
+        );
+    }
+
+    static $attackLogNextFlushCheckAt = 0.0;
+    $attackLogNow = \microtime(true);
+    if ($activeRequests <= 0 && $attackLogNow >= $attackLogNextFlushCheckAt) {
+        $attackLogNextFlushCheckAt = $attackLogNow + 0.25;
+        $attackLogOutputIdle = true;
+        foreach ($connections as $attackLogConnection) {
+            $attackLogBev = $attackLogConnection['bev'] ?? null;
+            if ($attackLogBev instanceof \EventBufferEvent && (int)($attackLogBev->getOutput()->length ?? 0) > 0) {
+                $attackLogOutputIdle = false;
+                break;
+            }
+        }
+        if ($attackLogOutputIdle) {
+            \Weline\Server\Service\AttackLogService::flushIfDue();
+        }
+    }
+
+    $connectionAcceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
+    if ($connectionAcceptGates !== null) {
+        foreach ($connectionAcceptGates->sweep() as $directive) {
+            wlsEventCloseConnection((int)$directive->connectionId, $connections, $stats);
+        }
+        $connectionAcceptGates->reconcileMapsIfDue($connections);
+    }
+
+    $applicationPolicyGateOpen = !$waitingForAck
+        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen();
+    $desiredListenerGateOpen = $applicationPolicyGateOpen
+        && !$shouldExit
+        && !$ipcDraining;
+    if ($desiredListenerGateOpen !== $eventPolicyGateOpen) {
+        $eventPolicyGateOpen = $desiredListenerGateOpen;
+        if ($listener instanceof \EventListener) {
+            $eventPolicyGateOpen ? $listener->enable() : $listener->disable();
+        }
+        foreach ($connections as $connection) {
+            $bev = $connection['bev'] ?? null;
+            if (!$bev instanceof \EventBufferEvent) {
+                continue;
+            }
+            // DRAIN closes admission only. Connections accepted before the
+            // fence must finish instead of being frozen until timeout.
+            if ($applicationPolicyGateOpen && empty($connection['close_after_write'])) {
+                $bev->enable(\EventBufferEvent::READING);
+            } else {
+                $bev->disable(\EventBufferEvent::READING);
+            }
+        }
+    }
+    if ($ipcClient !== null && $ipcClient->isConnected()) {
+        $pendingPolicyResponses = 0;
+        foreach ($connections as $connection) {
+            $bev = $connection['bev'] ?? null;
+            if ($bev instanceof \EventBufferEvent && (int)($bev->getOutput()->length ?? 0) > 0) {
+                $pendingPolicyResponses++;
+            }
+        }
+        $policyDrainReply = \Weline\Server\Service\Policy\WorkerPolicyControl::pollAfterApplicationDrain(
+            $activeRequests,
+            $homepageKeepWarmFiber instanceof \Fiber && !$homepageKeepWarmFiber->isTerminated() ? 1 : 0,
+            $pendingPolicyResponses
+        );
+        if ($policyDrainReply !== null) {
+            $ipcClient->send($policyDrainReply);
         }
     }
 
@@ -868,6 +1262,7 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     }
     if ($homepageKeepWarmMayRun
         && $homepageKeepWarmFiber === null
+        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
         && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
         && $runtime->shouldScheduleHomepageKeepWarm(0, false, false)
     ) {
@@ -909,6 +1304,7 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
         $kernel->flushWrites();
         $kernel->close();
     }
+    \Weline\Server\Service\AttackLogService::flushForShutdown();
     \Weline\Server\Log\WlsLogger::flush_(true);
     $base->exit();
 });
@@ -917,6 +1313,7 @@ $tickTimer->add(0.05);
 \Weline\Server\Log\WlsLogger::info_('EventBuffer SSL worker entering event loop');
 \Weline\Server\Log\WlsLogger::flush_(true);
 $base->loop();
+\Weline\Server\Service\AttackLogService::flushForShutdown();
 \Weline\Server\Log\WlsLogger::flush_(true);
 exit(0);
 
@@ -940,28 +1337,6 @@ function wlsEventBuildSslContext(string $sslCert, string $sslKey): \EventSslCont
     }
 
     return $context;
-}
-
-function wlsEventClearFrameworkCachePools(): void
-{
-    try {
-        if (\class_exists(\Weline\Framework\Cache\Adapter\WlsMemoryAdapter::class)) {
-            \Weline\Framework\Cache\Adapter\WlsMemoryAdapter::clearAllMemory();
-        }
-        if (!\class_exists(\Weline\Framework\Manager\ObjectManager::class)
-            || !\class_exists(\Weline\Framework\Cache\CacheManager::class)) {
-            return;
-        }
-        $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-        foreach (['router', 'fpc', 'hook', 'view', 'phrase', 'i18n', 'config', 'module_router', 'theme', 'url_rewrite', 'website', 'controller', 'taglib', 'system_config'] as $pool) {
-            if (\method_exists($cacheManager, 'hasPool') && !$cacheManager->hasPool($pool)) {
-                continue;
-            }
-            $cacheManager->pool($pool)->clear();
-        }
-    } catch (\Throwable $throwable) {
-        \Weline\Server\Log\WlsLogger::warning_('[EventBufferSSL] cache pool clear failed: ' . $throwable->getMessage());
-    }
 }
 
 function wlsEventCalculateCacheSize(string|int $value, int $defaultPercent, int $defaultMin, int $defaultMax): int
@@ -1020,6 +1395,16 @@ function wlsEventDescribeAddress(mixed $address): string
     if (\is_scalar($address) || $address === null) {
         return (string)$address;
     }
+    if (\is_array($address)) {
+        $host = (string)($address[0] ?? $address['host'] ?? $address['ip'] ?? '');
+        $port = (int)($address[1] ?? $address['port'] ?? 0);
+        if (\filter_var($host, FILTER_VALIDATE_IP)) {
+            if ($port <= 0) {
+                return $host;
+            }
+            return \str_contains($host, ':') ? '[' . $host . ']:' . $port : $host . ':' . $port;
+        }
+    }
     $encoded = @\json_encode($address, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     return \is_string($encoded) ? $encoded : \get_debug_type($address);
 }
@@ -1060,6 +1445,7 @@ function wlsEventReadSslError(\EventBufferEvent $bev): string
 
 function wlsEventCloseConnection(int $id, array &$connections, array &$stats): void
 {
+    \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->close((string)$id);
     if (!isset($connections[$id])) {
         return;
     }
@@ -1079,50 +1465,175 @@ function wlsEventCloseConnection(int $id, array &$connections, array &$stats): v
 }
 
 /**
- * @return array{0:string,1:string}|null
+ * EventBuffer uses the same authoritative request boundary as stream HTTP/TLS.
+ *
+ * @return array{status:string,consumed:int,request:string,error:string,status_code:int,header_bytes:int,content_length:int}
  */
-function wlsEventExtractCompleteRequest(string $buffer): ?array
+function wlsEventExtractCompleteRequest(string $buffer): array
 {
-    $headerEnd = \strpos($buffer, "\r\n\r\n");
-    if ($headerEnd === false) {
-        return null;
-    }
-    $totalLength = $headerEnd + 4;
-    $headers = \substr($buffer, 0, $headerEnd);
-    if (\preg_match('/^Content-Length:\s*(\d+)/mi', $headers, $m)) {
-        $totalLength += (int)$m[1];
-    }
-    if (\strlen($buffer) < $totalLength) {
-        return null;
+    global $WLS_EVENT_MAX_REQUEST_HEADER_BYTES, $WLS_EVENT_MAX_REQUEST_BODY_BYTES;
+
+    return wlsParseHttpRequestFrame(
+        $buffer,
+        (int)($WLS_EVENT_MAX_REQUEST_HEADER_BYTES ?? 65536),
+        (int)($WLS_EVENT_MAX_REQUEST_BODY_BYTES ?? 16 * 1024 * 1024),
+    );
+}
+
+/**
+ * Finish complete pipelined requests that were already copied out of libevent
+ * before maintenance was applied. The budget bounds control-plane work per
+ * tick; partial input is deliberately ignored so slow clients cannot hold ACK.
+ *
+ * @param array<int, array<string, mixed>> $connections
+ * @param array<string, int> $stats
+ */
+function wlsEventDrainBufferedMaintenanceRequests(
+    array &$connections,
+    array &$stats,
+    ?\Weline\Framework\Runtime\WlsRuntime $runtime,
+    ?string $runtimeError,
+    ?\Weline\Server\Service\WorkerFullPageCacheFastPath $fpcFastPath,
+    \Weline\Server\Runtime\Async\AsyncBizAdapters $asyncBizAdapters,
+    string $instanceName,
+    int $workerId,
+    int $port,
+    int &$requestCount,
+    int &$activeRequests,
+    int $startTime,
+    string $originToken,
+    bool $originTokenValidationEnabled,
+    string $originTokenHeader,
+    bool $originTokenAllowLocal,
+    \Weline\Server\Service\Telemetry\WorkerTelemetryReporter $workerTelemetryReporter,
+    ?\Weline\Server\IPC\ChildControl\ChildControlClientInterface $ipcClient,
+    int $budget = 64,
+): int {
+    $processed = 0;
+    $budget = \max(1, \min(256, $budget));
+
+    foreach (\array_keys($connections) as $connectionId) {
+        if ($processed >= $budget || !isset($connections[$connectionId])) {
+            break;
+        }
+        $bev = $connections[$connectionId]['bev'] ?? null;
+        if (!$bev instanceof \EventBufferEvent) {
+            continue;
+        }
+
+        $processedForConnection = 0;
+        while ($processed < $budget && isset($connections[$connectionId])) {
+            $buffer = (string)($connections[$connectionId]['buffer'] ?? '');
+            $frame = wlsEventExtractCompleteRequest($buffer);
+            if (($frame['status'] ?? '') === 'incomplete') {
+                break;
+            }
+            if (($frame['status'] ?? '') === 'error') {
+                $connections[$connectionId]['buffer'] = '';
+                $connections[$connectionId]['close_after_write'] = true;
+                $bev->write(wlsHttpFramingErrorResponse((int)($frame['status_code'] ?? 400)));
+                $bev->disable(\EventBufferEvent::READING);
+                $stats['errors'] = ((int)($stats['errors'] ?? 0)) + 1;
+                $processed++;
+                break;
+            }
+
+            $rawRequest = (string)($frame['request'] ?? '');
+            $remaining = \substr($buffer, (int)($frame['consumed'] ?? 0));
+            $connections[$connectionId]['buffer'] = $remaining;
+            \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->markRequestComplete(
+                (string)$connectionId
+            );
+            if ($remaining !== '') {
+                \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest(
+                    (string)$connectionId
+                );
+            }
+            $requestCount++;
+            $activeRequests++;
+            $stats['requests'] = ((int)($stats['requests'] ?? 0)) + 1;
+            $connections[$connectionId]['requests'] = ((int)($connections[$connectionId]['requests'] ?? 0)) + 1;
+            $handleStartedAt = \microtime(true);
+            $servedFromFpc = false;
+
+            try {
+                $response = wlsEventHandleRequest(
+                    $rawRequest,
+                    $runtime,
+                    $runtimeError,
+                    $fpcFastPath,
+                    $handleStartedAt,
+                    $servedFromFpc,
+                    $asyncBizAdapters,
+                    $instanceName,
+                    $workerId,
+                    $port,
+                    $requestCount,
+                    $activeRequests,
+                    \count($connections),
+                    $startTime,
+                    $originToken,
+                    $originTokenValidationEnabled,
+                    $originTokenHeader,
+                    $originTokenAllowLocal,
+                    (int)$connectionId,
+                    (string)($connections[$connectionId]['peer'] ?? ''),
+                    $frame,
+                );
+            } catch (\Throwable $throwable) {
+                \Weline\Server\Log\WlsLogger::error_(
+                    'EventBuffer maintenance drain request failed: ' . $throwable->getMessage()
+                );
+                $body = 'Service Unavailable';
+                $response = "HTTP/1.1 503 Service Unavailable\r\n"
+                    . "Content-Type: text/plain; charset=utf-8\r\n"
+                    . 'Content-Length: ' . \strlen($body) . "\r\n"
+                    . "Connection: close\r\n\r\n"
+                    . $body;
+            } finally {
+                $activeRequests = \max(0, $activeRequests - 1);
+            }
+
+            $durationMs = \round((\microtime(true) - $handleStartedAt) * 1000, 2);
+            $isFpcHit = $servedFromFpc;
+            if (!$isFpcHit || wlsExplicitPerformanceDiagnosticsRequested($rawRequest)) {
+                $response = wlsEventInjectProcessTimeHeader($response, $durationMs);
+            }
+            $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
+            $bev->write($response);
+            if (!\str_contains($response, "\r\nX-WLS-Static-Cache: HIT\r\n") && !$isFpcHit) {
+                $workerTelemetryReporter->record(
+                    $ipcClient,
+                    wlsEventRequestHost($rawRequest),
+                    wlsEventResponseStatus($response),
+                    (int)$durationMs,
+                    \strlen($response),
+                );
+            }
+            $processed++;
+            $processedForConnection++;
+        }
+
+        if ($processedForConnection > 0 && isset($connections[$connectionId])) {
+            $remaining = (string)($connections[$connectionId]['buffer'] ?? '');
+            if (($remaining === '' || (wlsEventExtractCompleteRequest($remaining)['status'] ?? '') === 'incomplete')) {
+                $connections[$connectionId]['close_after_write'] = true;
+                $bev->disable(\EventBufferEvent::READING);
+            }
+        }
     }
 
-    return [\substr($buffer, 0, $totalLength), \substr($buffer, $totalLength)];
+    return $processed;
 }
 
 function wlsEventHeader(string $rawRequest, string $headerName): ?string
 {
-    $pattern = '/^' . \preg_quote($headerName, '/') . ':\s*([^\r\n]+)/im';
-    if (!\preg_match($pattern, $rawRequest, $m)) {
-        return null;
-    }
-    $value = \trim((string)$m[1]);
-
-    return $value === '' ? null : $value;
+    return getHeaderValue($rawRequest, $headerName);
 }
 
 function wlsEventIsKeepAlive(string $rawRequest): bool
 {
-    if (\preg_match('/^Connection:\s*([^\r\n]+)/im', $rawRequest, $m)) {
-        $connection = \strtolower(\trim((string)$m[1]));
-        if ($connection === 'close') {
-            return false;
-        }
-        if ($connection === 'keep-alive') {
-            return true;
-        }
-    }
-
-    return \strpos($rawRequest, 'HTTP/1.1') !== false;
+    return isKeepAlive($rawRequest);
 }
 
 function wlsEventRequestHost(string $rawRequest): string
@@ -1175,6 +1686,9 @@ function wlsEventHandleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
     ?string $runtimeError,
+    ?\Weline\Server\Service\WorkerFullPageCacheFastPath $fpcFastPath,
+    float $requestStartedAt,
+    bool &$servedFromFpc,
     \Weline\Server\Runtime\Async\AsyncBizAdapters $asyncBizAdapters,
     string $instanceName,
     int $workerId,
@@ -1187,23 +1701,37 @@ function wlsEventHandleRequest(
     bool $originTokenValidationEnabled,
     string $originTokenHeader,
     bool $originTokenAllowLocal,
-    int $connectionId
+    int $connectionId,
+    string $transportPeer = '',
+    ?array $parsedFrame = null,
 ): string {
-    $method = 'GET';
-    $uri = '/';
-    $requestTarget = '/';
-    if (\preg_match('/^([A-Z]+)\s+([^\s]+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $m)) {
-        $method = \strtoupper((string)$m[1]);
-        $requestTarget = (string)$m[2];
-        if (\Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget) === null) {
-            return wlsEventBadRequestResponse();
-        }
-        $rawPath = \parse_url($requestTarget, PHP_URL_PATH);
-        $uri = \is_string($rawPath) && $rawPath !== '' ? $rawPath : '/';
+    $servedFromFpc = false;
+    $policyDecision = \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate(
+        $rawRequest,
+        $transportPeer,
+        $parsedFrame,
+    );
+    if (!$policyDecision->allowed) {
+        return (string)$policyDecision->response;
+    }
+    $policyServerInfo = $policyDecision->requestServerInfo();
+
+    $method = $policyDecision->method;
+    $uri = $policyDecision->path;
+    $requestTarget = $policyDecision->target;
+    if (\Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget) === null) {
+        return wlsEventBadRequestResponse();
     }
 
-    if ($uri === '/_wls/health') {
-        $keepAlive = wlsEventIsKeepAlive($rawRequest);
+    if ($method === 'GET' && $uri === '/_wls/health') {
+        $keepAlive = $policyDecision->keepAlive();
+        if (!\Weline\Server\Service\WorkerHealthAccessPolicy::instance($instanceName)->allowsClient(
+            $policyDecision->clientIp,
+            $policyDecision->headers,
+        )) {
+            return "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: "
+                . ($keepAlive ? 'keep-alive' : 'close') . "\r\n\r\nForbidden";
+        }
         if (\str_contains($rawRequest, 'detail=1') || \str_contains($rawRequest, 'detail=true')) {
             $body = \json_encode([
                 'status' => 'healthy',
@@ -1229,48 +1757,50 @@ function wlsEventHandleRequest(
         return "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: " . ($keepAlive ? 'keep-alive' : 'close') . "\r\n\r\nOK";
     }
 
-    if ($originTokenValidationEnabled && $originToken !== '') {
-        $clientIp = (string)(wlsEventHeader($rawRequest, 'X-Real-IP') ?? '127.0.0.1');
-        $isLocal = \in_array($clientIp, ['127.0.0.1', '::1', 'localhost'], true);
-        if (!$originTokenAllowLocal || !$isLocal) {
-            $receivedToken = (string)(wlsEventHeader($rawRequest, $originTokenHeader) ?? '');
-            if (!\hash_equals($originToken, $receivedToken)) {
-                $body = '{"error":true,"message":"Origin token validation failed"}';
-
-                return "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: "
-                    . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
-            }
-        }
-    }
-
-    $staticResponse = wlsEventHandleStaticFile($requestTarget, $rawRequest);
+    $staticResponse = $policyDecision->staticProcessCacheEnabled()
+        ? \Weline\Server\Service\WorkerStaticResponseL1::lookup($policyDecision)
+        : null;
     if ($staticResponse !== null) {
         return $staticResponse;
     }
 
-    $fastPathResponse = wlsEventTryServeFormattedFpcFastResponse($rawRequest, wlsEventIsKeepAlive($rawRequest));
-    if ($fastPathResponse !== null) {
-        if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
-            $runtime->noteHomepageNaturalHit($requestTarget);
-        }
-        return $fastPathResponse;
+    $fpcHit = $policyDecision->fpcCacheEnabled()
+        ? $fpcFastPath?->lookup($policyDecision, 'https')
+        : null;
+    if ($fpcHit !== null) {
+        $servedFromFpc = true;
+        return wlsDecorateFormattedFpcFastResponseForPerformancePanel(
+            (string)$fpcHit['response'],
+            $rawRequest,
+            (\microtime(true) - $requestStartedAt) * 1000,
+            $workerId,
+            $port,
+            (string)$fpcHit['source'],
+        );
+    }
+
+    // Keep the EventBuffer transport aligned with stream HTTP/TLS: only the
+    // immutable Static L1 lookup precedes FPC. Filesystem fallback runs after
+    // an FPC miss so a hot page never performs candidate is_file/filemtime IO.
+    $staticResponse = $policyDecision->staticProcessCacheEnabled()
+        ? wlsEventHandleStaticFile($requestTarget, $policyDecision)
+        : null;
+    if ($staticResponse !== null) {
+        return $staticResponse;
     }
 
     if ($runtime === null) {
-        $body = \json_encode([
-            'error' => true,
-            'message' => 'Runtime initialization failed',
-            'detail' => $runtimeError,
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        $body = \is_string($body) ? $body : '{"error":true}';
-
-        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: "
-            . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+        return \Weline\Server\Service\Runtime\WorkerRuntimeFailureResponse::create($runtimeError, [
+            'instance' => $instanceName,
+            'worker_id' => $workerId,
+            'port' => $port,
+            'transport' => 'https_event_buffer',
+        ]);
     }
 
     wlsEventRequestContextEnter($connectionId);
     try {
-        $request = \Weline\Framework\Http\WlsRequest::fromRaw($rawRequest, [
+        $request = \Weline\Framework\Http\WlsRequest::fromEnvelope($policyDecision->requestEnvelope(), $policyServerInfo + [
             'WLS_INSTANCE' => $instanceName,
             'WLS_WORKER_ID' => $workerId,
             'WLS_PORT' => $port,
@@ -1287,7 +1817,7 @@ function wlsEventHandleRequest(
 
         if (\is_string($result) && \str_starts_with($result, 'HTTP/')) {
             $result = wlsEventMergeRuntimeCookies($result, $runtime);
-            $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
+            $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
             if (\strtoupper($method) === 'HEAD') {
                 $headerEnd = \strpos($result, "\r\n\r\n");
@@ -1324,7 +1854,7 @@ function wlsEventHandleRequest(
                 $response->setHeader($name, $value);
             }
         }
-        $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
+        $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
         \Weline\Server\Service\RouteHintService::addHintToFrameworkResponse($response, $sni);
         $acceptEncoding = $request->getHeader('Accept-Encoding');
         if (\is_string($acceptEncoding) && $acceptEncoding !== '') {
@@ -1430,55 +1960,14 @@ function wlsEventMergeRuntimeCookies(string $response, \Weline\Framework\Runtime
     return $headers . "\r\n\r\n" . $body;
 }
 
-function wlsEventTryServeFormattedFpcFastResponse(string $rawRequest, bool $keepAlive): ?string
-{
-    if (!\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $m)) {
+function wlsEventHandleStaticFile(
+    string $requestTarget,
+    \Weline\Server\Security\WorkerPolicyDecision $decision,
+): ?string {
+    if (!\in_array($decision->method, ['GET', 'HEAD'], true)) {
         return null;
-    }
-    $method = \strtoupper((string)$m[1]);
-    if ($method !== 'GET' && $method !== 'HEAD') {
-        return null;
-    }
-    $target = (string)$m[2];
-    $host = \trim((string)(wlsEventHeader($rawRequest, 'Host') ?? ''));
-    if ($host === '') {
-        return null;
-    }
-    $targetParts = \parse_url($target);
-    if (\is_array($targetParts) && !empty($targetParts['scheme']) && !empty($targetParts['host'])) {
-        $fullUri = $target;
-    } else {
-        $requestUri = $target === '' ? '/' : $target;
-        if (!\str_starts_with($requestUri, '/')) {
-            $requestUri = '/' . $requestUri;
-        }
-        $fullUri = 'https://' . $host . $requestUri;
     }
 
-    try {
-        $coordinator = \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Framework\Router\FullPageCacheCoordinator::class
-        );
-        if (!$coordinator instanceof \Weline\Framework\Router\FullPageCacheCoordinator) {
-            return null;
-        }
-        $cached = $coordinator->getFormattedCachedResponseForFullUri(
-            $fullUri,
-            $method,
-            (string)(wlsEventHeader($rawRequest, 'Accept') ?? ''),
-            (string)(wlsEventHeader($rawRequest, 'Accept-Encoding') ?? ''),
-            (string)(wlsEventHeader($rawRequest, 'Cookie') ?? ''),
-            $keepAlive
-        );
-
-        return \is_array($cached) ? ((string)($cached['response'] ?? '') ?: null) : null;
-    } catch (\Throwable) {
-        return null;
-    }
-}
-
-function wlsEventHandleStaticFile(string $requestTarget, string $rawRequest): ?string
-{
     $path = \Weline\Server\Service\WlsStaticUriPathResolver::resolvePath($requestTarget);
     if ($path === null) {
         return wlsEventBadRequestResponse();
@@ -1496,16 +1985,81 @@ function wlsEventHandleStaticFile(string $requestTarget, string $rawRequest): ?s
         if (!\is_file($candidate) || !\is_readable($candidate)) {
             continue;
         }
-        $content = @\file_get_contents($candidate);
+
+        $mtime = @\filemtime($candidate);
+        if (!\is_int($mtime)) {
+            return null;
+        }
+        $lastModified = \gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
+        $etag = '"' . \md5($candidate . $mtime) . '"';
+        $keepAlive = $decision->keepAlive();
+        $connection = $keepAlive ? 'keep-alive' : 'close';
+        $ifNoneMatch = \trim((string)($decision->headers['if-none-match'] ?? ''));
+        $ifModifiedSince = \trim((string)($decision->headers['if-modified-since'] ?? ''));
+        if (($ifNoneMatch !== '' && $ifNoneMatch === $etag)
+            || ($ifNoneMatch === '' && $ifModifiedSince !== '' && $ifModifiedSince === $lastModified)
+        ) {
+            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\n"
+                . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
+                . "X-WLS-Static-Cache: MISS\r\n"
+                . "Connection: {$connection}\r\n\r\n";
+        }
+
+        $fileSize = @\filesize($candidate);
+        if (!\is_int($fileSize)) {
+            return null;
+        }
+        $range = wlsResolveStaticByteRange(
+            (string)($decision->headers['range'] ?? ''),
+            (string)($decision->headers['if-range'] ?? ''),
+            $fileSize,
+            $etag,
+            $mtime,
+        );
+        if ($range['status'] === 'unsatisfiable') {
+            return "HTTP/1.1 416 Range Not Satisfiable\r\n"
+                . "Content-Range: bytes */{$fileSize}\r\nContent-Length: 0\r\n"
+                . "Accept-Ranges: bytes\r\nConnection: {$connection}\r\n\r\n";
+        }
+        $mime = wlsEventMimeType($candidate);
+        if ($range['status'] === 'range') {
+            $content = $decision->method === 'HEAD'
+                ? ''
+                : wlsReadStaticFileSlice($candidate, $range['start'], $range['length']);
+            if ($content === false) {
+                return null;
+            }
+            return "HTTP/1.1 206 Partial Content\r\n"
+                . "Content-Range: bytes {$range['start']}-{$range['end']}/{$fileSize}\r\n"
+                . "Content-Type: {$mime}\r\nContent-Length: {$range['length']}\r\n"
+                . "Cache-Control: public, max-age=31536000\r\nETag: {$etag}\r\n"
+                . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
+                . "X-WLS-Static-Cache: DISK\r\nConnection: {$connection}\r\n\r\n"
+                . ($decision->method === 'HEAD' ? '' : $content);
+        }
+
+        $content = $decision->method === 'HEAD' ? '' : @\file_get_contents($candidate);
         if (!\is_string($content)) {
             return null;
         }
-        $mime = wlsEventMimeType($candidate);
-        $keepAlive = wlsEventIsKeepAlive($rawRequest);
+        $response = "HTTP/1.1 200 OK\r\nContent-Type: {$mime}\r\nContent-Length: {$fileSize}"
+            . "\r\nCache-Control: public, max-age=31536000\r\nETag: {$etag}\r\n"
+            . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
+            . "X-WLS-Static-Cache: MISS\r\n"
+            . "Connection: {$connection}\r\n\r\n" . $content;
+        if ($decision->method === 'GET') {
+            \Weline\Server\Service\WorkerStaticResponseL1::publish(
+                $requestTarget,
+                $response,
+                $candidate,
+                $etag,
+                $lastModified,
+                \time(),
+                31_536_000,
+            );
+        }
 
-        return "HTTP/1.1 200 OK\r\nContent-Type: {$mime}\r\nContent-Length: " . \strlen($content)
-            . "\r\nCache-Control: public, max-age=31536000\r\nConnection: " . ($keepAlive ? 'keep-alive' : 'close')
-            . "\r\n\r\n" . $content;
+        return $response;
     }
 
     return null;

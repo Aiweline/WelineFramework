@@ -17,9 +17,14 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Compiler\SqliteCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Exception\DatabaseRetryTimeoutException;
+use Weline\Framework\Database\Retry\RetryBudget;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
@@ -35,9 +40,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 {
     use SqlTrait;
     
-    // 重试配置
-    private const MAX_RETRY_ATTEMPTS = 5;
-    private const RETRY_DELAY_MS = 100;
+    // SQLite busy 重试配置：动态请求预算不可突破 150ms。
+    // Deadline is authoritative; this only guards against a broken clock or scheduler.
+    private const MAX_RETRY_ATTEMPTS = 32;
+    private const DEFAULT_RETRY_DELAY_MS = 2;
+    private const DEFAULT_REQUEST_RETRY_BUDGET_MS = 50;
+    private const MAX_REQUEST_RETRY_BUDGET_MS = 150;
+    private const MAX_CLI_RETRY_BUDGET_MS = 30_000;
+    private const REQUEST_RETRY_BUDGET_CONTEXT_KEY = 'database.sqlite.retry_budget';
+
+    private ?\WeakReference $nonBlockingBusyTimeoutLink = null;
 
     public string $exist_update_sql = '';
 
@@ -127,14 +139,24 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             }
         }
         if ($this->batch and $this->fetch_type == 'insert') {
-            // 使用重试机制执行批量插入
+            // 批量插入也必须使用预编译参数绑定。直接 exec(getSql()) 会把字符串值
+            // 拼回 SQL，词典、模板等包含引号或代码片段的数据会破坏 SQL 语法。
             $origin_data = $this->executeWithRetry(function() {
-                $result = $this->getLink()->exec($this->getSql());
-                if ($result === false) {
-                    return false;
-                } else {
-                    return $this->getLink()->lastInsertId();
+                $stmt = $this->getLink()->prepare($this->sql);
+                if ($stmt === false) {
+                    $errorInfo = $this->getLink()->errorInfo();
+                    throw new Exception(
+                        __('PDO prepare 失败：%{1}。SQL预览：%{2}', [
+                            $errorInfo[2] ?? 'Unknown',
+                            substr($this->sql, 0, 200),
+                        ])
+                    );
                 }
+                $this->PDOStatement = $stmt;
+                $this->PDOStatement->execute($this->bound_values);
+                // SQLite RETURNING 会留下结果集；消费它以便后续提交事务。
+                $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                return $this->getLink()->lastInsertId();
             });
             $this->reset();
         } else {
@@ -401,18 +423,22 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->reset();
         $this->sql = $sql;
         $this->fetch_type = __FUNCTION__;
-        $stmt = $this->getLink()->prepare($sql);
-        if ($stmt === false) {
-            $errorInfo = $this->getLink()->errorInfo();
-            $errorCode = $errorInfo[0] ?? '';
-            $errorMessage = $errorInfo[2] ?? '';
+        $stmt = $this->executeWithRetry(function () use ($sql) {
+            $stmt = $this->getLink()->prepare($sql);
+            if ($stmt === false) {
+                $errorInfo = $this->getLink()->errorInfo();
+                $errorCode = $errorInfo[0] ?? '';
+                $errorMessage = $errorInfo[2] ?? '';
 
-            // 统一抛出 PDO prepare 错误，批量变量过多的情况由上层在生成 SQL 时按批次拆分处理
-            throw new Exception(
-                __('PDO prepare 失败：%{1} (错误代码: %{2})。SQL预览：%{3}', 
-                [$errorMessage, $errorCode, substr($sql, 0, 200)])
-            );
-        }
+                // 统一抛出 PDO prepare 错误，批量变量过多的情况由上层在生成 SQL 时按批次拆分处理
+                throw new Exception(
+                    __('PDO prepare 失败：%{1} (错误代码: %{2})。SQL预览：%{3}',
+                    [$errorMessage, $errorCode, substr($sql, 0, 200)])
+                );
+            }
+
+            return $stmt;
+        });
         $this->PDOStatement = $stmt;
         return $this;
     }
@@ -444,11 +470,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->bound_values = $compiled->bindings;
 
         if (!empty($this->sql)) {
-            $stmt = $this->getLink()->prepare($this->sql);
-            if ($stmt === false) {
-                $err = $this->getLink()->errorInfo();
-                throw new Exception(__('SQL 鍑嗗澶辫触锛?{1}銆係QL: %{2}', [$err[2] ?? 'Unknown', substr($this->sql, 0, 200)]));
-            }
+            $stmt = $this->executeWithRetry(function () {
+                $stmt = $this->getLink()->prepare($this->sql);
+                if ($stmt === false) {
+                    $err = $this->getLink()->errorInfo();
+                    throw new Exception(__('SQL 鍑嗗澶辫触锛?{1}銆係QL: %{2}', [$err[2] ?? 'Unknown', substr($this->sql, 0, 200)]));
+                }
+
+                return $stmt;
+            });
             $this->PDOStatement = $stmt;
         } else {
             $this->PDOStatement = null;
@@ -1258,33 +1288,83 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
 
     /**
-     * 执行带重试机制的数据库操作
+     * Execute an SQLite operation with one immutable retry deadline.
+     *
+     * Only SQLITE_BUSY/SQLITE_LOCKED is retryable. SQLite reports those
+     * conditions before the statement commits, so retrying cannot duplicate a
+     * completed mutation. Every other PDO error keeps its original type and
+     * stack. In WLS, retry is allowed only when the current Fiber can yield.
      */
     protected function executeWithRetry(callable $operation, array $params = []): mixed
     {
         $attempts = 0;
-        $lastException = null;
+        $operationStartedAtNanoseconds = (float)\hrtime(true);
+        $budget = null;
+        $lastBusyException = null;
+        // Reserve exception construction/unwind plus one final non-blocking PDO call.
+        $completionReserveMicroseconds = 8_000;
+
+        $this->disableNativeBusyTimeout();
 
         while ($attempts < self::MAX_RETRY_ATTEMPTS) {
+            if ($budget instanceof RetryBudget
+                && $lastBusyException instanceof \PDOException
+                && $budget->remainingMicroseconds() <= $completionReserveMicroseconds
+            ) {
+                throw $this->newBusyTimeoutException(
+                    'deadline_exhausted',
+                    $attempts,
+                    $budget,
+                    $lastBusyException
+                );
+            }
+
+            $attempts++;
+            $attemptStartedAtNanoseconds = (float)\hrtime(true);
             try {
-                return call_user_func_array($operation, $params);
-                
+                return $operation(...$params);
             } catch (\PDOException $e) {
-                $lastException = $e;
-                $attempts++;
-                
-                // 如果是数据库锁定错误，进行重试
-                if ($this->isDatabaseLockedError($e) && $attempts < self::MAX_RETRY_ATTEMPTS) {
-                    $this->waitBeforeRetry($attempts);
-                    continue;
+                if (!$this->isDatabaseLockedError($e)) {
+                    throw $e;
                 }
-                
-                // 如果不是锁定错误或达到最大重试次数，抛出异常
-                break;
+
+                $lastBusyException = $e;
+                $lastAttemptMicroseconds = (int)\max(
+                    1,
+                    \ceil(((float)\hrtime(true) - $attemptStartedAtNanoseconds) / 1_000)
+                );
+                $completionReserveMicroseconds = \max(
+                    8_000,
+                    ($lastAttemptMicroseconds * 2) + 2_000
+                );
+                $budget ??= $this->resolveRetryBudget($operationStartedAtNanoseconds);
+                if ($budget->isExpired()) {
+                    throw $this->newBusyTimeoutException(
+                        'deadline_exhausted',
+                        $attempts,
+                        $budget,
+                        $e
+                    );
+                }
+                if ($attempts >= self::MAX_RETRY_ATTEMPTS) {
+                    throw $this->newBusyTimeoutException(
+                        'attempt_limit',
+                        $attempts,
+                        $budget,
+                        $e
+                    );
+                }
+
+                $this->waitBeforeRetry(
+                    $attempts,
+                    $budget,
+                    $e,
+                    $completionReserveMicroseconds
+                );
             }
         }
 
-        throw new Exception("数据库操作失败，已重试 {$attempts} 次。最后错误: " . $lastException->getMessage());
+        throw new \LogicException('SQLite retry loop terminated without a result.');
     }
 
     /**
@@ -1292,28 +1372,139 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function isDatabaseLockedError(\PDOException $e): bool
     {
-        $message = strtolower($e->getMessage());
-        return str_contains($message, 'database is locked') || 
-               str_contains($message, 'database table is locked') ||
-               str_contains($message, 'sqlite_busy') ||
-               $e->getCode() === 5; // SQLITE_BUSY
+        $message = \strtolower($e->getMessage());
+        $driverCode = (int)($e->errorInfo[1] ?? 0);
+        $primaryDriverCode = $driverCode > 0 ? ($driverCode & 0xff) : 0;
+
+        return \str_contains($message, 'database is locked')
+            || \str_contains($message, 'database table is locked')
+            || \str_contains($message, 'sqlite_busy')
+            || \str_contains($message, 'sqlite_locked')
+            || \in_array($primaryDriverCode, [5, 6], true)
+            || \in_array($e->getCode(), [5, 6, '5', '6'], true);
     }
 
     /**
-     * 重试前等待
+     * Wait cooperatively in WLS and synchronously only in bounded FPM/CLI.
      */
-    protected function waitBeforeRetry(int $attempt): void
+    protected function waitBeforeRetry(
+        int $attempt,
+        RetryBudget $budget,
+        \PDOException $lastException,
+        int $completionReserveMicroseconds
+    ): void
     {
-        // 指数退避算法：每次重试等待时间递增
-        $delay = self::RETRY_DELAY_MS * pow(2, $attempt - 1);
-        $maxDelay = 1000; // 最大延迟1秒
-        $delay = min($delay, $maxDelay);
-        
-        // 添加随机抖动避免惊群效应
-        $jitter = rand(0, intval($delay * 0.1));
-        $delay += $jitter;
-        
-        SchedulerSystem::usleep($delay * 1000); // 转换为微秒
+        $delayMilliseconds = self::DEFAULT_RETRY_DELAY_MS * (2 ** \max(0, $attempt - 1));
+        $jitterMicroseconds = \random_int(0, \max(1, $delayMilliseconds * 100));
+        $delayMicroseconds = $budget->capDelayMicroseconds(
+            ($delayMilliseconds * 1_000) + $jitterMicroseconds,
+            $completionReserveMicroseconds
+        );
+
+        if ($delayMicroseconds <= 0) {
+            throw $this->newBusyTimeoutException(
+                'deadline_exhausted',
+                $attempt,
+                $budget,
+                $lastException
+            );
+        }
+
+        if (Runtime::isPersistent()) {
+            $canYield = SchedulerSystem::isSchedulerActive()
+                && \Fiber::getCurrent() instanceof \Fiber
+                && FiberOutputBuffer::flushBeforeYield();
+            if (!$canYield) {
+                throw $this->newBusyTimeoutException(
+                    'cooperative_wait_unavailable',
+                    $attempt,
+                    $budget,
+                    $lastException,
+                    false
+                );
+            }
+        }
+
+        SchedulerSystem::usleep($delayMicroseconds);
+    }
+
+    /**
+     * SQLite's native busy handler blocks the whole PHP thread. Disable it for
+     * every PDO link and let the deadline-aware retry loop own all waiting.
+     */
+    private function disableNativeBusyTimeout(): void
+    {
+        $link = $this->getLink();
+        $configuredLink = $this->nonBlockingBusyTimeoutLink?->get();
+        if ($configuredLink === $link) {
+            return;
+        }
+
+        $link->exec('PRAGMA busy_timeout = 0');
+        $this->nonBlockingBusyTimeoutLink = \WeakReference::create($link);
+    }
+
+    private function resolveRetryBudget(float $operationStartedAtNanoseconds): RetryBudget
+    {
+        if (!Runtime::isCli()) {
+            $requestBudget = RequestContext::get(self::REQUEST_RETRY_BUDGET_CONTEXT_KEY);
+            if ($requestBudget instanceof RetryBudget) {
+                return $requestBudget;
+            }
+        }
+
+        $budget = RetryBudget::fromMilliseconds(
+            $this->resolveRetryBudgetMilliseconds(),
+            $operationStartedAtNanoseconds
+        );
+
+        if (!Runtime::isCli() && RequestContext::getId() !== null) {
+            RequestContext::set(self::REQUEST_RETRY_BUDGET_CONTEXT_KEY, $budget);
+        }
+
+        return $budget;
+    }
+
+    private function resolveRetryBudgetMilliseconds(): int
+    {
+        $requestBudget = (int)Env::get(
+            'db.retry.sqlite.request_budget_ms',
+            self::DEFAULT_REQUEST_RETRY_BUDGET_MS
+        );
+        $requestBudget = \max(1, \min(self::MAX_REQUEST_RETRY_BUDGET_MS, $requestBudget));
+
+        if (!Runtime::isCli()) {
+            return $requestBudget;
+        }
+
+        $configuredCliBudget = Env::get('db.retry.sqlite.cli_budget_ms', null);
+        if ($configuredCliBudget === null || $configuredCliBudget === '') {
+            return $requestBudget;
+        }
+
+        return \max(1, \min(self::MAX_CLI_RETRY_BUDGET_MS, (int)$configuredCliBudget));
+    }
+
+    private function newBusyTimeoutException(
+        string $reason,
+        int $attempts,
+        RetryBudget $budget,
+        \PDOException $previous,
+        ?bool $cooperativeWaitAvailable = null
+    ): DatabaseRetryTimeoutException
+    {
+        $cooperativeWaitAvailable ??= !Runtime::isPersistent()
+            || (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() instanceof \Fiber);
+
+        return new DatabaseRetryTimeoutException(
+            driver: 'sqlite',
+            reason: $reason,
+            attempts: $attempts,
+            budgetMilliseconds: $budget->budgetMilliseconds(),
+            elapsedMilliseconds: $budget->elapsedMilliseconds(),
+            cooperativeWaitAvailable: $cooperativeWaitAvailable,
+            previous: $previous
+        );
     }
 
     /**

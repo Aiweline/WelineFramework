@@ -21,7 +21,6 @@ use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\FeedItem;
 use Weline\Geo\Model\PushLog;
 use Weline\Geo\Model\WebsiteProtocolConfig;
-use Weline\Queue\Model\Queue\Type;
 
 class Install implements InstallInterface
 {
@@ -71,53 +70,5 @@ class Install implements InstallInterface
         $modelSetup->putModel($websiteProtocolConfig);
         $websiteProtocolConfig->setup($modelSetup, $context);
 
-        $this->registerQueueTypes();
-    }
-
-    /**
-     * 注册队列类型
-     * 
-     * @return void
-     */
-    protected function registerQueueTypes(): void
-    {
-        /** @var Type $queueType */
-        $queueType = ObjectManager::getInstance(Type::class);
-
-        // 注册Feed生成队列类型
-        $generateType = $queueType->where(Type::schema_fields_class, 'Weline\Geo\Queue\FeedGenerateQueue')
-            ->find()
-            ->fetch();
-
-        if (!$generateType->getId()) {
-            $generateType = ObjectManager::getInstance(Type::class);
-            $generateType->setData([
-                Type::schema_fields_name => 'GEO Feed生成队列',
-                Type::schema_fields_tip => '生成Feed文件并保存到pub目录',
-                Type::schema_fields_module_name => 'Weline_Geo',
-                Type::schema_fields_class => 'Weline\Geo\Queue\FeedGenerateQueue',
-                Type::schema_fields_attributes => '',
-                Type::schema_fields_enable => 1,
-            ]);
-            $generateType->save();
-        }
-
-        // 注册Feed推送队列类型
-        $pushType = $queueType->where(Type::schema_fields_class, 'Weline\Geo\Queue\FeedPushQueue')
-            ->find()
-            ->fetch();
-
-        if (!$pushType->getId()) {
-            $pushType = ObjectManager::getInstance(Type::class);
-            $pushType->setData([
-                Type::schema_fields_name => 'GEO Feed推送队列',
-                Type::schema_fields_tip => '推送Feed到AI搜索引擎平台',
-                Type::schema_fields_module_name => 'Weline_Geo',
-                Type::schema_fields_class => 'Weline\Geo\Queue\FeedPushQueue',
-                Type::schema_fields_attributes => '',
-                Type::schema_fields_enable => 1,
-            ]);
-            $pushType->save();
-        }
     }
 }

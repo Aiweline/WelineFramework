@@ -1,21 +1,24 @@
 {
-  "name": "weline/module-smtp",
-  "description": "Weline smtp module",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "phpmailer/phpmailer": "^6.6"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Smtp\\": ""
-    }
-  },
-  "license": "MIT"
+    "name": "weline/module-smtp",
+    "description": "Weline smtp module",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "phpmailer/phpmailer": "^6.6",
+        "weline/module-admin": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-system-config": "@dev"
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Smtp\\": ""
+        }
+    },
+    "license": "MIT"
 }

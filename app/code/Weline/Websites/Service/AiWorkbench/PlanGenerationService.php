@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service\AiWorkbench;
 
-use Weline\Ai\Service\AiService;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Ai\Api\AiRuntimeInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class PlanGenerationService
 {
@@ -27,8 +27,11 @@ class PlanGenerationService
         'custom_page',
     ];
 
+    private bool $aiRuntimeResolved = false;
+    private ?AiRuntimeInterface $aiRuntime = null;
+
     public function __construct(
-        private readonly ?AiService $aiService = null,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
     ) {
     }
 
@@ -92,11 +95,10 @@ class PlanGenerationService
         string $userMessage,
         ?callable $emit
     ): array {
-        if (!\class_exists(AiService::class)) {
+        $aiService = $this->getAiRuntime();
+        if ($aiService === null) {
             throw new \RuntimeException((string)__('AI service is not available for plan generation'));
         }
-
-        $aiService = $this->aiService ?? ObjectManager::getInstance(AiService::class);
         $fullContent = '';
         $prompt = $this->buildPrompt($brief, $references, $conversation, $currentPlan, $userMessage);
 
@@ -146,6 +148,17 @@ class PlanGenerationService
         }
 
         return $decoded;
+    }
+
+    private function getAiRuntime(): ?AiRuntimeInterface
+    {
+        if (!$this->aiRuntimeResolved) {
+            $resolved = $this->runtimeProviderResolver->resolve(AiRuntimeInterface::class);
+            $this->aiRuntime = $resolved instanceof AiRuntimeInterface ? $resolved : null;
+            $this->aiRuntimeResolved = true;
+        }
+
+        return $this->aiRuntime;
     }
 
     /**

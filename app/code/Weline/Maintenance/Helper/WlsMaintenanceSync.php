@@ -6,6 +6,8 @@ namespace Weline\Maintenance\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Runtime\MaintenanceRoutingBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * CLI 切换框架维护标志后，向运行中的 WLS 广播 maintenance_enable/disable，
@@ -15,17 +17,16 @@ final class WlsMaintenanceSync
 {
     public static function syncAfterCliToggle(Printing $printing, bool $enabled, array $args): void
     {
-        if (!\class_exists(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)) {
+        $broadcaster = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MaintenanceRoutingBroadcasterInterface::class);
+        if (!$broadcaster instanceof MaintenanceRoutingBroadcasterInterface) {
             return;
         }
 
         $instanceName = self::resolveInstanceName($args);
 
         try {
-            $dispatchService = ObjectManager::getInstance(
-                \Weline\Server\Service\Control\BroadcastControlDispatchService::class
-            );
-            $result = $dispatchService->setMaintenanceRoutingOnly($enabled, $instanceName);
+            $result = $broadcaster->setMaintenanceRoutingOnly($enabled, $instanceName);
 
             if (($result['attempted'] ?? []) === []) {
                 $printing->note(

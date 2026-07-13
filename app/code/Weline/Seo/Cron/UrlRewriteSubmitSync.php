@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Seo\Service\UrlRewriteSubmitSyncService;
 
 class UrlRewriteSubmitSync implements CronTaskInterface

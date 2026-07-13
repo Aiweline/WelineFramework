@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\BackendActivity\Observer;
 
-use Weline\Acl\Model\Acl;
+use Weline\Acl\Api\Authorization\AuthorizationServiceInterface;
 use Weline\BackendActivity\Model\BackendActivityLog;
 use Weline\BackendActivity\Service\BusinessContextService;
 use Weline\Framework\App\Env;
@@ -22,13 +22,13 @@ class BackendControllerInit implements ObserverInterface
 {
     private Request $request;
     private AuthenticatedSessionInterface $backendSession;
-    private Acl $acl;
+    private AuthorizationServiceInterface $authorizationService;
 
-    public function __construct(Request $request, Acl $acl)
+    public function __construct(Request $request, AuthorizationServiceInterface $authorizationService)
     {
         $this->request = $request;
         $this->backendSession = SessionFactory::getInstance()->createBackendSession();
-        $this->acl = $acl;
+        $this->authorizationService = $authorizationService;
     }
 
     public function execute(Event &$event): void
@@ -51,19 +51,14 @@ class BackendControllerInit implements ObserverInterface
             return;
         }
 
-        $acl = $this->acl->where(Acl::schema_fields_CLASS, $this->request->getRouterData('class/name'))
-            ->where(Acl::schema_fields_METHOD, $this->request->getMethod())
-            ->where(Acl::schema_fields_ROUTE, $this->request->getRouteUrlPath())
-            ->find()
-            ->fetch();
-
-        if (!$acl->getId()) {
+        $resource = $this->authorizationService->findRouteResource(
+            (string)$this->request->getRouterData('class/name'),
+            (string)$this->request->getMethod(),
+            (string)$this->request->getRouteUrlPath(),
+        );
+        $name = $resource?->getSourceName();
+        if (empty($name)) {
             $name = __('Unnamed Access');
-        } else {
-            $name = $acl->getSourceName();
-            if (empty($name)) {
-                $name = __('Unnamed Access');
-            }
         }
 
         /** @var BackendActivityLog $activityLogger */
@@ -71,7 +66,7 @@ class BackendControllerInit implements ObserverInterface
         try {
             $activityLogger->setName($name)
                 ->setUserId($this->backendSession->getUserId() ?? 0)
-                ->setAclId((int)$acl->getAclId())
+                ->setAclId($resource?->getAclId() ?? 0)
                 ->setPath($this->request->getRouteUrlPath())
                 ->setModule($this->request->getData('router/module'))
                 ->setHost($this->request->getBaseHost())

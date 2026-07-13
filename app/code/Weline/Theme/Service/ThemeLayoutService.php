@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
  * 主题布局服务
@@ -329,7 +330,7 @@ class ThemeLayoutService
     public function getFullLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED, array $identity = []): array
     {
         $layout = $this->getLayout($themeId, $pageType, $status, $identity);
-        $widgetRegistry = ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class)->getRegistry();
+        $widgetRegistry = ObjectManager::getInstance(WidgetRegistryInterface::class)->getRegistry();
 
         // 为每个部件添加元信息，并按 slot_id 组织到 slots 子数组
         foreach ($layout as $area => &$areaData) {
@@ -892,63 +893,6 @@ class ThemeLayoutService
             ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)
                 ->clearNonGlobalCaches($themeId > 0 ? $themeId : null, 'theme_layout_publish');
         } catch (\Throwable) {
-        }
-
-        try {
-            if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
-                \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            $cacheManager = ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-            foreach (['fpc', 'router'] as $pool) {
-                if (\method_exists($cacheManager, 'hasPool') && $cacheManager->hasPool($pool)) {
-                    $cacheManager->pool($pool)->clear();
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)
-                ->cacheClear();
-        } catch (\Throwable) {
-        }
-
-        try {
-            if (\class_exists(\Weline\Server\Service\MemoryStateFacade::class)) {
-                $facade = new \Weline\Server\Service\MemoryStateFacade([
-                    'consumer_code' => 'theme_layout_publish',
-                    'prefer_direct_connect' => true,
-                    'pool_size' => 1,
-                    'auto_start' => false,
-                ]);
-                $facade->clearCache('router');
-                $facade->clearCache('fpc');
-                $facade->clearNamespace('theme_runtime');
-                $facade->disconnect();
-            }
-        } catch (\Throwable) {
-        }
-
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
-        if (\is_dir($payloadDir)) {
-            try {
-                $iterator = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($payloadDir, \FilesystemIterator::SKIP_DOTS),
-                    \RecursiveIteratorIterator::CHILD_FIRST
-                );
-                foreach ($iterator as $item) {
-                    if ($item->isDir()) {
-                        @\rmdir($item->getPathname());
-                    } else {
-                        @\unlink($item->getPathname());
-                    }
-                }
-            } catch (\Throwable) {
-            }
         }
     }
 

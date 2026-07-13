@@ -7,7 +7,7 @@ declare(strict_types=1);
  */
 namespace Weline\Backend\Console\User;
 
-use Weline\Acl\Service\AclService;
+use Weline\Acl\Api\Authorization\AuthorizationServiceInterface;
 use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Console\CommandInterface;
@@ -16,6 +16,11 @@ use Weline\Framework\Output\Cli\Printing;
 
 class AclCheck implements CommandInterface
 {
+    public function __construct(
+        private readonly AuthorizationServiceInterface $authorizationService,
+    ) {
+    }
+
     public function execute(array $args = [], array $data = [])
     {
         $formatArgs = $args['format'] ?? [];
@@ -31,9 +36,6 @@ class AclCheck implements CommandInterface
         $userModel = ObjectManager::getInstance(BackendUser::class);
         /** @var UserRole $urModel */
         $urModel = ObjectManager::getInstance(UserRole::class);
-        /** @var AclService $aclService */
-        $aclService = ObjectManager::getInstance(AclService::class);
-
         $printer->printing('========== 1. backend_user 表（逻辑名 backend_user，实际带前缀） ==========');
         foreach ($userIds as $uid) {
             $user = clone $userModel;
@@ -85,7 +87,7 @@ class AclCheck implements CommandInterface
             if ($roleId <= 0) {
                 $printer->warning('    -> role_id<=0，RouteBefore 会走 no_role（用户没有分配角色）');
             } else {
-                $hasAny = $aclService->hasAnyPermission($roleId);
+                $hasAny = $this->authorizationService->hasAnyPermission($roleId);
                 $printer->printing('    -> hasAnyPermission(' . $roleId . ') = ' . ($hasAny ? 'true' : 'false'));
                 if (!$hasAny) {
                     $printer->warning('    -> RouteBefore 会走 no_any_permission（角色没有任何 ACL 权限）');

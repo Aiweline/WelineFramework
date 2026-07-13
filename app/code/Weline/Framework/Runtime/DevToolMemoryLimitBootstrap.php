@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
-use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -56,7 +55,7 @@ final class DevToolMemoryLimitBootstrap
     private static function isLikelyDevToolSession(): bool
     {
         try {
-            return ObjectManager::getInstance(PanelAccessService::class)->canAccessPanel();
+            return ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessPanel();
         } catch (\Throwable) {
             return false;
         }

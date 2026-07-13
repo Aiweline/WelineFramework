@@ -8,7 +8,7 @@ use Weline\Currency\Model\Currency;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
-use Weline\I18n\LocalModel;
+use Weline\I18n\Api\Localization\LocalModel;
 
 #[Table(comment: '货币多语言描述表')]
 #[Index(name: 'idx_currency_local_description_unique', columns: ['currency_id', 'local_code'], type: 'UNIQUE')]

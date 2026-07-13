@@ -4,7 +4,7 @@ namespace Weline\Admin\Observer;
 
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Admin\Service\BackendRememberLoginService;
-use Weline\Backend\Service\BackendWarmupContext;
+use Weline\Backend\Api\Runtime\BackendWarmupContext;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;

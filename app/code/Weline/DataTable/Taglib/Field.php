@@ -7,7 +7,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Model;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\DataTable\Helper\TableContext;
 
 class Field implements TaglibInterface
@@ -18,6 +18,11 @@ class Field implements TaglibInterface
      * 请求级模板字段缓存（WLS 下由 StateManager 每请求重置）
      */
     private static array $templateFields = [];
+
+    public static function resetRequestState(): void
+    {
+        self::$templateFields = [];
+    }
 
     static public function name(): string
     {

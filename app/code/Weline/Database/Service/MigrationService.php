@@ -8,11 +8,12 @@
 
 namespace Weline\Database\Service;
 
-use Weline\Database\Interface\MigrationInterface;
+use Weline\Framework\Database\Migration\MigrationInterface;
 use Weline\Database\Model\Migration;
 use Weline\Database\Service\BackupService;
 use Weline\Database\Service\VersionService;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Registry\Service\RegistryProgress;
 
@@ -66,17 +67,26 @@ class MigrationService
                 throw new \Exception(__("迁移依赖未满足"));
             }
             
-            $query = $this->connectionFactory->query('SELECT 1');
-            $query->beginTransaction();
-            
+            $transactional = $this->isDataOnlyMigration($migrationClass);
+            $query = $transactional ? $this->connectionFactory->query('SELECT 1') : null;
+            if ($query !== null) {
+                $query->beginTransaction();
+            }
+
+            $migrationId = 0;
             try {
                 $needsBackup = $this->migrationRequiresBackup($migrationClass);
-                $migrationId = 0;
-                
+                $migrationId = $this->insertMigrationRecord(
+                    $moduleName,
+                    $migrationFile,
+                    $migrationClass,
+                    Migration::STATUS_RUNNING
+                );
+                if ($migrationId <= 0) {
+                    throw new \RuntimeException(__('无法记录迁移运行状态'));
+                }
+
                 if ($needsBackup) {
-                    $migrationId = $this->insertMigrationRecord(
-                        $moduleName, $migrationFile, $migrationClass, Migration::STATUS_RUNNING
-                    );
                     $this->performBackup($migrationClass, $migrationId);
                 }
                 
@@ -86,26 +96,25 @@ class MigrationService
                     throw new \Exception(__("迁移执行失败"));
                 }
                 
-                if ($migrationId > 0) {
-                    $this->updateMigrationStatus($moduleName, basename($migrationFile), Migration::STATUS_INSTALLED);
-                } else {
-                    $this->recordMigration($moduleName, $migrationFile, $migrationClass);
+                $this->updateMigrationStatusById($migrationId, Migration::STATUS_INSTALLED);
+                if ($query !== null) {
+                    $query->commit();
                 }
-                
-                $query->commit();
                 
                 $this->printing->success(__("迁移升级成功: %{1}", $migrationFile));
                 return true;
                 
-            } catch (\Exception $e) {
-                $query->rollBack();
+            } catch (\Throwable $e) {
+                if ($query !== null) {
+                    $query->rollBack();
+                }
                 if ($migrationId > 0) {
-                    $this->updateMigrationStatus($moduleName, basename($migrationFile), Migration::STATUS_FAILED);
+                    $this->updateMigrationStatusById($migrationId, Migration::STATUS_FAILED);
                 }
                 throw $e;
             }
             
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->printing->error(__("迁移升级失败: %{1}", $e->getMessage()));
             return false;
         }
@@ -121,19 +130,27 @@ class MigrationService
     public function rollbackMigration(string $moduleName, string $migrationFile): bool
     {
         try {
-            $filename = basename($migrationFile);
-            if (!$this->migrationModel->isMigrationExists($moduleName, $filename)) {
-                throw new \Exception(__("迁移记录不存在: %{1}", $migrationFile));
+            if (!is_file($migrationFile)) {
+                throw new \RuntimeException(__('迁移文件不存在: %{1}', $migrationFile));
             }
-            
+            $filename = basename($migrationFile);
+            $record = $this->getInstalledMigrationRecord($moduleName, $filename);
+            if ($record === null) {
+                throw new \RuntimeException(__("未找到已安装迁移记录: %{1}", $migrationFile));
+            }
+            $this->assertMigrationChecksum($record, $migrationFile);
+
             $migrationClass = $this->loadMigrationClass($migrationFile);
             if (!$migrationClass instanceof MigrationInterface) {
                 throw new \Exception(__("迁移类必须实现MigrationInterface接口"));
             }
             
-            $query = $this->connectionFactory->query('SELECT 1');
-            $query->beginTransaction();
-            
+            $transactional = $this->isDataOnlyMigration($migrationClass);
+            $query = $transactional ? $this->connectionFactory->query('SELECT 1') : null;
+            if ($query !== null) {
+                $query->beginTransaction();
+            }
+
             try {
                 $result = $migrationClass->uninstall();
                 
@@ -141,24 +158,27 @@ class MigrationService
                     throw new \Exception(__("迁移回滚失败"));
                 }
                 
-                $migrationId = $this->migrationModel->findMigrationId($moduleName, $filename);
+                $migrationId = (int)$record->getId();
                 if ($migrationId > 0) {
                     $this->restoreBackupsForMigration($migrationId);
                 }
                 
-                $this->updateMigrationStatus($moduleName, $filename, Migration::STATUS_ROLLED_BACK);
-                
-                $query->commit();
+                $record->updateStatus(Migration::STATUS_ROLLED_BACK);
+                if ($query !== null) {
+                    $query->commit();
+                }
                 
                 $this->printing->success(__("迁移回滚成功: %{1}", $migrationFile));
                 return true;
                 
-            } catch (\Exception $e) {
-                $query->rollBack();
+            } catch (\Throwable $e) {
+                if ($query !== null) {
+                    $query->rollBack();
+                }
                 throw $e;
             }
             
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->printing->error(__("迁移回滚失败: %{1}", $e->getMessage()));
             return false;
         }
@@ -174,20 +194,24 @@ class MigrationService
     public function uninstallMigration(string $moduleName, string $migrationFile): bool
     {
         try {
-            // 检查迁移是否已安装
-            if (!$this->migrationModel->isMigrationExists($moduleName, basename($migrationFile))) {
-                throw new \Exception(__("迁移记录不存在: %{1}", $migrationFile));
+            if (!is_file($migrationFile)) {
+                throw new \RuntimeException(__('迁移文件不存在: %{1}', $migrationFile));
             }
-            
-            // 加载迁移类
+            $record = $this->getInstalledMigrationRecord($moduleName, basename($migrationFile));
+            if ($record === null) {
+                throw new \RuntimeException(__("迁移记录不存在: %{1}", $migrationFile));
+            }
+            $this->assertMigrationChecksum($record, $migrationFile);
+
             $migrationClass = $this->loadMigrationClass($migrationFile);
             if (!$migrationClass instanceof MigrationInterface) {
                 throw new \Exception(__("迁移类必须实现MigrationInterface接口"));
             }
-            
-            // 开始事务
-            $query = $this->connectionFactory->query('SELECT 1');
-            $query->beginTransaction();
+
+            $query = $this->isDataOnlyMigration($migrationClass)
+                ? $this->connectionFactory->query('SELECT 1')
+                : null;
+            $query?->beginTransaction();
             
             try {
                 // 执行卸载
@@ -197,16 +221,14 @@ class MigrationService
                     throw new \Exception(__("迁移卸载失败"));
                 }
                 
-                // 删除迁移记录
-                $this->migrationModel->deleteMigration($moduleName, basename($migrationFile));
-                
-                $query->commit();
+                $record->updateStatus(Migration::STATUS_ROLLED_BACK);
+                $query?->commit();
                 
                 $this->printing->success(__("迁移卸载成功: %{1}", $migrationFile));
                 return true;
                 
-            } catch (\Exception $e) {
-                $query->rollBack();
+            } catch (\Throwable $e) {
+                $query?->rollBack();
                 throw $e;
             }
             
@@ -233,16 +255,20 @@ class MigrationService
         $migrations = [];
         
         foreach ($files as $file) {
+            $migration = $this->loadMigrationClass($file);
             $migrations[] = [
                 'file' => $file,
                 'filename' => basename($file),
-                'class' => $this->getMigrationClassName($file)
+                'class' => $migration::class,
+                'version' => $migration->getVersion(),
+                'checksum' => hash_file('sha256', $file) ?: '',
             ];
         }
         
         // 按文件名排序
         usort($migrations, function($a, $b) {
-            return strcmp($a['filename'], $b['filename']);
+            $versionOrder = version_compare($a['version'], $b['version']);
+            return $versionOrder !== 0 ? $versionOrder : strcmp($a['filename'], $b['filename']);
         });
         
         return $migrations;
@@ -281,20 +307,19 @@ class MigrationService
      */
     private function loadMigrationClass(string $migrationFile): MigrationInterface
     {
-        $shortClass = $this->getMigrationClassName($migrationFile);
-
-        if (!class_exists($shortClass)) {
-            require_once $migrationFile;
+        if (!is_file($migrationFile)) {
+            throw new \RuntimeException(__('迁移文件不存在: %{1}', $migrationFile));
         }
 
-        if (class_exists($shortClass)) {
-            $instance = new $shortClass();
-        } else {
-            $fqcn = $this->resolveNamespacedMigrationClass($migrationFile, $shortClass);
-            if ($fqcn === null) {
-                throw new \Exception(__("迁移类不存在: %{1}", $shortClass));
-            }
-            $instance = new $fqcn();
+        $className = $this->readMigrationClassName($migrationFile);
+        require_once $migrationFile;
+        if ($className === null || !class_exists($className)) {
+            throw new \RuntimeException(__('迁移文件未声明可加载类: %{1}', $migrationFile));
+        }
+
+        $instance = ObjectManager::make($className);
+        if (!$instance instanceof MigrationInterface) {
+            throw new \RuntimeException(__('迁移类必须实现 MigrationInterface: %{1}', $className));
         }
 
         return $instance;
@@ -352,8 +377,10 @@ class MigrationService
             'description'    => $migrationClass->getDescription(),
             'status'         => $status,
             'dependencies'   => $migrationClass->getDependencies(),
-            'checksum'       => file_exists($migrationFile) ? md5_file($migrationFile) : '',
+            'checksum'       => file_exists($migrationFile) ? hash_file('sha256', $migrationFile) : '',
             'executed_at'    => date('Y-m-d H:i:s'),
+            'migration_type' => 'script',
+            'operation_kind' => method_exists($migrationClass, 'getType') ? $migrationClass->getType() : 'script',
         ];
 
         return $this->migrationModel->recordMigration($data);
@@ -368,6 +395,11 @@ class MigrationService
             return $migration->requiresBackup();
         }
         return false;
+    }
+
+    private function isDataOnlyMigration(MigrationInterface $migration): bool
+    {
+        return method_exists($migration, 'getType') && $migration->getType() === 'data_migration';
     }
 
     /**
@@ -437,6 +469,47 @@ class MigrationService
             $migration->updateStatus($status);
         }
     }
+
+    private function updateMigrationStatusById(int $migrationId, string $status): void
+    {
+        $migration = clone $this->migrationModel;
+        $migration->load($migrationId);
+        if (!$migration->getId()) {
+            throw new \RuntimeException(__('迁移记录不存在: %{1}', (string)$migrationId));
+        }
+        $migration->updateStatus($status);
+    }
+
+    private function getInstalledMigrationRecord(string $moduleName, string $migrationFile): ?Migration
+    {
+        $items = $this->migrationModel->reset()
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, $migrationFile)
+            ->where(Migration::schema_fields_STATUS, Migration::STATUS_INSTALLED)
+            ->order(Migration::schema_fields_ID, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $record = $items[0] ?? null;
+        return $record instanceof Migration ? $record : null;
+    }
+
+    private function assertMigrationChecksum(Migration $record, string $migrationFile): void
+    {
+        $expected = trim((string)$record->getData(Migration::schema_fields_CHECKSUM));
+        if ($expected === '') {
+            throw new \RuntimeException(__('迁移记录缺少校验和，禁止自动回滚: %{1}', basename($migrationFile)));
+        }
+
+        $actual = strlen($expected) === 32
+            ? md5_file($migrationFile)
+            : hash_file('sha256', $migrationFile);
+        if (!is_string($actual) || !hash_equals($expected, $actual)) {
+            throw new \RuntimeException(__('迁移文件校验和不一致，禁止自动回滚: %{1}', basename($migrationFile)));
+        }
+    }
     
     
     /**
@@ -449,42 +522,16 @@ class MigrationService
      */
     public function getMigrationsByVersion(string $moduleName, string $version, string $specificFile = ''): array
     {
-        $migrationPath = $this->getMigrationPath($moduleName);
-        $versionPath = $migrationPath . $version . '/';
-        
-        if (!is_dir($versionPath)) {
-            return [];
-        }
-        
-        $files = glob($versionPath . "*.php");
         $migrations = [];
-        
-        foreach ($files as $file) {
-            $filename = basename($file);
-            
-            // 如果指定了特定文件，只返回该文件
-            if (!empty($specificFile)) {
-                if ($filename === $specificFile) {
-                    return [[
-                        'file' => $file,
-                        'filename' => $filename,
-                        'class' => $this->getMigrationClassName($filename)
-                    ]];
-                }
-            } else {
-                $migrations[] = [
-                    'file' => $file,
-                    'filename' => $filename,
-                    'class' => $this->getMigrationClassName($filename)
-                ];
+        foreach ($this->getModuleMigrations($moduleName) as $migration) {
+            if ($migration['version'] !== $version) {
+                continue;
             }
+            if ($specificFile !== '' && $migration['filename'] !== basename($specificFile)) {
+                continue;
+            }
+            $migrations[] = $migration;
         }
-        
-        // 按文件名排序
-        usort($migrations, function($a, $b) {
-            return strcmp($a['filename'], $b['filename']);
-        });
-        
         return $migrations;
     }
     
@@ -508,7 +555,7 @@ class MigrationService
         $success = true;
         foreach ($migrations as $migration) {
             $this->printing->note(__("执行迁移: %{1}", $migration['filename']));
-            $result = $this->upgradeMigration($moduleName, $migration['filename']);
+            $result = $this->upgradeMigration($moduleName, $migration['file']);
             if (!$result) {
                 $success = false;
             }
@@ -539,7 +586,7 @@ class MigrationService
         $migrations = array_reverse($migrations);
         foreach ($migrations as $migration) {
             $this->printing->note(__("回滚迁移: %{1}", $migration['filename']));
-            $result = $this->rollbackMigration($moduleName, $migration['filename']);
+            $result = $this->rollbackMigration($moduleName, $migration['file']);
             if (!$result) {
                 $success = false;
             }
@@ -570,7 +617,7 @@ class MigrationService
         $migrations = array_reverse($migrations);
         foreach ($migrations as $migration) {
             $this->printing->note(__("卸载迁移: %{1}", $migration['filename']));
-            $result = $this->uninstallMigration($moduleName, $migration['filename']);
+            $result = $this->uninstallMigration($moduleName, $migration['file']);
             if (!$result) {
                 $success = false;
             }
@@ -592,7 +639,11 @@ class MigrationService
         
         if ($moduleInfo && isset($moduleInfo['base_path'])) {
             // 使用模块的基础路径
-            return $moduleInfo['base_path'] . 'Setup/Db/Migration/';
+            $basePath = (string)$moduleInfo['base_path'];
+            if (!str_starts_with($basePath, '/') && !preg_match('/^[A-Za-z]:[\\\\\/]/', $basePath)) {
+                $basePath = BP . ltrim($basePath, '/\\\\');
+            }
+            return rtrim($basePath, '/\\\\') . DS . 'Setup' . DS . 'Db' . DS . 'Migration' . DS;
         }
         
         // 如果没有找到模块信息，尝试默认路径
@@ -606,13 +657,13 @@ class MigrationService
         $module = $parts[1];
         
         // 尝试 app/code 路径
-        $appPath = "app/code/{$vendor}/{$module}/Setup/Db/Migration/";
+        $appPath = BP . "app/code/{$vendor}/{$module}/Setup/Db/Migration/";
         if (is_dir($appPath)) {
             return $appPath;
         }
         
         // 尝试 vendor 路径
-        $vendorPath = "vendor/{$vendor}/{$module}/Setup/Db/Migration/";
+        $vendorPath = BP . "vendor/{$vendor}/{$module}/Setup/Db/Migration/";
         if (is_dir($vendorPath)) {
             return $vendorPath;
         }
@@ -641,16 +692,44 @@ class MigrationService
     /**
      * 迁移文件在命名空间 Weline\X\Setup\Db\Migration 下时，class_exists(短类名) 为 false，由此解析 FQCN。
      */
-    private function resolveNamespacedMigrationClass(string $migrationFile, string $shortClassName): ?string
+    private function readMigrationClassName(string $migrationFile): ?string
     {
-        $real = realpath($migrationFile);
-        $dir = str_replace('\\', '/', $real !== false ? dirname($real) : dirname($migrationFile));
-        if (!preg_match('#/code/(.+)/Setup/Db/Migration$#', $dir, $m)) {
+        $source = file_get_contents($migrationFile);
+        if (!is_string($source)) {
             return null;
         }
-        $fqcn = str_replace('/', '\\', $m[1]) . '\\Setup\\Db\\Migration\\' . $shortClassName;
-
-        return class_exists($fqcn) ? $fqcn : null;
+        $tokens = token_get_all($source);
+        $namespace = '';
+        $count = count($tokens);
+        for ($index = 0; $index < $count; $index++) {
+            $token = $tokens[$index];
+            if (!is_array($token)) {
+                continue;
+            }
+            if ($token[0] === T_NAMESPACE) {
+                $namespace = '';
+                for ($index++; $index < $count; $index++) {
+                    $part = $tokens[$index];
+                    if ($part === ';' || $part === '{') {
+                        break;
+                    }
+                    if (is_array($part) && in_array($part[0], [T_STRING, T_NAME_QUALIFIED, T_NS_SEPARATOR], true)) {
+                        $namespace .= $part[1];
+                    }
+                }
+                continue;
+            }
+            if ($token[0] !== T_CLASS) {
+                continue;
+            }
+            for ($index++; $index < $count; $index++) {
+                $nameToken = $tokens[$index];
+                if (is_array($nameToken) && $nameToken[0] === T_STRING) {
+                    return ltrim($namespace . '\\' . $nameToken[1], '\\');
+                }
+            }
+        }
+        return null;
     }
     
     /**
@@ -685,17 +764,18 @@ class MigrationService
                 return $result;
             }
             
-            // 获取需要回滚的迁移（已安装的、版本大于目标版本的）
-            $migrationsToRollback = $this->getMigrationsBetweenVersions($moduleName, $targetVersion, $currentVersion);
+            $scriptPlan = $this->planRollbackToVersion($moduleName, $targetVersion, $currentVersion);
+            $migrationsToRollback = $scriptPlan['migrations'];
+            if ($scriptPlan['blockers'] !== []) {
+                $result['errors'] = array_merge($result['errors'], $scriptPlan['blockers']);
+                return $result;
+            }
             
             if (empty($migrationsToRollback)) {
                 $this->printing->info(__('没有需要回滚的迁移'));
                 $result['success'] = true;
                 return $result;
             }
-            
-            // 按相反顺序回滚（后进先出）
-            $migrationsToRollback = array_reverse($migrationsToRollback);
             
             if ($dryRun) {
                 $this->printing->note(__('预演模式 - 以下迁移将被回滚:'));
@@ -707,29 +787,9 @@ class MigrationService
                 return $result;
             }
             
-            // 执行回滚
-            foreach ($migrationsToRollback as $migration) {
-                // 检查反向依赖
-                if (!$this->checkReverseDependencies($moduleName, $migration['filename'])) {
-                    $result['errors'][] = __('迁移 %{1} 存在反向依赖，无法回滚', $migration['filename']);
-                    return $result;
-                }
-                
-                $this->printing->note(__('回滚迁移: %{1}', $migration['filename']));
-                
-                if (!$this->rollbackMigration($moduleName, $migration['file'])) {
-                    $result['errors'][] = __('回滚迁移 %{1} 失败', $migration['filename']);
-                    return $result;
-                }
-                
-                $result['rolled_back_migrations'][] = $migration['filename'];
-            }
-            
-            // 更新版本号
-            $this->versionService->rollbackModuleVersion($moduleName, $targetVersion);
-            
-            $result['success'] = true;
-            $this->printing->success(__('成功回滚到版本 %{1}，共回滚 %{2} 个迁移', [$targetVersion, count($result['rolled_back_migrations'])]));
+            $result['errors'][] = __(
+                '已禁止独立数据库回滚；请通过 ModuleRollbackManagerInterface 创建代码与数据库联动回滚任务'
+            );
             
         } catch (\Exception $e) {
             $result['errors'][] = $e->getMessage();
@@ -737,6 +797,72 @@ class MigrationService
         }
         
         return $result;
+    }
+
+    /**
+     * Build a checksum-verified reverse script chain for a semantic version range.
+     *
+     * @return array{migrations: list<array<string, mixed>>, blockers: list<string>}
+     */
+    public function planRollbackToVersion(string $moduleName, string $targetVersion, string $currentVersion): array
+    {
+        $blockers = [];
+        $migrations = $this->getMigrationsBetweenVersions($moduleName, $targetVersion, $currentVersion);
+        foreach ($migrations as &$migration) {
+            $file = (string)$migration['file'];
+            $record = $this->getInstalledMigrationRecord($moduleName, (string)$migration['filename']);
+            if ($record === null) {
+                $blockers[] = __('迁移缺少 installed 记录: %{1}', $migration['filename']);
+                continue;
+            }
+            if (!is_file($file)) {
+                $blockers[] = __('迁移文件缺失: %{1}', $migration['filename']);
+                continue;
+            }
+            try {
+                $this->assertMigrationChecksum($record, $file);
+            } catch (\Throwable $e) {
+                $blockers[] = $e->getMessage();
+                continue;
+            }
+            $migration['migration_id'] = (int)$record->getId();
+            $migration['checksum'] = (string)$record->getData(Migration::schema_fields_CHECKSUM);
+            $dependencies = json_decode((string)$record->getData(Migration::schema_fields_DEPENDENCIES), true);
+            $migration['dependencies'] = is_array($dependencies) ? $dependencies : [];
+        }
+        unset($migration);
+
+        usort($migrations, static function (array $left, array $right): int {
+            $version = version_compare((string)$right['version'], (string)$left['version']);
+            return $version !== 0 ? $version : strcmp((string)$right['filename'], (string)$left['filename']);
+        });
+
+        return ['migrations' => $migrations, 'blockers' => array_values(array_unique($blockers))];
+    }
+
+    /** @param list<array<string, mixed>> $migrations */
+    public function executeRollbackPlan(string $moduleName, array $migrations): array
+    {
+        $completed = [];
+        foreach ($migrations as $migration) {
+            $file = (string)($migration['file'] ?? '');
+            if (!$this->rollbackMigration($moduleName, $file)) {
+                throw new \RuntimeException(__('回滚迁移 %{1} 失败', (string)($migration['filename'] ?? basename($file))));
+            }
+            $completed[] = $migration;
+        }
+        return $completed;
+    }
+
+    /** @param list<array<string, mixed>> $migrations */
+    public function compensateRollbackPlan(string $moduleName, array $migrations): void
+    {
+        foreach (array_reverse($migrations) as $migration) {
+            $file = (string)($migration['file'] ?? '');
+            if (!$this->upgradeMigration($moduleName, $file)) {
+                throw new \RuntimeException(__('正向补偿迁移 %{1} 失败', (string)($migration['filename'] ?? basename($file))));
+            }
+        }
     }
     
     /**
@@ -878,9 +1004,13 @@ class MigrationService
             $version = $migration['version'] ?? $migration->getData('version');
             $filename = $migration['migration_file'] ?? $migration->getData('migration_file');
             $status = $migration['status'] ?? $migration->getData('status');
+            $migrationType = $migration['migration_type'] ?? $migration->getData(Migration::schema_fields_MIGRATION_TYPE);
             
             // 跳过已回滚的迁移
             if ($status === Migration::STATUS_ROLLED_BACK) {
+                continue;
+            }
+            if ($migrationType !== '' && $migrationType !== 'script') {
                 continue;
             }
             

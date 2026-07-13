@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\View\Template;
+use Weline\Widget\Api\Rendering\RuntimeTemplateRendererInterface;
 
-class WidgetRuntimeTemplateRenderer
+class WidgetRuntimeTemplateRenderer implements RuntimeTemplateRendererInterface
 {
     private array $compiledCache = [];
     private static array $workerCompiledCache = [];

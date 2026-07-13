@@ -152,7 +152,7 @@ class Rebuild extends CommandAbstract
             [
                 '执行后会在项目根目录的 generated/hooks.php 写入钩子规约信息。',
                 '指定 -m 时为增量更新，仅刷新指定模块相关的 Hook 规约和实现。',
-                '所有钩子必须同时具备规约文件 (hook.php) 和 HookInterface 常量定义才能正常使用。',
+                '所有 Hook 必须由所属模块的 hook.php 声明，并编译进生成注册表后才能使用。',
             ],
             [
                 '全量重建' => 'php bin/w hook:rebuild',

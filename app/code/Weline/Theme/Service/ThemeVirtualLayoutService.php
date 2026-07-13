@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\SystemConfig\Model\SystemConfig;
-use Weline\SystemConfig\Model\SystemConfigVersion;
+use Weline\SystemConfig\Api\Scope\ScopedConfigData;
+use Weline\SystemConfig\Api\Scope\ScopedConfigRepositoryInterface;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Model\ThemeVirtualLayout;
@@ -17,7 +17,7 @@ class ThemeVirtualLayoutService
 {
     public const MODULE_CODE = 'Weline_Theme';
     public const DEFAULT_AREA = 'frontend';
-    public const DEFAULT_SCOPE = SystemConfig::SCOPE_GLOBAL;
+    public const DEFAULT_SCOPE = ScopedConfigData::SCOPE_GLOBAL;
     public const RUNTIME_MODULE_PREFIX = 'runtime/virtual-layouts/';
     private const RUNTIME_DIR = 'theme-virtual-layouts';
 
@@ -25,7 +25,7 @@ class ThemeVirtualLayoutService
         private readonly ThemeVirtualLayout $virtualLayout,
         private readonly ThemeVirtualLayoutVersion $virtualLayoutVersion,
         private readonly WelineTheme $welineTheme,
-        private readonly SystemConfig $systemConfig,
+        private readonly ScopedConfigRepositoryInterface $systemConfig,
     ) {
     }
 
@@ -61,7 +61,7 @@ class ThemeVirtualLayoutService
         } catch (\InvalidArgumentException $e) {
             return ['success' => false, 'status' => 'invalid_target_type', 'message' => $e->getMessage()];
         }
-        if ($targetId <= 0 || $layoutType === '' || $layoutOption === '') {
+        if (!$this->isValidTargetIdentity($targetType, $targetId, false) || $layoutType === '' || $layoutOption === '') {
             return ['success' => false, 'status' => 'invalid_identity'];
         }
         $locale = $this->normalizeSelectionLocale($locale);
@@ -124,6 +124,9 @@ class ThemeVirtualLayoutService
         } catch (\InvalidArgumentException $e) {
             return ['success' => false, 'status' => 'invalid_target_type', 'message' => $e->getMessage()];
         }
+        if (!$this->isValidTargetIdentity($targetType, $targetId, false) || $layoutType === '') {
+            return ['success' => false, 'status' => 'invalid_identity'];
+        }
         $locale = $this->normalizeSelectionLocale($locale);
         $key = $this->selectionKey($targetType, $targetId, $layoutType);
 
@@ -167,7 +170,7 @@ class ThemeVirtualLayoutService
         if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL && $rawTargetType !== ThemeVirtualLayout::TARGET_GLOBAL) {
             return null;
         }
-        if ($targetId <= 0 || $layoutType === '') {
+        if (!$this->isValidTargetIdentity($targetType, $targetId, false) || $layoutType === '') {
             return null;
         }
         $locale = $this->normalizeSelectionLocale($locale);
@@ -227,7 +230,7 @@ class ThemeVirtualLayoutService
             (string)$identity['locale'],
             $scanLimit
         ) as $row) {
-            $versionId = (int)($row[SystemConfigVersion::schema_fields_ID] ?? 0);
+            $versionId = (int)($row[ScopedConfigData::VERSION_ID] ?? 0);
             if ($versionId <= 0) {
                 continue;
             }
@@ -269,8 +272,8 @@ class ThemeVirtualLayoutService
             (string)($context['target_type'] ?? $metadata['target_type'] ?? ''),
             (int)($context['target_id'] ?? $metadata['target_id'] ?? 0),
             (string)($context['layout_type'] ?? $metadata['layout_type'] ?? ''),
-            isset($context['scope']) ? (string)$context['scope'] : (string)($detail[SystemConfigVersion::schema_fields_SCOPE] ?? self::DEFAULT_SCOPE),
-            isset($context['locale']) ? (string)$context['locale'] : (string)($detail[SystemConfigVersion::schema_fields_LOCALE] ?? SystemConfig::LOCALE_DEFAULT)
+            isset($context['scope']) ? (string)$context['scope'] : (string)($detail[ScopedConfigData::SCOPE] ?? self::DEFAULT_SCOPE),
+            isset($context['locale']) ? (string)$context['locale'] : (string)($detail[ScopedConfigData::LOCALE] ?? ScopedConfigData::LOCALE_DEFAULT)
         );
 
         $blockers = [];
@@ -280,19 +283,19 @@ class ThemeVirtualLayoutService
         if (!$this->isValidSelectionIdentity($identity)) {
             $blockers[] = 'invalid_identity';
         }
-        if ((string)($detail[SystemConfigVersion::schema_fields_MODULE] ?? '') !== self::MODULE_CODE) {
+        if ((string)($detail[ScopedConfigData::MODULE] ?? '') !== self::MODULE_CODE) {
             $blockers[] = 'module_mismatch';
         }
-        if ((string)($detail[SystemConfigVersion::schema_fields_AREA] ?? '') !== self::DEFAULT_AREA) {
+        if ((string)($detail[ScopedConfigData::AREA] ?? '') !== self::DEFAULT_AREA) {
             $blockers[] = 'area_mismatch';
         }
-        if ((string)($detail[SystemConfigVersion::schema_fields_STATUS] ?? '') !== SystemConfigVersion::STATUS_APPLIED) {
+        if ((string)($detail[ScopedConfigData::STATUS] ?? '') !== ScopedConfigData::STATUS_APPLIED) {
             $blockers[] = 'version_not_applied';
         }
-        if ($this->systemConfig->normalizeScope((string)($detail[SystemConfigVersion::schema_fields_SCOPE] ?? self::DEFAULT_SCOPE)) !== (string)$identity['scope']) {
+        if ($this->systemConfig->normalizeScope((string)($detail[ScopedConfigData::SCOPE] ?? self::DEFAULT_SCOPE)) !== (string)$identity['scope']) {
             $blockers[] = 'scope_mismatch';
         }
-        if ($this->systemConfig->normalizeLocale((string)($detail[SystemConfigVersion::schema_fields_LOCALE] ?? SystemConfig::LOCALE_DEFAULT)) !== (string)$identity['locale']) {
+        if ($this->systemConfig->normalizeLocale((string)($detail[ScopedConfigData::LOCALE] ?? ScopedConfigData::LOCALE_DEFAULT)) !== (string)$identity['locale']) {
             $blockers[] = 'locale_mismatch';
         }
         if (!$this->selectionVersionMatchesIdentity($detail, $identity)) {
@@ -316,8 +319,8 @@ class ThemeVirtualLayoutService
                 (string)$identity['locale']
             );
 
-            $expectedVersion = (int)($newRow[SystemConfig::schema_fields_VERSION] ?? 0);
-            $currentVersion = (int)($currentRow[SystemConfig::schema_fields_VERSION] ?? 0);
+            $expectedVersion = (int)($newRow[ScopedConfigData::VERSION] ?? 0);
+            $currentVersion = (int)($currentRow[ScopedConfigData::VERSION] ?? 0);
             if ($newRow === null && $currentRow !== null) {
                 $conflicts[] = [
                     'key' => $selectionKey,
@@ -346,7 +349,7 @@ class ThemeVirtualLayoutService
                 continue;
             }
 
-            $restoreOption = $this->normalizeLayoutOption((string)($oldRow[SystemConfig::schema_fields_VALUE] ?? ''));
+            $restoreOption = $this->normalizeLayoutOption((string)($oldRow[ScopedConfigData::VALUE] ?? ''));
             if ($restoreOption === '') {
                 $blockers[] = 'empty_restore_option';
                 continue;
@@ -422,8 +425,13 @@ class ThemeVirtualLayoutService
      */
     public function saveSourceVersion(array $identity, string $sourceCode, array $versionData = [], bool $publish = true): array
     {
+        $rawTargetType = strtolower(trim((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
+        $rawTargetId = (int)($identity['target_id'] ?? 0);
         $identity = $this->normalizeIdentity($identity);
         $sourceCode = trim($sourceCode);
+        if (!$this->isValidTargetIdentity($rawTargetType, $rawTargetId, true)) {
+            return ['success' => false, 'status' => 'invalid_identity', 'message' => (string)__('主题布局目标无效')];
+        }
         if ($sourceCode === '') {
             return ['success' => false, 'status' => 'empty_source', 'message' => (string)__('布局源码不能为空')];
         }
@@ -502,9 +510,25 @@ class ThemeVirtualLayoutService
      */
     public function copyVirtualLayoutIdentity(array $sourceIdentity, array $targetIdentity): array
     {
+        $sourceTargetType = strtolower(trim((string)($sourceIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
+        $sourceTargetId = (int)($sourceIdentity['target_id'] ?? 0);
+        $targetTargetType = strtolower(trim((string)($targetIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)));
+        $targetTargetId = (int)($targetIdentity['target_id'] ?? 0);
         $sourceIdentity = $this->normalizeIdentity($sourceIdentity);
         $targetIdentity = $this->normalizeIdentity($targetIdentity);
         $results = [];
+
+        if (!$this->isValidTargetIdentity($sourceTargetType, $sourceTargetId, true)
+            || !$this->isValidTargetIdentity($targetTargetType, $targetTargetId, true)) {
+            return [
+                'success' => false,
+                'status' => 'invalid_identity',
+                'copied' => 0,
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+                'results' => [],
+            ];
+        }
 
         if ($sourceIdentity['layout_option'] === 'default' || $targetIdentity['layout_option'] === 'default') {
             return [
@@ -904,7 +928,7 @@ class ThemeVirtualLayoutService
             'layout_option' => $this->normalizeLayoutOption((string)($identity['layout_option'] ?? '')),
             'scope' => $this->normalizeScope(isset($identity['scope']) ? (string)$identity['scope'] : null),
             'target_type' => $this->normalizeTargetType((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL)),
-            'target_id' => max(0, (int)($identity['target_id'] ?? 0)),
+            'target_id' => (int)($identity['target_id'] ?? 0),
             'name' => (string)($identity['name'] ?? ''),
             'description' => (string)($identity['description'] ?? ''),
             'metadata' => is_array($identity['metadata'] ?? null) ? $identity['metadata'] : [],
@@ -913,7 +937,7 @@ class ThemeVirtualLayoutService
 
     private function selectionKey(string $targetType, int $targetId, string $layoutType): string
     {
-        return 'virtual_layout.selection.' . $this->normalizeTargetType($targetType) . '.' . max(0, $targetId) . '.' . $this->normalizeLayoutType($layoutType);
+        return 'virtual_layout.selection.' . strtolower(trim($targetType)) . '.' . $targetId . '.' . $this->normalizeLayoutType($layoutType);
     }
 
     /**
@@ -928,7 +952,7 @@ class ThemeVirtualLayoutService
     ): array {
         return [
             'target_type' => $this->normalizeTargetType($targetType),
-            'target_id' => max(0, $targetId),
+            'target_id' => $targetId,
             'layout_type' => $this->normalizeLayoutType($layoutType),
             'scope' => $this->normalizeScope($scope),
             'locale' => $this->normalizeSelectionLocale($locale),
@@ -939,7 +963,7 @@ class ThemeVirtualLayoutService
     {
         $locale = trim((string)($locale ?? ''));
         return $locale === ''
-            ? SystemConfig::LOCALE_DEFAULT
+            ? ScopedConfigData::LOCALE_DEFAULT
             : $this->systemConfig->normalizeLocale($locale);
     }
 
@@ -948,9 +972,12 @@ class ThemeVirtualLayoutService
      */
     private function isValidSelectionIdentity(array $identity): bool
     {
-        return (int)($identity['target_id'] ?? 0) > 0
-            && (string)($identity['target_type'] ?? '') !== ThemeVirtualLayout::TARGET_GLOBAL
-            && (string)($identity['layout_type'] ?? '') !== '';
+        return (string)($identity['layout_type'] ?? '') !== ''
+            && $this->isValidTargetIdentity(
+                (string)($identity['target_type'] ?? ''),
+                (int)($identity['target_id'] ?? 0),
+                false
+            );
     }
 
     /**
@@ -1003,21 +1030,21 @@ class ThemeVirtualLayoutService
         $newRow = is_array($change['new_row'] ?? null) ? $change['new_row'] : null;
 
         return [
-            'version_id' => (int)($detail[SystemConfigVersion::schema_fields_ID] ?? 0),
-            'operation' => (string)($detail[SystemConfigVersion::schema_fields_OPERATION] ?? ''),
-            'status' => (string)($detail[SystemConfigVersion::schema_fields_STATUS] ?? ''),
-            'scope' => (string)($detail[SystemConfigVersion::schema_fields_SCOPE] ?? ''),
-            'locale' => (string)($detail[SystemConfigVersion::schema_fields_LOCALE] ?? ''),
-            'created_at' => (string)($detail[SystemConfigVersion::schema_fields_CREATED_AT] ?? ''),
-            'actor_id' => (string)($detail[SystemConfigVersion::schema_fields_ACTOR_ID] ?? ''),
-            'actor_name' => (string)($detail[SystemConfigVersion::schema_fields_ACTOR_NAME] ?? ''),
-            'reason' => (string)($detail[SystemConfigVersion::schema_fields_REASON] ?? ''),
+            'version_id' => (int)($detail[ScopedConfigData::VERSION_ID] ?? 0),
+            'operation' => (string)($detail[ScopedConfigData::OPERATION] ?? ''),
+            'status' => (string)($detail[ScopedConfigData::STATUS] ?? ''),
+            'scope' => (string)($detail[ScopedConfigData::SCOPE] ?? ''),
+            'locale' => (string)($detail[ScopedConfigData::LOCALE] ?? ''),
+            'created_at' => (string)($detail[ScopedConfigData::CREATED_AT] ?? ''),
+            'actor_id' => (string)($detail[ScopedConfigData::ACTOR_ID] ?? ''),
+            'actor_name' => (string)($detail[ScopedConfigData::ACTOR_NAME] ?? ''),
+            'reason' => (string)($detail[ScopedConfigData::REASON] ?? ''),
             'identity' => $identity,
             'selection_key' => $selectionKey,
-            'old_layout_option' => $oldRow !== null ? $this->normalizeLayoutOption((string)($oldRow[SystemConfig::schema_fields_VALUE] ?? '')) : null,
-            'new_layout_option' => $newRow !== null ? $this->normalizeLayoutOption((string)($newRow[SystemConfig::schema_fields_VALUE] ?? '')) : null,
-            'old_row_version' => $oldRow !== null ? (int)($oldRow[SystemConfig::schema_fields_VERSION] ?? 0) : 0,
-            'new_row_version' => $newRow !== null ? (int)($newRow[SystemConfig::schema_fields_VERSION] ?? 0) : 0,
+            'old_layout_option' => $oldRow !== null ? $this->normalizeLayoutOption((string)($oldRow[ScopedConfigData::VALUE] ?? '')) : null,
+            'new_layout_option' => $newRow !== null ? $this->normalizeLayoutOption((string)($newRow[ScopedConfigData::VALUE] ?? '')) : null,
+            'old_row_version' => $oldRow !== null ? (int)($oldRow[ScopedConfigData::VERSION] ?? 0) : 0,
+            'new_row_version' => $newRow !== null ? (int)($newRow[ScopedConfigData::VERSION] ?? 0) : 0,
             'metadata' => is_array($detail['metadata_data'] ?? null) ? $detail['metadata_data'] : [],
         ];
     }
@@ -1046,6 +1073,21 @@ class ThemeVirtualLayoutService
         /** @var ThemeTargetTypeRegistry $registry */
         $registry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
         return $registry->normalizeForWrite($targetType);
+    }
+
+    private function isValidTargetIdentity(string $targetType, int $targetId, bool $allowGlobal): bool
+    {
+        $targetType = strtolower(trim($targetType));
+        if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
+            return $allowGlobal && $targetId === 0;
+        }
+        if ($targetType === '') {
+            return false;
+        }
+
+        /** @var ThemeTargetTypeRegistry $registry */
+        $registry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+        return $registry->isValidTarget($targetType, $targetId);
     }
 
     private function getActiveThemeId(string $area): int
@@ -1341,9 +1383,9 @@ class ThemeVirtualLayoutService
             if (!is_array($target)) {
                 continue;
             }
-            $targetType = $this->normalizeTargetType((string)($target['target_type'] ?? ''));
-            $targetId = max(0, (int)($target['target_id'] ?? 0));
-            if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL || $targetId <= 0) {
+            $targetType = strtolower(trim((string)($target['target_type'] ?? '')));
+            $targetId = (int)($target['target_id'] ?? 0);
+            if (!$this->isValidTargetIdentity($targetType, $targetId, false)) {
                 continue;
             }
             $key = $targetType . ':' . $targetId;

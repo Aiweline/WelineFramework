@@ -33,6 +33,11 @@
 - “公开 API”不是靠文件夹名判断，而是当前控制器/动作没有 `#[Acl]` 时，`ApiSecurityService::isPublicApi()` 会把它当公开接口。也就是说，漏写 `#[Acl]` 可能直接把接口变成公开。
 - IP 白名单和 User-Agent 限制是模块内现成能力，服务在 `IpWhitelistService`、`UserAgentRestrictionService`；做集成令牌时优先接这套，不要各模块散写一遍。
 - 接口需要被文档系统识别时，沿用现有注释文档约定与 `ApiDocService` 能力，不要新造一套注解格式。
+- 跨模块生成 API 文档时只依赖
+  `Weline\Api\Api\Documentation\ApiDocumentationProviderInterface`；`ApiDocService` 是模块内部实现，不是跨模块契约。
+- 跨模块认证和 ACL 数据只依赖对方 `Api` 契约：后台令牌使用
+  `BackendApiAuthenticationInterface`，ACL scope 使用 `ScopeCatalogInterface`，白名单安装使用
+  `WhitelistServiceInterface`。禁止从本模块引用 Backend/Acl/Customer 的 Service 或 Model。
 
 ## 典型开发流程
 

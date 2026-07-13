@@ -4,6 +4,8 @@
 
 Weline_Order 是一个符合国际电商标准的订单管理模块，提供完整的订单生命周期管理功能，支持订单创建、支付、发货、退款、发票等全流程操作。
 
+订单优惠校验直接使用 Payment 的支付方式兼容能力，因此 Payment 是必需依赖。
+
 ## 核心功能
 
 ### 1. 订单管理
@@ -421,10 +423,14 @@ $result = $validationService->validateRuleActions('alipay', [
 
 ### 与营销模块集成
 
-订单模块的优惠方式验证功能与营销模块的优惠规则系统完全集成：
+订单模块不直接依赖 Marketing。它只消费
+`Weline\Payment\Api\Discount\DiscountActionSupportInterface`；Payment 在 Marketing
+存在时从公开的 data-only ActionCatalog 获取动作描述。因此：
+
 - 自动发现所有可用的优惠方式（包括扩展的）
 - 支持营销模块扩展的所有优惠方式类型
 - 在订单创建时自动验证，确保支付方式支持优惠方式
+- Order 不加载 Payment `Service` / `Model`，Marketing 未安装也不会导致类加载错误
 
 ## 测试
 
@@ -465,4 +471,3 @@ php bin/w phpunit:run --module=Weline_Order --filter=Integration
 ## 许可证
 
 本模块遵循WelineFramework许可证。
-

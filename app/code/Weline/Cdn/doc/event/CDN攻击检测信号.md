@@ -1,140 +1,135 @@
-# CDN 攻击检测信号事件
+# CDN 攻击检测与恢复信号
 
-## 事件名称
+## 事件所有权
 
-`Weline_Cdn::security::attack_detected`
+权威事件由 `Weline_Server` 发布：
 
-## 概述
+- 攻击检测：`Weline_Server::security::attack_detected`
+- 攻击恢复：`Weline_Server::security::attack_recovered`
 
-当 WLS (Weline Server) Dispatcher 检测到攻击并发送信号时触发。CDN 模块收到此事件后，将广播到各 CDN 服务商开启攻击防护模式。
+`Weline_Cdn` 是可选集成方：监听 Server-owned 事件，再根据域名账户和适配器 capability 开启或关闭边缘防护。Server 不引用 Cdn 模块的内部类。
 
-## 触发流程
+下列旧名称只在 Cdn 的 `etc/event.xml` 中保留一个版本的兼容监听别名：
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           攻击检测与防护流程                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   1. Dispatcher 探测攻击                                                     │
-│      ├── 频率限制检测                                                        │
-│      ├── 路径扫描检测                                                        │
-│      ├── 恶意特征检测                                                        │
-│      ├── 恶意 User-Agent 检测                                               │
-│      ├── 保护路径检测                                                        │
-│      └── Slowloris 检测                                                     │
-│                                                                             │
-│   2. 添加攻击信号头 (X-Weline-Attack-Signal)                                 │
-│      └── 信号包含：类型、域名、IP、时间、原因                                   │
-│                                                                             │
-│   3. Server 模块监听 App::run_before 事件                                    │
-│      └── AttackSignalObserver 解析 Header                                   │
-│                                                                             │
-│   4. 调用 CDN 事件 (Weline_Cdn::security::attack_detected)                  │
-│      └── 传递攻击信号和摘要信息                                               │
-│                                                                             │
-│   5. CDN 模块处理                                                            │
-│      ├── AttackSignalHandler 接收信号                                       │
-│      ├── 判断攻击严重程度                                                    │
-│      ├── 获取域名关联的 CDN 账户                                             │
-│      └── 向各 CDN 服务商 API 发送开启攻击防护模式请求                          │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+- `Weline_Cdn::security::attack_detected`
+- `Weline_Cdn::security::attack_recovered`
+
+新代码和第三方集成必须监听或发布 Server-owned 名称。不要同时发布新旧两个名称，否则兼容期内 Cdn Handler 会重复执行。
+
+## 拓扑无关的处理流程
+
+```text
+WLS Dispatcher/Direct Worker 安全策略
+→ Server 攻击信号状态
+→ AttackSignalMonitor
+→ Weline_Server::security::attack_detected / attack_recovered
+→ Cdn Observer（可选）
+→ 域名 + 账户的 adapter code
+→ 编译型 cache.edge_adapter.* Provider Registry
+→ enableAttackMode() / disableAttackMode()
 ```
 
-## 事件数据结构
+该链路不依赖 Dispatcher 作为 HTTP 代理：Windows Dispatcher 和 POSIX Direct 都使用 Server-owned 事件与同一 Cdn 集成契约。
+
+## 攻击检测负载
+
+`Weline_Server::security::attack_detected` 的 `DataObject` 包含：
 
 ```php
-$eventData = new DataObject([
+[
     'signal' => [
-        'type' => 'rate_limit',      // 攻击类型
-        'domain' => 'example.com',   // 被攻击域名
-        'ip' => '1.2.3.4',           // 攻击者IP
-        'timestamp' => 1738742400,   // 检测时间戳
-        'reason' => '请求频率过高',   // 攻击原因描述
+        'type' => 'rate_limit',
+        'domain' => 'example.com',
+        'ip' => '1.2.3.4',
+        'timestamp' => 1738742400,
+        'reason' => '请求频率过高',
     ],
     'summary' => [
-        'total' => 15,               // 总攻击次数
-        'by_type' => [               // 按类型分组
+        'total' => 15,
+        'by_type' => [
             'rate_limit' => 10,
             'path_scan' => 5,
         ],
-        'recent_ips' => [            // 最近攻击IP
-            '1.2.3.4',
-            '5.6.7.8',
-        ],
+        'recent_ips' => ['1.2.3.4', '5.6.7.8'],
+        'domains' => ['example.com'],
     ],
-    'domain' => 'example.com',       // 被攻击域名
-    'attack_type' => 'rate_limit',   // 攻击类型
-    'attacker_ip' => '1.2.3.4',      // 攻击者IP
-    'timestamp' => 1738742400,       // 时间戳
-    'reason' => '请求频率过高',       // 原因
-]);
+    'domain' => 'example.com',
+    'attack_type' => 'rate_limit',
+    'attacker_ip' => '1.2.3.4',
+    'timestamp' => 1738742400,
+    'reason' => '请求频率过高',
+    'all_signals' => [],
+]
+```
+
+字段可能为空；监听方必须使用安全默认值，不得假设某个域名或 IP 一定存在。
+
+## 攻击恢复负载
+
+`Weline_Server::security::attack_recovered` 的 `DataObject` 包含：
+
+```php
+[
+    'domains' => ['example.com'],
+    'started_at' => 1738742400,
+    'recovered_at' => 1738742700,
+    'duration' => 300,
+]
 ```
 
 ## 攻击类型
 
 | 类型 | 说明 |
-|------|------|
+|---|---|
 | `rate_limit` | 请求频率超过限制 |
-| `path_scan` | 路径扫描行为（大量404） |
-| `malicious_pattern` | 恶意请求特征（SQL注入、XSS等） |
+| `path_scan` | 路径扫描行为 |
+| `malicious_pattern` | SQL 注入、XSS 等恶意特征 |
 | `bad_user_agent` | 恶意 User-Agent |
-| `protected_path` | 访问受保护路径 |
-| `slowloris` | Slowloris 慢速攻击 |
+| `protected_path` | 命中受保护路径 |
+| `slowloris` | Slowloris 慢连接攻击 |
 
-## 使用示例
-
-### 触发事件（Server 模块内部使用）
-
-```php
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\DataObject\DataObject;
-
-$eventsManager->dispatch('Weline_Cdn::security::attack_detected', new DataObject([
-    'signal' => $signal,
-    'summary' => $summary,
-    'domain' => $signal['domain'],
-    'attack_type' => $signal['type'],
-    'attacker_ip' => $signal['ip'],
-    'timestamp' => $signal['timestamp'],
-    'reason' => $signal['reason'],
-]));
-```
-
-### 监听事件（第三方模块可扩展）
+## 监听示例
 
 ```xml
 <!-- etc/event.xml -->
-<event name="Weline_Cdn::security::attack_detected">
-    <observer name="MyModule::custom_attack_handler" 
-              instance="MyModule\Observer\CustomAttackHandler" 
-              disabled="false" 
-              shared="true" 
+<event name="Weline_Server::security::attack_detected">
+    <observer name="Vendor_Module::edge_attack_handler"
+              instance="Vendor\Module\Observer\EdgeAttackHandler"
+              disabled="false"
+              shared="true"
               sort="100"/>
 </event>
 ```
 
-## CDN 适配器要求
+恢复处理使用 `Weline_Server::security::attack_recovered`。观察者从 `$event->getData('data')` 取得 Server 发布的 `DataObject`。
 
-CDN 适配器需要实现 `enableAttackMode` 方法：
+## Adapter 契约
+
+Adapter 通过编译型 `cache.edge_adapter.*` Provider Registry 发布，并实现 `Weline\Framework\Cache\Contract\EdgeCacheAdapterInterface` 或兼容契约 `Weline\Cdn\Api\AdapterInterface`。攻击模式相关签名为：
 
 ```php
-interface AttackModeInterface
-{
-    /**
-     * 开启攻击防护模式
-     *
-     * @param string $zoneId CDN 区域ID
-     * @param array $data 攻击数据
-     * @return array ['success' => bool, 'message' => string]
-     */
-    public function enableAttackMode(string $zoneId, array $data): array;
-}
+public function enableAttackMode(
+    string $zoneId,
+    array $credentials,
+    array $attackData = [],
+): array;
+
+public function disableAttackMode(
+    string $zoneId,
+    array $credentials,
+): array;
+
+public function supportsAttackMode(): bool;
 ```
 
-## 相关文件
+Cdn 只会对 `supportsAttackMode() === true` 的适配器调用开启和关闭方法。Cloudflare 当前支持攻击模式；WLS Memory 只是本地缓存适配器，返回 `supportsAttackMode() === false`。
 
-- `Weline\Server\Security\AttackDetector` - 攻击探测器
-- `Weline\Server\Security\AttackSignalService` - 攻击信号服务
-- `Weline\Server\Observer\AttackSignalObserver` - Server 模块事件监听
-- `Weline\Cdn\Observer\AttackSignalHandler` - CDN 模块事件处理
+Adapter 注册、编译和 WLS 重载流程见 [Weline_Cdn 模块扩展文档](../../extends.md)。
+
+## 相关实现
+
+- `Weline\Server\Cron\AttackSignalMonitor` - 发布 Server-owned 检测/恢复事件
+- `Weline\Server\Service\AttackSignalFileService` - 攻击信号和攻击模式状态
+- `Weline\Cdn\Observer\AttackSignalHandler` - 开启 CDN 攻击防护
+- `Weline\Cdn\Observer\AttackRecoveryHandler` - 关闭 CDN 攻击防护
+- `Weline_Cdn/etc/event.xml` - 权威事件监听和一版兼容别名

@@ -65,7 +65,7 @@ class TenantIsolation
             return $this->inactiveTenantResponse();
         }
 
-        // 设置全局租户上下文
+        // 设置当前请求的租户上下文
         $this->setTenantContext($tenantId, $tenant->getData('name'));
 
         // 记录租户活动
@@ -87,14 +87,11 @@ class TenantIsolation
         $this->request->setData('current_tenant_id', $tenantId);
         $this->request->setData('current_tenant_name', $tenantName);
 
-        // 设置全局变量（用于数据库查询过滤）
-        if (!isset($GLOBALS['ai_tenant_context'])) {
-            $GLOBALS['ai_tenant_context'] = [
-                'tenant_id' => $tenantId,
-                'tenant_name' => $tenantName,
-                'set_at' => time()
-            ];
-        }
+        TenantContext::mergeTenantContext([
+            'tenant_id' => (int)$tenantId,
+            'tenant_name' => $tenantName,
+            'set_at' => time(),
+        ]);
     }
 
     /**
@@ -104,7 +101,8 @@ class TenantIsolation
      */
     public static function getCurrentTenantId(): ?int
     {
-        return $GLOBALS['ai_tenant_context']['tenant_id'] ?? null;
+        $tenantId = TenantContext::getTenantContext()['tenant_id'] ?? null;
+        return $tenantId === null ? null : (int)$tenantId;
     }
 
     /**
@@ -114,7 +112,7 @@ class TenantIsolation
      */
     public static function hasTenantContext(): bool
     {
-        return isset($GLOBALS['ai_tenant_context']);
+        return array_key_exists('tenant_id', TenantContext::getTenantContext());
     }
 
     /**
@@ -151,4 +149,3 @@ class TenantIsolation
         ];
     }
 }
-

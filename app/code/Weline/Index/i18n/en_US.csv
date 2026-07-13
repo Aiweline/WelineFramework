@@ -1,9 +1,4 @@
-保存成功,"Saved successfully"
-保存失败!,"Save Failed!"
-保存成功!,"Saved successfully!"
-参数错误,"Parameter error"
-设置不存在,"Setting Does Not Exist"
-"Unsupported contact operation: %{1}","Unsupported contact operation: %{1}"
+﻿"Unsupported contact operation: %{1}","Unsupported contact operation: %{1}"
 "Name, email, subject and comments are required.","Name, email, subject and comments are required."
 "Invalid email address.","Invalid email address."
 "Thanks, your message has been submitted.","Thanks, your message has been submitted."
@@ -11,6 +6,11 @@
 "Provides storefront contact form operations.","Provides storefront contact form operations."
 "Submit storefront contact form.","Submit storefront contact form."
 "Weline 首页 sitemap URL 提供器","Weline 首页 sitemap URL 提供器"
+保存成功,"Saved successfully"
+保存失败!,"Save Failed!"
+保存成功!,"Saved successfully!"
+参数错误,"Parameter error"
+设置不存在,"Setting Does Not Exist"
 模块化开发,模块化开发
 多语言多站点,多语言多站点
 常驻运行时,常驻运行时

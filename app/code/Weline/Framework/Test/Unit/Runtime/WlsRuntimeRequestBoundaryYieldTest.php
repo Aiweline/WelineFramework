@@ -87,7 +87,7 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
 
         self::assertIsString($worker);
         self::assertIsString($workerSsl);
-        self::assertStringContainsString('$maxAcceptPerLoop = 64;', $worker);
+        self::assertStringContainsString('int $maxAcceptPerLoop = 64,', $worker);
         self::assertStringContainsString('while ($accepted < $maxAcceptPerLoop)', $worker);
         self::assertStringContainsString('if (@\feof($conn))', $worker);
         self::assertStringContainsString('if (@\feof($conn))', $workerSsl);

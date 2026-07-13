@@ -13,6 +13,10 @@ namespace Weline\Framework\System\Process\Driver;
  */
 interface ProcessDriverInterface
 {
+    public const PROCESS_STATE_RUNNING = 'running';
+    public const PROCESS_STATE_EXITED = 'exited';
+    public const PROCESS_STATE_UNKNOWN = 'unknown';
+
     /**
      * 获取驱动支持的操作系统名称
      * 
@@ -70,6 +74,17 @@ interface ProcessDriverInterface
      * @return bool 是否成功
      */
     public function killProcessTree(int $pid): bool;
+
+    /**
+     * 对 PID（可选包含当前进程树快照）执行一次强制终止，不等待、不重试。
+     *
+     * 该原语用于上层身份围栏：每次重试前都必须重新验证 PID 身份，驱动内部
+     * 不能在等待期间再次向可能已复用的 PID 发信号。
+     *
+     * @param int $pid 进程 ID
+     * @param bool $tree 是否同时终止当前子进程快照
+     */
+    public function killProcessOnce(int $pid, bool $tree = false): bool;
     
     /**
      * 向进程发送指定信号
@@ -103,6 +118,18 @@ interface ProcessDriverInterface
      * @return bool
      */
     public function isRunningByPid(int $pid): bool;
+
+    /**
+     * 三态探测进程状态。
+     *
+     * 与 {@see isRunningByPid()} 不同，系统调用失败、权限异常或输出不可解析时
+     * 必须返回 unknown，不能把“无法确认”误判为“已经退出”。
+     *
+     * @param int $pid 进程 ID
+     * @param bool $fresh 是否绕过驱动进程内缓存执行新探测
+     * @return string self::PROCESS_STATE_RUNNING、EXITED 或 UNKNOWN
+     */
+    public function probeProcessState(int $pid, bool $fresh = false): string;
     
     /**
      * 获取进程详细信息

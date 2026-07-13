@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Model;
 
-use Weline\Backend\Model\Config as BackendConfig;
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -41,16 +41,16 @@ class Config
     private const MODULE = 'Weline_Currency';
 
     /**
-     * @var BackendConfig
+     * @var BackendConfigStore
      */
-    private BackendConfig $backendConfig;
+    private BackendConfigStore $backendConfig;
 
     /**
      * 构造函数
      */
     public function __construct()
     {
-        $this->backendConfig = ObjectManager::getInstance(BackendConfig::class);
+        $this->backendConfig = ObjectManager::getInstance(BackendConfigStore::class);
     }
 
     /**
@@ -244,4 +244,3 @@ class Config
         return $this->set(self::KEY_LAST_IMPORT_TIME, $timestamp ?? time());
     }
 }
-

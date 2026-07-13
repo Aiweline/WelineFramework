@@ -28,6 +28,7 @@
 - `app/code/Weline/Cron/composer.json`
 
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：11
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或不可变 DTO，不要直接依赖 Cron Model。 文件数：3
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：1
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：1

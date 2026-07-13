@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Dashboard\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
 
-class Dashboard extends BaseController
+class Dashboard extends BackendPageController
 {
     protected ?string $layoutType = 'dashboard.default';
 

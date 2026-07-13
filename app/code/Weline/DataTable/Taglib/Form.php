@@ -9,7 +9,7 @@
 namespace Weline\DataTable\Taglib;
 
 use Weline\DataTable\Helper\FrontendAccess;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\View\Template;
 

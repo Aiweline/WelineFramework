@@ -147,6 +147,21 @@ $map = w_query('system_config', 'getConfigs', [
 ]);
 ```
 
+PHP 服务需要在热路径读取配置时，可注入或从进程容器取得
+`Weline\SystemConfig\Api\ConfigReader`。该只读 API 保留 `getConfig()`、
+`getConfigMapByModule()`、scope/locale 归一化和 fallback 查询，不向调用模块暴露
+`SystemConfig` ORM Model；写入仍必须走 SystemConfig 的保存边界。
+
+需要写入的 PHP 服务使用 `Weline\SystemConfig\Api\ConfigStore`。新后台和站点级写入
+必须调用 `setScopedConfig()` / `deleteScopedConfig()` 并传入显式 scope；`setConfig()`
+只保留给既有全局配置写入兼容，不得用当前后台请求的隐式 scope 代替管理员选择。
+
+Theme 虚拟布局这类需要配置批次、版本列表、回滚预检和 fallback 的必需依赖模块，使用
+`Weline\SystemConfig\Api\Scope\ScopedConfigRepositoryInterface`。该 Provider 精确委托现有
+SystemConfig 批次语义，不重新实现 scope 系统；跨模块只接收数组，并通过
+`ScopedConfigData` 读取稳定字段键，不得引用 `Model\SystemConfig`、
+`Model\SystemConfigVersion` 或它们的 schema 常量。
+
 需要字段元信息时显式传 `return_type`：
 
 ```php

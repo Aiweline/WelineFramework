@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * SSE 终端组件
@@ -121,7 +121,7 @@ class SseTerminal implements TaglibInterface
             // 解析属性
             $t_reconnecting = addslashes(__('连接重试中...'));
             $t_url_not_configured = 'URL not configured';
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
             // path 优先：若提供 path 则用 getBackendUrl 解析为完整 URL
             $code .= "\nif (!empty(\$Taglib__path ?? '')) { \$Taglib__url = (string)\$this->getBackendUrl(\$Taglib__path); }";
 

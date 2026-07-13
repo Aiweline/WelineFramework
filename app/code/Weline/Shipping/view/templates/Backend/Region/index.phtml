@@ -2,10 +2,6 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
-
-use Weline\I18n\Model\Countries;
-use Weline\Shipping\Model\Region;
-
 $countries = $this->getData('countries') ?? [];
 $currentCountryCode = $this->getData('current_country_code') ?? '';
 $regionTree = $this->getData('region_tree') ?? [];
@@ -51,9 +47,8 @@ $confirmMessages = [
                                         <form method="get" action="<?= $backendBase ?>" class="d-inline-flex align-items-center">
                                             <label class="me-2 mb-0"><?= __('国家') ?>:</label>
                                             <select name="country_code" class="form-select form-select-sm me-2" data-region-country-select>
-                                                <?php /** @var Countries $country */ ?>
                                                 <?php foreach ($countries as $country): ?>
-                                                    <?php $code = $country->getData(Countries::fields_CODE); ?>
+                                                    <?php $code = (string)($country['code'] ?? ''); ?>
                                                     <option value="<?= htmlspecialchars($code) ?>"
                                                         <?= $code === $currentCountryCode ? 'selected' : '' ?>>
                                                         <?= htmlspecialchars($code) ?>

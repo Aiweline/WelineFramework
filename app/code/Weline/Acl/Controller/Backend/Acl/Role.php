@@ -14,7 +14,6 @@ namespace Weline\Acl\Controller\Backend\Acl;
 
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
-use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Exception;
@@ -22,7 +21,7 @@ use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 
 #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role', '管理权限', 'mdi mdi-security', '访问控制权限管理', 'Weline_Acl::acl')]
-class Role extends \Weline\Admin\Controller\BaseController
+class Role extends \Weline\Framework\App\Controller\BackendPageController
 {
     private \Weline\Acl\Model\Role $role;
 
@@ -236,7 +235,7 @@ class Role extends \Weline\Admin\Controller\BaseController
         /** @var AuthenticatedSessionInterface $session */
         $session = SessionFactory::getInstance()->createBackendSession();
         $user = $session->getUser();
-        $userRole = ($user instanceof \Weline\Backend\Model\BackendUser) ? $user->getRole() : null;
+        $userRole = $user !== null && \method_exists($user, 'getRole') ? $user->getRole() : null;
         $this->assign('user_role', $userRole);
         return $this->fetch('assign');
     }

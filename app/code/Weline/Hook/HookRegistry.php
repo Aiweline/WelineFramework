@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\Hook;
 
-use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -20,7 +19,7 @@ use Weline\Framework\System\File\Scan;
 /**
  * Hook 注册表管理
  * 管理 generated/hooks.php 文件的读取和写入
- * 同时管理 HookInterface 中定义的常量
+ * 编译各模块 hook.php 并管理生成的 Hook 注册表
  */
 class HookRegistry
 {
@@ -32,7 +31,7 @@ class HookRegistry
     private ModuleScanService $moduleScanService;
     
     /**
-     * 已注册的 hook 列表（从 HookInterface 常量中获取）
+     * 已注册的 hook 列表（从编译注册表获取）
      * 
      * @var array
      */
@@ -56,7 +55,10 @@ class HookRegistry
     }
 
     /**
-     * 初始化注册表，从 HookInterface 中读取所有常量
+     * 初始化已注册 Hook 索引。
+     *
+     * 模块 hook.php 的编译产物是唯一事实源；不再反射 Framework
+     * 中的模块专有常量，避免 Framework 反向依赖业务模块。
      */
     public function initialize(): void
     {
@@ -64,16 +66,15 @@ class HookRegistry
             return;
         }
         
-        $reflection = new \ReflectionClass(HookInterface::class);
-        $constants = $reflection->getConstants();
-        
-        foreach ($constants as $constantName => $constantValue) {
-            if (is_string($constantValue)) {
-                $this->registeredHooks[$constantValue] = [
-                    'name' => $constantValue,
-                    'constant' => $constantName,
-                ];
+        foreach ($this->getHooks() as $hookName => $hookInfo) {
+            if (!\is_string($hookName) || $hookName === '') {
+                continue;
             }
+            $this->registeredHooks[$hookName] = [
+                'name' => $hookName,
+                'constant' => '',
+                'module' => \is_array($hookInfo) ? (string)($hookInfo['module'] ?? '') : '',
+            ];
         }
         
         $this->initialized = true;
@@ -1112,7 +1113,7 @@ class HookRegistry
     }
 
     /**
-     * 检查 hook 是否已注册（在 HookInterface 中定义）
+     * 检查 hook 是否已出现在编译注册表中。
      * 
      * @param string $hookName Hook 名称
      * @return bool
@@ -1130,7 +1131,7 @@ class HookRegistry
     }
     
     /**
-     * 获取所有已注册的 hook（从 HookInterface 中）
+     * 获取所有已注册的 hook。
      * 
      * @return array
      */
@@ -1141,7 +1142,7 @@ class HookRegistry
     }
     
     /**
-     * 获取 hook 信息（从 HookInterface 中）
+     * 获取 hook 的编译注册信息。
      * 
      * @param string $hookName Hook 名称
      * @return array|null
@@ -1222,4 +1223,3 @@ class HookRegistry
         return $hookToModule[$hookName] ?? null;
     }
 }
-

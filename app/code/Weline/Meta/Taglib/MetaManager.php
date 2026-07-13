@@ -14,7 +14,7 @@ namespace Weline\Meta\Taglib;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Taglib as TaglibView;
 use Weline\Meta\Model\Meta as MetaModel;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class MetaManager implements TaglibInterface
 {

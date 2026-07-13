@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-app-store",
+    "description": "WelineFramework AppStore module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev"
+    },
+    "suggest": {
+        "weline/module-eav": "Enables setup-time marketplace attributes when an EAV product module is installed.",
+        "weline/module-database": "Enables exact-version AppStore artifacts for module rollback orchestration."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\AppStore\\": ""
+        }
+    }
+}

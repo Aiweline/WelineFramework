@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 其它请求等待并复用结果。用于防缓存击穿。
  *
  * 不同运行时（WLS/FPM/CLI）由不同实现承载：
- * - WLS：`WlsMemoryAdapter::compareAndSet` 原子占位
+ * - WLS：使用已注册缓存适配器的原子 compare-and-set 能力占位
  * - FPM：基于文件锁 (flock)
  * - CLI：进程内数组锁（仅同进程有效）
  *

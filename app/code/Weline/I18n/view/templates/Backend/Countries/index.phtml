@@ -2,10 +2,12 @@
 /** @var \Weline\Framework\View\Template $this */
 
 $countries = $this->getData('countries') ?? [];
-$currentFilter = (string)($this->getData('current_filter') ?? 'active');
+$currentFilter = (string)($this->getData('current_filter') ?? 'all');
 $search = (string)($this->getData('search') ?? '');
 $stats = (array)($this->getData('stats') ?? []);
 $pagination = $this->getData('countries_pagination') ?: '';
+$backendAdminJsFile = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'I18n' . DS . 'view' . DS . 'statics' . DS . 'js' . DS . 'backend-admin.js';
+$backendAdminJsVersion = (string)(@filemtime($backendAdminJsFile) ?: '1');
 
 $readValue = static function ($item, string $key, mixed $default = null): mixed {
     if (is_array($item)) {
@@ -42,7 +44,7 @@ $renderHiddenFields = static function (array $fields): string {
 
 ?>
 <link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
-<script src="@static(Weline_I18n::js/backend-admin.js)"></script>
+<script src="@static(Weline_I18n::js/backend-admin.js)?v=<?= htmlspecialchars($backendAdminJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <div class="i18n-admin-page">
 <div class="row">
     <div class="col-12">
@@ -122,12 +124,13 @@ $renderHiddenFields = static function (array $fields): string {
 
         <form method="get" action="@backend-url('*/backend/countries')" class="row g-3 align-items-end">
             <div class="col-lg-5 col-md-6">
-                <label class="form-label mb-1"><?= __('智能搜索') ?></label>
+                <label class="form-label mb-1"><?= __('搜索国家') ?></label>
                 <input type="text"
                        name="search"
                        class="form-control"
                        value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
-                       placeholder="<?= __('搜索') ?>">
+                       placeholder="<?= __('输入国家名称或代码，例如：印度 / IN') ?>">
+                <div class="form-text"><?= __('搜索会自动包含全部状态，未安装的国家可直接安装。') ?></div>
             </div>
             <div class="col-lg-3 col-md-6">
                 <label class="form-label mb-1"><?= __('状态') ?></label>
@@ -141,25 +144,29 @@ $renderHiddenFields = static function (array $fields): string {
             </div>
             <div class="col-lg-4">
                 <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
-                    <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
+                    <button type="submit" class="btn btn-primary"><?= __('查找国家') ?></button>
                     <a href="@backend-url('*/backend/countries')" class="btn btn-outline-secondary"><?= __('重置') ?></a>
-                    <a href="@backend-url('*/backend/countries/update')" class="btn btn-outline-success"><?= __('更新全球数据') ?></a>
+                    <a href="@backend-url('*/backend/countries/update')"
+                       data-async-href="@backend-url('*/backend/countries/update')"
+                       data-async-action="country-sync"
+                       data-async-success-message="<?= htmlspecialchars(__('全球国家数据已同步，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
+                       class="btn btn-outline-success"><?= __('更新全球数据') ?></a>
                 </div>
             </div>
         </form>
     </div>
 </div>
 
-<form id="country-batch-install-form" method="post" action="@backend-url('*/backend/countries/batchInstall')" class="d-none">
+<form id="country-batch-install-form" method="post" action="@backend-url('*/backend/countries/batchInstall')" class="d-none" data-async-action="country-batch-install">
     <?= $renderHiddenFields($preserve) ?>
 </form>
-<form id="country-batch-activate-form" method="post" action="@backend-url('*/backend/countries/batchActive')" class="d-none">
+<form id="country-batch-activate-form" method="post" action="@backend-url('*/backend/countries/batchActive')" class="d-none" data-async-action="country-batch-activate">
     <?= $renderHiddenFields($preserve) ?>
 </form>
-<form id="country-batch-disable-form" method="post" action="@backend-url('*/backend/countries/batchDisable')" class="d-none">
+<form id="country-batch-disable-form" method="post" action="@backend-url('*/backend/countries/batchDisable')" class="d-none" data-async-action="country-batch-disable">
     <?= $renderHiddenFields($preserve) ?>
 </form>
-<form id="country-batch-uninstall-form" method="post" action="@backend-url('*/backend/countries/batchUninstall')" class="d-none">
+<form id="country-batch-uninstall-form" method="post" action="@backend-url('*/backend/countries/batchUninstall')" class="d-none" data-async-action="country-batch-uninstall">
     <?= $renderHiddenFields($preserve) ?>
 </form>
 
@@ -245,14 +252,14 @@ $renderHiddenFields = static function (array $fields): string {
                                     </div>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center" data-country-active-state>
                                 <?php if ($isActive): ?>
                                     <span class="badge bg-success-subtle text-success"><?= __('已激活') ?></span>
                                 <?php else: ?>
                                     <span class="badge bg-secondary-subtle text-secondary"><?= __('未激活') ?></span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center" data-country-install-state>
                                 <?php if ($isInstall): ?>
                                     <span class="badge bg-primary-subtle text-primary"><?= __('已安装') ?></span>
                                 <?php else: ?>
@@ -264,20 +271,24 @@ $renderHiddenFields = static function (array $fields): string {
                                     <?php if (!$isInstall): ?>
                                         <form method="post"
                                               action="@backend-url('*/backend/countries/install')"
+                                              data-async-action="country-install"
+                                              data-async-success-message="<?= htmlspecialchars(__('国家已安装，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-message="<?= htmlspecialchars(__('确定安装 %{1} 吗？', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-type="info">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary"><?= __('安装') ?></button>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" data-async-submit-label="<?= htmlspecialchars(__('安装中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已安装'), ENT_QUOTES, 'UTF-8') ?>"><?= __('安装') ?></button>
                                         </form>
                                     <?php elseif (!$isActive): ?>
                                         <form method="post"
                                               action="@backend-url('*/backend/countries/active')"
+                                              data-async-action="country-activate"
+                                              data-async-success-message="<?= htmlspecialchars(__('国家已激活，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-message="<?= htmlspecialchars(__('确定启用 %{1} 吗？推荐地区会同步启用。', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-type="success">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
-                                            <button type="submit" class="btn btn-sm btn-outline-success"><?= __('激活') ?></button>
+                                            <button type="submit" class="btn btn-sm btn-outline-success" data-async-submit-label="<?= htmlspecialchars(__('激活中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已激活'), ENT_QUOTES, 'UTF-8') ?>"><?= __('激活') ?></button>
                                         </form>
                                     <?php endif; ?>
 
@@ -291,6 +302,8 @@ $renderHiddenFields = static function (array $fields): string {
                                     <?php if ($isActive): ?>
                                         <form method="post"
                                               action="@backend-url('*/backend/countries/disable')"
+                                              data-async-action="country-disable"
+                                              data-async-complete-label="<?= htmlspecialchars(__('已停用'), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-message="<?= htmlspecialchars(__('确定停用 %{1} 吗？关联地区会一并停用。', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-type="warning">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
@@ -302,6 +315,10 @@ $renderHiddenFields = static function (array $fields): string {
                                     <?php if ($isInstall): ?>
                                         <form method="post"
                                               action="@backend-url('*/backend/countries/uninstall')"
+                                              data-async-action="country-uninstall"
+                                              data-async-complete-label="<?= htmlspecialchars(__('已卸载'), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-async-install-label="<?= htmlspecialchars(__('未安装'), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-async-active-label="<?= htmlspecialchars(__('未激活'), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-message="<?= htmlspecialchars(__('确定卸载 %{1} 吗？相关地区会同步卸载。', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
                                               data-confirm-type="danger">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
@@ -400,7 +417,13 @@ $renderHiddenFields = static function (array $fields): string {
                 return;
             }
             fillBatchForm(form, codes);
-            form.submit();
+            if (window.I18nAdminUI && typeof window.I18nAdminUI.requestForm === 'function') {
+                window.I18nAdminUI.requestForm(form, {confirmed: true}).catch(function (error) {
+                    showWarning(error && error.message ? error.message : '<?= addslashes(__('操作失败，请重试')) ?>');
+                });
+                return;
+            }
+            showWarning('<?= addslashes(__('异步组件不可用，请刷新页面后重试')) ?>');
         });
     };
 
@@ -427,30 +450,6 @@ $renderHiddenFields = static function (array $fields): string {
         });
     }
 
-    document.addEventListener('submit', function (event) {
-        var form = event.target;
-        if (!(form instanceof HTMLFormElement)) {
-            return;
-        }
-        if (form.dataset.confirmed === '1') {
-            form.dataset.confirmed = '0';
-            return;
-        }
-
-        var message = form.getAttribute('data-confirm-message');
-        if (!message) {
-            return;
-        }
-
-        event.preventDefault();
-        showConfirm(message, form.getAttribute('data-confirm-type')).then(function (confirmed) {
-            if (!confirmed) {
-                return;
-            }
-            form.dataset.confirmed = '1';
-            form.submit();
-        });
-    }, true);
 })();
 </script>
 </div>

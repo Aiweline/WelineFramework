@@ -4,6 +4,19 @@
 
 Weline_CustomerService 是一个完整的客服服务模块，提供多语言实时聊天、客户语言配置、客服语言配置、邮件绑定客户等功能。
 
+## 依赖清单
+
+Backend、Customer、Framework、Smtp 与 Theme 是客服主流程的必需依赖。Ai 是可选翻译
+Provider，观察者只引用 `Weline\Ai\Api\AiRuntimeInterface`；未安装 Ai 时保留原文，客服
+会话与消息流程继续工作。
+
+跨模块边界固定如下：客服人员列表通过
+`Weline\Backend\Api\Auth\BackendUserDirectoryInterface` 读取不可变后台用户上下文；邮箱绑定通过
+`Weline\Customer\Api\Auth\CustomerAccountFacadeInterface` 按邮箱读取 `CustomerIdentity`；验证邮件
+通过 `Weline\Smtp\Api\MailSenderInterface` 发送。CustomerService 不得引用 Backend/Customer Model
+或 Smtp Helper。直接客户 ID 绑定、邮箱客户查找、会话保存、语言迁移和游客邮箱语言配置的顺序
+不得改变；邮件 from/to、主题、HTML、五个空可选参数和 `Weline_CustomerService` 配置域保持稳定。
+
 ## 主要功能
 
 ### 1. 多语言实时聊天
@@ -215,4 +228,3 @@ class CustomerServiceTranslationObserver implements ObserverInterface
 - 客服工作台
 - 智能客服（AI集成）
 - 客服评价系统
-

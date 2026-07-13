@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Deploy\Service;
 
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
 class DeployConfigService
 {

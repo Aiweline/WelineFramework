@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Skill;
 
-use Weline\Ai\Interface\SkillProviderInterface;
+use Weline\Ai\Api\SkillProviderInterface;
 use Weline\Ai\Model\AiSkill;
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;

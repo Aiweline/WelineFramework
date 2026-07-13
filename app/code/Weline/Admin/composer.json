@@ -1,21 +1,24 @@
 {
-  "name": "weline/module-admin",
-  "description": "WelineFramework admin module",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.0",
-    "weline/framework": "@dev"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Admin\\": ""
-    }
-  },
-  "license": "MIT"
+    "name": "weline/module-admin",
+    "description": "WelineFramework admin module",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-acl": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-system-config": "@dev"
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Admin\\": ""
+        }
+    },
+    "license": "MIT"
 }

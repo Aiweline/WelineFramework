@@ -2,6 +2,17 @@
 
 Weline_AppStore provides the local application store integration for account binding, module download history, license views, installed-module records, and setup-time AppStore metadata initialization.
 
+## Dependency Inventory
+
+Framework is required. Eav is optional and is used only when setup detects a compatible
+product module and publishes the marketplace `installable_module` attribute; AppStore
+installation remains valid when that optional product/EAV integration is absent.
+
+The optional setup integration declares `no/否` and `yes/是` through Eav's public
+`AttributeOptionDefinition` and `AttributeOptionStoreInterface`. AppStore must not
+instantiate `Eav\Model` or `Eav\Service` classes; Framework's `RuntimeProviderResolver`
+resolves the compiled Provider only after the compatible product class is detected.
+
 ## Setup Logging
 
 Setup and observer error handling must keep the `Weline\Framework\App\Env::log_error()` contract:

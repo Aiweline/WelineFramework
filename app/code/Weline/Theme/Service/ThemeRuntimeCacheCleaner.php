@@ -6,10 +6,11 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
-use Weline\Server\Service\MemoryStateFacade;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
@@ -31,6 +32,10 @@ final class ThemeRuntimeCacheCleaner
 
         $this->runStep($result, 'framework_non_global_pools', function (): void {
             ObjectManager::getInstance(CacheManager::class)->clearAll();
+        });
+
+        $this->runStep($result, 'router_runtime_cache', static function (): void {
+            ObjectManager::getInstance(CacheManager::class)->pool('router')->clear();
         });
 
         $this->runStep($result, 'theme_model_active_keys', function () use ($themeId): void {
@@ -76,25 +81,24 @@ final class ThemeRuntimeCacheCleaner
             }
         });
 
-        $this->runStep($result, 'wls_theme_runtime_memory', function () use ($reason): void {
-            if (!\class_exists(MemoryStateFacade::class)) {
+        $this->runStep($result, 'shared_theme_runtime_memory', function (): void {
+            if ($this->currentRuntimeInstanceName() === null) {
                 return;
             }
-
-            $facade = new MemoryStateFacade([
-                'consumer_code' => $reason,
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]);
-            $facade->clearCache('fpc');
-            $facade->clearNamespace('theme_runtime');
-            $facade->disconnect();
+            $state = $this->runtimeProvider(SharedCacheStateInterface::class);
+            if (!$state instanceof SharedCacheStateInterface) {
+                return;
+            }
+            $state->clearCache('router');
+            $state->clearCache('fpc');
+            $state->clearNamespace('theme_runtime');
         });
 
-        $this->runStep($result, 'wls_worker_runtime_broadcast', static function (): void {
-            if (\class_exists(BroadcastControlDispatchService::class)) {
-                ObjectManager::getInstance(BroadcastControlDispatchService::class)->cacheClear();
+        $this->runStep($result, 'runtime_cache_broadcast', function (): void {
+            $instanceName = $this->currentRuntimeInstanceName();
+            $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
+            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
+                $broadcaster->cacheClear($instanceName);
             }
         });
 
@@ -103,6 +107,37 @@ final class ThemeRuntimeCacheCleaner
         });
 
         return $result;
+    }
+
+    private function runtimeProvider(string $contract): ?object
+    {
+        try {
+            return ObjectManager::getInstance(RuntimeProviderResolver::class)->resolve($contract);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function currentRuntimeInstanceName(): ?string
+    {
+        foreach ([
+            $_SERVER['WLS_INSTANCE_NAME'] ?? null,
+            $_SERVER['WLS_INSTANCE'] ?? null,
+            $_ENV['WLS_INSTANCE_NAME'] ?? null,
+            $_ENV['WLS_INSTANCE'] ?? null,
+            \getenv('WLS_INSTANCE_NAME') ?: null,
+            \getenv('WLS_INSTANCE') ?: null,
+        ] as $candidate) {
+            if (!\is_string($candidate)) {
+                continue;
+            }
+            $candidate = \trim($candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -6,8 +6,8 @@ namespace Weline\Currency\Service;
 
 use Weline\Currency\Model\Currency;
 use Weline\Currency\Model\Currency\LocalDescription;
-use Weline\I18n\Model\I18n;
-use Weline\I18n\Service\ActiveLocaleCodeProvider;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
 
 class CurrencyLocalDescriptionService
 {
@@ -15,8 +15,7 @@ class CurrencyLocalDescriptionService
 
     public function __construct(
         private readonly LocalDescription $localDescription,
-        private readonly ActiveLocaleCodeProvider $activeLocaleCodeProvider,
-        private readonly I18n $i18n,
+        private readonly RuntimeProviderResolver $runtimeProviders,
     ) {
     }
 
@@ -26,25 +25,15 @@ class CurrencyLocalDescriptionService
     public function getAvailableLocales(string $displayLocale = 'zh_Hans_CN'): array
     {
         try {
-            $codes = $this->activeLocaleCodeProvider->getInstalledActiveCodes();
+            $records = $this->localeRepository()->installedActive($displayLocale);
         } catch (\Throwable) {
-            $codes = [];
-        }
-
-        if ($codes === []) {
-            $codes = self::DEFAULT_LOCALE_CODES;
-        }
-
-        try {
-            $names = $this->i18n->getLocals($displayLocale);
-        } catch (\Throwable) {
-            $names = [];
+            $records = [];
         }
 
         $locales = [];
         $seen = [];
-        foreach ($codes as $code) {
-            $code = trim((string)$code);
+        foreach ($records as $record) {
+            $code = trim($record->code);
             if (!$this->isValidLocaleCode($code)) {
                 continue;
             }
@@ -57,11 +46,27 @@ class CurrencyLocalDescriptionService
 
             $locales[] = [
                 'code' => $code,
-                'name' => (string)($names[$code] ?? $code),
+                'name' => $record->displayName !== '' ? $record->displayName : $code,
             ];
         }
 
+        if ($locales === []) {
+            foreach (self::DEFAULT_LOCALE_CODES as $code) {
+                $locales[] = ['code' => $code, 'name' => $code];
+            }
+        }
+
         return $locales;
+    }
+
+    private function localeRepository(): LocaleRepositoryInterface
+    {
+        $repository = $this->runtimeProviders->resolve(LocaleRepositoryInterface::class);
+        if (!$repository instanceof LocaleRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n locale repository provider is unavailable.');
+        }
+
+        return $repository;
     }
 
     /**

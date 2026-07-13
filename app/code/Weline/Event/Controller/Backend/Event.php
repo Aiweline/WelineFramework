@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Event\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Admin\Api\Controller\BaseController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Event\Service\EventDataService;
 
@@ -375,4 +375,3 @@ class Event extends BaseController
         }
     }
 }
-

@@ -5,7 +5,7 @@ namespace Weline\I18n\Model;
 use Symfony\Component\Intl\Countries;
 use Symfony\Component\Intl\Languages;
 use Symfony\Component\Intl\Locales;
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\CacheManager\Api\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;

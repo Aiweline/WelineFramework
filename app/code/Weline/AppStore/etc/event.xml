@@ -14,4 +14,9 @@
         <observer name="appstore_module_installed"
                   instance="Weline\AppStore\Observer\ModuleInstalledObserver"/>
     </event>
+
+    <event name="Weline_Database_ModuleArtifact::collect">
+        <observer name="appstore_module_artifact_provider"
+                  instance="Weline\AppStore\Observer\CollectModuleArtifactProvider"/>
+    </event>
 </config>

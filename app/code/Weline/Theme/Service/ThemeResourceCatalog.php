@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Meta\Service\ParamDefinitionNormalizer;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Dto\ThemeSlotDefinition;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Model\WelineTheme;
@@ -545,8 +546,12 @@ class ThemeResourceCatalog
 
     private function formatParams(array $params): array
     {
-        /** @var ParamDefinitionNormalizer $normalizer */
-        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        /** @var ParamDefinitionNormalizerInterface $normalizer */
+        $normalizer = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ParamDefinitionNormalizerInterface::class);
+        if (!$normalizer instanceof ParamDefinitionNormalizerInterface) {
+            throw new \RuntimeException('Weline_Meta param normalizer provider is unavailable.');
+        }
         return $normalizer->normalizeParsedParamList($params);
     }
 

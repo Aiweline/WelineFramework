@@ -7,7 +7,7 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
-use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
  * 部件位置解析器
@@ -15,7 +15,7 @@ use Weline\Widget\Service\WidgetRegistry;
  */
 class WidgetPositionResolver
 {
-    private WidgetRegistry $widgetRegistry;
+    private WidgetRegistryInterface $widgetRegistry;
     private ThemePlaceableRegistryInterface $placeableRegistry;
 
     // 位置到区域的映射
@@ -37,7 +37,7 @@ class WidgetPositionResolver
         ],
     ];
 
-    public function __construct(WidgetRegistry $widgetRegistry, mixed $placeableRegistry)
+    public function __construct(WidgetRegistryInterface $widgetRegistry, mixed $placeableRegistry)
     {
         $this->widgetRegistry = $widgetRegistry;
         $this->placeableRegistry = $this->resolvePlaceableRegistry($placeableRegistry);

@@ -990,14 +990,33 @@ class Stop extends CommandAbstract
     private function collectRecoverablePortsFromRecord(array $record, bool $includeSharedState = false): array
     {
         $ports = [];
-        foreach (['port', 'worker_port', 'worker_base_port', 'control_port', 'dispatcher_port', 'http_redirect_port'] as $field) {
+        $runtimeSelection = \is_array($record['runtime_selection'] ?? null)
+            ? $record['runtime_selection']
+            : [];
+        $effectiveTopology = \strtolower(\trim((string)(
+            $runtimeSelection['effective_topology']
+            ?? $record['effective_topology']
+            ?? $record['topology']
+            ?? ''
+        )));
+        $direct = $effectiveTopology === 'direct';
+
+        // Direct workers share the public listener. worker_base_port is only
+        // a compatibility/allocation hint and the adjacent range is not owned
+        // by this instance. Treating it like legacy independent worker ports
+        // can terminate a different WLS instance on a neighbouring port.
+        $recordFields = $direct
+            ? ['port', 'worker_port', 'control_port', 'http_redirect_port']
+            : ['port', 'worker_port', 'worker_base_port', 'control_port', 'dispatcher_port', 'http_redirect_port'];
+        foreach ($recordFields as $field) {
             $port = (int) ($record[$field] ?? 0);
             if ($port > 0) {
                 $ports[] = $port;
             }
         }
 
-        foreach (['port', 'worker_port', 'worker_base_port'] as $baseField) {
+        $rangeBaseFields = $direct ? [] : ['port', 'worker_port', 'worker_base_port'];
+        foreach ($rangeBaseFields as $baseField) {
             $basePort = (int) ($record[$baseField] ?? 0);
             $count = (int) ($record['count'] ?? 0);
             if ($basePort <= 0 || $count <= 1) {

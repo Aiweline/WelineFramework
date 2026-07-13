@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\DeveloperWorkspace\Plugin;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
 use Weline\Framework\Ui\FormKey;
@@ -57,7 +58,11 @@ class Route extends Core
   </div>
 </div>
 HTML;
-            $result = str_replace('</body>', $html . '</body>', $result);
+            if ($result instanceof Response) {
+                $result->setBody(str_replace('</body>', $html . '</body>', $result->getBody()));
+            } elseif (is_string($result)) {
+                $result = str_replace('</body>', $html . '</body>', $result);
+            }
         }
         return $result;
     }

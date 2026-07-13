@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\TargetTypeProviderInterface;
@@ -52,6 +53,25 @@ class ThemeTargetTypeRegistry
     }
 
     /**
+     * 目标 ID 的有效性只由对应 Provider 定义，Theme 核心不猜测模块语义。
+     *
+     * @param array<string,mixed> $context
+     */
+    public function isValidTarget(string $targetType, int $targetId, array $context = []): bool
+    {
+        $provider = $this->get($targetType);
+        if (!$provider instanceof TargetTypeProviderInterface) {
+            return false;
+        }
+
+        try {
+            return $provider->validate($targetId, $context);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * @return array<string, TargetTypeProviderInterface>
      */
     public function all(): array
@@ -77,6 +97,23 @@ class ThemeTargetTypeRegistry
                 if ($code !== '') {
                     $providers[$code] = $provider;
                 }
+            }
+        }
+
+        foreach (ObjectManager::getInstance(ServiceProviderRegistry::class)
+            ->implementationsWithPrefix('theme.target_type.') as $implementation
+        ) {
+            try {
+                $provider = ObjectManager::getInstance($implementation);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!$provider instanceof TargetTypeProviderInterface) {
+                continue;
+            }
+            $code = \strtolower(\trim($provider->getCode()));
+            if ($code !== '') {
+                $providers[$code] = $provider;
             }
         }
 
@@ -153,7 +190,6 @@ class ThemeTargetTypeRegistry
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_PRODUCT, (string)__('商品'), ['product']),
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY, (string)__('分类'), ['category', 'product_list']),
             new BuiltInThemeTargetTypeProvider(ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT, (string)__('分类商品默认'), ['product']),
-            new BuiltInThemeTargetTypeProvider('website', (string)__('站点'), ['dashboard']),
         ] as $provider) {
             $providers[$provider->getCode()] = $provider;
         }
@@ -202,10 +238,7 @@ final class BuiltInThemeTargetTypeProvider implements TargetTypeProviderInterfac
     public function validate(int $targetId, array $context = []): bool
     {
         if ($this->code === ThemeVirtualLayout::TARGET_GLOBAL) {
-            return true;
-        }
-        if ($this->code === 'website') {
-            return $targetId >= 0;
+            return $targetId === 0;
         }
 
         return $targetId > 0;

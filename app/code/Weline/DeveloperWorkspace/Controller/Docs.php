@@ -12,10 +12,11 @@ use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationConfigService;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationReadService;
 use Weline\DeveloperWorkspace\Service\ApiDocCollector;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\Localization\LocaleNameProviderInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\I18n;
-use Weline\I18n\Model\Locale;
-use Weline\Websites\Data\WebsiteData;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\LocaleCatalogInterface;
+use Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface;
 
 /**
  * 前端文档浏览控制器
@@ -994,8 +995,11 @@ class Docs extends FrontendController
     private function getAvailableCurrencies(): array
     {
         try {
-            // 从当前网站获取关联的货币列表
-            $currencies = WebsiteData::getCurrencies();
+            $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(WebsiteCurrencyCatalogInterface::class);
+            $currencies = $provider instanceof WebsiteCurrencyCatalogInterface
+                ? $provider->current()
+                : [];
             
             // 如果网站没有关联货币，返回默认列表
             if (empty($currencies)) {
@@ -1034,24 +1038,17 @@ class Docs extends FrontendController
         try {
             $languageCodes = $this->translationConfigService->getSupportedLocales();
             $displayLocaleCode = $this->getRequestLocale();
-
-            /** @var Locale $localeModel */
-            $localeModel = ObjectManager::getInstance(Locale::class);
-            /** @var I18n $i18n */
-            $i18n = ObjectManager::getInstance(I18n::class);
-
-            $query = $localeModel->clear()
-                ->order(Locale::schema_fields_CODE, 'ASC');
-
-            if (empty($languageCodes)) {
-                $query->where(Locale::schema_fields_IS_INSTALL, 1);
-            } else {
-                $query->where(Locale::schema_fields_CODE, array_values(array_unique($languageCodes)), 'in');
+            $resolver = ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $catalog = $resolver->resolve(LocaleCatalogInterface::class);
+            $nameProvider = $resolver->resolve(LocaleNameProviderInterface::class);
+            if (!$catalog instanceof LocaleCatalogInterface) {
+                throw new \RuntimeException('Locale catalog provider is unavailable.');
             }
 
-            // Use fetchArray here to avoid cloning the model for every locale row.
-            $rows = $query->select()->fetchArray();
-            if (!is_array($rows) || empty($rows)) {
+            $rows = empty($languageCodes)
+                ? $catalog->installed($displayLocaleCode)
+                : $catalog->all($displayLocaleCode);
+            if (empty($rows)) {
                 $fallback = [];
                 foreach ($languageCodes as $code) {
                     $fallback[] = $this->buildLocaleCodeOnlyOption((string)$code);
@@ -1064,11 +1061,17 @@ class Docs extends FrontendController
                 if (!is_array($row)) {
                     continue;
                 }
-                $code = trim((string)($row[Locale::schema_fields_CODE] ?? ''));
-                if ($code === '' || isset($optionsByCode[$code])) {
+                $code = trim((string)($row['code'] ?? ''));
+                if ($code === ''
+                    || isset($optionsByCode[$code])
+                    || (!empty($languageCodes) && !in_array($code, $languageCodes, true))) {
                     continue;
                 }
-                $optionsByCode[$code] = $this->buildLocaleDisplayOption($code, $i18n, (string)$displayLocaleCode);
+                $optionsByCode[$code] = $this->buildLocaleDisplayOption(
+                    $code,
+                    $nameProvider instanceof LocaleNameProviderInterface ? $nameProvider : null,
+                    (string)$displayLocaleCode
+                );
             }
 
             if (empty($optionsByCode)) {
@@ -1103,11 +1106,15 @@ class Docs extends FrontendController
         }
     }
 
-    private function buildLocaleDisplayOption(string $code, I18n $i18n, string $displayLocaleCode): array
+    private function buildLocaleDisplayOption(
+        string $code,
+        ?LocaleNameProviderInterface $nameProvider,
+        string $displayLocaleCode
+    ): array
     {
-        $localizedName = trim((string)$i18n->getLocaleName($code, $displayLocaleCode));
-        $nativeName = trim((string)$i18n->getLocaleName($code, $code));
-        $referenceName = trim((string)$i18n->getLocaleName($code, 'en'));
+        $localizedName = trim((string)($nameProvider?->resolveName($code, $displayLocaleCode) ?? ''));
+        $nativeName = trim((string)($nameProvider?->resolveName($code, $code) ?? ''));
+        $referenceName = trim((string)($nameProvider?->resolveName($code, 'en') ?? ''));
 
         if ($localizedName === '') {
             $localizedName = $nativeName !== '' ? $nativeName : ($referenceName !== '' ? $referenceName : $code);
@@ -1164,4 +1171,3 @@ class Docs extends FrontendController
         ];
     }
 }
-

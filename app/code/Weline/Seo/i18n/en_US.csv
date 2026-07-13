@@ -1,5 +1,51 @@
-该平台不支持自动提交,"This platform does not support automatic submission."
-该平台不支持统计数据获取,"This platform does not support statistical data retrieval."
+﻿"SEO subject created","SEO subject created"
+"Dispatched when an SEO subject is created.","Dispatched when an SEO subject is created."
+"SEO subject updated","SEO subject updated"
+"Dispatched when SEO subject data is updated.","Dispatched when SEO subject data is updated."
+"SEO keywords extracted","SEO keywords extracted"
+"Dispatched when keyword extraction is completed.","Dispatched when keyword extraction is completed."
+"SEO suggestion generated","SEO suggestion generated"
+"Dispatched when AI SEO suggestions are generated.","Dispatched when AI SEO suggestions are generated."
+"Website SEO account bound","Website SEO account bound"
+"Dispatched when a website is bound to an SEO account.","Dispatched when a website is bound to an SEO account."
+"SEO feed collect","SEO feed collect"
+"Allows other modules to provide SEO feed data.","Allows other modules to provide SEO feed data."
+"SEO head context resolve","SEO head context resolve"
+"Allows other modules to enrich page-level SEO head context before profile providers merge.","Allows other modules to enrich page-level SEO head context before profile providers merge."
+"SEO URL submit request","SEO URL submit request"
+"Allows modules to enqueue changed public URLs for immediate search engine URL push.","Allows modules to enqueue changed public URLs for immediate search engine URL push."
+"SEO URL changed","SEO URL changed"
+"Unified URL change notification before SEO decides sitemap sync and URL push tasks.","Unified URL change notification before SEO decides sitemap sync and URL push tasks."
+"SEO URL change processed","SEO URL change processed"
+"Dispatched after URL change notification has been mapped to sitemap sync and URL push decisions.","Dispatched after URL change notification has been mapped to sitemap sync and URL push decisions."
+"SEO task enqueued","SEO task enqueued"
+"Dispatched after an SEO task is enqueued.","Dispatched after an SEO task is enqueued."
+"SEO task completed","SEO task completed"
+"Dispatched after an SEO task is completed.","Dispatched after an SEO task is completed."
+"SEO trend sync completed","SEO trend sync completed"
+"Dispatched when trend data sync is completed.","Dispatched when trend data sync is completed."
+id属性不能为空,"The id attribute cannot be empty"
+搜索SEO账户...,"Search SEO accounts..."
+请选择SEO账户,"Please select SEO account"
+加载中...,Loading...
+提示：点击选择SEO账户，绑定后将自动提交sitemap,"Tip: Click to select SEO account, sitemap will be auto-submitted after binding"
+未找到匹配的账户,"No matching accounts found"
+加载失败,"Failed to load"
+暂无SEO账户，请先创建,"No SEO Account, Please Create One First"
+"SEO管理标签缺少 module 属性","SEO admin tag is missing module attribute"
+SEO管理,"SEO Management"
+在新窗口打开,"Open in New Window"
+"SEO head output","SEO head output"
+"Renders SEO metadata and structured data in the document head.","Renders SEO metadata and structured data in the document head."
+"SEO body output","SEO body output"
+"Renders SEO body-level markup immediately after the document body starts.","Renders SEO body-level markup immediately after the document body starts."
+"SEO footer output","SEO footer output"
+"Renders SEO footer-level markup before the document body closes.","Renders SEO footer-level markup before the document body closes."
+"缺少 IndexNow Key","Missing IndexNow Key"
+"Sitemap URL 缺少主机名","Sitemap URL is missing a host"
+"IndexNow 请求失败：%{1}","IndexNow request failed: %{1}"
+"已通过 IndexNow 通知 %{1}","Notified %{1} via IndexNow"
+"IndexNow 返回错误码：%{1}","IndexNow returns error code: %{1}"
 "缺少百度站长平台 Token","Missing Baidu Webmaster Token"
 "百度 API 请求失败：%{1}","Baidu API request failed: %{1}"
 "百度返回错误：%{1} - %{2}","Baidu returned error: %{1} - %{2}"
@@ -8,13 +54,6 @@
 "已成功通过%{1} API提交到百度，成功 %{2} 条","Successfully submitted to Baidu via %{1} API, %{2} successful"
 "百度 API 返回异常","Baidu API returned abnormal response"
 "百度提交完成：成功 %{1} 条，剩余配额 %{2}","Baidu submission completed: %{1} successful, remaining quota %{2}"
-"缺少 Bing Webmaster API Key","Missing Bing Webmaster API Key"
-"API 请求失败：%{1}","API request failed: %{1}"
-"已成功提交 sitemap 到 Bing Webmaster","Successfully submitted sitemap to Bing Webmaster"
-"API 请求返回错误码：%{1}","API request returned error code: %{1}"
-"IndexNow 请求失败：%{1}","IndexNow request failed: %{1}"
-"已通过 IndexNow 通知 Bing 更新","Notified Bing via IndexNow"
-"IndexNow 请求返回错误码：%{1}","IndexNow request returned error code: %{1}"
 "Google Ping 方式已于 2023 年弃用。请配置 Service Account 使用 Search Console API 提交。","The Google Ping method is deprecated in 2023. Please configure the Service Account to submit using the Search Console API."
 "Ping 请求失败：%{1}","Ping request failed: %{1}"
 "已成功通知 Google 更新 sitemap","Successfully notified Google to update sitemap"
@@ -32,13 +71,32 @@
 "缺少 Service Account 配置","Missing Service Account configuration"
 "成功获取 Google Search Console 统计数据","Successfully retrieved Google Search Console statistics"
 获取统计数据失败：%{1},"Failed to fetch statistical data: %{1}"
-"缺少 IndexNow Key","Missing IndexNow Key"
-"Sitemap URL 缺少主机名","Sitemap URL is missing a host"
-"已通过 IndexNow 通知 %{1}","Notified %{1} via IndexNow"
-"IndexNow 返回错误码：%{1}","IndexNow returns error code: %{1}"
-SEO账户配置,"SEO Account Configuration"
-账户不存在,"Account does not exist"
+"缺少 Bing Webmaster API Key","Missing Bing Webmaster API Key"
+"API 请求失败：%{1}","API request failed: %{1}"
+"已成功提交 sitemap 到 Bing Webmaster","Successfully submitted sitemap to Bing Webmaster"
+"API 请求返回错误码：%{1}","API request returned error code: %{1}"
+"已通过 IndexNow 通知 Bing 更新","Notified Bing via IndexNow"
+"IndexNow 请求返回错误码：%{1}","IndexNow request returned error code: %{1}"
+该平台不支持自动提交,"This platform does not support automatic submission."
+该平台不支持统计数据获取,"This platform does not support statistical data retrieval."
+加载失败：%{1},"Failed to load: %{1}"
+站点ID无效,"Invalid Site ID"
+站点不存在,"Site does not exist"
 无效的请求方法,"Invalid request method"
+"绑定配置保存成功，共绑定 %{1} 个SEO账户","Binding configuration saved successfully, a total of %{1} SEO accounts bound"
+保存失败：%{1},"Save failed: %{1}"
+参数无效,"Invalid parameter"
+绑定已解除,"Binding has been removed"
+绑定关系不存在,"The binding relationship does not exist"
+解除失败：%{1},"Release Failed: %{1}"
+SEO总览,"SEO Overview"
+主体不存在,"Subject does not exist"
+主体SEO详情,"Main SEO details"
+SEO主体列表,"SEO subject list"
+无效的主体ID,"Invalid Subject ID"
+AI建议生成成功,"AI suggestion generated successfully"
+生成建议失败：%{1},"Suggestion generation failed: %{1}"
+账户不存在,"Account does not exist"
 账户名称不能为空,"Account name cannot be empty"
 平台不能为空,"Platform cannot be empty"
 平台未注册：%{1},"Platform is not registered: %{1}"
@@ -51,7 +109,6 @@ SEO账户配置,"SEO Account Configuration"
 "成功绑定 %{1} 个站点","Successfully bound %{1} sites"
 "成功解绑 %{1} 个站点","Successfully unbound %{1} sites"
 站点绑定未发生变化,"Site Binding Unchanged"
-保存失败：%{1},"Save failed: %{1}"
 账户ID或站点ID无效,"Invalid account ID or site ID"
 该账户未绑定此站点,"This account is not bound to this site"
 配置保存成功,"Configuration saved successfully"
@@ -62,13 +119,6 @@ SEO账户配置,"SEO Account Configuration"
 该账户没有绑定任何站点,"This account is not bound to any site"
 "成功同步 %{1} 个站点的统计数据","Successfully synced statistics for %{1} sites"
 同步失败：%{1},"Sync failed: %{1}"
-SEO总览,"SEO Overview"
-主体不存在,"Subject does not exist"
-主体SEO详情,"Main SEO details"
-SEO主体列表,"SEO subject list"
-无效的主体ID,"Invalid Subject ID"
-AI建议生成成功,"AI suggestion generated successfully"
-生成建议失败：%{1},"Suggestion generation failed: %{1}"
 "%{1} SEO管理","%{1} SEO Management"
 SEO主体管理,"SEO Subject Management"
 标题不能为空,"Title is required"
@@ -105,108 +155,6 @@ SEO主体管理,"SEO Subject Management"
 生成文件数：%{1},"Files generated: %{1}"
 平台明细,"Platform Details"
 "%{1} 个文件","%{1} files"
-加载失败：%{1},"Failed to load: %{1}"
-站点ID无效,"Invalid Site ID"
-站点不存在,"Site does not exist"
-"绑定配置保存成功，共绑定 %{1} 个SEO账户","Binding configuration saved successfully, a total of %{1} SEO accounts bound"
-参数无效,"Invalid parameter"
-绑定已解除,"Binding has been removed"
-绑定关系不存在,"The binding relationship does not exist"
-解除失败：%{1},"Release Failed: %{1}"
-"Sitemap 提交提示","Sitemap Submission Notice"
-"以下站点未绑定 SEO 账户，无法自动提交 sitemap：","The following sites are not bound to an SEO account, so sitemaps cannot be submitted automatically:"
-"请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","Please go to ""SEO Management > Sitemap Management"" or ""Site Management"" to bind the SEO account."
-"SEO subject created","SEO subject created"
-"Dispatched when an SEO subject is created.","Dispatched when an SEO subject is created."
-"SEO subject updated","SEO subject updated"
-"Dispatched when SEO subject data is updated.","Dispatched when SEO subject data is updated."
-"SEO keywords extracted","SEO keywords extracted"
-"Dispatched when keyword extraction is completed.","Dispatched when keyword extraction is completed."
-"SEO suggestion generated","SEO suggestion generated"
-"Dispatched when AI SEO suggestions are generated.","Dispatched when AI SEO suggestions are generated."
-"Website SEO account bound","Website SEO account bound"
-"Dispatched when a website is bound to an SEO account.","Dispatched when a website is bound to an SEO account."
-"SEO feed collect","SEO feed collect"
-"Allows other modules to provide SEO feed data.","Allows other modules to provide SEO feed data."
-"SEO head context resolve","SEO head context resolve"
-"Allows other modules to enrich page-level SEO head context before profile providers merge.","Allows other modules to enrich page-level SEO head context before profile providers merge."
-"SEO URL submit request","SEO URL submit request"
-"Allows modules to enqueue changed public URLs for immediate search engine URL push.","Allows modules to enqueue changed public URLs for immediate search engine URL push."
-"SEO URL changed","SEO URL changed"
-"Unified URL change notification before SEO decides sitemap sync and URL push tasks.","Unified URL change notification before SEO decides sitemap sync and URL push tasks."
-"SEO URL change processed","SEO URL change processed"
-"Dispatched after URL change notification has been mapped to sitemap sync and URL push decisions.","Dispatched after URL change notification has been mapped to sitemap sync and URL push decisions."
-"SEO task enqueued","SEO task enqueued"
-"Dispatched after an SEO task is enqueued.","Dispatched after an SEO task is enqueued."
-"SEO task completed","SEO task completed"
-"Dispatched after an SEO task is completed.","Dispatched after an SEO task is completed."
-"SEO trend sync completed","SEO trend sync completed"
-"Dispatched when trend data sync is completed.","Dispatched when trend data sync is completed."
-"SEO head output","SEO head output"
-"Renders SEO metadata and structured data in the document head.","Renders SEO metadata and structured data in the document head."
-"SEO body output","SEO body output"
-"Renders SEO body-level markup immediately after the document body starts.","Renders SEO body-level markup immediately after the document body starts."
-"SEO footer output","SEO footer output"
-"Renders SEO footer-level markup before the document body closes.","Renders SEO footer-level markup before the document body closes."
-百度站长平台,"Baidu Webmaster Platform"
-"缺少百度站点 URL","Missing Baidu site URL"
-"URL 列表为空","URL list is empty"
-"已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}","Submitted %{2} URLs via Baidu %{1}, remaining quota %{3}"
-"百度 URL 提交失败","Baidu URL submission failed"
-"百度站长平台 API Token","Baidu Webmaster Platform API Token"
-"已在百度站长平台验证的站点 URL","Site URL verified on Baidu Webmaster Platform"
-"Bing API 请求失败：%{1}","Bing API request failed: %{1}"
-"Bing API 返回错误码：%{1}","Bing API returns error code: %{1}"
-"已在 Bing Webmaster Tools 验证的站点 URL","Site URL verified in Bing Webmaster Tools"
-"已成功向 Bing 提交 %{1} 个 URL","Successfully submitted %{1} URLs to Bing"
-"已通过 IndexNow 提交 %{1} 个 URL","Submitted %{1} URLs via IndexNow"
-"已向Google Indexing API 提交 %{success} 个URL","Submitted %{success} URL(s) to Google Indexing API"
-"向Google Indexing API 提交URL失败","Failed to submit URL to Google Indexing API"
-"Sitemap URL为空","Sitemap URL is empty"
-"Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API","Google Indexing API is not used for Sitemap submission. Use the Google Search Console Sitemap API."
-"Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）","Google Service Account configuration is missing or incorrectly formatted (requires client_email and private_key)"
-"获取 Google Indexing API 访问令牌失败","Failed to get Google Indexing API access token"
-"URL 已提交给 Google Indexing API","URL has been submitted to Google Indexing API"
-"服务器未启用 cURL 扩展，无法调用 Google Indexing API","Server does not have the cURL extension enabled, unable to call the Google Indexing API"
-"请求失败: %{1}","Request failed: %{1}"
-"HTTP错误: %{1}","HTTP error: %{1}"
-"Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交","Google Search Console API does not provide generic URL push. Use Google Indexing API or submit a Sitemap instead."
-"Google Service Account JSON 凭据内容","Google Service Account JSON credential content"
-"Search Console 中已验证的站点属性 URL","Verified site property URL in Search Console"
-"URL 缺少主机名：%{1}","URL is missing a host: %{1}"
-"IndexNow Key","IndexNow Key"
-"可公开访问的 IndexNow Key 文件地址","Publicly accessible IndexNow key file URL"
-"缺少 Naver Search Advisor Access Token","Missing Naver Search Advisor Access Token"
-"Naver Search Advisor 请求失败：%{1}","Naver Search Advisor request failed: %{1}"
-"Naver Search Advisor 返回错误：%{1}","Naver Search Advisor returned error: %{1}"
-"已通过 Naver Search Advisor 提交 %{1} 个 URL","Submitted %{1} URL(s) through Naver Search Advisor"
-"Naver Search Advisor 收集请求 API 面向落地页 URL，不用于 Sitemap 文件；请使用 IndexNow 或在 Naver Search Advisor 手动提交 Sitemap","Naver Search Advisor Crawl Request API is for landing page URLs, not Sitemap files. Use IndexNow or submit the Sitemap manually in Naver Search Advisor."
-"Naver Search Advisor Access Token","Naver Search Advisor Access Token"
-"提交类型：update 或 delete","Submission type: update or delete"
-"SEO sitemap Provider 定向同步失败：%{1}","SEO sitemap Provider 定向同步失败：%{1}"
-"缺少 sitemap 定向同步 module 或 website_id","缺少 sitemap 定向同步 module 或 website_id"
-"SitemapUrlProvider 必须返回非空 scope 和 module","SitemapUrlProvider 必须返回非空 scope 和 module"
-"第 %{1} 条 URL 数据不是数组","第 %{1} 条 URL 数据不是数组"
-"第 %{1} 条 URL 缺少 url_key 或 loc","第 %{1} 条 URL 缺少 url_key 或 loc"
-"重复的 sitemap url_key：%{1}","重复的 sitemap url_key：%{1}"
-"URL target 数据不是数组","URL target 数据不是数组"
-"缺少 URL 提交 scope","缺少 URL 提交 scope"
-"无法识别 URL 所属站点","无法识别 URL 所属站点"
-"没有可提交的公开 URL","没有可提交的公开 URL"
-"该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL","该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL"
-"该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。","This site is not bound to an SEO account. There are %{1} URL(s) but no sitemap file can be generated. Please go to ""Site Management"" or ""SEO Management > Account Management"" to bind an SEO account."
-"平台 %{1} 不支持自动提交","Platform %{1} does not support auto-submit"
-id属性不能为空,"The id attribute cannot be empty"
-搜索SEO账户...,"Search SEO accounts..."
-请选择SEO账户,"Please select SEO account"
-加载中...,Loading...
-提示：点击选择SEO账户，绑定后将自动提交sitemap,"Tip: Click to select SEO account, sitemap will be auto-submitted after binding"
-未找到匹配的账户,"No matching accounts found"
-加载失败,"Failed to load"
-暂无SEO账户，请先创建,"No SEO Account, Please Create One First"
-"SEO管理标签缺少 module 属性","SEO admin tag is missing module attribute"
-SEO管理,"SEO Management"
-在新窗口打开,"Open in New Window"
 "SEO 协议与搜索提交","SEO protocol and search submission"
 robots.txt,robots.txt
 "启用站点 robots 协议输出","Enable site robots protocol output"
@@ -217,135 +165,105 @@ Google-Extended,Google-Extended
 "禁止 Google-Extended","Block Google-Extended"
 "robots.txt 追加规则","robots.txt append rules"
 "每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。","One robots directive per line; basic security rules are auto-generated by Weline_Seo."
-编辑SEO账户,"Edit SEO account"
-新增SEO账户,"Add SEO Account"
+搜索引擎账户启用,搜索引擎账户启用
 账户管理,"Account Management"
-编辑,Edit
-新增,Add
-Scope,Scope
-由URL参数指定的scope不可修改，用于区分不同业务范围。,"The scope specified by the URL parameter cannot be modified; it is used to distinguish different business scopes."
-账户名称,"Account Name"
-平台(Platform),Platform
-请选择平台（选择后将显示配置获取指南）,请选择平台（选择后将显示配置获取指南）
-选择目标搜索引擎平台后，下方将自动显示：,"After selecting the target search engine platform, the following will be displayed automatically:"
-平台支持的功能列表,"List of features supported by the platform"
-详细的配置获取步骤指南,"Detailed configuration acquisition step guide"
-配置模板和示例,"Configuration templates and examples"
-支持的功能,"Supported features"
-配置模板：,"Configuration template:"
-描述,Description
-账户配置(JSON),"Account Configuration (JSON)"
-填充模板,"Fill Template"
-"上传 JSON 文件","Upload JSON file"
-"请根据所选平台填写相应的配置信息，点击上方""配置获取指南""查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件","Please fill in the corresponding configuration information based on the selected platform. Click the ""Configuration Guide"" above for detailed steps, or directly upload the JSON key file downloaded from Google Cloud."
-启用账户,"Enable account"
-启用URL定时推送,"Enable scheduled URL push"
-启用Sitemap定时提交,"Enable scheduled Sitemap submission"
-保存,Save
-返回列表,"Back to List"
-取消,Cancel
-"标准 XML Sitemap 生成","Standard XML Sitemap generation"
-站点绑定后生成独立平台目录,"Generate an independent platform directory after site binding"
-"IndexNow 自动通知","IndexNow automatic notification"
-"站长平台手动 Sitemap 提交","Manual Sitemap submission in webmaster platform"
-"需要配置 IndexNow Key 和可公开访问的 Key 文件","Requires an IndexNow key and a publicly accessible key file"
-"无需 API 配置；生成 sitemap 后到对应站长平台手动提交","No API configuration is required; submit the generated sitemap manually in the corresponding webmaster platform"
-"%{1} 配置步骤","%{1} setup steps"
-"1. 生成 8-128 位 IndexNow Key","1. Generate an 8-128 character IndexNow key"
-"2. 在网站根目录放置 Key 文件，文件内容只包含该 Key","2. Place the key file in the website root; the file content should contain only that key"
-"3. 在下方配置中填写 indexnow_key 和 key_location","3. Fill indexnow_key and key_location in the configuration below"
-"4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交","4. Save the account, bind the site, and enable URL/Sitemap automatic submission"
-"1. 保存账户并绑定站点","1. Save the account and bind the site"
-"2. 运行 Sitemap 生成或等待定时任务生成平台目录","2. Run Sitemap generation or wait for the scheduled task to generate the platform directory"
-"3. 将 %{1} 提交到对应站长平台","3. Submit %{1} to the corresponding webmaster platform"
-"4. 保持 robots.txt 中的 Sitemap 入口可访问","4. Keep the Sitemap entry in robots.txt accessible"
-成功,Success
-错误,Error
-提示,Prompt
-确认操作,"Confirm operation"
-确定,Confirm
-SEO账户列表,"SEO account list"
-新增账户,"Add Account"
+暂无可启用的搜索引擎账户,暂无可启用的搜索引擎账户
+"先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。","先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。"
+"URL Push","URL Push"
+Sitemap,Sitemap
+IndexNow,IndexNow
+"Catalog Only","Catalog Only"
+"Sitemap Submit","Sitemap Submit"
+数据同步,数据同步
+"Sitemap 频率","Sitemap 频率"
+抓取频率,抓取频率
+"URL 优先级","URL priority"
+启用该账户的网站自动提交,启用该账户的网站自动提交
+"启用该账户的 URL rewrite 推送","启用该账户的 URL rewrite 推送"
+保存后立即更新该网站的搜索引擎账户启用状态。,保存后立即更新该网站的搜索引擎账户启用状态。
+保存启用状态,保存启用状态
+当前网站,当前网站
+实时,Real-Time
+每小时,Hourly
+每天,Daily
+每周,Weekly
+每月,Monthly
+手动,Manual
+总是,Always
+每年,Yearly
+从不,Never
+"打开 SEO 账户管理","打开 SEO 账户管理"
+未知平台,未知平台
+启用,Enabled
+停用,停用
+保存搜索引擎账户启用状态,保存搜索引擎账户启用状态
+保存失败,"Save Failed"
+保存中,保存中
+启用状态已保存,启用状态已保存
+请检查输入后重试,"Please check the input and try again"
+请求失败,"Request failed"
+前往SEO管理配置,"Go to SEO Management"
+暂无SEO账户配置,"No SEO accounts configured"
+点击前往配置,"Click to configure"
 ID,ID
 名称,Name
 供应商,Supplier
-绑定站点,"Bind site"
-"SEO 数据","SEO data"
-启用,Enabled
-操作,Action
-暂无账户,"No accounts"
-个站点,sites
-未绑定,"Not bound"
-暂无数据,"No data"
-禁用,Disabled
-已收录,Indexed
-点击量,"Click count."
-展示量,Impressions
-已提交URL,"URL submitted"
-最后同步,"Last sync"
-已收录页面,"Indexed page"
-错误数,"Error Count"
-同步,Sync
-同步统计数据,"Sync statistics"
-总览,Overview
-SEO主体总数,"Total number of SEO subjects"
-关键词总数,"Total Keywords"
-已启用主体,"Enabled Subject"
-平均关键词数,"Average number of keywords"
-暂无SEO主体,"No SEO Entity"
-当前没有启用的SEO主体，请先创建SEO主体。,"No enabled SEO subject exists. Please create an SEO subject first."
-个关键词,keywords
-查看详情,"View Details"
-该主体暂无关键词,"This subject currently has no keywords."
-未命名主体,"Unnamed subject"
-主体列表,"Subject list"
-搜索主体,"Search subject"
 状态,Status
+URL推送,"URL push"
+Sitemap提交,"Sitemap Submit"
+操作,Action
+禁用,Disabled
+编辑,Edit
+共,Total
+个账户,accounts
+过滤条件,Filter
+添加主体,"Add Subject"
 搜索,Search
 重置,Reset
-当前没有SEO主体记录。,"No SEO subject record currently exists."
-主体信息,"Subject information"
-关键词数,"Number of Keywords"
-更新时间,"Update time"
-详情,Details
+暂无SEO主体,"No SEO Entity"
+"点击上方""添加主体""按钮创建第一个SEO主体。","Click the ""Add Subject"" button above to create the first SEO subject."
+关键词,Keywords
+添加SEO主体,"Add SEO Subject"
+标题,Title
+URL,URL
+主体类型,"Subject type"
+描述,Description
+取消,Cancel
+保存,Save
 输入主体标题...,"Enter the main title..."
 全部状态,"All Statuses"
-基本信息,"Basic information"
-标题,Title
-创建时间,"Creation time"
-AI优化建议,"AI optimization suggestions"
-刷新建议,"Refresh Suggestions"
-优化建议,"Optimization Suggestions"
-生成时间：,"Generation time:"
-暂无AI建议，点击上方按钮生成,"No AI Suggestions, Click the Button Above to Generate"
-关键词列表,"Keyword List"
-优先级：,Priority:
-搜索量：,"Search volume:"
-难度：,Difficulty:
-主体详情,"Subject details"
-生成AI建议,"AI-generated suggestions"
-URL,URL
-类型,Type
-语言,Language
-关键词,Keywords
-暂无关键词,"No Keywords"
-"AI SEO建议","AI SEO Suggestions"
-正在生成AI建议...,"Generating AI suggestions..."
-编辑SEO主体,"Edit SEO Subject"
-主体类型,"Subject type"
+未命名主体,"Unnamed subject"
+查看详情,"View Details"
+删除,Delete
 页面,Page
 店铺,Store
 网站,Website
-保存失败,"Save Failed"
-生成建议失败,"Suggestion generation failed"
-请求失败,"Request failed"
-添加主体,"Add Subject"
-"点击上方""添加主体""按钮创建第一个SEO主体。","Click the ""Add Subject"" button above to create the first SEO subject."
-添加SEO主体,"Add SEO Subject"
-删除,Delete
 删除失败,"Deletion failed"
 确定要删除该SEO主体吗？,"Are you sure you want to delete this SEO subject?"
 确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
+返回列表,"Back to List"
+生成AI建议,"AI-generated suggestions"
+基本信息,"Basic information"
+类型,Type
+语言,Language
+创建时间,"Creation time"
+更新时间,"Update time"
+暂无关键词,"No Keywords"
+"AI SEO建议","AI SEO Suggestions"
+暂无AI建议，点击上方按钮生成,"No AI Suggestions, Click the Button Above to Generate"
+正在生成AI建议...,"Generating AI suggestions..."
+编辑SEO主体,"Edit SEO Subject"
+主体详情,"Subject details"
+生成建议失败,"Suggestion generation failed"
+站点账户绑定,"Site Account Binding"
+"为不同站点绑定 SEO 账户，配置 Sitemap 提交策略。绑定后，系统将按设定频率自动生成并提交 Sitemap 到对应搜索引擎。","Bind SEO accounts to different sites and configure Sitemap submission strategies. After binding, the system will automatically generate and submit the Sitemap to the corresponding search engine at the set frequency."
+域名,Domain
+已绑定账户,"Bound account"
+暂无站点,"No sites"
+请先在站点管理中创建站点,"Please create a site in Site Management first"
+未绑定,"Not bound"
+管理绑定,"Manage bindings"
+"管理站点 SEO 账户启用","管理站点 SEO 账户启用"
 Sitemap管理,"Sitemap Management"
 "SEO 模块工作原理","SEO Module Workflow"
 点击查看,"Click to View"
@@ -390,7 +308,6 @@ Sitemap管理,"Sitemap Management"
 生成Sitemap,"Generate Sitemap"
 "注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件","注意：请先点击下方""同步所有 Provider""按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件"
 "Sitemap URL Provider","Sitemap URL Provider"
-停用,停用
 生成,Generate
 "同步所有 Provider","同步所有 Provider"
 "暂无注册的 Sitemap URL Provider","暂无注册的 Sitemap URL Provider"
@@ -401,7 +318,6 @@ Sitemap管理,"Sitemap Management"
 自动生成,"Auto Generated"
 个文件,files
 个模块,modules
-手动,Manual
 定时推送,"Scheduled Push"
 复制提交URL,"Copy Submit URL"
 平台总索引,"Platform total index"
@@ -423,50 +339,134 @@ Sitemap管理,"Sitemap Management"
 定时任务推送URL,"Scheduled Task Push URL"
 复制地址,"Copy URL"
 打开查看,Open
-站点账户绑定,"Site Account Binding"
-"为不同站点绑定 SEO 账户，配置 Sitemap 提交策略。绑定后，系统将按设定频率自动生成并提交 Sitemap 到对应搜索引擎。","Bind SEO accounts to different sites and configure Sitemap submission strategies. After binding, the system will automatically generate and submit the Sitemap to the corresponding search engine at the set frequency."
-域名,Domain
-已绑定账户,"Bound account"
-暂无站点,"No sites"
-请先在站点管理中创建站点,"Please create a site in Site Management first"
-个账户,accounts
-管理绑定,"Manage bindings"
-当前网站,当前网站
-"管理站点 SEO 账户启用","管理站点 SEO 账户启用"
-前往SEO管理配置,"Go to SEO Management"
-暂无SEO账户配置,"No SEO accounts configured"
-点击前往配置,"Click to configure"
-URL推送,"URL push"
-Sitemap提交,"Sitemap Submit"
-共,Total
-过滤条件,Filter
-搜索引擎账户启用,搜索引擎账户启用
-暂无可启用的搜索引擎账户,暂无可启用的搜索引擎账户
-"先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。","先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。"
-"URL Push","URL Push"
-Sitemap,Sitemap
-IndexNow,IndexNow
-"Catalog Only","Catalog Only"
-"Sitemap Submit","Sitemap Submit"
-数据同步,数据同步
-"Sitemap 频率","Sitemap 频率"
-抓取频率,抓取频率
-"URL 优先级","URL priority"
-启用该账户的网站自动提交,启用该账户的网站自动提交
-"启用该账户的 URL rewrite 推送","启用该账户的 URL rewrite 推送"
-保存后立即更新该网站的搜索引擎账户启用状态。,保存后立即更新该网站的搜索引擎账户启用状态。
-保存启用状态,保存启用状态
-实时,Real-Time
-每小时,Hourly
-每天,Daily
-每周,Weekly
-每月,Monthly
-总是,Always
-每年,Yearly
-从不,Never
-"打开 SEO 账户管理","打开 SEO 账户管理"
-未知平台,未知平台
-保存搜索引擎账户启用状态,保存搜索引擎账户启用状态
-保存中,保存中
-启用状态已保存,启用状态已保存
-请检查输入后重试,"Please check the input and try again"
+主体列表,"Subject list"
+详情,Details
+关键词数,"Number of Keywords"
+AI优化建议,"AI optimization suggestions"
+刷新建议,"Refresh Suggestions"
+优化建议,"Optimization Suggestions"
+生成时间：,"Generation time:"
+关键词列表,"Keyword List"
+该主体暂无关键词,"This subject currently has no keywords."
+优先级：,Priority:
+搜索量：,"Search volume:"
+难度：,Difficulty:
+总览,Overview
+SEO主体总数,"Total number of SEO subjects"
+关键词总数,"Total Keywords"
+已启用主体,"Enabled Subject"
+平均关键词数,"Average number of keywords"
+当前没有启用的SEO主体，请先创建SEO主体。,"No enabled SEO subject exists. Please create an SEO subject first."
+个关键词,keywords
+搜索主体,"Search subject"
+当前没有SEO主体记录。,"No SEO subject record currently exists."
+主体信息,"Subject information"
+SEO账户列表,"SEO account list"
+新增账户,"Add Account"
+绑定站点,"Bind site"
+"SEO 数据","SEO data"
+暂无账户,"No accounts"
+个站点,sites
+暂无数据,"No data"
+已收录,Indexed
+点击量,"Click count."
+展示量,Impressions
+已提交URL,"URL submitted"
+最后同步,"Last sync"
+已收录页面,"Indexed page"
+错误数,"Error Count"
+同步,Sync
+同步统计数据,"Sync statistics"
+编辑SEO账户,"Edit SEO account"
+新增SEO账户,"Add SEO Account"
+新增,Add
+Scope,Scope
+由URL参数指定的scope不可修改，用于区分不同业务范围。,"The scope specified by the URL parameter cannot be modified; it is used to distinguish different business scopes."
+账户名称,"Account Name"
+平台(Platform),Platform
+请选择平台（选择后将显示配置获取指南）,请选择平台（选择后将显示配置获取指南）
+选择目标搜索引擎平台后，下方将自动显示：,"After selecting the target search engine platform, the following will be displayed automatically:"
+平台支持的功能列表,"List of features supported by the platform"
+详细的配置获取步骤指南,"Detailed configuration acquisition step guide"
+配置模板和示例,"Configuration templates and examples"
+支持的功能,"Supported features"
+配置模板：,"Configuration template:"
+账户配置(JSON),"Account Configuration (JSON)"
+填充模板,"Fill Template"
+"上传 JSON 文件","Upload JSON file"
+"请根据所选平台填写相应的配置信息，点击上方""配置获取指南""查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件","Please fill in the corresponding configuration information based on the selected platform. Click the ""Configuration Guide"" above for detailed steps, or directly upload the JSON key file downloaded from Google Cloud."
+启用账户,"Enable account"
+启用URL定时推送,"Enable scheduled URL push"
+启用Sitemap定时提交,"Enable scheduled Sitemap submission"
+"标准 XML Sitemap 生成","Standard XML Sitemap generation"
+站点绑定后生成独立平台目录,"Generate an independent platform directory after site binding"
+"IndexNow 自动通知","IndexNow automatic notification"
+"站长平台手动 Sitemap 提交","Manual Sitemap submission in webmaster platform"
+"需要配置 IndexNow Key 和可公开访问的 Key 文件","Requires an IndexNow key and a publicly accessible key file"
+"无需 API 配置；生成 sitemap 后到对应站长平台手动提交","No API configuration is required; submit the generated sitemap manually in the corresponding webmaster platform"
+"%{1} 配置步骤","%{1} setup steps"
+"1. 生成 8-128 位 IndexNow Key","1. Generate an 8-128 character IndexNow key"
+"2. 在网站根目录放置 Key 文件，文件内容只包含该 Key","2. Place the key file in the website root; the file content should contain only that key"
+"3. 在下方配置中填写 indexnow_key 和 key_location","3. Fill indexnow_key and key_location in the configuration below"
+"4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交","4. Save the account, bind the site, and enable URL/Sitemap automatic submission"
+"1. 保存账户并绑定站点","1. Save the account and bind the site"
+"2. 运行 Sitemap 生成或等待定时任务生成平台目录","2. Run Sitemap generation or wait for the scheduled task to generate the platform directory"
+"3. 将 %{1} 提交到对应站长平台","3. Submit %{1} to the corresponding webmaster platform"
+"4. 保持 robots.txt 中的 Sitemap 入口可访问","4. Keep the Sitemap entry in robots.txt accessible"
+成功,Success
+错误,Error
+提示,Prompt
+确认操作,"Confirm operation"
+确定,Confirm
+"URL target 数据不是数组","URL target 数据不是数组"
+"缺少 URL 提交 scope","缺少 URL 提交 scope"
+"无法识别 URL 所属站点","无法识别 URL 所属站点"
+"没有可提交的公开 URL","没有可提交的公开 URL"
+"已向Google Indexing API 提交 %{success} 个URL","Submitted %{success} URL(s) to Google Indexing API"
+"向Google Indexing API 提交URL失败","Failed to submit URL to Google Indexing API"
+"Sitemap URL为空","Sitemap URL is empty"
+"Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API","Google Indexing API is not used for Sitemap submission. Use the Google Search Console Sitemap API."
+"Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）","Google Service Account configuration is missing or incorrectly formatted (requires client_email and private_key)"
+"获取 Google Indexing API 访问令牌失败","Failed to get Google Indexing API access token"
+"URL 已提交给 Google Indexing API","URL has been submitted to Google Indexing API"
+"服务器未启用 cURL 扩展，无法调用 Google Indexing API","Server does not have the cURL extension enabled, unable to call the Google Indexing API"
+"请求失败: %{1}","Request failed: %{1}"
+"HTTP错误: %{1}","HTTP error: %{1}"
+"Bing API 请求失败：%{1}","Bing API request failed: %{1}"
+"Bing API 返回错误码：%{1}","Bing API returns error code: %{1}"
+"已在 Bing Webmaster Tools 验证的站点 URL","Site URL verified in Bing Webmaster Tools"
+"已成功向 Bing 提交 %{1} 个 URL","Successfully submitted %{1} URLs to Bing"
+"URL 列表为空","URL list is empty"
+"已通过 IndexNow 提交 %{1} 个 URL","Submitted %{1} URLs via IndexNow"
+"URL 缺少主机名：%{1}","URL is missing a host: %{1}"
+"IndexNow Key","IndexNow Key"
+"可公开访问的 IndexNow Key 文件地址","Publicly accessible IndexNow key file URL"
+"缺少 Naver Search Advisor Access Token","Missing Naver Search Advisor Access Token"
+"Naver Search Advisor 请求失败：%{1}","Naver Search Advisor request failed: %{1}"
+"Naver Search Advisor 返回错误：%{1}","Naver Search Advisor returned error: %{1}"
+"已通过 Naver Search Advisor 提交 %{1} 个 URL","Submitted %{1} URL(s) through Naver Search Advisor"
+"Naver Search Advisor 收集请求 API 面向落地页 URL，不用于 Sitemap 文件；请使用 IndexNow 或在 Naver Search Advisor 手动提交 Sitemap","Naver Search Advisor Crawl Request API is for landing page URLs, not Sitemap files. Use IndexNow or submit the Sitemap manually in Naver Search Advisor."
+"Naver Search Advisor Access Token","Naver Search Advisor Access Token"
+"提交类型：update 或 delete","Submission type: update or delete"
+"Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交","Google Search Console API does not provide generic URL push. Use Google Indexing API or submit a Sitemap instead."
+"Google Service Account JSON 凭据内容","Google Service Account JSON credential content"
+"Search Console 中已验证的站点属性 URL","Verified site property URL in Search Console"
+百度站长平台,"Baidu Webmaster Platform"
+"缺少百度站点 URL","Missing Baidu site URL"
+"已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}","Submitted %{2} URLs via Baidu %{1}, remaining quota %{3}"
+"百度 URL 提交失败","Baidu URL submission failed"
+"百度站长平台 API Token","Baidu Webmaster Platform API Token"
+"已在百度站长平台验证的站点 URL","Site URL verified on Baidu Webmaster Platform"
+"SEO sitemap Provider 定向同步失败：%{1}","SEO sitemap Provider 定向同步失败：%{1}"
+"该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL","该站点没有 URL 数据，请先点击""同步所有 Provider""按钮生成 URL"
+"该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。","This site is not bound to an SEO account. There are %{1} URL(s) but no sitemap file can be generated. Please go to ""Site Management"" or ""SEO Management > Account Management"" to bind an SEO account."
+"平台 %{1} 不支持自动提交","Platform %{1} does not support auto-submit"
+"缺少 sitemap 定向同步 module 或 website_id","缺少 sitemap 定向同步 module 或 website_id"
+"SitemapUrlProvider 必须返回非空 scope 和 module","SitemapUrlProvider 必须返回非空 scope 和 module"
+"第 %{1} 条 URL 数据不是数组","第 %{1} 条 URL 数据不是数组"
+"第 %{1} 条 URL 缺少 url_key 或 loc","第 %{1} 条 URL 缺少 url_key 或 loc"
+"重复的 sitemap url_key：%{1}","重复的 sitemap url_key：%{1}"
+"Sitemap 提交提示","Sitemap Submission Notice"
+"以下站点未绑定 SEO 账户，无法自动提交 sitemap：","The following sites are not bound to an SEO account, so sitemaps cannot be submitted automatically:"
+"请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","Please go to ""SEO Management > Sitemap Management"" or ""Site Management"" to bind the SEO account."
+SEO账户配置,"SEO Account Configuration"

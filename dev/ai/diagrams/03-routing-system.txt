@@ -14,16 +14,24 @@ After adding Controllers: php bin/w setup:upgrade --route
 └─────────────────────────────────────────────────────────────────────────────┘
 
 Frontend URL format:
-  /{currency}/{language}/{module}/{area}/{controller}/{action}
+  /{currency?}/{language?}/{module}/{area}/{controller}/{action}
+  (currency/language 可单独出现；组合时支持任意顺序，常用 /CNY/zh_Hans_CN/...)
 
   Example: /CNY/zh_Hans_CN/catalog/product/view/id/123
            └─┬─┘ └────┬────┘ └──┬──┘ └──┬──┘ └──┬─┘ └──┬──┘ └─┬─┘
           currency lang   module  area  controller action params
 
 Backend URL format:
-  /{backendKey}/{currency}/{language}/{module}/{area}/{controller}/{action}
+  /{backendKey}/{currency?}/{language?}/{module}/{area}/{controller}/{action}
+  (backendKey 后的 currency/language 可单独出现，组合时支持任意顺序)
+  backendKey 不是固定的 `backend` 或 `admin`：必须从运行时
+  `Env::getAreaRoutePrefix('backend')` 获取，并且必须作为 URL 第一段。
+  `WELINE_AREA_ROUTE` 只能校验当前请求已解析的区域，不能代替 key，
+  也不能让无 key URL 作为回退路径。生成后台 URL 必须复用
+  `getBackendUrl()` 或等价的统一 URL builder，禁止手写后台首段。
 
-  Example: /admin/CNY/zh_Hans_CN/catalog/product/edit/id/123
+  Example (backendKey 为当前运行时配置值 `EXAMPLE_BACKEND_KEY`):
+    /EXAMPLE_BACKEND_KEY/CNY/zh_Hans_CN/catalog/product/edit/id/123
            └─┬──┘ └─┬─┘ └────┬────┘ └──┬──┘ └──┬──┘ └─┬─┘ └──┬──┘ └─┬─┘
           backend currency lang   module  area  ctrl  action params
 
@@ -47,9 +55,9 @@ Weline/Catalog/
     │   └── View.php          → /catalog/category/view
     └── Backend/              ← Backend controllers
         └── Product/
-            ├── Index.php     → /admin/catalog/product/index
-            ├── Edit.php      → /admin/catalog/product/edit
-            └── Save.php      → /admin/catalog/product/save
+            ├── Index.php     → /{backendKey}/catalog/product/index
+            ├── Edit.php      → /{backendKey}/catalog/product/edit
+            └── Save.php      → /{backendKey}/catalog/product/save
 
 Mapping rule:
   Controller/{Area}/{Controller}/{Action}.php
@@ -60,12 +68,12 @@ Mapping rule:
 │ Route Parsing Flow                                                            │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-HTTP Request: /admin/catalog/product/edit/id/123
+HTTP Request: /{backendKey}/catalog/product/edit/id/123
      │
      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Router\Core::parse($url)                                                  │
-│   1. Extract backendKey (admin)                                           │
+│   1. Extract and require backendKey (from Env::getAreaRoutePrefix('backend'))│
 │   2. Extract currency/language (optional, use defaults)                   │
 │   3. Extract module/area/controller/action                                │
 │   4. Extract params (id=123)                                              │
@@ -133,7 +141,7 @@ Frontend URL:
 
 Backend URL:
   $this->getBackendUrl('catalog/product/edit', ['id' => 123])
-  → /admin/CNY/zh_Hans_CN/catalog/product/edit/id/123
+  → /{runtimeBackendKey}/CNY/zh_Hans_CN/catalog/product/edit/id/123
 
 API URL:
   $this->getUrl('rest/v1/catalog/products')
@@ -157,6 +165,13 @@ API URL:
 │     ],                                                                  │
 │ ];                                                                      │
 └────────────────────────────────────────────────────────────────────────┘
+
+说明：模块 `etc/env.php` 中的 `backend_router` 配置值（例如 `admin`）是模块
+内部路由名，不是后台入口 key。后台入口 key 由 `router.area_routes.backend.prefix`
+运行时配置提供；修改或排查后台地址时，先读取
+`Env::getAreaRoutePrefix('backend')`，再把它作为第一段拼接模块路由。
+例如 i18n 国家页面的结构是：
+`/{backendKey}/i18n/backend/countries`，不能省略 `/{backendKey}`。
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Route Cache                                                                   │

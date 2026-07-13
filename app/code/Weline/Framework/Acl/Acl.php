@@ -21,6 +21,9 @@ use Weline\Framework\Manager\ObjectManager;
 
 #[\Attribute] class Acl extends DataObject implements RouterAttributeInterface
 {
+    public const ACCESS_MODE_READ = 'read';
+    public const ACCESS_MODE_EDIT = 'edit';
+
     /**
      * 给路由上权限控制
      *

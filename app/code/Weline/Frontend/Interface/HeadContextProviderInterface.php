@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Interface;
 
-interface HeadContextProviderInterface
+/**
+ * @deprecated Implement \Weline\Framework\View\Head\HeadContextProviderInterface.
+ */
+interface HeadContextProviderInterface extends \Weline\Framework\View\Head\HeadContextProviderInterface
 {
     /**
      * @param mixed $template

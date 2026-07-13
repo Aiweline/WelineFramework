@@ -60,6 +60,12 @@ class GlobalsEmulator
 
     private function buildServerArray(Request $request): array
     {
+        $parsedServer = [];
+        if (\method_exists($request, 'getParsedServerSnapshot')) {
+            $candidate = $request->getParsedServerSnapshot();
+            $parsedServer = \is_array($candidate) ? $candidate : [];
+        }
+
         $keepKeys = [
             'PHP_SELF',
             'SCRIPT_NAME',
@@ -82,6 +88,7 @@ class GlobalsEmulator
         $requestScopedKeys = [
             'WLS_INTERNAL_WARMUP',
             'WLS_INTERNAL_DYNAMIC_WARMUP',
+            'WLS_INTERNAL_HOMEPAGE_PRIME',
             'WLS_INTERNAL_BACKEND_WARMUP',
             'WLS_INTERNAL_BACKEND_WARMUP_USER_ID',
             'WLS_FPC_BYPASS',
@@ -89,6 +96,10 @@ class GlobalsEmulator
 
         $server = [];
         foreach ($keepKeys as $key) {
+            if (\array_key_exists($key, $parsedServer) && $parsedServer[$key] !== '') {
+                $server[$key] = $parsedServer[$key];
+                continue;
+            }
             $requestValue = \method_exists($request, 'getServer') ? $request->getServer($key) : null;
             if ($requestValue !== null && $requestValue !== '') {
                 $server[$key] = $requestValue;
@@ -97,9 +108,19 @@ class GlobalsEmulator
             }
         }
         foreach ($requestScopedKeys as $key) {
+            if (\array_key_exists($key, $parsedServer) && $parsedServer[$key] !== '') {
+                $server[$key] = $parsedServer[$key];
+                continue;
+            }
             $requestValue = \method_exists($request, 'getServer') ? $request->getServer($key) : null;
             if ($requestValue !== null && $requestValue !== '') {
                 $server[$key] = $requestValue;
+            } elseif (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+                // WlsRequest::fromRaw() has already replaced $_SERVER with the
+                // current request snapshot. Its server-only warmup markers are
+                // not HTTP headers and may not yet be visible through a
+                // ServerBag still bound to the previous Context.
+                $server[$key] = $_SERVER[$key];
             }
         }
 

@@ -5,6 +5,8 @@ namespace Weline\Server\Supervisor\Client;
 
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Policy\DispatcherPolicyControl;
+use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Protocol\SupervisorMessage;
@@ -18,6 +20,12 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     private string $readBuffer = '';
     private string $writeBuffer = '';
+    private int $maxReadBufferSize = 2097152;
+    private int $maxWriteBufferSize = 2097152;
+    private int $maxNdjsonLinesPerReadable = 192;
+    private int $heartbeatSeq = 0;
+    private float $lastHeartbeatAt = 0.0;
+    private float $heartbeatIntervalSec = 5.0;
     private bool $receivedShutdown = false;
     private bool $verboseLog = false;
     private string $selfTag = 'SupervisorChild';
@@ -79,6 +87,10 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $this->receivedShutdown = false;
         $this->readyConfirmed = false;
         $this->reconnectFailCount = 0;
+        $this->leaseId = '';
+        $this->generation = 0;
+        $this->heartbeatSeq = 0;
+        $this->lastHeartbeatAt = 0.0;
 
         return true;
     }
@@ -100,6 +112,11 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     public function hasPendingWrites(): bool
     {
+        // Worker loops call this before building their writable socket set.
+        // Schedule heartbeats here so an otherwise idle control channel does
+        // not depend on Master traffic becoming readable first.
+        $this->maybeSendHeartbeat();
+
         return $this->writeBuffer !== '';
     }
 
@@ -161,6 +178,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
             msgId: $msgId !== '' ? $msgId : $launchId,
             leaseId: $leaseId,
             generation: $generation,
+            authSecret: $this->resolveHelloAuthSecret(),
         );
 
         if (!$this->sendRaw($hello)) {
@@ -174,6 +192,8 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
         $this->leaseId = (string)($response['lease_id'] ?? '');
         $this->generation = (int)($response['generation'] ?? 0);
+        $this->heartbeatSeq = 0;
+        $this->lastHeartbeatAt = \microtime(true);
         $this->readyConfirmed = false;
         $this->releaseSent = false;
 
@@ -234,6 +254,13 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return false;
         }
 
+        $readiness = match (true) {
+            \in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
+                => WorkerReadinessState::snapshot(),
+            $role === ControlMessage::ROLE_DISPATCHER
+                => DispatcherPolicyControl::readinessSnapshot(),
+            default => [],
+        };
         $ready = SupervisorMessage::ready(
             slotId: $this->buildSlotId($role, $workerId),
             leaseId: $this->leaseId,
@@ -241,6 +268,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
             port: $port,
             msgId: $msgId !== '' ? $msgId : $this->leaseId,
             channel: $this->channelId,
+            readiness: $readiness,
         );
         if (!$this->sendRaw($ready)) {
             $this->readyConfirmed = false;
@@ -262,32 +290,46 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool
     {
-        unset($workerId, $port, $pid);
-        return true;
+        return $this->send(ControlMessage::workerLoopStarted($workerId, $port, $pid));
     }
 
     public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool
     {
-        unset($workerId, $port, $msgId, $reason);
-        return true;
+        if ($workerId === 0 && $this->registerInfo !== null) {
+            $workerId = (int)$this->registerInfo['worker_id'];
+            $port = (int)$this->registerInfo['port'];
+            $msgId = (string)($this->registerInfo['msg_id'] ?? $msgId);
+        }
+
+        return $this->send(ControlMessage::drainingComplete($workerId, $port, $msgId, $reason));
     }
 
     public function sendStatusReport(int $connections, int $memory, int $requests): bool
     {
-        unset($connections, $memory, $requests);
-        return true;
+        return $this->send(ControlMessage::statusReport($connections, $memory, $requests));
     }
 
     public function sendLogLine(string $line, string $level, string $processTag): bool
     {
-        unset($line, $level, $processTag);
-        return true;
+        return $this->send(ControlMessage::logLine($line, $level, $processTag), false);
     }
 
     public function send(string $message, bool $disconnectOnWriteOverflow = true): bool
     {
-        unset($disconnectOnWriteOverflow);
-        return $this->sendRaw($message);
+        if (!$this->isConnected()) {
+            return false;
+        }
+        if (!$this->enqueueWrite($message)) {
+            if ($disconnectOnWriteOverflow) {
+                $this->handleDisconnect();
+            }
+            return false;
+        }
+
+        // Ordinary child events are hot-path best effort. Queue them and only
+        // consume the currently writable window; the event loop drains the rest.
+        $this->flushPendingWrites();
+        return true;
     }
 
     public function flushPendingWrites(float $timeBudgetSec = 0.0): bool
@@ -319,6 +361,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
         if (!$this->isConnected()) {
             return [];
         }
+        $this->maybeSendHeartbeat();
         $data = @\fread($this->socket, 65536);
         if ($data === false) {
             if (!@\feof($this->socket)) {
@@ -333,6 +376,10 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return [];
         }
         if ($data !== '') {
+            if ((\strlen($this->readBuffer) + \strlen($data)) > $this->maxReadBufferSize) {
+                $this->handleDisconnect();
+                return [];
+            }
             $this->readBuffer .= $data;
         }
 
@@ -341,6 +388,8 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
     public function handleWritable(): bool
     {
+        $this->maybeSendHeartbeat();
+
         return $this->flushPendingWrites();
     }
 
@@ -394,6 +443,10 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $this->readBuffer = '';
         $this->writeBuffer = '';
         $this->readyConfirmed = false;
+        $this->leaseId = '';
+        $this->generation = 0;
+        $this->heartbeatSeq = 0;
+        $this->lastHeartbeatAt = 0.0;
     }
 
     /**
@@ -453,10 +506,46 @@ final class SupervisorChildClient implements ChildControlClientInterface
         return [$slotId, $leaseId, $generation];
     }
 
+    private function resolveHelloAuthSecret(): string
+    {
+        $environmentSecret = (string)(\getenv('WLS_MASTER_TOKEN') ?: '');
+        $argv = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        if (!\is_array($argv)) {
+            return $environmentSecret;
+        }
+        foreach ($argv as $arg) {
+            $arg = (string)$arg;
+            if (!\str_starts_with($arg, '--master-token=')) {
+                continue;
+            }
+            $secret = (string)\substr($arg, 15);
+            if ($secret !== '') {
+                return $secret;
+            }
+        }
+
+        return $environmentSecret;
+    }
+
     private function sendRaw(string $message): bool
     {
-        $this->writeBuffer .= $message;
+        if (!$this->enqueueWrite($message)) {
+            return false;
+        }
         return $this->flushPendingWrites(0.5);
+    }
+
+    private function enqueueWrite(string $message): bool
+    {
+        if ($message === '') {
+            return true;
+        }
+        if ((\strlen($this->writeBuffer) + \strlen($message)) > $this->maxWriteBufferSize) {
+            return false;
+        }
+
+        $this->writeBuffer .= $message;
+        return true;
     }
 
     /**
@@ -486,7 +575,8 @@ final class SupervisorChildClient implements ChildControlClientInterface
     private function extractMessages(): array
     {
         $messages = [];
-        while (($newlinePos = \strpos($this->readBuffer, "\n")) !== false) {
+        while (\count($messages) < $this->maxNdjsonLinesPerReadable
+            && ($newlinePos = \strpos($this->readBuffer, "\n")) !== false) {
             $line = \substr($this->readBuffer, 0, $newlinePos + 1);
             $this->readBuffer = (string)\substr($this->readBuffer, $newlinePos + 1);
             $decoded = SupervisorMessage::decode($line);
@@ -521,6 +611,31 @@ final class SupervisorChildClient implements ChildControlClientInterface
         }
 
         return $messages;
+    }
+
+    private function maybeSendHeartbeat(): void
+    {
+        if ($this->leaseId === '' || $this->generation <= 0 || $this->registerInfo === null) {
+            return;
+        }
+        $now = \microtime(true);
+        if (($now - $this->lastHeartbeatAt) < $this->heartbeatIntervalSec) {
+            return;
+        }
+        $role = (string)($this->registerInfo['role'] ?? '');
+        $workerId = (int)($this->registerInfo['worker_id'] ?? 0);
+        $this->heartbeatSeq++;
+        if (!$this->send(SupervisorMessage::heartbeat(
+            $this->buildSlotId($role, $workerId),
+            $this->leaseId,
+            $this->generation,
+            $this->heartbeatSeq,
+            channel: $this->channelId,
+        ), false)) {
+            $this->heartbeatSeq--;
+            return;
+        }
+        $this->lastHeartbeatAt = $now;
     }
 
     private function flushWriteBufferChunk(float $deadline = 0.0): int

@@ -1,20 +1,20 @@
 {
-  "name": "weline/module-website-monitoring",
-  "description": "网站监控",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.0"
-  },
-  "authors": [
-    {
-      "name": "Aiweline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\WebsiteMonitoring\\": ""
-    }
-  },
-  "license": "MIT"
+    "name": "weline/module-website-monitoring",
+    "description": "网站监控",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4"
+    },
+    "authors": [
+        {
+            "name": "Aiweline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\WebsiteMonitoring\\": ""
+        }
+    },
+    "license": "MIT"
 }

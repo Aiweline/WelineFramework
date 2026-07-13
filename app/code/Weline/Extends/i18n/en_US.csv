@@ -12,8 +12,45 @@
 "加载模块详情失败: %1","加载模块详情失败: %1"
 扩展搜索,"Extension search"
 "搜索失败: %1","搜索失败: %1"
-文档路径,"Document path"
-确定,Confirm
+提供扩展点,"Provides extension points"
+"被 Sticker 扩展","Extended by Sticker"
+被模块扩展,"Extended by Module"
+被主题扩展,"Extended by Theme"
+扩展点数,"Number of extension points"
+"Sticker 扩展","Sticker extension"
+模块扩展,"Module extension"
+主题扩展,"Theme extensions"
+扩展定义,"Extension definitions"
+被扩展信息,"Extended Information"
+无扩展定义,"No Extension Definition"
+该模块没有定义任何扩展点,"This module does not define any extension points"
+扩展类型,"Extension type"
+文档,Document
+扩展点列表,"Extension point list"
+必需,Required
+可选,Optional
+多实例,"Multiple instances"
+单实例,"Single Instance"
+路径,Path
+接口,Interface
+没有被扩展,"Not extended"
+该模块没有被其他模块扩展,"This module is not extended by other modules"
+扩展概览,"Extension overview"
+个,indivual
+"无 Sticker 扩展","No Sticker Extension"
+"该模块没有 Sticker 扩展","This module has no Sticker extension"
+"个 Sticker",stickers
+目标文件,"Target file"
+"Sticker 类型","Sticker type"
+源文件,"Source file"
+模块级,"Module level"
+主题级,"Theme Level"
+无模块扩展,"No module extensions"
+个扩展,extensions
+扩展文件,"Extension files"
+扩展点,"Extension points"
+无主题扩展,"No Theme Extension"
+该模块没有被主题扩展,"This module is not extended by a theme"
 扩展管理页副标题,"Review declared extension points per module"
 系统配置,"System Configuration"
 扩展与注册表,"Extensions & registry"
@@ -35,56 +72,19 @@
 搜索关键词,"Search keyword"
 没有找到匹配的模块或扩展点,"No matching module or extension point found"
 模块名,"Module name"
-扩展定义,"Extension definitions"
 被扩展统计,"Extended Statistics"
-"Sticker 扩展","Sticker extension"
 操作,Operation
 错误,Error
 警告,Warning
 个扩展点,"extension points"
-无扩展定义,"No Extension Definition"
 总计,Total
 模块,Module.
 主题,Topic
-没有被扩展,"Not extended"
-"个 Sticker",stickers
 有错误,"Has errors"
 有警告,"Has warnings"
 关闭,Close
 详情,Details
 "Sticker 扩展详情","Sticker extension details"
 "Sticker 快捷入口",Sticker
-提供扩展点,"Provides extension points"
-"被 Sticker 扩展","Extended by Sticker"
-被模块扩展,"Extended by Module"
-被主题扩展,"Extended by Theme"
-扩展点数,"Number of extension points"
-模块扩展,"Module extension"
-主题扩展,"Theme extensions"
-被扩展信息,"Extended Information"
-该模块没有定义任何扩展点,"This module does not define any extension points"
-扩展类型,"Extension type"
-文档,Document
-扩展点列表,"Extension point list"
-必需,Required
-可选,Optional
-多实例,"Multiple instances"
-单实例,"Single Instance"
-路径,Path
-接口,Interface
-该模块没有被其他模块扩展,"This module is not extended by other modules"
-扩展概览,"Extension overview"
-个,indivual
-"无 Sticker 扩展","No Sticker Extension"
-"该模块没有 Sticker 扩展","This module has no Sticker extension"
-目标文件,"Target file"
-"Sticker 类型","Sticker type"
-源文件,"Source file"
-模块级,"Module level"
-主题级,"Theme Level"
-无模块扩展,"No module extensions"
-个扩展,extensions
-扩展文件,"Extension files"
-扩展点,"Extension points"
-无主题扩展,"No Theme Extension"
-该模块没有被主题扩展,"This module is not extended by a theme"
+文档路径,"Document path"
+确定,Confirm

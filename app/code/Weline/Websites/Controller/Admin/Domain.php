@@ -15,9 +15,6 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Controller\Admin;
 
-use Weline\Backend\Model\Config as BackendConfig;
-use Weline\Cron\Schedule\Schedule;
-use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -41,8 +38,6 @@ use Weline\Websites\Service\ServerIpService;
 #[Acl('Weline_Websites::domain_service', '域名服务', 'mdi mdi-domain', '域名服务管理', 'Weline_Websites::website_service')]
 class Domain extends BackendController
 {
-    private const CRON_MODULE = 'Weline_Cron';
-
     private DomainRegistrar $registrar;
     private DomainRegistrarAccount $registrarAccount;
     private DomainRegistrarResolverService $resolverService;
@@ -53,8 +48,6 @@ class Domain extends BackendController
     private DomainParserService $domainParserService;
     private DomainSyncService $syncService;
     private ServerIpService $serverIpService;
-    private Schedule $schedule;
-    private BackendConfig $backendConfig;
     private DnsSwitchService $dnsSwitchService;
 
     public function __construct(
@@ -68,8 +61,6 @@ class Domain extends BackendController
         DomainParserService $domainParserService,
         DomainSyncService $syncService,
         ServerIpService $serverIpService,
-        Schedule $schedule,
-        BackendConfig $backendConfig,
         DnsSwitchService $dnsSwitchService
     ) {
         $this->registrar = $registrar;
@@ -82,31 +73,18 @@ class Domain extends BackendController
         $this->domainParserService = $domainParserService;
         $this->syncService = $syncService;
         $this->serverIpService = $serverIpService;
-        $this->schedule = $schedule;
-        $this->backendConfig = $backendConfig;
         $this->dnsSwitchService = $dnsSwitchService;
     }
 
     /**
      * 检测系统定时任务是否已安装
-     * 主检测：schedule->exist() 通过 crontab/schtasks 查询
-     * 回退：当 Web 进程用户与安装用户不同时（如 root 安装、www-data 运行），exist() 可能误报未安装，
-     *      此时检查 generated 目录下是否已有 cron 脚本文件（安装成功时会创建）
+     * 调度器和平台脚本检测由 Cron 模块自己负责。
      */
     private function isCronInstalled(): bool
     {
         try {
-            $cronName = (string) ($this->backendConfig->getConfig(Schedule::cron_config_key, self::CRON_MODULE) ?? '');
-            if ($cronName === '') {
-                $cronName = Schedule::cron_flag . '-' . \md5(self::CRON_MODULE) . '-' . Schedule::cron_flag;
-            }
-            if ($this->schedule->exist($cronName)) {
-                return true;
-            }
-            // 回退：检查 generated 目录下 cron 脚本是否存在（解决 Linux 下安装用户≠Web 用户导致的误报）
-            $suffix = (\defined('IS_WIN') && IS_WIN) ? '-cron.vbs' : '-cron.sh';
-            $scriptPath = Env::path_framework_generated . $cronName . $suffix;
-            return \is_file($scriptPath);
+            $status = w_query('cron', 'getInstallationStatus', ['scope' => 'Weline_Cron']);
+            return is_array($status) && !empty($status['installed']);
         } catch (\Throwable) {
             return false;
         }

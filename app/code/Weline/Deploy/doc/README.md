@@ -35,3 +35,9 @@
 - **查看当前版本** → `php bin/w deploy:release:status` 或 `curl https://域名/~wh~.../version`；WLS Panel 子项目可追加 `project_id` / `domain` 等上下文读取项目 `deploy_root/var/deploy/current.json`
 - **CI 等待部署完成** → `php bin/w deploy:release:wait --expect=v1.0.0`
 - **发布历史** → 后台 `系统管理 > 系统维护 > 发布历史`
+
+## 模块边界
+
+- Webhook 路由缓存只能通过 `Weline\ModuleRouter\Api\RouteCache` 失效；Deploy 不得引用 ModuleRouter Observer。
+- 网站 URL 候选只通过可选的 `Weline\Websites\Api\DefaultWebsiteUrl` 读取；未安装 Websites 时返回空候选，不产生类加载错误。
+- WLS 面板扩展继续通过 `Integration/Server` Provider 注册，Deploy 不反向读取 Server 内部实现。

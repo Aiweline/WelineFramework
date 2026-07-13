@@ -38,57 +38,6 @@ if (!\function_exists('wlsNormalizeMemoryLimit')) {
         return $default;
     }
 }
-if (!\function_exists('wlsClearFrameworkCachePools')) {
-    /**
-     * @return array<string, bool>
-     */
-    function wlsClearFrameworkCachePools(): array
-    {
-        $results = [];
-        $pools = [
-            'router',
-            'fpc',
-            'hook',
-            'view',
-            'phrase',
-            'i18n',
-            'config',
-            'module_router',
-            'theme',
-            'url_rewrite',
-            'website',
-            'controller',
-            'taglib',
-            'system_config',
-        ];
-
-        try {
-            if (\class_exists(\Weline\Framework\Cache\Adapter\WlsMemoryAdapter::class)) {
-                \Weline\Framework\Cache\Adapter\WlsMemoryAdapter::clearAllMemory();
-            }
-
-            if (!\class_exists(\Weline\Framework\Manager\ObjectManager::class)
-                || !\class_exists(\Weline\Framework\Cache\CacheManager::class)) {
-                return $results;
-            }
-
-            $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-            foreach ($pools as $pool) {
-                if (\method_exists($cacheManager, 'hasPool') && !$cacheManager->hasPool($pool)) {
-                    continue;
-                }
-
-                $results[$pool] = (bool)$cacheManager->pool($pool)->clear();
-            }
-        } catch (\Throwable $throwable) {
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning('[WLS] cache pool clear failed: ' . $throwable->getMessage(), [], 'wls_cache_clear');
-            }
-        }
-
-        return $results;
-    }
-}
 if (!\function_exists('wlsMemoryLimitToBytes')) {
     function wlsMemoryLimitToBytes(mixed $value): int
     {
@@ -195,6 +144,7 @@ $wlsMemoryLimit = '256M';
 $processName = '';
 $isFrontend = false;
 $useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
+$listenFd = 0;          // macOS direct: Master 预绑定的共享监听 FD
 $deferSsl = false;      // 延迟 SSL 模式（用于 TCP 透传架构，先接受 TCP 连接，再手动启用 SSL）
                         // 注意：延迟 SSL 仅改变握手时机，不消除 TLS 问题。Windows 下若出现 TLS reset，
                         // 可改用 --no-ssl 或 wls.https=false 做 HTTP 验证；或安装 event 扩展后再测 HTTPS。
@@ -202,6 +152,7 @@ $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $workerCount = 1;
+$wlsRuntimeTopology = 'auto';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
@@ -230,6 +181,8 @@ foreach ($argv as $arg) {
         $isFrontend = true;
     } elseif ($arg === '--reuseport' || $arg === '-reuseport') {
         $useReusePort = true;
+    } elseif (\str_starts_with($arg, '--listen-fd=')) {
+        $listenFd = (int)\substr($arg, 12);
     } elseif ($arg === '--defer-ssl' || $arg === '-defer-ssl') {
         $deferSsl = true;
     } elseif (\str_starts_with($arg, '--host=')) {
@@ -260,11 +213,22 @@ foreach ($argv as $arg) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--worker-count=')) {
         $workerCount = \max(1, (int)\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--wls-runtime-topology=')) {
+        $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
+
+if ($listenFd > 0 && $useReusePort) {
+    \fwrite(\STDERR, "--listen-fd and --reuseport are mutually exclusive.\n");
+    exit(1);
+}
+if ($listenFd > 0 && ($listenFd < 3 || $wlsRuntimeTopology !== 'direct' || \PHP_OS_FAMILY === 'Windows')) {
+    \fwrite(\STDERR, "--listen-fd requires POSIX direct topology and an inherited descriptor >= 3.\n");
+    exit(1);
+}
 
 // 检测根目录
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
@@ -277,6 +241,7 @@ if (!\defined('DS')) {
 
 // Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
@@ -325,6 +290,10 @@ $_ENV['WLS_WORKER_ID'] = (string)$workerId;
 $_SERVER['WLS_WORKER_COUNT'] = (string)$workerCount;
 $_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
 @\putenv('WLS_WORKER_COUNT=' . (string)$workerCount);
+$_SERVER['WLS_RUNTIME_TOPOLOGY'] = $wlsRuntimeTopology;
+$_ENV['WLS_RUNTIME_TOPOLOGY'] = $wlsRuntimeTopology;
+@\putenv('WLS_RUNTIME_TOPOLOGY=' . $wlsRuntimeTopology);
+\Weline\Server\Service\Runtime\WorkerReadinessState::reset($wlsRuntimeTopology);
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
@@ -384,7 +353,14 @@ use Weline\Server\Service\WorkerProcessLabel;
 $processTag = WorkerProcessLabel::buildLogTag(true, $isMaintenanceWorker, $workerId, $port, $instanceName);
 if (\function_exists('cli_set_process_title')) {
     @\cli_set_process_title(
-        WorkerProcessLabel::buildProcessTitle(true, $isMaintenanceWorker, $workerId, $port, $instanceName)
+        WorkerProcessLabel::buildProcessTitle(
+            true,
+            $isMaintenanceWorker,
+            $workerId,
+            $port,
+            $instanceName,
+            $orchestratorLaunchId
+        )
     );
 }
 
@@ -500,7 +476,7 @@ $ipcReceivedShutdown = $ipcReceivedShutdown ?? false;
 $drainStartTime = $drainStartTime ?? 0;
 $shouldExit = $shouldExit ?? false;
 $maxDrainTime = 10;
-$pendingMaintDrainReqId = null;
+$maintenanceDrainState = new \Weline\Server\Service\Runtime\WorkerMaintenanceDrainState($isMaintenanceWorker);
 $waitingForAck = $waitingForAck ?? false;
 $readySentTime = $readySentTime ?? 0.0;
 $ackRetryCount = $ackRetryCount ?? 0;
@@ -516,8 +492,9 @@ $memoryCheckInterval = $memoryCheckInterval ?? 5;
 $lastMemoryCheck = $lastMemoryCheck ?? \time();
 $memoryWarningThreshold = $memoryWarningThreshold ?? 0.80;
 $memoryDrainThreshold = $memoryDrainThreshold ?? 0.88;
-$maxRequestBodyBytes = $maxRequestBodyBytes ?? (32 * 1024 * 1024);
-$maxBufferedRequestBytes = $maxBufferedRequestBytes ?? ($maxRequestBodyBytes + 128 * 1024);
+$maxRequestHeaderBytes = $maxRequestHeaderBytes ?? 65536;
+$maxRequestBodyBytes = $maxRequestBodyBytes ?? (16 * 1024 * 1024);
+$maxBufferedRequestBytes = $maxBufferedRequestBytes ?? ($maxRequestHeaderBytes + $maxRequestBodyBytes);
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 $earlyIpcHandler = null;
 $kernel = null;
@@ -842,40 +819,41 @@ if ($isFrontend) {
 
 // 注册 PID 到 Processer（启用快速 PID 查找）
 if ($processName) {
-    \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
+    $managedProcessIdentity = '--name=' . $processName;
+    if ($orchestratorLaunchId !== '') {
+        $managedProcessIdentity .= ' --launch-id=' . $orchestratorLaunchId;
+    }
+    if ($orchestratorEpoch > 0) {
+        $managedProcessIdentity .= ' --epoch=' . $orchestratorEpoch;
+    }
+    \Weline\Framework\System\Process\Processer::setPid($managedProcessIdentity, \getmypid());
     // 注册监听端口（启用快速端口→PID 查找）
     if ($port > 0) {
-        \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
+        \Weline\Framework\System\Process\Processer::setProcessPorts($managedProcessIdentity, [$port]);
     }
 }
 
-// 初始化路由提示服务（用于 TCP 透传模式下的智能路由）
-\Weline\Server\Service\RouteHintService::init($port, true, 3600);
+// 路由提示只属于 Dispatcher 透传数据面；Direct 不需要逐响应改写。
+\Weline\Server\Service\RouteHintService::init($port, $wlsRuntimeTopology === 'dispatcher', 3600);
 
 // 初始化框架运行时
 $runtime = null;
 $runtimeError = null;
+$fpcFastPath = null;
 
 try {
     WlsLogger::info_("Worker 启动，监听 ssl://{$host}:{$port}");
     $wlsStartupTrace('runtime_bootstrap_begin');
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
-    $fpcCoordinatorReadyPreload = \getenv('WLS_WORKER_FPC_COORDINATOR_READY_PRELOAD');
-    if ($fpcCoordinatorReadyPreload === false || \trim((string)$fpcCoordinatorReadyPreload) === '') {
-        $fpcCoordinatorReadyPreload = \Weline\Framework\App\Env::get('wls.worker.fpc_coordinator_ready_preload', null);
-    }
-    if (\in_array(\strtolower(\trim((string)$fpcCoordinatorReadyPreload)), ['1', 'true', 'yes', 'on', 'sync'], true)) {
-        try {
-            $wlsStartupTrace('fpc_coordinator_preload_begin');
-            \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Router\FullPageCacheCoordinator::class);
-            $wlsStartupTrace('fpc_coordinator_preloaded');
-        } catch (\Throwable $fpcPreloadError) {
-            WlsLogger::warning_('FPC coordinator preload failed: ' . $fpcPreloadError->getMessage());
-        }
-    } else {
-        $wlsStartupTrace('fpc_coordinator_preload_skipped', ['reason' => 'deferred_until_after_ready']);
-    }
+    $wlsStartupTrace('fpc_coordinator_preload_begin');
+    $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
+        \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Router\FullPageCacheCoordinator::class
+        ),
+        $runtime,
+    );
+    $wlsStartupTrace('fpc_coordinator_preloaded');
     $wlsStartupTrace('runtime_bootstrap_done');
     WlsLogger::info_("框架运行时初始化成功");
 
@@ -1213,6 +1191,7 @@ if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
     }
     
     // 无致命错误但进程即将退出：多为业务代码 die()/exit() 或信号终止
+    \Weline\Server\Service\AttackLogService::flushForShutdown();
     $wlsWorkerExitTrace('shutdown_without_graceful_reason', 'process_shutdown_without_worker_reason');
 });
 
@@ -1221,64 +1200,72 @@ if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
 // Production can pin the server protocol list with wls.ssl.protocols, for
 // example ['tls1.2'], when a TLS implementation path proves unstable.
 $cryptoMethod = 0;
-$wlsConfiguredSslProtocols = $wlsSslConfig['protocols'] ?? ($wlsSslConfig['server_protocols'] ?? null);
+$wlsConfiguredSslProtocols = \array_key_exists('protocols', $wlsSslConfig)
+    ? $wlsSslConfig['protocols']
+    : (\array_key_exists('server_protocols', $wlsSslConfig)
+        ? $wlsSslConfig['server_protocols']
+        : ['tls1.2', 'tls1.3']);
 if (\is_string($wlsConfiguredSslProtocols)) {
     $wlsConfiguredSslProtocols = \preg_split('/[\s,|]+/', $wlsConfiguredSslProtocols, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 }
-if (\is_array($wlsConfiguredSslProtocols)) {
-    foreach ($wlsConfiguredSslProtocols as $wlsConfiguredSslProtocol) {
-        $wlsConfiguredSslProtocol = \strtolower(\trim((string)$wlsConfiguredSslProtocol));
-        $wlsConfiguredSslProtocol = \str_replace(['_', '-', ' '], ['.', '.', ''], $wlsConfiguredSslProtocol);
-        $wlsConfiguredSslProtocol = \str_replace('tlsv', 'tls', $wlsConfiguredSslProtocol);
-        if (\in_array($wlsConfiguredSslProtocol, ['1.2', 'tls1.2', 'tls12'], true)
-            && \defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')
-        ) {
-            $cryptoMethod |= STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
-        }
-        if (\in_array($wlsConfiguredSslProtocol, ['1.3', 'tls1.3', 'tls13'], true)
-            && \defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')
-        ) {
-            $cryptoMethod |= STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
-        }
-    }
+if (!\is_array($wlsConfiguredSslProtocols) || $wlsConfiguredSslProtocols === []) {
+    WlsLogger::error_('wls.ssl.protocols 必须是非空列表，且只允许 tls1.2/tls1.3');
+    exit(1);
 }
-if ($cryptoMethod === 0) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLS_SERVER;
-    if (\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
-        $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
-    } elseif (\defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
-        $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+foreach ($wlsConfiguredSslProtocols as $wlsConfiguredSslProtocol) {
+    if (!\is_string($wlsConfiguredSslProtocol)) {
+        WlsLogger::error_('wls.ssl.protocols 只允许字符串 tls1.2/tls1.3');
+        exit(1);
     }
+    $wlsConfiguredSslProtocol = \strtolower(\trim($wlsConfiguredSslProtocol));
+    $wlsConfiguredSslProtocol = \str_replace(['_', '-', ' '], ['.', '.', ''], $wlsConfiguredSslProtocol);
+    $wlsConfiguredSslProtocol = \str_replace('tlsv', 'tls', $wlsConfiguredSslProtocol);
+    if (\in_array($wlsConfiguredSslProtocol, ['1.2', 'tls1.2', 'tls12'], true)) {
+        if (!\defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
+            WlsLogger::error_('TLS 1.2 已配置，但当前 PHP/OpenSSL 不支持 TLS 1.2 server stream');
+            exit(1);
+        }
+        $cryptoMethod |= STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+        continue;
+    }
+    if (\in_array($wlsConfiguredSslProtocol, ['1.3', 'tls1.3', 'tls13'], true)) {
+        if (!\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
+            WlsLogger::error_('TLS 1.3 已配置，但当前 PHP/OpenSSL 不支持 TLS 1.3 server stream');
+            exit(1);
+        }
+        $cryptoMethod |= STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
+        continue;
+    }
+
+    WlsLogger::error_("wls.ssl.protocols 包含不支持的值 {$wlsConfiguredSslProtocol}；只允许 tls1.2/tls1.3");
+    exit(1);
 }
 $wlsModernTlsCiphers = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:!aNULL:!eNULL:!MD5:!RC4:!DES:!3DES:!DSS:!SHA1:!DHE';
 $wlsModernTlsCurves = 'X25519:prime256v1';
 
-// 检测 SO_REUSEPORT 支持（Linux 3.9+，允许多进程监听同一端口）
+// 验证 RuntimeSelection 下发的 SO_REUSEPORT 原语。
 $isWindows = \PHP_OS_FAMILY === 'Windows';
-$supportsReusePort = false;
+$supportsReusePort = $useReusePort && (
+    \defined('SO_REUSEPORT')
+    && \extension_loaded('sockets')
+    && \function_exists('socket_create')
+    && \function_exists('socket_set_option')
+);
 
-// 检测 SO_REUSEPORT 支持
-if (!$isWindows && \defined('SO_REUSEPORT')) {
-    if (PHP_OS === 'Linux') {
-        $release = \php_uname('r');
-        if (\version_compare($release, '3.9', '>=')) {
-            $supportsReusePort = true;
-        }
-    } elseif (PHP_OS === 'Darwin') {
-        // macOS 也支持 SO_REUSEPORT
-        $supportsReusePort = true;
-    }
-}
-
-// 如果显式指定了 --reuseport 但平台不支持，报错
+// Master 只有在最终 RuntimeSelection=direct/reuseport 且真实 probe 通过后才会
+// 下发 --reuseport。Worker 不再二次猜测 Linux 内核版本；以实际 set/bind/listen
+// 与 READY 作为最终门禁。
 if ($useReusePort && !$supportsReusePort) {
-    WlsLogger::error_("平台不支持 SO_REUSEPORT");
+    WlsLogger::error_("RuntimeSelection 要求 SO_REUSEPORT，但当前 Worker 缺少 sockets/SO_REUSEPORT 原语");
     exit(1);
 }
 
 // ========== Socket 创建 ==========
 
 $socket = null;
+$reusePortBound = false;
+$sharedListenerBound = false;
+$sharedListenerSocket = null;
 
 // 延迟 SSL 时共用：accept 后根据首包判断 HTTP 重定向或启用 SSL（同端口 http→https）
 $deferSslOptions = null;
@@ -1310,8 +1297,41 @@ if (\PHP_OS !== 'WINNT' && $port < 1024) {
     }
 }
 
+// macOS direct 使用 Master 预绑定的单个共享 accept queue。TLS 仍由 Worker accept 后处理。
+if ($listenFd > 0) {
+    if (!$deferSsl) {
+        WlsLogger::error_('Inherited direct listener requires --defer-ssl for per-connection TLS/SNI handling');
+        exit(1);
+    }
+    $socket = @\fopen('php://fd/' . $listenFd, 'r+');
+    if (!\is_resource($socket)) {
+        WlsLogger::error_("Unable to open inherited direct listener FD {$listenFd}");
+        exit(1);
+    }
+    // php://fd produces a plain tcp_socket wrapper. Connections accepted via
+    // stream_socket_accept inherit that wrapper and cannot be promoted to TLS
+    // on macOS ("This stream does not support SSL/crypto"). Keep the stream for
+    // event-loop readiness, but accept through sockets and export each client
+    // so PHP creates the crypto-capable tcp_socket/ssl wrapper.
+    if (!\function_exists('socket_import_stream')
+        || !\function_exists('socket_accept')
+        || !\function_exists('socket_export_stream')
+    ) {
+        @\fclose($socket);
+        WlsLogger::error_('Inherited direct TLS listener requires the sockets extension');
+        exit(1);
+    }
+    $sharedListenerSocket = @\socket_import_stream($socket);
+    if (!$sharedListenerSocket instanceof \Socket) {
+        @\fclose($socket);
+        WlsLogger::error_('Unable to import the inherited direct listener as a native socket');
+        exit(1);
+    }
+    $sharedListenerBound = true;
+    WlsLogger::info_("Using inherited direct shared listener FD {$listenFd} on {$host}:{$port}");
+
 // 方案1a：SO_REUSEPORT + 延迟 SSL（同端口 HTTP→HTTPS 重定向，与方案2b 行为一致）
-if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket_create')) {
+} elseif ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket_create')) {
     WlsLogger::info_("使用 SO_REUSEPORT + 延迟 SSL，监听 tcp://{$host}:{$port}（同端口 HTTP→HTTPS 重定向）");
     $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
     if (!$rawSocket) {
@@ -1344,6 +1364,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         @\socket_close($rawSocket);
         exit(1);
     }
+    $reusePortBound = true;
     // 不在此 socket 上启用 SSL，由 accept 后按首包处理
     WlsLogger::info_("SO_REUSEPORT + 延迟 SSL socket 创建成功，Worker #{$workerId} 监听 {$host}:{$port}");
 
@@ -1400,6 +1421,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         @\socket_close($rawSocket);
         exit(1);
     }
+    $reusePortBound = true;
     
     // 启用 SSL 加密（手动处理）
     $sslContext = \stream_context_create([
@@ -1562,6 +1584,13 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
 
 $wlsStartupTrace('socket_listen_ready', ['port' => $port]);
 \stream_set_blocking($socket, false);
+\Weline\Server\Service\Runtime\WorkerReadinessState::markListenerBound(
+    $reusePortBound,
+    (string)($eventLoopMeta['resolved'] ?? $wlsLoopDriver),
+    'stream',
+    $sharedListenerBound ? 'shared_fd' : ($reusePortBound ? 'reuseport' : 'single'),
+    $sharedListenerBound ? $listenFd : 0,
+);
 
 // ========== 上报 READY 前跳过 Session/Memory 验证（按需连接） ==========
 // Session/Memory 是共享服务，连接在首次使用时自动建立，无需在启动时预验证
@@ -1578,36 +1607,84 @@ if ($isMaintenanceWorker) {
 
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
 $ipcClient = null;
+\Weline\Server\Security\GlobalRateLimiter::setBanDeltaPublisher(
+    static function (string $deltaInstance, string $ip, int $expiresAt) use (&$ipcClient): void {
+        if ($ipcClient !== null && $ipcClient->isConnected()) {
+            $ipcClient->send(\Weline\Server\IPC\ControlMessage::policyStateDelta($deltaInstance, $ip, $expiresAt), false);
+        }
+    }
+);
 $ipcSelfTag = null;
 $ipcDraining = false;
 $ipcReceivedShutdown = false;
 $drainStartTime = 0;
 $shouldExit = false;
+$cacheClearEpoch = 0;
 $maxDrainTime = 10;     // 由 Master drain/reload 消息或默认覆盖
-$pendingMaintDrainReqId = null; // 维护：先排空本 Worker 存量连接再 ACK
 $waitingForAck = false;
 $readySentTime = 0.0;
 $ackRetryCount = 0;
 $maxAckRetries = 0;
 $ackTimeout = 10.0;
 $readyGateWorkerBootstrapWarmupCompleted = false;
+$readyGateSharedRuntimeConnectionWarmupCompleted = false;
 $runReadyGateWorkerBootstrapWarmup = static function () use (
     &$readyGateWorkerBootstrapWarmupCompleted,
+    &$readyGateSharedRuntimeConnectionWarmupCompleted,
     &$runtime,
     &$runtimeError,
     $isMaintenanceWorker,
-    $workerId
+    $workerId,
+    $instanceName,
+    $sessionHost,
+    $sessionPort,
+    $sessionTokenFileName,
+    $memoryHost,
+    $memoryPort,
+    $memoryTokenFileName
 ): void {
-    if ($readyGateWorkerBootstrapWarmupCompleted
-        || $isMaintenanceWorker
-        || $runtimeError !== null
-        || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime
-    ) {
+    if ($readyGateWorkerBootstrapWarmupCompleted) {
+        return;
+    }
+    if ($isMaintenanceWorker) {
+        \Weline\Server\Service\Runtime\WorkerReadinessState::markMaintenanceReady();
+        $readyGateWorkerBootstrapWarmupCompleted = true;
+        return;
+    }
+    if ($runtimeError !== null || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
         return;
     }
 
     WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup start worker={$workerId}");
-    $runtime->runReadyGateWorkerBootstrapWarmup();
+    $poolWarmup = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools(
+        $workerId,
+        $instanceName,
+        [
+            'session' => [
+                'host' => $sessionHost,
+                'port' => $sessionPort,
+                'token_file_name' => $sessionTokenFileName,
+            ],
+            'memory' => [
+                'host' => $memoryHost,
+                'port' => $memoryPort,
+                'token_file_name' => $memoryTokenFileName,
+            ],
+        ]
+    );
+    $poolWarmupErrors = \is_array($poolWarmup['errors'] ?? null) ? $poolWarmup['errors'] : [];
+    if ($poolWarmupErrors !== []) {
+        throw new \RuntimeException(
+            'READY gate shared runtime connection warmup failed: '
+            . (\json_encode($poolWarmupErrors, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}')
+        );
+    }
+    $readyGateSharedRuntimeConnectionWarmupCompleted = true;
+    $homepageFpcProof = $runtime->runReadyGateWorkerBootstrapWarmup();
+    \Weline\Server\Service\Runtime\WorkerReadinessState::markBusinessHomepageHot($homepageFpcProof);
+    \Weline\Server\Service\Runtime\WorkerReadinessState::markDynamicFirstRenderProof(
+        $runtime->readyGateDynamicFirstRenderProof()
+    );
     $readyGateWorkerBootstrapWarmupCompleted = true;
     WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup done worker={$workerId}");
 };
@@ -1633,6 +1710,11 @@ $normalizeMemoryThreshold = static function (mixed $value, float $default): floa
     return $threshold;
 };
 $memoryGuardConfig = \is_array($wlsEnv['memory_guard'] ?? null) ? $wlsEnv['memory_guard'] : [];
+$configuredRequestGcInterval = $memoryGuardConfig['request_gc_interval'] ?? 512;
+$requestGcInterval = \is_numeric($configuredRequestGcInterval)
+    ? \max(64, \min(65536, (int)$configuredRequestGcInterval))
+    : 512;
+$lastRequestGcCount = 0;
 $memoryWarningThreshold = $normalizeMemoryThreshold(
     $memoryGuardConfig['worker_memory_warning_threshold'] ?? 0.80,
     0.80
@@ -1652,8 +1734,9 @@ $memoryDrainThreshold = \min(
         $baseMemoryDrainThreshold + (\max(0, $workerId - 1) % 5) * $memoryDrainJitter
     )
 );
-$maxRequestBodyBytes = 32 * 1024 * 1024;
-$maxBufferedRequestBytes = $maxRequestBodyBytes + 128 * 1024;
+$maxRequestHeaderBytes = 65536;
+$maxRequestBodyBytes = 16 * 1024 * 1024;
+$maxBufferedRequestBytes = $maxRequestHeaderBytes + $maxRequestBodyBytes;
 
 // 如果启用了维护模式
 if ($isMaintenanceWorker) {
@@ -1673,6 +1756,34 @@ if ($isMaintenanceWorker) {
         WlsLogger::warning_("设置业务 Worker 非维护模式失败: " . $e->getMessage());
     }
 }
+
+try {
+    $workerPolicyKernel = \Weline\Server\Security\WorkerPolicyKernel::boot(
+        $instanceName,
+        $wlsRuntimeTopology,
+        $workerCount
+    );
+    $workerPolicyKernel->setMaintenanceMode($isMaintenanceWorker);
+    \Weline\Server\Service\Runtime\WorkerReadinessState::markPolicyLoaded(
+        $workerPolicyKernel->policyDigest()
+    );
+    $requestFramingLimits = $workerPolicyKernel->framingLimits();
+    $maxRequestHeaderBytes = $requestFramingLimits['max_header_bytes'];
+    $maxRequestBodyBytes = $requestFramingLimits['max_body_bytes'];
+    $maxBufferedRequestBytes = $requestFramingLimits['max_buffer_bytes'];
+    WlsLogger::info_('[PolicyKernel] ready topology=' . $wlsRuntimeTopology
+        . ' digest=' . $workerPolicyKernel->policyDigest());
+    if ($wlsRuntimeTopology === 'direct') {
+        $workerOrdinal = ($workerId - 1) % \max(1, $workerCount);
+        $workerPolicyKernel->bootConnectionAcceptGatePool(\max(0, $workerOrdinal));
+        WlsLogger::info_('[AcceptGate] direct public accept enabled ordinal=' . \max(0, $workerOrdinal));
+    }
+} catch (\Throwable $policyError) {
+    WlsLogger::error_('[PolicyKernel] bootstrap failed: ' . $policyError->getMessage());
+    throw $policyError;
+}
+$workerTelemetryReporter = \Weline\Server\Service\Telemetry\WorkerTelemetryReporter::boot($instanceName);
+$workerHealthAccessPolicy = \Weline\Server\Service\WorkerHealthAccessPolicy::boot($instanceName);
 
 // 获取控制端口
 if ($controlPort <= 0 && !$supervisorEnabled) {
@@ -1696,7 +1807,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$pendingMaintDrainReqId, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, $sslCert, $sslKey, $cryptoMethod, $instanceName, $listenerHost): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, $sslCert, $sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -1727,6 +1838,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         if ($socket && \is_resource($socket)) {
                             @\fclose($socket);
                             $socket = null;
+                            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                         }
                         if ($ipcClient !== null && $ipcClient->isConnected()) {
                             $ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason('master_rejected_ready:' . $reason, 0));
@@ -1775,54 +1887,99 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
+                        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
                     WlsLogger::info_("收到 reload 命令，已清除 opcache 并关闭监听 socket，开始排水（最多等待 {$maxDrainTime} 秒）...");
                     break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:
-                    // 缓存清理：原地执行，不重启
-                    if (\function_exists('opcache_reset')) {
-                        \opcache_reset();
+                    $requestedCacheEpoch = \max(0, (int)($msg['cache_epoch'] ?? 0));
+                    if ($requestedCacheEpoch > 0 && $requestedCacheEpoch < $cacheClearEpoch) {
+                        $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                            $requestedCacheEpoch,
+                            false,
+                            'stale_cache_epoch',
+                            $workerId,
+                            false,
+                            $cacheClearEpoch,
+                        ));
+                        WlsLogger::warning_("拒绝过期 cache_clear 代际 {$requestedCacheEpoch}，当前代际 {$cacheClearEpoch}");
+                        break;
                     }
-                    \clearstatcache(true);
-                    \function_exists('wlsClearFrameworkCachePools') && wlsClearFrameworkCachePools();
-                    \Weline\Framework\Manager\ObjectManager::clearInstances();
-                    if (\class_exists(\Weline\Framework\Phrase\Parser::class)) {
-                        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+                    if ($requestedCacheEpoch > 0 && $requestedCacheEpoch === $cacheClearEpoch) {
+                        $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                            $requestedCacheEpoch,
+                            true,
+                            '',
+                            $workerId,
+                            false,
+                            $cacheClearEpoch,
+                        ));
+                        break;
                     }
-                    if (\class_exists(\Weline\I18n\Parser::class)) {
-                        \Weline\I18n\Parser::clearWorkerCaches();
+
+                    try {
+                        // 缓存清理：只有全部 L1 reset 完成后才提交新代际。
+                        if (\function_exists('opcache_reset')) {
+                            \opcache_reset();
+                        }
+                        \clearstatcache(true);
+                        $cachePoolResults = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::clearFrameworkPools();
+                        $failedCachePools = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::failedPools(
+                            $cachePoolResults
+                        );
+                        if ($failedCachePools !== []) {
+                            throw new \RuntimeException(
+                                'cache_pool_clear_failed:' . \implode(',', $failedCachePools)
+                            );
+                        }
+                        \Weline\Framework\Manager\ObjectManager::clearInstances();
+                        if (\class_exists(\Weline\Framework\Phrase\Parser::class)) {
+                            \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+                        }
+                        if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class)) {
+                            \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
+                        }
+                        if (\class_exists(\Weline\Framework\View\Template::class)) {
+                            \Weline\Framework\View\Template::clearStaticHookCaches();
+                        }
+                        \Weline\Framework\Manager\ObjectManager::getInstance(
+                            \Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry::class
+                        )->reset(new \Weline\Framework\Runtime\ProcessCacheResetContext(
+                            \Weline\Framework\Runtime\ProcessCacheResetContext::REASON_CACHE_CLEAR,
+                            true
+                        ));
+                        if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
+                            \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+                        }
+                        if (\function_exists('handleStaticFile')) {
+                            handleStaticFile('__CLEAR_CACHE__', '');
+                        }
+                        if ($requestedCacheEpoch > 0) {
+                            $cacheClearEpoch = $requestedCacheEpoch;
+                            $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                                $requestedCacheEpoch,
+                                true,
+                                '',
+                                $workerId,
+                                true,
+                                $cacheClearEpoch,
+                            ));
+                        }
+                        WlsLogger::info_("收到 cache_clear 命令，已清理缓存，代际={$cacheClearEpoch}");
+                    } catch (\Throwable $throwable) {
+                        if ($requestedCacheEpoch > 0) {
+                            $ipcClient?->send(\Weline\Server\IPC\ControlMessage::cacheClearAck(
+                                $requestedCacheEpoch,
+                                false,
+                                'cache_reset_failed',
+                                $workerId,
+                                false,
+                                $cacheClearEpoch,
+                            ));
+                        }
+                        WlsLogger::error_("cache_clear 执行失败：" . $throwable->getMessage());
                     }
-                    if (\class_exists(\Weline\ModuleRouter\Observer\ProcessUrlBefore::class)) {
-                        \Weline\ModuleRouter\Observer\ProcessUrlBefore::clearCache();
-                    }
-                    if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class)) {
-                        \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
-                    }
-                    if (\class_exists(\Weline\Framework\View\Template::class)) {
-                        \Weline\Framework\View\Template::clearStaticHookCaches();
-                    }
-                    if (\class_exists(\Weline\Theme\Block\Partials::class)) {
-                        \Weline\Theme\Block\Partials::clearMetaCache();
-                    }
-                    if (\class_exists(\Weline\Theme\Service\SlotRendererService::class)) {
-                        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\SlotRendererService::class)
-                            ->clearCache();
-                    }
-                    if (\class_exists(\Weline\Theme\Observer\ControllerFetchFileBefore::class)) {
-                        \Weline\Theme\Observer\ControllerFetchFileBefore::clearRuntimeCache();
-                    }
-                    if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
-                        \Weline\Theme\Helper\ThemeData::clearCache();
-                    }
-                    if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
-                        \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
-                    }
-                    // 清理 WLS 内置的静态文件内存缓存
-                    if (\function_exists('handleStaticFile')) {
-                        handleStaticFile('__CLEAR_CACHE__', '');
-                    }
-                    WlsLogger::info_("收到 cache_clear 命令，已清理缓存（opcache + ObjectManager + 静态文件缓存）");
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
@@ -1894,6 +2051,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
+                        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
                     WlsLogger::info_("收到 drain 命令，已关闭监听 socket，开始排水（最多 {$maxDrainTime}s）...");
                     break;
@@ -1901,18 +2059,26 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_SET_MAINTENANCE_MODE:
                     $mEnabled = (bool) ($msg['enabled'] ?? false);
                     $mReqId = (string) ($msg['request_id'] ?? '');
-                    $pendingMaintDrainReqId = null;
-                    WlsLogger::warning_(
-                        "忽略 Worker 维护模式信号 enabled=" . ($mEnabled ? 'true' : 'false')
+                    $effectiveMaintenance = $isMaintenanceWorker ? true : $mEnabled;
+                    \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode($effectiveMaintenance);
+                    \Weline\Server\Security\WorkerPolicyKernel::instance()->setMaintenanceMode($effectiveMaintenance);
+                    $maintenanceDrainState->modeApplied($effectiveMaintenance, $mReqId);
+                    WlsLogger::info_(
+                        "已应用 Worker 维护模式 enabled=" . ($effectiveMaintenance ? 'true' : 'false')
                         . " request_id={$mReqId}"
                         . " pinned_role=" . ($isMaintenanceWorker ? 'maintenance' : 'business')
                     );
-                    if ($mReqId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
-                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
-                            'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
-                            'request_id' => $mReqId,
-                            'worker_id' => $workerId,
-                        ]));
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_SECURITY_UNBLOCK:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_STATE_DELTA:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_PREPARE:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_ACTIVATE:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_COMMIT:
+                case \Weline\Server\IPC\ControlMessage::TYPE_POLICY_ROLLBACK:
+                    $policyReply = \Weline\Server\Service\Policy\WorkerPolicyControl::handle($msg, $wlsRuntimeTopology, $instanceName);
+                    if ($policyReply !== null && $ipcClient !== null && $ipcClient->isConnected()) {
+                        $ipcClient->send($policyReply);
                     }
                     break;
 
@@ -1926,6 +2092,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
+                        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
@@ -1959,6 +2126,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
     $wlsStartupTrace('ipc_ready_report_begin', [
         'control_port' => $controlPort,
         'connected' => $kernel->isConnected() ? 1 : 0,
+        'readiness' => \Weline\Server\Service\Runtime\WorkerReadinessState::snapshot(),
     ]);
     $readyReported = $kernel->isConnected()
         ? $kernel->sendReady()
@@ -2005,6 +2173,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
 // ========== IPC 控制通道结束 ==========
 
 $connections = [];
+$connectionPeerIps = [];
 $requestCount = 0;
 $activeRequests = 0; // 正在处理的请求数
 $requestBuffers = [];
@@ -2015,6 +2184,7 @@ $writableConnections = [];
 $pendingPeek = [];
 $pendingPeekStartTimes = [];
 $pendingHandshakes = [];
+$postHandshakeReadPending = [];
 $pendingClose = [];
 $handshakeStartTimes = [];
 /** SNI 解析失败或为空时，用当前监听主机再选证（避免默认 PEM 与浏览器访问主机不一致） */
@@ -2063,6 +2233,7 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
     $wlsWorkerGracefulExitReason = $reason !== '' ? $reason : 'graceful';
     // 刷新日志缓冲区
     WlsLogger::flush_(true);
+    \Weline\Server\Service\AttackLogService::flushForShutdown();
     
     // 记录退出原因
     if ($reason) {
@@ -2077,6 +2248,7 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
     }
     if (\is_resource($socket) && \get_resource_type($socket) === 'stream') {
         @\fclose($socket);
+        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
     }
     
     // 清理连接相关数据
@@ -2120,6 +2292,7 @@ if (\function_exists('pcntl_signal')) {
         if ($socket && \is_resource($socket)) {
             @\fclose($socket);
             $socket = null;
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
         }
         $logReload('SIGUSR1');
     });
@@ -2143,9 +2316,27 @@ $eventLoopLagWarnings = 0;
 $eventLoopLastMetricsLogAt = \time();
 $deferredWorkerBootstrapWarmupStarted = false;
 $deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
-$sharedRuntimeConnectionWarmupStarted = false;
+$sharedRuntimeConnectionWarmupStarted = $readyGateSharedRuntimeConnectionWarmupCompleted;
 $sharedRuntimeConnectionWarmupNotBefore = \microtime(true);
 $homepageKeepWarmFiber = null;
+$attackLogNextFlushCheckAt = 0.0;
+$darwinSharedAcceptCooldownEnabled = \PHP_OS_FAMILY === 'Darwin'
+    && $sharedListenerBound
+    && $coroutineRuntime->getLoopBackend() === 'event';
+$darwinSharedAcceptBusyCooldownUsec = $darwinSharedAcceptCooldownEnabled
+    ? \max(0, \min(1000, (int)($wlsSslConfig['darwin_shared_accept_busy_cooldown_usec'] ?? 100)))
+    : 0;
+$darwinSharedAcceptIdleCooldownUsec = $darwinSharedAcceptCooldownEnabled
+    ? \max($darwinSharedAcceptBusyCooldownUsec, \min(
+        5000,
+        (int)($wlsSslConfig['darwin_shared_accept_idle_cooldown_usec'] ?? 5000)
+    ))
+    : 0;
+$darwinSharedAcceptBusyHoldUsec = $darwinSharedAcceptCooldownEnabled
+    ? \max(0, \min(100000, (int)($wlsSslConfig['darwin_shared_accept_busy_hold_usec'] ?? 20000)))
+    : 0;
+$darwinSharedAcceptCooldownUntilNs = 0;
+$darwinSharedAcceptBusyUntilNs = 0;
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
@@ -2179,6 +2370,45 @@ while (true) {
     
     // 定期刷新日志缓冲区（避免日志堆积）
     WlsLogger::flush_(false);
+    $workerTelemetryReporter->tick($ipcClient);
+    if ($workerLoopHeartbeatNow >= $attackLogNextFlushCheckAt) {
+        $attackLogNextFlushCheckAt = $workerLoopHeartbeatNow + 0.25;
+        if ($activeRequests <= 0 && $writeBuffers === []) {
+            \Weline\Server\Service\AttackLogService::flushIfDue();
+        }
+    }
+
+    $connectionAcceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
+    if ($connectionAcceptGates !== null) {
+        foreach ($connectionAcceptGates->sweep() as $directive) {
+            $gateConnId = (int)$directive->connectionId;
+            $gateConn = $connections[$gateConnId]
+                ?? ($pendingHandshakes[$gateConnId]['conn'] ?? null)
+                ?? ($pendingPeek[$gateConnId]['conn'] ?? null);
+            if (\is_resource($gateConn)) {
+                safeCloseStream($gateConn);
+            }
+            unset(
+                $connections[$gateConnId],
+                $pendingHandshakes[$gateConnId],
+                $handshakeStartTimes[$gateConnId],
+                $pendingPeek[$gateConnId],
+                $pendingPeekStartTimes[$gateConnId],
+                $requestBuffers[$gateConnId],
+                $connectionLastActivity[$gateConnId],
+                $requestLogged[$gateConnId],
+                $connectionPeerIps[$gateConnId],
+                $writeBuffers[$gateConnId],
+                $writableConnections[$gateConnId],
+                $pendingClose[$gateConnId]
+            );
+        }
+        $connectionAcceptGates->reconcileMapsIfDue(
+            $connections,
+            $pendingHandshakes,
+            $pendingPeek,
+        );
+    }
 
     $now = \time();
 
@@ -2351,6 +2581,7 @@ while (true) {
         && !$isMaintenanceWorker
         && !$ipcReceivedShutdown
         && empty($pendingHandshakes)
+        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
         && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null)
         && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)
     ) {
@@ -2370,23 +2601,33 @@ while (true) {
         }
     }
 
-    if ($pendingMaintDrainReqId !== null && !$isMaintenanceWorker
-        && empty($connections) && empty($pendingHandshakes)) {
-        try {
-            \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(false);
-        } catch (\Throwable $e) {
-            WlsLogger::warning_('维护标志应用失败: ' . $e->getMessage());
+    // Maintenance mode is already applied before this barrier. Preconnects,
+    // incomplete TLS handshakes and partial HTTP input are not dispatched work;
+    // when they later complete they observe the new maintenance policy. Waiting
+    // for them lets a browser preconnect/slowloris block restart for seconds.
+    $maintenanceRequestWorkDrained = $activeFibers === [] && $activeRequests === 0;
+    if ($maintenanceRequestWorkDrained) {
+        foreach ($writeBuffers as $maintenanceWriteBuffer) {
+            if (\is_string($maintenanceWriteBuffer) && $maintenanceWriteBuffer !== '') {
+                $maintenanceRequestWorkDrained = false;
+                break;
+            }
         }
-        $rid = $pendingMaintDrainReqId;
-        if ($ipcClient !== null && $ipcClient->isConnected()) {
-            $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
-                'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
-                'request_id' => $rid,
-                'worker_id' => $workerId,
-            ]));
-        }
-        WlsLogger::info_('维护：存量连接已排空，已上报 Master ACK');
-        $pendingMaintDrainReqId = null;
+    }
+    $maintenanceAckRequestId = $maintenanceDrainState->nextAcknowledgement($maintenanceRequestWorkDrained);
+    if ($maintenanceAckRequestId !== null
+        && $ipcClient !== null
+        && $ipcClient->isConnected()
+        && $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
+            'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+            'request_id' => $maintenanceAckRequestId,
+            'worker_id' => $workerId,
+        ]))
+    ) {
+        $maintenanceDrainState->markAcknowledged($maintenanceAckRequestId);
+        WlsLogger::info_(
+            '维护排水已完成，已上报 Master ACK request_id=' . $maintenanceAckRequestId
+        );
     }
 
     // 检查是否需要优雅退出（排水模式）
@@ -2415,23 +2656,21 @@ while (true) {
                     );
                 }
             }
-            // ========== 排水模式：快速清理连接，加速退出 ==========
-            // 1. 立即关闭所有空闲 Keep-Alive 连接（无请求数据、无写缓冲、非握手中）
-            foreach ($connections as $cid => $cconn) {
-                $hasReqData = isset($requestBuffers[$cid]) && $requestBuffers[$cid] !== '';
-                $hasWriteData = isset($writeBuffers[$cid]) && $writeBuffers[$cid] !== '';
-                $isPendingHs = isset($pendingHandshakes[$cid]);
-                if (!$hasReqData && !$hasWriteData && !$isPendingHs) {
-                    @\fclose($cconn);
-                    unset($connections[$cid], $requestBuffers[$cid], $connectionLastActivity[$cid],
-                          $requestLogged[$cid], $writeBuffers[$cid], $writableConnections[$cid], $pendingClose[$cid]);
-                }
-            }
-            
+            // 已 accept/已握手但 HTTP 首字节尚未到达的 fresh TLS 连接，
+            // 与空闲 Keep-Alive 在缓冲层看起来相同。排水时不能立即
+            // close 这些连接，否则客户端会在 reload 窗口收到 RST。
+            // 完成响应的连接会因 ipcDraining 自动关闭，其余交给
+            // 下方的总 drain deadline。
+
             $drainElapsed = $drainStartTime > 0 ? (\time() - $drainStartTime) : 0;
             
-            // 2. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
-            if (empty($connections) && empty($pendingHandshakes)) {
+            // 1. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
+            if (empty($connections)
+                && empty($pendingPeek)
+                && empty($pendingHandshakes)
+                && empty($postHandshakeReadPending)
+                && empty($activeFibers)
+                && empty($writeBuffers)) {
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $sslDrainReason = $ipcReceivedShutdown
                         ? "shutdown_command:worker={$workerId}"
@@ -2443,9 +2682,12 @@ while (true) {
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
             
-            // 3. 排水超时 → 强制关闭所有剩余连接
+            // 2. 排水超时 → 强制关闭所有剩余连接
             if ($drainElapsed >= $maxDrainTime) {
-                $remaining = \count($connections) + \count($pendingHandshakes);
+                $remaining = \count($connections)
+                    + \count($pendingPeek)
+                    + \count($pendingHandshakes)
+                    + \count($postHandshakeReadPending);
                 WlsLogger::warning_("排水超时（{$drainElapsed}秒 >= {$maxDrainTime}秒），强制关闭剩余 {$remaining} 个连接");
                 foreach ($connections as $cid => $cconn) {
                     @\fclose($cconn);
@@ -2453,6 +2695,11 @@ while (true) {
                 foreach ($pendingHandshakes as $cid => $hsInfo) {
                     if (\is_resource($hsInfo['conn'])) {
                         @\fclose($hsInfo['conn']);
+                    }
+                }
+                foreach ($pendingPeek as $cid => $peekInfo) {
+                    if (\is_resource($peekInfo['conn'] ?? null)) {
+                        @\fclose($peekInfo['conn']);
                     }
                 }
                 $connections = [];
@@ -2466,6 +2713,8 @@ while (true) {
                 $writableConnections = [];
                 $pendingClose = [];
                 $handshakeStartTimes = [];
+                $postHandshakeReadPending = [];
+                $connectionPeerIps = [];
                 
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $sslDrainTimeoutReason = $ipcReceivedShutdown
@@ -2476,7 +2725,10 @@ while (true) {
                 }
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（超时强制退出）');
             }
-        } elseif (empty($connections) && empty($pendingHandshakes)) {
+        } elseif (empty($connections)
+            && empty($pendingPeek)
+            && empty($pendingHandshakes)
+            && empty($postHandshakeReadPending)) {
             // 非排水模式退出（如 shutdown 命令）
             $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
         }
@@ -2593,6 +2845,7 @@ while (true) {
                 if ($socket && \is_resource($socket)) {
                     @\fclose($socket);
                     $socket = null;
+                    \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                 }
             } elseif ($memoryPercent >= $memoryWarningThreshold) {
                 WlsLogger::warning_(
@@ -2668,12 +2921,28 @@ while (true) {
     
     // 构建 stream_select 读数组
     $readSockets = [];
+    $applicationAdmissionOpen = !$waitingForAck
+        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen();
+    $darwinSharedAcceptCooldownRemainingUsec = 0;
+    if ($darwinSharedAcceptCooldownEnabled) {
+        $acceptNowNs = \hrtime(true);
+        if ($darwinSharedAcceptCooldownUntilNs > $acceptNowNs) {
+            $darwinSharedAcceptCooldownRemainingUsec = (int)\ceil(
+                ($darwinSharedAcceptCooldownUntilNs - $acceptNowNs) / 1000
+            );
+        }
+    }
+    // Keep the shared listener registered in EventExtLoop for the full Worker
+    // lifetime. Removing it during every Darwin fairness cooldown makes the
+    // event backend del/free and recreate the watcher; a failed re-add leaves a
+    // live Worker permanently unable to accept connections. The cooldown is
+    // applied to this loop's ready result immediately before accept instead.
     if ($socket && \is_resource($socket)) {
         $readSockets[] = $socket; // 监听 socket（排水后已关闭则不加入）
     }
     $validConnectionsReadable = [];
     foreach ($validConnections as $connIdReadable => $connReadable) {
-        if (!isset($longLivedConnections[$connIdReadable])) {
+        if ($applicationAdmissionOpen && !isset($longLivedConnections[$connIdReadable])) {
             $validConnectionsReadable[$connIdReadable] = $connReadable;
         }
     }
@@ -2701,6 +2970,9 @@ while (true) {
         || $validWritableConnections !== []
         || ($ipcSocket && $ipcClient && $ipcClient->hasPendingWrites())) {
         $loopWaitUsec = 1000;
+    }
+    if ($darwinSharedAcceptCooldownRemainingUsec > 0) {
+        $loopWaitUsec = \min($loopWaitUsec, $darwinSharedAcceptCooldownRemainingUsec);
     }
 
     $waitStartedAt = \microtime(true);
@@ -2889,12 +3161,44 @@ while (true) {
     if ($ipcSocket && \in_array($ipcSocket, $write, true) && $ipcClient) {
         $ipcClient->handleWritable();
     }
+    if ($ipcClient !== null && $ipcClient->isConnected()) {
+        $policyTrackedFibers = \count($activeFibers);
+        foreach ([$homepageKeepWarmFiber, $deferredWarmupFiber ?? null, $sharedRuntimeConnectionWarmupFiber ?? null] as $backgroundFiber) {
+            if ($backgroundFiber instanceof \Fiber && !$backgroundFiber->isTerminated()) {
+                $policyTrackedFibers++;
+            }
+        }
+        $policyDrainReply = \Weline\Server\Service\Policy\WorkerPolicyControl::pollAfterApplicationDrain(
+            $activeRequests,
+            $policyTrackedFibers,
+            \count($writeBuffers)
+        );
+        if ($policyDrainReply !== null) {
+            $ipcClient->send($policyDrainReply);
+        }
+    }
+    $applicationAdmissionOpen = !$waitingForAck
+        && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen();
     
     // 处理连接
     // Advance accepts and TLS handshakes before starting request fibers. A cold
     // render can run synchronously until its first cooperative yield; if it
     // starts first, pending clients observe that stall as appconnect latency.
-    wlsSslAcceptNewConnections(
+    // Preserve the persistent listener watcher while suppressing accept for
+    // this one fairness window. A readable listener may wake the loop early;
+    // the bounded timeout above guarantees the next iteration observes expiry.
+    if ($darwinSharedAcceptCooldownEnabled
+        && $darwinSharedAcceptCooldownUntilNs > \hrtime(true)
+        && $socket
+        && \is_resource($socket)
+    ) {
+        $listenerReadyKey = \array_search($socket, $read, true);
+        if ($listenerReadyKey !== false) {
+            unset($read[$listenerReadyKey]);
+        }
+    }
+
+    $admittedConnections = wlsSslAcceptNewConnections(
         $socket,
         $read,
         $deferSsl,
@@ -2905,8 +3209,24 @@ while (true) {
         $connections,
         $requestBuffers,
         $connectionLastActivity,
-        $hotPathLogsEnabled
+        $hotPathLogsEnabled,
+        $connectionPeerIps,
+        $sharedListenerBound ? 1 : 64,
+        $applicationAdmissionOpen,
+        $sharedListenerSocket,
     );
+    if ($darwinSharedAcceptCooldownEnabled && $admittedConnections > 0) {
+        $acceptNowNs = \hrtime(true);
+        if (wlsSslListenerHasPendingAccept($socket)) {
+            $darwinSharedAcceptBusyUntilNs = $acceptNowNs
+                + ($darwinSharedAcceptBusyHoldUsec * 1000);
+        }
+        $acceptCooldownUsec = $darwinSharedAcceptBusyUntilNs > $acceptNowNs
+            ? $darwinSharedAcceptBusyCooldownUsec
+            : $darwinSharedAcceptIdleCooldownUsec;
+        $darwinSharedAcceptCooldownUntilNs = $acceptNowNs
+            + ($acceptCooldownUsec * 1000);
+    }
 
     wlsSslAdvancePeekState(
         $pendingPeek,
@@ -2916,6 +3236,7 @@ while (true) {
         $connections,
         $requestBuffers,
         $connectionLastActivity,
+        $postHandshakeReadPending,
         $read,
         $deferSsl ? $deferSslOptions : null,
         $cryptoMethod,
@@ -2926,7 +3247,10 @@ while (true) {
         $sslCert,
         $sslKey,
         $port,
-        $deferSslPreferredHost
+        $deferSslPreferredHost,
+        $connectionPeerIps,
+        $wlsRuntimeTopology,
+        $masterToken
     );
 
     wlsSslAdvanceHandshakeState(
@@ -2936,6 +3260,7 @@ while (true) {
         $requestBuffers,
         $connectionLastActivity,
         $requestLogged,
+        $postHandshakeReadPending,
         $read,
         $write,
         $changed,
@@ -2944,10 +3269,59 @@ while (true) {
         $hotPathLogsEnabled
     );
 
+    // ext-event observes kernel readiness only. OpenSSL may already hold the
+    // first HTTP bytes in its user-space buffer after TLS completes, so newly
+    // handshaken streams get a short bounded first-read pump. Ordinary
+    // keep-alive connections never enter this map and pay no scan cost.
+    $postHandshakeReadNow = \microtime(true);
+    foreach ($postHandshakeReadPending as $postHandshakeConnId => $postHandshakeState) {
+        $postHandshakeConn = $postHandshakeState['conn'] ?? null;
+        if (($postHandshakeState['deadline'] ?? 0.0) < $postHandshakeReadNow
+            || !\is_resource($postHandshakeConn)
+            || !isset($connections[$postHandshakeConnId])
+        ) {
+            unset($postHandshakeReadPending[$postHandshakeConnId]);
+            continue;
+        }
+        if (!\in_array($postHandshakeConn, $read, true)) {
+            $read[] = $postHandshakeConn;
+        }
+    }
+
+    // Preserve HTTP/1.1 pipelining across OpenSSL reads. When the previous
+    // response has drained, a complete/error frame already held in PHP memory
+    // must run without waiting for another kernel or ext-event readable edge.
+    foreach ($requestBuffers as $bufferedConnId => $bufferedRequest) {
+        if (!\is_string($bufferedRequest)
+            || $bufferedRequest === ''
+            || !isset($connections[$bufferedConnId])
+            || isset($pendingPeek[$bufferedConnId])
+            || isset($pendingHandshakes[$bufferedConnId])
+            || isset($activeFibers[$bufferedConnId])
+            || ($writeBuffers[$bufferedConnId] ?? '') !== ''
+            || isset($pendingClose[$bufferedConnId])
+        ) {
+            continue;
+        }
+        $bufferedFrame = wlsParseHttpRequestFrame(
+            $bufferedRequest,
+            $maxRequestHeaderBytes,
+            $maxRequestBodyBytes,
+        );
+        if (($bufferedFrame['status'] ?? '') !== 'incomplete'
+            && !\in_array($connections[$bufferedConnId], $read, true)
+        ) {
+            $read[] = $connections[$bufferedConnId];
+        }
+    }
+
     foreach ($read as $conn) {
         $connId = \get_resource_id($conn);
 
         if (isset($pendingPeek[$connId])) {
+            continue;
+        }
+        if (!$applicationAdmissionOpen && isset($connections[$connId])) {
             continue;
         }
         if (\Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
@@ -2975,7 +3349,19 @@ while (true) {
             continue;
         }
         
-        $data = @\fread($conn, 65535);
+        $bufferedFrame = null;
+        if (isset($connectionPeerIps[$connId]) && ($requestBuffers[$connId] ?? '') !== '') {
+            $bufferedFrame = wlsParseHttpRequestFrame(
+                $requestBuffers[$connId],
+                $maxRequestHeaderBytes,
+                $maxRequestBodyBytes,
+            );
+        }
+
+        $data = '';
+        if (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete') {
+            $data = @\fread($conn, 65535);
+        }
         
         // fread 返回 false 表示错误
         // fread 返回空字符串只表示暂无数据（非阻塞模式），不是连接关闭
@@ -2983,6 +3369,7 @@ while (true) {
         if ($data === false) {
             // 读取错误，关闭连接
             safeCloseStream($conn);
+            unset($postHandshakeReadPending[$connId]);
             unset($connections[$connId]);
             unset($requestBuffers[$connId]);
             unset($connectionLastActivity[$connId]);
@@ -3008,9 +3395,10 @@ while (true) {
             continue;
         }
         
-        if ($data === '') {
+        if ($data === '' && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')) {
             if (@\feof($conn)) {
                 safeCloseStream($conn);
+                unset($postHandshakeReadPending[$connId]);
                 unset($connections[$connId]);
                 unset($requestBuffers[$connId]);
                 unset($connectionLastActivity[$connId]);
@@ -3035,23 +3423,20 @@ while (true) {
             continue;
         }
         
-        // 更新连接最后活动时间
-        $connectionLastActivity[$connId] = \time();
-        
-        $requestBuffers[$connId] = ($requestBuffers[$connId] ?? '') . $data;
+        if ($data !== '') {
+            // 更新连接最后活动时间
+            $connectionLastActivity[$connId] = \time();
+            \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest((string)$connId);
+            $requestBuffers[$connId] = ($requestBuffers[$connId] ?? '') . $data;
+        } else {
+            \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest((string)$connId);
+        }
+
         $bufferLength = \strlen($requestBuffers[$connId]);
         $tooLarge = $bufferLength > $maxBufferedRequestBytes;
-        if (!$tooLarge && \preg_match('/Content-Length:\s*(\d+)/i', $requestBuffers[$connId], $contentLengthMatch)) {
-            $tooLarge = (int) $contentLengthMatch[1] > $maxRequestBodyBytes;
-        }
         if ($tooLarge) {
             WlsLogger::warning_("SSL request body too large, reject connection (connId: {$connId}, buffered={$bufferLength})");
-            $errorBody = 'Request Entity Too Large';
-            $errorResponse = "HTTP/1.1 413 Request Entity Too Large\r\n";
-            $errorResponse .= "Content-Type: text/plain; charset=utf-8\r\n";
-            $errorResponse .= "Connection: close\r\n";
-            $errorResponse .= "Content-Length: " . \strlen($errorBody) . "\r\n\r\n" . $errorBody;
-            @\fwrite($conn, $errorResponse);
+            @\fwrite($conn, wlsHttpFramingErrorResponse(413));
             safeCloseStream($conn);
             unset($connections[$connId]);
             unset($requestBuffers[$connId]);
@@ -3088,75 +3473,96 @@ while (true) {
             }
         }
         
-        $isComplete = isRequestComplete($requestBuffers[$connId]);
-        if (!$isComplete) {
+        $frame = wlsParseHttpRequestFrame(
+            $requestBuffers[$connId],
+            $maxRequestHeaderBytes,
+            $maxRequestBodyBytes,
+        );
+        if (($frame['status'] ?? '') === 'error') {
+            WlsLogger::warning_(
+                'Invalid SSL HTTP request framing, reject connection (connId=' . $connId
+                . ', reason=' . (string)($frame['error'] ?? 'invalid_framing') . ')'
+            );
+            @\fwrite($conn, wlsHttpFramingErrorResponse((int)($frame['status_code'] ?? 400)));
+            safeCloseStream($conn);
+            unset(
+                $postHandshakeReadPending[$connId],
+                $connections[$connId],
+                $requestBuffers[$connId],
+                $connectionLastActivity[$connId],
+                $requestLogged[$connId],
+                $writeBuffers[$connId],
+                $writableConnections[$connId],
+                $pendingClose[$connId]
+            );
+            if (isset($longLivedConnections[$connId])) {
+                unset($longLivedConnections[$connId]);
+            }
             continue;
         }
-        
-        $rawRequest = $requestBuffers[$connId];
-        $requestBuffers[$connId] = '';
-        $uri = '/';
-        if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
-            $_p = \parse_url($matches[1], PHP_URL_PATH);
-            $uri = (\is_string($_p) && $_p !== '') ? $_p : '/';
+        if (($frame['status'] ?? '') !== 'complete') {
+            continue;
         }
-        $method = 'GET';
-        if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
-            $method = $matches[1];
-        }
+
+        unset($postHandshakeReadPending[$connId]);
+
+        \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->markRequestComplete((string)$connId);
+
+        $rawRequest = (string)($frame['request'] ?? '');
+        $requestBuffers[$connId] = \substr(
+            $requestBuffers[$connId],
+            (int)($frame['consumed'] ?? 0),
+        );
         if (!isset($requestLogged[$connId])) {
             $requestCount++;
         }
         unset($requestLogged[$connId]); // 清理标记（如果不存在也不会报错）
         $activeRequests++;
 
-        // 周期性垃圾回收：每处理 50 个请求触发一次 GC，避免内存持续增长
-        // AbstractModel::$items 和其他静态缓存会在 StateManager::reset() 中清理，
-        // 但 PHP 的循环引用垃圾需要主动 gc_collect_cycles() 才能释放
-        static $lastGcRequestCount = 0;
-        if ($requestCount - $lastGcRequestCount >= 50) {
-            $lastGcRequestCount = $requestCount;
-            $compaction = wlsCompactWorkerMemoryCaches('ssl_request_interval', $maxMemoryBytes, 0.55, 16 * 1024 * 1024);
-            $collected = (int)($compaction['cycles'] ?? 0);
-            $currentMemory = \memory_get_usage(true);
-            $memoryPeak = \memory_get_peak_usage(true);
-            $staticCacheCompaction = (array)($compaction['static_file_cache'] ?? []);
-            $staticCacheDebug = (($staticCacheCompaction['cleared'] ?? false) ? 'cleared' : 'kept')
-                . ':' . (int)($staticCacheCompaction['count'] ?? 0)
-                . ':' . (int)($staticCacheCompaction['size'] ?? 0);
-            if ($staticCacheCompaction['cleared'] ?? false) {
-                WlsLogger::debug_("GC static cache compact: worker=ssl requests={$requestCount} static={$staticCacheDebug}");
-            }
-            if (($compaction['cycles'] ?? 0) > 0 || ($compaction['trimmed_bytes'] ?? 0) > 0 || ($staticCacheCompaction['cleared'] ?? false) || $currentMemory > 150 * 1024 * 1024) {
-                WlsLogger::debug_("GC 触发: 回收 {$collected} 个循环，内存: " . \round($currentMemory / 1024 / 1024, 1) . "MB，峰值: " . \round($memoryPeak / 1024 / 1024, 1) . "MB");
-            }
-            // 内存过高警告（超过 200MB）
-            if ($currentMemory > 200 * 1024 * 1024) {
-                WlsLogger::warning_("内存使用过高: " . \round($currentMemory / 1024 / 1024, 1) . "MB，请检查内存泄漏。当前请求: {$method} {$uri}");
-            }
+        $transportPeerRaw = @\stream_socket_get_name($conn, true);
+        $transportPeer = $connectionPeerIps[$connId]
+            ?? (\is_string($transportPeerRaw) ? $transportPeerRaw : '');
+        $policyStartedAt = \microtime(true);
+        $policyDecision = \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate(
+            $rawRequest,
+            $transportPeer,
+            $frame,
+        );
+        if (!$policyDecision->allowed) {
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                (string)$policyDecision->response,
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests
+            );
+            continue;
         }
-        
-        // 非开发模式：在请求完整后输出路径日志（开发模式已在接收首行时提前输出）
-        if (!$isDev) {
-            $requestLogPrefix = InternalRequestLabel::buildLogPrefix($rawRequest);
-            if ($requestLogPrefix !== '') {
-                $method = $requestLogPrefix . $method;
-            }
-            WlsLogger::debug_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
-        }
-        
+        $uri = $policyDecision->path;
+        $method = $policyDecision->method;
+
         // force_root_to_www：HTTPS 下根域 301 到 www 子域（在框架处理前拦截）
-        if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $rawRequest, $_hostMatch)) {
-            $_reqHost = \strtolower(\trim($_hostMatch[1]));
+        $_reqHost = \strtolower(\trim((string)($policyDecision->headers['host'] ?? '')));
+        if ($_reqHost !== '') {
             $_hostOnly = \explode(':', $_reqHost)[0];
             $_hostParts = \explode('.', $_hostOnly);
             if (\count($_hostParts) === 2) {
                 $_p = _getDomainPolicy($_hostOnly);
                 if ($_p['force_root_to_www'] === 1) {
-                    $_reqPath = '/';
-                    if (\preg_match('/^\w+\s+(\S+)\s+/', $rawRequest, $_rm)) {
-                        $_reqPath = \parse_url($_rm[1], \PHP_URL_PATH) ?: '/';
-                    }
+                    $_reqPath = $policyDecision->path !== '' ? $policyDecision->path : '/';
                     $_wwwHost = 'www.' . $_hostOnly;
                     $_redirectPort = (int) $port;
                     $_wwwUrl = ($_redirectPort === 443)
@@ -3171,6 +3577,128 @@ while (true) {
                     continue;
                 }
             }
+        }
+
+        // Mandatory policy and the HTTPS canonical-host redirect have already
+        // completed. A process Static L1 hit must stop here, before protocol
+        // detection, FPC, Fiber creation and Framework request state.
+        $staticFastResponse = $policyDecision->staticProcessCacheEnabled()
+            ? \Weline\Server\Service\WorkerStaticResponseL1::lookup($policyDecision)
+            : null;
+        if ($staticFastResponse !== null) {
+            $staticFastResponse = injectWlsProcessTimeHeader(
+                $staticFastResponse,
+                (\microtime(true) - $policyStartedAt) * 1000
+            );
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                $staticFastResponse,
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                false,
+                (string)($policyDecision->headers['host'] ?? ''),
+                $policyDecision->keepAlive(),
+            );
+            continue;
+        }
+
+        // FPC executes immediately after mandatory policy/static gates. The
+        // fast-path service rejects SSE/upgrades and client cache bypasses, so
+        // a hit never creates request scope, a Fiber, Session or Router state.
+        if ($policyDecision->fpcCacheEnabled()
+            && $fpcFastPath instanceof \Weline\Server\Service\WorkerFullPageCacheFastPath
+        ) {
+            $fpcHit = $fpcFastPath->lookup($policyDecision, 'https');
+            if ($fpcHit !== null) {
+                $fastPathElapsedMs = (float)\round((\microtime(true) - $policyStartedAt) * 1000, 2);
+                $fastPathResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
+                    (string)$fpcHit['response'],
+                    $rawRequest,
+                    $fastPathElapsedMs,
+                    $workerId,
+                    $port,
+                    (string)$fpcHit['source'],
+                );
+                sslFinalizeHttpResponseAfterHandle(
+                    $conn,
+                    $connId,
+                    $rawRequest,
+                    $fastPathResponse,
+                    $policyStartedAt,
+                    false,
+                    $ipcDraining,
+                    $connections,
+                    $requestBuffers,
+                    $connectionLastActivity,
+                    $requestLogged,
+                    $writeBuffers,
+                    $writableConnections,
+                    $pendingClose,
+                    $longLivedConnections,
+                    $ipcClient,
+                    $instanceName,
+                    $activeRequests,
+                    false,
+                    (string)($policyDecision->headers['host'] ?? ''),
+                    $policyDecision->keepAlive(),
+                    true,
+                );
+                continue;
+            }
+        }
+
+        // Static L1 is immutable under the cache epoch, so static-only traffic
+        // does not need request-scope GC/status JSON. Dynamic/cold requests keep
+        // the existing bounded compaction cadence below the fast-path gate.
+        if ($requestCount - $lastRequestGcCount >= $requestGcInterval) {
+            $lastRequestGcCount = $requestCount;
+            $compaction = wlsCompactWorkerMemoryCaches('ssl_request_interval', $maxMemoryBytes, 0.55, 16 * 1024 * 1024);
+            $collected = (int)($compaction['cycles'] ?? 0);
+            $currentMemory = \memory_get_usage(true);
+            $memoryPeak = \memory_get_peak_usage(true);
+            $staticCacheCompaction = (array)($compaction['static_file_cache'] ?? []);
+            $staticCacheDebug = (($staticCacheCompaction['cleared'] ?? false) ? 'cleared' : 'kept')
+                . ':' . (int)($staticCacheCompaction['count'] ?? 0)
+                . ':' . (int)($staticCacheCompaction['size'] ?? 0);
+            if ($staticCacheCompaction['cleared'] ?? false) {
+                WlsLogger::debug_("GC static cache compact: worker=ssl requests={$requestCount} static={$staticCacheDebug}");
+            }
+            foreach (\array_keys($connectionPeerIps) as $peerConnId) {
+                if (!isset($connections[$peerConnId])
+                    && !isset($pendingPeek[$peerConnId])
+                    && !isset($pendingHandshakes[$peerConnId])
+                ) {
+                    unset($connectionPeerIps[$peerConnId]);
+                }
+            }
+            if (($compaction['cycles'] ?? 0) > 0 || ($compaction['trimmed_bytes'] ?? 0) > 0 || ($staticCacheCompaction['cleared'] ?? false) || $currentMemory > 150 * 1024 * 1024) {
+                WlsLogger::debug_("GC 触发: 回收 {$collected} 个循环，内存: " . \round($currentMemory / 1024 / 1024, 1) . "MB，峰值: " . \round($memoryPeak / 1024 / 1024, 1) . "MB");
+            }
+            if ($currentMemory > 200 * 1024 * 1024) {
+                WlsLogger::warning_("内存使用过高: " . \round($currentMemory / 1024 / 1024, 1) . "MB，请检查内存泄漏。当前请求: {$method} {$uri}");
+            }
+        }
+
+        if (!$isDev) {
+            $requestLogPrefix = InternalRequestLabel::buildLogPrefix($rawRequest);
+            if ($requestLogPrefix !== '') {
+                $method = $requestLogPrefix . $method;
+            }
+            WlsLogger::debug_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
         }
 
         // 长连分层：is_long_lived 与 HTTP Worker 一致；protocol===sse 仅本文件用于 SseContext 写队列 + sslFinalize 分支（见 SseMatcher 注释）。
@@ -3195,54 +3723,6 @@ while (true) {
             );
         }
         $handleStartTime = \microtime(true);
-
-        if (!$isLongLived) {
-            $fastPathResponse = wlsTryServeFormattedFpcFastResponse($rawRequest, isKeepAlive($rawRequest));
-            if ($fastPathResponse !== null) {
-                if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
-                    && \preg_match('/^[A-Z]+\s+(\S+)\s+HTTP\//i', $rawRequest, $fastPathRequestLine)
-                ) {
-                    $runtime->noteHomepageNaturalHit((string)($fastPathRequestLine[1] ?? '/'));
-                }
-                $fastPathElapsedMs = (string)\round((\microtime(true) - $handleStartTime) * 1000, 2);
-                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-Wls-Performance-Total', $fastPathElapsedMs);
-                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-Wls-Performance-Fpc-Fastpath', 'worker');
-                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-Id', (string)$workerId);
-                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-Port', (string)$port);
-                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-PID', (string)\getmypid());
-                $fastPathResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
-                    $fastPathResponse,
-                    $rawRequest,
-                    (float)$fastPathElapsedMs,
-                    $workerId,
-                    $port
-                );
-                $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
-                $fastPathResponse = \Weline\Server\Service\RouteHintService::addHintToResponse($fastPathResponse, $sni);
-                $fastPathResponse = injectWlsProcessTimeHeader($fastPathResponse, (\microtime(true) - $handleStartTime) * 1000);
-                sslFinalizeHttpResponseAfterHandle(
-                    $conn,
-                    $connId,
-                    $rawRequest,
-                    $fastPathResponse,
-                    $handleStartTime,
-                    false,
-                    $ipcDraining,
-                    $connections,
-                    $requestBuffers,
-                    $connectionLastActivity,
-                    $requestLogged,
-                    $writeBuffers,
-                    $writableConnections,
-                    $pendingClose,
-                    $longLivedConnections,
-                    $ipcClient,
-                    $instanceName,
-                    $activeRequests
-                );
-                continue;
-            }
-        }
 
         if ($isLongLived) {
             $layer = (string) ($longLivedDetection['layer'] ?? 'unknown');
@@ -3340,6 +3820,8 @@ while (true) {
             $originTokenValidationEnabled,
             $originTokenHeader,
             $originTokenAllowLocal,
+            $transportPeer,
+            $policyDecision,
             $asyncBizAdapters,
             $WLS_UOPZ_EXIT_GUARD,
             $fiberConn,
@@ -3412,7 +3894,9 @@ while (true) {
                     $originToken,
                     $originTokenValidationEnabled,
                     $originTokenHeader,
-                    $originTokenAllowLocal
+                    $originTokenAllowLocal,
+                    $transportPeer,
+                    $policyDecision
                 );
             } catch (\Weline\Framework\Runtime\RequestExitException $e) {
                 throw $e;
@@ -3612,21 +4096,61 @@ function wlsSslAcceptNewConnections(
     array &$connections,
     array &$requestBuffers,
     array &$connectionLastActivity,
-    bool $isDev
-): void {
+    bool $isDev,
+    array &$connectionPeerIps,
+    int $maxAcceptPerLoop = 64,
+    bool $applicationAdmissionOpen = true,
+    mixed $nativeListenerSocket = null,
+): int {
     if (!$socket || !\is_resource($socket) || !\in_array($socket, $read, true)) {
-        return;
+        return 0;
+    }
+
+    if (!$applicationAdmissionOpen) {
+        $key = \array_search($socket, $read, true);
+        if ($key !== false) {
+            unset($read[$key]);
+        }
+        return 0;
     }
 
     $accepted = 0;
-    $maxAcceptPerLoop = 64;
+    $admitted = 0;
+    $maxAcceptPerLoop = \max(1, \min(64, $maxAcceptPerLoop));
     while ($accepted < $maxAcceptPerLoop) {
-        $conn = @\stream_socket_accept($socket, 0);
-        if (!$conn) {
-            break;
+        if ($nativeListenerSocket instanceof \Socket) {
+            $acceptedSocket = @\socket_accept($nativeListenerSocket);
+            if (!$acceptedSocket instanceof \Socket) {
+                break;
+            }
+            // Raw accept already consumed kernel work. Count it before export so
+            // repeated export failures cannot bypass the per-loop CPU budget.
+            $accepted++;
+            $conn = @\socket_export_stream($acceptedSocket);
+            if (!\is_resource($conn)) {
+                @\socket_close($acceptedSocket);
+                continue;
+            }
+        } else {
+            $conn = @\stream_socket_accept($socket, 0);
+            if (!$conn) {
+                break;
+            }
+            $accepted++;
         }
-        $accepted++;
         $connId = \get_resource_id($conn);
+        unset($connectionPeerIps[$connId]);
+        $peerNameRaw = @\stream_socket_get_name($conn, true);
+        $peerName = \is_string($peerNameRaw) ? $peerNameRaw : 'unknown-peer';
+        $acceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
+        if ($acceptGates !== null) {
+            $decision = $acceptGates->accept((string)$connId, $peerName);
+            if (!$decision->allowed) {
+                safeCloseStream($conn);
+                continue;
+            }
+            $connectionPeerIps[$connId] = $decision->peerIp;
+        }
         if ($deferSsl && (\count($pendingPeek) + $pendingHandshakeCount) >= $handshakeQueueHighWatermark) {
             safeCloseStream($conn);
             if ($isDev) {
@@ -3634,8 +4158,6 @@ function wlsSslAcceptNewConnections(
             }
             break;
         }
-        $peerNameRaw = @\stream_socket_get_name($conn, true);
-        $peerName = \is_string($peerNameRaw) ? $peerNameRaw : 'unknown-peer';
         if ($isDev) {
             WlsLogger::info_("新连接: {$peerName} (connId: {$connId})");
         }
@@ -3654,12 +4176,15 @@ function wlsSslAcceptNewConnections(
             $requestBuffers[$connId] = '';
             $connectionLastActivity[$connId] = \time();
         }
+        $admitted++;
     }
 
     $key = \array_search($socket, $read, true);
     if ($key !== false) {
         unset($read[$key]);
     }
+
+    return $admitted;
 }
 
 function wlsSslTuneAcceptedStream(mixed $conn): void
@@ -3684,6 +4209,24 @@ function wlsSslTuneAcceptedStream(mixed $conn): void
     if (\defined('TCP_NODELAY') && \defined('SOL_TCP')) {
         @\socket_set_option($socket, \SOL_TCP, (int) \TCP_NODELAY, 1);
     }
+}
+
+/**
+ * Zero-wait kernel readiness probe used only after a successful Darwin shared
+ * accept. A remaining readable listener means a burst is still queued, so the
+ * Worker uses the short cooldown; an empty queue gets a longer low-load yield.
+ */
+function wlsSslListenerHasPendingAccept(mixed $socket): bool
+{
+    if (!\is_resource($socket)) {
+        return false;
+    }
+
+    $read = [$socket];
+    $write = null;
+    $except = null;
+
+    return @\stream_select($read, $write, $except, 0, 0) > 0;
 }
 
 /**
@@ -3791,6 +4334,7 @@ function wlsSslAdvancePeekState(
     array &$connections,
     array &$requestBuffers,
     array &$connectionLastActivity,
+    array &$postHandshakeReadPending,
     array $read,
     ?array $deferSslOptions,
     int $cryptoMethod,
@@ -3801,7 +4345,10 @@ function wlsSslAdvancePeekState(
     string $sslCert,
     string $sslKey,
     int $publicTcpPort,
-    string $deferSslPreferredHost = ''
+    string $deferSslPreferredHost = '',
+    array &$connectionPeerIps = [],
+    string $runtimeTopology = 'direct',
+    string $proxyAuthenticationSecret = ''
 ): void {
     if ($pendingPeek === []) {
         return;
@@ -3841,6 +4388,31 @@ function wlsSslAdvancePeekState(
 
         if (!isset($readyPeekIds[$connId])) {
             continue;
+        }
+
+        $trustedDispatcherBackend = $runtimeTopology === 'dispatcher'
+            && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($peerName);
+        if ($trustedDispatcherBackend) {
+            try {
+                $proxy = \Weline\Server\Protocol\ProxyProtocolV2::consumeFromStream(
+                    $conn,
+                    $proxyAuthenticationSecret,
+                    true
+                );
+            } catch (\Throwable $proxyError) {
+                $failedPeeks[] = $connId;
+                WlsLogger::warning_('Invalid authenticated PROXY v2 preface: ' . $proxyError->getMessage());
+                continue;
+            }
+            if (!($proxy['complete'] ?? false)) {
+                continue;
+            }
+            $proxyIp = (string)($proxy['source_ip'] ?? '');
+            if ($proxyIp !== '' && \filter_var($proxyIp, FILTER_VALIDATE_IP)) {
+                $peerName = $proxyIp;
+                $pendingPeek[$connId]['peerName'] = $proxyIp;
+                $connectionPeerIps[$connId] = $proxyIp;
+            }
         }
 
         $peeked = wlsSslPeekTcpPrefixNoConsume($conn);
@@ -3928,6 +4500,10 @@ function wlsSslAdvancePeekState(
             $connections[$connId] = $conn;
             $requestBuffers[$connId] = '';
             $connectionLastActivity[$connId] = \time();
+            $postHandshakeReadPending[$connId] = [
+                'conn' => $conn,
+                'deadline' => \microtime(true) + 0.20,
+            ];
             $completedPeeks[] = $connId;
             continue;
         }
@@ -3978,7 +4554,8 @@ function wlsSslAdvanceHandshakeState(
     array &$requestBuffers,
     array &$connectionLastActivity,
     array &$requestLogged,
-    array $read,
+    array &$postHandshakeReadPending,
+    array &$read,
     array $write,
     int|false $changed,
     int $cryptoMethod,
@@ -4073,6 +4650,17 @@ function wlsSslAdvanceHandshakeState(
         $connections[$connId] = $conn;
         $requestBuffers[$connId] = '';
         $connectionLastActivity[$connId] = \time();
+        $postHandshakeReadPending[$connId] = [
+            'conn' => $conn,
+            'deadline' => \microtime(true) + 0.20,
+        ];
+        // OpenSSL may consume the first HTTP bytes into its user-space buffer
+        // while finishing a handshake on WRITE readiness. libevent then sees
+        // no kernel READ edge, so force one immediate non-blocking read in the
+        // current loop instead of leaving the request parked until timeout.
+        if (!\in_array($conn, $read, true)) {
+            $read[] = $conn;
+        }
         unset($pendingHandshakes[$connId], $handshakeStartTimes[$connId]);
     }
 
@@ -4110,7 +4698,9 @@ function wlsSslFlushQueuedWrites(
     array &$longLivedConnections
 ): void {
     $maxBytesPerConnectionPerLoop = 131072; // 128KB，分片推进上限
-    $maxChunkPerWrite = 16384; // 16KB，单次写入分片
+    // OpenSSL 会在内部按 TLS record 分片；PHP 层一次提交 64KB，避免
+    // 中等响应反复 substr/复制剩余缓冲。每连接每轮仍受 128KB 总预算限制。
+    $maxChunkPerWrite = 65536;
     foreach ($writableConnections as $connId => $conn) {
         if (!isset($writeBuffers[$connId]) || $writeBuffers[$connId] === '') {
             continue;
@@ -4190,428 +4780,6 @@ function wlsSslFlushQueuedWrites(
     }
 }
 
-function isRequestComplete(string $data): bool
-{
-    $headerEnd = \strpos($data, "\r\n\r\n");
-    if ($headerEnd === false) {
-        return false;
-    }
-    
-    if (\preg_match('/Content-Length:\s*(\d+)/i', $data, $matches)) {
-        $contentLength = (int) $matches[1];
-        $bodyStart = $headerEnd + 4;
-        $currentBodyLength = \strlen($data) - $bodyStart;
-        return $currentBodyLength >= $contentLength;
-    }
-    
-    return true;
-}
-
-function isKeepAlive(string $rawRequest): bool
-{
-    // HTTP/1.1 默认启用 Keep-Alive，除非显式指定 Connection: close
-    $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
-    
-    // 检查 Connection 头
-    if (\preg_match('/Connection:\s*(\S+)/i', $rawRequest, $matches)) {
-        $connection = \strtolower(\trim($matches[1]));
-        // 如果显式指定 close，则关闭连接
-        if ($connection === 'close') {
-            return false;
-        }
-        // 如果显式指定 keep-alive，则保持连接
-        if ($connection === 'keep-alive') {
-            return true;
-        }
-    }
-    
-    // HTTP/1.1 默认 Keep-Alive，HTTP/1.0 默认关闭
-    return $isHttp11;
-}
-
-function getHeaderValue(string $rawRequest, string $headerName): ?string
-{
-    $pattern = '/^' . \preg_quote($headerName, '/') . ':\s*([^\r\n]+)/im';
-    if (\preg_match($pattern, $rawRequest, $matches)) {
-        $value = \trim($matches[1]);
-        return $value === '' ? null : $value;
-    }
-    return null;
-}
-
-/**
- * 从 Cookie 头中解析指定 name 的值
- */
-function getCookieValue(string $cookieHeader, string $name): ?string
-{
-    if ($cookieHeader === '') {
-        return null;
-    }
-    $name = \preg_quote($name, '/');
-    if (\preg_match('/\b' . $name . '=([^;\s]+)/', $cookieHeader, $m)) {
-        $v = \trim($m[1], '"');
-        return $v === '' ? null : $v;
-    }
-    return null;
-}
-
-/**
- * 校验“开发模式+后台登录”下发放的健康检查放行 Cookie（与 PHP 端生成逻辑一致）
- * 仅当 env 中配置了 wls.health_cookie_secret 时生效。
- */
-function isHealthAllowCookieValid(string $cookieValue, array $env): bool
-{
-    $secret = $env['wls']['health_cookie_secret'] ?? null;
-    if ($secret === null || $secret === '') {
-        return false;
-    }
-    $slot = \floor(\time() / 3600);
-    $expected = \hash_hmac('sha256', 'wls_health_' . $slot, (string) $secret);
-    if (\hash_equals($expected, $cookieValue)) {
-        return true;
-    }
-    $expectedPrev = \hash_hmac('sha256', 'wls_health_' . ($slot - 1), (string) $secret);
-    return \hash_equals($expectedPrev, $cookieValue);
-}
-
-/**
- * 注入 WLS 处理耗时响应头。
- * 仅添加 header，不修改 body / Content-Length，避免 Content-Length mismatch 导致浏览器 loading 挂死。
- * 前端通过 Server-Timing API 读取：performance.getEntriesByType('navigation')[0].serverTiming
- */
-function injectWlsProcessTimeHeader(string $response, float $durationMs): string
-{
-    if ($durationMs < 500 && !\Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
-        return $response;
-    }
-
-    $pos = \strpos($response, "\r\n\r\n");
-    if ($pos === false) {
-        return $response;
-    }
-    $ms = \round($durationMs, 2);
-    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"\r\n";
-    return \substr_replace($response, $headers, $pos + 2, 0);
-}
-
-function wlsCompressFormattedHttpResponse(string $response, string $acceptEncoding): string
-{
-    if ($response === ''
-        || \stripos($acceptEncoding, 'gzip') === false
-        || !\function_exists('gzencode')) {
-        return $response;
-    }
-
-    $headerEnd = \strpos($response, "\r\n\r\n");
-    if ($headerEnd === false) {
-        return $response;
-    }
-
-    $headersPart = \substr($response, 0, $headerEnd);
-    $bodyPart = \substr($response, $headerEnd + 4);
-    if ($bodyPart === '' || \strlen($bodyPart) < 1024) {
-        return $response;
-    }
-
-    if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)
-        || \preg_match('/^Content-Encoding:/mi', $headersPart)) {
-        return $response;
-    }
-
-    $contentType = '';
-    if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
-        $contentType = \strtolower(\trim((string)$typeMatch[1]));
-    }
-    if ($contentType !== ''
-        && !\str_starts_with($contentType, 'text/')
-        && !\str_contains($contentType, 'application/json')
-        && !\str_contains($contentType, 'application/javascript')
-        && !\str_contains($contentType, 'application/xml')
-        && !\str_contains($contentType, 'application/xhtml+xml')
-        && !\str_contains($contentType, 'image/svg+xml')) {
-        return $response;
-    }
-
-    $compressed = \gzencode($bodyPart, 6);
-    if ($compressed === false) {
-        return $response;
-    }
-
-    $headersPart .= "\r\nContent-Encoding: gzip";
-    $headersPart = wlsSetFormattedHeader($headersPart, 'Content-Length', (string)\strlen($compressed));
-    $headersPart = wlsAddFormattedVaryAcceptEncoding($headersPart);
-
-    return $headersPart . "\r\n\r\n" . $compressed;
-}
-
-function wlsSetFormattedHeader(string $headersPart, string $name, string $value): string
-{
-    $replacement = $name . ': ' . $value;
-    $lines = \preg_split('/\r\n|\n|\r/', $headersPart);
-    if ($lines === false) {
-        return \rtrim($headersPart, "\r\n") . "\r\n" . $replacement;
-    }
-
-    $prefix = \strtolower($name) . ':';
-    $kept = [];
-    foreach ($lines as $line) {
-        if (\str_starts_with(\strtolower(\ltrim($line)), $prefix)) {
-            continue;
-        }
-        $kept[] = $line;
-    }
-
-    return \rtrim(\implode("\r\n", $kept), "\r\n") . "\r\n" . $replacement;
-}
-
-function wlsSetFormattedHttpResponseHeader(string $response, string $name, string $value): string
-{
-    $headerEnd = \strpos($response, "\r\n\r\n");
-    if ($headerEnd === false) {
-        return $response;
-    }
-
-    $headersPart = \substr($response, 0, $headerEnd);
-    $bodyPart = \substr($response, $headerEnd + 4);
-
-    return wlsSetFormattedHeader($headersPart, $name, $value) . "\r\n\r\n" . $bodyPart;
-}
-
-function wlsDecorateFormattedFpcFastResponseForPerformancePanel(
-    string $response,
-    string $rawRequest,
-    float $elapsedMs,
-    int $workerId,
-    int $port
-): string {
-    if (!wlsPerformancePanelAllowed($rawRequest)) {
-        return $response;
-    }
-
-    $requestId = wlsPerformancePanelRequestId($rawRequest);
-    $response = wlsSetFormattedHttpResponseHeader($response, 'X-Weline-Request-Id', $requestId);
-    wlsRecordFormattedFpcFastResponseForPerformancePanel($rawRequest, $requestId, $elapsedMs, $workerId, $port);
-
-    return $response;
-}
-
-function wlsDecorateFormattedStaticResponseForPerformancePanel(
-    string $response,
-    string $rawRequest,
-    float $elapsedMs,
-    int $workerId,
-    int $port,
-    array $cacheInfo = []
-): string {
-    if (!wlsPerformancePanelAllowed($rawRequest)) {
-        return $response;
-    }
-
-    $cacheStatus = \strtolower((string)($cacheInfo['status'] ?? 'miss'));
-    $source = match ($cacheStatus) {
-        'hit' => 'static_memory',
-        'missing' => 'static_missing',
-        default => 'static_file',
-    };
-    $requestId = wlsPerformancePanelRequestId($rawRequest);
-    $response = wlsSetFormattedHttpResponseHeader($response, 'X-Weline-Request-Id', $requestId);
-    wlsRecordFormattedFpcFastResponseForPerformancePanel(
-        $rawRequest,
-        $requestId,
-        $elapsedMs,
-        $workerId,
-        $port,
-        $source,
-        wlsFormattedHttpStatusCode($response)
-    );
-
-    return $response;
-}
-
-function wlsFormattedHttpStatusCode(string $response): int
-{
-    if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/', $response, $matches) === 1) {
-        return (int)$matches[1];
-    }
-
-    return 200;
-}
-
-function wlsPerformancePanelAllowed(string $rawRequest = ''): bool
-{
-    if (\class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
-        try {
-            return (new \Weline\DeveloperWorkspace\Service\PanelAccessService())->canAccessRawHttp($rawRequest);
-        } catch (\Throwable) {
-        }
-    }
-
-    if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
-        return true;
-    }
-    if (!wlsPanelEnvTruthy(\Weline\Framework\App\Env::get('dev_tool.panel.enable_in_prod', false))) {
-        return false;
-    }
-
-    $token = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token', ''));
-    $tokenHash = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token_hash', ''));
-    if ($token === '' && $tokenHash === '') {
-        return false;
-    }
-    $cookieName = (string)\Weline\Framework\App\Env::get('dev_tool.panel.cookie_name', 'w_weline_panel');
-    if ($cookieName === '') {
-        return false;
-    }
-    $cookieHeader = (string)(getHeaderValue($rawRequest ?? '', 'Cookie') ?? '');
-
-    return wlsPanelSessionCookieValid((string)(getCookieValue($cookieHeader, $cookieName) ?? ''));
-}
-
-function wlsPanelEnvTruthy(mixed $value): bool
-{
-    if (\is_bool($value)) {
-        return $value;
-    }
-    if (\is_int($value) || \is_float($value)) {
-        return (bool)$value;
-    }
-    if (\is_string($value)) {
-        return \in_array(\strtolower(\trim($value)), ['1', 'true', 'yes', 'on'], true);
-    }
-
-    return false;
-}
-
-function wlsPanelSessionCookieValid(string $cookieValue): bool
-{
-    if ($cookieValue === '') {
-        return false;
-    }
-    $decoded = wlsPanelBase64UrlDecode($cookieValue);
-    $parts = \explode('.', $decoded);
-    if (\count($parts) !== 4) {
-        return false;
-    }
-    [$issuedAt, $expiresAt, $nonce, $signature] = $parts;
-    if (!\ctype_digit($issuedAt) || !\ctype_digit($expiresAt) || $nonce === '' || $signature === '') {
-        return false;
-    }
-    if ((int)$expiresAt < \time()) {
-        return false;
-    }
-    $payload = $issuedAt . '.' . $expiresAt . '.' . $nonce;
-    $expected = \hash_hmac('sha256', $payload, wlsPanelSessionSigningKey());
-
-    return \hash_equals($expected, $signature);
-}
-
-function wlsPanelSessionSigningKey(): string
-{
-    $tokenHash = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token_hash', ''));
-    $token = \trim((string)\Weline\Framework\App\Env::get('dev_tool.panel.token', ''));
-    $material = $tokenHash !== '' ? $tokenHash : $token;
-    $salt = \defined('BP') ? (string)BP : __DIR__;
-
-    return \hash('sha256', $material . '|' . $salt);
-}
-
-function wlsPanelBase64UrlDecode(string $value): string
-{
-    $value = \strtr($value, '-_', '+/');
-    $padding = \strlen($value) % 4;
-    if ($padding > 0) {
-        $value .= \str_repeat('=', 4 - $padding);
-    }
-    $decoded = \base64_decode($value, true);
-
-    return \is_string($decoded) ? $decoded : '';
-}
-
-function wlsPerformancePanelRequestId(string $rawRequest): string
-{
-    foreach (['X-Weline-Request-Id', 'X-Request-Id'] as $header) {
-        $value = getHeaderValue($rawRequest, $header);
-        if (\is_string($value) && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $value)) {
-            return $value;
-        }
-    }
-
-    try {
-        return \bin2hex(\random_bytes(8)) . '-' . \dechex((int)(\microtime(true) * 1000000));
-    } catch (\Throwable) {
-        return \str_replace('.', '', \uniqid('wls', true));
-    }
-}
-
-function wlsRecordFormattedFpcFastResponseForPerformancePanel(
-    string $rawRequest,
-    string $requestId,
-    float $elapsedMs,
-    int $workerId,
-    int $port,
-    string $source = 'worker_fastpath',
-    int $status = 200
-): void {
-    try {
-        if (!\class_exists(\Weline\Server\Service\WlsPerformanceTraceStore::class)) {
-            return;
-        }
-        [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
-        $host = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
-        $path = '/';
-        $parsedPath = \parse_url($target, PHP_URL_PATH);
-        if (\is_string($parsedPath) && $parsedPath !== '') {
-            $path = $parsedPath;
-        }
-        $query = \parse_url($target, PHP_URL_QUERY);
-        if (\is_string($query) && $query !== '') {
-            $path .= '?' . $query;
-        }
-        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Server\Service\WlsPerformanceTraceStore::class)
-            ->record([], [
-                'request_id' => $requestId,
-                'method' => $method,
-                'uri' => $path,
-                'host' => $host,
-                'status' => $status,
-                'total_ms' => \round($elapsedMs, 2),
-                'pre_telemetry_total_ms' => \round($elapsedMs, 2),
-                'fpc_hit' => \in_array($source, ['worker_fastpath', 'static_memory'], true),
-                'fpc_source' => $source,
-                'worker_id' => (string)$workerId,
-                'worker_port' => (string)$port,
-                'pid' => \getmypid() ?: 0,
-            ]);
-    } catch (\Throwable) {
-    }
-}
-
-function wlsPerformancePanelRequestLine(string $rawRequest): array
-{
-    if (\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $matches)) {
-        return [\strtoupper((string)$matches[1]), (string)$matches[2]];
-    }
-
-    return ['GET', '/'];
-}
-
-function wlsAddFormattedVaryAcceptEncoding(string $headersPart): string
-{
-    if (!\preg_match('/^Vary:\s*([^\r\n]*)$/mi', $headersPart, $match)) {
-        return \rtrim($headersPart, "\r\n") . "\r\nVary: Accept-Encoding";
-    }
-
-    $varyValue = (string)($match[1] ?? '');
-    foreach (\array_map('trim', \explode(',', $varyValue)) as $part) {
-        if (\strcasecmp($part, 'Accept-Encoding') === 0) {
-            return $headersPart;
-        }
-    }
-
-    $newValue = \trim($varyValue) === '' ? 'Accept-Encoding' : $varyValue . ', Accept-Encoding';
-    return (string)\preg_replace('/^Vary:\s*[^\r\n]*$/mi', 'Vary: ' . $newValue, $headersPart, 1);
-}
-
 /**
  * 安全关闭 stream/socket 资源，避免重复关闭触发 warning。
  */
@@ -4625,6 +4793,7 @@ function safeCloseStream(mixed $conn): void
     }
 
     $connId = \get_resource_id($conn);
+    \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->close((string)$connId);
     $backtrace = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
     $caller = $backtrace[1] ?? [];
     $callerLine = ($caller['file'] ?? 'unknown') . ':' . ($caller['line'] ?? '?');
@@ -4851,6 +5020,7 @@ function wlsDrainAfterResponseIfRequested(
     if ($socket && \is_resource($socket)) {
         @\fclose($socket);
         $socket = null;
+        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
     }
 }
 
@@ -4927,9 +5097,15 @@ function sslFinalizeHttpResponseAfterHandle(
     mixed $ipcClient,
     string $instanceName,
     int &$activeRequests,
+    bool $recordObservability = true,
+    ?string $precomputedRequestHost = null,
+    ?bool $precomputedKeepAlive = null,
+    bool $trustedCacheHit = false,
 ): void {
+    $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
+
     $responseStatus = 200;
-    if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
+    if (!$trustedCacheHit && \preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
         $responseStatus = (int) $statusMatches[1];
     }
 
@@ -4947,7 +5123,7 @@ function sslFinalizeHttpResponseAfterHandle(
         }
     }
     $responseBytes = 0;
-    $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
+    $requestHost = $precomputedRequestHost ?? (getHeaderValue($rawRequest, 'Host') ?? '');
     if (\str_contains($requestHost, ':')) {
         $requestHost = (string) \explode(':', $requestHost, 2)[0];
     }
@@ -4955,7 +5131,9 @@ function sslFinalizeHttpResponseAfterHandle(
     $activeRequests = \max(0, $activeRequests - 1);
 
     $responseLenPre = \strlen($response);
-    WlsLogger::debug_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
+    if ($recordObservability) {
+        WlsLogger::debug_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
+    }
 
     $hasQueuedSsePayload = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
     $actualSseStarted = $isSseProtocolRequest
@@ -4972,7 +5150,7 @@ function sslFinalizeHttpResponseAfterHandle(
     }
     // SSE 收尾兜底：上下文标记可能先于写队列排空被重置，此时仍必须按 SSE 分支处理。
     $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
-    $keepAlive = isKeepAlive($rawRequest);
+    $keepAlive = $precomputedKeepAlive ?? isKeepAlive($rawRequest);
     $bufferedBytesBeforeWrite = isset($writeBuffers[$connId]) ? \strlen($writeBuffers[$connId]) : 0;
     $forceCloseAfterResponse = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldForceConnectionClose(
         $keepAlive,
@@ -4994,7 +5172,9 @@ function sslFinalizeHttpResponseAfterHandle(
             // 防止前一个 SSE 连接关闭后缓冲区残留 SSE 数据碎片被拼到普通 HTTP 响应前面。
             $writeBuffers[$connId] = $response;
             $writableConnections[$connId] = $conn;
-            WlsLogger::debug_("Worker 响应覆盖缓冲区（替换残留） connId={$connId} len={$responseLen}");
+            if ($recordObservability) {
+                WlsLogger::debug_("Worker 响应覆盖缓冲区（替换残留） connId={$connId} len={$responseLen}");
+            }
             goto ssl_finalize_skip_write;
         }
 
@@ -5009,13 +5189,23 @@ function sslFinalizeHttpResponseAfterHandle(
 
         $headerEnd = \strpos($response, "\r\n\r\n");
         $headerBytes = $headerEnd === false ? 0 : $headerEnd + 4;
-        $configuredImmediateBytes = (int)(\Weline\Framework\App\Env::get('wls.ssl.immediate_response_write_bytes', 32768) ?: 32768);
+        $configuredImmediateBytes = $recordObservability
+            ? (int)(\Weline\Framework\App\Env::get('wls.ssl.immediate_response_write_bytes', 32768) ?: 32768)
+            // 可信 Static/FPC 快路径允许在既有公平上限内一次写完常见缓存页，
+            // 避免 64 KiB 边界把约 70 KiB 的首页人为拆到下一轮事件循环。
+            : 131072;
         $immediateBudget = \max(8192, \min(131072, $configuredImmediateBytes));
         if ($headerBytes > 0) {
             $immediateBudget = \max($immediateBudget, \min($responseLen, $headerBytes + 8192));
         }
         $immediateBudget = \min($responseLen, $immediateBudget);
-        $maxImmediateChunk = 16384;
+        // Submit a large contiguous buffer to OpenSSL. The TLS layer already
+        // splits it into protocol records; forcing 16 KiB PHP writes makes a
+        // 70-128 KiB cached page pay four to eight userland write cycles and,
+        // on Darwin direct sockets, can expose delayed-ACK sized gaps between
+        // records. Keep the fairness ceiling at 128 KiB while matching the
+        // queued-write path's 64 KiB submission size.
+        $maxImmediateChunk = 65536;
 
         while ($totalWritten < $immediateBudget) {
             $remainingBudget = $immediateBudget - $totalWritten;
@@ -5038,7 +5228,9 @@ function sslFinalizeHttpResponseAfterHandle(
         }
 
         if ($totalWritten >= $responseLen) {
-            WlsLogger::debug_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
+            if ($recordObservability) {
+                WlsLogger::debug_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
+            }
             $responseBytes = $totalWritten;
             $responseFullyWritten = true;
             goto ssl_finalize_skip_write;
@@ -5047,10 +5239,12 @@ function sslFinalizeHttpResponseAfterHandle(
         $responseBytes = $totalWritten;
         $writeBuffers[$connId] = \substr($response, $totalWritten);
         $writableConnections[$connId] = $conn;
-        WlsLogger::debug_(
-            'Worker 响应入队 connId=' . $connId . ' written=' . $totalWritten . ' total=' . $responseLen
-            . ' remaining=' . ($responseLen - $totalWritten)
-        );
+        if ($recordObservability) {
+            WlsLogger::debug_(
+                'Worker 响应入队 connId=' . $connId . ' written=' . $totalWritten . ' total=' . $responseLen
+                . ' remaining=' . ($responseLen - $totalWritten)
+            );
+        }
 
         ssl_finalize_skip_write:
     } else {
@@ -5061,36 +5255,37 @@ function sslFinalizeHttpResponseAfterHandle(
     $connectionLastActivity[$connId] = \time();
     $handleDurationMs = (float) \round((\microtime(true) - $handleStartTime) * 1000, 2);
 
-    // 浏览器文档请求慢时输出明确慢日志（method/uri/status/耗时），便于直接对照 DevTools waterfall。
-    $slowThresholdMs = (float) (\Weline\Framework\App\Env::get('wls.slow_request_threshold_ms', 1000) ?: 1000);
-    if ($handleDurationMs >= $slowThresholdMs) {
-        $requestLine = '';
-        if (\preg_match('/^([A-Z]+)\s+([^\s]+)\s+HTTP\/\d\.\d/i', $rawRequest, $matches)) {
-            $requestLine = (string) ($matches[1] ?? '') . ' ' . (string) ($matches[2] ?? '');
+    if ($recordObservability) {
+        // 浏览器文档请求慢时输出明确慢日志（method/uri/status/耗时），便于直接对照 DevTools waterfall。
+        $slowThresholdMs = (float) (\Weline\Framework\App\Env::get('wls.slow_request_threshold_ms', 1000) ?: 1000);
+        if ($handleDurationMs >= $slowThresholdMs) {
+            $requestLine = '';
+            if (\preg_match('/^([A-Z]+)\s+([^\s]+)\s+HTTP\/\d\.\d/i', $rawRequest, $matches)) {
+                $requestLine = (string) ($matches[1] ?? '') . ' ' . (string) ($matches[2] ?? '');
+            }
+            WlsLogger::warning_(
+                "Slow request detected (worker=https, connId={$connId}, status={$responseStatus}, "
+                . "duration_ms={$handleDurationMs}, host={$requestHost}, request=\"{$requestLine}\")"
+            );
         }
-        WlsLogger::warning_(
-            "Slow request detected (worker=https, connId={$connId}, status={$responseStatus}, "
-            . "duration_ms={$handleDurationMs}, host={$requestHost}, request=\"{$requestLine}\")"
-        );
-    }
 
-    if ($ipcClient && $ipcClient->isConnected()) {
-        $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
-            $instanceName,
+        \Weline\Server\Service\Telemetry\WorkerTelemetryReporter::instance($instanceName)->record(
+            $ipcClient instanceof \Weline\Server\IPC\ChildControl\ChildControlClientInterface ? $ipcClient : null,
             $requestHost,
             $responseStatus,
-            (int) $handleDurationMs,
-            $responseBytes
-        ));
+            (int)$handleDurationMs,
+            $responseBytes,
+        );
+
+        WlsLogger::tick_();
     }
 
-    WlsLogger::tick_();
-
-    if (!$isSseMode && $responseFullyWritten) {
+    if ($recordObservability && !$isSseMode && $responseFullyWritten) {
         wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
     }
 
-    $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
+    $responseRequestsClose = !$trustedCacheHit
+        && \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
     $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse || $responseRequestsClose;
     if ($shouldClose) {
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
@@ -5110,66 +5305,6 @@ function sslFinalizeHttpResponseAfterHandle(
     }
 }
 
-function wlsTryServeFormattedFpcFastResponse(string $rawRequest, bool $keepAlive): ?string
-{
-    if (!\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $matches)) {
-        return null;
-    }
-
-    $method = \strtoupper((string)($matches[1] ?? 'GET'));
-    if ($method !== 'GET' && $method !== 'HEAD') {
-        return null;
-    }
-
-    $target = (string)($matches[2] ?? '/');
-    $host = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
-    if ($host === '') {
-        return null;
-    }
-    foreach (['X-WLS-FPC-Bypass', 'X-WLS-Dynamic-Warmup', 'X-WLS-Dynamic-Benchmark'] as $bypassHeader) {
-        $value = getHeaderValue($rawRequest, $bypassHeader);
-        if (\is_string($value) && \in_array(\strtolower(\trim($value)), ['1', 'true', 'yes', 'on'], true)) {
-            return null;
-        }
-    }
-
-    $targetParts = \parse_url($target);
-    if (\is_array($targetParts) && !empty($targetParts['scheme']) && !empty($targetParts['host'])) {
-        $fullUri = $target;
-    } else {
-        $requestUri = $target === '' ? '/' : $target;
-        if (!\str_starts_with($requestUri, '/')) {
-            $requestUri = '/' . $requestUri;
-        }
-        $fullUri = 'https://' . $host . $requestUri;
-    }
-
-    try {
-        $coordinator = \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Framework\Router\FullPageCacheCoordinator::class
-        );
-        if (!$coordinator instanceof \Weline\Framework\Router\FullPageCacheCoordinator) {
-            return null;
-        }
-
-        $acceptEncoding = (string)(getHeaderValue($rawRequest, 'Accept-Encoding') ?? '');
-
-        $cached = $coordinator->getFormattedCachedResponseForFullUri(
-            $fullUri,
-            $method,
-            (string)(getHeaderValue($rawRequest, 'Accept') ?? ''),
-            $acceptEncoding,
-            (string)(getHeaderValue($rawRequest, 'Cookie') ?? ''),
-            $keepAlive,
-            !(bool)\Weline\Framework\App\Env::get('wls.worker.fpc_fastpath_shared_enabled', true)
-        );
-
-        return \is_array($cached) ? (string)($cached['response'] ?? '') ?: null : null;
-    } catch (\Throwable) {
-        return null;
-    }
-}
-
 function handleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -5185,79 +5320,29 @@ function handleRequest(
     string $originToken,
     bool $originTokenValidationEnabled,
     string $originTokenHeader,
-    bool $originTokenAllowLocal
+    bool $originTokenAllowLocal,
+    string $transportPeer = '',
+    ?\Weline\Server\Security\WorkerPolicyDecision $precomputedPolicyDecision = null
 ): string {
-    // 解析请求 URI（parse_url 失败时返回 false，?? 无法兜底，须显式归一为 string）
-    $uri = '/';
-    if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
-        $path = \parse_url($matches[1], PHP_URL_PATH);
-        $uri = (\is_string($path) && $path !== '') ? $path : '/';
+    $policyDecision = $precomputedPolicyDecision
+        ?? \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate($rawRequest, $transportPeer);
+    if (!$policyDecision->allowed) {
+        return (string)$policyDecision->response;
     }
-    $method = 'GET';
-    if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
-        $method = $matches[1];
-    }
+    $policyServerInfo = $policyDecision->requestServerInfo();
+
+    $uri = $policyDecision->path;
+    $method = $policyDecision->method;
     
-    // 获取客户端 IP
-    $clientIp = '127.0.0.1';
-    $cfConnectingIp = getHeaderValue($rawRequest, 'CF-Connecting-IP');
-    if ($cfConnectingIp !== null) {
-        $clientIp = $cfConnectingIp;
-    } elseif (\preg_match('/X-Real-IP:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
-        $clientIp = \trim($matches[1]);
-    } elseif (\preg_match('/X-Forwarded-For:\s*([^\r\n,]+)/i', $rawRequest, $matches)) {
-        $clientIp = \trim($matches[1]);
-    }
-    
-    // 判断是否本地请求
-    $localIps = ['127.0.0.1', '::1', 'localhost'];
-    $isLocal = \in_array($clientIp, $localIps, true) || \strpos($clientIp, '192.168.') === 0 || \strpos($clientIp, '10.') === 0;
+    $clientIp = $policyDecision->clientIp;
     
     // ========== 健康检查接口（仅本地访问，不受维护模式影响） ==========
-    if ($uri === '/_wls/health') {
-        // 检查请求是否要求 Keep-Alive（HTTP/1.1 默认 keep-alive）
-        $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
-        $hasClose = \stripos($rawRequest, 'Connection: close') !== false;
-        $keepAlive = $isHttp11 && !$hasClose;
-        // 可选：允许外网访问健康检查（仅测试/内网环境建议开启，生产建议关闭）
-        $healthAllowRemote = false;
-        $env = [];
-        if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
-            $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
-            $env = \is_array($env) ? $env : [];
-            $w = $env['wls'] ?? [];
-            $wlsServers = \is_array($w['servers'] ?? null) ? $w['servers'] : [];
-            $healthAllowRemote = (bool)(($wlsServers[$instanceName]['health_allow_remote'] ?? null)
-                ?? $w['health_allow_remote'] ?? false);
-        }
-        // 非本地且未全局放行时：若带有“开发模式+后台登录”下发放的签名 Cookie 或同源请求则放行
-        $healthAllowedByCookie = false;
-        $healthAllowedBySameOrigin = false;
-        if (!$isLocal && !$healthAllowRemote) {
-            $cookieHeader = getHeaderValue($rawRequest, 'Cookie') ?? '';
-            $allowCookie = getCookieValue($cookieHeader, 'wls_health_allow');
-            if ($allowCookie !== null && isHealthAllowCookieValid($allowCookie, $env)) {
-                $healthAllowedByCookie = true;
-            }
-            // 同源请求放行：开发工具面板等从后台页面发起的 fetch 可访问；直接导航时 Referer 同站点也可放行
-            $hostHeader = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
-            $originHeader = \trim((string)(getHeaderValue($rawRequest, 'Origin') ?? ''));
-            if ($hostHeader !== '') {
-                if ($originHeader !== '' && \preg_match('#^https?://([^/]+)#i', $originHeader, $om)) {
-                    if (\strcasecmp($om[1], $hostHeader) === 0) {
-                        $healthAllowedBySameOrigin = true;
-                    }
-                } else {
-                    $refererHeader = \trim((string)(getHeaderValue($rawRequest, 'Referer') ?? ''));
-                    if ($refererHeader !== '' && \preg_match('#^https?://([^/]+)#i', $refererHeader, $rm)) {
-                        if (\strcasecmp($rm[1], $hostHeader) === 0) {
-                            $healthAllowedBySameOrigin = true;
-                        }
-                    }
-                }
-            }
-        }
-        if (!$isLocal && !$healthAllowRemote && !$healthAllowedByCookie && !$healthAllowedBySameOrigin) {
+    if ($method === 'GET' && $uri === '/_wls/health') {
+        $keepAlive = $policyDecision->keepAlive();
+        if (!\Weline\Server\Service\WorkerHealthAccessPolicy::instance($instanceName)->allowsClient(
+            $clientIp,
+            $policyDecision->headers,
+        )) {
             // 非本地请求且未配置允许且无有效放行 Cookie：返回 403（极简响应）
             return $keepAlive
                 ? "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\nForbidden"
@@ -5307,19 +5392,6 @@ function handleRequest(
     }
     // ========== 健康检查接口结束 ==========
 
-    // ========== Origin Token 回源校验（可选）==========
-    if ($originTokenValidationEnabled && $originToken !== '') {
-        $isLocalClient = $isLocal;
-        if (!$originTokenAllowLocal || !$isLocalClient) {
-            $receivedToken = getHeaderValue($rawRequest, $originTokenHeader) ?? '';
-            if (!\hash_equals($originToken, $receivedToken)) {
-                $forbiddenBody = '{"error":true,"message":"Origin token validation failed"}';
-                return "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " . \strlen($forbiddenBody) . "\r\nConnection: close\r\n\r\n{$forbiddenBody}";
-            }
-        }
-    }
-    // ========== Origin Token 回源校验结束 ==========
-
     // ========== ACME HTTP-01 校验（WLS 虚拟：从 generated/acme-http01 按域名返回 keyAuth，验证完由证书流程删除） ==========
     if ($method === 'GET' && \preg_match('#^/\.well-known/acme-challenge/([^/]+)/?$#', $uri, $acmeMatches)) {
         $requestToken = $acmeMatches[1];
@@ -5339,9 +5411,7 @@ function handleRequest(
                         && (string)($data['token'] ?? '') === (string)$requestToken) {
                         $body = $data['keyAuth'];
                         $len = \strlen($body);
-                        $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
-                        $hasClose = \stripos($rawRequest, 'Connection: close') !== false;
-                        $keepAlive = $isHttp11 && !$hasClose;
+                        $keepAlive = $policyDecision->keepAlive();
                         return $keepAlive
                             ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
                             : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
@@ -5356,7 +5426,9 @@ function handleRequest(
 
     // ========== 静态文件处理（WLS 模式特有） ==========
     $staticFileStart = \microtime(true);
-    $staticResponse = handleStaticFile($uri, $rawRequest);
+    $staticResponse = $policyDecision->staticProcessCacheEnabled()
+        ? handleStaticFile($uri, $rawRequest)
+        : null;
     if ($staticResponse !== null) {
         $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache();
         $cacheStatus = $cacheInfo['status'] ?? 'miss';
@@ -5378,20 +5450,18 @@ function handleRequest(
     
     // 如果运行时初始化失败，返回错误
     if ($runtime === null) {
-        WlsLogger::error_("运行时未初始化，返回错误: {$runtimeError}");
-        $errorBody = \json_encode([
-            'error' => true,
-            'message' => 'Runtime initialization failed',
-            'detail' => $runtimeError,
-        ], JSON_UNESCAPED_UNICODE);
-        
-        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " . \strlen($errorBody) . "\r\nConnection: close\r\n\r\n" . $errorBody;
+        return \Weline\Server\Service\Runtime\WorkerRuntimeFailureResponse::create($runtimeError, [
+            'instance' => $instanceName,
+            'worker_id' => $workerId,
+            'port' => $port,
+            'transport' => 'https_stream',
+        ]);
     }
     
     WlsLogger::info_("准备进入框架处理: {$method} {$uri}");
     try {
         // 创建 WLS 请求对象（框架会自动处理维护模式）
-        $request = \Weline\Framework\Http\WlsRequest::fromRaw($rawRequest, [
+        $request = \Weline\Framework\Http\WlsRequest::fromEnvelope($policyDecision->requestEnvelope(), $policyServerInfo + [
             'WLS_INSTANCE' => $instanceName,
             'WLS_WORKER_ID' => $workerId,
             'WLS_PORT' => $port,
@@ -5438,7 +5508,7 @@ function handleRequest(
                 }
                 $result = $headerPart . "\r\n\r\n" . $bodyPart;
             }
-            $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
+            $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
             $headerEnd = \strpos($result, "\r\n\r\n");
             if ($headerEnd !== false) {
@@ -5502,7 +5572,7 @@ function handleRequest(
         }
         
         // 添加路由提示头（用于 TCP 透传模式下的智能路由）
-        $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
+        $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
         \Weline\Server\Service\RouteHintService::addHintToFrameworkResponse($response, $sni);
 
         $acceptEncoding = $request->getHeader('Accept-Encoding');
@@ -5512,7 +5582,12 @@ function handleRequest(
 
         $responseLocation = (string)($response->getHeader('Location') ?? '');
         if ($responseLocation !== '') {
-            $response->setHeader('Location', appendBackendLoginReturnUrl($responseLocation, $request, $method, $rawRequest));
+            $response->setHeader('Location', appendBackendLoginReturnUrl(
+                $responseLocation,
+                $request,
+                $method,
+                $policyDecision->target,
+            ));
         }
 
         $responseBody = (string)$response->getBody();
@@ -5644,7 +5719,12 @@ function handleRequest(
  * @param string $rawRequest 原始请求（用于获取 If-Modified-Since 等头部）
  * @return string|null 如果是静态文件则返回 HTTP 响应字符串，否则返回 null
  */
-function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http\Request $request, string $method, string $rawRequest): string
+function appendBackendLoginReturnUrl(
+    string $redirectUrl,
+    \Weline\Framework\Http\Request $request,
+    string $method,
+    string $requestTarget,
+): string
 {
     $method = \strtoupper($method);
     if ($method !== 'GET' && $method !== 'HEAD') {
@@ -5659,7 +5739,7 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
         return $redirectUrl;
     }
 
-    $uri = extractUriFromRawRequest($rawRequest);
+    $uri = $requestTarget;
     if ($uri === '') {
         $uri = (string)($request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $request->getServer('REQUEST_URI'));
     }
@@ -5750,21 +5830,6 @@ function removeBackendLoginReturnParams(string $url): string
     }
     $base .= $parts['path'] ?? '';
     return $query === '' ? $base : $base . '?' . $query;
-}
-
-function extractUriFromRawRequest(string $rawRequest): string
-{
-    $requestLine = \strtok($rawRequest, "\r\n");
-    if (!\is_string($requestLine) || $requestLine === '') {
-        return '';
-    }
-
-    $parts = \explode(' ', $requestLine, 3);
-    if (\count($parts) < 2) {
-        return '';
-    }
-
-    return (string)$parts[1];
 }
 
 function wlsGetStaticFileCacheStatus(): array
@@ -5957,6 +6022,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
             $requestTarget = (string)$requestLineParts[1];
         }
     }
+    $keepAlive = isKeepAlive($rawRequest);
+    $connectionHeader = $keepAlive ? 'keep-alive' : 'close';
 
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
     // 缓存格式：[filepath => ['content' => string, 'mtime' => int, 'size' => int, 'cached_at' => int, 'hits' => int, 'last_access' => int]]
@@ -5975,6 +6042,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $size = $staticFileCacheTotalSize;
         $staticFileCache = [];
         $staticFileCacheTotalSize = 0;
+        \Weline\Server\Service\WorkerStaticResponseL1::clear();
         return "cleared:{$count}:{$size}";
     }
     
@@ -5986,9 +6054,10 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
             'max_total' => $maxTotal,
             'max_size' => $maxSize,
             'eviction_threshold' => $evictionThreshold,
+            'response_l1' => \Weline\Server\Service\WorkerStaticResponseL1::status(),
         ]);
     }
-    
+
     /**
      * 冷热淘汰：当缓存接近上限时，淘汰最冷的缓存项
      * 评分公式：score = hits * 10 + recency_bonus
@@ -6231,19 +6300,15 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $lastModified = \gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
     $etag = '"' . \md5($filename . $mtime) . '"';
     
-    // 检查缓存验证（304 Not Modified）- 精简响应头
-    if (\preg_match('/If-Modified-Since:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
-        $ifModifiedSince = \trim($matches[1]);
-        if ($ifModifiedSince === $lastModified) {
-            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\nX-WLS-Static-Cache: {$cacheHeaderStatus}\r\nConnection: keep-alive\r\n\r\n";
-        }
-    }
-    
-    if (\preg_match('/If-None-Match:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
-        $ifNoneMatch = \trim($matches[1]);
-        if ($ifNoneMatch === $etag) {
-            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\nX-WLS-Static-Cache: {$cacheHeaderStatus}\r\nConnection: keep-alive\r\n\r\n";
-        }
+    // If-None-Match takes precedence over If-Modified-Since.
+    $ifNoneMatch = getHeaderValue($rawRequest, 'If-None-Match');
+    $ifModifiedSince = getHeaderValue($rawRequest, 'If-Modified-Since');
+    if (($ifNoneMatch !== null && $ifNoneMatch === $etag)
+        || ($ifNoneMatch === null && $ifModifiedSince === $lastModified)
+    ) {
+        return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\n"
+            . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
+            . "X-WLS-Static-Cache: {$cacheHeaderStatus}\r\nConnection: {$connectionHeader}\r\n\r\n";
     }
     
     // 获取文件大小
@@ -6254,6 +6319,36 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     // 缓存控制（静态资源可以长期缓存）
     $maxAge = 86400 * 7; // 7 天
+
+    $method = wlsStaticRequestMethod($rawRequest);
+    $range = wlsResolveStaticByteRange(
+        getHeaderValue($rawRequest, 'Range'),
+        getHeaderValue($rawRequest, 'If-Range'),
+        $fileSize,
+        $etag,
+        $mtime,
+    );
+    if ($range['status'] === 'unsatisfiable') {
+        return "HTTP/1.1 416 Range Not Satisfiable\r\n"
+            . "Content-Range: bytes */{$fileSize}\r\nContent-Length: 0\r\n"
+            . "Accept-Ranges: bytes\r\nConnection: {$connectionHeader}\r\n\r\n";
+    }
+    if ($range['status'] === 'range') {
+        $content = $method === 'HEAD'
+            ? ''
+            : wlsReadStaticFileSlice($filename, $range['start'], $range['length']);
+        if ($content === false) {
+            return null;
+        }
+        $response = "HTTP/1.1 206 Partial Content\r\n"
+            . "Content-Range: bytes {$range['start']}-{$range['end']}/{$fileSize}\r\n"
+            . "Content-Type: {$mimeType}\r\nContent-Length: {$range['length']}\r\n"
+            . "Cache-Control: public, max-age={$maxAge}\r\nETag: {$etag}\r\n"
+            . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
+            . "Connection: {$connectionHeader}\r\nX-WLS-Static-Cache: DISK\r\n"
+            . "X-WLS-File-Size: {$fileSize}\r\n\r\n";
+        return $method === 'HEAD' ? $response : $response . $content;
+    }
     
     // ========== 内存缓存策略（冷热淘汰） ==========
     $content = $validatedCached['content'] ?? null;
@@ -6331,30 +6426,26 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $contentLength = \strlen($content);
     }
     
-    // HTTP/1.1 默认 keep-alive，除非客户端显式请求 close
-    $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
-    $hasCloseHeader = \stripos($rawRequest, 'Connection: close') !== false;
-    $keepAlive = $isHttp11 && !$hasCloseHeader;
-    $connectionHeader = $keepAlive ? 'keep-alive' : 'close';
-    
     // 构建精简的 HTTP 响应（静态文件不需要 cookie、server 等冗余头部）
     $response = "HTTP/1.1 200 OK\r\n";
     $response .= "Content-Type: {$mimeType}\r\n";
     $response .= "Content-Length: {$contentLength}\r\n";
     $response .= "Cache-Control: public, max-age={$maxAge}\r\n";
     $response .= "ETag: {$etag}\r\n";
+    $response .= "Last-Modified: {$lastModified}\r\n";
+    $response .= "Accept-Ranges: bytes\r\n";
     $response .= "Connection: {$connectionHeader}\r\n";
     // WLS 内存缓存状态标识（HIT=内存缓存命中, MISS=磁盘读取）
     $response .= "X-WLS-Static-Cache: " . ($fromCache ? 'HIT' : 'MISS') . "\r\n";
     $response .= "X-WLS-File-Size: {$fileSize}\r\n";
     $response .= "X-WLS-Content-Length: {$contentLength}\r\n";
     $response .= "\r\n";
-    $response .= $content;
+    $response .= $method === 'HEAD' ? '' : $content;
     
     $expectedResponseLen = \strlen($response);
     $headerEndPos = \strpos($response, "\r\n\r\n");
     $actualBodyLen = $expectedResponseLen - $headerEndPos - 4;
-    if ($actualBodyLen !== $contentLength) {
+    if ($method !== 'HEAD' && $actualBodyLen !== $contentLength) {
         // 响应构建错误，返回错误响应
         return "HTTP/1.1 500 Internal Server Error\r\n" .
                "Content-Type: text/plain\r\n" .
@@ -6362,6 +6453,19 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
                "Connection: close\r\n" .
                "\r\n" .
                "Response construction error: {$actualBodyLen} != {$contentLength}";
+    }
+
+
+    if ($method === 'GET') {
+        \Weline\Server\Service\WorkerStaticResponseL1::publish(
+            $requestTarget,
+            $response,
+            $filename,
+            $etag,
+            $lastModified,
+            $now,
+            $staticFileCacheMaxAge,
+        );
     }
     
     return $response;

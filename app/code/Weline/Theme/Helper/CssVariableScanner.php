@@ -12,8 +12,10 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Meta\Helper\MetaData;
-use Weline\Meta\Model\Meta;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Meta\Api\Data\MetadataIdentity;
+use Weline\Meta\Api\Data\MetadataWrite;
+use Weline\Meta\Api\MetadataRepositoryInterface;
 use Weline\Theme\Model\WelineTheme;
 
 /**
@@ -34,6 +36,7 @@ class CssVariableScanner
     {
         $area = strtolower($area);
         $results = [];
+        $metadataWrites = [];
         
         // 获取主题
         if ($theme === null) {
@@ -68,8 +71,7 @@ class CssVariableScanner
                 $variables = $this->extractVariablesFromCss($filePath, $variableFile);
                 
                 foreach ($variables as $variable) {
-                    // 注册到Meta系统
-                    $this->registerVariableToMeta($area, $variableFile, $variable, $theme);
+                    $metadataWrites[] = $this->createVariableMetadataWrite($area, $variableFile, $variable);
                     
                     $results[] = [
                         'file' => $variableFile,
@@ -81,6 +83,10 @@ class CssVariableScanner
             }
         }
         
+        if ($metadataWrites !== []) {
+            $this->metadataRepository()->upsertBatch($metadataWrites);
+        }
+
         return $results;
     }
     
@@ -296,6 +302,16 @@ class CssVariableScanner
      */
     public function registerVariableToMeta(string $area, string $variableFile, array $variableData, WelineTheme $theme): void
     {
+        $this->metadataRepository()->upsert(
+            $this->createVariableMetadataWrite($area, $variableFile, $variableData)
+        );
+    }
+
+    private function createVariableMetadataWrite(
+        string $area,
+        string $variableFile,
+        array $variableData
+    ): MetadataWrite {
         $variableName = $variableData['name'];
         $variableValue = $variableData['value'];
         $category = $variableData['category'] ?? '其他';
@@ -331,22 +347,24 @@ class CssVariableScanner
             ]
         ];
         
-        // 使用 forceCheck 自动处理插入或更新，避免唯一约束冲突
-        /** @var Meta $metaModel */
-        $metaModel = ObjectManager::make(Meta::class);
-        $metaModel->reset();
-        $metaModel->setData(Meta::schema_fields_NAMESPACE, 'theme');
-        $metaModel->setData(Meta::schema_fields_META_TYPE, 'variables');
-        $metaModel->setData(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
-        $metaModel->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-        $metaModel->setData(Meta::schema_fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-        $metaModel->setData(Meta::schema_fields_AREA, $area);
-        $metaModel->setData(Meta::schema_fields_CATEGORY, $variableFile);
-        
-        // 使用 forceCheck 确保唯一键检查，如果已存在则更新，不存在则插入
-        // 这样可以避免并发情况下的唯一约束冲突
-        $metaModel->forceCheck(true, [Meta::schema_fields_NAMESPACE, Meta::schema_fields_META_TYPE, Meta::schema_fields_META_IDENTIFY])
-                ->save();
+        return new MetadataWrite(
+            identity: new MetadataIdentity('theme', 'variables', $metaIdentify),
+            metaData: $metaDataArray,
+            setting: $setting,
+            area: $area,
+            category: $variableFile,
+        );
+    }
+
+    private function metadataRepository(): MetadataRepositoryInterface
+    {
+        $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetadataRepositoryInterface::class);
+        if (!$repository instanceof MetadataRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta metadata repository provider is unavailable.');
+        }
+
+        return $repository;
     }
     
     /**
@@ -383,4 +401,3 @@ class CssVariableScanner
         return 'text';
     }
 }
-

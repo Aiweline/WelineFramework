@@ -19,6 +19,10 @@
 - 目录：`app/code/Weline/UrlManager`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 
+## 公共 PHP 契约
+
+跨模块扫描 URL rewrite 时使用 `Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface`。同名 Factory/编译 Provider 返回不可变 `UrlRewriteRecord`，只发布 rewrite ID、系统默认站点或业务站点 ID、字段是否显式存在、内部 path 与公开 rewrite；调用方不得注入 `Weline\UrlManager\Model\UrlRewrite`，也不得读取其字段常量或 Query Builder。`websiteIdSpecified=true, websiteId=0` 明确表示系统默认站点；只有 `websiteIdSpecified=false, websiteId=null` 才表示遗留字段缺失，可由调用方采用受控的全站语义。
+
 ## 代码面概览
 
 入口文件：
@@ -47,6 +51,7 @@
 
 ## 本模块文档资产
 
+- `app/code/Weline/UrlManager/doc/route-import-idempotency.md`
 - `app/code/Weline/UrlManager/doc/url-rewrite-slug-redirect-plan.md`
 
 ## 维护规则
@@ -56,3 +61,9 @@
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。
 - 本 README 目前是结构稿；后续功能稳定后，应继续补模块职责、关键流程、接口与反例。
+
+## URL 重写公共读取
+
+`Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface` 提供非空重写列表、当前网站 ID
+和按网站/path 的精确查询，结果为不可变 `UrlRewriteRecord`。可选集成必须经 Runtime Provider
+解析，不能直接实例化 `UrlRewrite` Model，也不能在模块缺失时产生类加载错误。

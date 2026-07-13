@@ -43,12 +43,12 @@ final class SupervisorRuntime
 
     public function handle(array $message): ?string
     {
-        $msgId = (string)($message['msg_id'] ?? '');
-        $receivedChannel = (string)($message['channel'] ?? '');
-        if ($receivedChannel !== $this->channelId) {
-            return SupervisorMessage::channelReject($msgId, $this->channelId, $receivedChannel);
+        $rejection = $this->validateEnvelope($message);
+        if ($rejection !== null) {
+            return $rejection;
         }
 
+        $msgId = (string)($message['msg_id'] ?? '');
         $before = $this->structuralDigest();
         $poolBefore = $this->workerPoolDigest();
         $response = $this->supervisor->handle($message);
@@ -65,7 +65,6 @@ final class SupervisorRuntime
             $slotId = (string)($message['slot_id'] ?? '');
             $lease = $slotId !== '' ? $this->supervisor->leases()->get($slotId) : null;
             if ($lease instanceof SlotLease && $lease->role === 'worker' && $lease->state === SlotLease::STATE_READY) {
-                $msgId = (string)($message['msg_id'] ?? '');
                 $response = SupervisorMessage::readyAck(
                     lease: $lease,
                     msgId: $msgId,
@@ -76,6 +75,31 @@ final class SupervisorRuntime
         }
 
         return $response;
+    }
+
+    /** @param array<string, mixed> $message */
+    public function validateEnvelope(array $message): ?string
+    {
+        $msgId = (string)($message['msg_id'] ?? '');
+        $receivedChannel = (string)($message['channel'] ?? '');
+        if ($receivedChannel !== $this->channelId) {
+            return SupervisorMessage::channelReject($msgId, $this->channelId, $receivedChannel);
+        }
+        if (($message['type'] ?? '') === SupervisorMessage::TYPE_HELLO) {
+            $receivedInstance = (string)($message['instance'] ?? '');
+            if ($receivedInstance === '' || !\hash_equals($this->instanceName, $receivedInstance)) {
+                return SupervisorMessage::channelReject(
+                    $msgId,
+                    $this->channelId,
+                    $receivedChannel,
+                    'instance_mismatch',
+                    $this->instanceName,
+                    $receivedInstance,
+                );
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -107,6 +131,24 @@ final class SupervisorRuntime
         $snapshot['channel'] = $this->channelId;
 
         return $snapshot;
+    }
+
+    public function releaseLease(string $slotId, string $leaseId, int $generation): bool
+    {
+        $before = $this->structuralDigest();
+        $poolBefore = $this->workerPoolDigest();
+        $released = $this->supervisor->leases()->release($slotId, $leaseId, $generation);
+        if (!$released) {
+            return false;
+        }
+        if ($this->structuralDigest() !== $before) {
+            $this->slotSnapshotVersion++;
+        }
+        if ($this->workerPoolDigest() !== $poolBefore) {
+            $this->workerPoolSnapshotVersion++;
+        }
+
+        return true;
     }
 
     private function structuralDigest(): string

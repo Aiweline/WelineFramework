@@ -2,14 +2,14 @@
 
 namespace Weline\FileManager\Taglib;
 
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\FileManager\FileManagerInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class FileManager implements TaglibInterface
 {
@@ -81,7 +81,7 @@ class FileManager implements TaglibInterface
                 $userConfigFileManager = $attributes['code'];
             } else {
                 # 检查是否有配置默认的文件管理器，默认使用 weline_media
-                $userConfigFileManager = ObjectManager::getInstance(BackendUserConfig::class)->getConfig('file_manager') ?: 'weline_media';
+                $userConfigFileManager = ObjectManager::getInstance(BackendUserConfigStore::class)->getConfig('file_manager') ?: 'weline_media';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
             /**@var CachePoolInterface $cache */

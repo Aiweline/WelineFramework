@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
-use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Env\WelineEnv;
@@ -100,7 +99,7 @@ class TelemetryBroadcaster
     private static function hasDevToolActivation(?Request $request): bool
     {
         try {
-            return ObjectManager::getInstance(PanelAccessService::class)->canAccessPanel($request);
+            return ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessPanel($request);
         } catch (\Throwable) {
             return false;
         }

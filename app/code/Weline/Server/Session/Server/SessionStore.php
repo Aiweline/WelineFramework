@@ -38,6 +38,15 @@ final class SessionStore
     /** 最大 Session 数量 */
     private int $maxSessions;
 
+    /** 内存达到高水位后开始主动淘汰；0 表示禁用内存水位保护。 */
+    private int $memoryHighWatermarkBytes = 0;
+
+    /** 主动淘汰持续到低水位，给协议编解码和连接缓冲预留空间。 */
+    private int $memoryLowWatermarkBytes = 0;
+
+    /** 因内存压力淘汰的 Session 数量。 */
+    private int $memoryPressureEvictionCount = 0;
+
     /** 默认 TTL（秒） */
     private int $defaultTtl;
 
@@ -126,7 +135,7 @@ final class SessionStore
      */
     public function __construct(array $config = [])
     {
-        $this->maxSessions = (int)($config['max_sessions'] ?? 50000);
+        $this->maxSessions = \max(1, (int)($config['max_sessions'] ?? 50000));
         $this->defaultTtl = (int)($config['session_ttl'] ?? 3600);
         $this->persistInterval = (int)($config['persist_interval'] ?? 30);
         $this->persistOnWrites = (int)($config['persist_on_writes'] ?? 100);
@@ -156,6 +165,24 @@ final class SessionStore
         $this->persistFailureBackoffSec = (int)($config['persist_failure_backoff_sec'] ?? $this->persistMinInterval);
         if ($this->persistFailureBackoffSec < 1) {
             $this->persistFailureBackoffSec = 1;
+        }
+
+        $memoryLimitBytes = $this->parseMemoryBytes((string)\ini_get('memory_limit'));
+        $configuredHighBytes = \max(0, (int)($config['memory_high_watermark_bytes'] ?? 0));
+        $configuredLowBytes = \max(0, (int)($config['memory_low_watermark_bytes'] ?? 0));
+        $highRatio = \max(0.50, \min(0.90, (float)($config['memory_high_watermark_ratio'] ?? 0.75)));
+        $lowRatio = \max(0.35, \min($highRatio - 0.05, (float)($config['memory_low_watermark_ratio'] ?? 0.60)));
+        $this->memoryHighWatermarkBytes = $configuredHighBytes > 0
+            ? $configuredHighBytes
+            : ($memoryLimitBytes > 0 ? (int)\floor($memoryLimitBytes * $highRatio) : 0);
+        $this->memoryLowWatermarkBytes = $configuredLowBytes > 0
+            ? $configuredLowBytes
+            : ($memoryLimitBytes > 0 ? (int)\floor($memoryLimitBytes * $lowRatio) : 0);
+        if ($this->memoryHighWatermarkBytes > 0) {
+            $this->memoryLowWatermarkBytes = \max(1, \min(
+                $this->memoryLowWatermarkBytes,
+                $this->memoryHighWatermarkBytes - 1
+            ));
         }
         
         $this->lastPersistTime = \time();
@@ -441,6 +468,7 @@ final class SessionStore
 
         $this->store[$sessionId]['data'][$key] = $value;
         $this->markDirty($sessionId);
+        $this->evictIfNeeded(true);
 
         if ($shouldSample) {
             $this->recordOperationMetric('set', \microtime(true) - $startTime, 'success');
@@ -470,6 +498,7 @@ final class SessionStore
         $this->lruOrder[$sessionId] = true;
         $this->touchLru($sessionId);
         $this->markDirty($sessionId);
+        $this->evictIfNeeded(true);
 
         return true;
     }
@@ -753,6 +782,7 @@ final class SessionStore
         }
 
         $this->markDirty($sessionId);
+        $this->evictIfNeeded(true);
         return true;
     }
 
@@ -856,6 +886,10 @@ final class SessionStore
             'persist_interval' => $this->persistInterval,
             'persist_on_writes' => $this->persistOnWrites,
             'memory_usage' => \memory_get_usage(true),
+            'memory_usage_live' => \memory_get_usage(false),
+            'memory_high_watermark_bytes' => $this->memoryHighWatermarkBytes,
+            'memory_low_watermark_bytes' => $this->memoryLowWatermarkBytes,
+            'memory_pressure_eviction_count' => $this->memoryPressureEvictionCount,
             'uptime' => \time() - $this->startTime,
             'request_counts' => $this->requestCounts,
             'eviction_count' => $this->evictionCount,
@@ -940,56 +974,45 @@ final class SessionStore
      * 优化策略：优先淘汰即将过期（expire - now < 10分钟）的 Session，
      * 其次淘汰最久未访问的 Session
      */
-    private function evictIfNeeded(): void
+    private function evictIfNeeded(bool $memoryOnly = false): void
     {
-        if (\count($this->store) < $this->maxSessions) {
+        $sessionCount = \count($this->store);
+        $countPressure = !$memoryOnly && $sessionCount >= $this->maxSessions;
+        $memoryUsage = \memory_get_usage(false);
+        $memoryPressure = $this->memoryHighWatermarkBytes > 0
+            && $memoryUsage >= $this->memoryHighWatermarkBytes;
+        if (!$countPressure && !$memoryPressure) {
             return;
         }
 
         $startTime = \microtime(true);
-
-        $toEvict = (int)\ceil($this->maxSessions * 0.1);
+        $toEvict = $countPressure ? \max(1, (int)\ceil($this->maxSessions * 0.1)) : 0;
         $evicted = 0;
-        $now = \time();
-        $expiringThreshold = $now + 600;
-
-        $expiringSessions = [];
-        $lruSessions = [];
-
-        foreach ($this->lruOrder as $sessionId => $_) {
-            if (!isset($this->store[$sessionId])) {
-                continue;
-            }
-
-            $entry = $this->store[$sessionId];
-            if ($entry['expire'] > 0 && $entry['expire'] < $expiringThreshold) {
-                $expiringSessions[$sessionId] = $entry['expire'];
-            } else {
-                $lruSessions[] = $sessionId;
-            }
-        }
-
-        \asort($expiringSessions);
-
-        foreach ($expiringSessions as $sessionId => $expire) {
-            if ($evicted >= $toEvict) {
+        while ($this->lruOrder !== []) {
+            $sessionId = \array_key_first($this->lruOrder);
+            if ($sessionId === null) {
                 break;
             }
             unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
             $evicted++;
-        }
 
-        foreach ($lruSessions as $sessionId) {
-            if ($evicted >= $toEvict) {
+            $countSatisfied = !$countPressure || $evicted >= $toEvict;
+            $memorySatisfied = !$memoryPressure
+                || \memory_get_usage(false) <= $this->memoryLowWatermarkBytes;
+            if ($countSatisfied && $memorySatisfied) {
                 break;
             }
-            unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
-            $evicted++;
         }
 
         if ($evicted > 0) {
             $this->evictionCount += $evicted;
-            $this->log("LRU evicted {$evicted} sessions (expiring-first strategy)");
+            if ($memoryPressure) {
+                $this->memoryPressureEvictionCount += $evicted;
+            }
+            $reason = $memoryPressure && $countPressure
+                ? 'memory+count'
+                : ($memoryPressure ? 'memory' : 'count');
+            $this->log("LRU evicted {$evicted} sessions (reason={$reason})");
             $this->markDirty();
 
             // 记录淘汰耗时
@@ -1000,6 +1023,36 @@ final class SessionStore
                 []
             );
         }
+    }
+
+    /**
+     * 在读取协议帧或维护阶段释放内存，避免到达 PHP memory_limit 后才被动崩溃。
+     */
+    public function relieveMemoryPressure(): int
+    {
+        $before = $this->evictionCount;
+        $this->evictIfNeeded(true);
+
+        return $this->evictionCount - $before;
+    }
+
+    private function parseMemoryBytes(string $value): int
+    {
+        $value = \strtoupper(\trim($value));
+        if ($value === '' || $value === '-1') {
+            return 0;
+        }
+        if (!\preg_match('/^(\d+)([KMG]?)$/', $value, $matches)) {
+            return 0;
+        }
+
+        $bytes = (int)$matches[1];
+        return match ($matches[2]) {
+            'G' => $bytes * 1024 * 1024 * 1024,
+            'M' => $bytes * 1024 * 1024,
+            'K' => $bytes * 1024,
+            default => $bytes,
+        };
     }
 
     /**

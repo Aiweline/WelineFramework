@@ -13,6 +13,10 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Api\AgentInterface;
+use Weline\Ai\Api\AgentModelExecutor;
+use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Api\AiModel as AgentModel;
 use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiUsageLog;
@@ -23,6 +27,7 @@ use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\AgentScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
+use Weline\Ai\Service\Provider\ProviderRuntime;
 use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
 use Weline\Ai\Service\Provider\ImageGenerationResponseNormalizer;
 use Weline\Ai\Service\Provider\VendorConfigManager;
@@ -31,8 +36,6 @@ use Weline\Ai\Service\ConfigResolver;
 use Weline\Ai\Service\Skill\AdapterSkillResolver;
 use Weline\Ai\Service\Style\AdapterStyleResolver;
 use Weline\Ai\Service\Style\StyleService;
-use Weline\Ai\Interface\AgentInterface;
-use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
@@ -2068,7 +2071,9 @@ class AiService
         // 5. 解析配置（API key、base_url 等）
         $resolvedConfig = $this->resolveModelConfig($model, $params);
         $params['resolved_config'] = $resolvedConfig;
-        $params['provider_factory'] = $this->providerFactory;
+        $providerRuntime = new ProviderRuntime($this->providerFactory, $this->aiModel);
+        $params['provider_factory'] = $providerRuntime;
+        $params['model_executor'] = new AgentModelExecutor($providerRuntime);
 
         // 5.1 包装 streamCallback：所有智能体事件流式写入 ai_activity.log
         $wrappedCallback = null;
@@ -2095,7 +2100,12 @@ class AiService
         }
 
         // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
-        $result = $agent->execute($prompt, $model, $params, $wrappedCallback);
+        $result = $agent->execute(
+            $prompt,
+            AgentModel::fromArray($model->getData()),
+            $params,
+            $wrappedCallback,
+        );
         $result->agentCode = $agentCode;
         $result->modelCode = $model->getModelCode();
 

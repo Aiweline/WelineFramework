@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Api\SecretStoreInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\System\Security\Encrypt;
 
@@ -17,7 +18,7 @@ use Weline\Framework\System\Security\Encrypt;
  * 
  * @package Weline_Ai
  */
-class SecretStoreService
+class SecretStoreService implements SecretStoreInterface
 {
     /**
      * 加密算法
@@ -290,4 +291,3 @@ class SecretStoreService
         return $reencrypted;
     }
 }
-

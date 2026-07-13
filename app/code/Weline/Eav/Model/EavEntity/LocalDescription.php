@@ -14,8 +14,9 @@ namespace Weline\Eav\Model\EavEntity;
 
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\I18n\Api\Localization\LocalModel;
 
-class LocalDescription extends \Weline\I18n\LocalModel
+class LocalDescription extends LocalModel
 {
     public const fields_ID = EavEntity::schema_fields_ID;
 

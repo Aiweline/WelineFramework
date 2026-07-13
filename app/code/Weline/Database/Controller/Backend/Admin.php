@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Database\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Database\Service\Admin\AuditLogService;
 use Weline\Database\Service\Admin\DatabaseAdminService;
 use Weline\Database\Service\Admin\SchemaAdminService;
@@ -21,7 +21,7 @@ use Weline\Framework\Http\Response;
     '类 phpMyAdmin 数据库管理入口',
     'Weline_Backend::data_tools_group'
 )]
-class Admin extends BaseController
+class Admin extends BackendPageController
 {
     public function __construct(
         private readonly DatabaseAdminService $databaseAdminService,

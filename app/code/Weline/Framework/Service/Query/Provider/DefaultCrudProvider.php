@@ -26,7 +26,7 @@ class DefaultCrudProvider implements QueryProviderInterface
                     'description' => __('创建记录'),
                     'params' => [
                         ['name' => 'model', 'type' => 'string', 'required' => true, 'description' => __('模型类名或短名（配合 module 参数）')],
-                        ['name' => 'module', 'type' => 'string', 'required' => false, 'description' => __('模块名（使用短 model 名时必填，如 Weline_Widget）')],
+                        ['name' => 'module', 'type' => 'string', 'required' => false, 'description' => __('模块名（使用短 model 名时必填，如 Vendor_Module）')],
                         ['name' => 'data', 'type' => 'array', 'required' => true, 'description' => __('要写入的字段键值对')],
                     ],
                 ],
@@ -201,4 +201,3 @@ class DefaultCrudProvider implements QueryProviderInterface
         return $model->select()->fetchArray();
     }
 }
-

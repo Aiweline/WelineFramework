@@ -12,12 +12,13 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
+use Weline\I18n\Api\Translation\TranslationCollectorInterface;
 
 /**
  * 翻译字符串收集服务
  * 统一的翻译字符串提取服务，供模块管理器、主题创建和i18n收集命令使用
  */
-class TranslationCollector
+class TranslationCollector implements TranslationCollectorInterface
 {
     /**
      * 从指定目录或模块收集翻译字符串（数组版本，向后兼容）
@@ -402,4 +403,3 @@ class TranslationCollector
         return true;
     }
 }
-

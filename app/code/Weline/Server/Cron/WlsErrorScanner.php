@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Server\Console\Server\WlsErrorScanner as WlsErrorScannerCommand;
 
 /**

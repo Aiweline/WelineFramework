@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Social\Service;
 
-use Weline\Ai\Service\SecretStoreService;
+use Weline\Ai\Api\SecretStoreInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Social\Interface\SocialPlatformConfigTesterInterface;
 use Weline\Social\Model\SocialPlatformAccount;
@@ -13,7 +13,7 @@ class SocialAccountService
 {
     public function __construct(
         private readonly SocialPlatformRegistry $registry,
-        private readonly SecretStoreService $secretStore,
+        private readonly SecretStoreInterface $secretStore,
         private readonly ?ObjectManager $objectManager = null,
         private readonly ?SocialPlatformIconService $iconService = null
     ) {

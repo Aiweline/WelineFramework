@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\Attribute\CronTestHelp;
+use Weline\Framework\Cron\Attribute\CronTestHelp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Service\SslCertificateService;
+use Weline\Server\Api\Tls\CertificateChallenge;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPoolFlowLog;
@@ -30,7 +30,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     description: '子域证书校验：扫描阶段为 cert_valid/site_live 且解析指向本机的池子，用 SSL 证书管理器判断 PEM/文件与临期；不健康则回退池状态，已建站则立即重申请。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_verify --domain=www.example.com -v'],
     manual_help: [
-        '逻辑：遍历池内 pool_lifecycle_stage 为 cert_valid 或 site_live 的记录，用 SslCertificateService::isManagedCertificateHealthyForHostname 判定；不健康则回退该条并可选立即重申请（已建站时）。',
+        '逻辑：遍历池内 pool_lifecycle_stage 为 cert_valid 或 site_live 的记录，通过 Server Query 的 isManagedCertificateHealthy 判定；不健康则回退该条并可选立即重申请（已建站时）。',
         '--domain= 仅校验该子域；不指定则处理全部。',
     ],
 )]
@@ -60,7 +60,6 @@ class DomainPoolCertificateVerify
 
         try {
             $poolModel = ObjectManager::getInstance(DomainPool::class);
-            $sslSvc = ObjectManager::getInstance(SslCertificateService::class);
             $domains = $this->getPoolDomainsForManagedCertificateHealthScan($poolModel);
             $results['checked'] = \count($domains);
 
@@ -83,7 +82,9 @@ class DomainPoolCertificateVerify
                 }
                 WebsitesCronTestContext::detail('DomainPoolCertificateVerify.row', ['domain' => $domain, 'pool_id' => $poolId]);
 
-                $certValid = $sslSvc->isManagedCertificateHealthyForHostname($domain);
+                $certValid = (bool)\w_query('server', 'isManagedCertificateHealthy', [
+                    'hostname' => $domain,
+                ]);
                 WebsitesCronTestContext::detail('isManagedCertificateHealthyForHostname', ['domain' => $domain, 'valid' => $certValid]);
 
                 if ($certValid) {
@@ -219,7 +220,7 @@ class DomainPoolCertificateVerify
                 'cert_strategy' => 'single',
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
-                'challenge_strategy' => SslCertificateService::CHALLENGE_DNS01,
+                'challenge_strategy' => CertificateChallenge::DNS_01,
                 '_on_progress' => $onProgress,
             ]);
 

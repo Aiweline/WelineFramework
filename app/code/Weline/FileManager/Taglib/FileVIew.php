@@ -2,7 +2,7 @@
 
 namespace Weline\FileManager\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class FileVIew implements TaglibInterface
 {

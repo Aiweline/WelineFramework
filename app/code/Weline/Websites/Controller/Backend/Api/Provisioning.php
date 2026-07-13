@@ -3,10 +3,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Controller\Backend\Api;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Admin\Api\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\ProvisioningOrder;
 use Weline\Websites\Service\DomainLifecycleOrchestrationService;
@@ -133,7 +134,7 @@ class Provisioning extends BaseController
                     'step' => 'resolve',
                     'message' => __('等待 DNS 生效... (%{1}/6)', [$i + 1]),
                 ]);
-                sleep(5);
+                SchedulerSystem::sleep(5);
             }
 
             if (!$resolved) {

@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Taglib\Taglib;
 
-class Test implements \Weline\Taglib\TaglibInterface
+class Test implements \Weline\Framework\Taglib\TaglibInterface
 {
     static function name(): string
     {

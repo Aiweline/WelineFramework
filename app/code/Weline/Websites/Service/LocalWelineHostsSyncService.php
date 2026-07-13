@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
-use Weline\Server\Service\HostsFileManager;
-use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
+use Weline\Server\Api\System\HostsWriter;
 
 class LocalWelineHostsSyncService
 {
@@ -23,7 +23,8 @@ class LocalWelineHostsSyncService
 
     public function isEligibleDomain(string $domain): bool
     {
-        return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
+        return \class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
     /**
@@ -34,7 +35,8 @@ class LocalWelineHostsSyncService
         $domain = \strtolower(\trim($domain));
         $ip = \trim($ip) !== '' ? \trim($ip) : '127.0.0.1';
 
-        if (LocalDomainPolicy::resolvesViaLoopbackSuffix($domain)) {
+        if (\class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::resolvesViaLoopbackSuffix($domain)) {
             return [
                 'success' => true,
                 'skipped' => true,
@@ -57,7 +59,16 @@ class LocalWelineHostsSyncService
             return $result + ['domain' => $domain];
         }
 
-        $fallback = HostsFileManager::addDomain($domain, $ip);
+        if (!\class_exists(HostsWriter::class)) {
+            return [
+                'success' => false,
+                'skipped' => true,
+                'message' => (string)__('Weline Server is required for automatic hosts injection'),
+                'domain' => $domain,
+            ];
+        }
+
+        $fallback = HostsWriter::addDomain($domain, $ip);
         return $fallback + ['domain' => $domain, 'fallback' => true];
     }
 

@@ -18,7 +18,8 @@ namespace Weline\Ai\Interface;
  * - 工具名称、描述、参数定义供 AI function calling 使用
  * - 框架中间格式（与 OpenAI/Anthropic 无关），由 Provider 负责转换
  */
-interface ToolInterface
+/** @deprecated Implement \Weline\Ai\Api\ToolInterface. */
+interface ToolInterface extends \Weline\Ai\Api\ToolInterface
 {
     /**
      * 获取工具名称（函数名）

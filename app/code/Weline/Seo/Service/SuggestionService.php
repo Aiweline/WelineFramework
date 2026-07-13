@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service;
 
-use Weline\Ai\Service\AiService;
+use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoSubject;
 use Weline\Seo\Model\SeoKeyword;
@@ -27,12 +27,12 @@ use Weline\Seo\Model\SeoSuggestion;
 class SuggestionService
 {
     private ObjectManager $objectManager;
-    private AiService $aiService;
+    private AiRuntimeInterface $aiRuntime;
 
-    public function __construct(ObjectManager $objectManager)
+    public function __construct(ObjectManager $objectManager, AiRuntimeInterface $aiRuntime)
     {
         $this->objectManager = $objectManager;
-        $this->aiService = $objectManager->getInstance(AiService::class);
+        $this->aiRuntime = $aiRuntime;
     }
 
     /**
@@ -85,7 +85,7 @@ class SuggestionService
 
         // 调用 AI 生成建议
         try {
-            $response = $this->aiService->generateText(
+            $response = $this->aiRuntime->generate(
                 $prompt,
                 null, // 使用默认模型
                 'seo_keyword_planning', // 场景代码
@@ -193,4 +193,3 @@ class SuggestionService
         ];
     }
 }
-

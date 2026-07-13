@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\AppStore\Service;
 
+use Weline\AppStore\Api\AppStorePlatformUrlResolverInterface;
 use Weline\Framework\App\Env;
 
-class AppStorePlatformUrlResolver
+class AppStorePlatformUrlResolver implements AppStorePlatformUrlResolverInterface
 {
     public const DEFAULT_PLATFORM_URL = 'https://app.aiweline.com';
     public const LOCAL_PLATFORM_URL = 'https://app.weline.test:9523';

@@ -110,7 +110,15 @@ class Maintenance extends CommandAbstract
             if ($queuePosition > 0) {
                 $this->printer->note(__('  队列位置：%{1}', [$queuePosition]));
             }
-            return;
+            $result = $this->waitForMaintenanceTransition(
+                $instanceName,
+                true,
+                (string)($result['data']['operation_id'] ?? '')
+            );
+            if ($result === null) {
+                $this->printer->error(__('✗ 启用失败：%{1}', [__('维护转换未返回可验证终态')]));
+                return;
+            }
         }
         
         if ($result['success'] ?? false) {
@@ -145,7 +153,15 @@ class Maintenance extends CommandAbstract
             if ($queuePosition > 0) {
                 $this->printer->note(__('  队列位置：%{1}', [$queuePosition]));
             }
-            return;
+            $result = $this->waitForMaintenanceTransition(
+                $instanceName,
+                false,
+                (string)($result['data']['operation_id'] ?? '')
+            );
+            if ($result === null) {
+                $this->printer->error(__('✗ 禁用失败：%{1}', [__('维护转换未返回可验证终态')]));
+                return;
+            }
         }
         
         if ($result['success'] ?? false) {
@@ -240,7 +256,114 @@ class Maintenance extends CommandAbstract
         echo __('  维护 Worker：%{1}', [$maintenanceWorkers]) . "\n";
         echo "  ────────────────────────────────────\n";
     }
-    
+
+    /**
+     * Wait until a queued maintenance command exposes its terminal operation
+     * result. Falling back to the committed state keeps this command compatible
+     * with a Master that completed just before the first status poll.
+     */
+    private function waitForMaintenanceTransition(
+        string $instanceName,
+        bool $expectedEnabled,
+        string $operationId
+    ): ?array {
+        if ($operationId === '') {
+            return null;
+        }
+
+        $deadline = \microtime(true) + self::WAIT_MAX_TIMEOUT;
+        while (\microtime(true) < $deadline) {
+            $status = $this->sendMaintenanceCommand($instanceName, ControlMessage::ACTION_STATUS);
+            if ($status === null || !($status['success'] ?? false)) {
+                SchedulerSystem::usleep(100000);
+                continue;
+            }
+
+            $statusData = \is_array($status['data'] ?? null) ? $status['data'] : [];
+            $controlOperation = \is_array($statusData['control_operation'] ?? null)
+                ? $statusData['control_operation']
+                : [];
+            $last = \is_array($controlOperation['last'] ?? null)
+                ? $controlOperation['last']
+                : [];
+            if ((string)($last['id'] ?? '') === $operationId) {
+                $data = \is_array($last['data'] ?? null) ? $last['data'] : [];
+                return [
+                    'type' => ControlMessage::TYPE_COMMAND_RESULT,
+                    'success' => (bool)($last['success'] ?? false),
+                    'message' => (string)($last['message'] ?? ''),
+                    'data' => $data,
+                ];
+            }
+
+            $active = \is_array($controlOperation['active'] ?? null)
+                ? $controlOperation['active']
+                : [];
+            $operationPending = (string)($active['id'] ?? '') === $operationId;
+            foreach ((array)($controlOperation['queued'] ?? []) as $queued) {
+                if (\is_array($queued) && (string)($queued['id'] ?? '') === $operationId) {
+                    $operationPending = true;
+                    break;
+                }
+            }
+
+            if (!$operationPending
+                && (bool)($statusData['maintenance_mode'] ?? false) === $expectedEnabled
+            ) {
+                return [
+                    'type' => ControlMessage::TYPE_COMMAND_RESULT,
+                    'success' => true,
+                    'message' => $expectedEnabled
+                        ? (string)__('维护模式已启用')
+                        : (string)__('维护模式已禁用'),
+                    'data' => [
+                        'state' => 'completed',
+                        'maintenance_workers' => $this->countReadyMaintenanceWorkers($statusData),
+                    ],
+                ];
+            }
+
+            if (!$operationPending) {
+                return [
+                    'type' => ControlMessage::TYPE_COMMAND_RESULT,
+                    'success' => false,
+                    'message' => (string)__('维护操作已结束，但未提交请求的目标状态'),
+                    'data' => [
+                        'state' => 'failed',
+                        'maintenance_workers' => $this->countReadyMaintenanceWorkers($statusData),
+                    ],
+                ];
+            }
+
+            SchedulerSystem::usleep(100000);
+        }
+
+        return [
+            'type' => ControlMessage::TYPE_COMMAND_RESULT,
+            'success' => false,
+            'message' => (string)__('维护操作在可观测终态返回前超时'),
+            'data' => [
+                'state' => 'failed',
+                'operation_id' => $operationId,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $statusData
+     */
+    private function countReadyMaintenanceWorkers(array $statusData): int
+    {
+        $ready = 0;
+        $instances = $statusData['services'][ControlMessage::ROLE_MAINTENANCE]['instances'] ?? [];
+        foreach (\is_array($instances) ? $instances : [] as $instance) {
+            if (\is_array($instance) && (string)($instance['state'] ?? '') === 'ready') {
+                $ready++;
+            }
+        }
+        return $ready;
+    }
+
     /**
      * 发送维护模式命令
      */
@@ -476,8 +599,8 @@ class Maintenance extends CommandAbstract
         $this->printer->note(__('用法：server:maintenance <子命令> [实例名]'));
         echo "\n";
         $this->printer->note(__('子命令：'));
-        echo "  enable, on     - " . __('启用维护模式（启动维护 Worker）') . "\n";
-        echo "  disable, off   - " . __('禁用维护模式（停止维护 Worker）') . "\n";
+        echo "  enable, on     - " . __('启用维护模式（Dispatcher 切维护池；Direct 切业务 Worker 本地门禁）') . "\n";
+        echo "  disable, off   - " . __('禁用维护模式并恢复业务响应') . "\n";
         echo "  rolling        - " . __('执行滚动重启（自动管理维护模式）') . "\n";
         echo "  status         - " . __('查看维护模式状态') . "\n";
         echo "\n";
@@ -492,7 +615,7 @@ class Maintenance extends CommandAbstract
      */
     public function tip(): string
     {
-        return __('WLS 维护模式管理（滚动重启、维护 Worker）');
+        return __('WLS 维护模式管理（Dispatcher 维护池 / Direct Worker 本地门禁）');
     }
     
     /**
@@ -502,17 +625,17 @@ class Maintenance extends CommandAbstract
     {
         return CommandHelper::formatHelp(
             'server:maintenance <子命令> [实例名]',
-            __('管理 WLS 的维护模式：启用/禁用维护 Worker，执行滚动重启。'),
+            __('管理 WLS 维护模式：Dispatcher 切换维护 Worker 池；Direct 通过 IPC ACK 切换业务 Worker 本地维护门禁。'),
             [
-                'enable, on' => __('启用维护模式：启动维护 Worker，准备接管流量'),
-                'disable, off' => __('禁用维护模式：停止维护 Worker，恢复正常运行'),
-                'rolling' => __('执行滚动重启：逐个重启 Worker，期间由维护 Worker 接管流量'),
+                'enable, on' => __('启用维护模式：Dispatcher 启动/切换维护池；Direct 不启动维护 Worker'),
+                'disable, off' => __('禁用维护模式：恢复业务 Worker 正常响应'),
+                'rolling' => __('执行滚动重启：Dispatcher 使用维护池；Direct 使用业务 Worker 本地维护门禁'),
                 'status' => __('查看维护模式状态'),
                 '[instance]' => __('实例名称（默认：default）'),
             ],
             [
-                __('滚动重启') => __('逐个重启 Worker 进程，期间由维护 Worker 接管流量，实现零停机更新'),
-                __('维护 Worker') => __('临时启动的 Worker 进程，用于在滚动重启期间处理请求'),
+                __('滚动重启') => __('按拓扑使用维护池或 Worker 本地门禁，分批替换 Worker'),
+                __('维护 Worker') => __('仅 Dispatcher 拓扑使用；Direct 的维护 Worker 目标数固定为 0'),
                 __('自动管理') => __('rolling 命令会自动启用/禁用维护模式，无需手动操作'),
             ],
             [

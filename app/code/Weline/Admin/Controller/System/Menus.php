@@ -13,23 +13,22 @@ namespace Weline\Admin\Controller\System;
 
 use Weline\Admin\Controller\BaseController;
 use Weline\Admin\Helper\MenuUrlValidator;
-use Weline\Acl\Model\Acl;
-use Weline\Acl\Service\ResourceTreeServiceInterface;
+use Weline\Acl\Api\Resource\MenuResourceServiceInterface;
 use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 
 class Menus extends BaseController
 {
-    private ?ResourceTreeServiceInterface $resourceTreeService = null;
+    private ?MenuResourceServiceInterface $resourceTreeService = null;
 
     /**
      * 获取资源树服务
      */
-    private function getResourceTreeService(): ResourceTreeServiceInterface
+    private function getResourceTreeService(): MenuResourceServiceInterface
     {
         if ($this->resourceTreeService === null) {
-            $this->resourceTreeService = ObjectManager::getInstance(ResourceTreeServiceInterface::class);
+            $this->resourceTreeService = ObjectManager::getInstance(MenuResourceServiceInterface::class);
         }
         return $this->resourceTreeService;
     }
@@ -44,9 +43,9 @@ class Menus extends BaseController
         // 搜索过滤
         if ($search) {
             $allMenus = array_filter($allMenus, function($menu) use ($search) {
-                $name = $menu[Acl::schema_fields_SOURCE_NAME] ?? '';
-                $sourceId = $menu[Acl::schema_fields_SOURCE_ID] ?? '';
-                $module = $menu[Acl::schema_fields_MODULE] ?? '';
+                $name = $menu['source_name'] ?? '';
+                $sourceId = $menu['source_id'] ?? '';
+                $module = $menu['module'] ?? '';
                 return stripos($name, $search) !== false 
                     || stripos($sourceId, $search) !== false 
                     || stripos($module, $search) !== false;
@@ -54,7 +53,7 @@ class Menus extends BaseController
             $allMenus = array_values($allMenus);
         }
         
-        $menuTree = $this->getResourceTreeService()->buildMenuManagementTree($allMenus);
+        $menuTree = $this->getResourceTreeService()->buildManagementTree($allMenus);
         
         $this->assign('menuTree', $menuTree);
         $this->assign('allMenus', $allMenus);
@@ -63,7 +62,7 @@ class Menus extends BaseController
         return $this->fetch();
     }
 
-    #[AclAttribute('Weline_Admin::system_menu_delete', '删除菜单', 'mdi mdi-delete-outline', '删除后台菜单资源', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[AclAttribute('Weline_Admin::system_menu_delete', '删除菜单', 'mdi mdi-delete-outline', '删除后台菜单资源', 'Weline_Admin::system_menu_manager', accessMode: AclAttribute::ACCESS_MODE_EDIT)]
     public function postDelete()
     {
         try {
@@ -74,17 +73,17 @@ class Menus extends BaseController
             
             // 加载 ACL 菜单资源
             $menu = $this->getResourceTreeService()->loadMenuResource($id);
-            if (!$menu || !$menu->getSourceId()) {
+            if (!$menu || empty($menu['source_id'])) {
                 return $this->fetchJson(['code' => 403, 'msg' => __('菜单不存在！'), 'data' => []]);
             }
             
             // 检查是否有子菜单
-            if ($this->getResourceTreeService()->hasMenuChildren($menu->getSourceId())) {
+            if ($this->getResourceTreeService()->hasMenuChildren((string)$menu['source_id'])) {
                 return $this->fetchJson(['code' => 403, 'msg' => __('该菜单下有子菜单，请先删除子菜单！'), 'data' => []]);
             }
             
             // 删除
-            $menu->delete();
+            $this->getResourceTreeService()->deleteMenuResource($id);
             MenuUrlValidator::clearCache();
             
             return $this->fetchJson(['code' => 200, 'msg' => __('删除成功！'), 'data' => []]);
@@ -93,7 +92,7 @@ class Menus extends BaseController
         }
     }
 
-    #[AclAttribute('Weline_Admin::system_menu_save', '保存菜单', 'mdi mdi-content-save-outline', '新增或更新后台菜单资源', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[AclAttribute('Weline_Admin::system_menu_save', '保存菜单', 'mdi mdi-content-save-outline', '新增或更新后台菜单资源', 'Weline_Admin::system_menu_manager', accessMode: AclAttribute::ACCESS_MODE_EDIT)]
     public function postSave()
     {
         try {
@@ -102,22 +101,7 @@ class Menus extends BaseController
                 // 映射字段名以兼容前端提交的数据
                 $mappedData = $this->mapMenuDataToAcl($data);
                 
-                // 获取或创建 ACL 记录
-                $acl = ObjectManager::getInstance(Acl::class);
-                $sourceId = $mappedData[Acl::schema_fields_SOURCE_ID] ?? '';
-                
-                if ($sourceId) {
-                    $acl->load($sourceId, Acl::schema_fields_SOURCE_ID);
-                }
-                
-                $acl->addData($mappedData);
-                
-                // 确保类型为 menus
-                if (!$acl->getType()) {
-                    $acl->setType(Acl::type_MENUS);
-                }
-                
-                $acl->save();
+                $this->getResourceTreeService()->saveMenuResource($mappedData);
                 MenuUrlValidator::clearCache();
             }
             return json_encode($this->success());
@@ -135,62 +119,58 @@ class Menus extends BaseController
         
         // source_id
         if (isset($data['source_id'])) {
-            $mapped[Acl::schema_fields_SOURCE_ID] = $data['source_id'];
+            $mapped['source_id'] = $data['source_id'];
         } elseif (isset($data['source'])) {
-            $mapped[Acl::schema_fields_SOURCE_ID] = $data['source'];
+            $mapped['source_id'] = $data['source'];
         }
         
         // source_name (title -> source_name)
         if (isset($data['title'])) {
-            $mapped[Acl::schema_fields_SOURCE_NAME] = $data['title'];
+            $mapped['source_name'] = $data['title'];
         } elseif (isset($data['source_name'])) {
-            $mapped[Acl::schema_fields_SOURCE_NAME] = $data['source_name'];
+            $mapped['source_name'] = $data['source_name'];
         }
         
         // route (action -> route)
         if (isset($data['action'])) {
-            $mapped[Acl::schema_fields_ROUTE] = trim($data['action'], '/');
+            $mapped['route'] = trim($data['action'], '/');
         } elseif (isset($data['route'])) {
-            $mapped[Acl::schema_fields_ROUTE] = trim($data['route'], '/');
+            $mapped['route'] = trim($data['route'], '/');
         }
         
         // parent_source
         if (isset($data['parent_source'])) {
-            $mapped[Acl::schema_fields_PARENT_SOURCE] = $data['parent_source'];
+            $mapped['parent_source'] = $data['parent_source'];
         }
         
         // icon
         if (isset($data['icon'])) {
-            $mapped[Acl::schema_fields_ICON] = $data['icon'];
+            $mapped['icon'] = $data['icon'];
         }
         
         // order
         if (isset($data['order'])) {
-            $mapped[Acl::schema_fields_ORDER] = (int)$data['order'];
+            $mapped['order'] = (int)$data['order'];
         }
         
         // module
         if (isset($data['module'])) {
-            $mapped[Acl::schema_fields_MODULE] = $data['module'];
+            $mapped['module'] = $data['module'];
         }
         
         // is_enable
         if (isset($data['is_enable'])) {
-            $mapped[Acl::schema_fields_IS_ENABLE] = (int)$data['is_enable'];
+            $mapped['is_enable'] = (int)$data['is_enable'];
         }
         
         // is_backend
         if (isset($data['is_backend'])) {
-            $mapped[Acl::schema_fields_IS_BACKEND] = (int)$data['is_backend'];
+            $mapped['is_backend'] = (int)$data['is_backend'];
         }
-        
-        // type (确保为 menus)
-        $mapped[Acl::schema_fields_TYPE] = Acl::type_MENUS;
-        $mapped[Acl::schema_fields_ACL_ORIGIN] = Acl::acl_origin_user;
         
         // acl_id (如果存在)
         if (isset($data['acl_id'])) {
-            $mapped[Acl::schema_fields_ACL_ID] = $data['acl_id'];
+            $mapped['acl_id'] = $data['acl_id'];
         }
         
         return $mapped;
@@ -199,7 +179,7 @@ class Menus extends BaseController
     /**
      * 更新菜单排序
      */
-    #[AclAttribute('Weline_Admin::system_menu_update_order', '更新菜单排序', 'mdi mdi-sort', '更新后台菜单排序', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[AclAttribute('Weline_Admin::system_menu_update_order', '更新菜单排序', 'mdi mdi-sort', '更新后台菜单排序', 'Weline_Admin::system_menu_manager', accessMode: AclAttribute::ACCESS_MODE_EDIT)]
     public function postUpdateOrder()
     {
         try {
@@ -208,14 +188,9 @@ class Menus extends BaseController
                 throw new Exception(__('参数错误：缺少排序数据'));
             }
 
-            $acl = ObjectManager::getInstance(Acl::class);
             foreach ($data['orders'] as $item) {
                 if (isset($item['id']) && isset($item['order'])) {
-                    // id 可能是 acl_id 或 source_id
-                    $menu = $this->getResourceTreeService()->loadMenuResource($item['id']);
-                    if ($menu && $menu->getSourceId()) {
-                        $menu->setOrder((int)$item['order'])->save();
-                    }
+                    $this->getResourceTreeService()->updateMenuOrder($item['id'], (int)$item['order']);
                 }
             }
 
@@ -229,7 +204,7 @@ class Menus extends BaseController
     /**
      * 获取菜单详情（用于编辑）
      */
-    #[AclAttribute('Weline_Admin::system_menu_detail', '查看菜单详情', 'mdi mdi-eye-outline', '查看后台菜单资源详情', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_READ)]
+    #[AclAttribute('Weline_Admin::system_menu_detail', '查看菜单详情', 'mdi mdi-eye-outline', '查看后台菜单资源详情', 'Weline_Admin::system_menu_manager', accessMode: AclAttribute::ACCESS_MODE_READ)]
     public function getDetail()
     {
         try {
@@ -239,14 +214,14 @@ class Menus extends BaseController
             }
 
             $menu = $this->getResourceTreeService()->loadMenuResource($id);
-            if (!$menu || !$menu->getSourceId()) {
+            if (!$menu || empty($menu['source_id'])) {
                 throw new Exception(__('菜单不存在'));
             }
 
             return $this->fetchJson([
                 'code' => 200,
                 'msg' => 'success',
-                'data' => $menu->getData()
+                'data' => $menu
             ]);
         } catch (\Exception $exception) {
             return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => []]);

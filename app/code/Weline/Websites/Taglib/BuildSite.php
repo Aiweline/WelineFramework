@@ -13,9 +13,10 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Taglib;
 
-use Weline\Component\Block\OffCanvas;
+use Weline\Component\Api\OffCanvasRendererInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class BuildSite implements TaglibInterface
 {
@@ -110,11 +111,13 @@ class BuildSite implements TaglibInterface
                 $blockData['action-params'] = $actionParams;
             }
 
-            // 仅传一个命名参数 data，避免 PHP 8 将 $blockData 的键（如 cache）当作构造函数命名参数
-            /** @var OffCanvas $block */
-            $block = ObjectManager::getInstance(OffCanvas::class, ['data' => $blockData]);
-            $block->__init();
-            return $block->render();
+            $renderer = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(OffCanvasRendererInterface::class);
+            if (!$renderer instanceof OffCanvasRendererInterface) {
+                throw new \RuntimeException('Weline_Component OffCanvas renderer provider is unavailable.');
+            }
+
+            return $renderer->render($blockData);
         };
     }
 

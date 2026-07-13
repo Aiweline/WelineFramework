@@ -186,6 +186,20 @@ $order = $checkoutService->createOrder($data);
 - `Weline_Backend` - 后台管理
 - `Weline_Customer` - 客户管理
 - `Weline_I18n` - 国际化支持
+- `Weline_Payment` - 支付、退款及支付状态契约
+
+## 支付模块边界
+
+Checkout 只通过 `Weline\Payment\Api\PaymentFacadeInterface` 发起现代
+Provider 支付，并仅消费不可变 `PaymentTransactionRecord`。不得引用
+Payment 的 `Model` / `Service` / 数据库字段常量。
+
+当前 2.0 迁移阶段仍保留 `weline_checkout_payment_transaction` 作为兼容投影，
+因此原有 `transaction_id` 返回、网关响应字段和事件语义不变。投影表的
+移除或数据迁移必须作为单独版本任务，不能在 API 解耦批次中隐式删除。
+
+Checkout 构造的 `idempotency_key` 保持
+`checkout:{order_id}:{payment_method}`，通过 Facade 原样交给 Payment 内核。
 
 ## 安装
 

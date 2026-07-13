@@ -45,6 +45,24 @@ final class WlsRuntimeProfile
         return \max(1, (int) $this->get('cpu_cores', 4));
     }
 
+    public function physicalCpuCores(): int
+    {
+        $physical = \max(1, (int)$this->get('cpu_physical_cores', $this->cpuCores()));
+        return \min($this->cpuCores(), $physical);
+    }
+
+    public function performanceCpuCores(): int
+    {
+        $performance = \max(1, (int)$this->get('cpu_performance_cores', $this->physicalCpuCores()));
+        return \min($this->physicalCpuCores(), $performance);
+    }
+
+    public function cpuTopologySource(): string
+    {
+        $source = \trim((string)$this->get('cpu_topology_source', ''));
+        return $source !== '' ? $source : 'logical_cpu';
+    }
+
     public function memoryMb(): ?int
     {
         $memory = $this->get('memory_mb');
@@ -72,6 +90,44 @@ final class WlsRuntimeProfile
     public function supportsReusePort(): bool
     {
         return (bool) $this->get('supports_reuse_port', false);
+    }
+
+    public function supportsDirectListener(): bool
+    {
+        return (bool)$this->get('supports_direct_listener', $this->supportsReusePort());
+    }
+
+    public function directListenerMode(): string
+    {
+        $mode = \strtolower(\trim((string)$this->get('direct_listener_mode', '')));
+        if (\in_array($mode, ['reuseport', 'shared_fd'], true)) {
+            return $mode;
+        }
+        if ($this->isDarwin()) {
+            return 'shared_fd';
+        }
+
+        return $this->supportsReusePort() ? 'reuseport' : '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function directListenerProbe(): array
+    {
+        $probe = $this->get('direct_listener_probe', []);
+
+        return \is_array($probe) ? $probe : [];
+    }
+
+    /**
+     * @return array{supported?:bool,host?:string,family?:string,reason?:string,error_code?:int}
+     */
+    public function reusePortProbe(): array
+    {
+        $probe = $this->get('reuse_port_probe', []);
+
+        return \is_array($probe) ? $probe : [];
     }
 
     public function canUseEventLoop(): bool

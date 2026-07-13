@@ -24,6 +24,8 @@ use Weline\Server\Service\ServiceOrchestrator;
 
 class ServiceOrchestratorStartupTest extends TestCase
 {
+    private const TEST_POLICY_DIGEST = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
     protected function setUp(): void
     {
         if (!\defined('DS')) {
@@ -166,6 +168,17 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
 
+        self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
+        self::assertSame([], $orchestrator->startupReadyMarks);
+
+        $secondWorker = $registry->getInstance('worker', 2);
+        self::assertInstanceOf(ServiceInstance::class, $secondWorker);
+        $secondWorker->state = ServiceInstance::STATE_READY;
+        $secondWorker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $registry->updateInstance($secondWorker);
+
+        $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
+
         self::assertTrue($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
         self::assertSame([[
             'instanceName' => 'test',
@@ -177,7 +190,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     {
         $orchestrator = new ServiceOrchestrator();
 
-        self::assertSame(1, $this->invokePrivateWithArgs(
+        self::assertSame(8, $this->invokePrivateWithArgs(
             $orchestrator,
             'resolveStartupAcceptanceMinReady',
             [ControlMessage::ROLE_WORKER, 8]
@@ -237,6 +250,39 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
         $registry->updateInstance($worker);
+
+        self::assertSame(
+            [],
+            $this->invokePrivateWithArgs($orchestrator, 'collectStartupAcceptancePendingLabels', [$startupAcceptance])
+        );
+    }
+
+    public function testStartupAcceptanceDoesNotDeadlockBehindTemporaryMaintenancePool(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 18080,
+        ));
+
+        $startupAcceptance = [
+            ControlMessage::ROLE_WORKER => [
+                'displayName' => 'HTTP Worker',
+                'expected' => 1,
+                'minReady' => 1,
+            ],
+        ];
 
         self::assertSame(
             [],
@@ -2315,6 +2361,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'maintenanceMode', true);
+        $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
 
         $registry->addInstance(new ServiceInstance(
             role: 'dispatcher',
@@ -2361,6 +2408,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'launch_id' => 'late-maint',
             'port' => $maintPort,
             'role' => ControlMessage::ROLE_MAINTENANCE,
+            ...$this->readyCapabilityPayload($context, ControlMessage::ROLE_MAINTENANCE),
         ], 202]);
 
         $poolSent = null;
@@ -2405,6 +2453,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'maintenanceMode', true);
+        $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
 
         $dispatcher = new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -2435,6 +2484,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'launch_id' => 'dup-ready',
             'port' => 29339,
             'role' => ControlMessage::ROLE_MAINTENANCE,
+            ...$this->readyCapabilityPayload($context, ControlMessage::ROLE_MAINTENANCE),
         ], 202]);
 
         $setPoolMessages = 0;
@@ -2488,6 +2538,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
         $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
 
         $dispatcher = new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,
@@ -2541,6 +2592,25 @@ class ServiceOrchestratorStartupTest extends TestCase
             'port' => 28001,
             'epoch' => $context->epoch,
             'launch_id' => 'new-worker-launch',
+            ...$this->readyCapabilityPayload($context, ControlMessage::ROLE_WORKER),
+        ], 302]);
+
+        $held = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
+        self::assertInstanceOf(ServiceInstance::class, $held);
+        self::assertSame(
+            ServiceInstance::STATE_REGISTERED,
+            $held->state,
+            'replacement READY must remain behind the runtime policy PREPARE barrier'
+        );
+        $pendingReady = $this->readPrivate($orchestrator, 'runtimePolicyPendingReady');
+        self::assertArrayHasKey(302, $pendingReady);
+
+        $policyTransition = $this->readPrivate($orchestrator, 'runtimePolicyTransition');
+        self::assertIsArray($policyTransition);
+        $this->invokePrivateWithArgs($orchestrator, 'handleRuntimePolicyPreparedAck', [[
+            'digest' => (string)$policyTransition['digest'],
+            'success' => true,
+            'capabilities' => ['policy_accept_gate'],
         ], 302]);
 
         $ready = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
@@ -3209,7 +3279,12 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesDuringBootstrapWhenFlagsSet(): void
     {
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function isWindowsRuntime(): bool
+            {
+                return true;
+            }
+        };
         $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
 
         $context = new ServiceContext(
@@ -3252,19 +3327,18 @@ class ServiceOrchestratorStartupTest extends TestCase
             [ControlMessage::ROLE_WORKER, $context]
         );
 
-        if (\defined('IS_WIN') && IS_WIN) {
-            self::assertTrue($dispatchForeground);
-            self::assertTrue($workerForeground);
-            return;
-        }
-
         self::assertTrue($dispatchForeground);
-        self::assertFalse($workerForeground);
+        self::assertTrue($workerForeground);
     }
 
     public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesAfterBootstrapWhenFlagsSet(): void
     {
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function isWindowsRuntime(): bool
+            {
+                return true;
+            }
+        };
         $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
 
         $context = new ServiceContext(
@@ -3307,14 +3381,8 @@ class ServiceOrchestratorStartupTest extends TestCase
             [ControlMessage::ROLE_WORKER, $context]
         );
 
-        if (\defined('IS_WIN') && IS_WIN) {
-            self::assertTrue($dispatchForeground);
-            self::assertTrue($workerForeground);
-            return;
-        }
-
         self::assertTrue($dispatchForeground);
-        self::assertFalse($workerForeground);
+        self::assertTrue($workerForeground);
     }
 
     public function testShouldLaunchForegroundKeepsUnixFrontendBootstrapChildrenDetached(): void
@@ -3678,7 +3746,8 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $budget = $this->invokePrivateWithArgs($orchestrator, 'resolveConcurrentStartupDrainMinDurationUsec', [$context]);
 
-        self::assertSame(2500000, $budget);
+        $expected = (\defined('IS_WIN') && IS_WIN) ? 2_500_000 : 750_000;
+        self::assertSame($expected, $budget);
     }
 
     public function testConfiguredMaintenanceDoesNotAutoDisableWhenWorkerBecomesReady(): void
@@ -4680,6 +4749,29 @@ class ServiceOrchestratorStartupTest extends TestCase
         );
     }
 
+    /** @return array<string, mixed> */
+    private function readyCapabilityPayload(ServiceContext $context, string $role): array
+    {
+        return [
+            'topology' => $context->getEffectiveTopology()->value,
+            'policy_digest' => self::TEST_POLICY_DIGEST,
+            'warmup_state' => $role === ControlMessage::ROLE_MAINTENANCE ? 'ready' : 'hot',
+            'homepage_fpc' => [
+                'hit' => true,
+                'fpc_status' => 'HIT',
+                'source' => 'process',
+                'full_uri' => 'http://example.test/',
+                'http_status' => 200,
+            ],
+            'listen_capabilities' => [
+                'bound' => true,
+                'mode' => 'single',
+                'event_loop' => 'select',
+                'ssl_engine' => 'stream',
+            ],
+        ];
+    }
+
     /**
      * PHPUnit CLI 涓?Runtime::isWls() 甯镐负 false锛孲chedulerWaitObserver 涓嶄細娉ㄥ唽 yield 瀹氭椂鍣紝
      * 鎸傝捣鐨?stop_all Fiber 闇€鎵嬪姩 resume 鎵嶈兘鎵ц闂寘鍐呯殑 stopAll()銆?
@@ -4772,4 +4864,3 @@ class ServiceOrchestratorStartupTest extends TestCase
         throw new \ReflectionException(\sprintf('Property %s::%s does not exist', $object::class, $property));
     }
 }
-

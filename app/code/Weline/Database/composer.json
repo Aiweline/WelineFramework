@@ -1,0 +1,15 @@
+{
+    "name": "weline/module-database",
+    "description": "WelineFramework Database module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Database\\": ""
+        }
+    }
+}

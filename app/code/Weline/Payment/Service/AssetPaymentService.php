@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Payment\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
 
 final class AssetPaymentService
 {

@@ -8,7 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
  * 主题缓存生成器
@@ -23,12 +23,12 @@ class ThemeCacheGenerator
 
     private ThemeLayoutService $layoutService;
     private WelineTheme $welineTheme;
-    private WidgetRegistry $widgetRegistry;
+    private WidgetRegistryInterface $widgetRegistry;
 
     public function __construct(
         ThemeLayoutService $layoutService,
         WelineTheme $welineTheme,
-        WidgetRegistry $widgetRegistry
+        WidgetRegistryInterface $widgetRegistry
     ) {
         $this->layoutService = $layoutService;
         $this->welineTheme = $welineTheme;

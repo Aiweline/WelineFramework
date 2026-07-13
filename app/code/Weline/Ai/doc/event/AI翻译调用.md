@@ -1,8 +1,8 @@
-# Weline AI 模块 - AI翻译调用事件
+# Weline AI 模块 - 机器翻译事件实现
 
 ## 概述
 
-本文档详细说明了 Weline AI 模块提供的 `Weline_Ai::translate` 事件及其使用方法。该事件允许其他模块通过触发事件的方式调用AI进行翻译，支持批量翻译和增量翻译。
+机器翻译的中立契约为 `Weline_I18n::machine_translate`，由 I18n 拥有。AI 模块通过 `TranslationRequestObserver` 提供可选实现，并继续监听 `Weline_Ai::translate` 作为一版兼容入口。新代码应优先通过 I18n 适配器调用。
 
 ## 事件列表
 
@@ -229,4 +229,3 @@ class TranslationCronTask implements CronTaskInterface
 ## 更新记录
 
 - 2025-12-06: 创建文档，定义AI翻译调用事件接口
-

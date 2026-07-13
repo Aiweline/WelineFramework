@@ -1,4 +1,11 @@
-﻿"WLS 文件管理器","WLS 文件管理器"
+﻿已选文件:,已选文件:
+点击下载,点击下载
+"所指定的文件管理器不存在! 文件管理器名：%{1}","所指定的文件管理器不存在! 文件管理器名：%{1}"
+"使用：%{1} 文件管理器代替。","使用：%{1} 文件管理器代替。"
+文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。,文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。
+缺少目标ID。文档：%{1},缺少目标ID。文档：%{1}
+"缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}","缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}"
+"WLS 文件管理器","WLS 文件管理器"
 "WLS 文件管理器源码回收：%{1}","WLS 文件管理器源码回收：%{1}"
 "WLS source archive: %{1}","WLS 源码归档：%{1}"
 "WLS source directory archive: %{1}","WLS 源码目录归档：%{1}"
@@ -196,47 +203,10 @@ Stopped,已停止
 "Change Operations","Change Operations"
 Guarded,受控
 "Directory creation, small text saves, guarded uploads, same-folder rename, file, empty-directory, bounded recursive directory delete, bounded ZIP compression, and queued large ZIP compression require ACL, confirmation, and operation logs.","目录创建、小文本保存、受控上传、同目录重命名、文件、空目录、受限递归目录删除、受限 ZIP 压缩和队列化大型 ZIP 压缩都需要 ACL、确认和操作日志。"
-"WLS 文件管理器大文件操作","WLS 文件管理器大文件操作"
-"由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。","由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。"
-"WLS 文件队列内容无效。","WLS 文件队列内容无效。"
-"WLS source directory archive queue payload is invalid.","WLS 源码目录归档队列内容无效。"
-"WLS source archive queue payload is invalid.","WLS 源码归档队列内容无效。"
-"WLS source selection archive queue payload is invalid.","WLS 源码多选归档队列内容无效。"
-"WLS 源码文件队列内容无效。","WLS 源码文件队列内容无效。"
-"WLS 文件管理器队列压缩开始：%{1}","WLS 文件管理器队列压缩开始：%{1}"
-"WLS 文件管理器队列压缩失败：%{1}","WLS 文件管理器队列压缩失败：%{1}"
-"WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。","WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。"
-"WLS source archive queue started: %{1}","WLS 源码归档队列开始：%{1}"
-"WLS source archive queue failed: %{1}","WLS 源码归档队列失败：%{1}"
-"WLS source archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
-"WLS source directory archive queue started: %{1}","WLS 源码目录归档队列开始：%{1}"
-"WLS source directory archive queue failed: %{1}","WLS 源码目录归档队列失败：%{1}"
-"WLS source directory archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码目录归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
-"WLS source selection archive queue started: %{1}","WLS 源码多选归档队列开始：%{1}"
-"WLS source selection archive queue failed: %{1}","WLS 源码多选归档队列失败：%{1}"
-"WLS source selection archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码多选归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
-"WLS 文件管理器队列回收开始：%{1}","WLS 文件管理器队列回收开始：%{1}"
-"WLS 文件管理器队列回收失败：%{1}","WLS 文件管理器队列回收失败：%{1}"
-"WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。","WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。"
-源码编辑默认关闭,源码编辑默认关闭
-源码编辑策略允许,源码编辑策略允许
-源码编辑策略禁用,源码编辑策略禁用
-源码编辑策略允许此只读根目录内的已存在小源码文件进入保存表单。,源码编辑策略允许此只读根目录内的已存在小源码文件进入保存表单。
-默认继承,默认继承
-策略只读根目录,策略只读根目录
-策略禁用,策略禁用
-策略只读,策略只读
-当前项目路径策略已禁用此根目录写入。,当前项目路径策略已禁用此根目录写入。
-策略允许,策略允许
-当前项目路径策略允许此根目录受控写入。,当前项目路径策略允许此根目录受控写入。
-文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。,文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。
-"所指定的文件管理器不存在! 文件管理器名：%{1}","所指定的文件管理器不存在! 文件管理器名：%{1}"
-"使用：%{1} 文件管理器代替。","使用：%{1} 文件管理器代替。"
-缺少目标ID。文档：%{1},缺少目标ID。文档：%{1}
-"缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}","缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}"
-已选文件:,已选文件:
-点击下载,点击下载
 预览,预览
+允许的文件类型：,允许的文件类型：
+允许的文件大小：,允许的文件大小：
+暂无缩略图,暂无缩略图
 "子项目 var/pub 受控写入","子项目 var/pub 受控写入"
 子项目路径待校验,子项目路径待校验
 "当前实例 var/pub 受控写入","当前实例 var/pub 受控写入"
@@ -286,6 +256,7 @@ Policy,策略
 项目级写入根策略,项目级写入根策略
 "保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。","保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。"
 已保存策略,已保存策略
+默认继承,默认继承
 "Path policy summary",路径策略摘要
 策略键,策略键
 启用根,启用根
@@ -473,6 +444,35 @@ Latest,最新
 "No matching file operation logs.",没有匹配的文件操作日志。
 暂无文件操作日志。,暂无文件操作日志。
 能力阶段,能力阶段
-允许的文件类型：,允许的文件类型：
-允许的文件大小：,允许的文件大小：
-暂无缩略图,暂无缩略图
+"WLS 文件管理器大文件操作","WLS 文件管理器大文件操作"
+"由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。","由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。"
+"WLS 文件队列内容无效。","WLS 文件队列内容无效。"
+"WLS source directory archive queue payload is invalid.","WLS 源码目录归档队列内容无效。"
+"WLS source archive queue payload is invalid.","WLS 源码归档队列内容无效。"
+"WLS source selection archive queue payload is invalid.","WLS 源码多选归档队列内容无效。"
+"WLS 源码文件队列内容无效。","WLS 源码文件队列内容无效。"
+"WLS 文件管理器队列压缩开始：%{1}","WLS 文件管理器队列压缩开始：%{1}"
+"WLS 文件管理器队列压缩失败：%{1}","WLS 文件管理器队列压缩失败：%{1}"
+"WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。","WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。"
+"WLS source archive queue started: %{1}","WLS 源码归档队列开始：%{1}"
+"WLS source archive queue failed: %{1}","WLS 源码归档队列失败：%{1}"
+"WLS source archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
+"WLS source directory archive queue started: %{1}","WLS 源码目录归档队列开始：%{1}"
+"WLS source directory archive queue failed: %{1}","WLS 源码目录归档队列失败：%{1}"
+"WLS source directory archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码目录归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
+"WLS source selection archive queue started: %{1}","WLS 源码多选归档队列开始：%{1}"
+"WLS source selection archive queue failed: %{1}","WLS 源码多选归档队列失败：%{1}"
+"WLS source selection archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码多选归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
+"WLS 文件管理器队列回收开始：%{1}","WLS 文件管理器队列回收开始：%{1}"
+"WLS 文件管理器队列回收失败：%{1}","WLS 文件管理器队列回收失败：%{1}"
+"WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。","WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。"
+源码编辑默认关闭,源码编辑默认关闭
+源码编辑策略允许,源码编辑策略允许
+源码编辑策略禁用,源码编辑策略禁用
+源码编辑策略允许此只读根目录内的已存在小源码文件进入保存表单。,源码编辑策略允许此只读根目录内的已存在小源码文件进入保存表单。
+策略只读根目录,策略只读根目录
+策略禁用,策略禁用
+策略只读,策略只读
+当前项目路径策略已禁用此根目录写入。,当前项目路径策略已禁用此根目录写入。
+策略允许,策略允许
+当前项目路径策略允许此根目录受控写入。,当前项目路径策略允许此根目录受控写入。

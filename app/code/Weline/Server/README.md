@@ -37,7 +37,7 @@ php bin/w server:stop
 | 常驻内存 | 启动后常驻内存，避免每次请求重新加载 |
 | 多进程 | 支持多 Worker 进程，充分利用多核 CPU |
 | 异步 I/O | 基于事件循环的非阻塞 I/O |
-| 高性能 | 单进程 QPS 15,000+，多进程可达 100,000+ |
+| 高性能 | 常驻内存、多 Worker 和可选 libevent 事件循环；实际 QPS 以本机 `server:benchmark` 为准 |
 | 跨平台 | 支持 Windows/Linux/Mac |
 
 #### 启动命令
@@ -45,6 +45,12 @@ php bin/w server:stop
 ```bash
 # 默认启动（智能模式）
 php bin/w server:start
+
+# Linux/macOS 显式切换 Dispatcher 对照/兼容
+php bin/w server:start --dispatcher
+
+# Linux/macOS 显式 direct（auto 已默认直连）
+php bin/w server:start --direct
 
 # 命名实例
 php bin/w server:start api-server
@@ -64,6 +70,18 @@ php bin/w server:start -d
 | `--host` | `-h` | 监听地址 | 127.0.0.1 |
 | `--count` | `-c` | Worker 进程数 | 智能推算 |
 | `--daemon` | `-d` | 守护进程模式 | false |
+| `--direct` | - | 显式 direct（Linux 使用 SO_REUSEPORT，macOS 使用 Master 共享监听 FD） | POSIX `auto` 已选择 |
+| `--dispatcher` | - | 显式 Dispatcher TCP 透传 | Windows `auto` 已选择 |
+
+#### 平台拓扑
+
+| 平台 | `auto` 结果 | 说明 |
+|---|---|---|
+| Windows | Dispatcher | Windows 只支持 Dispatcher 透传；`--direct`、`--no-dispatcher` 启动前拒绝 |
+| Linux | Direct | 通过 ext-event、SO_REUSEPORT 真实双监听 accept 分布和策略能力检查后，客户端直达 Worker |
+| macOS | Direct | Master 只 bind 一个公开 listener 并以 FD 3 传给全部 Worker；Worker 竞争同一 accept queue，没有代理透传 |
+
+Direct 时不启动 Dispatcher，不创建第二条 Worker 后端连接。两种拓扑都在 Worker 加载同一 RuntimePolicyBundle，因此 Host、后台 Key、Origin Token、安全规则、限流、Static/FPC 和维护模式不会因 direct 而失效。POSIX direct 能力检查失败时停止启动，需运维明确使用 `--dispatcher`，不静默降级。
 
 #### 智能模式
 
@@ -111,6 +129,12 @@ php -S 127.0.0.1:8080 -t pub
     'mode' => 'io',             // 'io' 或 'cpu'
     'https' => true,            // 启用 HTTPS（默认 true）
     'http_redirect_port' => 9980, // HTTP 重定向端口（可选，默认 = HTTPS端口 - 463）
+],
+
+'wls' => [
+    'runtime' => [
+        'topology' => 'auto',  // auto/direct/dispatcher/independent
+    ],
 ],
 
 // 多实例配置（可选）
@@ -165,6 +189,8 @@ php bin/w server:status
 php bin/w server:status api-server
 ```
 
+指定实例的详细状态会校验 endpoint schema v3 中的完整 `runtime_selection` 与根级兼容投影，并显示 requested/effective topology、listener strategy、event loop、SSL engine、policy compatibility 与完整 digest。投影冲突时 fail closed，不从其他字段重新推导拓扑；旧 schema 仅标记为 legacy projection。
+
 输出示例：
 
 ```
@@ -198,11 +224,14 @@ Worker 进程状态：
 压力测试（自动探测运行中的服务器）。
 
 ```bash
-# 自动探测服务器
+# 仅有一个可验证的运行实例时自动选择
 php bin/w server:benchmark
 
+# 推荐：精确指定实例，安全归因运行时元数据
+php bin/w server:benchmark --instance api-server
+
 # 自定义参数
-php bin/w server:benchmark -c 500 -n 50000
+php bin/w server:benchmark --instance api-server -c 500 -n 50000
 ```
 
 参数说明：
@@ -211,44 +240,49 @@ php bin/w server:benchmark -c 500 -n 50000
 |-----|------|------|--------|
 | `--concurrency` | `-c` | 并发数 | 100 |
 | `--requests` | `-n` | 总请求数 | 10000 |
-| `--path` | - | 请求路径 | / |
+| `--path` | - | 请求路径 | `/_wls/health` |
+| `--instance` | - | 精确指定运行实例，并归因 schema v3 运行时元数据 | - |
 | `--port` | `-p` | 指定端口（可选） | 自动探测 |
+| `--no-keepalive` | - | 强制 fresh connection；HTTPS 时同时代表 fresh TLS | false |
+
+报告保存到 `var/log/wls/benchmark_report_*.json`，schema v3 除原有 QPS/延迟/错误字段外，还记录 `target_attribution`、endpoint schema/runtime selection 校验结果、requested/effective topology、listener、event loop、SSL engine、Worker 数、policy compatibility/digest、keep-alive/fresh TLS 和响应观测到的 cache source。手动 `-p` 只有在 host/port（以及显式 SSL 要求）唯一匹配运行中的本地 endpoint 时才归因实例；零匹配或多匹配仍可压明确端口，但运行时字段保持 `null`。有多个运行实例且未指定目标时，命令直接拒绝自动选择，避免误压生产实例。
 
 ## 🔧 性能优化
 
 ### 事件循环（最重要！）
 
-Weline Server 支持多种事件循环，自动选择最优方案并优雅降级：
+Weline Server 支持多种事件循环。`server:start` 会先检查当前 PHP：在有可验证安装链的 Linux/macOS 上，缺少 `ext-event` 时会自动安装、启用并用新 PHP 进程继续启动。默认不会在安装失败后静默降级。
 
 | 事件循环 | 性能 | 安装方式 | 说明 |
 |---------|------|---------|------|
-| **Event 扩展** | 30,000-50,000 QPS | `pecl install event` | 最优方案，推荐使用 |
-| stream_select | 15,000-20,000 QPS | 无需安装 | 回退方案，纯 PHP |
+| **Event 扩展** | libevent 驱动，收益取决于路由与业务负载 | 支持的 Linux/macOS 由 `server:start` 自动安装 | 默认优先，安装后会使用当前 PHP 验证 |
+| stream_select | 兼容性基线 | 无需安装 | 平台无安全安装链，或显式使用 `--no-auto-deps` 时使用 |
 
 #### 检测与优雅降级
 
 ```
 启动时自动检测：
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. 检测 event 扩展 → 有则使用（最优性能）                     │
-│ 2. 回退 stream_select → 始终可用（兼容性保证）                │
+│ 1. event 可用 → 直接使用 libevent                          │
+│ 2. 受支持且缺失 → 当前平台安装、新 PHP 验证、继续启动   │
+│ 3. 安装失败 → 停止启动并给出原始错误，不静默降级         │
+│ 4. --no-auto-deps → 由运维显式接受兼容运行时             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 #### 安装 Event 扩展
 
-**Linux/Mac:**
+**Linux/macOS（手动预装，适合镜像构建）:**
 ```bash
-pecl install event
-echo "extension=event" >> $(php --ini | grep "Loaded Configuration" | cut -d: -f2 | tr -d ' ')
+php bin/w env:install event -y
 ```
 
 **Windows:**
-1. 从 [PECL](https://pecl.php.net/package/event) 下载对应版本的 `php_event.dll`
-2. 复制到 PHP 的 `ext` 目录
-3. 在 `php.ini` 中添加：`extension=event`
+1. 只使用与当前 PHP 版本、架构、TS/NTS 和编译器 ABI 全部匹配的 `php_event.dll`。
+2. DLL 已存在于当前 PHP `extension_dir` 时，启动预检会尝试启用并验证。
+3. 没有可验证 DLL 时使用 Windows 稳定兼容运行时；框架不会自动下载不明 ABI 的二进制文件。
 
-启动时系统会自动检测并提示优化建议：
+生产镜像建议在构建阶段执行 `env:install`；不允许启动时修改系统的只读容器可预装依赖，并用 `--no-auto-deps` 明确关闭启动安装。
 
 ### 推荐配置
 
@@ -278,90 +312,27 @@ memory_limit=256M
 
 ## 🏗️ 架构说明
 
-### HTTPS 模式完整架构
+### 当前跨平台数据面
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              WLS Server (HTTPS Mode)                            │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  ┌────────────────────────────────────────────────────────────────────────┐    │
-│  │                         Master Process (监控)                          │    │
-│  │  • 监控所有 Worker 健康状态                                             │    │
-│  │  • 自动重启异常退出的 Worker                                            │    │
-│  │  • 管理 HTTP Redirect Worker 生命周期                                   │    │
-│  │  • reload 时：只重载业务 Worker，不重载 HTTP Redirect Worker            │    │
-│  │  • stop 时：关闭所有进程（包括 HTTP Redirect Worker）                    │    │
-│  └────────────────────────────────────────────────────────────────────────┘    │
-│                                      │                                          │
-│           ┌──────────────────────────┼──────────────────────────┐              │
-│           │                          │                          │              │
-│           ▼                          ▼                          ▼              │
-│  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────────────┐ │
-│  │  HTTP Redirect  │      │   Dispatcher    │      │     Worker × N          │ │
-│  │     Worker      │      │    (可选)       │      │                         │ │
-│  │                 │      │                 │      │  • 处理实际业务请求      │ │
-│  │  端口: 80/9980  │      │  端口: 443/9443 │      │  • 加载框架代码          │ │
-│  │                 │      │                 │      │  • 端口: 10443+N        │ │
-│  │  职责:          │      │  职责:          │      │                         │ │
-│  │  • 监听 HTTP    │      │  • SSL 终结     │      │  reload 时:             │ │
-│  │  • 返回 301     │      │  • 流量分发     │      │  • Worker 自行重载       │ │
-│  │  • 重定向 HTTPS │      │  • 负载均衡     │      │                         │ │
-│  │                 │      │                 │      │                         │ │
-│  │  特点:          │      └────────┬────────┘      └─────────────────────────┘ │
-│  │  ✗ 不加载框架   │               │                          ▲               │
-│  │  ✓ 极低资源占用 │               │                          │               │
-│  │  ✓ reload 时   │               └──────────────────────────┘               │
-│  │    不需处理     │                        分发请求                           │
-│  └─────────────────┘                                                           │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  MASTER["Master / Registry\n生命周期 + policy publish"] --> WORKER["Worker x N\nWorkerPolicyKernel + Runtime"]
+  MASTER --> DISP["Dispatcher\nWindows 默认 / POSIX 显式"]
+  WIN["Windows Client"] --> DISP
+  DISP -->|"PROXY v2 + TCP/TLS 字节透传"| WORKER
+  LINUX["Linux Client"] -->|"SO_REUSEPORT direct"| WORKER
+  MAC["macOS Client"] -->|"shared listener FD direct"| WORKER
+  WORKER --> CACHE["Static L1 / FPC Process L1 + Shared L2"]
+  WORKER --> APP["Router / Controller / Response"]
 ```
 
-### 请求流向
+- Windows 只使用 Dispatcher 透传。Dispatcher 负责 L4 准入、READY Worker 选择、背压和 failover，TLS/HTTP 语义由 Worker 处理。
+- Linux `auto` 由 SO_REUSEPORT Worker 共享公开端口；macOS `auto` 由 Master 绑定一个 listener 并将同一 FD 继承给 Worker。两者都没有 Dispatcher、后端连接或字节透传；可用 `--dispatcher` 显式切换对照。
+- Worker 在两种拓扑中都先执行 mandatory guard，再命中 Static/FPC，最后才进入 Session、Router 和 Controller。
+- 策略、缓存 epoch 和维护 epoch 由 Master 版本化发布；Worker active digest 不匹配时不得 READY。
 
-```
-  用户访问 HTTP:
-  http://127.0.0.1:9980/catalog/...
-           │
-           ▼
-  ┌─────────────────┐
-  │  HTTP Redirect  │ ──────► HTTP 301 Moved Permanently
-  │  Worker (:9980) │         Location: https://127.0.0.1:9443/catalog/...
-  └─────────────────┘
-           │
-           ▼ (浏览器自动跳转)
-  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────────────┐
-  │  用户重新请求    │ ───► │   Dispatcher    │ ───► │    Worker (处理业务)    │
-  │  HTTPS (:9443)  │      │   (:9443)       │      │    (:10443+N)           │
-  └─────────────────┘      └─────────────────┘      └─────────────────────────┘
-```
+完整组件、时序与请求顺序见 [WLS 运行时架构](doc/WLS架构图.md) 和 [WLS 安全与规则配置推演](doc/WLS安全与规则配置推演.md)。
 
-### 端口配置方案
-
-| 协议模式 | HTTP Redirect | HTTPS 端口 | Worker 内部端口 |
-|---------|---------------|-----------|----------------|
-| 默认端口 | **80** → 443  | 443       | 10443 + N      |
-| 备用端口 | **9980** → 9443 | 9443    | 19443 + N      |
-
-### HTTP 模式简化架构
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Master Process                          │
-│                    (进程管理、信号处理)                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-         ┌────────────────────┼────────────────────┐
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│  Worker #1      │ │  Worker #2      │ │  Worker #N      │
-│  Port: 9981     │ │  Port: 9982     │ │  Port: 998N     │
-│  事件循环        │ │  事件循环        │ │  事件循环        │
-│  连接管理        │ │  连接管理        │ │  连接管理        │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-```
 
 ### 内存缓存管理（智能模式）
 

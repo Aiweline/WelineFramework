@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Interface;
 
-interface SiteCrawlerAuditInterface
+/** @deprecated Implement \Weline\Seo\Api\SiteCrawlerAuditInterface. */
+interface SiteCrawlerAuditInterface extends \Weline\Seo\Api\SiteCrawlerAuditInterface
 {
     /**
      * @param array<string, mixed> $options

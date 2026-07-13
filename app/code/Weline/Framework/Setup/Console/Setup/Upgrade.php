@@ -44,7 +44,8 @@ use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\UnitTest\Service\TestCollectionService;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Console\ParseModuleArgsTrait;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
@@ -493,9 +494,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function syncWlsMaintenanceMode(bool $enabled): void
     {
         try {
-            /** @var BroadcastControlDispatchService $dispatchService */
-            $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
-            $result = $dispatchService->setMaintenanceMode($enabled, null);
+            $dispatchService = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(RuntimeControlBroadcasterInterface::class);
+            if (!$dispatchService instanceof RuntimeControlBroadcasterInterface) {
+                return;
+            }
+            $result = $dispatchService->setMaintenanceMode($enabled);
 
             if (($result['attempted'] ?? []) === []) {
                 return;
@@ -1535,6 +1539,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             ]);
             $schemaDiffStage->prepare([]);
             $schemaDiffStage->commit();
+
+            // prepareUpgrade() 可能为新发现模块将 Register 切到 MODULE_ONLY。
+            // 路由扫描通过 Register::register() 写入；若不先恢复 ALL，
+            // 所有路由只会进入 pending 队列，全量路由 batch 始终为空。
+            RegistryProgress::run(function (): void {
+                RegistryProgress::section('setup:upgrade route-only pending registrations');
+                Register::runPendingRegistrations();
+                Register::clearRegisterPhase();
+            });
 
             // 使用独立的路由更新服务
             // 注意：路由更新不依赖 register.php，register.php 只负责模块注册
@@ -2949,7 +2962,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             [
                 '--model' => '仅升级数据库模型',
                 '--route' => '仅升级路由',
-                '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
+                '-m, --module=<模块名>' => '升级指定模块（例如：Vendor_Module）',
                 '--stage=<code>[,code...]' => __('只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}', [$stageCodes]),
                 '--hot' => __('热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS'),
                 '-s, --skip-env-check' => '跳过环境依赖检测',
@@ -2968,10 +2981,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '仅升级路由（新增 Controller 后）' => 'php bin/w setup:upgrade --route',
                 __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',
                 __('仅运行 framework_db_bootstrap 阶段') => 'php bin/w setup:upgrade --stage=framework_db_bootstrap',
-                '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Weline_Demo',
-                '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Weline_Demo',
-                '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Weline_Demo',
-                '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
+                '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Vendor_Module',
+                '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Vendor_Module',
+                '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Vendor_Module',
+                '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Vendor_Module',
                 '热更新 WLS 服务器（最快，< 1s）' => 'php bin/w setup:upgrade --hot',
                 __('跳过 classmap 生成（未新增/删除文件时）') => 'php bin/w setup:upgrade --skip-classmap',
                 __('跳过 composer dump-autoload') => 'php bin/w setup:upgrade --skip-composer-dump',

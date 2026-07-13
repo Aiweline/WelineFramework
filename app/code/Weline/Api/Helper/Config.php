@@ -10,12 +10,13 @@ declare(strict_types=1);
 
 namespace Weline\Api\Helper;
 
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\App\Exception;
 
 /**
  * API模块配置助手类
  */
-class Config extends \Weline\Backend\Model\Config
+class Config extends BackendConfigStore
 {
     // 配置键名
     const API_TOKEN_REFRESH_PERIOD = 'api_token_refresh_period';
@@ -48,16 +49,10 @@ class Config extends \Weline\Backend\Model\Config
             }
         }
 
-        // 从数据库加载配置
-        $items = $this->systemConfig
-            ->where('module', $module, '=', 'and')
-            ->where('key', self::keys, '=', 'or')
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        foreach ($items as $item) {
-            $this->config[$module][$item->getKey()] = $item->getData('v');
+        foreach ($this->getConfigs($module) as $configKey => $configValue) {
+            if (in_array((string)$configKey, self::keys, true)) {
+                $this->config[$module][(string)$configKey] = $configValue;
+            }
         }
 
         // 确保所有配置项都有默认值
@@ -148,4 +143,3 @@ class Config extends \Weline\Backend\Model\Config
         return $result;
     }
 }
-

@@ -15,7 +15,7 @@ use Weline\Currency\Api\ExchangeRateApi;
 use Weline\Currency\Api\ExchangeRateApiInterface;
 use Weline\Currency\Model\Config;
 use Weline\Currency\Service\CurrencyImportService;
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 /**

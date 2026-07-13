@@ -97,8 +97,8 @@ class Reinstall extends CommandAbstract
         if (empty($moduleNames)) {
             $this->printer->error(__('错误：请指定要重新安装的模块！'));
             $this->printer->note(__('用法示例：'));
-            $this->printer->setup('php bin/w module:reinstall -m Weline_Demo');
-            $this->printer->setup('php bin/w module:reinstall --module "Weline_Demo Weline_Test"');
+            $this->printer->setup('php bin/w module:reinstall -m Vendor_Module');
+            $this->printer->setup('php bin/w module:reinstall --module "Vendor_Module AnotherVendor_Module"');
             exit(1);
         }
 
@@ -1037,12 +1037,11 @@ class Reinstall extends CommandAbstract
                 '智能清理' => '重装完成后可选择清理历史备份表，也可保留多个批次',
             ],
             [
-                '重新安装单个模块' => 'php bin/w module:reinstall -m Weline_Demo',
-                '重新安装多个模块' => 'php bin/w module:reinstall --module "Weline_Demo Weline_Test"',
-                '跳过确认提示' => 'php bin/w module:reinstall -m Weline_Demo -y',
+                '重新安装单个模块' => 'php bin/w module:reinstall -m Vendor_Module',
+                '重新安装多个模块' => 'php bin/w module:reinstall --module "Vendor_Module AnotherVendor_Module"',
+                '跳过确认提示' => 'php bin/w module:reinstall -m Vendor_Module -y',
             ],
             'php bin/w module:reinstall -m <模块名>'
         );
     }
 }
-

@@ -5,7 +5,7 @@
  * 本文件定义了 Weline_Backend 模块提供的所有 Hook 扩展点
  * Hook 命名格式：{ModuleName}::{area}::{type}::{component}::{position}
  * 
- * 所有 Hook 必须在 Weline\Framework\Hook\HookInterface 中定义为常量
+ * 本文件是 Backend Hook 的唯一事实源；PHP 常量如有需要应发布在本模块 Api 中。
  */
 return [
     // ==================== Backend Header ====================

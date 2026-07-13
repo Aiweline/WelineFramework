@@ -12,10 +12,11 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\View\PreparedContentStore;
 use Weline\Framework\View\Template;
 use Weline\Theme\Api\TargetPreviewPayloadProviderInterface;
 use Weline\Theme\Service\PreviewContextService;
-use Weline\Theme\Service\PreparedContentStore;
+use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 /**
@@ -822,7 +823,7 @@ HTML;
         }
 
         [$targetType, $targetId] = $this->resolvePreviewTarget();
-        if ($targetType === '' || $targetId <= 0) {
+        if ($targetType === '') {
             $template->setData('target_preview_meta', []);
             return [];
         }
@@ -877,19 +878,18 @@ HTML;
      */
     private function resolvePreviewTarget(): array
     {
-        $targetType = strtolower(trim((string)$this->readRequestValue('theme_layout_target_type')));
-        $targetId = (int)$this->readRequestValue('theme_layout_target_id');
-        if ($targetType !== '' && $targetId > 0) {
-            return [$targetType, $targetId];
-        }
-
-        $sourceTargetType = strtolower(trim((string)$this->readRequestValue('theme_layout_source_target_type')));
-        $sourceTargetId = (int)$this->readRequestValue('theme_layout_source_target_id');
-        if ($sourceTargetType !== '' && $sourceTargetId > 0) {
-            return [$sourceTargetType, $sourceTargetId];
-        }
-
-        return ['', 0];
+        /** @var ThemeTargetIdentityResolver $identityResolver */
+        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        return $identityResolver->resolveFirst([
+            [
+                'target_type' => $this->readRequestValue('theme_layout_target_type'),
+                'target_id' => $this->readRequestValue('theme_layout_target_id'),
+            ],
+            [
+                'target_type' => $this->readRequestValue('theme_layout_source_target_type'),
+                'target_id' => $this->readRequestValue('theme_layout_source_target_id'),
+            ],
+        ]);
     }
 
     private function readRequestValue(string $key): mixed
@@ -1068,7 +1068,8 @@ HTML;
         $normalizedContent = \str_replace('\\', '/', $contentTemplate);
         return \str_contains($normalized, 'Weline_Theme::theme/frontend/layouts/account/')
             || \str_contains($normalized, '/Weline/Theme/view/theme/frontend/layouts/account/')
-            || \str_contains($normalizedContent, 'Weline_Customer::templates/frontend/account/');
+            || \str_contains($normalizedContent, '::templates/frontend/account/')
+            || \str_contains($normalizedContent, '/view/templates/frontend/account/');
     }
 
     private function htmlHasAccountSidebar(string $html): bool
