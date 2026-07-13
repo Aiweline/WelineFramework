@@ -20,6 +20,7 @@ $options = [
     'config' => '',
     'pid-file' => '',
     'token-file' => '',
+    'tls-session-resumption' => '1',
     'public-host' => 'localhost',
     'admin-address' => '',
     'control-port' => '0',
@@ -84,6 +85,11 @@ $caddyBinary = \trim((string)$options['caddy-binary']);
 $configFile = \trim((string)$options['config']);
 $pidFile = \trim((string)$options['pid-file']);
 $tokenFile = \trim((string)$options['token-file']);
+$tlsSessionResumption = !\in_array(
+    \strtolower(\trim((string)$options['tls-session-resumption'])),
+    ['0', 'false', 'off', 'no'],
+    true,
+);
 $publicHost = \trim((string)$options['public-host']) ?: 'localhost';
 $adminAddress = \trim((string)$options['admin-address']);
 $controlPort = (int)$options['control-port'];
@@ -175,7 +181,7 @@ if (!$kernel->connectAndRegister($controlPort, false)) {
     $fail('Unable to register with Master control plane.');
 }
 
-/** @return array{success:bool,exit_code:int,output:string} */
+/** @return array{success:bool,exit_code:int,output:string,stdout:string,stderr:string} */
 $runCommand = static function (array $command, float $timeoutSec) use (&$kernel): array {
     $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
     $process = @\proc_open($command, [
@@ -184,7 +190,13 @@ $runCommand = static function (array $command, float $timeoutSec) use (&$kernel)
         2 => ['pipe', 'w'],
     ], $pipes, BP, null, ['bypass_shell' => true]);
     if (!\is_resource($process)) {
-        return ['success' => false, 'exit_code' => 126, 'output' => 'Unable to launch process.'];
+        return [
+            'success' => false,
+            'exit_code' => 126,
+            'output' => 'Unable to launch process.',
+            'stdout' => '',
+            'stderr' => 'Unable to launch process.',
+        ];
     }
     foreach ([1, 2] as $index) {
         if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
@@ -193,6 +205,8 @@ $runCommand = static function (array $command, float $timeoutSec) use (&$kernel)
     }
     $deadline = \microtime(true) + \max(0.1, $timeoutSec);
     $output = '';
+    $stdout = '';
+    $stderr = '';
     $status = ['running' => true, 'exitcode' => -1];
     while (($status['running'] ?? false) && \microtime(true) < $deadline) {
         $kernel->tick();
@@ -202,6 +216,12 @@ $runCommand = static function (array $command, float $timeoutSec) use (&$kernel)
                 $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
                 if ($chunk !== '' && \strlen($output) < 262144) {
                     $output .= \substr($chunk, 0, 262144 - \strlen($output));
+                }
+                if ($chunk !== '' && $index === 1 && \strlen($stdout) < 262144) {
+                    $stdout .= \substr($chunk, 0, 262144 - \strlen($stdout));
+                }
+                if ($chunk !== '' && $index === 2 && \strlen($stderr) < 262144) {
+                    $stderr .= \substr($chunk, 0, 262144 - \strlen($stderr));
                 }
             }
         }
@@ -218,7 +238,16 @@ $runCommand = static function (array $command, float $timeoutSec) use (&$kernel)
     }
     foreach ([1, 2] as $index) {
         if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-            $output .= (string)(@\stream_get_contents($pipes[$index]) ?: '');
+            $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
+            if ($chunk !== '' && \strlen($output) < 262144) {
+                $output .= \substr($chunk, 0, 262144 - \strlen($output));
+            }
+            if ($chunk !== '' && $index === 1 && \strlen($stdout) < 262144) {
+                $stdout .= \substr($chunk, 0, 262144 - \strlen($stdout));
+            }
+            if ($chunk !== '' && $index === 2 && \strlen($stderr) < 262144) {
+                $stderr .= \substr($chunk, 0, 262144 - \strlen($stderr));
+            }
             @\fclose($pipes[$index]);
         }
     }
@@ -226,12 +255,62 @@ $runCommand = static function (array $command, float $timeoutSec) use (&$kernel)
     if ($exitCode < 0) {
         $exitCode = (int)$closeCode;
     }
-    return ['success' => $exitCode === 0, 'exit_code' => $exitCode, 'output' => \trim($output)];
+    return [
+        'success' => $exitCode === 0,
+        'exit_code' => $exitCode,
+        'output' => \trim($output),
+        'stdout' => \trim($stdout),
+        'stderr' => \trim($stderr),
+    ];
 };
 
-$validation = $runCommand([$caddyBinary, 'validate', '--config', $configFile, '--adapter', 'caddyfile'], 10.0);
-if (!$validation['success']) {
-    $fail('Caddy config validation failed: ' . $validation['output']);
+$nativeConfigFile = ProtocolEdgeRuntime::nativeConfigFile($instanceName);
+/** @return array{success:bool,output:string} */
+$compileNativeConfig = static function () use (
+    $caddyBinary,
+    $configFile,
+    $instanceName,
+    $runCommand,
+    $tlsSessionResumption,
+): array {
+    $adapted = $runCommand([
+        $caddyBinary,
+        'adapt',
+        '--config',
+        $configFile,
+        '--adapter',
+        'caddyfile',
+        '--pretty',
+    ], 10.0);
+    if (!$adapted['success']) {
+        return ['success' => false, 'output' => 'Caddyfile adaptation failed: ' . $adapted['output']];
+    }
+
+    try {
+        $config = \json_decode($adapted['stdout'], false, 512, \JSON_THROW_ON_ERROR);
+        if (!\is_object($config)) {
+            throw new \RuntimeException('Adapted Caddy config is not an object.');
+        }
+        $nativeConfigFile = ProtocolEdgeRuntime::writeNativeConfig(
+            $instanceName,
+            $config,
+            $tlsSessionResumption,
+        );
+    } catch (\Throwable $throwable) {
+        return ['success' => false, 'output' => 'Native Caddy config compilation failed: ' . $throwable->getMessage()];
+    }
+
+    $validation = $runCommand([$caddyBinary, 'validate', '--config', $nativeConfigFile], 10.0);
+    if (!$validation['success']) {
+        return ['success' => false, 'output' => 'Native Caddy config validation failed: ' . $validation['output']];
+    }
+
+    return ['success' => true, 'output' => $adapted['stderr']];
+};
+
+$compiledConfig = $compileNativeConfig();
+if (!$compiledConfig['success']) {
+    $fail($compiledConfig['output']);
 }
 
 // A stale Caddy child may survive an ungraceful wrapper crash. Terminate only
@@ -242,7 +321,7 @@ if (\is_file($pidFile)) {
         $commandLine = Processer::getProcessCommandLine($stalePid, true);
         if ($commandLine !== ''
             && \str_contains($commandLine, $caddyBinary)
-            && \str_contains($commandLine, $configFile)
+            && (\str_contains($commandLine, $configFile) || \str_contains($commandLine, $nativeConfigFile))
         ) {
             Processer::killProcessTreeByPid($stalePid, true);
         } else {
@@ -306,9 +385,7 @@ $caddyProcess = @\proc_open([
     $caddyBinary,
     'run',
     '--config',
-    $configFile,
-    '--adapter',
-    'caddyfile',
+    $nativeConfigFile,
     '--pidfile',
     $pidFile,
 ], [
@@ -476,7 +553,9 @@ $nextConfigCheckAt = \microtime(true) + 0.25;
 
 WlsLogger::info_(
     '[ProtocolEdge] READY public=' . $publicHost . ':' . $publicPort
-    . ' protocols=h3,h2,h1 tls_session_resumption=enabled upstreams=' . \implode(',', $upstreams)
+    . ' protocols=h3,h2,h1 tls_session_resumption='
+    . ($tlsSessionResumption ? 'persistent' : 'disabled')
+    . ' upstreams=' . \implode(',', $upstreams)
 );
 
 while (!$shutdownRequested) {
@@ -516,29 +595,20 @@ while (!$shutdownRequested) {
     if ($certificateReloadRequested || ($configChanged && $observedConfigDigest !== $failedConfigDigest)) {
         $certificateOnlyReload = $certificateReloadRequested && !$configChanged;
         $certificateReloadRequested = false;
-        if ($configChanged) {
-            $validation = $runCommand([
-                $caddyBinary,
-                'validate',
-                '--config',
-                $configFile,
-                '--adapter',
-                'caddyfile',
-            ], 10.0);
-            if (!$validation['success']) {
+        $compiledConfig = $compileNativeConfig();
+        if (!$compiledConfig['success']) {
+            if ($configChanged) {
                 $failedConfigDigest = $observedConfigDigest;
-                WlsLogger::error_('[ProtocolEdge] Candidate route configuration rejected: ' . $validation['output']);
-                SchedulerSystem::usleep(20000);
-                continue;
             }
+            WlsLogger::error_('[ProtocolEdge] Candidate configuration rejected: ' . $compiledConfig['output']);
+            SchedulerSystem::usleep(20000);
+            continue;
         }
         $reload = $runCommand([
             $caddyBinary,
             'reload',
             '--config',
-            $configFile,
-            '--adapter',
-            'caddyfile',
+            $nativeConfigFile,
             '--address',
             $adminAddress,
             '--force',

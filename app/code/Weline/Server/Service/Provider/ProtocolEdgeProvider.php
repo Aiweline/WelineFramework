@@ -51,7 +51,8 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
     public function getReloadStrategy(): string
     {
         // Code reloads keep the established public TLS/QUIC listener and its
-        // session cache alive. Certificate reload is handled over Caddy admin.
+        // connections alive. Instance-isolated STEKs preserve resumability
+        // when Caddy reprovisions TLS during route/certificate reloads.
         return 'none';
     }
 
@@ -73,6 +74,7 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
         }
 
         $configFile = ProtocolEdgeRuntime::writeConfig($context);
+        $selection = ProtocolEdgeRuntime::selection($context);
         $tokenFile = ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
         $script = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin' . DS . 'protocol_edge.php';
         $processName = MasterProcess::buildScopedProcessName(
@@ -86,6 +88,7 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
             '--config=' . $configFile,
             '--pid-file=' . ProtocolEdgeRuntime::pidFile($context->instanceName),
             '--token-file=' . $tokenFile,
+            '--tls-session-resumption=' . ($selection->tlsSessionResumption ? '1' : '0'),
             '--public-host=' . (string)($context->publicHost ?: $context->host),
             '--admin-address=127.0.0.1:' . ProtocolEdgeRuntime::adminPort($context),
             '--control-port=' . $context->controlPort,

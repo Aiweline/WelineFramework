@@ -22,9 +22,9 @@ final class TlsProcessProfileConfigurator
      */
     public function activate(array $config, bool $sslEnabled): array
     {
-        $ssl = \is_array($config['ssl'] ?? null) ? $config['ssl'] : [];
-        $requested = $this->normalizeProfile($ssl['key_exchange_profile'] ?? self::PROFILE_PERFORMANCE);
-        $protocols = $this->normalizeProtocols($ssl);
+        $selection = $this->resolveConfiguration($config);
+        $requested = $selection['requested'];
+        $protocols = $selection['protocols'];
 
         if (!$sslEnabled) {
             return [
@@ -77,6 +77,26 @@ final class TlsProcessProfileConfigurator
             'effective' => self::PROFILE_PERFORMANCE,
             'openssl_conf' => $path,
             'reason' => 'TLS 1.3 groups pinned to X25519:P-256 for lower handshake CPU and wire size',
+        ];
+    }
+
+    /**
+     * Resolve the transport-neutral TLS contract once so native PHP TLS and
+     * the public protocol edge cannot silently apply different versions or
+     * key-exchange profiles.
+     *
+     * @param array<string, mixed> $config
+     * @return array{requested:string,protocols:non-empty-list<'tls1.2'|'tls1.3'>}
+     */
+    public function resolveConfiguration(array $config): array
+    {
+        $ssl = \is_array($config['ssl'] ?? null) ? $config['ssl'] : [];
+
+        return [
+            'requested' => $this->normalizeProfile(
+                $ssl['key_exchange_profile'] ?? self::PROFILE_PERFORMANCE
+            ),
+            'protocols' => $this->normalizeProtocols($ssl),
         ];
     }
 
