@@ -284,6 +284,7 @@ PID 为 0 不是生命周期状态，只表示尚未观察到 PID。IPC REGISTER
 - 一次首页 warmup transaction 以 HTTP 2xx/3xx、非空响应、无 `Set-Cookie`、无 `private/no-store` 和 `source=process` 验收，不再依赖 Controller 专属 header。
 - 同一 Worker 在 READY 前还必须绕过 FPC 真实执行动态首页，并生成包含 host、`/`、2xx/3xx、正文长度、耗时/目标、尝试数、FPC 非 HIT 和 reason 的不可变回执。共享 owner 只构建 generation 前置；每个 Worker 都必须执行自己的 Router/Controller/Template 本地渲染。批量启动时这些本地渲染通过带 TTL、总 deadline 和 owner token 的共享 render slot 串行进入，避免 16 个冷进程同时争抢 CPU；该锁不进入公开请求路径。Master 的初启与 Direct surge admission 复用同一证明校验器；`server:status` 从 Registry metadata 展示该回执，不能用 CLI 自测结果替代 READY 事实。
 - 动态预热耗时超过目标但页面证明有效时，默认记录 `ready:slow` 并允许 Worker READY；发布仍必须用 `server:benchmark:first-render` 对公开入口独立执行 `< target_ms` 门禁。这样区分“进程正确可用”和“当前机器性能达标”，不会再把一次冷机竞争放大成重启风暴。
+- READY 已完成首页 Process FPC 与动态首页硬门禁；`wls.worker_bootstrap_warmup` 的 READY 后 registry 二次预载默认关闭，避免 Worker 刚变为可路由又重复执行同一批 bootstrap。只有实例声明额外 registry 贡献并配置允许角色时才显式开启。
 - 其它动态热路径由一个 owner 发现，再按 Worker 分片；不让每个 Worker 重复遍历同一列表。
 - keep-hot 在 Worker 主循环的低优先级 Fiber 中运行并带 Worker jitter；仅在无活跃/待处理请求、无 TLS handshake、非排水、无内存压力时执行。
 - 运行期 keep-hot 只从仍有效的 fresh shared FPC 重装并验证 process FPC；shared miss 立即降级，绝不在可路由业务 Worker 中同步冷渲染 Controller。
@@ -497,6 +498,18 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 
 对应报告：`benchmark_report_20260713_071233_910814_root_pid45280.json` 至 `benchmark_report_20260713_071248_074079_root_pid50490.json`、`benchmark_report_20260713_071334_403766_wls-health_pid55576.json`、`benchmark_report_20260713_071438_244151_wls-health_pid80021.json`、`benchmark_report_20260713_062157_238600_root_pid80964.json`。Windows 和 Linux 仍必须在原生平台执行各自门禁；macOS 数据不能替代它们。
 
+### 3.8.6 2026-07-13 重复实现审计与回归收口
+
+提交拓扑审计确认 `codex/welineframework-2-architecture` 是 `master/dev` 的线性祖先，当前功能分支、`master` 与 `dev` 在修复前共同指向 `83ccfe358`；不存在重复 merge、重复 cherry-pick 或多个 worktree 互相回灌。重复行为来自同一后续架构提交内的两处版本错位，必须按符号和测试证据处理，不能再把它归因于分支数量：
+
+- READY 已完成首页 Process FPC 与每 Worker 动态首页证明，但后续改动又把 `worker_bootstrap_warmup` 缺省值从关闭改为开启，导致 Worker 刚成为可路由状态后重复执行 registry bootstrap。缺省值现已恢复为关闭，额外 registry 贡献只能显式开启。
+- 延迟恢复同时保存 authenticated service PID 与 process-tree tracking PID；后续改动错误地把两者都写为 service PID。foreground wrapper/root 仍存活时会丢失真正的槽位占用事实。恢复队列现分别保留 `pid` 和 `tracking_pid`，防止提前拉起重复 Worker。
+- readiness v3 引入 compiled-container digest 与动态首渲染证明后，旧启动测试夹具仍发送旧 READY 结构，造成 3 个 error 和 5 个 failure。夹具已升级到同一协议事实源；`ServiceOrchestratorStartupTest` 为 93/93、440 assertions，`WlsRuntimeInternalWarmupInputTest` 为 23/23、52 assertions。
+
+独立实例 `ai-test-wls-regression-20260713-1710` 在 macOS 上以 `auto -> direct/shared_fd/event/stream`、4 Worker 完整 READY 约 2 秒；公开动态首页 BYPASS-FPC first-render 为 46.52ms，首页 200、裸 `/admin/login` 404、带后台 Key 登录页 200，TLS 实际协商为 TLS 1.3 / `TLS_AES_256_GCM_SHA384`。Browser 可见性来自同一代码和策略的前一独立实例 `ai-test-wls-regression-20260713-1645`：首页和带 Key 登录表单正常可见，Console error/warn 为 0；Chrome 对后续 9882 端口返回客户端拦截，因此没有把 1645 的可见性伪记为 1710 的结果。测试白名单已恢复为关闭，两个实例及其共享 Session/Memory 进程均已停止。
+
+本审计不把尚未完成的工作包装成已完成：三个 Worker 入口仍分别为 5,484 / 6,472 / 2,103 行，当前只统一了 HTTP wire helper、策略内核、FPC/static fast path、控制面和 telemetry；它们还不是计划所述的“薄 Transport Adapter + 单一主循环”。Linux/Windows 原生矩阵也没有可用本机 runner 或现有 WLS CI，仍属于独立交付缺口。
+
 ## 4. 实施映射
 
 | 阶段 | 目标 | 主要代码锚点 | 核心验证 |
@@ -509,7 +522,10 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 | 本轮 | 平台无关 RuntimeSelection 与 POSIX auto direct | `RuntimeStrategyResolver`、Provider | Windows 拒绝 direct；Linux 通过 reuseport 分布 probe，macOS 通过共享 FD accept 分布 probe 后 direct |
 | 本轮 | 编译 RuntimePolicyBundle 和原子 digest 发布 | policy compiler/store/control message | 两拓扑策略结果一致；混合 digest 不 READY |
 | 已落地 | READY 后单槽恢复闭环 | `ServiceOrchestrator`、`ChildMasterGuard` | REGISTER 不取消复活；仅同租约 READY 且 IPC 会话仍存在时提交恢复 |
+| 已落地 | 重复预热与 PID 事实源回归收口 | `WlsRuntime`、`ServiceOrchestrator`、readiness v3 测试夹具 | READY 后不再默认重复 bootstrap；service/tracking PID 分离；116 项定向测试通过 |
 | P2 | 统一分段指标与慢请求归因 | telemetry / worker / dispatcher | p50/p95/p99/max 可定位到具体阶段 |
+| P4 待完成 | Worker 入口收敛为薄 Transport Adapter | `bin/worker*.php`、共享 Worker 主循环 | 三种 Transport 只保留 socket/TLS/event 差异，策略、解析、缓存、动态管线不再复制 |
+| 平台待完成 | Linux/Windows 原生矩阵 | 独立 runner / CI | Linux SO_REUSEPORT；Windows Dispatcher、批量启动、TLS、恢复和长稳实测 |
 
 ## 5. 验收门槛
 
