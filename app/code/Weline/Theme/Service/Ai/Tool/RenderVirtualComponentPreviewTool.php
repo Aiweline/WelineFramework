@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Ai\Tool;
 
-use Weline\Ai\Interface\ToolInterface;
+use Weline\Ai\Api\ToolInterface;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Dto\ThemeRenderable;
 use Weline\Theme\Model\WelineTheme;

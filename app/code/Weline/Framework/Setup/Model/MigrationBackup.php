@@ -40,6 +40,7 @@ class MigrationBackup extends Model implements ModelInterface
     public const TYPE_INDEX = 'index';
     public const TYPE_CONSTRAINT = 'constraint';
     public const TYPE_CHUNK = 'chunk';
+    public const TYPE_CONFLICT = 'conflict';
 
     public function getMigrationBackups(int $migrationId): array
     {

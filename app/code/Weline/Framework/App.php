@@ -26,7 +26,9 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\DevToolMemoryLimitBootstrap;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestPipeline;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 use Weline\Framework\Router\Core as Router;
@@ -123,6 +125,18 @@ class App
         $eventManager = $this->resolveEventManager();
         if ($eventManager->hasObservers('Weline_Framework::App::run_before')) {
             $eventManager->dispatch('Weline_Framework::App::run_before');
+        }
+    }
+
+    /**
+     * Mandatory guards that must run before URL/FPC and are not allowed to
+     * perform routing, controller dispatch or optional business integration.
+     */
+    public function dispatchPreRouteGate(): void
+    {
+        $eventManager = $this->resolveEventManager();
+        if ($eventManager->hasObservers('Weline_Framework::App::pre_route_gate')) {
+            $eventManager->dispatch('Weline_Framework::App::pre_route_gate');
         }
     }
 
@@ -335,7 +349,7 @@ class App
             $markApplyUrlStep('fpc_fast_path', ['hit' => false]);
             $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
             $markApplyUrlStep('url_parsed_after_dispatch');
-            if (Runtime::isPersistent() && RequestContext::get('wls.fpc.cached_response') instanceof Response) {
+            if (RequestPipeline::earlyResponse() instanceof Response) {
                 $markApplyUrlStep('url_parsed_after_cached_response', ['hit' => true]);
                 $flushApplyUrlProfile();
                 return;
@@ -375,7 +389,7 @@ class App
             if (!$response instanceof Response) {
                 return false;
             }
-            RequestContext::set('wls.fpc.cached_response', $response);
+            RequestPipeline::registerEarlyResponse($response);
             return true;
         } catch (\Throwable) {
             return false;
@@ -887,54 +901,15 @@ class App
 
     private function runPipeline(): mixed
     {
-        $this->bootstrapRequestCycle();
-
-        $runBeforeStart = microtime(true);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('run_before');
-        }
-        
-        $this->dispatchRunBefore();
-
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan('run_before', (microtime(true) - $runBeforeStart) * 1000, 'framework');
-        }
-        $result = '';
-        
-        if (self::isRequestRuntime()) {
-            $urlParserStart = microtime(true);
-            $parse = $this->parseUrl();
-            if (\is_array($parse)) {
-                $this->applyParsedUrl($parse);
-            }
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
-            }
-
-            $this->startSessionIfNeeded();
-            $routerStartBegin = microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::pushCurrentParent('router_start');
-            }
-            $result = $this->runRouter();
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('router_start', (microtime(true) - $routerStartBegin) * 1000, 'framework');
-            }
+        if (!self::isRequestRuntime()) {
+            $this->bootstrapRequestCycle();
+            $this->dispatchRunBefore();
+            $resultStr = $this->normalizeOutput($this->dispatchRunAfter(''));
+            return $this->broadcastTelemetry($resultStr, $this->resolveRequest());
         }
 
-        $runAfterStart = microtime(true);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('run_after');
-        }
-        $result = $this->dispatchRunAfter($result);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan('run_after', (microtime(true) - $runAfterStart) * 1000, 'framework');
-        }
-
-        $resultStr = $this->normalizeOutput($result);
+        $execution = (new RequestPipeline())->execute($this);
+        $resultStr = $this->normalizeOutput($execution->output());
         return $this->broadcastTelemetry($resultStr, $this->resolveRequest());
     }
 
@@ -1047,6 +1022,16 @@ class App
 
     private function shouldSuppressResponseCookiesForCurrentRequest(): bool
     {
+        if (InternalHomepagePrime::isCurrentRequest()) {
+            return true;
+        }
+        if (InternalHomepagePrime::hasServerOnlyMarker() && \function_exists('w_log_warning')) {
+            \w_log_warning('[InternalHomepagePrime] cookie suppression predicate rejected: ' . \json_encode(
+                InternalHomepagePrime::diagnostics(),
+                \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ));
+        }
+
         $path = $this->normalizeRequestPath($this->getCurrentRequestUri());
         $cookieConfig = Env::getInstance()->getConfig('cookie', []);
         if (!\is_array($cookieConfig)) {
@@ -1161,14 +1146,17 @@ class App
     {
         $requestResponse = ObjectManager::getInstance(Response::class);
         $requestResponse->setHttpResponseCode($response->getStatusCode());
+        $requestHeaderCollector = $requestResponse->getHeaderCollectorInstance();
 
         foreach ($response->getHeaders() as $name => $value) {
             if (\is_array($value)) {
+                $replace = true;
                 foreach ($value as $headerValue) {
-                    $requestResponse->setHeader($name, (string)$headerValue);
+                    $requestHeaderCollector->setHeader($name, (string)$headerValue, $replace);
+                    $replace = false;
                 }
             } else {
-                $requestResponse->setHeader($name, (string)$value);
+                $requestHeaderCollector->setHeader($name, (string)$value);
             }
         }
 

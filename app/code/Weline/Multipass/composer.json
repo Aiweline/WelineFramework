@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-multipass",
+    "description": "WelineFramework Multipass module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-frontend": "@dev",
+        "weline/module-system-config": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Multipass\\": ""
+        }
+    }
+}

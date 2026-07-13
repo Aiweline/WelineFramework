@@ -84,6 +84,8 @@ class AttackDetector
      * 规则配置
      */
     private array $rules = [];
+
+    private readonly CanonicalClientIdentity $clientIdentity;
     
     /**
      * 默认规则
@@ -337,6 +339,7 @@ class AttackDetector
      */
     private function __construct()
     {
+        $this->clientIdentity = new CanonicalClientIdentity();
         $this->rules = $this->defaultRules;
         $this->loadRules();
         $this->loadPermanentBannedIps();
@@ -431,16 +434,10 @@ class AttackDetector
         }
         
         foreach ($config['ips'] as $whitelistEntry) {
-            // 精确匹配
-            if ($whitelistEntry === $ip) {
+            if (\is_string($whitelistEntry)
+                && $this->ipMatchesCidr($ip, $whitelistEntry)
+            ) {
                 return true;
-            }
-            
-            // CIDR 匹配（如 10.0.0.0/8）
-            if (\strpos($whitelistEntry, '/') !== false) {
-                if ($this->ipMatchesCidr($ip, $whitelistEntry)) {
-                    return true;
-                }
             }
         }
         
@@ -456,23 +453,7 @@ class AttackDetector
      */
     private function ipMatchesCidr(string $ip, string $cidr): bool
     {
-        [$subnet, $bits] = \explode('/', $cidr, 2);
-        $bits = (int) $bits;
-        
-        // 处理 IPv4
-        if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) 
-            && \filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            $ipLong = \ip2long($ip);
-            $subnetLong = \ip2long($subnet);
-            $mask = -1 << (32 - $bits);
-            
-            return ($ipLong & $mask) === ($subnetLong & $mask);
-        }
-        
-        // 简单的 IPv6 支持（可后续扩展）
-        // 暂不实现，直接返回 false
-        
-        return false;
+        return $this->clientIdentity->matchesCidr($ip, $cidr);
     }
     
     /**

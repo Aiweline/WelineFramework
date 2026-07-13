@@ -24,12 +24,6 @@ if (!function_exists('w_log_should_use_wls_direct')) {
         if (\is_string($processTag) && $processTag !== '') {
             return true;
         }
-        if (\class_exists(\Weline\Server\Log\Error\ErrorBootstrap::class, false)
-            && \Weline\Server\Log\Error\ErrorBootstrap::isInitialized()
-        ) {
-            return true;
-        }
-
         return false;
     }
 }
@@ -50,20 +44,8 @@ if (!function_exists('w_log')) {
     function w_log(string $level, string $message, array $context = [], ?string $channel = null): void
     {
         try {
-            if (w_log_should_use_wls_direct() && \class_exists(\Weline\Server\Log\WlsLogger::class)) {
-                $payload = $context;
-                if ($channel !== null && $channel !== '') {
-                    $payload['_channel'] = $channel;
-                }
-                \Weline\Server\Log\WlsLogger::getInstance()->log(
-                    \strtoupper($level),
-                    $message,
-                    $payload
-                );
-            } else {
-                $logger = LoggerFactory::create($channel);
-                $logger->log($level, $message, $context);
-            }
+            $logger = LoggerFactory::create($channel);
+            $logger->log($level, $message, $context);
             $sseManual = \getenv('WELINE_CRON_MANUAL_SSE');
             if ($sseManual !== false && $sseManual !== '' && $sseManual !== '0') {
                 $echoLevels = ['notice', 'info', 'warning', 'error', 'critical', 'alert', 'emergency'];

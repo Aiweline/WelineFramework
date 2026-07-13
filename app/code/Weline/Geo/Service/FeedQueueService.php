@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Geo\Service;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Queue\Model\Queue;
-use Weline\Queue\Model\Queue\Type;
+use Weline\Geo\Queue\FeedGenerateQueue;
+use Weline\Geo\Queue\FeedPushQueue;
+use Weline\Queue\Api\QueueStatus;
 
 /**
  * Feed队列服务
@@ -40,34 +40,24 @@ class FeedQueueService
      */
     public function enqueueFeedGenerate(int $feedId, string $format = 'json_feed', bool $force = false): int
     {
-        /** @var Type $queueType */
-        $queueType = ObjectManager::getInstance(Type::class);
-        $type = $queueType->where(Type::schema_fields_class, 'Weline\Geo\Queue\FeedGenerateQueue')
-            ->find()
-            ->fetch();
-
-        if (!$type->getId()) {
-            throw new \Exception('Feed生成队列类型未注册，请先运行模块升级');
+        $result = w_query('queue', 'create', [
+            'class' => FeedGenerateQueue::class,
+            'name' => "生成Feed #{$feedId}",
+            'module' => 'Weline_Geo',
+            'content' => [
+                'feed_id' => $feedId,
+                'format' => $format,
+                'force' => $force,
+            ],
+            'status' => QueueStatus::PENDING,
+            'auto' => true,
+        ]);
+        $queueId = \is_array($result) ? (int)($result['queue_id'] ?? 0) : 0;
+        if ($queueId <= 0) {
+            throw new \RuntimeException((string)__('创建队列失败。'));
         }
 
-        /** @var Queue $queue */
-        $queue = ObjectManager::getInstance(Queue::class);
-        
-        $content = json_encode([
-            'feed_id' => $feedId,
-            'format' => $format,
-            'force' => $force,
-        ]);
-
-        $queue->setTypeId($type->getId())
-            ->setName("生成Feed #{$feedId}")
-            ->setContent($content)
-            ->setStatus(Queue::status_pending)
-            ->setAuto(true)
-            ->setModule('Weline_Geo')
-            ->save();
-
-        return (int)$queue->getId();
+        return $queueId;
     }
 
     /**
@@ -80,35 +70,25 @@ class FeedQueueService
      */
     public function enqueueFeedPush(int $feedId, array $platformIds = [], string $pushType = 'scheduled'): int
     {
-        /** @var Type $queueType */
-        $queueType = ObjectManager::getInstance(Type::class);
-        $type = $queueType->where(Type::schema_fields_class, 'Weline\Geo\Queue\FeedPushQueue')
-            ->find()
-            ->fetch();
-
-        if (!$type->getId()) {
-            throw new \Exception('Feed推送队列类型未注册，请先运行模块升级');
+        $platformIdsStr = empty($platformIds) ? '所有平台' : implode(',', $platformIds);
+        $result = w_query('queue', 'create', [
+            'class' => FeedPushQueue::class,
+            'name' => "推送Feed #{$feedId} 到平台 [{$platformIdsStr}]",
+            'module' => 'Weline_Geo',
+            'content' => [
+                'feed_id' => $feedId,
+                'platform_ids' => $platformIds,
+                'push_type' => $pushType,
+            ],
+            'status' => QueueStatus::PENDING,
+            'auto' => true,
+        ]);
+        $queueId = \is_array($result) ? (int)($result['queue_id'] ?? 0) : 0;
+        if ($queueId <= 0) {
+            throw new \RuntimeException((string)__('创建队列失败。'));
         }
 
-        /** @var Queue $queue */
-        $queue = ObjectManager::getInstance(Queue::class);
-        
-        $content = json_encode([
-            'feed_id' => $feedId,
-            'platform_ids' => $platformIds,
-            'push_type' => $pushType,
-        ]);
-
-        $platformIdsStr = empty($platformIds) ? '所有平台' : implode(',', $platformIds);
-        $queue->setTypeId($type->getId())
-            ->setName("推送Feed #{$feedId} 到平台 [{$platformIdsStr}]")
-            ->setContent($content)
-            ->setStatus(Queue::status_pending)
-            ->setAuto(true)
-            ->setModule('Weline_Geo')
-            ->save();
-
-        return (int)$queue->getId();
+        return $queueId;
     }
 
     /**
@@ -126,4 +106,3 @@ class FeedQueueService
         return $this->enqueueFeedGenerate($feedId, 'json_feed', false);
     }
 }
-

@@ -1,6 +1,6 @@
-﻿编辑器管理器,"Editor manager"
-"editor-manager 标签属性 container-id 不能为空！","editor-manager 标签属性 container-id 不能为空！"
+﻿"editor-manager 标签属性 container-id 不能为空！","editor-manager 标签属性 container-id 不能为空！"
 "配置的编辑器管理器不存在! 编辑器管理器名：%{1}","The configured editor manager does not exist! Editor manager name: %{1}"
+编辑器管理器,"Editor manager"
 管理系统中可用的富文本编辑器。编辑器管理器允许您在不同的编辑器之间切换。,"Manage the rich text editors available in the system. The editor manager allows you to switch between different editors."
 暂无已注册的编辑器管理器。,"No registered editor manager."
 编辑器名称,"Editor name"

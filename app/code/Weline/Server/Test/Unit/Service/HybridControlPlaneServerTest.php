@@ -9,6 +9,8 @@ use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
+use Weline\Server\Supervisor\Lease\SlotLease;
+use Weline\Server\Supervisor\SupervisorRuntime;
 
 final class HybridControlPlaneServerTest extends TestCase
 {
@@ -70,19 +72,43 @@ final class HybridControlPlaneServerTest extends TestCase
     public function testHybridServerBridgesSupervisorHelloReadyAndDisconnect(): void
     {
         $controlServer = new MasterControlServer();
+        $resolver = new ControlEndpointResolver(BP, 28000, 1000);
+        $runtime = new SupervisorRuntime(
+            instanceName: 'ut-instance',
+            channelId: 'channel-ut-instance',
+            endpointResolver: $resolver,
+        );
         $hybrid = new HybridControlPlaneServer(
             controlServer: $controlServer,
-            endpointResolver: new ControlEndpointResolver(BP, 28000, 1000),
+            endpointResolver: $resolver,
             supervisorEnabled: true,
             channelId: 'channel-ut-instance',
+            supervisorRuntime: $runtime,
         );
         $hybrid->setExpectedInstanceCode('ut-instance');
 
         $messages = [];
         $disconnects = [];
-        $hybrid->onMessage(function (array $msg, int $clientId, object $server) use (&$messages): void {
-            unset($server);
+        $readyLeaseStateBeforeMasterAck = null;
+        $hybrid->onMessage(function (array $msg, int $clientId, object $server) use (
+            &$messages,
+            &$readyLeaseStateBeforeMasterAck,
+            $runtime,
+        ): void {
             $messages[] = [$msg, $clientId];
+            if (($msg['type'] ?? '') !== ControlMessage::TYPE_READY) {
+                return;
+            }
+            $lease = $runtime->supervisor()->leases()->get((string)($msg['slot_id'] ?? ''));
+            $readyLeaseStateBeforeMasterAck = $lease?->state;
+            $server->sendTo($clientId, ControlMessage::readyAck(
+                leaseId: (string)($msg['lease_id'] ?? ''),
+                generation: (int)($msg['generation'] ?? 0),
+                workerId: (int)($msg['worker_id'] ?? 0),
+                port: (int)($msg['port'] ?? 0),
+                msgId: (string)($msg['msg_id'] ?? ''),
+                slotId: (string)($msg['slot_id'] ?? ''),
+            ));
         });
         $hybrid->onDisconnect(function (int $clientId, array $clientInfo, object $server) use (&$disconnects): void {
             unset($server);
@@ -137,12 +163,80 @@ final class HybridControlPlaneServerTest extends TestCase
             ));
             self::assertNotSame([], $readyMessages);
             self::assertSame(18081, $readyMessages[0][0]['port'] ?? null);
+            self::assertArrayHasKey('topology', $readyMessages[0][0]);
+            self::assertArrayHasKey('homepage_fpc', $readyMessages[0][0]);
+            self::assertSame(SlotLease::STATE_LEASED, $readyLeaseStateBeforeMasterAck);
+            self::assertSame(
+                SlotLease::STATE_READY,
+                $runtime->supervisor()->leases()->get('worker#1')?->state,
+            );
 
-            $hybrid->closeClient($readyMessages[0][1]);
+            self::assertTrue($client->send(ControlMessage::telemetry(
+                instance: 'forged-instance',
+                host: 'example.test',
+                status: 200,
+                latencyMs: 5,
+                bytesOut: 128,
+                ts: 1234567890,
+            )));
+            self::assertTrue($client->flushPendingWrites(0.25));
+            $this->pollUntil(
+                static function () use (&$messages): bool {
+                    return \count(\array_filter(
+                        $messages,
+                        static fn(array $item): bool => ($item[0]['type'] ?? null) === ControlMessage::TYPE_TELEMETRY
+                    )) >= 1;
+                },
+                $hybrid
+            );
+            $telemetryMessages = \array_values(\array_filter(
+                $messages,
+                static fn(array $item): bool => ($item[0]['type'] ?? null) === ControlMessage::TYPE_TELEMETRY
+            ));
+            self::assertSame('ut-instance', $telemetryMessages[0][0]['instance'] ?? null);
+
+            self::assertTrue($client->send(ControlMessage::workerPoolAck(
+                port: 18081,
+                inPool: true,
+                slotId: 'worker#1',
+                leaseId: 'forged-worker-pool-lease',
+                generation: 999,
+            )));
+            self::assertTrue($client->flushPendingWrites(0.25));
+            for ($i = 0; $i < 5; $i++) {
+                $hybrid->poll(0, 10000);
+            }
+            self::assertSame([], \array_values(\array_filter(
+                $messages,
+                static fn(array $item): bool => ($item[0]['type'] ?? null) === ControlMessage::TYPE_WORKER_POOL_ACK,
+            )), 'worker sessions must not forge Dispatcher pool acknowledgements');
+
+            self::assertTrue($client->send(ControlMessage::exitReason('unit-exit', 0)));
+            self::assertTrue($client->send(ControlMessage::exited(
+                ControlMessage::ROLE_WORKER,
+                12001,
+                18081,
+                1,
+                'exit-1',
+            )));
+            self::assertTrue($client->flushPendingWrites(0.25));
+            $deadline = \microtime(true) + 2.0;
+            while ($disconnects === [] && \microtime(true) < $deadline) {
+                $hybrid->poll(0, 10000);
+                \usleep(10000);
+            }
+            self::assertNotSame(
+                [],
+                $disconnects,
+                'EXITED must close the Supervisor session immediately; observed_types='
+                . \json_encode(\array_column(\array_column($messages, 0), 'type'))
+                . ', service_clients=' . $hybrid->countServiceClients(),
+            );
             self::assertCount(1, $disconnects);
             self::assertSame($readyMessages[0][1], $disconnects[0][0]);
             self::assertSame(ControlMessage::ROLE_WORKER, $disconnects[0][1]['role'] ?? null);
             self::assertSame(18081, $disconnects[0][1]['port'] ?? null);
+            self::assertSame('client_exited', $disconnects[0][1]['disconnect_reason'] ?? null);
         } finally {
             $client->close();
             $hybrid->close();

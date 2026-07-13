@@ -4,8 +4,7 @@ declare(strict_types=1);
 namespace Weline\PhpManager\Service;
 
 use Weline\PhpManager\Model\WlsPhpProfile;
-use Weline\Server\IPC\ControlMessage;
-use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Api\Control\RuntimeReloadGateway;
 
 class WlsPhpIniService
 {
@@ -17,7 +16,7 @@ class WlsPhpIniService
 
     public function __construct(
         private readonly WlsPhpProfileService $profileService,
-        private readonly IpcControlGateway $ipcControlGateway
+        private readonly RuntimeReloadGateway $runtimeReloadGateway
     ) {
     }
 
@@ -525,11 +524,11 @@ class WlsPhpIniService
             ];
         }
 
-        $result = $this->ipcControlGateway->reloadAsync($instance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
+        $result = $this->runtimeReloadGateway->forceReloadAsync($instance, 8.0);
         return [
             'action' => $action,
-            'success' => !empty($result['success']),
-            'message' => \mb_substr((string)($result['message'] ?? __('WLS reload request failed.')), 0, 220),
+            'success' => $result->success,
+            'message' => \mb_substr($result->message, 0, 220),
         ];
     }
 

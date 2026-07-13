@@ -26,6 +26,7 @@ use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInte
 use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionLease;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
@@ -76,7 +77,7 @@ final class Connector extends Query implements ConnectorInterface
     protected ?PDO $link = null;
     protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
-    protected bool $fromPool = false; // 标记连接是否来自连接池
+    private ?ConnectionLease $lease = null;
     protected ?PDO $_original_pdo = null; // 原始 PDO 引用，用于克隆后的对象访问
 
     private ?PgsqlDialect $dialect = null;
@@ -88,10 +89,13 @@ final class Connector extends Query implements ConnectorInterface
 
     public function create(): static
     {
-        if ($this->link !== null) {
+        if ($this->link !== null && $this->lease?->isActive()) {
             // 🔧 修复：如果连接已存在，确保引用也被设置
             $this->_original_pdo = $this->link;
             return $this;
+        }
+        if ($this->link !== null || $this->lease !== null) {
+            $this->close();
         }
 
         $db_type = $this->configProvider->getDbType();
@@ -107,7 +111,7 @@ final class Connector extends Query implements ConnectorInterface
         }
 
         // 从连接池获取连接
-        $this->link = ConnectionPool::getConnection(
+        $lease = ConnectionPool::acquire(
             $this->configProvider,
             function () {
                 // PostgreSQL DSN 格式: pgsql:host=hostname;port=5432;dbname=database;user=username;password=password
@@ -133,21 +137,27 @@ final class Connector extends Query implements ConnectorInterface
                 }
             }
         );
+        $this->lease = $lease;
+        $this->link = $lease->getConnection();
         $this->_original_pdo = $this->link;
-        $this->fromPool = true;
-
-        // 初始化 SchemaConfig（统一管理 schema）
-        SchemaConfig::setPdo($this->link);
-
-        // 设置 PDO 到 TableNameStrategy，使其能够动态获取 current_schema
-        $this->tableStrategy->setPdo($this->link);
-
         try {
-            $this->getDialect()->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
+            // 初始化 SchemaConfig（统一管理 schema）
+            SchemaConfig::setPdo($this->link);
+
+            // 设置 PDO 到 TableNameStrategy，使其能够动态获取 current_schema
+            $this->tableStrategy->setPdo($this->link);
+
+            $serverVersion = (string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION);
+            try {
+                $this->getDialect()->validateVersion($serverVersion);
+            } catch (\Throwable $e) {
+                w_log_warning(__('PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
+            }
+            $this->wrappedConnection = new PdoConnection($this->link, 'pgsql');
         } catch (\Throwable $e) {
-            w_log_warning(__('PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
+            $this->discardCurrentConnection();
+            throw $e;
         }
-        $this->wrappedConnection = new PdoConnection($this->link, 'pgsql');
         return $this;
     }
 
@@ -168,15 +178,7 @@ final class Connector extends Query implements ConnectorInterface
     {
         unset($exception);
 
-        if ($this->link instanceof PDO && $this->fromPool) {
-            ConnectionPool::discardConnection($this->link, $this->configProvider);
-        } elseif ($this->link instanceof PDO) {
-            ConnectionPool::markConnectionUnhealthy($this->link);
-        }
-
-        $this->link = null;
-        $this->wrappedConnection = null;
-        $this->fromPool = false;
+        $this->discardCurrentConnection();
 
         try {
             $this->create();
@@ -188,15 +190,42 @@ final class Connector extends Query implements ConnectorInterface
 
     public function close(): void
     {
-        // 如果连接来自连接池，归还到池中；否则直接释放
-        if ($this->link !== null) {
-            if ($this->fromPool) {
-                ConnectionPool::releaseConnection($this->link, $this->configProvider);
-            }
-            $this->link = null;
-            $this->wrappedConnection = null;
-            $this->fromPool = false;
+        $lease = $this->detachCurrentConnection();
+        $lease?->release();
+    }
+
+    private function discardCurrentConnection(): void
+    {
+        $link = $this->link;
+        $lease = $this->detachCurrentConnection();
+        SchemaConfig::reset();
+        if ($lease !== null) {
+            $lease->discard();
+        } elseif ($link instanceof PDO) {
+            ConnectionPool::discardConnection($link, $this->configProvider);
         }
+    }
+
+    private function detachCurrentConnection(): ?ConnectionLease
+    {
+        $lease = $this->lease;
+        $this->lease = null;
+        $this->link = null;
+        $this->_original_pdo = null;
+        $this->wrappedConnection = null;
+        return $lease;
+    }
+
+    public function __clone()
+    {
+        // The clone lazily acquires a distinct lease; it must not alias the
+        // original connector's ownership token or raw PDO.
+        $this->lease = null;
+        $this->link = null;
+        $this->_original_pdo = null;
+        $this->wrappedConnection = null;
+        $this->query = null;
+        $this->PDOStatement = null;
     }
 
     /**
@@ -214,6 +243,11 @@ final class Connector extends Query implements ConnectorInterface
     {
         if ($this->link === null) {
             throw new LinkException(__('数据库连接未初始化'));
+        }
+        if (!$this->lease?->isActive()) {
+            // requestEndCleanup may have returned the PDO while this process
+            // retains the Connector. Reacquire before exposing that reference.
+            $this->create();
         }
         
         // 🔧 修复：直接返回原始 PDO 对象，不再使用包装器
@@ -1093,4 +1127,3 @@ SQL;
         return '';
     }
 }
-

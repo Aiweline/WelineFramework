@@ -3,7 +3,7 @@
 namespace Weline\Taglib\Taglib;
 
 use Weline\Framework\App\Exception;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Scope implements TaglibInterface
 {

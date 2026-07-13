@@ -6922,15 +6922,14 @@
         },
         {
             "name": "weline/base",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Base",
-                "reference": "c389f5e5facf4b068c8ca4fe9ff25f8dddc75810"
+                "reference": "24aef6bd19cdcc17cf959b9f799975d7bb91913b"
             },
             "require": {
-                "php": "^8.1",
-                "weline/deploy-module": "@dev",
+                "php": "^8.4",
                 "weline/framework": "@dev",
                 "weline/module-acl": "@dev",
                 "weline/module-admin": "@dev",
@@ -6943,6 +6942,7 @@
                 "weline/module-cron": "@dev",
                 "weline/module-customer": "@dev",
                 "weline/module-data-table": "@dev",
+                "weline/module-deploy": "@dev",
                 "weline/module-developer-workspace": "@dev",
                 "weline/module-eav": "@dev",
                 "weline/module-editor-manager": "@dev",
@@ -6958,17 +6958,17 @@
                 "weline/module-module-router": "@dev",
                 "weline/module-parts": "@dev",
                 "weline/module-queue": "@dev",
+                "weline/module-session-manager": "@dev",
                 "weline/module-smtp": "@dev",
                 "weline/module-system-config": "@dev",
                 "weline/module-taglib": "@dev",
                 "weline/module-theme": "@dev",
                 "weline/module-theme-fancy": "@dev",
+                "weline/module-two-factor-auth": "@dev",
                 "weline/module-url-manager": "@dev",
                 "weline/module-visitor": "@dev",
                 "weline/module-warm-cache": "@dev",
-                "weline/module-website-monitoring": "@dev",
-                "weline/session-manager": "@dev",
-                "weline/two-factor-auth": "@dev"
+                "weline/module-website-monitoring": "@dev"
             },
             "type": "weline-module",
             "autoload": {
@@ -6985,41 +6985,7 @@
                     "email": "aiweline@qq.com"
                 }
             ],
-            "description": "Weline Base模块 - 统一管理所有Weline模块依赖",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/deploy-module",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/Deploy",
-                "reference": "1a674f12b33fb14124f26a443bd175bd9190ef1c"
-            },
-            "require": {
-                "php": ">=8.0",
-                "weline/framework": "@dev"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\Deploy\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Aiweline",
-                    "email": "aiweline@qq.com",
-                    "homepage": "https://aiweline.com"
-                }
-            ],
-            "description": "WelineFramework 部署模块，提供基于 Git 的代码更新和部署功能",
+            "description": "Weline Base聚合包 - 统一管理Weline默认发行模块依赖",
             "transport-options": {
                 "symlink": false,
                 "relative": true
@@ -7027,11 +6993,11 @@
         },
         {
             "name": "weline/framework",
-            "version": "1.9.2",
+            "version": "2.0.0",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Framework",
-                "reference": "10e5cfed6fb75844ab06a5ce06a3929a3b56771f"
+                "reference": "2409cb3c17453e1f70f128e1fc8ce075e2d31308"
             },
             "require": {
                 "ext-dom": "*",
@@ -7048,7 +7014,7 @@
                 "guzzlehttp/guzzle": "^7.4",
                 "jdorn/sql-formatter": "^1.2",
                 "mrclay/jsmin-php": "^2.4",
-                "php": "^8.1",
+                "php": "^8.4",
                 "phpunit/phpunit": "^10.0",
                 "symfony/intl": "^5.2",
                 "symfony/polyfill-intl-icu": "^1.23",
@@ -7087,21 +7053,19 @@
         },
         {
             "name": "weline/module-acl",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Acl",
-                "reference": "d1da8c894ba79564f5222c172e4202919efb3a20"
+                "reference": "fa10a5c579da860bde57d68dd2f6e8f18342c81e"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Acl\\": ""
-                },
-                "psr-0": {
                     "Weline\\Acl\\": ""
                 }
             },
@@ -7122,15 +7086,18 @@
         },
         {
             "name": "weline/module-admin",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Admin",
-                "reference": "545567b15778f19c4acea30536af9c56f361d30d"
+                "reference": "a0f803284f0c2fd488790be2d38d13160c84fdce"
             },
             "require": {
-                "php": "^8.0",
-                "weline/framework": "@dev"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-acl": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-system-config": "@dev"
             },
             "type": "weline-module",
             "autoload": {
@@ -7155,20 +7122,25 @@
         },
         {
             "name": "weline/module-ai",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Ai",
-                "reference": "46b83aa64c8c230868d2bba6479ba6d0a6508379"
+                "reference": "dcdbc99f42d90a68a0e534c3b7ffca86624fde95"
             },
             "require": {
-                "php": ">=8.0",
-                "weline/framework": "@dev"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-admin": "@dev",
+                "weline/module-backend": "@dev"
             },
             "require-dev": {
                 "friendsofphp/php-cs-fixer": "^3.0",
                 "phpstan/phpstan": "^1.0",
                 "phpunit/phpunit": "^9.0"
+            },
+            "suggest": {
+                "weline/module-i18n": "Enables the optional I18n machine-translation event integration."
             },
             "type": "weline-module",
             "autoload": {
@@ -7221,21 +7193,21 @@
         },
         {
             "name": "weline/module-backend",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Backend",
-                "reference": "d0e062491271a881c4d4b580cf0ed435fba70955"
+                "reference": "8c2a03c0fe9deff4790f5d0b615c88f67ffff9c2"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-acl": "@dev",
+                "weline/module-system-config": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Backend\\": ""
-                },
-                "psr-0": {
                     "Weline\\Backend\\": ""
                 }
             },
@@ -7256,21 +7228,21 @@
         },
         {
             "name": "weline/module-backend-activity",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/BackendActivity",
-                "reference": "7ec686e89a355b6452b6673d771586929273f4aa"
+                "reference": "159b707b55666003d3d61fdbd2ca0e82db19eb50"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-acl": "@dev",
+                "weline/module-backend": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\BackendActivity\\": ""
-                },
-                "psr-0": {
                     "Weline\\BackendActivity\\": ""
                 }
             },
@@ -7291,21 +7263,22 @@
         },
         {
             "name": "weline/module-cache-manager",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/CacheManager",
-                "reference": "b95a62028610e22ffd4262a3966b078a9231c6eb"
+                "reference": "ab3acbadb9c473f2d6f181c5bb4bd00dd1433446"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/module-admin": "@dev"
+            },
+            "suggest": {
+                "weline/module-cron": "Shows cache-related scheduled tasks in the cache dashboard."
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\CacheManager\\": ""
-                },
-                "psr-0": {
                     "Weline\\CacheManager\\": ""
                 }
             },
@@ -7326,22 +7299,20 @@
         },
         {
             "name": "weline/module-ck-editor-editor-manager",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/CKEditorEditorManager",
-                "reference": "b7c67a64c6d1a756a1a1d70bc83e02186b954160"
+                "reference": "7972c2428172c2007f0b9b402b5c4856164365b4"
             },
             "require": {
-                "php": "^8.1",
+                "php": "^8.4",
+                "weline/module-backend": "@dev",
                 "weline/module-editor-manager": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\CKEditorEditorManager\\": ""
-                },
-                "psr-0": {
                     "Weline\\CKEditorEditorManager\\": ""
                 }
             },
@@ -7362,21 +7333,20 @@
         },
         {
             "name": "weline/module-component",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Component",
-                "reference": "f5253ad8e67cfb938bced3b235311f51001a4cf2"
+                "reference": "74c84fd054c2c91423812deac4d06343d6771591"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-admin": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Component\\": ""
-                },
-                "psr-0": {
                     "Weline\\Component\\": ""
                 }
             },
@@ -7397,22 +7367,21 @@
         },
         {
             "name": "weline/module-cron",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Cron",
-                "reference": "6e971b492b8cfcd486bcb32c33c12a4125b562ad"
+                "reference": "8018d7c65ae78221b63efbb5c9cd814dc5750c52"
             },
             "require": {
                 "dragonmantank/cron-expression": "^3.4.0",
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/module-admin": "@dev",
+                "weline/module-backend": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Cron\\": ""
-                },
-                "psr-0": {
                     "Weline\\Cron\\": ""
                 }
             },
@@ -7433,21 +7402,29 @@
         },
         {
             "name": "weline/module-customer",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Customer",
-                "reference": "58bf8d052e5dbecd5d3025ca22ac8ddb47c2da8f"
+                "reference": "2e7cde6d0ef637dffa02004febd1a4a89b34cfa6"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-frontend": "@dev"
+            },
+            "suggest": {
+                "weline/module-currency": "Adds currency dictionaries to the customer account shell.",
+                "weline/module-i18n": "Adds locale dictionaries to the customer account shell.",
+                "weline/module-order": "Adds order dictionaries to the customer account shell.",
+                "weline/module-seo": "Adds SEO dictionaries to the customer account shell.",
+                "weline/module-shipping": "Adds shipping dictionaries to the customer account shell.",
+                "weline/module-theme": "Enables authenticated customer accounts for Theme previews."
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Customer\\": ""
-                },
-                "psr-0": {
                     "Weline\\Customer\\": ""
                 }
             },
@@ -7468,16 +7445,17 @@
         },
         {
             "name": "weline/module-data-table",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/DataTable",
-                "reference": "dc72b91af677a45e5205d6aae7354e9df01c7348"
+                "reference": "213a6d7e52027226f8889d3a4ea608d84496c609"
             },
             "require": {
-                "php": ">=8.0",
+                "php": "^8.4",
                 "phpoffice/phpspreadsheet": "^1.29",
-                "weline/module-taglib": "*"
+                "weline/framework": "@dev",
+                "weline/module-taglib": "@dev"
             },
             "type": "weline-module",
             "extra": {
@@ -7512,22 +7490,73 @@
             }
         },
         {
-            "name": "weline/module-developer-workspace",
-            "version": "dev-main",
+            "name": "weline/module-deploy",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
-                "url": "app/code/Weline/DeveloperWorkspace",
-                "reference": "f00c2b12499ad8246deb3f3c9bad94f278165263"
+                "url": "app/code/Weline/Deploy",
+                "reference": "be2c12f51b5fe456c17e88a8c923b55edca615b6"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-module-router": "@dev",
+                "weline/module-system-config": "@dev"
+            },
+            "suggest": {
+                "weline/module-server": "Adds deploy operations to the WLS panel.",
+                "weline/module-websites": "Provides the optional default website URL candidate for webhook setup."
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\DeveloperWorkspace\\": ""
-                },
-                "psr-0": {
+                    "Weline\\Deploy\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Aiweline",
+                    "email": "aiweline@qq.com",
+                    "homepage": "https://aiweline.com"
+                }
+            ],
+            "description": "WelineFramework 部署模块，提供基于 Git 的代码更新和部署功能",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-developer-workspace",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/DeveloperWorkspace",
+                "reference": "836fd66f30d540602ec4290628dc02d6eaaac264"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-ai": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-cron": "@dev",
+                "weline/module-i18n": "@dev",
+                "weline/module-system-config": "@dev"
+            },
+            "suggest": {
+                "weline/module-api": "Enables API documentation collection in the developer workspace.",
+                "weline/module-seo": "Enables the optional developer SEO crawl and audit endpoint.",
+                "weline/module-server": "Enables shared developer payloads and WLS performance traces.",
+                "weline/module-visitor": "Shares the optional production panel access token configuration.",
+                "weline/module-websites": "Provides website-scoped currency choices for developer documentation."
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
                     "Weline\\DeveloperWorkspace\\": ""
                 }
             },
@@ -7548,21 +7577,21 @@
         },
         {
             "name": "weline/module-eav",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Eav",
-                "reference": "31bdb5dd556ada94f4607a6c4178e383c445df15"
+                "reference": "027250b0e38852a52ddeac06b0b4744841a84f36"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-i18n": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Eav\\": ""
-                },
-                "psr-0": {
                     "Weline\\Eav\\": ""
                 }
             },
@@ -7583,22 +7612,20 @@
         },
         {
             "name": "weline/module-editor-manager",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/EditorManager",
-                "reference": "afd0346f32fb3f18ce5a388ff409dfe80468e343"
+                "reference": "9c94f5e80e3d3f554f7649af20e0d8eba00e3083"
             },
             "require": {
-                "php": "^8.1",
-                "weline/module-media-manager": "*"
+                "php": "^8.4",
+                "weline/module-backend": "@dev",
+                "weline/module-media-manager": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\EditorManager\\": ""
-                },
-                "psr-0": {
                     "Weline\\EditorManager\\": ""
                 }
             },
@@ -7619,23 +7646,21 @@
         },
         {
             "name": "weline/module-el-finder-file-manager",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/ElFinderFileManager",
-                "reference": "ce9fcaa8e396db4f654f6f1acb55136db9d91bc9"
+                "reference": "28b2137560c606aac92a99fc5e487435d64751ff"
             },
             "require": {
-                "php": "^8.1",
+                "php": "^8.4",
                 "studio-42/elfinder": "^2.1.69",
-                "weline/module-file-manager": "*"
+                "weline/module-backend": "@dev",
+                "weline/module-file-manager": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\ElFinderFileManager\\": ""
-                },
-                "psr-0": {
                     "Weline\\ElFinderFileManager\\": ""
                 }
             },
@@ -7655,23 +7680,52 @@
             }
         },
         {
-            "name": "weline/module-file-manager",
-            "version": "dev-main",
+            "name": "weline/module-extends",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
-                "url": "app/code/Weline/FileManager",
-                "reference": "4bd751a053ce8b40f97f2c0f3762d52613bf7fec"
+                "url": "app/code/Weline/Extends",
+                "reference": "92b4e6c6b9e1a960681dd93d37adeaec02e17248"
             },
             "require": {
-                "php": "^8.1",
-                "weline/module-media-manager": "*"
+                "php": "^8.4",
+                "weline/framework": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\FileManager\\": ""
-                },
-                "psr-0": {
+                    "Weline\\Extends\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "WelineFramework Extends module",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-file-manager",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/FileManager",
+                "reference": "617c5d79a98dd0290fd68c54485d6d8378a25af8"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/module-backend": "@dev",
+                "weline/module-eav": "@dev",
+                "weline/module-queue": "@dev"
+            },
+            "suggest": {
+                "weline/module-server": "Adds the File Manager capability to the WLS panel."
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
                     "Weline\\FileManager\\": ""
                 }
             },
@@ -7692,21 +7746,28 @@
         },
         {
             "name": "weline/module-frontend",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Frontend",
-                "reference": "5e20cf940edb3854139a74b1cb882cad8c0e137c"
+                "reference": "eb827ed0c61173057c4b45e0a07158432af8142f"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-admin": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-system-config": "@dev",
+                "weline/module-theme": "@dev"
+            },
+            "suggest": {
+                "weline/module-ai": "Provides the optional frontend account storage adapter used by Ai billing.",
+                "weline/module-url-manager": "Enables optional frontend URL rewrite redirects.",
+                "weline/module-websites": "Provides optional website-scoped frontend start-page configuration."
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Frontend\\": ""
-                },
-                "psr-0": {
                     "Weline\\Frontend\\": ""
                 }
             },
@@ -7727,22 +7788,28 @@
         },
         {
             "name": "weline/module-i18n",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/I18n",
-                "reference": "149da8b4e6e5e1ca2d206c294d4d349fc6cdacc8"
+                "reference": "da7da95e3787d452baf3f199945cf45a0cead23e"
             },
             "require": {
-                "php": "^8.0",
-                "symfony/intl": "^5.2"
+                "php": "^8.4",
+                "symfony/intl": "^5.2",
+                "weline/framework": "@dev"
+            },
+            "suggest": {
+                "weline/module-acl": "Provides access-mode constants for the optional I18n administration controllers.",
+                "weline/module-admin": "Provides the backend locale selector integration.",
+                "weline/module-backend": "Provides backend resource groups for the optional I18n administration UI.",
+                "weline/module-cache-manager": "Provides centrally configured locale-cache TTL values.",
+                "weline/module-queue": "Provides asynchronous AI translation execution.",
+                "weline/module-system-config": "Persists optional AI translation configuration."
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\I18n\\": ""
-                },
-                "psr-0": {
                     "Weline\\I18n\\": ""
                 }
             },
@@ -7763,21 +7830,18 @@
         },
         {
             "name": "weline/module-indexer",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Indexer",
-                "reference": "288c9f6cb44b48d2631337b6dd70ee291c0f6823"
+                "reference": "8001474db844c25bfef02d99ba3f840ec4d83e86"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Indexer\\": ""
-                },
-                "psr-0": {
                     "Weline\\Indexer\\": ""
                 }
             },
@@ -7798,21 +7862,18 @@
         },
         {
             "name": "weline/module-installer",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Installer",
-                "reference": "1d83d48d1a64a98bc3a5433b782739c230ed1ec9"
+                "reference": "e89a69ff46fdb4f170d101fcbebe8cc890104b3b"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Installer\\": ""
-                },
-                "psr-0": {
                     "Weline\\Installer\\": ""
                 }
             },
@@ -7833,21 +7894,19 @@
         },
         {
             "name": "weline/module-maintenance",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Maintenance",
-                "reference": "f8b15f946d36c45ecdfb60b5e4f98488c640ffb9"
+                "reference": "44907bc722b01fd3c73f9983a5f7ce412675e2fe"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/module-backend": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Maintenance\\": ""
-                },
-                "psr-0": {
                     "Weline\\Maintenance\\": ""
                 }
             },
@@ -7868,21 +7927,26 @@
         },
         {
             "name": "weline/module-media-manager",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/MediaManager",
-                "reference": "0d969fedd713191f6633af1fac92849f09b0c14b"
+                "reference": "98eacd9eb9e05ea8c5e273bfbd6e75e8c1f783fd"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-file-manager": "@dev"
+            },
+            "suggest": {
+                "weline/module-ai": "Enables the optional AI media-generation adapter.",
+                "weline/module-storage": "Enables optional configured storage sources in the media connector.",
+                "weline/module-theme": "Publishes requested development-theme override assets through the Theme integration."
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\MediaManager\\": ""
-                },
-                "psr-0": {
                     "Weline\\MediaManager\\": ""
                 }
             },
@@ -7902,22 +7966,53 @@
             }
         },
         {
-            "name": "weline/module-module-manager",
-            "version": "dev-main",
+            "name": "weline/module-meta",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
-                "url": "app/code/Weline/ModuleManager",
-                "reference": "67673e36b4505b2fcf8c802c695b966c0638011e"
+                "url": "app/code/Weline/Meta",
+                "reference": "bc79cc812e4c9e5188cd30ee4190edaa77e05737"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-i18n": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\ModuleManager\\": ""
-                },
-                "psr-0": {
+                    "Weline\\Meta\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "WelineFramework Meta module",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-module-manager",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/ModuleManager",
+                "reference": "f6a8a4c49a2463c84cd7bad18ce4febeb60c98c6"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/module-admin": "@dev"
+            },
+            "suggest": {
+                "weline/module-ai": "Enables optional AI-assisted module translation.",
+                "weline/module-i18n": "Enables translation collection and dictionary reuse while creating modules."
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
                     "Weline\\ModuleManager\\": ""
                 }
             },
@@ -7938,21 +8033,19 @@
         },
         {
             "name": "weline/module-module-router",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/ModuleRouter",
-                "reference": "c7cdefc38e6debbc480e37d950614ad4f96d051a"
+                "reference": "a073e5688f65d97289c0eb99c86b619e03f35887"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/framework": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\ModuleRouter\\": ""
-                },
-                "psr-0": {
                     "Weline\\ModuleRouter\\": ""
                 }
             },
@@ -7973,21 +8066,18 @@
         },
         {
             "name": "weline/module-parts",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Parts",
-                "reference": "cb4721e964c7d5ed47d3d159fdaaf40eb666ef7d"
+                "reference": "8da154112217256f5cf75e9db4741090141d88f6"
             },
             "require": {
-                "php": "^8.1"
+                "php": "^8.4"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Parts\\": ""
-                },
-                "psr-0": {
                     "Weline\\Parts\\": ""
                 }
             },
@@ -8008,22 +8098,22 @@
         },
         {
             "name": "weline/module-queue",
-            "version": "dev-main",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Queue",
-                "reference": "d3b43dc30afd3a2dad70bff381dcba38bd305996"
+                "reference": "fd28171a281184bb6a31737ef519c3809294d137"
             },
             "require": {
                 "mtdowling/cron-expression": "^1.2",
-                "php": "^8.1"
+                "php": "^8.4",
+                "weline/module-backend": "@dev",
+                "weline/module-cron": "@dev",
+                "weline/module-eav": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Queue\\": ""
-                },
-                "psr-0": {
                     "Weline\\Queue\\": ""
                 }
             },
@@ -8043,317 +8133,12 @@
             }
         },
         {
-            "name": "weline/module-smtp",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/Smtp",
-                "reference": "6cbc1f1e512f19d824195d81a437d97584b774ff"
-            },
-            "require": {
-                "php": "^8.1",
-                "phpmailer/phpmailer": "^6.6"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\Smtp\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "Weline smtp module",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-system-config",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/SystemConfig",
-                "reference": "f817baf700f57de19f6931535fd371880c2a30fc"
-            },
-            "require": {
-                "php": "^8.1"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\SystemConfig\\": ""
-                },
-                "psr-0": {
-                    "Weline\\SystemConfig\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework 系统配置",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-taglib",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/Taglib",
-                "reference": "361c181f53941a3d0c5c27026563936c485cf3c8"
-            },
-            "require": {
-                "php": "^8.1",
-                "weline/framework": "@dev"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\Taglib\\": ""
-                },
-                "psr-0": {
-                    "Weline\\Taglib\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework taglib module",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-theme",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/Theme",
-                "reference": "3c359203a62d3194086ffcec4871d73e27dae0bf"
-            },
-            "require": {
-                "php": "^8.0"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\Theme\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework theme module",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-theme-fancy",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/ThemeFancy",
-                "reference": "8e9fe6a7bc46b7576c8cce5be9bb021abd9f0381"
-            },
-            "require": {
-                "php": "^8.0"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\ThemeFancy\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "前端Fancy主题",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-url-manager",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/UrlManager",
-                "reference": "d92c2b5c6578f25d200e8720644f7c568757af21"
-            },
-            "require": {
-                "php": "^8.1"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\UrlManager\\": ""
-                },
-                "psr-0": {
-                    "Weline\\UrlManager\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework 链接管理",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-visitor",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/Currency",
-                "reference": "a77b1f1ff9a510c2f267d3cd6b149ef5a72abc29"
-            },
-            "require": {
-                "php": "^8.1"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\Visitor\\": ""
-                },
-                "psr-0": {
-                    "Weline\\Visitor\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework 组件（visitor）",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-warm-cache",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/WarmCache",
-                "reference": "11effc9f5de84a57bbf8433ab5cc12420af00a12"
-            },
-            "require": {
-                "php": "^8.1"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\WarmCache\\": ""
-                },
-                "psr-0": {
-                    "Weline\\WarmCache\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework 缓存预热",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-website-monitoring",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/WebsiteMonitoring",
-                "reference": "13461121abed17c4f71d9d4af7fabe8d90330ca6"
-            },
-            "require": {
-                "php": "^8.0"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\WebsiteMonitoring\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Aiweline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "网站监控",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/session-manager",
-            "version": "dev-main",
+            "name": "weline/module-session-manager",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/SessionManager",
-                "reference": "1bc1185e108901142c8ea157e4cb4fe8fe0eec0b"
+                "reference": "627abe60a0bad95d40647f855bdf01a56d2b5752"
             },
             "require": {
                 "ext-dom": "*",
@@ -8370,7 +8155,7 @@
                 "guzzlehttp/guzzle": "^7.4",
                 "jdorn/sql-formatter": "^1.2",
                 "mrclay/jsmin-php": "^2.4",
-                "php": "^8.1",
+                "php": "^8.4",
                 "phpunit/phpunit": "^10.0",
                 "symfony/intl": "^5.2",
                 "symfony/polyfill-intl-icu": "^1.23",
@@ -8379,7 +8164,7 @@
             "type": "project",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Framework\\": ""
+                    "Weline\\SessionManager\\": ""
                 }
             },
             "license": [
@@ -8408,17 +8193,201 @@
             }
         },
         {
-            "name": "weline/two-factor-auth",
-            "version": "dev-main",
+            "name": "weline/module-smtp",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/Smtp",
+                "reference": "c46750b2ac097f03769840bc3b639b4cf03f4621"
+            },
+            "require": {
+                "php": "^8.4",
+                "phpmailer/phpmailer": "^6.6",
+                "weline/module-admin": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-system-config": "@dev"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\Smtp\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "Weline smtp module",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-system-config",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/SystemConfig",
+                "reference": "6889c8d945a6f6fb21ea184bca5d7b7d1eccaa02"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/framework": "@dev"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\SystemConfig\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework 系统配置",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-taglib",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/Taglib",
+                "reference": "ca49afa940368a6519e98cf6350d253cd04ed7de"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/module-module-manager": "@dev"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\Taglib\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework taglib module",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-theme",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/Theme",
+                "reference": "7936134c6c6030ec203cd246102ef4b9901fb289"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-i18n": "@dev",
+                "weline/module-meta": "@dev",
+                "weline/module-system-config": "@dev",
+                "weline/module-widget": "@dev"
+            },
+            "suggest": {
+                "weline/module-ai": "Enables optional AI theme adapters, agents, and tools.",
+                "weline/module-cdn": "Publishes preview cache-bypass rules when CDN integration is installed.",
+                "weline/module-eav": "Enables EAV-backed option metadata in Theme query operations.",
+                "weline/module-file-manager": "Resolves configured brand media paths through the public media API.",
+                "weline/module-module-router": "Preloads the compiled module router cache in persistent workers.",
+                "weline/module-seo": "Enables optional SEO head-context integration for theme FAQ facts.",
+                "weline/module-server": "Enables WLS shared-state-aware worker warmup integration.",
+                "weline/module-websites": "Enables website target types and the AI virtual-theme workbench integration."
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\Theme\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework theme module",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-theme-fancy",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/ThemeFancy",
+                "reference": "ac3fe3852300f0a2cef27084f848118676660c17"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/module-frontend": "@dev"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\ThemeFancy\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "前端Fancy主题",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-two-factor-auth",
+            "version": "dev-codex/welineframework-2-architecture",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/TwoFactorAuth",
-                "reference": "276d80db742f521aa86995d95f3d7a0e818a96b6"
+                "reference": "e78c48af61fb758fc8cfda7c216937569c1e95b9"
             },
             "require": {
                 "endroid/qr-code": "^6.0",
                 "php": "^8.4",
-                "weline/framework": "@dev"
+                "weline/framework": "@dev",
+                "weline/module-customer": "@dev"
             },
             "require-dev": {
                 "phpstan/phpstan": "^1.0",
@@ -8453,6 +8422,177 @@
                 "totp",
                 "weline"
             ],
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-url-manager",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/UrlManager",
+                "reference": "e8fb99b456d493fe3850cedc21e2f473e39d4a77"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/module-admin": "@dev",
+                "weline/module-module-manager": "@dev"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\UrlManager\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework 链接管理",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-visitor",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/Visitor",
+                "reference": "d39cf125197b3c865280a3ce74cec40f729684e5"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-system-config": "@dev",
+                "weline/module-taglib": "@dev"
+            },
+            "suggest": {
+                "weline/module-dashboard": "Publishes the Visitor analytics dashboard page when Dashboard is installed.",
+                "weline/module-frontend": "Captures frontend login and registration pixel events.",
+                "weline/module-server": "Enables the optional WLS shared-memory pixel hot buffer."
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\Visitor\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework 组件（visitor）",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-warm-cache",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/WarmCache",
+                "reference": "9e12d8d278a11704b759e97c76ae79cc6849a224"
+            },
+            "require": {
+                "php": "^8.4"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\WarmCache\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework 缓存预热",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-website-monitoring",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/WebsiteMonitoring",
+                "reference": "23264f296cda9abe971a368b5a0e22610aec30ae"
+            },
+            "require": {
+                "php": "^8.4"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\WebsiteMonitoring\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Aiweline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "网站监控",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-widget",
+            "version": "dev-codex/welineframework-2-architecture",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/Widget",
+                "reference": "942b672bea8f98d07397dc22b548bfc393345a08"
+            },
+            "require": {
+                "php": "^8.4",
+                "weline/framework": "@dev",
+                "weline/module-ai": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-extends": "@dev",
+                "weline/module-meta": "@dev",
+                "weline/module-taglib": "@dev"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\Widget\\": ""
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "WelineFramework Widget module",
             "transport-options": {
                 "symlink": false,
                 "relative": true

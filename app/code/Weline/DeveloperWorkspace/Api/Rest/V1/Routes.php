@@ -6,7 +6,7 @@ namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;

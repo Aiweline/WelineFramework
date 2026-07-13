@@ -44,6 +44,16 @@
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
+## 公共邮件发送边界
+
+跨模块邮件只能依赖 `Weline\Smtp\Api\MailSenderInterface`。其 `sender()` 参数、默认值和异常行为
+与现有 `SmtpSender` 完全一致；实现仍在 Smtp 内部完成 SMTP 配置解析、PHPMailer 发送和发送日志。
+调用模块不得引用 `Smtp\Helper\SmtpSender`、`Helper\Data`、`SmtpSendLog` 或 PHPMailer 对象。
+
+接口同时通过 `MailSenderInterfaceFactory` 和 `etc/module.php.provides` 注册，兼容当前 ObjectManager
+迁移桥与编译 Provider。单元/契约验证必须注入 fake `MailSenderInterface`，禁止为验证公共边界而
+真实发信或写发送日志。
+
 ## 本模块文档资产
 
 - 当前除 `AI-INDEX.md` 外没有其他模块文档。后续一旦涉及稳定行为、接口或配置约定，请把长期说明补到本目录。

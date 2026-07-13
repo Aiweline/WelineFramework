@@ -19,6 +19,14 @@
 - 目录：`app/code/Weline/Hook`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 
+## Dependency Inventory
+
+- Framework 与 Admin 是必需依赖：Hook 管理页继承
+  `Weline\Admin\Api\Controller\BaseController`，使用 Admin 发布的统一后台会话、
+  页面外壳和模板资源，不引用 Admin 内部 Controller。
+- Hook 页阶段性能日志只依赖 Framework `LoggerFactory`；WLS/FPM 的具体日志实现由运行时 Provider 选择。
+- Hook 不引用 Server 内部日志类；Server 也不得反向依赖 Hook，请求热路径不会为调试日志强制装载具体运行时模块。
+
 ## 代码面概览
 
 入口文件：

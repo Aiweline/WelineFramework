@@ -1,11 +1,11 @@
 {
-    "name": "weline/ai-knowledge",
+    "name": "weline/module-ai-knowledge",
     "description": "AI Knowledge module providing MCP server, hybrid search, and documentation collectors",
     "type": "weline-module",
     "license": "proprietary",
     "version": "1.0.0",
     "require": {
-        "php": "^8.1"
+        "php": "^8.4"
     },
     "autoload": {
         "psr-4": {

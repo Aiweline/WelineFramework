@@ -34,6 +34,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
   const search = document.getElementById(id+"_search");
   const hidden = document.getElementById(id+"_code");
   const display = document.getElementById(id+"_display");
+  const aiApi = window.Weline.Api.resource('ai');
   let cache = null;
   function renderStatus(className, text){
     list.replaceChildren();
@@ -76,17 +77,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
   }
   function firstLoad(){
     loading.style.display = 'block';
-    var url = ep+'?limit='+limit;
-    window.Weline.Api.get(url, { silent: true })
-      .then(function(res){ var body = (res&&res.data)||res; loading.style.display='none'; cache=(body&&body.success)?(body.data||[]):[]; render(cache); })
+    aiApi.listModels({ primary_modality: serviceType || undefined })
+      .then(function(res){ var body = (res&&res.data)||res; loading.style.display='none'; cache=Array.isArray(body) ? body : ((body&&body.data)||[]); render(cache); })
       .catch(()=>{ loading.style.display='none'; renderStatus('p-2 text-danger', <?= json_encode(__('加载失败'), $jsonForScriptFlags) ?>); });
   }
   const debounce=(fn,t)=>{let id=null;return (...a)=>{clearTimeout(id);id=setTimeout(()=>fn.apply(null,a),t);}};
-  const doFilter = debounce(function(kw){ kw=(kw||'').toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var u=ep+'?search='+encodeURIComponent(kw); window.Weline.Api.get(u, { silent: true }).then(function(res){ var body=(res&&res.data)||res; render((body&&body.success)?(body.data||[]):[]); }).catch(function(){ var data=(cache||[]).filter(function(m){ return (`${m.name} ${m.supplier} ${m.code} ${m.version}`).toLowerCase().includes(kw); }); render(data); }); },800);
+  const doFilter = debounce(function(kw){ kw=(kw||'').toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var data=(cache||[]).filter(function(m){ return (`${m.name} ${m.supplier} ${m.code} ${m.version}`).toLowerCase().includes(kw); }); render(data); },800);
   trigger.addEventListener('click', function(e){ e.stopPropagation(); box.style.top=(trigger.offsetHeight+6)+'px'; box.style.width='100%'; box.style.display='block'; firstLoad(); setTimeout(()=>search.focus(),50); setTimeout(function(){ document.addEventListener('click', closeOutside); document.addEventListener('keydown', esc); },0); });
   search.addEventListener('input', function(){ doFilter(this.value); });
   function closeOutside(ev){ if(!(box.contains(ev.target)||trigger.contains(ev.target))){ box.style.display='none'; trigger.style.display='block'; document.removeEventListener('click', closeOutside); document.removeEventListener('keydown', esc); }}
   function esc(e){ if(e.key==='Escape'){ box.style.display='none'; trigger.style.display='block'; document.removeEventListener('click', closeOutside); document.removeEventListener('keydown', esc); }}
 })();</script>
-
 

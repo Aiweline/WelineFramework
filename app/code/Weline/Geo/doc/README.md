@@ -89,6 +89,8 @@
 
 ## 📝 更新日志
 
+- Geo 头部与协议渲染只依赖 `Weline\Seo\Api\Head`、`Weline\Seo\Api\Protocol` 的不可变上下文契约，不引用 Seo 内部 Service。
+
 ### v1.0.0 (2025-01-XX)
 
 - 初始版本发布
@@ -105,4 +107,3 @@
 - 官网：aiweline.com
 - 论坛：https://bbs.aiweline.com
 - 邮箱：aiweline@qq.com
-

@@ -7,10 +7,10 @@ namespace Weline\FileManager\Queue;
 use Weline\FileManager\Service\WlsFileManagerLargeOperationService;
 use Weline\FileManager\Service\WlsFileManagerPathPolicyService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
+use Weline\Queue\Api\QueueConsumerInterface;
+use Weline\Queue\Api\QueueTaskContextInterface;
 
-class WlsFileManagerLargeOperationQueue implements QueueInterface
+class WlsFileManagerLargeOperationQueue implements QueueConsumerInterface
 {
     public const OPERATION_COMPRESS_ZIP = 'compress_zip';
     public const OPERATION_TRASH_ENTRY = 'trash_entry';
@@ -48,7 +48,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
         return (string)__('由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。');
     }
 
-    public function validate(Queue &$queue): bool
+    public function validate(QueueTaskContextInterface $queue): bool
     {
         $payload = $this->payload($queue);
         $operation = (string)($payload['operation'] ?? '');
@@ -98,7 +98,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
             && trim((string)($payload['target_path'] ?? '')) !== '';
     }
 
-    public function execute(Queue &$queue): string
+    public function execute(QueueTaskContextInterface $queue): string
     {
         $payload = $this->payload($queue);
         $operation = (string)($payload['operation'] ?? '');
@@ -141,7 +141,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
         $sourceRelativePath = trim((string)($payload['source_relative_path'] ?? ''));
         $targetRelativePath = trim((string)($payload['target_relative_path'] ?? ''));
         $queue->setProcess((string)__('WLS 文件管理器队列压缩开始：%{1}', $sourceRelativePath !== '' ? $sourceRelativePath : (string)$payload['source_path']))
-            ->save();
+            ->persist();
 
         $service = ObjectManager::getInstance(WlsFileManagerLargeOperationService::class);
         $result = $service->createZipArchive(
@@ -154,7 +154,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
 
         if (empty($result['success'])) {
             $errorCode = (string)($result['error_code'] ?? 'compress_failed');
-            $queue->setProcess((string)__('WLS 文件管理器队列压缩失败：%{1}', $errorCode))->save();
+            $queue->setProcess((string)__('WLS 文件管理器队列压缩失败：%{1}', $errorCode))->persist();
             throw new \RuntimeException((string)__('WLS 文件管理器队列压缩失败：%{1}', $errorCode));
         }
 
@@ -163,7 +163,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
             (string)((int)($result['entries'] ?? 0)),
             (string)((int)($result['bytes'] ?? 0)),
         ]);
-        $queue->setProcess($message)->save();
+        $queue->setProcess($message)->persist();
 
         return $message;
     }
@@ -171,12 +171,12 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
     /**
      * @param array<string, mixed> $payload
      */
-    private function executeSourceArchive(Queue &$queue, array $payload): string
+    private function executeSourceArchive(QueueTaskContextInterface $queue, array $payload): string
     {
         $sourceRelativePath = trim((string)($payload['source_relative_path'] ?? ''));
         $targetRelativePath = trim((string)($payload['target_relative_path'] ?? ''));
         $queue->setProcess((string)__('WLS source archive queue started: %{1}', $sourceRelativePath !== '' ? $sourceRelativePath : (string)$payload['source_path']))
-            ->save();
+            ->persist();
 
         $service = ObjectManager::getInstance(WlsFileManagerLargeOperationService::class);
         $result = $service->createSingleFileArchive(
@@ -190,7 +190,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
 
         if (empty($result['success'])) {
             $errorCode = (string)($result['error_code'] ?? 'compress_failed');
-            $queue->setProcess((string)__('WLS source archive queue failed: %{1}', $errorCode))->save();
+            $queue->setProcess((string)__('WLS source archive queue failed: %{1}', $errorCode))->persist();
             throw new \RuntimeException((string)__('WLS source archive queue failed: %{1}', $errorCode));
         }
 
@@ -206,7 +206,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
             (string)((int)($result['entries'] ?? 0)),
             (string)((int)($result['bytes'] ?? 0)),
         ]);
-        $queue->setProcess($message)->save();
+        $queue->setProcess($message)->persist();
 
         return $message;
     }
@@ -214,12 +214,12 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
     /**
      * @param array<string, mixed> $payload
      */
-    private function executeSourceArchiveTree(Queue &$queue, array $payload): string
+    private function executeSourceArchiveTree(QueueTaskContextInterface $queue, array $payload): string
     {
         $sourceRelativePath = trim((string)($payload['source_relative_path'] ?? ''));
         $targetRelativePath = trim((string)($payload['target_relative_path'] ?? ''));
         $queue->setProcess((string)__('WLS source directory archive queue started: %{1}', $sourceRelativePath !== '' ? $sourceRelativePath : (string)$payload['source_path']))
-            ->save();
+            ->persist();
 
         $service = ObjectManager::getInstance(WlsFileManagerLargeOperationService::class);
         $result = $service->createSourceTreeArchive(
@@ -234,7 +234,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
 
         if (empty($result['success'])) {
             $errorCode = (string)($result['error_code'] ?? 'compress_failed');
-            $queue->setProcess((string)__('WLS source directory archive queue failed: %{1}', $errorCode))->save();
+            $queue->setProcess((string)__('WLS source directory archive queue failed: %{1}', $errorCode))->persist();
             throw new \RuntimeException((string)__('WLS source directory archive queue failed: %{1}', $errorCode));
         }
 
@@ -250,7 +250,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
             (string)((int)($result['entries'] ?? 0)),
             (string)((int)($result['bytes'] ?? 0)),
         ]);
-        $queue->setProcess($message)->save();
+        $queue->setProcess($message)->persist();
 
         return $message;
     }
@@ -258,13 +258,13 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
     /**
      * @param array<string, mixed> $payload
      */
-    private function executeSourceArchiveSelection(Queue &$queue, array $payload): string
+    private function executeSourceArchiveSelection(QueueTaskContextInterface $queue, array $payload): string
     {
         $sourceParentRelativePath = trim((string)($payload['source_parent_relative_path'] ?? ''));
         $targetRelativePath = trim((string)($payload['target_relative_path'] ?? ''));
         $sourceEntries = is_array($payload['source_entries'] ?? null) ? array_values((array)$payload['source_entries']) : [];
         $queue->setProcess((string)__('WLS source selection archive queue started: %{1}', $sourceParentRelativePath !== '' ? $sourceParentRelativePath : '/'))
-            ->save();
+            ->persist();
 
         $service = ObjectManager::getInstance(WlsFileManagerLargeOperationService::class);
         $result = $service->createSourceSelectionArchive(
@@ -278,7 +278,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
 
         if (empty($result['success'])) {
             $errorCode = (string)($result['error_code'] ?? 'compress_failed');
-            $queue->setProcess((string)__('WLS source selection archive queue failed: %{1}', $errorCode))->save();
+            $queue->setProcess((string)__('WLS source selection archive queue failed: %{1}', $errorCode))->persist();
             throw new \RuntimeException((string)__('WLS source selection archive queue failed: %{1}', $errorCode));
         }
 
@@ -294,7 +294,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
             (string)((int)($result['entries'] ?? 0)),
             (string)((int)($result['bytes'] ?? 0)),
         ]);
-        $queue->setProcess($message)->save();
+        $queue->setProcess($message)->persist();
 
         return $message;
     }
@@ -302,11 +302,11 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
     /**
      * @param array<string, mixed> $payload
      */
-    private function executeTrash(Queue &$queue, array $payload): string
+    private function executeTrash(QueueTaskContextInterface $queue, array $payload): string
     {
         $sourceRelativePath = trim((string)($payload['source_relative_path'] ?? ''));
         $queue->setProcess((string)__('WLS 文件管理器队列回收开始：%{1}', $sourceRelativePath !== '' ? $sourceRelativePath : (string)$payload['source_path']))
-            ->save();
+            ->persist();
 
         $service = ObjectManager::getInstance(WlsFileManagerLargeOperationService::class);
         $result = $service->moveToTrash(
@@ -319,7 +319,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
 
         if (empty($result['success'])) {
             $errorCode = (string)($result['error_code'] ?? 'trash_move_failed');
-            $queue->setProcess((string)__('WLS 文件管理器队列回收失败：%{1}', $errorCode))->save();
+            $queue->setProcess((string)__('WLS 文件管理器队列回收失败：%{1}', $errorCode))->persist();
             throw new \RuntimeException((string)__('WLS 文件管理器队列回收失败：%{1}', $errorCode));
         }
 
@@ -335,7 +335,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
             (string)((int)($result['entries'] ?? 0)),
             (string)((int)($result['bytes'] ?? 0)),
         ]);
-        $queue->setProcess($message)->save();
+        $queue->setProcess($message)->persist();
 
         return $message;
     }
@@ -343,7 +343,7 @@ class WlsFileManagerLargeOperationQueue implements QueueInterface
     /**
      * @return array<string, mixed>
      */
-    private function payload(Queue $queue): array
+    private function payload(QueueTaskContextInterface $queue): array
     {
         $decoded = json_decode((string)$queue->getContent(), true);
 

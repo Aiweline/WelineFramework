@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Model;
 
-use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Database\Model;
@@ -326,4 +325,3 @@ class RoleAccess extends Model
         return $types;
     }
 }
-

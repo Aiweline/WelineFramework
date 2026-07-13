@@ -118,16 +118,15 @@ class Domain extends BackendController
 
             // 获取网站信息（用于显示网站名称）
             $websites = [];
-            if (class_exists(\Weline\Websites\Model\Website::class)) {
-                try {
-                    $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                    $websiteList = $websiteModel->reset()->select()->fetchArray();
-                    foreach ($websiteList as $website) {
+            try {
+                $websiteList = w_query('websites', 'getWebsiteList');
+                foreach (\is_array($websiteList) ? $websiteList : [] as $website) {
+                    if (\is_array($website) && \array_key_exists('website_id', $website)) {
                         $websites[(int)$website['website_id']] = $website;
                     }
-                } catch (\Exception $e) {
-                    // 忽略错误，继续执行
                 }
+            } catch (\Throwable) {
+                // 忽略错误，继续执行
             }
 
             $this->assign('domains', $domains);
@@ -210,14 +209,12 @@ class Domain extends BackendController
         
         // 获取网站列表（从Weline_Websites模块）
         $websites = [];
-        if (class_exists(\Weline\Websites\Model\Website::class)) {
-            try {
-                $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                $websites = $websiteModel->reset()->select()->fetchArray();
-            } catch (\Exception $e) {
-                // 如果获取失败，使用空数组
-                $websites = [];
-            }
+        try {
+            $websiteList = w_query('websites', 'getWebsiteList');
+            $websites = \is_array($websiteList) ? $websiteList : [];
+        } catch (\Throwable) {
+            // 如果获取失败，使用空数组
+            $websites = [];
         }
         $this->assign('websites', $websites);
 
@@ -259,7 +256,7 @@ class Domain extends BackendController
             }
 
             // 验证必填字段
-            if (empty($data['site_id'])) {
+            if (!\array_key_exists('site_id', $data) || $data['site_id'] === '' || $data['site_id'] === null) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('网站不能为空')
@@ -660,4 +657,3 @@ class Domain extends BackendController
         return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }
-

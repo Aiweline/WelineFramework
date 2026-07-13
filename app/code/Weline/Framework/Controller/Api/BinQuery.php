@@ -5,6 +5,8 @@ namespace Weline\Framework\Controller\Api;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Framework\Binary\EmergencyPacket;
+use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Service\Query\BinQueryCachePolicy;
@@ -16,7 +18,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
     source_name: 'BinQuery Gateway',
     icon: 'bi bi-diagram-3',
     document: 'External BinQuery binary gateway',
-    parent_source: 'Weline_Backend::system_service_group',
+    parent_source: 'Weline_Framework::system_service_group',
     accessMode: 'edit',
     scopeGroup: 'framework',
     apiExposable: true
@@ -44,6 +46,7 @@ class BinQuery extends FrontendRestController
         $requestId = \bin2hex(\random_bytes(8));
         $guard = $this->beginBinaryOutputGuard();
         $statusCode = 200;
+        $readingProtocolInput = true;
         $responseHeaders = ['Cache-Control' => 'no-store'];
         $summary = [
             'type' => '',
@@ -54,15 +57,23 @@ class BinQuery extends FrontendRestController
         try {
             $this->assertProtocol();
             $this->assertContentType();
+            $contentLength = (int)$this->request->getServer('CONTENT_LENGTH');
+            if ($contentLength > Limits::PACKET_BYTES) {
+                throw new \InvalidArgumentException(Limits::PACKET_ERROR);
+            }
             $rawBody = $this->request->getParameterBag()->getRawBody();
             if ($rawBody === '') {
                 throw new FrontendQueryException('protocol_error', 'Empty BinQuery request body.', 400);
+            }
+            if (\strlen($rawBody) > Limits::PACKET_BYTES) {
+                throw new \InvalidArgumentException(Limits::PACKET_ERROR);
             }
 
             $payload = $this->codec->decodePacket($rawBody);
             if (!\is_array($payload)) {
                 throw new FrontendQueryException('protocol_error', 'BinQuery payload must be a map.', 400);
             }
+            $readingProtocolInput = false;
 
             $summary = $this->summarize($payload);
             $result = $this->gateway->execute(
@@ -83,18 +94,54 @@ class BinQuery extends FrontendRestController
             $responsePayload = $this->errorPayload($exception->getErrorCode(), $exception->getMessage(), $requestId);
             $responseHeaders = ['Cache-Control' => 'no-store'];
         } catch (\InvalidArgumentException $exception) {
-            $statusCode = 400;
-            $responsePayload = $this->errorPayload('protocol_error', $exception->getMessage(), $requestId);
+            if ($readingProtocolInput) {
+                $statusCode = 400;
+                $responsePayload = $this->errorPayload('protocol_error', $exception->getMessage(), $requestId);
+            } else {
+                $statusCode = 500;
+                $this->logUnexpectedFailure($exception, $requestId, $summary);
+                $responsePayload = $this->errorPayload(
+                    EmergencyPacket::ERROR_CODE,
+                    EmergencyPacket::ERROR_MESSAGE,
+                    $requestId
+                );
+            }
             $responseHeaders = ['Cache-Control' => 'no-store'];
         } catch (\Throwable $throwable) {
             $statusCode = 500;
-            $responsePayload = $this->errorPayload('business_error', $throwable->getMessage(), $requestId);
+            $this->logUnexpectedFailure($throwable, $requestId, $summary);
+            $responsePayload = $this->errorPayload(
+                EmergencyPacket::ERROR_CODE,
+                EmergencyPacket::ERROR_MESSAGE,
+                $requestId
+            );
             $responseHeaders = ['Cache-Control' => 'no-store'];
         }
 
         $this->endBinaryOutputGuard($guard);
 
-        return $this->binaryResponse($responsePayload, $statusCode, $responseHeaders, $summary);
+        try {
+            return $this->binaryResponse($responsePayload, $statusCode, $responseHeaders, $summary);
+        } catch (\Throwable $throwable) {
+            $this->logUnexpectedFailure($throwable, $requestId, $summary, 'response_encode');
+            $emptySummary = ['type' => '', 'provider' => '', 'operation' => ''];
+            try {
+                return $this->binaryResponse(
+                    $this->errorPayload(
+                        EmergencyPacket::ERROR_CODE,
+                        EmergencyPacket::ERROR_MESSAGE,
+                        $requestId
+                    ),
+                    500,
+                    ['Cache-Control' => 'no-store'],
+                    $emptySummary
+                );
+            } catch (\Throwable $fallbackThrowable) {
+                $this->logUnexpectedFailure($fallbackThrowable, $requestId, $summary, 'fallback_encode');
+
+                return $this->emergencyBinaryResponse($requestId);
+            }
+        }
     }
 
     private function assertProtocol(): void
@@ -199,6 +246,52 @@ class BinQuery extends FrontendRestController
     {
         $key = 'HTTP_' . \strtoupper(\str_replace('-', '_', $name));
         return \trim((string)$this->request->getServer($key));
+    }
+
+    /**
+     * @param array{type:string,provider:string,operation:string} $summary
+     */
+    private function logUnexpectedFailure(
+        \Throwable $throwable,
+        string $requestId,
+        array $summary,
+        string $stage = 'request'
+    ): void
+    {
+        if (!\function_exists('w_log_error')) {
+            return;
+        }
+
+        $context = \function_exists('w_log_exception_build_context')
+            ? \w_log_exception_build_context($throwable)
+            : [
+                'exception_class' => $throwable::class,
+                'exception_message' => $throwable->getMessage(),
+                'exception_file' => $throwable->getFile(),
+                'exception_line' => $throwable->getLine(),
+                '_exception_trace' => $throwable->getTraceAsString(),
+            ];
+        $context['request_id'] = $requestId;
+        $context['type'] = $summary['type'];
+        $context['provider'] = $summary['provider'];
+        $context['operation'] = $summary['operation'];
+        $context['stage'] = $stage;
+
+        \w_log_error('[BinQuery] Unexpected request failure', $context, 'bin_query');
+    }
+
+    private function emergencyBinaryResponse(string $requestId): Response
+    {
+        $response = Response::fromContent(
+            EmergencyPacket::internalServerError($requestId),
+            500,
+            WelineBinaryCodec::CONTENT_TYPE
+        );
+        $response->setHeader('Cache-Control', 'no-store');
+        $response->setHeader('X-Content-Type-Options', 'nosniff');
+        $response->setHeader('X-Weline-BinQuery-Protocol', BinQueryGateway::PROTOCOL);
+
+        return $response;
     }
 
     /**

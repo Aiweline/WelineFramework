@@ -11,13 +11,13 @@ declare(strict_types=1);
 namespace Weline\Api\Controller\Backend;
 
 use Weline\Framework\App\Exception;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Api\Helper\Config as ApiConfig;
 
 /**
  * API模块配置控制器
  */
-class Config extends \Weline\Admin\Controller\BaseController
+class Config extends BackendPageController
 {
     /**
      * @var ApiConfig
@@ -82,4 +82,3 @@ class Config extends \Weline\Admin\Controller\BaseController
         return $this->redirect($this->getBackendUrl('*/backend/config'));
     }
 }
-

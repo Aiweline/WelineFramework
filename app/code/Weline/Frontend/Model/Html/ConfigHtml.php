@@ -136,7 +136,7 @@ trait ConfigHtml
     {
         $key = explode('::', $key);
         if (count($key) != 2) {
-            throw new Exception(__('key格式错误，请使用[模块::key],例如：%{1}', 'Weline_Demo::header'));
+            throw new Exception(__('key格式错误，请使用[模块::key],例如：%{1}', 'Vendor_Module::header'));
         }
         $module = $key[0];
         $modules = Env::getInstance()->getActiveModules();

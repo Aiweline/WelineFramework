@@ -15,7 +15,6 @@ namespace Weline\Eav\Helper;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Queue\Model\Queue;
 
 class EavHelper
 {

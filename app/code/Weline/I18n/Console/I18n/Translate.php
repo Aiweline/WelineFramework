@@ -15,17 +15,13 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\I18n\Model\I18n;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
-use Weline\Ai\Service\TranslationService;
-use Weline\Ai\Model\AiDefaultModel;
+use Weline\I18n\Service\I18nAiTranslationAdapter;
 
 class Translate implements CommandInterface
 {
     private Printing $printing;
-    private I18n $i18n;
-    private ?TranslationService $translationService = null;
+    private I18nAiTranslationAdapter $translationAdapter;
     
     /**
      * 默认模块列表（不翻译这些模块的词条）
@@ -67,21 +63,11 @@ class Translate implements CommandInterface
     private string $sourceLocale = 'zh_Hans_CN';
     
     public function __construct(
-        I18n $i18n,
-        Printing $printing
+        Printing $printing,
+        I18nAiTranslationAdapter $translationAdapter
     ) {
         $this->printing = $printing;
-        $this->i18n = $i18n;
-        
-        // 尝试获取 TranslationService
-        // TranslationService 内部会使用 AiService，并通过场景代码 'translation' 自动使用 TranslationAdapter
-        try {
-            $this->translationService = ObjectManager::getInstance(TranslationService::class);
-        } catch (\Exception $e) {
-            $this->translationService = null;
-            // 记录错误但不抛出异常，在 execute 方法中会检查并提示用户
-            w_log_error(__('无法初始化 TranslationService：%{1}', [$e->getMessage()]), [], 'i18n');
-        }
+        $this->translationAdapter = $translationAdapter;
     }
 
     /**
@@ -94,17 +80,6 @@ class Translate implements CommandInterface
         
         // 获取模块名（可选）
         $moduleName = $args['module'] ?? $args['m'] ?? $args[2] ?? null;
-        
-        // 检查翻译服务是否可用
-        if (!$this->translationService) {
-            $this->printing->error(__('翻译服务不可用，请确保 AI 模块已安装并配置'));
-            $this->printing->note(__('提示：TranslationService 需要以下依赖：'));
-            $this->printing->note(__('  - Weline\\Ai\\Service\\AiService'));
-            $this->printing->note(__('  - Weline\\Ai\\Service\\I18nIntegration'));
-            $this->printing->note(__('  - Weline\\Ai\\Adapter\\TranslationAdapter（会自动通过场景代码使用）'));
-            $this->printing->note(__('请检查 AI 模块是否正确安装，并确保已配置默认翻译模型'));
-            return;
-        }
         
         $this->printing->note(__('开始提取并翻译自定义 i18n 词条...'));
         $this->printing->note(__('源语言：%{1}', [$this->sourceLocale]));
@@ -249,12 +224,16 @@ class Translate implements CommandInterface
             flush();
             
             try {
-                // 使用翻译服务进行翻译
-                $translation = $this->translationService->translate(
-                    $original,
-                    $targetLocale,
-                    $this->sourceLocale
+                $response = $this->translationAdapter->translateBatch(
+                    [$original],
+                    $this->sourceLocale,
+                    $targetLocale
                 );
+                if (empty($response['success'])) {
+                    $errors = array_values(array_filter(array_map('strval', (array)($response['errors'] ?? []))));
+                    throw new Exception($errors ? implode('; ', $errors) : (string)__('AI 翻译服务不可用'));
+                }
+                $translation = (string)($response['translations'][$original] ?? '');
                 
                 // 验证翻译结果
                 // 注意：如果翻译结果和原文相同，可能是翻译失败，但也可能是某些特殊情况
@@ -439,4 +418,3 @@ class Translate implements CommandInterface
         );
     }
 }
-

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Extends\Module\Weline_Framework\Query;
 
+use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
@@ -130,8 +131,8 @@ class AccountQueryProvider implements QueryProviderInterface
         }
 
         $challengeHandler = $this->getChallengeHandler();
-        if (method_exists($challengeHandler, 'createChallenge')) {
-            $challenge = $challengeHandler->createChallenge($user, $redirectUrl, $rememberDuration);
+        if ($challengeHandler instanceof CustomerLoginChallengeCreatorInterface) {
+            $challenge = $challengeHandler->createChallenge((int)$user->getId(), $redirectUrl, $rememberDuration);
             if (is_array($challenge) && !empty($challenge['redirect'])) {
                 return $this->success('Please complete two-factor verification.', [
                     'status' => 'challenge_required',

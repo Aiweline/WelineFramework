@@ -101,7 +101,93 @@ final class SupervisorServerTest extends TestCase
         }
     }
 
-    public function testClosingSessionDoesNotReleaseCurrentLease(): void
+    public function testServerRejectsUnauthenticatedHelloWhenSecretIsConfigured(): void
+    {
+        $runtime = $this->createRuntime('default');
+        $server = new SupervisorServer($runtime);
+        $server->setHelloAuthSecret('unit-secret');
+        $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+        $client = @\stream_socket_client($endpoint->uri(), $errno, $errstr, 3);
+        self::assertNotFalse($client, $errstr ?: 'Failed to connect to SupervisorServer test endpoint');
+        \stream_set_blocking($client, false);
+
+        try {
+            \fwrite($client, SupervisorMessage::hello(
+                instance: 'default',
+                channel: 'channel-default',
+                role: 'worker',
+                slotId: 'worker#1',
+                pid: 12001,
+                launchNonce: 'launch-unauthenticated',
+                msgId: 'hello-unauthenticated',
+            ));
+
+            $response = $this->waitForMessage($server, $client);
+            self::assertSame(SupervisorMessage::TYPE_CHANNEL_REJECT, $response['type'] ?? null);
+            self::assertSame('hello_identity_rejected', $response['reason'] ?? null);
+            self::assertSame([], $runtime->slotSnapshot()['slots']);
+        } finally {
+            if (\is_resource($client)) {
+                @\fclose($client);
+            }
+            $server->close();
+        }
+    }
+
+    public function testSecondLiveSessionCannotReplaceCurrentSlotLease(): void
+    {
+        $runtime = $this->createRuntime('default');
+        $server = new SupervisorServer($runtime);
+        $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+        $owner = @\stream_socket_client($endpoint->uri(), $ownerErrno, $ownerErrstr, 3);
+        $contender = @\stream_socket_client($endpoint->uri(), $contenderErrno, $contenderErrstr, 3);
+        self::assertNotFalse($owner, $ownerErrstr ?: 'Failed to connect owner session');
+        self::assertNotFalse($contender, $contenderErrstr ?: 'Failed to connect contender session');
+        \stream_set_blocking($owner, false);
+        \stream_set_blocking($contender, false);
+
+        try {
+            \fwrite($owner, SupervisorMessage::hello(
+                instance: 'default',
+                channel: 'channel-default',
+                role: 'worker',
+                slotId: 'worker#1',
+                pid: 12001,
+                launchNonce: 'launch-owner',
+                msgId: 'hello-owner',
+                leaseId: 'lease-owner',
+                generation: 7,
+            ));
+            $ownerLease = $this->waitForMessage($server, $owner);
+            self::assertSame(SupervisorMessage::TYPE_LEASE_ASSIGN, $ownerLease['type'] ?? null);
+
+            \fwrite($contender, SupervisorMessage::hello(
+                instance: 'default',
+                channel: 'channel-default',
+                role: 'worker',
+                slotId: 'worker#1',
+                pid: 12002,
+                launchNonce: 'launch-contender',
+                msgId: 'hello-contender',
+                leaseId: 'lease-contender',
+                generation: 8,
+            ));
+            $rejection = $this->waitForMessage($server, $contender);
+            self::assertSame(SupervisorMessage::TYPE_CHANNEL_REJECT, $rejection['type'] ?? null);
+            self::assertTrue($runtime->supervisor()->leases()->isCurrent('worker#1', 'lease-owner', 7));
+            self::assertCount(1, $server->sessions());
+        } finally {
+            if (\is_resource($owner)) {
+                @\fclose($owner);
+            }
+            if (\is_resource($contender)) {
+                @\fclose($contender);
+            }
+            $server->close();
+        }
+    }
+
+    public function testClosingSessionReleasesOnlyItsCurrentLease(): void
     {
         $runtime = $this->createRuntime('default');
         $leaseAssign = SupervisorMessage::decode((string)$runtime->handle([
@@ -147,11 +233,12 @@ final class SupervisorServerTest extends TestCase
 
         $server->closeSessionById(11);
 
-        self::assertTrue($runtime->supervisor()->leases()->isCurrent(
+        self::assertFalse($runtime->supervisor()->leases()->isCurrent(
             'worker#1',
             (string)$leaseAssign['lease_id'],
             (int)$leaseAssign['generation']
         ));
+        self::assertNull($runtime->supervisor()->leases()->get('worker#1'));
         self::assertFalse($server->hasSession(11));
     }
 

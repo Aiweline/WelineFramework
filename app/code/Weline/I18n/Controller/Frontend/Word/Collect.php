@@ -71,18 +71,22 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
         }
         
         try {
-            // Dictionary 表的主键是 word，使用 INSERT ... ON DUPLICATE KEY UPDATE
-            // 第二个参数是 update_where_fields（判断记录是否存在的条件），第三个参数是 update_fields（要更新的字段）
-            // 由于 word 是主键，如果 word 已存在，则更新 is_backend 和 module；否则插入新记录
-            // 修复：需要先 reset() 清除之前的查询状态
-            $this->dictionary->reset()
-                ->insert($insertData, [
-                    $this->dictionary::schema_fields_ID,  // word 是主键，用于判断记录是否存在
-                ], implode(',', [
-                    $this->dictionary::schema_fields_IS_BACKEND,
-                    $this->dictionary::schema_fields_MODULE,
-                ]))
-                ->fetch();  // 必须调用 fetch() 才会真正执行插入操作
+            // 逐词检查后再保存，兼容历史数据库中 word 尚未建立唯一约束的表。
+            foreach ($insertData as $item) {
+                $word = $item[$this->dictionary::schema_fields_WORD];
+                $this->dictionary->reset()->load($this->dictionary::schema_fields_WORD, $word);
+                if ($this->dictionary->getId()) {
+                    $this->dictionary
+                        ->setData($this->dictionary::schema_fields_IS_BACKEND, $item[$this->dictionary::schema_fields_IS_BACKEND])
+                        ->setData($this->dictionary::schema_fields_MODULE, $item[$this->dictionary::schema_fields_MODULE])
+                        ->save()
+                        ->fetch();
+                    continue;
+                }
+                $this->dictionary->reset()
+                    ->insert($item, $this->dictionary::schema_fields_WORD)
+                    ->fetch();
+            }
             $this->dictionary->commit();
             return $this->fetchJson($this->success(__('收集成功！一共收集更新词条：%{1} 个', count($insertData))));
         } catch (\Exception $exception) {

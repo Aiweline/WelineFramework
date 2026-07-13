@@ -11,29 +11,33 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block\Backend\Page;
 
+use Weline\Admin\Api\Localization\BackendLocaleCatalogInterface;
+use Weline\Backend\Api\Auth\BackendUserContext;
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\Config;
-use Weline\Backend\Service\BackendWarmupContext;
-use Weline\Framework\Database\AbstractModel;
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
-use Weline\I18n\Model\I18n;
 
 class Topbar extends \Weline\Framework\View\Block
 {
     public string $_template = 'Weline_Admin::backend/public/top-bar.phtml';
-    private Config $config;
+    private BackendConfigStore $config;
+    private RuntimeProviderResolver $runtimeProviderResolver;
     private AuthenticatedSessionInterface $session;
-    private ?BackendUser $user = null;
+    private ?BackendUserContext $user = null;
     private ?string $userCacheKey = null;
 
-    public function __construct(Config $config, array $data = [])
-    {
+    public function __construct(
+        BackendConfigStore $config,
+        RuntimeProviderResolver $runtimeProviderResolver,
+        array $data = [],
+    ) {
         $this->config = $config;
+        $this->runtimeProviderResolver = $runtimeProviderResolver;
         $this->session = SessionFactory::getInstance()->createBackendSession();
         parent::__construct($data);
     }
@@ -43,7 +47,10 @@ class Topbar extends \Weline\Framework\View\Block
         parent::__init();
         $this->session = SessionFactory::getInstance()->createBackendSession();
         // 使用默认宽高24x18，autoSize=true使SVG自适应按钮大小
-        $languages = $this->getI18n()->getLocalesWithFlagsDisplaySelf(Cookie::getLangLocal(), 24, 18, true, true);
+        $localeCatalog = $this->runtimeProviderResolver->resolve(BackendLocaleCatalogInterface::class);
+        $languages = $localeCatalog instanceof BackendLocaleCatalogInterface
+            ? $localeCatalog->selectable(Cookie::getLangLocal(), 24, 18, true)
+            : [];
         $websiteId = (int)($this->request->getData('website_id') ?? 0);
         if ($websiteId > 0) {
             $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
@@ -77,14 +84,8 @@ class Topbar extends \Weline\Framework\View\Block
         $this->assign('current_language', $current_language);
     }
 
-    public function getI18n(): I18n
-    {
-        return ObjectManager::getInstance(I18n::class);
-    }
-
     public function getAvatar()
     {
-        /** @var BackendUser $user */
         $user = $this->getUser();
         $avatar = $user->getAvatar();
 
@@ -94,7 +95,7 @@ class Topbar extends \Weline\Framework\View\Block
         }
 
         // 2. 没有上传头像时，如果有邮箱，则根据邮箱哈希生成首字母头像（SVG data URI）
-        $email = method_exists($user, 'getEmail') ? ($user->getEmail() ?? '') : '';
+        $email = $user->getEmail();
         if ($email !== '') {
             return $this->generateLetterAvatar($user);
         }
@@ -116,10 +117,10 @@ class Topbar extends \Weline\Framework\View\Block
      * - 颜色由邮箱哈希决定，保证同一邮箱颜色稳定
      * - 文本为邮箱（优先）或用户名的首字母
      */
-    private function generateLetterAvatar(BackendUser $user): string
+    private function generateLetterAvatar(BackendUserContext $user): string
     {
-        $email = method_exists($user, 'getEmail') ? ($user->getEmail() ?? '') : '';
-        $name = method_exists($user, 'getUsername') ? ($user->getUsername() ?? '') : '';
+        $email = $user->getEmail();
+        $name = $user->getUsername();
 
         $base = trim($email !== '' ? $email : $name);
         if ($base === '') {
@@ -160,33 +161,19 @@ class Topbar extends \Weline\Framework\View\Block
         return 'data:image/svg+xml;charset=UTF-8,' . $encodedSvg;
     }
 
-    public function getUser(): BackendUser|AbstractModel
+    public function getUser(): BackendUserContext
     {
-        if (\class_exists(BackendWarmupContext::class)) {
-            $warmupUser = BackendWarmupContext::currentUser();
-            if ($warmupUser instanceof BackendUser) {
-                $this->user = $warmupUser;
-                $this->userCacheKey = 'warmup:' . (int)$warmupUser->getId() . '|' . (string)$warmupUser->getUsername();
-                return $this->user;
-            }
-        }
-
         $this->session = SessionFactory::getInstance()->createBackendSession();
         $cacheKey = (string)($this->session->getUserId() ?? 0) . '|' . (string)($this->session->getUsername() ?? '');
-        if ($this->user instanceof BackendUser && $this->userCacheKey === $cacheKey) {
+        if ($this->user instanceof BackendUserContext && $this->userCacheKey === $cacheKey) {
             return $this->user;
         }
 
-        $user = $this->session->getLoginUser();
-        if ($user instanceof BackendUser) {
-            $this->user = $user;
-        } else {
-            /** @var BackendUser $fallback */
-            $fallback = ObjectManager::make(BackendUser::class);
-            $fallback->setData('username', 'Guest');
-            $fallback->setData('email', '');
-            $this->user = $fallback;
-        }
+        $provider = $this->runtimeProviderResolver->resolve(BackendUserContextProviderInterface::class);
+        $this->user = $provider instanceof BackendUserContextProviderInterface
+            ? $provider->current()
+            : null;
+        $this->user ??= new BackendUserContext(0, 'Guest', '', '', 0, false, false);
         $this->userCacheKey = $cacheKey;
 
         return $this->user;

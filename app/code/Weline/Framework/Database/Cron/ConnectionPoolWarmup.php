@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Cron;
 
-use Weline\Cron\CronTaskInterface;
 use Weline\Framework\App\Env;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Manager\ObjectManager;

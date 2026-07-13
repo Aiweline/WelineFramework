@@ -11,35 +11,22 @@ namespace Weline\Framework\Console\Console\Deploy;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 
 class Upgrade extends CommandAbstract
 {
-    private const FLAT_STATIC_RUNTIME_FILES = [
-        'Weline_Backend' => [
-            'base/weline.modules.js',
-            'backend/weline.modules.js',
-            'js/url-backend.js',
-            'js/weline-api.js',
-            'js/weline-api-worker.js',
-        ],
-        'Weline_Frontend' => [
-            'base/weline.modules.js',
-            'frontend/weline.modules.js',
-            'js/weline-api.js',
-            'js/weline-api-worker.js',
-            'js/weline.js',
-        ],
-    ];
-
     /**
      * @var System
      */
     private System $system;
 
     public function __construct(
-        System     $system
+        System $system,
+        private readonly ServiceProviderRegistry $providerRegistry,
     ) {
         $this->system  = $system;
     }
@@ -89,7 +76,7 @@ class Upgrade extends CommandAbstract
 
     private function publishFlatStaticRuntimeFiles(array $modules): void
     {
-        foreach (self::FLAT_STATIC_RUNTIME_FILES as $moduleName => $relativeFiles) {
+        foreach ($this->flatStaticRuntimeFiles() as $moduleName => $relativeFiles) {
             if (!isset($modules[$moduleName]) || empty($modules[$moduleName]['base_path'])) {
                 continue;
             }
@@ -98,6 +85,37 @@ class Upgrade extends CommandAbstract
                 $this->copyFlatStaticRuntimeFile($moduleName, (string)$modules[$moduleName]['base_path'], $relativeFile);
             }
         }
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function flatStaticRuntimeFiles(): array
+    {
+        $files = [];
+        foreach ($this->providerRegistry->implementationsWithPrefix('deploy.flat_static.') as $implementation) {
+            try {
+                $provider = ObjectManager::getInstance($implementation);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!$provider instanceof FlatStaticRuntimeFilesProviderInterface) {
+                continue;
+            }
+
+            $moduleName = \trim($provider->moduleName());
+            if ($moduleName === '') {
+                continue;
+            }
+            foreach ($provider->relativeFiles() as $relativeFile) {
+                $relativeFile = \trim((string)$relativeFile);
+                if ($relativeFile !== '') {
+                    $files[$moduleName][$relativeFile] = $relativeFile;
+                }
+            }
+        }
+
+        return \array_map('array_values', $files);
     }
 
     private function copyFlatStaticRuntimeFile(string $moduleName, string $moduleBasePath, string $relativeFile): void

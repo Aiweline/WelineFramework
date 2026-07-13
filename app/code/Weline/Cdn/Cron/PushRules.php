@@ -17,7 +17,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 
 /**
  * CDN规则推送定时任务

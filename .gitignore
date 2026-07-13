@@ -1,5 +1,8 @@
 !.gitignore
 
+# macOS metadata
+.DS_Store
+
 # Local tooling / session state (do not commit)
 .omx/
 /tmp/

@@ -19,6 +19,9 @@
 - 模块代码：`Weline_Seo`
 - 目录：`app/code/Weline/Seo`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- Websites 只为嵌入式 SEO 管理提供可选目标显示名；未安装 Websites 时 Seo 必须可独立加载。
+- URL 提交同步服务以 UrlManager 的重写数据为权威输入，因此 UrlManager 是必需依赖。
+- SEO 建议只通过 `Weline\Ai\Api\AiRuntimeInterface` 调用 AI；URL 提交同步只通过 `Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface` 读取不可变 rewrite 投影，不注入两个模块的内部 Service/Model。
 
 ## 代码面概览
 
@@ -88,6 +91,11 @@
 - `app/code/Weline/Seo/doc/队列化架构说明.md`
 
 ## 维护规则
+
+- 跨模块页面头部、协议站点和 sitemap 读取分别使用 `Api\Head`、`Api\Protocol`、`Api\Sitemap`；返回值是不可变 DTO，不暴露 Seo 内部服务或 ORM。
+- CMS 等可选集成通知 URL 变更时，使用
+  `Weline\Seo\Api\Url\UrlChangeNotifierInterface::notify()`。该边界只交换 array 数据，
+  保留 `url_changed -> 提交/sitemap -> url_change_processed` 顺序；调用方不得定位 `SeoUrlChangeService`。
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。

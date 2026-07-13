@@ -363,10 +363,10 @@ $cachePageConfigJson = \json_encode(
                         <?php foreach ($cronTasks as $index => $task): ?>
                             <tr>
                                 <td><?= (int)$index + 1 ?></td>
-                                <td><code><?= htmlspecialchars((string)($task->getData(\Weline\Cron\Model\CronTask::fields_EXECUTE_NAME) ?? '')) ?></code></td>
-                                <td><?= htmlspecialchars((string)($task->getData(\Weline\Cron\Model\CronTask::fields_NAME) ?? '')) ?></td>
-                                <td><code><?= htmlspecialchars((string)($task->getData(\Weline\Cron\Model\CronTask::fields_CRON_TIME) ?? '')) ?></code></td>
-                                <td class="weline-cache-muted"><?= nl2br(htmlspecialchars((string)($task->getData(\Weline\Cron\Model\CronTask::fields_TIP) ?? ''))) ?></td>
+                                <td><code><?= htmlspecialchars($task->executeName) ?></code></td>
+                                <td><?= htmlspecialchars($task->name) ?></td>
+                                <td><code><?= htmlspecialchars($task->cronTime) ?></code></td>
+                                <td class="weline-cache-muted"><?= nl2br(htmlspecialchars($task->tip)) ?></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>

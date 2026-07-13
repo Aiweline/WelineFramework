@@ -2,7 +2,7 @@
 
 namespace Weline\Visitor\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Visitor\Model\PixelSource;
 
 class Pixel implements CronTaskInterface

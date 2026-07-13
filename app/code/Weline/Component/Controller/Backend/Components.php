@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Component\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Admin\Api\Controller\BaseController;
 use Weline\Component\Service\ComponentScanner;
 use Weline\Framework\Manager\ObjectManager;
 

@@ -12,8 +12,10 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Log;
 
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Log\Handler\FileHandler;
 use Weline\Framework\Log\Handler\RotatingFileHandler;
+use Weline\Framework\Manager\ObjectManager;
 
 class LoggerFactory
 {
@@ -38,6 +40,8 @@ class LoggerFactory
      */
     private static bool $stateManagerRegistered = false;
     private static bool $resolvingRuntime = false;
+    private static bool $runtimeProviderResolved = false;
+    private static ?RuntimeLoggerProviderInterface $runtimeProvider = null;
 
     /**
      * 创建或获取日志实例
@@ -107,8 +111,9 @@ class LoggerFactory
         $config = self::getConfig();
         $runtime = self::resolveRuntime($config);
 
-        if ($runtime === 'wls') {
-            return self::createWlsLogger($channel, $config);
+        $runtimeProvider = self::runtimeLoggerProvider();
+        if ($runtimeProvider !== null && $runtimeProvider->supports($runtime, $config)) {
+            return $runtimeProvider->create($channel, $config);
         }
 
         return self::createFpmLogger($channel, $config);
@@ -122,14 +127,6 @@ class LoggerFactory
     {
         $runtime = $config['runtime'] ?? 'fpm';
         $data = ['runtime' => $runtime];
-
-        // WLS 进程内优先走直接判定，避免为了解析日志 runtime 再触发事件系统，
-        // 造成 LoggerFactory -> EventsManager -> EventRegistry 的递归放大。
-        if (\class_exists(\Weline\Server\Log\Error\ErrorBootstrap::class, false)
-            && \Weline\Server\Log\Error\ErrorBootstrap::isInitialized()
-        ) {
-            return 'wls';
-        }
 
         if (self::$resolvingRuntime) {
             return $runtime === 'wls' ? 'wls' : 'fpm';
@@ -177,35 +174,27 @@ class LoggerFactory
         return new FpmLogger($channel, $handler, $formatter, $filter);
     }
 
-    /**
-     * 创建 WLS 日志器
-     * 
-     * 如果 WlsLogger 不存在，回退到 FpmLogger
-     */
-    private static function createWlsLogger(string $channel, array $config): LoggerInterface
+    private static function runtimeLoggerProvider(): ?RuntimeLoggerProviderInterface
     {
-        // 尝试加载 WlsLogger
-        $wlsLoggerClass = 'Weline\\Server\\Log\\WlsLogger';
-        
-        if (class_exists($wlsLoggerClass)) {
-            // WlsLogger 存在，使用它（需要适配器包装以符合 LoggerInterface）
-            return self::createWlsLoggerAdapter($channel, $config);
+        if (self::$runtimeProviderResolved) {
+            return self::$runtimeProvider;
+        }
+        self::$runtimeProviderResolved = true;
+
+        try {
+            $implementation = (new ServiceProviderRegistry())->implementationFor(RuntimeLoggerProviderInterface::class);
+            if ($implementation === null) {
+                return null;
+            }
+            $provider = ObjectManager::getInstance($implementation);
+            if ($provider instanceof RuntimeLoggerProviderInterface) {
+                self::$runtimeProvider = $provider;
+            }
+        } catch (\Throwable) {
+            self::$runtimeProvider = null;
         }
 
-        // 回退到 FPM 日志器
-        return self::createFpmLogger($channel, $config);
-    }
-
-    /**
-     * 创建 WlsLogger 适配器（WLS 下 w_log_* 统一走 WlsLogger）
-     */
-    private static function createWlsLoggerAdapter(string $channel, array $config): LoggerInterface
-    {
-        $adapterClass = 'Weline\\Server\\Log\\WlsLoggerAdapter';
-        if (!class_exists($adapterClass)) {
-            return self::createFpmLogger($channel, $config);
-        }
-        return new $adapterClass($channel);
+        return self::$runtimeProvider;
     }
 
     /**
@@ -325,10 +314,7 @@ class LoggerFactory
     public static function reset(): void
     {
         foreach (self::$channelInstances as $logger) {
-            if ($logger instanceof FpmLogger) {
-                $logger->flush();
-            }
-            if ($logger instanceof \Weline\Server\Log\WlsLoggerAdapter) {
+            if (\method_exists($logger, 'flush')) {
                 $logger->flush();
             }
         }
@@ -346,10 +332,7 @@ class LoggerFactory
     public static function flushAll(): void
     {
         foreach (self::$channelInstances as $logger) {
-            if ($logger instanceof FpmLogger) {
-                $logger->flush();
-            }
-            if ($logger instanceof \Weline\Server\Log\WlsLoggerAdapter) {
+            if (\method_exists($logger, 'flush')) {
                 $logger->flush();
             }
         }

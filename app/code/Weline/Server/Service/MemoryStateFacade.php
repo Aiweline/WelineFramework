@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Cache\Contract\SharedBufferStateInterface;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 use Weline\Server\Shared\Service\SharedMemoryService;
 
-class MemoryStateFacade implements MemoryStateFacadeInterface
+class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateInterface, SharedBufferStateInterface
 {
     private SharedStateServiceManager $manager;
     private SharedMemoryService $sharedMemoryService;

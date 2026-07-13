@@ -4,11 +4,11 @@
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
     <!-- 
         维护模式拦截器：使用最早的事件时机
-        - Weline_Framework::App::run_before 在 URL 解析之前触发
+        - Weline_Framework::App::pre_route_gate 在 URL/FPC 之前触发
         - 此时没有数据库连接、没有第三方服务请求
         - sort=-999 确保优先于其他观察者执行（如 MediaManager 的 sort=0）
     -->
-    <event name="Weline_Framework::App::run_before">
+    <event name="Weline_Framework::App::pre_route_gate">
         <observer name="Weline_Maintenance::interceptor" instance="Weline\Maintenance\Observer\MaintenanceInterceptor" disabled="false" shared="true" sort="-999"/>
     </event>
 </config>

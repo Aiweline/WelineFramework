@@ -2,6 +2,7 @@
 
 namespace Weline\Eav\Observer;
 
+use Weline\Eav\Api\Entity\EntityDefinitionInterface;
 use Weline\Eav\EavInterface;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Set;
@@ -42,9 +43,9 @@ class UpgradeDefaultAttribute implements ObserverInterface
                 if (ObjectManager::isStaticClass($eav)) {
                     continue;
                 }
-                /**@var \Weline\Eav\EavInterface $eavEntity */
+                /** @var object $eavEntity */
                 $eavEntity = ObjectManager::getInstance($eav);
-                if ($eavEntity instanceof EavInterface) {
+                if ($eavEntity instanceof EavInterface || $eavEntity instanceof EntityDefinitionInterface) {
                     // 单例模型在循环场景会残留上一轮 data/id，必须先 clearData() 再做 forceCheck 保存。
                     $eavEntityModel->clearData()
                         ->setData(

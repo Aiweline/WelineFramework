@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service;
 
-use Weline\Api\Service\ApiDocService;
+use Weline\Api\Api\Documentation\ApiDocumentationProviderInterface;
 use Weline\Framework\Event\EventsManager;
 
 class ApiDocCollector
@@ -12,7 +12,7 @@ class ApiDocCollector
     public const EVENT_COLLECT_AFTER = 'Weline_DeveloperWorkspace::api_doc_collect_after';
 
     public function __construct(
-        private readonly ApiDocService $apiDocService,
+        private readonly ApiDocumentationProviderInterface $apiDocService,
         private readonly EventsManager $eventsManager
     ) {
     }

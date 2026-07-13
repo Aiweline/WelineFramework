@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Ai\Agent;
 
-use Weline\Ai\Agent\AgentResult;
-use Weline\Ai\Interface\AgentInterface;
-use Weline\Ai\Interface\ToolInterface;
-use Weline\Ai\Model\AiModel;
-use Weline\Ai\Service\Provider\ProviderFactory;
+use Weline\Ai\Api\AgentInterface;
+use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Api\AiModel;
+use Weline\Ai\Api\Provider\ProviderRuntimeInterface;
+use Weline\Ai\Api\ToolInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Theme\Service\Ai\Tool\GetSlotContractTool;
 use Weline\Theme\Service\Ai\Tool\GetThemeComponentFrameworkTool;
 use Weline\Theme\Service\Ai\Tool\GetThemeVariablesTool;
@@ -132,9 +133,12 @@ PROMPT;
             ['role' => 'user', 'content' => $prompt],
         ];
 
-        /** @var ProviderFactory $providerFactory */
-        $providerFactory = $params['provider_factory'] ?? ObjectManager::getInstance(ProviderFactory::class);
-        $provider = $providerFactory->getProvider($model);
+        $providerRuntime = $params['provider_factory'] ?? ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ProviderRuntimeInterface::class);
+        if (!is_object($providerRuntime) || !method_exists($providerRuntime, 'getProvider')) {
+            throw new \RuntimeException((string)__('AI 查询入口不可用。'));
+        }
+        $provider = $providerRuntime->getProvider($model);
         $useStreamFull = method_exists($provider, 'generateStreamFull');
 
         $iteration = 0;

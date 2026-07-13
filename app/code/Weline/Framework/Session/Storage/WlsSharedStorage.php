@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Storage;
 
-use Weline\Server\Service\SessionStateFacade;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
+use Weline\Framework\Manager\ObjectManager;
 
 final class WlsSharedStorage implements SessionStorageInterface
 {
     private array $config;
     private int $defaultTtl;
-    private ?SessionStateFacade $sessionFacade = null;
+    private ?SharedSessionStateInterface $sessionFacade = null;
     private ?SessionStorageInterface $fallbackStorage = null;
     private int $sharedUnavailableUntilTs = 0;
     private int $retryIntervalSec;
@@ -233,7 +234,7 @@ final class WlsSharedStorage implements SessionStorageInterface
             : $this->fallbackStorage()->list($payload);
     }
 
-    private function sessionFacade(): ?SessionStateFacade
+    private function sessionFacade(): ?SharedSessionStateInterface
     {
         if ($this->sessionFacade === null) {
             if ($this->sharedUnavailableUntilTs > \time()) {
@@ -248,12 +249,20 @@ final class WlsSharedStorage implements SessionStorageInterface
                 if ($this->sessionFacadeFactory !== null) {
                     $factory = $this->sessionFacadeFactory;
                     $facade = $factory($config);
-                    if (!$facade instanceof SessionStateFacade) {
-                        throw new \RuntimeException('Session facade factory must return SessionStateFacade.');
+                    if (!$facade instanceof SharedSessionStateInterface) {
+                        throw new \RuntimeException('Session facade factory must return SharedSessionStateInterface.');
                     }
                     $this->sessionFacade = $facade;
                 } else {
-                    $this->sessionFacade = new SessionStateFacade($config);
+                    $implementation = (new ServiceProviderRegistry())->implementationFor(SharedSessionStateInterface::class);
+                    if ($implementation === null) {
+                        throw new \RuntimeException('No shared session state provider is registered. Run: php bin/w framework:compile');
+                    }
+                    $facade = ObjectManager::getInstance($implementation, [$config], false);
+                    if (!$facade instanceof SharedSessionStateInterface) {
+                        throw new \RuntimeException("Shared session provider {$implementation} violates its contract.");
+                    }
+                    $this->sessionFacade = $facade;
                 }
                 $this->sharedUnavailableUntilTs = 0;
                 $this->fallbackReason = '';

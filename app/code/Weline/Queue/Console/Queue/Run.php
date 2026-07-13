@@ -14,13 +14,15 @@ declare(strict_types=1);
 namespace Weline\Queue\Console\Queue;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Async\TaskConsumerInterface as FrameworkTaskConsumerInterface;
 use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Process\Processer;
+use Weline\Queue\Api\QueueConsumerInterface;
 use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
+use Weline\Queue\QueueInterface as LegacyQueueInterface;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
@@ -115,19 +117,6 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note($message);
 
             return $message;
-            if ($existingPid > 0 && $existingPid !== $currentPid && Processer::isRunningByPid($existingPid)) {
-                $killed = (bool)Processer::killByPid($existingPid, true);
-                if (!$killed) {
-                    $this->printing->error(__('终止队列 #%{1} 旧任务失败（pid=%{2}），已中止本次运行。', [$id, $existingPid]));
-                    exit();
-                }
-                $this->printing->note(__('已终止队列 #%{1} 旧任务（pid=%{2}）。', [$id, $existingPid]));
-            }
-            $queue = $this->newQueueModel()->load($id);
-            $queue->setStatus($queue::status_pending)
-                ->setPid(0)
-                ->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . __('强制接管：已终止同 ID 旧任务，准备重新执行。')))
-                ->save();
         } elseif ($existingStatus === $queue::status_running && $existingPid > 0 && !Processer::isRunningByPid($existingPid)) {
             // 兜底：running + 僵尸 pid，自动回收，允许本次继续执行。
             $queue->setStatus($queue::status_pending)
@@ -153,17 +142,26 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('已清空该队列历史输出，本次仅展示最新执行过程。'));
             }
         }
-        /**@var QueueInterface $queue_execute */
+        /** @var FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $queue_execute */
         $queue_execute = ObjectManager::getInstance($queueClass);
-        $validate_result = $queue_execute->validate($queue);
+        if (
+            !$queue_execute instanceof FrameworkTaskConsumerInterface
+            && !$queue_execute instanceof QueueConsumerInterface
+            && !$queue_execute instanceof LegacyQueueInterface
+        ) {
+            throw new \LogicException(
+                FrameworkTaskConsumerInterface::class . '|' . QueueConsumerInterface::class . '|' . LegacyQueueInterface::class
+            );
+        }
+        $validate_result = $this->validateQueueConsumer($queue_execute, $queue);
         if (is_bool($validate_result) and $validate_result) {
             $queue->setStatus($queue::status_running)
                 ->setPid((int)getmypid())
                 ->setResult($queue->getResult() . PHP_EOL . __('正在执行...'))
                 ->save();
             try {
-                $queue->setArgs($args); # 记录执行参数
-                $result = $queue_execute->execute($queue);
+                $queue->setExecutionArgs($args); # 记录执行参数
+                $result = $this->executeQueueConsumer($queue_execute, $queue);
                 // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
                 $queue = $this->newQueueModel()->load($id);
                 if ($this->shouldPreserveQueueStateAfterExecute($queue)) {
@@ -201,6 +199,28 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 ->save();
         }
         return $result;
+    }
+
+    private function validateQueueConsumer(
+        FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $consumer,
+        Queue $queue
+    ): bool {
+        if ($consumer instanceof QueueConsumerInterface) {
+            return $consumer->validate($queue);
+        }
+
+        return $consumer->validate($queue);
+    }
+
+    private function executeQueueConsumer(
+        FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $consumer,
+        Queue $queue
+    ): string {
+        if ($consumer instanceof QueueConsumerInterface) {
+            return $consumer->execute($queue);
+        }
+
+        return $consumer->execute($queue);
     }
 
     private function shouldPreserveQueueStateAfterExecute(Queue $queue): bool

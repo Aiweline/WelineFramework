@@ -252,9 +252,7 @@ $jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
         if (!data.is_active) data.is_active = 0;
         if (!data.is_default) data.is_default = 0;
 
-        var saveUrl = '<?= $this->getBackendUrl('*/backend/provider/save') ?>';
-        var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
-        var req = window.Weline.Api.request(saveUrl, saveOpts);
+        var req = window.Weline.Api.resource('ai').providerSaveAccount({payload: data});
         req.then(function(res) {
             var resData = (res && res.data) || res;
             submitBtn.disabled = false;

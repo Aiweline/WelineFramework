@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block;
 
-use Weline\Acl\Service\ResourceTreeServiceInterface;
+use Weline\Acl\Api\ResourceTreeServiceInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;

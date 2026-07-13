@@ -57,6 +57,16 @@ Server 模块与 Websites 模块通过以下事件解耦集成：
 | `Weline_Server::domain::certificate_renewed` | Server | Websites | 证书续签完成 |
 | `Weline_Server::integration::domain_list_requested` | Server | Websites | 请求域名列表 |
 
+## 证书临期通知
+
+`CertificateAutoRenew` 通过 Framework 公开的 `w_msg()` 入口发布
+`Weline_Framework_Message::system_notification` 中性事件，不直接依赖 Backend 私有事件名。
+
+- 已启用 `Weline_Backend` 时，Backend 的 `SystemNotificationObserver` 监听该事件，通知仍持久化并按原路径分发。
+- 未安装 Backend 时，Server 的证书检查与续签能力仍可独立运行。
+- `Weline_Backend` 在 Server 模块清单中是 `optional`，只用于后台 ACL/菜单、主题配置集成和后台通知消费，不是 WLS 运行的必需依赖。
+- Server 后台控制器中的 `Weline_Backend::system_service_group` 只是 ACL 父资源标识，必须保持层级语义，不应改写为 Server 自有根节点。
+
 ## 文件清单
 
 ```

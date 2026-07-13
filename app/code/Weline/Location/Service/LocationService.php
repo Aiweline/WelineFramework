@@ -14,6 +14,7 @@ namespace Weline\Location\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Location\Service\Provider\LocationProviderInterface;
 use Weline\Location\Service\Provider\LocalProvider;
 use Weline\Location\Service\Provider\IpApiComProvider;
@@ -204,7 +205,7 @@ class LocationService
                     // 如果是最后一次尝试，继续下一个提供者
                     if ($attempt < $retry) {
                         // 等待一小段时间后重试
-                        usleep(100000); // 0.1秒
+                        SchedulerSystem::usleep(100000); // 0.1秒；WLS 下让出当前 Fiber
                         continue;
                     }
                 }
@@ -233,4 +234,3 @@ class LocationService
         }, $this->providers);
     }
 }
-

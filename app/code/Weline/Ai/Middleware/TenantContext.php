@@ -3,11 +3,15 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Middleware;
 
+use Weline\Framework\Runtime\RequestContext;
+
 /**
  * 租户上下文中间件
  */
 class TenantContext
 {
+    public const REQUEST_CONTEXT_KEY = 'module.Weline_Ai.tenant';
+
     public function handle($request, $next)
     {
         $tenantCode = $request->getHeader('X-Tenant-Code');
@@ -24,8 +28,28 @@ class TenantContext
 
     private function setTenantContext(string $tenantCode): void
     {
-        // 设置租户上下文到全局变量或服务容器
-        $GLOBALS['current_tenant'] = $tenantCode;
+        self::mergeTenantContext([
+            'tenant_code' => $tenantCode,
+        ]);
+    }
+
+    public static function mergeTenantContext(array $tenantContext): void
+    {
+        RequestContext::set(
+            self::REQUEST_CONTEXT_KEY,
+            array_replace(self::getTenantContext(), $tenantContext),
+        );
+    }
+
+    public static function getTenantContext(): array
+    {
+        $tenantContext = RequestContext::get(self::REQUEST_CONTEXT_KEY, []);
+        return is_array($tenantContext) ? $tenantContext : [];
+    }
+
+    public static function resetRequestState(): void
+    {
+        RequestContext::remove(self::REQUEST_CONTEXT_KEY);
     }
 
     private function missingTenantResponse()

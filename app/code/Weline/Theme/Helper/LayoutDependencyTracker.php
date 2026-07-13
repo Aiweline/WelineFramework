@@ -11,7 +11,10 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Meta\Model\MetaConfig;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Meta\Api\Data\MetaConfigSearch;
+use Weline\Meta\Api\Data\MetaConfigScopeSearch;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
 use Weline\Theme\Model\WelineTheme;
 
 /**
@@ -162,24 +165,33 @@ class LayoutDependencyTracker
         }
         
         try {
-            /** @var MetaConfig $metaConfig */
-            $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-            
+            $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(MetaConfigRepositoryInterface::class);
+            if (!$repository instanceof MetaConfigRepositoryInterface) {
+                return true;
+            }
+
+            // Meta config rows have no persisted update timestamp. Keep the previous
+            // conservative regeneration behavior whenever variable overrides exist.
             $namespace = "theme.{$area}";
-            $configKeyPrefix = "variables.%";
-            
-            // 查询该主题在指定命名空间下的变量配置，且更新时间在指定时间之后
-            $metaConfig->clearQuery()
-                ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$theme->getId())
-                ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
-                ->where(MetaConfig::schema_fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
-                ->where(MetaConfig::schema_fields_UPDATE_TIME, $sinceTimestamp, '>');
-            
-            $collection = $metaConfig->select()->fetch();
-            $items = $collection->getItems();
-            
-            return !empty($items);
-        } catch (\Exception $e) {
+            $identifyId = (string)$theme->getId();
+            foreach ($repository->listScopes(new MetaConfigScopeSearch(
+                namespace: $namespace,
+                identifyId: $identifyId,
+            )) as $scope) {
+                if ($repository->search(new MetaConfigSearch(
+                    namespace: $namespace,
+                    scope: $scope,
+                    configKeyPrefix: 'variables.',
+                    allLocales: true,
+                    identifyId: $identifyId,
+                )) !== []) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (\Throwable) {
             // 查询失败，保守处理：返回true
             return true;
         }
@@ -252,4 +264,3 @@ class LayoutDependencyTracker
         }
     }
 }
-

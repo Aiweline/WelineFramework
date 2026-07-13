@@ -15,22 +15,32 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\I18n;
-use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 
 class Meta extends BackendController
 {
     public function get()
     {
-        /** @var I18n $i18nModel */
-        $i18nModel = ObjectManager::getInstance(I18n::class);
-        $localsModel = $i18nModel->getActiveLocalsModel(Cookie::getLangLocal());
-        
-        if ($search = $this->request->getGet('search', '')) {
-            $localsModel->where("concat(" . implode(',', $localsModel->getModelFields()) . ")", '%' . $search . '%', 'like');
+        $displayLocale = Cookie::getLangLocal();
+        $search = trim((string)$this->request->getGet('search', ''));
+        $locals = [];
+        foreach ($this->localeRepository()->installedActive($displayLocale) as $locale) {
+            if ($search !== ''
+                && stripos($locale->code, $search) === false
+                && stripos($locale->displayName, $search) === false) {
+                continue;
+            }
+            $locals[] = [
+                'code' => $locale->code,
+                'target_code' => $locale->displayLocale,
+                'name' => $locale->displayName,
+                'flag' => $locale->flag,
+                'is_active' => $locale->active ? 1 : 0,
+                'is_install' => $locale->installed ? 1 : 0,
+            ];
         }
-        $localsModel->pagination()->select();
-        $locals = $localsModel->fetchArray();
         
         if (empty($locals)) {
             $url = $this->request->getUrlBuilder()->getUrl('*/backend/countries');
@@ -41,8 +51,6 @@ class Meta extends BackendController
             ]));
             $this->redirect(404);
         }
-        
-        $this->assign('local_pagination', $localsModel->getPagination());
         
         $metaKey = $this->request->getGet('key');
         if (empty($metaKey)) {
@@ -61,34 +69,26 @@ class Meta extends BackendController
         
         // 获取所有语言的翻译
         $translations = [];
+        $dictionary = $this->dictionaryRepository();
         foreach ($locals as $local) {
             $locale = $local['code'];
-            /** @var LocaleDictionary $localeDict */
-            $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
             
             // 先尝试带 scope 的 key
-            $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-            
-            $translation = '';
-            if ($localeDict->getId()) {
-                $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-            }
+            $resolvedKey = $metaKeyWithScope;
+            $translation = $dictionary->getEntry($resolvedKey, $locale)?->translation ?? '';
             
             // 如果没有找到，尝试不带 scope 的 key（使用默认值）
             if (empty($translation) && $scope !== 'default') {
-                $md5Default = LocaleDictionary::generateMd5($metaKey, $locale);
-                $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
-                if ($localeDict->getId()) {
-                    $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                }
+                $resolvedKey = $metaKey;
+                $translation = $dictionary->getEntry($resolvedKey, $locale)?->translation ?? '';
             }
             
             $translations[] = [
                 'local_code' => $locale,
                 'local' => $local,
                 'translate' => $translation ?: $value,
-                'md5' => $md5
+                // 保留旧模板数据形状；字典指纹的存储细节不再用于读写。
+                'md5' => md5($resolvedKey . $locale)
             ];
         }
         
@@ -125,6 +125,7 @@ class Meta extends BackendController
         
         // 获取翻译数据
         $translations = $this->request->getPost('translation', []);
+        $dictionary = $this->dictionaryRepository();
         
         // 保存翻译（使用带 scope 的 key）
         foreach ($translations as $translation) {
@@ -135,27 +136,32 @@ class Meta extends BackendController
                 continue;
             }
             
-            /** @var LocaleDictionary $localeDict */
-            $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-            $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-            
-            if ($localeDict->getId()) {
-                // 更新
-                $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $translateValue);
-                $localeDict->save();
-            } else {
-                // 新增
-                $localeDict->setData(LocaleDictionary::schema_fields_MD5, $md5);
-                $localeDict->setData(LocaleDictionary::schema_fields_STRING, $metaKeyWithScope);
-                $localeDict->setData(LocaleDictionary::schema_fields_LOCALE, $locale);
-                $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $translateValue);
-                $localeDict->save();
-            }
+            $dictionary->upsert($metaKeyWithScope, $locale, $translateValue);
         }
         
         MessageManager::success(__('翻译完成!'));
         return $this->get();
     }
-}
 
+    private function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
+    private function localeRepository(): LocaleRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(LocaleRepositoryInterface::class);
+        if (!$provider instanceof LocaleRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n locale repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+}

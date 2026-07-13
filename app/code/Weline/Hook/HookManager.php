@@ -41,11 +41,11 @@ class HookManager
         // 验证命名规范
         $this->validator->validateOrThrow($hookName);
         
-        // 检查是否已注册（在 HookInterface 中定义）
+        // 检查是否已经由所属模块 hook.php 声明并编译。
         if (!$this->registry->isRegistered($hookName)) {
             throw new \Exception(
                 __(
-                    'Hook 未注册：%{1}。请在 Weline\Framework\Hook\HookInterface 中定义此 hook 常量。',
+                    'Hook 未注册：%{1}。请在所属模块 hook.php 中声明并重建 Hook 注册表。',
                     [$hookName]
                 )
             );
@@ -88,4 +88,3 @@ class HookManager
         return $this->registry;
     }
 }
-

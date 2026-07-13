@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Social\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Queue\Model\Queue;
+use Weline\Queue\Api\QueueStatus;
 use Weline\Social\Model\SocialCreativeDraft;
 use Weline\Social\Model\SocialPlatformAccount;
 use Weline\Social\Model\SocialPublishBatch;
@@ -275,7 +275,7 @@ class SocialPublishService
                 'module' => 'Weline_Social',
                 'biz_key' => 'weline_social_target_' . (int)$target->getId(),
                 'content' => ['target_id' => (int)$target->getId()],
-                'status' => Queue::status_pending,
+                'status' => QueueStatus::PENDING,
                 'auto' => true,
             ]);
         } catch (\Throwable) {

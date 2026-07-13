@@ -8,6 +8,8 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
+use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -52,6 +54,12 @@ class Doctor extends CommandAbstract
     {
         $profile = (new RuntimeCapabilityDetector())->detect();
         $config = $this->resolveConfigForInstance($instanceName);
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+        $endpoint = $manager->getRawInstanceData($instanceName);
+        $endpointMetadata = \is_array($endpoint)
+            ? RuntimeEndpointMetadata::fromEndpoint($endpoint)->toArray()
+            : [];
         try {
             $strategy = (new RuntimeStrategyResolver())->resolve($config, [], $profile);
         } catch (\RuntimeException $exception) {
@@ -61,9 +69,49 @@ class Doctor extends CommandAbstract
                 'warnings' => [$exception->getMessage()],
             ];
         }
+
+        $selectionData = \is_array($endpointMetadata['runtime_selection'] ?? null)
+            ? $endpointMetadata['runtime_selection']
+            : [];
+        $runningSchemaV3 = \is_array($endpoint)
+            && (int)($endpoint['schema_version'] ?? 0) >= RuntimeSelection::ENDPOINT_SCHEMA_VERSION
+            && \strtolower(\trim((string)($endpoint['lifecycle_state'] ?? ''))) === 'running';
+        if ($runningSchemaV3 && ($endpointMetadata['runtime_selection_valid'] ?? null) !== true) {
+            $strategy['status'] = 'unsafe';
+            $strategy['warnings'] = \array_values(\array_unique(\array_merge(
+                (array)($strategy['warnings'] ?? []),
+                ['Running endpoint schema v3 is invalid: '
+                    . (string)($endpointMetadata['runtime_selection_error'] ?? 'unknown validation error')]
+            )));
+        } elseif ($runningSchemaV3 && $selectionData !== []) {
+            $selection = RuntimeSelection::fromArray($selectionData);
+            $strategy = \array_replace($strategy, [
+                'worker_count' => \max(1, (int)($endpoint['count'] ?? $strategy['worker_count'] ?? 1)),
+                'worker_count_reason' => 'observed running endpoint schema v3',
+                'requested_topology' => $selection->requestedTopology->value,
+                'effective_topology' => $selection->effectiveTopology->value,
+                'topology' => $selection->effectiveTopology->value,
+                'topology_source' => $selection->source,
+                'dispatcher_enabled' => $selection->isDispatcher(),
+                'direct_reuse_port' => $selection->isDirect() && $selection->listenerMode === 'reuseport',
+                'direct_listener_mode' => $selection->listenerMode,
+                'listener_strategy' => $selection->listenerMode,
+                'topology_reason' => $selection->reason,
+                'topology_reason_codes' => $selection->reasonCodes,
+                'event_loop_driver' => $selection->eventLoopDriver,
+                'ssl_engine' => $selection->sslEngine,
+                'policy_compatible' => $selection->policyCompatible,
+                'runtime_selection' => $selection,
+            ]);
+        }
         $diagnostics = (new RuntimeDiagnosticsFormatter())->toDiagnosticArray($profile, $strategy);
         $diagnostics['instance'] = $instanceName;
-        $diagnostics['config_source'] = $config['source'] ?? 'runtime/default';
+        $diagnostics['config_source'] = $runningSchemaV3
+            ? 'running endpoint schema v3'
+            : ($config['source'] ?? 'runtime/default');
+        if ($endpointMetadata !== []) {
+            $diagnostics['runtime_observation'] = $endpointMetadata;
+        }
 
         return $diagnostics;
     }
@@ -110,10 +158,22 @@ class Doctor extends CommandAbstract
         ], $wls, $serverConfig);
 
         if (\is_array($raw)) {
-            foreach (['count', 'worker_count', 'mode', 'topology', 'runtime_strategy', 'event_loop'] as $key) {
+            $schemaVersion = (int)($raw['schema_version'] ?? 0);
+            foreach (['count', 'worker_count', 'mode', 'runtime_strategy', 'event_loop'] as $key) {
                 if (isset($raw[$key])) {
                     $config[$key === 'count' ? 'worker_count' : $key] = $raw[$key];
                 }
+            }
+            if ($schemaVersion >= RuntimeSelection::ENDPOINT_SCHEMA_VERSION) {
+                $selection = \is_array($raw['runtime_selection'] ?? null) ? $raw['runtime_selection'] : [];
+                $requestedTopology = $raw['requested_topology']
+                    ?? $selection['requested_topology']
+                    ?? null;
+                if (\is_scalar($requestedTopology) && \trim((string)$requestedTopology) !== '') {
+                    $config['topology'] = \trim((string)$requestedTopology);
+                }
+            } elseif (isset($raw['topology'])) {
+                $config['topology'] = $raw['topology'];
             }
             $config['source'] = 'instance record';
         }

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationTaskService;
 
 class DocumentAiTranslation implements CronTaskInterface

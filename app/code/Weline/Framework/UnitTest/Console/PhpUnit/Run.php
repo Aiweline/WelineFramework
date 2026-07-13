@@ -2526,7 +2526,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
 1️⃣ 默认测试（自动收集所有模块的测试）：
     php bin/w phpunit:run                          # 使用 PHPUnit 运行所有模块的测试
     php bin/w phpunit:run --name=ThemeCssTaglibTest  # 智能查找并运行指定测试文件
-    php bin/w phpunit:run --module=Weline_Theme     # 自动收集并运行指定模块的测试
+    php bin/w phpunit:run --module=Vendor_Module     # 自动收集并运行指定模块的测试
     php bin/w phpunit:run --pest                   # 使用 Pest 运行测试
 
 2️⃣ 智能文件匹配（自动查找测试文件）：
@@ -2535,7 +2535,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
     php bin/w phpunit:run --name=ThemeCssTaglibTest::testMethod  # 运行指定方法
 
 3️⃣ 模块测试（自动收集模块下的所有测试）：
-    php bin/w phpunit:run --module=Weline_Theme         # 运行 Theme 模块的所有测试
+    php bin/w phpunit:run --module=Vendor_Module         # 运行指定模块的所有测试
     php bin/w phpunit:run --module=Weline_Framework     # 运行 Framework 模块的所有测试
 
 4️⃣ 强大的 Pest 参数组合：
@@ -2557,11 +2557,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
 5️⃣ Watch 模式（文件监听 + 自动收集）：
     php bin/w phpunit:run --watch                    # 监听所有模块的测试
     php bin/w phpunit:run --watch --name=Test         # 监听指定测试文件
-    php bin/w phpunit:run --watch --module=Weline_Theme  # 监听指定模块
+    php bin/w phpunit:run --watch --module=Vendor_Module  # 监听指定模块
 
 6️⃣ Pest 模式（需要指定 --pest 参数）：
     php bin/w phpunit:run --pest --name=Eav        # Pest 模式运行
-    php bin/w phpunit:run --pest --module=Weline_Ai  # Pest 模式测试模块
+    php bin/w phpunit:run --pest --module=Vendor_Module  # Pest 模式测试指定模块
 
 🎨 智能文件名匹配规则（自动查找）：
     ThemeCssTaglibTest     → app/code/Weline/Theme/test/Unit/ThemeCssTaglibTest.php
@@ -2599,7 +2599,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
     php bin/w phpunit:run --watch              # 启用文件监听模式
     php bin/w phpunit:run -w                    # 短参数形式
     php bin/w phpunit:run --watch --name=Test   # 监听指定测试文件
-    php bin/w phpunit:run --watch --module=Weline_Theme  # 监听指定模块测试
+    php bin/w phpunit:run --watch --module=Vendor_Module  # 监听指定模块测试
     
     💡 Watch 模式功能：
     - 自动监听 app/code 目录下的 PHP 文件变化

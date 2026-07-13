@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Service;
 
-class ParamDefinitionNormalizer
+use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
+
+class ParamDefinitionNormalizer implements ParamDefinitionNormalizerInterface
 {
     /**
      * @param array<string|int, mixed> $params

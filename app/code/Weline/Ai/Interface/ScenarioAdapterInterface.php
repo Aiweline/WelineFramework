@@ -22,7 +22,8 @@ namespace Weline\Ai\Interface;
  * - 支持提示词模板和参数处理
  * - 统一的适配器管理规范
  */
-interface ScenarioAdapterInterface
+/** @deprecated Implement \Weline\Ai\Api\ScenarioAdapterInterface. */
+interface ScenarioAdapterInterface extends \Weline\Ai\Api\ScenarioAdapterInterface
 {
     /**
      * 获取适配器代码
@@ -107,4 +108,3 @@ interface ScenarioAdapterInterface
      */
     public function supportsModel(string $modelCode): bool;
 }
-

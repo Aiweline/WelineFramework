@@ -29,7 +29,7 @@ class SeoWebsiteDirectory
                 continue;
             }
             $website = $this->normalizeWebsite($row);
-            if ((int)$website['website_id'] > 0) {
+            if ($this->hasWebsiteIdentity($row) && (int)$website['website_id'] >= 0) {
                 $websites[] = $website;
             }
         }
@@ -42,7 +42,7 @@ class SeoWebsiteDirectory
      */
     public function getWebsiteById(int $websiteId): ?array
     {
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return null;
         }
 
@@ -56,8 +56,13 @@ class SeoWebsiteDirectory
             return null;
         }
 
-        $website = $this->normalizeWebsite($this->unwrapRow($row));
-        return (int)$website['website_id'] > 0 ? $website : null;
+        $row = $this->unwrapRow($row);
+        if (!$this->hasWebsiteIdentity($row)) {
+            return null;
+        }
+
+        $website = $this->normalizeWebsite($row);
+        return (int)$website['website_id'] >= 0 ? $website : null;
     }
 
     /**
@@ -123,7 +128,7 @@ class SeoWebsiteDirectory
     public function currentWebsite(): array
     {
         $websiteId = (int)w_env('website_id', 0);
-        if ($websiteId > 0) {
+        if ($websiteId >= 0) {
             $website = $this->getWebsiteById($websiteId);
             if ($website !== null) {
                 return $this->withCurrentRequestUrl($website);
@@ -232,6 +237,12 @@ class SeoWebsiteDirectory
         }
 
         return $row;
+    }
+
+    /** @param array<string, mixed> $row */
+    private function hasWebsiteIdentity(array $row): bool
+    {
+        return \array_key_exists('website_id', $row) || \array_key_exists('id', $row);
     }
 
     /**

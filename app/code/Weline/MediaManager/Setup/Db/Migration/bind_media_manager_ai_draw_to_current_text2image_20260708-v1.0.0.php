@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Setup\Db\Migration;
 
-use Weline\Ai\Model\AiScenarioAdapter;
-use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\MediaManager\Service\AiDrawModelBinder;
 
@@ -24,14 +23,6 @@ class BindMediaManagerAiDrawToCurrentText2image20260708V100 extends AbstractMigr
     public function getDate(): string
     {
         return '2026-07-08';
-    }
-
-    /**
-     * @return array<int,string>
-     */
-    public function getAffectedTables(): array
-    {
-        return [AiScenarioAdapter::schema_table];
     }
 
     public function install(): bool

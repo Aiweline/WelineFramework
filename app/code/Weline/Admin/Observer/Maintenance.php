@@ -14,7 +14,7 @@ namespace Weline\Admin\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\View\Block;
-use Weline\Maintenance\Helper\UrlParser;
+
 class Maintenance implements \Weline\Framework\Event\ObserverInterface
 {
     /**
@@ -23,11 +23,12 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
     public function execute(Event &$event): void
     {
        
-        // 在 run_before 阶段，使用轻量级 URL 解析器判断请求类型（不触发事件，不查询数据库）
-        $parse = $event->getData('parse');
-        $uri = $parse['uri'];
-        $isApiRequest = UrlParser::isApiRequest(\w_env('origin_request_uri', ''));
-        $isBackend = UrlParser::isBackendRequest(\w_env('origin_request_uri', ''));
+        // MaintenanceInterceptor 已完成唯一次早期 URL 解析，直接复用结果。
+        $parse = (array)$event->getData('parse');
+        $uri = (string)($parse['uri'] ?? '/');
+        $area = (string)($parse['area'] ?? 'frontend');
+        $isApiRequest = \in_array($area, ['rest_frontend', 'rest_backend'], true);
+        $isBackend = $area === 'backend';
         // 如果 area 不是 API，再检查 Accept 头（兼容某些特殊情况）
         if (!$isApiRequest) {
             $acceptHeader = \w_env('server.accept', '');

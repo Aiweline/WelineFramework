@@ -1,25 +1,31 @@
 {
-  "name": "weline/module-i18n",
-  "description": "WelineFramework 国际化i18n翻译支持",
-  "minimum-stability": "stable",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.0",
-    "symfony/intl": "^5.2"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\I18n\\": ""
+    "name": "weline/module-i18n",
+    "description": "WelineFramework 国际化i18n翻译支持",
+    "minimum-stability": "stable",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "symfony/intl": "^5.2"
     },
-    "psr-0": {
-      "Weline\\I18n\\": ""
-    }
-  },
-  "license": "MIT"
+    "suggest": {
+        "weline/module-acl": "Provides access-mode constants for the optional I18n administration controllers.",
+        "weline/module-admin": "Provides the backend locale selector integration.",
+        "weline/module-backend": "Provides backend resource groups for the optional I18n administration UI.",
+        "weline/module-cache-manager": "Provides centrally configured locale-cache TTL values.",
+        "weline/module-queue": "Provides asynchronous AI translation execution.",
+        "weline/module-system-config": "Persists optional AI translation configuration."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\I18n\\": ""
+        }
+    },
+    "license": "MIT"
 }

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 日期：11/7/2023 09:47:54
  */
 namespace Weline\Queue\Model\Queue;
-use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Api\EavAttribute;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;

@@ -2,8 +2,10 @@
 
 namespace Weline\Websites\Data;
 
-use Weline\Currency\Model\Currency;
+use Weline\Currency\Api\CurrencyCatalogInterface;
+use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -285,41 +287,32 @@ class WebsiteData
         }
 
         $currencyCodes = self::getCurrencyCodes();
-        
-        // 如果没有限定关联货币，返回所有启用的货币
-        if (empty($currencyCodes)) {
-            $currencyModel = ObjectManager::getInstance(Currency::class);
-            $currencies = $currencyModel->clearQuery()
-                ->where(Currency::schema_fields_STATUS, 1)
-                ->select()
-                ->fetch()
-                ->getItems();
-        } else {
-            // 获取限定的货币
-            $currencyModel = ObjectManager::getInstance(Currency::class);
-            $currencies = [];
+        $activeCurrencies = self::currencyCatalog()->active();
+        if ($currencyCodes !== []) {
+            $activeByCode = [];
+            foreach ($activeCurrencies as $currency) {
+                $activeByCode[strtoupper($currency->code)] = $currency;
+            }
+
+            $activeCurrencies = [];
             foreach ($currencyCodes as $code) {
-                $currency = $currencyModel->clearQuery()
-                    ->where(Currency::schema_fields_CODE, $code)
-                    ->where(Currency::schema_fields_STATUS, 1)
-                    ->find()
-                    ->fetch();
-                if ($currency->getId()) {
-                    $currencies[] = $currency;
+                $currency = $activeByCode[strtoupper((string)$code)] ?? null;
+                if ($currency !== null) {
+                    $activeCurrencies[] = $currency;
                 }
             }
         }
 
         self::$currencies = [];
-        foreach ($currencies as $currency) {
+        foreach ($activeCurrencies as $currency) {
             self::$currencies[] = [
-                'code' => $currency->getCode(),
-                'name' => $currency->getName(),
-                'format' => $currency->getFormat(),
-                'symbol' => $currency->getSymbol(),
-                'position' => $currency->getPosition(),
-                'rate' => $currency->getRate(),
-                'status' => $currency->getStatus(),
+                'code' => $currency->code,
+                'name' => $currency->name,
+                'format' => $currency->format,
+                'symbol' => $currency->symbol,
+                'position' => $currency->position,
+                'rate' => $currency->rate,
+                'status' => $currency->active,
             ];
         }
 
@@ -338,17 +331,28 @@ class WebsiteData
         
         // 如果没有限定关联货币，检查货币表中是否存在且启用
         if (empty($currencyCodes)) {
-            $currencyModel = ObjectManager::getInstance(Currency::class);
-            $currency = $currencyModel->clearQuery()
-                ->where(Currency::schema_fields_CODE, strtoupper($currencyCode))
-                ->where(Currency::schema_fields_STATUS, 1)
-                ->find()
-                ->fetch();
-            return $currency->getId() > 0;
+            $currencyCode = strtoupper($currencyCode);
+            foreach (self::getCurrencies() as $currency) {
+                if (strtoupper((string)($currency['code'] ?? '')) === $currencyCode) {
+                    return true;
+                }
+            }
+            return false;
         }
         
         // 如果限定了关联货币，只允许这些货币
         return in_array(strtoupper($currencyCode), array_map('strtoupper', $currencyCodes));
+    }
+
+    private static function currencyCatalog(): CurrencyCatalogInterface
+    {
+        $catalog = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CurrencyCatalogInterface::class);
+        if (!$catalog instanceof CurrencyCatalogInterface) {
+            throw new \RuntimeException('Weline_Currency catalog provider is unavailable.');
+        }
+
+        return $catalog;
     }
 
     /**
@@ -361,15 +365,10 @@ class WebsiteData
     {
         $languageCodes = self::getLanguageCodes();
         
-        // 如果没有限定关联语言，检查i18n中是否存在且激活
+        // 没有网站级限制时，交给已注册的本地化 Provider 验证安装/启用状态。
         if (empty($languageCodes)) {
-            $localsModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
-            $locale = $localsModel->clearQuery()
-                ->where(\Weline\I18n\Model\Locals::schema_fields_CODE, $languageCode)
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
-                ->find()
-                ->fetch();
-            return (string)$locale->getData(\Weline\I18n\Model\Locals::schema_fields_CODE) !== '';
+            return ObjectManager::getInstance(LocalizationProviderRegistry::class)
+                ->supportsLanguage($languageCode);
         }
         
         // 如果限定了关联语言，只允许这些语言

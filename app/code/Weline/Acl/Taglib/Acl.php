@@ -14,7 +14,6 @@ namespace Weline\Acl\Taglib;
 
 use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
-use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -22,8 +21,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
-use Weline\Frontend\Model\FrontendUser;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Acl implements TaglibInterface
 {
@@ -148,7 +146,6 @@ class Acl implements TaglibInterface
             return false;
         }
         // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免线上/多 Worker 下复用错误角色导致权限不一致
-        /** @var BackendUser $user 已通过 method_exists 确保有 getRole() */
         $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
         if ($roleId <= 0) {
             self::$permissionCache[$source] = false;
@@ -227,8 +224,8 @@ class Acl implements TaglibInterface
 
     static function document(): string
     {
-        $msg = __('这里是重要信息，只允许拥有Weline_Backend::setting权限的用户访问');
-        $tag = __('使用示例：') . htmlentities('<acl source="Weline_Backend::setting">
+        $msg = __('这里是重要信息，只允许拥有Weline_Acl::acl权限的用户访问');
+        $tag = __('使用示例：') . htmlentities('<acl source="Weline_Acl::acl">
     <div>
         <span>' . $msg . '</span>
     </div>

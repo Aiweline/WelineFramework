@@ -2,7 +2,7 @@
 /**@var \Weline\Framework\View\Template $this */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Backend\Model\Config as BackendConfig;
-use Weline\FileManager\Helper\Image as ImageHelper;
+use Weline\FileManager\Api\Image as ImageHelper;
 
 // 获取后台配置
 /** @var BackendConfig $backendConfig */
@@ -54,10 +54,10 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
     body[data-bs-theme="dark"] #page-topbar .navbar-brand-box .logo img,
     body[data-topbar="dark"] #page-topbar .navbar-brand-box .logo img,
     body[data-sidebar="dark"] #page-topbar .navbar-brand-box .logo img {
-        padding: 4px !important;
-        border-radius: 12px !important;
-        background: rgba(255, 255, 255, 0.92) !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
     }
 </style>
 <header id="page-topbar">

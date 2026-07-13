@@ -1,0 +1,16 @@
+{
+    "name": "weline/module-fake-data",
+    "description": "WelineFramework FakeData module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-extends": "@dev",
+        "weline/framework": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\FakeData\\": ""
+        }
+    }
+}

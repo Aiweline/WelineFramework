@@ -18,6 +18,7 @@
 - 模块代码：`Weline_Marketing`
 - 目录：`app/code/Weline/Marketing`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 营销本地化模型继承 `Weline\I18n\Api\Localization\LocalModel`，因此 I18n 是必需依赖而非运行期猜测的可选模块。
 
 ## 代码面概览
 
@@ -28,9 +29,10 @@
 - `Controller`：前后台 HTTP 控制器与路由入口。 文件数：4
 - `Controller/Api`：API 控制器入口；涉及外部接入时同步检查 API 契约与安全约束。 文件数：1
 - `Controller/Backend`：后台控制器入口；变更前同步检查 ACL、菜单和返回路径。 文件数：3
-- `Interface`：已发布接口契约；跨模块依赖优先使用这里。 文件数：2
+- `Api`：跨模块公开契约和纯数据描述。 文件数：2
+- `Interface`：Marketing 内部规则扩展接口；跨模块消费者不得依赖此目录。 文件数：2
 - `Model`：ORM 模型与字段 schema。 文件数：34
-- `Service`：业务编排与模块服务层。 文件数：3
+- `Service`：业务编排与模块服务层。 文件数：4
 - `Setup`：安装/升级装配。 文件数：1
 - `etc`：模块配置。 文件数：3
 - `i18n`：国际化资源。 文件数：2
@@ -49,6 +51,15 @@
 - 存在浏览器静态资源；业务请求必须走 `Weline.Api.*`，不要直接写 raw fetch/ajax。
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
+
+## 规则动作公开契约
+
+`Weline\Marketing\Api\Rule\ActionCatalogInterface` 是跨模块的唯一动作目录读取入口。
+它返回 `ActionDescriptor` 列表，只包含 code、名称、描述和表单字段数据。
+不会暴露 `RuleEngine`、Action 实例、Closure 或可执行类名。
+
+跨模块消费者不得引用 `Weline\Marketing\Service\RuleEngine`；新的动作类仍由
+Marketing 内部扩展机制管理，目录在模块内完成实例化和数据投影。
 
 ## 本模块文档资产
 

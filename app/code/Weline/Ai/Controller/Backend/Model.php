@@ -234,6 +234,12 @@ class Model extends BackendController
         if (!empty($config['selected_model_preset']) || !empty($providerConfig['selected_model_preset'])) {
             return true;
         }
+        // 快速新增会把供应商模型 code 写入 provider_config，即使尚未配置密钥或测试，也应显示在已选模型列表。
+        if (!empty($providerConfig['model'])
+            || !empty($providerConfig['provider_model_code'])
+            || !empty($providerConfig['model_id'])) {
+            return true;
+        }
         if (!empty($providerConfig['account_id'])) {
             return true;
         }

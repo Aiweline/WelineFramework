@@ -274,6 +274,19 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertTrue($this->invokePrivateMethod($core, 'shouldReuseCachedWorkerRoute', 19982));
     }
 
+    public function testPlainHttpCachedRouteYieldsToLessLoadedWorker(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 2, false);
+        $this->setPrivateProperty($core, 'workerPorts', [19982, 19983]);
+        $this->setPrivateProperty($core, 'connections', [
+            1 => ['port' => 19982],
+            2 => ['port' => 19982],
+        ]);
+
+        self::assertFalse($this->invokePrivateMethod($core, 'shouldReuseCachedWorkerRoute', 19982));
+        self::assertTrue($this->invokePrivateMethod($core, 'shouldReuseCachedWorkerRoute', 19983));
+    }
+
     public function testNormalizeExcludePortClearsWhenPoolHasSingleWorker(): void
     {
         $core = new PassthroughCore('127.0.0.1', 19981, 2);

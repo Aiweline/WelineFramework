@@ -8,12 +8,12 @@ use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\FeedItem;
 use Weline\Geo\Model\WebsiteProtocolConfig;
 use Weline\Geo\Service\FeedGeneratorService;
-use Weline\Seo\Service\Protocol\WebsiteProtocolResolver;
+use Weline\Seo\Api\Protocol\WebsiteProtocolResolverInterface;
 
 class GeoProtocolRenderer
 {
     public function __construct(
-        private readonly WebsiteProtocolResolver $websiteResolver,
+        private readonly WebsiteProtocolResolverInterface $websiteResolver,
         private readonly Feed $feed,
         private readonly FeedItem $feedItem,
         private readonly FeedGeneratorService $feedGenerator,
@@ -24,9 +24,9 @@ class GeoProtocolRenderer
     public function renderLlms(bool $full = false): string
     {
         $website = $this->websiteResolver->currentWebsite();
-        $config = $this->loadWebsiteConfig((int)($website['website_id'] ?? 0));
-        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
-        $siteName = (string)($website['name'] ?? 'Weline');
+        $config = $this->loadWebsiteConfig($website->id);
+        $baseUrl = rtrim($website->url, '/');
+        $siteName = $website->name !== '' ? $website->name : 'Weline';
 
         if (!$config->isLlmsEnabled()) {
             return '# ' . $siteName . "\n\n> AI discovery is disabled for this website.\n";
@@ -88,7 +88,7 @@ class GeoProtocolRenderer
     public function renderFeed(string $format = 'json_feed'): string
     {
         $website = $this->websiteResolver->currentWebsite();
-        $config = $this->loadWebsiteConfig((int)($website['website_id'] ?? 0));
+        $config = $this->loadWebsiteConfig($website->id);
         if (!$config->isFeedEnabled()) {
             return $this->emptyFeed($format);
         }

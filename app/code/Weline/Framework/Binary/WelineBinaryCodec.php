@@ -19,28 +19,21 @@ final class WelineBinaryCodec
     private const TYPE_LIST = 0x07;
     private const TYPE_MAP = 0x08;
 
-    private const MAX_PACKET_BYTES = 4194304;
-    private const MAX_DEPTH = 32;
-    private const MAX_LIST_ITEMS = 200;
-    private const MAX_MAP_KEYS = 100;
-    private const MAX_STRING_BYTES = 2097152;
-    private const MAX_SAFE_INTEGER = 9007199254740991;
-
     public function encodePacket(mixed $payload): string
     {
-        $packet = self::MAGIC . \chr(self::VERSION) . $this->encodeValue($payload, 0);
-        if (\strlen($packet) > self::MAX_PACKET_BYTES) {
-            throw new \InvalidArgumentException('Weline binary packet exceeds 64KB limit.');
-        }
+        $writer = new BufferWriter(Limits::PACKET_BYTES);
+        $writer->append(self::MAGIC);
+        $writer->append(\chr(self::VERSION));
+        $this->encodeValueInto($payload, 0, $writer);
 
-        return $packet;
+        return $writer->finish();
     }
 
     public function decodePacket(string $packet): mixed
     {
         $length = \strlen($packet);
-        if ($length > self::MAX_PACKET_BYTES) {
-            throw new \InvalidArgumentException('Weline binary packet exceeds 64KB limit.');
+        if ($length > Limits::PACKET_BYTES) {
+            throw new \InvalidArgumentException(Limits::PACKET_ERROR);
         }
         if ($length < 5 || \substr($packet, 0, 4) !== self::MAGIC) {
             throw new \InvalidArgumentException('Invalid Weline binary packet magic.');
@@ -60,91 +53,104 @@ final class WelineBinaryCodec
         return $value;
     }
 
-    private function encodeValue(mixed $value, int $depth): string
+    private function encodeValueInto(mixed $value, int $depth, BufferWriter $writer): void
     {
-        if ($depth > self::MAX_DEPTH) {
-            throw new \InvalidArgumentException('Weline binary value exceeds max depth.');
+        if ($depth > Limits::VALUE_DEPTH) {
+            throw new \InvalidArgumentException(Limits::VALUE_DEPTH_ERROR);
         }
 
         if ($value === null) {
-            return \chr(self::TYPE_NULL);
+            $writer->append(\chr(self::TYPE_NULL));
+            return;
         }
         if ($value === false) {
-            return \chr(self::TYPE_FALSE);
+            $writer->append(\chr(self::TYPE_FALSE));
+            return;
         }
         if ($value === true) {
-            return \chr(self::TYPE_TRUE);
+            $writer->append(\chr(self::TYPE_TRUE));
+            return;
         }
         if (\is_int($value)) {
-            if ($value < -self::MAX_SAFE_INTEGER || $value > self::MAX_SAFE_INTEGER) {
+            if ($value < -Limits::SAFE_INTEGER || $value > Limits::SAFE_INTEGER) {
                 throw new \InvalidArgumentException('Integer is outside JavaScript safe integer range.');
             }
-            return \chr(self::TYPE_INT) . ($value < 0 ? "\x01" : "\x00") . $this->encodeVarUint(\abs($value));
+            $writer->append(\chr(self::TYPE_INT));
+            $writer->append($value < 0 ? "\x01" : "\x00");
+            $writer->append($this->encodeVarUint(\abs($value)));
+            return;
         }
         if (\is_float($value)) {
             if (!\is_finite($value)) {
                 throw new \InvalidArgumentException('Non-finite float is not allowed.');
             }
-            return \chr(self::TYPE_FLOAT64) . \pack('E', $value);
+            $writer->append(\chr(self::TYPE_FLOAT64));
+            $writer->append(\pack('E', $value));
+            return;
         }
         if (\is_string($value)) {
-            if (\strlen($value) > self::MAX_STRING_BYTES) {
-                throw new \InvalidArgumentException('String exceeds 16KB limit.');
+            if (\strlen($value) > Limits::STRING_BYTES) {
+                throw new \InvalidArgumentException(Limits::STRING_BYTES_ERROR);
             }
             if ($value !== '' && \preg_match('//u', $value) !== 1) {
                 throw new \InvalidArgumentException('Invalid UTF-8 string.');
             }
-            return \chr(self::TYPE_STRING) . $this->encodeVarUint(\strlen($value)) . $value;
+            $writer->append(\chr(self::TYPE_STRING));
+            $writer->append($this->encodeVarUint(\strlen($value)));
+            $writer->append($value);
+            return;
         }
         if (\is_object($value)) {
             $value = \get_object_vars($value);
         }
         if (\is_array($value)) {
-            return \array_is_list($value)
-                ? $this->encodeList($value, $depth)
-                : $this->encodeMap($value, $depth);
+            if (\array_is_list($value)) {
+                $this->encodeListInto($value, $depth, $writer);
+            } else {
+                $this->encodeMapInto($value, $depth, $writer);
+            }
+            return;
         }
 
         throw new \InvalidArgumentException('Unsupported Weline binary value type: ' . \gettype($value));
     }
 
-    private function encodeList(array $items, int $depth): string
+    private function encodeListInto(array $items, int $depth, BufferWriter $writer): void
     {
-        if (\count($items) > self::MAX_LIST_ITEMS) {
-            throw new \InvalidArgumentException('List exceeds 200 item limit.');
+        if (\count($items) > Limits::LIST_ITEMS) {
+            throw new \InvalidArgumentException(Limits::LIST_ITEMS_ERROR);
         }
 
-        $encoded = \chr(self::TYPE_LIST) . $this->encodeVarUint(\count($items));
+        $writer->append(\chr(self::TYPE_LIST));
+        $writer->append($this->encodeVarUint(\count($items)));
         foreach ($items as $item) {
-            $encoded .= $this->encodeValue($item, $depth + 1);
+            $this->encodeValueInto($item, $depth + 1, $writer);
         }
-
-        return $encoded;
     }
 
-    private function encodeMap(array $map, int $depth): string
+    private function encodeMapInto(array $map, int $depth, BufferWriter $writer): void
     {
-        if (\count($map) > self::MAX_MAP_KEYS) {
-            throw new \InvalidArgumentException('Map exceeds 100 key limit.');
+        if (\count($map) > Limits::MAP_KEYS) {
+            throw new \InvalidArgumentException(Limits::MAP_KEYS_ERROR);
         }
 
-        $encoded = \chr(self::TYPE_MAP) . $this->encodeVarUint(\count($map));
+        $writer->append(\chr(self::TYPE_MAP));
+        $writer->append($this->encodeVarUint(\count($map)));
         foreach ($map as $key => $value) {
             $key = (string)$key;
-            if (\strlen($key) > self::MAX_STRING_BYTES || \preg_match('//u', $key) !== 1) {
+            if (\strlen($key) > Limits::STRING_BYTES || \preg_match('//u', $key) !== 1) {
                 throw new \InvalidArgumentException('Invalid Weline binary map key.');
             }
-            $encoded .= $this->encodeVarUint(\strlen($key)) . $key;
-            $encoded .= $this->encodeValue($value, $depth + 1);
+            $writer->append($this->encodeVarUint(\strlen($key)));
+            $writer->append($key);
+            $this->encodeValueInto($value, $depth + 1, $writer);
         }
-
-        return $encoded;
     }
 
     private function decodeValue(string $packet, int &$offset, int $depth): mixed
     {
-        if ($depth > self::MAX_DEPTH) {
-            throw new \InvalidArgumentException('Weline binary value exceeds max depth.');
+        if ($depth > Limits::VALUE_DEPTH) {
+            throw new \InvalidArgumentException(Limits::VALUE_DEPTH_ERROR);
         }
         if ($offset >= \strlen($packet)) {
             throw new \InvalidArgumentException('Unexpected end of Weline binary packet.');
@@ -173,7 +179,7 @@ final class WelineBinaryCodec
         }
 
         $magnitude = $this->decodeVarUint($packet, $offset);
-        if ($magnitude > self::MAX_SAFE_INTEGER) {
+        if ($magnitude > Limits::SAFE_INTEGER) {
             throw new \InvalidArgumentException('Integer is outside JavaScript safe integer range.');
         }
 
@@ -194,8 +200,8 @@ final class WelineBinaryCodec
     private function decodeString(string $packet, int &$offset): string
     {
         $length = $this->decodeVarUint($packet, $offset);
-        if ($length > self::MAX_STRING_BYTES) {
-            throw new \InvalidArgumentException('String exceeds 16KB limit.');
+        if ($length > Limits::STRING_BYTES) {
+            throw new \InvalidArgumentException(Limits::STRING_BYTES_ERROR);
         }
 
         $value = $this->readBytes($packet, $offset, $length);
@@ -209,8 +215,8 @@ final class WelineBinaryCodec
     private function decodeBytes(string $packet, int &$offset): string
     {
         $length = $this->decodeVarUint($packet, $offset);
-        if ($length > self::MAX_STRING_BYTES) {
-            throw new \InvalidArgumentException('Byte string exceeds 16KB limit.');
+        if ($length > Limits::STRING_BYTES) {
+            throw new \InvalidArgumentException(Limits::BYTE_STRING_BYTES_ERROR);
         }
 
         return $this->readBytes($packet, $offset, $length);
@@ -219,8 +225,8 @@ final class WelineBinaryCodec
     private function decodeList(string $packet, int &$offset, int $depth): array
     {
         $count = $this->decodeVarUint($packet, $offset);
-        if ($count > self::MAX_LIST_ITEMS) {
-            throw new \InvalidArgumentException('List exceeds 200 item limit.');
+        if ($count > Limits::LIST_ITEMS) {
+            throw new \InvalidArgumentException(Limits::LIST_ITEMS_ERROR);
         }
 
         $items = [];
@@ -234,15 +240,15 @@ final class WelineBinaryCodec
     private function decodeMap(string $packet, int &$offset, int $depth): array
     {
         $count = $this->decodeVarUint($packet, $offset);
-        if ($count > self::MAX_MAP_KEYS) {
-            throw new \InvalidArgumentException('Map exceeds 100 key limit.');
+        if ($count > Limits::MAP_KEYS) {
+            throw new \InvalidArgumentException(Limits::MAP_KEYS_ERROR);
         }
 
         $map = [];
         for ($i = 0; $i < $count; $i++) {
             $keyLength = $this->decodeVarUint($packet, $offset);
-            if ($keyLength > self::MAX_STRING_BYTES) {
-                throw new \InvalidArgumentException('Map key exceeds 16KB limit.');
+            if ($keyLength > Limits::STRING_BYTES) {
+                throw new \InvalidArgumentException(Limits::MAP_KEY_BYTES_ERROR);
             }
             $key = $this->readBytes($packet, $offset, $keyLength);
             if ($key === '' || \preg_match('//u', $key) !== 1) {

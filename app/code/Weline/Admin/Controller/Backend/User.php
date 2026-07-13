@@ -12,19 +12,19 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Controller\Backend;
 
-use Weline\Acl\Model\Role;
-use Weline\Backend\Model\Backend\Acl\UserRole;
-use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\BackendUserData;
+use Weline\Acl\Api\Role\RoleCatalogInterface;
+use Weline\Backend\Api\User\BackendUserAdministrationInterface;
+use Weline\Backend\Api\User\BackendUserRecord;
+use Weline\Backend\Api\UserData\BackendCurrentUserDataInterface;
 use Weline\Framework\Manager\MessageManager;
-use Weline\Framework\Manager\ObjectManager;
 
 #[\Weline\Framework\Acl\Acl('Weline_Admin::system_user_listing', '用户管理', '管理后台用户', '')]
 class User extends \Weline\Framework\App\Controller\BackendController
 {
     function __construct(
-        private \Weline\Backend\Model\BackendUser $backendUser,
-        private BackendUserData                   $backendUserData
+        private BackendUserAdministrationInterface $backendUser,
+        private BackendCurrentUserDataInterface $backendUserData,
+        private RoleCatalogInterface $roleCatalog,
     )
     {
     }
@@ -32,14 +32,11 @@ class User extends \Weline\Framework\App\Controller\BackendController
     #[\Weline\Framework\Acl\Acl('Weline_Admin::system_user_list', '管理员列表', '', '查看管理后台用户列表')]
     function listing()
     {
-        if ($search = $this->request->getGet('search')) {
-            $this->backendUser->concat_like('username,email',"%$search%");
-        }
-        $users = $this->backendUser->order()
-            ->pagination()
-            ->select()
-            ->fetch();
-        $this->assign('users', $users->getItems());
+        $users = $this->backendUser->search((string)($this->request->getGet('search') ?? ''));
+        $this->assign('users', array_map(
+            static fn(BackendUserRecord $user): array => $user->toArray(),
+            $users->getUsers(),
+        ));
         $this->assign('pagination', $users->getPagination());
         return $this->fetch();
     }
@@ -61,13 +58,13 @@ class User extends \Weline\Framework\App\Controller\BackendController
             $this->redirect('*/backend/user/listing');
             return;
         }
-        $user = clone $this->backendUser->clear()->load((int)$id);
-        if (!$user->getId()) {
+        $user = $this->backendUser->find((int)$id);
+        if ($user === null) {
             MessageManager::warning(__('用户不存在'));
             $this->redirect('*/backend/user/listing');
             return;
         }
-        $this->assign('w_edit_user', $user);
+        $this->assign('w_edit_user', $user->toArray());
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/user/edit', $this->request->getGet()));
         return $this->fetch('form');
     }
@@ -77,18 +74,15 @@ class User extends \Weline\Framework\App\Controller\BackendController
     {
         try {
             $password = trim($this->request->getPost('password') ?? '');
-            $this->backendUser->clearData()
-                ->setId($this->request->getPost('user_id'))
-                ->setUsername($this->request->getPost('username'))
-                ->setEmail($this->request->getPost('email'));
-            // 只有在提供了密码时才更新密码
-            if (!empty($password)) {
-                $this->backendUser->setPassword($password);
-            }
-            $this->backendUser->save(true);
+            $user = $this->backendUser->save(
+                (int)$this->request->getPost('user_id'),
+                (string)$this->request->getPost('username'),
+                (string)$this->request->getPost('email'),
+                $password !== '' ? $password : null,
+            );
             MessageManager::success(__('修改成功！'));
-            $this->backendUserData->deleteScope('w_user');
-            $this->redirect('*/backend/user/edit', ['id' => $this->backendUser->getId()]);
+            $this->backendUserData->clearScope('w_user');
+            $this->redirect('*/backend/user/edit', ['id' => $user->getId()]);
         } catch (\Exception $exception) {
             MessageManager::warning(__('修改失败！'));
             if (DEV) MessageManager::exception($exception);
@@ -100,13 +94,15 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function postAdd()
     {
         try {
-            $this->backendUser->clearData()->setUsername($this->request->getPost('username'))
-                ->setEmail($this->request->getPost('email'))
-                ->setPassword(trim($this->request->getPost('password')))
-                ->save(true);
+            $user = $this->backendUser->save(
+                null,
+                (string)$this->request->getPost('username'),
+                (string)$this->request->getPost('email'),
+                trim((string)$this->request->getPost('password')),
+            );
             MessageManager::success(__('添加成功！'));
-            $this->backendUserData->deleteScope('w_user');
-            $this->redirect('*/backend/user/edit', ['id' => $this->backendUser->getId()]);
+            $this->backendUserData->clearScope('w_user');
+            $this->redirect('*/backend/user/edit', ['id' => $user->getId()]);
         } catch (\Exception $exception) {
             MessageManager::warning(__('添加失败！'));
             if (DEV) MessageManager::exception($exception);
@@ -130,14 +126,11 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 throw new \Exception(__('超级管理员不能被删除'));
             }
             
-            $this->backendUser->clearData()->load($id);
-            if (!$this->backendUser->getId()) {
+            if ($this->backendUser->find((int)$id) === null) {
                 throw new \Exception(__('用户不存在'));
             }
 
-            $this->backendUser->setIsDeleted()
-                ->setIsEnabled(false)
-                ->save();
+            $this->backendUser->setState((int)$id, false, true);
             
             // 如果是AJAX请求，返回JSON
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
@@ -170,10 +163,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function postActive()
     {
         try {
-            $this->backendUser->clearData()->load($this->request->getPost('id'))
-                ->setIsDeleted(false)
-                ->setIsEnabled(true)
-                ->save();
+            $this->backendUser->setState((int)$this->request->getPost('id'), true, false);
             MessageManager::success(__('激活成功！'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
@@ -187,9 +177,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function postInActive()
     {
         try {
-            $this->backendUser->clearData()->load($this->request->getPost('id'))
-                ->setIsEnabled(false)
-                ->save();
+            $this->backendUser->setState((int)$this->request->getPost('id'), false);
             MessageManager::success(__('禁用成功！'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
@@ -235,11 +223,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->backendUser->clearData();
-            
             if ($isEdit) {
-                $this->backendUser->load($userIdInt);
-                if (!$this->backendUser->getId()) {
+                if ($this->backendUser->find($userIdInt) === null) {
                     return $this->fetchJson([
                         'success' => false,
                         'msg' => __('用户不存在')
@@ -254,7 +239,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 }
             }
 
-            $existingUsername = $this->findBackendUserBy(BackendUser::schema_fields_username, $username, $userIdInt);
+            $existingUsername = $this->findBackendUserBy(BackendUserAdministrationInterface::FIELD_USERNAME, $username, $userIdInt);
             if ($existingUsername->getId()) {
                 return $this->fetchJson([
                     'success' => false,
@@ -264,7 +249,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
 
-            $existingEmail = $this->findBackendUserBy(BackendUser::schema_fields_email, $email, $userIdInt);
+            $existingEmail = $this->findBackendUserBy(BackendUserAdministrationInterface::FIELD_EMAIL, $email, $userIdInt);
             if ($existingEmail->getId()) {
                 return $this->fetchJson([
                     'success' => false,
@@ -274,13 +259,12 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->backendUser->setUsername($username)->setEmail($email);
-            
-            if (!empty($password)) {
-                $this->backendUser->setPassword($password);
-            }
-            
-            $this->backendUser->save(true);
+            $savedUser = $this->backendUser->save(
+                $userIdInt,
+                $username,
+                $email,
+                $password !== '' ? $password : null,
+            );
             
             $actionText = $isEdit ? __('修改') : __('新增');
             
@@ -288,7 +272,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 'success' => true,
                 'msg' => __('%{1}管理员成功', [$actionText]),
                 'data' => [
-                    'user_id' => $this->backendUser->getId()
+                    'user_id' => $savedUser->getId()
                 ]
             ]);
         } catch (\Exception $e) {
@@ -303,18 +287,13 @@ class User extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    private function findBackendUserBy(string $field, string $value, ?int $excludeUserId = null): BackendUser
+    private function findBackendUserBy(string $field, string $value, ?int $excludeUserId = null): BackendUserRecord
     {
-        /** @var BackendUser $backendUser */
-        $backendUser = ObjectManager::getInstance(BackendUser::class, [], false);
-        $backendUser->where($field, $value);
-
-        if (!empty($excludeUserId)) {
-            $backendUser->where(BackendUser::schema_fields_ID, $excludeUserId, '!=');
-        }
-
-        $backendUser->find()->fetch();
-        return $backendUser;
+        $backendUser = match ($field) {
+            BackendUserAdministrationInterface::FIELD_EMAIL => $this->backendUser->findByEmail($value, $excludeUserId),
+            default => $this->backendUser->findByUsername($value, $excludeUserId),
+        };
+        return $backendUser ?? BackendUserRecord::empty();
     }
 
     /**
@@ -341,16 +320,14 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->backendUser->clearData()->load((int)$id);
-            
-            if (!$this->backendUser->getId()) {
+            if ($this->backendUser->find((int)$id) === null) {
                 return $this->fetchJson([
                     'success' => false,
                     'msg' => __('用户不存在')
                 ]);
             }
             
-            $this->backendUser->setIsDeleted()->setIsEnabled(false)->save();
+            $this->backendUser->setState((int)$id, false, true);
             
             return $this->fetchJson([
                 'success' => true,
@@ -400,9 +377,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->backendUser->clearData()->load((int)$id);
-            
-            if (!$this->backendUser->getId()) {
+            if ($this->backendUser->find((int)$id) === null) {
                 return $this->fetchJson([
                     'success' => false,
                     'msg' => __('用户不存在')
@@ -410,14 +385,12 @@ class User extends \Weline\Framework\App\Controller\BackendController
             }
             
             if ($action === 'enable') {
-                $this->backendUser->setIsDeleted(false)->setIsEnabled(true);
+                $this->backendUser->setState((int)$id, true, false);
                 $msg = __('用户已激活');
             } else {
-                $this->backendUser->setIsEnabled(false);
+                $this->backendUser->setState((int)$id, false);
                 $msg = __('用户已禁用');
             }
-            
-            $this->backendUser->save();
             
             return $this->fetchJson([
                 'success' => true,
@@ -438,22 +411,22 @@ class User extends \Weline\Framework\App\Controller\BackendController
     #[\Weline\Framework\Acl\Acl('Weline_Admin::system_assign_role', '管理员角色归配', '', '将管理员分配到角色')]
     function getAssignRole()
     {
-        // 使用非共享实例，避免 WLS 环境下状态污染
-        /** @var Role $role */
-        $role = ObjectManager::getInstance(Role::class, [], false);
-        /** @var BackendUser $backendUser */
-        $backendUser = ObjectManager::getInstance(BackendUser::class, [], false);
-        $users = $backendUser
-            ->joinModel(UserRole::class, 'ur', 'main_table.user_id=ur.user_id', 'left')
-            ->joinModel(Role::class, 'r', 'ur.role_id=r.role_id', 'left')
-            ->order('main_table.create_time')
-            ->pagination()
-            ->select()
-            ->fetch();
-        $this->assign('current_user', $this->session->getLoginUser($backendUser::class));
-        $this->assign('users', $users->getItems());
+        $users = $this->backendUser->listWithRoles();
+        $currentUser = $this->backendUser->find((int)$this->session->getLoginUserID());
+        $this->assign('current_user', ($currentUser ?? BackendUserRecord::empty())->toArray());
+        $this->assign('users', array_map(
+            static fn(BackendUserRecord $user): array => $user->toArray(),
+            $users->getUsers(),
+        ));
         $this->assign('pagination', $users->getPagination());
-        $this->assign('roles', $role->select()->fetch()->getItems());
+        $this->assign('roles', array_map(
+            static fn(\Weline\Acl\Api\Role\RoleRecord $role): array => [
+                'role_id' => $role->getId(),
+                'role_name' => $role->getName(),
+                'role_description' => $role->getDescription(),
+            ],
+            $this->roleCatalog->list(),
+        ));
         return $this->fetch('assign_role');
     }
 
@@ -464,24 +437,13 @@ class User extends \Weline\Framework\App\Controller\BackendController
             MessageManager::warning(__('不能给自己分配权限！'));
             $this->redirect('*/backend/user/listing');
         }
-        /**@var UserRole $userRole */
-        $userRole = ObjectManager::getInstance(UserRole::class);
         $userId = (int) ($this->request->getPost('user_id') ?? 0);
         try {
-            $existing = $userRole->where(UserRole::schema_fields_USER_ID, $userId)->select()->fetch();
-            $items = $existing->getItems();
-            if (count($items) === 1 && ($roleId = $this->request->getPost('role_id')) !== '' && $roleId !== null) {
-                $row = reset($items);
-                $userRole->clearData()->load($row['id'] ?? $row[$userRole->getPrimaryKey()] ?? 0)
-                    ->setData($this->request->getPost())->save(true);
-            } elseif (count($items) !== 1) {
-                $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete()->fetch();
-                if ($this->request->getPost('role_id') !== '' && $this->request->getPost('role_id') !== null) {
-                    $userRole->clearData()->setData($this->request->getPost())->save(true);
-                }
-            } else {
-                $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete()->fetch();
-            }
+            $roleId = $this->request->getPost('role_id');
+            $this->backendUser->assignRole(
+                $userId,
+                $roleId !== '' && $roleId !== null ? (int)$roleId : null,
+            );
             MessageManager::success(__('角色分配成功！'));
         } catch (\Exception $exception) {
             MessageManager::warning(__('角色分配失败！'));
@@ -516,32 +478,17 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            /** @var UserRole $userRole */
-            $userRole = ObjectManager::getInstance(UserRole::class, [], false);
             $userIdInt = (int) $userId;
 
             if (empty($roleId)) {
-                $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->delete()->fetch();
+                $this->backendUser->assignRole($userIdInt, null);
                 return $this->fetchJson([
                     'success' => true,
                     'msg' => __('已取消角色分配')
                 ]);
             }
 
-            $existing = $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->select()->fetch();
-            $items = $existing->getItems();
-            if (count($items) === 1) {
-                $row = reset($items);
-                $pk = $userRole->getPrimaryKey();
-                $userRole->clearData()->load($row[$pk] ?? $row['id'] ?? 0)
-                    ->setRoleId((int) $roleId)->save(true);
-            } else {
-                $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->delete()->fetch();
-                $userRole->clearData()->setData([
-                    'user_id' => $userIdInt,
-                    'role_id' => (int) $roleId
-                ])->save(true);
-            }
+            $this->backendUser->assignRole($userIdInt, (int)$roleId);
             
             return $this->fetchJson([
                 'success' => true,

@@ -18,6 +18,8 @@
 - 模块代码：`Weline_ElFinderFileManager`
 - 目录：`app/code/Weline/ElFinderFileManager`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 文件管理器、Block、图片与 MIME 能力只通过 `Weline\FileManager\Api\*` 扩展，不引用 FileManager 的内部 `Helper/Block/Service` 命名空间。
+- Backend 是菜单 schema 与 ACL 父资源的必需提供方；FileManager 是文件能力公共契约的必需提供方。
 
 ## 代码面概览
 

@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Service\Head;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Api\View\ComponentMetaReaderInterface;
+
 class PageHeadContextResolver
 {
     public function __construct(
-        private readonly ?HeadProviderRegistry $providerRegistry = null
+        private readonly ?HeadProviderRegistry $providerRegistry = null,
+        private ?ComponentMetaReaderInterface $componentMetaReader = null,
     ) {
     }
 
@@ -208,19 +212,19 @@ class PageHeadContextResolver
             return '';
         }
 
-        if (!class_exists(\Weline\Theme\Helper\LayoutPathResolver::class)
-            || !class_exists(\Weline\Theme\Helper\ComponentMetaParser::class)) {
+        if (!class_exists(\Weline\Theme\Api\View\LayoutPathResolver::class)
+            || !interface_exists(ComponentMetaReaderInterface::class)) {
             return '';
         }
 
         try {
-            $layoutPath = \Weline\Theme\Helper\LayoutPathResolver::buildLayoutPath('', $area, $layoutType, $layoutOption);
-            $resolvedLayoutPath = \Weline\Theme\Helper\LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
+            $layoutPath = \Weline\Theme\Api\View\LayoutPathResolver::buildLayoutPath('', $area, $layoutType, $layoutOption);
+            $resolvedLayoutPath = \Weline\Theme\Api\View\LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
             if (!$resolvedLayoutPath) {
                 return '';
             }
 
-            $layoutFilePath = \Weline\Theme\Helper\LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
+            $layoutFilePath = \Weline\Theme\Api\View\LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
             $layoutName = $this->layoutNameFromFile($layoutFilePath);
             if ($layoutName !== '') {
                 return $layoutName;
@@ -228,7 +232,7 @@ class PageHeadContextResolver
 
             if (strpos($resolvedLayoutPath, '::') !== false) {
                 [, $relativePath] = explode('::', $resolvedLayoutPath, 2);
-                $defaultPath = \Weline\Theme\Helper\LayoutPathResolver::getDefaultLayoutPath($relativePath, $area);
+                $defaultPath = \Weline\Theme\Api\View\LayoutPathResolver::getDefaultLayoutPath($relativePath, $area);
                 return $this->layoutNameFromFile($defaultPath);
             }
         } catch (\Throwable) {
@@ -244,7 +248,8 @@ class PageHeadContextResolver
         }
 
         try {
-            $parsed = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
+            $this->componentMetaReader ??= ObjectManager::getInstance(ComponentMetaReaderInterface::class);
+            $parsed = $this->componentMetaReader->parse($layoutFilePath);
         } catch (\Throwable) {
             return '';
         }

@@ -9,11 +9,11 @@ declare(strict_types=1);
  * 日期：2022/12/21 22:05:23
  */
 namespace Weline\I18n\Model;
+use Weline\I18n\Api\Localization\LanguageCodeConverter;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
-use Weline\TranslationService\Helper\LanguageCodeConverter;
 #[Table(comment: '地区')]
 #[Index(name: 'idx_code', columns: ['country_code'], comment: '国家码索引')]
 #[Index(name: 'idx_short_code', columns: ['short_code'], comment: '简码索引')]

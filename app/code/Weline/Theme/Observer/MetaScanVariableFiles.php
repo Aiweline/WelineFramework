@@ -14,7 +14,10 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Meta\Model\Meta;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Meta\Api\Data\MetadataIdentity;
+use Weline\Meta\Api\Data\MetadataWrite;
+use Weline\Meta\Api\MetadataRepositoryInterface;
 use Weline\Theme\Helper\CssVariableParser;
 
 /**
@@ -136,6 +139,7 @@ class MetaScanVariableFiles implements ObserverInterface
      */
     private function saveVariablesToMeta(array $variables, string $filePath, string $area, string $namespace): void
     {
+        $writes = [];
         foreach ($variables as $variable) {
             $variableName = $variable['variable_name']; // 包含--前缀
             $variableNameWithoutPrefix = substr($variableName, 2); // 移除--前缀
@@ -174,61 +178,31 @@ class MetaScanVariableFiles implements ObserverInterface
                 ]
             ];
             
-            // 检查是否已存在（使用完整唯一约束字段：namespace, meta_type, meta_identify）
-            /** @var Meta $metaModel */
-            $metaModel = ObjectManager::getInstance(Meta::class);
-            $existing = $metaModel->clearQuery()
-                ->where(Meta::schema_fields_NAMESPACE, $namespace)
-                ->where(Meta::schema_fields_META_TYPE, 'variables')
-                ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
-                ->find()
-                ->fetch();
-            
-            try {
-                if ($existing && $existing->getId()) {
-                    // 更新现有记录（不改变唯一约束字段）
-                    $existing->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-                    $existing->setData(Meta::schema_fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-                    $existing->setData(Meta::schema_fields_AREA, $area);
-                    $existing->setData(Meta::schema_fields_CATEGORY, $variableFile);
-                    $existing->setData(Meta::schema_fields_FILE_PATH, $this->getRelativePath($filePath));
-                    $existing->setData(Meta::schema_fields_FILE_FULL_PATH, $filePath);
-                    $existing->save();
-                } else {
-                    // 创建新记录
-                    $metaModel->clearQuery();
-                    $metaModel->setData(Meta::schema_fields_NAMESPACE, $namespace);
-                    $metaModel->setData(Meta::schema_fields_META_TYPE, 'variables');
-                    $metaModel->setData(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
-                    $metaModel->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-                    $metaModel->setData(Meta::schema_fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-                    $metaModel->setData(Meta::schema_fields_AREA, $area);
-                    $metaModel->setData(Meta::schema_fields_CATEGORY, $variableFile);
-                    $metaModel->setData(Meta::schema_fields_FILE_PATH, $this->getRelativePath($filePath));
-                    $metaModel->setData(Meta::schema_fields_FILE_FULL_PATH, $filePath);
-                    $metaModel->save();
-                }
-            } catch (\Exception $e) {
-                // 如果保存失败（可能是唯一约束冲突），尝试使用 UPDATE 语句直接更新
-                if (strpos($e->getMessage(), 'UNIQUE constraint') !== false || strpos($e->getMessage(), 'Integrity constraint violation') !== false) {
-                    // 尝试直接更新（使用完整唯一约束条件）
-                    $metaModel->clearQuery()
-                        ->where(Meta::schema_fields_NAMESPACE, $namespace)
-                        ->where(Meta::schema_fields_META_TYPE, 'variables')
-                        ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
-                        ->update([
-                            Meta::schema_fields_META_DATA => json_encode($metaDataArray, JSON_UNESCAPED_UNICODE),
-                            Meta::schema_fields_SETTING => json_encode($setting, JSON_UNESCAPED_UNICODE),
-                            Meta::schema_fields_AREA => $area,
-                            Meta::schema_fields_CATEGORY => $variableFile,
-                            Meta::schema_fields_FILE_PATH => $this->getRelativePath($filePath),
-                            Meta::schema_fields_FILE_FULL_PATH => $filePath
-                        ])->fetch();
-                } else {
-                    throw $e;
-                }
-            }
+            $writes[] = new MetadataWrite(
+                identity: new MetadataIdentity($namespace, 'variables', $metaIdentify),
+                metaData: $metaDataArray,
+                setting: $setting,
+                filePath: $this->getRelativePath($filePath),
+                fileFullPath: $filePath,
+                area: $area,
+                category: $variableFile,
+            );
         }
+
+        if ($writes !== []) {
+            $this->metadataRepository()->upsertBatch($writes);
+        }
+    }
+
+    private function metadataRepository(): MetadataRepositoryInterface
+    {
+        $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetadataRepositoryInterface::class);
+        if (!$repository instanceof MetadataRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta metadata repository provider is unavailable.');
+        }
+
+        return $repository;
     }
     
     /**
@@ -266,4 +240,3 @@ class MetaScanVariableFiles implements ObserverInterface
         return $filePath;
     }
 }
-

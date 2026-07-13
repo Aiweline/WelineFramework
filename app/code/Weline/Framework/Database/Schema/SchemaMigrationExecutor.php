@@ -47,9 +47,14 @@ final class SchemaMigrationExecutor
      *
      * @param list<SchemaDiffOp> $ops
      */
-    public function execute(ConnectorInterface $connector, array $ops): void
+    public function execute(ConnectorInterface $connector, array $ops, array $context = []): void
     {
         $connectionName = self::CONNECTION_NAME_DEFAULT;
+        $moduleVersions = is_array($context['module_versions'] ?? null) ? $context['module_versions'] : [];
+        $tableFingerprints = is_array($context['table_fingerprints'] ?? null) ? $context['table_fingerprints'] : [];
+        $operationId = trim((string)($context['operation_id'] ?? ''));
+        $batchIds = [];
+        $sequences = [];
 
         usort($ops, function (SchemaDiffOp $a, SchemaDiffOp $b): int {
             $cmp = strcmp($a->tableName, $b->tableName);
@@ -76,6 +81,19 @@ final class SchemaMigrationExecutor
             }
 
             $moduleName = $this->moduleNameFromClass($op->modelClass);
+            if (!isset($batchIds[$moduleName])) {
+                $batchIds[$moduleName] = sprintf(
+                    'schema-%s-%s-%s',
+                    preg_replace('/[^A-Za-z0-9_.-]/', '-', $moduleName),
+                    preg_replace('/[^A-Za-z0-9_.-]/', '-', (string)($moduleVersions[$moduleName] ?? 'legacy')),
+                    bin2hex(random_bytes(6))
+                );
+                $sequences[$moduleName] = 0;
+            }
+            $sequences[$moduleName]++;
+            $fingerprints = is_array($tableFingerprints[$op->tableName] ?? null)
+                ? $tableFingerprints[$op->tableName]
+                : [];
             try {
                 $migrationId = $this->migrationModel->recordSchemaDdl(
                     $moduleName,
@@ -84,6 +102,14 @@ final class SchemaMigrationExecutor
                     $forwardSql,
                     $rollbackSql,
                     $op->modelClass,
+                    (string)($moduleVersions[$moduleName] ?? ''),
+                    $batchIds[$moduleName],
+                    $sequences[$moduleName],
+                    $op->kind,
+                    (string)($fingerprints['before'] ?? ''),
+                    (string)($fingerprints['after'] ?? ''),
+                    $operationId,
+                    $this->normalizeOperationPayload($op->payload),
                 );
             } catch (\Throwable $e) {
                 throw $e;
@@ -132,7 +158,88 @@ final class SchemaMigrationExecutor
             }
 
             $this->dispatchAfter($op);
+            if ($migrationId > 0 && $op->kind === SchemaDiffOp::KIND_ADD_COLUMN && $op->payload instanceof ColumnDefinition) {
+                $this->restorePreviouslyRolledBackColumnData(
+                    $moduleName,
+                    $op->tableName,
+                    $op->payload,
+                    $migrationId,
+                    $connector,
+                    $op->modelClass,
+                );
+            }
             $this->migrationModel->updateStatus(Migration::STATUS_INSTALLED);
+        }
+    }
+
+    private function normalizeOperationPayload(mixed $payload): array
+    {
+        if (is_object($payload)) {
+            $payload = get_object_vars($payload);
+        }
+        if (!is_array($payload)) {
+            return ['value' => $payload];
+        }
+        foreach ($payload as $key => $value) {
+            if (is_object($value)) {
+                $payload[$key] = get_object_vars($value);
+            } elseif (is_array($value)) {
+                $payload[$key] = $this->normalizeOperationPayload($value);
+            }
+        }
+        return $payload;
+    }
+
+    private function restorePreviouslyRolledBackColumnData(
+        string $moduleName,
+        string $tableName,
+        ColumnDefinition $column,
+        int $currentMigrationId,
+        ConnectorInterface $connector,
+        ?string $modelClass,
+    ): void {
+        if ($this->backupService === null) {
+            return;
+        }
+
+        $items = $this->migrationModel->reset()
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, 'schema_diff')
+            ->where(Migration::schema_fields_SCHEMA_TABLE_NAME, $tableName)
+            ->where(Migration::schema_fields_OPERATION_KIND, SchemaDiffOp::KIND_ADD_COLUMN)
+            ->where(Migration::schema_fields_STATUS, Migration::STATUS_ROLLED_BACK)
+            ->order(Migration::schema_fields_ROLLBACK_AT, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        foreach ($items as $item) {
+            $migrationId = (int)$item->getId();
+            if ($migrationId <= 0 || $migrationId === $currentMigrationId) {
+                continue;
+            }
+            $payload = json_decode((string)$item->getData(Migration::schema_fields_OPERATION_PAYLOAD), true);
+            if (!is_array($payload) || (string)($payload['name'] ?? '') !== $column->name) {
+                continue;
+            }
+            $result = $this->backupService->restoreColumnDataConflictSafe(
+                $tableName,
+                $column->name,
+                $migrationId,
+                $connector,
+                $modelClass,
+                $column->default,
+            );
+            if (($result['conflicts'] ?? 0) > 0) {
+                $this->eventsManager->dispatch('Weline_Framework_Schema::column_restore_conflict', new DataObject([
+                    'module_name' => $moduleName,
+                    'table_name' => $tableName,
+                    'column_name' => $column->name,
+                    'migration_id' => $migrationId,
+                    'conflicts' => $result['conflicts'],
+                ]));
+            }
+            break;
         }
     }
 

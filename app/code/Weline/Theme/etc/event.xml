@@ -151,6 +151,15 @@
                   sort="100"/>
     </event>
 
+    <!-- Theme 拥有该集成实现；Seo 只发布上下文事件，不反向引用 Theme 内部类。 -->
+    <event name="Weline_Seo::integration::head_context_resolve">
+        <observer name="Weline_Theme::seo_faq_head_context_resolve"
+                  instance="Weline\Theme\Observer\SeoFaqHeadContextResolve"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
+
     <event name="Weline_Framework_Template::compile_decision">
         <observer name="Weline_Theme::layout_critical_css_compile_decision"
                   instance="Weline\Theme\Observer\LayoutCriticalCssCompileDecision"

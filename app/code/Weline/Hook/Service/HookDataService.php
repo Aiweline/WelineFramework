@@ -98,7 +98,7 @@ class HookDataService
         // 从注册表获取所有 Hook（包含规约信息）
         $registryHooks = $this->getHookRegistry()->getHooks();
         
-        // 获取所有已注册的 Hook（从 HookInterface 常量）
+        // 获取所有已进入编译注册表的 Hook。
         $registeredHooks = $this->getHookRegistry()->getAllRegisteredHooks();
         
         // 扫描所有模块的 Hook 文件
@@ -126,7 +126,7 @@ class HookDataService
                 }
             }
             
-            // 检查是否在 HookInterface 中注册
+            // 检查是否在编译注册表中。
             $isRegistered = in_array($hookName, $registeredHooks);
             $hookInfoFromInterface = $isRegistered ? $this->getHookRegistry()->getHookInfoFromInterface($hookName) : null;
             
@@ -153,7 +153,7 @@ class HookDataService
             ];
         }
         
-        // 添加在 HookInterface 中注册但不在注册表中的 Hook（可能还没有规约文件）
+        // 兼容自定义注册源返回、但当前编译快照中尚无详情的 Hook。
         foreach ($registeredHooks as $hookName) {
             if (!isset($result[$hookName])) {
                 $hookInfoFromInterface = $this->getHookRegistry()->getHookInfoFromInterface($hookName);

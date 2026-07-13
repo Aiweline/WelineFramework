@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Service;
 
+use Weline\Acl\Api\Authorization\AuthorizationServiceInterface;
+use Weline\Acl\Api\Authorization\RouteResource;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
@@ -11,7 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\StateManager;
 
-class AclService implements AclServiceInterface
+class AclService implements AclServiceInterface, AuthorizationServiceInterface
 {
     private Role $roleModel;
     private RoleAccess $roleAccessModel;
@@ -52,6 +54,31 @@ class AclService implements AclServiceInterface
         self::$routeProtectedCache = [];
         self::$routeEquivalentPathsCache = [];
         self::$roleAclEntriesCache = [];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function findRouteResource(string $className, string $httpMethod, string $routePath): ?RouteResource
+    {
+        /** @var Acl $acl */
+        $acl = ObjectManager::getInstance(Acl::class, [], false)
+            ->fields([
+                Acl::schema_fields_ID,
+                Acl::schema_fields_ACL_ID,
+                Acl::schema_fields_SOURCE_NAME,
+            ])
+            ->where(Acl::schema_fields_CLASS, $className)
+            ->where(Acl::schema_fields_METHOD, $httpMethod)
+            ->where(Acl::schema_fields_ROUTE, $routePath)
+            ->find()
+            ->fetch();
+
+        if (!$acl->getId()) {
+            return null;
+        }
+
+        return new RouteResource($acl->getAclId(), $acl->getSourceName());
     }
 
     /**
@@ -438,4 +465,3 @@ class AclService implements AclServiceInterface
         return null;
     }
 }
-

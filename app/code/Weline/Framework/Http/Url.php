@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Context;
@@ -446,17 +447,9 @@ class Url implements UrlInterface
     {
         $codes = [];
         try {
-            if (!\class_exists(\Weline\Currency\Model\Currency::class)) {
-                return $codes;
-            }
-
-            $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
-            $rows = $currencyModel->clear()->select()->fetchArray();
-            foreach ((array)$rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $code = \strtoupper(\trim((string)($row[\Weline\Currency\Model\Currency::schema_fields_CODE] ?? '')));
+            $knownCodes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredCurrencyCodes();
+            foreach ($knownCodes as $knownCode) {
+                $code = \strtoupper(\trim((string)$knownCode));
                 if ($code !== '') {
                     $codes[$code] = $code;
                 }
@@ -474,21 +467,9 @@ class Url implements UrlInterface
     {
         $codes = [];
         try {
-            if (!\class_exists(\Weline\I18n\Model\Locals::class)) {
-                return $codes;
-            }
-
-            $localModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
-            $rows = $localModel->clear()
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_INSTALL, 1)
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
-                ->select()
-                ->fetchArray();
-            foreach ((array)$rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $code = \trim((string)($row[\Weline\I18n\Model\Locals::schema_fields_CODE] ?? ''));
+            $knownCodes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredLanguageCodes();
+            foreach ($knownCodes as $knownCode) {
+                $code = \trim((string)$knownCode);
                 if ($code !== '') {
                     $codes[$code] = $code;
                 }
@@ -514,19 +495,6 @@ class Url implements UrlInterface
         $parserWebsiteCode = (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? '');
         if ($parserWebsiteCode !== '') {
             return 'website_code:' . sha1(strtolower($parserWebsiteCode));
-        }
-
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
-                $website = \Weline\Websites\Data\WebsiteData::getWebsite();
-                if ($website !== null && \method_exists($website, 'getWebsiteId')) {
-                    $websiteId = (int)$website->getWebsiteId();
-                    if ($websiteId >= 0) {
-                        return 'website:' . $websiteId;
-                    }
-                }
-            }
-        } catch (\Throwable) {
         }
 
         $context = Context::getCurrent();
@@ -1553,28 +1521,6 @@ class Url implements UrlInterface
         // 使用 Env::getAreaByRoutePrefix() 动态识别区域
         // 支持通过 URL 首段匹配 area_routes 配置
         $matchedArea = Env::getAreaByRoutePrefix($area);
-
-        // 诊断日志：记录区域匹配结果和调用栈
-        if (
-            Env::get('wls.debug.hot_path_logs', false)
-            && (str_contains($url, 'ai-site-agent') || $area === 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8')
-        ) {
-            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
-            $caller = '';
-            foreach ($backtrace as $trace) {
-                if (isset($trace['class']) && isset($trace['function'])) {
-                    $caller .= $trace['class'] . '::' . $trace['function'] . ' -> ';
-                }
-            }
-            if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
-                \Weline\Server\Log\WlsLogger::info_('[Url::parser] Area matching', [
-                    'url' => $url,
-                    'first_segment' => $area,
-                    'matched_area' => $matchedArea ?? 'null',
-                    'caller' => \rtrim($caller, ' -> '),
-                ]);
-            }
-        }
 
         if ($matchedArea !== null) {
             // 匹配到配置的区域前缀

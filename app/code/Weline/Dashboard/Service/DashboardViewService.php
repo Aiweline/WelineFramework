@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Dashboard\Service;
 
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Model\ThemeLayout;
-use Weline\Theme\Service\ThemeContextService;
-use Weline\Theme\Service\ThemeLayoutService;
-use Weline\Theme\Service\ThemeLayoutVersionService;
-use Weline\Websites\Model\Website;
-use Weline\Websites\Service\DefaultWebsiteService;
+use Weline\Theme\Api\Layout\LayoutIdentity;
+use Weline\Theme\Api\Layout\LayoutStatus;
+use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
+use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 
 class DashboardViewService
 {
@@ -20,13 +18,9 @@ class DashboardViewService
 
     public function __construct(
         private readonly DashboardView $dashboardView,
-        private readonly Website $website,
-        private readonly BackendUserConfig $backendUserConfig,
-        private readonly ThemeContextService $themeContext,
-        private readonly ThemeLayoutService $themeLayoutService,
-        private readonly ThemeLayoutVersionService $themeLayoutVersionService,
-        private readonly ThemeLayout $themeLayout,
-        private readonly DefaultWebsiteService $defaultWebsiteService,
+        private readonly BackendUserConfigStore $backendUserConfig,
+        private readonly WebsiteCatalogInterface $websiteCatalog,
+        private readonly LayoutWorkspaceInterface $layoutWorkspace,
     ) {
     }
 
@@ -38,66 +32,41 @@ class DashboardViewService
     public function getDefaultWebsiteId(): int
     {
         try {
-            $row = $this->defaultWebsiteService->ensureDefaultWebsite(false);
-            if ((string)($row[Website::schema_fields_CODE] ?? '') === Website::CODE_DEFAULT) {
-                return max(self::DEFAULT_WEBSITE_ID, (int)($row[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID));
-            }
+            return max(self::DEFAULT_WEBSITE_ID, $this->websiteCatalog->defaultWebsiteId());
         } catch (\Throwable) {
         }
 
         try {
-            $row = $this->website->clearQuery()->clearData()
-                ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
-                ->find()
-                ->fetchArray();
-            if (is_array($row) && array_key_exists(Website::schema_fields_ID, $row)) {
-                return max(self::DEFAULT_WEBSITE_ID, (int)($row[Website::schema_fields_ID] ?? self::DEFAULT_WEBSITE_ID));
+            $firstWebsiteId = self::DEFAULT_WEBSITE_ID;
+            foreach ($this->websiteCatalog->all() as $index => $website) {
+                if ($index === 0) {
+                    $firstWebsiteId = max(self::DEFAULT_WEBSITE_ID, $website->id);
+                }
+                if ($website->code === 'default') {
+                    return max(self::DEFAULT_WEBSITE_ID, $website->id);
+                }
             }
+            return $firstWebsiteId;
         } catch (\Throwable) {
-        }
-
-        try {
-            $row = $this->website->clearQuery()->clearData()
-                ->order(Website::schema_fields_ID, 'ASC')
-                ->find()
-                ->fetchArray();
-            return max(0, (int)($row[Website::schema_fields_ID] ?? 0));
-        } catch (\Throwable) {
-            return 0;
+            return self::DEFAULT_WEBSITE_ID;
         }
     }
 
     public function listWebsites(): array
     {
         try {
-            $this->defaultWebsiteService->ensureDefaultWebsite(false);
+            $websites = $this->websiteCatalog->all();
         } catch (\Throwable) {
-        }
-
-        try {
-            $rows = $this->website->clearQuery()->clearData()
-                ->order(Website::schema_fields_ID, 'ASC')
-                ->select()
-                ->fetchArray();
-        } catch (\Throwable) {
-            $rows = [];
+            $websites = [];
         }
 
         $result = [];
-        foreach (is_array($rows) ? $rows : [] as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $websiteId = (int)($row[Website::schema_fields_ID] ?? 0);
+        foreach ($websites as $website) {
+            $websiteId = $website->id;
             if ($websiteId < self::DEFAULT_WEBSITE_ID) {
                 continue;
             }
-            $result[] = [
-                'website_id' => $websiteId,
-                'name' => (string)($row[Website::schema_fields_NAME] ?? ('#' . $websiteId)),
-                'code' => (string)($row[Website::schema_fields_CODE] ?? ''),
-                'url' => (string)($row[Website::schema_fields_URL] ?? ''),
-            ];
+            $result[] = $website->toArray();
         }
 
         return $result;
@@ -398,11 +367,11 @@ class DashboardViewService
         }
 
         try {
-            $this->themeLayoutVersionService->initializeVersionIfNeeded(
+            $this->layoutWorkspace->initializeVersionIfNeeded(
                 $themeId,
                 DashboardView::PAGE_TYPE,
                 null,
-                $view->layoutIdentity()
+                $this->layoutIdentity($view),
             );
         } catch (\Throwable) {
         }
@@ -467,11 +436,11 @@ class DashboardViewService
             throw new \RuntimeException((string)__('未找到后台主题，无法保存 Dashboard 布局。'));
         }
 
-        $saved = $this->themeLayoutService->publishLayout(
+        $saved = $this->layoutWorkspace->publishLayout(
             $themeId,
             DashboardView::PAGE_TYPE,
-            $view->layoutIdentity(),
-            true
+            $this->layoutIdentity($view),
+            true,
         );
         if (!$saved) {
             throw new \RuntimeException((string)__('Dashboard 布局保存失败。'));
@@ -483,8 +452,7 @@ class DashboardViewService
     public function getBackendThemeId(): int
     {
         try {
-            $theme = $this->themeContext->resolveTheme('backend', null, false);
-            return (int)($theme?->getId() ?? 0);
+            return $this->layoutWorkspace->resolveActiveThemeId('backend', false);
         } catch (\Throwable) {
             return 0;
         }
@@ -793,12 +761,12 @@ class DashboardViewService
             ];
         }
 
-        return $this->themeLayoutService->copyLayoutIdentity(
+        return $this->layoutWorkspace->copyLayout(
             $themeId,
             DashboardView::PAGE_TYPE,
-            $source->layoutIdentity(),
-            $target->layoutIdentity()
-        );
+            $this->layoutIdentity($source),
+            $this->layoutIdentity($target),
+        )->toArray();
     }
 
     /**
@@ -826,15 +794,15 @@ class DashboardViewService
         }
 
         $seeded = [];
-        foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
-            $this->themeLayoutService->saveLayout(
+        foreach ([LayoutStatus::DRAFT, LayoutStatus::PUBLISHED] as $status) {
+            $this->layoutWorkspace->replaceLayout(
                 $themeId,
                 DashboardView::PAGE_TYPE,
                 $payload,
                 $status,
-                $view->layoutIdentity()
+                $this->layoutIdentity($view),
             );
-            $seeded[$status] = array_sum(array_map('count', $payload));
+            $seeded[$status->value] = array_sum(array_map('count', $payload));
         }
 
         return [
@@ -928,22 +896,11 @@ class DashboardViewService
             return false;
         }
 
-        $identity = $view->layoutIdentity();
-        try {
-            $row = $this->themeLayout->clearQuery()->clearData()
-                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::schema_fields_PAGE_TYPE, DashboardView::PAGE_TYPE)
-                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
-                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
-                ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
-                ->find()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return false;
-        }
-
-        return is_array($row) && (int)($row[ThemeLayout::schema_fields_ID] ?? 0) > 0;
+        return $this->layoutWorkspace->hasLayout(
+            $themeId,
+            DashboardView::PAGE_TYPE,
+            $this->layoutIdentity($view),
+        );
     }
 
     private function deleteLayoutRows(DashboardView $view): void
@@ -952,33 +909,15 @@ class DashboardViewService
         if ($themeId <= 0) {
             return;
         }
-        $identity = $view->layoutIdentity();
-        try {
-            $rows = $this->themeLayout->clearQuery()->clearData()
-                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::schema_fields_PAGE_TYPE, DashboardView::PAGE_TYPE)
-                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
-                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
-                ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
-                ->select()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return;
-        }
+        $this->layoutWorkspace->deleteLayout(
+            $themeId,
+            DashboardView::PAGE_TYPE,
+            $this->layoutIdentity($view),
+        );
+    }
 
-        foreach (is_array($rows) ? $rows : [] as $row) {
-            $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
-            if ($layoutId <= 0) {
-                continue;
-            }
-            try {
-                $this->themeLayout->clearQuery()->clearData();
-                $this->themeLayout->load($layoutId);
-                $this->themeLayout->delete();
-            } catch (\Throwable) {
-            }
-        }
-        $this->themeLayout->clearQuery()->clearData();
+    private function layoutIdentity(DashboardView $view): LayoutIdentity
+    {
+        return LayoutIdentity::fromArray($view->layoutIdentity());
     }
 }

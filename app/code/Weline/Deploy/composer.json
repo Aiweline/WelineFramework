@@ -1,5 +1,5 @@
 {
-    "name": "weline/deploy-module",
+    "name": "weline/module-deploy",
     "description": "WelineFramework 部署模块，提供基于 Git 的代码更新和部署功能",
     "type": "weline-module",
     "license": "MIT",
@@ -10,10 +10,17 @@
             "homepage": "https://aiweline.com"
         }
     ],
-    "require": {
-        "php": ">=8.0",
-        "weline/framework": "@dev"
-    },
+  "require": {
+    "php": "^8.4",
+    "weline/framework": "@dev",
+    "weline/module-backend": "@dev",
+    "weline/module-module-router": "@dev",
+    "weline/module-system-config": "@dev"
+  },
+  "suggest": {
+    "weline/module-server": "Adds deploy operations to the WLS panel.",
+    "weline/module-websites": "Provides the optional default website URL candidate for webhook setup."
+  },
     "autoload": {
         "psr-4": {
             "Weline\\Deploy\\": ""

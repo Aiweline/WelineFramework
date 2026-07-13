@@ -28,13 +28,13 @@ interface QueueInterface
     public function name(): string;
 
     /**
-     * @DESC          # 队列类型所需属性  使用：\Weline\Eav\Model\EavAttribute[]
+     * @DESC          # 队列类型所需属性  使用：\Weline\Eav\Api\EavAttribute[]
      *
      * @AUTH  秋枫雁飞
      * @EMAIL aiweline@qq.com
      * @DateTime: 23/4/2024 下午4:55
      * 参数区：
-     * @return array \Weline\Eav\Model\EavAttribute[]
+     * @return array \Weline\Eav\Api\EavAttribute[]
      */
     public function attributes(): array;
 

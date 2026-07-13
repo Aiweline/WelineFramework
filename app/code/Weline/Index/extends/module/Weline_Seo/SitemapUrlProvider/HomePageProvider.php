@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Index\Extends\Module\Weline_Seo\SitemapUrlProvider;
 
-use Weline\Seo\Provider\AbstractSitemapUrlProvider;
-use Weline\Seo\Service\SeoWebsiteDirectory;
+use Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider;
+use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
 
 class HomePageProvider extends AbstractSitemapUrlProvider
 {
     public function __construct(
-        private readonly SeoWebsiteDirectory $websiteDirectory
+        private readonly WebsiteDirectoryInterface $websiteDirectory
     ) {
         parent::__construct();
     }
@@ -28,9 +28,9 @@ class HomePageProvider extends AbstractSitemapUrlProvider
     public function getWebsiteIds(): array
     {
         $ids = [];
-        foreach ($this->websiteDirectory->listWebsites() as $website) {
-            $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
-            if ($websiteId > 0) {
+        foreach ($this->websiteDirectory->all() as $website) {
+            $websiteId = $website->id;
+            if ($websiteId >= 0) {
                 $ids[] = $websiteId;
             }
         }
@@ -40,7 +40,7 @@ class HomePageProvider extends AbstractSitemapUrlProvider
 
     public function getUrlsForWebsite(int $websiteId): array
     {
-        $website = $this->websiteDirectory->getWebsiteById($websiteId);
+        $website = $this->websiteDirectory->get($websiteId);
         if ($website === null) {
             return [];
         }

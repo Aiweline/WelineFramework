@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Maintenance\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Maintenance\Service\BackupManager;

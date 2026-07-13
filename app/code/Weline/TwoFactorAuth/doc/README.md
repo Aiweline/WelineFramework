@@ -11,13 +11,21 @@
 2. `dev/ai/diagrams/08-module-docs-index.txt`
 3. `dev/ai/global-constraints.md`
 4. `app/code/Weline/Theme/doc/AI-INDEX.md`
-5. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+5. `app/code/Weline/Customer/doc/AI-INDEX.md`
 
 ## 模块定位
 
 - 模块代码：`Weline_TwoFactorAuth`
 - 目录：`app/code/Weline/TwoFactorAuth`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+
+## 依赖契约
+
+- 必需依赖仅为 `Weline_Framework`、`Weline_Customer`；TwoFactorAuth 不再引用 Frontend 的 Model、Service 或其他内部类。
+- `Controller/Api/CheckLogin` 只消费 Framework `AuthenticatedSessionInterface`。当前用户 ID/用户名由 `AuthenticableInterface` 投影，邮箱仅在身份对象公开 `getEmail()` 时返回，不固定任何具体账户 Model。已登录返回 HTTP 200 和 `data.logged_in=true`；未登录返回 HTTP 401、`data.logged_in=false` 及原登录地址。
+- Customer 密码校验后通过 `CustomerLoginChallengeCreatorInterface` 传入标量 customer ID、站内回跳路径和 remember 时长；Customer ORM 对象不会跨越模块边界。
+- 挑战完成时仅使用 `CustomerAccountFacadeInterface` 查找 data-only `CustomerIdentity`、建立登录态并委托 remember token。CustomerToken ORM、旧 token 清理、新 token 持久化及 `w_ut` Cookie 全部由 Customer 模块所有。
+- 固定时序为：挑战校验 → TOTP/备份码校验 → 客户存在性 → 登录 → remember token → 移除挑战。
 
 ## 代码面概览
 

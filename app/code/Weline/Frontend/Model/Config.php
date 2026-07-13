@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Model;
 
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
 class Config
 {

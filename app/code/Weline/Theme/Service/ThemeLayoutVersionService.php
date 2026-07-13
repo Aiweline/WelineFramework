@@ -6,7 +6,8 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locale\Dictionary;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\ThemeLayout;
@@ -887,30 +888,17 @@ readonly class ThemeLayoutVersionService
     private function collectTranslationRows(string $identify): array
     {
         $prefix = '@meta::' . $identify . '.';
-        /** @var Dictionary $dictionary */
-        $dictionary = clone ObjectManager::getInstance(Dictionary::class);
-        $rows = $dictionary->clearData()->clearQuery()
-            ->where(Dictionary::schema_fields_WORD, $prefix . '%', 'LIKE')
-            ->select()
-            ->fetchArray();
-        if (!is_array($rows)) {
-            return [];
-        }
-
         $translations = [];
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $word = (string)($row[Dictionary::schema_fields_WORD] ?? '');
-            $locale = (string)($row[Dictionary::schema_fields_LOCALE_CODE] ?? '');
+        foreach ($this->dictionaryRepository()->listByWordPrefix($prefix) as $entry) {
+            $word = $entry->word;
+            $locale = $entry->localeCode;
             if ($word === '' || $locale === '') {
                 continue;
             }
             $translations[] = [
                 'word' => $word,
                 'locale_code' => $locale,
-                'translate' => (string)($row[Dictionary::schema_fields_TRANSLATE] ?? ''),
+                'translate' => $entry->translation,
             ];
         }
 
@@ -919,17 +907,17 @@ readonly class ThemeLayoutVersionService
 
     private function saveDictionaryTranslation(string $word, string $localeCode, string $translate): void
     {
-        /** @var Dictionary $dictionary */
-        $dictionary = clone ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($word, $localeCode);
-        $dictionary->clearData()->clearQuery()
-            ->insert([
-                Dictionary::schema_fields_MD5 => $md5,
-                Dictionary::schema_fields_WORD => $word,
-                Dictionary::schema_fields_LOCALE_CODE => $localeCode,
-                Dictionary::schema_fields_TRANSLATE => $translate,
-            ], Dictionary::schema_fields_MD5)
-            ->fetch();
+        $this->dictionaryRepository()->upsert($word, $localeCode, $translate);
+    }
+
+    private function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+        return $provider;
     }
 
     private function normalizeThemeIdentify(string $identify, string $area): string

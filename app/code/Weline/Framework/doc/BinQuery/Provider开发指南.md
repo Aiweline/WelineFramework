@@ -1,6 +1,21 @@
 # BinQuery Provider 开发指南
 
-BinQuery 不要求开发者放弃旧 descriptor 数组。推荐新开发使用 Attribute，旧数组继续兼容；框架会在 `QueryProviderRegistry` 生成最终 descriptor 时合并 Attribute。
+BinQuery 不要求开发者放弃旧 descriptor 数组。推荐新开发使用 Attribute，旧数组继续兼容；框架会在 `framework:compile` 阶段合并 Attribute，生成最终不可变 descriptor。
+
+## 编译与发布
+
+Provider 或 Attribute 变更后必须执行：
+
+```bash
+php bin/w framework:compile
+```
+
+命令会生成 provider、operation 和 frontend/backend external area 索引。PROD/WLS 的
+descriptor 与 BinQuery 准入热路径只读该索引，不实例化 Provider、不反射方法、
+不读 Provider PHP 源文件。缺少索引或格式过期会明确失败，不会在生产请求中退回动态扫描。
+
+`getDescriptor()` 及 Attribute 转换后的值必须是纯标量数组；不允许 Closure、资源、
+服务对象或动态回调。provider name 和 operation name 必须唯一，否则编译直接失败。
 
 ## Attribute 示例
 

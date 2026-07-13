@@ -18,6 +18,9 @@
 - 模块代码：`Weline_Event`
 - 目录：`app/code/Weline/Event`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 事件后台页继承 `Weline\Admin\Api\Controller\BaseController`，通过 Admin 已发布的
+  `fetchBase()` 后台页面契约复用页面外壳；Admin 是已声明的真实必需依赖，不引用其
+  内部 Controller。
 
 ## 代码面概览
 

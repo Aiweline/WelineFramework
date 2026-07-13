@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Seo\Structure\Faq\FaqStructureNormalizer;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\ThemeLayout;
 
@@ -23,8 +22,7 @@ class ThemeFaqSeoContextService
     ];
 
     public function __construct(
-        private readonly ThemeLayoutService $layoutService,
-        private readonly ?FaqStructureNormalizer $faqStructureNormalizer = null
+        private readonly ThemeLayoutService $layoutService
     ) {
     }
 
@@ -51,16 +49,8 @@ class ThemeFaqSeoContextService
             return [];
         }
 
-        $normalizer = $this->faqStructureNormalizer ?? new FaqStructureNormalizer();
-        $faqs = $normalizer->mergeAndNormalize(
-            (array) ($context['faqs'] ?? []),
-            $widgetFaqs
-        );
-        if ($faqs === []) {
-            return [];
-        }
-
-        $headContext = ['faqs' => $faqs];
+        // Theme 只提交事实；归一化与去重由 Seo 的唯一入口负责。
+        $headContext = ['faqs' => $widgetFaqs];
         if ($pageType === '' || $pageType === 'cms_page') {
             $headContext['page_type'] = 'faq';
         }

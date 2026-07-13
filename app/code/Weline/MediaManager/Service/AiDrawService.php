@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Service;
 
-use Weline\Ai\Service\AiService;
+use Weline\Ai\Api\Image\ImageRuntimeInterface;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -17,7 +17,7 @@ class AiDrawService
     public function __construct(
         private readonly MediaStorageService $mediaStorage,
         private readonly AiDrawSessionStore $sessionStore,
-        private readonly ?AiService $aiService = null,
+        private readonly ?ImageRuntimeInterface $aiService = null,
         private readonly ?Url $url = null,
     ) {
     }
@@ -367,7 +367,7 @@ class AiDrawService
             return $this->mockImageBytes((string)($params['output_format'] ?? 'png'));
         }
         $service = $this->resolveAiService();
-        $result = $service->generateImage($prompt, null, self::SCENARIO_CODE, $params);
+        $result = $service->generate($prompt, null, self::SCENARIO_CODE, $params);
         $image = $this->firstImage($result);
         if ($image === []) {
             throw new \RuntimeException(__('图片生成未返回有效结果'));
@@ -683,13 +683,13 @@ class AiDrawService
         return !\in_array(\strtolower((string)$flag), ['0', 'false', 'no', 'off'], true);
     }
 
-    private function resolveAiService(): AiService
+    private function resolveAiService(): ImageRuntimeInterface
     {
-        if ($this->aiService instanceof AiService) {
+        if ($this->aiService instanceof ImageRuntimeInterface) {
             return $this->aiService;
         }
 
-        return ObjectManager::getInstance(AiService::class);
+        return ObjectManager::getInstance(ImageRuntimeInterface::class);
     }
 
     private function resolveUrl(): Url

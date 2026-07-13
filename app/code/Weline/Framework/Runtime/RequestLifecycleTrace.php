@@ -14,6 +14,57 @@ namespace Weline\Framework\Runtime;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 
+/**
+ * Mutable trace data for exactly one main/fiber/request scope.
+ *
+ * @internal RequestLifecycleTrace is the only public entry point.
+ */
+final class RequestLifecycleTraceState
+{
+    public ?bool $enabledCache = null;
+    public bool $maxSpansLogged = false;
+    public bool $recordingDisabledUntilReset = false;
+    public ?int $maxSpansCapCache = null;
+    public ?int $metaStringMaxBytesCache = null;
+
+    /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
+    public array $spans = [];
+
+    public string $requestId = '';
+    public int $nextSeq = 1;
+
+    /** @var list<string> */
+    public array $compactRows = [];
+
+    /** @var array<string, int> */
+    public array $nameIds = [];
+
+    /** @var array<int, string> */
+    public array $names = [];
+
+    /** @var array<string, int> */
+    public array $categoryIds = [];
+
+    /** @var array<int, string> */
+    public array $categories = [];
+
+    /** @var array<string, int> */
+    public array $metaIds = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $metas = [];
+
+    /** @var array<string, float> */
+    public array $startStack = [];
+
+    /** @var list<string> */
+    public array $currentParentStack = [];
+
+    public function __construct(public string $scopeId)
+    {
+    }
+}
+
 class RequestLifecycleTrace
 {
     private const REQUEST_CONTEXT_ID_KEY = 'request_lifecycle_trace.request_id';
@@ -27,64 +78,112 @@ class RequestLifecycleTrace
         '/websites/backend/site-builder-agent/',
     ];
 
-    private static bool $maxSpansLogged = false;
+    /** @var \WeakMap<\Fiber, RequestLifecycleTraceState>|null */
+    private static ?\WeakMap $fiberStates = null;
 
-    private static bool $recordingDisabledUntilReset = false;
+    /** @var \WeakMap<Context, RequestLifecycleTraceState>|null */
+    private static ?\WeakMap $contextStates = null;
 
-    /** @var positive-int|null 缓存 getMaxSpansCap()，reset 时清空 */
-    private static ?int $maxSpansCapCache = null;
-
-    /** @var int|null 缓存 getMetaStringMaxBytes()（0=不截断），reset 时清空 */
-    private static ?int $metaStringMaxBytesCache = null;
-
-    private static ?bool $enabledCache = null;
-
-    /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
-    private static array $spans = [];
-
-    private static string $requestId = '';
-
-    private static int $nextSeq = 1;
-
-    /** @var list<string> */
-    private static array $compactRows = [];
-
-    /** @var array<string, int> */
-    private static array $nameIds = [];
-
-    /** @var array<int, string> */
-    private static array $names = [];
-
-    /** @var array<string, int> */
-    private static array $categoryIds = [];
-
-    /** @var array<int, string> */
-    private static array $categories = [];
-
-    /** @var array<string, int> */
-    private static array $metaIds = [];
-
-    /** @var array<int, array<string, mixed>> */
-    private static array $metas = [];
-
-    /** @var array<string, float> name => start microtime */
-    private static array $startStack = [];
+    private static ?RequestLifecycleTraceState $mainState = null;
 
     /**
-     * 当前链路上下文栈：观察者执行时入栈，执行完出栈。
-     * 嵌套派发的事件会挂到栈顶观察者下，形成「事件→观察者→子事件→子观察者」的完整链路，
-     * 观察者 span 的结束以回到事件调用结束为准（含其内所有子事件耗时）。
-     * @var list<string> 栈顶为当前父 span 名称，如 observer::Weline::Acl::Observer::RouteBefore
+     * Resolve trace storage without sharing mutable state between request Fibers.
+     *
+     * A Fiber is the primary WLS isolation boundary. The request id additionally
+     * fences a reused Context/main execution scope. FPM keeps the historical
+     * single-request behavior through the Context/main branches.
      */
-    private static array $currentParentStack = [];
+    private static function state(): RequestLifecycleTraceState
+    {
+        $scopeId = self::currentScopeId();
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            self::$fiberStates ??= new \WeakMap();
+            $state = self::$fiberStates[$fiber] ?? null;
+            if (!$state instanceof RequestLifecycleTraceState
+                || self::scopeTransitionIsNewRequest($state->scopeId, $scopeId)
+            ) {
+                $state = new RequestLifecycleTraceState($scopeId);
+                self::$fiberStates[$fiber] = $state;
+            } elseif ($state->scopeId !== $scopeId) {
+                // Preserve pre-RequestContext bootstrap spans in this Fiber.
+                $state->scopeId = $scopeId;
+            }
+
+            return $state;
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            self::$contextStates ??= new \WeakMap();
+            $state = self::$contextStates[$context] ?? null;
+            if (!$state instanceof RequestLifecycleTraceState
+                && self::$mainState instanceof RequestLifecycleTraceState
+                && (!\class_exists(Runtime::class, false) || !Runtime::isPersistent())
+            ) {
+                // FPM can create its Context after early bootstrap events.
+                $state = self::$mainState;
+                self::$mainState = null;
+            }
+            if (!$state instanceof RequestLifecycleTraceState
+                || self::scopeTransitionIsNewRequest($state->scopeId, $scopeId)
+            ) {
+                $state = new RequestLifecycleTraceState($scopeId);
+                self::$contextStates[$context] = $state;
+            } elseif ($state->scopeId !== $scopeId) {
+                $state->scopeId = $scopeId;
+                self::$contextStates[$context] = $state;
+            }
+
+            return $state;
+        }
+
+        if (!self::$mainState instanceof RequestLifecycleTraceState
+            || self::$mainState->scopeId !== $scopeId
+        ) {
+            self::$mainState = new RequestLifecycleTraceState($scopeId);
+        }
+
+        return self::$mainState;
+    }
+
+    private static function scopeTransitionIsNewRequest(string $from, string $to): bool
+    {
+        return $from !== $to
+            && \str_starts_with($from, 'request:')
+            && \str_starts_with($to, 'request:');
+    }
+
+    private static function currentScopeId(): string
+    {
+        if (\class_exists(RequestContext::class, false)) {
+            $requestId = (string)(RequestContext::getRequestId() ?? '');
+            if ($requestId !== '') {
+                return 'request:' . $requestId;
+            }
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            return 'context:' . \spl_object_id($context);
+        }
+
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            return 'fiber:' . \spl_object_id($fiber);
+        }
+
+        return 'main';
+    }
 
     /**
      * 是否启用（DEV 或 DEBUG 时启用，便于开发环境与调试时查看请求链路）
      */
     public static function isEnabled(): bool
     {
-        if (self::$enabledCache !== null) {
-            return self::$enabledCache;
+        $state = self::state();
+        if ($state->enabledCache !== null) {
+            return $state->enabledCache;
         }
 
         $enabled = false;
@@ -99,7 +198,7 @@ class RequestLifecycleTrace
         }
 
         if (!$enabled) {
-            self::$enabledCache = false;
+            $state->enabledCache = false;
             return false;
         }
 
@@ -114,16 +213,16 @@ class RequestLifecycleTrace
             && Runtime::isPersistent()
             && !self::isPersistentRequestTraceAllowed()
         ) {
-            self::$enabledCache = false;
+            $state->enabledCache = false;
             return false;
         }
 
         if (self::shouldSkipForCurrentRequest()) {
-            self::$enabledCache = false;
+            $state->enabledCache = false;
             return false;
         }
 
-        self::$enabledCache = true;
+        $state->enabledCache = true;
         return true;
     }
 
@@ -136,8 +235,11 @@ class RequestLifecycleTrace
         $panelEnabled = (\defined('DEV') && DEV)
             || (\defined('DEBUG') && DEBUG)
             || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE);
-        if (\class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
-            $panelEnabled = (new \Weline\DeveloperWorkspace\Service\PanelAccessService())->shouldInjectBootstrap();
+        try {
+            $panelEnabled = \Weline\Framework\Manager\ObjectManager::getInstance(
+                DeveloperAccessPolicy::class
+            )->shouldInjectBootstrap();
+        } catch (\Throwable) {
         }
 
         return self::isExplicitPersistentTraceRequested()
@@ -237,16 +339,17 @@ class RequestLifecycleTrace
         if (!self::isEnabled()) {
             return;
         }
-        if (self::$recordingDisabledUntilReset) {
+        $state = self::state();
+        if ($state->recordingDisabledUntilReset) {
             return;
         }
-        $maxSpans = self::getMaxSpansCap();
-        if (\count(self::$spans) >= $maxSpans) {
-            if (!self::$maxSpansLogged) {
-                self::$maxSpansLogged = true;
+        $maxSpans = self::getMaxSpansCap($state);
+        if (\count($state->spans) >= $maxSpans) {
+            if (!$state->maxSpansLogged) {
+                $state->maxSpansLogged = true;
                 \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，已停止记录直至 reset');
             }
-            self::$recordingDisabledUntilReset = true;
+            $state->recordingDisabledUntilReset = true;
 
             return;
         }
@@ -264,38 +367,39 @@ class RequestLifecycleTrace
             $span['parent'] = $resolvedParent;
         }
         if (!empty($meta)) {
-            $span['meta'] = self::sanitizeMetaForStorage($meta);
+            $span['meta'] = self::sanitizeMetaForStorage($meta, $state);
         }
-        self::$spans[] = $span;
-        self::appendCompactSpan($span);
+        $state->spans[] = $span;
+        self::appendCompactSpan($span, $state);
     }
 
     public static function ensureRequestId(): string
     {
+        $state = self::state();
         if (self::hasRequestContextScope()) {
             $contextRequestId = (string) RequestContext::get(self::REQUEST_CONTEXT_ID_KEY, '');
             if ($contextRequestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $contextRequestId)) {
-                self::$requestId = $contextRequestId;
+                $state->requestId = $contextRequestId;
                 return $contextRequestId;
             }
 
-            $requestId = self::resolveContextBackedRequestId();
+            $requestId = self::resolveContextBackedRequestId($state);
             RequestContext::set(self::REQUEST_CONTEXT_ID_KEY, $requestId);
-            self::$requestId = $requestId;
+            $state->requestId = $requestId;
 
             return $requestId;
         }
 
-        if (self::$requestId !== '') {
-            return self::$requestId;
+        if ($state->requestId !== '') {
+            return $state->requestId;
         }
 
-        self::$requestId = self::resolveNewRequestId();
+        $state->requestId = self::resolveNewRequestId();
 
-        return self::$requestId;
+        return $state->requestId;
     }
 
-    private static function resolveContextBackedRequestId(): string
+    private static function resolveContextBackedRequestId(RequestLifecycleTraceState $state): string
     {
         $incoming = self::resolveIncomingRequestId();
         if ($incoming !== '') {
@@ -307,8 +411,8 @@ class RequestLifecycleTrace
             return $contextId;
         }
 
-        if (self::$requestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', self::$requestId)) {
-            return self::$requestId;
+        if ($state->requestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $state->requestId)) {
+            return $state->requestId;
         }
 
         return self::resolveNewRequestId();
@@ -354,10 +458,11 @@ class RequestLifecycleTrace
      */
     public static function exportCompactPayload(): array
     {
+        $state = self::state();
         $spans = self::getSpansWithDbSummary();
-        if (empty(self::$compactRows) && !empty($spans)) {
+        if (empty($state->compactRows) && !empty($spans)) {
             foreach ($spans as $span) {
-                self::appendCompactSpan($span);
+                self::appendCompactSpan($span, $state);
             }
         }
 
@@ -384,11 +489,11 @@ class RequestLifecycleTrace
         return [
             'request_id' => self::ensureRequestId(),
             'format' => 'compact-v1',
-            'trace' => \implode("\n", self::$compactRows),
+            'trace' => \implode("\n", $state->compactRows),
             'dict' => [
-                'names' => self::$names,
-                'categories' => self::$categories,
-                'metas' => self::$metas,
+                'names' => $state->names,
+                'categories' => $state->categories,
+                'metas' => $state->metas,
             ],
             'summary' => [
                 'span_count' => \count($spans),
@@ -397,8 +502,8 @@ class RequestLifecycleTrace
                 'db_duration_ms' => \round($dbDurationMs, 2),
                 'category_counts' => $categoryCounts,
                 'category_totals' => self::roundFloatMap($categoryTotals),
-                'truncated' => self::$recordingDisabledUntilReset,
-                'max_spans' => self::getMaxSpansCap(),
+                'truncated' => $state->recordingDisabledUntilReset,
+                'max_spans' => self::getMaxSpansCap($state),
             ],
         ];
     }
@@ -420,16 +525,19 @@ class RequestLifecycleTrace
     /**
      * @param array<string, mixed> $span
      */
-    private static function appendCompactSpan(array $span): void
+    private static function appendCompactSpan(
+        array $span,
+        RequestLifecycleTraceState $state
+    ): void
     {
-        $seq = self::$nextSeq++;
-        $nameId = self::dictId((string)($span['name'] ?? ''), self::$nameIds, self::$names);
-        $parentId = self::dictId((string)($span['parent'] ?? ''), self::$nameIds, self::$names);
-        $categoryId = self::dictId((string)($span['category'] ?? 'framework'), self::$categoryIds, self::$categories);
+        $seq = $state->nextSeq++;
+        $nameId = self::dictId((string)($span['name'] ?? ''), $state->nameIds, $state->names);
+        $parentId = self::dictId((string)($span['parent'] ?? ''), $state->nameIds, $state->names);
+        $categoryId = self::dictId((string)($span['category'] ?? 'framework'), $state->categoryIds, $state->categories);
         $durationUs = (int)\round(((float)($span['duration_ms'] ?? 0.0)) * 1000);
-        $metaId = self::metaId(\is_array($span['meta'] ?? null) ? $span['meta'] : []);
+        $metaId = self::metaId(\is_array($span['meta'] ?? null) ? $span['meta'] : [], $state);
 
-        self::$compactRows[] = \implode('|', [$seq, $parentId, $categoryId, $nameId, $durationUs, $metaId]);
+        $state->compactRows[] = \implode('|', [$seq, $parentId, $categoryId, $nameId, $durationUs, $metaId]);
     }
 
     /**
@@ -454,7 +562,7 @@ class RequestLifecycleTrace
     /**
      * @param array<string, mixed> $meta
      */
-    private static function metaId(array $meta): int
+    private static function metaId(array $meta, RequestLifecycleTraceState $state): int
     {
         if (empty($meta)) {
             return 0;
@@ -463,12 +571,12 @@ class RequestLifecycleTrace
         if (!\is_string($json) || $json === '') {
             return 0;
         }
-        if (isset(self::$metaIds[$json])) {
-            return self::$metaIds[$json];
+        if (isset($state->metaIds[$json])) {
+            return $state->metaIds[$json];
         }
-        $id = \count(self::$metas) + 1;
-        self::$metaIds[$json] = $id;
-        self::$metas[$id] = $meta;
+        $id = \count($state->metas) + 1;
+        $state->metaIds[$json] = $id;
+        $state->metas[$id] = $meta;
 
         return $id;
     }
@@ -477,9 +585,12 @@ class RequestLifecycleTrace
      * @param array<string, mixed> $meta
      * @return array<string, mixed>
      */
-    private static function sanitizeMetaForStorage(array $meta): array
+    private static function sanitizeMetaForStorage(
+        array $meta,
+        RequestLifecycleTraceState $state
+    ): array
     {
-        $max = self::getMetaStringMaxBytes();
+        $max = self::getMetaStringMaxBytes($state);
         if ($max <= 0) {
             return $meta;
         }
@@ -497,10 +608,10 @@ class RequestLifecycleTrace
         return $out;
     }
 
-    private static function getMaxSpansCap(): int
+    private static function getMaxSpansCap(RequestLifecycleTraceState $state): int
     {
-        if (self::$maxSpansCapCache !== null) {
-            return self::$maxSpansCapCache;
+        if ($state->maxSpansCapCache !== null) {
+            return $state->maxSpansCapCache;
         }
 
         $cap = self::DEFAULT_MAX_SPANS;
@@ -511,38 +622,38 @@ class RequestLifecycleTrace
             }
         }
 
-        self::$maxSpansCapCache = \max(1, $cap);
+        $state->maxSpansCapCache = \max(1, $cap);
 
-        return self::$maxSpansCapCache;
+        return $state->maxSpansCapCache;
     }
 
-    private static function getMetaStringMaxBytes(): int
+    private static function getMetaStringMaxBytes(RequestLifecycleTraceState $state): int
     {
-        if (self::$metaStringMaxBytesCache !== null) {
-            return self::$metaStringMaxBytesCache;
+        if ($state->metaStringMaxBytesCache !== null) {
+            return $state->metaStringMaxBytesCache;
         }
 
         if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
-            self::$metaStringMaxBytesCache = 0;
+            $state->metaStringMaxBytesCache = 0;
 
             return 0;
         }
 
         $configured = (int)\Weline\Framework\App\Env::get('wls.debug.request_trace_meta_max_bytes', 0);
         if ($configured === 0) {
-            self::$metaStringMaxBytesCache = 0;
+            $state->metaStringMaxBytesCache = 0;
 
             return 0;
         }
         if ($configured > 0) {
-            self::$metaStringMaxBytesCache = \min($configured, 1048576);
+            $state->metaStringMaxBytesCache = \min($configured, 1048576);
 
-            return self::$metaStringMaxBytesCache;
+            return $state->metaStringMaxBytesCache;
         }
 
-        self::$metaStringMaxBytesCache = 2048;
+        $state->metaStringMaxBytesCache = 2048;
 
-        return self::$metaStringMaxBytesCache;
+        return $state->metaStringMaxBytesCache;
     }
 
     /**
@@ -554,7 +665,7 @@ class RequestLifecycleTrace
             return;
         }
         self::registerStateManager();
-        self::$currentParentStack[] = $observerSpanName;
+        self::state()->currentParentStack[] = $observerSpanName;
     }
 
     /**
@@ -562,10 +673,14 @@ class RequestLifecycleTrace
      */
     public static function popCurrentParent(): void
     {
-        if (!self::isEnabled() || empty(self::$currentParentStack)) {
+        if (!self::isEnabled()) {
             return;
         }
-        array_pop(self::$currentParentStack);
+        $state = self::state();
+        if ($state->currentParentStack === []) {
+            return;
+        }
+        \array_pop($state->currentParentStack);
     }
 
     /**
@@ -573,10 +688,11 @@ class RequestLifecycleTrace
      */
     public static function getCurrentParent(): ?string
     {
-        if (empty(self::$currentParentStack)) {
+        $stack = self::state()->currentParentStack;
+        if ($stack === []) {
             return null;
         }
-        return self::$currentParentStack[array_key_last(self::$currentParentStack)];
+        return $stack[\array_key_last($stack)];
     }
 
     /**
@@ -588,7 +704,7 @@ class RequestLifecycleTrace
             return;
         }
         self::registerStateManager();
-        self::$startStack[$name] = microtime(true);
+        self::state()->startStack[$name] = \microtime(true);
     }
 
     /**
@@ -596,11 +712,15 @@ class RequestLifecycleTrace
      */
     public static function endSpan(string $name, string $category = 'framework'): void
     {
-        if (!self::isEnabled() || !isset(self::$startStack[$name])) {
+        if (!self::isEnabled()) {
             return;
         }
-        $durationMs = (microtime(true) - self::$startStack[$name]) * 1000;
-        unset(self::$startStack[$name]);
+        $state = self::state();
+        if (!isset($state->startStack[$name])) {
+            return;
+        }
+        $durationMs = (\microtime(true) - $state->startStack[$name]) * 1000;
+        unset($state->startStack[$name]);
         self::recordSpan($name, $durationMs, $category);
     }
 
@@ -611,7 +731,7 @@ class RequestLifecycleTrace
      */
     public static function getSpans(): array
     {
-        return self::$spans;
+        return self::state()->spans;
     }
 
     /**
@@ -626,7 +746,7 @@ class RequestLifecycleTrace
     public static function getSpansWithDbSummary(): array
     {
         // 先复制一份，避免直接修改内部静态数组
-        $spans = self::$spans;
+        $spans = self::state()->spans;
 
         if (empty($spans)) {
             return $spans;
@@ -676,12 +796,13 @@ class RequestLifecycleTrace
      */
     public static function sumDurationsByName(string $name): float
     {
-        if ($name === '' || empty(self::$spans)) {
+        $spans = self::state()->spans;
+        if ($name === '' || $spans === []) {
             return 0.0;
         }
 
         $total = 0.0;
-        foreach (self::$spans as $span) {
+        foreach ($spans as $span) {
             if (($span['name'] ?? '') !== $name) {
                 continue;
             }
@@ -693,23 +814,25 @@ class RequestLifecycleTrace
 
     public static function reset(): void
     {
-        self::$spans = [];
-        self::$startStack = [];
-        self::$currentParentStack = [];
-        self::$requestId = '';
-        self::$nextSeq = 1;
-        self::$compactRows = [];
-        self::$nameIds = [];
-        self::$names = [];
-        self::$categoryIds = [];
-        self::$categories = [];
-        self::$metaIds = [];
-        self::$metas = [];
-        self::$maxSpansLogged = false;
-        self::$recordingDisabledUntilReset = false;
-        self::$maxSpansCapCache = null;
-        self::$metaStringMaxBytesCache = null;
-        self::$enabledCache = null;
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            if (self::$fiberStates !== null && isset(self::$fiberStates[$fiber])) {
+                unset(self::$fiberStates[$fiber]);
+            }
+
+            return;
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            if (self::$contextStates !== null && isset(self::$contextStates[$context])) {
+                unset(self::$contextStates[$context]);
+            }
+
+            return;
+        }
+
+        self::$mainState = null;
     }
 
     private static function currentRequestUri(): string

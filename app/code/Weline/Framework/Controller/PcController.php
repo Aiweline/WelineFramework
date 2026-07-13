@@ -554,7 +554,7 @@ class PcController extends Core
         $finalContent = $eventData->getData('content');
         $fetchProfileTotalMs = \round((\microtime(true) - $fetchProfileStart) * 1000, 2);
         $uri = (string)(\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
-        if ($fetchProfileTotalMs >= 20.0 || \str_contains($uri, 'customer/account')) {
+        if ($fetchProfileTotalMs >= 20.0) {
             $entry = [
                 'file' => (string)$fileName,
                 'uri' => $uri,

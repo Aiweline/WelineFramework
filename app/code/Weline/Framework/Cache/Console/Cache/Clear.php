@@ -17,9 +17,10 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\TemplateCacheManager;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
 
 class Clear implements \Weline\Framework\Console\CommandInterface
 {
@@ -34,9 +35,9 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     private Printing $printing;
 
     /**
-     * @var BroadcastControlDispatchService|null
+     * @var RuntimeControlBroadcasterInterface|null
      */
-    private ?BroadcastControlDispatchService $broadcastService = null;
+    private ?RuntimeControlBroadcasterInterface $broadcastService = null;
 
     public function __construct(
         Scanner  $scanner,
@@ -50,10 +51,15 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     /**
      * 获取广播控制服务（延迟初始化，避免 CLI 场景不必要开销）
      */
-    private function getBroadcastService(): BroadcastControlDispatchService
+    private function getBroadcastService(): RuntimeControlBroadcasterInterface
     {
         if ($this->broadcastService === null) {
-            $this->broadcastService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
+            $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(RuntimeControlBroadcasterInterface::class);
+            if (!$provider instanceof RuntimeControlBroadcasterInterface) {
+                throw new \RuntimeException('No runtime control broadcaster is registered.');
+            }
+            $this->broadcastService = $provider;
         }
         return $this->broadcastService;
     }

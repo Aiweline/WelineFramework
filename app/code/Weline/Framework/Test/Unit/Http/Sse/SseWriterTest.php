@@ -47,6 +47,37 @@ final class SseWriterTest extends TestCase
         $this->assertStringContainsString('data: {"message":"hello"}', $content);
     }
 
+    public function testSendEventUsesProvidedPersistentId(): void
+    {
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+
+        $sse = new SseWriter();
+        $sse->sendEvent('progress', ['step' => 3], 123);
+
+        \rewind($stream);
+        $content = \stream_get_contents($stream);
+
+        $this->assertStringContainsString("id: 123\n", $content);
+        $this->assertStringContainsString('event: progress', $content);
+    }
+
+    public function testSendControlEventDoesNotWriteAnEventId(): void
+    {
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+
+        $sse = new SseWriter();
+        $sse->sendControlEvent('runtime_reset', ['reason' => 'compacted']);
+
+        \rewind($stream);
+        $content = \stream_get_contents($stream);
+
+        $this->assertStringContainsString('event: runtime_reset', $content);
+        $this->assertStringContainsString('data: {"reason":"compacted"}', $content);
+        $this->assertStringNotContainsString('id:', $content);
+    }
+
     public function testSendDataSendsCorrectFormat(): void
     {
         $stream = $this->createStream();

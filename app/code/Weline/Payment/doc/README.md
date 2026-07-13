@@ -2,6 +2,8 @@
 
 `Weline_Payment` 是统一支付抽象层。业务模块通过 Payable 接入可支付对象，支付模块通过 Provider 接入支付能力，核心层负责配置、可用性判断、支付请求、退款请求、回调校验和结果归一化。
 
+Marketing 是可选折扣动作目录：存在时提供动作元数据，不存在时支付核心返回空动作目录并继续工作。
+
 ## 核心接口
 
 ### ProviderInterface
@@ -95,6 +97,34 @@ app/code/Weline/Payment/extends/module/Weline_Payment/PaymentProvider/FakeProvid
     'supported_discount_actions' => ['discount_fixed_amount', 'discount_percentage'],
 ]
 ```
+
+跨模块校验只能依赖
+`Weline\Payment\Api\Discount\DiscountActionSupportInterface`，不得引用
+`Payment\Service` 或 `Payment\Model`。营销动作元数据是可选集成：
+`Weline_Marketing` 通过 `ActionCatalogInterface` 只提供不可变描述数据，
+`Weline_Payment` 不感知 Marketing `RuleEngine` 或动作实例。未安装
+Marketing 时动作目录为空，支付核心仍可独立启动。
+
+## 跨模块支付编排契约
+
+结账、订单或其他业务模块发起支付时，使用
+`Weline\Payment\Api\PaymentFacadeInterface`。返回值是纯数据
+`PaymentTransactionRecord`，不暴露 Payment ORM 模型、表字段常量或内部服务。
+
+`tryCreatePayment()` 只在支付方式不存在或当前作用域未启用时返回
+`null`；Provider、持久化或协议错误会显式抛出，不会被误判为“无此支付方式”。
+
+## 支付方式自定义属性
+
+`PaymentMethodAttributeEntity` 只是支付方式的 EAV 实体定义：它继续映射现有 `payment_method` 表，属性值的 `entity_id` 仍是 `method_id`，但不再继承 Eav 内部 `EavModel`。
+
+`PaymentMethodAttributeHelper` 只依赖：
+
+- `Weline\Eav\Api\Entity\EntityDefinitionInterface`
+- `Weline\Eav\Api\Attribute\EntityAttributeStoreInterface`
+- 不可变 `AttributeDefinition` / `AttributeRecord`
+
+属性 ORM、属性集/组/类型查询、PostgreSQL 序列同步、以及 `eav_payment_method_{type}` 值表读写全部由 `Weline_Eav` Provider 所有。Payment 不得引用 `Weline\Eav\Model` / `Service` / 根命名空间实现类。
 
 ## 验证建议
 

@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
-class Value extends \Weline\Framework\Database\Model
+class Value extends \Weline\Framework\Database\Model implements \Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface
 {
     /** 值表按实体+类型动态创建，无固定表名 */
     public const schema_table = '';

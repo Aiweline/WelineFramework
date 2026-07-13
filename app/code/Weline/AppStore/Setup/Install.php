@@ -3,11 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\AppStore\Setup;
 
+use Weline\Eav\Api\Attribute\Option\AttributeOptionDefinition;
+use Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\InstallInterface;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * AppStore 模块安装器
@@ -16,6 +19,13 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Install implements InstallInterface
 {
+    private ?AttributeOptionStoreInterface $attributeOptions = null;
+
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviders,
+    ) {
+    }
+
     /**
      * 安装时执行
      *
@@ -75,11 +85,11 @@ class Install implements InstallInterface
                 ];
 
                 foreach ($options as $optionData) {
-                    $option = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Option::class);
-                    $option->setAttributeId($attribute->getId());
-                    $option->setCode($optionData['code']);
-                    $option->setValue($optionData['value']);
-                    $option->save();
+                    $this->attributeOptions()->register(new AttributeOptionDefinition(
+                        attributeId: (int)$attribute->getId(),
+                        code: $optionData['code'],
+                        value: $optionData['value'],
+                    ));
                 }
             }
         } catch (\Exception $e) {
@@ -89,5 +99,19 @@ class Install implements InstallInterface
                 'AppStore Install: Failed to add EAV attribute: ' . $e->getMessage()
             );
         }
+    }
+
+    private function attributeOptions(): AttributeOptionStoreInterface
+    {
+        if ($this->attributeOptions instanceof AttributeOptionStoreInterface) {
+            return $this->attributeOptions;
+        }
+
+        $provider = $this->runtimeProviders->resolve(AttributeOptionStoreInterface::class);
+        if (!$provider instanceof AttributeOptionStoreInterface) {
+            throw new \RuntimeException('eav_attribute_option_store_unavailable');
+        }
+
+        return $this->attributeOptions = $provider;
     }
 }

@@ -4,12 +4,20 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\MarketplaceMeta\MarketplaceMetaReader;
+use Weline\Server\Api\Panel\WlsPanelOperationDefinitionProviderInterface;
 
 class WlsPanelPluginDiscoveryService
 {
     public const WLS_PLUGIN_TAG = 'module:wls';
     public const PANEL_SURFACE = 'backend';
+
+    public function __construct(
+        private readonly ServiceProviderRegistry $serviceProviderRegistry,
+    ) {
+    }
 
     /**
      * @return array{items: array<int, array<string, mixed>>, count: int, error: string}
@@ -350,12 +358,12 @@ class WlsPanelPluginDiscoveryService
      */
     private function getOperationDefinitions(): array
     {
-        return [
+        $definitions = [
             [
                 'key' => 'php-profile',
                 'title' => 'PHP Profiles',
                 'description' => 'Configure PHP runtime profiles, versions, extensions, and per-project bindings.',
-                'module' => 'Weline_PhpManager',
+                'module' => '',
                 'required_tag' => 'custom:wls-php-manager',
                 'feature_tag' => 'feature:php-config',
                 'install_query' => 'WLS PHP Manager',
@@ -365,7 +373,7 @@ class WlsPanelPluginDiscoveryService
                 'key' => 'database-profile',
                 'title' => 'Database Profiles',
                 'description' => 'Store and open project database connection profiles from the WLS panel.',
-                'module' => 'Weline_DbManager',
+                'module' => '',
                 'required_tag' => 'custom:wls-database-manager',
                 'feature_tag' => 'feature:database-profile',
                 'install_query' => 'WLS Database Manager',
@@ -375,7 +383,7 @@ class WlsPanelPluginDiscoveryService
                 'key' => 'file-manager',
                 'title' => 'File Manager',
                 'description' => 'Manage project paths through a path-guarded WLS panel plugin.',
-                'module' => 'Weline_FileManager',
+                'module' => '',
                 'required_tag' => 'custom:wls-file-manager',
                 'feature_tag' => 'feature:file-manager',
                 'install_query' => 'WLS File Manager',
@@ -385,13 +393,38 @@ class WlsPanelPluginDiscoveryService
                 'key' => 'deploy',
                 'title' => 'Deploy Releases',
                 'description' => 'Add webhook and tag-driven release flows for panel-managed child projects.',
-                'module' => 'Weline_Deploy',
+                'module' => '',
                 'required_tag' => 'custom:wls-deploy',
                 'feature_tag' => 'feature:tag-deploy',
                 'install_query' => 'WLS Deploy',
                 'capabilities' => ['deploy.webhook', 'deploy.tag', 'project.release'],
             ],
         ];
+
+        $definitionIndexes = [];
+        foreach ($definitions as $index => $definition) {
+            $definitionIndexes[(string)$definition['key']] = $index;
+        }
+        foreach ($this->serviceProviderRegistry->implementationsWithPrefix('wls_panel.operation_definition.') as $implementation) {
+            try {
+                $provider = ObjectManager::getInstance($implementation);
+                if (!$provider instanceof WlsPanelOperationDefinitionProviderInterface) {
+                    continue;
+                }
+                $contribution = $provider->definition();
+                $key = \trim((string)($contribution['key'] ?? ''));
+                if ($key === '' || !isset($definitionIndexes[$key])) {
+                    continue;
+                }
+                $definitions[$definitionIndexes[$key]] = \array_replace(
+                    $definitions[$definitionIndexes[$key]],
+                    $contribution,
+                );
+            } catch (\Throwable) {
+            }
+        }
+
+        return $definitions;
     }
 
     /**

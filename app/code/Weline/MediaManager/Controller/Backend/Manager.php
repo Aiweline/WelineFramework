@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Controller\Backend;
 
+use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
 
 class Manager extends BackendController
 {
+    public function __construct(
+        private readonly BackendThemeConfigInterface $backendThemeConfig,
+    ) {
+    }
+
     /**
      * 独立媒体管理器页面
      */
@@ -62,23 +67,17 @@ class Manager extends BackendController
         $this->assign('ext', $params['ext'] ?? '*');
         $this->assign('size', $params['size'] ?? '102400');
         $this->assign('lock_path', $params['lockPath'] ?? '0');
-        // 兼容主题色：与后台一致的亮色/暗色模式
-        $themeMode = 'light';
-        try {
-            $themeConfigBlock = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-            if (method_exists($themeConfigBlock, '__init')) {
-                $themeConfigBlock->__init();
-            }
-            if (method_exists($themeConfigBlock, 'getThemeConfig')) {
-                $mode = $themeConfigBlock->getThemeConfig('theme-mode-switch');
-                if ($mode === 'dark' || $mode === 'light') {
-                    $themeMode = $mode;
-                }
-            }
-        } catch (\Throwable $e) {
-            // 忽略，使用默认 light
-        }
-        $this->assign('theme_mode', $themeMode);
+        $this->assign('theme_mode', $this->resolveIframeThemeMode());
         return $this->fetch('manager.phtml');
+    }
+
+    private function resolveIframeThemeMode(): string
+    {
+        try {
+            $mode = $this->backendThemeConfig->getThemeConfig('theme-mode-switch');
+            return $mode === 'dark' || $mode === 'light' ? $mode : 'light';
+        } catch (\Throwable) {
+            return 'light';
+        }
     }
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class RegistrarSelect implements TaglibInterface
 {
@@ -61,7 +61,7 @@ class RegistrarSelect implements TaglibInterface
             $onSelect = (string)($attributes['on-select'] ?? '');
 
             $attrs = $attributes;
-            $code = \Weline\Taglib\Taglib::attributes($attrs);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attrs);
             $multiFlag = $isMultiple ? 'true' : 'false';
 
             $html = [];

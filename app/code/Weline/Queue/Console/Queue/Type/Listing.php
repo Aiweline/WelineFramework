@@ -32,10 +32,16 @@ class Listing implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        array_shift($args);
-        if ($args) {
-            $this->printing->setup(implode(',', $args), '搜索');
-            foreach ($args as $arg) {
+        $searchTerms = [];
+        foreach ($args as $index => $arg) {
+            if (!\is_int($index) || $index === 0 || !\is_string($arg) || \str_starts_with($arg, '-')) {
+                continue;
+            }
+            $searchTerms[] = $arg;
+        }
+        if ($searchTerms) {
+            $this->printing->setup(implode(',', $searchTerms), '搜索');
+            foreach ($searchTerms as $arg) {
                 $this->type->where('concat(name,module_name,class)', '%' . $arg . '%', 'like', 'or');
             }
         }

@@ -29,16 +29,13 @@
     <event name="Weline_Framework_Template::after_compile">
         <observer name="Weline_I18n::template_compile_extract_js_modules" instance="Weline\I18n\Observer\TemplateCompile" disabled="false" shared="true" sort="100"/>
     </event>
-    <event name="Weline_Framework_Resource::compiler">
-        <observer name="Weline_I18n::resource_compiler_collect_translations" instance="Weline\I18n\Observer\ResourceCompiler" disabled="false" shared="true" sort="50"/>
-    </event>
     <event name="Weline_I18n::collect_translations">
         <observer name="Weline_I18n::collect_translations" instance="Weline\I18n\Observer\CollectTranslations" disabled="false" shared="true" sort="10"/>
     </event>
+    <event name="Weline_Framework_MarketplaceMeta::collect_translations">
+        <observer name="Weline_I18n::marketplace_meta_collect_translations" instance="Weline\I18n\Observer\CollectTranslations" disabled="false" shared="true" sort="10"/>
+    </event>
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_I18n::setup_upgrade_collect_translations" instance="Weline\I18n\Observer\SetupUpgradeCollectTranslations" disabled="false" shared="true" sort="100"/>
-    </event>
-    <event name="Weline_Ai::translate">
-        <observer name="Weline_I18n::ai_translation" instance="Weline\I18n\Observer\AiTranslationObserver" disabled="false" shared="true" sort="0"/>
     </event>
 </config>

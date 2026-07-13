@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Setup;
 
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\UpgradeInterface;
@@ -12,9 +12,9 @@ use Weline\MediaManager\Service\AiDrawModelBinder;
 
 class Upgrade implements UpgradeInterface
 {
-    private BackendUserConfig $backendUserConfig;
+    private BackendUserConfigStore $backendUserConfig;
 
-    public function __construct(BackendUserConfig $backendUserConfig)
+    public function __construct(BackendUserConfigStore $backendUserConfig)
     {
         $this->backendUserConfig = $backendUserConfig;
     }

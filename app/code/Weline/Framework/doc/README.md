@@ -11,6 +11,7 @@
 #### 核心开发
 - [模块开发完整指南](./模块开发完整指南.md) - 模块开发全流程
 - [BinQuery 文档目录](./BinQuery/) - 站外二进制 Query 网关、SDK 与 Provider 开发指南
+- [性能与稳定性预算](./architecture/04-performance-budget.md) - 请求 deadline、严格连接池与 SQLite busy 重试约束
 - [文档更新日志](./文档更新日志.md) - 文档变更记录
 - [DOCUMENTATION-UPDATE-SUMMARY](./DOCUMENTATION-UPDATE-SUMMARY.md) - 文档更新总结
 

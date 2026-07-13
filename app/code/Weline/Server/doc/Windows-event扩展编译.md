@@ -1,18 +1,20 @@
 # Windows 下 event 扩展编译说明
 
-Windows 上官方预编译的 event DLL 可能没有覆盖所有 PHP 版本（例如 PHP 8.4 暂无）。可按下面顺序处理。
+Windows 固定使用 Dispatcher 拓扑。`event` 是 Dispatcher 的可选事件循环优化，不是启动或 HTTPS 的必要条件；没有可信 DLL 时，WLS 保持 `Dispatcher + stream SSL + 有界 stream_select`，不改写拓扑。
 
-## 一、优先：用相邻 PHP 版本的预编译 DLL（推荐）
+## 一、ABI 门禁（必须完全匹配）
 
-1. 打开 **https://windows.php.net/downloads/pecl/releases/event/**
-2. 进入 **3.0.6** 或 **3.0.7** 等 3.0.x 目录
-3. 若没有当前 PHP 版本（如 8.4），可试 **8.3** 或 **8.2** 的 zip（多数情况下兼容）
-4. 选择与当前 PHP 一致的：**nts/ts**、**x64/x86**，文件名形如：
-   - `php_event-3.0.6-8.3-nts-vs16-x64.zip`
-   - `php_event-3.0.6-8.2-nts-vs16-x64.zip`
-5. 解压后将 **php_event.dll** 放入 PHP 的 **ext** 目录，在 **php.ini** 中添加 `extension=event`，重启
+只能使用与当前 `PHP_BINARY` 完全匹配的 DLL：
 
-若 8.3/8.2 的 DLL 在 8.4 上无法加载，再考虑从源码编译。
+- PHP major/minor，例如 PHP 8.4 只能使用为 8.4 构建的 DLL；
+- x64/x86；
+- TS/NTS；
+- Visual Studio toolset；
+- release/debug 构建。
+
+禁止把 PHP 8.2/8.3 的 `php_event.dll` 放到 PHP 8.4 中试运行。DLL 文件“存在”不是能力证明；`server:start` 只有在同一 `PHP_BINARY` 的新子进程中同时验证 `extension_loaded('event')`、`EventBase` 和 `Event` 后才会启用。
+
+若 [PECL Windows event 发布目录](https://windows.php.net/downloads/pecl/releases/event/) 没有完全匹配的包，保持 Windows 默认 Dispatcher 运行时，或按下文使用对应 PHP 源码自行编译。WLS 不自动下载、不自动加载未验证 DLL。
 
 ---
 
@@ -89,7 +91,16 @@ configure --disable-all --enable-cli --with-event=LIBEVENT_DIR
 nmake
 ```
 
-在生成的 `Release_TS` 或 `Release_NTS` 目录中会得到 **php_event.dll**，将其复制到现有 PHP 的 **ext** 目录，并在 **php.ini** 中添加 `extension=event`。
+在生成的 `Release_TS` 或 `Release_NTS` 目录中会得到 **php_event.dll**，只能将它复制到与本次编译 PHP ABI 完全一致的 **ext** 目录，并在该 `PHP_BINARY` 实际加载的 **php.ini** 中添加 `extension=event`。
+
+安装后先独立验证：
+
+```bat
+php -r "echo PHP_BINARY, PHP_EOL, PHP_VERSION, PHP_EOL; exit(extension_loaded('event') && class_exists('EventBase') && class_exists('Event') ? 0 : 1);"
+php bin/w server:doctor
+```
+
+只有两条命令都指向预期 PHP 且验证成功，WLS 才会选择 event loop。
 
 ### 5. 参考链接
 
@@ -100,7 +111,8 @@ nmake
 
 ---
 
-## 三、无法编译时的替代方案
+## 三、无法编译时的正常运行方案
 
-- 使用 **PHP 8.2 或 8.3**（有现成 event DLL）运行 Weline Server  
-- 或使用 **`php bin/w server:start --cli`** 回退到 PHP 内置服务器（无 HTTPS，不依赖 event）
+- 保持框架要求的 PHP 8.4，使用 Windows 默认 `Dispatcher + stream/select`。
+- HTTPS 由当前 PHP 的 OpenSSL 扩展承担；`server:start` 会用同一 `PHP_BINARY` 验证 OpenSSL，不会因 event 缺失关闭 HTTPS。
+- 运维对照或诊断时显式使用 `php bin/w server:start --dispatcher`；Windows 上 `--direct`、`--no-dispatcher` 和 `independent` 会在任何 Master/Worker 创建前被拒绝。

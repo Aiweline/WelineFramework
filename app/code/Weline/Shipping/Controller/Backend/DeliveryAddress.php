@@ -11,21 +11,24 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Controller\Backend;
 
+use Weline\Frontend\Api\Auth\FrontendAccountFacadeInterface;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Shipping\Service\DeliveryAddressService;
-use Weline\Frontend\Model\FrontendUser;
 
 #[Acl('Weline_Shipping::delivery_address', '运送地址管理', 'mdi-truck-delivery', '运送地址管理', 'Weline_Backend::shipping_group')]
 class DeliveryAddress extends BackendController
 {
     private DeliveryAddressService $service;
+    private RuntimeProviderResolver $runtimeProviders;
 
     public function __construct(
         ObjectManager $objectManager
     ) {
         $this->service = $objectManager->getInstance(DeliveryAddressService::class);
+        $this->runtimeProviders = $objectManager->getInstance(RuntimeProviderResolver::class);
     }
 
     /**
@@ -62,28 +65,7 @@ class DeliveryAddress extends BackendController
         
         // 获取所有客户列表用于筛选
         try {
-            /** @var FrontendUser $customerModel */
-            $customerModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-            $customers = $customerModel->reset()
-                ->order(FrontendUser::schema_fields_ID, 'DESC')
-                ->pagination(1, 1000) // 获取前1000个客户
-                ->select()
-                ->fetch()
-                ->getItems();
-            
-            // 格式化客户数据
-            $formattedCustomers = [];
-            foreach ($customers as $customer) {
-                $data = is_array($customer) ? $customer : $customer->getData();
-                $formattedCustomers[] = [
-                    'id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
-                    'customer_id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
-                    'name' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
-                    'email' => $data['email'] ?? '',
-                    'username' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
-                ];
-            }
-            $customers = $formattedCustomers;
+            $customers = $this->customerOptions();
         } catch (\Throwable $e) {
             // 如果获取客户列表失败，使用空数组
             $customers = [];
@@ -123,28 +105,7 @@ class DeliveryAddress extends BackendController
         
         // 获取所有客户列表用于选择
         try {
-            /** @var FrontendUser $customerModel */
-            $customerModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-            $customers = $customerModel->reset()
-                ->order(FrontendUser::schema_fields_ID, 'DESC')
-                ->pagination(1, 1000) // 获取前1000个客户
-                ->select()
-                ->fetch()
-                ->getItems();
-            
-            // 格式化客户数据
-            $formattedCustomers = [];
-            foreach ($customers as $customer) {
-                $data = is_array($customer) ? $customer : $customer->getData();
-                $formattedCustomers[] = [
-                    'id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
-                    'customer_id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
-                    'name' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
-                    'email' => $data['email'] ?? '',
-                    'username' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
-                ];
-            }
-            $customers = $formattedCustomers;
+            $customers = $this->customerOptions();
         } catch (\Throwable $e) {
             // 如果获取客户列表失败，使用空数组
             $customers = [];
@@ -321,5 +282,26 @@ class DeliveryAddress extends BackendController
         
         $this->redirect('*/index');
     }
-}
 
+    /** @return list<array{id:int,customer_id:int,name:string,email:string,username:string}> */
+    private function customerOptions(): array
+    {
+        $accounts = $this->runtimeProviders->resolve(FrontendAccountFacadeInterface::class);
+        if (!$accounts instanceof FrontendAccountFacadeInterface) {
+            throw new \RuntimeException('Weline_Frontend account provider is unavailable.');
+        }
+
+        $customers = [];
+        foreach ($accounts->search('', 1, 1000)->getUsers() as $customer) {
+            $customers[] = [
+                'id' => $customer->getId(),
+                'customer_id' => $customer->getId(),
+                'name' => $customer->getUsername(),
+                'email' => $customer->getEmail(),
+                'username' => $customer->getUsername(),
+            ];
+        }
+
+        return $customers;
+    }
+}

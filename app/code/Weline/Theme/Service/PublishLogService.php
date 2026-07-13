@@ -205,15 +205,7 @@ class PublishLogService
             
             $this->eventsManager->dispatch('Weline_Theme::notification', $eventData);
             
-            // 如果有站内消息系统，发送站内消息
-            if (isset($data['user_id']) && $data['user_id']) {
-                $this->eventsManager->dispatch('Weline_Message::send', [
-                    'user_id' => $data['user_id'],
-                    'title' => __('主题发布通知'),
-                    'content' => $data['message'] ?? '',
-                    'type' => 'theme_publish',
-                ]);
-            }
+            // 通知模块可选监听 Theme-owned 事件；Theme 不反向调用具体消息模块。
         } catch (\Throwable $e) {
             // 通知发送失败不影响主流程
         }

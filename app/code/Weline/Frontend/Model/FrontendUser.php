@@ -33,6 +33,14 @@ class FrontendUser extends Model
     public const schema_fields_sess_id = 'sess_id';
     #[Col('int', 1, default: 0, comment: '是否沙盒账户')]
     public const schema_fields_is_sandbox = 'is_sandbox';
+    #[Col('decimal', '12,4', default: 0, comment: '账户余额')]
+    public const schema_fields_BALANCE = 'balance';
+    #[Col('decimal', '12,4', default: 0, comment: '累计充值')]
+    public const schema_fields_TOTAL_RECHARGE = 'total_recharge';
+    #[Col('decimal', '12,4', default: 0, comment: '累计消费')]
+    public const schema_fields_TOTAL_CONSUMPTION = 'total_consumption';
+    #[Col('varchar', 10, nullable: false, default: 'CNY', comment: '账户币种')]
+    public const schema_fields_CURRENCY = 'currency';
     public array $_unit_primary_keys = ['user_id'];
 public function getAttemptTimes()
     {

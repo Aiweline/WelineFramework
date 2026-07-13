@@ -3,15 +3,15 @@ declare(strict_types=1);
 
 namespace Weline\Api\Service;
 
-use Weline\Acl\Model\Acl;
+use Weline\Acl\Api\Scope\ScopeCatalogInterface;
 use Weline\Api\Model\ApiAppInstallationScope;
 use Weline\Framework\Manager\ObjectManager;
 
 class ApiScopeCatalogService
 {
-    protected function newAclModel(): Acl
-    {
-        return ObjectManager::getInstance(Acl::class, [], false);
+    public function __construct(
+        private readonly ScopeCatalogInterface $scopeCatalog,
+    ) {
     }
 
     protected function newScopeModel(): ApiAppInstallationScope
@@ -21,21 +21,14 @@ class ApiScopeCatalogService
 
     public function listExposableSources(): array
     {
-        $rows = $this->newAclModel()->reset()
-            ->where(Acl::schema_fields_API_EXPOSABLE, 1)
-            ->where(Acl::schema_fields_IS_ENABLE, 1)
-            ->order(Acl::schema_fields_MODULE, 'ASC')
-            ->order(Acl::schema_fields_SCOPE_GROUP, 'ASC')
-            ->order(Acl::schema_fields_ACCESS_MODE, 'ASC')
-            ->select()
-            ->fetchArray();
+        $rows = $this->scopeCatalog->listExposableRows();
 
         $catalog = [];
         foreach ($rows as $row) {
             $row = $this->normalizeAclRow($row);
-            $module = (string)($row[Acl::schema_fields_MODULE] ?? '');
-            $group = (string)($row[Acl::schema_fields_SCOPE_GROUP] ?? '');
-            $mode = (string)($row[Acl::schema_fields_ACCESS_MODE] ?? Acl::ACCESS_MODE_EDIT);
+            $module = (string)($row[ScopeCatalogInterface::FIELD_MODULE] ?? '');
+            $group = (string)($row[ScopeCatalogInterface::FIELD_SCOPE_GROUP] ?? '');
+            $mode = (string)($row[ScopeCatalogInterface::FIELD_ACCESS_MODE] ?? ScopeCatalogInterface::ACCESS_MODE_EDIT);
             $catalog[$module][$group][$mode][] = $this->formatScopeRow($row);
         }
 
@@ -49,17 +42,12 @@ class ApiScopeCatalogService
             return [];
         }
 
-        $rows = $this->newAclModel()->reset()
-            ->where(Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-            ->where(Acl::schema_fields_API_EXPOSABLE, 1)
-            ->where(Acl::schema_fields_IS_ENABLE, 1)
-            ->select()
-            ->fetchArray();
+        $rows = $this->scopeCatalog->getExposableRowsBySourceIds($sourceIds);
 
         $bySourceId = [];
         foreach ($rows as $row) {
             $row = $this->normalizeAclRow($row);
-            $bySourceId[(string)$row[Acl::schema_fields_SOURCE_ID]] = $row;
+            $bySourceId[(string)$row[ScopeCatalogInterface::FIELD_SOURCE_ID]] = $row;
         }
 
         return $bySourceId;
@@ -103,11 +91,7 @@ class ApiScopeCatalogService
             return [];
         }
 
-        $aclRows = $this->newAclModel()->reset()
-            ->where(Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
-            ->where(Acl::schema_fields_IS_ENABLE, 1)
-            ->select()
-            ->fetchArray();
+        $aclRows = $this->scopeCatalog->getEnabledRowsBySourceIds($sourceIds);
 
         $scopeBySourceId = [];
         foreach ($scopeRows as $scopeRow) {
@@ -116,16 +100,16 @@ class ApiScopeCatalogService
 
         $entries = [];
         foreach ($aclRows as $row) {
-            $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+            $sourceId = (string)($row[ScopeCatalogInterface::FIELD_SOURCE_ID] ?? '');
             if ($sourceId === '' || !isset($scopeBySourceId[$sourceId])) {
                 continue;
             }
             $scopeRow = $scopeBySourceId[$sourceId];
-            $row[Acl::schema_fields_ACCESS_MODE] = Acl::normalizeAccessMode(
+            $row[ScopeCatalogInterface::FIELD_ACCESS_MODE] = $this->scopeCatalog->normalizeAccessMode(
                 (string)($scopeRow[ApiAppInstallationScope::schema_fields_ACCESS_MODE] ?? ''),
-                (string)($row[Acl::schema_fields_METHOD] ?? '')
+                (string)($row[ScopeCatalogInterface::FIELD_METHOD] ?? '')
             );
-            $row[Acl::schema_fields_SCOPE_GROUP] = (string)($scopeRow[ApiAppInstallationScope::schema_fields_SCOPE_GROUP] ?? '');
+            $row[ScopeCatalogInterface::FIELD_SCOPE_GROUP] = (string)($scopeRow[ApiAppInstallationScope::schema_fields_SCOPE_GROUP] ?? '');
             $entries[] = $this->normalizeAclRow($row);
         }
 
@@ -142,26 +126,26 @@ class ApiScopeCatalogService
 
     private function normalizeAclRow(array $row): array
     {
-        $row[Acl::schema_fields_ACCESS_MODE] = Acl::normalizeAccessMode(
-            (string)($row[Acl::schema_fields_ACCESS_MODE] ?? ''),
-            (string)($row[Acl::schema_fields_METHOD] ?? '')
+        $row[ScopeCatalogInterface::FIELD_ACCESS_MODE] = $this->scopeCatalog->normalizeAccessMode(
+            (string)($row[ScopeCatalogInterface::FIELD_ACCESS_MODE] ?? ''),
+            (string)($row[ScopeCatalogInterface::FIELD_METHOD] ?? '')
         );
-        $row[Acl::schema_fields_SCOPE_GROUP] = (string)($row[Acl::schema_fields_SCOPE_GROUP] ?? '');
-        $row[Acl::schema_fields_API_EXPOSABLE] = (int)($row[Acl::schema_fields_API_EXPOSABLE] ?? 0);
+        $row[ScopeCatalogInterface::FIELD_SCOPE_GROUP] = (string)($row[ScopeCatalogInterface::FIELD_SCOPE_GROUP] ?? '');
+        $row[ScopeCatalogInterface::FIELD_API_EXPOSABLE] = (int)($row[ScopeCatalogInterface::FIELD_API_EXPOSABLE] ?? 0);
         return $row;
     }
 
     private function formatScopeRow(array $row): array
     {
         return [
-            'source_id' => (string)($row[Acl::schema_fields_SOURCE_ID] ?? ''),
-            'source_name' => (string)($row[Acl::schema_fields_SOURCE_NAME] ?? ''),
-            'document' => (string)($row[Acl::schema_fields_DOCUMENT] ?? ''),
-            'module' => (string)($row[Acl::schema_fields_MODULE] ?? ''),
-            'scope_group' => (string)($row[Acl::schema_fields_SCOPE_GROUP] ?? ''),
-            'access_mode' => (string)($row[Acl::schema_fields_ACCESS_MODE] ?? Acl::ACCESS_MODE_EDIT),
-            'route' => (string)($row[Acl::schema_fields_ROUTE] ?? ''),
-            'method' => (string)($row[Acl::schema_fields_METHOD] ?? ''),
+            'source_id' => (string)($row[ScopeCatalogInterface::FIELD_SOURCE_ID] ?? ''),
+            'source_name' => (string)($row[ScopeCatalogInterface::FIELD_SOURCE_NAME] ?? ''),
+            'document' => (string)($row[ScopeCatalogInterface::FIELD_DOCUMENT] ?? ''),
+            'module' => (string)($row[ScopeCatalogInterface::FIELD_MODULE] ?? ''),
+            'scope_group' => (string)($row[ScopeCatalogInterface::FIELD_SCOPE_GROUP] ?? ''),
+            'access_mode' => (string)($row[ScopeCatalogInterface::FIELD_ACCESS_MODE] ?? ScopeCatalogInterface::ACCESS_MODE_EDIT),
+            'route' => (string)($row[ScopeCatalogInterface::FIELD_ROUTE] ?? ''),
+            'method' => (string)($row[ScopeCatalogInterface::FIELD_METHOD] ?? ''),
         ];
     }
 }

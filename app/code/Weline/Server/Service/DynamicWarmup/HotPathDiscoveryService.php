@@ -162,18 +162,11 @@ final class HotPathDiscoveryService
             return $this->pathListFromConfig($configured);
         }
 
-        return [
-            '/',
-            '/catalog/category/clothing',
-            '/en_US/catalog/category/clothing',
-            '/USD/en_US/catalog/category/clothing',
-            '/zh_Hans_CN/catalog/category/clothing',
-            '/CNY/zh_Hans_CN/catalog/category/clothing',
-            '/product/demo-category-81-sports',
-            '/en_US/product/demo-category-81-sports',
-            '/product/demo-category-45-clothing',
-            '/en_US/product/demo-category-45-clothing',
-        ];
+        // Server owns only the topology-level homepage invariant. Business
+        // modules publish their own real hot paths through configuration or the
+        // warmup-path event; demo catalog/product routes must never become a
+        // framework-wide startup cost.
+        return ['/'];
     }
 
     /**

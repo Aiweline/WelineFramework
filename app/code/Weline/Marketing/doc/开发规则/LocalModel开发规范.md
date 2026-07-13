@@ -12,7 +12,7 @@
 
 **位置**: `app/code/Weline/Marketing/Model/Rule/LocalDescription.php`
 
-**必须继承**: `Weline\I18n\LocalModel`
+**必须继承**: `Weline\I18n\Api\Localization\LocalModel`
 
 **必须定义**:
 ```php
@@ -21,7 +21,7 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule;
 
-use Weline\I18n\LocalModel;
+use Weline\I18n\Api\Localization\LocalModel;
 use Weline\Marketing\Model\Rule\Rule;
 
 class LocalDescription extends LocalModel
@@ -376,6 +376,5 @@ protected function tearDown(): void
 ## 参考资源
 
 - [WelineFramework 单元测试指南](../../../../docs/dev/单元测试.md)
-- [LocalModel 接口定义](../../../../app/code/Weline/I18n/LocalModelInterface.php)
+- [LocalModel 接口定义](../../../I18n/Api/Localization/LocalModelInterface.php)
 - [测试用例文档](../测试/规则名称多语言翻译测试用例.md)
-

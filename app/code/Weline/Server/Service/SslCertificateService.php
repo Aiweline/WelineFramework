@@ -15,6 +15,8 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Server\Api\Tls\AcmeDnsTxtPollPolicyProviderInterface;
 use Weline\Server\Model\SslCertificate;
 
 /**
@@ -3505,20 +3507,15 @@ CNF;
         }
 
         try {
-            $poolModel = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Websites\Model\DomainPool::class,
-                [],
-                false
-            );
-            $subdomains = $poolModel->clearQuery()
-                ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
-                ->where(\Weline\Websites\Model\DomainPool::schema_fields_STATUS, \Weline\Websites\Model\DomainPool::STATUS_ACTIVE)
-                ->select()
-                ->fetchIterator();
+            $subdomains = w_query('websites', 'getDomainPoolList', [
+                'status' => 'active',
+                'root_domain' => $rootDomain,
+                'limit' => 2000,
+            ]);
+            $subdomains = \is_array($subdomains) ? $subdomains : [];
 
             foreach ($subdomains as $row) {
-                $row = \is_array($row) ? $row : (\method_exists($row, 'getData') ? $row->getData() : []);
-                $subdomain = (string) ($row[\Weline\Websites\Model\DomainPool::schema_fields_DOMAIN] ?? '');
+                $subdomain = (string)($row['domain'] ?? '');
                 if ($subdomain !== '' && !isset($map[$subdomain])) {
                     $map[$subdomain] = $certData;
                 }
@@ -5129,23 +5126,30 @@ CNF;
      */
     private function getAcmeDnsTxtPollConfig(): array
     {
-        $cfg = Env::module_env('Weline_Websites', 'acme_dns') ?? [];
-        if (!\is_array($cfg)) {
-            $cfg = [];
+        $config = [];
+        try {
+            $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(AcmeDnsTxtPollPolicyProviderInterface::class);
+            if ($provider instanceof AcmeDnsTxtPollPolicyProviderInterface) {
+                $config = $provider->getPolicy();
+            }
+        } catch (\Throwable) {
+            $config = [];
         }
+
         // 未配置时默认走 DoH 回退：本机 dns_get_record 在 Windows/企业递归上常滞后于权威，与「CF 已写入但进程查不到」现象一致
         $out = [
-            'max_seconds' => (int) ($cfg['txt_poll_max_seconds'] ?? 900),
-            'interval_seconds' => (int) ($cfg['txt_poll_interval_seconds'] ?? 10),
-            'visible_use_public_doh' => !\array_key_exists('txt_visible_use_public_doh', $cfg)
+            'max_seconds' => (int)($config['max_seconds'] ?? 900),
+            'interval_seconds' => (int)($config['interval_seconds'] ?? 10),
+            'visible_use_public_doh' => !\array_key_exists('visible_use_public_doh', $config)
                 ? true
-                : !empty($cfg['txt_visible_use_public_doh']),
+                : !empty($config['visible_use_public_doh']),
         ];
-        if (\array_key_exists('txt_poll_max_seconds_gname', $cfg)) {
-            $out['max_seconds_gname'] = (int) $cfg['txt_poll_max_seconds_gname'];
+        if (\array_key_exists('max_seconds_gname', $config)) {
+            $out['max_seconds_gname'] = (int)$config['max_seconds_gname'];
         }
-        if (\array_key_exists('txt_poll_max_seconds_cloudflare', $cfg)) {
-            $out['max_seconds_cloudflare'] = (int) $cfg['txt_poll_max_seconds_cloudflare'];
+        if (\array_key_exists('max_seconds_cloudflare', $config)) {
+            $out['max_seconds_cloudflare'] = (int)$config['max_seconds_cloudflare'];
         }
 
         return $out;

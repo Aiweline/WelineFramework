@@ -93,6 +93,30 @@ final class SupervisorMessageTest extends TestCase
         self::assertArrayHasKey('timestamp', $heartbeat);
     }
 
+    public function testHelloAuthenticationRejectsTampering(): void
+    {
+        $hello = SupervisorMessage::decode(SupervisorMessage::hello(
+            instance: 'default',
+            channel: 'channel-default',
+            role: 'worker',
+            slotId: 'worker#1',
+            pid: 1234,
+            launchNonce: 'launch-auth',
+            msgId: 'msg-auth',
+            leaseId: 'lease-auth',
+            generation: 7,
+            authSecret: 'unit-secret',
+        ));
+
+        self::assertTrue(SupervisorMessage::verifyHelloAuthentication($hello, 'unit-secret'));
+        self::assertArrayHasKey('auth_ts', $hello);
+        self::assertArrayHasKey('auth_nonce', $hello);
+        self::assertArrayHasKey('auth_mac', $hello);
+
+        $hello['slot_id'] = 'worker#2';
+        self::assertFalse(SupervisorMessage::verifyHelloAuthentication($hello, 'unit-secret'));
+    }
+
     public function testLeaseReleaseAndAckCarryLeaseIdentity(): void
     {
         $release = SupervisorMessage::decode(SupervisorMessage::leaseRelease(
