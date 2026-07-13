@@ -16926,7 +16926,11 @@ class ServiceOrchestrator
             'scheduledAt' => \microtime(true) + $delay,
             'delayed' => true,  // 标记为延迟复活，执行前需要再次检查进程状态
             'pid' => $leasePid,  // 保存冻结 lease PID，不在复活时重新猜测
-            'tracking_pid' => $leasePid,
+            // Keep the process-tree owner separate from the authenticated
+            // service PID. A foreground wrapper may remain alive after the
+            // Worker IPC socket drops; recovery must keep observing that root
+            // instead of prematurely launching a duplicate slot.
+            'tracking_pid' => $trackingPid,
             'root_pid' => $instance->getRootPid(),
             'launcher_pid' => $instance->getLauncherPid(),
             'process_name' => $processName,
