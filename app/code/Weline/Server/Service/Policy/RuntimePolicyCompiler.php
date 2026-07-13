@@ -458,8 +458,10 @@ final class RuntimePolicyCompiler
                     (int)($slowloris['incomplete_timeout'] ?? 30),
                 ),
                 // Only connections still incomplete after this grace enter
-                // shared accounting. Ordinary fresh connections stay local.
-                'grace_seconds' => \max(0.01, (float)($slowloris['grace_seconds'] ?? 0.25)),
+                // shared accounting. Keep the grace above the fresh-TLS
+                // latency budget so normal concurrent handshakes cannot be
+                // classified as slowloris under scheduler pressure.
+                'grace_seconds' => \max(0.01, (float)($slowloris['grace_seconds'] ?? 1.5)),
             ],
         ];
     }

@@ -170,11 +170,14 @@ class AttackDetector
             'block_duration' => 300,
         ],
         
-        // 慢速攻击检测（配置保留；detect() 中尚未接入，需 Dispatcher 层按连接状态统计后调用）
+        // 慢速攻击检测。连接先经过宽限窗口，只有仍未完成 TLS/HTTP
+        // 请求的连接才进入跨 Worker 的每 IP 计数，避免把正常 fresh-TLS
+        // 并发误判为 slowloris。
         'slowloris' => [
             'enabled' => true,
             'max_incomplete_conns' => 10, // 同一 IP 最大未完成连接数
             'incomplete_timeout' => 30,    // 请求不完整超时
+            'grace_seconds' => 1.5,        // 正常 TLS/请求帧完成宽限（秒）
         ],
         
         // 敏感路径保护
