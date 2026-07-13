@@ -2,8 +2,8 @@
 
 namespace Weline\ElFinderFileManager\Block;
 
-use Weline\FileManager\Block\FileManager;
-use Weline\FileManager\Helper\Image;
+use Weline\FileManager\Api\Block\FileManager;
+use Weline\FileManager\Api\Image;
 use Weline\Framework\View\Block;
 
 class ElFinder extends FileManager

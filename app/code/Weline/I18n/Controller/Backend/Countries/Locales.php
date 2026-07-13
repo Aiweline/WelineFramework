@@ -47,7 +47,10 @@ class Locales extends BaseController
     {
         parent::__init();
         $country_code = $this->request->getParam('country_code');
-        
+        // WLS worker 常驻时模型对象可能跨请求复用。列表查询必须使用
+        // 请求级模型，避免上一请求的 items/data 参与本次状态判断。
+        $this->locale = ObjectManager::make(Locale::class);
+
         // 先设置基础条件
         $this->locale->where('main_table.' . $this->locale::schema_fields_COUNTRY_CODE, $country_code);
         
@@ -96,8 +99,10 @@ class Locales extends BaseController
             ->select()
             ->fetch();
             
-        // 如果查不到数据就自动更新区域数据
-        if ($locales_result->getTotal() == 0) {
+        // 如果没有实际行才自动更新区域数据。AbstractModel 没有真正的
+        // getTotal() 方法，调用它会退化为读取一个不存在的 data 字段，
+        // 导致每次刷新都误判为空并用默认 is_install=0 覆盖已安装状态。
+        if (empty($locales_result->getItems())) {
             $this->autoUpdateLocaleData();
             // 重新查询
             $locales_result = $query_copy
@@ -113,56 +118,43 @@ class Locales extends BaseController
 //        p($this->locale->getLastSql());
         $this->assign('locales', $locales_result->getItems());
         $this->assign('pagination', $locales_result->getPagination());
-        return $this->fetch();
+        // The view intentionally uses getIndex.phtml to distinguish the
+        // locale listing from the country listing. The implicit action view
+        // resolver looks for index.phtml, so select the template explicitly.
+        return $this->fetch('getIndex');
     }
 
 
     public function getUpdate()
     {
+        $isJsonRequest = $this->isJsonRequest();
         $this->request->checkParam();
-        $country_code = $this->request->getGet('country_code');
+        $country_code = (string)$this->request->getGet('country_code', '');
         $this->request->checkParam(false);
         if (!Countries::exists($country_code)) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('国家不存在！代码：%{1}', $country_code));
+            }
             $this->getMessageManager()->addWarning(__('国家不存在！代码：%{1}', $country_code));
-            $this->redirect('*/backend/countries/locales');
+            return $this->redirect('*/backend/countries/locales');
         }
-        $country = $this->i18n->getCountry($country_code);
-        $countryLocales = (array)($country['locales'] ?? []);
-        $locales = [];
-        $locales_display = [];
-        $this->locale->clearQuery();
-        foreach ($countryLocales as $localeCode) {
-            $localeCodes = Locale::extractLocaleCodes($localeCode);
-
-            $locales[] = [
-                $this->locale::schema_fields_CODE => $localeCode,
-                $this->locale::schema_fields_COUNTRY_CODE => $country_code,
-                $this->locale::schema_fields_SHORT_CODE => $localeCodes['short_code'],
-                $this->locale::schema_fields_ISO2 => $localeCodes['iso2'],
-                $this->locale::schema_fields_ISO3 => $localeCodes['iso3'],
-                $this->locale::schema_fields_IS_INSTALL => 0,
-                $this->locale::schema_fields_IS_ACTIVE => 0,
-                $this->locale::schema_fields_FLAG => '',
-            ];
-            $locales_display[] = [
-                Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                Name::schema_fields_LOCALE_CODE => $localeCode,
-                Name::schema_fields_DISPLAY_NAME => $this->i18n->getLocaleName($localeCode, Cookie::getLangLocal()),
-            ];
-        }
-        $this->locale->beginTransaction();
         try {
-            // 安装地区
-            $result = $this->locale->reset()->insert($locales, $this->locale::schema_fields_CODE)->fetch();
-            // 安装地区展示码
-            $this->localeName->reset()->insert($locales_display, [
-                $this->localeName::schema_fields_LOCALE_CODE,
-                $this->localeName::schema_fields_DISPLAY_LOCALE_CODE
-            ])->fetch();
-            $this->locale->commit();
-            $this->getMessageManager()->addSuccess(__('安装国家地区数据成功！'));
-        } catch (\Exception $exception) {
-            $this->locale->rollBack();
+            // 仅补齐缺失目录和名称，不能用默认状态 0 全量 upsert 覆盖已安装/已激活状态。
+            $this->autoUpdateLocaleData();
+            $this->autoUpdateMissingLocaleNames();
+            $localeCount = count($this->lifecycle->getLocaleCodesByCountry($country_code));
+            $message = (string)__('国家地区数据同步完成！共 %{1} 个地区。', $localeCount);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, [
+                    'country_code' => $country_code,
+                    'locale_count' => $localeCount,
+                ]);
+            }
+            $this->getMessageManager()->addSuccess($message);
+        } catch (\Throwable $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             $this->getMessageManager()->addException($exception);
         }
         $this->redirect('*/backend/countries/locales', [], true);
@@ -170,15 +162,26 @@ class Locales extends BaseController
 
     public function postActive()
     {
-        $code = $this->request->getPost('code');
+        $code = (string)$this->request->getPost('code', '');
+        $isJsonRequest = $this->isJsonRequest();
         if ($this->i18n->localeExists($code)) {
             try {
-                $this->lifecycle->activateLocale((string)$code);
-                $this->getMessageManager()->addSuccess(__('激活成功！'));
+                $summary = $this->lifecycle->activateLocale($code);
+                $message = (string)__('区域已激活！区域代码：%{1}', $code);
+                if ($isJsonRequest) {
+                    return $this->jsonActionResponse(true, $message, $summary);
+                }
+                $this->getMessageManager()->addSuccess($message);
             } catch (\Exception $exception) {
+                if ($isJsonRequest) {
+                    return $this->jsonActionResponse(false, $exception->getMessage());
+                }
                 $this->getMessageManager()->addException($exception);
             }
         } else {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('地区已经不存在！'));
+            }
             $this->getMessageManager()->addWarning(__('地区已经不存在！'));
         }
         $this->redirect('*/backend/countries/locales', $this->request->getParams());
@@ -186,15 +189,33 @@ class Locales extends BaseController
 
     public function postDisable()
     {
-        $code = $this->request->getPost('code');
+        $code = (string)$this->request->getPost('code', '');
+        $isJsonRequest = $this->isJsonRequest();
+        if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择要停用的区域！'));
+            }
+            $this->getMessageManager()->addWarning(__('请选择要停用的区域！'));
+            return $this->redirect($this->request->getReferer());
+        }
         if ($this->i18n->localeExists($code)) {
             try {
-                $this->lifecycle->deactivateLocale((string)$code);
-                $this->getMessageManager()->addSuccess(__('禁用成功！'));
-            } catch (\Exception $exception) {
+                $summary = $this->lifecycle->deactivateLocale($code);
+                $message = (string)__('区域已停用！区域代码：%{1}', $code);
+                if ($isJsonRequest) {
+                    return $this->jsonActionResponse(true, $message, $summary);
+                }
+                $this->getMessageManager()->addSuccess($message);
+            } catch (\Throwable $exception) {
+                if ($isJsonRequest) {
+                    return $this->jsonActionResponse(false, $exception->getMessage());
+                }
                 $this->getMessageManager()->addException($exception);
             }
         } else {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('地区已经不存在！'));
+            }
             $this->getMessageManager()->addWarning(__('地区已经不存在！'));
         }
         $this->redirect('*/backend/countries/locales', $this->request->getParams());
@@ -202,23 +223,62 @@ class Locales extends BaseController
 
     public function postInstall()
     {
-        $code = $this->request->getPost('code');
+        $code = (string)$this->request->getPost('code', '');
+        $isJsonRequest = $this->isJsonRequest();
         try {
-            $this->lifecycle->installLocale((string)$code);
-            $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%{1}', $code));
+            $summary = $this->lifecycle->installLocale($code);
+            $message = (string)__('区域已安装！区域代码：%{1}', $code);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, $summary);
+            }
+            $this->getMessageManager()->addSuccess($message);
         } catch (\Exception $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             $this->getMessageManager()->addException($exception);
         }
         $this->redirect($this->request->getReferer());
     }
 
+    private function isJsonRequest(): bool
+    {
+        $accept = strtolower((string)($this->request->getHeader('Accept') ?? ''));
+        return $this->request->isAjax() || str_contains($accept, 'application/json');
+    }
+
+    private function jsonActionResponse(bool $success, string $message, array $data = []): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        return json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     public function postUninstall()
     {
-        $code = $this->request->getPost('code');
+        $code = (string)$this->request->getPost('code', '');
+        $isJsonRequest = $this->isJsonRequest();
+        if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择要卸载的区域！'));
+            }
+            $this->getMessageManager()->addWarning(__('请选择要卸载的区域！'));
+            return $this->redirect($this->request->getReferer());
+        }
         try {
-            $this->lifecycle->uninstallLocale((string)$code);
-            $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%{1}', $code));
-        } catch (\Exception $exception) {
+            $summary = $this->lifecycle->uninstallLocale($code);
+            $message = (string)__('区域已卸载！区域代码：%{1}', $code);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, $summary);
+            }
+            $this->getMessageManager()->addSuccess($message);
+        } catch (\Throwable $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
             $this->getMessageManager()->addException($exception);
         }
         $this->redirect($this->request->getReferer());
@@ -273,32 +333,47 @@ class Locales extends BaseController
                 ];
             }
             
-            // 使用独立的模型实例，避免影响主查询对象
-            $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            $localeNameModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
-            
-            $localeModel->beginTransaction();
-            
-            // 插入区域数据
-            $localeModel->reset()->insert($locales_data, $this->locale::schema_fields_CODE)->fetch();
-            
-            // 插入区域显示名称数据
-            $localeNameModel->reset()->insert($locales_display, [
-                $this->localeName::schema_fields_LOCALE_CODE,
-                $this->localeName::schema_fields_DISPLAY_LOCALE_CODE
-            ])->fetch();
-            
-            $localeModel->commit();
+            // 使用独立且干净的模型实例，避免影响主查询对象。
+            $localeModel = ObjectManager::make(Locale::class);
+            $localeNameModel = ObjectManager::make(Name::class);
+
+            // 只插入数据库中缺失的区域。这里不能使用带冲突更新的
+            // 全量 upsert：自动补数据的默认状态是 0，会覆盖用户刚安装
+            // 的区域。
+            $existingLocales = $localeModel->reset()
+                ->where(Locale::schema_fields_COUNTRY_CODE, $country_code)
+                ->select(Locale::schema_fields_CODE)
+                ->fetch()
+                ->getItems();
+            $existingLocaleCodes = [];
+            foreach ($existingLocales as $existingLocale) {
+                $existingCode = (string)$existingLocale->getData(Locale::schema_fields_CODE);
+                if ($existingCode !== '') {
+                    $existingLocaleCodes[$existingCode] = true;
+                }
+            }
+
+            $missingLocales = array_values(array_filter(
+                $locales_data,
+                static fn(array $localeData): bool => !isset($existingLocaleCodes[(string)$localeData[Locale::schema_fields_CODE]])
+            ));
+            if ($missingLocales !== []) {
+                $localeModel->reset()
+                    ->insert($missingLocales, Locale::schema_fields_CODE)
+                    ->fetch();
+            }
+
+            // 名称表允许按 locale + 展示语言补齐；不会触碰区域安装状态。
+            if ($locales_display !== []) {
+                $localeNameModel->reset()->insert($locales_display, [
+                    Name::schema_fields_LOCALE_CODE,
+                    Name::schema_fields_DISPLAY_LOCALE_CODE
+                ])->fetch();
+            }
             
         } catch (\Exception $e) {
-            // 使用独立的模型实例回滚
-            try {
-                $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-                $localeModel->rollBack();
-            } catch (\Exception $rollbackException) {
-                // 忽略回滚错误
-            }
-            // 静默处理异常，不影响页面显示
+            // 这里没有显式开启事务，不能为了补数据去回滚共享连接上
+            // 其他请求留下的事务；记录错误并保留当前页面可用性即可。
             w_log_error('Auto update locale data failed: ' . $e->getMessage(), [], 'i18n');
         }
     }

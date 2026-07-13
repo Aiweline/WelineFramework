@@ -13,7 +13,8 @@ declare(strict_types=1);
 namespace Weline\UrlManager\Plugin;
 
 use Weline\Framework\App\Env;
-use Weline\ModuleManager\Model\Module;
+use Weline\Framework\Module\ModuleIdentityProviderInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\UrlManager\Model\UrlManager;
 
 class ModuleUpgradeExecuteAfterPlugin
@@ -21,13 +22,15 @@ class ModuleUpgradeExecuteAfterPlugin
     private const ROUTE_BATCH_SIZE = 500;
     private const ROUTE_IMPORT_MEMORY_LIMIT = '512M';
 
-    private $module =  null;
     private $urlManager =  null;
+    private ?ModuleIdentityProviderInterface $moduleIdentity = null;
     /** @var array<string, int> */
     private array $moduleIdCache = [];
-    function __construct(Module $module,UrlManager $urlManager)
+    function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviders,
+        UrlManager $urlManager,
+    )
     {
-        $this->module = $module;
         $this->urlManager = $urlManager;
     }
 
@@ -83,6 +86,7 @@ class ModuleUpgradeExecuteAfterPlugin
                 UrlManager::schema_fields_IDENTIFY => md5($path . $type),
                 UrlManager::schema_fields_DATA => json_encode($urlConfig),
                 UrlManager::schema_fields_TYPE => $type,
+                UrlManager::schema_fields_IS_DELETE => 0,
             ];
 
             if (count($batchRows) >= self::ROUTE_BATCH_SIZE) {
@@ -103,8 +107,7 @@ class ModuleUpgradeExecuteAfterPlugin
             return $this->moduleIdCache[$moduleName];
         }
 
-        $this->module->recovery();
-        $moduleId = (int)$this->module->load('name', $moduleName)->getId();
+        $moduleId = (int)($this->moduleIdentity()->idsByNames([$moduleName])[$moduleName] ?? 0);
         $this->moduleIdCache[$moduleName] = $moduleId;
         return $moduleId;
     }
@@ -129,22 +132,19 @@ class ModuleUpgradeExecuteAfterPlugin
             return;
         }
 
-        $rows = $this->module->reset()
-            ->fields(Module::schema_fields_ID . ',' . Module::schema_fields_NAME)
-            ->where(Module::schema_fields_NAME, array_values($moduleNames), 'IN')
-            ->select()
-            ->fetchArray();
-        if (!$rows) {
-            return;
-        }
+        $this->moduleIdCache += $this->moduleIdentity()->idsByNames(\array_values($moduleNames));
+    }
 
-        foreach ($rows as $row) {
-            $name = (string)($row[Module::schema_fields_NAME] ?? '');
-            if ($name === '') {
-                continue;
-            }
-            $this->moduleIdCache[$name] = (int)($row[Module::schema_fields_ID] ?? 0);
+    private function moduleIdentity(): ModuleIdentityProviderInterface
+    {
+        if ($this->moduleIdentity instanceof ModuleIdentityProviderInterface) {
+            return $this->moduleIdentity;
         }
+        $provider = $this->runtimeProviders->resolve(ModuleIdentityProviderInterface::class);
+        if (!$provider instanceof ModuleIdentityProviderInterface) {
+            throw new \RuntimeException('Module identity provider is unavailable.');
+        }
+        return $this->moduleIdentity = $provider;
     }
 
     /**
@@ -169,14 +169,11 @@ class ModuleUpgradeExecuteAfterPlugin
             return;
         }
 
-        $identifies = array_keys($deduplicatedRows);
-        // 先删除旧记录，再批量插入新记录，确保 PostgreSQL 下不会触发唯一键冲突
-        $this->urlManager->recovery()
-            ->where(UrlManager::schema_fields_IDENTIFY, $identifies, 'IN')
-            ->delete()
-            ->fetch();
-
-        $this->urlManager->recovery()
+        // 路由同步必须是单语句原子 upsert：“先删后插”在并发升级时存在唯一键竞态。
+        // 临时清空自增主键 identity，让三种方言编译器生成真正的批量
+        // INSERT ... ON CONFLICT/ON DUPLICATE KEY，冲突依据仍是 identify 唯一索引。
+        $query = $this->urlManager->recovery()->getQuery();
+        $query->identity('')
             ->insert(array_values($deduplicatedRows), UrlManager::schema_fields_IDENTIFY)
             ->fetch();
     }

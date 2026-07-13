@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 namespace Weline\Multipass\Controller\Frontend;
 
-use Weline\Customer\Model\Customer;
+use Weline\Customer\Api\Auth\CustomerIdentity;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\TrustedApp;
+use Weline\Multipass\Service\AccountFacadeResolver;
 use Weline\Multipass\Service\IdentityClientService;
 use Weline\Multipass\Service\IdentityBridgeService;
 
@@ -17,6 +18,7 @@ class Identity extends FrontendController
 
     private ?IdentityBridgeService $identityBridgeService = null;
     private ?IdentityClientService $identityClientService = null;
+    private ?AccountFacadeResolver $accountFacades = null;
 
     public function getAuthorize(): string
     {
@@ -203,20 +205,14 @@ class Identity extends FrontendController
         return $this->identityClientService;
     }
 
-    private function getCurrentCustomer(): ?Customer
+    private function getCurrentCustomer(): ?CustomerIdentity
     {
-        $user = $this->getLoginUser();
-        if ($user instanceof Customer && $user->getId()) {
-            return $user;
-        }
+        return $this->accountFacades()->customer()->current();
+    }
 
-        $userId = (int) ($this->getLoginUserId() ?? 0);
-        if ($userId <= 0) {
-            return null;
-        }
-
-        $customer = ObjectManager::getInstance(Customer::class, [], false)->load($userId);
-        return $customer->getId() ? $customer : null;
+    private function accountFacades(): AccountFacadeResolver
+    {
+        return $this->accountFacades ??= ObjectManager::getInstance(AccountFacadeResolver::class);
     }
 
     private function redirectToLogin(): string

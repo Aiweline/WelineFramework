@@ -10,22 +10,30 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
-use Weline\I18n\Model\Locale\Dictionary;
-use Weline\Meta\Helper\MetaData;
-use Weline\Meta\Model\MetaConfig;
-use Weline\Meta\Service\ParamDefinitionNormalizer;
-use Weline\Server\Service\MemoryStateFacade;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Api\Data\MetaConfigIdentity;
+use Weline\Meta\Api\Data\MetaConfigRecord;
+use Weline\Meta\Api\Data\MetaConfigScopeSearch;
+use Weline\Meta\Api\Data\MetaConfigSearch;
+use Weline\Meta\Api\Data\MetaConfigWrite;
+use Weline\Meta\Api\Data\MetadataRecord;
+use Weline\Meta\Api\Data\MetadataSearch;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
+use Weline\Meta\Api\MetadataRepositoryInterface;
+use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewThemeScopeService;
 use Weline\Theme\Service\ThemeContextService;
-use Weline\Widget\Ui\ParamType\AbstractParamType;
+use Weline\Widget\Api\Param\ParamDefinition;
 
 final class ThemeDataRequestState
 {
@@ -35,14 +43,21 @@ final class ThemeDataRequestState
     public bool $initialized = false;
     public bool $performanceLoading = false;
     public array $performanceCache = [];
+    public ?string $performanceNamespace = null;
+    public ?string $performanceScope = null;
+    public ?string $performanceLocale = null;
+    /** @var array<string, string> */
+    public array $requestedScopes = [];
+    /** @var array<string, string> */
+    public array $effectiveScopes = [];
+    public ?string $configLocale = null;
 }
 
 /**
  * ThemeData 静态类
  * 
- * 统一管理Theme模块对Meta模块的调用
- * 内部统一使用MetaData获取值，不直接调用MetaConfig
- * 利用MetaData的performanceLoad方法优化性能
+ * 统一管理 Theme 模块对 Meta 公共 Repository 契约的调用。
+ * 请求热路径只缓存标量或纯数组，不暴露 Meta Model/ORM 对象。
  * 
  * 使用示例：
  * // 获取配置值
@@ -69,7 +84,7 @@ class ThemeData
     private static array $scopedStates = [];
     /** @var array<string, array{expires_at: float, value: mixed}> */
     private static array $runtimeCache = [];
-    private static ?MemoryStateFacade $sharedRuntimeCache = null;
+    private static ?SharedCacheStateInterface $sharedRuntimeCache = null;
     private static bool $sharedRuntimeCacheResolved = false;
 
     private static function currentFiber(): ?\Fiber
@@ -138,12 +153,18 @@ class ThemeData
 
     private static function resolveRequestedScopeForArea(string $area): string
     {
+        $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
+        $state = self::state();
+        if (isset($state->requestedScopes[$area])) {
+            return $state->requestedScopes[$area];
+        }
+
         try {
             /** @var ThemeContextService $themeContext */
             $themeContext = ObjectManager::getInstance(ThemeContextService::class);
-            return $themeContext->resolveCurrentScope($area);
+            return $state->requestedScopes[$area] = $themeContext->resolveCurrentScope($area);
         } catch (\Throwable) {
-            return 'default';
+            return $state->requestedScopes[$area] = 'default';
         }
     }
 
@@ -161,12 +182,21 @@ class ThemeData
             return $scope;
         }
 
+        $cacheKey = (string)$themeId . "\0" . $area . "\0" . $scope;
+        if (isset($state->effectiveScopes[$cacheKey])) {
+            return $state->effectiveScopes[$cacheKey];
+        }
+
         try {
             /** @var PreviewThemeScopeService $previewThemeScopeService */
             $previewThemeScopeService = ObjectManager::getInstance(PreviewThemeScopeService::class);
-            return $previewThemeScopeService->resolveEffectiveScope((int)$themeId, $area, $scope);
+            return $state->effectiveScopes[$cacheKey] = $previewThemeScopeService->resolveEffectiveScope(
+                (int)$themeId,
+                $area,
+                $scope,
+            );
         } catch (\Throwable) {
-            return $scope;
+            return $state->effectiveScopes[$cacheKey] = $scope;
         }
     }
 
@@ -225,31 +255,317 @@ class ThemeData
         }
     }
 
-    private static function sharedRuntimeCache(): ?MemoryStateFacade
+    private static function sharedRuntimeCache(): ?SharedCacheStateInterface
     {
         if (self::$sharedRuntimeCacheResolved) {
             return self::$sharedRuntimeCache;
         }
         self::$sharedRuntimeCacheResolved = true;
 
-        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
             return null;
         }
 
         try {
-            /** @var RuntimeCachePolicy $policy */
-            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
-            self::$sharedRuntimeCache = new MemoryStateFacade($policy->memoryOptions([
-                'consumer_code' => self::SHARED_CACHE_NAMESPACE,
-                'prefer_direct_connect' => true,
-                'persistent' => true,
-                'lazy_connect' => true,
-            ]));
+            $cache = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(SharedCacheStateInterface::class);
+            self::$sharedRuntimeCache = $cache instanceof SharedCacheStateInterface ? $cache : null;
         } catch (\Throwable) {
             self::$sharedRuntimeCache = null;
         }
 
         return self::$sharedRuntimeCache;
+    }
+
+    private static function metadataRepository(): MetadataRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetadataRepositoryInterface::class);
+        if (!$provider instanceof MetadataRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta metadata repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
+    private static function metaConfigRepository(): MetaConfigRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetaConfigRepositoryInterface::class);
+        if (!$provider instanceof MetaConfigRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta config repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
+    private static function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
+    private static function paramDefinitionNormalizer(): ParamDefinitionNormalizerInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ParamDefinitionNormalizerInterface::class);
+        if (!$provider instanceof ParamDefinitionNormalizerInterface) {
+            throw new \RuntimeException('Weline_Meta param normalizer provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
+    private static function currentConfigLocale(?string $locale = null): string
+    {
+        $locale = trim((string)($locale ?? ''));
+        if ($locale !== '') {
+            return $locale;
+        }
+
+        $state = self::state();
+        return $state->configLocale ??= Cookie::getLang() ?? Cookie::getLangLocal() ?? 'zh_Hans_CN';
+    }
+
+    /** @return list<string> */
+    private static function dualReadConfigKeys(string $configKey): array
+    {
+        $configKey = trim($configKey);
+        if ($configKey === '') {
+            return [];
+        }
+
+        if (str_ends_with($configKey, '.value')) {
+            $canonical = substr($configKey, 0, -strlen('.value'));
+            return $canonical !== '' ? [$canonical, $configKey] : [$configKey];
+        }
+
+        return [$configKey, $configKey . '.value'];
+    }
+
+    private static function resolveConfigValue(
+        string $identifyId,
+        string $namespace,
+        string $configKey,
+        string $scope,
+        ?string $locale = null,
+    ): ?string {
+        $locale = self::currentConfigLocale($locale);
+        $cacheKey = 'scalar_config:' . hash('sha256', implode("\0", [
+            $identifyId,
+            $namespace,
+            $configKey,
+            $scope,
+            $locale,
+        ]));
+        $state = self::state();
+        if (array_key_exists($cacheKey, $state->performanceCache)) {
+            $cached = $state->performanceCache[$cacheKey];
+            return is_string($cached) ? $cached : null;
+        }
+
+        [$runtimeHit, $runtimeValue] = self::getRuntimeCache($cacheKey);
+        if ($runtimeHit && is_string($runtimeValue)) {
+            $state->performanceCache[$cacheKey] = $runtimeValue;
+            return $runtimeValue;
+        }
+
+        $identities = [];
+        foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
+            $identities[] = new MetaConfigIdentity(
+                namespace: $namespace,
+                configKey: $candidateKey,
+                scope: $scope,
+                locale: $locale,
+                identifyId: $identifyId,
+            );
+        }
+
+        $records = self::metaConfigRepository()->resolveBatch($identities);
+        foreach ($records as $record) {
+            if (!$record instanceof MetaConfigRecord) {
+                continue;
+            }
+            $state->performanceCache[$cacheKey] = $record->value;
+            self::setRuntimeCache($cacheKey, $record->value);
+            return $record->value;
+        }
+
+        $state->performanceCache[$cacheKey] = null;
+        return null;
+    }
+
+    /**
+     * @param list<MetaConfigRecord> $records
+     * @return array<string, string>
+     */
+    private static function resolveConfigMap(array $records, ?string $locale = null): array
+    {
+        $locale = self::currentConfigLocale($locale);
+        $values = [];
+        $ranks = [];
+
+        foreach ($records as $record) {
+            if (!$record instanceof MetaConfigRecord) {
+                continue;
+            }
+            $rank = self::localeRank($record->locale, $locale);
+            if ($rank === null || (isset($ranks[$record->configKey]) && $rank >= $ranks[$record->configKey])) {
+                continue;
+            }
+            $ranks[$record->configKey] = $rank;
+            $values[$record->configKey] = $record->value;
+        }
+
+        return $values;
+    }
+
+    private static function localeRank(?string $recordLocale, string $requestedLocale): ?int
+    {
+        $locales = array_values(array_unique([$requestedLocale, 'zh_Hans_CN'], SORT_STRING));
+        $locales[] = null;
+        foreach ($locales as $rank => $locale) {
+            if ($recordLocale === $locale) {
+                return $rank;
+            }
+        }
+
+        return null;
+    }
+
+    private static function findMetadataRecord(string $identify): ?MetadataRecord
+    {
+        $records = self::metadataRepository()->search(new MetadataSearch(
+            namespace: 'theme',
+            identify: $identify,
+        ));
+
+        return $records[0] ?? null;
+    }
+
+    /** @return array<string, mixed> */
+    private static function metadataRecordToArray(MetadataRecord $record): array
+    {
+        return [
+            'meta_id' => $record->id,
+            'meta_identify' => $record->identify,
+            'file_path' => $record->filePath,
+            'file_full_path' => $record->fileFullPath,
+            'category' => $record->category,
+            'meta_data' => $record->metaData,
+            'setting' => $record->setting,
+            '_model' => null,
+        ];
+    }
+
+    private static function nestedArrayValue(array $data, string $path): mixed
+    {
+        $value = $data;
+        foreach (explode('.', $path) as $segment) {
+            if (!is_array($value) || !array_key_exists($segment, $value)) {
+                return null;
+            }
+            $value = $value[$segment];
+        }
+
+        return $value;
+    }
+
+    private static function metadataFieldValue(MetadataRecord $record, string $field): mixed
+    {
+        foreach ([$record->metaData, $record->metaData['meta'] ?? [], $record->metaData['attributes'] ?? []] as $data) {
+            if (!is_array($data) || !array_key_exists($field, $data)) {
+                continue;
+            }
+            $value = $data[$field];
+            if (!is_array($value)) {
+                return $value;
+            }
+            if ($field === 'default' && array_key_exists('default', $value)) {
+                return $value['default'];
+            }
+            if (array_key_exists('name', $value)) {
+                return $value['name'];
+            }
+            if (array_key_exists('default', $value)) {
+                return $value['default'];
+            }
+        }
+
+        return null;
+    }
+
+    private static function translatedValue(string $translationKey, mixed $fallback = null): mixed
+    {
+        $requestedLocale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        $locales = array_values(array_unique([$requestedLocale, 'zh_Hans_CN'], SORT_STRING));
+
+        try {
+            $dictionary = self::dictionaryRepository();
+            foreach ($locales as $locale) {
+                $entry = $dictionary->getEntry($translationKey, $locale);
+                if ($entry === null) {
+                    continue;
+                }
+                $translation = $entry->translation;
+                if ($translation !== null && $translation !== '') {
+                    return $translation;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $fallback;
+    }
+
+    private static function metadataFallbackValue(string $identify): mixed
+    {
+        if (preg_match('/^(.+)\.(name|description|default)(\.(lang|value|info|config))?$/', $identify, $matches)) {
+            $record = self::findMetadataRecord($matches[1]);
+            if (!$record instanceof MetadataRecord) {
+                return null;
+            }
+            $field = $matches[2];
+            $suffix = $matches[4] ?? null;
+            $fieldValue = self::metadataFieldValue($record, $field);
+            $defaultValue = self::metadataFieldValue($record, 'default');
+            if ($suffix === 'lang') {
+                return self::translatedValue(
+                    "@meta::{$record->namespace}.{$record->type}.{$record->identify}.{$field}",
+                    $fieldValue,
+                );
+            }
+            if ($suffix === 'value' && $defaultValue !== null) {
+                return $defaultValue;
+            }
+            return $fieldValue;
+        }
+
+        if (preg_match('/^(.+)\.info\.(.+)$/', $identify, $matches)) {
+            $record = self::findMetadataRecord($matches[1]);
+            if (!$record instanceof MetadataRecord) {
+                return null;
+            }
+            $value = self::nestedArrayValue($record->metaData, $matches[2]);
+            return self::translatedValue(
+                "@meta::{$record->namespace}.{$record->type}.{$record->identify}.{$matches[2]}",
+                $value,
+            );
+        }
+
+        if (preg_match('/^(.+)\.lang$/', $identify, $matches)) {
+            $translationKey = str_starts_with($matches[1], '@meta::')
+                ? $matches[1]
+                : '@meta::' . $matches[1];
+            return self::translatedValue($translationKey);
+        }
+
+        return self::findMetadataRecord($identify);
     }
 
     private static function runtimeCacheTtl(): int
@@ -355,17 +671,31 @@ class ThemeData
             $requestedScope = self::resolveRequestedScopeForArea($area);
             $effectiveScope = self::resolveEffectiveScope($requestedScope, $area);
             $themeId = self::state()->currentTheme?->getId();
+            $locale = self::currentConfigLocale();
 
-            if ($themeId) {
-                /** @var MetaConfig $metaConfig */
-                $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-                $locale = Cookie::getLang() ?? 'zh_Hans_CN';
-                $configValue = $metaConfig->getConfig(
-                    $themeId,
+            if ($themeId !== null && (string)$themeId !== '') {
+                $state = self::state();
+                if ($state->performanceKey !== null
+                    && $state->performanceNamespace === 'theme.' . $area
+                    && $state->performanceScope === $effectiveScope
+                    && $state->performanceLocale === $locale
+                    && isset($state->performanceCache[$state->performanceKey])
+                    && is_array($state->performanceCache[$state->performanceKey])
+                ) {
+                    $themeConfigs = $state->performanceCache[$state->performanceKey];
+                    foreach (self::dualReadConfigKeys($configKeyWithoutValue) as $candidateKey) {
+                        if (array_key_exists($candidateKey, $themeConfigs)) {
+                            return $themeConfigs[$candidateKey];
+                        }
+                    }
+                }
+
+                $configValue = self::resolveConfigValue(
+                    (string)$themeId,
                     'theme.' . $area,
                     $configKeyWithoutValue,
                     $effectiveScope,
-                    $locale
+                    $locale,
                 );
                 if ($configValue !== null) {
                     return $configValue;
@@ -376,38 +706,14 @@ class ThemeData
                 return $default;
             }
         }
-        
-        // 优先从本地缓存读取配置值
-        // 检查是否是 .value 格式
-        if (preg_match('/^(.+)\.value$/', $identify, $matches)) {
-            $baseIdentify = $matches[1]; // 如 theme.frontend.partials.header
-            
-            // 从 baseIdentify 解析出 configKey
-            // theme.frontend.partials.header -> partials.header
-            $parts = explode('.', $baseIdentify);
-            if (count($parts) >= 3 && $parts[0] === 'theme') {
-                // 移除 theme.{area} 前缀
-                $configKey = implode('.', array_slice($parts, 2)) . '.value';
-                
-                // 从 performanceCache 中查找
-                $state = self::state();
-                if ($state->performanceKey && isset($state->performanceCache[$state->performanceKey])) {
-                    $themeConfigs = $state->performanceCache[$state->performanceKey];
-                    if (isset($themeConfigs[$configKey])) {
-                        return $themeConfigs[$configKey];
-                    }
-                }
-            }
-        }
-        
-        // 如果缓存中没有，回退到 MetaData::get()
-        $result = MetaData::get($identify);
+
+        $result = self::metadataFallbackValue($identify);
         
         return $result !== null ? $result : $default;
     }
     
     /**
-     * 主要接口：设置配置值（统一使用MetaData）
+     * 主要接口：通过 Meta 公共 Repository 设置配置值
      * 
      * @param string $identify meta_identify（如 partials.header.value）
      * @param string $value 配置值
@@ -418,34 +724,82 @@ class ThemeData
     public static function set(string $identify, string $value, string $scope = 'default', ?string $locale = null): bool
     {
         self::ensureInitialized();
-        
-        // 规范化identify（自动补全前缀）
         $identify = self::normalizeIdentify($identify);
-        
-        // 获取主题ID
-        $themeId = null;
-        $state = self::state();
-        if ($state->currentTheme && $state->currentTheme->getId()) {
-            $themeId = $state->currentTheme->getId();
+
+        if (preg_match('/^theme\.(frontend|backend)\.(.+)\.value$/', $identify, $matches)) {
+            $themeId = self::state()->currentTheme?->getId();
+            if ($themeId === null || (string)$themeId === '') {
+                return false;
+            }
+
+            $area = $matches[1];
+            $namespace = 'theme.' . $area;
+            $configKey = $matches[2];
+            $effectiveScope = self::resolveEffectiveScope($scope, $area);
+
+            try {
+                $identity = new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $configKey,
+                    scope: $effectiveScope,
+                    locale: $locale,
+                    identifyId: (string)$themeId,
+                );
+
+                $existing = self::metaConfigRepository()->search(new MetaConfigSearch(
+                    namespace: $namespace,
+                    scope: $effectiveScope,
+                    configKey: $configKey,
+                    locale: $locale,
+                    identifyId: (string)$themeId,
+                ));
+                if ($existing === []) {
+                    $baseIdentify = substr($identify, 0, -strlen('.value'));
+                    $metadata = self::findMetadataRecord($baseIdentify);
+                    if (!$metadata instanceof MetadataRecord) {
+                        $parentIdentify = str_contains($baseIdentify, '.')
+                            ? substr($baseIdentify, 0, (int)strrpos($baseIdentify, '.'))
+                            : '';
+                        $metadata = $parentIdentify !== '' ? self::findMetadataRecord($parentIdentify) : null;
+                    }
+                    if ($metadata instanceof MetadataRecord) {
+                        $identity = new MetaConfigIdentity(
+                            namespace: $namespace,
+                            configKey: $configKey,
+                            scope: $effectiveScope,
+                            locale: $locale,
+                            identifyId: (string)$themeId,
+                            metaId: $metadata->id,
+                            metaIdentify: $metadata->identify,
+                        );
+                    }
+                }
+
+                self::metaConfigRepository()->upsert(new MetaConfigWrite($identity, $value));
+                self::clearCache();
+                return true;
+            } catch (\Throwable) {
+                return false;
+            }
         }
-        
-        // 统一使用MetaData设置值
-        $result = MetaData::set(
-            $identify,
-            $value,
-            preg_match('/^theme\.(frontend|backend)\./', $identify, $scopeMatches)
-                ? self::resolveEffectiveScope($scope, $scopeMatches[1])
-                : $scope,
-            $locale,
-            $themeId
-        );
-        
-        // 清除缓存
-        if ($result) {
-            self::clearCache();
+
+        if (preg_match('/^(.+)\.lang$/', $identify, $matches)) {
+            $translationKey = str_starts_with($matches[1], '@meta::')
+                ? $matches[1]
+                : '@meta::' . $matches[1];
+            if (count(explode('.', substr($translationKey, strlen('@meta::')))) < 5) {
+                return false;
+            }
+            $locale = $locale ?? Cookie::getLangLocal() ?? 'zh_Hans_CN';
+
+            try {
+                return self::dictionaryRepository()->upsert($translationKey, $locale, (string)$value);
+            } catch (\Throwable) {
+                return false;
+            }
         }
-        
-        return $result;
+
+        return false;
     }
     
     /**
@@ -546,9 +900,7 @@ class ThemeData
             return [];
         }
 
-        /** @var ParamDefinitionNormalizer $normalizer */
-        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
-        $params = $normalizer->normalizeDefinitions($params);
+        $params = self::paramDefinitionNormalizer()->normalizeDefinitions($params);
 
         $definitions = [];
         foreach ($params as $name => $definition) {
@@ -598,34 +950,55 @@ class ThemeData
             return [];
         }
 
+        $resolvedLocale = self::currentConfigLocale($locale);
+        $themeId = self::state()->currentTheme?->getId();
+        $identities = [];
+        $candidateIndexes = [];
+        if ($themeId !== null && (string)$themeId !== '') {
+            foreach ($definitions as $paramName => $definition) {
+                if (!empty($definition['translate'])) {
+                    continue;
+                }
+                [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}");
+                foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
+                    $candidateIndexes[$paramName][] = count($identities);
+                    $identities[] = new MetaConfigIdentity(
+                        namespace: $namespace,
+                        configKey: $candidateKey,
+                        scope: $effectiveScope,
+                        locale: $resolvedLocale,
+                        identifyId: (string)$themeId,
+                    );
+                }
+            }
+        }
+
+        $records = $identities !== []
+            ? self::metaConfigRepository()->resolveBatch($identities)
+            : [];
+
         $values = [];
         foreach ($definitions as $paramName => $definition) {
             $defaultValue = $definition['default'] ?? null;
-            $isTranslatable = !empty($definition['translate']);
-
-            if ($isTranslatable) {
+            if (!empty($definition['translate'])) {
                 $values[$paramName] = self::getParamTranslation(
                     $identify,
                     $paramName,
                     $effectiveScope,
                     $locale,
-                    is_scalar($defaultValue) ? (string)$defaultValue : null
+                    is_scalar($defaultValue) ? (string)$defaultValue : null,
                 );
                 continue;
             }
 
-            [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}");
-
-            /** @var MetaConfig $metaConfig */
-            $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-            $themeId = self::state()->currentTheme?->getId();
-            $resolvedLocale = $locale ?? (Cookie::getLang() ?? 'zh_Hans_CN');
-
             $value = null;
-            if ($themeId) {
-                $value = $metaConfig->getConfig($themeId, $namespace, $configKey, $effectiveScope, $resolvedLocale);
+            foreach ($candidateIndexes[$paramName] ?? [] as $recordIndex) {
+                $record = $records[$recordIndex] ?? null;
+                if ($record instanceof MetaConfigRecord) {
+                    $value = $record->value;
+                    break;
+                }
             }
-
             if ($value === null) {
                 $value = is_scalar($defaultValue) ? (string)$defaultValue : $defaultValue;
             }
@@ -721,13 +1094,23 @@ class ThemeData
             return;
         }
 
-        [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}.value");
+        [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}");
         $themeId = self::state()->currentTheme?->getId();
 
-        if ($themeId) {
-            /** @var MetaConfig $metaConfig */
-            $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-            $metaConfig->deleteConfig($themeId, $namespace, $configKey, $effectiveScope, $locale);
+        if ($themeId !== null && (string)$themeId !== '') {
+            $deleted = false;
+            foreach (self::dualReadConfigKeys($configKey) as $candidateKey) {
+                $deleted = self::metaConfigRepository()->delete(new MetaConfigIdentity(
+                    namespace: $namespace,
+                    configKey: $candidateKey,
+                    scope: $effectiveScope,
+                    locale: $locale,
+                    identifyId: (string)$themeId,
+                )) || $deleted;
+            }
+            if (!$deleted) {
+                return;
+            }
             self::clearCache();
         }
     }
@@ -762,7 +1145,7 @@ class ThemeData
     /**
      * 设置某个参数在指定语言下的翻译值
      *
-     * 注意：翻译值写入 I18n Dictionary 表，而不是 MetaData 表，
+     * 注意：翻译值写入 I18n Dictionary 表，而不是 MetaConfig 表，
      * 读取时通过 MetaTranslation 统一取值。
      *
      * @param string      $identify  meta_identify（如 layouts.account）
@@ -791,20 +1174,7 @@ class ThemeData
             $translationKey .= '|scope:' . $effectiveScope;
         }
 
-        /** @var Dictionary $dict */
-        $dict = clone ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->clearData()->clearQuery()
-            ->insert([
-                Dictionary::schema_fields_MD5 => $md5,
-                Dictionary::schema_fields_WORD => $translationKey,
-                Dictionary::schema_fields_LOCALE_CODE => $locale,
-                Dictionary::schema_fields_TRANSLATE => $value,
-            ], Dictionary::schema_fields_MD5)
-            ->fetch();
-
-        // 清除性能缓存中与该 meta 相关的翻译缓存（如果以后有需要，可以在此扩展）
-        return true;
+        return self::dictionaryRepository()->upsert($translationKey, $locale, $value);
     }
 
     /**
@@ -828,16 +1198,7 @@ class ThemeData
             $translationKey .= '|scope:' . $effectiveScope;
         }
 
-        /** @var Dictionary $dict */
-        $dict = clone ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->clearData()->clearQuery()->load(Dictionary::schema_fields_MD5, $md5);
-
-        if ($dict->getId()) {
-            $dict->delete();
-            return true;
-        }
-        return false;
+        return self::dictionaryRepository()->deleteEntry($translationKey, $locale);
     }
 
     /**
@@ -915,10 +1276,7 @@ class ThemeData
             }
             $scope = self::resolveEffectiveScope($scope, $state->currentArea);
             
-            // 如果没有提供locale，使用当前语言
-            if ($locale === null) {
-                $locale = Cookie::getLangLocal() ?? null;
-            }
+            $locale = self::currentConfigLocale($locale);
             
             // 获取当前主题ID
             $themeId = null;
@@ -926,9 +1284,13 @@ class ThemeData
                 $themeId = $state->currentTheme->getId();
             }
             
-            // 生成缓存key（包含主题ID）
-            $keyParts = array_filter([$namespace, $metaIdentify, $scope, $locale, $themeId]);
-            $key = md5(implode('.', $keyParts));
+            $key = hash('sha256', implode("\0", [
+                $namespace,
+                $metaIdentify,
+                $scope,
+                $locale,
+                $themeId === null ? 'null' : (string)$themeId,
+            ]));
             
             // 如果已经加载过相同的配置，直接返回
             if ($state->performanceKey === $key) {
@@ -937,52 +1299,38 @@ class ThemeData
 
             [$runtimeHit, $runtimeThemeConfigs] = self::getRuntimeCache('performance:' . $key);
             if ($runtimeHit && is_array($runtimeThemeConfigs)) {
-                MetaData::performanceLoad($key, $namespace, $metaIdentify, $scope, $locale);
                 $state->performanceCache[$key] = $runtimeThemeConfigs;
                 $state->performanceKey = $key;
+                $state->performanceNamespace = $namespace;
+                $state->performanceScope = $scope;
+                $state->performanceLocale = $locale;
                 return;
             }
-            // 先调用MetaData的performanceLoad方法加载Meta记录
-            MetaData::performanceLoad($key, $namespace, $metaIdentify, $scope, $locale);
-            
-            // 如果有主题ID，预加载该主题的MetaConfig配置
-            if ($themeId) {
+
+            if ($themeId !== null && (string)$themeId !== '') {
                 try {
-                    /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
-                    $metaConfig = ObjectManager::getInstance(\Weline\Meta\Model\MetaConfig::class);
-                    
-                    // 重要：清除之前的查询状态，避免参数绑定冲突
-                    $metaConfig->clearQuery();
-                    
-                    // 查询该主题在指定命名空间下的所有配置
-                    $metaConfig->where(\Weline\Meta\Model\MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
-                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
-                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope);
-                    
-                    $collection = $metaConfig->select()->fetch();
-                    $items = $collection->getItems();
-                    
-                    $themeConfigs = [];
-                    foreach ($items as $item) {
-                        if (!$item instanceof \Weline\Meta\Model\MetaConfig) {
-                            continue;
-                        }
-                        $configKey = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY);
-                        $configValue = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
-                        $themeConfigs[$configKey] = $configValue;
-                    }
-                    
+                    $records = self::metaConfigRepository()->search(new MetaConfigSearch(
+                        namespace: $namespace,
+                        scope: $scope,
+                        allLocales: true,
+                        identifyId: (string)$themeId,
+                    ));
+                    $themeConfigs = self::resolveConfigMap($records, $locale);
                     $state->performanceCache[$key] = $themeConfigs;
                     self::setRuntimeCache('performance:' . $key, $themeConfigs);
-                } catch (\Throwable $e) {
+                } catch (\Throwable) {
                     $state->performanceCache[$key] = [];
                     self::setRuntimeCache('performance:' . $key, []);
                 }
+            } else {
+                $state->performanceCache[$key] = [];
             }
             
-            // 保存performanceKey
             $state->performanceKey = $key;
-        } catch (\Exception $e) {
+            $state->performanceNamespace = $namespace;
+            $state->performanceScope = $scope;
+            $state->performanceLocale = $locale;
+        } catch (\Throwable) {
             // 预加载失败，继续执行
         } finally {
             // 重置加载标志，允许后续调用
@@ -995,7 +1343,6 @@ class ThemeData
      */
     public static function clearCache(): void
     {
-        MetaData::clearCache();
         self::$runtimeCache = [];
         self::clearSharedRuntimeCache();
         self::resetCurrentState();
@@ -1076,6 +1423,12 @@ class ThemeData
     {
         $state = self::state();
         $state->currentTheme = $theme;
+        $state->performanceKey = null;
+        $state->performanceNamespace = null;
+        $state->performanceScope = null;
+        $state->performanceLocale = null;
+        $state->requestedScopes = [];
+        $state->effectiveScopes = [];
         $state->initialized = false; // 重置初始化状态，下次调用时会重新初始化
     }
     
@@ -1089,6 +1442,12 @@ class ThemeData
     {
         $state = self::state();
         $state->currentArea = $area;
+        $state->performanceKey = null;
+        $state->performanceNamespace = null;
+        $state->performanceScope = null;
+        $state->performanceLocale = null;
+        $state->requestedScopes = [];
+        $state->effectiveScopes = [];
         $state->initialized = false; // 重置初始化状态，下次调用时会重新初始化
     }
     
@@ -1141,61 +1500,22 @@ class ThemeData
         }
         
         try {
-            /** @var \Weline\Meta\Model\Meta $metaModel */
-            $metaModel = ObjectManager::getInstance(\Weline\Meta\Model\Meta::class);
-            
-            // 重要：清除之前的查询状态，避免参数绑定冲突
-            $metaModel->clearQuery();
-            
-            // 构建查询条件：meta_identify LIKE 'theme.{area}.{type}.%'
-            $identifyPrefix = "theme.{$area}.{$type}.%";
-            
-            $metaModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
-                ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $identifyPrefix, 'LIKE');
-            
-            $collection = $metaModel->select()->fetch();
-            $items = $collection->getItems();
-            
+            $records = self::metadataRepository()->search(new MetadataSearch(
+                namespace: 'theme',
+                identifyPrefix: "theme.{$area}.{$type}.",
+            ));
             $result = [];
-            foreach ($items as $item) {
-                if (!$item instanceof \Weline\Meta\Model\Meta) {
+            foreach ($records as $record) {
+                if (!$record instanceof MetadataRecord) {
                     continue;
                 }
-                
-                $metaId = $item->getId();
-                $identify = $item->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY);
-                $metaDataJson = $item->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA);
-                $settingJson = $item->getData(\Weline\Meta\Model\Meta::schema_fields_SETTING);
-                $filePath = $item->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_PATH);
-                $fileFullPath = $item->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_FULL_PATH);
-                $category = $item->getData(\Weline\Meta\Model\Meta::schema_fields_CATEGORY);
-                
-                $metaData = [];
-                if ($metaDataJson) {
-                    $metaData = json_decode($metaDataJson, true) ?? [];
-                }
-                
-                $setting = [];
-                if ($settingJson) {
-                    $setting = json_decode($settingJson, true) ?? [];
-                }
-                
-                $result[] = [
-                    'meta_id' => $metaId,
-                    'meta_identify' => $identify,
-                    'file_path' => $filePath,
-                    'file_full_path' => $fileFullPath,
-                    'category' => $category,
-                    'meta_data' => $metaData,
-                    'setting' => $setting,
-                    '_model' => $item, // 保留原始模型对象，方便后续操作
-                ];
+                $result[] = self::metadataRecordToArray($record);
             }
             
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable) {
             return [];
         }
     }
@@ -1391,9 +1711,7 @@ class ThemeData
         
         // 从 setting 中提取参数
         if (isset($setting['param']) && is_array($setting['param'])) {
-            /** @var ParamDefinitionNormalizer $normalizer */
-            $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
-            $meta['params'] = $normalizer->normalizeDefinitions($setting['param']);
+            $meta['params'] = self::paramDefinitionNormalizer()->normalizeDefinitions($setting['param']);
         }
         
         // 如果 meta_data 和 setting 都没有参数，尝试从文件解析
@@ -1439,9 +1757,7 @@ class ThemeData
      */
     private static function formatParsedParams(array $parsedParams): array
     {
-        /** @var ParamDefinitionNormalizer $normalizer */
-        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
-        return $normalizer->normalizeParsedParamList($parsedParams);
+        return self::paramDefinitionNormalizer()->normalizeParsedParamList($parsedParams);
     }
     
     /**
@@ -1466,7 +1782,8 @@ class ThemeData
             $themeId = $state->currentTheme->getId();
         }
         
-        $cacheKey = "config_list_{$area}_{$type}_{$effectiveScope}_{$themeId}";
+        $locale = self::currentConfigLocale();
+        $cacheKey = "config_list_{$area}_{$type}_{$effectiveScope}_{$themeId}_{$locale}";
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
         }
@@ -1477,71 +1794,38 @@ class ThemeData
             return $runtimeValue;
         }
 
-        if ($state->performanceKey && isset($state->performanceCache[$state->performanceKey])
+        if ($state->performanceKey
+            && $state->performanceNamespace === "theme.{$area}"
+            && $state->performanceScope === $effectiveScope
+            && $state->performanceLocale === $locale
+            && isset($state->performanceCache[$state->performanceKey])
             && is_array($state->performanceCache[$state->performanceKey])) {
             $result = self::filterThemeConfigsByType($state->performanceCache[$state->performanceKey], $type);
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
             return $result;
         }
+
+        if ($themeId === null || (string)$themeId === '') {
+            $state->performanceCache[$cacheKey] = [];
+            return [];
+        }
         
         try {
-            /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
-            $metaConfig = ObjectManager::getInstance(\Weline\Meta\Model\MetaConfig::class);
-            
-            // 重要：清除之前的查询状态，避免参数绑定冲突
-            $metaConfig->clearQuery();
-            
             $namespace = "theme.{$area}";
-            $configKeyPrefix = "{$type}.%";
-            
-            $query = $metaConfig->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
-                ->where(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
-                ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $effectiveScope);
-            
-            // 如果提供了主题ID，添加 identify_id 条件
-            if ($themeId !== null) {
-                $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId);
-            }
-            
-            $collection = $query->select()->fetch();
-            $items = $collection->getItems();
-            
-            $result = [];
-            foreach ($items as $item) {
-                if (!$item instanceof \Weline\Meta\Model\MetaConfig) {
-                    continue;
-                }
-                
-                $configKey = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY);
-                $configValue = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
-                
-                // 尝试解析 JSON 字符串（如果值是 JSON 格式）
-                if (is_string($configValue) && !empty($configValue)) {
-                    // 检查是否是 JSON 字符串
-                    if (($configValue[0] === '{' || $configValue[0] === '[') && 
-                        ($decoded = json_decode($configValue, true)) !== null && 
-                        json_last_error() === JSON_ERROR_NONE) {
-                        // 如果是 JSON 对象，需要进一步处理
-                        // 对于 layouts 类型，如果值是对象，需要提取对应的值
-                        if (is_array($decoded)) {
-                            $configValue = $decoded;
-                        } else {
-                            $configValue = $decoded;
-                        }
-                    }
-                }
-                
-                // 移除类型前缀，例如：layouts.account.value -> account.value
-                $keyWithoutType = substr($configKey, strlen($type) + 1);
-                
-                $result[$keyWithoutType] = $configValue;
-            }
+            $records = self::metaConfigRepository()->search(new MetaConfigSearch(
+                namespace: $namespace,
+                scope: $effectiveScope,
+                configKeyPrefix: $type . '.',
+                allLocales: true,
+                identifyId: (string)$themeId,
+            ));
+            $result = self::filterThemeConfigsByType(self::resolveConfigMap($records, $locale), $type);
             
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable) {
             return [];
         }
     }
@@ -1571,27 +1855,10 @@ class ThemeData
         }
 
         try {
-            /** @var MetaConfig $metaConfig */
-            $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-            $metaConfig->clearQuery();
-
-            $items = $metaConfig
-                ->where(MetaConfig::schema_fields_NAMESPACE, "theme.{$area}")
-                ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
-                ->select()
-                ->fetch()
-                ->getItems();
-
-            foreach ($items as $item) {
-                if (!$item instanceof MetaConfig) {
-                    continue;
-                }
-
-                $scope = trim((string)$item->getData(MetaConfig::schema_fields_SCOPE));
-                if ($scope !== '') {
-                    $scopes[] = $scope;
-                }
-            }
+            $scopes = array_merge($scopes, self::metaConfigRepository()->listScopes(new MetaConfigScopeSearch(
+                namespace: "theme.{$area}",
+                identifyId: (string)$themeId,
+            )));
         } catch (\Throwable) {
             // ignore and keep default scope only
         }
@@ -2005,14 +2272,14 @@ class ThemeData
 
             $type = $def['type'] ?? 'string';
 
-            if ($type !== 'array' && AbstractParamType::isTranslatable($def)) {
+            if ($type !== 'array' && ParamDefinition::isTranslatable($def)) {
                 $top[] = $paramName;
             }
 
             if ($type === 'array' && !empty($def['item_schema']) && is_array($def['item_schema'])) {
                 $subTranslatable = [];
                 foreach ($def['item_schema'] as $fieldKey => $fieldDef) {
-                    if (is_array($fieldDef) && AbstractParamType::isTranslatable($fieldDef)) {
+                    if (is_array($fieldDef) && ParamDefinition::isTranslatable($fieldDef)) {
                         $subTranslatable[] = $fieldKey;
                     }
                 }
@@ -2077,18 +2344,7 @@ class ThemeData
             $translationKey .= '|scope:' . $effectiveScope;
         }
 
-        /** @var Dictionary $dict */
-        $dict = clone ObjectManager::getInstance(Dictionary::class);
-        $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->clearData()->clearQuery()
-            ->insert([
-                Dictionary::schema_fields_MD5 => $md5,
-                Dictionary::schema_fields_WORD => $translationKey,
-                Dictionary::schema_fields_LOCALE_CODE => $locale,
-                Dictionary::schema_fields_TRANSLATE => $value,
-            ], Dictionary::schema_fields_MD5)
-            ->fetch();
-        return true;
+        return self::dictionaryRepository()->upsert($translationKey, $locale, $value);
     }
 
     /**

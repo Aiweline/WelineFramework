@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\FileManager\Ui\EavModel\Select;
 
-use Weline\Eav\EavModelInterface;
-use Weline\Eav\Model\EavAttribute;
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Eav\Api\EavAttribute;
+use Weline\Eav\Api\EavModelInterface;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\FileManager\Taglib\FileManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -92,7 +92,7 @@ class File implements EavModelInterface
             'w' => '50',
             'h' => '50',
             'size' => '102400',
-            'code' => ObjectManager::getInstance(BackendUserConfig::class)->getConfig('file_manager')
+            'code' => ObjectManager::getInstance(BackendUserConfigStore::class)->getConfig('file_manager')
         ];
     }
 

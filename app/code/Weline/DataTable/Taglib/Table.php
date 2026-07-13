@@ -7,7 +7,7 @@ use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Table implements TaglibInterface
 {

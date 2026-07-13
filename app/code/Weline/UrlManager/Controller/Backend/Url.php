@@ -14,7 +14,8 @@ declare(strict_types=1);
 namespace Weline\UrlManager\Controller\Backend;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\ModuleManager\Model\Module;
+use Weline\Framework\Module\ModuleIdentityProviderInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\UrlManager\Model\UrlManager;
 use Weline\UrlManager\Model\UrlRewrite;
 
@@ -29,13 +30,7 @@ class Url extends \Weline\Framework\App\Controller\BackendController
         if ($q) {
             $urlManager->where('path', "%{$q}%", 'like');
         }
-        $urlManager->joinModel(
-            Module::class,
-            'm',
-            'main_table.module_id=m.module_id',
-            'left',
-            'm.name as module_name'
-        )->pagination(
+        $urlManager->pagination(
             $this->request->getParam('page', 1),
             $this->request->getParam('pageSize', 10),
             $this->request->getParams()
@@ -43,7 +38,22 @@ class Url extends \Weline\Framework\App\Controller\BackendController
          ->fetch();
         /**@var UrlRewrite $item */
         $items = $urlManager->getItems();
+        $moduleIds = [];
+        foreach ($items as $item) {
+            $moduleId = (int)$item->getData(UrlManager::schema_fields_MODULE_ID);
+            if ($moduleId > 0) {
+                $moduleIds[] = $moduleId;
+            }
+        }
+        $moduleNames = [];
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ModuleIdentityProviderInterface::class);
+        if ($provider instanceof ModuleIdentityProviderInterface) {
+            $moduleNames = $provider->namesByIds($moduleIds);
+        }
         foreach ($items as &$item) {
+            $moduleId = (int)$item->getData(UrlManager::schema_fields_MODULE_ID);
+            $item->setData('module_name', (string)($moduleNames[$moduleId] ?? ''));
             $item->setData('can_rewrite', str_ends_with($item['path'], '::GET'));
         }
         $this->assign('urls', $items);

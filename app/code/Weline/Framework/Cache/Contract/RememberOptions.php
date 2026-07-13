@@ -47,7 +47,10 @@ final class RememberOptions
         public mixed $hotKeyHandler = null,
 
         /** 是否允许在锁未获取且 stale 数据可用时返回 stale（保可用降级） */
-        public bool $serveStaleOnLock = false
+        public bool $serveStaleOnLock = false,
+
+        /** single-flight 超时且二次读取仍 miss 时，是否允许当前请求自行回源 */
+        public bool $computeOnSingleFlightTimeout = true
     ) {
     }
 }

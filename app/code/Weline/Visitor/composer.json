@@ -1,23 +1,29 @@
 {
-  "name": "weline/module-visitor",
-  "description": "WelineFramework 组件（visitor）",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Visitor\\": ""
+    "name": "weline/module-visitor",
+    "description": "WelineFramework 组件（visitor）",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-taglib": "@dev"
     },
-    "psr-0": {
-      "Weline\\Visitor\\": ""
-    }
-  },
-  "license": "MIT"
+    "suggest": {
+        "weline/module-dashboard": "Publishes the Visitor analytics dashboard page when Dashboard is installed.",
+        "weline/module-frontend": "Captures frontend login and registration pixel events.",
+        "weline/module-server": "Enables the optional WLS shared-memory pixel hot buffer."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Visitor\\": ""
+        }
+    },
+    "license": "MIT"
 }

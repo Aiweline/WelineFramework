@@ -70,7 +70,8 @@ class ExtendsScanner
                 ];
             }
 
-            $extendedBy = $this->scanModuleExtends($moduleName, $basePath);
+            $scannerConfig = \is_array($extendsConfig['scanner'] ?? null) ? $extendsConfig['scanner'] : [];
+            $extendedBy = $this->scanModuleExtends($moduleName, $basePath, $scannerConfig);
             $extendedFileCount = array_sum(array_map('count', $extendedBy));
             RegistryProgress::module(
                 'Extends scan module',
@@ -120,20 +121,20 @@ class ExtendsScanner
         return $config;
     }
 
-    private function scanModuleExtends(string $sourceModule, string $basePath): array
+    private function scanModuleExtends(string $sourceModule, string $basePath, array $scannerConfig = []): array
     {
         $result = [];
 
         $extendsModuleDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/module')
             ?? $this->moduleScanService->resolveDirectory($basePath, 'Extends/module');
         if ($extendsModuleDir !== null) {
-            $this->scanExtendsDirectory($extendsModuleDir, $sourceModule, $basePath, 'module', $result);
+            $this->scanExtendsDirectory($extendsModuleDir, $sourceModule, $basePath, 'module', $result, $scannerConfig);
         }
 
         $extendsThemeDir = $this->moduleScanService->resolveDirectory($basePath, 'extends/theme')
             ?? $this->moduleScanService->resolveDirectory($basePath, 'Extends/theme');
         if ($extendsThemeDir !== null) {
-            $this->scanExtendsDirectory($extendsThemeDir, $sourceModule, $basePath, 'theme', $result);
+            $this->scanExtendsDirectory($extendsThemeDir, $sourceModule, $basePath, 'theme', $result, $scannerConfig);
         }
 
         return $result;
@@ -144,7 +145,8 @@ class ExtendsScanner
         string $sourceModule,
         string $basePath,
         string $type,
-        array &$result
+        array &$result,
+        array $scannerConfig = [],
     ): void {
         try {
             $iterator = new \RecursiveIteratorIterator(
@@ -171,7 +173,7 @@ class ExtendsScanner
                 }
 
                 $pathParts = explode('/', $relativePath);
-                $parsedTarget = $this->parseExtensionTarget($pathParts, $type);
+                $parsedTarget = $this->parseExtensionTarget($pathParts, $type, $scannerConfig);
                 if ($parsedTarget === null) {
                     continue;
                 }
@@ -196,9 +198,14 @@ class ExtendsScanner
                     'class_name' => $className,
                 ];
 
-                if (($parsedTarget['is_sticker_extension'] ?? false) === true) {
-                    $extendInfo['is_sticker_extension'] = true;
-                    $extendInfo['sticker_type'] = $type;
+                foreach (($parsedTarget['metadata'] ?? []) as $metadataKey => $metadataValue) {
+                    if (
+                        \is_string($metadataKey)
+                        && \preg_match('/^[a-z][a-z0-9_]*$/', $metadataKey) === 1
+                        && !\array_key_exists($metadataKey, $extendInfo)
+                    ) {
+                        $extendInfo[$metadataKey] = $metadataValue;
+                    }
                 }
 
                 if (isset($parsedTarget['theme_name'])) {
@@ -212,7 +219,7 @@ class ExtendsScanner
         }
     }
 
-    private function parseExtensionTarget(array $pathParts, string $type): ?array
+    private function parseExtensionTarget(array $pathParts, string $type, array $scannerConfig = []): ?array
     {
         if (strcasecmp($pathParts[0] ?? '', 'extends') !== 0 || strcasecmp($pathParts[1] ?? '', $type) !== 0) {
             return null;
@@ -236,7 +243,7 @@ class ExtendsScanner
 
         $nextIndex = $targetIndex + 1;
 
-        if ($targetModulePath === 'Weline_Sticker') {
+        if (($scannerConfig['target_shape'] ?? '') === 'nested_vendor_module') {
             $vendor = $pathParts[$nextIndex] ?? '';
             $module = $pathParts[$nextIndex + 1] ?? '';
             $filePath = implode('/', array_slice($pathParts, $nextIndex + 2));
@@ -247,8 +254,14 @@ class ExtendsScanner
             $result = [
                 'target_module' => $vendor . '_' . $module,
                 'file_path' => $filePath,
-                'is_sticker_extension' => true,
+                'metadata' => \is_array($scannerConfig['metadata'] ?? null)
+                    ? $scannerConfig['metadata']
+                    : [],
             ];
+            $typeField = $scannerConfig['type_field'] ?? null;
+            if (\is_string($typeField) && \preg_match('/^[a-z][a-z0-9_]*$/', $typeField) === 1) {
+                $result['metadata'][$typeField] = $type;
+            }
 
             if ($themeName !== null) {
                 $result['theme_name'] = $themeName;

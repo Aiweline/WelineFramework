@@ -481,6 +481,9 @@ if ($warmupPathObserversEnabled) {
 }
 $dispatcher->configure([
     'sni_routing_enabled' => true,
+    'proxy_protocol_v2_enabled' => true,
+    'proxy_protocol_v2_secret' => $masterToken,
+    'proxy_protocol_v2_require_auth' => true,
     'learning_mode_enabled' => true,
     'connection_timeout' => 300,
     'main_loop_unblocked_log_every' => \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsConfig, ['dispatcher']),

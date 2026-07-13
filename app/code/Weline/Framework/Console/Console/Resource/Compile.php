@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Console\Console\Resource;
 
 use Weline\Framework\Cache\Console\Cache\Clear;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
@@ -30,8 +31,10 @@ class Compile extends CommandAbstract
 {
     private Printing $printing;
 
-    public function __construct(Printing $printing)
-    {
+    public function __construct(
+        Printing $printing,
+        private readonly ServiceProviderRegistry $providerRegistry,
+    ) {
         $this->printing = $printing;
     }
 
@@ -91,30 +94,29 @@ class Compile extends CommandAbstract
     private function compileResourceType(string $type): void
     {
         try {
+            $capability = 'resource_compiler.' . $type;
+            $compilerClass = $this->providerRegistry->implementationFor($capability);
+
             // 将键名转换为类名：welineModules -> WelineModules, less -> Less
-            $type = preg_replace('/([a-z])([A-Z])/', '$1 $2', $type);
-            $className = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $type)));
-            
-            // 尝试从 Theme 模块加载编译器
-            $compilerClass = "Weline\\Theme\\Console\\Resource\\Compiler\\{$className}";
-            if (class_exists($compilerClass)) {
+            $displayType = preg_replace('/([a-z])([A-Z])/', '$1 $2', $type);
+            $className = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $displayType)));
+
+            if ($compilerClass === null) {
+                $frameworkCompiler = "Weline\\Framework\\Resource\\Compiler\\{$className}";
+                $compilerClass = class_exists($frameworkCompiler) ? $frameworkCompiler : null;
+            }
+
+            if ($compilerClass !== null && class_exists($compilerClass)) {
                 /**@var CompilerInterface $compiler */
                 $compiler = ObjectManager::getInstance($compilerClass);
+                if (!$compiler instanceof CompilerInterface) {
+                    throw new \RuntimeException(__('%{1} 资源编译器必须实现 CompilerInterface', [$type]));
+                }
                 $compiler->compile();
-                $this->printing->success(__('%{1} 编译完成', [$type]));
+                $this->printing->success(__('%{1} 编译完成', [$displayType]));
                 return;
             }
-            
-            // 如果 Theme 模块没有，尝试从 Framework 模块加载
-            $compilerClass = "Weline\\Framework\\Resource\\Compiler\\{$className}";
-            if (class_exists($compilerClass)) {
-                /**@var CompilerInterface $compiler */
-                $compiler = ObjectManager::getInstance($compilerClass);
-                $compiler->compile();
-                $this->printing->success(__('%{1} 编译完成', [$type]));
-                return;
-            }
-            
+
             $this->printing->error(__('未找到资源类型 %{1} 的编译器', [$type]));
         } catch (\Exception $e) {
             $this->printing->error(__('编译 %{1} 时出错：%{2}', [$type, $e->getMessage()]));
@@ -133,6 +135,13 @@ class Compile extends CommandAbstract
             'welineModules' => __('编译 weline.modules.js 模块配置文件'),
             'less' => __('编译 Less 样式文件'),
         ];
+        foreach ($this->providerRegistry->implementationsWithPrefix('resource_compiler.') as $capability => $_implementation) {
+            $type = \substr($capability, \strlen('resource_compiler.'));
+            if ($type !== '' && !isset($data[$type])) {
+                $data[$type] = __('编译 %{1} 资源', [$type]);
+            }
+        }
+        \ksort($data);
         
         if ($to_string) {
             return implode(', ', array_keys($data));

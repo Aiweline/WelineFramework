@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service\Head;
 
-use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\DeveloperAccessPolicy;
 use Weline\Seo\Structure\SeoStructureRegistry;
 
 class HeadRenderer
@@ -277,7 +277,7 @@ class HeadRenderer
 
     private function renderSeoPanelTabBootstrap($template, string $source = 'footer-slot'): string
     {
-        if (!(new PanelAccessService())->shouldInjectBootstrap()) {
+        if (!ObjectManager::getInstance(DeveloperAccessPolicy::class)->shouldInjectBootstrap()) {
             return '';
         }
 

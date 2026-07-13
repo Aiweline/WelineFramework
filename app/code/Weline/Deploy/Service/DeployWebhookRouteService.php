@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Deploy\Service;
 
-use Weline\ModuleRouter\Observer\ProcessUrlBefore;
+use Weline\ModuleRouter\Api\RouteCache;
 
 /**
  * Webhook 公网路径：固定特征前缀 + 随机段，供 ModuleRouter 快速短路匹配。
@@ -87,6 +87,6 @@ class DeployWebhookRouteService
     {
         self::$memoryCache = null;
         w_cache('module_router')->delete(self::CACHE_POOL_KEY);
-        ProcessUrlBefore::clearCache();
+        RouteCache::clear();
     }
 }

@@ -14,6 +14,7 @@ namespace Weline\Server\IPC;
 
 use Weline\Framework\System\IPC\NdjsonProtocol;
 use Weline\Framework\System\IPC\ProcessKind;
+use Weline\Server\Service\Policy\DispatcherPolicyControl;
 
 class ControlMessage
 {
@@ -37,8 +38,38 @@ class ControlMessage
     /** Master → Worker：通知清缓存（原地执行，不重启） */
     public const TYPE_CACHE_CLEAR = 'cache_clear';
 
+    /** Worker → Master：确认指定缓存代际已在本进程生效。 */
+    public const TYPE_CACHE_CLEAR_ACK = 'cache_clear_ack';
+
     /** Master → Worker：下发驱动路由策略（file-only hijack + 服务端点） */
     public const TYPE_ROUTING_POLICY = 'routing_policy';
+
+    /** Master → Worker/Dispatcher：校验并暂存不可变运行时策略包。 */
+    public const TYPE_POLICY_PREPARE = 'policy_prepare';
+
+    /** Worker/Dispatcher → Master：策略包已校验并暂存。 */
+    public const TYPE_POLICY_PREPARED_ACK = 'policy_prepared_ack';
+
+    /** Master → Worker/Dispatcher：原子激活已 PREPARE 的策略 digest。 */
+    public const TYPE_POLICY_ACTIVATE = 'policy_activate';
+
+    /** Worker/Dispatcher → Master：策略 digest 已激活。 */
+    public const TYPE_POLICY_ACTIVATED_ACK = 'policy_activated_ack';
+
+    /** Master → Worker/Dispatcher：全部关键参与者已激活，提交并恢复入口。 */
+    public const TYPE_POLICY_COMMIT = 'policy_commit';
+
+    /** Worker/Dispatcher → Master：策略已提交且入口已恢复。 */
+    public const TYPE_POLICY_COMMITTED_ACK = 'policy_committed_ack';
+
+    /** Master → Worker/Dispatcher：回滚到前一或指定策略 digest。 */
+    public const TYPE_POLICY_ROLLBACK = 'policy_rollback';
+
+    /** Worker/Dispatcher → Master：策略回滚结果。 */
+    public const TYPE_POLICY_ROLLBACK_ACK = 'policy_rollback_ack';
+
+    /** Worker/Dispatcher ↔ Master：实例级封禁正缓存增量。 */
+    public const TYPE_POLICY_STATE_DELTA = 'policy_state_delta';
 
     /** Master → Dispatcher：将指定端口加入黑名单 */
     public const TYPE_DRAIN = 'drain';
@@ -68,6 +99,9 @@ class ControlMessage
     public const TYPE_WORKER_LOOP_STARTED = 'worker_loop_started';
     /** 子进程 → Master：上报请求遥测事件 */
     public const TYPE_TELEMETRY = 'telemetry';
+
+    /** Worker → Master：批量上报普通请求的进程内聚合计数。 */
+    public const TYPE_TELEMETRY_BATCH = 'telemetry_batch';
 
     /** Dispatcher → Master：上报后端池全不可用等需自愈异常 */
     public const TYPE_DISPATCHER_ALERT = 'dispatcher_alert';
@@ -219,6 +253,12 @@ class ControlMessage
 
     /** CLI → Master：清除 Dispatcher 路由缓存 */
     public const ACTION_ROUTING_CACHE_CLEAR = 'routing_cache_clear';
+
+    /** CLI → Master：发布已 staged 的运行时策略包。 */
+    public const ACTION_POLICY_PUBLISH = 'policy_publish';
+
+    /** CLI → Master：回滚并发布前一或指定策略包。 */
+    public const ACTION_POLICY_ROLLBACK = 'policy_rollback';
 
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
@@ -439,6 +479,20 @@ class ControlMessage
         if ($launchId !== '') {
             $data['launch_id'] = $launchId;
         }
+        if (\in_array($role, [self::ROLE_WORKER, self::ROLE_MAINTENANCE], true)) {
+            $readiness = \Weline\Server\Service\Runtime\WorkerReadinessState::snapshot();
+            $data['readiness_protocol_version'] = $readiness['readiness_protocol_version'];
+            $data['readiness_capabilities'] = $readiness['readiness_capabilities'];
+            $data['topology'] = $readiness['topology'];
+            $data['policy_digest'] = $readiness['policy_digest'];
+            $data['container_registry_digest'] = $readiness['container_registry_digest'];
+            $data['warmup_state'] = $readiness['warmup_state'];
+            $data['homepage_fpc'] = $readiness['homepage_fpc'];
+            $data['dynamic_first_render'] = $readiness['dynamic_first_render'];
+            $data['listen_capabilities'] = $readiness['listen_capabilities'];
+        } elseif ($role === self::ROLE_DISPATCHER) {
+            $data += DispatcherPolicyControl::readinessSnapshot();
+        }
         self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
         return self::encode($data);
     }
@@ -550,11 +604,48 @@ class ControlMessage
     /**
      * 构建 cache_clear 消息
      */
-    public static function cacheClear(): string
+    public static function cacheClear(int $cacheEpoch = 0): string
     {
-        return self::encode([
+        $payload = [
             'type' => self::TYPE_CACHE_CLEAR,
-        ]);
+        ];
+        if ($cacheEpoch > 0) {
+            $payload['cache_epoch'] = $cacheEpoch;
+        }
+
+        return self::encode($payload);
+    }
+
+    /**
+     * 构建 cache_clear 代际回执。
+     *
+     * applied=false 仅表示该代际已经生效，本次为幂等重复请求。
+     */
+    public static function cacheClearAck(
+        int $cacheEpoch,
+        bool $success = true,
+        string $error = '',
+        int $workerId = 0,
+        bool $applied = true,
+        int $currentEpoch = 0,
+    ): string {
+        $payload = [
+            'type' => self::TYPE_CACHE_CLEAR_ACK,
+            'cache_epoch' => \max(0, $cacheEpoch),
+            'success' => $success,
+            'applied' => $applied,
+        ];
+        if ($error !== '') {
+            $payload['error'] = \substr($error, 0, 512);
+        }
+        if ($workerId > 0) {
+            $payload['worker_id'] = $workerId;
+        }
+        if ($currentEpoch > 0) {
+            $payload['current_epoch'] = $currentEpoch;
+        }
+
+        return self::encode($payload);
     }
 
     /**
@@ -583,6 +674,106 @@ class ControlMessage
         return self::encode([
             'type' => self::TYPE_ROUTING_POLICY,
             'data' => $policy,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $bundle
+     */
+    public static function policyPrepare(array $bundle): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_PREPARE,
+            'digest' => (string)($bundle['digest'] ?? ''),
+            'bundle' => $bundle,
+        ]);
+    }
+
+    /**
+     * @param list<string> $capabilities
+     */
+    public static function policyPreparedAck(
+        string $digest,
+        bool $success = true,
+        string $error = '',
+        array $capabilities = [],
+    ): string {
+        return self::encode([
+            'type' => self::TYPE_POLICY_PREPARED_ACK,
+            'digest' => $digest,
+            'success' => $success,
+            'error' => $error,
+            'capabilities' => \array_values(\array_unique(\array_map('strval', $capabilities))),
+        ]);
+    }
+
+    public static function policyActivate(string $digest): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_ACTIVATE,
+            'digest' => $digest,
+        ]);
+    }
+
+    public static function policyActivatedAck(string $digest, bool $success = true, string $error = ''): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_ACTIVATED_ACK,
+            'digest' => $digest,
+            'success' => $success,
+            'error' => $error,
+        ]);
+    }
+
+    public static function policyCommit(string $digest): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_COMMIT,
+            'digest' => $digest,
+        ]);
+    }
+
+    public static function policyCommittedAck(string $digest, bool $success = true, string $error = ''): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_COMMITTED_ACK,
+            'digest' => $digest,
+            'success' => $success,
+            'error' => $error,
+        ]);
+    }
+
+    public static function policyRollback(?string $digest = null, bool $abort = false): string
+    {
+        $payload = ['type' => self::TYPE_POLICY_ROLLBACK];
+        if ($digest !== null && $digest !== '') {
+            $payload['digest'] = $digest;
+        }
+        if ($abort) {
+            $payload['abort'] = true;
+        }
+        return self::encode($payload);
+    }
+
+    public static function policyRollbackAck(string $digest, bool $success = true, string $error = ''): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_ROLLBACK_ACK,
+            'digest' => $digest,
+            'success' => $success,
+            'error' => $error,
+        ]);
+    }
+
+    public static function policyStateDelta(string $instance, string $ip, int $expiresAt): string
+    {
+        return self::encode([
+            'type' => self::TYPE_POLICY_STATE_DELTA,
+            'version' => 1,
+            'state' => 'ban',
+            'instance' => \trim($instance),
+            'ip' => \trim($ip),
+            'expires_at' => $expiresAt,
         ]);
     }
 
@@ -706,6 +897,44 @@ class ControlMessage
     }
 
     /**
+     * 构建普通请求批量遥测消息（Worker -> Master）。
+     *
+     * @param list<array<string, int|string>> $samples
+     */
+    public static function telemetryBatch(string $instance, array $samples): string
+    {
+        if (\count($samples) > 256) {
+            throw new \InvalidArgumentException('Telemetry batch cannot contain more than 256 samples.');
+        }
+        $normalized = [];
+        foreach ($samples as $sample) {
+            if (!\is_array($sample)) {
+                throw new \InvalidArgumentException('Telemetry batch samples must be arrays.');
+            }
+            $count = (int)($sample['request_count'] ?? 0);
+            if ($count < 1 || $count > 4096) {
+                throw new \InvalidArgumentException('Telemetry batch request_count is outside the supported range.');
+            }
+            $normalized[] = [
+                'host' => \substr((string)($sample['host'] ?? 'unknown'), 0, 255),
+                'bucket_ts' => (int)($sample['bucket_ts'] ?? \time()),
+                'request_count' => $count,
+                'error_count' => \max(0, \min($count, (int)($sample['error_count'] ?? 0))),
+                'bytes_out' => \max(0, (int)($sample['bytes_out'] ?? 0)),
+                'latency_total_ms' => \max(0, (int)($sample['latency_total_ms'] ?? 0)),
+                'latency_max_ms' => \max(0, (int)($sample['latency_max_ms'] ?? 0)),
+            ];
+        }
+
+        return self::encode([
+            'type' => self::TYPE_TELEMETRY_BATCH,
+            'instance' => \substr(\trim($instance) !== '' ? \trim($instance) : 'default', 0, 128),
+            'samples' => $normalized,
+            'ts' => \time(),
+        ]);
+    }
+
+    /**
      * 构建 dispatcher_alert 消息
      *
      * @param string $instance 实例名
@@ -763,7 +992,7 @@ class ControlMessage
     }
 
     /**
-     * 构建 security_unblock 消息（Master → Dispatcher）
+     * 构建 security_unblock 消息（Master → Worker/Dispatcher）
      *
      * @param string|null $ip 解封指定 IP，为 null 且 clear_all 为 true 时清空全部
      * @param bool $clearAll 是否清空全部封禁

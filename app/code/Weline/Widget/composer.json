@@ -1,0 +1,20 @@
+{
+    "name": "weline/module-widget",
+    "description": "WelineFramework Widget module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-ai": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-extends": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-meta": "@dev",
+        "weline/module-taglib": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Widget\\": ""
+        }
+    }
+}

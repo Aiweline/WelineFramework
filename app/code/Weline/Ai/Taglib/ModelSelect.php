@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\Http\Url;
 
 class ModelSelect implements TaglibInterface
@@ -62,7 +62,7 @@ class ModelSelect implements TaglibInterface
             }
             
             // 解析所有属性（包括 id 和 data 属性），解析后的值会存储在 $Taglib__{属性名} 变量中
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
             // 使用解析后的 id（Taglib::attributes 会自动解析变量，如果变量不存在会返回原始字符串）
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
@@ -98,6 +98,7 @@ class ModelSelect implements TaglibInterface
             // 脚本：数据加载 + 搜索 + 选中回填
             $html[] = '<script>(function(){';
             $html[] = 'const ep = ' . json_encode($epUrl) . ';';
+            $html[] = 'const aiApi = window.Weline.Api.resource("ai");';
             $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'const json = <?=$Taglib__json?>;';
             $html[] = 'const limit = \'<?=$Taglib__limit?>\';';
@@ -158,11 +159,10 @@ JS;
             $html[] = <<<JS
 function firstLoad(){
   loading.style.display = "block";
-  fetch(ep+"?limit="+limit)
-    .then(r=>r.json())
+  aiApi.listModels({})
     .then(res=>{
       loading.style.display = "none";
-      cache = (res&&res.success) ? (res.data||[]) : [];
+      cache = Array.isArray(res) ? res : ((res&&res.data) ? res.data : []);
       render(cache);
       // 渲染完成后，如果有初始值，尝试设置显示文本
       if(hidden.value && cache && cache.length > 0){
@@ -182,7 +182,7 @@ JS;
             $html[] = <<<'JS'
 const debounce=(fn,t)=>{let id=null;return (...a)=>{clearTimeout(id);id=setTimeout(()=>fn.apply(null,a),t);}};
 JS;
-            $html[] = 'const doFilter = debounce(function(kw){ kw=(kw||"").toLowerCase().trim(); if(!kw){ render(cache||[]); return;} fetch(ep+"?search="+encodeURIComponent(kw)).then(function(r){return r.json();}).then(function(res){ render((res&&res.success)?(res.data||[]):[]); }).catch(function(){ var data=(cache||[]).filter(function(m){ var t=((m.name||"")+" "+(m.supplier||"")+" "+(m.code||"")+" "+(m.version||"")); return t.toLowerCase().indexOf(kw)!==-1; }); render(data); }); },800);';
+            $html[] = 'const doFilter = debounce(function(kw){ kw=(kw||"").toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var data=(cache||[]).filter(function(m){ var t=((m.name||"")+" "+(m.supplier||"")+" "+(m.code||"")+" "+(m.version||"")); return t.toLowerCase().indexOf(kw)!==-1; }); render(data); },800);';
             $html[] = 'trigger.addEventListener("click", function(e){ e.stopPropagation(); box.style.top=(trigger.offsetHeight+6)+"px"; box.style.width="100%"; box.style.display="block"; firstLoad(); setTimeout(()=>search.focus(),50); });';
             $html[] = 'search.addEventListener("input", function(){ doFilter(this.value); });';
             $html[] = 'function closeOutside(ev){ if(!(box.contains(ev.target)||trigger.contains(ev.target))){ box.style.display="none"; trigger.style.display="block"; document.removeEventListener("click", closeOutside); document.removeEventListener("keydown", esc); }}';
@@ -190,8 +190,8 @@ JS;
             $html[] = 'trigger.addEventListener("click", function(){ setTimeout(function(){ document.addEventListener("click", closeOutside); document.addEventListener("keydown", esc); }, 0); });';
             // 页面加载时，如果有初始值，自动加载并设置显示文本（无论当前显示文本是什么）
             $html[] = 'if(hidden.value){';
-            $html[] = '  fetch(ep+"?limit="+limit).then(r=>r.json()).then(res=>{';
-            $html[] = '    const models = (res&&res.success) ? (res.data||[]) : [];';
+            $html[] = '  aiApi.listModels({}).then(res=>{';
+            $html[] = '    const models = Array.isArray(res) ? res : ((res&&res.data) ? res.data : []);';
             $html[] = '    const matched = models.find(function(m){ return m.code === hidden.value; });';
             $html[] = '    if(matched){';
             $html[] = '      const txt = matched.name + " (" + matched.supplier + ") - " + matched.version;';
@@ -299,5 +299,3 @@ DOC;
         return htmlspecialchars($doc, ENT_NOQUOTES);
     }
 }
-
-

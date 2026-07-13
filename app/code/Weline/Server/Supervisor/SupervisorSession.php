@@ -22,6 +22,12 @@ final class SupervisorSession
         public string $launchNonce = '',
         public string $leaseId = '',
         public int $generation = 0,
+        /** @var array<string, mixed> */
+        public array $readyCapabilities = [],
+        public float $connectedAt = 0.0,
+        public bool $masterAccepted = false,
+        /** @var array<string, mixed> */
+        public array $pendingReady = [],
     ) {
     }
 

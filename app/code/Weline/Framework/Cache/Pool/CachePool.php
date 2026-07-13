@@ -151,6 +151,9 @@ class CachePool implements CachePoolInterface, RemembererInterface
                 if ($retry !== null) {
                     return $retry;
                 }
+                if (!$options->computeOnSingleFlightTimeout) {
+                    return null;
+                }
             }
         }
 

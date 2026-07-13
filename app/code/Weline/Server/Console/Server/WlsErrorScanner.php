@@ -56,6 +56,14 @@ class WlsErrorScanner extends CommandAbstract
     /** 每次最多写入任务数 */
     private const MAX_TASKS_PER_RUN = 50;
 
+    /** One invocation is deliberately bounded even when a log grows without limit. */
+    private const SCAN_MAX_BYTES_PER_RUN = 32 * 1024 * 1024;
+    private const SCAN_MAX_BYTES_PER_FILE = 8 * 1024 * 1024;
+    private const SCAN_DEADLINE_SECONDS = 0.25;
+    private const SCAN_READ_BYTES = 64 * 1024;
+    private const SCAN_CAPTURE_BYTES = 8 * 1024;
+    private const SCAN_PATTERN_TAIL_BYTES = 64;
+
     public function execute(array $args = [], array $data = []): mixed
     {
         $verbose = $this->isFlagEnabled($args, 'v', 'verbose');
@@ -142,6 +150,26 @@ class WlsErrorScanner extends CommandAbstract
         return self::LOG_FILES;
     }
 
+    protected function getScanByteBudget(): int
+    {
+        return self::SCAN_MAX_BYTES_PER_RUN;
+    }
+
+    protected function getPerFileScanByteBudget(): int
+    {
+        return self::SCAN_MAX_BYTES_PER_FILE;
+    }
+
+    protected function getScanDeadlineSeconds(): float
+    {
+        return self::SCAN_DEADLINE_SECONDS;
+    }
+
+    protected function getMaxErrorsPerRun(): int
+    {
+        return self::MAX_TASKS_PER_RUN;
+    }
+
     private function isFlagEnabled(array $args, string ...$names): bool
     {
         foreach ($names as $name) {
@@ -166,21 +194,45 @@ class WlsErrorScanner extends CommandAbstract
     private function scanLogFiles(bool $verbose, array &$cursors): array
     {
         $errors = [];
+        $logFiles = \array_values($this->getLogFiles());
+        $fileCount = \count($logFiles);
+        if ($fileCount === 0) {
+            return $errors;
+        }
 
-        foreach ($this->getLogFiles() as $logFile) {
+        $remainingRunBytes = \max(1, $this->getScanByteBudget());
+        $deadline = \hrtime(true) + (int)(\max(0.001, $this->getScanDeadlineSeconds()) * 1_000_000_000);
+        $maxErrors = \max(1, $this->getMaxErrorsPerRun());
+        $meta = \is_array($cursors['_meta'] ?? null) ? $cursors['_meta'] : [];
+        $startIndex = \max(0, (int)($meta['next_file_index'] ?? 0)) % $fileCount;
+
+        for ($processedFiles = 0; $processedFiles < $fileCount; $processedFiles++) {
+            $fileIndex = ($startIndex + $processedFiles) % $fileCount;
+            if ($remainingRunBytes <= 0 || \hrtime(true) >= $deadline || \count($errors) >= $maxErrors) {
+                $meta['next_file_index'] = $fileIndex;
+                break;
+            }
+
+            $logFile = $logFiles[$fileIndex];
             $filePath = $this->resolveLogPath($logFile);
             if (!is_file($filePath)) {
                 if ($verbose) {
                     $this->out('跳过不存在文件: ' . $logFile);
                 }
+                $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
                 continue;
             }
 
-            $fileSize = filesize($filePath);
-            if ($fileSize === false) {
+            \clearstatcache(true, $filePath);
+            $stat = @\stat($filePath);
+            if (!\is_array($stat)) {
+                $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
                 continue;
             }
-            $mtime = filemtime($filePath) ?: time();
+            $fileSize = \max(0, (int)($stat['size'] ?? 0));
+            $mtime = \max(0, (int)($stat['mtime'] ?? \time()));
+            $inode = \max(0, (int)($stat['ino'] ?? 0));
+            $device = \max(0, (int)($stat['dev'] ?? 0));
             $cursorKey = md5($filePath);
             $cursor = $cursors[$cursorKey] ?? null;
 
@@ -188,100 +240,221 @@ class WlsErrorScanner extends CommandAbstract
                 $cursors[$cursorKey] = [
                     'path' => $filePath,
                     'size' => $fileSize,
+                    'offset' => $fileSize,
                     'mtime' => $mtime,
-                    'line' => $this->countCompleteLines($filePath),
+                    'line' => 0,
+                    'inode' => $inode,
+                    'device' => $device,
+                    'line_origin' => 'cursor_bootstrap',
                 ];
                 if ($verbose) {
                     $this->out('WLS error scan cursor initialized: ' . $logFile);
                 }
+                $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
                 continue;
             }
 
-            $offset = max(0, (int)($cursor['size'] ?? 0));
+            $offset = max(0, (int)($cursor['offset'] ?? $cursor['size'] ?? 0));
             $lineNumber = max(0, (int)($cursor['line'] ?? 0));
+            $partial = $this->normalizePartialLine($cursor['partial'] ?? null);
+            $rotated = $fileSize < $offset
+                || ($inode > 0 && isset($cursor['inode']) && (int)$cursor['inode'] !== $inode)
+                || ($device > 0 && isset($cursor['device']) && (int)$cursor['device'] !== $device);
 
-            if ($fileSize < $offset) {
+            if ($rotated) {
                 $offset = 0;
                 $lineNumber = 0;
+                $partial = $this->emptyPartialLine();
                 if ($verbose) {
                     $this->out('WLS error scan log rotated/truncated: ' . $logFile);
                 }
             }
 
             if ($fileSize === $offset) {
-                $cursors[$cursorKey] = [
-                    'path' => $filePath,
-                    'size' => $fileSize,
-                    'mtime' => $mtime,
-                    'line' => $lineNumber,
-                ];
+                $cursors[$cursorKey] = $this->buildCursor(
+                    $filePath,
+                    $offset,
+                    $mtime,
+                    $lineNumber,
+                    $inode,
+                    $device,
+                    $partial,
+                    (string)($cursor['line_origin'] ?? 'file_start'),
+                );
+                $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
                 continue;
             }
 
             $handle = @fopen($filePath, 'rb');
             if ($handle === false) {
+                $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
                 continue;
             }
-            if ($offset > 0) {
-                @fseek($handle, $offset);
-            }
-            $chunk = stream_get_contents($handle);
-            fclose($handle);
-
-            if (!is_string($chunk) || $chunk === '') {
+            if ($offset > 0 && @fseek($handle, $offset) !== 0) {
+                fclose($handle);
+                $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
                 continue;
             }
 
-            $scannedBytes = strlen($chunk);
-            if (!str_ends_with($chunk, "\n")) {
-                $lastNewline = strrpos($chunk, "\n");
-                if ($lastNewline === false) {
-                    $cursors[$cursorKey] = [
-                        'path' => $filePath,
-                        'size' => $offset,
-                        'mtime' => $mtime,
-                        'line' => $lineNumber,
-                    ];
+            $remainingFileBytes = \min(
+                \max(1, $this->getPerFileScanByteBudget()),
+                $fileSize - $offset,
+            );
+            while ($remainingFileBytes > 0
+                && $remainingRunBytes > 0
+                && $offset < $fileSize
+                && \count($errors) < $maxErrors
+                && \hrtime(true) < $deadline
+            ) {
+                $readBytes = \min(
+                    self::SCAN_READ_BYTES,
+                    $remainingFileBytes,
+                    $remainingRunBytes,
+                    $fileSize - $offset,
+                );
+                if ($readBytes <= 0) {
+                    break;
+                }
+
+                // fgets with a fixed maximum keeps memory bounded even when a
+                // corrupt log contains a multi-megabyte line without a LF.
+                $fragment = @fgets($handle, $readBytes + 1);
+                if (!\is_string($fragment) || $fragment === '') {
+                    break;
+                }
+                $fragmentBytes = \strlen($fragment);
+                $offset += $fragmentBytes;
+                $remainingFileBytes -= $fragmentBytes;
+                $remainingRunBytes -= $fragmentBytes;
+                $complete = \str_ends_with($fragment, "\n");
+                $content = $complete ? \substr($fragment, 0, -1) : $fragment;
+                if ($complete && \str_ends_with($content, "\r")) {
+                    $content = \substr($content, 0, -1);
+                }
+                $partial = $this->appendPartialLine($partial, $content);
+
+                if (!$complete) {
                     continue;
                 }
-                $chunk = substr($chunk, 0, $lastNewline + 1);
-                $scannedBytes = strlen($chunk);
-            }
 
-            $lines = explode("\n", $chunk);
-            if (end($lines) === '') {
-                array_pop($lines);
-            }
-            foreach ($lines as $line) {
                 $lineNumber++;
-                foreach (self::ERROR_PATTERNS as $pattern) {
-                    if (str_contains($line, $pattern)) {
-                        $hash = md5($filePath . $lineNumber . $pattern . mb_substr($line, 0, 200));
-                        $timestamp = $this->extractTimestamp($line);
-                        $type = $this->classifyError($line);
-                        $errors[] = [
-                            'file' => $filePath,
-                            'line' => $lineNumber,
-                            'type' => $type,
-                            'message' => trim($line),
-                            'timestamp' => $timestamp,
-                            'hash' => $hash,
-                        ];
-                        // 每行只匹配一次 pattern，避免同一条错误被多次添加
-                        break;
+                $pattern = $partial['pattern'];
+                if (\is_string($pattern) && $pattern !== '') {
+                    $message = \trim($partial['capture']);
+                    if ($partial['bytes'] > \strlen($partial['capture'])) {
+                        $message .= ' … [line truncated]';
                     }
+                    $errors[] = [
+                        'file' => $filePath,
+                        'line' => $lineNumber,
+                        'type' => $this->classifyError($pattern),
+                        'message' => $message,
+                        'timestamp' => $this->extractTimestamp($partial['capture']),
+                        'hash' => md5($filePath . $lineNumber . $pattern . \substr($partial['capture'], 0, 200)),
+                    ];
                 }
+                $partial = $this->emptyPartialLine();
             }
+            fclose($handle);
 
-            $cursors[$cursorKey] = [
-                'path' => $filePath,
-                'size' => $offset + $scannedBytes,
-                'mtime' => $mtime,
-                'line' => $lineNumber,
-            ];
+            $cursors[$cursorKey] = $this->buildCursor(
+                $filePath,
+                $offset,
+                $mtime,
+                $lineNumber,
+                $inode,
+                $device,
+                $partial,
+                $rotated ? 'file_start' : (string)($cursor['line_origin'] ?? 'file_start'),
+            );
+            $meta['next_file_index'] = ($fileIndex + 1) % $fileCount;
         }
 
+        $cursors['_meta'] = $meta + ['next_file_index' => 0];
+
         return $errors;
+    }
+
+    /** @return array{capture:string,tail:string,pattern:?string,bytes:int} */
+    private function emptyPartialLine(): array
+    {
+        return ['capture' => '', 'tail' => '', 'pattern' => null, 'bytes' => 0];
+    }
+
+    /** @return array{capture:string,tail:string,pattern:?string,bytes:int} */
+    private function normalizePartialLine(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return $this->emptyPartialLine();
+        }
+        $pattern = \is_string($value['pattern'] ?? null) && \in_array($value['pattern'], self::ERROR_PATTERNS, true)
+            ? $value['pattern']
+            : null;
+        $capture = \substr((string)($value['capture'] ?? ''), 0, self::SCAN_CAPTURE_BYTES);
+        $tail = \substr((string)($value['tail'] ?? ''), -self::SCAN_PATTERN_TAIL_BYTES);
+
+        return [
+            'capture' => $capture,
+            'tail' => $tail,
+            'pattern' => $pattern,
+            'bytes' => \max(\strlen($capture), (int)($value['bytes'] ?? 0)),
+        ];
+    }
+
+    /**
+     * @param array{capture:string,tail:string,pattern:?string,bytes:int} $partial
+     * @return array{capture:string,tail:string,pattern:?string,bytes:int}
+     */
+    private function appendPartialLine(array $partial, string $fragment): array
+    {
+        if ($partial['pattern'] === null) {
+            $subject = $partial['tail'] . $fragment;
+            foreach (self::ERROR_PATTERNS as $pattern) {
+                if (\str_contains($subject, $pattern)) {
+                    $partial['pattern'] = $pattern;
+                    break;
+                }
+            }
+        }
+        $captureRemaining = self::SCAN_CAPTURE_BYTES - \strlen($partial['capture']);
+        if ($captureRemaining > 0) {
+            $partial['capture'] .= \substr($fragment, 0, $captureRemaining);
+        }
+        $partial['bytes'] += \strlen($fragment);
+        $partial['tail'] = \substr($partial['tail'] . $fragment, -self::SCAN_PATTERN_TAIL_BYTES);
+
+        return $partial;
+    }
+
+    /**
+     * @param array{capture:string,tail:string,pattern:?string,bytes:int} $partial
+     * @return array<string, mixed>
+     */
+    private function buildCursor(
+        string $filePath,
+        int $offset,
+        int $mtime,
+        int $lineNumber,
+        int $inode,
+        int $device,
+        array $partial,
+        string $lineOrigin,
+    ): array {
+        $cursor = [
+            'path' => $filePath,
+            'size' => $offset,
+            'offset' => $offset,
+            'mtime' => $mtime,
+            'line' => $lineNumber,
+            'inode' => $inode,
+            'device' => $device,
+            'line_origin' => $lineOrigin,
+        ];
+        if ($partial['bytes'] > 0) {
+            $cursor['partial'] = $partial;
+        }
+
+        return $cursor;
     }
 
     private function resolveLogPath(string $logFile): string
@@ -292,26 +465,6 @@ class WlsErrorScanner extends CommandAbstract
         }
 
         return BP . '/' . ltrim($normalized, '/');
-    }
-
-    private function countCompleteLines(string $filePath): int
-    {
-        $handle = @fopen($filePath, 'rb');
-        if ($handle === false) {
-            return 0;
-        }
-
-        $count = 0;
-        while (!feof($handle)) {
-            $chunk = fread($handle, 1048576);
-            if ($chunk === false || $chunk === '') {
-                break;
-            }
-            $count += substr_count($chunk, "\n");
-        }
-        fclose($handle);
-
-        return $count;
     }
 
     /**

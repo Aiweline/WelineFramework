@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\AiModel;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * 模拟AI提供者
@@ -36,8 +37,8 @@ class MockProvider implements ProviderInterface, ProviderConnectionTestInterface
      */
     public function generate(AiModel $model, string $prompt, array $params = []): array
     {
-        // 模拟API延迟
-        usleep(500000); // 0.5秒
+        // 模拟 API 延迟：WLS Fiber 中让出 Worker，FPM/CLI 才使用同步回退。
+        SchedulerSystem::usleep(500000);
 
         $mockResponse = $this->generateMockResponse($prompt, $model);
 
@@ -71,7 +72,7 @@ class MockProvider implements ProviderInterface, ProviderConnectionTestInterface
         
         foreach ($chunks as $chunk) {
             $callback($chunk);
-            usleep(50000); // 0.05秒延迟
+            SchedulerSystem::usleep(50000);
         }
 
         return [
@@ -167,4 +168,3 @@ class MockProvider implements ProviderInterface, ProviderConnectionTestInterface
         ];
     }
 }
-

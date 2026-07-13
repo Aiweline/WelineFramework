@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
-use Weline\Ai\Interface\AgentInterface;
+use Weline\Ai\Api\AgentInterface;
 use Weline\Ai\Model\AiAgent;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\App\Exception;

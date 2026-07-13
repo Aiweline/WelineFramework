@@ -9,7 +9,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Queue\Model\Queue as QueueModel;
 use Weline\Queue\Service\QueueDispatchService;
 
-class Queue implements \Weline\Cron\CronTaskInterface
+class Queue implements \Weline\Framework\Cron\CronTaskInterface
 {
     public function __construct(
         QueueModel $queue,

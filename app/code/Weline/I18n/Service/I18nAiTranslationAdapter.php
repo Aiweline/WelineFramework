@@ -44,7 +44,7 @@ class I18nAiTranslationAdapter
             'success' => false,
         ];
 
-        $this->eventsManager->dispatch('Weline_Ai::translate', $eventData);
+        $this->eventsManager->dispatch('Weline_I18n::machine_translate', $eventData);
 
         return [
             'success' => !empty($eventData['success']),

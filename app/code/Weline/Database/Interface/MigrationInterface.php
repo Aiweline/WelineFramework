@@ -8,7 +8,10 @@
 
 namespace Weline\Database\Interface;
 
-interface MigrationInterface
+/**
+ * @deprecated Implement \Weline\Framework\Database\Migration\MigrationInterface.
+ */
+interface MigrationInterface extends \Weline\Framework\Database\Migration\MigrationInterface
 {
     /**
      * 执行迁移安装

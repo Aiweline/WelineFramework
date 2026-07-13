@@ -1,9 +1,4 @@
-﻿统一配置中心,统一配置中心
-配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
-配置回滚预检失败，当前配置未改变。,配置回滚预检失败，当前配置未改变。
-配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
-配置保存失败，当前配置未改变。,配置保存失败，当前配置未改变。
-配置读取,"Configuration read"
+﻿配置读取,"Configuration read"
 当系统配置被读取时触发，允许其他模块拦截或修改配置值。,"Triggered when the system configuration is read, allowing other modules to intercept or modify configuration values."
 配置设置前,"Before configuration settings"
 在配置写入数据库前触发，允许其他模块验证或修改配置值。,"Triggered before configuration is written to the database, allowing other modules to validate or modify configuration values."
@@ -34,17 +29,17 @@
 "map|fields; default map keeps compatibility.","map|fields; default map keeps compatibility."
 "Limit field metadata lookup to one template code when return_type=fields.","Limit field metadata lookup to one template code when return_type=fields."
 backend|frontend,backend|frontend
+统一配置中心,统一配置中心
+配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
+配置回滚预检失败，当前配置未改变。,配置回滚预检失败，当前配置未改变。
+配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
+配置保存失败，当前配置未改变。,配置保存失败，当前配置未改变。
 保存配置失败，已回滚本次批次。%{1},保存配置失败，已回滚本次批次。%{1}
 "回滚配置版本 %{1}","回滚配置版本 %{1}"
 回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
 "当前 system_config 表尚未升级，不能保存非全局 scope 配置。","当前 system_config 表尚未升级，不能保存非全局 scope 配置。"
-存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
-配置校验失败，当前配置未改变。,配置校验失败，当前配置未改变。
-没有需要保存的配置。,没有需要保存的配置。
-"配置模板不存在或未通过 Extends 注册。","配置模板不存在或未通过 Extends 注册。"
-"当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
-此字段不能为空。,此字段不能为空。
-字段值不在允许选项内。,字段值不在允许选项内。
+定位配置项,"Find configuration item"
+返回引导,"Back to guide"
 模块,模块
 全部模块,全部模块
 区域,区域
@@ -61,6 +56,7 @@ Locale,Locale
 当前值,当前值
 保存值,保存值
 继承,继承
+引导目标,"Guide target"
 默认值,默认值
 保存配置,保存配置
 最近版本,最近版本
@@ -69,6 +65,9 @@ Locale,Locale
 时间,时间
 回滚,回滚
 不可回滚,不可回滚
+打开,打开
+"引导步骤 %{1}","Guide step %{1}"
+配置引导,"Configuration guide"
 配置或字段,配置或字段
 保存原因,保存原因
 存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
@@ -78,11 +77,3 @@ Locale,Locale
 "当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
 此字段不能为空。,此字段不能为空。
 字段值不在允许选项内。,字段值不在允许选项内。
-配置引导,"Configuration guide"
-已为你标记本次上线引导需要处理的配置项。,"The configuration item required for this launch guide has been highlighted."
-返回引导,"Back to guide"
-上线引导标记,"Launch guide marker"
-留空保持现有密钥,"Leave blank to keep the existing secret"
-"引导步骤 %{1}","Guide step %{1}"
-定位配置项,"Find configuration item"
-引导目标,"Guide target"

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\Http\Url;
 
 /**
@@ -92,7 +92,7 @@ class SearchSelect implements TaglibInterface
             // 静态选项在运行时由 $Taglib__options 解析（支持 PHP 变量和字面量）
 
             // 解析属性
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             $disabledAttr = $disabled ? 'disabled' : '';
             $requiredAttr = $required ? 'required' : '';

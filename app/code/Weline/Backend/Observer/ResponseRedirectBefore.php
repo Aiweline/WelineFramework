@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
-use Weline\Admin\Service\BackendLoginReturnUrlService;
+use Weline\Backend\Api\Routing\LoginReturnUrlProviderInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\DataObject\DataObject;
@@ -19,6 +19,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 
@@ -28,12 +29,14 @@ class ResponseRedirectBefore implements ObserverInterface
      * @var Request
      */
     protected Request $request;
-    private ?BackendLoginReturnUrlService $returnUrlService;
+    private ?LoginReturnUrlProviderInterface $returnUrlService = null;
+    private bool $returnUrlServiceResolved = false;
 
-    public function __construct(Request $request, ?BackendLoginReturnUrlService $returnUrlService = null)
-    {
+    public function __construct(
+        Request $request,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
+    ) {
         $this->request = $request;
-        $this->returnUrlService = $returnUrlService;
     }
 
     /**
@@ -97,10 +100,13 @@ class ResponseRedirectBefore implements ObserverInterface
             // 检查当前路径是否在白名单中
             $currentPath = trim($this->request->getRouteUrlPath(), '/');
             if (!in_array($currentPath, $whiteUrls)) {
-                if (!$this->getReturnUrlService()->shouldCaptureCurrentRequestReturnUrl($this->request, $this->getCurrentRequestUrl())) {
+                $returnUrlService = $this->getReturnUrlService();
+                if (!$returnUrlService instanceof LoginReturnUrlProviderInterface
+                    || !$returnUrlService->shouldCaptureCurrentRequestReturnUrl($this->request, $this->getCurrentRequestUrl())
+                ) {
                     return;
                 }
-                $refererUrl = $this->getReturnUrlService()->normalizeCandidateUrl($this->getCurrentRequestUrl());
+                $refererUrl = $returnUrlService->normalizeCandidateUrl($this->getCurrentRequestUrl());
                 if ($refererUrl === null) {
                     return;
                 }
@@ -330,7 +336,10 @@ class ResponseRedirectBefore implements ObserverInterface
         if ($currentRequestUrl === '') {
             return $loginUrl;
         }
-        if (!$this->getReturnUrlService()->shouldCaptureCurrentRequestReturnUrl($this->request, $currentRequestUrl)) {
+        $returnUrlService = $this->getReturnUrlService();
+        if (!$returnUrlService instanceof LoginReturnUrlProviderInterface
+            || !$returnUrlService->shouldCaptureCurrentRequestReturnUrl($this->request, $currentRequestUrl)
+        ) {
             return $loginUrl;
         }
 
@@ -343,13 +352,15 @@ class ResponseRedirectBefore implements ObserverInterface
             return $loginUrl;
         }
 
-        return $this->getReturnUrlService()->buildLoginUrlWithReturn($loginUrl, $currentRequestUrl, 'not_logged_in');
+        return $returnUrlService->buildLoginUrlWithReturn($loginUrl, $currentRequestUrl, 'not_logged_in');
     }
 
-    private function getReturnUrlService(): BackendLoginReturnUrlService
+    private function getReturnUrlService(): ?LoginReturnUrlProviderInterface
     {
-        if (!$this->returnUrlService instanceof BackendLoginReturnUrlService) {
-            $this->returnUrlService = ObjectManager::getInstance(BackendLoginReturnUrlService::class);
+        if (!$this->returnUrlServiceResolved) {
+            $this->returnUrlServiceResolved = true;
+            $provider = $this->runtimeProviderResolver->resolve(LoginReturnUrlProviderInterface::class);
+            $this->returnUrlService = $provider instanceof LoginReturnUrlProviderInterface ? $provider : null;
         }
 
         return $this->returnUrlService;

@@ -22,17 +22,18 @@ class Cli extends CliAbstract
      *
      * 参数区：
      *
+     * @return int Process exit status returned by the selected command.
      * @throws ConsoleException
      * @throws Exception
      */
-    public function run(): void
+    public function run(): int
     {
         ConsoleEncoding::initForCli();
         $args = $this->parseArgs($this->argv);
         // 检查是否是查找命令 (find 或 -f)
         if ($this->isFindCommand($args)) {
             $this->handleFindCommand($args);
-            return;
+            return 0;
         }
         
         // 有命令时，需要接受用户检查 和 参数检查 但是在检测到env环境为空时，允许执行，方便安装
@@ -43,26 +44,26 @@ class Cli extends CliAbstract
             // 没有任何参数
             if (!isset($this->argv[0])) {
                 $this->execute();
-                exit();
+                return 0;
             }
         }
         $command_class = $this->checkCommand($args);
         // 如果返回的是推荐列表，显示推荐列表
         if (is_array($command_class) && !isset($command_class['class'])) {
             $this->showRecommendations($command_class, $args);
-            return;
+            return 0;
         }
         
         // 检查是否需要显示help
         if (isset($args['h']) || isset($args['help']) || isset($args['-h']) || isset($args['--help'])) {
             $this->showHelp($command_class);
-            return;
+            return 0;
         }
         
         // 执行命令
         $command = $command_class['command'] ?? '';
         $data = $command_class['data'];
-        ObjectManager::getInstance($command_class['class'])->execute($args, $data);
+        $commandResult = ObjectManager::getInstance($command_class['class'])->execute($args, $data);
         
         // 触发命令执行完成事件（传规范命令名，便于观察者按前缀匹配，如 setup: 而非别名 s:up）
         $canonicalCommand = $this->getCanonicalCommandName($command, $command_class['class']);
@@ -74,6 +75,16 @@ class Cli extends CliAbstract
             $this->printer->printing("\n");
             $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
         }
+
+        // Commands may return an integer process status. Keep legacy null/bool/
+        // object results successful so existing commands do not change meaning;
+        // the top-level bin entrypoint is the sole owner of process termination.
+        return $this->normalizeCommandExitCode($commandResult);
+    }
+
+    protected function normalizeCommandExitCode(mixed $commandResult): int
+    {
+        return \is_int($commandResult) ? \max(0, \min(255, $commandResult)) : 0;
     }
 
     private function isJsonOutputCommand(array $args): bool

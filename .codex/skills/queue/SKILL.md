@@ -19,6 +19,7 @@ Use this skill for WelineFramework queue inspection, repair, and operation in th
    - `app/code/Weline/Queue/Model/Queue.php`
 2. Use `w_query('queue', ...)` for runtime queue reads and business-level writes. Direct DB reads can miss framework casting, EAV/model behavior, event dispatching, and current query-provider semantics.
 3. Preserve side-effect boundaries. `stats`, `get`, `getByBizKey`, `list`, `getTypeIdByClass`, and `queue:type:listing` are diagnostic. `create`, `update`, `delete`, `queue:collect`, and `queue:run` change state or execute work.
+4. New cross-module consumers implement `Weline\Queue\Api\QueueConsumerInterface` and receive `QueueTaskContextInterface`. `Weline\Queue\QueueInterface` remains a runtime compatibility boundary for existing third-party consumers only.
 
 ## Queue CLI
 
@@ -28,7 +29,7 @@ Use these commands from the repository root.
 php bin/w queue:collect
 ```
 
-Collect queue types from modules into `weline_queue_type`. Run this after adding or changing queue classes, or when `getTypeIdByClass` cannot resolve a class. The collector must only register classes that implement `Weline\Queue\QueueInterface`; helper/static classes in a `Queue/` directory are not automatically queue implementations.
+Collect queue types from modules into `weline_queue_type`. Run this after adding or changing queue classes, or when `getTypeIdByClass` cannot resolve a class. The collector only registers instantiable classes that implement either the public `Weline\Queue\Api\QueueConsumerInterface` or the legacy `Weline\Queue\QueueInterface`; helper/static classes in a `Queue/` directory are not queue implementations.
 
 ```powershell
 php bin/w queue:type:listing
@@ -120,7 +121,7 @@ Use `force => true` only when the queue is running and deletion is explicitly in
 - `getByBizKey`: require `biz_key`; return the latest matching row.
 - `list`: filters include `page`, `page_size`, `module`, `status`, `type_id`, `queue_id`, `biz_key`, and `q`; returns `items` and `pagination`.
 - `stats`: return counts for `all`, `pending`, `running`, `done`, `error`, and `stop`.
-- `getTypeIdByClass`: resolve a `QueueInterface` class to `type_id`; if missing, it runs collection internally.
+- `getTypeIdByClass`: resolve a public or legacy queue consumer class to `type_id`; if missing, it runs collection internally.
 - `create`: require `name`, `module`, and either `type_id` or `class`; optional `content`, `status`, `auto`, `biz_key`.
 - `update`: locate by `queue_id`/`id` or `biz_key`; pass `patch` or top-level fields. Safe patch fields include `name`, `module`, `status`, `content`, `result`, `process`, `biz_key`, `auto`, `finished`, `pid`, and `type_id`.
 - `delete`: locate by `queue_id`/`id` or `biz_key`; running queues require `force`.
@@ -129,7 +130,7 @@ Valid statuses are `pending`, `running`, `done`, `error`, and `stop`.
 
 ## Validation
 
-After queue registration or QueueInterface filtering changes:
+After queue registration or consumer-contract filtering changes:
 
 ```powershell
 php -l app/code/Weline/Queue/Helper/Helper.php

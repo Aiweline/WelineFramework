@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Interface;
 
-interface AdapterStyleBindingInterface
+/** @deprecated Implement \Weline\Ai\Api\AdapterStyleBindingInterface. */
+interface AdapterStyleBindingInterface extends \Weline\Ai\Api\AdapterStyleBindingInterface
 {
     /**
      * Adapter-level defaults are preferred style tags for this scenario.

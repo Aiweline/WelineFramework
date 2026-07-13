@@ -7,14 +7,14 @@ namespace Weline\Geo\Service\Head;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\WebsiteProtocolConfig;
-use Weline\Seo\Service\Head\PageSeoContextResolver;
-use Weline\Seo\Service\Protocol\WebsiteProtocolResolver;
+use Weline\Seo\Api\Head\PageContextResolverInterface;
+use Weline\Seo\Api\Protocol\WebsiteProtocolResolverInterface;
 
 class GeoDiscoveryRenderer
 {
     public function __construct(
-        private readonly PageSeoContextResolver $resolver,
-        private readonly WebsiteProtocolResolver $websiteResolver,
+        private readonly PageContextResolverInterface $resolver,
+        private readonly WebsiteProtocolResolverInterface $websiteResolver,
         private readonly WebsiteProtocolConfig $protocolConfig
     ) {
     }
@@ -32,7 +32,7 @@ class GeoDiscoveryRenderer
 
         $context = $this->resolver->resolve($template, $options);
         $website = $this->websiteResolver->currentWebsite();
-        $config = $this->loadWebsiteConfig((int)($website['website_id'] ?? 0));
+        $config = $this->loadWebsiteConfig($website->id);
         if (!$config->isLlmsEnabled() && !$config->isFeedEnabled()) {
             return '';
         }
@@ -40,7 +40,7 @@ class GeoDiscoveryRenderer
         $feedUrl = $this->resolveFeedUrl($template) ?: $this->absoluteUrl($template, '/geo-feed.json');
         $rssUrl = $this->absoluteUrl($template, '/geo-feed.xml');
         $llmsUrl = $this->absoluteUrl($template, '/llms.txt');
-        $title = (string) ($context['site_name'] ?? 'GEO Feed');
+        $title = $context->siteName !== '' ? $context->siteName : 'GEO Feed';
         $lines = ['<meta name="weline-geo" content="enabled">'];
         if ($config->isFeedEnabled()) {
             $lines[] = '<link rel="alternate" type="application/feed+json" title="' . $this->escape($title . ' JSON Feed') . '" href="' . $this->escape($feedUrl) . '">';

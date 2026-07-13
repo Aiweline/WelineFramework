@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Database\Console\Db\Migrate;
 
-use Weline\Database\Interface\MigrationInterface;
+use Weline\Framework\Database\Migration\MigrationInterface;
 use Weline\Database\Model\Migration;
 use Weline\Database\Service\BackupService;
 use Weline\Database\Service\MigrationService;

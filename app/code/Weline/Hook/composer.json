@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-hook",
+    "description": "WelineFramework Hook module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-admin": "@dev"
+    },
+    "suggest": {
+        "weline/module-server": "Adds optional DEV-only WLS performance logging to the Hook administration page."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Hook\\": ""
+        }
+    }
+}

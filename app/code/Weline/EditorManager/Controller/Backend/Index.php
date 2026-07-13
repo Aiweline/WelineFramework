@@ -6,8 +6,9 @@ namespace Weline\EditorManager\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\EditorManager\EditorManagerInterface;
+use Weline\EditorManager\Api\Editor\EditorManagerInterface;
 
 #[Acl('Weline_EditorManager::main', '编辑器管理器', 'mdi mdi-content-save-edit', '内容管理')]
 class Index extends BackendController
@@ -64,16 +65,20 @@ class Index extends BackendController
      */
     private function findEditorManagerClasses(): array
     {
-        $classes = [];
-        
-        // 默认的 Local 编辑器
-        $classes[] = \Weline\EditorManager\EditorManager\Local::class;
-        
-        // 检查是否有 CKEditor 模块
-        if (class_exists(\Weline\CkeditorEditorManager\EditorManager\CKEditor::class)) {
-            $classes[] = \Weline\CkeditorEditorManager\EditorManager\CKEditor::class;
+        $classes = [\Weline\EditorManager\EditorManager\Local::class];
+
+        try {
+            $providers = ObjectManager::getInstance(ServiceProviderRegistry::class)
+                ->implementationsWithPrefix('editor_manager.');
+            foreach ($providers as $providerClass) {
+                if (is_string($providerClass) && $providerClass !== '') {
+                    $classes[] = $providerClass;
+                }
+            }
+        } catch (\Throwable) {
+            // 编译注册表缺失时仍保留内置 Local 编辑器。
         }
-        
-        return $classes;
+
+        return array_values(array_unique($classes));
     }
 }

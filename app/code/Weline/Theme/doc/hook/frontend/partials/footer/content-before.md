@@ -68,7 +68,7 @@ view/hooks/Weline_Theme--frontend--partials--footer--content-before.phtml
 ## 相关文件
 
 - **Hook 规约文件**：`app/code/Weline/Theme/hook.php`
-- **Hook 接口定义**：`app/code/Weline/Framework/Hook/HookInterface.php`
+- **Hook 规约定义**：`app/code/Weline/Theme/hook.php`
 - **主题文档**：`app/code/Weline/Theme/doc/README.md`
 
 ## 扩展开发

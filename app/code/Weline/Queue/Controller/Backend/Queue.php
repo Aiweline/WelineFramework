@@ -13,17 +13,16 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Controller\Backend;
 
-use PHPUnit\Util\Exception;
-use Weline\Backend\Model\BackendUserData;
-use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
-use Weline\Framework\Session\SessionFactory;
-use Weline\Cron\Helper\Process;
-use Weline\Eav\Model\EavAttribute;
+use Weline\Backend\Api\UserData\BackendCurrentUserDataInterface;
+use Weline\Cron\Api\Process\ProcessControlInterface;
+use Weline\Eav\Api\EavAttribute;
+use Weline\Eav\Api\EavAttributeType;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Queue\Model\Queue\Type\Attributes;
 use Weline\Queue\QueueInterface;
 
@@ -35,6 +34,8 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
 
     private \Weline\Queue\Model\Queue $queue;
     private \Weline\Queue\Model\Queue\Type $type;
+    private ?BackendCurrentUserDataInterface $currentUserData = null;
+    private ?ProcessControlInterface $processControl = null;
 
     public function __init()
     {
@@ -48,8 +49,11 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    public function __construct(\Weline\Queue\Model\Queue $queue, \Weline\Queue\Model\Queue\Type $type)
-    {
+    public function __construct(
+        \Weline\Queue\Model\Queue $queue,
+        \Weline\Queue\Model\Queue\Type $type,
+        private readonly RuntimeProviderResolver $runtimeProviders,
+    ) {
         $this->queue = $queue;
         $this->type = $type;
     }
@@ -305,37 +309,6 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             '</pre></div>';
     }
 
-    private function renderBackendBlankTemplate(string $contentTemplate): string
-    {
-        $contentHtml = (string)$this->template($contentTemplate);
-        $contentRenderKey = \Weline\Theme\Service\PreparedContentStore::put($contentHtml);
-        $template = $this->getTemplate();
-        $template->setData('contentTemplate', $contentTemplate);
-        $template->setData('contentRenderKey', $contentRenderKey);
-
-        $meta = $template->getData('meta');
-        if (!\is_array($meta)) {
-            $meta = [];
-        }
-        $meta['contentTemplate'] = $contentTemplate;
-        $meta['contentRenderKey'] = $contentRenderKey;
-        unset($meta['content']);
-        $template->setData('meta', $meta);
-
-        $childHtml = $template->getData('child_html');
-        if (!\is_array($childHtml)) {
-            $childHtml = [];
-        }
-        $childHtml['contentRenderKey'] = $contentRenderKey;
-        unset($childHtml['content']);
-        $template->setData('child_html', $childHtml);
-
-        return (string)$this->template('Weline_Theme::theme/backend/layouts/default/blank.phtml', [
-            'contentRenderKey' => $contentRenderKey,
-            'contentTemplate' => $contentTemplate,
-        ]);
-    }
-
     #[Acl('Weline_Queue::form', '编辑或者新增', 'mdi mdi-form-textbox', '编辑或者新增')]
     function form()
     {
@@ -344,10 +317,6 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $queue = $this->queue->load($id);
             $module = $this->request->getGet('module');
             $dir = $this->request->getGet('dir');
-            # 删除用户的记录数据
-//            /** @var BackendUserData $userData */
-//            $userData = ObjectManager::getInstance(BackendUserData::class);
-//            $userData->deleteScope($this->session->getLoginUserID(), 'queue');
             # 如果队列已经运行则无法修改
             if ($queue->getId() and !$queue->isPending()) {
                 $this->redirect('/component/offcanvas/error', ['msg' => __('队列已经运行，无法修改'), 'reload' => 1]);
@@ -356,9 +325,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 $this->redirect('/component/offcanvas/error', ['msg' => __('队列已经完成,无法修改'), 'reload' => 1]);
             }
             if (!$queue->getId()) {
-                /** @var BackendUserData $userData */
-                $userData = ObjectManager::getInstance(BackendUserData::class);
-                $userData = $userData->getScope('queue');
+                $userData = $this->currentUserData()->getScope('queue');
                 $queue->setData($userData);
             }
             if ($module) {
@@ -452,7 +419,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 $this->queue->setResult($json['msg'])->save();
                 return $this->fetchJson($json);
             }
-            $attr = $attributeModel->reset()->joinModel(EavAttribute\Type::class, 't', 'main_table.type_id=t.type_id')
+            $attr = $attributeModel->reset()->joinModel(EavAttributeType::class, 't', 'main_table.type_id=t.type_id')
                 ->where('main_table.code', $value['code'])
                 ->find()
                 ->fetch();
@@ -503,9 +470,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             return $this->fetchJson($json);
         }
         # 删除用户的记录数据
-        /** @var BackendUserData $userData */
-        $userData = ObjectManager::getInstance(BackendUserData::class);
-        $userData->deleteScope('queue');
+        $this->currentUserData()->clearScope('queue');
         $json['code'] = 200;
         $json['msg'] = $edit ? __('队列已编辑！等待运行中...') : __('队列已成功创建！等待运行中...');
 
@@ -555,9 +520,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             return $this->fetchJson($json);
         }
         $type = $this->type->load($type_id);
-        /** @var BackendUserData $userData */
-        $userData = ObjectManager::getInstance(BackendUserData::class);
-        $userData = $userData->getScope('queue');
+        $userData = $this->currentUserData()->getScope('queue');
         $options_data = [
             'label_class' => 'control-label',
             'attrs' => ['class' => 'form-control w-100', 'scope' => 'queue', 'file-ext' => '*', 'file-size' => '102400000'],
@@ -629,9 +592,6 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 $sieMb = round($resultSize / 1024 / 1024, 2);
                 $this->queue->setData('result', __('队列结果过大:%{1} Mb。 请<a href="%{2}">下载队列结果</a>查看。', [$sieMb, $dowloadUrl]));
             }
-        }
-        if ($this->request->isIframe()) {
-            return $this->renderBackendBlankTemplate('Weline_Queue::templates/Backend/Queue/show.phtml');
         }
         return $this->fetch();
     }
@@ -768,7 +728,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         
         $pid = $this->queue->getPid();
         if ($pid) {
-            $running = Process::isProcessRunning($pid);
+            $running = $this->processControl()->isRunning((int)$pid);
             if ($running) {
                 $msg = __('队列有正在运行的进程（PID: %{1}），请先暂停队列后再重置！', $pid);
                 if ($isAjax) {
@@ -814,11 +774,11 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $pid = $queue->getPid();
         $killMsg = '';
         if ($pid) {
-            $running = Process::isProcessRunning($pid);
+            $running = $this->processControl()->isRunning((int)$pid);
             if ($running) {
                 $pname = 'queue-' . $queue->getName() . '-' . $queue->getId();
-                $result = Process::killPid($pid, $pname);
-                Process::unsetLogProcessFilePath($pname);
+                $result = $this->processControl()->terminate((int)$pid, $pname);
+                $this->processControl()->removeLog($pname);
                 if ($result) {
                     $killMsg = __('（进程 PID: %{1} 已终止）', $pid);
                 } else {
@@ -865,7 +825,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         
         $pid = $queue->getPid();
         if ($pid) {
-            $running = Process::isProcessRunning($pid);
+            $running = $this->processControl()->isRunning((int)$pid);
             if ($running) {
                 $msg = __('队列进程（PID: %{1}）仍在运行中，无法继续！请先暂停队列。', $pid);
                 if ($isAjax) {
@@ -930,11 +890,11 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 case 'stop':
                     $pid = $this->queue->getPid();
                     if ($pid) {
-                        $running = Process::isProcessRunning($pid);
+                        $running = $this->processControl()->isRunning((int)$pid);
                         if ($running) {
                             $pname = 'queue-' . $this->queue->getName() . '-' . $this->queue->getId();
-                            $result = Process::killPid($pid, $pname);
-                            Process::unsetLogProcessFilePath($pname);
+                            $result = $this->processControl()->terminate((int)$pid, $pname);
+                            $this->processControl()->removeLog($pname);
                             if (!$result) {
                                 $json['msg'] = __('杀死进程失败！进程ID：%{1}', $pid);
                                 return $this->fetchJson($json);
@@ -973,7 +933,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 case 'retry':
                     $pid = $this->queue->getPid();
                     if ($pid) {
-                        $running = Process::isProcessRunning($pid);
+                        $running = $this->processControl()->isRunning((int)$pid);
                         if ($running) {
                             $json['msg'] = __('队列有进程正在运行，无法继续！进程ID：%{1}', $pid);
                             return $this->fetchJson($json);
@@ -992,7 +952,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                     
                 case 'reset':
                     $pid = $this->queue->getPid();
-                    if ($pid && Process::isProcessRunning($pid)) {
+                    if ($pid && $this->processControl()->isRunning((int)$pid)) {
                         $json['msg'] = __('队列有进程正在运行，请先暂停队列！进程ID：%{1}', $pid);
                         return $this->fetchJson($json);
                     }
@@ -1062,10 +1022,10 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                         
                     case 'stop':
                         $pid = $queue->getPid();
-                        if ($pid && Process::isProcessRunning($pid)) {
+                        if ($pid && $this->processControl()->isRunning((int)$pid)) {
                             $pname = 'queue-' . $queue->getName() . '-' . $queue->getId();
-                            Process::killPid($pid, $pname);
-                            Process::unsetLogProcessFilePath($pname);
+                            $this->processControl()->terminate((int)$pid, $pname);
+                            $this->processControl()->removeLog($pname);
                             $queue->setPid(0);
                         }
                         $queue->setData(\Weline\Queue\Model\Queue::schema_fields_status, \Weline\Queue\Model\Queue::status_stop);
@@ -1100,7 +1060,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
 
                     case 'continue':
                         $pid = $queue->getPid();
-                        if ($pid && Process::isProcessRunning($pid)) {
+                        if ($pid && $this->processControl()->isRunning((int)$pid)) {
                             $results[] = ['id' => $queueId, 'success' => false, 'msg' => __('有进程运行')];
                             $failCount++;
                             continue 2;
@@ -1132,5 +1092,33 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $json['failCount'] = $failCount;
         
         return $this->fetchJson($json);
+    }
+
+    private function currentUserData(): BackendCurrentUserDataInterface
+    {
+        if ($this->currentUserData instanceof BackendCurrentUserDataInterface) {
+            return $this->currentUserData;
+        }
+
+        $provider = $this->runtimeProviders->resolve(BackendCurrentUserDataInterface::class);
+        if (!$provider instanceof BackendCurrentUserDataInterface) {
+            throw new \RuntimeException('backend_current_user_data_provider_unavailable');
+        }
+
+        return $this->currentUserData = $provider;
+    }
+
+    private function processControl(): ProcessControlInterface
+    {
+        if ($this->processControl instanceof ProcessControlInterface) {
+            return $this->processControl;
+        }
+
+        $provider = $this->runtimeProviders->resolve(ProcessControlInterface::class);
+        if (!$provider instanceof ProcessControlInterface) {
+            throw new \RuntimeException('cron_process_control_provider_unavailable');
+        }
+
+        return $this->processControl = $provider;
     }
 }

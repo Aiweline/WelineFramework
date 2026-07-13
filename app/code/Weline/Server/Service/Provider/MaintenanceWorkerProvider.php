@@ -87,8 +87,8 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
-        $mode = $context->mode;
-        $host = ($mode === 'linux-direct')
+        $direct = $context->isDirect();
+        $host = $direct
             ? ($context->host ?: '127.0.0.1')
             : '127.0.0.1';
 
@@ -112,14 +112,12 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $arguments[] = '--win';
         }
 
-        $dispatcherEnabled = $mode === 'linux-direct' ? false : $context->isDispatcherEnabled();
-        $topology = $mode === 'linux-direct'
-            ? 'direct'
-            : ($dispatcherEnabled ? 'dispatcher' : 'independent');
+        $dispatcherEnabled = $context->isDispatcherEnabled();
+        $topology = $context->getEffectiveTopology()->value;
         $arguments[] = '--wls-dispatcher-enabled=' . ($dispatcherEnabled ? '1' : '0');
         $arguments[] = '--wls-runtime-topology=' . $topology;
 
-        if ($mode === 'linux-direct') {
+        if ($direct) {
             $arguments[] = '--reuseport';
         }
 
@@ -156,10 +154,9 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
      */
     private function getMaintenanceBasePort(ServiceContext $context): int
     {
-        $mode = $context->mode;
         $mainPort = $context->mainPort;
 
-        if ($mode === 'linux-direct' && $mainPort > 0) {
+        if ($context->isDirect() && $mainPort > 0) {
             return $mainPort + 100;
         }
 
@@ -202,10 +199,16 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
                 . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
             );
         }
-        if ($engine === 'event_buffer' && $context->mode === 'linux-direct') {
+        if ($engine === 'event_buffer' && $context->isDirect()) {
             throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer requires the Dispatcher+TLS topology and does not support linux-direct mode. '
+                'wls.ssl.engine=event_buffer does not support direct mode. '
                 . 'Use wls.ssl.engine=stream for direct mode.'
+            );
+        }
+        if ($engine === 'event_buffer' && $context->isDispatcherEnabled()) {
+            throw new \InvalidArgumentException(
+                'wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface before TLS. '
+                . 'Use wls.ssl.engine=stream; Dispatcher startup will not silently corrupt the TLS stream.'
             );
         }
 

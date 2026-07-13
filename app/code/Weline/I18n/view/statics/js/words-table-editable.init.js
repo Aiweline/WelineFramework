@@ -37,37 +37,32 @@ $(function () {
                 }
             }
             showLoading();
-            $.ajax({
-                url: window.url('*/backend/countries/locale/words/translate'),
-                type: 'post',
-                dataType: 'json',
-                data: data,
-                success: async (res) => {
-                    if (res.code !== 200) {
-                        // 使用sweetalert2提示
-                        Swal.fire({
-                            title: __('提示'),
-                            text: res.msg,
-                            icon: 'error',
-                        });
-                    } else {
-                        Swal.fire({
-                            title: __('提示'),
-                            text: res.msg,
-                            icon: 'success',
-                        });
-                    }
-                }, error: (res) => {
-                    console.log(res)
-                    // 使用sweetalert2提示
-                    Swal.fire({
-                        title: __('提示'),
-                        text: __('保存失败'),
-                        icon: 'error',
-                    });
+            try {
+                if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                    throw new Error(__('Weline.Api 不可用'));
                 }
-            })
-            hideLoading();
+                const api = await Promise.resolve(window.Weline.Api.resource('i18n_admin'));
+                const res = await api.action({
+                    action: 'word-translate',
+                    payload: data
+                }, {silent: true});
+                if (!res || res.success !== true) {
+                    throw new Error((res && (res.message || res.msg)) || __('保存失败'));
+                }
+                await Swal.fire({
+                    title: __('提示'),
+                    text: res.message || __('保存成功'),
+                    icon: 'success',
+                });
+            } catch (error) {
+                Swal.fire({
+                    title: __('提示'),
+                    text: error && error.message ? error.message : __('保存失败'),
+                    icon: 'error',
+                });
+            } finally {
+                hideLoading();
+            }
         },
         cancel: function (values) {
             $(".edit i", this)

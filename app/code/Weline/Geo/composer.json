@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-geo",
+    "description": "WelineFramework Geo module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-i18n": "@dev",
+        "weline/module-queue": "@dev",
+        "weline/module-seo": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Geo\\": ""
+        }
+    }
+}

@@ -7,8 +7,8 @@ namespace Weline\Theme\Service;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Widget\Service\WidgetConfigService;
-use Weline\Widget\Service\WidgetPreviewService;
+use Weline\Widget\Api\WidgetConfigService;
+use Weline\Widget\Api\WidgetPreviewService;
 
 class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
 {

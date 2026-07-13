@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Block\System;
 
-use Weline\Admin\Model\System\SystemNotification;
+use Weline\Admin\Api\Notification\SystemNotificationDirectoryInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -42,10 +42,9 @@ class Notification extends \Weline\Framework\View\Block
 //        if ($notices = $this->cache->get($cache_key)) {
 //            return $notices;
 //        }
-        /**@var SystemNotification $notificationsModel */
-        $notificationsModel = ObjectManager::getInstance(SystemNotification::class);
-        //        $this->cache->set($cache_key, $notices);
-        return $notificationsModel->where(SystemNotification::schema_fields_is_read, false)->select()->fetch();
+        /** @var SystemNotificationDirectoryInterface $directory */
+        $directory = ObjectManager::getInstance(SystemNotificationDirectoryInterface::class);
+        return $directory->listUnread();
     }
 //
 //    function getTotals()

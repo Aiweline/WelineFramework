@@ -11,9 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Helper;
 
-use Weline\Acl\Model\Acl;
-use Weline\Acl\Model\WhiteAclSource;
-use Weline\Acl\Service\ResourceTreeServiceInterface;
+use Weline\Acl\Api\Resource\WhitelistServiceInterface;
+use Weline\Acl\Api\ResourceTreeServiceInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 class MenuUrlValidator
@@ -86,6 +85,12 @@ class MenuUrlValidator
         $cache->delete(self::WHITELIST_CACHE_KEY);
     }
 
+    public static function resetRequestState(): void
+    {
+        self::$menuPathsCache = null;
+        self::$whitelistCache = null;
+    }
+
     /**
      * 白名单缓存键名
      */
@@ -115,21 +120,9 @@ class MenuUrlValidator
             return $cachedPaths;
         }
 
-        // 从数据库查询白名单路径
-        /** @var WhiteAclSource $whiteAclSource */
-        $whiteAclSource = ObjectManager::getInstance(WhiteAclSource::class);
-        $whitelist = $whiteAclSource
-            ->fields('path')
-            ->where('type', WhiteAclSource::type_PC)
-            ->select();
-
-        $paths = [];
-        foreach ($whitelist->fetchIterator() as $item) {
-            $path = $item['path'] ?? '';
-            if ($path !== '') {
-                $paths[] = $path;
-            }
-        }
+        /** @var WhitelistServiceInterface $whitelistService */
+        $whitelistService = ObjectManager::getInstance(WhitelistServiceInterface::class);
+        $paths = $whitelistService->listPaths();
         
         self::$whitelistCache = $paths;
         $cache->set(self::WHITELIST_CACHE_KEY, $paths, 3600);

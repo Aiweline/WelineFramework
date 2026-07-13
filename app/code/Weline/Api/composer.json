@@ -1,0 +1,21 @@
+{
+    "name": "weline/module-api",
+    "description": "WelineFramework Api module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-acl": "@dev",
+        "weline/module-admin": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/framework": "@dev"
+    },
+    "suggest": {
+        "weline/module-customer": "Enables optional customer actors for delegated API authentication."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Api\\": ""
+        }
+    }
+}

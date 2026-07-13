@@ -13,8 +13,8 @@ namespace Weline\Shipping\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Cookie;
-use Weline\I18n\Model\Countries;
-use Weline\I18n\Model\Countries\Locale\Name;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\CountryRepositoryInterface;
 use Weline\Shipping\Model\Region;
 use Symfony\Component\Intl\Countries as IntlCountries;
 
@@ -26,10 +26,12 @@ use Symfony\Component\Intl\Countries as IntlCountries;
 class RegionService
 {
     private ObjectManager $objectManager;
+    private RuntimeProviderResolver $runtimeProviders;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->objectManager = $objectManager;
+        $this->runtimeProviders = $objectManager->getInstance(RuntimeProviderResolver::class);
     }
 
     /**
@@ -205,41 +207,22 @@ class RegionService
 
     private function getInstalledCountriesAsRegions(): array
     {
-        /** @var Countries $countryModel */
-        $countryModel = $this->objectManager->getInstance(Countries::class);
-        /** @var Name $nameModel */
-        $nameModel = $this->objectManager->getInstance(Name::class);
-
-        $countries = $countryModel->reset()
-            ->where(Countries::schema_fields_IS_INSTALL, 1)
-            ->where(Countries::schema_fields_IS_ACTIVE, 1)
-            ->order(Countries::schema_fields_CODE, 'ASC')
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        $names = $nameModel->reset()
-            ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        $nameMap = [];
-        foreach ($names as $name) {
-            $nameMap[(string)$name->getData(Name::schema_fields_COUNTRY_CODE)] = (string)$name->getData(Name::schema_fields_DISPLAY_NAME);
+        $repository = $this->runtimeProviders->resolve(CountryRepositoryInterface::class);
+        if (!$repository instanceof CountryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n country repository provider is unavailable.');
         }
 
         $result = [];
-        foreach ($countries as $country) {
-            $code = (string)$country->getData(Countries::schema_fields_CODE);
-            $countryName = $this->localizedCountryName($code, $nameMap[$code] ?? $code);
+        foreach ($repository->installedActive(Cookie::getLangLocal()) as $country) {
+            $code = $country->code;
+            $countryName = $this->localizedCountryName($code, $country->displayName);
             $result[] = [
                 'region_id' => 0,
                 'parent_region_id' => 0,
                 'country_code' => $code,
                 'region_code' => $code,
                 'region_name' => $countryName,
-                'region_default_name' => $nameMap[$code] ?? $code,
+                'region_default_name' => $country->displayName,
                 'region_locale' => $this->currentLocale(),
                 'region_type' => Region::TYPE_COUNTRY,
                 'postal_code_pattern' => '',
@@ -605,4 +588,3 @@ class RegionService
         return $region->getId() ? $region : null;
     }
 }
-

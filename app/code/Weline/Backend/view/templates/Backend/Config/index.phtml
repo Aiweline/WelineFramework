@@ -9,6 +9,9 @@
  * @var array $configs
  */
 $configs = $configs ?? [];
+$usesDefaultLogo = trim((string)($configs['logo_dark'] ?? '')) === ''
+    && trim((string)($configs['logo_light'] ?? '')) === ''
+    && trim((string)($configs['logo_sm'] ?? '')) === '';
 ?>
 <!-- 页面标题 -->
 <div class="row">
@@ -32,7 +35,20 @@ $configs = $configs ?? [];
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4"><lang>外观与 Logo</lang></h4>
-                <p class="text-muted mb-4"><lang>配置全站 Logo 与站点图标：未填写时使用 Theme 默认资源；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。</lang></p>
+                <p class="text-muted mb-4"><lang>配置全站 Logo 与站点图标：未填写 Logo 时默认使用与登录页一致的 W 字母黄色丝带标识；填写后前后台顶栏、登录页与浏览器标签页将统一使用此处配置。</lang></p>
+                <?php if ($usesDefaultLogo): ?>
+                    <div class="alert alert-light border d-flex align-items-center gap-3 mb-4" role="status">
+                        <img src="/Weline/Theme/view/theme/backend/assets/images/theme/logo.png"
+                             alt="<?= __('默认 Weline Logo') ?>"
+                             width="96"
+                             height="75"
+                             style="object-fit: contain;">
+                        <div>
+                            <strong class="d-block"><lang>当前使用默认 Logo</lang></strong>
+                            <span class="text-muted"><lang>未配置自定义 Logo，后台顶栏与登录页使用同一个 W 字母黄色丝带标识。</lang></span>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 
                 <form id="configForm">
                     <!-- Logo配置 -->

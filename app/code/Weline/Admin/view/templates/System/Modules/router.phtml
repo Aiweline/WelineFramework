@@ -673,7 +673,7 @@ foreach ($routers as $module => $routes) {
                         </td>
                         <td>
                             <?php if (!empty($info['start_page_path'])): ?>
-                            <a class="weline-router-start-btn" href="<?= $this->getBackendUrl('backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=' . urlencode($info['start_page_path'])) ?>" title="<?= __('设为首页') ?>">
+                            <a class="weline-router-start-btn" href="<?= $this->getBackendUrl('backend/system/config/set?key=' . \Weline\Backend\Api\Config\KeysInterface::key_start_page_path . '&value=' . urlencode($info['start_page_path'])) ?>" title="<?= __('设为首页') ?>">
                                 <i class="mdi mdi-home-outline"></i> <?= __('设为首页') ?>
                             </a>
                             <?php endif; ?>

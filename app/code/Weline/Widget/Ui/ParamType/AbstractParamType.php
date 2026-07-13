@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Ui\ParamType;
 
+use Weline\Widget\Api\Param\ParamDefinition;
+
 /**
  * Widget 参数类型抽象基类
  *
@@ -15,20 +17,13 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
 {
     protected const CSS_PREFIX = 'w-param-';
 
-    /** 天然需要翻译的字段类型 */
-    private const TRANSLATABLE_TYPES = ['string', 'textarea', 'html', 'text'];
-
     /**
      * 推断字段是否可翻译：显式 i18n 优先，否则文本类默认 true
      * 关闭多语言：'i18n' => false
      */
     public static function isTranslatable(array $param): bool
     {
-        if (array_key_exists('i18n', $param)) {
-            return (bool)$param['i18n'];
-        }
-        $type = $param['type'] ?? 'string';
-        return in_array($type, self::TRANSLATABLE_TYPES, true);
+        return ParamDefinition::isTranslatable($param);
     }
 
     protected function generateFieldId(string $key, int|string $layoutId): string

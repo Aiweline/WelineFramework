@@ -9,7 +9,7 @@ if (defined('TAGLIB_EXAMPLE_LOADED')) {
 }
 define('TAGLIB_EXAMPLE_LOADED', true);
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * 标签依赖管理示例

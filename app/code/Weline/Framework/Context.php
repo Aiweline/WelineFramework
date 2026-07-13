@@ -73,7 +73,16 @@ class Context
         $headers = \method_exists($request, 'getHeaders') ? (array)($request->getHeaders() ?? []) : [];
 
         $server = [];
-        if (\method_exists($request, 'getServer')) {
+        if (\method_exists($request, 'getParsedServerSnapshot')) {
+            $parsedServerSnapshot = $request->getParsedServerSnapshot();
+            if (\is_array($parsedServerSnapshot) && $parsedServerSnapshot !== []) {
+                // WLS owns an immutable transport snapshot. A reused ServerBag
+                // may still observe another Fiber's emulated globals, so it is
+                // never authoritative for the initial request Context.
+                $server = $parsedServerSnapshot;
+            }
+        }
+        if ($server === [] && \method_exists($request, 'getServer')) {
             $serverValue = $request->getServer();
             $server = \is_array($serverValue) ? $serverValue : [];
         }

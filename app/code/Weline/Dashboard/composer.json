@@ -1,0 +1,20 @@
+{
+    "name": "weline/module-dashboard",
+    "description": "WelineFramework Dashboard module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-acl": "@dev",
+        "weline/module-admin": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-theme": "@dev",
+        "weline/module-websites": "@dev",
+        "weline/module-widget": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Dashboard\\": ""
+        }
+    }
+}

@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Observer;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Runtime\Preload\ViewWarmupContribution;
+use Weline\Framework\Runtime\Preload\ViewWarmupContributionRegistry;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
 use Weline\Framework\View\Template;
+use Weline\ModuleRouter\Api\RouterRulesReaderInterface;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
@@ -23,6 +27,13 @@ use Weline\Theme\Service\ThemePageTypeResolver;
 
 class WorkerBootstrapWarmup implements ObserverInterface
 {
+    private ?ViewWarmupContribution $viewWarmupContribution = null;
+
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviders,
+    ) {
+    }
+
     public function execute(Event &$event): void
     {
         if (!Runtime::isPersistent()) {
@@ -81,27 +92,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
         ObjectManager::getInstance(LayoutSlotRenderer::class);
         ObjectManager::getInstance(QueryProviderRegistry::class)->getAllDescriptors();
         ObjectManager::getInstance(FrontendWorkerSessionService::class)->cleanupExpired();
-
-        if (\class_exists(\Weline\Backend\Config\MenuXmlReader::class)) {
-            ObjectManager::getInstance(\Weline\Backend\Config\MenuXmlReader::class)->read();
-        }
-
-        foreach ([
-            \Weline\Backend\Service\MenuService::class,
-            \Weline\Admin\Service\MenuRenderService::class,
-            \Weline\Admin\Service\FastMenuRenderService::class,
-            \Weline\Backend\Block\ThemeConfig::class,
-            \Weline\Backend\Model\Config::class,
-            \Weline\Framework\Ui\FormKey::class,
-        ] as $className) {
-            if (\class_exists($className)) {
-                ObjectManager::getInstance($className);
-            }
-        }
-
-        if (\class_exists(\Weline\I18n\Taglib\LanguageSwitcher::class)) {
-            \Weline\I18n\Taglib\LanguageSwitcher::warmBackendCaches(['zh_Hans_CN', 'en_US']);
-        }
+        ObjectManager::getInstance(\Weline\Framework\Ui\FormKey::class);
     }
 
     private function warmFrontendThemeData(): void
@@ -175,48 +166,24 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Theme::theme/frontend/layouts/account/dashboard.phtml',
             'Weline_Theme::theme/frontend/layouts/account_orders/default.phtml',
             'Weline_Theme::theme/frontend/layouts/account_profile/default.phtml',
-            'Weline_Customer::templates/frontend/account/sidebar/side.phtml',
-            'Weline_Customer::templates/frontend/account/index.phtml',
-            'WeShop_Catalog::templates/Frontend/Category/content.phtml',
-            'WeShop_Product::templates/frontend/product/view.phtml',
-            'WeShop_Filters::templates/Frontend/filters.phtml',
         ] as $fileName) {
             $this->warmViewTemplate($template, $fileName);
             SchedulerSystem::yield();
         }
 
-        foreach ([
-            'WeShop_Catalog::WeShop_Catalog/frontend/layouts/category/products-content.phtml',
-            'WeShop_Catalog::Weline_Theme/frontend/layouts/category/subcategories-filter.phtml',
-            'WeShop_Catalog::Weline_Theme/frontend/partials/breadcrumb/items.phtml',
-            'WeShop_Catalog::Weline_Theme/frontend/partials/header/categories-before.phtml',
-            'WeShop_Catalog::Weline_Theme/frontend/partials/header/search-form-before.phtml',
-            'WeShop_Product::WeShop_Product/frontend/layouts/product/main-content.phtml',
-            'Weline_Order::hooks/account.sidebar.phtml',
-            'Weline_Order::hooks/account.sidebar.content.phtml',
-            'WeShop_Order::hooks/account.sidebar.phtml',
-            'WeShop_Order::hooks/account.sidebar.content.phtml',
-            'Weline_Shipping::hooks/account.sidebar.phtml',
-            'Weline_Shipping::hooks/account.sidebar.content.phtml',
-            'WeShop_Filters::Weline_Theme/frontend/layouts/category/filters-sidebar.phtml',
-            'WeShop_Filters::Weline_Theme/frontend/layouts/base/body-end.phtml',
-        ] as $hookFile) {
-            $this->warmTagTemplate($template, 'hooks', $hookFile);
+        foreach ($this->viewWarmupContribution()->templates as $fileName) {
+            $this->warmViewTemplate($template, $fileName);
             SchedulerSystem::yield();
         }
 
+        foreach ($this->viewWarmupContribution()->tagTemplates as $type => $sources) {
+            foreach ($sources as $source) {
+                $this->warmTagTemplate($template, $type, $source);
+                SchedulerSystem::yield();
+            }
+        }
+
         foreach ([
-            'Weline_Admin::templates/Login/fast.phtml',
-            'Weline_Admin::templates/Login/index.phtml',
-            'Weline_Admin::templates/Login/head.phtml',
-            'Weline_Admin::templates/Login/footer.phtml',
-            'Weline_Admin::templates/common/head.phtml',
-            'Weline_Admin::templates/common/footer.phtml',
-            'Weline_Admin::templates/common/left-sidebar.phtml',
-            'Weline_Admin::templates/common/right-sidebar.phtml',
-            'Weline_Admin::templates/common/page/loading.phtml',
-            'Weline_Backend::templates/public/head.phtml',
-            'Weline_Backend::templates/public/footer.phtml',
             'Weline_Theme::theme/backend/layouts/default/default.phtml',
             'Weline_Theme::theme/backend/layouts/default/blank.phtml',
             'Weline_Theme::theme/backend/layouts/login/default.phtml',
@@ -240,15 +207,6 @@ class WorkerBootstrapWarmup implements ObserverInterface
             SchedulerSystem::yield();
         }
 
-        foreach ([
-            'Weline_Backend::header/base.phtml',
-            'Weline_Backend::footer/base.phtml',
-            'Weline_Backend::version.phtml',
-            'Weline_Backend::system/notification.phtml',
-        ] as $blockFile) {
-            $this->warmTagTemplate($template, 'blocks', $blockFile);
-            SchedulerSystem::yield();
-        }
     }
 
     private function warmHotHookRegistries(): void
@@ -276,7 +234,6 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Theme::frontend::layouts::account::sidebar-after',
             'account.sidebar',
             'account.sidebar.content',
-            'Weline_Admin::backend::partials::login::providers',
             'Weline_Theme::backend::layouts::base::head-before',
             'Weline_Theme::backend::layouts::base::head-after',
             'Weline_Theme::backend::layouts::base::body-start',
@@ -296,40 +253,31 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Theme::backend::partials::scripts::before',
             'Weline_Theme::backend::partials::scripts::after',
         ] as $hookName) {
-            /** @var HookReader $reader */
-            $reader = ObjectManager::make(HookReader::class);
-            $reader->setPath($hookName);
-            $reader->getFileListWithMeta();
-            $reader->getFileList();
-            SchedulerSystem::yield();
+            $this->warmHookRegistry($hookName);
         }
+
+        foreach ($this->viewWarmupContribution()->hookNames as $hookName) {
+            $this->warmHookRegistry($hookName);
+        }
+    }
+
+    private function warmHookRegistry(string $hookName): void
+    {
+        /** @var HookReader $reader */
+        $reader = ObjectManager::make(HookReader::class);
+        $reader->setPath($hookName);
+        $reader->getFileListWithMeta();
+        $reader->getFileList();
+        SchedulerSystem::yield();
     }
 
     private function warmHotStaticFiles(): void
     {
-        foreach ([
-            BP . '/app/code/Weline/Customer/view/statics/css/account-index.css',
-            BP . '/app/code/Weline/Customer/view/statics/css/account-sidebar.css',
-            BP . '/app/code/Weline/Customer/view/statics/js/account-index.js',
+        $paths = [
             BP . '/app/code/Weline/Frontend/view/statics/base/weline.modules.js',
             BP . '/app/code/Weline/Frontend/view/statics/js/weline-api.js',
             BP . '/app/code/Weline/Frontend/view/statics/js/weline-api-worker.js',
             BP . '/app/code/Weline/Theme/view/theme/frontend/assets/js/theme.js',
-            BP . '/app/code/Weline/Admin/view/statics/assets/css/bootstrap.min.css',
-            BP . '/app/code/Weline/Admin/view/statics/assets/css/bootstrap-dark.min.css',
-            BP . '/app/code/Weline/Admin/view/statics/assets/css/icons.min.css',
-            BP . '/app/code/Weline/Admin/view/statics/assets/css/app.min.css',
-            BP . '/app/code/Weline/Admin/view/statics/assets/css/app-dark.min.css',
-            BP . '/app/code/Weline/Admin/view/statics/assets/libs/bootstrap/js/bootstrap.bundle.min.js',
-            BP . '/app/code/Weline/Admin/view/statics/assets/libs/jquery/jquery.min.js',
-            BP . '/app/code/Weline/Admin/view/statics/assets/libs/metismenu/metisMenu.min.js',
-            BP . '/app/code/Weline/Admin/view/statics/assets/libs/simplebar/simplebar.min.js',
-            BP . '/app/code/Weline/Admin/view/statics/assets/libs/node-waves/waves.min.js',
-            BP . '/app/code/Weline/Admin/view/statics/assets/js/app.js',
-            BP . '/app/code/Weline/Backend/view/statics/base/weline.modules.js',
-            BP . '/app/code/Weline/Backend/view/statics/backend/weline.modules.js',
-            BP . '/app/code/Weline/Backend/view/statics/js/url-backend.js',
-            BP . '/app/code/Weline/Backend/view/statics/js/cookie.js',
             BP . '/app/code/Weline/Theme/view/theme/backend/assets/css/theme.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/assets/js/theme.js',
             BP . '/app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js',
@@ -339,7 +287,12 @@ class WorkerBootstrapWarmup implements ObserverInterface
             BP . '/app/code/Weline/Theme/view/theme/backend/variables/_colors.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/variables/_spacing.css',
             BP . '/app/code/Weline/Theme/view/theme/backend/variables/_typography.css',
-        ] as $path) {
+        ];
+        foreach ($this->viewWarmupContribution()->staticFiles as $relativePath) {
+            $paths[] = BP . '/' . $relativePath;
+        }
+
+        foreach ($paths as $path) {
             if (!\is_file($path)) {
                 continue;
             }
@@ -353,8 +306,9 @@ class WorkerBootstrapWarmup implements ObserverInterface
 
     private function warmRoutingCaches(): void
     {
-        if (\class_exists(\Weline\ModuleRouter\Config\ModuleRouterReader::class)) {
-            ObjectManager::getInstance(\Weline\ModuleRouter\Config\ModuleRouterReader::class)->read();
+        $routerRules = $this->runtimeProviders->resolve(RouterRulesReaderInterface::class);
+        if ($routerRules instanceof RouterRulesReaderInterface) {
+            $routerRules->read();
         }
 
         try {
@@ -482,35 +436,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
      */
     private function resolveFpcWarmupPaths(): array
     {
-        $paths = [
-            '/',
-            '/en_US/catalog/category/sports',
-            '/USD/en_US/catalog/category/sports',
-            '/zh_Hans_CN/catalog/category/sports',
-            '/CNY/zh_Hans_CN/catalog/category/sports',
-            '/catalog/category/clothing',
-            '/en_US/catalog/category/clothing',
-            '/USD/en_US/catalog/category/clothing',
-            '/zh_Hans_CN/catalog/category/clothing',
-            '/CNY/zh_Hans_CN/catalog/category/clothing',
-            '/en_US/catalog/category/men/shirts',
-            '/USD/en_US/catalog/category/men/shirts',
-            '/zh_Hans_CN/catalog/category/men/shirts',
-            '/CNY/zh_Hans_CN/catalog/category/men/shirts',
-            '/en_US/catalog/category/women',
-            '/USD/en_US/catalog/category/women',
-            '/zh_Hans_CN/catalog/category/women',
-            '/CNY/zh_Hans_CN/catalog/category/women',
-            '/en_US/catalog/category/gear',
-            '/en_US/catalog/category/running-gear',
-            '/USD/en_US/catalog/category/running-gear',
-            '/zh_Hans_CN/catalog/category/running-gear',
-            '/CNY/zh_Hans_CN/catalog/category/running-gear',
-            '/en_US/product/demo-category-81-sports',
-            '/en_US/product/demo-category-45-clothing',
-            '/product/demo-category-81-sports',
-            '/product/demo-category-45-clothing',
-        ];
+        $paths = ['/', ...$this->viewWarmupContribution()->fpcPaths];
 
         $configured = \Weline\Framework\App\Env::get('wls.worker.fpc_warmup_paths', []);
         if (\is_string($configured)) {
@@ -526,8 +452,6 @@ class WorkerBootstrapWarmup implements ObserverInterface
                 }
             }
         }
-
-        $paths = $this->applyDispatcherWarmupPathObservers($paths);
 
         $normalized = [];
         foreach ($paths as $path) {
@@ -585,40 +509,6 @@ class WorkerBootstrapWarmup implements ObserverInterface
     }
 
     /**
-     * @param list<string> $paths
-     * @return list<string>
-     */
-    private function applyDispatcherWarmupPathObservers(array $paths): array
-    {
-        try {
-            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $data = new \Weline\Framework\DataObject\DataObject([
-                'paths' => $paths,
-                'instance_name' => (string)(\getenv('WLS_INSTANCE_NAME') ?: ''),
-                'port' => (int)(\getenv('WLS_WORKER_PORT') ?: 0),
-                'hosts' => $this->resolveFpcWarmupHosts(),
-            ]);
-            $events = $eventsManager->scanEvents();
-            $eventName = 'Weline_Server::dispatcher::warmup_paths';
-            $observers = \is_array($events[$eventName] ?? null) ? $events[$eventName] : [];
-            if ($observers === []) {
-                $eventsManager->dispatch($eventName, $data);
-            } else {
-                $event = new \Weline\Framework\Event\Event([
-                    'data' => &$data,
-                    'observers' => $observers,
-                ]);
-                $event->setName($eventName)->dispatch();
-            }
-
-            $eventPaths = $data->getData('paths');
-            return \is_array($eventPaths) ? \array_values($eventPaths) : $paths;
-        } catch (\Throwable) {
-            return $paths;
-        }
-    }
-
-    /**
      * @param callable(): void $callback
      */
     private function tryWarm(callable $callback): int
@@ -632,6 +522,16 @@ class WorkerBootstrapWarmup implements ObserverInterface
             }
             return 0;
         }
+    }
+
+    private function viewWarmupContribution(): ViewWarmupContribution
+    {
+        if ($this->viewWarmupContribution instanceof ViewWarmupContribution) {
+            return $this->viewWarmupContribution;
+        }
+
+        $registry = ObjectManager::getInstance(ViewWarmupContributionRegistry::class);
+        return $this->viewWarmupContribution = $registry->aggregate();
     }
 
     private function warmViewTemplate(Template $template, string $fileName): void

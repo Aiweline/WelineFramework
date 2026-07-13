@@ -3,13 +3,15 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\Service;
 
+use Weline\Framework\Cache\Contract\SharedBufferStateFactoryInterface;
+use Weline\Framework\Cache\Contract\SharedBufferStateInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class PixelHotBufferService
 {
-    private const MEMORY_CLASS = 'Weline\\Server\\Service\\MemoryStateFacade';
     private const NAMESPACE = 'visitor.pixel.hot_buffer';
     private const KEY_LAST_FLUSH_AT = 'last_flush_at';
     private const KEY_LAST_FLUSH_RESULT = 'last_flush_result';
@@ -20,8 +22,11 @@ class PixelHotBufferService
     private const DEFAULT_FLUSH_INTERVAL = 15;
     private const DEFAULT_BATCH_SIZE = 500;
     private const DEFAULT_TTL = 300;
+    private const MEMORY_FAILURE_COOLDOWN_SECONDS = 2.0;
 
-    private ?object $memory = null;
+    private ?SharedBufferStateInterface $memory = null;
+    private float $memoryRetryAfter = 0.0;
+    private int $memoryConsecutiveFailures = 0;
 
     public function __construct(
         private ?PixelEventPersistenceService $persistenceService = null,
@@ -340,29 +345,57 @@ class PixelHotBufferService
         }
     }
 
-    private function memory(): ?object
+    private function memory(): ?SharedBufferStateInterface
     {
-        if (!Runtime::isPersistent() || !\class_exists(self::MEMORY_CLASS)) {
+        if (!Runtime::isPersistent()) {
             return null;
         }
         if ($this->memory) {
             return $this->memory;
         }
+        if ($this->memoryRetryAfter > \microtime(true)) {
+            return null;
+        }
 
         try {
-            $memory = ObjectManager::getInstance(self::MEMORY_CLASS);
-            if (!\is_object($memory) || !\method_exists($memory, 'append') || !\method_exists($memory, 'getAll')) {
+            $factory = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(SharedBufferStateFactoryInterface::class);
+            if (!$factory instanceof SharedBufferStateFactoryInterface) {
+                $this->markMemoryUnavailable();
                 return null;
             }
-            if (\method_exists($memory, 'ping') && !$memory->ping()) {
+
+            $memory = $factory->create([
+                'consumer_code' => self::NAMESPACE,
+                'prefer_direct_connect' => true,
+                'fail_fast_on_unhealthy' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]);
+            if (!$memory instanceof SharedBufferStateInterface) {
+                $this->markMemoryUnavailable();
+                return null;
+            }
+            if (!$memory->ping()) {
+                $this->markMemoryUnavailable();
                 return null;
             }
             $this->memory = $memory;
+            $this->memoryRetryAfter = 0.0;
+            $this->memoryConsecutiveFailures = 0;
             return $memory;
         } catch (\Throwable $throwable) {
+            $this->markMemoryUnavailable();
             $this->recordError('memory', $throwable);
             return null;
         }
+    }
+
+    private function markMemoryUnavailable(): void
+    {
+        $this->memory = null;
+        $this->memoryConsecutiveFailures++;
+        $this->memoryRetryAfter = \microtime(true) + self::MEMORY_FAILURE_COOLDOWN_SECONDS;
     }
 
     private function flushInterval(): int
@@ -451,7 +484,7 @@ class PixelHotBufferService
     {
         try {
             $memory = $this->memory;
-            if ($memory && \method_exists($memory, 'set')) {
+            if ($memory) {
                 $memory->set(self::NAMESPACE, self::KEY_LAST_ERROR, $phase . ': ' . $throwable->getMessage(), $this->ttl());
             }
         } catch (\Throwable) {

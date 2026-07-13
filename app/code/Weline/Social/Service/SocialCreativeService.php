@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace Weline\Social\Service;
 
+use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Social\Model\SocialCreativeDraft;
 
 class SocialCreativeService
 {
     private const SCENARIO_CODE = 'media_publisher_creative_generation';
+    private ?AiRuntimeInterface $aiRuntime;
 
     public function __construct(
         private readonly SocialPlatformRegistry $registry,
-        private readonly ?ObjectManager $objectManager = null
+        private readonly ?ObjectManager $objectManager = null,
+        ?AiRuntimeInterface $aiRuntime = null
     ) {
+        $this->aiRuntime = $aiRuntime;
     }
 
     /**
@@ -34,7 +38,7 @@ class SocialCreativeService
 
         if ($useAi) {
             try {
-                $content = $this->objectManager()->getInstance(\Weline\Ai\Service\AiService::class)->generate(
+                $content = $this->aiRuntime()->generate(
                     $this->buildPrompt($prompt, $platformCodes),
                     null,
                     self::SCENARIO_CODE,
@@ -152,5 +156,19 @@ class SocialCreativeService
     private function objectManager(): ObjectManager
     {
         return $this->objectManager ?? ObjectManager::getInstance();
+    }
+
+    private function aiRuntime(): AiRuntimeInterface
+    {
+        if ($this->aiRuntime instanceof AiRuntimeInterface) {
+            return $this->aiRuntime;
+        }
+
+        $runtime = $this->objectManager()->getInstance(AiRuntimeInterface::class);
+        if (!$runtime instanceof AiRuntimeInterface) {
+            throw new \RuntimeException('ai_runtime_provider_unavailable');
+        }
+
+        return $this->aiRuntime = $runtime;
     }
 }

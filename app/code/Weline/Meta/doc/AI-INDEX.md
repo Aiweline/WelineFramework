@@ -10,10 +10,11 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Meta/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Meta/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-9. 只读取本次任务相关源码、配置和验证入口
+6. 公共 Repository 契约：`app/code/Weline/Meta/doc/public-repository-contract.md`
+7. `app/code/Weline/Theme/doc/AI-INDEX.md`
+8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+9. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+10. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -28,6 +29,7 @@
 - `app/code/Weline/Meta/etc/module.xml`
 - `app/code/Weline/Meta/etc/backend/menu.xml`
 
+- `Api`：公开 Repository、参数归一化契约和不可变 DTO；跨模块不得直接使用 Meta Model/Service。
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：1
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：4
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2
@@ -53,6 +55,7 @@
 - `app/code/Weline/Meta/doc/w-meta标签使用说明.md`
 - `app/code/Weline/Meta/doc/使用指南.md`
 - `app/code/Weline/Meta/doc/完整实现方案.md`
+- `app/code/Weline/Meta/doc/public-repository-contract.md`
 
 ## 开发前门禁
 

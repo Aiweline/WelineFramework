@@ -10,6 +10,9 @@
 namespace Weline\Theme\Config\Reader;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
+use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Resource\Config\ResourceReader;
 use Weline\Framework\View\Template;
 
@@ -56,13 +59,11 @@ class WelineModules extends ResourceReader
         // 扫描所有模块的 view/statics 目录下的 weline.modules.js 文件
         // 路径应该是 view/statics/{frontend|backend}/weline.modules.js
         // 读取指定区域的所有weline.modules.js文件
-        if($area == 'frontend'){
-            $module_info = Env::getInstance()->getModuleInfo('Weline_Frontend');
+        if (!\in_array($area, ['frontend', 'backend'], true)) {
+            return '';
         }
-        elseif($area == 'backend'){
-            $module_info = Env::getInstance()->getModuleInfo('Weline_Backend');
-        }
-        else{
+        $module_info = $this->resolveRuntimeModuleInfo($area);
+        if ($module_info === null) {
             return '';
         }
         $require_configs_file = realpath($module_info['base_path'].'view/statics/base/weline.modules.js');
@@ -87,6 +88,38 @@ class WelineModules extends ResourceReader
             return $quote_before . $url_path . $quote_after;
         }, $content);
         return $content;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveRuntimeModuleInfo(string $area): ?array
+    {
+        $marker = $area . '/weline.modules.js';
+        $registry = ObjectManager::getInstance(ServiceProviderRegistry::class);
+        foreach ($registry->implementationsWithPrefix('deploy.flat_static.') as $implementation) {
+            try {
+                $provider = ObjectManager::getInstance($implementation);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!$provider instanceof FlatStaticRuntimeFilesProviderInterface
+                || !\in_array($marker, $provider->relativeFiles(), true)
+            ) {
+                continue;
+            }
+
+            $moduleName = \trim($provider->moduleName());
+            if ($moduleName === '') {
+                continue;
+            }
+            $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+            if (\is_array($moduleInfo) && !empty($moduleInfo['base_path'])) {
+                return $moduleInfo;
+            }
+        }
+
+        return null;
     }
 
     protected Template $template;

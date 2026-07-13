@@ -10,6 +10,7 @@
 namespace Weline\Database\Observer;
 
 use Weline\Database\Service\MigrationService;
+use Weline\Database\Service\VersionService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -20,6 +21,7 @@ use Weline\Framework\Registry\Service\RegistryProgress;
 class SetupUpgradeObserver implements ObserverInterface
 {
     private ?MigrationService $migrationService = null;
+    private ?VersionService $versionService = null;
     private Printing $printing;
 
     public function __construct(Printing $printing)
@@ -33,6 +35,14 @@ class SetupUpgradeObserver implements ObserverInterface
             $this->migrationService = ObjectManager::getInstance(MigrationService::class);
         }
         return $this->migrationService;
+    }
+
+    private function getVersionService(): VersionService
+    {
+        if ($this->versionService === null) {
+            $this->versionService = ObjectManager::getInstance(VersionService::class);
+        }
+        return $this->versionService;
     }
     
     /**
@@ -61,7 +71,7 @@ class SetupUpgradeObserver implements ObserverInterface
         
         try {
             // 获取所有激活的模块
-            $activeModules = $this->getActiveModules();
+            $activeModules = $this->getActiveModules((array)($eventData['args'] ?? []));
             
             if (empty($activeModules)) {
                 $this->printing->info("没有发现激活的模块");
@@ -88,24 +98,26 @@ class SetupUpgradeObserver implements ObserverInterface
                     // 获取模块的待执行迁移
                     $pendingMigrations = $this->getMigrationService()->getPendingMigrations($moduleName);
                     
+                    $lastMigration = '';
                     if (empty($pendingMigrations)) {
                         $this->printing->info("模块 {$moduleName} 没有待执行的迁移");
-                        continue;
+                    } else {
+                        $this->printing->info("模块 {$moduleName} 发现 " . count($pendingMigrations) . " 个待执行的迁移");
+                        $count = count($pendingMigrations);
+                        $result = $this->executeModuleMigrations($moduleName, $pendingMigrations);
+                        $lastMigration = (string)($pendingMigrations[$count - 1]['filename'] ?? '');
+                        $totalMigrations += $count;
+                        $totalSuccess += $result['success'];
                     }
-                    
-                    $this->printing->info("模块 {$moduleName} 发现 " . count($pendingMigrations) . " 个待执行的迁移");
-                    
-                    $count = count($pendingMigrations);
-                    // 执行模块迁移
-                    $result = $this->executeModuleMigrations($moduleName, $pendingMigrations);
+
+                    $runtimeVersion = (string)(Env::getInstance()->getModuleInfo($moduleName)['version'] ?? '');
+                    $this->getVersionService()->reconcileSuccessfulSetup($moduleName, $runtimeVersion, $lastMigration);
                     unset($pendingMigrations);
-                    $totalMigrations += $count;
-                    $totalSuccess += $result['success'];
-                    $totalFailed += $result['failed'];
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     $this->printing->error("模块 {$moduleName} 迁移执行异常: " . $e->getMessage());
                     RegistryProgress::log('Database migration module exception: ' . $moduleName . ' ' . $e->getMessage());
                     $totalFailed++;
+                    throw $e;
                 } finally {
                     $compaction = ObjectManager::relieveMemoryPressure(false);
                     $cycles = function_exists('gc_collect_cycles') ? gc_collect_cycles() : 0;
@@ -126,11 +138,7 @@ class SetupUpgradeObserver implements ObserverInterface
             $this->printing->info("成功: {$totalSuccess}");
             $this->printing->info("失败: {$totalFailed}");
             
-            if ($totalFailed > 0) {
-                $this->printing->error("存在失败的迁移，请检查日志并手动处理");
-            } else {
-                $this->printing->success("所有迁移执行成功");
-            }
+            $this->printing->success("所有迁移执行成功");
             
         } catch (\Exception $e) {
             $this->printing->error("系统升级迁移执行失败: " . $e->getMessage());
@@ -143,15 +151,18 @@ class SetupUpgradeObserver implements ObserverInterface
      *
      * @return array<string>
      */
-    private function getActiveModules(): array
+    private function getActiveModules(array $args = []): array
     {
         $active = Env::getInstance()->getActiveModules();
+        $requested = $args['module'] ?? $args['m'] ?? null;
+        $requested = is_array($requested) ? $requested : ($requested ? [$requested] : []);
+        $requested = array_fill_keys(array_map('strval', $requested), true);
         $modules = [];
-        foreach ($active as $name => $info) {
-            $basePath = $info['base_path'] ?? '';
-            if ($basePath !== '' && is_dir($basePath . 'Setup/Db/Migration/')) {
-                $modules[] = $name;
+        foreach ($active as $name => $_info) {
+            if ($requested !== [] && !isset($requested[$name])) {
+                continue;
             }
+            $modules[] = $name;
         }
         return $modules;
     }
@@ -177,17 +188,16 @@ class SetupUpgradeObserver implements ObserverInterface
                     $migration['file']
                 );
                 
-                if ($result) {
-                    $successCount++;
-                    $this->printing->success("  ✓ 迁移成功: {$migration['filename']}");
-                } else {
-                    $failCount++;
-                    $this->printing->error("  ✗ 迁移失败: {$migration['filename']}");
+                if (!$result) {
+                    throw new \RuntimeException(__('迁移返回失败状态: %{1}', $migration['filename']));
                 }
+                $successCount++;
+                $this->printing->success("  ✓ 迁移成功: {$migration['filename']}");
                 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $failCount++;
                 $this->printing->error("  ✗ 迁移异常: {$migration['filename']} - " . $e->getMessage());
+                throw $e;
             }
         }
         

@@ -5,24 +5,40 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Session;
-use Weline\I18n\Model\Locale\Dictionary;
-use Weline\Meta\Model\MetaConfig;
-use Weline\Theme\Service\PreviewTokenService;
+use Weline\I18n\Api\Translation\DictionaryEntry;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Api\Data\MetaConfigIdentity;
+use Weline\Meta\Api\Data\MetaConfigRecord;
+use Weline\Meta\Api\Data\MetaConfigSearch;
+use Weline\Meta\Api\Data\MetaConfigWrite;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
 
 final class PreviewThemeScopeService
 {
     public const PREFIX = '__preview__';
     private const INIT_SESSION_KEY = 'theme_preview_scope_init';
 
+    private ?MetaConfigRepositoryInterface $metaConfigRepository;
+    private DictionaryRepositoryInterface $dictionary;
+    private PreviewTokenService $previewTokenService;
+
     public function __construct(
         private readonly Request $request,
         private readonly Session $session,
         private readonly PreviewRequestInspector $previewRequestInspector,
-        private readonly MetaConfig $metaConfig,
-        private readonly Dictionary $dictionary,
-        private readonly PreviewTokenService $previewTokenService,
+        mixed $metaConfig = null,
+        ?DictionaryRepositoryInterface $dictionary = null,
+        ?PreviewTokenService $previewTokenService = null,
     ) {
+        $this->metaConfigRepository = $metaConfig instanceof MetaConfigRepositoryInterface
+            ? $metaConfig
+            : null;
+        $this->dictionary = $dictionary ?? $this->resolveDictionaryRepository();
+        $this->previewTokenService = $previewTokenService
+            ?? ObjectManager::getInstance(PreviewTokenService::class);
     }
 
     public function shouldUsePreviewScope(?string $path = null): bool
@@ -112,30 +128,15 @@ final class PreviewThemeScopeService
 
         foreach ($baseRows as $baseRow) {
             if (!isset($previewMap[$this->configRowKey($baseRow)])) {
-                $baseRow->delete()->fetch();
+                $this->metaConfigRepository()->delete($this->identityForRecord($baseRow));
             }
         }
 
         foreach ($previewRows as $previewRow) {
-            $locale = $previewRow->getData(MetaConfig::schema_fields_LOCALE);
-            $locale = $locale === null || $locale === '' ? null : (string)$locale;
-
-            /** @var MetaConfig $target */
-            $target = clone $this->metaConfig;
-            $target->clearData()->clearQuery()->setConfig(
-                (string)$themeId,
-                (string)$previewRow->getData(MetaConfig::schema_fields_NAMESPACE),
-                (string)$previewRow->getData(MetaConfig::schema_fields_CONFIG_KEY),
-                (string)$previewRow->getData(MetaConfig::schema_fields_CONFIG_VALUE),
-                $baseScope,
-                $locale,
-                ($previewRow->getData(MetaConfig::schema_fields_META_ID) ?: null)
-                    ? (int)$previewRow->getData(MetaConfig::schema_fields_META_ID)
-                    : null,
-                ($previewRow->getData(MetaConfig::schema_fields_META_IDENTIFY) ?: null)
-                    ? (string)$previewRow->getData(MetaConfig::schema_fields_META_IDENTIFY)
-                    : null,
-            );
+            $this->metaConfigRepository()->upsert(new MetaConfigWrite(
+                $this->identityForRecord($previewRow, $baseScope),
+                $previewRow->value,
+            ));
             $publishedConfigs++;
         }
 
@@ -170,14 +171,16 @@ final class PreviewThemeScopeService
     {
         $discardedConfigs = 0;
         foreach ($this->listConfigRows($themeId, $area, $previewScope) as $row) {
-            $row->delete()->fetch();
-            $discardedConfigs++;
+            if ($this->metaConfigRepository()->delete($this->identityForRecord($row))) {
+                $discardedConfigs++;
+            }
         }
 
         $discardedTranslations = 0;
         foreach ($this->listTranslationsForScope($area, $previewScope) as $row) {
-            $row->delete()->fetch();
-            $discardedTranslations++;
+            if ($this->dictionary->deleteEntry($row->word, $row->localeCode)) {
+                $discardedTranslations++;
+            }
         }
 
         $this->unmarkScopeInitialized($previewScope, $area, $baseScope);
@@ -236,44 +239,11 @@ final class PreviewThemeScopeService
 
     private function cloneConfigRows(int $themeId, string $area, string $baseScope, string $previewScope): void
     {
-        $namespace = 'theme.' . $area;
-
-        /** @var MetaConfig $metaConfig */
-        $metaConfig = clone $this->metaConfig;
-        $metaConfig->clearData()->clearQuery();
-
-        $items = $metaConfig
-            ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
-            ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
-            ->where(MetaConfig::schema_fields_SCOPE, $baseScope)
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        foreach ($items as $item) {
-            if (!$item instanceof MetaConfig) {
-                continue;
-            }
-
-            $locale = $item->getData(MetaConfig::schema_fields_LOCALE);
-            $locale = $locale === null || $locale === '' ? null : (string)$locale;
-
-            /** @var MetaConfig $target */
-            $target = clone $this->metaConfig;
-            $target->clearData()->clearQuery()->setConfig(
-                (string)$themeId,
-                (string)$item->getData(MetaConfig::schema_fields_NAMESPACE),
-                (string)$item->getData(MetaConfig::schema_fields_CONFIG_KEY),
-                (string)$item->getData(MetaConfig::schema_fields_CONFIG_VALUE),
-                $previewScope,
-                $locale,
-                ($item->getData(MetaConfig::schema_fields_META_ID) ?: null)
-                    ? (int)$item->getData(MetaConfig::schema_fields_META_ID)
-                    : null,
-                ($item->getData(MetaConfig::schema_fields_META_IDENTIFY) ?: null)
-                    ? (string)$item->getData(MetaConfig::schema_fields_META_IDENTIFY)
-                    : null,
-            );
+        foreach ($this->listConfigRows($themeId, $area, $baseScope) as $item) {
+            $this->metaConfigRepository()->upsert(new MetaConfigWrite(
+                $this->identityForRecord($item, $previewScope),
+                $item->value,
+            ));
         }
     }
 
@@ -281,40 +251,14 @@ final class PreviewThemeScopeService
     {
         $prefix = '@meta::theme.' . $area . '.';
 
-        /** @var Dictionary $dictionary */
-        $dictionary = clone $this->dictionary;
-        $dictionary->clearData()->clearQuery();
-
-        $items = $dictionary
-            ->where(Dictionary::schema_fields_WORD, $prefix . '%', 'LIKE')
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        foreach ($items as $item) {
-            if (!$item instanceof Dictionary) {
-                continue;
-            }
-
-            $word = (string)$item->getData(Dictionary::schema_fields_WORD);
+        foreach ($this->dictionary->listByWordPrefix($prefix) as $item) {
+            $word = $item->word;
             if (!$this->matchesBaseScopeWord($word, $prefix, $baseScope)) {
                 continue;
             }
 
             $previewWord = $this->bindWordToScope($word, $previewScope);
-            $localeCode = (string)$item->getData(Dictionary::schema_fields_LOCALE_CODE);
-            $translate = (string)$item->getData(Dictionary::schema_fields_TRANSLATE);
-
-            /** @var Dictionary $target */
-            $target = clone $this->dictionary;
-            $target->clearData()->clearQuery()
-                ->insert([
-                    Dictionary::schema_fields_MD5 => Dictionary::generateMd5($previewWord, $localeCode),
-                    Dictionary::schema_fields_WORD => $previewWord,
-                    Dictionary::schema_fields_LOCALE_CODE => $localeCode,
-                    Dictionary::schema_fields_TRANSLATE => $translate,
-                ], Dictionary::schema_fields_MD5)
-                ->fetch();
+            $this->dictionary->upsert($previewWord, $item->localeCode, $item->translation);
         }
     }
 
@@ -410,30 +354,21 @@ final class PreviewThemeScopeService
         return 'session|' . $sessionId . '|' . $themeId . '|' . $baseScope;
     }
 
-    /**
-     * @return MetaConfig[]
-     */
+    /** @return list<MetaConfigRecord> */
     private function listConfigRows(int $themeId, string $area, string $scope): array
     {
         $namespace = 'theme.' . $this->normalizeArea($area);
-        /** @var MetaConfig $metaConfig */
-        $metaConfig = clone $this->metaConfig;
-        $metaConfig->clearData()->clearQuery();
-
-        $items = $metaConfig
-            ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
-            ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
-            ->where(MetaConfig::schema_fields_SCOPE, $scope)
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        return \array_values(\array_filter($items, static fn(mixed $item): bool => $item instanceof MetaConfig));
+        return $this->metaConfigRepository()->search(new MetaConfigSearch(
+            namespace: $namespace,
+            scope: $scope,
+            allLocales: true,
+            identifyId: (string)$themeId,
+        ));
     }
 
     /**
-     * @param MetaConfig[] $rows
-     * @return array<string, MetaConfig>
+     * @param list<MetaConfigRecord> $rows
+     * @return array<string, MetaConfigRecord>
      */
     private function mapConfigRows(array $rows): array
     {
@@ -445,14 +380,14 @@ final class PreviewThemeScopeService
         return $map;
     }
 
-    private function configRowKey(MetaConfig $row): string
+    private function configRowKey(MetaConfigRecord $row): string
     {
         return \implode('|', [
-            (string)$row->getData(MetaConfig::schema_fields_NAMESPACE),
-            (string)$row->getData(MetaConfig::schema_fields_CONFIG_KEY),
-            (string)$row->getData(MetaConfig::schema_fields_LOCALE),
-            (string)$row->getData(MetaConfig::schema_fields_META_ID),
-            (string)$row->getData(MetaConfig::schema_fields_META_IDENTIFY),
+            $row->namespace,
+            $row->configKey,
+            (string)$row->locale,
+            (string)$row->metaId,
+            (string)$row->metaIdentify,
         ]);
     }
 
@@ -464,20 +399,19 @@ final class PreviewThemeScopeService
         $published = 0;
 
         foreach ($previewRows as $previewRow) {
-            $previewWord = (string)$previewRow->getData(Dictionary::schema_fields_WORD);
+            $previewWord = $previewRow->word;
             $baseWord = $this->bindWordToScope($previewWord, $baseScope);
-            $localeCode = (string)$previewRow->getData(Dictionary::schema_fields_LOCALE_CODE);
-            $translate = (string)$previewRow->getData(Dictionary::schema_fields_TRANSLATE);
+            $localeCode = $previewRow->localeCode;
+            $translate = $previewRow->translation;
             $previewBaseWords[$baseWord . '|' . $localeCode] = true;
             $this->saveDictionaryWord($baseWord, $localeCode, $translate);
             $published++;
         }
 
         foreach ($baseRows as $baseRow) {
-            $key = (string)$baseRow->getData(Dictionary::schema_fields_WORD)
-                . '|' . (string)$baseRow->getData(Dictionary::schema_fields_LOCALE_CODE);
+            $key = $baseRow->word . '|' . $baseRow->localeCode;
             if (!isset($previewBaseWords[$key])) {
-                $baseRow->delete()->fetch();
+                $this->dictionary->deleteEntry($baseRow->word, $baseRow->localeCode);
             }
         }
 
@@ -485,29 +419,15 @@ final class PreviewThemeScopeService
     }
 
     /**
-     * @return Dictionary[]
+     * @return list<DictionaryEntry>
      */
     private function listTranslationsForScope(string $area, string $scope): array
     {
         $prefix = '@meta::theme.' . $this->normalizeArea($area) . '.';
 
-        /** @var Dictionary $dictionary */
-        $dictionary = clone $this->dictionary;
-        $dictionary->clearData()->clearQuery();
-
-        $items = $dictionary
-            ->where(Dictionary::schema_fields_WORD, $prefix . '%', 'LIKE')
-            ->select()
-            ->fetch()
-            ->getItems();
-
         $filtered = [];
-        foreach ($items as $item) {
-            if (!$item instanceof Dictionary) {
-                continue;
-            }
-            $word = (string)$item->getData(Dictionary::schema_fields_WORD);
-            if ($this->matchesBaseScopeWord($word, $prefix, $scope)) {
+        foreach ($this->dictionary->listByWordPrefix($prefix) as $item) {
+            if ($this->matchesBaseScopeWord($item->word, $prefix, $scope)) {
                 $filtered[] = $item;
             }
         }
@@ -517,17 +437,46 @@ final class PreviewThemeScopeService
 
     private function saveDictionaryWord(string $word, string $localeCode, string $translate): void
     {
-        /** @var Dictionary $target */
-        $target = clone $this->dictionary;
-        $md5 = Dictionary::generateMd5($word, $localeCode);
-        $target->clearData()->clearQuery()
-            ->insert([
-                Dictionary::schema_fields_MD5 => $md5,
-                Dictionary::schema_fields_WORD => $word,
-                Dictionary::schema_fields_LOCALE_CODE => $localeCode,
-                Dictionary::schema_fields_TRANSLATE => $translate,
-            ], Dictionary::schema_fields_MD5)
-            ->fetch();
+        $this->dictionary->upsert($word, $localeCode, $translate);
+    }
+
+    private function metaConfigRepository(): MetaConfigRepositoryInterface
+    {
+        if ($this->metaConfigRepository instanceof MetaConfigRepositoryInterface) {
+            return $this->metaConfigRepository;
+        }
+
+        $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetaConfigRepositoryInterface::class);
+        if (!$repository instanceof MetaConfigRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta config repository provider is unavailable.');
+        }
+
+        return $this->metaConfigRepository = $repository;
+    }
+
+    private function resolveDictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$repository instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+
+        return $repository;
+    }
+
+    private function identityForRecord(MetaConfigRecord $record, ?string $scope = null): MetaConfigIdentity
+    {
+        return new MetaConfigIdentity(
+            namespace: $record->namespace,
+            configKey: $record->configKey,
+            scope: $scope ?? $record->scope,
+            locale: $record->locale,
+            identifyId: $record->identifyId,
+            metaId: $record->metaId,
+            metaIdentify: $record->metaIdentify,
+        );
     }
 
     private function normalizeArea(string $area): string

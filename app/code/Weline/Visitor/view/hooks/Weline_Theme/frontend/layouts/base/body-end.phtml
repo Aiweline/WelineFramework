@@ -70,9 +70,9 @@ $__visitor_pixel_enabled = !empty($__visitor_tracking_config['pixel']['enabled']
 $__visitor_ga4_enabled = !empty($__visitor_tracking_config['ga4']['enabled']);
 $__visitor_panel_enabled = false;
 try {
-    if (class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
-        $__visitor_panel_enabled = (new \Weline\DeveloperWorkspace\Service\PanelAccessService())->shouldInjectBootstrap();
-    }
+    $__visitor_panel_enabled = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Framework\Runtime\DeveloperAccessPolicy::class
+    )->shouldInjectBootstrap();
 } catch (\Throwable) {
     $__visitor_panel_enabled = false;
 }

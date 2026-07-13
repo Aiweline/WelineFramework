@@ -16,6 +16,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Dependency\Sort;
+use Weline\Framework\Module\Manifest\ModuleManifestReader;
 
 class Register implements RegisterDataInterface
 {
@@ -51,6 +52,15 @@ class Register implements RegisterDataInterface
             self::$pendingRegistrations[] = func_get_args();
             return null;
         }
+        if ($type === self::MODULE && is_string($param)) {
+            [$module_name, $version, $dependencies] = self::resolveAuthoritativeModuleMetadata(
+                $param,
+                $module_name,
+                $version,
+                $dependencies,
+            );
+        }
+
         $install_params = func_get_args();
         switch ($type) {
             // 模块安装
@@ -91,6 +101,34 @@ class Register implements RegisterDataInterface
         } else {
             throw new ConsoleException($installer_class . __('安装器必须继承：') . RegisterInterface::class);
         }
+    }
+
+    /**
+     * etc/module.php is authoritative when present. The register.php arguments remain a
+     * compatibility bridge for third-party modules that have not migrated yet.
+     *
+     * @param list<string>|array<string, string> $dependencies
+     * @return array{string, string, list<string>}
+     */
+    private static function resolveAuthoritativeModuleMetadata(
+        string $modulePath,
+        string $registeredName,
+        string $registeredVersion,
+        array $dependencies,
+    ): array {
+        $manifestPath = rtrim($modulePath, '/\\') . DS . 'etc' . DS . 'module.php';
+        if (!is_file($manifestPath)) {
+            return [$registeredName, $registeredVersion, array_values($dependencies)];
+        }
+
+        $manifest = (new ModuleManifestReader())->read($modulePath);
+        if ($manifest->name !== $registeredName) {
+            throw new ConsoleException(
+                "Module manifest name {$manifest->name} does not match register.php name {$registeredName}: {$manifestPath}",
+            );
+        }
+
+        return [$manifest->name, $manifest->version, array_keys($manifest->requires)];
     }
 
     /**

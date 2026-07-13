@@ -23,6 +23,7 @@ use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Parser as I18nParser;
 use Weline\I18n\Service\AiTranslationQueueService;
+use Weline\I18n\Service\RuntimeCacheBroadcaster;
 
 class Dictionary extends BaseController
 {
@@ -353,8 +354,12 @@ class Dictionary extends BaseController
 
     function getDelete()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         $md5 = $this->request->getGet('md5');
         if (!$md5) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('缺少必要的参数'));
+            }
             Message::error(__('缺少必要的参数'));
             $this->redirect($this->request->getReferer());
             return;
@@ -364,9 +369,15 @@ class Dictionary extends BaseController
         try {
             $this->localeDictionary->load($md5)->delete();
             $this->localeDictionary->commit();
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, (string)__('翻译删除成功！'), ['md5' => $md5]);
+            }
             Message::success(__('翻译删除成功！'));
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
             $this->localeDictionary->rollBack();
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('删除失败: %{1}', $exception->getMessage()));
+            }
             Message::error(__('删除失败: %{1}', $exception->getMessage()));
         }
         $this->redirect($this->request->getReferer());
@@ -459,11 +470,15 @@ class Dictionary extends BaseController
      */
     function postAdd()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         $word = $this->request->getPost('word');
         $localeCode = $this->request->getPost('locale_code');
         $translate = $this->request->getPost('translate');
         
         if (!$word || !$localeCode || !$translate) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请填写完整的翻译信息'));
+            }
             Message::error(__('请填写完整的翻译信息'));
             $this->redirect($this->request->getReferer());
             return;
@@ -478,8 +493,17 @@ class Dictionary extends BaseController
                 $this->localeDictionary::schema_fields_TRANSLATE => $translate
             ])->save();
             
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, (string)__('翻译添加成功！'), [
+                    'locale_code' => $localeCode,
+                    'word' => $word,
+                ]);
+            }
             Message::success(__('翻译添加成功！'));
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('添加失败: %{1}', $exception->getMessage()));
+            }
             Message::error(__('添加失败: %{1}', $exception->getMessage()));
         }
         
@@ -491,10 +515,14 @@ class Dictionary extends BaseController
      */
     function postEdit()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         $md5 = $this->request->getPost('md5');
         $translate = $this->request->getPost('translate');
         
         if (!$md5 || !$translate) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请填写完整的翻译信息'));
+            }
             Message::error(__('请填写完整的翻译信息'));
             $this->redirect($this->request->getReferer());
             return;
@@ -503,14 +531,26 @@ class Dictionary extends BaseController
         try {
             $this->localeDictionary->load($md5);
             if (!$this->localeDictionary->getId()) {
+                if ($isAsyncRequest) {
+                    return $this->asyncJsonResponse(false, (string)__('翻译不存在'));
+                }
                 Message::error(__('翻译不存在'));
                 $this->redirect($this->request->getReferer());
                 return;
             }
             
             $this->localeDictionary->setData($this->localeDictionary::schema_fields_TRANSLATE, $translate)->save();
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, (string)__('翻译更新成功！'), [
+                    'md5' => $md5,
+                    'translate' => $translate,
+                ]);
+            }
             Message::success(__('翻译更新成功！'));
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('更新失败: %{1}', $exception->getMessage()));
+            }
             Message::error(__('更新失败: %{1}', $exception->getMessage()));
         }
         
@@ -706,6 +746,7 @@ class Dictionary extends BaseController
                 } else {
                     // 插入新记录
                     $this->localeDictionary->reset()
+                        ->setData($this->localeDictionary::schema_fields_MD5, $this->localeDictionary->getMd5($item['word'], $localeCode))
                         ->setData($this->localeDictionary::schema_fields_WORD, $item['word'])
                         ->setData($this->localeDictionary::schema_fields_TRANSLATE, $item['translate'])
                         ->setData($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
@@ -732,6 +773,117 @@ class Dictionary extends BaseController
                 'message' => __('导入失败: %{1}', $exception->getMessage())
             ]);
         }
+    }
+
+    /**
+     * 通过 bin-query 接收文本化 CSV，避免文件上传动作回退到页面提交。
+     * 文件下载仍使用原生下载响应；CSV 导入属于写操作，必须等待 bin-query
+     * 成功后再更新页面提示和进度。
+     */
+    public function postImportCsvContent(): string
+    {
+        $fileName = trim((string)$this->request->getPost('file_name', ''));
+        $content = (string)$this->request->getPost('csv_content', '');
+        if ($fileName === '' || $content === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('请选择要导入的CSV文件')
+            ]);
+        }
+
+        $localeCode = pathinfo($fileName, PATHINFO_FILENAME);
+        if (!$this->isValidLocaleCode($localeCode)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('文件名必须是有效的locale_code，如：zh_Hans_CN、en_US等')
+            ]);
+        }
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('无法读取CSV文件')
+            ]);
+        }
+
+        fwrite($handle, $content);
+        rewind($handle);
+        $firstLine = fgets($handle);
+        if ($firstLine !== false && substr($firstLine, 0, 3) === "\xEF\xBB\xBF") {
+            $firstLine = substr($firstLine, 3);
+        }
+        if ($firstLine === false) {
+            fclose($handle);
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('CSV文件为空或格式不正确')
+            ]);
+        }
+
+        // 消费标题行；后续数据列仍按标准 CSV 规则读取。
+        str_getcsv($firstLine);
+        $csvData = [];
+        while (($data = fgetcsv($handle)) !== false) {
+            if (count($data) >= 2) {
+                $csvData[] = [
+                    'word' => $data[0] ?? '',
+                    'translate' => $data[1] ?? '',
+                    'locale_code' => $localeCode,
+                    'update_time' => time()
+                ];
+            }
+        }
+        fclose($handle);
+
+        if (empty($csvData)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('CSV文件为空或格式不正确')
+            ]);
+        }
+
+        $successCount = 0;
+        $updateCount = 0;
+        foreach ($csvData as $item) {
+            if (empty($item['word']) || empty($item['translate'])) {
+                continue;
+            }
+
+            $existing = $this->localeDictionary->reset()
+                ->where($this->localeDictionary::schema_fields_WORD, $item['word'])
+                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->select()
+                ->fetch();
+
+            if ($existing->getItems()) {
+                $existing->getItems()[0]
+                    ->setData($this->localeDictionary::schema_fields_TRANSLATE, $item['translate'])
+                    ->setData($this->localeDictionary::schema_fields_UPDATE_TIME, $item['update_time'])
+                    ->save();
+                $updateCount++;
+                continue;
+            }
+
+            $this->localeDictionary->reset()
+                ->setData($this->localeDictionary::schema_fields_MD5, $this->localeDictionary->getMd5($item['word'], $localeCode))
+                ->setData($this->localeDictionary::schema_fields_WORD, $item['word'])
+                ->setData($this->localeDictionary::schema_fields_TRANSLATE, $item['translate'])
+                ->setData($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->setData($this->localeDictionary::schema_fields_UPDATE_TIME, $item['update_time'])
+                ->save();
+            $successCount++;
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('导入成功！新增 %{1} 条，更新 %{2} 条', [$successCount, $updateCount]),
+            'data' => [
+                'new_count' => $successCount,
+                'update_count' => $updateCount,
+                'total_count' => $successCount + $updateCount,
+            ]
+        ]);
     }
     
     /**
@@ -1075,6 +1227,10 @@ class Dictionary extends BaseController
             
             $defaultLanguageCode = Env::default_LANGUAGE_CODE;
             $words = $this->normalizeCollectedWords($this->i18n->getLocalWords($defaultLanguageCode));
+            $wordCountBefore = (int)$this->dictionary->reset()->count();
+            $defaultLocaleCountBefore = (int)$this->localeDictionary->reset()
+                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
+                ->count();
             $collectedCount = 0;
             $defaultLocaleCount = 0;
             
@@ -1088,7 +1244,7 @@ class Dictionary extends BaseController
             
             $wordKeys = array_keys($words);
             $existingRecords = [];
-            foreach (array_chunk($wordKeys, 999) as $wordChunk) {
+            foreach (array_chunk($wordKeys, 200) as $wordChunk) {
                 $records = $this->dictionary->reset()
                     ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
                     ->select()
@@ -1126,7 +1282,7 @@ class Dictionary extends BaseController
             }
 
             // 默认语言译文跟随真实收集值写入，避免显示成“暂无翻译数据”。
-            foreach (array_chunk($wordKeys, 999) as $wordChunk) {
+            foreach (array_chunk($wordKeys, 200) as $wordChunk) {
                 $existingLocaleWords = [];
                 $localeRecords = $this->localeDictionary->reset()
                     ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
@@ -1161,6 +1317,15 @@ class Dictionary extends BaseController
                 }
             }
 
+            // 以真实落库增量为准；ON CONFLICT 更新不应计作新增词条。
+            $collectedCount = max(0, (int)$this->dictionary->reset()->count() - $wordCountBefore);
+            $defaultLocaleCount = max(
+                0,
+                (int)$this->localeDictionary->reset()
+                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
+                    ->count() - $defaultLocaleCountBefore
+            );
+
             $queued = [];
             if ($collectedCount > 0) {
                 $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
@@ -1175,6 +1340,9 @@ class Dictionary extends BaseController
             ]);
             
         } catch (\Exception $e) {
+            w_log_error('I18n dictionary collect failed: ' . $e->getMessage(), [
+                'trace' => substr($e->getTraceAsString(), 0, 1200),
+            ], 'i18n');
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -1223,13 +1391,7 @@ class Dictionary extends BaseController
         PhraseParser::clearWorkerCaches();
         I18nParser::clearWorkerCaches();
 
-        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
-        if (class_exists($dispatchClass)) {
-            try {
-                ObjectManager::getInstance($dispatchClass)->cacheClear();
-            } catch (\Throwable) {
-            }
-        }
+        ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
     }
 
     /**

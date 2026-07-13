@@ -448,8 +448,7 @@
             submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('保存中...') ?>';
             submitBtn.disabled = true;
             
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
-            var req = window.Weline.Api.request(this.form.action, opts);
+            var req = window.Weline.Api.resource('ai').providerSaveAccount({payload: data});
             req.then(function(res) {
                 var data = (res && res.data) || res;
                 submitBtn.innerHTML = originalText;
@@ -492,12 +491,10 @@
                 var modelForm = new FormData();
                 modelForm.set('provider_code', providerCode);
                 modelForm.set('account_id', accountId);
-                chooseModel = window.Weline.Api.request(modelUrl, {
-                    method: 'POST',
-                    body: modelForm,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                }).then(function(res) {
-                    var data = (res && res.data) || res;
+                chooseModel = window.Weline.Api.resource('ai').providerRemoteModelsForSelect({
+                    provider_code: providerCode,
+                    account_id: accountId
+                }).then(function(data) {
                     if (!data || !data.success || !Array.isArray(data.data) || !data.data.length) {
                         throw new Error((data && data.message) || 'models endpoint unavailable');
                     }
@@ -559,14 +556,12 @@
                     return;
                 }
 
-            var url = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
             var payload = { id: accountId };
             if (modelCode) payload.model_code = modelCode;
             var selectedMeta = modelCode && window.__welineProviderTestModelMeta ? window.__welineProviderTestModelMeta[modelCode] : null;
             if (selectedMeta && selectedMeta.primary_modality) payload.primary_modality = selectedMeta.primary_modality;
             if (selectedMeta && Array.isArray(selectedMeta.capabilities)) payload.capabilities = selectedMeta.capabilities;
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
-            var req = window.Weline.Api.request(url, opts);
+            var req = window.Weline.Api.resource('ai').providerTestConnection({payload: payload});
             req.then(function(res) {
                 var data = (res && res.data) || res;
                 btn.innerHTML = originalHtml;

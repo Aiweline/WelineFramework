@@ -101,6 +101,34 @@ class DispatcherHalfClosedConnectionTest extends TestCase
         self::assertArrayNotHasKey($connId, $clients);
     }
 
+    public function testHandleClientDataClosesCompletedPlainHttpResponseImmediately(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $socket = \socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        self::assertInstanceOf(\Socket::class, $socket);
+        $connId = \spl_object_id($socket);
+
+        $core = $this->createMock(PassthroughCore::class);
+        $core->expects(self::once())->method('forwardToWorker')->with($socket)->willReturn(-2);
+        $core->expects(self::once())->method('isClientInputClosed')->with($socket)->willReturn(true);
+        $core->expects(self::once())->method('isHttpResponseComplete')->with($socket)->willReturn(true);
+        $core->expects(self::once())->method('hasBufferedData')->with($socket)->willReturn(false);
+        $core->expects(self::once())->method('hasWorkerBufferedData')->with($socket)->willReturn(false);
+        $core->expects(self::once())->method('closeConnection')->with($socket);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'clientConnections', [$connId => $socket]);
+        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => \microtime(true)]);
+        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => \microtime(true)]);
+        $this->setProperty($dispatcher, 'connectionBytes', [$connId => ['in' => 128, 'out' => 256]]);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleClientData');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, $socket);
+
+        self::assertArrayNotHasKey($connId, $this->getProperty($dispatcher, 'clientConnections'));
+    }
+
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);

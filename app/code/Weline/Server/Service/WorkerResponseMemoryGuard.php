@@ -3,6 +3,11 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry;
+use Weline\Framework\Runtime\ProcessCacheResetContext;
+use Weline\Framework\Runtime\WlsConcurrency;
+
 final class WorkerResponseMemoryGuard
 {
     public const LARGE_RESPONSE_BYTES = 262144;
@@ -170,6 +175,14 @@ final class WorkerResponseMemoryGuard
             'cleared_process_caches' => 0,
         ];
 
+        // ObjectManager MemoryStore and process registries are shared by all
+        // request Fibers. A peer may still be rendering from those objects, so
+        // only the worker-owned WlsConcurrency fact source may authorize a
+        // process-cache compaction window.
+        if (!WlsConcurrency::canCompactProcessCaches()) {
+            return $compactions;
+        }
+
         if (\class_exists(\Weline\Framework\Manager\ObjectManager::class, false)) {
             $objectManagerCompaction = \Weline\Framework\Manager\ObjectManager::relieveMemoryPressure($aggressive);
             $compactions['memory_store_clears'] = (int) ($objectManagerCompaction['memory_store_clears'] ?? 0);
@@ -181,25 +194,17 @@ final class WorkerResponseMemoryGuard
             $compactions['cleared_process_caches']++;
         }
 
-        if (\class_exists(\Weline\Widget\Service\WidgetData::class, false)) {
-            \Weline\Widget\Service\WidgetData::clearCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if (\class_exists(\Weline\Theme\Block\Partials::class, false)) {
-            \Weline\Theme\Block\Partials::clearMetaCache();
-            $compactions['cleared_process_caches']++;
-        }
-
         if (\class_exists(\Weline\Framework\Phrase\Parser::class, false)) {
             \Weline\Framework\Phrase\Parser::clearWorkerCaches();
             $compactions['cleared_process_caches']++;
         }
 
-        if (\class_exists(\Weline\Admin\Controller\BaseController::class, false)) {
-            \Weline\Admin\Controller\BaseController::clearRuntimeFullPageCache();
-            $compactions['cleared_process_caches']++;
-        }
+        $compactions['cleared_process_caches'] += ObjectManager::getInstance(
+            ModuleProcessCacheResetterRegistry::class,
+        )->reset(new ProcessCacheResetContext(
+            ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
+            $aggressive,
+        ));
 
         if ($aggressive && \class_exists(\Weline\Framework\Event\EventData::class, false)) {
             \Weline\Framework\Event\EventData::clearCache();

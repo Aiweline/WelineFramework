@@ -75,6 +75,54 @@ class VersionService
             return false;
         }
     }
+
+    /**
+     * Reconcile the durable database cursor after a successful setup run.
+     *
+     * The cursor may only move forward here. A cursor ahead of the runtime
+     * manifest means code/database drift and must be repaired before setup or
+     * rollback can continue.
+     */
+    public function reconcileSuccessfulSetup(
+        string $moduleName,
+        string $runtimeVersion,
+        string $lastMigration = ''
+    ): void {
+        if (!$this->validateVersion($runtimeVersion)) {
+            throw new \InvalidArgumentException(__(
+                '模块 %{1} 的运行时版本 %{2} 不是有效语义版本',
+                [$moduleName, $runtimeVersion]
+            ));
+        }
+
+        $currentVersion = $this->getModuleVersionString($moduleName);
+        if ($currentVersion !== null && version_compare($currentVersion, $runtimeVersion, '>')) {
+            throw new \RuntimeException(__(
+                '模块 %{1} 数据库版本游标 %{2} 高于代码版本 %{3}，已阻止继续升级',
+                [$moduleName, $currentVersion, $runtimeVersion]
+            ));
+        }
+
+        if ($currentVersion === $runtimeVersion) {
+            if (!$this->updateModuleVersion($moduleName, $runtimeVersion, $lastMigration)) {
+                throw new \RuntimeException(__('无法刷新模块 %{1} 的数据库版本游标', $moduleName));
+            }
+            return;
+        }
+
+        $fromVersion = $currentVersion ?? '0.0.0';
+        if (!$this->updateModuleVersion($moduleName, $runtimeVersion, $lastMigration)) {
+            throw new \RuntimeException(__('无法建立模块 %{1} 的数据库版本基线', $moduleName));
+        }
+
+        $this->recordVersionHistory(
+            $moduleName,
+            $fromVersion,
+            $runtimeVersion,
+            $currentVersion === null ? ModuleVersionHistory::ACTION_INSTALL : ModuleVersionHistory::ACTION_UPGRADE,
+            $lastMigration
+        );
+    }
     
     /**
      * 获取模块版本
@@ -254,24 +302,39 @@ class VersionService
      */
     public function rollbackModuleVersion(string $moduleName, string $toVersion, string $migrationFile = ''): bool
     {
+        $this->printing->error(__(
+            '已禁止单独修改模块数据库版本；请使用 ModuleRollbackManagerInterface 执行联动回滚'
+        ));
+        return false;
+    }
+
+    /**
+     * Commit a version cursor after the coordinated rollback executor has
+     * already switched code, schema and scripts successfully.
+     */
+    public function finalizeCoordinatedRollback(
+        string $moduleName,
+        string $fromVersion,
+        string $toVersion,
+        string $operationId,
+    ): void {
         $currentVersion = $this->getModuleVersionString($moduleName);
-        if (!$currentVersion) {
-            $this->printing->error(__('模块 %{1} 当前版本不存在', $moduleName));
-            return false;
+        if ($currentVersion !== $fromVersion) {
+            throw new \RuntimeException(__(
+                '模块 %{1} 版本游标已漂移：计划 %{2}，实际 %{3}',
+                [$moduleName, $fromVersion, (string)$currentVersion]
+            ));
         }
-        
-        if (version_compare($currentVersion, $toVersion, '<=')) {
-            $this->printing->error(__('当前版本 %{1} 不高于目标版本 %{2}', [$currentVersion, $toVersion]));
-            return false;
+        if (!$this->updateModuleVersion($moduleName, $toVersion, $operationId)) {
+            throw new \RuntimeException(__('无法提交模块 %{1} 的回滚版本游标', $moduleName));
         }
-        
-        $result = $this->updateModuleVersion($moduleName, $toVersion);
-        if ($result) {
-            $this->recordVersionHistory($moduleName, $currentVersion, $toVersion, ModuleVersionHistory::ACTION_ROLLBACK, $migrationFile);
-            $this->printing->info(__('模块 %{1} 版本已回滚: %{2} -> %{3}', [$moduleName, $currentVersion, $toVersion]));
-        }
-        
-        return $result;
+        $this->recordVersionHistory(
+            $moduleName,
+            $fromVersion,
+            $toVersion,
+            ModuleVersionHistory::ACTION_ROLLBACK,
+            $operationId
+        );
     }
     
     /**

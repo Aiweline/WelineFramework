@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Service;
 
-use Weline\Backend\Config\MenuXmlReader;
 use Weline\Framework\App\Env;
 
 /**
@@ -17,7 +16,7 @@ use Weline\Framework\App\Env;
 class CliAclDiffService
 {
     public function __construct(
-        private MenuXmlReader $menuReader,
+        private MenuSourceIds $menuSourceIds,
         private AclOrphanCleanupService $aclOrphanCleanupService
     ) {
     }
@@ -42,17 +41,7 @@ class CliAclDiffService
      */
     private function getCollectedMenuSourceIds(): array
     {
-        $moduleMenus = $this->menuReader->read();
-        $sources = [];
-        foreach ($moduleMenus as $menus) {
-            foreach (($menus['data'] ?? []) as $menu) {
-                $source = (string)($menu['source'] ?? '');
-                if ($source !== '') {
-                    $sources[] = $source;
-                }
-            }
-        }
-        return $sources;
+        return $this->menuSourceIds->all();
     }
 
 }

@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron;
 
-use Weline\Backend\Model\Config;
 use Weline\Framework\App\System;
 
 class Run extends BaseCommand

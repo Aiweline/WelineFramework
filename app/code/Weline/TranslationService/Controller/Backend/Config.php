@@ -19,7 +19,7 @@ use Weline\TranslationService\Service\ProviderFactory;
 /**
  * 翻译服务配置控制器
  */
-class Config extends \Weline\Admin\Controller\BaseController
+class Config extends \Weline\Framework\App\Controller\BackendPageController
 {
     /**
      * @var TranslationProvider
@@ -212,4 +212,3 @@ class Config extends \Weline\Admin\Controller\BaseController
         return $this->redirect($this->getBackendUrl('*/backend/config'));
     }
 }
-

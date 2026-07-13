@@ -29,6 +29,7 @@
 - `app/code/Weline/Acl/composer.json`
 
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：4
+- `Api`：公开接口与只读 DTO。跨模块角色、授权和资源读取只能依赖这里发布的契约。 文件数：23
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：7
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：6
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：1

@@ -2,20 +2,24 @@
 
 namespace Weline\FileManager\Setup;
 
-use Weline\Backend\Model\BackendUserConfig;
-use Weline\Eav\Model\EavAttribute\Type;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
+use Weline\Eav\Api\Attribute\Type\AttributeTypeDefinition;
+use Weline\Eav\Api\Attribute\Type\AttributeTypeRegistryInterface;
 use Weline\FileManager\Ui\EavModel\Select\File;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\InstallInterface;
 
 class Install implements InstallInterface
 {
-    private BackendUserConfig $backendUserConfig;
+    private BackendUserConfigStore $backendUserConfig;
+    private ?AttributeTypeRegistryInterface $attributeTypes = null;
 
-    public function __construct(BackendUserConfig $backendUserConfig)
-    {
+    public function __construct(
+        BackendUserConfigStore $backendUserConfig,
+        private readonly RuntimeProviderResolver $runtimeProviders,
+    ) {
         $this->backendUserConfig = $backendUserConfig;
     }
 
@@ -27,20 +31,32 @@ class Install implements InstallInterface
         if (!$this->backendUserConfig->getDefaultConfig('file-manager')) {
             $this->backendUserConfig->setDefaultConfig('file-manager', 'local', 'Weline_FileManager', '文件管理器配置');
         }
-        # 安装选择文件属性
-        /** @var Type $type */
-        $type = ObjectManager::getInstance(Type::class);
-        $type->setFieldType(TableInterface::column_type_VARCHAR)
-            ->setCode('select_file')
-            ->setFrontendAttrs('type="text" data-parsley-minlength="3" required')
-            ->setFieldLength(255)
-            ->setIsSwatch(false)
-            ->setElement('input')
-            ->setModelClass(File::class)
-            ->setModelClassData('')
-            ->setRequired(true)
-            ->setDefaultValue('')
-            ->setName('选择文件')
-            ->save();
+        $this->attributeTypes()->register(new AttributeTypeDefinition(
+            fieldType: TableInterface::column_type_VARCHAR,
+            code: 'select_file',
+            frontendAttributes: 'type="text" data-parsley-minlength="3" required',
+            fieldLength: 255,
+            swatch: false,
+            element: 'input',
+            modelClass: File::class,
+            modelClassData: '',
+            required: true,
+            defaultValue: '',
+            name: '选择文件',
+        ));
+    }
+
+    private function attributeTypes(): AttributeTypeRegistryInterface
+    {
+        if ($this->attributeTypes instanceof AttributeTypeRegistryInterface) {
+            return $this->attributeTypes;
+        }
+
+        $provider = $this->runtimeProviders->resolve(AttributeTypeRegistryInterface::class);
+        if (!$provider instanceof AttributeTypeRegistryInterface) {
+            throw new \RuntimeException('eav_attribute_type_registry_unavailable');
+        }
+
+        return $this->attributeTypes = $provider;
     }
 }

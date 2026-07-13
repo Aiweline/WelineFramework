@@ -13,11 +13,11 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Observer;
 
-use Weline\Admin\Service\BackendRememberLoginService;
+use Weline\Acl\Api\Auth\BackendIdentityContextProviderInterface;
+use Weline\Acl\Api\Auth\RememberLoginProviderInterface;
 use Weline\Acl\Model\WhiteAclSource;
 use Weline\Acl\Service\AclService;
 use Weline\Acl\Service\AclServiceInterface;
-use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -30,6 +30,7 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 
@@ -56,19 +57,27 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     private AclServiceInterface $aclService;
     private PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher;
-    private BackendRememberLoginService $backendRememberLoginService;
+    private ?RememberLoginProviderInterface $backendRememberLoginProvider;
+    private ?BackendIdentityContextProviderInterface $backendIdentityContextProvider;
 
     public function __construct(
         WhiteAclSource $whiteAclSource,
         AclService $aclService,
         PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher,
-        BackendRememberLoginService $backendRememberLoginService
+        RuntimeProviderResolver $runtimeProviderResolver,
     ) {
         $this->whiteAclSource = $whiteAclSource;
         $this->aclCache = w_cache('acl');
         $this->aclService = $aclService;
         $this->publicApiAuthRouteMatcher = $publicApiAuthRouteMatcher;
-        $this->backendRememberLoginService = $backendRememberLoginService;
+        $rememberLoginProvider = $runtimeProviderResolver->resolve(RememberLoginProviderInterface::class);
+        $this->backendRememberLoginProvider = $rememberLoginProvider instanceof RememberLoginProviderInterface
+            ? $rememberLoginProvider
+            : null;
+        $identityContextProvider = $runtimeProviderResolver->resolve(BackendIdentityContextProviderInterface::class);
+        $this->backendIdentityContextProvider = $identityContextProvider instanceof BackendIdentityContextProviderInterface
+            ? $identityContextProvider
+            : null;
     }
 
     /** 获取当前请求的后台 Session，延迟创建；同请求内复用，WLS 下由 StateManager 在请求结束时清空 */
@@ -268,13 +277,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $eventUser = $event->getData('user');
             $eventRole = $event->getData('role');
             $eventAccessSources = $event->getData('access_sources');
-            $warmupUserId = 0;
-            if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)
-                && \Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($request)
-                && \Weline\Backend\Service\BackendWarmupContext::isActive()
-            ) {
-                $warmupUserId = \Weline\Backend\Service\BackendWarmupContext::currentUserId();
-            }
+            $warmupUserId = $this->backendIdentityContextProvider?->currentWarmupUserId($request) ?? 0;
 
             $t0 = microtime(true);
             if ($eventUser) {
@@ -287,7 +290,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             } elseif ($warmupUserId > 0) {
                 $tAcl = microtime(true);
                 try {
-                    $sessionAclContext = BackendUser::getAclContext($warmupUserId);
+                    $sessionAclContext = $this->backendIdentityContextProvider?->getAclContext($warmupUserId);
                 } catch (\Throwable) {
                     $sessionAclContext = null;
                 }
@@ -316,9 +319,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 }
                 $userId = $backendSession->getUserId();
                 if (($userId === null || $userId === '') && $request->isBackend()) {
-                    if ($this->backendRememberLoginService->restoreIfNeeded($request)) {
-                        $restoredAclContext = $this->backendRememberLoginService->consumeRestoredAclContext();
-                        $restoredSession = $this->backendRememberLoginService->consumeRestoredSession();
+                    if ($this->backendRememberLoginProvider?->restoreIfNeeded($request) === true) {
+                        $restoredAclContext = $this->backendRememberLoginProvider->consumeRestoredAclContext();
+                        $restoredSession = $this->backendRememberLoginProvider->consumeRestoredSession();
                         if ($restoredSession instanceof AuthenticatedSessionInterface) {
                             self::$backendSessionRequestCache = $restoredSession;
                             $backendSession = $restoredSession;
@@ -352,7 +355,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         $fromCache = true;
                     } else {
                         try {
-                            $sessionAclContext = BackendUser::getAclContext((int) $userId);
+                            $sessionAclContext = $this->backendIdentityContextProvider?->getAclContext((int)$userId);
                         } catch (\Throwable $e) {
                             $sessionAclContext = null;
                         }

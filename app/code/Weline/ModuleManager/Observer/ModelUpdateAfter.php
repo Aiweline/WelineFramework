@@ -2,10 +2,9 @@
 
 namespace Weline\ModuleManager\Observer;
 
-use Weline\Eav\Model\EavAttribute\Type\Value;
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\ModuleManager\Model\Module;
@@ -31,7 +30,9 @@ class ModelUpdateAfter implements ObserverInterface
         $data = $event->getData('data');
         /**@var Model $model */
         $model = $data->getModel();
-        if ($model::class !== ModuleTable::class and $model::class !== Value::class and $model instanceof Model) {
+        if ($model::class !== ModuleTable::class
+            && !$model instanceof SchemaDiffExcludedModelInterface
+            && $model instanceof Model) {
             $this->table->reset()->clearData();
             /**@var Module $module */
             $module = $event->getData('module');

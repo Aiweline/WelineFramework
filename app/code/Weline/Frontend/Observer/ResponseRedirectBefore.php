@@ -17,7 +17,8 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\UrlManager\Model\UrlRewrite;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface;
 
 class ResponseRedirectBefore implements ObserverInterface
 {
@@ -72,10 +73,9 @@ class ResponseRedirectBefore implements ObserverInterface
     protected function handleUrlRewrite(DataObject $data, string $url, int $code): void
     {
         try {
-            // 妫€鏌ユ槸鍚︽湁URL閲嶅啓瑙勫垯
-            if (class_exists(UrlRewrite::class)) {
-                /** @var UrlRewrite $urlRewrite */
-                $urlRewrite = ObjectManager::getInstance(UrlRewrite::class);
+            $directory = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(UrlRewriteDirectoryInterface::class);
+            if ($directory instanceof UrlRewriteDirectoryInterface) {
                 
                 // 瑙ｆ瀽褰撳墠URL璺緞
                 $parsedUrl = parse_url($url);
@@ -85,19 +85,13 @@ class ResponseRedirectBefore implements ObserverInterface
                     $path = ltrim($path, '/');
                     
                     // 鑾峰彇褰撳墠缃戠珯ID
-                    $websiteId = UrlRewrite::getCurrentWebsiteId();
+                    $websiteId = $directory->currentWebsiteId();
                     
                     // 鎸?website_id 鏌ユ壘閲嶅啓瑙勫垯锛堜笉鍥為€€鍒?website_id=0锛?
-                    $rewrite = $urlRewrite->reset()
-                        ->clearQuery()
-                        ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                        ->where(UrlRewrite::schema_fields_PATH, $path)
-                        ->order(UrlRewrite::schema_fields_ID, 'DESC')
-                        ->find()
-                        ->fetch();
+                    $rewrite = $directory->findByPath($path, $websiteId);
                     
-                    if ($rewrite->getId()) {
-                        $rewritePath = $rewrite->getData('rewrite');
+                    if ($rewrite !== null && $rewrite->id > 0) {
+                        $rewritePath = $rewrite->rewrite;
                         if (!empty($rewritePath)) {
                             // 鏋勫缓鏂扮殑URL
                             $newUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];

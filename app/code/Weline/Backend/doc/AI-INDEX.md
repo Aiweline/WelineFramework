@@ -27,7 +27,7 @@
 - `app/code/Weline/Backend/etc/backend/menu.xml`
 - `app/code/Weline/Backend/composer.json`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：2
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：32
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：5
 - `Config`：配置读取、合并或 schema 支撑。涉及作用域配置时同时读 SystemConfig 文档。 文件数：2
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：6

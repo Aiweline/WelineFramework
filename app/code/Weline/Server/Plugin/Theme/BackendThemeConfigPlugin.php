@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Plugin\Theme;
 
-use Weline\Backend\Block\ThemeConfig;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Server\Service\ThemeModeSharedService;
 
@@ -15,19 +14,19 @@ class BackendThemeConfigPlugin
     ) {
     }
 
-    public function afterGetThemeConfig(ThemeConfig $subject, mixed $result, string $key = ''): mixed
+    public function afterGetThemeConfig(object $subject, mixed $result, string $key = ''): mixed
     {
         if ($key !== 'theme-mode-switch' || !$this->themeModeSharedService->enabled()) {
             return $result;
         }
-        $session = $this->resolveSession($subject);
+        $session = $this->resolveSession();
         $userId = $session?->getUserId();
         $sessionId = $session?->getId();
         $mode = $this->themeModeSharedService->getMode('backend', \is_numeric($userId) ? (int)$userId : null, $sessionId);
         return $mode ?? $result;
     }
 
-    public function afterSetThemeConfig(ThemeConfig $subject, mixed $result, string|array $key, mixed $value = ''): mixed
+    public function afterSetThemeConfig(object $subject, mixed $result, string|array $key, mixed $value = ''): mixed
     {
         if (!$this->themeModeSharedService->enabled()) {
             return $result;
@@ -36,7 +35,7 @@ class BackendThemeConfigPlugin
         if ($mode === null) {
             return $result;
         }
-        $session = $this->resolveSession($subject);
+        $session = $this->resolveSession();
         $userId = $session?->getUserId();
         $sessionId = $session?->getId();
         $this->themeModeSharedService->setMode(
@@ -60,7 +59,7 @@ class BackendThemeConfigPlugin
         return \is_string($value) ? $value : null;
     }
 
-    private function resolveSession(ThemeConfig $subject): mixed
+    private function resolveSession(): mixed
     {
         return SessionFactory::getInstance()->createBackendSession();
     }

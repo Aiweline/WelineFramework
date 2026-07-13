@@ -2,9 +2,8 @@
 
 namespace Weline\CKEditorEditorManager\EditorManager;
 
-use Weline\EditorManager\EditorManager;
+use Weline\EditorManager\Api\Editor\EditorManager;
 use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
 class CKEditor extends EditorManager

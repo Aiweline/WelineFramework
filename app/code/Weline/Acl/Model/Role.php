@@ -12,13 +12,14 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Model;
 
+use Weline\Acl\Api\RoleIdentityInterface;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '角色表')]
-class Role extends Model
+class Role extends Model implements RoleIdentityInterface
 {
 #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '角色ID')]
     public const schema_fields_ID = 'role_id';

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Service;
 
-use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\BackendUserToken;
+use Weline\Backend\Api\Auth\BackendInteractiveAuthInterface;
+use Weline\Backend\Api\Auth\BackendLoginAccount;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
@@ -19,8 +19,7 @@ class BackendRememberLoginService
     public function __construct(
         private readonly Request $request,
         private readonly SessionFactory $sessionFactory,
-        private readonly BackendUserToken $backendUserToken,
-        private readonly BackendUser $backendUser,
+        private readonly BackendInteractiveAuthInterface $backendAuth,
         private readonly MessageManager $messageManager
     ) {
     }
@@ -46,43 +45,33 @@ class BackendRememberLoginService
             return false;
         }
 
-        $backendUserToken = $this->createRememberTokenModel();
-        $backendUserToken->where($backendUserToken::schema_fields_token, $token)
-            ->where($backendUserToken::schema_fields_type, 'admin_login_remember_me')
-            ->find()
-            ->fetch();
-
-        if (!$backendUserToken->getId()) {
+        $backendUserToken = $this->createRememberTokenModel()->findRememberToken($token);
+        if ($backendUserToken === null) {
             $this->clearRememberCookie($request);
             $session->delete('remember_expire_time');
             return false;
         }
 
-        $expireAt = (int) $backendUserToken->getData($backendUserToken::schema_fields_token_expire_time);
+        $expireAt = $backendUserToken->getExpireAt();
         if ($expireAt <= \time()) {
-            $this->invalidateRememberToken($backendUserToken);
+            $this->invalidateRememberToken($token);
             $this->clearRememberCookie($request);
             $session->delete('remember_expire_time');
             $this->messageManager->addWarning(__('记住登录已过期，请重新登录！'));
             return false;
         }
 
-        $userId = (int) $backendUserToken->getId();
-        $adminUser = $this->createBackendUserModel();
-        $adminUser->load($userId);
-        if (!$adminUser->getId()) {
-            $this->invalidateRememberToken($backendUserToken);
+        $userId = $backendUserToken->getUserId();
+        $adminUser = $this->createBackendUserModel()->find($userId);
+        if ($adminUser === null) {
+            $this->invalidateRememberToken($token);
             $this->clearRememberCookie($request);
             $this->messageManager->addWarning(__('用户不存在！'));
             return false;
         }
 
         $this->restoreIntoCurrentSession($session, $adminUser, $expireAt);
-
-        $adminUser->setSessionId($session->getId())
-            ->setLoginIp($request->clientIP())
-            ->resetAttemptTimes()
-            ->save();
+        $adminUser = $this->backendAuth->completeLogin($userId, (string)$session->getId(), $request->clientIP());
 
         w_auth_log('remember_login_restored', 'Remember-me restored backend session before controller flow', [
             'user_id' => $adminUser->getId(),
@@ -91,11 +80,9 @@ class BackendRememberLoginService
         ]);
 
         $this->lastRestoredSession = $session;
-        $userRole = $adminUser->getRole();
-        $isSuperAdminById = (int) $adminUser->getId() === 1;
         $this->lastRestoredAclContext = [
             'user_id' => (int) $adminUser->getId(),
-            'role_id' => $userRole && $userRole->getRoleId() ? (int) $userRole->getRoleId() : ($isSuperAdminById ? 1 : 0),
+            'role_id' => $adminUser->getRoleId(),
             'is_enabled' => $adminUser->getIsEnabled() ? 1 : 0,
         ];
         return true;
@@ -117,55 +104,9 @@ class BackendRememberLoginService
         return $context;
     }
 
-    private function restoreIntoCurrentSession(object $session, BackendUser $adminUser, int $expireAt): void
+    private function restoreIntoCurrentSession(object $session, BackendLoginAccount $adminUser, int $expireAt): void
     {
-        if (\method_exists($session, 'getAreaConfig') && \method_exists($session, 'getSession')) {
-            /** @var \Weline\Framework\Session\Auth\AuthenticatedSessionInterface $session */
-            $areaConfig = $session->getAreaConfig();
-            $rawSession = $session->getSession();
-            $rawSession->set($areaConfig->getLoginKey(), $adminUser->getAuthUsername());
-            $rawSession->set($areaConfig->getLoginIdKey(), $adminUser->getAuthIdentifier());
-            $rawSession->set($areaConfig->getUserModelKey(), $adminUser::getAuthModelClass());
-            $rawSession->set('remember_expire_time', $expireAt);
-
-            $userRole = $adminUser->getRole();
-            $isSuperAdminById = (int) $adminUser->getId() === 1;
-            $aclRoleId = $userRole && $userRole->getRoleId() ? (int) $userRole->getRoleId() : ($isSuperAdminById ? 1 : 0);
-            $rawSession->set('backend_acl_role_id', $aclRoleId);
-            $rawSession->set('backend_acl_is_enabled', $adminUser->getIsEnabled() ? 1 : 0);
-            $rawSession->save();
-            $this->refreshRestoredSessionCookie($session, $rawSession, $expireAt);
-            return;
-        }
-
-        $session->login($adminUser);
-        $session->set('remember_expire_time', $expireAt);
-
-        if (\method_exists($session, 'getSession')) {
-            $userRole = $adminUser->getRole();
-            $isSuperAdminById = (int) $adminUser->getId() === 1;
-            $aclRoleId = $userRole && $userRole->getRoleId() ? (int) $userRole->getRoleId() : ($isSuperAdminById ? 1 : 0);
-            $rawSession = $session->getSession();
-            $rawSession->set('backend_acl_role_id', $aclRoleId);
-            $rawSession->set('backend_acl_is_enabled', $adminUser->getIsEnabled() ? 1 : 0);
-            $rawSession->save();
-            $this->refreshRestoredSessionCookie($session, $rawSession, $expireAt);
-        }
-    }
-
-    private function refreshRestoredSessionCookie(object $session, object $rawSession, int $expireAt): void
-    {
-        if (!\method_exists($session, 'getId') || !\method_exists($rawSession, 'getStrategy')) {
-            return;
-        }
-
-        $sessionId = (string) $session->getId();
-        $remainingTtl = $expireAt - \time();
-        if ($sessionId === '' || $remainingTtl <= 0) {
-            return;
-        }
-
-        $rawSession->getStrategy()->setCookie($sessionId, $remainingTtl);
+        $this->backendAuth->restoreRememberedSession($session, $adminUser, $expireAt);
     }
 
     private function clearRememberCookie(Request $request): void
@@ -179,9 +120,9 @@ class BackendRememberLoginService
         return (string) Cookie::get('w_ut', '');
     }
 
-    protected function createRememberTokenModel(): BackendUserToken
+    protected function createRememberTokenModel(): BackendInteractiveAuthInterface
     {
-        return clone $this->backendUserToken;
+        return $this->backendAuth;
     }
 
     protected function getBackendSession(): object
@@ -193,19 +134,13 @@ class BackendRememberLoginService
         return SessionFactory::getInstance()->createBackendSession();
     }
 
-    protected function createBackendUserModel(): BackendUser
+    protected function createBackendUserModel(): BackendInteractiveAuthInterface
     {
-        return clone $this->backendUser;
+        return $this->backendAuth;
     }
 
-    private function invalidateRememberToken(BackendUserToken $backendUserToken): void
+    private function invalidateRememberToken(string $token): void
     {
-        if (!$backendUserToken->getId()) {
-            return;
-        }
-
-        $backendUserToken->setData($backendUserToken::schema_fields_token, '')
-            ->setData($backendUserToken::schema_fields_token_expire_time, 0)
-            ->save();
+        $this->backendAuth->invalidateRememberToken($token);
     }
 }

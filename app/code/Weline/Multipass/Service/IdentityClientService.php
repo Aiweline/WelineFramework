@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Multipass\Service;
 
-use Weline\Customer\Model\Customer;
-use Weline\Customer\Service\CustomerAccountService;
+use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
+use Weline\Customer\Api\Auth\CustomerIdentity;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -18,7 +18,8 @@ class IdentityClientService
 
     public function __construct(
         private readonly Request $request,
-        private readonly SessionFactory $sessionFactory
+        private readonly SessionFactory $sessionFactory,
+        private ?CustomerAccountFacadeInterface $customerAccounts = null,
     ) {
     }
 
@@ -162,7 +163,7 @@ class IdentityClientService
         $userInfo = $this->fetchUserInfo($provider, $accessToken);
         $customer = $this->findOrCreateCustomerFromUserInfo($provider, $userInfo);
         $this->bindRemoteAccount($provider, $accessToken, $customer, $userInfo);
-        ObjectManager::getInstance(CustomerAccountService::class)->loginCustomer($customer);
+        $this->customerAccounts()->login($customer);
 
         return [
             'provider' => $provider,
@@ -213,7 +214,7 @@ class IdentityClientService
         return $data;
     }
 
-    private function bindRemoteAccount(IdentityProvider $provider, string $accessToken, Customer $customer, array $userInfo): void
+    private function bindRemoteAccount(IdentityProvider $provider, string $accessToken, CustomerIdentity $customer, array $userInfo): void
     {
         $response = $this->postForm($this->endpoint($provider, 'bind'), [
             'external_subject_id' => 'customer:' . $customer->getId(),
@@ -229,30 +230,33 @@ class IdentityClientService
         $this->extractResponseData($response, __('绑定官网授权账号失败'));
     }
 
-    private function findOrCreateCustomerFromUserInfo(IdentityProvider $provider, array $userInfo): Customer
+    private function findOrCreateCustomerFromUserInfo(IdentityProvider $provider, array $userInfo): CustomerIdentity
     {
         $email = strtolower(trim((string) ($userInfo['email'] ?? '')));
         if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             throw new \RuntimeException((string) __('官网授权资料缺少有效邮箱地址'));
         }
 
-        /** @var CustomerAccountService $accountService */
-        $accountService = ObjectManager::getInstance(CustomerAccountService::class);
+        $accountService = $this->customerAccounts();
         $customer = $accountService->findByEmail($email);
         if (!$customer) {
-            $result = $accountService->register($email, 'Mp' . bin2hex(random_bytes(12)) . '9', [
+            $customer = $accountService->register($email, 'Mp' . bin2hex(random_bytes(12)) . '9', [
                 'identity_provider' => $provider->getName(),
                 'identity_subject' => (string) ($userInfo['sub'] ?? ''),
             ]);
-            $customer = $result['customer'];
         }
 
         $avatar = trim((string) ($userInfo['avatar'] ?? ''));
-        if ($avatar !== '' && method_exists($customer, 'setAvatar')) {
-            $customer->setAvatar($avatar)->save();
+        if ($avatar !== '') {
+            $customer = $accountService->updateAvatar($customer, $avatar);
         }
 
         return $customer;
+    }
+
+    private function customerAccounts(): CustomerAccountFacadeInterface
+    {
+        return $this->customerAccounts ??= ObjectManager::getInstance(AccountFacadeResolver::class)->customer();
     }
 
     private function consumeState(string $state): array

@@ -19,6 +19,7 @@
 - 模块代码：`Weline_Visitor`
 - 目录：`app/code/Weline/Visitor`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- Backend 提供菜单与 ACL 父资源，是必需依赖；Frontend 登录/注册事件、Dashboard 页面发布和 Server WLS 热缓冲均为可选集成，缺失时保持基础访客统计可加载。
 
 ## 代码面概览
 
@@ -73,6 +74,9 @@
 ## 维护规则
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
+- Framework 是直接必需依赖；像素热缓冲只依赖 Framework 的
+  `SharedBufferStateFactoryInterface`。Server 是可选 Provider，缺失或不可用时像素事件必须回落到数据库持久化。
+- 共享态创建或健康检查失败后使用 2 秒进程内冷却，期间直接回落数据库；成功重连会清除冷却，禁止每请求重建客户端或永久熔断。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。

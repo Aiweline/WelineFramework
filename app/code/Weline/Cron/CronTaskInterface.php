@@ -15,7 +15,7 @@ namespace Weline\Cron;
 /**
  * 调度任务接口
  */
-interface CronTaskInterface
+interface CronTaskInterface extends \Weline\Framework\Cron\CronTaskInterface
 {
     /**
      * @DESC          # 调度任务名【用于系统】

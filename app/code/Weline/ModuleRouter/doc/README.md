@@ -41,6 +41,9 @@
 ## 维护规则
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
+- 跨模块发布路由变更后使用 `Weline\ModuleRouter\Api\RouteCache::clear()`；`Observer/ProcessUrlBefore` 是内部实现，不允许被其他模块直接引用。
+- Worker 启动预热路由规则时使用只读 `Weline\ModuleRouter\Api\RouterRulesReaderInterface`；
+  该契约只返回编译后的数组规则，调用模块不得引用 `Config\ModuleRouterReader`。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。

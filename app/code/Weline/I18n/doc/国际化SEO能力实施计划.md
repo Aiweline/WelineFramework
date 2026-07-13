@@ -2,7 +2,7 @@
 
 ## 目标
 
-默认前端布局只提供通用 `seo::head` hook，不直接拼 SEO 规则；I18n 通过 `Weline_Seo::HeadContextProvider` 向 SEO 模块注入国际化上下文；SEO 模块统一输出符合全球站点要求的 canonical、hreflang、Open Graph locale 和 JSON-LD `inLanguage`。
+默认前端布局只提供通用 `seo::head` hook，不直接拼 SEO 规则；I18n 通过 Framework 的通用 Head Context 契约向前端请求上下文注入国际化数据；SEO 模块只消费该上下文并统一输出符合全球站点要求的 canonical、hreflang、Open Graph locale 和 JSON-LD `inLanguage`。
 
 后端默认主题 head 不引入 `<w:seo>` 或 `<w:geo>` 插槽。后台页面是管理界面，不参与前台国际化 SEO/GEO discovery 输出。
 
@@ -57,7 +57,7 @@ $template->setData('i18n_alternates', [
 
 ## 实施清单
 
-- 在 `Weline_I18n` 增加 `InternationalSeoProvider`，注册到 `Weline_Seo` 的 `HeadContextProvider` 扩展点。
+- 在 `Weline_I18n` 增加 `InternationalSeoProvider`，注册到 `Weline_Frontend` 的通用 `HeadContextProvider` 扩展点，并只实现 Framework 契约。
 - 在 `Weline_I18n` 增加 `InternationalSeoContextService`，按当前网站语言生成 locale、html locale、OG locale、available languages、hreflang alternates 和本地化 SEO 覆盖。
 - 在 `Weline_Seo` 的 `HeadRenderer` 中统一规范化 hreflang，输出 Open Graph locale 与 JSON-LD 语言字段。
 - 保持 Theme 默认主题只使用 hook，不向 Theme 写入跨模块 SEO 逻辑。

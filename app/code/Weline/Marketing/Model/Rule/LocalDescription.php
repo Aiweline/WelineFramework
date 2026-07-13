@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Marketing\Model\Rule;
 
-use Weline\I18n\LocalModel;
+use Weline\I18n\Api\Localization\LocalModel;
 use Weline\Marketing\Model\Rule\Rule;
 
 /**
@@ -32,4 +32,3 @@ class LocalDescription extends LocalModel
     public const schema_fields_NAME = 'name';           // 规则名称
     public const schema_fields_DESCRIPTION = 'description'; // 规则描述
 }
-

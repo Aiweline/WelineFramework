@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * theme:css 标签：仅处理主题样式（THEME，如 Weline_Theme::theme/...）。

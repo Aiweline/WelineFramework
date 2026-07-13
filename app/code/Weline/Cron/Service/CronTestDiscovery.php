@@ -3,8 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Service;
 
-use Weline\Cron\Attribute\CronTestHelp;
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\Attribute\CronTestHelp;
+use Weline\Framework\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface as FrameworkCronTaskInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
@@ -47,7 +48,7 @@ final class CronTestDiscovery
                 if (!$ref->isInstantiable()) {
                     continue;
                 }
-                $helpAttrs = $ref->getAttributes(CronTestHelp::class);
+                $helpAttrs = $ref->getAttributes(CronTestHelp::class, \ReflectionAttribute::IS_INSTANCEOF);
                 $testMethod = $ref->hasMethod('test') ? $ref->getMethod('test') : null;
                 $hasTest = $testMethod !== null
                     && $testMethod->isPublic()
@@ -71,7 +72,7 @@ final class CronTestDiscovery
 
                 $executeName = null;
                 $tip = '';
-                if ($ref->implementsInterface(CronTaskInterface::class)) {
+                if ($ref->implementsInterface(FrameworkCronTaskInterface::class)) {
                     try {
                         /** @var CronTaskInterface $inst */
                         $inst = ObjectManager::getInstance($fqcn);

@@ -6,8 +6,7 @@ namespace Weline\DbManager\Service;
 use Weline\DbManager\Model\WlsDatabaseProfile;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\IPC\ControlMessage;
-use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Api\Control\RuntimeReloadGateway;
 
 class WlsDatabaseProfileService
 {
@@ -17,7 +16,7 @@ class WlsDatabaseProfileService
     public const ENV_PASSWORD_IMPORT_PHRASE = 'COPY_ENV_PASSWORD';
 
     public function __construct(
-        private readonly IpcControlGateway $ipcControlGateway
+        private readonly RuntimeReloadGateway $runtimeReloadGateway
     ) {
     }
 
@@ -384,11 +383,11 @@ class WlsDatabaseProfileService
             ];
         }
 
-        $result = $this->ipcControlGateway->reloadAsync($runtimeInstance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
+        $result = $this->runtimeReloadGateway->forceReloadAsync($runtimeInstance, 8.0);
 
         return [
-            'success' => (bool)($result['success'] ?? false),
-            'message' => (string)($result['message'] ?? __('WLS runtime reload requested.')),
+            'success' => $result->success,
+            'message' => $result->message,
         ];
     }
 

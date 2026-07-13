@@ -2,11 +2,13 @@
 
 namespace Weline\Visitor\Api\Rest;
 
-use Weline\DeveloperWorkspace\Service\PanelAccessService;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\DeveloperAccessPolicy;
+use Weline\Framework\Runtime\DeveloperAccessProviderInterface;
 
 trait PanelProtectedTrait
 {
-    private ?PanelAccessService $visitorPanelAccessService = null;
+    private ?DeveloperAccessProviderInterface $visitorPanelAccessService = null;
 
     protected function guardVisitorPanelApi(): ?string
     {
@@ -17,10 +19,10 @@ trait PanelProtectedTrait
         return $this->error('访问面板数据需要有效的开发面板 Token', [], 403);
     }
 
-    private function panelAccessService(): PanelAccessService
+    private function panelAccessService(): DeveloperAccessProviderInterface
     {
         if (!$this->visitorPanelAccessService) {
-            $this->visitorPanelAccessService = new PanelAccessService();
+            $this->visitorPanelAccessService = ObjectManager::getInstance(DeveloperAccessPolicy::class);
         }
 
         return $this->visitorPanelAccessService;

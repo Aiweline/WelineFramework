@@ -3,12 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service\Document;
 
-use Weline\Ai\Model\AiModel;
-use Weline\Ai\Model\AiScenarioAdapter;
-use Weline\Ai\Model\Provider\UsageRecord;
-use Weline\Ai\Service\AdapterScanner;
-use Weline\Ai\Service\AiService;
-use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Api\AiModel;
+use Weline\Ai\Api\AiRuntimeInterface;
+use Weline\Ai\Api\Configuration\ScenarioConfigurationInterface;
+use Weline\Ai\Api\Configuration\ScenarioRecord;
 use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Model\Document\Catalog\Translation as CatalogTranslation;
@@ -16,6 +14,7 @@ use Weline\DeveloperWorkspace\Model\Document\Translation;
 use Weline\DeveloperWorkspace\Model\Document\TranslationJob;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class DocumentTranslationTaskService
 {
@@ -31,12 +30,8 @@ class DocumentTranslationTaskService
         private Translation $translationModel,
         private CatalogTranslation $catalogTranslationModel,
         private TranslationJob $jobModel,
-        private AiScenarioAdapter $adapterModel,
-        private AiModel $aiModel,
-        private AdapterScanner $adapterScanner,
-        private AiService $aiService,
-        private AccountService $accountService,
-        private UsageRecord $usageRecordModel
+        private ScenarioConfigurationInterface $scenarioConfiguration,
+        private RuntimeProviderResolver $runtimeProviderResolver,
     ) {
     }
 
@@ -265,11 +260,11 @@ class DocumentTranslationTaskService
             'counts' => $counts,
             'usage' => $usage,
             'adapter' => [
-                'exists' => (bool)($adapter && $adapter->getId()),
-                'active' => (bool)($adapter && $adapter->getData(AiScenarioAdapter::schema_fields_IS_ACTIVE)),
+                'exists' => (bool)($adapter && $adapter->id > 0),
+                'active' => (bool)($adapter && $adapter->active),
                 'code' => self::ADAPTER_CODE,
-                'name' => $adapter ? (string)$adapter->getData(AiScenarioAdapter::schema_fields_NAME) : '',
-                'version' => $adapter ? (string)$adapter->getData(AiScenarioAdapter::schema_fields_VERSION) : '',
+                'name' => $adapter?->name ?? '',
+                'version' => $adapter?->version ?? '',
                 'model_code' => $modelCode,
             ],
             'validation' => $validation,
@@ -279,57 +274,51 @@ class DocumentTranslationTaskService
 
     public function getTextModels(): array
     {
-        $rows = $this->aiModel->clear()
-            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->where(AiModel::schema_fields_PRIMARY_MODALITY, AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)
-            ->order(AiModel::schema_fields_NAME, 'ASC')
-            ->select()
-            ->fetchArray();
-
-        return is_array($rows) ? $rows : [];
+        return array_map(
+            static fn(AiModel $model): array => $model->toArray(),
+            $this->scenarioConfiguration->activeModels(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT),
+        );
     }
 
     public function saveModelBinding(string $modelCode): void
     {
         $adapter = $this->getAdapterRecord(true);
-        if (!$adapter || !$adapter->getId()) {
+        if (!$adapter || $adapter->id <= 0) {
             throw new Exception(__('Document translation adapter is not registered.'));
         }
 
         if ($modelCode !== '') {
-            $model = $this->aiModel->clear()
-                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-                ->find()
-                ->fetch();
-            if (!$model || !$model->getId() || !$model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
+            $model = $this->scenarioConfiguration->model(
+                $modelCode,
+                true,
+                AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+            );
+            if (!$model || !$model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
                 throw new Exception(__('Selected model is not an active text-to-text model.'));
             }
         }
 
-        $bindings = $adapter->getModelBindings();
-        if ($modelCode === '') {
-            unset($bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT]);
-            $adapter->setData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL, '');
-        } else {
-            $bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT] = $modelCode;
-            $adapter->setData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL, $modelCode);
+        if (!$this->scenarioConfiguration->bindModel(
+            self::ADAPTER_CODE,
+            AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+            $modelCode,
+        )) {
+            throw new Exception(__('Document translation adapter is not registered.'));
         }
-        $adapter->setModelBindings($bindings)->save();
     }
 
     public function scanAdapter(): array
     {
-        $scanned = $this->adapterScanner->scanAllAdapters();
-        return ['scanned' => count($scanned), 'exists' => (bool)$this->getAdapterRecord(false)?->getId()];
+        $scanned = $this->scenarioConfiguration->scanAdapters();
+        return ['scanned' => $scanned, 'exists' => (bool)$this->getAdapterRecord(false)?->id];
     }
 
     public function testAdapter(): array
     {
-        $adapter = $this->adapterScanner->getAdapter(self::ADAPTER_CODE);
+        $adapter = $this->scenarioConfiguration->adapter(self::ADAPTER_CODE);
         if (!$adapter) {
             $this->scanAdapter();
-            $adapter = $this->adapterScanner->getAdapter(self::ADAPTER_CODE);
+            $adapter = $this->scenarioConfiguration->adapter(self::ADAPTER_CODE);
         }
         if (!$adapter) {
             throw new Exception(__('Document translation adapter is not available.'));
@@ -408,10 +397,10 @@ class DocumentTranslationTaskService
         }
 
         $adapter = $this->getAdapterRecord($scanAdapter);
-        if (!$adapter || !$adapter->getId()) {
+        if (!$adapter || $adapter->id <= 0) {
             return ['ok' => false, 'message' => __('Document translation adapter is missing. Scan adapters first.')];
         }
-        if (!(int)$adapter->getData(AiScenarioAdapter::schema_fields_IS_ACTIVE)) {
+        if (!$adapter->active) {
             return ['ok' => false, 'message' => __('Document translation adapter is inactive.')];
         }
 
@@ -420,21 +409,21 @@ class DocumentTranslationTaskService
             return ['ok' => false, 'message' => __('No text-to-text model is bound to the document translation adapter.')];
         }
 
-        $model = $this->aiModel->clear()
-            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
-        if (!$model || !$model->getId() || !$model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
+        $model = $this->scenarioConfiguration->model(
+            $modelCode,
+            true,
+            AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+        );
+        if (!$model || !$model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
             return ['ok' => false, 'message' => __('Bound model is not an active text-to-text model.'), 'model_code' => $modelCode];
         }
 
-        $providerCode = $this->accountService->getProviderByModel($model);
-        if (!$providerCode || !$this->accountService->getAvailableAccount($providerCode)) {
+        $availability = $this->scenarioConfiguration->providerAvailability($modelCode);
+        if (!$availability->available) {
             return ['ok' => false, 'message' => __('No available provider account for the bound model.'), 'model_code' => $modelCode];
         }
 
-        return ['ok' => true, 'message' => __('Ready'), 'model_code' => $modelCode, 'provider_code' => $providerCode];
+        return ['ok' => true, 'message' => __('Ready'), 'model_code' => $modelCode, 'provider_code' => $availability->providerCode];
     }
 
     private function enqueueJob(string $targetType, int $targetId, string $locale, string $sourceHash, bool $force): bool
@@ -653,7 +642,7 @@ class DocumentTranslationTaskService
                 ? $requestId . '_c' . str_pad((string)($batchIndex + 1), 3, '0', STR_PAD_LEFT)
                 : $requestId;
 
-            $response = $this->aiService->generate(
+            $response = $this->aiRuntime()->generate(
                 'Translate DeveloperWorkspace document segments.',
                 $modelCode,
                 self::ADAPTER_CODE,
@@ -701,14 +690,24 @@ class DocumentTranslationTaskService
         return $this->segmenter->restore($prepared['templates'], $translated, $prepared['protected_tokens']);
     }
 
+    private function aiRuntime(): AiRuntimeInterface
+    {
+        $runtime = $this->runtimeProviderResolver->resolve(AiRuntimeInterface::class);
+        if (!$runtime instanceof AiRuntimeInterface) {
+            throw new Exception(__('AI运行时提供器不可用。'));
+        }
+
+        return $runtime;
+    }
+
     private function loadActiveTextModel(string $modelCode): AiModel
     {
-        $model = $this->aiModel->clear()
-            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
-        if (!$model || !$model->getId() || !$model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
+        $model = $this->scenarioConfiguration->model(
+            $modelCode,
+            true,
+            AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+        );
+        if (!$model || !$model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
             throw new Exception(__('Bound model is not an active text-to-text model.'));
         }
 
@@ -1070,21 +1069,9 @@ class DocumentTranslationTaskService
             ->fetch();
     }
 
-    private function getAdapterRecord(bool $scan): ?AiScenarioAdapter
+    private function getAdapterRecord(bool $scan): ?ScenarioRecord
     {
-        if ($scan) {
-            try {
-                $this->adapterScanner->scanAllAdapters();
-            } catch (\Throwable) {
-            }
-        }
-
-        $adapter = $this->adapterModel->clear()
-            ->where(AiScenarioAdapter::schema_fields_CODE, self::ADAPTER_CODE)
-            ->find()
-            ->fetch();
-
-        return $adapter && $adapter->getId() ? $adapter : null;
+        return $this->scenarioConfiguration->scenario(self::ADAPTER_CODE, $scan);
     }
 
     private function aggregateUsageByRequestId(string $requestId): ?array
@@ -1093,24 +1080,7 @@ class DocumentTranslationTaskService
             return null;
         }
 
-        $rows = $this->usageRecordModel->clear()
-            ->where(UsageRecord::schema_fields_REQUEST_ID, $requestId . '%', 'LIKE')
-            ->select()
-            ->fetchArray();
-
-        if (!is_array($rows) || $rows === []) {
-            return null;
-        }
-
-        $usage = ['prompt_tokens' => 0, 'completion_tokens' => 0, 'total_tokens' => 0, 'actual_cost' => 0.0];
-        foreach ($rows as $row) {
-            $usage['prompt_tokens'] += (int)($row[UsageRecord::schema_fields_PROMPT_TOKENS] ?? 0);
-            $usage['completion_tokens'] += (int)($row[UsageRecord::schema_fields_COMPLETION_TOKENS] ?? 0);
-            $usage['total_tokens'] += (int)($row[UsageRecord::schema_fields_TOTAL_TOKENS] ?? 0);
-            $usage['actual_cost'] += (float)($row[UsageRecord::schema_fields_TOTAL_COST] ?? 0);
-        }
-
-        return $usage;
+        return $this->scenarioConfiguration->usageByRequestPrefix($requestId)?->toArray();
     }
 
     private function getUsedTokensSince(int $timestamp): int
@@ -1133,11 +1103,8 @@ class DocumentTranslationTaskService
 
     private function estimateCost(string $modelCode, int $tokens): float
     {
-        $model = $this->aiModel->clear()
-            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-            ->find()
-            ->fetch();
-        if (!$model || !$model->getId()) {
+        $model = $this->scenarioConfiguration->model($modelCode);
+        if (!$model || $model->getId() <= 0) {
             return 0.0;
         }
 

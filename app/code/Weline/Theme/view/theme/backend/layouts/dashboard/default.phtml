@@ -11,9 +11,9 @@ $meta = $this->getData('meta') ?? [];
 
 $isEditorMode = !empty($editor_mode ?? false) || !empty($this->getData('editor_mode'));
 $showHeader = $meta['showHeader'] ?? true;
-$showSidebar = $meta['showSidebar'] ?? !$isEditorMode;
-$showFooter = $meta['showFooter'] ?? false;
-$showRightSidebar = $meta['showRightSidebar'] ?? !$isEditorMode;
+$showSidebar = $meta['showSidebar'] ?? true;
+$showFooter = $meta['showFooter'] ?? true;
+$showRightSidebar = $meta['showRightSidebar'] ?? true;
 $extraClass = $meta['class'] ?? '';
 ?>
 <!DOCTYPE html>

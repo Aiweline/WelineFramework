@@ -402,21 +402,6 @@ class Core
         # 获取URL
         $this->url = $url = $this->processUrl();
 
-        // 诊断日志：记录路由开始时的关键状态
-        $originalUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
-        if (Env::get('wls.debug.hot_path_logs', false) && str_contains($originalUri, 'ai-site-agent')) {
-            if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
-                \Weline\Server\Log\WlsLogger::info_('[Router::start] ai-site-agent request', [
-                    'request_uri' => \w_env('request.uri', '(empty)'),
-                    'weline_area' => \w_env('area', '(empty)'),
-                    'weline_is_backend' => ((\w_env('is_backend', false) ? 'true' : 'false')),
-                    'is_backend' => ($this->is_backend ? 'true' : 'false'),
-                    'request_area' => $this->request_area ?? '(empty)',
-                    'area_router' => $this->area_router ?? '(empty)',
-                    'processed_url' => $url,
-                ]);
-            }
-        }
         $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
         $isFrontendRootRequest = $this->isFrontendRootRequest();
         $canUseRouteCache = !$this->is_backend && !$hasPreviewTheme && !$isFrontendRootRequest;
@@ -498,9 +483,9 @@ class Core
     /**
      * 获取去除区域路由前缀后的 URL 路径
      *
-     * 后台 URL 结构为 /backendKey/currency/language/module/controller/action，
-     * 解析后 getUrlPath() 为 /currency/language/admin/...（已去 backendKey），
-     * 路由表键为 admin/controller/action，故需再去除前两段（货币+语言）再匹配。
+     * 后台 URL 结构为 /backendKey/[currency]/[language]/module/controller/action，
+     * 货币和语言可单独出现，组合时顺序不固定。解析后 getUrlPath() 为
+     * /[currency]/[language]/admin/...（已去 backendKey），路由匹配前剥离开头最多两段本地化前缀。
      */
     private function getStrippedUrlPath(): string
     {
@@ -521,7 +506,7 @@ class Core
                 }
             }
         }
-        // 后台：路径可能为 currency/language/admin/...，需去掉前两段再与路由表匹配
+        // 后台：路径可能带最多两段本地化前缀，剥离后再与路由表匹配
         return $this->stripLeadingLocaleCurrencySegments($url);
     }
 
@@ -1529,19 +1514,14 @@ class Core
             $routeProfileLast = $now;
             $routeProfile['elapsed_ms'] = \round(($now - $routeProfileStart) * 1000, 2);
         };
-        $routeProfilePublish = static function (string $stage = 'return') use (&$routeProfile, $routeProfileStart, $profileUri): void {
+        $routeProfilePublish = static function (string $stage = 'return') use (&$routeProfile, $routeProfileStart): void {
             $now = \microtime(true);
             $routeProfile['stage'] = $stage;
             $routeProfile['total_ms'] = \round(($now - $routeProfileStart) * 1000, 2);
             if (\class_exists(RequestContext::class, false) && RequestContext::isInitialized()) {
                 RequestContext::set('router.start.profile', $routeProfile);
             }
-            $uriForLog = $profileUri !== '' ? $profileUri : (string)($routeProfile['uri'] ?? '');
-            if (
-                ($routeProfile['total_ms'] ?? 0) >= 100.0
-                || \str_contains($uriForLog, 'customer/account')
-                || \str_contains($uriForLog, 'query-bin')
-            ) {
+            if (($routeProfile['total_ms'] ?? 0) >= 100.0) {
                 \error_log('[RouterPerf] route ' . \json_encode($routeProfile, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
             }
         };
@@ -1645,24 +1625,6 @@ class Core
         $routeProfile['controller'] = (string)$dispatch;
         $routeProfile['action'] = (string)$method;
         $routeProfileMark('controller_resolve');
-        $originalUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
-        if (
-            Env::get('wls.debug.hot_path_logs', false)
-            && \str_contains($originalUri, 'ai-site-agent')
-            && \class_exists(\Weline\Server\Log\WlsLogger::class)
-        ) {
-            \Weline\Server\Log\WlsLogger::info_('[Router::route] controller_resolved', [
-                'uri' => $originalUri,
-                'request_area' => $this->request_area,
-                'area_router' => $this->area_router,
-                'is_backend' => $this->is_backend,
-                'router_class' => (string)($this->router['class']['name'] ?? ''),
-                'router_method' => (string)($this->router['class']['method'] ?? ''),
-                'dispatch' => (string)$dispatch,
-                'method' => (string)$method,
-            ]);
-        }
-        
         // 解析注解
         foreach (self::getControllerAttributeMetadata((string)$dispatch) as $attribute) {
             $dispatchAttribute = ObjectManager::getInstance($attribute['name'], $attribute['arguments']);

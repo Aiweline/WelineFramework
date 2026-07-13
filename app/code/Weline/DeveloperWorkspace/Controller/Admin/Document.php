@@ -11,21 +11,22 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Controller\Admin;
 
-use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Api\Auth\BackendUserContext;
+use Weline\Backend\Api\Auth\BackendUserDirectoryInterface;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Model\Document\Translation;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationConfigService;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationReadService;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationTaskService;
-use Weline\Ai\Model\AiModel;
-use Weline\I18n\Model\I18n;
-use Weline\I18n\Model\Locale;
 use Weline\DeveloperWorkspace\Model\ModelService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\Localization\LocaleNameProviderInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\System\File\Uploader;
+use Weline\I18n\Api\Localization\LocaleCatalogInterface;
 
 use function PHPUnit\Framework\matches;
 
@@ -245,9 +246,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         $catalogs     = $catalogModel->getTree('pid');
         $this->assign('catalogs', $catalogs);
         # 作者
-        /**@var BackendUser $adminUserModel */
-        $adminUserModel = ObjectManager::getInstance(BackendUser::class);
-        $this->assign('users', $adminUserModel->select()->fetch()->getItems());
+        $this->assign('users', $this->getBackendUserOptions());
         # 如果是编辑,不是就返回空 文档
         $this->assign('document', ModelService::getDocumentModel()->load($this->request->getParam('id', 0)));
         return $this->fetch();
@@ -309,9 +308,9 @@ class Document extends \Weline\Framework\App\Controller\BackendController
             } else {
                 $author = null;
                 if ($document->getAuthorId()) {
-                    $author = ObjectManager::getInstance(BackendUser::class)->load($document->getAuthorId());
-                    if ($author && $author->getId()) {
-                        $authorName = $author->getData('username');
+                    $author = $this->getBackendUserDirectory()?->find((int)$document->getAuthorId());
+                    if ($author instanceof BackendUserContext) {
+                        $authorName = $author->getUsername();
                     }
                 }
             }
@@ -379,9 +378,9 @@ class Document extends \Weline\Framework\App\Controller\BackendController
                 } else {
                     $authorId = $doc->getData('author_id');
                     if ($authorId) {
-                        $author = ObjectManager::getInstance(BackendUser::class)->load($authorId);
-                        if ($author && $author->getId()) {
-                            $authorName = $author->getData('username');
+                        $author = $this->getBackendUserDirectory()?->find((int)$authorId);
+                        if ($author instanceof BackendUserContext) {
+                            $authorName = $author->getUsername();
                         }
                     }
                 }
@@ -448,24 +447,26 @@ class Document extends \Weline\Framework\App\Controller\BackendController
     private function getInstalledDocumentLocales(): array
     {
         try {
-            /** @var Locale $localeModel */
-            $localeModel = ObjectManager::getInstance(Locale::class);
-            /** @var I18n $i18n */
-            $i18n = ObjectManager::getInstance(I18n::class);
             $displayLocaleCode = $this->getRequestLocale();
-            $rows = $localeModel->clear()
-                ->where(Locale::schema_fields_IS_INSTALL, 1)
-                ->order(Locale::schema_fields_CODE, 'ASC')
-                ->select()
-                ->fetchArray();
+            $resolver = ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $catalog = $resolver->resolve(LocaleCatalogInterface::class);
+            $nameProvider = $resolver->resolve(LocaleNameProviderInterface::class);
+            if (!$catalog instanceof LocaleCatalogInterface) {
+                throw new \RuntimeException('Locale catalog provider is unavailable.');
+            }
 
             $result = [];
-            foreach (is_array($rows) ? $rows : [] as $row) {
-                $code = trim((string)($row[Locale::schema_fields_CODE] ?? ''));
+            foreach ($catalog->installed($displayLocaleCode) as $row) {
+                $code = trim((string)($row['code'] ?? ''));
                 if ($code === '') {
                     continue;
                 }
-                $name = (string)$i18n->getLocaleName($code, $displayLocaleCode);
+                $name = $nameProvider instanceof LocaleNameProviderInterface
+                    ? trim((string)$nameProvider->resolveName($code, $displayLocaleCode))
+                    : '';
+                if ($name === '') {
+                    $name = trim((string)($row['name'] ?? ''));
+                }
                 $result[] = [
                     'code' => $code,
                     'name' => $name !== '' ? $name : $code,
@@ -482,6 +483,36 @@ class Document extends \Weline\Framework\App\Controller\BackendController
                 ['code' => 'en_US', 'name' => 'English'],
             ];
         }
+    }
+
+    /** @return list<array{user_id:int,username:string}> */
+    private function getBackendUserOptions(): array
+    {
+        $directory = $this->getBackendUserDirectory();
+        if (!$directory instanceof BackendUserDirectoryInterface) {
+            return [];
+        }
+
+        $options = [];
+        foreach ($directory->all() as $user) {
+            if (!$user instanceof BackendUserContext) {
+                continue;
+            }
+            $options[] = [
+                'user_id' => $user->getId(),
+                'username' => $user->getUsername(),
+            ];
+        }
+
+        return $options;
+    }
+
+    private function getBackendUserDirectory(): ?BackendUserDirectoryInterface
+    {
+        $directory = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(BackendUserDirectoryInterface::class);
+
+        return $directory instanceof BackendUserDirectoryInterface ? $directory : null;
     }
 
     private function getSupportedDocumentLocales(): array

@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Backend;
 
-use Weline\Acl\Model\Acl as AclModel;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
@@ -13,7 +12,7 @@ use Weline\Framework\App\Controller\BackendController;
     'mdi-storefront-outline',
     'Redirect the old WLS marketplace entry to the standalone WLS Panel marketplace.',
     'Weline_Server::wls_panel',
-    accessMode: AclModel::ACCESS_MODE_READ
+    accessMode: Acl::ACCESS_MODE_READ
 )]
 class PanelMarketplace extends BackendController
 {

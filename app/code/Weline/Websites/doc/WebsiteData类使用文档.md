@@ -207,6 +207,12 @@ $isAllowed = WebsiteData::isCurrencyAllowed('CNY');
 // 2. 如果网站没有限定关联货币，允许所有货币表中的启用货币
 ```
 
+`WebsiteData` 通过 `Weline\Currency\Api\CurrencyCatalogInterface` 获取不可变货币快照，
+不会跨模块实例化 Currency Model。这个边界不会改变现有返回数组：仍固定包含
+`code`、`name`、`format`、`symbol`、`position`、`rate`、`status`。
+网站配置了货币代码时，列表保持配置顺序且只返回启用记录；允许性判断仍按配置代码
+大小写不敏感匹配，因此不要用“列表中是否存在”替代该判断。
+
 ## 四、语言相关方法
 
 ### 1. 获取关联语言代码列表
@@ -539,4 +545,3 @@ foreach ($currencies as $currency) {
 - [Websites模块FIXME文档](../FIXME.md)
 - [Currency模块文档](../../Currency/doc/)
 - [I18n模块文档](../../I18n/doc/)
-

@@ -16,7 +16,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\Http\Url;
 
 /**
@@ -126,7 +126,7 @@ class DomainSelect implements TaglibInterface
             $attributes['limit'] = $limit;
             
             // 解析所有属性
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
             $idAttr = (string) ($attributes['id'] ?? 'domain_select');
             $brwSuffix = \preg_replace('/[^a-zA-Z0-9_]/', '_', $idAttr) ?: 'domain_select';
             if ($brwSuffix !== '' && \preg_match('/^[0-9]/', $brwSuffix)) {

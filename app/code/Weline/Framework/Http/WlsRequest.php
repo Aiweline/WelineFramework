@@ -14,7 +14,7 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Log\LogConfig;
+use Weline\Framework\Runtime\Policy\RequestEnvelope;
 
 /**
  * WLS 请求对象
@@ -53,10 +53,21 @@ class WlsRequest extends Request
     private array $parsedBodyPayload = ['post' => [], 'files' => []];
     /** 解析出的请求方法 */
     private string $parsedMethod = 'GET';
+    /** 策略内核已验证的 HTTP 协议版本 */
+    private string $parsedProtocol = 'HTTP/1.1';
     /** 是否 HTTPS（不依赖 $_SERVER） */
     private bool $parsedHttps = false;
     /** 解析出的 Host（不依赖 $_SERVER） */
     private string $parsedHost = '';
+    /**
+     * 传输层解析出的原始 server 快照。
+     *
+     * ServerBag 在常驻 Worker 中可能仍绑定上一个 RequestContext；控制面注入的
+     * WLS_INTERNAL_* 标记不能依赖该可变对象，否则内部预热会被误判为普通请求。
+     *
+     * @var array<string, mixed>
+     */
+    private array $parsedServerSnapshot = [];
     
     /**
      * 从原始 HTTP 数据创建请求对象
@@ -70,6 +81,24 @@ class WlsRequest extends Request
         $request = self::createRequestInstance();
         $request->rawData = $rawData;
         $request->parseRawHttp($rawData, $serverInfo);
+        return $request;
+    }
+
+    /**
+     * 从 Worker 已完成强制策略校验的不可变请求快照创建请求。
+     *
+     * 该入口不再解析原始 HTTP 请求行或头部；它只完成框架
+     * Request/ServerBag 所需的水合与 body 格式解码。
+     *
+     * @param array<string, mixed> $serverInfo
+     */
+    public static function fromEnvelope(RequestEnvelope $envelope, array $serverInfo = []): self
+    {
+        $request = self::createRequestInstance();
+        // Envelope 路径的原始输入语义是 HTTP body，不再保留已消费的传输头字节。
+        $request->rawData = $envelope->body;
+        $request->parseRawHttp('', $serverInfo, $envelope);
+
         return $request;
     }
 
@@ -200,49 +229,90 @@ class WlsRequest extends Request
     /**
      * 解析原始 HTTP 数据
      */
-    private function parseRawHttp(string $rawData, array $serverInfo): void
+    private function parseRawHttp(
+        string $rawData,
+        array $serverInfo,
+        ?RequestEnvelope $envelope = null,
+    ): void
     {
         $this->parameterBag = null;
         $this->fileBag = null;
         $this->setObjectData([]);
 
-        // 分离头部和正文
-        $parts = \explode("\r\n\r\n", $rawData, 2);
-        $headerSection = $parts[0] ?? '';
-        $this->body = $parts[1] ?? '';
-        
-        // 解析请求行
-        $lines = \explode("\r\n", $headerSection);
-        $requestLine = \array_shift($lines);
-        
-        $method = 'GET';
-        $uri = '/';
-        $protocol = 'HTTP/1.1';
-        
-        if (\preg_match('/^(\w+)\s+([^\s]+)\s+(HTTP\/[\d.]+)?$/', $requestLine, $matches)) {
-            $method = \strtoupper($matches[1]);
-            $uri = $matches[2];
-            $protocol = $matches[3] ?? 'HTTP/1.1';
-        }
-        
-        // 解析头部
-        $headers = [];
-        foreach ($lines as $line) {
-            if (\strpos($line, ':') !== false) {
-                list($name, $value) = \explode(':', $line, 2);
-                $name = self::normalizeHeaderName((string)\trim($name));
-                $value = \trim($value);
-                if (isset($headers[$name]) && $headers[$name] !== '') {
-                    // RFC 7230: 重复头按逗号拼接（Cookie/Set-Cookie 不在请求头场景）。
-                    $headers[$name] .= ',' . $value;
-                } else {
-                    $headers[$name] = $value;
+        if ($envelope instanceof RequestEnvelope) {
+            $this->body = $envelope->body;
+            $method = \strtoupper($envelope->method);
+            $validatedTarget = \trim((string)($envelope->attributes['target'] ?? ''));
+            $query = '';
+            $targetPath = '';
+            if ($validatedTarget !== '') {
+                try {
+                    $parsedQuery = \parse_url($validatedTarget, \PHP_URL_QUERY);
+                    $query = \is_string($parsedQuery) ? $parsedQuery : '';
+                    $parsedPath = \parse_url($validatedTarget, \PHP_URL_PATH);
+                    $targetPath = \is_string($parsedPath) ? $parsedPath : '';
+                } catch (\ValueError) {
+                    // WorkerPolicyKernel already validated the target; fail closed if the snapshot was mutated.
+                    throw new \InvalidArgumentException('Invalid request target in request envelope.');
+                }
+            }
+            // Preserve the validated wire encoding here. WorkerPolicyKernel
+            // already decoded it once for policy matching; Url::parser owns
+            // the single application-side decode. Feeding envelope->path back
+            // into Url::parser would double-decode values such as `%252F`.
+            $uri = ($targetPath !== '' ? $targetPath : $envelope->path)
+                . ($query !== '' ? '?' . $query : '');
+            $protocol = \strtoupper(\trim((string)($envelope->attributes['protocol'] ?? 'HTTP/1.1')));
+            if (!\in_array($protocol, ['HTTP/1.0', 'HTTP/1.1'], true)) {
+                throw new \InvalidArgumentException('Unsupported HTTP protocol in request envelope.');
+            }
+            $headers = [];
+            foreach ($envelope->headers as $name => $value) {
+                $headers[self::normalizeHeaderName($name)] = $value;
+            }
+            if (!isset($headers['Host']) && $envelope->host !== '') {
+                $headers['Host'] = $envelope->host;
+            }
+        } else {
+            // 分离头部和正文
+            $parts = \explode("\r\n\r\n", $rawData, 2);
+            $headerSection = $parts[0] ?? '';
+            $this->body = $parts[1] ?? '';
+
+            // 解析请求行
+            $lines = \explode("\r\n", $headerSection);
+            $requestLine = \array_shift($lines);
+
+            $method = 'GET';
+            $uri = '/';
+            $protocol = 'HTTP/1.1';
+
+            if (\preg_match('/^(\w+)\s+([^\s]+)\s+(HTTP\/[\d.]+)?$/', (string)$requestLine, $matches)) {
+                $method = \strtoupper($matches[1]);
+                $uri = $matches[2];
+                $protocol = $matches[3] ?? 'HTTP/1.1';
+            }
+
+            // 解析头部
+            $headers = [];
+            foreach ($lines as $line) {
+                if (\strpos($line, ':') !== false) {
+                    list($name, $value) = \explode(':', $line, 2);
+                    $name = self::normalizeHeaderName((string)\trim($name));
+                    $value = \trim($value);
+                    if (isset($headers[$name]) && $headers[$name] !== '') {
+                        // RFC 7230: 重复头按逗号拼接（Cookie/Set-Cookie 不在请求头场景）。
+                        $headers[$name] .= ',' . $value;
+                    } else {
+                        $headers[$name] = $value;
+                    }
                 }
             }
         }
         $this->parsedHeaders = $headers;
         $this->parsedUri = $uri;
         $this->parsedMethod = $method;
+        $this->parsedProtocol = $protocol;
         // parsedHttps 将在后面根据实际检测结果设置
         
         // 解析 URI
@@ -255,7 +325,9 @@ class WlsRequest extends Request
                 \w_log_warning('[WlsRequest] parse_url failed for malformed request URI: ' . $e->getMessage());
             }
         }
-        $path = $uriParts['path'] ?? '/';
+        $path = $envelope instanceof RequestEnvelope
+            ? $envelope->path
+            : ($uriParts['path'] ?? '/');
         $queryString = $uriParts['query'] ?? '';
         $this->parsedQueryString = $queryString;
         $isStaticResource = weline_is_static_file_path($path);
@@ -289,27 +361,45 @@ class WlsRequest extends Request
         }
         
         // ========== 优先使用 Weline- 自定义头（WLS Dispatcher 专用）==========
-        // 检测是否经过 WLS Dispatcher
-        $viaDispatcher = isset($headers['Weline-Via-Dispatcher']) && $headers['Weline-Via-Dispatcher'] === '1';
+        // WorkerPolicyKernel 传入的 canonical peer 是客户端身份权威。只有传输层
+        // 已确认 peer 属于 trusted proxy 时，才允许转发头改写请求身份。
+        $canonicalRemote = \trim((string)($serverInfo['WLS_CANONICAL_REMOTE_ADDR'] ?? ''));
+        $canonicalSpecified = \array_key_exists('WLS_CANONICAL_REMOTE_ADDR', $serverInfo);
+        $trustForwardedHeaders = \in_array(
+            \strtolower((string)($serverInfo['WLS_TRUST_FORWARDED_HEADERS'] ?? '0')),
+            ['1', 'true', 'yes', 'on'],
+            true,
+        );
+        // Host is the public authority already validated by WorkerPolicyKernel
+        // and consumed by Static/FPC. Never replace it with proxy-specific
+        // Forwarded/Weline headers before Router/Controller execution.
+        $originalHost = \trim((string)($headers['Host'] ?? ''));
+        // 检测是否经过 WLS Dispatcher；不再信任公网客户端自报的标记。
+        $viaDispatcher = $trustForwardedHeaders
+            && isset($headers['Weline-Via-Dispatcher'])
+            && $headers['Weline-Via-Dispatcher'] === '1';
         
         if ($viaDispatcher) {
-            // 使用 Weline- 头还原原始请求信息
-            $originalHost = \trim(\explode(',', (string)($headers['Weline-Original-Host'] ?? ($headers['Host'] ?? '')), 2)[0]);
+            // Weline transport metadata may restore scheme/client facts only;
+            // the standard Host header remains the sole public authority.
             $originalScheme = \strtolower(\trim(\explode(',', $headers['Weline-Original-Scheme'] ?? 'http', 2)[0]));
-            $originalPort = \trim(\explode(',', $headers['Weline-Original-Port'] ?? '', 2)[0]);
             $originalSsl = $headers['Weline-Original-Ssl'] ?? 'off';
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['Weline-Real-Ip'] ?? '');
             $isHttps = ($originalScheme === 'https' || $originalSsl === 'on');
         } else {
-            // 回退到标准 X-Forwarded-* 头（兼容其他代理）
-            $originalHost = \trim(\explode(',', (string)($headers['X-Forwarded-Host'] ?? ($headers['Host'] ?? '')), 2)[0]);
-            $originalPort = \trim(\explode(',', $headers['X-Forwarded-Port'] ?? '', 2)[0]); // 非 Dispatcher 模式，优先使用 X-Forwarded-Port
-            $forwardedProto = \strtolower(\trim(\explode(',', $headers['X-Forwarded-Proto'] ?? '', 2)[0]));
-            $realIp = $headers['CF-Connecting-IP'] ?? ($headers['X-Real-IP'] ?? '');
+            // 受信代理可提供 scheme/client 事实，但不得二次改写 Host authority。
+            $forwardedProto = $trustForwardedHeaders
+                ? \strtolower(\trim(\explode(',', $headers['X-Forwarded-Proto'] ?? '', 2)[0]))
+                : '';
+            $realIp = $trustForwardedHeaders
+                ? ($headers['CF-Connecting-IP'] ?? ($headers['X-Real-IP'] ?? ''))
+                : '';
             
             // 检测 HTTPS：多种检测方式
             $isHttps = false;
-            if ($forwardedProto === 'https' || isset($headers['X-Forwarded-Ssl'])) {
+            if ($trustForwardedHeaders
+                && ($forwardedProto === 'https' || isset($headers['X-Forwarded-Ssl']))
+            ) {
                 $isHttps = true;
             } elseif (isset($serverInfo['ssl']) && $serverInfo['ssl']) {
                 $isHttps = true;
@@ -328,15 +418,6 @@ class WlsRequest extends Request
                     // 检查服务器是否配置为 HTTPS 模式
                     if (isset($serverConfig['https']) && $serverConfig['https'] === true) {
                         $isHttps = true;
-                        // 同时修正 Host 头，移除 Worker 端口，使用配置的端口
-                        $configPort = $serverConfig['port'] ?? '443';
-                        $hostParts = \explode(':', $originalHost);
-                        $hostName = $hostParts[0];
-                        // 如果当前 Host 包含 Worker 端口（10xxx），替换为正确的端口
-                        if (isset($hostParts[1]) && \str_starts_with($hostParts[1], '10')) {
-                            $originalHost = $hostName; // 使用默认端口 443
-                            $originalPort = $configPort;
-                        }
                     }
                 }
             }
@@ -432,12 +513,16 @@ class WlsRequest extends Request
         $server['HTTPS'] = $isHttps ? 'on' : '';
         $server['REQUEST_SCHEME'] = $isHttps ? 'https' : 'http';
         
-        // 设置客户端 IP（优先使用代理头，回退到默认值）
-        if ($realIp) {
+        // 设置客户端 IP：canonical transport identity 优先级最高。
+        if ($canonicalSpecified && \filter_var($canonicalRemote, FILTER_VALIDATE_IP)) {
+            $server['REMOTE_ADDR'] = $canonicalRemote;
+        } elseif ($realIp && (!$canonicalSpecified || $trustForwardedHeaders)) {
             $server['REMOTE_ADDR'] = $realIp;
         } elseif (!isset($server['REMOTE_ADDR']) || empty($server['REMOTE_ADDR'])) {
             // 从 X-Forwarded-For 取第一个 IP
-            $forwardedFor = $headers['CF-Connecting-IP'] ?? ($headers['X-Forwarded-For'] ?? $headers['Weline-Forwarded-For'] ?? '');
+            $forwardedFor = $trustForwardedHeaders
+                ? ($headers['CF-Connecting-IP'] ?? ($headers['X-Forwarded-For'] ?? $headers['Weline-Forwarded-For'] ?? ''))
+                : '';
             if ($forwardedFor) {
                 $ips = \explode(',', $forwardedFor);
                 $server['REMOTE_ADDR'] = \trim($ips[0]);
@@ -446,18 +531,13 @@ class WlsRequest extends Request
             }
         }
         
-        // 解析端口（优先使用 Weline-Original-Port）
+        // 解析标准 Host authority 中的端口。
         $hostName = $hostAuthority['host'];
         $serverName = $hostAuthority['server_name'];
         $hostPort = $hostAuthority['port'];
         
-        // 端口优先级：Weline-Original-Port > Host 头中的端口 > 协议默认端口
-        if ($originalPort !== '') {
-            if (!\ctype_digit((string)$originalPort) || !self::isValidTcpPort((int)$originalPort)) {
-                throw new \InvalidArgumentException('Invalid forwarded port value.');
-            }
-            $serverPort = (int)$originalPort;
-        } elseif ($hostPort !== null) {
+        // 端口优先级：Host 头中的端口 > 协议默认端口。
+        if ($hostPort !== null) {
             $serverPort = $hostPort;
         } else {
             $serverPort = $isHttps ? 443 : 80;
@@ -515,6 +595,10 @@ class WlsRequest extends Request
             }
         }
         
+        // 保存不可变的传输层快照，再同步兼容超全局。后续 GlobalsEmulator 必须优先
+        // 使用该快照，避免复用 Request/ServerBag 时读取到上一请求的 server 状态。
+        $this->parsedServerSnapshot = $server;
+
         // 设置超全局变量
         $_GET = $getParams;
         $_POST = $postParams;
@@ -613,6 +697,14 @@ class WlsRequest extends Request
     {
         return $this->parsedHeaders;
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getParsedServerSnapshot(): array
+    {
+        return $this->parsedServerSnapshot;
+    }
     
     /**
      * 获取请求体
@@ -689,15 +781,10 @@ class WlsRequest extends Request
      */
     public function isKeepAlive(): bool
     {
-        $connection = \strtolower(\trim((string)($this->parsedHeaders['Connection'] ?? '')));
-        if ($connection === 'close') {
-            return false;
-        }
-        if ($connection === 'keep-alive') {
-            return true;
-        }
-        // HTTP/1.1 默认 Keep-Alive；仅在明确 close 时关闭
-        return \str_contains($this->rawData, 'HTTP/1.1');
+        return ConnectionSemantics::shouldKeepAlive(
+            $this->parsedProtocol,
+            (string)($this->parsedHeaders['Connection'] ?? ''),
+        );
     }
     
     /**
@@ -1284,6 +1371,6 @@ class WlsRequest extends Request
             return true;
         }
 
-        return \class_exists(LogConfig::class) && LogConfig::isVerboseWlsLog();
+        return false;
     }
 }
