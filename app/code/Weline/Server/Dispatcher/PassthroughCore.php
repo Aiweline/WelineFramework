@@ -3498,7 +3498,15 @@ class PassthroughCore
         
         // socket_read 返回空字符串表示客户端发送了 FIN（上行半关闭）
         if ($data === '') {
-            // 半关闭：停止 client->worker，上行不再读取；下行继续发回响应
+            // Propagate the TCP half-close to the backend. TLS tunnels are
+            // opaque here, so the Dispatcher cannot wait for an HTTP framing
+            // signal before releasing the Worker side. Without SHUT_WR the
+            // client socket stays in CLOSE_WAIT while the backend remains
+            // ESTABLISHED until the generic request-idle timeout, growing the
+            // select set after every short keep-alive benchmark/browser burst.
+            // Keep the read side open so a final TLS alert/response can still
+            // drain back to the client.
+            @\socket_shutdown($workerSocket, 1);
             $this->connectionTerminalReasons[$connId] = 'forward_to_worker_client_read_eof';
             $this->clientInputClosed[$connId] = true;
             return -2;
