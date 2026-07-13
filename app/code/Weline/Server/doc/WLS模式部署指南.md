@@ -85,7 +85,7 @@ php bin/w server:stop
 
 ### 3.0 启动依赖预检
 
-`server:start` 在创建 Master/Worker 之前先按唯一拓扑事实求出 `requested/effective topology` 和 `HttpProtocolSelection`，再决定必需依赖。Linux/macOS Direct 必须安装并验证 `sockets + ext-event`；HTTPS 在所有拓扑下还必须验证 `OpenSSL`。默认 h3/h2 需要 Caddy v2 协议边缘，启动会验证 reverse proxy 与 QUIC 构建；缺失时按平台自动安装，安装后重新探测。任一必需依赖失败即 fail-closed；不会为了“启动成功”静默关闭 HTTP/2/3 或改写拓扑。显式 Dispatcher 的 `ext-event` 仍是可选优化。
+`server:start` 在创建 Master/Worker 之前先按唯一拓扑事实求出 `requested/effective topology` 和 `HttpProtocolSelection`，再决定必需依赖。Linux/macOS Direct 必须安装并验证 `sockets + ext-event`；HTTPS 在所有拓扑下还必须验证 `OpenSSL`。默认 h3/h2 需要 Caddy v2 协议边缘，启动会验证 reverse proxy、QUIC、`tls.stek.distributed` 与 `caddy.storage.file_system`；缺失时按平台自动安装，安装后重新探测。任一必需依赖失败即 fail-closed；不会为了“启动成功”静默关闭 HTTP/2/3、禁用持久会话复用或改写拓扑。显式 Dispatcher 的 `ext-event` 仍是可选优化。
 
 - macOS：Homebrew 和 PECL 以当前用户运行，不使用 `sudo`。
 - Linux：按 apt/dnf/yum/apk/pacman/Docker 当前平台策略执行；非交互启动不会等待 sudo 密码。
@@ -269,7 +269,7 @@ Nginx/Caddy 只需要代理到 WLS 的一个公开端口。如需跨机高可用
 ```
 
 - HTTP/2 与 HTTP/3 都支持在一条连接内并发多路复用，避免为每个请求新建 TCP/TLS 连接。
-- TLS session ticket 默认开启，兼容客户端重连时复用会话；代码滚动重载不重启协议边缘，因此公开 listener、既有连接和会话缓存保持。
+- TLS session ticket 默认开启。协议边缘把适配后的 Caddy 原生 JSON 注入实例隔离的 distributed STEK，存储目录为 `var/server/protocol-edge/{instance}/stek`，默认每 12 小时轮换并保留 4 把密钥。代码滚动重载保持公开 listener 和既有连接；即使 Caddy 重新装载 TLS app 或协议边缘完整重启，已签发 TLS 1.3 票据仍可 `Reused`，同时不同 WLS 实例不会共享票据密钥。
 - HTTP/3 需要同一公开端口的 UDP 入站；只放行 TCP 会导致客户端继续使用 h2/h1，但服务端不能宣称 h3 网络可达。
 - `server:status` 显示实际协议顺序、preferred、edge 与 `tls-resumption`；启动日志中的能力结果来自真实 Caddy/QUIC probe，而不是仅看配置文件。
 - 协议边缘到 Worker 固定使用私有 HTTP/1.1 keep-alive 连接池。这是有界、可复用的 transport adapter，不把 TLS、HTTP/2 frame 或 QUIC 逻辑复制进 PHP Worker；WorkerPolicyKernel 仍是 Host、后台 Key、Origin Token、攻击防护、限流、Static/FPC 的唯一执行点。
@@ -309,6 +309,7 @@ WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理
 ```
 
 - `performance` 是默认值。WLS 在派生 Master/Worker 子进程前生成 `var/server/tls/openssl-performance-{hash}.cnf`，其中只有 `Groups = X25519:P-256`；不强制 TLS 1.3 ciphersuite。
+- 默认 h3/h2 协议边缘会读取同一份实例级 TLS 契约：`protocols` 会转换为 Caddy 的精确 min/max，`performance` 会在公网握手上显式使用 `x25519 + secp256r1`。因此 `['tls1.3']` 不再只约束 PHP Worker 而遗漏协议边缘；实例级 `wls.servers.<name>.ssl` 也会进入 Master 的不可变运行上下文。
 - 若运维已在 WLS 启动环境设置 `OPENSSL_CONF`，WLS 完整保留该配置，不生成覆盖。这是最高优先级的进程级 OpenSSL 策略入口。
 - `system` 用于显式保留系统 OpenSSL group 策略，适合运维要求混合后量子组或统一系统密码策略的环境。
 - `protocols` 未配置时默认为 `['tls1.2', 'tls1.3']`；一旦显式配置，空字符串、空数组、非字符串元素或 TLS 1.0/1.1/未知值都在创建子进程前被拒绝，不再回退到 `TLS_SERVER`。
@@ -319,6 +320,8 @@ WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理
 滚动重载必须同时验证长连接复用和 fresh handshake。2026-07-11 当前 macOS Direct 实例在 reload 中分别完成 100,000 次 TLS 1.3 keep-alive（9,562.78 QPS，p95 6.230ms）与 100,000 次 fresh TLS 1.3（1,776.06 QPS，p95 21.725ms），两组均 0 错误；reload 后当前 4 Worker 的 20,000 次 fresh TLS 分布 `max/min=1.055`。跨代压测会同时记录旧代、surge、新代 PID，不能把不同存活窗口的总计数误判为当前代倾斜。
 
 生命周期索引与 maintenance ACK 收口后的最终复核为：100,000 次 keep-alive 10,313.37 QPS、p95 18.669ms；20,000 次稳态 fresh TLS 1,869.76 QPS、p95 21.201ms、`max/min=1.036`；与 rolling reload 重叠的 20,000 次 fresh TLS 0 错误、p95 28.330ms、max 105.782ms。reload 后只保留 1 Master + 4 canonical Worker，PID 索引无短命 launcher 或 surge 残留。空闲 TLS preconnect 存在时 maintenance enable/disable 仍能全量 ACK，避免浏览器预连接拖住 restart。
+
+2026-07-14 当前 macOS 专用实例补充验证了持久票据与新协议边缘配置：同一张 TLS 1.3 票据跨两轮 Worker upstream reload 及协议边缘完整停启均为 `Reused`。首页 Process FPC c32×2,500 为 10,736.43 QPS、p95 4.089ms；health c128×100,000 为 15,084.92 QPS、p95 11.960ms；fresh TLS c32×2,000 为 3,246.75 QPS、p95 11.055ms、`max/min=1.131`，全部 0 错误。另一次与 rolling reload 重叠的 100,000 请求为 0 错误、14,065.69 QPS、p95 13.670ms、max 50.546ms，收敛后仍为 4/4 canonical Worker。
 
 ```bash
 # 默认即 HTTPS（自动证书或 app/etc/ssl/）
@@ -359,14 +362,14 @@ php bin/w server:benchmark -p 9443 --ssl --tls-version 1.3 --no-keepalive
 | 子进程停在 STARTING 且 PID=0 | 批量 launcher 创建后 `pcntl_exec` 失败或子进程在注册前退出 | 查看对应 `var/process/<process>.log`；launcher 会记录脱敏后的 errno、PHP 可执行文件名和脚本名，不再静默等待到 READY 超时 |
 | Worker 异常退出 | 进程崩溃 | Master 默认启用，会自动重启异常 Worker |
 | TLS 1.3 启动前失败 | 当前 PHP/OpenSSL 构建不支持 TLS 1.3 stream server | 切换到与当前平台匹配且暴露 `STREAM_CRYPTO_METHOD_TLSv1_3_SERVER` 的 PHP/OpenSSL，不删除协议门禁兜底 |
-| HTTP/2/3 协议边缘预检失败 | Caddy 缺失、版本过旧、无 QUIC 模块或包管理器不可用 | 查看启动时安装/probe 输出；修复包管理器或显式配置已验证的 `wls.http.protocol_edge_binary`，不要静默关闭协议 |
+| HTTP/2/3 协议边缘预检失败 | Caddy 缺失、版本过旧、无 QUIC / distributed STEK / file-system storage 模块，或包管理器不可用 | 查看启动时安装/probe 输出；修复包管理器或显式配置已验证的 `wls.http.protocol_edge_binary`，不要静默关闭协议或持久会话复用 |
 | h1/h2 正常但 h3 不可达 | 同一公开端口的 UDP 未放行，或上游 NAT/LB 不转发 QUIC | 放行并转发该端口的 UDP；用支持 HTTP/3 的 curl/浏览器复测 |
 | 请求 `performance` 但状态显示 `external` | 启动环境已存在 `OPENSSL_CONF` | 这是运维配置优先的预期行为；核对该文件的 group/cipher 策略，不要期待 WLS 覆盖 |
 
 ---
 
 **版本：** 2.0.0-dev
-**更新时间：** 2026-07-13
-**状态：** macOS 已验证 h1/h2/h3 自动协商、TLS 会话复用、Direct/Dispatcher 策略一致和首页 Process FPC。Linux/Windows 的原生 HTTP/3、安装器和长稳矩阵仍需各平台发布门禁，不能由 macOS 数据代替。
+**更新时间：** 2026-07-14
+**状态：** macOS 已验证 h1/h2/h3 自动协商、TLS 会话复用（含 reload/完整进程重启后的 persistent STEK）、Direct/Dispatcher 策略一致和首页 Process FPC。Linux/Windows 的原生 HTTP/3、安装器和长稳矩阵仍需各平台发布门禁，不能由 macOS 数据代替。
 
 动态路径预热默认只包含首页 `/`。业务模块需要预热商品、分类或账户页面时，应显式配置 `wls.worker.dynamic_critical_paths` / `wls.worker.dynamic_hot_paths`，或通过 `Weline_Server::dispatcher::warmup_paths` 发布真实路由；Server 不内置任何演示业务 URL。

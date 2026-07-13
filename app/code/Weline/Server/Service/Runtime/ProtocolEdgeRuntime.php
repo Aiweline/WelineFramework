@@ -54,6 +54,16 @@ final class ProtocolEdgeRuntime
         return self::runtimeDirectory($instanceName) . DS . 'Caddyfile';
     }
 
+    public static function nativeConfigFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'caddy.json';
+    }
+
+    public static function sessionTicketStorageDirectory(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'stek';
+    }
+
     public static function pidFile(string $instanceName): string
     {
         return self::runtimeDirectory($instanceName) . DS . 'caddy.pid';
@@ -76,6 +86,56 @@ final class ProtocolEdgeRuntime
         }
 
         self::writeAtomically($path, \bin2hex(\random_bytes(32)) . PHP_EOL, 0600);
+
+        return $path;
+    }
+
+    /**
+     * Persist the adapted Caddy JSON with an instance-isolated distributed
+     * session-ticket key source. Caddy reloads provision a new TLS app even
+     * for route-only changes; storing the STEK outside that app keeps TLS 1.3
+     * resumable without sharing ticket keys between WLS instances.
+     *
+     * @param object $adaptedConfig Native JSON object; keeping object identity
+     *        is required because Caddy distinguishes `{}` from `[]`.
+     */
+    public static function writeNativeConfig(
+        string $instanceName,
+        object $adaptedConfig,
+        bool $tlsSessionResumption = true,
+    ): string
+    {
+        $apps = $adaptedConfig->apps ?? null;
+        $tls = \is_object($apps) ? ($apps->tls ?? null) : null;
+        if (!\is_object($apps) || !\is_object($tls)) {
+            throw new \RuntimeException('Adapted protocol-edge config does not contain the Caddy TLS app.');
+        }
+
+        self::ensurePrivateDirectory(self::runtimeDirectory($instanceName));
+        if ($tlsSessionResumption) {
+            $storageDirectory = self::sessionTicketStorageDirectory($instanceName);
+            self::ensurePrivateDirectory($storageDirectory);
+            $tls->session_tickets = (object)[
+                'key_source' => (object)[
+                    'provider' => 'distributed',
+                    'storage' => (object)[
+                        'module' => 'file_system',
+                        'root' => $storageDirectory,
+                    ],
+                ],
+                'rotation_interval' => '12h',
+                'max_keys' => 4,
+            ];
+        } else {
+            $tls->session_tickets = (object)['disabled' => true];
+        }
+
+        $payload = \json_encode(
+            $adaptedConfig,
+            \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT | \JSON_THROW_ON_ERROR,
+        );
+        $path = self::nativeConfigFile($instanceName);
+        self::writeAtomically($path, $payload . PHP_EOL, 0600);
 
         return $path;
     }
@@ -221,6 +281,23 @@ final class ProtocolEdgeRuntime
         $healthHost = self::formatAuthority($serverName, $context->mainPort);
         $idlePerHost = \max(64, \count($resolvedUpstreams) * 64);
         $maxPerHost = \max(256, \count($resolvedUpstreams) * 128);
+        $sslConfig = $context->getConfig('wls.ssl', []);
+        $tlsSelection = (new TlsProcessProfileConfigurator())->resolveConfiguration([
+            'ssl' => \is_array($sslConfig) ? $sslConfig : [],
+        ]);
+        $tlsProtocols = $tlsSelection['protocols'];
+        $tlsMinimum = \in_array('tls1.2', $tlsProtocols, true) ? 'tls1.2' : 'tls1.3';
+        $tlsMaximum = \in_array('tls1.3', $tlsProtocols, true) ? 'tls1.3' : 'tls1.2';
+        $tlsPolicyLines = [
+            '    tls ' . self::quote($context->sslCert) . ' ' . self::quote($context->sslKey) . ' {',
+            '        protocols ' . $tlsMinimum . ' ' . $tlsMaximum,
+        ];
+        if ($tlsSelection['requested'] === TlsProcessProfileConfigurator::PROFILE_PERFORMANCE) {
+            // Caddy terminates public TLS when h2/h3 is enabled, so the PHP
+            // OPENSSL_CONF alone cannot enforce the WLS performance profile.
+            $tlsPolicyLines[] = '        curves x25519 secp256r1';
+        }
+        $tlsPolicyLines[] = '    }';
 
         $lines = [
             '{',
@@ -241,9 +318,7 @@ final class ProtocolEdgeRuntime
             '}',
             '',
             'https://' . $authority . ' {',
-            '    tls ' . self::quote($context->sslCert) . ' ' . self::quote($context->sslKey) . ' {',
-            '        protocols tls1.2 tls1.3',
-            '    }',
+            ...$tlsPolicyLines,
             '',
             '    reverse_proxy ' . $upstreams . ' {',
             '        lb_policy least_conn',

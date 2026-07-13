@@ -182,9 +182,10 @@ accept/TLS -> 单次请求解析 -> 真实客户端身份
 | HTTP/1.1 | h1 / TLS TCP | ALPN 回退 | HTTP/1.1 keep-alive |
 
 - 默认启用 `h3,h2,h1`；HTTP 实例固定 h1。HTTP/3 与 HTTP/2 不满足能力时不得伪装为已启用。
-- TLS 1.2/1.3 session ticket 默认开启；客户端可复用 TLS 会话，不需要每个连接都做完整握手。HTTP/2/3 在单连接内复用多个并发 stream。
-- `server:start` 在任何 Master/Worker 创建前验证 Caddy v2、reverse proxy 与 QUIC 构建；缺失时按 macOS Homebrew、Linux 包管理器、Windows winget/Chocolatey/Scoop 自动安装，安装后重新验证。失败即停止启动，不以静默退回 h1 的方式掩盖能力缺失。
-- Caddy upstream 连接池只连接当前 READY 集合。Direct rolling reload 先发布新集合并等待 active digest ACK，再 drain 旧 Worker；公开 TLS/QUIC listener 与 session cache 在代码 reload 时保持存活。
+- TLS 1.2/1.3 session ticket 默认开启；客户端可复用 TLS 会话，不需要每个连接都做完整握手。HTTP/2/3 在单连接内复用多个并发 stream。协议边缘把 Caddyfile 编译为原生 JSON，并注入实例隔离的 distributed STEK：密钥只写入 `var/server/protocol-edge/{instance}/stek`，12 小时轮换、最多保留 4 把；配置 reload 或协议边缘进程重启后仍可解密已签发票据，不与其它 WLS 实例共享密钥。
+- 公网 TLS 与 legacy Worker TLS 使用同一实例级 `wls.ssl` 事实：协议边缘按允许集合生成精确 TLS min/max，`performance` profile 在 Caddy 上显式使用 `x25519/secp256r1`；不能出现 Worker 是 TLS 1.3-only、公开 h3/h2 入口却仍接受 TLS 1.2 的分叉。
+- `server:start` 在任何 Master/Worker 创建前验证 Caddy v2、reverse proxy、QUIC、`tls.stek.distributed` 与 `caddy.storage.file_system`；缺失时按 macOS Homebrew、Linux 包管理器、Windows winget/Chocolatey/Scoop 自动安装，安装后重新验证。失败即停止启动，不以静默退回 h1 或临时内存票据的方式掩盖能力缺失。
+- Caddy upstream 连接池只连接当前 READY 集合。Direct rolling reload 先发布新集合并等待 active digest ACK，再 drain 旧 Worker；公开 TLS/QUIC listener 与既有连接在代码 reload 时保持存活，持久 STEK 同时保证新连接的 session resumption 不因 TLS app 重新装载而失效。
 - FPC cache key 使用可信公开 scheme/authority，而不是私有 Worker 的 `http://127.0.0.1`。因此 Direct 与 Dispatcher 的首页都必须命中同一 HTTPS Process FPC，不能因协议解复用进入完整 Controller 渲染。
 
 ### 3.0.2 Worker 路由级翻译常驻内存
