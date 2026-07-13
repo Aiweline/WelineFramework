@@ -68,4 +68,10 @@ final class ModuleArtifactProviderRegistry
             'error' => implode('; ', $errors),
         ];
     }
+
+    /** @return array<string, mixed> */
+    public function snapshotCurrent(string $moduleName, string $version, string $operationId): array
+    {
+        return $this->localProvider->snapshotCurrent($moduleName, $version, $operationId);
+    }
 }

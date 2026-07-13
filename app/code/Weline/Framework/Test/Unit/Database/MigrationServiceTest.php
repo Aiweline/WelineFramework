@@ -26,8 +26,11 @@ class MigrationServiceTest extends TestCore
     
     public function tearDown(): void
     {
+        ObjectManager::getInstance(Migration::class, [], false)
+            ->where(Migration::schema_fields_MODULE, 'Weline_Test')
+            ->delete()
+            ->fetch();
         parent::tearDown();
-        // 清理测试数据
     }
     
     /**
@@ -143,7 +146,7 @@ class CreateTableTest20250101V100 implements MigrationInterface
     {
         // 测试标准模块名称解析
         $moduleName = 'Weline_Test';
-        $expectedPath = 'app/code/Weline/Test/Setup/Db/Migration/';
+        $expectedPath = BP . 'app/code/Weline/Test/Setup/Db/Migration/';
         
         // 通过反射访问私有方法
         $reflection = new \ReflectionClass($this->migrationService);
@@ -260,11 +263,15 @@ class CreateTableTest20250101V100 implements MigrationInterface
         $method->invoke($this->migrationService, $moduleName, $migrationFile, Migration::STATUS_ROLLED_BACK);
         
         // 验证状态已更新
-        $collection = $this->migrationModel->getCollection();
-        $collection->addFieldToFilter(Migration::schema_fields_MODULE, $moduleName);
-        $collection->addFieldToFilter(Migration::schema_fields_FILE, $migrationFile);
-        
-        $migration = $collection->getFirstItem();
+        $items = ObjectManager::getInstance(Migration::class, [], false)
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, $migrationFile)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $migration = $items[0] ?? null;
+        $this->assertInstanceOf(Migration::class, $migration);
         $this->assertEquals(Migration::STATUS_ROLLED_BACK, $migration->getData(Migration::schema_fields_STATUS));
     }
 }
