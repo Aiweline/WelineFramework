@@ -17,7 +17,7 @@ flowchart TB
     C -->|--master-only| M1["runMasterOnly(instance)<br/>schema v3 校验 RuntimeSelection 与投影<br/>从 instance.json 恢复 Master 运行态"]
     C -->|默认 WLS| D["acquireStartLock(instance)"]
     D --> E["getServerConfig()<br/>解析 host/port/count/frontend/ssl"]
-    E --> E1["RuntimeSelection 预检<br/>参数冲突、平台能力、策略兼容、依赖安装与复验"]
+    E --> E1["RuntimeSelection + HttpProtocolSelection 预检<br/>参数冲突、平台能力、策略兼容、Caddy/QUIC 依赖安装与复验"]
     E1 --> E2{"effective topology 是 independent?"}
     E2 -->|是| E3["在创建进程前拒绝<br/>要求 direct 或 Dispatcher"]
     E2 -->|否| F{"是否需要先清旧实例?"}
@@ -39,8 +39,8 @@ flowchart TB
     Q --> R["runLoopWithDeferredChildStartup()"]
     R --> S["startAllChildServices()<br/>按依赖阶段批量拉起子服务"]
     S --> S1["Windows: 固定 K 路 launcher<br/>macOS/Linux: 短命 PHP/pcntl launcher"]
-    S1 --> T["REGISTER → READY gate<br/>首页 shared publish + process hit"]
-    T --> T1["waitForStartupAcceptance()<br/>等待关键角色与路由 ACK 达标"]
+    S1 --> T["REGISTER → READY gate<br/>Worker 首页 shared publish + process hit<br/>Protocol Edge active config digest"]
+    T --> T1["waitForStartupAcceptance()<br/>等待关键角色、策略与 Edge/Dispatcher 路由 ACK 达标"]
     T1 --> U["persistServicesInfo()<br/>broadcastRoutingPolicyToWorkers()"]
     U --> V["armServerReadyNotification()<br/>startup_phase -> running"]
     V --> W["释放 start lock<br/>进入常驻主循环"]
@@ -67,8 +67,8 @@ flowchart TB
     H1 --> I["IPC ACTION_STOP -> Master"]
     I --> J["MasterProcess::stopWithProgress()<br/>ServiceOrchestrator::requestStop()"]
     J --> K["主循环调度 stopAll()"]
-    K --> L["阶段1: Dispatcher DRAIN<br/>停止派发新请求"]
-    L --> M["阶段2: 等待 Dispatcher 排水完成"]
+    K --> L["阶段1: Protocol Edge / Dispatcher DRAIN<br/>停止接纳或派发新请求"]
+    L --> M["阶段2: 等待公开连接与 Dispatcher 排水完成"]
     M --> N["阶段3: releaseSharedStateConsumersForStopFlow()<br/>并发终止非共享进程"]
     N --> O["阶段4: verifyAndKillRemainingProcesses()"]
     O --> P["阶段5: closeIpcServer()<br/>Master 退出"]
@@ -87,7 +87,8 @@ flowchart TB
 
 ## 关键分支说明
 
-- 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v3 写入完整数组。`--master-only` 不再从多个布尔/字符串重新推导；v3 中任一 topology/listener/event/SSL/policy 投影缺失或冲突就在绑定端口前拒绝。旧 v2 只做读取兼容，Master 运行期不会在没有完整 selection 时把它标记为 v3。
+- 新启动在停止旧实例之前产生不可变 `RuntimeSelection` 与 `HttpProtocolSelection`，并以 endpoint schema v3 写入完整数组。`--master-only` 不再从多个布尔/字符串重新推导；v3 中任一 topology/listener/event/SSL/HTTP protocol/policy 投影缺失或冲突就在绑定端口前拒绝。旧 v2 只做读取兼容，Master 运行期不会在没有完整 selection 时把它标记为 v3。
+- h2/h3 启用时，Caddy v2、reverse proxy 和 QUIC 构建必须在 Master 创建前通过真实 probe；缺失时平台安装器在带 30 秒锁 deadline 的单一控制面安装并复验。失败中止启动，不在子进程已经创建后静默改成 h1。
 - `independent` 尚无完整 READY/策略保证，`RuntimeStrategyResolver` 和旧 endpoint 的 `--master-only` 重入都明确拒绝，不允许进入永远无法 READY 的运行态。
 - `server:start -r` 在调用 `server:stop` 前会固化旧实例当下真实监听的主端口、控制端口、Dispatcher/Worker 端口和 Redirect 端口（排除可跨实例复用的 Session/Memory sidecar）。停止后在一个 monotonic 总 deadline 内反复清理端口探测缓存，只有目标端口全部无监听且本项目+本实例 scoped 进程前缀全部无存活 PID 才能继续。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动。
@@ -125,20 +126,20 @@ flowchart TB
 
 - 所有 Master 发起的终止、滚动替换、surge 退场和 PID 文件清理都先冻结 `pid + canonical process_name + launch_id`；探测结果只允许 `running / exited / identity_mismatch / unknown` 四类处理。
 - `exited` 与 `identity_mismatch` 表示当前 PID 已不属于该租约，只清理匹配的旧记录，不向该 PID 发信号；`unknown` 必须 fail closed 并保留诊断，不能把“探测不到”当作“可以杀”。
-- Worker 终止默认不做进程树 kill；Direct 公开端口是共享资源，任何单槽恢复与 surge 退场都禁止按端口杀进程。
+- Worker 终止默认不做进程树 kill；协议边缘 direct 的公开端口归 Edge，legacy direct 的公开端口是共享资源。任何单槽恢复与 surge 退场都禁止按公开端口杀进程。
 - 进程标题只保留实例、role、slot、launch/generation 的短标识；PID/端口/生命周期文件和日志不得保存控制 token、TLS key 路径等敏感参数。
 - `name_index/pid_index/port_index` 的更新必须持有同一全局锁；清理路径锁失败时 fail closed，不允许退化为无锁删除。`port_index` 只是共享端口的建议代表，删除旧代时只有当前 owner 与冻结租约一致才可 CAS 释放，并优先提升仍存活的共享 owner。
 - 端口占用诊断必须分别报告内核 listener PID/命令和 `port_index` 建议 owner；不得把内核 Master PID 与历史 Worker 名称拼成一个伪进程事实。
 
 ## 运行拓扑平台边界
 
-- Windows `auto` 固定使用 Dispatcher + stream Worker；Linux `auto` 在真实 SO_REUSEPORT 探测通过后 direct，macOS `auto` 在 Master 共享 listener FD 探测通过后 direct。三者共用 REGISTER→WARMING→READY、policy digest 与分批重载契约；业务 Worker 的 READY v3 必须证明首页 Process FPC 已热，并提交绕过 FPC 的动态首渲染回执。动态目标默认是发布性能门禁而非存活门禁；显式开启 strict 开关时才会因超标拒绝 READY。初启与 Direct surge replacement 使用同一契约。
+- Windows `auto` 固定使用 Dispatcher；Linux/macOS `auto` 使用 direct。默认 HTTPS 的公开 listener 由协议边缘拥有：POSIX Edge 直达 Worker，Windows Edge 后接内部 Dispatcher；只有关闭 Edge 的 h1 legacy 路径才使用 SO_REUSEPORT/共享 FD。三者共用 REGISTER→WARMING→READY、policy digest 与分批重载契约；业务 Worker 的 READY v3 必须证明首页 Process FPC 已热，并提交绕过 FPC 的动态首渲染回执。
 - 拓扑/依赖预检发生在任何 Master/Worker 创建之前；POSIX direct 不满足能力时明确失败并提示显式 `--dispatcher`，不在已创建进程后静默改拓扑。
 - macOS `worker_count=auto` 使用性能核数并受内存预算限制；启动与 Doctor/建议共用同一个 resolver，显式 `-c` 保持不变。
 - 旧 `linux-direct` 只做读取兼容，新状态统一写为 `direct`；新实例的 SSL engine 默认为 `stream`。
 - 当前 `RuntimeStrategyResolver` 在启动预检阶段同时拒绝 `event_buffer + direct` 与 `event_buffer + authenticated PROXY v2 Dispatcher`；Windows 原生 EventBuffer 也明确拒绝。EventBuffer Adapter 仍属实验代码，不是当前受支持拓扑的可选 SSL engine，不得再把它描述为 macOS/Linux Dispatcher+TLS 可用路径。
 - Worker 通过 `--public-origin` 获得对外 scheme/authority；READY 首页预热与真实 HTTP/HTTPS FPC key 一致，实例文件只是兼容兜底。
-- macOS shared-FD HTTPS 的 listener 仅用于 event readiness，Worker 原生 accept 后导出 TLS stream；新握手连接有 200ms 有界首读衔接，避免 ClientHello 成功后首请求停在 OpenSSL 用户态缓冲。
+- macOS shared-FD TLS 与 200ms 首读衔接只属于协议边缘关闭的 legacy Worker-TLS 路径；默认协议边缘由 Caddy 终结 TLS/QUIC，Worker 使用私有 h1 keep-alive。
 
 ## 平台验收边界
 
@@ -152,7 +153,7 @@ flowchart TB
 - 每批 DRAIN 前按实时 Registry 再校验容量；不足时拒绝摘批。
 - force 只有在 maintenance 池已被所有 Dispatcher ACK 后才允许整池单批，否则自动降级为安全分批。
 - 每批先统一置 DRAINING 并发布一次摘批快照，批内全部 READY 后再发布一次加回快照。
-- Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC，再分批替换 canonical 槽；canonical 全部 READY 后，surge 按冻结身份租约排水和退场。
+- Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC。协议边缘模式还必须先发布 READY upstream 集合并等待 Caddy active config digest ACK，才能排水旧槽；canonical 全部 READY 后，surge 按冻结身份租约退场。
 - 普通、stream TLS 与 EventBuffer Worker 的 DRAIN 都先停止公开 accept，并完成已分派请求与待写响应。维护模式 ACK 是另一条更短的屏障：策略先立即生效，业务 Worker 至少跨过一个 transport loop，再等待 active request/Fiber 与 response output 清空；空闲 preconnect、未完成 TLS/HTTP 和 slowloris 不得阻塞 ACK。EventBuffer 已完整落入 PHP buffer 的流水线请求属于已接纳工作，按每 tick 有界预算通过同一 WorkerPolicyKernel 生成响应后再 ACK；只有不完整输入可忽略。
 - 所有 drain/exit 等待使用总 deadline；到期后报告仍在途的具体阶段，不能用无界等待或静默关闭掩盖长尾。
 
@@ -174,6 +175,9 @@ flowchart TB
   - `runLoopWithDeferredChildStartup()`
   - `requestStop()`
   - `stopAll()`
+- `app/code/Weline/Server/Service/Runtime/HttpProtocolSelection.php`
+- `app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php`
+- `app/code/Weline/Server/Service/Provider/ProtocolEdgeProvider.php`
 - `app/code/Weline/Server/Console/Server/Stop.php`
   - `execute()`
   - `stopInstance()`

@@ -31,6 +31,7 @@ use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Policy\RuntimePolicyValidator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
@@ -68,6 +69,7 @@ class ServiceOrchestrator
         ControlMessage::ROLE_DISPATCHER => true,
         ControlMessage::ROLE_REDIRECT => true,
         ControlMessage::ROLE_MAINTENANCE => true,
+        ProtocolEdgeRuntime::ROLE => true,
     ];
     private const BULK_LAUNCH_PORT_REPROBE_ROLES = [
         ControlMessage::ROLE_WORKER => true,
@@ -124,6 +126,8 @@ class ServiceOrchestrator
     private float $lastReconcileAt = 0.0;
     private float $lastSweepAt = 0.0;
     private string $lastDispatcherRouteTableSignature = '__unpublished__';
+    private string $lastProtocolEdgeRouteSignature = '__unpublished__';
+    private string $lastProtocolEdgeConfigDigest = '';
     private int $routeTableVersion = 0;
 
     /**
@@ -2156,6 +2160,7 @@ class ServiceOrchestrator
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-gateway', $instanceName),
+            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
         ];
 
         return \array_values(\array_unique($prefixes));
@@ -4123,6 +4128,9 @@ class ServiceOrchestrator
             ControlMessage::ROLE_MAINTENANCE => [
                 MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-',
             ],
+            ProtocolEdgeRuntime::ROLE => [
+                MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
+            ],
             default => [],
         };
     }
@@ -4245,7 +4253,7 @@ class ServiceOrchestrator
         if (!\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
             return false;
         }
-        if ($context->isDirect()) {
+        if ($context->isWorkerPublicListener()) {
             return false;
         }
         if ($configuredPort <= 0) {
@@ -4476,7 +4484,7 @@ class ServiceOrchestrator
 
     private function usesDirectSharedListener(ServiceContext $context): bool
     {
-        if (!$context->isDirect()) {
+        if (!$context->isWorkerPublicListener()) {
             return false;
         }
 
@@ -4488,7 +4496,7 @@ class ServiceOrchestrator
         return $role === ControlMessage::ROLE_WORKER
             && $port > 0
             && $this->context !== null
-            && $this->context->isDirect()
+            && $this->context->isWorkerPublicListener()
             && $port === $this->context->mainPort;
     }
 
@@ -6749,6 +6757,16 @@ class ServiceOrchestrator
                 }
             }
             if ($ready === \count($expectedIdentities)) {
+                if ($this->context?->isProtocolEdgeEnabled()) {
+                    $this->publishProtocolEdgeWorkerPoolFromRegistry(true);
+                    if (!$this->waitForProtocolEdgeRouteActivation(10.0, $imperialEpochSnap)) {
+                        $this->failWorkerBatchNotify(
+                            'reload',
+                            'Direct new-first surge is hot but protocol-edge route activation was not acknowledged'
+                        );
+                        return ['status' => 'failed', 'ids' => $surgeIds];
+                    }
+                }
                 WlsLogger::info_(
                     '[Orchestrator][DirectNewFirst] phase=surge_ready'
                     . ', surge_ids=[' . \implode(',', $surgeIds) . ']'
@@ -6804,11 +6822,11 @@ class ServiceOrchestrator
      */
     private function allocateDirectReloadSurgeWorkerIds(int $count): array
     {
-        $maxExistingId = 100;
+        $maxExistingId = ProtocolEdgeRuntime::DIRECT_RELOAD_SURGE_MIN_CANONICAL_ID;
         foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instance) {
             $maxExistingId = \max($maxExistingId, (int)$instance->instanceId);
         }
-        $next = $maxExistingId + 1000;
+        $next = ProtocolEdgeRuntime::directReloadSurgeStartInstanceId($maxExistingId);
         $ids = [];
         while (\count($ids) < $count) {
             if ($this->registry->getInstance(ControlMessage::ROLE_WORKER, $next) === null) {
@@ -6866,11 +6884,15 @@ class ServiceOrchestrator
             && (int)($listenCapabilities['inherited_fd'] ?? 0) > 0;
         $reusePortListenerReady = $reportedListenerMode === 'reuseport'
             && (bool)($listenCapabilities['reuseport'] ?? false);
-        $listenerReady = match ($expectedListenerMode) {
-            'shared_fd' => $sharedListenerReady,
-            'reuseport' => $reusePortListenerReady,
-            default => $sharedListenerReady || $reusePortListenerReady,
-        };
+        $singleListenerReady = $reportedListenerMode === 'single'
+            && (bool)($listenCapabilities['bound'] ?? false);
+        $listenerReady = $this->context?->isProtocolEdgeEnabled()
+            ? $singleListenerReady
+            : match ($expectedListenerMode) {
+                'shared_fd' => $sharedListenerReady,
+                'reuseport' => $reusePortListenerReady,
+                default => $sharedListenerReady || $reusePortListenerReady,
+            };
         $dynamicFirstRenderRejection = $this->validateBusinessDynamicFirstRenderReadiness([
             'readiness_protocol_version' => $instance->getMeta('readiness_protocol_version', 0),
             'readiness_capabilities' => $instance->getMeta('readiness_capabilities', []),
@@ -7145,6 +7167,27 @@ class ServiceOrchestrator
             return false;
         }
 
+        $protocolEdgeRouteFenced = false;
+        if ($this->context?->isProtocolEdgeEnabled()) {
+            foreach (\array_keys($instances) as $instanceId) {
+                $this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId] = true;
+            }
+            $protocolEdgeRouteFenced = $this->publishProtocolEdgeWorkerPoolFromRegistry(true)
+                && $this->waitForProtocolEdgeRouteActivation(10.0);
+            if (!$protocolEdgeRouteFenced) {
+                foreach (\array_keys($instances) as $instanceId) {
+                    unset($this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId]);
+                }
+                $this->publishProtocolEdgeWorkerPoolFromRegistry(true);
+                WlsLogger::error_(
+                    '[Orchestrator][DirectNewFirst] phase=surge_route_fence_failed'
+                    . ', surge_ids=[' . \implode(',', \array_keys($instances)) . ']'
+                    . ', admission=retained'
+                );
+                return false;
+            }
+        }
+
         $drainTimeout = $this->resolveWorkerReloadDrainTimeout();
         foreach ($instances as $instance) {
             // Hold generic desired-state convergence out of this explicit
@@ -7193,6 +7236,9 @@ class ServiceOrchestrator
                 $this->registry->removeInstance(ControlMessage::ROLE_WORKER, (int)$instanceId);
             }
             unset($this->reloadWorkerProcessLeases[(int)$instanceId]);
+            if ($protocolEdgeRouteFenced) {
+                unset($this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId]);
+            }
             $retired[] = (int)$instanceId;
         }
         $allRetired = \count($retired) === \count($instances);
@@ -7873,13 +7919,34 @@ class ServiceOrchestrator
             $worker->state = ServiceInstance::STATE_DRAINING;
             $this->registry->updateInstance($worker);
             if ($worker->ipcClientId !== null) {
-                $this->sendDrainToInstance($worker, $reloadDrainTimeout);
                 $drainRefs[] = $instanceId;
             }
         }
 
         $newRoutePorts = $this->collectReadyWorkerPortsSorted();
         $this->syncDispatcherFullWorkerPoolFromRegistry(true);
+        if ($this->context->isProtocolEdgeEnabled()
+            && !$this->waitForProtocolEdgeRouteActivation(10.0, $imperialEpochSnap)
+        ) {
+            foreach ($instanceIds as $instanceId) {
+                $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+                if ($worker !== null && $worker->state === ServiceInstance::STATE_DRAINING) {
+                    $worker->state = ServiceInstance::STATE_READY;
+                    $this->registry->updateInstance($worker);
+                }
+            }
+            $this->failWorkerBatchNotify(
+                $rollingOrReload,
+                'Batch ' . $batchList . ' protocol-edge route removal was not acknowledged before drain'
+            );
+            return 'failed';
+        }
+        foreach ($drainRefs as $instanceId) {
+            $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+            if ($worker !== null && $worker->ipcClientId !== null) {
+                $this->sendDrainToInstance($worker, $reloadDrainTimeout);
+            }
+        }
         WlsLogger::info_(
             '[Orchestrator][RouteTransition] reason=worker_batch_draining'
             . ', batch=' . $batchIndex . '/' . $batchTotal
@@ -10712,6 +10779,7 @@ class ServiceOrchestrator
                 ControlMessage::ROLE_MAINTENANCE,
                 ControlMessage::ROLE_DISPATCHER,
                 ControlMessage::ROLE_REDIRECT,
+                ProtocolEdgeRuntime::ROLE,
             ],
             true
         )) {
@@ -11097,11 +11165,13 @@ class ServiceOrchestrator
             $sharedListenerReady = $reportedListenerMode === 'shared_fd'
                 && (bool)($listenCapabilities['shared_listener'] ?? false)
                 && (int)($listenCapabilities['inherited_fd'] ?? 0) > 0;
-            $directListenerReady = match ($expectedListenerMode) {
-                'reuseport' => $reusePortListenerReady,
-                'shared_fd' => $sharedListenerReady,
-                default => $reusePortListenerReady || $sharedListenerReady,
-            };
+            $directListenerReady = $this->context?->isProtocolEdgeEnabled()
+                ? ($reportedListenerMode === 'single' && (bool)($listenCapabilities['bound'] ?? false))
+                : match ($expectedListenerMode) {
+                    'reuseport' => $reusePortListenerReady,
+                    'shared_fd' => $sharedListenerReady,
+                    default => $reusePortListenerReady || $sharedListenerReady,
+                };
             $readyRejection = '';
             if ($readinessProtocolVersion !== WorkerReadinessState::READINESS_PROTOCOL_VERSION) {
                 $readyRejection = 'readiness_protocol_version_unsupported';
@@ -11999,7 +12069,14 @@ class ServiceOrchestrator
             'ssl_enabled',
             'ssl_cert',
             'ssl_key',
+            'http_protocol_selection',
+            'http_protocols',
+            'http_preferred_protocol',
+            'protocol_edge_enabled',
+            'protocol_edge_binary',
+            'tls_session_resumption',
             'dispatcher_enabled',
+            'dispatcher_port',
             'worker_port',
             'worker_base_port',
             'gateway',
@@ -12418,6 +12495,7 @@ class ServiceOrchestrator
      */
     private function convergeDispatcherRouteTableAfterWorkerReady(): void
     {
+        $this->publishProtocolEdgeWorkerPoolFromRegistry();
         if ($this->maintenanceMode) {
             // 维护模式中：先尝试根据当前 Registry 状态退出维护；若仍在维护中，则保持业务路由不变。
             $this->checkAndDisableMaintenanceIfReady();
@@ -12551,6 +12629,7 @@ class ServiceOrchestrator
      */
     private function syncDispatcherFullWorkerPoolFromRegistry(bool $force = false): void
     {
+        $this->publishProtocolEdgeWorkerPoolFromRegistry($force);
         if ($this->maintenanceMode) {
             $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
             return;
@@ -12589,6 +12668,111 @@ class ServiceOrchestrator
         $this->broadcastRoutingPolicyToWorkers();
         $this->lastDispatcherRouteTableSignature = $signature;
         WlsLogger::info_('[Orchestrator] Dispatcher route table is aligned with Registry: ' . $signature);
+    }
+
+    /**
+     * Direct + protocol-edge keeps the product topology direct: Caddy is only
+     * the TLS/QUIC transport adapter, while this READY registry remains the
+     * authoritative Worker route source. Config publication is atomic and the
+     * wrapper acknowledges the exact digest only after Caddy accepts reload.
+     */
+    private function publishProtocolEdgeWorkerPoolFromRegistry(bool $force = false): bool
+    {
+        if ($this->context === null
+            || !$this->context->isDirect()
+            || !$this->context->isProtocolEdgeEnabled()
+        ) {
+            return true;
+        }
+
+        $ports = [];
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
+            if (isset($this->workerRoutePublishSuppressedInstanceIds[$worker->instanceId])) {
+                continue;
+            }
+            if ($worker->state !== ServiceInstance::STATE_READY
+                || $worker->port === null
+                || $worker->port <= 0
+            ) {
+                continue;
+            }
+            $ports[(int)$worker->port] = true;
+        }
+        $ports = \array_keys($ports);
+        \sort($ports, \SORT_NUMERIC);
+        if ($ports === []) {
+            WlsLogger::warning_(
+                '[Orchestrator][ProtocolEdgeRoute] refusing to publish an empty Direct Worker route set'
+            );
+            return false;
+        }
+
+        $signature = \implode(',', $ports);
+        $currentDigest = ProtocolEdgeRuntime::configDigest($this->context->instanceName);
+        if (!$force
+            && $signature === $this->lastProtocolEdgeRouteSignature
+            && $currentDigest !== ''
+        ) {
+            $this->lastProtocolEdgeConfigDigest = $currentDigest;
+            return true;
+        }
+
+        ProtocolEdgeRuntime::writeConfig($this->context, $ports);
+        $digest = ProtocolEdgeRuntime::configDigest($this->context->instanceName);
+        if ($digest === '') {
+            throw new \RuntimeException('Protocol-edge route config was written but could not be fingerprinted.');
+        }
+        $this->lastProtocolEdgeRouteSignature = $signature;
+        $this->lastProtocolEdgeConfigDigest = $digest;
+        WlsLogger::info_(
+            '[Orchestrator][ProtocolEdgeRoute] candidate published'
+            . ', upstream_ports=[' . $signature . ']'
+            . ', config_digest=' . \substr($digest, 0, 16)
+        );
+
+        return true;
+    }
+
+    private function waitForProtocolEdgeRouteActivation(
+        float $timeoutSec = 10.0,
+        ?int $imperialEpochSnap = null,
+    ): bool {
+        if ($this->context === null
+            || !$this->context->isDirect()
+            || !$this->context->isProtocolEdgeEnabled()
+        ) {
+            return true;
+        }
+
+        $expectedDigest = ProtocolEdgeRuntime::configDigest($this->context->instanceName);
+        if ($expectedDigest === '') {
+            return false;
+        }
+        $deadline = \microtime(true) + \max(0.25, $timeoutSec);
+        while (\microtime(true) < $deadline) {
+            if ($this->isStopFlowActive()
+                || ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap)
+            ) {
+                return false;
+            }
+            if (ProtocolEdgeRuntime::isConfigActive($this->context->instanceName, $expectedDigest)) {
+                $this->lastProtocolEdgeConfigDigest = $expectedDigest;
+                WlsLogger::info_(
+                    '[Orchestrator][ProtocolEdgeRoute] active config acknowledged'
+                    . ', config_digest=' . \substr($expectedDigest, 0, 16)
+                );
+                return true;
+            }
+            $this->yieldControlPlane(20000);
+        }
+
+        WlsLogger::error_(
+            '[Orchestrator][ProtocolEdgeRoute] activation timeout'
+            . ', expected_digest=' . \substr($expectedDigest, 0, 16)
+            . ', route_signature=' . $this->lastProtocolEdgeRouteSignature
+        );
+
+        return false;
     }
 
     /**
@@ -15717,7 +15901,7 @@ class ServiceOrchestrator
             if ($instance->ipcClientId === null) {
                 continue;
             }
-            if ($instance->role !== ControlMessage::ROLE_WORKER) {
+            if (!\in_array($instance->role, [ControlMessage::ROLE_WORKER, ProtocolEdgeRuntime::ROLE], true)) {
                 continue;
             }
             $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
