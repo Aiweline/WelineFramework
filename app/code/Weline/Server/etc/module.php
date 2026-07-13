@@ -17,6 +17,7 @@ return [
         \Weline\Framework\Runtime\WlsRuntimeAdapterInterface::class => \Weline\Server\Api\Runtime\WlsRuntimeAdapter::class,
         \Weline\Framework\Runtime\RuntimeRoutingPolicyInterface::class => \Weline\Server\Api\Runtime\RuntimeRoutingPolicy::class,
         \Weline\Framework\Runtime\RuntimeControlBroadcasterInterface::class => \Weline\Server\Api\Runtime\RuntimeControlBroadcaster::class,
+        \Weline\Framework\Runtime\RuntimeDeploymentControlInterface::class => \Weline\Server\Api\Runtime\RuntimeDeploymentControl::class,
         \Weline\Framework\Runtime\MaintenanceRoutingBroadcasterInterface::class => \Weline\Server\Api\Runtime\MaintenanceRoutingBroadcaster::class,
         \Weline\Framework\Runtime\SharedStateAdminProviderInterface::class => \Weline\Server\Api\Runtime\SharedStateAdminProvider::class,
         \Weline\Framework\Cache\Contract\SharedBufferStateFactoryInterface::class => \Weline\Server\Api\Runtime\SharedBufferStateProvider::class,

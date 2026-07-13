@@ -21,4 +21,13 @@
     <event name="Weline_Framework_UninstallService::module_db_restore">
         <observer name="Weline_ModuleManager::uninstall_module_db_restore" instance="Weline\ModuleManager\Observer\UninstallServiceModuleDbRestore" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Database_ModuleRollback::audit_state">
+        <observer name="Weline_ModuleManager::rollback_audit_projection" instance="Weline\ModuleManager\Observer\ModuleRollbackAuditObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+    <event name="Weline_Database_ModuleRollback::state_committed">
+        <observer name="Weline_ModuleManager::rollback_projection_committed" instance="Weline\ModuleManager\Observer\ModuleRollbackProjectionObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+    <event name="Weline_Database_ModuleRollback::failed_recovered">
+        <observer name="Weline_ModuleManager::rollback_projection_recovered" instance="Weline\ModuleManager\Observer\ModuleRollbackProjectionObserver" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>
