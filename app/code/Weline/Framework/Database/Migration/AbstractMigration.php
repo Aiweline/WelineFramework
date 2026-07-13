@@ -7,7 +7,7 @@ namespace Weline\Framework\Database\Migration;
 /**
  * Module-neutral migration defaults shared by every migration runtime.
  */
-abstract class AbstractMigration implements MigrationInterface
+abstract class AbstractMigration implements MigrationMetadataInterface
 {
     public function getInfo(): array
     {

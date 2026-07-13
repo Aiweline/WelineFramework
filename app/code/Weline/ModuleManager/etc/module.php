@@ -2,9 +2,10 @@
 
 return [
     "name" => 'Weline_ModuleManager',
-    "version" => '1.0.2',
+    "version" => '1.1.0',
     "requires" => [
         'Weline_Admin' => '*',
+        'Weline_Database' => '^1.2.0',
     ],
     "optional" => [
         'Weline_Ai' => '*',

@@ -9,6 +9,7 @@
 namespace Weline\Database\Service;
 
 use Weline\Framework\Database\Migration\MigrationInterface;
+use Weline\Framework\Database\Migration\RollbackBackupStrategyInterface;
 use Weline\Database\Model\Migration;
 use Weline\Database\Service\BackupService;
 use Weline\Database\Service\VersionService;
@@ -16,6 +17,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Setup\Model\MigrationBackup;
 
 class MigrationService
 {
@@ -95,6 +97,12 @@ class MigrationService
                 if (!$result) {
                     throw new \Exception(__("迁移执行失败"));
                 }
+
+                $this->restorePreviouslyRolledBackBackups(
+                    $moduleName,
+                    $migrationFile,
+                    $migrationId,
+                );
                 
                 $this->updateMigrationStatusById($migrationId, Migration::STATUS_INSTALLED);
                 if ($query !== null) {
@@ -127,9 +135,19 @@ class MigrationService
      * @param string $migrationFile 迁移文件路径
      * @return bool
      */
-    public function rollbackMigration(string $moduleName, string $migrationFile): bool
+    public function rollbackMigration(
+        string $moduleName,
+        string $migrationFile,
+        string $operationId = '',
+        ?array $expectedBackupStrategy = null,
+    ): bool
     {
         try {
+            if ($operationId === '') {
+                throw new \RuntimeException(__(
+                    '已禁止独立迁移回滚；请通过 ModuleRollbackManagerInterface 创建联动回滚任务'
+                ));
+            }
             if (!is_file($migrationFile)) {
                 throw new \RuntimeException(__('迁移文件不存在: %{1}', $migrationFile));
             }
@@ -144,6 +162,14 @@ class MigrationService
             if (!$migrationClass instanceof MigrationInterface) {
                 throw new \Exception(__("迁移类必须实现MigrationInterface接口"));
             }
+
+            $backupStrategy = $this->resolveRollbackBackupStrategy($migrationClass);
+            if ($expectedBackupStrategy !== null
+                && $this->canonicalJson($backupStrategy) !== $this->canonicalJson($expectedBackupStrategy)) {
+                throw new \RuntimeException(__('迁移回滚备份策略在预检后已变化: %{1}', $filename));
+            }
+            $migrationId = (int)$record->getId();
+            $this->performRollbackBackup($migrationClass, $migrationId, $operationId, $backupStrategy);
             
             $transactional = $this->isDataOnlyMigration($migrationClass);
             $query = $transactional ? $this->connectionFactory->query('SELECT 1') : null;
@@ -158,7 +184,6 @@ class MigrationService
                     throw new \Exception(__("迁移回滚失败"));
                 }
                 
-                $migrationId = (int)$record->getId();
                 if ($migrationId > 0) {
                     $this->restoreBackupsForMigration($migrationId);
                 }
@@ -317,7 +342,8 @@ class MigrationService
             throw new \RuntimeException(__('迁移文件未声明可加载类: %{1}', $migrationFile));
         }
 
-        $instance = ObjectManager::make($className);
+        // 使用 ObjectManager 的非共享实例入口：它同时支持无显式构造函数和带 DI 构造函数的迁移类。
+        $instance = ObjectManager::getInstance($className, [], false);
         if (!$instance instanceof MigrationInterface) {
             throw new \RuntimeException(__('迁移类必须实现 MigrationInterface: %{1}', $className));
         }
@@ -411,19 +437,27 @@ class MigrationService
             ? $migration->getBackupStrategy()
             : ['strategy' => 'none', 'tables' => [], 'columns' => []];
 
-        if ($strategy['strategy'] === 'none' || empty($strategy['tables'])) {
-            return;
+        $strategyName = strtolower(trim((string)($strategy['strategy'] ?? 'none')));
+        $tables = $this->normalizeIdentifierList((array)($strategy['tables'] ?? []));
+        $columns = $this->normalizeIdentifierList((array)($strategy['columns'] ?? []));
+        if (!in_array($strategyName, ['column', 'table'], true) || $tables === []) {
+            throw new \RuntimeException(__(
+                '迁移声明 requiresBackup=true，但未提供可执行的 table/column 备份策略'
+            ));
+        }
+        if ($strategyName === 'column' && $columns === []) {
+            throw new \RuntimeException(__('列备份策略必须声明至少一个字段'));
         }
 
-        $tables  = $strategy['tables'] ?? [];
-        $columns = $strategy['columns'] ?? [];
-
         foreach ($tables as $table) {
-            if ($strategy['strategy'] === 'column' && !empty($columns)) {
+            if ($strategyName === 'column') {
                 foreach ($columns as $column) {
                     $this->backupService->backupColumnData($table, $column, $migrationId);
                 }
             } else {
+                if (!$this->backupService->backupTableStructure($table, $migrationId)) {
+                    throw new \RuntimeException(__('无法备份表 %{1} 的结构', $table));
+                }
                 $this->backupService->backupTableData($table, $migrationId);
             }
         }
@@ -436,16 +470,351 @@ class MigrationService
      */
     private function restoreBackupsForMigration(int $migrationId): void
     {
-        $backups = $this->backupService->getBackupsByMigrationId($migrationId);
+        $backups = array_values(array_filter(
+            $this->backupService->getBackupsByMigrationId($migrationId),
+            static function ($backup): bool {
+                $scope = trim((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_SCOPE));
+                return $scope === '' || $scope === MigrationBackup::SCOPE_UPGRADE;
+            },
+        ));
         if (empty($backups)) {
             return;
         }
 
+        $priority = [
+            MigrationBackup::TYPE_STRUCTURE => 0,
+            MigrationBackup::TYPE_TABLE => 1,
+            MigrationBackup::TYPE_COLUMN => 2,
+        ];
+        usort($backups, static function ($left, $right) use ($priority): int {
+            $leftType = (string)$left->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
+            $rightType = (string)$right->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
+            $typeOrder = ($priority[$leftType] ?? 99) <=> ($priority[$rightType] ?? 99);
+            return $typeOrder !== 0 ? $typeOrder : (int)$left->getId() <=> (int)$right->getId();
+        });
+
         $this->printing->info(__("正在恢复迁移备份 (migration_id: %{1})...", $migrationId));
 
         foreach ($backups as $backup) {
-            $this->backupService->restoreByBackupId((int) $backup->getId());
+            if (!$this->backupService->restoreByBackupId((int)$backup->getId())) {
+                throw new \RuntimeException(__('恢复迁移备份失败: #%{1}', (string)$backup->getId()));
+            }
         }
+    }
+
+    /**
+     * @param array{
+     *     strategy: string,
+     *     tables: list<string>,
+     *     columns: list<string>,
+     *     reason: string,
+     *     requires_forward_backup: bool,
+     *     forward_backup_types: list<string>
+     * } $strategy
+     */
+    private function performRollbackBackup(
+        MigrationInterface $migration,
+        int $migrationId,
+        string $operationId,
+        array $strategy,
+    ): void {
+        $strategyName = (string)$strategy['strategy'];
+        if ($strategyName === 'none') {
+            return;
+        }
+
+        foreach ($strategy['tables'] as $table) {
+            if ($strategyName === 'table') {
+                if (!$this->hasRollbackBackup(
+                    $migrationId,
+                    $table,
+                    MigrationBackup::TYPE_STRUCTURE,
+                    null,
+                    $operationId,
+                )) {
+                    if (!$this->backupService->backupTableStructure(
+                        $table,
+                        $migrationId,
+                        MigrationBackup::SCOPE_ROLLBACK,
+                        $operationId,
+                    )) {
+                        throw new \RuntimeException(__('回滚前无法备份表 %{1} 的结构', $table));
+                    }
+                }
+                if (!$this->hasRollbackBackup(
+                    $migrationId,
+                    $table,
+                    MigrationBackup::TYPE_TABLE,
+                    null,
+                    $operationId,
+                )) {
+                    $this->backupService->backupTableData(
+                        $table,
+                        $migrationId,
+                        MigrationBackup::SCOPE_ROLLBACK,
+                        $operationId,
+                    );
+                }
+                continue;
+            }
+
+            foreach ($strategy['columns'] as $column) {
+                if ($this->hasRollbackBackup(
+                    $migrationId,
+                    $table,
+                    MigrationBackup::TYPE_COLUMN,
+                    $column,
+                    $operationId,
+                )) {
+                    continue;
+                }
+                $this->backupService->backupColumnData(
+                    $table,
+                    $column,
+                    $migrationId,
+                    null,
+                    null,
+                    'ROLLBACK',
+                    MigrationBackup::SCOPE_ROLLBACK,
+                    $operationId,
+                );
+            }
+        }
+
+        $this->printing->info(__(
+            '迁移回滚备份完成 (migration_id: %{1}, operation_id: %{2})',
+            [(string)$migrationId, $operationId]
+        ));
+    }
+
+    private function hasRollbackBackup(
+        int $migrationId,
+        string $table,
+        string $type,
+        ?string $column,
+        string $operationId,
+    ): bool {
+        foreach ($this->backupService->getBackupsByMigrationId($migrationId) as $backup) {
+            if ((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_SCOPE) !== MigrationBackup::SCOPE_ROLLBACK
+                || (string)$backup->getData(MigrationBackup::schema_fields_OPERATION_ID) !== $operationId
+                || (string)$backup->getData(MigrationBackup::schema_fields_TABLE_NAME) !== $table
+                || (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE) !== $type) {
+                continue;
+            }
+            $storedColumn = trim((string)$backup->getData(MigrationBackup::schema_fields_COLUMN_NAME));
+            if ($column === null || $column === '' || strcasecmp($storedColumn, $column) === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Restore data captured immediately before a successful coordinated
+     * rollback when the same migration is installed again later.
+     *
+     * Existing non-empty values and existing rows are never overwritten;
+     * BackupService persists a conflict record instead.
+     */
+    private function restorePreviouslyRolledBackBackups(
+        string $moduleName,
+        string $migrationFile,
+        int $currentMigrationId,
+    ): void {
+        $records = (clone $this->migrationModel)->reset()
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, basename($migrationFile))
+            ->where(Migration::schema_fields_STATUS, Migration::STATUS_ROLLED_BACK)
+            ->order(Migration::schema_fields_ID, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        foreach ($records as $record) {
+            $sourceMigrationId = (int)$record->getId();
+            if ($sourceMigrationId <= 0 || $sourceMigrationId === $currentMigrationId) {
+                continue;
+            }
+            $backups = array_values(array_filter(
+                $this->backupService->getBackupsByMigrationId($sourceMigrationId),
+                static fn($backup): bool =>
+                    (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_SCOPE)
+                    === MigrationBackup::SCOPE_ROLLBACK,
+            ));
+            if ($backups === []) {
+                continue;
+            }
+
+            $expectedChecksum = trim((string)$record->getData(Migration::schema_fields_CHECKSUM));
+            $actualChecksum = strlen($expectedChecksum) === 32
+                ? (md5_file($migrationFile) ?: '')
+                : (hash_file('sha256', $migrationFile) ?: '');
+            if ($expectedChecksum === '' || !hash_equals($expectedChecksum, $actualChecksum)) {
+                throw new \RuntimeException(__(
+                    '迁移 %{1} 的历史回滚备份对应不同校验和，禁止自动恢复',
+                    basename($migrationFile)
+                ));
+            }
+
+            $conflicts = 0;
+            foreach ($backups as $backup) {
+                $backupId = (int)$backup->getId();
+                $table = (string)$backup->getData(MigrationBackup::schema_fields_TABLE_NAME);
+                $type = (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
+                $operationId = (string)$backup->getData(MigrationBackup::schema_fields_OPERATION_ID);
+                if ($type === MigrationBackup::TYPE_STRUCTURE) {
+                    if ($this->connectionFactory->getConnector()->tableExist($table)) {
+                        $this->backupService->markBackupRestored($backupId);
+                    }
+                    continue;
+                }
+                if ($type === MigrationBackup::TYPE_TABLE) {
+                    $result = $this->backupService->restoreTableDataConflictSafe(
+                        $table,
+                        $sourceMigrationId,
+                        MigrationBackup::SCOPE_ROLLBACK,
+                        $operationId,
+                        $backupId,
+                    );
+                    $conflicts += $result['conflicts'];
+                    continue;
+                }
+                if ($type === MigrationBackup::TYPE_COLUMN) {
+                    $column = trim((string)$backup->getData(MigrationBackup::schema_fields_COLUMN_NAME));
+                    if ($column === '') {
+                        throw new \RuntimeException(__('回滚列备份 #%{1} 缺少字段名', (string)$backupId));
+                    }
+                    $result = $this->backupService->restoreColumnDataConflictSafe(
+                        $table,
+                        $column,
+                        $sourceMigrationId,
+                        null,
+                        null,
+                        null,
+                        MigrationBackup::SCOPE_ROLLBACK,
+                        $operationId,
+                        $backupId,
+                    );
+                    $conflicts += $result['conflicts'];
+                }
+            }
+
+            if ($conflicts > 0) {
+                $this->printing->warning(__(
+                    '迁移 %{1} 重新升级后有 %{2} 个备份冲突，已记录且未覆盖现值',
+                    [basename($migrationFile), (string)$conflicts]
+                ));
+            }
+            return;
+        }
+    }
+
+    /**
+     * @return array{
+     *     strategy: 'none'|'column'|'table',
+     *     tables: list<string>,
+     *     columns: list<string>,
+     *     reason: string,
+     *     requires_forward_backup: bool,
+     *     forward_backup_types: list<string>
+     * }
+     */
+    private function resolveRollbackBackupStrategy(MigrationInterface $migration): array
+    {
+        if (!$migration instanceof RollbackBackupStrategyInterface) {
+            throw new \RuntimeException(__('迁移未实现 RollbackBackupStrategyInterface'));
+        }
+        $raw = $migration->getRollbackBackupStrategy();
+        $strategy = strtolower(trim((string)($raw['strategy'] ?? '')));
+        $tables = $this->normalizeIdentifierList((array)($raw['tables'] ?? []));
+        $columns = $this->normalizeIdentifierList((array)($raw['columns'] ?? []));
+        $reason = trim((string)($raw['reason'] ?? ''));
+        $requiresForwardBackup = (bool)($raw['requires_forward_backup'] ?? false);
+        $forwardBackupTypes = $this->normalizeIdentifierList((array)($raw['forward_backup_types'] ?? []));
+
+        if (!in_array($strategy, ['none', 'column', 'table'], true)) {
+            throw new \RuntimeException(__('未知回滚备份策略: %{1}', $strategy));
+        }
+        if ($reason === '') {
+            throw new \RuntimeException(__('回滚备份策略必须声明 reason'));
+        }
+        if ($strategy !== 'none' && $tables === []) {
+            throw new \RuntimeException(__('回滚备份策略必须声明至少一个表'));
+        }
+        if ($strategy === 'column' && $columns === []) {
+            throw new \RuntimeException(__('column 回滚备份策略必须声明至少一个字段'));
+        }
+        $allowedForwardTypes = [
+            MigrationBackup::TYPE_STRUCTURE,
+            MigrationBackup::TYPE_TABLE,
+            MigrationBackup::TYPE_COLUMN,
+        ];
+        foreach ($forwardBackupTypes as $type) {
+            if (!in_array($type, $allowedForwardTypes, true)) {
+                throw new \RuntimeException(__('未知正向备份类型: %{1}', $type));
+            }
+        }
+        if ($requiresForwardBackup && $forwardBackupTypes === []) {
+            $forwardBackupTypes = [MigrationBackup::TYPE_STRUCTURE, MigrationBackup::TYPE_TABLE];
+        }
+
+        sort($tables);
+        sort($columns);
+        sort($forwardBackupTypes);
+        return [
+            'strategy' => $strategy,
+            'tables' => $tables,
+            'columns' => $columns,
+            'reason' => $reason,
+            'requires_forward_backup' => $requiresForwardBackup,
+            'forward_backup_types' => $forwardBackupTypes,
+        ];
+    }
+
+    /** @param array<string, mixed> $strategy */
+    private function assertRequiredForwardBackups(Migration $record, array $strategy): void
+    {
+        if (empty($strategy['requires_forward_backup'])) {
+            return;
+        }
+        $available = [];
+        foreach ($this->backupService->getBackupsByMigrationId((int)$record->getId()) as $backup) {
+            $scope = trim((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_SCOPE));
+            if ($scope === '' || $scope === MigrationBackup::SCOPE_UPGRADE) {
+                $available[(string)$backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE)] = true;
+            }
+        }
+        foreach ((array)($strategy['forward_backup_types'] ?? []) as $requiredType) {
+            if (!isset($available[$requiredType])) {
+                throw new \RuntimeException(__('缺少正向 %{1} 备份', $requiredType));
+            }
+        }
+    }
+
+    /** @return list<string> */
+    private function normalizeIdentifierList(array $values): array
+    {
+        $result = [];
+        foreach ($values as $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $result[$value] = true;
+            }
+        }
+        return array_keys($result);
+    }
+
+    private function canonicalJson(array $value): string
+    {
+        if (!array_is_list($value)) {
+            ksort($value);
+        }
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                $value[$key] = json_decode($this->canonicalJson($item), true);
+            }
+        }
+        return (string)json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
     
     /**
@@ -825,28 +1194,156 @@ class MigrationService
                 $blockers[] = $e->getMessage();
                 continue;
             }
+            try {
+                $migrationInstance = $this->loadMigrationClass($file);
+                $rollbackBackupStrategy = $this->resolveRollbackBackupStrategy($migrationInstance);
+                $this->assertRequiredForwardBackups($record, $rollbackBackupStrategy);
+            } catch (\Throwable $e) {
+                $blockers[] = __('迁移 %{1} 无法自动回滚：%{2}', [$migration['filename'], $e->getMessage()]);
+                continue;
+            }
             $migration['migration_id'] = (int)$record->getId();
             $migration['checksum'] = (string)$record->getData(Migration::schema_fields_CHECKSUM);
+            $migration['rollback_backup_strategy'] = $rollbackBackupStrategy;
             $dependencies = json_decode((string)$record->getData(Migration::schema_fields_DEPENDENCIES), true);
             $migration['dependencies'] = is_array($dependencies) ? $dependencies : [];
         }
         unset($migration);
 
-        usort($migrations, static function (array $left, array $right): int {
-            $version = version_compare((string)$right['version'], (string)$left['version']);
-            return $version !== 0 ? $version : strcmp((string)$right['filename'], (string)$left['filename']);
-        });
+        $installedDependencies = [];
+        foreach ($this->migrationModel->getInstalledMigrations($moduleName) as $installedMigration) {
+            $migrationType = (string)$installedMigration->getData(Migration::schema_fields_MIGRATION_TYPE);
+            if ($migrationType !== '' && $migrationType !== 'script') {
+                continue;
+            }
+            $filename = basename((string)$installedMigration->getData(Migration::schema_fields_FILE));
+            if ($filename === '') {
+                continue;
+            }
+            $dependencies = json_decode(
+                (string)$installedMigration->getData(Migration::schema_fields_DEPENDENCIES),
+                true
+            );
+            $installedDependencies[$filename] = array_values(array_unique(array_map(
+                static fn(mixed $dependency): string => basename(trim((string)$dependency)),
+                is_array($dependencies) ? $dependencies : []
+            )));
+        }
+
+        $dependencyPlan = $this->sortRollbackDependencyGraph($migrations, $installedDependencies);
+        $migrations = $dependencyPlan['migrations'];
+        $blockers = array_merge($blockers, $dependencyPlan['blockers']);
 
         return ['migrations' => $migrations, 'blockers' => array_values(array_unique($blockers))];
     }
 
-    /** @param list<array<string, mixed>> $migrations */
-    public function executeRollbackPlan(string $moduleName, array $migrations): array
+    /**
+     * Dependencies point from a migration to the migration it requires. During
+     * rollback that edge is executed in the same direction: dependent first,
+     * dependency second.
+     *
+     * @param list<array<string, mixed>> $migrations
+     * @param array<string, list<string>> $installedDependencies
+     * @return array{migrations: list<array<string, mixed>>, blockers: list<string>}
+     */
+    private function sortRollbackDependencyGraph(array $migrations, array $installedDependencies): array
     {
+        $selected = [];
+        foreach ($migrations as $migration) {
+            $filename = basename((string)($migration['filename'] ?? ''));
+            if ($filename !== '') {
+                $selected[$filename] = $migration;
+            }
+        }
+
+        $blockers = [];
+        $adjacency = array_fill_keys(array_keys($selected), []);
+        $inDegree = array_fill_keys(array_keys($selected), 0);
+        foreach ($installedDependencies as $filename => $dependencies) {
+            foreach ($dependencies as $dependency) {
+                $dependency = basename(trim((string)$dependency));
+                if ($dependency === '') {
+                    continue;
+                }
+                if (isset($selected[$filename]) && !array_key_exists($dependency, $installedDependencies)) {
+                    $blockers[] = __('迁移 %{1} 的已安装依赖缺失: %{2}', [$filename, $dependency]);
+                    continue;
+                }
+                if (!isset($selected[$dependency])) {
+                    continue;
+                }
+                if (!isset($selected[$filename])) {
+                    $blockers[] = __(
+                        '目标范围外的已安装迁移 %{1} 仍依赖待回滚迁移 %{2}',
+                        [$filename, $dependency]
+                    );
+                    continue;
+                }
+                $adjacency[$filename][] = $dependency;
+                $inDegree[$dependency]++;
+            }
+        }
+
+        $compare = static function (string $left, string $right) use ($selected): int {
+            $version = version_compare(
+                (string)($selected[$right]['version'] ?? ''),
+                (string)($selected[$left]['version'] ?? '')
+            );
+            return $version !== 0 ? $version : strcmp($right, $left);
+        };
+        $queue = array_keys(array_filter($inDegree, static fn(int $degree): bool => $degree === 0));
+        usort($queue, $compare);
+        $ordered = [];
+        while ($queue !== []) {
+            $filename = array_shift($queue);
+            $ordered[] = $selected[$filename];
+            foreach (array_values(array_unique($adjacency[$filename])) as $dependency) {
+                $inDegree[$dependency]--;
+                if ($inDegree[$dependency] === 0) {
+                    $queue[] = $dependency;
+                    usort($queue, $compare);
+                }
+            }
+        }
+
+        if (count($ordered) !== count($selected)) {
+            $blockers[] = __('待回滚迁移依赖图存在循环，无法生成安全反向顺序');
+            $ordered = array_values($selected);
+            usort($ordered, static function (array $left, array $right): int {
+                $version = version_compare((string)$right['version'], (string)$left['version']);
+                return $version !== 0
+                    ? $version
+                    : strcmp((string)$right['filename'], (string)$left['filename']);
+            });
+        }
+
+        return ['migrations' => $ordered, 'blockers' => array_values(array_unique($blockers))];
+    }
+
+    /** @param list<array<string, mixed>> $migrations */
+    public function executeRollbackPlan(string $moduleName, array $migrations, string $operationId = ''): array
+    {
+        if ($operationId === '') {
+            throw new \InvalidArgumentException(__('联动回滚任务缺少 operation_id'));
+        }
         $completed = [];
         foreach ($migrations as $migration) {
             $file = (string)($migration['file'] ?? '');
-            if (!$this->rollbackMigration($moduleName, $file)) {
+            $migrationId = (int)($migration['migration_id'] ?? 0);
+            if ($migrationId > 0 && $operationId !== '') {
+                $record = clone $this->migrationModel;
+                $record->load($migrationId);
+                if (!$record->getId() || $record->getData(Migration::schema_fields_STATUS) !== Migration::STATUS_INSTALLED) {
+                    throw new \RuntimeException(__('迁移记录状态已变化: #%{1}', (string)$migrationId));
+                }
+                $record->setData(Migration::schema_fields_OPERATION_ID, $operationId)->save();
+            }
+            if (!$this->rollbackMigration(
+                $moduleName,
+                $file,
+                $operationId,
+                (array)($migration['rollback_backup_strategy'] ?? []),
+            )) {
                 throw new \RuntimeException(__('回滚迁移 %{1} 失败', (string)($migration['filename'] ?? basename($file))));
             }
             $completed[] = $migration;
