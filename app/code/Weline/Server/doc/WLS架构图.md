@@ -187,6 +187,23 @@ accept/TLS -> 单次请求解析 -> 真实客户端身份
 - Caddy upstream 连接池只连接当前 READY 集合。Direct rolling reload 先发布新集合并等待 active digest ACK，再 drain 旧 Worker；公开 TLS/QUIC listener 与 session cache 在代码 reload 时保持存活。
 - FPC cache key 使用可信公开 scheme/authority，而不是私有 Worker 的 `http://127.0.0.1`。因此 Direct 与 Dispatcher 的首页都必须命中同一 HTTPS Process FPC，不能因协议解复用进入完整 Controller 渲染。
 
+### 3.0.2 Worker 路由级翻译常驻内存
+
+翻译词不属于请求态清理对象。每个 Worker 持有只随真实请求增长的精确词哈希；一次词查找按下面的固定层级执行：
+
+```text
+Worker exact-word L1
+  -> Worker route/module dictionary L1
+  -> phrase Shared Memory route/module snapshot L2
+  -> scoped provider query (source_module IN current modules, single-flight)
+  -> owning module i18n CSV
+  -> source word
+```
+
+路由、Controller、Layout、Query 在请求中登记的模块共同组成词典范围；模块集合变化时生成新的进程快照，但绝不包含未参与请求的模块。Shared L2 只在 Worker L1 失效时访问，随后该 Worker 直接查本地哈希。翻译发布和 cache epoch 会同时使进程词哈希与模块快照失效；普通 request cleanup 只删除 request id、used words 和本次翻译结果，不丢弃常驻 L1。
+
+`Weline\I18n\Parser` 只是 Framework Parser 的兼容桥，不再维护第二份全 locale 缓存。WLS 启动预热也不扫描所有 active module 或 `generated/language/{locale}.php`。这条边界既避免 16 Worker 重复持有全量字典，也避免把 1MB 级序列化数组送入 Shared Memory 协议。
+
 单次解析的边界在 `WorkerPolicyKernel`：原始 HTTP 字节只在这里变成不可变 `WorkerPolicyDecision` / Framework `RequestEnvelope`。快照保留已验证的 protocol、canonical path、target/query、Header/body、client identity 和 policy digest；Static L1 直接使用 Decision 的 method、target、条件 Header 与 keep-alive 语义，FPC 也直接读 Decision，动态路由 `WlsRequest::fromEnvelope()` 水合。
 
 Transport Adapter 的 HTTP wire 辅助统一由 `bin/worker_http_message.php` 提供。HTTP 与 stream-TLS Worker 直接加载同一份 request-complete、keep-alive、Header/Cookie、格式化响应 Header、gzip、状态码和请求行实现，不再各自复制函数体；EventBuffer 保留自己的连接与 libevent 状态机，但 Header 读取通过原签名 wrapper 复用同一实现。共享文件不持有 listener、socket、TLS 或 event-loop 状态，Transport 主循环、调用点签名、重复 Header 处理、HTTP/1.0 keep-alive、Connection token 与 CRLF 语义均保持不变。其余仍有 transport 差异的握手、写缓冲和连接关闭逻辑继续留在各 Adapter，不能为了表面去重强行合并。
@@ -305,7 +322,7 @@ PID 为 0 不是生命周期状态，只表示尚未观察到 PID。IPC REGISTER
 - Shared/Process FPC 命中时，预热证明头必须写入实际返回的缓存响应对象；不得只写到已经被替换的请求默认 Response。
 - 一次首页 warmup transaction 以 HTTP 2xx/3xx、非空响应、无 `Set-Cookie`、无 `private/no-store` 和 `source=process` 验收，不再依赖 Controller 专属 header。
 - 同一 Worker 在 READY 前还必须绕过 FPC 真实执行动态首页，并生成包含 host、`/`、2xx/3xx、正文长度、耗时/目标、尝试数、FPC 非 HIT 和 reason 的不可变回执。共享 owner 只构建 generation 前置；每个 Worker 都必须执行自己的 Router/Controller/Template 本地渲染。批量启动时这些本地渲染通过带 TTL、总 deadline 和 owner token 的共享 render slot 串行进入，避免 16 个冷进程同时争抢 CPU；该锁不进入公开请求路径。Master 的初启与 Direct surge admission 复用同一证明校验器；`server:status` 从 Registry metadata 展示该回执，不能用 CLI 自测结果替代 READY 事实。
-- 动态预热耗时超过目标但页面证明有效时，默认记录 `ready:slow` 并允许 Worker READY；发布仍必须用 `server:benchmark:first-render` 对公开入口独立执行 `< target_ms` 门禁。这样区分“进程正确可用”和“当前机器性能达标”，不会再把一次冷机竞争放大成重启风暴。
+- 动态预热的冷链第一次有效渲染若超过目标，会在同一个有界 attempt 预算内立即复验已经填充的进程缓存；READY 回执优先记录这次热链复验，而不是把冷填充耗时冒充可路由性能。只有最终尝试仍慢时才记录 `ready:slow` 并允许 Worker READY；发布仍必须用 `server:benchmark:first-render` 对公开入口独立执行 `< target_ms` 门禁。这样同时保证“READY 后已热”和“主机抖动不触发重启风暴”。
 - READY 已完成首页 Process FPC 与动态首页硬门禁；`wls.worker_bootstrap_warmup` 的 READY 后 registry 二次预载默认关闭，避免 Worker 刚变为可路由又重复执行同一批 bootstrap。只有实例声明额外 registry 贡献并配置允许角色时才显式开启。
 - 其它动态热路径由一个 owner 发现，再按 Worker 分片；不让每个 Worker 重复遍历同一列表。
 - keep-hot 在 Worker 主循环的低优先级 Fiber 中运行并带 Worker jitter；仅在无活跃/待处理请求、无 TLS handshake、非排水、无内存压力时执行。
@@ -572,7 +589,17 @@ Dispatcher 初始版本把 Worker FPC scheme 固定为 `http`，而公开预热 
 
 连接池身份边界修复后的完整停启约 2 秒进入 READY。正式策略默认 `3000/60s/IP`，因此从单一 loopback 源直接跑 10,000 次首页会得到 2,995 个 200 与 7,005 个 429；这是限流按配置生效，不是协议失败，也不能拿这组 70.05% 失败的数据计算有效 QPS。首页性能轮仅对两个专用实例两阶段发布临时测试源白名单，测完立即恢复 `enabled=false` 并重新 ACK 正式 digest；生产实例从未参与发布。
 
-TLS 会话票据已用同一 SNI 的首连 `New`、二连 `Reused` 验证；HTTP/2 与 HTTP/3 均验证多个请求复用同一公开连接。协议能力、策略正确性和 FPC 回归已通过，但当前重启代的 READY 动态首页证明仍为 Direct 201.76–262.89ms、Dispatcher 210.29–251.07ms，未达到 `<70ms`；跨平台安装器与 Linux/Windows 原生长稳也仍属于发布矩阵，不能用 macOS 结果推断完成。
+TLS 会话票据已用同一 SNI 的首连 `New`、二连 `Reused` 验证；HTTP/2 与 HTTP/3 的 16 路并行请求均只建立 1 条公开连接。冷链复验修复前，当前代 READY 动态首页为 Direct 196.82–209.79ms、Dispatcher 180.62–195.10ms（各有 1 个偶发快样本）；修复后 Direct 完整停启 4 个 Worker 全部以 `attempts=2` 在 16.48–18.70ms READY，Dispatcher rolling reload 为 12.08–21.24ms，均低于 70ms。专用测试源白名单下五轮首页中位数为 Direct 7,853.61 QPS / p95 6.082ms、Dispatcher 5,775.71 QPS / p95 9.052ms，Direct QPS 高 35.98%、p95 低 32.81%。当前代压测中终止 Worker 的 100,000 请求为 0 错误，替补约 1.389 秒 READY；随后 1,000,000 请求仍为 0 错误、p99 51.702ms、max 518.477ms，追加 100,000 请求后 Worker RSS 不再增长。白名单已恢复为 `false` 并重新发布正式策略。跨平台安装器与 Linux/Windows 原生长稳仍属于发布矩阵，不能用 macOS 结果替代。
+
+### 3.8.9 2026-07-14 词级翻译常驻缓存与 Master lease 竞态修复
+
+历史 `phrase` Shared Memory 拒绝帧为约 1.67MB，对应数据库中 21,055 条、约 1.88MB 的 `zh_Hans_CN` 全 locale 词典；这些旧行的 `source_module` 为空，单纯按当前模块查询既取不到译文，又会诱发重复范围查询。当前持久 Worker 改为两条有界链：模块 CSV 使用 `Worker L1 -> Shared 模块快照 -> CSV`；模块 miss 后使用 `Worker 单词 L1 -> Shared 单词记录 -> md5(word + locale) 精确 DB`。最终词哈希只随本 Worker 实际遇到的词增长，上限 32,768 项；请求 cleanup 不清它，cache epoch 才清。实测一个仅存在于数据库的词首次精确解析为 16.467ms，第二次同 Worker L1 为 0.001ms；另一进程从共享单词记录解析为 9.844ms（含新进程引导）。旧超大帧拒绝计数保持 459，最新时间仍为 15:44:32，新代码启动和请求未新增拒绝。
+
+同轮还发现读取实例状态可能在 Master endpoint 与 PID index 的毫秒级发布窗口把运行实例误写为 `stale_cleanup`。`ServerInstanceManager` 现在把新鲜 lease 作为只读 overlay，并要求实例名、running、心跳、epoch、Master PID 和精确受管进程身份全部匹配；status 不再执行破坏性清理，真正 cleanup 也会在删除前二次验证 lease。人为破坏 endpoint 后，`server:status` 能恢复识别真实 Master/16 Worker，且 endpoint mtime 不变化；正常 stop 仍能终止全部本实例进程。
+
+专用实例 `ai-test-wls-phrase-20260714-0035`（9900）连续三轮 16 Worker 冷/热启动的 `batchCreate` 为 111/115/84ms，内部完整 READY 为 3.600/2.447/1.869s，中位 2.447s；第三轮 16 个 Worker 的动态首页首渲染为 13.70–51.27ms，全部 `<70ms`。正式策略下首页 c32×2,500 为 2,500/2,500、0 错误、7,510.12 QPS、p95 9.364ms；health c128×100,000 为 100,000/100,000、0 错误、8,360.5 QPS；fresh TLS 1.3 health c128×5,000 为 0 错误、2,594.82 QPS、p95 63.901ms，16 Worker `max/min=1.241`。同一实例实际返回 h1/h2/h3 版本 1.1/2/3，TLS 1.3 首连 `New`、二连 `Reused`，首页 Process FPC HIT，裸/带 Key 后台登录为 404/200。Browser 可见首页与带 Key 登录表单，Console error/warn 为 0。
+
+修复非 Weline vendor 的模块名规范化后又执行一次 16 Worker rolling reload，最终 16 个 READY 动态首渲染为 10.81–21.77ms。当前精确代码代的正式策略首页 c32×2,500 为 0 错误、7,090.55 QPS、p95 8.963ms；health c128×100,000 为 0 错误、12,286.74 QPS、p95 18.541ms、p99 30.351ms、max 119.856ms，Master 与 16 Worker PID 均保持运行。Browser 重载后的首页和带 Key 登录页仍可见且 Console 0 error/warn；h1/h2/h3、Process FPC 和后台 Key 404/200 重新通过。报告为 `benchmark_report_20260713_165208_619313_root_pid4416.json`、`benchmark_report_20260713_165226_865387_wls-health_pid5879.json`。
 
 ## 4. 实施映射
 
@@ -588,6 +615,7 @@ TLS 会话票据已用同一 SNI 的首连 `New`、二连 `Reused` 验证；HTTP
 | 已落地 | h3/h2/h1 自动协商、TLS 会话复用与协议边缘 lifecycle | `HttpProtocolSelection`、`ProtocolEdgeRuntime`、`ProtocolEdgeProvider` | 三协议实际 version；私有 Worker token；配置 digest ACK；Direct/Dispatcher FPC 同源 |
 | 已落地 | READY 后单槽恢复闭环 | `ServiceOrchestrator`、`ChildMasterGuard` | REGISTER 不取消复活；仅同租约 READY 且 IPC 会话仍存在时提交恢复 |
 | 已落地 | 重复预热与 PID 事实源回归收口 | `WlsRuntime`、`ServiceOrchestrator`、readiness v3 测试夹具 | READY 后不再默认重复 bootstrap；service/tracking PID 分离；116 项定向测试通过 |
+| 已落地 | Worker 词级翻译 L1/L2 与只读 Master lease 恢复 | `Phrase\Parser`、`GlobalDictionaryProviderInterface`、`ServerInstanceManager` | 不生成全 locale Shared 帧；精确词动态增长；status 不因索引竞态清理运行实例 |
 | P2 | 统一分段指标与慢请求归因 | telemetry / worker / dispatcher | p50/p95/p99/max 可定位到具体阶段 |
 | P4 进行中 | Worker 入口收敛为薄 Transport Adapter | `bin/worker*.php`、`worker_runtime_common.php`、共享 Worker 主循环 | 运行时记账/清理已统一；后续继续收敛策略、解析、缓存和动态主循环，仅保留 socket/TLS/event 差异 |
 | 平台待完成 | Linux/Windows 原生矩阵 | 独立 runner / CI | Linux SO_REUSEPORT；Windows Dispatcher、批量启动、TLS、恢复和长稳实测 |
