@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Weline\Customer\Test\Unit\Controller\Account;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Customer\Service\CustomerAccountService;
 use Weline\Customer\Controller\Account\Register;
+use Weline\Customer\Service\CustomerAccountService;
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer as AuthCustomer;
 
@@ -15,24 +17,33 @@ class RegisterViewRoutingTest extends TestCase
 {
     public function testGetIndexUsesCustomerRegisterTemplateForGuest(): void
     {
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturn(null);
+        $request->method('getReferer')->willReturn('');
+
         $controller = $this->getMockBuilder(Register::class)
             ->setConstructorArgs([
                 $this->createMock(Template::class),
                 $this->createMock(CustomerAccountService::class),
+                new CustomerAuthReturnUrlService($request),
             ])
             ->onlyMethods(['isLoggedIn', 'fetch', 'assign', 'redirect'])
             ->getMock();
 
         $controller->expects($this->once())->method('isLoggedIn')->willReturn(false);
         $assignCalls = 0;
-        $controller->expects($this->exactly(2))
+        $controller->expects($this->exactly(3))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Register {
                 if ($assignCalls === 0) {
+                    TestCase::assertSame('redirect_url', $key);
+                    TestCase::assertSame('', $value);
+                }
+                if ($assignCalls === 1) {
                     TestCase::assertSame('login_url', $key);
                     TestCase::assertSame('/customer/account/login', $value);
                 }
-                if ($assignCalls === 1) {
+                if ($assignCalls === 2) {
                     TestCase::assertSame('title', $key);
                     TestCase::assertNotSame('', (string) $value);
                 }
@@ -44,6 +55,9 @@ class RegisterViewRoutingTest extends TestCase
             ->with('Weline_Customer::templates/frontend/account/register.phtml')
             ->willReturn('register-page');
         $controller->expects($this->never())->method('redirect');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+        $this->setProtectedProperty($controller, 'session', $this->createSessionDouble());
 
         $this->assertSame('register-page', $controller->getIndex());
     }
@@ -74,6 +88,7 @@ class RegisterViewRoutingTest extends TestCase
             ['agree_terms', null, '1'],
         ]);
         $this->setProtectedProperty($controller, 'request', $request);
+        $this->setProtectedProperty($controller, 'session', $this->createSessionDouble());
 
         $this->assertSame('redirected', $controller->postIndex());
     }
@@ -112,8 +127,17 @@ class RegisterViewRoutingTest extends TestCase
             ['agree_terms', null, '1'],
         ]);
         $this->setProtectedProperty($controller, 'request', $request);
+        $this->setProtectedProperty($controller, 'session', $this->createSessionDouble());
 
         $this->assertSame('account', $controller->postIndex());
+    }
+
+    private function createSessionDouble(): AuthenticatedSessionInterface
+    {
+        $session = $this->createMock(AuthenticatedSessionInterface::class);
+        $session->method('get')->with('login_referer')->willReturn('');
+
+        return $session;
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

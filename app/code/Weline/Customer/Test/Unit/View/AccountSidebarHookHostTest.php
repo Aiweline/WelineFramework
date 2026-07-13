@@ -92,11 +92,14 @@ final class AccountSidebarHookHostTest extends TestCase
         $moduleRoot = dirname(__DIR__, 4);
         $sidebarFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.phtml';
         $contentFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.content.phtml';
+        $scriptFile = $moduleRoot . '/TwoFactorAuth/view/statics/Frontend/js/account-two-factor-inline-v2.js';
 
         $this->assertFileExists($sidebarFile);
         $this->assertFileExists($contentFile);
+        $this->assertFileExists($scriptFile);
         $sidebar = (string) file_get_contents($sidebarFile);
         $content = (string) file_get_contents($contentFile);
+        $script = (string) file_get_contents($scriptFile);
 
         $this->assertStringContainsString('account-hook-nav-link', $sidebar);
         $this->assertStringNotContainsString('account-hook-nav-group', $sidebar);
@@ -111,11 +114,11 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('hidden', $content);
         $this->assertStringContainsString('account-card__body', $content);
         $this->assertStringNotContainsString('Weline_Theme::theme/frontend/components/card.phtml', $content);
-        $this->assertStringContainsString('id="authenticatorAppModal"', $content);
-        $this->assertStringContainsString('data-twofa-platform="desktop"', $content);
-        $this->assertStringContainsString("querySelectorAll('[data-twofa-platform]')", $content);
-        $this->assertStringNotContainsString('let installInstructions =', $content);
-        $this->assertStringNotContainsString('modal.innerHTML = `', $content);
+        $this->assertStringContainsString('data-twofa-action="disable"', $content);
+        $this->assertStringContainsString('禁用两步验证', $content);
+        $this->assertStringContainsString('account-two-factor-inline-v2.js', $content);
+        $this->assertStringContainsString("window.Weline.Api.resource('twoFactor')", $script);
+        $this->assertStringContainsString("action === 'regenerate'", $script);
     }
 
     public function testShippingHookUsesAccountSectionProtocol(): void
