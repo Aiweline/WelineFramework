@@ -2324,7 +2324,7 @@ $darwinSharedAcceptCooldownEnabled = \PHP_OS_FAMILY === 'Darwin'
     && $sharedListenerBound
     && $coroutineRuntime->getLoopBackend() === 'event';
 $darwinSharedAcceptBusyCooldownUsec = $darwinSharedAcceptCooldownEnabled
-    ? \max(0, \min(1000, (int)($wlsSslConfig['darwin_shared_accept_busy_cooldown_usec'] ?? 100)))
+    ? \max(0, \min(1000, (int)($wlsSslConfig['darwin_shared_accept_busy_cooldown_usec'] ?? 500)))
     : 0;
 $darwinSharedAcceptIdleCooldownUsec = $darwinSharedAcceptCooldownEnabled
     ? \max($darwinSharedAcceptBusyCooldownUsec, \min(
