@@ -127,6 +127,9 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - Worker 可原子预占 1/8/16/32 个 token 的小 lease；低阈值规则固定为 1，预占不能超过剩余配额。
 - SharedState 短断时使用 `global_limit / ready_workers` 的保守本地配额，禁止无限放行，也禁止请求线程秒级等待。
 - Ban 使用共享 TTL/CAS，进程本地只缓存已封禁的正向结果。
+- 配额耗尽与攻击判定必须分离：实例级、路径级 token bucket 超额只返回 `429`，不得升级为共享 IP Ban。共享 Ban 只用于高置信攻击规则、受保护路径和达到路径扫描阈值等明确安全事件，避免反向代理或本机共享出口下“一次误判、全站 403”。
+- 默认 `bad_user_agents` 只保留 `sqlmap`、`nikto`、`nmap`、`masscan` 等高置信扫描器；空 UA、`curl`、`python-requests` 可能来自健康检查、部署与运维命令，不得仅凭 UA 默认封禁。
+- 路径扫描计数只统计具有扫描价值的路径。普通 `GET/HEAD` 浏览器静态扩展（CSS、JS、图片、字体、音视频、WASM、source map）不占用 unique-path 预算；点文件、无扩展路径和服务端可执行扩展仍参与计数，并继续执行 protected-path 与恶意规则。
 - `server:security:unblock` 由 Master 同时广播给当前实例的业务 Worker、维护 Worker 与 Dispatcher。各进程会同步清除请求策略内核、Connection AcceptGate、共享状态和进程内分布式 Ban。`--clear-all` 只按当前实例 hash 前缀删除共享 Ban，不得清空其他 WLS 实例。
 - Dispatcher 不再构建 `AttackDetector`、不读取或轮询攻击规则文件，也不重复维护 whitelist/CIDR 索引。其 accept 热路的唯一安全事实源是当前已激活 Bundle 构建的 `ConnectionAcceptGatePool`；URI/Header/Body 攻击规则只在 WorkerPolicyKernel 执行。
 - 攻击日志进入进程 ring buffer 后批量提交；请求热路径不直接 ORM、写 JSON 或同步 IPC。
@@ -141,6 +144,8 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - loopback peer 未显式命中 whitelist CIDR 时，必须与公网 peer 一样执行 Origin Token、ban、限流和攻击规则；trusted proxy 不等于 whitelist。
 - 对已声明实例 Host 的 Bundle，`host_policy_strict=true`、context digest 与最终 Start 配置一致；正确 Host 可通过，任意非托管 Host 必须在缓存和 Router 前 403。staged/rollback 的旧 Host context 不得激活。
 - 16 Worker 全局限流仍为一份实例总额。
+- 普通 `curl` 与浏览器 UA 必须通过；连续超过实例/路径额度时响应为 `429`，随后不得变成 `shared_ban`。高置信扫描器应立即 403，并使同一客户端后续请求命中共享 Ban。
+- 同一客户端访问超过路径扫描阈值数量的不同静态资源后，首页仍必须可访问；非静态扫描路径超过阈值仍应触发 Ban。
 - Static/FPC 命中时不创建 Session、Router 或 Controller，但 mandatory guard 必须已执行。
 - 禁用 `server.cache.static` 或 `server.cache.fpc` 后，三种 transport 都不得继续命中或发布对应缓存；重新启用只能由新的 active digest 生效。
 - 普通、TLS stream、EventBuffer 的动态请求在策略通过后均由同一 `RequestEnvelope` 创建 `WlsRequest`；Worker 热路不应再出现 `WlsRequest::fromRaw()`。
