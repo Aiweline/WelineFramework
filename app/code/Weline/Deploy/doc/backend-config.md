@@ -99,6 +99,12 @@ refs/heads/main
 
 核心仓库用于 `php bin/w update:core`。
 
+推荐直接指定目标分支，例如 `php bin/w core:update master`（仍兼容
+`php bin/w update:core -b master`）。命令在下载和复制任何文件之前检查当前
+项目 Git 工作区；已跟踪、未跟踪或子模块存在未提交变更时默认拒绝更新。
+只有明确接受覆盖风险时才使用 `-f/--force` 绕过该保护。命令不会自动清理、
+恢复或提交本地变更。
+
 建议填写：
 
 - `核心仓库地址`：框架核心仓库，例如 `https://gitee.com/aiweline/WelineFramework.git`
