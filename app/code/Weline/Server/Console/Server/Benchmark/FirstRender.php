@@ -293,9 +293,12 @@ final class FirstRender extends CommandAbstract
             ],
         ]);
 
-        $startedAt = \microtime(true);
+        $startedAtNanoseconds = \hrtime(true);
         $raw = \curl_exec($ch);
-        $elapsedMs = \round((\microtime(true) - $startedAt) * 1000, 2);
+        $elapsedMs = \round(\max(
+            0.0,
+            (\hrtime(true) - $startedAtNanoseconds) / 1_000_000.0
+        ), 2);
         $status = \curl_getinfo($ch, \CURLINFO_RESPONSE_CODE);
         $headerSize = \curl_getinfo($ch, \CURLINFO_HEADER_SIZE);
         $error = \curl_error($ch);
@@ -353,9 +356,12 @@ final class FirstRender extends CommandAbstract
             ],
         ]);
 
-        $startedAt = \microtime(true);
+        $startedAtNanoseconds = \hrtime(true);
         $body = @\file_get_contents($url, false, $context);
-        $elapsedMs = \round((\microtime(true) - $startedAt) * 1000, 2);
+        $elapsedMs = \round(\max(
+            0.0,
+            (\hrtime(true) - $startedAtNanoseconds) / 1_000_000.0
+        ), 2);
         $headers = isset($http_response_header) && \is_array($http_response_header)
             ? \implode("\r\n", $http_response_header)
             : '';
