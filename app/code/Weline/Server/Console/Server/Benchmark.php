@@ -521,7 +521,7 @@ class Benchmark extends CommandAbstract
         $statusCodes = [];
         $workerHits = [];
         $cacheSources = [];
-        $startTime = \microtime(true);
+        $startedAtNanoseconds = \hrtime(true);
         
         // 检查 curl 扩展
         if (!\function_exists('curl_multi_init')) {
@@ -607,7 +607,7 @@ class Benchmark extends CommandAbstract
         
         // 创建固定数量的 curl handle 用于复用
         $handlePool = [];
-        $activeHandles = [];  // key => ['handle' => $ch, 'start' => time, 'poolIndex' => index]
+        $activeHandles = [];  // key => ['handle' => $ch, 'started_at_nanoseconds' => int, 'poolIndex' => index]
         $headerBuffers = [];  // key => raw header text
         $completed = 0;
         $requestsSent = 0;
@@ -635,7 +635,7 @@ class Benchmark extends CommandAbstract
             \curl_multi_add_handle($mh, $ch);
             $activeHandles[(int)$ch] = [
                 'handle' => $ch,
-                'start' => \microtime(true),
+                'started_at_nanoseconds' => \hrtime(true),
                 'poolIndex' => $i,
             ];
             $requestsSent++;
@@ -660,7 +660,10 @@ class Benchmark extends CommandAbstract
                 $key = (int)$ch;
                 
                 if (isset($activeHandles[$key])) {
-                    $elapsed = (\microtime(true) - $activeHandles[$key]['start']) * 1000; // ms
+                    $elapsed = \max(
+                        0.0,
+                        (\hrtime(true) - $activeHandles[$key]['started_at_nanoseconds']) / 1_000_000.0
+                    );
                     $poolIndex = $activeHandles[$key]['poolIndex'];
                     
                     if ($info['result'] === CURLE_OK) {
@@ -710,7 +713,7 @@ class Benchmark extends CommandAbstract
                         \curl_multi_add_handle($mh, $ch);
                         $activeHandles[(int)$ch] = [
                             'handle' => $ch,
-                            'start' => \microtime(true),
+                            'started_at_nanoseconds' => \hrtime(true),
                             'poolIndex' => $poolIndex,
                         ];
                         $requestsSent++;
@@ -734,8 +737,10 @@ class Benchmark extends CommandAbstract
             \curl_share_close($sh);
         }
         
-        $endTime = \microtime(true);
-        $totalTime = $endTime - $startTime;
+        $totalTime = \max(
+            0.0,
+            (\hrtime(true) - $startedAtNanoseconds) / 1_000_000_000.0
+        );
         
         // 生成报告
         $this->generateReport(

@@ -381,47 +381,90 @@ if (!$upstreamReady || $shutdownRequested) {
 }
 
 $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-$caddyProcess = @\proc_open([
+$caddyProcess = null;
+$caddyPipes = [];
+$caddyPid = 0;
+$caddyOutput = '';
+$launchCaddy = static function () use (
     $caddyBinary,
-    'run',
-    '--config',
     $nativeConfigFile,
-    '--pidfile',
     $pidFile,
-], [
-    0 => ['file', $null, 'r'],
-    1 => ['pipe', 'w'],
-    2 => ['pipe', 'w'],
-], $caddyPipes, BP, null, ['bypass_shell' => true]);
-if (!\is_resource($caddyProcess)) {
+    $null,
+    &$caddyProcess,
+    &$caddyPipes,
+    &$caddyPid,
+    &$caddyOutput,
+): bool {
+    $pipes = [];
+    $process = @\proc_open([
+        $caddyBinary,
+        'run',
+        '--config',
+        $nativeConfigFile,
+        '--pidfile',
+        $pidFile,
+    ], [
+        0 => ['file', $null, 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes, BP, null, ['bypass_shell' => true]);
+    if (!\is_resource($process)) {
+        return false;
+    }
+    foreach ([1, 2] as $index) {
+        if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+            \stream_set_blocking($pipes[$index], false);
+        }
+    }
+    $status = \proc_get_status($process);
+    $caddyProcess = $process;
+    $caddyPipes = $pipes;
+    $caddyPid = (int)($status['pid'] ?? 0);
+    $caddyOutput = '';
+
+    return true;
+};
+$drainCaddyOutput = static function () use (&$caddyPipes, &$caddyOutput): void {
+    foreach ([1, 2] as $index) {
+        if (!isset($caddyPipes[$index]) || !\is_resource($caddyPipes[$index])) {
+            continue;
+        }
+        $chunk = (string)(@\stream_get_contents($caddyPipes[$index]) ?: '');
+        if ($chunk === '') {
+            continue;
+        }
+        WlsLogger::debug_('[ProtocolEdge/Caddy] ' . \trim($chunk));
+        $caddyOutput .= $chunk;
+        if (\strlen($caddyOutput) > 32768) {
+            $caddyOutput = \substr($caddyOutput, -32768);
+        }
+    }
+};
+if (!$launchCaddy()) {
     $fail('Unable to launch Caddy data plane.');
 }
-foreach ([1, 2] as $index) {
-    if (isset($caddyPipes[$index]) && \is_resource($caddyPipes[$index])) {
-        \stream_set_blocking($caddyPipes[$index], false);
-    }
-}
-$caddyStatus = \proc_get_status($caddyProcess);
-$caddyPid = (int)($caddyStatus['pid'] ?? 0);
-$terminated = false;
-$terminateCaddy = static function (bool $force = false) use (&$caddyProcess, &$caddyPipes, &$terminated, $caddyPid, $pidFile): void {
-    if ($terminated) {
-        return;
-    }
-    $terminated = true;
+$closeCaddyProcess = static function (bool $force = false) use (
+    &$caddyProcess,
+    &$caddyPipes,
+    &$caddyPid,
+    $pidFile,
+): void {
     if (\is_resource($caddyProcess)) {
-        @\proc_terminate($caddyProcess);
-        $deadline = \microtime(true) + ($force ? 0.2 : 5.0);
-        do {
-            $status = \proc_get_status($caddyProcess);
-            if (!($status['running'] ?? false)) {
-                break;
-            }
-            SchedulerSystem::usleep(20000);
-        } while (\microtime(true) < $deadline);
         $status = \proc_get_status($caddyProcess);
-        if (($status['running'] ?? false) && $caddyPid > 0) {
-            Processer::killProcessTreeByPid($caddyPid, true);
+        if ($status['running'] ?? false) {
+            @\proc_terminate($caddyProcess);
+            $deadlineNanoseconds = \hrtime(true) + (int)(($force ? 0.2 : 5.0) * 1_000_000_000);
+            do {
+                $status = \proc_get_status($caddyProcess);
+                if (!($status['running'] ?? false)) {
+                    break;
+                }
+                SchedulerSystem::usleep(20000);
+            } while (\hrtime(true) < $deadlineNanoseconds);
+            $status = \proc_get_status($caddyProcess);
+            if (($status['running'] ?? false) && $caddyPid > 0) {
+                Processer::killProcessTreeByPid($caddyPid, true);
+            }
         }
     }
     foreach ([1, 2] as $index) {
@@ -432,7 +475,18 @@ $terminateCaddy = static function (bool $force = false) use (&$caddyProcess, &$c
     if (\is_resource($caddyProcess)) {
         @\proc_close($caddyProcess);
     }
+    $caddyProcess = null;
+    $caddyPipes = [];
+    $caddyPid = 0;
     @\unlink($pidFile);
+};
+$terminated = false;
+$terminateCaddy = static function (bool $force = false) use (&$terminated, $closeCaddyProcess): void {
+    if ($terminated) {
+        return;
+    }
+    $terminated = true;
+    $closeCaddyProcess($force);
 };
 \register_shutdown_function(static function () use ($terminateCaddy, $instanceName): void {
     $terminateCaddy(true);
@@ -507,21 +561,35 @@ $readConfiguredUpstreams = static function () use ($configFile): array {
     return \is_array($values) ? \array_values($values) : [];
 };
 
-$publicDeadline = \microtime(true) + 15.0;
+$publicDeadlineNanoseconds = \hrtime(true) + 15_000_000_000;
 $publicReady = false;
-while (!$shutdownRequested && \microtime(true) < $publicDeadline) {
+$caddyLaunchAttempts = 1;
+while (!$shutdownRequested && \hrtime(true) < $publicDeadlineNanoseconds) {
     $kernel->tick();
     $kernel->flushWrites();
-    foreach ([1, 2] as $index) {
-        if (isset($caddyPipes[$index]) && \is_resource($caddyPipes[$index])) {
-            $chunk = (string)(@\stream_get_contents($caddyPipes[$index]) ?: '');
-            if ($chunk !== '') {
-                WlsLogger::debug_('[ProtocolEdge/Caddy] ' . \trim($chunk));
-            }
-        }
-    }
+    $drainCaddyOutput();
     $caddyStatus = \proc_get_status($caddyProcess);
     if (!($caddyStatus['running'] ?? false)) {
+        $drainCaddyOutput();
+        $lastPublicProbeError = 'caddy_exited exit_code=' . (int)($caddyStatus['exitcode'] ?? 1)
+            . ' output=' . (\trim($caddyOutput) !== '' ? \trim($caddyOutput) : '(empty)');
+        $relaunched = false;
+        while (!$shutdownRequested
+            && $caddyLaunchAttempts < 3
+            && \hrtime(true) < $publicDeadlineNanoseconds
+        ) {
+            $closeCaddyProcess(true);
+            SchedulerSystem::usleep(50000);
+            $caddyLaunchAttempts++;
+            if ($launchCaddy()) {
+                $relaunched = true;
+                break;
+            }
+            $lastPublicProbeError = 'caddy_relaunch_failed attempt=' . $caddyLaunchAttempts . '/3';
+        }
+        if ($relaunched) {
+            continue;
+        }
         break;
     }
     if ($probePublic()) {
@@ -571,14 +639,7 @@ while (!$shutdownRequested) {
     if (!$kernel->isConnected()) {
         $kernel->reconnect();
     }
-    foreach ([1, 2] as $index) {
-        if (isset($caddyPipes[$index]) && \is_resource($caddyPipes[$index])) {
-            $chunk = (string)(@\stream_get_contents($caddyPipes[$index]) ?: '');
-            if ($chunk !== '') {
-                WlsLogger::debug_('[ProtocolEdge/Caddy] ' . \trim($chunk));
-            }
-        }
-    }
+    $drainCaddyOutput();
     $caddyStatus = \proc_get_status($caddyProcess);
     if (!($caddyStatus['running'] ?? false)) {
         $kernel->sendExitReason('caddy_data_plane_exited', (int)($caddyStatus['exitcode'] ?? 1));

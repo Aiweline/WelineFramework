@@ -307,7 +307,11 @@ final class RuntimeCapabilityDetector
         $counts = [0, 0];
         $connected = 0;
 
-        for ($index = 0; $index < 128; $index++) {
+        // A 128-connection sample can exceed the 1.5 ratio by ordinary hash
+        // variance and intermittently reject a healthy Linux kernel. Keep the
+        // strict balance gate, but use a large local-only sample so the result
+        // represents listener capability instead of one short random burst.
+        for ($index = 0; $index < 512; $index++) {
             $client = @\socket_create($familyName === 'ipv6' ? \AF_INET6 : \AF_INET, \SOCK_STREAM, \SOL_TCP);
             if (!$client instanceof \Socket) {
                 continue;
@@ -319,15 +323,18 @@ final class RuntimeCapabilityDetector
             $this->drainProbeAccepts($first, $counts[0]);
             $this->drainProbeAccepts($second, $counts[1]);
         }
-        $deadline = \microtime(true) + 0.15;
+        $deadlineNanoseconds = \hrtime(true) + 150_000_000;
         do {
             $before = $counts[0] + $counts[1];
             $this->drainProbeAccepts($first, $counts[0]);
             $this->drainProbeAccepts($second, $counts[1]);
-            if ($counts[0] + $counts[1] >= $connected || ($counts[0] + $counts[1]) === $before) {
+            if ($counts[0] + $counts[1] >= $connected) {
                 break;
             }
-        } while (\microtime(true) < $deadline);
+            if (($counts[0] + $counts[1]) === $before) {
+                SchedulerSystem::usleep(1000);
+            }
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         $min = \min($counts);
         $max = \max($counts);

@@ -16,6 +16,7 @@ final class ProtocolEdgeDependencyBootstrapper
     private const INSTALL_TIMEOUT_SECONDS = 900;
     private const INSTALL_LOCK_TIMEOUT_SECONDS = 30;
     private const PROBE_TIMEOUT_SECONDS = 20;
+    private const HTTP3_LIVE_PROBE_TIMEOUT_SECONDS = 5;
     private const MAX_OUTPUT_BYTES = 1048576;
 
     /**
@@ -110,7 +111,7 @@ final class ProtocolEdgeDependencyBootstrapper
     public function probe(string $binary, HttpProtocolSelection $selection): array
     {
         $version = $this->run([$binary, 'version'], self::PROBE_TIMEOUT_SECONDS);
-        if (!$version['success'] || \preg_match('/\bv2\.[0-9]+\.[0-9]+\b/', $version['output']) !== 1) {
+        if (!$version['success'] || \preg_match('/\bv?2\.[0-9]+\.[0-9]+\b/', $version['output']) !== 1) {
             return [
                 'success' => false,
                 'version' => '',
@@ -130,14 +131,173 @@ final class ProtocolEdgeDependencyBootstrapper
         if ($selection->supports(HttpProtocolSelection::HTTP_3)) {
             $buildInfo = $this->run([$binary, 'build-info'], self::PROBE_TIMEOUT_SECONDS);
             $buildInfoOutput = $buildInfo['output'];
-            $hasHttp3 = $buildInfo['success']
-                && \str_contains($buildInfo['output'], 'github.com/quic-go/quic-go');
+            // Distribution packages commonly strip Go dependency metadata, so
+            // build-info cannot be the HTTP/3 authority. Start a real bounded
+            // TCP+UDP listener on port 0 and require Caddy to acknowledge h3.
+            $http3Probe = $this->probeHttp3Listener($binary);
+            $hasHttp3 = $http3Probe['success'];
+            $buildInfoOutput .= PHP_EOL . $http3Probe['output'];
         }
 
         return [
             'success' => $hasReverseProxy && $hasPersistentSessionTickets && $hasHttp3,
             'version' => \trim($version['output']),
             'output' => $this->tail($modules['output'] . PHP_EOL . $buildInfoOutput),
+        ];
+    }
+
+    /**
+     * @return array{success:bool,output:string}
+     */
+    private function probeHttp3Listener(string $binary): array
+    {
+        if (!\function_exists('proc_open')) {
+            return ['success' => false, 'output' => 'proc_open is unavailable for the HTTP/3 live probe.'];
+        }
+
+        $directory = \rtrim(\sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR
+            . 'wls-caddy-http3-probe-' . \bin2hex(\random_bytes(6));
+        if (!@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
+            return ['success' => false, 'output' => 'Unable to create the HTTP/3 live-probe directory.'];
+        }
+
+        $configPath = $directory . DIRECTORY_SEPARATOR . 'caddy.json';
+        $config = [
+            'admin' => ['disabled' => true],
+            'apps' => [
+                'http' => [
+                    'servers' => [
+                        'probe' => [
+                            'listen' => ['127.0.0.1:0'],
+                            'protocols' => ['h1', 'h2', 'h3'],
+                            'automatic_https' => ['disable_redirects' => true],
+                            'tls_connection_policies' => [(object)[]],
+                            'routes' => [[
+                                'handle' => [[
+                                    'handler' => 'static_response',
+                                    'status_code' => 204,
+                                ]],
+                            ]],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $payload = \json_encode($config, \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
+        if (@\file_put_contents($configPath, $payload) === false) {
+            @\rmdir($directory);
+            return ['success' => false, 'output' => 'Unable to write the HTTP/3 live-probe configuration.'];
+        }
+
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $environment = \getenv();
+        $environment = \is_array($environment) ? $environment : [];
+        $environment['XDG_CONFIG_HOME'] = $directory . DIRECTORY_SEPARATOR . 'config';
+        $environment['XDG_DATA_HOME'] = $directory . DIRECTORY_SEPARATOR . 'data';
+        if (PHP_OS_FAMILY === 'Windows') {
+            $environment['APPDATA'] = $environment['XDG_CONFIG_HOME'];
+            $environment['LOCALAPPDATA'] = $environment['XDG_DATA_HOME'];
+        }
+
+        $process = @\proc_open([
+            $binary,
+            'run',
+            '--config',
+            $configPath,
+        ], [
+            0 => ['file', $null, 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, $directory, $environment, ['bypass_shell' => true]);
+        if (!\is_resource($process)) {
+            @\unlink($configPath);
+            @\rmdir($directory);
+            return ['success' => false, 'output' => 'Unable to launch Caddy for the HTTP/3 live probe.'];
+        }
+
+        foreach ([1, 2] as $index) {
+            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+                \stream_set_blocking($pipes[$index], false);
+            }
+        }
+
+        $output = '';
+        $listenerReady = false;
+        $serverReady = false;
+        $deadlineNanoseconds = \hrtime(true)
+            + (self::HTTP3_LIVE_PROBE_TIMEOUT_SECONDS * 1_000_000_000);
+        while (\hrtime(true) < $deadlineNanoseconds) {
+            $read = [];
+            foreach ([1, 2] as $index) {
+                if (isset($pipes[$index]) && \is_resource($pipes[$index]) && !\feof($pipes[$index])) {
+                    $read[] = $pipes[$index];
+                }
+            }
+            if ($read !== []) {
+                $write = null;
+                $except = null;
+                @\stream_select($read, $write, $except, 0, 100000);
+                foreach ($read as $pipe) {
+                    $chunk = (string)(@\fread($pipe, 8192) ?: '');
+                    if ($chunk !== '' && \strlen($output) < self::MAX_OUTPUT_BYTES) {
+                        $output .= \substr($chunk, 0, self::MAX_OUTPUT_BYTES - \strlen($output));
+                    }
+                }
+            }
+
+            $listenerReady = $listenerReady || \str_contains($output, 'enabling HTTP/3 listener');
+            $serverReady = $serverReady || \str_contains($output, 'serving initial configuration');
+            if ($listenerReady && $serverReady) {
+                break;
+            }
+            $status = \proc_get_status($process);
+            if (!($status['running'] ?? false)) {
+                break;
+            }
+        }
+
+        $status = \proc_get_status($process);
+        if ($status['running'] ?? false) {
+            @\proc_terminate($process);
+            $terminateDeadlineNanoseconds = \hrtime(true) + 1_000_000_000;
+            do {
+                SchedulerSystem::usleep(50000);
+                $status = \proc_get_status($process);
+            } while (($status['running'] ?? false) && \hrtime(true) < $terminateDeadlineNanoseconds);
+            if (($status['running'] ?? false) && PHP_OS_FAMILY !== 'Windows') {
+                @\proc_terminate($process, 9);
+            }
+        }
+
+        foreach ([1, 2] as $index) {
+            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+                $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
+                if ($chunk !== '' && \strlen($output) < self::MAX_OUTPUT_BYTES) {
+                    $output .= \substr($chunk, 0, self::MAX_OUTPUT_BYTES - \strlen($output));
+                }
+                @\fclose($pipes[$index]);
+            }
+        }
+        @\proc_close($process);
+
+        $removeTree = static function (string $path) use (&$removeTree): void {
+            if (\is_dir($path) && !\is_link($path)) {
+                foreach ((array)@\scandir($path) as $entry) {
+                    if ($entry === '.' || $entry === '..') {
+                        continue;
+                    }
+                    $removeTree($path . DIRECTORY_SEPARATOR . $entry);
+                }
+                @\rmdir($path);
+                return;
+            }
+            @\unlink($path);
+        };
+        $removeTree($directory);
+
+        return [
+            'success' => $listenerReady && $serverReady,
+            'output' => $this->tail($output),
         ];
     }
 
