@@ -600,6 +600,17 @@ class LinuxProcessDriver extends AbstractProcessDriver
             return self::PROCESS_STATE_RUNNING;
         }
 
+        // macOS keeps a killed child visible to signal 0 until its parent
+        // reaps the zombie. Query the native process state before posix_kill;
+        // otherwise a dead WLS Worker can be reported as RUNNING for the
+        // entire control-plane cache TTL.
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $state = $this->probeProcessStateWithPs($pid);
+            if ($state !== self::PROCESS_STATE_UNKNOWN) {
+                return $state;
+            }
+        }
+
         // POSIX signal 0 不发送信号，仅查询 PID。只有 ESRCH 能确定进程不存在；
         // EPERM 反而证明进程存在，其余 errno 必须保持 unknown。
         $functions = $this->detectAvailableFunctions();
@@ -622,7 +633,14 @@ class LinuxProcessDriver extends AbstractProcessDriver
             return self::PROCESS_STATE_UNKNOWN;
         }
 
-        // macOS/通用 Unix 回退。命令执行失败或输出不可解析不能当作 PID 已退出。
+        return $this->probeProcessStateWithPs($pid);
+    }
+
+    /**
+     * macOS/通用 Unix 状态探测。命令执行失败或输出不可解析不能当作 PID 已退出。
+     */
+    private function probeProcessStateWithPs(int $pid): string
+    {
         $output = [];
         $exitCode = 0;
         $executed = $this->executeCommand("ps -p {$pid} -o pid=,stat= 2>/dev/null", $output, $exitCode);

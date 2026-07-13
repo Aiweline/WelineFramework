@@ -1975,7 +1975,11 @@ class Start extends CommandAbstract
         // 轮询检查后台 Master 是否成功启动
         $instanceFile = $this->getRuntimeInstanceFile($instanceName);
         $maxWaitMs = $this->resolveBackgroundMasterConfirmWaitMs($spawnedMasterPid);
-        $waitStepMs = 200;      // 每 200ms 检查一次
+        // READY is persisted atomically by the Master, so startup confirmation
+        // does not need a coarse 200ms polling cadence. Keep Windows slightly
+        // more conservative while POSIX returns as soon as the control plane
+        // has published its state.
+        $waitStepMs = IS_WIN ? 100 : 50;
         $hardWaitMs = $this->resolveBackgroundMasterControlHardWaitMs($spawnedMasterPid);
         $waited = 0;
         $masterStarted = false;
@@ -2816,24 +2820,18 @@ class Start extends CommandAbstract
         string $lastProgress,
         int $waitStepMs
     ): array {
-        $maxDrainMs = 1200;
-        $quietMs = 0;
-        $drainedMs = 0;
-        $waitStepMs = \max(50, \min(250, $waitStepMs));
+        unset($waitStepMs);
 
-        while ($drainedMs < $maxDrainMs && $quietMs < 400) {
-            SchedulerSystem::usleep($waitStepMs * 1000);
-            $drainedMs += $waitStepMs;
-            $beforeSeq = $lastSeq;
-            [$lastSeq, $lastProgress] = $this->emitBackgroundStartupEvents(
-                $this->readBackgroundStartupData($instanceFile),
-                $lastSeq,
-                $lastProgress
-            );
-            $quietMs = $lastSeq > $beforeSeq ? 0 : $quietMs + $waitStepMs;
-        }
-
-        return [$lastSeq, $lastProgress];
+        // `startup_phase=running` is written only after every required child
+        // has reached READY and its startup event has been persisted. A fixed
+        // post-READY quiet window delayed a successful CLI start by at least
+        // 400ms without adding correctness. Re-read once to cover the atomic
+        // file replacement boundary, then return immediately.
+        return $this->emitBackgroundStartupEvents(
+            $this->readBackgroundStartupData($instanceFile),
+            $lastSeq,
+            $lastProgress
+        );
     }
     
     /**
@@ -8176,12 +8174,16 @@ PHP;
         $contextJson = $context === []
             ? '{}'
             : (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}');
+        $now = \microtime(true);
+        $seconds = (int)$now;
+        $timestamp = \date('Y-m-d H:i:s', $seconds)
+            . \sprintf('.%06d', (int)(($now - $seconds) * 1000000));
 
         @\file_put_contents(
             $dir . 'wls-startup-trace.log',
             \sprintf(
                 "[%s] pid=%d instance=%s phase=%s context=%s%s",
-                \date('Y-m-d H:i:s'),
+                $timestamp,
                 \getmypid(),
                 $instanceName,
                 $phase,

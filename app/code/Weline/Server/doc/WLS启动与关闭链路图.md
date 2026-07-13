@@ -130,6 +130,7 @@ flowchart TB
 - 进程标题只保留实例、role、slot、launch/generation 的短标识；PID/端口/生命周期文件和日志不得保存控制 token、TLS key 路径等敏感参数。
 - `name_index/pid_index/port_index` 的更新必须持有同一全局锁；清理路径锁失败时 fail closed，不允许退化为无锁删除。`port_index` 只是共享端口的建议代表，删除旧代时只有当前 owner 与冻结租约一致才可 CAS 释放，并优先提升仍存活的共享 owner。
 - 端口占用诊断必须分别报告内核 listener PID/命令和 `port_index` 建议 owner；不得把内核 Master PID 与历史 Worker 名称拼成一个伪进程事实。
+- `server:status`、实例枚举和普通读取是只读操作，不得因为 endpoint 与 PID index 的短暂发布顺序差异执行清理。读取时可用新鲜 Master lease 覆盖内存视图，但不回写 endpoint；只有 lease 的实例名、running 状态、心跳、epoch、PID 和精确受管进程身份全部匹配，才承认 Master 存活。任何破坏性 stale cleanup 在落盘前必须再次执行同一 lease 校验。
 
 ## 运行拓扑平台边界
 

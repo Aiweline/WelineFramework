@@ -7491,6 +7491,254 @@ class ServiceOrchestrator
     }
 
     /**
+     * Only a slot already moving through autonomous recovery may delay reload
+     * preflight. Identity mismatch/unknown results remain fail-closed.
+     *
+     * @param string[] $errors
+     */
+    private function canAwaitReloadWorkerIdentityRecovery(array $errors): bool
+    {
+        if ($errors === []) {
+            return false;
+        }
+
+        foreach ($errors as $error) {
+            if (\preg_match('/^worker#(\d+):(.+)$/', $error, $matches) !== 1) {
+                return false;
+            }
+            $instanceId = (int)$matches[1];
+            $detail = (string)$matches[2];
+            if (\str_contains($detail, Processer::PROCESS_STATE_IDENTITY_MISMATCH)
+                || \str_starts_with($detail, Processer::PROCESS_STATE_UNKNOWN . '/')
+            ) {
+                return false;
+            }
+
+            // The OS can report an exited PID before the IPC disconnect event
+            // has updated Registry and queued resurrection. Waiting here does
+            // not authorize a signal or replacement; it only gives the
+            // control plane a bounded chance to classify the vanished lease.
+            $awaitingExitClassification = \str_starts_with($detail, 'missing_')
+                || \str_starts_with($detail, Processer::PROCESS_STATE_EXITED . '/');
+
+            $queueKey = ControlMessage::ROLE_WORKER . ':' . $instanceId;
+            $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+            $queued = isset($this->resurrectQueue[$queueKey]);
+            $transitioning = $worker !== null && \in_array($worker->state, [
+                ServiceInstance::STATE_STARTING,
+                ServiceInstance::STATE_REGISTERED,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+                ServiceInstance::STATE_FAILED,
+            ], true);
+            $plannedRecovery = $worker !== null && (
+                (bool)$worker->getMeta('autonomous_exit_pending', false)
+                || $this->isPlannedWorkerRecycleReason(
+                    (string)$worker->getMeta(
+                        'autonomous_exit_reason',
+                        $worker->getMeta('exit_reason', '')
+                    )
+                )
+            );
+            if (!$awaitingExitClassification && !$queued && !$transitioning && !$plannedRecovery) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * A reload preflight can observe a dead Worker before the cached liveness
+     * audit or IPC disconnect callback classifies it. When the OS freshly
+     * confirms that the authenticated service PID no longer exists, fence the
+     * stale slot and enqueue the existing single-slot recovery immediately.
+     * Ambiguous/mismatched identities remain fail-closed and are never primed.
+     *
+     * @param int[] $instanceIds
+     * @param string[] $errors
+     * @return int[]
+     */
+    private function primeReloadWorkerIdentityRecovery(array $instanceIds, array $errors): array
+    {
+        $eligible = [];
+        foreach ($errors as $error) {
+            if (\preg_match('/^worker#(\d+):(.+)$/', $error, $matches) !== 1) {
+                continue;
+            }
+            $instanceId = (int)$matches[1];
+            $detail = (string)$matches[2];
+            if (!\str_contains($detail, 'missing_live_identity')
+                && !\str_starts_with($detail, Processer::PROCESS_STATE_EXITED . '/')
+            ) {
+                continue;
+            }
+            $eligible[$instanceId] = true;
+        }
+
+        $primed = [];
+        foreach ($instanceIds as $instanceId) {
+            $instanceId = (int)$instanceId;
+            $queueKey = ControlMessage::ROLE_WORKER . ':' . $instanceId;
+            if (!isset($eligible[$instanceId])) {
+                continue;
+            }
+
+            $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+            if ($worker === null) {
+                continue;
+            }
+            $pid = (int)$worker->pid;
+            $processState = $pid > 0
+                ? Processer::probeProcessState($pid, true)
+                : Processer::PROCESS_STATE_UNKNOWN;
+            if ($processState !== Processer::PROCESS_STATE_EXITED) {
+                continue;
+            }
+
+            // The generic liveness cache intentionally amortizes OS probes,
+            // but reload already has a missing command line for this exact PID.
+            // Discard the stale positive entry after the fresh OS result.
+            unset($this->processRunningCache[$pid]);
+
+            if (isset($this->resurrectQueue[$queueKey])) {
+                $queuedEntry = $this->resurrectQueue[$queueKey];
+                $queuedEntry['scheduledAt'] = \microtime(true);
+                $queuedEntry['restartDelay'] = 0.0;
+                $queuedEntry['explicit_exit'] = true;
+                $this->resurrectQueue[$queueKey] = $queuedEntry;
+                if ($this->launchPrimedReloadWorkerIdentityRecovery($worker)) {
+                    $primed[] = $instanceId;
+                }
+                continue;
+            }
+
+            $clientId = $worker->ipcClientId;
+            if ($clientId !== null) {
+                $this->controlServer?->closeClient((int)$clientId);
+                $worker->ipcClientId = null;
+                $this->registry->updateInstance($worker);
+            }
+
+            $reason = (string)$worker->getMeta(
+                'autonomous_exit_reason',
+                $worker->getMeta('exit_reason', '')
+            );
+            $plannedRecycle = $this->isPlannedWorkerRecycleReason($reason);
+            $worker->setMeta('lease_state', 'reload_identity_recovery');
+            $worker->setMeta('reload_identity_recovery_queued_at', \microtime(true));
+            $this->fenceWorkerFromDispatcherAfterIpcDisconnect($worker);
+            $this->scheduleResurrectionWithDelay(
+                $worker,
+                0.0,
+                !$plannedRecycle,
+                true,
+            );
+            if (isset($this->resurrectQueue[$queueKey])
+                && $this->launchPrimedReloadWorkerIdentityRecovery($worker)
+            ) {
+                $primed[] = $instanceId;
+            }
+        }
+
+        if ($primed !== []) {
+            $this->scheduleResurrectQueueMainLoopTaskIfDue(\microtime(true));
+            $this->traceStartup('reload_identity_recovery_primed', [
+                'worker_ids' => $primed,
+                'source' => 'fresh_os_pid_exit',
+            ]);
+        }
+
+        return $primed;
+    }
+
+    /**
+     * The reload operation itself is a main-loop Fiber. A resurrection task
+     * queued from that Fiber cannot run until reload yields ownership back to
+     * the outer scheduler, so start a positively-dead slot inline and let the
+     * existing bounded preflight wait observe its authenticated READY lease.
+     */
+    private function launchPrimedReloadWorkerIdentityRecovery(ServiceInstance $worker): bool
+    {
+        if ($this->context === null || $this->isStopFlowActive()) {
+            return false;
+        }
+
+        $instanceId = (int)$worker->instanceId;
+        $queueKey = ControlMessage::ROLE_WORKER . ':' . $instanceId;
+        $queuedEntry = $this->resurrectQueue[$queueKey] ?? null;
+        if (!\is_array($queuedEntry) || !empty($queuedEntry['launching'])) {
+            return false;
+        }
+
+        $provider = $this->registry->getProvider(ControlMessage::ROLE_WORKER);
+        if ($provider === null || !$provider->isEnabled($this->context)) {
+            return false;
+        }
+
+        $oldRestarts = $worker->restarts;
+        $registeredPid = (int)$worker->pid;
+        $record = $registeredPid > 0 ? Processer::getProcessRecordByPid($registeredPid) : [];
+        $registeredPname = \trim((string)($record['pname'] ?? ''));
+        $this->cleanupInstancePidFile($worker, $registeredPname, $registeredPid);
+
+        unset($this->resurrectQueue[$queueKey]);
+        $this->registry->removeInstance(ControlMessage::ROLE_WORKER, $instanceId);
+
+        try {
+            $startedInstances = $this->startInstanceIdsBatch($provider, [$instanceId], $this->context);
+        } catch (\Throwable $throwable) {
+            $worker->state = ServiceInstance::STATE_FAILED;
+            $worker->ipcClientId = null;
+            $this->registry->addInstance($worker);
+            $queuedEntry['scheduledAt'] = \microtime(true) + 0.5;
+            $queuedEntry['restartDelay'] = 0.5;
+            unset($queuedEntry['launching'], $queuedEntry['launchingAt']);
+            $this->resurrectQueue[$queueKey] = $queuedEntry;
+            WlsLogger::error_(
+                '[Orchestrator][ReloadIdentityFence] phase=inline_recovery_launch_failed'
+                . ', worker_id=' . $instanceId
+                . ', error=' . $throwable->getMessage()
+            );
+
+            return false;
+        }
+
+        $started = null;
+        foreach ($startedInstances as $startedInstance) {
+            if ($startedInstance instanceof ServiceInstance
+                && (int)$startedInstance->instanceId === $instanceId
+            ) {
+                $started = $startedInstance;
+                break;
+            }
+        }
+        $started ??= $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+        if (!$started instanceof ServiceInstance) {
+            $worker->state = ServiceInstance::STATE_FAILED;
+            $worker->ipcClientId = null;
+            $this->registry->addInstance($worker);
+            $queuedEntry['scheduledAt'] = \microtime(true) + 0.5;
+            $queuedEntry['restartDelay'] = 0.5;
+            unset($queuedEntry['launching'], $queuedEntry['launchingAt']);
+            $this->resurrectQueue[$queueKey] = $queuedEntry;
+
+            return false;
+        }
+
+        $started->restarts = $oldRestarts;
+        $this->registry->updateInstance($started);
+        $this->persistServicesInfo($this->context);
+        $this->traceStartup('reload_identity_recovery_launched', [
+            'worker_id' => $instanceId,
+            'old_pid' => $registeredPid,
+            'new_generation' => $this->getInstanceGeneration($started),
+        ]);
+
+        return true;
+    }
+
+    /**
      * Send a signal only after a fresh identity probe. Unknown is fail-closed;
      * identity_mismatch means the old lease no longer owns the PID and is
      * released without signaling the current process.
@@ -7882,6 +8130,62 @@ class ServiceOrchestrator
         }
 
         $leaseSnapshot = $this->captureReloadWorkerProcessLeases($instanceIds);
+        if ($leaseSnapshot['errors'] !== []
+            && $this->canAwaitReloadWorkerIdentityRecovery($leaseSnapshot['errors'])
+        ) {
+            $this->primeReloadWorkerIdentityRecovery($instanceIds, $leaseSnapshot['errors']);
+            $defaultRecoveryTimeout = $this->isWindowsRuntime() ? 8.0 : 5.0;
+            $recoveryTimeout = (float)$this->context->getConfig(
+                'wls.orchestrator.reload_identity_recovery_timeout_sec',
+                $defaultRecoveryTimeout
+            );
+            $recoveryTimeout = \max(0.0, \min(10.0, $recoveryTimeout));
+            $recoveryStartedAt = \microtime(true);
+            $recoveryDeadline = $recoveryStartedAt + $recoveryTimeout;
+            $nextRecoveryPrimeAt = $recoveryStartedAt + 0.1;
+            WlsLogger::warning_(
+                '[Orchestrator][ReloadIdentityFence] phase=await_autonomous_recovery'
+                . ', batch_ids=' . $batchList
+                . ', timeout_sec=' . $recoveryTimeout
+                . ', errors=' . \implode(',', $leaseSnapshot['errors'])
+            );
+            $this->traceStartup('reload_identity_recovery_wait', [
+                'batch_ids' => $instanceIds,
+                'timeout_sec' => $recoveryTimeout,
+                'errors' => $leaseSnapshot['errors'],
+            ]);
+            while ($recoveryTimeout > 0.0 && \microtime(true) < $recoveryDeadline) {
+                if ($this->isStopFlowActive()
+                    || ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap)
+                ) {
+                    return 'aborted';
+                }
+                $this->yieldControlPlane(20000);
+                $leaseSnapshot = $this->captureReloadWorkerProcessLeases($instanceIds);
+                $now = \microtime(true);
+                if ($leaseSnapshot['errors'] !== [] && $now >= $nextRecoveryPrimeAt) {
+                    $this->primeReloadWorkerIdentityRecovery($instanceIds, $leaseSnapshot['errors']);
+                    $nextRecoveryPrimeAt = $now + 0.1;
+                }
+                if ($leaseSnapshot['errors'] === []
+                    && \count($leaseSnapshot['leases']) === \count($instanceIds)
+                ) {
+                    WlsLogger::info_(
+                        '[Orchestrator][ReloadIdentityFence] phase=autonomous_recovery_ready'
+                        . ', batch_ids=' . $batchList
+                        . ', elapsed_ms=' . \round((\microtime(true) - $recoveryStartedAt) * 1000, 2)
+                    );
+                    $this->traceStartup('reload_identity_recovery_ready', [
+                        'batch_ids' => $instanceIds,
+                        'elapsed_ms' => \round((\microtime(true) - $recoveryStartedAt) * 1000, 2),
+                    ]);
+                    break;
+                }
+                if (!$this->canAwaitReloadWorkerIdentityRecovery($leaseSnapshot['errors'])) {
+                    break;
+                }
+            }
+        }
         $reloadWorkerLeases = $leaseSnapshot['leases'];
         if ($leaseSnapshot['errors'] !== [] || \count($reloadWorkerLeases) !== \count($instanceIds)) {
             $reason = 'reload_process_identity_preflight_failed:'

@@ -1668,44 +1668,33 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         throw new \RuntimeException('Timed out waiting for the process-local warmup render slot.');
                     }
 
-                    if ($isHomepage) {
-                        // The mandatory READY gate above has already proved
-                        // this worker owns a process-local homepage FPC hit.
-                        // One owner publishes generation-wide prerequisites;
-                        // after observing that proof, every peer warms its own
-                        // controller/template chain before advertising READY.
-                        $attempts = 0;
-                        do {
-                            $attempts++;
-                            $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
-                            $validation = $this->validateDynamicFirstRenderWarmup(
-                                $warmupMeta,
-                                $targetMs,
-                                false
-                            );
-                            if ($validation['ok'] || $attempts >= $maxAttempts) {
-                                break;
-                            }
-                            $sequence++;
-                            SchedulerSystem::yield();
-                        } while (true);
-                    } else {
-                        $attempts = 0;
-                        do {
-                            $attempts++;
-                            $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
-                            $validation = $this->validateDynamicFirstRenderWarmup(
-                                $warmupMeta,
-                                $targetMs,
-                                true
-                            );
-                            if ($validation['ok'] || $attempts >= $maxAttempts) {
-                                break;
-                            }
-                            $sequence++;
-                            SchedulerSystem::yield();
-                        } while (true);
-                    }
+                    // The mandatory READY gate above has already proved that
+                    // the homepage owns a process-local FPC hit. Dynamic
+                    // warmup deliberately bypasses FPC so the first pass can
+                    // populate this Worker's router/controller/template
+                    // caches. A slow-but-valid first pass is therefore not the
+                    // performance proof: immediately revalidate the hot chain
+                    // within the existing bounded attempt budget. This keeps
+                    // the liveness fail-open while preventing a cold Worker
+                    // from advertising a misleading ready:slow sample.
+                    $attempts = 0;
+                    $requireControllerCache = !$isHomepage;
+                    do {
+                        $attempts++;
+                        $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
+                        $validation = $this->validateDynamicFirstRenderWarmup(
+                            $warmupMeta,
+                            $targetMs,
+                            $requireControllerCache
+                        );
+                        $slowReady = (bool)$validation['ok']
+                            && \str_starts_with((string)$validation['reason'], 'ready:slow ');
+                        if (($validation['ok'] && !$slowReady) || $attempts >= $maxAttempts) {
+                            break;
+                        }
+                        $sequence++;
+                        SchedulerSystem::yield();
+                    } while (true);
                     $warmupHeaders = \is_array($warmupMeta['headers'] ?? null)
                         ? $warmupMeta['headers']
                         : [];
@@ -2661,32 +2650,39 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $token = (string)\getmypid()
             . ':' . (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: '0')
             . ':' . \bin2hex(\random_bytes(6));
+        $laneCount = $this->dynamicWarmupRenderConcurrency();
+        $workerId = $this->currentWorkerId();
+        $preferredLane = $workerId > 0 ? (($workerId - 1) % $laneCount) : 0;
         $deadline = \microtime(true) + (\max(5000, $this->dynamicWarmupPathWaitMs()) / 1000);
         do {
             try {
-                if ($coordinator->cas(
-                    self::DYNAMIC_WARMUP_COORDINATOR_NS,
-                    'render.' . $pathKey,
-                    null,
-                    $token,
-                    30
-                )) {
-                    return $token;
-                }
-
-                $currentToken = $coordinator->get(
-                    self::DYNAMIC_WARMUP_COORDINATOR_NS,
-                    'render.' . $pathKey
-                );
-                if (\is_string($currentToken) && $this->isDeadDynamicWarmupRenderOwner($currentToken)) {
+                for ($offset = 0; $offset < $laneCount; $offset++) {
+                    $lane = ($preferredLane + $offset) % $laneCount;
+                    $lockKey = $this->dynamicWarmupRenderLockKey($pathKey, $lane);
                     if ($coordinator->cas(
                         self::DYNAMIC_WARMUP_COORDINATOR_NS,
-                        'render.' . $pathKey,
-                        $currentToken,
+                        $lockKey,
+                        null,
                         $token,
                         30
                     )) {
-                        return $token;
+                        return $lane . '|' . $token;
+                    }
+
+                    $currentToken = $coordinator->get(
+                        self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                        $lockKey
+                    );
+                    if (\is_string($currentToken) && $this->isDeadDynamicWarmupRenderOwner($currentToken)) {
+                        if ($coordinator->cas(
+                            self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                            $lockKey,
+                            $currentToken,
+                            $token,
+                            30
+                        )) {
+                            return $lane . '|' . $token;
+                        }
                     }
                 }
             } catch (\Throwable) {
@@ -2699,6 +2695,30 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         } while (\microtime(true) < $deadline);
 
         return null;
+    }
+
+    private function dynamicWarmupRenderConcurrency(): int
+    {
+        $raw = \getenv('WLS_WORKER_DYNAMIC_WARMUP_RENDER_CONCURRENCY');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.dynamic_warmup_render_concurrency', null);
+        }
+        if ($raw === null || \trim((string)$raw) === '') {
+            // One lane per two Workers keeps small pools bounded, while a
+            // 16-Worker cold batch can use eight CPU lanes instead of warming
+            // in four serial waves. Public requests never acquire these
+            // bootstrap-only locks; operators may still pin any value 1..8.
+            return \max(1, \min(8, (int)\ceil($this->currentWorkerCount() / 2)));
+        }
+
+        return \max(1, \min(8, (int)$raw));
+    }
+
+    private function dynamicWarmupRenderLockKey(string $pathKey, int $lane): string
+    {
+        // Preserve the original key for lane zero so rolling upgrades remain
+        // coordinated with an old generation that only knows the single lock.
+        return 'render.' . $pathKey . ($lane > 0 ? '.' . $lane : '');
     }
 
     private function isDeadDynamicWarmupRenderOwner(string $token): bool
@@ -2718,6 +2738,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return;
         }
 
+        [$lane, $ownerToken] = \array_pad(\explode('|', $token, 2), 2, '');
+        if ($ownerToken === '' || !\ctype_digit($lane)) {
+            return;
+        }
+
         $coordinator = $this->dynamicWarmupCoordinator();
         if ($coordinator === null) {
             return;
@@ -2726,8 +2751,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         try {
             $coordinator->cas(
                 self::DYNAMIC_WARMUP_COORDINATOR_NS,
-                'render.' . $pathKey,
-                $token,
+                $this->dynamicWarmupRenderLockKey($pathKey, (int)$lane),
+                $ownerToken,
                 null,
                 1
             );
