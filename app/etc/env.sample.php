@@ -238,10 +238,9 @@ return [
             'runtime_log_file' => 'var/log/wls/runtime.log',
             'timing_log_file' => 'var/log/wls/timing.log',
         ],
-        // WLS worker READY 后错峰预载 router/hook/event/extends/query/i18n 等进程级注册表。
-        // 显式设为 false/0/off 可关闭；默认开启，避免首个用户请求承担扫描成本。
-        // 设为 sync 才会在 READY 前同步预热；默认不允许任何预热卡住启动。
-        'worker_bootstrap_warmup' => true,
+        // READY 已完成首页与动态请求硬门禁；READY 后的 registry 二次预载默认关闭，
+        // 仅当实例确有额外 registry 贡献且配置了可执行角色时显式开启。
+        'worker_bootstrap_warmup' => false,
         // Worker READY 后错峰协程执行主题/分类/store 等 observer 预热；显式 false/0/off 可关闭。
         'worker_deferred_bootstrap_warmup' => true,
         'worker_bootstrap_observer_warmup' => false,
