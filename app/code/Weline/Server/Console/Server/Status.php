@@ -327,6 +327,12 @@ class Status extends CommandAbstract
         $listener = (string)($runtime['listener_strategy'] ?? '');
         $eventLoop = (string)($runtime['event_loop_driver'] ?? '');
         $sslEngine = (string)($runtime['ssl_engine'] ?? '');
+        $httpProtocols = \is_array($runtime['http_protocols'] ?? null)
+            ? \array_values(\array_filter(\array_map('strval', $runtime['http_protocols'])))
+            : [];
+        $httpPreferredProtocol = \trim((string)($runtime['http_preferred_protocol'] ?? ''));
+        $protocolEdgeEnabled = $runtime['protocol_edge_enabled'] ?? null;
+        $tlsSessionResumption = $runtime['tls_session_resumption'] ?? null;
         $digest = \strtolower(\trim((string)($runtime['policy_digest'] ?? '')));
         $digestSource = 'endpoint';
         try {
@@ -355,6 +361,7 @@ class Status extends CommandAbstract
                 . ' / ' . ($listener !== '' ? $listener : '-')
                 . ' / ' . ($eventLoop !== '' ? $eventLoop : '-')
                 . ' / ' . ($sslEngine !== '' ? $sslEngine : '-')
+                . ($httpProtocols !== [] ? ' / http=' . \implode('>', $httpProtocols) : '')
                 . ' / policy=' . $digestShort
                 . ' / container=' . $containerDigestShort;
             $this->printer->note($prefix . __('实际运行时：') . $summary);
@@ -374,6 +381,13 @@ class Status extends CommandAbstract
             . 'listener=' . ($listener !== '' ? $listener : '-')
             . ', event=' . ($eventLoop !== '' ? $eventLoop : '-')
             . ', ssl=' . ($sslEngine !== '' ? $sslEngine : '-'));
+        if ($httpProtocols !== [] || $protocolEdgeEnabled !== null || $tlsSessionResumption !== null) {
+            $this->printer->note($prefix . __('HTTP 协议：')
+                . 'auto=' . ($httpProtocols !== [] ? \implode(' -> ', $httpProtocols) : '-')
+                . ', preferred=' . ($httpPreferredProtocol !== '' ? $httpPreferredProtocol : '-')
+                . ', edge=' . ($protocolEdgeEnabled === null ? '-' : ($protocolEdgeEnabled ? 'enabled' : 'disabled'))
+                . ', tls-resumption=' . ($tlsSessionResumption === null ? '-' : ($tlsSessionResumption ? 'enabled' : 'disabled')));
+        }
         $compatible = $runtime['policy_compatible'] ?? null;
         $compatibleText = \is_bool($compatible) ? ($compatible ? 'true' : 'false') : '-';
         $this->printer->note($prefix . __('策略：')

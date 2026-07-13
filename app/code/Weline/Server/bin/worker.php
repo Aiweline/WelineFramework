@@ -46,6 +46,7 @@ $wlsRuntimeTopology = 'auto';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
+$protocolEdgeTokenFile = '';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -80,6 +81,8 @@ foreach ($argv as $arg) {
         $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
+    } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
+        $protocolEdgeTokenFile = (string)\substr($arg, 27);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -163,6 +166,11 @@ if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
+if ($protocolEdgeTokenFile !== '') {
+    $_SERVER['WLS_PROTOCOL_EDGE_TOKEN_FILE'] = $protocolEdgeTokenFile;
+    $_ENV['WLS_PROTOCOL_EDGE_TOKEN_FILE'] = $protocolEdgeTokenFile;
+    @\putenv('WLS_PROTOCOL_EDGE_TOKEN_FILE=' . $protocolEdgeTokenFile);
 }
 
 // 定义前端模式常量（供 WlsRuntime 使用）
@@ -841,10 +849,12 @@ try {
     $maxBufferedRequestBytes = $requestFramingLimits['max_buffer_bytes'];
     WlsLogger::info_('[PolicyKernel] ready topology=' . $wlsRuntimeTopology
         . ' digest=' . $workerPolicyKernel->policyDigest());
-    if ($wlsRuntimeTopology === 'direct') {
+    if ($wlsRuntimeTopology === 'direct' && $protocolEdgeTokenFile === '') {
         $workerOrdinal = ($workerId - 1) % \max(1, $workerCount);
         $workerPolicyKernel->bootConnectionAcceptGatePool(\max(0, $workerOrdinal));
         WlsLogger::info_('[AcceptGate] direct public accept enabled ordinal=' . \max(0, $workerOrdinal));
+    } elseif ($protocolEdgeTokenFile !== '') {
+        WlsLogger::info_('[AcceptGate] public connection gate owned by authenticated protocol edge; Worker L7 policy remains enabled');
     }
 } catch (\Throwable $policyError) {
     WlsLogger::error_('[PolicyKernel] bootstrap failed: ' . $policyError->getMessage());
@@ -2263,6 +2273,7 @@ while (true) {
         $requestBuffers,
         $connectionLastActivity,
         $connectionPeerIps,
+        $protocolEdgeTokenFile !== '',
         $sharedListenerBound ? 1 : 64,
     );
 
@@ -2673,6 +2684,7 @@ function wlsAcceptHttpConnections(
     array &$requestBuffers,
     array &$connectionLastActivity,
     array &$connectionPeerIps,
+    bool $protocolEdgeIngressEnabled = false,
     int $maxAcceptPerLoop = 64,
 ): void {
     if (!$socket || !\is_resource($socket) || !\in_array($socket, $read, true)) {
@@ -2701,9 +2713,14 @@ function wlsAcceptHttpConnections(
         $acceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
         if ($acceptGates !== null) {
             $peer = @\stream_socket_get_name($conn, true);
+            $peer = \is_string($peer) ? $peer : '';
+            $trustedProtocolEdge = $protocolEdgeIngressEnabled
+                && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($peer);
             $decision = $acceptGates->accept(
                 (string)$connId,
-                \is_string($peer) ? $peer : '',
+                $peer,
+                null,
+                $trustedProtocolEdge,
             );
             if (!$decision->allowed) {
                 @\fclose($conn);
@@ -3350,7 +3367,15 @@ function wlsDispatchRequestFiberStep(
         if ($fpcCacheEnabled
             && $fpcFastPath instanceof \Weline\Server\Service\WorkerFullPageCacheFastPath
         ) {
-            $fpcHit = $fpcFastPath->lookup($policyDecision, 'http');
+            $forwardedScheme = \strtolower(\trim(\explode(
+                ',',
+                (string)($policyDecision->headers['x-forwarded-proto'] ?? ''),
+                2,
+            )[0] ?? ''));
+            $fpcScheme = $policyDecision->trustedProxy && $forwardedScheme === 'https'
+                ? 'https'
+                : 'http';
+            $fpcHit = $fpcFastPath->lookup($policyDecision, $fpcScheme);
             if ($fpcHit !== null) {
                 $handleDuration = \round((\microtime(true) - $staticFastPathStartedAt) * 1000, 2);
                 $fpcResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(

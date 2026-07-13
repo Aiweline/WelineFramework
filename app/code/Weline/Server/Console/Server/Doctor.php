@@ -6,6 +6,9 @@ namespace Weline\Server\Console\Server;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
+use Weline\Server\Service\Runtime\ProtocolEdgeDependencyBootstrapper;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
@@ -43,6 +46,28 @@ class Doctor extends CommandAbstract
                 $this->printer->note($line);
             } else {
                 $this->printer->note($line);
+            }
+        }
+        $http = \is_array($diagnostics['http_protocol'] ?? null)
+            ? $diagnostics['http_protocol']
+            : [];
+        if ($http !== []) {
+            $this->printer->note('HTTP negotiation: '
+                . \implode(' -> ', (array)($http['protocols'] ?? []))
+                . ', preferred=' . (string)($http['preferred'] ?? '-')
+                . ', edge=' . (string)($http['edge'] ?? 'disabled')
+                . ', TLS session reuse=' . (!empty($http['tls_session_resumption']) ? 'enabled' : 'disabled'));
+            $dependency = \is_array($http['dependency'] ?? null) ? $http['dependency'] : [];
+            if ($dependency !== []) {
+                $line = 'HTTP protocol edge: ' . (string)($dependency['status'] ?? 'unknown')
+                    . ((string)($dependency['version'] ?? '') !== ''
+                        ? ' - ' . (string)$dependency['version']
+                        : '');
+                if (($dependency['status'] ?? '') === 'ready') {
+                    $this->printer->note($line);
+                } else {
+                    $this->printer->warning($line);
+                }
             }
         }
     }
@@ -111,6 +136,50 @@ class Doctor extends CommandAbstract
             : ($config['source'] ?? 'runtime/default');
         if ($endpointMetadata !== []) {
             $diagnostics['runtime_observation'] = $endpointMetadata;
+        }
+        try {
+            $httpSelection = \is_array($endpoint['http_protocol_selection'] ?? null)
+                ? HttpProtocolSelection::fromArray($endpoint['http_protocol_selection'])
+                : HttpProtocolSelection::fromConfig(
+                    $config,
+                    (bool)($endpoint['ssl_enabled'] ?? $config['ssl_enabled'] ?? true),
+                );
+            $http = $httpSelection->toArray();
+            if ($httpSelection->isProtocolEdgeEnabled()) {
+                $configuredBinary = \trim((string)($endpoint['protocol_edge_binary'] ?? ''));
+                $binary = $configuredBinary !== '' && \is_file($configuredBinary) && \is_executable($configuredBinary)
+                    ? $configuredBinary
+                    : ProtocolEdgeRuntime::resolveBinary($config);
+                $probe = $binary !== ''
+                    ? (new ProtocolEdgeDependencyBootstrapper())->probe($binary, $httpSelection)
+                    : ['success' => false, 'version' => '', 'output' => 'Caddy binary not found.'];
+                $http['dependency'] = [
+                    'status' => !empty($probe['success']) ? 'ready' : 'unavailable',
+                    'binary' => $binary,
+                    'version' => (string)($probe['version'] ?? ''),
+                    'output' => !empty($probe['success']) ? '' : (string)($probe['output'] ?? ''),
+                ];
+                if (empty($probe['success'])) {
+                    $diagnostics['status'] = 'unsafe';
+                    $diagnostics['warnings'] = \array_values(\array_unique(\array_merge(
+                        (array)($diagnostics['warnings'] ?? []),
+                        ['HTTP/2/HTTP/3 protocol edge dependency is unavailable or failed QUIC verification.'],
+                    )));
+                }
+            } else {
+                $http['dependency'] = ['status' => 'disabled', 'binary' => '', 'version' => '', 'output' => ''];
+            }
+            $diagnostics['http_protocol'] = $http;
+        } catch (\RuntimeException $exception) {
+            $diagnostics['status'] = 'unsafe';
+            $diagnostics['http_protocol'] = [
+                'status' => 'invalid',
+                'error' => $exception->getMessage(),
+            ];
+            $diagnostics['warnings'] = \array_values(\array_unique(\array_merge(
+                (array)($diagnostics['warnings'] ?? []),
+                ['HTTP protocol selection is invalid: ' . $exception->getMessage()],
+            )));
         }
 
         return $diagnostics;

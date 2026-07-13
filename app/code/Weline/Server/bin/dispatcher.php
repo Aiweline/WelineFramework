@@ -70,6 +70,7 @@ $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $masterLeaseFile = '';
 $masterToken = '';
+$protocolEdgeTokenFile = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -89,6 +90,8 @@ foreach ($argv as $arg) {
         $masterToken = (string)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
+        $protocolEdgeTokenFile = (string)\substr($arg, 27);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -323,6 +326,16 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
 $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 $startupProtectionConfig = \is_array($wlsConfig['startup_protection'] ?? null) ? $wlsConfig['startup_protection'] : [];
 $dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
+$protocolEdgeToken = '';
+if ($protocolEdgeTokenFile !== '') {
+    if (!\is_file($protocolEdgeTokenFile) || !\is_readable($protocolEdgeTokenFile)) {
+        throw new \RuntimeException('Dispatcher protocol-edge token file is not readable.');
+    }
+    $protocolEdgeToken = \strtolower(\trim((string)@\file_get_contents($protocolEdgeTokenFile)));
+    if (\preg_match('/^[a-f0-9]{64}$/D', $protocolEdgeToken) !== 1) {
+        throw new \RuntimeException('Dispatcher protocol-edge token is invalid.');
+    }
+}
 $warmupHosts = [];
 $addWarmupHost = static function (string $candidate) use (&$warmupHosts, $port): void {
     $candidate = \trim($candidate);
@@ -481,9 +494,11 @@ if ($warmupPathObserversEnabled) {
 }
 $dispatcher->configure([
     'sni_routing_enabled' => true,
+    'protocol_edge_ingress_enabled' => $protocolEdgeToken !== '',
     'proxy_protocol_v2_enabled' => true,
     'proxy_protocol_v2_secret' => $masterToken,
     'proxy_protocol_v2_require_auth' => true,
+    'worker_protocol_edge_token' => $protocolEdgeToken,
     'learning_mode_enabled' => true,
     'connection_timeout' => 300,
     'main_loop_unblocked_log_every' => \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsConfig, ['dispatcher']),

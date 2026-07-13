@@ -107,6 +107,24 @@ final readonly class RuntimeEndpointMetadata
         $policyCompatible = ($authoritativeSelection || $legacySelection)
             ? $selection->policyCompatible
             : (\is_bool($endpoint['policy_compatible'] ?? null) ? $endpoint['policy_compatible'] : null);
+        $httpProtocolSelection = \is_array($endpoint['http_protocol_selection'] ?? null)
+            ? $endpoint['http_protocol_selection']
+            : [];
+        $httpProtocols = self::stringList(
+            $endpoint['http_protocols'] ?? ($httpProtocolSelection['protocols'] ?? [])
+        );
+        $httpPreferredProtocol = self::firstNonEmptyString([
+            $endpoint['http_preferred_protocol'] ?? null,
+            $httpProtocolSelection['preferred'] ?? null,
+        ]);
+        $protocolEdgeEnabled = \array_key_exists('protocol_edge_enabled', $endpoint)
+            ? (bool)$endpoint['protocol_edge_enabled']
+            : null;
+        $tlsSessionResumption = \array_key_exists('tls_session_resumption', $endpoint)
+            ? (bool)$endpoint['tls_session_resumption']
+            : (\array_key_exists('tls_session_resumption', $httpProtocolSelection)
+                ? (bool)$httpProtocolSelection['tls_session_resumption']
+                : null);
 
         $host = \strtolower(\trim((string)($endpoint['host'] ?? '')));
         $localRuntime = \in_array($host, ['', '127.0.0.1', 'localhost', '::1', '0.0.0.0', '::'], true);
@@ -145,6 +163,10 @@ final readonly class RuntimeEndpointMetadata
             'event_extension_version' => $eventExtensionVersion,
             'ssl_enabled' => (bool)($endpoint['ssl_enabled'] ?? false),
             'ssl_engine' => $sslEngine,
+            'http_protocols' => $httpProtocols,
+            'http_preferred_protocol' => $httpPreferredProtocol,
+            'protocol_edge_enabled' => $protocolEdgeEnabled,
+            'tls_session_resumption' => $tlsSessionResumption,
             'policy_compatible' => $policyCompatible,
             'policy_digest' => self::firstNonEmptyString([
                 $endpoint['policy_digest'] ?? null,

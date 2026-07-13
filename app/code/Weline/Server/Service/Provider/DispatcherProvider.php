@@ -11,6 +11,7 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\ServiceOrchestrator;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * Dispatcher 服务提供者
@@ -89,6 +90,9 @@ class DispatcherProvider extends AbstractServiceProvider
         if ($context->windowMode) {
             $arguments[] = '--win';
         }
+        if ($context->isProtocolEdgeEnabled()) {
+            $arguments[] = '--protocol-edge-token-file=' . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+        }
 
         return new ServiceCommand(
             script: $script,
@@ -99,11 +103,17 @@ class DispatcherProvider extends AbstractServiceProvider
 
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
+        if ($context->isProtocolEdgeEnabled()) {
+            return ProtocolEdgeRuntime::dispatcherPort($context);
+        }
         return $context->mainPort;
     }
 
     private function resolveBindHost(ServiceContext $context): string
     {
+        if ($context->isProtocolEdgeEnabled()) {
+            return '127.0.0.1';
+        }
         $wlsConfig = \is_array($context->envConfig['wls'] ?? null) ? $context->envConfig['wls'] : [];
         $dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
 

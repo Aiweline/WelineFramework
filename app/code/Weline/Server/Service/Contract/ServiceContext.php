@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Contract;
 
 use Weline\Server\Service\Runtime\EffectiveTopology;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
 
 /**
  * 服务启动上下文
@@ -150,6 +151,26 @@ class ServiceContext
     public function isDirect(): bool
     {
         return \in_array($this->mode, ['direct', 'linux-direct'], true);
+    }
+
+    /**
+     * The protocol edge is a transport adapter, not a business Dispatcher.
+     * Direct topology remains direct while the public TLS/QUIC listener moves
+     * to the edge and Workers use private, per-slot loopback ports.
+     */
+    public function isProtocolEdgeEnabled(): bool
+    {
+        return HttpProtocolSelection::fromConfig(
+            ['http' => \is_array($this->getConfig('wls.http', []))
+                ? $this->getConfig('wls.http', [])
+                : []],
+            $this->sslEnabled,
+        )->isProtocolEdgeEnabled();
+    }
+
+    public function isWorkerPublicListener(): bool
+    {
+        return $this->isDirect() && !$this->isProtocolEdgeEnabled();
     }
 
     public function getEffectiveTopology(): EffectiveTopology

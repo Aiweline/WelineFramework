@@ -12,6 +12,7 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * Worker 服务提供者
@@ -67,7 +68,8 @@ class WorkerProvider extends AbstractServiceProvider
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
 
-        $script = $context->sslEnabled
+        $protocolEdgeEnabled = $context->isProtocolEdgeEnabled();
+        $script = $context->sslEnabled && !$protocolEdgeEnabled
             ? $this->resolveSslWorkerScript($scriptDir, $context)
             : $scriptDir . DS . 'worker.php';
 
@@ -78,7 +80,7 @@ class WorkerProvider extends AbstractServiceProvider
         // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外，Worker 端口只供本机 Dispatcher 连接
         $direct = $context->isDirect();
         $directListenerMode = $this->resolveDirectListenerMode($context);
-        $host = $direct
+        $host = $direct && !$protocolEdgeEnabled
             ? ($context->host ?: '127.0.0.1')
             : '127.0.0.1';
 
@@ -89,9 +91,13 @@ class WorkerProvider extends AbstractServiceProvider
             $context->instanceName,
         ];
 
-        if ($context->sslEnabled && $context->sslCert && $context->sslKey) {
+        if ($context->sslEnabled && !$protocolEdgeEnabled && $context->sslCert && $context->sslKey) {
             $arguments[] = '--ssl-cert=' . $context->sslCert;
             $arguments[] = '--ssl-key=' . $context->sslKey;
+        }
+
+        if ($protocolEdgeEnabled) {
+            $arguments[] = '--protocol-edge-token-file=' . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
         }
 
         $arguments[] = '--control-port=' . $context->controlPort;
@@ -109,11 +115,11 @@ class WorkerProvider extends AbstractServiceProvider
             $arguments[] = '--win';
         }
 
-        if ($direct && $directListenerMode === 'shared_fd') {
+        if ($direct && !$protocolEdgeEnabled && $directListenerMode === 'shared_fd') {
             $arguments[] = '--listen-fd=' . DirectSharedListener::INHERITED_FD;
-        } elseif ($direct && $directListenerMode === 'reuseport') {
+        } elseif ($direct && !$protocolEdgeEnabled && $directListenerMode === 'reuseport') {
             $arguments[] = '--reuseport';
-        } elseif ($direct) {
+        } elseif ($direct && !$protocolEdgeEnabled) {
             throw new \InvalidArgumentException(
                 'Direct topology requires wls.runtime.listener_mode=reuseport or shared_fd.'
             );
@@ -130,7 +136,7 @@ class WorkerProvider extends AbstractServiceProvider
 
         // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
         // 这同时覆盖 Dispatcher 透传和 direct SO_REUSEPORT 模式。
-        if ($context->sslEnabled) {
+        if ($context->sslEnabled && !$protocolEdgeEnabled) {
             $arguments[] = '--defer-ssl';
         }
 
@@ -144,6 +150,9 @@ class WorkerProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         $basePort = $context->getWorkerBasePort();
+        if ($context->isProtocolEdgeEnabled()) {
+            return ProtocolEdgeRuntime::workerPort($context, $instanceId);
+        }
         if ($context->isDirect()) {
             return $context->mainPort;
         }

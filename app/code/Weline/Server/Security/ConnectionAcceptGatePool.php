@@ -76,6 +76,7 @@ final class ConnectionAcceptGatePool
         string $connectionId,
         string $transportPeer,
         ?float $now = null,
+        bool $trustedProtocolEdge = false,
     ): ConnectionAcceptDecision {
         $connectionId = \trim($connectionId);
         if (isset($this->owners[$connectionId])) {
@@ -85,7 +86,7 @@ final class ConnectionAcceptGatePool
             $this->close($connectionId);
         }
         $gate = $this->currentGate();
-        $decision = $gate->accept($connectionId, $transportPeer, $now);
+        $decision = $gate->accept($connectionId, $transportPeer, $now, $trustedProtocolEdge);
         if ($decision->allowed) {
             $this->owners[$connectionId] = $this->currentDigest;
         }
