@@ -117,6 +117,10 @@ class TwoFactorAuthService
      */
     public function verifyBackupCode(int $userId, string $code): bool
     {
+        if (!$this->isEnabled($userId)) {
+            return false;
+        }
+
         return $this->userTwoFactor->useBackupCode($userId, $code);
     }
 
@@ -237,4 +241,3 @@ class TwoFactorAuthService
         ];
     }
 }
-
