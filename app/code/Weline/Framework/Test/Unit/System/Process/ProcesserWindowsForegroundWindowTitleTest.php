@@ -150,7 +150,7 @@ final class ProcesserWindowsForegroundWindowTitleTest extends TestCase
         self::assertLessThanOrEqual(0.6, $timeout);
     }
 
-    public function testWindowsBatchCreateUsesSplitHelpersByDefault(): void
+    public function testWindowsBatchCreateAlwaysUsesBoundedParallelHelpers(): void
     {
         $method = new \ReflectionMethod(Processer::class, 'batchCreateWindows');
         $method->setAccessible(true);
@@ -165,9 +165,9 @@ final class ProcesserWindowsForegroundWindowTitleTest extends TestCase
             $method->getEndLine() - $method->getStartLine() + 1
         ));
 
-        self::assertStringContainsString('system.processer.windows_batch_create_split_helpers', $source);
-        self::assertStringContainsString('!$waitForResults && $splitDetachedHelpers', $source);
+        self::assertStringNotContainsString('windows_batch_create_split_helpers', $source);
+        self::assertStringContainsString('if (!$waitForResults)', $source);
         self::assertStringContainsString('return self::batchCreateWindowsDetachedHelpers', $source);
-        self::assertStringContainsString("Env::get('system.processer.windows_batch_create_split_helpers', true)", $source);
+        self::assertStringContainsString('self::resolveWindowsBatchCreateHelperParallelism', $source);
     }
 }

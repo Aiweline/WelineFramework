@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Ai\Tool;
 
-use Weline\Ai\Interface\ToolInterface;
+use Weline\Ai\Api\ToolInterface;
 use Weline\Theme\Service\ThemeBuilderSchemaService;
 
 class GetThemeVariablesTool implements ToolInterface

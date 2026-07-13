@@ -10,7 +10,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locals;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class LanguageSelect implements TaglibInterface
 {
@@ -69,7 +69,7 @@ class LanguageSelect implements TaglibInterface
                 throw new \Exception(__('id属性不能为空'));
             }
 
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';

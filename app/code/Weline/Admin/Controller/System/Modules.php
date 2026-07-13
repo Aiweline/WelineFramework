@@ -14,7 +14,6 @@ namespace Weline\Admin\Controller\System;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\SystemConfig\Model\SystemConfig;
 
 class Modules extends BaseController
 {

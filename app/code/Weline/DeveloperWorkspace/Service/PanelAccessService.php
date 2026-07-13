@@ -9,7 +9,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
 
 class PanelAccessService
 {

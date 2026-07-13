@@ -9,8 +9,8 @@ declare(strict_types=1);
  * 当窗口内总命中数 >= 阈值 → 标记为热点。
  *
  * 存储策略：
- * - WLS 模式：使用 WlsMemoryAdapter（进程内 + 共享内存），跨 Worker 一致
- * - 其它模式：进程内静态数组（仅当前进程有效，CLI/FPM 命中价值有限）
+ * - 当前实现使用进程内静态数组；跨 Worker 协调由运行时缓存适配器负责
+ * - CLI/FPM 仅在当前进程内有效
  *
  * 设计意图：
  * - O(1) touch / O(1) isHot 查询

@@ -8,12 +8,18 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Frontend\Model\FrontendUser;
-use Weline\Frontend\Model\FrontendUserToken;
+use Weline\Frontend\Api\User\FrontendUserAdministrationInterface;
+use Weline\Frontend\Api\User\FrontendUserMutationResult;
+use Weline\Frontend\Api\User\FrontendUserSaveCommand;
 
 #[Acl('Weline_Customer::customer', '前端客户', 'mdi-account-group', '前端客户', 'Weline_Backend::customer_group')]
 class Customer extends BackendController
 {
+    public function __construct(
+        private ?FrontendUserAdministrationInterface $userAdministration = null,
+    ) {
+    }
+
     #[Acl('Weline_Customer::customer_index', '查看前端客户', 'mdi-account', '查看前端客户')]
     public function index(): string
     {
@@ -23,62 +29,15 @@ class Customer extends BackendController
             $limit = $limit > 0 ? min($limit, 100) : 20;
             $keyword = trim((string)($this->request->getParam('keyword') ?? ''));
 
-            /** @var FrontendUser $userModel */
-            $userModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-            $query = $userModel->reset();
-
-            if ($keyword !== '') {
-                $query->where(FrontendUser::schema_fields_username, "%{$keyword}%", 'LIKE');
-            }
-
-            $query->order(FrontendUser::schema_fields_ID, 'DESC');
-            $collection = $query->pagination($page, $limit);
-            $items = $collection->select()->fetch()->getItems();
-            $total = (int)$collection->getTotal();
+            $result = $this->users()->search($keyword, $page, $limit);
+            $total = $result->getTotal();
             $totalPages = (int)ceil($total / $limit);
-
-            $customers = [];
-            $userIds = [];
-
-            foreach ($items as $item) {
-                $data = is_object($item) ? $item->getData() : (array)$item;
-                $userId = (int)($data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0);
-                if ($userId <= 0) {
-                    continue;
-                }
-                $userIds[] = $userId;
-                $customers[] = [
-                    'user_id'       => $userId,
-                    'username'      => $data['username'] ?? '',
-                    'avatar'        => $data['avatar'] ?? '',
-                    'login_ip'      => $data['login_ip'] ?? '',
-                    'attempt_times' => (int)($data['attempt_times'] ?? 0),
-                    'sess_id'       => $data['sess_id'] ?? '',
-                    'token_count'   => 0,
-                    'is_sandbox'    => (int)($data[FrontendUser::schema_fields_is_sandbox] ?? 0),
-                ];
-            }
-
-            if (!empty($userIds)) {
-                try {
-                /** @var FrontendUserToken $tokenModel */
-                $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
-                    $userIds = array_unique($userIds);
-                    $tokenCounts = [];
-                    foreach ($userIds as $userId) {
-                        $tokenCounts[$userId] = (int)$tokenModel->reset()
-                            ->where(FrontendUserToken::schema_fields_user_id, $userId)
-                            ->count();
-                    }
-
-                    foreach ($customers as &$customer) {
-                        $id = $customer['user_id'];
-                        $customer['token_count'] = $tokenCounts[$id] ?? 0;
-                    }
-                    unset($customer);
-                } catch (\Throwable $tokenException) {
-                    Message::warning(__('无法统计令牌数量：%{1}', [$tokenException->getMessage()]));
-                }
+            $customers = array_map(
+                static fn($customer): array => $customer->toAdminArray(),
+                $result->getUsers(),
+            );
+            if ($result->getTokenCountError() !== null) {
+                Message::warning(__('无法统计令牌数量：%{1}', [$result->getTokenCountError()]));
             }
 
             $this->assign('customers', $customers);
@@ -111,27 +70,13 @@ class Customer extends BackendController
             return $this->jsonResponse(false, __('无效的用户ID'));
         }
 
-        /** @var FrontendUser $userModel */
-        $userModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-        $user = $userModel->reset()->load($userId);
-
-        if (!$user->getId()) {
+        $user = $this->users()->find($userId);
+        if ($user === null) {
             return $this->jsonResponse(false, __('用户不存在'));
         }
 
-        $data = $user->getData();
-        unset($data['password']);
-
         return $this->jsonResponse(true, __('获取成功'), [
-            'user' => [
-                'user_id'       => (int)$data[FrontendUser::schema_fields_ID],
-                'username'      => $data['username'] ?? '',
-                'avatar'        => $data['avatar'] ?? '',
-                'login_ip'      => $data['login_ip'] ?? '',
-                'attempt_times' => (int)($data['attempt_times'] ?? 0),
-                'sess_id'       => $data['sess_id'] ?? '',
-                'is_sandbox'    => (int)($data[FrontendUser::schema_fields_is_sandbox] ?? 0),
-            ],
+            'user' => array_diff_key($user->toAdminArray(), ['token_count' => true]),
         ]);
     }
 
@@ -153,49 +98,23 @@ class Customer extends BackendController
             return $this->jsonResponse(false, __('用户名不能为空'));
         }
 
-        /** @var FrontendUser $userModel */
-        $userModel = ObjectManager::getInstance(FrontendUser::class);
-        if ($userId > 0) {
-            $userModel->load($userId);
-            if (!$userModel->getId()) {
-                return $this->jsonResponse(false, __('用户不存在'));
-            }
-        } else {
-            $userModel->reset();
+        $result = $this->users()->save(new FrontendUserSaveCommand(
+            userId: $userId,
+            username: $username,
+            password: $password,
+            avatar: $avatar,
+            resetAttempts: (bool)$resetAttempts,
+            sandbox: (bool)$isSandbox,
+        ));
+        if ($result->getStatus() === FrontendUserMutationResult::NOT_FOUND) {
+            return $this->jsonResponse(false, __('用户不存在'));
         }
-
-        // 检查用户名是否重复
-        /** @var FrontendUser $duplicateChecker */
-        $duplicateChecker = ObjectManager::getInstance(FrontendUser::class, [], false);
-        $duplicateChecker->reset()
-            ->where(FrontendUser::schema_fields_username, $username);
-        if ($userId > 0) {
-            $duplicateChecker->where(FrontendUser::schema_fields_ID, $userId, '!=');
-        }
-        $duplicateChecker->find()->fetch();
-        if ($duplicateChecker->getId()) {
+        if ($result->getStatus() === FrontendUserMutationResult::DUPLICATE_USERNAME) {
             return $this->jsonResponse(false, __('用户名已存在'));
         }
-
-        $userModel->setUsername($username);
-        if ($avatar !== '') {
-            $userModel->setAvatar($avatar);
-        }
-
-        $userModel->setSandboxAccount((bool)$isSandbox);
-
-        if ($password !== '') {
-            $userModel->setPassword($password);
-        } elseif ($userId <= 0) {
+        if ($result->getStatus() === FrontendUserMutationResult::PASSWORD_REQUIRED) {
             return $this->jsonResponse(false, __('新建用户必须设置密码'));
         }
-
-        if ($resetAttempts) {
-            $userModel->setData(FrontendUser::schema_fields_attempt_times, 0);
-            $userModel->setAttemptIp('');
-        }
-
-        $userModel->save();
 
         return $this->jsonResponse(true, __('保存成功'));
     }
@@ -212,22 +131,11 @@ class Customer extends BackendController
             return $this->jsonResponse(false, __('无效的用户ID'));
         }
 
-        /** @var FrontendUser $userModel */
-        $userModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-        $userModel->load($userId);
-        if (!$userModel->getId()) {
+        $result = $this->users()->delete($userId);
+        if ($result->getStatus() === FrontendUserMutationResult::NOT_FOUND) {
             return $this->jsonResponse(false, __('用户不存在'));
         }
-
-        /** @var FrontendUserToken $tokenModel */
-        $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
-        $tokenModel->reset()
-            ->where(FrontendUserToken::schema_fields_user_id, $userId)
-            ->delete()->fetch();
-
-        $userModel->delete()->fetch();
-
-        if ($userModel->getId()) {
+        if ($result->getStatus() === FrontendUserMutationResult::DELETE_FAILED) {
             return $this->jsonResponse(false, __('删除失败'));
         }
 
@@ -246,20 +154,10 @@ class Customer extends BackendController
             return $this->jsonResponse(false, __('无效的用户ID'));
         }
 
-        /** @var FrontendUser $userModel */
-        $userModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-        $userModel->load($userId);
-        if (!$userModel->getId()) {
+        $result = $this->users()->resetToken($userId);
+        if ($result->getStatus() === FrontendUserMutationResult::NOT_FOUND) {
             return $this->jsonResponse(false, __('用户不存在'));
         }
-
-        /** @var FrontendUserToken $tokenModel */
-        $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
-        $tokenModel->reset()
-            ->where(FrontendUserToken::schema_fields_user_id, $userId)
-            ->delete();
-
-        $userModel->setSessionId('')->save();
 
         return $this->jsonResponse(true, __('令牌已重置'));
     }
@@ -281,22 +179,10 @@ class Customer extends BackendController
             $newPassword = $this->generateTempPassword();
         }
 
-        /** @var FrontendUser $userModel */
-        $userModel = ObjectManager::getInstance(FrontendUser::class, [], false);
-        $userModel->load($userId);
-        if (!$userModel->getId()) {
+        $result = $this->users()->resetPassword($userId, $newPassword);
+        if ($result->getStatus() === FrontendUserMutationResult::NOT_FOUND) {
             return $this->jsonResponse(false, __('用户不存在'));
         }
-
-        $userModel->setPassword($newPassword);
-        $userModel->setSessionId('');
-        $userModel->save();
-
-        /** @var FrontendUserToken $tokenModel */
-        $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
-        $tokenModel->reset()
-            ->where(FrontendUserToken::schema_fields_user_id, $userId)
-            ->delete();
 
         return $this->jsonResponse(true, __('密码已重置'), [
             'new_password' => $newPassword,
@@ -324,5 +210,9 @@ class Customer extends BackendController
         }
         return $password;
     }
-}
 
+    private function users(): FrontendUserAdministrationInterface
+    {
+        return $this->userAdministration ??= ObjectManager::getInstance(FrontendUserAdministrationInterface::class);
+    }
+}

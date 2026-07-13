@@ -28,12 +28,17 @@ final class WorkerProcessLabel
         bool $maintenance,
         int $workerId,
         int $port,
-        string $instanceName
+        string $instanceName,
+        string $launchId = '',
     ): string {
         $role = $maintenance ? 'maintenance' : 'worker';
         $transport = $ssl ? 'ssl' : 'http';
         $scopedInstanceName = MasterProcess::getScopedInstanceName($instanceName);
 
-        return "weline-wls-{$role}-{$transport}-{$scopedInstanceName}-{$workerId}-{$port}";
+        $generationSuffix = $launchId !== ''
+            ? '-g' . \substr(\hash('sha256', $launchId), 0, 12)
+            : '';
+
+        return "weline-wls-{$role}-{$transport}-{$scopedInstanceName}-{$workerId}-{$port}{$generationSuffix}";
     }
 }

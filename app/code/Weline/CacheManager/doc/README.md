@@ -4,6 +4,12 @@
 
 Weline CacheManager 是系统的缓存管理模块，提供了统一的缓存管理界面、缓存状态控制、缓存清理等功能。该模块支持多种缓存类型，包括系统缓存和应用缓存，并提供可视化的缓存管理工具。
 
+Cron 是可选集成：安装后缓存面板通过 `Weline\Cron\Api\Task\CronTaskCatalogInterface` 读取不可变 `CronTaskRecord` 投影，未安装或 Provider 不可用时返回空列表且不影响缓存管理。CacheManager 不得直接读取 Cron ORM Model、字段常量或 Query Builder。
+
+跨模块读取运行时 TTL 时使用 `Weline\CacheManager\Api\RuntimeCachePolicy`。该 facade
+只返回限幅后的整数 TTL，并在 CacheManager 内部委托配置默认合并与请求级缓存；调用模块不得
+引用 `CacheManager\Service\RuntimeCachePolicy`。
+
 ## 主要功能
 
 ### 1. 缓存管理界面
@@ -97,11 +103,11 @@ $cache->setName('自定义缓存')
 ```php
 namespace Your\Module\Controller\System;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\CacheManager\Model\Cache;
 
-class CacheController extends BaseController
+class CacheController extends BackendPageController
 {
     public function index()
     {
@@ -424,4 +430,4 @@ A: 在缓存管理界面点击"清理"按钮，或通过代码调用 `clearCache
 A: 检查环境配置是否正确更新，重启应用或清理配置缓存。
 
 ### Q: 如何添加新的缓存类型？
-A: 在数据库中添加新的缓存记录，设置正确的 identity 和 type 值。 
+A: 在数据库中添加新的缓存记录，设置正确的 identity 和 type 值。

@@ -166,10 +166,9 @@ class Rebuild extends CommandAbstract
             ],
             [
                 '全量重建' => 'php bin/w event:rebuild',
-                '增量重建指定模块' => 'php bin/w event:rebuild -m Weline_Admin',
+                '增量重建指定模块' => 'php bin/w event:rebuild -m Vendor_Module',
             ],
             'php bin/w event:rebuild [-m|--module=<模块名>]'
         );
     }
 }
-

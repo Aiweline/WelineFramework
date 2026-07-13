@@ -18,16 +18,33 @@
 
 ## 核心约定
 
-- 业务 EAV 实体必须继承 `Weline\Eav\EavModel`，并提供 `entity_code`、`entity_name`、`eav_entity_id_field_type`、`eav_entity_id_field_length`。`EavModel::__init()` 会强校验这些声明。
-- EAV 实体注册不是手动建表后就结束。`Observer/UpgradeDefaultAttribute.php` 会在升级流程里扫描激活模块 `Model/` 下实现 `EavInterface` 的类，写入 `eav_entity`，并为每个实体兜底创建 `default` 属性集与属性组。
+- 模块清单显式依赖 `Weline_Framework`、`Weline_Backend` 与 `Weline_I18n`；EAV 后台入口和本地化模型不能依靠未声明的隐式安装顺序。
+- Eav 模块内的传统实体可继续继承 `Weline\Eav\EavModel`。其他模块的新实体不得继承或引用 Eav 内部模型：实现 `Weline\Eav\Api\Entity\EntityDefinitionInterface`，通过 `EntityAttributeStoreInterface` 进行属性声明、值读写和动态值表装配。
+- EAV 实体注册不是手动建表后就结束。`Observer/UpgradeDefaultAttribute.php` 会在升级流程里扫描激活模块 `Model/` 下实现旧 `EavInterface` 或公开 `EntityDefinitionInterface` 的类，写入 `eav_entity`，并为每个实体兜底创建 `default` 属性集与属性组。
 - `attribute_id` 和 `eav_entity_id` 不是一回事：
   `attribute_id` 是属性行主键；
   `eav_entity_id` 是 `eav_entity` 表主键；
   `EavAttribute::getId()` 走的是框架联合主键首字段语义，不能拿它替代 `getAttributeId()` 去操作值表。
 - 值表不是固定一张。`Model/EavAttribute/Type/Value.php` 会按 `eav_{entity_code}_{type_code}` 计算值表名，表结构在安装阶段按实体和类型批量创建。
 - EAV 核心表由 `SchemaRegistry` 和 `Schema/*` 统一管理，入口在 `Model/EavEntity::install()`。不要自己再造一套 EAV 基础表，也不要回退到手改 `generated/` 或旧式升级脚本。
+- Setup 向 Framework 发布的公开边界是 `Weline\Eav\Api\SchemaProvider`：它实现 Framework 契约、通过 `ownerModuleName()` 自述 `Weline_Eav`，再在模块内部调用 `SchemaRegistry`。Framework Setup 不得反向引用 Eav 内部类或硬编码模块名。
 - `getAttributeGroup()` 在组不存在时会自动创建组；`default` 组/集是系统兜底语义，不要把“未配置组”理解成“没有 default”。
 - 属性前台行为靠元数据字段驱动：`frontend_is_visible`、`frontend_is_filterable`、`frontend_is_searchable`、`data_is_multiple`、`data_has_option`。需要过滤/搜索能力时，先改属性元数据，再接消费逻辑。
+- EAV 的本地化描述模型统一继承公开的 `Weline\I18n\Api\Localization\LocalModel`；旧 `Weline\I18n\LocalModel` 只用于历史兼容，新代码不得引用旧内部命名空间。
+- 后台属性表单的当前用户草稿只通过 `Weline\Backend\Api\UserData\BackendCurrentUserDataInterface` 读取和清理 `attribute` scope；Eav 不得查询 Backend 的用户数据 ORM 模型。
+
+## 跨模块公开契约
+
+- `EntityDefinitionInterface` 只描述实体 code、名称、主键类型和长度，不继承 Eav 内部类。
+- `AttributeDefinition` 是属性声明输入；`AttributeRecord` 是不可变元数据投影，不暴露 ORM 对象或表字段常量。
+- `EntityAttributeStoreInterface` 是实体属性运行时边界。消费模块通过 Framework `RuntimeProviderResolver` 获取，不得直接实例化 `Eav\Service` 或引用 `Eav\Model`。
+- `AttributeOptionDefinition` 是属性选项注册输入，`AttributeOptionRecord` 是只读不可变投影；跨模块通过 `AttributeOptionStoreInterface` 注册或查询选项，不得操作内部 `EavAttribute\Option` ORM 模型。
+- `AttributeTypeDefinition` 是属性类型注册输入，`AttributeTypeRecord` 是只读不可变投影；安装模块通过 `AttributeTypeRegistryInterface` 注册或查询属性类型，不得跨模块操作 `Eav\Model\EavAttribute\Type`。
+- 可视化编辑器读取实体、属性和选项列表时使用
+  `Weline\Eav\Api\Options\EavOptionsQueryInterface`。接口接收请求参数数组并返回与
+  `/weline/eav/api/options*` 一致的纯数组 payload；HTTP Controller 和可选 Theme 集成
+  共用同一 Eav Service，调用模块不得构造 Eav Controller 或 Model。
+- 动态值表仍使用 `eav_{entity_code}_{type_code}`，值行仍以 `attribute_id + entity_id` 定位；Provider 迁移不改变表名、主键或已有数据语义。
 
 ## 典型开发流程
 

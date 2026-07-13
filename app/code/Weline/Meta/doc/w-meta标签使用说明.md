@@ -104,6 +104,9 @@
 ## 技术实现
 
 - 翻译值存储在 `i18n_locale_dictionary` 表中
-- 使用 MD5 哈希作为唯一标识
+- `Weline_Meta` 只通过 `Weline\I18n\Api\Translation\DictionaryRepositoryInterface` 按「翻译键 + locale」读写，不依赖 I18n Model、字段常量或指纹算法
+- `theme.frontend.layouts.default.name` 等历史简写也会规范化为 `@meta::theme.frontend.layouts.default.name`，不再进入 LocalModel 分支
+- 翻译窗口的 locale 列表来自 `Weline\I18n\Api\Localization\LocaleRepositoryInterface` 的不可变 DTO
+- MD5 指纹和表字段属于 `Weline_I18n` 内部存储细节，Taglib 与 Meta Helper 不感知
 - 支持多语言翻译管理
 - 翻译模态框使用 Bootstrap Offcanvas 组件

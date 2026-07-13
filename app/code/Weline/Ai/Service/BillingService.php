@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Api\Billing\BillingAccountProviderInterface;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiApiKey;
 use Weline\Ai\Model\AiApiCallLog;
-use Weline\Frontend\Model\FrontendUser;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * 计费服务
@@ -17,11 +18,17 @@ use Weline\Framework\Database\ConnectionFactory;
 class BillingService
 {
     private ConnectionFactory $connectionFactory;
-    
+
+    private RuntimeProviderResolver $runtimeProviderResolver;
+
+    private ?BillingAccountProviderInterface $billingAccountProvider = null;
+
     public function __construct(
-        ConnectionFactory $connectionFactory
+        ConnectionFactory $connectionFactory,
+        RuntimeProviderResolver $runtimeProviderResolver,
     ) {
         $this->connectionFactory = $connectionFactory;
+        $this->runtimeProviderResolver = $runtimeProviderResolver;
     }
     
     /**
@@ -75,42 +82,33 @@ class BillingService
      */
     public function deductBalance(int $userId, float $amount, array $callData = []): bool
     {
-        $conn = $this->connectionFactory->getConnection();
+        $conn = $this->connectionFactory->getConnector();
         $conn->beginTransaction();
-        
+
         try {
-            /** @var FrontendUser $user */
-            $user = ObjectManager::getInstance(FrontendUser::class)
-                ->lockForUpdate()
-                ->load($userId);
-            
-            if (!$user->getId()) {
+            $result = $this->getBillingAccountProvider()->debit($userId, $amount);
+
+            if (!$result->accountExists) {
                 throw new \Exception(__('用户不存在'));
             }
-            
-            $balance = (float)($user->getData('balance') ?? 0.0);
-            
-            // 检查余额
-            if ($balance < $amount) {
+
+            if (!$result->debited) {
                 throw new \Exception(__('账户余额不足，当前余额：%{1}，需要：%{2}', 
-                    number_format($balance, 4), 
+                    number_format($result->balanceBefore, 4),
                     number_format($amount, 4)
                 ));
             }
-            
-            // 扣除余额
-            $balanceAfter = $balance - $amount;
-            $user->setData('balance', $balanceAfter);
-            $user->setData('total_consumption', 
-                ((float)($user->getData('total_consumption') ?? 0.0)) + $amount
-            );
-            $user->save();
-            
+
             // 如果提供了调用数据，记录调用日志
             if (!empty($callData)) {
-                $this->logApiCall($userId, $balance, $balanceAfter, $callData);
+                $this->logApiCall(
+                    $userId,
+                    $result->balanceBefore,
+                    $result->balanceAfter,
+                    $callData,
+                );
             }
-            
+
             $conn->commit();
             return true;
         } catch (\Exception $e) {
@@ -225,14 +223,35 @@ class BillingService
      */
     public function checkBalance(int $userId, float $requiredAmount = 0.0): bool
     {
-        /** @var FrontendUser $user */
-        $user = ObjectManager::getInstance(FrontendUser::class)->load($userId);
-        if (!$user->getId()) {
+        $provider = $this->resolveBillingAccountProvider();
+        if (!$provider instanceof BillingAccountProviderInterface) {
             return false;
         }
-        
-        $balance = (float)($user->getData('balance') ?? 0.0);
-        return $balance >= $requiredAmount;
+
+        return $provider->hasSufficientBalance($userId, $requiredAmount);
+    }
+
+    private function getBillingAccountProvider(): BillingAccountProviderInterface
+    {
+        $provider = $this->resolveBillingAccountProvider();
+        if (!$provider instanceof BillingAccountProviderInterface) {
+            throw new \RuntimeException(__('计费账户服务不可用'));
+        }
+
+        return $provider;
+    }
+
+    private function resolveBillingAccountProvider(): ?BillingAccountProviderInterface
+    {
+        if ($this->billingAccountProvider instanceof BillingAccountProviderInterface) {
+            return $this->billingAccountProvider;
+        }
+
+        $provider = $this->runtimeProviderResolver->resolve(BillingAccountProviderInterface::class);
+        if (!$provider instanceof BillingAccountProviderInterface) {
+            return null;
+        }
+
+        return $this->billingAccountProvider = $provider;
     }
 }
-

@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\Attribute\CronTestHelp;
+use Weline\Framework\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Service\DomainCronLockService;

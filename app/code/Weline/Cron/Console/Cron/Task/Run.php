@@ -14,7 +14,7 @@ declare(strict_types=1);
 namespace Weline\Cron\Console\Cron\Task;
 
 use Cron\CronExpression;
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
@@ -75,14 +75,11 @@ class Run implements CommandInterface
             }
             $class = (string) ($task->getData(CronTask::schema_fields_CLASS) ?? '');
             $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
-            if ($class !== '' && !class_exists($class)) {
-                $fallback = $executeName === 'domain_lifecycle_orchestration'
-                    ? 'Weline\\Websites\\Cron\\DomainLifecycleOrchestration'
-                    : '';
-                if ($fallback !== '' && class_exists($fallback)) {
-                    $class = $fallback;
-                    $task->setData(CronTask::schema_fields_CLASS, $class)->setData(CronTask::schema_fields_MODULE, 'Weline_Websites')->save();
-                }
+            if ($class === '' || !class_exists($class)) {
+                throw new \RuntimeException((string)__(
+                    '计划任务 %{1} 的实现已失效，请先执行 php bin/w cron:task:collect 重建编译任务索引。',
+                    $executeName
+                ));
             }
             /**@var CronTaskInterface $instance */
             $instance = ObjectManager::getInstance($class);

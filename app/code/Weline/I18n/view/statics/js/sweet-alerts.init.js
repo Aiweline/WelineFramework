@@ -28,48 +28,40 @@ File: Sweetalert Js File
                     let code = $(e.target).attr('data-code')
                     let country_code = $(e.target).attr('data-country-code')
                     if (code && md5 && country_code) {
-                        $.ajax(
-                            {
-                                url: window.url('*/backend/countries/locale/words/restore'),
-                                type: 'post',
-                                data: {
-                                    md5: md5,
-                                    code: code,
-                                    country_code: country_code,
-                                },
-                                success: function (res) {
-                                    if (200 === res.code) {
-                                        Swal.fire({
-                                            title: __("恢复结果通知!"),
-                                            text: res.msg,
-                                            icon: "success",
-                                            confirmButtonColor: "#1cbb8c",
-                                            confirmButtonText: __("知道了")
-                                        })
-                                        console.log($(e.target).parent().parent())
-                                        $('#words-table').find('td[data-md5="' + md5 + '"]').text(res.data)
-                                    } else {
-                                        Swal.fire({
-                                            title: __("恢复结果通知!"),
-                                            text: res.msg,
-                                            icon: "error",
-                                            confirmButtonColor: "rgba(255,69,0,0.76)",
-                                            confirmButtonText: __("知道了")
-                                        })
+                        Promise.resolve(window.Weline.Api.resource('i18n_admin'))
+                            .then(function (api) {
+                                return api.action({
+                                    action: 'word-restore',
+                                    payload: {
+                                        md5: md5,
+                                        code: code,
+                                        country_code: country_code,
                                     }
-                                },
-                                error: function (res) {
-                                    res = JSON.parse(res)
-                                    Swal.fire({
-                                        title: __("恢复结果通知!"),
-                                        text: res.msg,
-                                        icon: "error",
-                                        confirmButtonColor: "rgba(255,69,0,0.76)",
-                                        confirmButtonText: __("知道了")
-                                    })
+                                }, {silent: true});
+                            })
+                            .then(function (res) {
+                                if (!res || res.success !== true) {
+                                    throw new Error((res && (res.message || res.msg)) || __('恢复失败'));
                                 }
-                            }
-                        )
+                                return Swal.fire({
+                                    title: __("恢复结果通知!"),
+                                    text: res.message || res.msg || __("恢复成功！"),
+                                    icon: "success",
+                                    confirmButtonColor: "#1cbb8c",
+                                    confirmButtonText: __("知道了")
+                                }).then(function () {
+                                    $('#words-table').find('td[data-md5="' + md5 + '"]').text(res.data || '');
+                                });
+                            })
+                            .catch(function (error) {
+                                Swal.fire({
+                                    title: __("恢复结果通知!"),
+                                    text: error && error.message ? error.message : __("恢复失败"),
+                                    icon: "error",
+                                    confirmButtonColor: "rgba(255,69,0,0.76)",
+                                    confirmButtonText: __("知道了")
+                                });
+                            });
                     }
                 }
             });

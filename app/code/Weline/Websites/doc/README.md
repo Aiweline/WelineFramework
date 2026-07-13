@@ -25,7 +25,27 @@
 - 当前请求命中的网站由 `Observer/DetectWebsite.php` 负责解析。它会把结果写入 `RequestContext`、`ScopeContext` 和 `WebsiteData`。其他模块读取当前站点时，优先取 `WebsiteData`，不要自己重复匹配域名。
 - `WebsiteData` 是运行时站点事实来源。默认语言、默认货币、已关联语言/货币都应该从这里或其模型读取。
 - 跨模块与前端调用网站能力时，优先使用已发布的 `w_query('websites', ...)`，不要直接依赖内部服务类。
+- 网站表单的语言与货币选项分别读取 I18n `LocaleRepositoryInterface` 和 Currency
+  `CurrencyCatalogInterface` 的不可变 DTO；Controller 与模板不得引用对方 ORM Model/Query。
+- `WebsiteData::getCurrencies()` 通过 `RuntimeProviderResolver` 获取 Currency Catalog，继续返回
+  `code/name/format/symbol/position/rate/status` 数组；无站点限制时只允许全部启用货币，
+  有限制时保持网站配置顺序，并继续过滤被禁用的货币。`isCurrencyAllowed()` 在有限制时仍只按
+  配置代码判断，在无限制时按启用货币判断，不能把两种语义合并。
+- 其他模块只需读取当前网站货币 `code/name` 时，使用
+  `Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface`；不要跨模块调用 `WebsiteData`。
+- `Taglib/BuildSite` 只能调用 `Weline\Component\Api\OffCanvasRendererInterface`；Component
+  内部 renderer 负责实例化 OffCanvas Block 并保持 `__init() -> render()` 顺序，Websites
+  不得再引用 Component Block 或其模板实现。
 - 建站编排、域名购买、证书申请、DNS/CDN 切换都有专门服务和 QueryProvider，不要在控制器里重新拼一条“旁路流程”。
+
+## Dependency Inventory
+
+- Acl、Admin、Backend、Component、Currency、Cron、Framework、I18n 和 SystemConfig 是必需依赖：它们共同支撑站点后台、建站组件、语言/货币关联、任务与作用域配置。
+- 域名池与建站配置后台接口继承 `Weline\Admin\Api\Controller\BaseController`，只使用
+  Admin 发布的后台控制器契约，不跨模块引用 Admin 内部 Controller。
+- Ai 和 Server 是可选集成：分别增加 AI 建站和 WLS 证书/本地域名能力，不得成为站点主数据的隐式必需项。
+- 跨模块读站点信息必须使用 Websites Api/QueryProvider；不得因 Theme 的可选站点适配而形成 `Websites <-> Theme` 依赖环。
+- 列表与计数使用 `Api\Catalog\WebsiteCatalogInterface`，其列表返回不可变 `WebsiteSummary`，不暴露 Website ORM。
 
 ## 典型开发流程
 

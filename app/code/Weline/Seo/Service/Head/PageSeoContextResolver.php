@@ -43,7 +43,7 @@ class PageSeoContextResolver
             'Weline Framework',
         ]);
 
-        $layoutName = $this->layoutName($template, $meta);
+        $layoutName = $this->layoutName($meta);
         $controllerTitle = $this->firstNonEmpty([
             $this->read($meta, ['controller_title']),
             $this->meaningfulTemplateTitle($template),
@@ -240,7 +240,8 @@ class PageSeoContextResolver
         }
 
         $pageMeta = array_replace($meta, $layoutMeta);
-        foreach (['layout_name', 'name', 'layout_description', 'description', 'title', 'meta_title', 'meta_description'] as $key) {
+        // layout_name 是主题布局阶段发布的通用模板事实，不应被业务 layout 数据清掉。
+        foreach (['name', 'layout_description', 'description', 'title', 'meta_title', 'meta_description'] as $key) {
             if (!array_key_exists($key, $layoutMeta)) {
                 unset($pageMeta[$key]);
             }
@@ -353,76 +354,8 @@ class PageSeoContextResolver
     /**
      * @param array<string, mixed> $meta
      */
-    private function layoutName($template, array $meta): string
+    private function layoutName(array $meta): string
     {
-        return (string) $this->firstNonEmpty([
-            $this->normalizeMetaText($meta['layout_name'] ?? null),
-            $this->normalizeMetaText($meta['name'] ?? null),
-            $this->layoutNameFromThemeContext($template),
-        ]);
-    }
-
-    private function layoutNameFromThemeContext($template): string
-    {
-        $themeData = $this->readTemplate($template, 'theme');
-        if (!is_array($themeData)) {
-            return '';
-        }
-
-        $layoutType = trim((string) ($themeData['layoutType'] ?? ''));
-        $layoutOption = trim((string) ($themeData['layoutOption'] ?? ''));
-        $area = trim((string) ($themeData['area'] ?? 'frontend')) ?: 'frontend';
-        $theme = $themeData['theme'] ?? null;
-        if ($layoutType === '' || $layoutOption === '' || !is_object($theme)) {
-            return '';
-        }
-
-        if (!class_exists(\Weline\Theme\Helper\LayoutPathResolver::class)
-            || !class_exists(\Weline\Theme\Helper\ComponentMetaParser::class)) {
-            return '';
-        }
-
-        try {
-            $layoutPath = \Weline\Theme\Helper\LayoutPathResolver::buildLayoutPath('', $area, $layoutType, $layoutOption);
-            $resolvedLayoutPath = \Weline\Theme\Helper\LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
-            if (!$resolvedLayoutPath) {
-                return '';
-            }
-
-            $layoutFilePath = \Weline\Theme\Helper\LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
-            $layoutName = $this->layoutNameFromFile($layoutFilePath);
-            if ($layoutName !== '') {
-                return $layoutName;
-            }
-
-            if (strpos($resolvedLayoutPath, '::') !== false) {
-                [, $relativePath] = explode('::', $resolvedLayoutPath, 2);
-                $defaultPath = \Weline\Theme\Helper\LayoutPathResolver::getDefaultLayoutPath($relativePath, $area);
-                return $this->layoutNameFromFile($defaultPath);
-            }
-        } catch (\Throwable) {
-        }
-
-        return '';
-    }
-
-    private function layoutNameFromFile(?string $layoutFilePath): string
-    {
-        if (!$layoutFilePath || !is_file($layoutFilePath)) {
-            return '';
-        }
-
-        try {
-            $parsed = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
-        } catch (\Throwable) {
-            return '';
-        }
-
-        $meta = $parsed['meta'] ?? [];
-        if (!is_array($meta)) {
-            return '';
-        }
-
         return (string) $this->firstNonEmpty([
             $this->normalizeMetaText($meta['layout_name'] ?? null),
             $this->normalizeMetaText($meta['name'] ?? null),

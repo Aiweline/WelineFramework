@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\FileManager;
 
-use Weline\FileManager\FileManager;
+use Weline\FileManager\Api\FileManager;
 
 class WelineMedia extends FileManager
 {

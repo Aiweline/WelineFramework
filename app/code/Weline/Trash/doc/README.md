@@ -18,6 +18,7 @@
 - 模块代码：`Weline_Trash`
 - 目录：`app/code/Weline/Trash`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 回收站后台入口挂载到 Backend 菜单与 ACL 资源树，因此 Backend 是必需依赖。
 
 ## 代码面概览
 

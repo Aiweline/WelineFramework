@@ -29,6 +29,7 @@
 - `app/code/Weline/EditorManager/composer.json`
 
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：1
+- `Api`：公开编辑器扩展契约。第三方编辑器只继承或实现此目录中的类型。 文件数：4
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：1
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：1
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
-use Weline\Queue\Model\Queue;
+use Weline\Framework\Async\TaskStatus;
 
 class AiTranslationQueueService
 {
@@ -48,7 +48,7 @@ class AiTranslationQueueService
         $bizKey = $this->buildBizKey($localeCode);
         if ($deduplicate && !$force) {
             $existing = $this->getLatestQueueByBizKey($bizKey);
-            if ($existing && in_array((string)($existing['status'] ?? ''), [Queue::status_pending, Queue::status_running], true)) {
+            if ($existing && in_array((string)($existing['status'] ?? ''), [TaskStatus::PENDING, TaskStatus::RUNNING], true)) {
                 return (int)($existing['queue_id'] ?? 0);
             }
         }
@@ -69,7 +69,7 @@ class AiTranslationQueueService
             'name' => (string)__('I18n AI翻译 %{1}', [$localeCode]),
             'module' => AiTranslationConfig::MODULE,
             'content' => $content,
-            'status' => Queue::status_pending,
+            'status' => TaskStatus::PENDING,
             'auto' => true,
             'biz_key' => $bizKey,
         ]);

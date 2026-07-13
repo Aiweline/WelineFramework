@@ -18,9 +18,10 @@ use PHPMailer\PHPMailer\SMTP;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Smtp\Api\MailSenderInterface;
 use Weline\Smtp\Model\SmtpSendLog;
 
-class SmtpSender extends \Weline\Framework\App\Helper
+class SmtpSender extends \Weline\Framework\App\Helper implements MailSenderInterface
 {
     /**
      * @var \Weline\Smtp\Helper\Data

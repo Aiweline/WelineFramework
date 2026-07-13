@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\App;
 
+use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Http\Cookie;
@@ -314,81 +315,18 @@ class State extends DataObject
         }
 
         $map = [];
-        foreach (self::loadWebsiteBoundLanguageCodes() as $code) {
-            $map[strtolower($code)] = true;
-        }
-        if ($map === []) {
-            foreach (self::loadGlobalEnabledLanguageCodes() as $code) {
+        try {
+            $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredLanguageCodes();
+            foreach (self::normalizeLanguageCodeList($codes) as $code) {
                 $map[strtolower($code)] = true;
             }
+        } catch (\Throwable) {
         }
 
         self::$allowedLanguageCodeScope = $scope;
         self::$allowedLanguageCodeMap = $map;
 
         return self::$allowedLanguageCodeMap;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function loadWebsiteBoundLanguageCodes(): array
-    {
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
-                $codes = \Weline\Websites\Data\WebsiteData::getLanguageCodes();
-                if ($codes !== []) {
-                    return self::normalizeLanguageCodeList($codes);
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        $websiteId = (int)\w_env('website_id', 0);
-        if ($websiteId <= 0) {
-            $websiteId = (int)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', 0);
-        }
-        if ($websiteId <= 0 || !\class_exists(\Weline\Websites\Model\WebsiteLanguage::class, false)) {
-            return [];
-        }
-
-        try {
-            $websiteLanguage = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
-            return self::normalizeLanguageCodeList($websiteLanguage->getWebsiteLanguageCodes($websiteId));
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function loadGlobalEnabledLanguageCodes(): array
-    {
-        try {
-            if (!\class_exists(\Weline\I18n\Model\Locals::class, false)) {
-                return [];
-            }
-            $localModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
-            $rows = $localModel->clear()
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_INSTALL, 1)
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
-                ->select()
-                ->fetchArray();
-            $codes = [];
-            foreach ((array)$rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $code = trim((string)($row[\Weline\I18n\Model\Locals::schema_fields_CODE] ?? ''));
-                if ($code !== '') {
-                    $codes[] = $code;
-                }
-            }
-            return self::normalizeLanguageCodeList($codes);
-        } catch (\Throwable) {
-            return [];
-        }
     }
 
     /**
@@ -449,7 +387,8 @@ class State extends DataObject
     {
         return \strlen($segment) === 3
             && $segment === strtoupper($segment)
-            && ctype_alpha($segment);
+            && ctype_alpha($segment)
+            && !Env::isAreaRoutePathSegment($segment);
     }
 
     private static function probeLanguageExistsInStore(string $code): bool
@@ -470,17 +409,7 @@ class State extends DataObject
         }
 
         try {
-            if (!\class_exists(\Weline\I18n\Model\Locals::class, false)) {
-                return false;
-            }
-            $localModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
-            $local = $localModel->clear()
-                ->where(\Weline\I18n\Model\Locals::schema_fields_CODE, $code)
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_INSTALL, 1)
-                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
-                ->find()
-                ->fetch();
-            return (bool)$local->getId();
+            return ObjectManager::getInstance(LocalizationProviderRegistry::class)->supportsLanguage($code);
         } catch (\Throwable) {
             return false;
         }
@@ -523,99 +452,18 @@ class State extends DataObject
         }
 
         $map = [];
-        foreach (self::loadWebsiteBoundCurrencyCodes() as $code) {
-            $map[$code] = true;
-        }
-        if ($map === []) {
-            foreach (self::loadGlobalEnabledCurrencyCodes() as $code) {
+        try {
+            $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredCurrencyCodes();
+            foreach (self::normalizeCurrencyCodeList($codes) as $code) {
                 $map[$code] = true;
             }
+        } catch (\Throwable) {
         }
 
         self::$allowedCurrencyCodeScope = $scope;
         self::$allowedCurrencyCodeMap = $map;
 
         return self::$allowedCurrencyCodeMap;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function loadWebsiteBoundCurrencyCodes(): array
-    {
-        try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
-                $codes = \Weline\Websites\Data\WebsiteData::getCurrencyCodes();
-                if ($codes !== []) {
-                    return self::normalizeCurrencyCodeList($codes);
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        $websiteId = (int)\w_env('website_id', 0);
-        if ($websiteId <= 0) {
-            $websiteId = (int)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', 0);
-        }
-        if ($websiteId <= 0 || !\class_exists(\Weline\Websites\Model\WebsiteCurrency::class, false)) {
-            return [];
-        }
-
-        try {
-            $websiteCurrency = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteCurrency::class);
-            return self::normalizeCurrencyCodeList($websiteCurrency->getWebsiteCurrencyCodes($websiteId));
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function loadGlobalEnabledCurrencyCodes(): array
-    {
-        try {
-            if (\class_exists(\Weline\Currency\Data\CurrencyData::class, false)) {
-                $codes = [];
-                foreach (\Weline\Currency\Data\CurrencyData::getCurrencies() as $row) {
-                    if (!\is_array($row)) {
-                        continue;
-                    }
-                    $code = strtoupper(trim((string)($row['code'] ?? '')));
-                    if ($code !== '') {
-                        $codes[] = $code;
-                    }
-                }
-                if ($codes !== []) {
-                    return self::normalizeCurrencyCodeList($codes);
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            if (!\class_exists(\Weline\Currency\Model\Currency::class, false)) {
-                return [];
-            }
-            $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
-            $rows = $currencyModel->clear()
-                ->where(\Weline\Currency\Model\Currency::schema_fields_STATUS, true)
-                ->select()
-                ->fetchArray();
-            $codes = [];
-            foreach ((array)$rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $code = strtoupper(trim((string)($row[\Weline\Currency\Model\Currency::schema_fields_CODE] ?? '')));
-                if ($code !== '') {
-                    $codes[] = $code;
-                }
-            }
-            return self::normalizeCurrencyCodeList($codes);
-        } catch (\Throwable) {
-            return [];
-        }
     }
 
     /**
@@ -651,13 +499,10 @@ class State extends DataObject
         }
 
         try {
-            if (\class_exists(\Weline\Currency\Data\CurrencyData::class, false)) {
-                return \Weline\Currency\Data\CurrencyData::getCurrency($code) !== null;
-            }
+            return ObjectManager::getInstance(LocalizationProviderRegistry::class)->supportsCurrency($code);
         } catch (\Throwable) {
+            return false;
         }
-
-        return false;
     }
 
     private static function detectCurrencyFromRequestPath(): string

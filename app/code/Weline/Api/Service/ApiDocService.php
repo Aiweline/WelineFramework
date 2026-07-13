@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Api\Service;
 
+use Weline\Api\Api\Documentation\ApiDocumentationProviderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -22,7 +23,7 @@ use Weline\Framework\Service\Query\QueryProviderRegistry;
  * 
  * 用于扫描API控制器并生成Swagger格式的API文档
  */
-class ApiDocService
+class ApiDocService implements ApiDocumentationProviderInterface
 {
     private CachePoolInterface $cache;
     private Handle $moduleHandle;
@@ -1032,4 +1033,3 @@ class ApiDocService
         return $params;
     }
 }
-

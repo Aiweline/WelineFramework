@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Weline\Framework\App\Controller;
 
 use Weline\Framework\Controller\PcController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\View\FrontendLayoutProviderInterface;
 
 /**
  * 前台控制器基类
@@ -19,6 +22,8 @@ class FrontendController extends PcController
 {
     /** 认证 Session（使用新架构） */
     protected AuthenticatedSessionInterface $session;
+    private bool $frontendLayoutProviderResolved = false;
+    private ?FrontendLayoutProviderInterface $frontendLayoutProvider = null;
 
     public function __init()
     {
@@ -44,14 +49,6 @@ class FrontendController extends PcController
         ?string $title = null,
         array $additionalData = []
     ): string {
-        $layoutMap = [
-            'auth' => 'Weline_Theme::theme/frontend/layouts/account/auth.phtml',
-            'default' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
-            'full' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
-        ];
-        
-        $layoutTemplate = $layoutMap[$layoutType] ?? $layoutType;
-        
         if (\strpos($contentTemplate, '::') === false) {
             $controllerClass = \get_class($this);
             $moduleName = \explode('\\', $controllerClass)[0] . '_' . \explode('\\', $controllerClass)[1];
@@ -67,8 +64,35 @@ class FrontendController extends PcController
             $layoutData['meta'] ?? [],
             ['content' => $contentHtml, 'contentTemplate' => $contentTemplate]
         );
-        
+
+        $layoutTemplate = \str_contains($layoutType, '::')
+            ? $layoutType
+            : $this->frontendLayoutProvider()?->resolve($layoutType);
+        if ($layoutTemplate === null || $layoutTemplate === '') {
+            return $contentHtml;
+        }
+
         return $this->fetch($layoutTemplate, $layoutData);
+    }
+
+    private function frontendLayoutProvider(): ?FrontendLayoutProviderInterface
+    {
+        if ($this->frontendLayoutProviderResolved) {
+            return $this->frontendLayoutProvider;
+        }
+        $this->frontendLayoutProviderResolved = true;
+
+        try {
+            $resolver = ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $provider = $resolver->resolve(FrontendLayoutProviderInterface::class);
+            if ($provider instanceof FrontendLayoutProviderInterface) {
+                $this->frontendLayoutProvider = $provider;
+            }
+        } catch (\Throwable) {
+            $this->frontendLayoutProvider = null;
+        }
+
+        return $this->frontendLayoutProvider;
     }
     
     /**

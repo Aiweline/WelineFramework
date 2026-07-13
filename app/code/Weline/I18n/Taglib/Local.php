@@ -18,7 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\View\Taglib;
 
-class Local implements \Weline\Taglib\TaglibInterface
+class Local implements \Weline\Framework\Taglib\TaglibInterface
 {
     private static array $ids = [];
     private static bool $stateRegistered = false;

@@ -1,0 +1,14 @@
+{
+    "name": "weline/module-layout",
+    "description": "WelineFramework Layout module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Layout\\": ""
+        }
+    }
+}

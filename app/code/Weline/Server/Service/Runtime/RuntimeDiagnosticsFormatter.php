@@ -14,6 +14,7 @@ final class RuntimeDiagnosticsFormatter
         $lines = [
             'WLS runtime strategy: ' . ($strategy['runtime_strategy'] ?? 'auto') . ' (' . ($strategy['status'] ?? 'degraded') . ')',
             'Topology: ' . ($strategy['topology'] ?? 'unknown') . ' - ' . ($strategy['topology_reason'] ?? ''),
+            'Listener: ' . ($strategy['direct_listener_mode'] ?? 'single'),
             'Event loop: ' . ($strategy['event_loop_driver'] ?? 'auto') . ' - ' . ($strategy['event_loop_reason'] ?? ''),
             'Workers: ' . ($strategy['worker_count'] ?? '?') . ' - ' . ($strategy['worker_count_reason'] ?? ''),
             'Supervisor: ' . (!empty($strategy['supervisor_enabled']) ? 'enabled' : 'disabled') . ' - ' . ($strategy['supervisor_reason'] ?? ''),

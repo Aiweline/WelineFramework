@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoWebsiteStats;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;

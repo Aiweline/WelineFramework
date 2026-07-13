@@ -108,15 +108,25 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - **强制高压线**：所有浏览器侧前后端业务接口必须走 bin-query，也就是 Theme 内置 `weline-api` / `Weline.Api.*`；任何原生 Ajax/XHR、`fetch`、`$.ajax`、`axios`、手写 `query-bin` URL、直连 REST URL 或临时 fallback 都视为违规。
 - 业务前端请求必须通过 Theme 的 `theme.js -> weline-api -> worker -> /{rest_frontend}/framework/query-bin -> FrontendQueryGateway -> QueryProvider/service` 链路；`{rest_frontend}` 由 `Env::getAreaRoutePrefix('rest_frontend')` 生成，禁止假定固定为 `api`。
 - 后端提供给前端消费的站内业务能力必须发布为 QueryProvider / `frontend=true` operation，并由 `weline-api` 通过 bin-query 调用；不得为了页面交互新建绕过 query-bin 的私有直连接口。
-- 站内浏览器业务 API 只能使用 `Weline.Api.resource()`、`Weline.Api.graph()` 或 `Weline.Api.stream()`。
+- 站内浏览器业务 API 只能使用 `Weline.Api.resource()`、`Weline.Api.graph()` 或 `Weline.Api.stream()`；`Weline.Api.request()/get()/post()` 仅允许框架 transport 基础设施和非业务资源加载，不得用于模块业务控制器 URL。
 - 禁止在业务 JS、`.phtml`、内联脚本或 API 示例中新增原生 `ajax()`/`XMLHttpRequest`、`fetch(...)`、`fetch(window.api(...))`、`$.ajax`、`axios`、`new EventSource(url)` 或手写 query-bin URL。
+- 每次迁移或新增浏览器业务代码后必须运行 `php dev/ai/scripts/check-browser-business-requests.php`；该检查只允许 `Weline.Api.resource()`、`Weline.Api.graph()`、`Weline.Api.stream()`，并排除 `weline-api` 底层 worker 与 Service Worker 资源转发实现。
 - 涉及前端请求、QueryProvider、流式订阅或 worker 链路，必须加载 `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`。
 - 涉及浏览器可见 UI、组件、页面、布局、样式、响应式、状态展示、可用性或审美优化，必须加载命中的 Weline 前端技能和 `dev/ai/skills/ui-ux-pro-max/SKILL.md`。
 - `ui-ux-pro-max` 只补设计系统、信息层级、视觉质量和可用性约束；不得覆盖 Weline 的模板边界、layout 约定、i18n、请求链路和验证要求。
 - 开发或调整供应商主题（如 `WeShop/default`）前必须先加载 `前端主题工程师-主题模板开发`，涉及页面/组件同时加载 `前端主题工程师-组件与页面构建` 与 `ui-ux-pro-max`，涉及请求再加载 `前端主题工程师-前端API交互`；开始写前必须先阅读可继承的核心模板、Hook、slot 和 Theme 组件。
 - 站点/供应商主题开发前必须先盘点 `Weline_Theme` 以及 `Weline_Cart`、`Weline_Checkout`、`Weline_Customer`、`Weline_Payment`、`Weline_Shipping` 等既有能力；已有且满足需求时通过主题继承、Hook、slot、配置或 QueryProvider 接入，不得在供应商模块里平行重写商城、购物车、结账、支付、个人中心或配送链路。
 - Theme/前端新增文件前必须确认默认 Theme 是否已有同路径文件、Hook/slot、变量/色盘、组件或配置入口；已有能力应继承、配置或扩展。新增 active-theme 文件、全局 CSS、变量文件、JS 入口或组件必须有明确业务差异和必要性，不得为了“方便”复制默认实现。
+
+### 7.1 商城前端个人中心（硬性要求）
+
+- 商城前端凡涉及当前客户、会员或用户的个人信息、账户设置、安全、订单、地址、收藏、服务及其他个人相关能力，必须由正规的 `Weline_Customer` 个人中心/账户布局统一承载，并全部呈现在个人中心内。
+- 其他模块和供应商主题禁止自行新建、复制或平行维护个人中心相关的独立页面、布局、侧栏、账户首页或个人信息展示页；不得通过独立路由/控制器直接输出绕过个人中心布局的页面。即使需要独立 URL，也必须复用个人中心布局并以其为宿主。
+- 个人中心菜单和入口必须通过正式 Hook `account.sidebar` 注入；对应的内容区必须通过 `account.sidebar.content` 或 `Weline_Theme` 正式登记的账户布局 Hook 注入，并遵循 `data-account-nav-link`、`data-section`、`data-account-section` 约定。
+- 开发前必须先阅读 `Weline_Customer` 个人中心布局和 `Weline_Theme` 账户 Hook 文档，确认可复用的挂载点；现有 Hook 不足时，先补通用核心 Hook/扩展点并确认，再实现业务，禁止用模块私有页面绕过本约束。该要求为硬性门禁，违反即不接受。
+
 - URL 本地化前缀必须兼容单独和组合形态：可选 area 段后，货币与语言最多两段，可只出现货币、只出现语言，也可 `currency/language` 或 `language/currency` 任意顺序出现，例如 `/USD/products`、`/zh_Hans_CN/products`、`/USD/zh_Hans_CN/products`、`/zh_Hans_CN/USD/products`。
+- 后台地址必须带运行时配置的后台区域 key，且 key 必须是 URL 第一段：生成或拼接后台 URL 前读取 `Env::getAreaRoutePrefix('backend')`，形成 `/{backendKey}/{module}/{area}/{controller}/{action}`；禁止硬编码 `/backend`、`/admin` 或根据经验猜测入口。`WELINE_AREA_ROUTE` 只能用于当前请求已解析区域的上下文校验，不能代替 key，也不能作为无 key URL 的回退。模块 `etc/env.php` 中的 `backend_router`（例如 `admin`）是模块内部路由名，不是后台区域 key。
 - 请求启动、WLS URL 解析、Router 前缀剥离、登录回跳和 canonical redirect 必须复用统一的路径本地化解析约定；禁止在新代码里重新假设固定顺序、只支持“双段同时出现”，或只处理其中一种组合。
 - 路由匹配/路径剥离阶段不得依赖当前 allowed currency/language 配置或缓存来判断前缀是否存在，因为本地化前缀解析本身可能发生在站点、货币、语言上下文完全预热之前；可用形状约定识别前缀，再在业务/配置层校验是否合法。
 - 若既有核心能力不符合业务要求，先说明缺口并让用户确认是否升级核心抽象；核心升级必须保持面向多模块复用，不能只为单个站点写特例。
@@ -155,10 +165,16 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 ## 10. 验证底线
 
 - 不以“已实现”替代“已验证”。
+- **每次仓库修改都必须完成一次内置 Browser 验证并留证**：范围包括代码、配置、规则、索引和文档；纯文档/规则改动至少用 Codex 内置 Browser 打开变更后的 `file://` 文档并核对可见内容，涉及页面、路由、接口或运行时行为时必须在变更后的专用 WLS 实例上完成真实页面冒烟。不得用 shell、静态 diff、CLI 或“文件存在”替代内置 Browser 验收。
+- **内置 Browser 出现异常时必须立即修复或重建**：包括 Browser 不可用、连接中断、工具状态损坏、页面无法正常打开或验证失败等情况。修复/重建并确认 Browser 已恢复、能够正常打开目标页面后，才能继续验证或交付；不得因 Browser 故障跳过验证，也不得擅自改用未经授权的替代方式。
+- **每次修改必须有可恢复记录**：开始前创建 `dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/`，过程中追加 `progress.md`，完成时在 `result.md` 写明变更文件、Browser URL、操作步骤、可见结果、控制台结果、WLS 实例状态和未验证项；记录必须与本次修改同一任务目录关联。
+- **验证后立即同步当前文档**：验证发现行为、命令、入口、约束或事实发生变化时，必须在同一任务内更新对应的当前 `AI-ENTRY.md`、`AGENTS.md`、`global-constraints.md`、模块 `doc/`、README 或使用说明；不要仅新增版本说明、历史报告或保留旧口径。文档同步后，将所有变更文件作为同一修改批次再次用内置 Browser 核对，并把最终证据写入任务记录。
 - 默认禁止新增、更新、固化或生成任何单元测试、测试用例、E2E/Playwright spec、回归用例、fixtures、测试数据或测试脚本；只有用户明确要求“写测试 / 补单测 / 写用例 / 更新 E2E”等测试产物时才允许处理。
 - 修改业务逻辑时，默认使用真实入口、HTTP、Browser、WLS、现有命令、静态检查或文档检查提供验证证据；修 bug 优先用现有入口复现问题路径，再修复。不要主动新增或更新测试产物来完成复现或验证，除非用户明确要求。
 - 涉及路由、页面、接口、运行时行为时，必须提供可复现验证命令。
-- 浏览器可见功能最终必须用 Codex 内置 Browser 冒烟：打开目标 URL、确认无明显错误、执行核心交互、核对可见结果。
+- 浏览器可见功能最终必须用 Codex 内置 Browser 冒烟：打开目标 URL、确认无明显错误、执行核心交互、核对可见结果。任何会影响浏览器行为的代码、模板、静态资源、QueryProvider、路由、缓存或运行时配置修改，都必须在修改后的目标 WLS 实例上重新完成这一步；不得以静态检查、CLI 成功、代码已写入、缓存命令已发送或 WLS `reload` 已受理替代实际浏览器验收。
+- Browser 冒烟前必须确认修改后的运行时已真正生效：模板/缓存已清理，WLS reload/restart 已完成（必要时核对 Worker PID/运行状态），并使用新建标签页或强制刷新加载目标 URL。浏览器控制台必须在本次交互后无未处理 error；业务失败必须以页面可见、准确的业务提示被处理，不能伪装为“网络错误”。
+- 最终回复只有在实际 Browser 冒烟完成后才能写“已修复/已通过”；否则必须明确写“代码已修改，浏览器验收未完成”以及阻塞原因。每次交付应列出验证的真实 URL、执行的核心交互、可见结果、控制台结果与 WLS 实例状态。
 - 浏览器/桌面自动化不得抢占用户当前桌面焦点：禁止置前 Chrome、切换用户正在使用的窗口，禁止依赖系统焦点、全局键盘输入或鼠标焦点完成操作。
 - 需要浏览器操作时，必须通过 Codex Browser、目标标签页的 DevTools/Playwright/Chrome 扩展 tab control 等可寻址自动化接口直接控制标签页；可以新建或复用独立标签页，但不得干扰用户当前键鼠输入。若只能通过 OS 焦点或前台窗口完成，必须停止并说明阻塞点。
 - Browser 被 runtime、WLS、端口、认证、证书或环境阻塞时，必须说明阻塞点；不得声称前端流程已完成或已验证。

@@ -9,15 +9,19 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Console\User;
 
-use Weline\Acl\Model\Role;
+use Weline\Acl\Api\Role\RoleCatalogInterface;
 use Weline\Backend\Model\BackendUser;
-use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 class AssignRole implements CommandInterface
 {
+    public function __construct(
+        private readonly RoleCatalogInterface $roleCatalog,
+    ) {
+    }
+
     public function execute(array $args = [], array $data = [])
     {
         $formatArgs = $args['format'] ?? [];
@@ -67,9 +71,8 @@ class AssignRole implements CommandInterface
 
         try {
             $user->assignRole($roleIdInt);
-            /** @var Role $role */
-            $role = ObjectManager::getInstance(Role::class)->load($roleIdInt);
-            $roleLabel = $role->getId() ? $role->getRoleName() : (string) $roleIdInt;
+            $role = $this->roleCatalog->find($roleIdInt);
+            $roleLabel = $role?->getName() ?? (string)$roleIdInt;
             $printer->success(__('已为用户分配角色') . '：' . $user->getUsername() . ' → ' . $roleLabel . ' (user_id=' . $user->getId() . ', role_id=' . $roleIdInt . ')');
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
@@ -84,9 +87,8 @@ class AssignRole implements CommandInterface
     private function resolveRoleId(string $roleId, string $roleName, Printing $printer): int
     {
         if ($roleId !== '' && is_numeric($roleId)) {
-            /** @var Role $role */
-            $role = ObjectManager::getInstance(Role::class)->load((int) $roleId);
-            if ($role->getId()) {
+            $role = $this->roleCatalog->find((int)$roleId);
+            if ($role !== null) {
                 return (int) $roleId;
             }
             $printer->error(__('角色 ID %{id} 不存在', ['id' => $roleId]));
@@ -94,10 +96,8 @@ class AssignRole implements CommandInterface
         }
 
         if ($roleName !== '') {
-            /** @var Role $role */
-            $role = ObjectManager::getInstance(Role::class);
-            $role->where(Role::schema_fields_ROLE_NAME, $roleName)->find()->fetch();
-            if ($role->getId()) {
+            $role = $this->roleCatalog->findByName($roleName);
+            if ($role !== null) {
                 return $role->getId();
             }
             $printer->error(__('角色名「%{name}」不存在', ['name' => $roleName]));
@@ -109,16 +109,14 @@ class AssignRole implements CommandInterface
 
     private function printRoleList(Printing $printer): void
     {
-        /** @var Role $roleModel */
-        $roleModel = ObjectManager::getInstance(Role::class);
-        $roles = $roleModel->select()->fetch()->getItems();
+        $roles = $this->roleCatalog->list();
         if (empty($roles)) {
             $printer->note(__('暂无可用角色，请先在后台创建角色'));
             return;
         }
         $printer->note(__('可用角色：'));
-        foreach ($roles as $r) {
-            $printer->printing('  --role_id=' . $r['role_id'] . ' 或 --role=' . $r['role_name']);
+        foreach ($roles as $role) {
+            $printer->printing('  --role_id=' . $role->getId() . ' 或 --role=' . $role->getName());
         }
     }
 

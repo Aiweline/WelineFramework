@@ -1,23 +1,23 @@
 {
-  "name": "weline/module-eav",
-  "description": "WelineFramework eav module",
-  "type": "weline-module",
+    "name": "weline/module-eav",
+    "description": "WelineFramework eav module",
+    "type": "weline-module",
   "require": {
-    "php": "^8.1"
+    "php": "^8.4",
+    "weline/framework": "@dev",
+    "weline/module-backend": "@dev",
+    "weline/module-i18n": "@dev"
   },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Eav\\": ""
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Eav\\": ""
+        }
     },
-    "psr-0": {
-      "Weline\\Eav\\": ""
-    }
-  },
-  "license": "MIT"
+    "license": "MIT"
 }

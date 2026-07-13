@@ -6,7 +6,7 @@ namespace Weline\Cms\Setup\Db\Migration;
 
 use Weline\Cms\Model\Page;
 use Weline\Cms\Model\PathGroup;
-use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Migration\AbstractMigration;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;

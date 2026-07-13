@@ -1,0 +1,22 @@
+{
+    "name": "weline/module-customer-service",
+    "description": "WelineFramework CustomerService module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-smtp": "@dev",
+        "weline/module-theme": "@dev"
+    },
+    "suggest": {
+        "weline/module-ai": "Enables optional AI translation for customer-service conversations."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\CustomerService\\": ""
+        }
+    }
+}

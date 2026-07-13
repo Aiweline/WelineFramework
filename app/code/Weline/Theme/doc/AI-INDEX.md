@@ -72,6 +72,8 @@
 - `app/code/Weline/Theme/doc/README.md`
 - `app/code/Weline/Theme/doc/SOLID原则重构说明.md`
 - `app/code/Weline/Theme/doc/Theme.js使用指南.md`
+- `app/code/Weline/Theme/doc/runtime-cache-invalidation.md`
+- `app/code/Weline/Theme/doc/worker-view-warmup-contributions.md`
 - `app/code/Weline/Theme/doc/event/theme_editor_result_after.md`
 - `app/code/Weline/Theme/doc/hook/backend/partials/topbar/logo.md`
 - `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-content.md`

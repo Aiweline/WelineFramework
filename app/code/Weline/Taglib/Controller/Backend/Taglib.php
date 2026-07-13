@@ -4,7 +4,6 @@ namespace Weline\Taglib\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\ModuleManager\Model\Module;
 
 #[Acl('Weline_Taglib::taglib_manager', '标签管理', 'fa fa-tags', '标签查看文档', 'Weline_Taglib::taglib')]
 class Taglib extends BackendController
@@ -20,16 +19,14 @@ class Taglib extends BackendController
     public function listing()
     {
         if ($q = $this->request->getGet('q')) {
-            $this->taglib->where('main_table.name', "%$q%", 'like', 'or')
-                ->where('module.name', "%$q%", 'like', 'and');
+            $this->taglib->filterByNameOrModule((string) $q);
         }
         $listing = $this->taglib
-            ->joinModel(Module::class, 'module', 'main_table.module_id=module.module_id')
             ->pagination()
             ->order($this->taglib::schema_fields_UPDATE_TIME)
             ->select()
             ->fetch();
-        $this->assign('items', $listing->getItems());
+        $this->assign('items', $this->taglib->hydrateModuleMetadata($listing->getItems()));
         $this->assign('pagination', $listing->getPagination());
         return $this->fetch();
     }

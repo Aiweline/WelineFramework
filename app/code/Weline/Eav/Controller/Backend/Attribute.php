@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Controller\Backend;
 
-use Weline\Backend\Model\BackendUserData;
+use Weline\Backend\Api\UserData\BackendCurrentUserDataInterface;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Type;
@@ -22,6 +22,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * @deprecated 请使用 Manager 控制器 (/eav/backend/manager) 统一管理EAV
@@ -38,15 +39,13 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
      * @var \Weline\Eav\Model\EavAttribute
      */
     private EavAttribute $eavAttribute;
-    /**
-     * @var \Weline\Backend\Model\BackendUserData
-     */
-    private BackendUserData $backendUserData;
+    private ?BackendCurrentUserDataInterface $currentUserData = null;
+    private RuntimeProviderResolver $runtimeProviders;
 
-    public function __construct(BackendUserData $backendUserData, EavAttribute $eavAttribute)
+    public function __construct(RuntimeProviderResolver $runtimeProviders, EavAttribute $eavAttribute)
     {
         $this->eavAttribute = $eavAttribute;
-        $this->backendUserData = $backendUserData;
+        $this->runtimeProviders = $runtimeProviders;
     }
 
     public function index()
@@ -139,11 +138,8 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         # 检测是否有锁定实体 entity_type
         $entity_type = $this->request->getGet('entity_type');
         $this->assign('entity_type', $entity_type);
-        $user_data = $this->backendUserData->where('backend_user_id', $this->session->getLoginUserID())
-            ->where('scope', 'attribute')
-            ->find()->fetch();
         # 配置属性记录
-        $attribute = json_decode($user_data['json'] ?? '', true);
+        $attribute = $this->backendCurrentUserData()->getScope('attribute');
         # 属性配置项解析
         if (isset($attribute['options'])) {
             $attribute['options'] = json_decode($attribute['options'], true);
@@ -203,7 +199,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         $json['data']['options'] = $this->eavAttribute->getOptions();
         $json['msg'] = __('保存成功');
         # 删除实时保存的数据
-        $this->backendUserData->where('backend_user_id', $this->session->getLoginUserID())->where('scope', 'attribute')->delete()->fetch();
+        $this->backendCurrentUserData()->clearScope('attribute');
         return $this->fetchJson($json);
     }
 
@@ -269,5 +265,19 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
     {
         $attribute_id = $this->request->getPost('attribute_id');
         $eav_entity_id = $this->request->getPost('eav_entity_id');
+    }
+
+    private function backendCurrentUserData(): BackendCurrentUserDataInterface
+    {
+        if ($this->currentUserData instanceof BackendCurrentUserDataInterface) {
+            return $this->currentUserData;
+        }
+
+        $provider = $this->runtimeProviders->resolve(BackendCurrentUserDataInterface::class);
+        if (!$provider instanceof BackendCurrentUserDataInterface) {
+            throw new \RuntimeException('backend_current_user_data_provider_unavailable');
+        }
+
+        return $this->currentUserData = $provider;
     }
 }

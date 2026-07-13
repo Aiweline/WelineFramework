@@ -10,7 +10,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
-use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestPipeline;
 use Weline\Framework\Runtime\Runtime;
 
 class CheckFullPageCache implements ObserverInterface
@@ -65,12 +65,7 @@ class CheckFullPageCache implements ObserverInterface
 
         $response = $coordinator->getCachedResponse($method);
         if ($response !== null) {
-            if (Runtime::isPersistent()) {
-                RequestContext::set('wls.fpc.cached_response', $response);
-                return;
-            }
-
-            throw new \Weline\Framework\Http\ResponseTerminateException($response);
+            RequestPipeline::registerEarlyResponse($response);
         }
     }
 }

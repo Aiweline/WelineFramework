@@ -248,6 +248,24 @@ class SessionStoreTest extends TestCase
         $this->assertEquals(100, $stats['max_sessions']);
     }
 
+    public function testMemoryWatermarkEvictsBeforePhpMemoryLimit(): void
+    {
+        $baseline = \memory_get_usage(false);
+        $store = new SessionStore([
+            'max_sessions' => 100,
+            'persist_enabled' => false,
+            'persist_path' => $this->testPersistPath,
+            'memory_high_watermark_bytes' => $baseline + 131072,
+            'memory_low_watermark_bytes' => $baseline + 65536,
+        ]);
+
+        $store->set('pressure-session', 'payload', \str_repeat('x', 1048576));
+        $stats = $store->getStats();
+
+        $this->assertGreaterThan(0, $stats['memory_pressure_eviction_count']);
+        $this->assertSame(0, $stats['session_count']);
+    }
+
     /**
      * 测试持久化和加载
      */

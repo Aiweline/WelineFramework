@@ -10,7 +10,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
 #[Acl('Weline_CacheManager::system_cache', '缓存管理', 'mdi mdi-database-cog-outline', '系统缓存状态管理')]
-class Cache extends \Weline\Admin\Controller\BaseController
+class Cache extends \Weline\Framework\App\Controller\BackendPageController
 {
     public function __construct(
         private readonly CacheAdminService $cacheAdminService

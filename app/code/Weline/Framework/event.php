@@ -1,9 +1,14 @@
 <?php
 return [
     // ========== 应用生命周期事件 ==========
+    'Weline_Framework::App::pre_route_gate' => [
+        'name' => __('请求前置门禁'),
+        'description' => __('在 URL 解析和 FPC 前执行维护模式等强制门禁；观察者不得派发控制器或执行业务集成。'),
+        'doc' => 'app/请求前置门禁.md',
+    ],
     'Weline_Framework::App::run_before' => [
         'name' => __('应用运行前'),
-        'description' => __('应用运行前，你可以在这里做一些初始化操作。'),
+        'description' => __('URL 已解析且 early response 未命中后、Session/Router 前执行。'),
         'doc' => 'app/应用运行前.md',
     ],
     'Weline_Framework::App::run_after' => [
@@ -264,14 +269,33 @@ return [
             'tip' => ['type' => 'string', 'required' => false, 'description' => '缓存说明'],
         ],
     ],
+    'Weline_Framework_MarketplaceMeta::collect_translations' => [
+        'name' => __('Marketplace Meta 翻译词收集'),
+        'description' => __('Marketplace Meta 读取完成后触发，由已启用的翻译能力提供者消费 translations 数据；Framework 不依赖具体翻译模块。'),
+        'version' => '2.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'module' => ['type' => 'string', 'required' => true, 'description' => '提交 Marketplace Meta 的模块名'],
+            'translations' => ['type' => 'array', 'required' => true, 'description' => '待收集的翻译词列表'],
+        ],
+    ],
+    'Weline_Framework_Message::system_notification' => [
+        'name' => __('系统通知'),
+        'description' => __('发布通用系统通知，由已启用的通知能力提供者持久化或分发；Framework 不依赖具体后台模块。'),
+        'version' => '2.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'data' => ['type' => 'array', 'required' => true, 'description' => 'topic、type、title、content、priority、metadata、notify_users 等通知数据'],
+        ],
+    ],
     'Weline_Framework_Cache::driver_create_before' => [
         'name' => __('缓存驱动创建前'),
-        'description' => __('在创建缓存驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File 缓存替换为内存缓存。'),
+        'description' => __('在创建缓存驱动实例前触发，允许已注册的运行时提供者接管驱动，例如常驻内存运行时将 File 缓存替换为内存缓存。'),
         'doc' => 'cache/driver_create_before.md',
     ],
     'Weline_Framework_Session::driver_create_before' => [
         'name' => __('Session 驱动创建前'),
-        'description' => __('在创建 Session 驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File Session 替换为内存 Session。'),
+        'description' => __('在创建 Session 驱动实例前触发，允许已注册的运行时提供者接管驱动，例如常驻内存运行时将 File Session 替换为内存 Session。'),
         'doc' => 'session/driver_create_before.md',
     ],
     'Weline_Framework_Session::storage_resolve' => [
@@ -289,7 +313,7 @@ return [
     // ========== 日志事件 ==========
     'Weline_Framework_Log::resolve_runtime' => [
         'name' => __('日志运行模式解析'),
-        'description' => __('在解析当前日志运行模式（fpm | wls）时触发。默认来自配置 log.runtime，观察者可修改 data["runtime"] 为 wls（如 WLS 进程内由 Weline_Server 设置）。'),
+        'description' => __('在解析当前日志运行模式（fpm | wls）时触发。默认来自配置 log.runtime，已注册的运行时提供者可修改 data["runtime"]。'),
         'doc' => 'log/日志运行模式解析.md',
     ],
     

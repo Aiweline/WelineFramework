@@ -100,6 +100,10 @@ final class WlsPerformanceTraceStoreTest extends TestCase
         self::assertCount(2, $requests);
         self::assertSame('req-10000003', $requests[0]['request_id'] ?? null);
         self::assertSame('req-10000002', $requests[1]['request_id'] ?? null);
+        self::assertSame([], $store->getDetail('req-10000001'));
+
+        $detailFiles = (array)\glob($this->baseDir . \DIRECTORY_SEPARATOR . 'request' . \DIRECTORY_SEPARATOR . '*' . \DIRECTORY_SEPARATOR . '*.json');
+        self::assertCount(2, $detailFiles);
 
         $slow = $store->requests(10, 0, true);
         self::assertCount(2, $slow);
@@ -140,6 +144,37 @@ final class WlsPerformanceTraceStoreTest extends TestCase
         self::assertSame(1, $services['services']['memory']['sample_count'] ?? null);
         self::assertSame(8.5, $services['services']['session']['max_ms'] ?? null);
         self::assertSame(3.25, $services['services']['memory']['max_ms'] ?? null);
+    }
+
+    public function testSamplingSkipsNormalDetailsButAlwaysKeepsErrorsAndSlowRequests(): void
+    {
+        $store = $this->store([
+            'sample_rate' => 0.0,
+            'slow_sample_rate' => 1.0,
+            'error_sample_rate' => 1.0,
+            'slow_request_threshold_ms' => 500,
+        ]);
+
+        self::assertTrue($store->record($this->telemetry('req-40000001'), [
+            'request_id' => 'req-40000001',
+            'status' => 200,
+            'total_ms' => 25,
+        ]));
+        self::assertSame([], $store->getDetail('req-40000001'));
+
+        self::assertTrue($store->record($this->telemetry('req-40000002'), [
+            'request_id' => 'req-40000002',
+            'status' => 500,
+            'total_ms' => 25,
+        ]));
+        self::assertSame('req-40000002', $store->getDetail('req-40000002')['request_id'] ?? null);
+
+        self::assertTrue($store->record($this->telemetry('req-40000003'), [
+            'request_id' => 'req-40000003',
+            'status' => 200,
+            'total_ms' => 750,
+        ]));
+        self::assertSame('req-40000003', $store->getDetail('req-40000003')['request_id'] ?? null);
     }
 
     private function store(array $config = []): WlsPerformanceTraceStore

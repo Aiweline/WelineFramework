@@ -11,7 +11,8 @@ namespace Weline\Ai\Interface;
  * scanner only uses these bindings when creating a new adapter record, or when
  * an existing record has no model binding configured yet.
  */
-interface AdapterModelBindingInterface
+/** @deprecated Implement \Weline\Ai\Api\AdapterModelBindingInterface. */
+interface AdapterModelBindingInterface extends \Weline\Ai\Api\AdapterModelBindingInterface
 {
     /**
      * @return array<string,string> Map primary modality to model code.

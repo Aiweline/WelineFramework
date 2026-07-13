@@ -25,6 +25,7 @@ use Weline\I18n\Model\Countries\Locale\Name;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
+use Weline\I18n\Service\RuntimeCacheBroadcaster;
 
 #[\Weline\Framework\Acl\Acl('Weline_I18n::i18n', '国际化I18n管理', 'ri-translate', '国际化I18n管理', 'Weline_Backend::i18n_group')]
 class Words extends BaseController
@@ -131,11 +132,15 @@ class Words extends BaseController
 
     public function collect()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         $locale_code = $this->request->getParam('code');
         // 检测地方码是否存在
         if (!$this->locale->load($locale_code)->getId()) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('地方码不存在！'));
+            }
             $this->getMessageManager()->addWarning(__('地方码不存在！'));
-            $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
+            return $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
         }
         // 从词典获取
         $words = $this->dictionary->select()->fetchArray();
@@ -162,6 +167,7 @@ class Words extends BaseController
             }
         }
         if ($collected_words) {
+            $collectedCount = count($collected_words);
             $this->localeDictionary->beginTransaction();
             try {
                 # 分999个为一批
@@ -170,13 +176,23 @@ class Words extends BaseController
                     $this->localeDictionary->reset()->insert($collected_word, $this->localeDictionary::schema_fields_MD5)->fetch();
                 }
                 $this->localeDictionary->commit();
-                Message::success(__('词典收集成功！一共更新 %{1} 个词。', count($collected_words)));
-            } catch (\Exception $exception) {
+                $message = (string)__('词典收集成功！一共更新 %{1} 个词。', $collectedCount);
+                if ($isAsyncRequest) {
+                    return $this->asyncJsonResponse(true, $message, ['count' => $collectedCount]);
+                }
+                Message::success($message);
+            } catch (\Throwable $exception) {
                 $this->localeDictionary->rollBack();
+                if ($isAsyncRequest) {
+                    return $this->asyncJsonResponse(false, $exception->getMessage());
+                }
                 Message::exception($exception);
             }
         }
-        $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
+        if ($isAsyncRequest) {
+            return $this->asyncJsonResponse(true, (string)__('没有需要收集的词。'));
+        }
+        return $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
     }
 
     public function translate(): string
@@ -230,6 +246,7 @@ class Words extends BaseController
 
     public function push()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         $code = $this->request->getParam('code');
         $locale = $this->locale->where([
             $this->locale::schema_fields_IS_ACTIVE => 1,
@@ -239,8 +256,11 @@ class Words extends BaseController
             ->find()
             ->fetch();
         if (!$locale->getId()) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('地区码未安装或者未激活！地区码：%{1}', $code));
+            }
             $this->getMessageManager()->addWarning(__('地区码未安装或者未激活！地区码：%{1}', $this->request->getParam('code')));
-            $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
+            return $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
         }
         // 语言包生成
         $i18n_dir = APP_PATH . 'i18n' . DS . 'WelineFramework' . DS;
@@ -292,14 +312,20 @@ REGISTER_CONTENT;
         file_put_contents($pack_file, $pack_file_content);
         // 清理i18n缓存
         $this->clearRuntimeTranslationCaches();
-        Message::success(__('成功清理i18n缓存！'));
+        if (!$isAsyncRequest) {
+            Message::success(__('成功清理i18n缓存！'));
+        }
         // 清理生成的模板缓存文件
         /**@var System $system */
         $system = ObjectManager::getInstance(System::class);
         $system->exec('rm -rf ' . Env::path_framework_generated_complicate);
-        Message::success(__('成功清理系统模板缓存文件！'));
-        Message::success(__('成功发布！'));
-        $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
+        if (!$isAsyncRequest) {
+            Message::success(__('成功清理系统模板缓存文件！'));
+            Message::success(__('成功发布！'));
+            return $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
+        }
+
+        return $this->asyncJsonResponse(true, (string)__('成功发布！'), ['locale_code' => $code]);
     }
 
     private function clearRuntimeTranslationCaches(): void
@@ -317,34 +343,44 @@ REGISTER_CONTENT;
         \Weline\Framework\Phrase\Parser::clearWorkerCaches();
         \Weline\I18n\Parser::clearWorkerCaches();
 
-        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
-        if (class_exists($dispatchClass)) {
-            try {
-                ObjectManager::getInstance($dispatchClass)->cacheClear();
-            } catch (\Throwable) {
-            }
-        }
+        ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
     }
 
     public function enable()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         try {
             Env::set('i18n.translate_mode', 'online');
-            $this->getMessageManager()->addSuccess(__('成功开启！'));
-        } catch (\Exception $exception) {
+            $message = (string)__('成功开启！');
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, ['mode' => 'online']);
+            }
+            $this->getMessageManager()->addSuccess($message);
+        } catch (\Throwable $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, $exception->getMessage());
+            }
             $this->getMessageManager()->addException($exception);
         }
-        $this->redirect('*/backend/countries/locale/words', $this->request->getGet());
+        return $this->redirect('*/backend/countries/locale/words', $this->request->getGet());
     }
 
     public function disable()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         try {
             Env::set('i18n.translate_mode', 'default');
-            $this->getMessageManager()->addSuccess(__('成功禁用！'));
-        } catch (\Exception $exception) {
+            $message = (string)__('成功禁用！');
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, ['mode' => 'default']);
+            }
+            $this->getMessageManager()->addSuccess($message);
+        } catch (\Throwable $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, $exception->getMessage());
+            }
             $this->getMessageManager()->addException($exception);
         }
-        $this->redirect('*/backend/countries/locale/words', $this->request->getGet());
+        return $this->redirect('*/backend/countries/locale/words', $this->request->getGet());
     }
 }

@@ -253,7 +253,11 @@ return [
             'dynamic_ready_gate_enabled' => true,
             'dynamic_ready_gate_paths' => ['/'],
             'dynamic_ready_gate_max_paths' => 1,
-            'dynamic_ready_gate_fail_open' => true,
+            // READY 前每个业务 Worker 必须完成真实首页动态渲染并建立缓存。
+            // dynamic_target_ms 默认是发布性能门禁，不作为进程存活条件；仅诊断时显式开启严格阻断。
+            'dynamic_ready_gate_fail_open' => false,
+            'dynamic_warmup_block_on_target_ms' => false,
+            'dynamic_warmup_attempts' => 3,
             'homepage_warmup_host' => null,
             'homepage_warmup_peer_wait_ms' => 3000,
             'homepage_keep_warm_enabled' => true,
@@ -277,7 +281,11 @@ return [
         'ssl' => [
             // stream 是 Windows/macOS/Linux 默认；event_buffer 仅支持 macOS/Linux Dispatcher+TLS，direct 模式会拒绝启动。
             'engine' => 'stream', // stream|event_buffer
+            // 仅允许 TLS 1.2/1.3；配置键存在时空字符串、空数组或任何其他值都会在创建 Worker 前拒绝启动。
             'protocols' => ['tls1.2', 'tls1.3'],
+            // performance: TLS 1.3 只配置 Groups=X25519:P-256，不强制 ciphersuite；system: 保留 OpenSSL 系统组策略。
+            // 运维在启动环境中显式设置的 OPENSSL_CONF 永远优先，WLS 不会覆盖。
+            'key_exchange_profile' => 'performance', // performance|system
             'event_buffer_enabled' => false,
             'event_buffer_max_connections_per_worker' => 0,
             'event_buffer_read_high_watermark' => 1048576,
@@ -302,7 +310,10 @@ return [
         'max_connections' => 10000,
         // Worker Keep-Alive 空闲连接超时（秒），<=0 则使用内置默认 60。
         'keep_alive_timeout' => 60,
-        'max_request' => 100000,
+        // 单个 Worker 的基础优雅回收请求数，0 表示禁用。
+        'worker_max_requests' => 100000,
+        // 各 Worker 槽位在基础值上的确定性错峰量，避免整池同时回收。
+        'worker_recycle_stagger_requests' => 2500,
         'hot_reload' => false,
         'watch_dirs' => ['app/code', 'app/etc'],
         'watch_interval' => 1,
@@ -310,7 +321,9 @@ return [
         'attack_detector' => [
             'ip_whitelist' => [
                 'enabled' => true,
-                'ips' => ['127.0.0.1', '::1'],
+                // Default fail-close: loopback may be an Nginx/Caddy peer.
+                // Add only deliberate operator/test source CIDRs here.
+                'ips' => [],
             ],
         ],
         'cache' => [
@@ -353,6 +366,9 @@ return [
             'persist_interval' => 30,
             'persist_on_writes' => 100,
             'gc_interval' => 300,
+            // Shared Session/Memory sidecar 在 PHP memory_limit 前主动 LRU，给协议编解码保留余量。
+            'memory_high_watermark_ratio' => 0.75,
+            'memory_low_watermark_ratio' => 0.60,
             'wls_server' => [
                 'host' => '127.0.0.1',
                 'port' => 19970,
@@ -563,6 +579,17 @@ return [
             'token_hash' => '',
             'cookie_name' => 'w_weline_panel',
             'session_ttl' => 3600,
+            'wls_performance' => [
+                // 详情 Span 为调试数据；确定性分层采样避免故障时遥测反向放大业务延迟。
+                'sample_rate' => 0.02,
+                'slow_sample_rate' => 0.05,
+                'error_sample_rate' => 0.10,
+                'slow_request_threshold_ms' => 500,
+                'max_recent' => 200,
+            ],
+            // WLS 常驻热路径默认不复制完整 DevTool trace；需要精确抓取时请求带 ?weline_trace=1
+            // 或 X-Weline-Trace: 1。普通性能 Span 由上方有界 WLS 采样环提供。
+            'wls_trace_sample_rate' => 0.0,
         ],
     ],
 ];

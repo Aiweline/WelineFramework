@@ -9,7 +9,7 @@ use RecursiveIteratorIterator;
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Frontend\Interface\HeadContextProviderInterface;
+use Weline\Framework\View\Head\HeadContextProviderInterface;
 use Weline\Frontend\Interface\HeadPolicyProviderInterface;
 
 class HeadProviderRegistry

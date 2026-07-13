@@ -4,7 +4,8 @@ declare(strict_types=1);
 namespace Weline\Widget\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
-use Weline\Theme\Service\ThemePlaceableRegistry;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Widget\Api\WidgetLibraryProviderInterface;
 use Weline\Widget\Service\AiWidgetGenerationService;
 use Weline\Widget\Service\WidgetConfigService;
 use Weline\Widget\Service\WidgetListService;
@@ -12,12 +13,16 @@ use Weline\Widget\Service\WidgetPreviewService;
 
 class WidgetQueryProvider implements QueryProviderInterface
 {
+    private bool $libraryProviderResolved = false;
+
+    private ?WidgetLibraryProviderInterface $libraryProvider = null;
+
     public function __construct(
         private readonly WidgetListService $listService,
         private readonly WidgetConfigService $configService,
         private readonly WidgetPreviewService $previewService,
-        private readonly ThemePlaceableRegistry $placeableRegistry,
         private readonly AiWidgetGenerationService $aiWidgetGenerationService,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
     ) {
     }
 
@@ -29,12 +34,7 @@ class WidgetQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'getAvailableList' => $this->placeableRegistry->getAvailableList(
-                $params['page_type'] ?? null,
-                $params['filter_options'] ?? null,
-                null,
-                (string)(($params['filter_options']['area'] ?? null) ?: ($params['area'] ?? 'frontend'))
-            ),
+            'getAvailableList' => $this->getAvailableList($params),
             'getParamDefinitions' => $this->getParamDefinitions($params),
             'getConfigForm' => $this->configService->renderForm(
                 $params['layout_id'] ?? '',
@@ -63,14 +63,27 @@ class WidgetQueryProvider implements QueryProviderInterface
         };
     }
 
+    private function getAvailableList(array $params): array
+    {
+        $filterOptions = is_array($params['filter_options'] ?? null) ? $params['filter_options'] : null;
+        $area = (string)(($filterOptions['area'] ?? null) ?: ($params['area'] ?? 'frontend'));
+        $provider = $this->libraryProvider();
+        if ($provider instanceof WidgetLibraryProviderInterface) {
+            return $provider->getAvailableList($params['page_type'] ?? null, $filterOptions, $area);
+        }
+
+        return $this->listService->getAvailableList($params['page_type'] ?? null, $filterOptions);
+    }
+
     private function getParamDefinitions(array $params): array
     {
         $module = (string)($params['widget_module'] ?? '');
         $code = (string)($params['widget_code'] ?? '');
         $area = (string)($params['area'] ?? 'frontend');
 
-        if ($module === 'Weline_Theme' && str_contains($code, '/')) {
-            return $this->placeableRegistry->getParamDefinitions($module, 'theme_component', $code, null, $area);
+        $provider = $this->libraryProvider();
+        if ($provider instanceof WidgetLibraryProviderInterface && $provider->supports($module, $code, $area)) {
+            return $provider->getParamDefinitions($module, $code, $area);
         }
 
         return $this->configService->getParamDefinitions($module, $code, $area);
@@ -83,11 +96,23 @@ class WidgetQueryProvider implements QueryProviderInterface
         $config = $params['config'] ?? [];
         $area = (string)($params['area'] ?? 'frontend');
 
-        if ($module === 'Weline_Theme' && str_contains($code, '/')) {
-            return $this->placeableRegistry->renderPreview($module, 'theme_component', $code, is_array($config) ? $config : [], null, $area);
+        $provider = $this->libraryProvider();
+        if ($provider instanceof WidgetLibraryProviderInterface && $provider->supports($module, $code, $area)) {
+            return $provider->renderPreview($module, $code, is_array($config) ? $config : [], $area);
         }
 
         return $this->previewService->render($module, $code, is_array($config) ? $config : [], $area);
+    }
+
+    private function libraryProvider(): ?WidgetLibraryProviderInterface
+    {
+        if ($this->libraryProviderResolved) {
+            return $this->libraryProvider;
+        }
+
+        $this->libraryProviderResolved = true;
+        $provider = $this->runtimeProviderResolver->resolve(WidgetLibraryProviderInterface::class);
+        return $this->libraryProvider = $provider instanceof WidgetLibraryProviderInterface ? $provider : null;
     }
 
     public function getDescriptor(): array

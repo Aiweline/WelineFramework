@@ -1,0 +1,22 @@
+{
+    "name": "weline/module-shipping",
+    "description": "WelineFramework Shipping module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-i18n": "@dev"
+    },
+    "suggest": {
+        "weline/module-frontend": "Adds frontend customer lookup to backend delivery-address management.",
+        "weline/module-theme": "Enables shipping hooks integrated with the storefront theme."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Shipping\\": ""
+        }
+    }
+}

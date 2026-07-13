@@ -11,15 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller\System;
 
+use Weline\Acl\Api\Authorization\AccessMode;
 use Weline\Backend\Config\KeysInterface;
-use Weline\Acl\Model\Acl as AclModel;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Ui\FormKey;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
 #[Acl('Weline_Backend::system_config_set', '保存系统配置', 'mdi-content-save', '保存后台系统配置', 'Weline_Backend::system_config_group')]
 class Config extends \Weline\Framework\App\Controller\BackendController
@@ -29,7 +29,7 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         return FormKey::key_name;
     }
 
-    #[Acl('Weline_Backend::system_config_set_save', '保存系统配置', 'mdi-content-save', '保存后台系统配置', 'Weline_Backend::system_config_set', accessMode: AclModel::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Backend::system_config_set_save', '保存系统配置', 'mdi-content-save', '保存后台系统配置', 'Weline_Backend::system_config_set', accessMode: AccessMode::EDIT)]
     public function set(): string
     {
         if (!$this->request->isPost()) {

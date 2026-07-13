@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Address implements TaglibInterface
 {
@@ -133,7 +133,7 @@ class Address implements TaglibInterface
                 'selectCityFirst' => $translate('请先选择城市', 'Please select city first'),
             ];
 
-            $tagAttributes = \Weline\Taglib\Taglib::attributes($attributes);
+            $tagAttributes = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
             $data = [
                 'for' => implode('|', $levels),
                 'code' => $code,

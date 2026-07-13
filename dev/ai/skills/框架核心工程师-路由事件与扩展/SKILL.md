@@ -144,7 +144,11 @@ ProcessUrlBefore::clearCache();
 
 - 模块前缀：`etc/env.php` → `'router' => 'module_name'`
 - 新增控制器后：`php bin/w setup:upgrade --route`
-- 后台 URL 用 `getBackendUrl()`，前台用框架 URL 助手，禁止硬编码域名
+- 后台 URL 必须使用运行时后台区域 key 作为第一段：读取 `Env::getAreaRoutePrefix('backend')`，形成 `/{backendKey}/{module}/{area}/{controller}/{action}`；不得硬编码 `/backend` 或 `/admin`，也不得允许无 key 的后台 URL 作为回退。
+- `WELINE_AREA_ROUTE` 只表示当前请求已经解析出的区域上下文，不能作为生成后台 URL 的 key 来源；生成 URL 必须使用 `getBackendUrl()` 或统一 URL builder。
+- 模块 `etc/env.php` 的 `backend_router`（例如 `admin`）是模块内部路由名，不是后台区域 key。后台入口 key 来自 `router.area_routes.backend.prefix`，生产环境可能是随机字符串。
+- 例：若 `Env::getAreaRoutePrefix('backend')` 返回 `EXAMPLE_BACKEND_KEY`，i18n 国家页是 `/EXAMPLE_BACKEND_KEY/i18n/backend/countries`，而不是 `/i18n/backend/countries`；真实 key 必须在运行时读取，不能把示例值写死。
+- 后台 URL 用 `getBackendUrl()`，前台用框架 URL 助手，禁止硬编码域名或后台入口 key。
 
 ---
 
@@ -157,16 +161,18 @@ ProcessUrlBefore::clearCache();
 # Workflow
 
 1. 判断：固定路径 → 控制器 + env；自定义/随机公网 URL → `Controller/Router.php`
-2. Router 方案：定特征前缀 → 实现 `process()` → 改写内部 `$path` → 配置缓存与失效
-3. 若涉及 Theme 页面布局，先在目标 Controller 设置/检查 `$layoutType` 或业务布局选择逻辑；不要把 layout 塞进 Router 或 URL 参数
-4. 若涉及货币/语言 URL 前缀，先确认是否已复用共享解析逻辑；不要新增只支持固定顺序或双段同时出现的解析代码
-5. 控制器方案：改 Controller + `etc/env.php` → `setup:upgrade --route`
-6. HTTP / `http:request` 验证内外路径
+2. 后台路径先读取 `Env::getAreaRoutePrefix('backend')`，确认 URL 第一段带真实 key；再拼接模块内部路由，区分 `backendKey` 与模块 `backend_router`
+3. Router 方案：定特征前缀 → 实现 `process()` → 改写内部 `$path` → 配置缓存与失效
+4. 若涉及 Theme 页面布局，先在目标 Controller 设置/检查 `$layoutType` 或业务布局选择逻辑；不要把 layout 塞进 Router 或 URL 参数
+5. 若涉及货币/语言 URL 前缀，先确认是否已复用共享解析逻辑；不要新增只支持固定顺序或双段同时出现的解析代码
+6. 控制器方案：改 Controller + `etc/env.php` → `setup:upgrade --route`
+7. HTTP / `http:request` 验证带 key 的外部路径，并确认无 key 路径不会被当作后台入口
 
 # Validation
 
 - 静态路由变更：`php bin/w setup:upgrade --route`
 - Module Router：`curl` 公网路径 + 确认内部 Controller 被命中
+- 后台路由：从 `Env::getAreaRoutePrefix('backend')` 读取实际 key，验证 `/{backendKey}/...` 可访问；同时验证 `/...` 无 key 不会误判为后台路径
 - Theme 页面：确认响应中没有依赖 `layout_type`、`page_type`、`layout_option` 或 `theme/frontend/policy` 的公开路由残留
 - 本地化 URL：验证 `/USD/...`、`/zh_Hans_CN/...`、`/USD/zh_Hans_CN/...`、`/zh_Hans_CN/USD/...` 均能命中同一业务路由或预期跳转
 - 配置型随机路径：变更后确认 `ProcessUrlBefore::clearCache()` 已执行
@@ -178,6 +184,7 @@ ProcessUrlBefore::clearCache();
 - 禁止无特征前缀的全路径遍历匹配
 - 禁止用 Router、URL、query 参数选择 Theme layout；公开页布局必须由 Controller、事件/Observer、配置或业务上下文决定
 - 禁止本地化 URL 新逻辑只兼容单一前缀顺序、只兼容双段同时出现，或在路由剥离阶段依赖 allowed currency/language 配置
+- 后台 URL 禁止省略运行时 `backendKey`；禁止把模块 `backend_router`（如 `admin`）误当成后台区域 key；禁止让无 key 路径通过经验性的 `/admin` 或 `/backend` 判断进入后台
 
 # Shared Collaboration Contract
 

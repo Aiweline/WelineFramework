@@ -1,6 +1,17 @@
 # 后台菜单、ACL 与入口约定
 
-## 1. 菜单源只有 `menu.xml`
+## 1. 后台入口必须携带 area key
+
+后台 HTML 路由只能通过配置的 `area_routes.backend.prefix` 进入，并且 key 必须是 URL 的第一段：
+
+- 允许：`/{backend_key}/admin/login`
+- 允许：`/{backend_key}/{currency}/{locale}/admin/login`
+- 拒绝：`/admin/login`
+- 拒绝：`/{currency}/{locale}/admin/login`
+
+缺少 key、key 错误或大小写不一致时统一返回 404，不建立后台 Session，不执行登录、事件或业务控制器。路由解析层与 `BackendController` 入口层都必须保持这个不变量，禁止根据 `admin` 或 `backend` 路径字面量推断后台区域。
+
+## 2. 菜单源只有 `menu.xml`
 
 后台菜单声明源固定是：
 
@@ -14,7 +25,7 @@
 - `app/code/Weline/Backend/Service/MenuCollector.php`
 - `app/code/Weline/Backend/Config/MenuXmlReader.php`
 
-## 2. 父级链必须闭合
+## 3. 父级链必须闭合
 
 `MenuCollector` 会强校验 `parent_source`。如果某个菜单的父级不存在，会直接抛异常：
 
@@ -24,7 +35,7 @@
 
 所以新增菜单前，先确认父级 source 真存在。
 
-## 3. 菜单与 `#[Acl]` 要成对看
+## 4. 菜单与 `#[Acl]` 要成对看
 
 一个后台能力通常至少有两层入口：
 
@@ -37,7 +48,7 @@
 - 菜单出现但动作被拒
 - 子动作权限粒度失控
 
-## 4. 后台前端请求协议
+## 5. 后台前端请求协议
 
 后台页面也属于浏览器页面，业务请求仍然只能走：
 
@@ -47,7 +58,7 @@
 
 不要因为代码在后台模板里，就写原生 `fetch/ajax`。
 
-## 5. 页面落点
+## 6. 页面落点
 
 模板与资源优先落在：
 
@@ -58,7 +69,7 @@
 
 - `view/tpl/*`
 
-## 6. 扩展入口
+## 7. 扩展入口
 
 后台模块已提供一些稳定扩展面：
 

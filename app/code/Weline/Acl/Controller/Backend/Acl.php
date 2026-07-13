@@ -15,7 +15,7 @@ namespace Weline\Acl\Controller\Backend;
 use Weline\Framework\Manager\ObjectManager;
 
 #[\Weline\Framework\Acl\Acl('Weline_Acl::acl', '管理权限','mdi mdi-security', '')]
-class Acl extends \Weline\Admin\Controller\BaseController
+class Acl extends \Weline\Framework\App\Controller\BackendPageController
 {
     function getIndex()
     {

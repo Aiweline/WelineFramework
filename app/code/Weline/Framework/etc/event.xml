@@ -16,11 +16,6 @@
         <observer name="Weline_Framework_Api::maintenance_response" instance="Weline\Framework\Api\Observer\Maintenance" disabled="false" shared="true" sort="-100"/>
     </event>
     
-    <!-- App 运行前检查全页缓存（URL 解析之前，仅做后端判断） -->
-    <event name="Weline_Framework::App::run_before">
-        <observer name="Weline_Framework_Router::check_full_page_cache" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>
-    </event>
-    
     <!-- URL 解析后检查全页缓存（此时可以生成正确的缓存键） -->
     <event name="Weline_Framework::App::url_parsed_after">
         <observer name="Weline_Framework_Router::check_full_page_cache_after_parse" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>

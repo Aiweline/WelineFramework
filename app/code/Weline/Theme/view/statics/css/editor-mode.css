@@ -33,6 +33,103 @@ body.editor-mode [data-editor-interactive] {
     user-select: auto;
 }
 
+/* 真实后台预览模式提示：仅由 ThemeEditor 预览响应注入。 */
+.theme-preview-mode-notice {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 2147483000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(520px, calc(100vw - 32px));
+    padding: 10px 12px;
+    color: #f8fafc;
+    background: rgba(15, 23, 42, 0.96);
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(2, 6, 23, 0.34);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    pointer-events: auto;
+    user-select: text;
+}
+
+.theme-preview-mode-notice__icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    color: #bfdbfe;
+    background: rgba(37, 99, 235, 0.28);
+    border-radius: 9px;
+}
+
+.theme-preview-mode-notice__copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.theme-preview-mode-notice__copy strong {
+    color: #f8fafc;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.theme-preview-mode-notice__copy small {
+    color: #cbd5e1;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.theme-preview-mode-notice__exit {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 34px;
+    padding: 0 11px;
+    color: #fff !important;
+    background: #2563eb;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none !important;
+    transition: background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.theme-preview-mode-notice__exit:hover {
+    color: #fff !important;
+    background: #1d4ed8;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.32);
+}
+
+.theme-preview-mode-notice__exit:focus-visible {
+    outline: 3px solid rgba(147, 197, 253, 0.9);
+    outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+    .theme-preview-mode-notice {
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+    }
+
+    .theme-preview-mode-notice__copy small {
+        display: none;
+    }
+
+    .theme-preview-mode-notice__exit {
+        margin-left: auto;
+    }
+}
+
 body.editor-mode [data-editor-interactive] a,
 body.editor-mode [data-editor-interactive] button,
 body.editor-mode [data-editor-interactive] input,

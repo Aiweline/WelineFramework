@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Router;
 
-use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
 use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Session\Auth\AreaConfig;
@@ -44,6 +46,7 @@ final class FullPageCacheCoordinator
     private const FRONTEND_LOGIN_SESSION_NEGATIVE_TTL_SECONDS = 30.0;
     private const FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS = 1.0;
     private const FRONTEND_LOGIN_SESSION_CACHE_MAX_ITEMS = 1024;
+    private const INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY = 'wls.fpc.internal_homepage_receipt';
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
@@ -172,7 +175,12 @@ final class FullPageCacheCoordinator
         }
 
         $lockKey = $this->getBuildLockKey($method);
-        $adapter = $this->resolveWlsMemoryAdapter();
+        // The shared-state backend currently applies TTL at namespace scope.
+        // Keeping the short-lived build lock in cache:router would let the
+        // one-second release tombstone expire every route/FPC entry in that
+        // namespace. Isolate locks in the dedicated single-flight pool so
+        // cache payload lifetime can never be shortened by lock lifecycle.
+        $adapter = $this->resolveAtomicCacheAdapter('single_flight');
         if ($adapter !== null) {
             $token = $this->generateLockToken();
             if ($adapter->compareAndSet($lockKey, null, $token, self::LOCK_TTL_SECONDS)) {
@@ -258,7 +266,7 @@ final class FullPageCacheCoordinator
         }
 
         if (($lock['driver'] ?? '') === 'shared') {
-            $adapter = $this->resolveWlsMemoryAdapter();
+            $adapter = $this->resolveAtomicCacheAdapter('single_flight');
             $token = (string)($lock['token'] ?? '');
             $key = (string)($lock['key'] ?? '');
             if ($adapter !== null && $token !== '' && $key !== '') {
@@ -355,6 +363,12 @@ final class FullPageCacheCoordinator
             );
         }
         $this->setProcessCachedPayload($unifiedCacheKey, $payload);
+        if (InternalHomepagePrime::isCurrentRequest()) {
+            RequestContext::set(
+                self::INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY,
+                $this->buildInternalHomepageWarmupReceipt($fullUri, $variant, $unifiedCacheKey)
+            );
+        }
         self::cooperativeBuildYield();
         $formattedGzip = $this->buildFormattedGzipKeepAliveResponse($payload, 'shared');
         if ($formattedGzip !== null) {
@@ -450,13 +464,31 @@ final class FullPageCacheCoordinator
 
     public function shouldBypassForDynamicFirstRender(): bool
     {
+        // READY-gate warmup runs before the public accept loop and may execute
+        // on the persistent Worker main thread. WelineEnv intentionally rejects
+        // persistent main-thread fallback to avoid cross-request globals, so
+        // read the immutable active request Context first (the same invariant
+        // used by InternalHomepagePrime) and only then use the normal accessor.
+        $contextServer = Context::getCurrent()?->server();
         foreach ([
-            WelineEnv::server('WLS_FPC_BYPASS', null),
-            WelineEnv::server('WLS_INTERNAL_DYNAMIC_WARMUP', null),
-            WelineEnv::server('HTTP_X_WLS_FPC_BYPASS', null),
-            WelineEnv::server('HTTP_X_WLS_DYNAMIC_WARMUP', null),
-            WelineEnv::server('HTTP_X_WLS_DYNAMIC_BENCHMARK', null),
-        ] as $flag) {
+            'WLS_FPC_BYPASS',
+            'WLS_INTERNAL_DYNAMIC_WARMUP',
+            'HTTP_X_WLS_FPC_BYPASS',
+            'HTTP_X_WLS_INTERNAL_FPC_BYPASS',
+            'HTTP_X_WLS_DYNAMIC_WARMUP',
+            'HTTP_X_WLS_INTERNAL_DYNAMIC_WARMUP',
+            'HTTP_X_WLS_DYNAMIC_BENCHMARK',
+            'HTTP_X_WLS_FPC_PRIME',
+            // Defensive aliases accepted by WorkerFullPageCacheFastPath.
+            'HTTP_WLS_FPC_BYPASS',
+            'HTTP_WLS_INTERNAL_DYNAMIC_WARMUP',
+            'HTTP_HTTP_X_WLS_FPC_BYPASS',
+            'HTTP_HTTP_X_WLS_DYNAMIC_WARMUP',
+            'HTTP_HTTP_X_WLS_DYNAMIC_BENCHMARK',
+        ] as $key) {
+            $flag = \is_array($contextServer) && \array_key_exists($key, $contextServer)
+                ? $contextServer[$key]
+                : WelineEnv::server($key, null);
             if (\is_scalar($flag)
                 && \in_array(\strtolower(\trim((string)$flag)), ['1', 'true', 'yes', 'on'], true)) {
                 return true;
@@ -468,16 +500,7 @@ final class FullPageCacheCoordinator
 
     private function internalFpcWarmupMode(): string
     {
-        if ((string)WelineEnv::server('WLS_INTERNAL_WARMUP', '') !== '1'
-            || (string)WelineEnv::server('WLS_INTERNAL_DYNAMIC_WARMUP', '') !== '1'
-        ) {
-            return '';
-        }
-
-        if ((string)WelineEnv::server('HTTP_X_WLS_FPC_PRIME', '') === '1') {
-            return 'prime';
-        }
-        return '';
+        return InternalHomepagePrime::isCurrentRequest() ? 'prime' : '';
     }
 
     public function shouldBypassCachedResponseForClientCacheControl(): bool
@@ -711,6 +734,79 @@ final class FullPageCacheCoordinator
         $this->setProcessCachedPayload($cacheKey, $cached);
         $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey));
         return $this->getProcessCachedPayload($cacheKey) !== null;
+    }
+
+    /**
+     * Return the exact anonymous FPC identity used by the current homepage
+     * prime. Public requests can never obtain this receipt: the predicate
+     * requires transport-injected server markers which HTTP headers cannot
+     * create on their own.
+     *
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}|null
+     */
+    public function currentInternalHomepageWarmupReceipt(): ?array
+    {
+        if (!InternalHomepagePrime::isCurrentRequest()) {
+            return null;
+        }
+
+        $publishedReceipt = RequestContext::get(self::INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY);
+        if (\is_array($publishedReceipt)
+            && (int)($publishedReceipt['version'] ?? 0) === 1
+            && (string)($publishedReceipt['method'] ?? '') === 'GET'
+            && KeyBuilder::isValidFullPageCacheKey((string)($publishedReceipt['full_uri'] ?? ''))
+            && \preg_match('/^[a-f0-9]{64}$/D', (string)($publishedReceipt['identity_digest'] ?? '')) === 1
+        ) {
+            return $publishedReceipt;
+        }
+
+        $fullUri = $this->getCacheKeyFullUri();
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return null;
+        }
+
+        $variant = $this->buildCurrentFpcVariant();
+        if ($this->privateSessionTokenFromVariant($variant) !== '') {
+            return null;
+        }
+        $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, 'GET', $variant);
+
+        return $this->buildInternalHomepageWarmupReceipt($fullUri, $variant, $cacheKey);
+    }
+
+    /**
+     * Capture the exact identity that was used to publish or serve the
+     * internal homepage prime. The caller supplies the already-resolved
+     * full URI, variant and unified key so later Context mutations cannot
+     * produce a different receipt.
+     *
+     * @param array<string, mixed> $variant
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}|null
+     */
+    private function buildInternalHomepageWarmupReceipt(
+        string $fullUri,
+        array $variant,
+        string $unifiedCacheKey
+    ): ?array {
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)
+            || $unifiedCacheKey === ''
+            || $this->privateSessionTokenFromVariant($variant) !== ''
+        ) {
+            return null;
+        }
+
+        $lang = $this->normalizeVariantLang((string)($variant['lang'] ?? ''));
+        $currency = $this->normalizeVariantCurrency((string)($variant['currency'] ?? ''));
+        $cookieHeader = 'WELINE_USER_LANG=' . \rawurlencode($lang)
+            . '; WELINE_USER_CURRENCY=' . \rawurlencode($currency);
+
+        return [
+            'version' => 1,
+            'full_uri' => $fullUri,
+            'method' => 'GET',
+            'cookie_header' => $cookieHeader,
+            'identity_digest' => \hash('sha256', $unifiedCacheKey),
+        ];
     }
 
     /**
@@ -2614,15 +2710,24 @@ final class FullPageCacheCoordinator
         return $this->cacheManager;
     }
 
-    private function resolveWlsMemoryAdapter(): ?WlsMemoryAdapter
+    private function resolveAtomicCacheAdapter(string $poolIdentity = 'router'): ?AtomicCacheAdapterInterface
     {
-        $cache = $this->cache();
+        // An explicitly supplied pool is the complete cache boundary for
+        // isolated construction (for example a module-owned adapter or a
+        // focused harness). Production ObjectManager construction supplies
+        // neither nullable dependency, so non-router locks still resolve the
+        // dedicated single_flight pool through CacheManager.
+        $useInjectedPool = $poolIdentity === 'router'
+            || ($this->cachePool !== null && $this->cacheManager === null);
+        $cache = $useInjectedPool
+            ? $this->cache()
+            : $this->cacheManager()->pool($poolIdentity);
         if (!\method_exists($cache, 'getAdapter')) {
             return null;
         }
 
         $adapter = $cache->getAdapter();
-        return $adapter instanceof WlsMemoryAdapter ? $adapter : null;
+        return $adapter instanceof AtomicCacheAdapterInterface ? $adapter : null;
     }
 
     /**

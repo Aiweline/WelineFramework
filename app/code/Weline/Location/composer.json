@@ -1,0 +1,16 @@
+{
+    "name": "weline/module-location",
+    "description": "WelineFramework Location module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-theme": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Location\\": ""
+        }
+    }
+}

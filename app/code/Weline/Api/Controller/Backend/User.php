@@ -13,7 +13,8 @@ namespace Weline\Api\Controller\Backend;
 
 use Weline\Api\Model\ApiUser;
 use Weline\Api\Model\ApiUserRole;
-use Weline\Acl\Model\Role;
+use Weline\Acl\Api\Role;
+use Weline\Acl\Api\RoleAccess;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -444,8 +445,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
         }
         
         // 获取权限树（使用RoleAccess的getTreeWithRole方法）
-        /** @var \Weline\Acl\Model\RoleAccess $roleAccessModel */
-        $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
+        /** @var RoleAccess $roleAccessModel */
+        $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
         $trees = $roleAccessModel->clear()->getTreeWithRole($userRole);
         
         // 获取当前角色已分配的权限
@@ -494,26 +495,26 @@ class User extends \Weline\Framework\App\Controller\BackendController
                     continue;
                 }
                 $acls[] = [
-                    \Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID => $roleId,
-                    \Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID => $aclId,
+                    RoleAccess::schema_fields_ROLE_ID => $roleId,
+                    RoleAccess::schema_fields_SOURCE_ID => $aclId,
                 ];
             }
             
-            /** @var \Weline\Acl\Model\RoleAccess $roleAccessModel */
-            $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
+            /** @var RoleAccess $roleAccessModel */
+            $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
             $roleAccessModel->beginTransaction();
             
             try {
                 // 清除角色原有权限
                 $roleAccessModel->reset()
-                    ->where(\Weline\Acl\Model\Role::schema_fields_ROLE_ID, $roleId)
+                    ->where(Role::schema_fields_ROLE_ID, $roleId)
                     ->delete()
                     ->fetch();
                 
                 // 保存新权限
                 if (!empty($acls)) {
                     $roleAccessModel->reset()
-                        ->insert($acls, [\Weline\Acl\Model\Role::schema_fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID])
+                        ->insert($acls, [Role::schema_fields_ROLE_ID, RoleAccess::schema_fields_SOURCE_ID])
                         ->fetch();
                 }
                 
@@ -537,4 +538,3 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/api/backend/user/assign-permissions', ['id' => $userId ?? 0]);
     }
 }
-

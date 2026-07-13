@@ -1,24 +1,21 @@
 {
-  "name": "weline/module-taglib",
-  "description": "WelineFramework taglib module",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "weline/framework": "@dev"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Taglib\\": ""
+    "name": "weline/module-taglib",
+    "description": "WelineFramework taglib module",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-module-manager": "@dev"
     },
-    "psr-0": {
-      "Weline\\Taglib\\": ""
-    }
-  },
-  "license": "MIT"
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Taglib\\": ""
+        }
+    },
+    "license": "MIT"
 }

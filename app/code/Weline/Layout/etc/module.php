@@ -1,0 +1,11 @@
+<?php
+
+return [
+    "name" => 'Weline_Layout',
+    "version" => '0.0.0',
+    "requires" => [
+    ],
+    "optional" => [
+    ],
+    "provides" => [],
+];

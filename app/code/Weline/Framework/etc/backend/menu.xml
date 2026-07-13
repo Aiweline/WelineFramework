@@ -15,7 +15,7 @@
           name="env_manager" 
           title="环境管理" 
           action="weline_framework/backend/env-manager"
-          parent="Weline_Backend::system_service_group" 
+          parent="Weline_Framework::system_service_group"
           icon="mdi mdi-chip" 
           order="90"/>
 </menus>

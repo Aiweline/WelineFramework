@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Helper;
 
-use Weline\Eav\Model\EavAttribute;
-use Weline\Eav\Model\EavAttribute\Group;
-use Weline\Eav\Model\EavAttribute\Set;
-use Weline\Eav\Model\EavAttribute\Type;
-use Weline\Eav\Model\EavAttribute\Type\Value;
-use Weline\Eav\Model\EavEntity;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Eav\Api\Attribute\AttributeDefinition;
+use Weline\Eav\Api\Attribute\AttributeRecord;
+use Weline\Eav\Api\Attribute\AttributeStorageException;
+use Weline\Eav\Api\Attribute\EntityAttributeStoreInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Payment\Model\PaymentMethodAttributeEntity;
 
 class PaymentMethodAttributeHelper
@@ -19,12 +17,11 @@ class PaymentMethodAttributeHelper
     public const DEFAULT_GROUP_CODE = 'default';
     public const DEFAULT_TYPE_CODE = 'input_string';
 
+    private ?EntityAttributeStoreInterface $attributeStore = null;
+
     public function __construct(
         private readonly PaymentMethodAttributeEntity $methodEntity,
-        private readonly EavAttribute $attribute,
-        private readonly Type $type,
-        private readonly Set $set,
-        private readonly Group $group
+        private readonly RuntimeProviderResolver $runtimeProviders,
     ) {
     }
 
@@ -35,73 +32,54 @@ class PaymentMethodAttributeHelper
         bool $isMultiple = false,
         bool $hasOption = false,
         string $setCode = self::DEFAULT_SET_CODE,
-        string $groupCode = self::DEFAULT_GROUP_CODE
-    ): EavAttribute {
+        string $groupCode = self::DEFAULT_GROUP_CODE,
+    ): AttributeRecord {
         $attributeCode = $this->normalizeCode($attributeCode, 'payment_attribute_code_invalid');
         $label = trim($label) ?: $attributeCode;
-        $entity = $this->requireEavEntity();
-        $type = $this->requireType($typeCode);
-        $set = $this->requireSet((int) $entity->getId(), $setCode);
-        $group = $this->requireGroup((int) $entity->getId(), (int) $set->getId(), $groupCode);
+        $typeCode = $this->normalizeCode($typeCode, 'payment_attribute_type_invalid');
+        $setCode = $this->normalizeCode($setCode, 'payment_attribute_set_invalid');
+        $groupCode = $this->normalizeCode($groupCode, 'payment_attribute_group_invalid');
 
-        $attribute = $this->findAttribute($attributeCode);
-        if (!$attribute->getId()) {
-            $attribute = ObjectManager::make(EavAttribute::class);
-        }
-
-        $this->methodEntity->syncAttributeSequence();
-
-        $attribute
-            ->clearData()
-            ->setData([
-                EavAttribute::schema_fields_code => $attributeCode,
-                EavAttribute::schema_fields_name => $label,
-                EavAttribute::schema_fields_type_id => (int) $type->getId(),
-                EavAttribute::schema_fields_set_id => (int) $set->getId(),
-                EavAttribute::schema_fields_group_id => (int) $group->getId(),
-                EavAttribute::schema_fields_eav_entity_id => (int) $entity->getId(),
-                EavAttribute::schema_fields_is_system => 0,
-                EavAttribute::schema_fields_basic_is_enable => 1,
-                EavAttribute::schema_fields_data_is_multiple => $isMultiple ? 1 : 0,
-                EavAttribute::schema_fields_data_has_option => $hasOption ? 1 : 0,
-            ])
-            ->forceCheck(true, [EavAttribute::schema_fields_eav_entity_id, EavAttribute::schema_fields_code])
-            ->save();
-
-        $attribute = $this->findAttribute($attributeCode);
-        $this->bindAttributeEntity($attribute);
-
-        return $attribute;
+        return $this->storeCall(fn(): AttributeRecord => $this->store()->declareAttribute(
+            $this->methodEntity,
+            new AttributeDefinition(
+                code: $attributeCode,
+                name: $label,
+                typeCode: $typeCode,
+                multiple: $isMultiple,
+                hasOption: $hasOption,
+                setCode: $setCode,
+                groupCode: $groupCode,
+            ),
+        ));
     }
 
-    public function getAttribute(string $attributeCode): ?EavAttribute
+    public function getAttribute(string $attributeCode): ?AttributeRecord
     {
-        $attribute = $this->findAttribute($attributeCode);
-        if (!$attribute->getId()) {
-            return null;
-        }
+        $attributeCode = $this->normalizeCode($attributeCode, 'payment_attribute_code_invalid');
 
-        $this->bindAttributeEntity($attribute);
-
-        return $attribute;
+        return $this->storeCall(
+            fn(): ?AttributeRecord => $this->store()->getAttribute($this->methodEntity, $attributeCode),
+        );
     }
 
     public function getValue(string $methodCode, string $attributeCode, mixed $default = null): mixed
     {
         $method = $this->requireMethod($methodCode);
         $attribute = $this->getAttribute($attributeCode);
-        if (!$attribute) {
+        if ($attribute === null) {
             return $default;
         }
 
-        $this->bindAttributeEntity($attribute, $method);
-        $value = $this->readAttributeValue($attribute, (int) $method->getId());
+        $value = $this->storeCall(
+            fn(): mixed => $this->store()->readValue($method, (int)$method->getId(), $attribute),
+        );
 
         return $value === '' || $value === [] ? $default : $value;
     }
 
     /**
-     * @param array<int, string>|null $attributeCodes
+     * @param list<string>|null $attributeCodes
      * @return array<string, mixed>
      */
     public function getValues(string $methodCode, ?array $attributeCodes = null): array
@@ -109,53 +87,62 @@ class PaymentMethodAttributeHelper
         $method = $this->requireMethod($methodCode);
         $attributes = $attributeCodes === null
             ? $this->getAttributes()
-            : array_filter(array_map(fn(string $code): ?EavAttribute => $this->getAttribute($code), $attributeCodes));
+            : array_values(array_filter(array_map(
+                fn(string $code): ?AttributeRecord => $this->getAttribute($code),
+                $attributeCodes,
+            )));
         $values = [];
 
         foreach ($attributes as $attribute) {
-            if (!$attribute instanceof EavAttribute) {
-                continue;
-            }
-            $this->bindAttributeEntity($attribute, $method);
-            $values[$attribute->getCode()] = $this->readAttributeValue($attribute, (int) $method->getId());
+            $values[$attribute->code] = $this->storeCall(
+                fn(): mixed => $this->store()->readValue($method, (int)$method->getId(), $attribute),
+            );
         }
 
         return $values;
     }
 
     /**
-     * @param string|int|array<int, string|int> $value
+     * @param string|int|list<string|int> $value
+     * @param array<string, mixed> $definition
      */
     public function setValue(
         string $methodCode,
         string $attributeCode,
         string|int|array $value,
-        array $definition = []
-    ): EavAttribute {
+        array $definition = [],
+    ): AttributeRecord {
         $method = $this->requireMethod($methodCode);
         $attribute = $this->getAttribute($attributeCode);
 
-        if (!$attribute) {
+        if ($attribute === null) {
             $attribute = $this->declareAttribute(
                 $attributeCode,
-                (string) ($definition['label'] ?? $attributeCode),
-                (string) ($definition['type'] ?? self::DEFAULT_TYPE_CODE),
-                (bool) ($definition['multiple'] ?? \is_array($value)),
-                (bool) ($definition['has_option'] ?? false),
-                (string) ($definition['set'] ?? self::DEFAULT_SET_CODE),
-                (string) ($definition['group'] ?? self::DEFAULT_GROUP_CODE)
+                (string)($definition['label'] ?? $attributeCode),
+                (string)($definition['type'] ?? self::DEFAULT_TYPE_CODE),
+                (bool)($definition['multiple'] ?? is_array($value)),
+                (bool)($definition['has_option'] ?? false),
+                (string)($definition['set'] ?? self::DEFAULT_SET_CODE),
+                (string)($definition['group'] ?? self::DEFAULT_GROUP_CODE),
             );
         }
 
-        $this->bindAttributeEntity($attribute, $method);
-        $this->writeAttributeValue($attribute, (int) $method->getId(), $this->normalizeValue($value));
-        $attribute->unsetData(EavAttribute::value_key);
+        $value = $this->normalizeValue($value);
+        if (is_array($value) && !$attribute->multiple && count($value) > 1) {
+            throw new \InvalidArgumentException(
+                'payment_attribute_single_value_expected:' . $attribute->code,
+            );
+        }
+
+        $this->storeCall(function () use ($method, $attribute, $value): void {
+            $this->store()->replaceValue($method, (int)$method->getId(), $attribute, $value);
+        });
 
         return $attribute;
     }
 
     /**
-     * @param array<string, string|int|array<int, string|int>> $values
+     * @param array<string, string|int|list<string|int>> $values
      * @param array<string, array<string, mixed>> $definitions
      * @return array<string, mixed>
      */
@@ -164,12 +151,12 @@ class PaymentMethodAttributeHelper
         $saved = [];
 
         foreach ($values as $attributeCode => $value) {
-            $attributeCode = (string) $attributeCode;
-            $saved[$attributeCode] = $this->setValue(
+            $attributeCode = (string)$attributeCode;
+            $this->setValue(
                 $methodCode,
                 $attributeCode,
                 $value,
-                $definitions[$attributeCode] ?? []
+                $definitions[$attributeCode] ?? [],
             );
             $saved[$attributeCode] = $this->getValue($methodCode, $attributeCode);
         }
@@ -178,25 +165,13 @@ class PaymentMethodAttributeHelper
     }
 
     /**
-     * @return array<int, EavAttribute>
+     * @return list<AttributeRecord>
      */
     public function getAttributes(): array
     {
-        $entity = $this->requireEavEntity();
-        $attributes = $this->attribute
-            ->reset()
-            ->where(EavAttribute::schema_fields_eav_entity_id, (int) $entity->getId())
-            ->select()
-            ->fetch()
-            ->getItems();
-
-        foreach ($attributes as $attribute) {
-            if ($attribute instanceof EavAttribute) {
-                $this->bindAttributeEntity($attribute);
-            }
-        }
-
-        return $attributes;
+        return $this->storeCall(
+            fn(): array => $this->store()->getAttributes($this->methodEntity),
+        );
     }
 
     public function getEntityCode(): string
@@ -207,8 +182,8 @@ class PaymentMethodAttributeHelper
     private function requireMethod(string $methodCode): PaymentMethodAttributeEntity
     {
         $methodCode = $this->normalizeMethodCode($methodCode);
-        $method = ObjectManager::make(PaymentMethodAttributeEntity::class);
-        $method->load(PaymentMethodAttributeEntity::schema_fields_CODE, $methodCode);
+        $method = clone $this->methodEntity;
+        $method->reset()->clearData()->load(PaymentMethodAttributeEntity::schema_fields_CODE, $methodCode);
 
         if (!$method->getId()) {
             throw new \InvalidArgumentException('payment_method_not_found:' . $methodCode);
@@ -217,178 +192,54 @@ class PaymentMethodAttributeHelper
         return $method;
     }
 
-    private function findAttribute(string $attributeCode): EavAttribute
+    private function store(): EntityAttributeStoreInterface
     {
-        $attributeCode = $this->normalizeCode($attributeCode, 'payment_attribute_code_invalid');
-        $entity = $this->requireEavEntity();
-        $attribute = ObjectManager::make(EavAttribute::class);
-        $attribute
-            ->where(EavAttribute::schema_fields_eav_entity_id, (int) $entity->getId())
-            ->where(EavAttribute::schema_fields_code, $attributeCode)
-            ->find()
-            ->fetch();
-
-        return $attribute;
-    }
-
-    private function requireEavEntity(): EavEntity
-    {
-        $entity = ObjectManager::make(EavEntity::class);
-        $entity->load(EavEntity::schema_fields_code, PaymentMethodAttributeEntity::entity_code);
-
-        if (!$entity->getId()) {
-            throw new \RuntimeException('payment_method_eav_entity_not_registered');
+        if ($this->attributeStore instanceof EntityAttributeStoreInterface) {
+            return $this->attributeStore;
         }
 
-        return $entity;
-    }
-
-    private function requireType(string $typeCode): Type
-    {
-        $typeCode = $this->normalizeCode($typeCode, 'payment_attribute_type_invalid');
-        $type = ObjectManager::make(Type::class);
-        $type->load(Type::schema_fields_code, $typeCode);
-
-        if (!$type->getId()) {
-            throw new \InvalidArgumentException('payment_attribute_type_not_found:' . $typeCode);
+        $store = $this->runtimeProviders->resolve(EntityAttributeStoreInterface::class);
+        if (!$store instanceof EntityAttributeStoreInterface) {
+            throw new \RuntimeException('payment_method_eav_provider_unavailable');
         }
 
-        return $type;
+        return $this->attributeStore = $store;
     }
 
-    private function requireSet(int $entityId, string $setCode): Set
+    private function storeCall(callable $operation): mixed
     {
-        $setCode = $this->normalizeCode($setCode, 'payment_attribute_set_invalid');
-        $set = ObjectManager::make(Set::class);
-        $set
-            ->where(Set::schema_fields_eav_entity_id, $entityId)
-            ->where(Set::schema_fields_code, $setCode)
-            ->find()
-            ->fetch();
-
-        if (!$set->getId()) {
-            throw new \RuntimeException('payment_attribute_set_not_found:' . $setCode);
+        try {
+            return $operation();
+        } catch (AttributeStorageException $exception) {
+            $this->throwMappedStorageException($exception);
         }
-
-        return $set;
     }
 
-    private function requireGroup(int $entityId, int $setId, string $groupCode): Group
+    private function throwMappedStorageException(AttributeStorageException $exception): never
     {
-        $groupCode = $this->normalizeCode($groupCode, 'payment_attribute_group_invalid');
-        $group = ObjectManager::make(Group::class);
-        $group
-            ->where(Group::schema_fields_eav_entity_id, $entityId)
-            ->where(Group::schema_fields_set_id, $setId)
-            ->where(Group::schema_fields_code, $groupCode)
-            ->find()
-            ->fetch();
-
-        if (!$group->getId()) {
-            throw new \RuntimeException('payment_attribute_group_not_found:' . $groupCode);
-        }
-
-        return $group;
-    }
-
-    private function bindAttributeEntity(EavAttribute $attribute, ?PaymentMethodAttributeEntity $method = null): void
-    {
-        $entity = $method ?? $this->methodEntity;
-        $attribute->current_setEntity($entity);
-        $attribute->resetTypeModel();
-    }
-
-    private function readAttributeValue(EavAttribute $attribute, int $methodId): mixed
-    {
-        $valueModel = $attribute->w_getValueModel();
-        $valueModel
-            ->reset()
-            ->fields(Value::schema_fields_value)
-            ->where(Value::schema_fields_attribute_id, $this->getAttributeId($attribute))
-            ->where(Value::schema_fields_entity_id, $methodId);
-
-        if ($attribute->getMultipleValued()) {
-            return array_map(
-                static fn(array $row): mixed => $row[Value::schema_fields_value] ?? null,
-                $valueModel->select()->fetchArray()
-            );
-        }
-
-        $row = $valueModel->find()->fetchArray();
-
-        return $row[Value::schema_fields_value] ?? '';
-    }
-
-    private function writeAttributeValue(EavAttribute $attribute, int $methodId, string|int|array $value): void
-    {
-        $attributeId = $this->getAttributeId($attribute);
-        $valueModel = $attribute->w_getValueModel();
-        $this->deleteAttributeValues($valueModel, $attributeId, $methodId);
-
-        $items = \is_array($value) ? $value : [$value];
-        if (!$attribute->getMultipleValued() && \count($items) > 1) {
-            throw new \InvalidArgumentException('payment_attribute_single_value_expected:' . $attribute->getCode());
-        }
-        if ($items === []) {
-            return;
-        }
-
-        $rows = array_map(
-            static fn(string|int $item): array => [
-                Value::schema_fields_attribute_id => $attributeId,
-                Value::schema_fields_entity_id => $methodId,
-                Value::schema_fields_value => $item,
-            ],
-            $items
-        );
-
-        $valueModel
-            ->reset()
-            ->insert($rows, [Value::schema_fields_entity_id, Value::schema_fields_attribute_id, Value::schema_fields_value])
-            ->fetch();
-    }
-
-    private function deleteAttributeValues(Value $valueModel, int $attributeId, int $methodId): void
-    {
-        $connector = $valueModel->getConnection()->getConnector();
-        $connectorClass = $connector::class;
-        $table = $this->quoteQualifiedIdentifier($valueModel->getTable(), $connectorClass);
-        $attributeField = $this->quoteIdentifier(Value::schema_fields_attribute_id, $connectorClass);
-        $entityField = $this->quoteIdentifier(Value::schema_fields_entity_id, $connectorClass);
-
-        $connector
-            ->query("DELETE FROM {$table} WHERE {$attributeField} = {$attributeId} AND {$entityField} = {$methodId}")
-            ->fetch();
-    }
-
-    private function getAttributeId(EavAttribute $attribute): int
-    {
-        $attributeId = (int) $attribute->getData(EavAttribute::schema_fields_attribute_id);
-        if ($attributeId <= 0) {
-            throw new \RuntimeException('payment_attribute_id_missing:' . $attribute->getCode());
-        }
-
-        return $attributeId;
-    }
-
-    private function quoteQualifiedIdentifier(string $identifier, string $connectorClass): string
-    {
-        $parts = array_filter(
-            array_map(static fn(string $part): string => trim($part, "`\" \t\n\r\0\x0B"), explode('.', $identifier)),
-            static fn(string $part): bool => $part !== ''
-        );
-
-        return implode('.', array_map(
-            fn(string $part): string => $this->quoteIdentifier($part, $connectorClass),
-            $parts
-        ));
-    }
-
-    private function quoteIdentifier(string $identifier, string $connectorClass): string
-    {
-        $quote = str_contains(strtolower($connectorClass), 'mysql') ? '`' : '"';
-
-        return $quote . str_replace($quote, $quote . $quote, $identifier) . $quote;
+        throw match ($exception->reason) {
+            AttributeStorageException::ENTITY_NOT_REGISTERED => new \RuntimeException(
+                'payment_method_eav_entity_not_registered',
+                previous: $exception,
+            ),
+            AttributeStorageException::TYPE_NOT_FOUND => new \InvalidArgumentException(
+                'payment_attribute_type_not_found:' . $exception->resourceCode,
+                previous: $exception,
+            ),
+            AttributeStorageException::SET_NOT_FOUND => new \RuntimeException(
+                'payment_attribute_set_not_found:' . $exception->resourceCode,
+                previous: $exception,
+            ),
+            AttributeStorageException::GROUP_NOT_FOUND => new \RuntimeException(
+                'payment_attribute_group_not_found:' . $exception->resourceCode,
+                previous: $exception,
+            ),
+            AttributeStorageException::ATTRIBUTE_ID_MISSING => new \RuntimeException(
+                'payment_attribute_id_missing:' . $exception->resourceCode,
+                previous: $exception,
+            ),
+            default => $exception,
+        };
     }
 
     private function normalizeMethodCode(string $methodCode): string
@@ -407,18 +258,18 @@ class PaymentMethodAttributeHelper
     }
 
     /**
-     * @param string|int|array<int, string|int> $value
-     * @return string|int|array<int, string|int>
+     * @param string|int|list<string|int> $value
+     * @return string|int|list<string|int>
      */
     private function normalizeValue(string|int|array $value): string|int|array
     {
-        if (\is_array($value)) {
+        if (is_array($value)) {
             return array_values(array_map(
-                static fn(string|int $item): string|int => \is_int($item) ? $item : trim((string) $item),
-                $value
+                static fn(string|int $item): string|int => is_int($item) ? $item : trim((string)$item),
+                $value,
             ));
         }
 
-        return \is_int($value) ? $value : trim($value);
+        return is_int($value) ? $value : trim($value);
     }
 }

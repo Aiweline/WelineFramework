@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Contract;
 
+use Weline\Server\Service\Runtime\EffectiveTopology;
+
 /**
  * 服务启动上下文
  *
  * 包含启动服务所需的全局信息。
  * 
- * 运行态字段（runtime fields）优先级高于 envConfig：
+ * 拓扑 mode 是新实例的唯一事实源；legacy 实例再回退运行态字段和 envConfig：
  * - dispatcherEnabled: 本次启动是否启用 Dispatcher（由 CLI 参数或智能决策）
  * - workerCount: 本次启动的 Worker 数量
  * - workerBasePort: Worker 基础端口
@@ -125,11 +127,17 @@ class ServiceContext
     /**
      * 判断是否启用 Dispatcher
      * 
-     * 优先级：运行态字段 > envConfig
+     * 优先级：拓扑 mode > legacy 运行态字段 > envConfig
      */
     public function isDispatcherEnabled(): bool
     {
-        // 运行态字段优先
+        if ($this->isDirect() || $this->mode === 'independent') {
+            return false;
+        }
+        if (\in_array($this->mode, ['dispatcher', 'windows-dispatcher'], true)) {
+            return true;
+        }
+        // 新拓扑 mode 是唯一事实源；仅 legacy 实例回退运行态布尔值。
         if ($this->dispatcherEnabled !== null) {
             return $this->dispatcherEnabled;
         }
@@ -137,6 +145,23 @@ class ServiceContext
         $wls = $this->envConfig['wls'] ?? [];
         $envValue = \is_array($wls) ? ($wls['dispatcher_enabled'] ?? null) : null;
         return $envValue !== false;
+    }
+
+    public function isDirect(): bool
+    {
+        return \in_array($this->mode, ['direct', 'linux-direct'], true);
+    }
+
+    public function getEffectiveTopology(): EffectiveTopology
+    {
+        if ($this->isDirect()) {
+            return EffectiveTopology::Direct;
+        }
+        if ($this->isDispatcherEnabled()) {
+            return EffectiveTopology::Dispatcher;
+        }
+
+        return EffectiveTopology::Independent;
     }
 
     /**
@@ -219,7 +244,7 @@ class ServiceContext
             return $this->workerPort;
         }
         // 直连模式：Worker 直接监听主端口
-        if ($this->mode === 'linux-direct') {
+        if ($this->isDirect()) {
             return $this->mainPort;
         }
         // Dispatcher 模式或独立端口模式：基于 workerBasePort 计算

@@ -14,8 +14,10 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
-use Weline\Server\Service\MemoryStateFacade;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
+use Weline\Seo\Api\Url\UrlChangeNotifierInterface;
 
 class PageService
 {
@@ -936,7 +938,10 @@ class PageService
     public function clearThemeRuntimeCaches(string $reason): void
     {
         try {
-            w_query('theme', 'clearRuntimeLayoutCaches', ['reason' => $reason]);
+            $result = w_query('theme', 'clearRuntimeLayoutCaches', ['reason' => $reason]);
+            if (\is_array($result) && !empty($result['success'])) {
+                return;
+            }
         } catch (\Throwable $e) {
             if (function_exists('w_log_warning')) {
                 w_log_warning(
@@ -968,8 +973,9 @@ class PageService
         }
 
         try {
-            if (\class_exists(MemoryStateFacade::class)) {
-                $facade = new MemoryStateFacade([
+            $adapter = $this->runtimeProvider(WlsRuntimeAdapterInterface::class);
+            if ($adapter instanceof WlsRuntimeAdapterInterface) {
+                $facade = $adapter->createSharedState([
                     'consumer_code' => $reason,
                     'prefer_direct_connect' => true,
                     'pool_size' => 1,
@@ -985,14 +991,24 @@ class PageService
         }
 
         try {
-            if (\class_exists(BroadcastControlDispatchService::class)) {
-                ObjectManager::getInstance(BroadcastControlDispatchService::class)->cacheClear();
+            $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
+            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
+                $broadcaster->cacheClear();
             }
         } catch (\Throwable $e) {
             $this->logCacheClearFailure('wls_worker_broadcast', $reason, $e);
         }
 
         $this->purgeRouterFpcPayloadFiles($reason);
+    }
+
+    private function runtimeProvider(string $contract): ?object
+    {
+        try {
+            return ObjectManager::getInstance(RuntimeProviderResolver::class)->resolve($contract);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function logCacheClearFailure(string $step, string $reason, \Throwable $e): void
@@ -1091,18 +1107,16 @@ class PageService
      */
     private function notifySeoUrlChanged(array $payload): array
     {
-        $serviceClass = '\\Weline\\Seo\\Service\\SeoUrlChangeService';
-        if (!class_exists($serviceClass)) {
+        if (!interface_exists(UrlChangeNotifierInterface::class)) {
             return ['skipped' => true, 'reason' => 'seo_module_missing'];
         }
 
         try {
-            $service = ObjectManager::getInstance($serviceClass);
-            if (!is_object($service) || !method_exists($service, 'notify')) {
+            $service = ObjectManager::getInstance(UrlChangeNotifierInterface::class);
+            if (!$service instanceof UrlChangeNotifierInterface) {
                 return ['skipped' => true, 'reason' => 'seo_url_change_service_unavailable'];
             }
 
-            /** @var object{notify: callable} $service */
             return $service->notify($payload);
         } catch (\Throwable $e) {
             if (function_exists('w_log_warning')) {

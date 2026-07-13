@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Observer;
 
-use Weline\Acl\Model\Acl;
+use Weline\Acl\Api\Resource\MenuResourceServiceInterface;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -24,15 +24,15 @@ class MenuAccessLogObserver implements ObserverInterface
 {
     private Request $request;
     private AuthenticatedSessionInterface $backendSession;
-    private Acl $acl;
+    private MenuResourceServiceInterface $menuResourceService;
 
     public function __construct(
         Request $request,
-        Acl $acl
+        MenuResourceServiceInterface $menuResourceService
     ) {
         $this->request = $request;
         $this->backendSession = SessionFactory::getInstance()->createBackendSession();
-        $this->acl = $acl;
+        $this->menuResourceService = $menuResourceService;
     }
 
     /**
@@ -69,30 +69,13 @@ class MenuAccessLogObserver implements ObserverInterface
         $route = $this->request->getRouteUrlPath();
         $method = $this->request->getMethod();
 
-        // 根据路由查找对应的ACL资源
-        $acl = $this->acl->clearData()
-            ->where(Acl::schema_fields_ROUTE, $route)
-            ->where(Acl::schema_fields_METHOD, $method, '=')
-            ->where(Acl::schema_fields_IS_BACKEND, 1)
-            ->find()
-            ->fetch();
-
-        // 如果没有找到对应的ACL，尝试仅根据路由匹配（忽略方法）
-        if (!$acl->getId()) {
-            $acl = $this->acl->clearData()
-                ->where(Acl::schema_fields_ROUTE, $route)
-                ->where(Acl::schema_fields_IS_BACKEND, 1)
-                ->find()
-                ->fetch();
-        }
-
-        // 只记录类型为menus的ACL资源
-        if ($acl->getId() && $acl->getType() === Acl::type_MENUS) {
+        $sourceId = $this->menuResourceService->findEnabledBackendMenuSource($route, $method);
+        if ($sourceId !== null) {
             /** @var MenuAccessLog $menuAccessLog */
             $menuAccessLog = ObjectManager::getInstance(MenuAccessLog::class);
             
             // 防止短时间内重复记录（同一用户、同一菜单在30秒内的重复访问不记录）
-            $sessionKey = 'menu_access_log_' . $userId . '_' . $acl->getSourceId();
+            $sessionKey = 'menu_access_log_' . $userId . '_' . $sourceId;
             /** @var AuthenticatedSessionInterface $backendSession */
             $backendSession = SessionFactory::getInstance()->createBackendSession();
             $lastAccessTime = $backendSession->getData($sessionKey);
@@ -115,7 +98,7 @@ class MenuAccessLogObserver implements ObserverInterface
                 
                 $menuAccessLog->clearData()
                     ->setUserId($userId)
-                    ->setSourceId($acl->getSourceId())
+                    ->setSourceId($sourceId)
                     ->setRoute($route)
                     ->setMethod($method)
                     ->setAccessTime($currentTime)
@@ -126,4 +109,3 @@ class MenuAccessLogObserver implements ObserverInterface
         }
     }
 }
-

@@ -11,6 +11,7 @@ use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
+use Weline\Server\Service\Runtime\DirectSharedListener;
 
 /**
  * Worker 服务提供者
@@ -75,8 +76,9 @@ class WorkerProvider extends AbstractServiceProvider
 
         // 安全：Dispatcher 模式下 Worker 仅监听 127.0.0.1，不暴露内网端口
         // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外，Worker 端口只供本机 Dispatcher 连接
-        $mode = $context->mode;
-        $host = ($mode === 'linux-direct')
+        $direct = $context->isDirect();
+        $directListenerMode = $this->resolveDirectListenerMode($context);
+        $host = $direct
             ? ($context->host ?: '127.0.0.1')
             : '127.0.0.1';
 
@@ -96,6 +98,9 @@ class WorkerProvider extends AbstractServiceProvider
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
         $arguments[] = '--worker-count=' . $this->getInstanceCount($context);
+        $topology = $context->getEffectiveTopology()->value;
+        $arguments[] = '--wls-dispatcher-enabled=' . ($context->isDispatcherEnabled() ? '1' : '0');
+        $arguments[] = '--wls-runtime-topology=' . $topology;
         // READY 首页预热使用启动时固化的对外 origin，避免 Windows 替换 instance.json 时的短暂空窗。
         // 保持为离散 argv，不使用 environment，以便 Windows 继续走快速批量启动路径。
         $arguments[] = '--public-origin=' . $this->buildPublicOrigin($context);
@@ -104,8 +109,14 @@ class WorkerProvider extends AbstractServiceProvider
             $arguments[] = '--win';
         }
 
-        if ($mode === 'linux-direct') {
+        if ($direct && $directListenerMode === 'shared_fd') {
+            $arguments[] = '--listen-fd=' . DirectSharedListener::INHERITED_FD;
+        } elseif ($direct && $directListenerMode === 'reuseport') {
             $arguments[] = '--reuseport';
+        } elseif ($direct) {
+            throw new \InvalidArgumentException(
+                'Direct topology requires wls.runtime.listener_mode=reuseport or shared_fd.'
+            );
         }
 
         $arguments = \array_merge($arguments, $this->buildSharedStateArguments($context));
@@ -118,7 +129,7 @@ class WorkerProvider extends AbstractServiceProvider
         $arguments[] = '--wls-loop-driver=' . $loopDriver;
 
         // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
-        // 这同时覆盖 Dispatcher 透传和 linux-direct SO_REUSEPORT 模式。
+        // 这同时覆盖 Dispatcher 透传和 direct SO_REUSEPORT 模式。
         if ($context->sslEnabled) {
             $arguments[] = '--defer-ssl';
         }
@@ -133,9 +144,7 @@ class WorkerProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         $basePort = $context->getWorkerBasePort();
-        $mode = $context->mode;
-
-        if ($mode === 'linux-direct') {
+        if ($context->isDirect()) {
             return $context->mainPort;
         }
 
@@ -233,10 +242,16 @@ class WorkerProvider extends AbstractServiceProvider
                 . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
             );
         }
-        if ($engine === 'event_buffer' && $context->mode === 'linux-direct') {
+        if ($engine === 'event_buffer' && $context->isDirect()) {
             throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer requires the Dispatcher+TLS topology and does not support linux-direct mode. '
+                'wls.ssl.engine=event_buffer does not support direct mode. '
                 . 'Use wls.ssl.engine=stream for direct mode.'
+            );
+        }
+        if ($engine === 'event_buffer' && $context->isDispatcherEnabled()) {
+            throw new \InvalidArgumentException(
+                'wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface before TLS. '
+                . 'Use wls.ssl.engine=stream; Dispatcher startup will not silently corrupt the TLS stream.'
             );
         }
 
@@ -247,6 +262,21 @@ class WorkerProvider extends AbstractServiceProvider
                 'Unsupported WLS SSL engine "' . $engine . '"; expected stream or event_buffer'
             ),
         };
+    }
+
+    private function resolveDirectListenerMode(ServiceContext $context): string
+    {
+        if (!$context->isDirect()) {
+            return 'single';
+        }
+        $mode = \strtolower(\trim((string)$context->getConfig('wls.runtime.listener_mode', '')));
+        if ($mode === '') {
+            // Read compatibility for an instance created before listener_mode
+            // became part of RuntimeSelection. New starts always set it.
+            $mode = PHP_OS_FAMILY === 'Darwin' ? 'shared_fd' : 'reuseport';
+        }
+
+        return $mode;
     }
 
     private function buildPublicOrigin(ServiceContext $context): string

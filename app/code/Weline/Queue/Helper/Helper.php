@@ -12,12 +12,15 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Helper;
 
+use Weline\Eav\Api\EavAttribute;
 use Weline\Framework\App\Env;
+use Weline\Framework\Async\TaskConsumerInterface as FrameworkTaskConsumerInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Config\ModuleFileReader;
 use Weline\Framework\Module\Model\Module;
+use Weline\Queue\Api\QueueConsumerInterface;
 use Weline\Queue\Model\Queue\Type;
-use Weline\Queue\QueueInterface;
+use Weline\Queue\QueueInterface as LegacyQueueInterface;
 
 class Helper
 {
@@ -35,10 +38,13 @@ class Helper
             foreach ($queue_files as $queue_class) {
                 try {
                     $queue_ref = ObjectManager::getReflectionInstance($queue_class);
-                    if (!$queue_ref->isInstantiable() || !$queue_ref->implementsInterface(QueueInterface::class)) {
+                    $isFrameworkConsumer = $queue_ref->implementsInterface(FrameworkTaskConsumerInterface::class);
+                    $isPublicConsumer = $queue_ref->implementsInterface(QueueConsumerInterface::class);
+                    $isLegacyConsumer = $queue_ref->implementsInterface(LegacyQueueInterface::class);
+                    if (!$queue_ref->isInstantiable() || (!$isFrameworkConsumer && !$isPublicConsumer && !$isLegacyConsumer)) {
                         continue;
                     }
-                    /**@var QueueInterface $queue */
+                    /** @var FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $queue */
                     $queue = ObjectManager::getInstance($queue_class);
                 } catch (\Exception $e) {
                     continue;
@@ -70,17 +76,17 @@ class Helper
                     ])->save(true);
                 }
                 # 属性更新
-                /** @var \Weline\Eav\Model\EavAttribute[] $attrs */
+                /** @var EavAttribute[] $attrs */
                 $attrs = $queue->attributes();
                 foreach ($attrs as $attr) {
-                    if (!($attr instanceof \Weline\Eav\Model\EavAttribute)) {
+                    if (!($attr instanceof EavAttribute)) {
                         throw new \Exception(__('队列类：%{1} 属性错误。 队列属性必须继承自 %{2}', [
                             $queue_class,
-                            \Weline\Eav\Model\EavAttribute::class
+                            EavAttribute::class
                         ]));
                     }
                 }
-                $attrsCodes = array_map(function (\Weline\Eav\Model\EavAttribute $attr) {
+                $attrsCodes = array_map(function (EavAttribute $attr) {
                     return $attr->getCode();
                 }, $attrs);
                 if ($attrsCodes) {
@@ -132,8 +138,8 @@ class Helper
                         ->fetch()
                         ->getItems();
                     # 先查找不属于当前队列的属性
-                    /**@var \Weline\Eav\Model\EavAttribute $eavAttribute */
-                    $eavAttribute = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute::class);
+                    /** @var EavAttribute $eavAttribute */
+                    $eavAttribute = ObjectManager::getInstance(EavAttribute::class);
                     foreach ($notBeLongTypeAttrs as $notBeLongTypeAttr) {
                         $eavAttribute->load($notBeLongTypeAttr->getAttributeId());
                         $valueTable = $eavAttribute->getEavEntityAttributeValueTable();

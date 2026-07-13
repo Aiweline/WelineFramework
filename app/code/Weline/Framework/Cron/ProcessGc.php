@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cron;
 
-use Weline\Cron\CronTaskInterface;
 use Weline\Framework\System\Process\Processer;
 
 /**

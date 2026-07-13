@@ -19,7 +19,10 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\TaggableInterface;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Pool\TaggableCachePool;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\RuntimeRoutingPolicyInterface;
 
 class CacheManager implements CacheManagerInterface
 {
@@ -259,8 +262,13 @@ class CacheManager implements CacheManagerInterface
      */
     private function shouldHijackFileToWlsMemory(): bool
     {
-        if (\class_exists(\Weline\Server\Service\Runtime\RoutingPolicyRegistry::class)) {
-            return \Weline\Server\Service\Runtime\RoutingPolicyRegistry::shouldHijackCacheFile();
+        try {
+            $policy = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(RuntimeRoutingPolicyInterface::class);
+            if ($policy instanceof RuntimeRoutingPolicyInterface) {
+                return $policy->shouldHijackCacheFile();
+            }
+        } catch (\Throwable) {
         }
         // Master 策略尚未下发时，使用安全默认值（接管 file）
         return true;

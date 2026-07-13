@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Weline\Theme\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\LocaleCatalogInterface;
 use Weline\Theme\Service\EditorLockService;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewNavigationResolver;
@@ -25,20 +28,23 @@ use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Service\ThemeResourceCatalog;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeSlotContractService;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 use Weline\Theme\Service\WidgetPositionResolver;
-use Weline\Widget\Service\WidgetRegistry;
-use Weline\Widget\Service\ParamTypeRenderer;
-use Weline\Meta\Service\ParamDefinitionNormalizer;
-use Weline\Meta\Model\MetaConfig;
+use Weline\Widget\Api\Param\ParamFormRendererInterface;
+use Weline\Widget\Api\WidgetRegistryInterface;
+use Weline\Meta\Api\Data\MetaConfigIdentity;
+use Weline\Meta\Api\Data\MetaConfigWrite;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
+use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemePathResolver;
-use Weline\Meta\Model\Meta;
 use Weline\Theme\Observer\ControllerFetchFileBefore;
 use Weline\Theme\Service\PreviewThemeScopeService;
+use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 /**
@@ -53,11 +59,11 @@ class ThemeEditor extends BackendController
     private ThemeLayoutVersionService $versionService;
     private ThemeCacheGenerator $cacheGenerator;
     private WidgetPositionResolver $positionResolver;
-    private WidgetRegistry $widgetRegistry;
+    private WidgetRegistryInterface $widgetRegistry;
     private ThemeLayout $themeLayout;
-    private Meta $meta;
     private PreviewTokenService $previewTokenService;
     private EditorLockService $editorLockService;
+    private ParamFormRendererInterface $paramFormRenderer;
 
     private function useFullscreenEditorLayout(): void
     {
@@ -81,11 +87,12 @@ class ThemeEditor extends BackendController
         ThemeLayoutVersionService $versionService,
         ThemeCacheGenerator $cacheGenerator,
         WidgetPositionResolver $positionResolver,
-        WidgetRegistry $widgetRegistry,
+        WidgetRegistryInterface $widgetRegistry,
         ThemeLayout $themeLayout,
-        Meta $meta,
-        PreviewTokenService $previewTokenService,
-        EditorLockService $editorLockService
+        mixed $meta = null,
+        ?PreviewTokenService $previewTokenService = null,
+        ?EditorLockService $editorLockService = null,
+        ?ParamFormRendererInterface $paramFormRenderer = null,
     ) {
         $this->welineTheme = $welineTheme;
         $this->layoutService = $layoutService;
@@ -94,9 +101,12 @@ class ThemeEditor extends BackendController
         $this->positionResolver = $positionResolver;
         $this->widgetRegistry = $widgetRegistry;
         $this->themeLayout = $themeLayout;
-        $this->meta = $meta;
-        $this->previewTokenService = $previewTokenService;
-        $this->editorLockService = $editorLockService;
+        $this->previewTokenService = $previewTokenService
+            ?? ObjectManager::getInstance(PreviewTokenService::class);
+        $this->editorLockService = $editorLockService
+            ?? ObjectManager::getInstance(EditorLockService::class);
+        $this->paramFormRenderer = $paramFormRenderer
+            ?? ObjectManager::getInstance(ParamFormRendererInterface::class);
     }
 
     private function dispatchThemeEditorResultAfter(string $result, string $action): string
@@ -137,87 +147,11 @@ class ThemeEditor extends BackendController
     private function flushFullPageCache(): void
     {
         try {
-            ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class)->clearAll();
+            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)
+                ->clearNonGlobalCaches(null, 'theme_editor_publish');
         } catch (\Throwable $e) {
-            // 非全局池清理失败不阻塞发布流程
-        }
-
-        try {
-            $routerCache = ObjectManager::getInstance(
-                \Weline\Framework\Router\Cache\RouterCache::class . 'Factory'
-            );
-            $routerCache->flush();
-        } catch (\Throwable $e) {
-            // 路由/FPC 派生缓存清理失败不阻塞发布流程
-        }
-
-        try {
-            if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
-                \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
-            }
-        } catch (\Throwable $e) {
-        }
-
-        try {
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-        } catch (\Throwable $e) {
-        }
-
-        try {
-            ControllerFetchFileBefore::clearRuntimeCache();
-        } catch (\Throwable $e) {
-        }
-
-        ThemeData::clearCache();
-
-        try {
-            ObjectManager::getInstance(
-                \Weline\Server\Service\Control\BroadcastControlDispatchService::class
-            )->cacheClear();
-        } catch (\Throwable $e) {
-        }
-
-        $this->purgeSharedMemoryCachePools();
-        $this->purgeRouterFpcPayloadFiles();
-    }
-
-    private function purgeSharedMemoryCachePools(): void
-    {
-        try {
-            $facade = new \Weline\Server\Service\MemoryStateFacade([
-                'consumer_code' => 'theme_editor_fpc_flush',
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]);
-            $facade->clearCache('router');
-            $facade->clearCache('fpc');
-            $facade->clearNamespace('theme_runtime');
-            $facade->disconnect();
-        } catch (\Throwable $e) {
-        }
-    }
-
-    private function purgeRouterFpcPayloadFiles(): void
-    {
-        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
-        if (!\is_dir($dir)) {
-            return;
-        }
-
-        try {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-                \RecursiveIteratorIterator::CHILD_FIRST
-            );
-            foreach ($iterator as $item) {
-                if ($item->isDir()) {
-                    @\rmdir($item->getPathname());
-                } else {
-                    @\unlink($item->getPathname());
-                }
-            }
-        } catch (\Throwable $e) {
+            // A successful publish must not be rolled back only because a
+            // best-effort runtime cache invalidation step failed.
         }
     }
 
@@ -1865,32 +1799,22 @@ class ThemeEditor extends BackendController
     /**
      * 获取已安装语言列表（含 SVG 国旗）
      *
-     * 通过 Weline_I18n::query 查询器获取，由 I18n 模块统一提供。
+     * 通过 Weline_I18n 公共 LocaleCatalog 契约获取。
      *
      * @return array JSON 响应 { success, locales: [ { code, name, flag }, ... ] }
      */
     public function getInstalledLocales()
     {
-        $eventData = [
-            'data' => [
-                'operation' => 'getInstalledLocales',
-                'params' => [],
-            ],
-        ];
-        $this->getEventManager()->dispatch('Weline_I18n::query', $eventData);
-
-        $error = $eventData['data']['error'] ?? '';
-        if ($error !== '') {
+        try {
+            $locales = $this->localeCatalog()->installed(
+                \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN',
+            );
+        } catch (\Throwable $throwable) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => $error,
+                'message' => $throwable->getMessage(),
                 'locales' => [],
             ]);
-        }
-
-        $locales = $eventData['data']['result'] ?? [];
-        if (!is_array($locales)) {
-            $locales = [];
         }
 
         return $this->fetchJson([
@@ -2101,9 +2025,7 @@ class ThemeEditor extends BackendController
             $definitions = $this->loadLayoutParamDefinitions($theme, $editorArea, $layoutType, $layoutOption, $layoutIdentify);
             $config = $this->getLayoutConfigValues($theme, $layoutIdentify, $scope, $locale, $definitions, $targetIdentify);
 
-            /** @var ParamTypeRenderer $renderer */
-            $renderer = ObjectManager::getInstance(ParamTypeRenderer::class);
-            $formHtml = $renderer->renderForm($identify, $definitions, $config, [
+            $formHtml = $this->paramFormRenderer->renderForm($identify, $definitions, $config, [
                 'class' => 'w-param-form layout-config-form',
                 'auto_save' => false,
                 'delete_button' => false,
@@ -2432,6 +2354,7 @@ class ThemeEditor extends BackendController
         $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
         $session->setData('preview_theme_id', $themeId);
         $session->setData('preview_theme_area', $editorArea);
+        $this->assign('preview_exit_url', $this->buildEditorShellUrl($context, $layoutType));
 
         try {
             $this->welineTheme->load($themeId);
@@ -3626,9 +3549,15 @@ class ThemeEditor extends BackendController
             && !$this->resolveThemeLayoutExists($themeId, $editorArea, $layoutType, $layoutOption)
         ) {
             // backend 预览请求可能沿用 frontend 的 layout_type（如 homepage），
-            // 该布局在 backend 目录下不存在时，必须回退到 backend 默认布局，避免误渲染 frontend 页面。
-            $layoutType = 'default';
+            // 优先回退到可视化 Dashboard 画布；仅当 Dashboard 布局也不存在时才使用通用默认壳层。
+            $layoutType = $this->resolveThemeLayoutExists(
+                $themeId,
+                $editorArea,
+                ThemeLayout::PAGE_TYPE_DASHBOARD,
+                'default'
+            ) ? ThemeLayout::PAGE_TYPE_DASHBOARD : ThemeLayout::PAGE_TYPE_DEFAULT;
             $layoutOption = 'default';
+            $context['target_value'] = $layoutType;
         }
         $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
         $session->setData('preview_theme_id', $themeId);
@@ -3660,6 +3589,10 @@ class ThemeEditor extends BackendController
         if ($editorArea === PreviewContextService::AREA_BACKEND && !$this->isDashboardPreviewLayout($layoutType)) {
             $html = $this->injectBackendStructuralSlots($html);
         }
+
+        // ControllerFetchFileAfter 在控制器返回后读取 layoutType 并套用真实后台布局。
+        // renderUnifiedLayoutPreview 会恢复临时状态，因此此处为最终响应重新声明一次。
+        $this->layoutType = $layoutType;
 
         return $this->dispatchThemeEditorResultAfter(
             $this->injectEditorModeAssets($html),
@@ -3785,9 +3718,22 @@ class ThemeEditor extends BackendController
     private function injectEditorModeAssets(string $html): string
     {
         // 使用框架的静态资源获取方法
-        $cssUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
+        $cssSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
+        $cssUrl = $cssSrc . '?v=20260712-backend-real-preview';
         $jsSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
-        $jsUrl = $jsSrc . '?v=20260702-dashboard-slots';
+        $jsUrl = $jsSrc . '?v=20260712-backend-real-preview';
+        $previewExitUrl = htmlspecialchars(
+            (string)($this->getTemplate()->getData('preview_exit_url') ?? ''),
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        $previewModeLabel = htmlspecialchars((string)__('预览模式'), ENT_QUOTES, 'UTF-8');
+        $previewModeHint = htmlspecialchars(
+            (string)__('当前正在预览后台主题，页面操作不会离开主题编辑流程。'),
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        $exitPreviewLabel = htmlspecialchars((string)__('退出预览'), ENT_QUOTES, 'UTF-8');
 
         // 编辑模式 CSS
         $editorCss = <<<HTML
@@ -3800,6 +3746,23 @@ HTML;
 <!-- Theme Editor Mode JS -->
 <script src="{$jsUrl}"></script>
 HTML;
+
+        $previewNotice = $previewExitUrl !== '' ? <<<HTML
+<!-- Theme Preview Mode Notice -->
+<aside class="theme-preview-mode-notice" data-editor-interactive aria-label="{$previewModeLabel}">
+    <span class="theme-preview-mode-notice__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path fill="currentColor" d="M12 5c5.5 0 9.5 5.1 9.5 7s-4 7-9.5 7S2.5 13.9 2.5 12 6.5 5 12 5Zm0 2C8.2 7 5.1 10.1 4.5 12c.6 1.9 3.7 5 7.5 5s6.9-3.1 7.5-5c-.6-1.9-3.7-5-7.5-5Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z"/></svg>
+    </span>
+    <span class="theme-preview-mode-notice__copy">
+        <strong>{$previewModeLabel}</strong>
+        <small>{$previewModeHint}</small>
+    </span>
+    <a class="theme-preview-mode-notice__exit" href="{$previewExitUrl}" target="_top">
+        {$exitPreviewLabel}
+        <svg viewBox="0 0 24 24" width="16" height="16" focusable="false" aria-hidden="true"><path fill="currentColor" d="M13 5 20 12l-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z"/></svg>
+    </a>
+</aside>
+HTML : '';
         
         // 在 </head> 前注入 CSS
         if (stripos($html, '</head>') !== false) {
@@ -3811,10 +3774,10 @@ HTML;
         
         // 在 </body> 前注入 JS
         if (stripos($html, '</body>') !== false) {
-            $html = str_ireplace('</body>', $editorJs . "\n</body>", $html);
+            $html = str_ireplace('</body>', $previewNotice . "\n" . $editorJs . "\n</body>", $html);
         } else {
             // 如果没有 </body>，在末尾添加
-            $html .= "\n" . $editorJs;
+            $html .= "\n" . $previewNotice . "\n" . $editorJs;
         }
         
         return $html;
@@ -4148,18 +4111,17 @@ HTML;
         $layoutOption = $this->normalizeLayoutOption($layoutOption);
         $effectiveScope = $this->resolveEditorEffectiveScope($theme, $editorArea, $scope);
 
-        /** @var MetaConfig $metaConfig */
-        $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-        $metaConfig->clearData()->clearQuery()->setConfig(
-            (string)$theme->getId(),
-            'theme.' . $editorArea,
-            'layouts.' . $layoutType . '.value',
-            $layoutOption,
-            $effectiveScope,
-            null,
-            null,
-            'theme.' . $editorArea . '.layouts.' . $layoutType
-        );
+        $this->metaConfigRepository()->upsert(new MetaConfigWrite(
+            identity: new MetaConfigIdentity(
+                namespace: 'theme.' . $editorArea,
+                configKey: 'layouts.' . $layoutType . '.value',
+                scope: $effectiveScope,
+                locale: null,
+                identifyId: (string)$theme->getId(),
+                metaIdentify: 'theme.' . $editorArea . '.layouts.' . $layoutType,
+            ),
+            value: $layoutOption,
+        ));
 
         return $effectiveScope;
     }
@@ -4174,15 +4136,24 @@ HTML;
         $layoutType = $this->normalizeLayoutType($layoutType);
         $effectiveScope = $this->resolveEditorEffectiveScope($theme, $editorArea, $scope);
 
-        /** @var MetaConfig $metaConfig */
-        $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-        return $metaConfig->clearData()->clearQuery()->getConfig(
-            (string)$theme->getId(),
-            'theme.' . $editorArea,
-            'layouts.' . $layoutType . '.value',
-            $effectiveScope,
-            null
-        );
+        return $this->metaConfigRepository()->resolve(new MetaConfigIdentity(
+            namespace: 'theme.' . $editorArea,
+            configKey: 'layouts.' . $layoutType . '.value',
+            scope: $effectiveScope,
+            locale: Cookie::getLang() ?? 'zh_Hans_CN',
+            identifyId: (string)$theme->getId(),
+        ))?->value;
+    }
+
+    private function metaConfigRepository(): MetaConfigRepositoryInterface
+    {
+        $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(MetaConfigRepositoryInterface::class);
+        if (!$repository instanceof MetaConfigRepositoryInterface) {
+            throw new \RuntimeException('Weline_Meta config repository provider is unavailable.');
+        }
+
+        return $repository;
     }
 
     private function resolveEditorEffectiveScope(WelineTheme $theme, string $editorArea, string $scope): string
@@ -4268,34 +4239,28 @@ HTML;
     private function buildTargetLayoutConfigIdentify(string $editorArea, string $layoutType, string $layoutOption): string
     {
         $payload = $this->getEditorJsonPayload();
-        $targetType = strtolower(trim((string)(
-            ($payload['theme_layout_target_type'] ?? '')
-            ?: ($payload['theme_layout_source_target_type'] ?? '')
-            ?: ($payload['target_type'] ?? '')
-            ?: ($payload['layout_lock_target_type'] ?? '')
-            ?: ($payload['virtual_target_type'] ?? '')
-        )));
-        $targetId = (int)(
-            ($payload['theme_layout_target_id'] ?? 0)
-            ?: ($payload['theme_layout_source_target_id'] ?? 0)
-            ?: ($payload['target_id'] ?? 0)
-            ?: ($payload['virtual_target_id'] ?? 0)
-        );
+        $candidates = [
+            ['target_type' => $payload['theme_layout_target_type'] ?? null, 'target_id' => $payload['theme_layout_target_id'] ?? null],
+            ['target_type' => $payload['theme_layout_source_target_type'] ?? null, 'target_id' => $payload['theme_layout_source_target_id'] ?? null],
+            ['target_type' => $payload['target_type'] ?? null, 'target_id' => $payload['target_id'] ?? null],
+            ['target_type' => $payload['layout_lock_target_type'] ?? null, 'target_id' => $payload['layout_lock_target_id'] ?? null],
+            ['target_type' => $payload['virtual_target_type'] ?? null, 'target_id' => $payload['virtual_target_id'] ?? null],
+        ];
+        /** @var ThemeTargetIdentityResolver $identityResolver */
+        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        [$targetType, $targetId] = $identityResolver->resolveFirst($candidates);
         if ($targetType === '') {
+            foreach ($candidates as $candidate) {
+                $providedType = strtolower(trim((string)($candidate['target_type'] ?? '')));
+                if ($providedType === '') {
+                    continue;
+                }
+                if ($providedType === ThemeVirtualLayout::TARGET_GLOBAL) {
+                    return '';
+                }
+                throw new \InvalidArgumentException((string)__('主题目标类型或 ID 无效。'));
+            }
             return '';
-        }
-
-        /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
-        $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
-        if (!$targetTypeRegistry->has($targetType)) {
-            throw new \InvalidArgumentException((string)__('未注册的主题目标类型：%{1}', [$targetType]));
-        }
-        if ($targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
-            return '';
-        }
-        $provider = $targetTypeRegistry->get($targetType);
-        if (!$provider || !$provider->validate($targetId)) {
-            throw new \InvalidArgumentException((string)__('主题目标ID不能为空。'));
         }
 
         /** @var ThemeMetaIdentityService $metaIdentityService */
@@ -4328,8 +4293,12 @@ HTML;
             return [];
         }
 
-        /** @var ParamDefinitionNormalizer $normalizer */
-        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        /** @var ParamDefinitionNormalizerInterface $normalizer */
+        $normalizer = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ParamDefinitionNormalizerInterface::class);
+        if (!$normalizer instanceof ParamDefinitionNormalizerInterface) {
+            throw new \RuntimeException('Weline_Meta param normalizer provider is unavailable.');
+        }
         return $normalizer->normalizeParsedParamList($parsed['params']);
     }
 
@@ -4378,15 +4347,20 @@ HTML;
 
     private function getInstalledLocalesPayload(): array
     {
-        $eventData = [
-            'data' => [
-                'operation' => 'getInstalledLocales',
-                'params' => [],
-            ],
-        ];
-        $this->getEventManager()->dispatch('Weline_I18n::query', $eventData);
-        $locales = $eventData['data']['result'] ?? [];
-        return is_array($locales) ? $locales : [];
+        try {
+            return $this->localeCatalog()->installed(
+                \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN',
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private function localeCatalog(): LocaleCatalogInterface
+    {
+        /** @var LocaleCatalogInterface $catalog */
+        $catalog = ObjectManager::getInstance(LocaleCatalogInterface::class);
+        return $catalog;
     }
 
     private function getThemeAiRequestPayload(): array
@@ -5141,6 +5115,21 @@ HTML;
             $this->assign('preview_context', $context);
             $this->assign('layout_type', $layoutType);
             $this->assign('layout_option', $layoutOption);
+            if ($editorArea === PreviewContextService::AREA_BACKEND && $this->isDashboardPreviewLayout($layoutType)) {
+                $this->assign('meta', [
+                    'showHeader' => true,
+                    'showSidebar' => true,
+                    'showFooter' => true,
+                    'showRightSidebar' => true,
+                ]);
+
+                // 直接编译框架提供的完整后台 Dashboard 外壳；当前预览主题仍通过 session
+                // 提供颜色、静态资源与局部部件，避免依赖主题 6 自身复制布局文件。
+                $this->layoutType = null;
+                return $this->getTemplate()->fetchModuleThemeHtml(
+                    'Weline_Theme::theme/backend/layouts/dashboard/default.phtml'
+                );
+            }
             $layoutIdentity = $this->resolveVersionLayoutIdentity($context);
             /** @var ThemePreviewContentRenderer $previewContentRenderer */
             $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
@@ -5152,9 +5141,6 @@ HTML;
                 $layoutIdentity
             );
             $this->assign('content', $previewPayload['content']);
-            if ($editorArea === PreviewContextService::AREA_BACKEND && $this->isDashboardPreviewLayout($layoutType)) {
-                return $this->renderDashboardEditorPreviewShell((string)$previewPayload['content']);
-            }
 
             $layoutIdentify = $this->buildLayoutConfigIdentify($layoutType, $layoutOption);
             $targetIdentify = $this->buildTargetLayoutConfigIdentify($editorArea, $layoutType, $layoutOption);
@@ -5167,23 +5153,33 @@ HTML;
                 $layoutDefinitions,
                 $targetIdentify
             );
-            $this->assign('meta', array_merge([
+            $layoutMeta = array_merge([
                 'showHeader' => true,
+                'showSidebar' => true,
                 'showFooter' => true,
+                'showRightSidebar' => true,
                 'showStatistics' => true,
                 'showFeatures' => true,
                 'showProducts' => true,
                 'showTestimonials' => true,
                 'showNews' => true,
                 'showPartners' => true,
-            ], $previewPayload['meta'], $layoutMeta));
+            ], $previewPayload['meta'], $layoutMeta);
+            $this->assign('meta', $layoutMeta);
 
             $previewContentTemplate = $editorArea === PreviewContextService::AREA_BACKEND
                 ? 'Weline_Theme::templates/backend/theme-preview/content.phtml'
                 : 'Weline_Theme::templates/frontend/theme-preview/content.phtml';
 
             return (string)$this->fetch($previewContentTemplate);
-        } catch (\Throwable) {
+        } catch (\Throwable $throwable) {
+            \Weline\Framework\App\Env::getInstance()->getLogger()?->error('[Theme Editor Layout Preview Failed]', [
+                'theme_id' => $themeId,
+                'editor_area' => $editorArea,
+                'layout_type' => $layoutType,
+                'layout_option' => $layoutOption,
+                'exception' => $throwable,
+            ]);
             return '';
         } finally {
             $this->layoutType = $previousLayoutType;

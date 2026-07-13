@@ -46,6 +46,10 @@
 - `ScopeContext`
 - `WebsiteData`
 
+本地 WLS 的标准项目入口 `p<8位十六进制>.(weline.test|local.test|weline.localhost)` 会绑定系统默认网站 `0/default`，并保留当前 HTTP/HTTPS、Host 与非默认端口。该规则是严格 Host 契约：`www.p...`、错误长度、其他后缀和非 HTTP(S) URL 都不会触发默认站点映射。
+
+请求级命中缓存会忽略不参与站点选择的 query/fragment；标准项目 Host 的所有 path 共用同一站点身份。普通绑定域名仍保留 path 以支持 `sub_path`，但 WLS 进程缓存有固定 256 项上限，随机 URI 不得让常驻内存线性增长。站点保存或域名变更后仍须通过现有清理/epoch 链路使缓存失效。
+
 ## 4. 读取当前站点
 
 其他模块要读当前站点时，优先用：
@@ -74,3 +78,5 @@
 - 域名池
 
 这些都不应该散落成控制器里的私有流程。
+
+只读部署工具若只需要默认/首个有效网站 URL，使用 `Weline\Websites\Api\DefaultWebsiteUrl::resolve()`；该 Api 会正确保留合法的 `website_id=0`，调用方不得跨模块读取 Website Model。

@@ -19,6 +19,12 @@
 - 目录：`app/code/Weline/CKEditorEditorManager`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 
+## Dependency Inventory
+
+- Backend 和 EditorManager 是必需依赖。
+- CKEditor 通过 `editor_manager.Weline_CKEditorEditorManager` 编译 Provider 向 EditorManager 注册；EditorManager 不得反向依赖或按类名探测本模块。
+- CKEditor 的适配器与 Block 只继承 `Weline\EditorManager\Api\Editor\*` 公共基类，不再引用 EditorManager 根类或 `Block` 内部实现。
+
 ## 代码面概览
 
 入口文件：

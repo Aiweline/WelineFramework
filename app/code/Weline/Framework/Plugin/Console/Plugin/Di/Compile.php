@@ -122,7 +122,7 @@ class Compile implements \Weline\Framework\Console\CommandInterface
             ],
             [
                 '全量编译' => 'php bin/w plugin:di:compile',
-                '增量编译指定模块' => 'php bin/w plugin:di:compile -m Weline_Admin',
+                '增量编译指定模块' => 'php bin/w plugin:di:compile -m Vendor_Module',
             ],
             'php bin/w plugin:di:compile [-m|--module=<模块名>]'
         );

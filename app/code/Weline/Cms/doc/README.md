@@ -19,6 +19,18 @@ CMS 依赖 `Weline_BackendActivity` 的公开契约记录后台用户操作：
 
 记录入口是 `Weline\BackendActivity\Api\BusinessContextInterface`。CMS 不直接写 Activity 表，也不直接调用 Activity 内部 Service。
 
+## Dependency Inventory
+
+- Backend、BackendActivity 和 Theme 是必需依赖：CMS 发布后台资源、记录操作上下文，并使用 Theme 的公开目标契约及布局运行时。
+- Seo 和 Trash 是可选集成：它们仅扩展站点地图/URL 通知与回收站能力，缺失时 CMS 基本读写仍可用。
+- CMS 不得要求 Seo、Trash 或 Theme 反向依赖 CMS；可选集成保持在 `extends/module/<Target>` 边界。
+
+CMS 前台页的布局状态使用 `Weline\Theme\Api\Layout\LayoutStatus`，预览请求的
+mode/shell/area 使用 immutable `Weline\Theme\Api\Preview\PreviewContext`；不得引用 ThemeLayout Model
+或 PreviewContextService。SEO 安装时，URL 变更通过可选
+`Weline\Seo\Api\Url\UrlChangeNotifierInterface` 同步返回处理结果；通知仍发生在
+`Weline_Cms::page_save_after/page_delete_after` 事件之前，以保持原 SEO 副作用顺序。
+
 ## 回收站关系
 
 CMS 页面和一级 path 的删除、恢复、永久清理由 `Weline_Trash` 调用 CMS 的 Trash provider 完成。Provider 在业务操作成功后标记 Activity 上下文，因此 Activity 列表中能看到真实业务对象，而不是只有通用回收站请求。

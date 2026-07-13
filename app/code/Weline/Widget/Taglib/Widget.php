@@ -15,7 +15,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;

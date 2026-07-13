@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\I18n\Model\Locale;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
 class AiTranslationConfig
 {

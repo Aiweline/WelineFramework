@@ -2,16 +2,16 @@
 
 namespace Weline\EditorManager\Taglib;
 
-use Weline\Backend\Model\BackendUserConfig;
+use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\EditorManager\EditorManager\Local;
-use Weline\EditorManager\EditorManagerInterface;
+use Weline\EditorManager\Api\Editor\EditorManagerInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class EditorManager implements TaglibInterface
 {
@@ -66,11 +66,11 @@ class EditorManager implements TaglibInterface
                 throw new Exception(__('editor-manager 标签属性 container-id 不能为空！'));
             }
             # 检查是否有配置默认的编辑器管理器
-            /**@var BackendUserConfig $BackendUserConfig */
-            $BackendUserConfig = ObjectManager::getInstance(BackendUserConfig::class);
-            $userConfigEditorManager = $BackendUserConfig->getConfig('editor-manager');
+            /** @var BackendUserConfigStore $backendUserConfig */
+            $backendUserConfig = ObjectManager::getInstance(BackendUserConfigStore::class);
+            $userConfigEditorManager = $backendUserConfig->getConfig('editor-manager');
             if (empty($userConfigEditorManager)) {
-                $userConfigEditorManager = $BackendUserConfig->getDefaultConfig('editor-manager');
+                $userConfigEditorManager = $backendUserConfig->getDefaultConfig('editor-manager');
             }
             if (empty($userConfigEditorManager)) {
                 $userConfigEditorManager = 'local';

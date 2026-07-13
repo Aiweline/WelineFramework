@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
@@ -12,16 +13,16 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
-use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Widget\Service\WidgetRegistry;
-use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
+use Weline\Widget\Api\WidgetRegistryInterface;
+use Weline\Widget\Api\Rendering\RuntimeTemplateRendererInterface;
 
 /**
  * 插槽渲染服务
@@ -44,7 +45,7 @@ use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
 class SlotRendererService
 {
     private ThemeLayoutService $layoutService;
-    private WidgetRegistry $widgetRegistry;
+    private WidgetRegistryInterface $widgetRegistry;
     private ThemePlaceableRegistryInterface $placeableRegistry;
     private ThemeComponentRenderer $componentRenderer;
     private Template $template;
@@ -57,7 +58,7 @@ class SlotRendererService
     private const CACHEABLE_WIDGET_OUTPUTS = [];
     private static array $publishedLayoutDataCache = [];
     private static array $widgetOutputCache = [];
-    private static ?MemoryStateFacade $runtimeCache = null;
+    private static ?SharedCacheStateInterface $runtimeCache = null;
     private static bool $runtimeCacheResolved = false;
     private static ?\WeakMap $fiberRenderYieldAt = null;
     private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
@@ -77,18 +78,22 @@ class SlotRendererService
     /** 已加载主题缓存：theme_id => WelineTheme|null */
     private array $renderThemeCache = [];
 
+    private RuntimeTemplateRendererInterface $runtimeTemplateRenderer;
+
     public function __construct(
         ThemeLayoutService $layoutService,
-        WidgetRegistry $widgetRegistry,
+        WidgetRegistryInterface $widgetRegistry,
         mixed $placeableRegistry,
         ThemeComponentRenderer $componentRenderer,
-        Template $template
+        Template $template,
+        RuntimeTemplateRendererInterface $runtimeTemplateRenderer,
     ) {
         $this->layoutService = $layoutService;
         $this->widgetRegistry = $widgetRegistry;
         $this->placeableRegistry = $this->resolvePlaceableRegistry($placeableRegistry);
         $this->componentRenderer = $componentRenderer;
         $this->template = $template;
+        $this->runtimeTemplateRenderer = $runtimeTemplateRenderer;
     }
 
     /**
@@ -849,8 +854,7 @@ class SlotRendererService
         $templateContent = (string)($widgetMeta['template_content'] ?? '');
         if (trim($templateContent) !== '') {
             try {
-                $renderer = ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
-                $html = $renderer->renderContent($templateContent, $finalConfig);
+                $html = $this->runtimeTemplateRenderer->renderContent($templateContent, $finalConfig);
                 $html = is_string($html) ? $html : '';
 
                 if ($layoutId) {
@@ -1252,33 +1256,33 @@ class SlotRendererService
 
         $layoutOption = trim((string)$getParam('layout_option', 'default'));
         $scope = trim((string)$getParam('scope', 'default'));
-        $targetType = trim((string)$getParam('theme_layout_source_target_type', ''));
-        if ($targetType === '') {
-            $targetType = trim((string)$getParam('theme_layout_target_type', ''));
+        $legacyTargetType = trim((string)$getParam('target_type', ''));
+        // PreviewContext 的 layout 是 UI 上下文，不是 Theme 数据目标。
+        if ($legacyTargetType === 'layout') {
+            $legacyTargetType = '';
         }
-        if ($targetType === '') {
-            $targetType = trim((string)$getParam('target_type', ''));
-            // PreviewContext uses target_type=layout to mean "editing a layout page";
-            // theme_layout rows use global/page-specific target identities, so do not
-            // let that UI context become a DB filter.
-            if ($targetType === 'layout') {
-                $targetType = '';
-            }
-        }
-
-        $targetId = (int)$getParam('theme_layout_source_target_id', 0);
-        if ($targetId <= 0) {
-            $targetId = (int)$getParam('theme_layout_target_id', 0);
-        }
-        if ($targetId <= 0 && $targetType !== '') {
-            $targetId = (int)$getParam('target_id', 0);
-        }
+        /** @var ThemeTargetIdentityResolver $identityResolver */
+        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        [$targetType, $targetId] = $identityResolver->resolveFirst([
+            [
+                'target_type' => $getParam('theme_layout_source_target_type', null),
+                'target_id' => $getParam('theme_layout_source_target_id', null),
+            ],
+            [
+                'target_type' => $getParam('theme_layout_target_type', null),
+                'target_id' => $getParam('theme_layout_target_id', null),
+            ],
+            [
+                'target_type' => $legacyTargetType,
+                'target_id' => $getParam('target_id', null),
+            ],
+        ]);
 
         return [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
             'scope' => $scope !== '' ? $scope : 'default',
             'target_type' => $targetType !== '' ? $targetType : 'global',
-            'target_id' => max(0, $targetId),
+            'target_id' => $targetType !== '' ? $targetId : 0,
         ];
     }
 
@@ -1496,13 +1500,9 @@ class SlotRendererService
                 return;
             }
 
-            $cache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
-                'consumer_code' => 'theme_runtime_slot',
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]));
-            $cache->clearNamespace('theme_runtime');
+            // The optional Server module owns the concrete shared-state
+            // implementation. Without a provider the process cache above is
+            // still cleared and no cross-module class is loaded.
         } catch (\Throwable) {
             // 静默失败，不影响发布主流程
         }
@@ -1539,24 +1539,21 @@ class SlotRendererService
         }
     }
 
-    private static function runtimeCache(): ?MemoryStateFacade
+    private static function runtimeCache(): ?SharedCacheStateInterface
     {
         if (self::$runtimeCacheResolved) {
             return self::$runtimeCache;
         }
         self::$runtimeCacheResolved = true;
 
-        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
             return null;
         }
 
         try {
-            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
-                'consumer_code' => 'theme_runtime_slot',
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]));
+            $cache = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(SharedCacheStateInterface::class);
+            self::$runtimeCache = $cache instanceof SharedCacheStateInterface ? $cache : null;
         } catch (\Throwable) {
             self::$runtimeCache = null;
         }

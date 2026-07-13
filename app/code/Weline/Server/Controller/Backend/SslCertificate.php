@@ -10,11 +10,11 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendController;
 use Weline\Server\Model\SslCertificate as CertModel;
 use Weline\Server\Service\SslCertificateService;
 
-class SslCertificate extends BaseController
+class SslCertificate extends BackendController
 {
     /**
      * @var CertModel
@@ -95,7 +95,7 @@ class SslCertificate extends BaseController
         $this->assign('stats', $stats);
         $this->assign('title', __('SSL 证书管理'));
         
-        return $this->fetch('index');
+        return $this->fetch('Weline_Server::templates/Backend/SslCertificate/index.phtml');
     }
     
     /**

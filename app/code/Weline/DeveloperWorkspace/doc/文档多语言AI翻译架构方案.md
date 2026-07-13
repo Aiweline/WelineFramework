@@ -30,6 +30,13 @@
 
 `app/code/Weline/DeveloperWorkspace/extends/module/Weline_Ai/Adapter/DocumentTranslationAdapter.php`
 
+跨模块调用边界：
+
+- 文本生成统一通过 `Weline\Ai\Api\AiRuntimeInterface`，由编译 Provider Registry 解析实现。
+- 场景记录、模型目录、绑定命令、适配器扫描、账号可用性与 usage 聚合统一通过 `Weline\Ai\Api\Configuration\ScenarioConfigurationInterface`；返回 `ScenarioRecord`、`AiModel`、`ProviderAvailability`、`UsageSummary` 等 data-only 对象。
+- 适配器接口与模型 modality 常量使用 `Weline\Ai\Api\*` 公共名称，不直接依赖 AI 内部 Model、Scanner、AccountService 或 UsageRecord。
+- 后台语言候选使用 `Weline\I18n\Api\Localization\LocaleCatalogInterface` 与 Framework `LocaleNameProviderInterface`，不读取 I18n Model。
+
 适配器职责：
 
 - 只支持 text-to-text 模型。

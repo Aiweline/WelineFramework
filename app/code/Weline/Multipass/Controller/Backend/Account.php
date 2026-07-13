@@ -13,9 +13,8 @@ namespace Weline\Multipass\Controller\Backend;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Message\Manager;
-use Weline\Backend\Model\BackendUser;
-use Weline\Frontend\Model\FrontendUser;
 use Weline\Multipass\Model\MultipassSite;
+use Weline\Multipass\Service\AccountFacadeResolver;
 use Weline\Multipass\Service\MultipassService;
 
 #[\Weline\Framework\Acl\Acl('Weline_Multipass::account_management', 'Multipass账户管理', 'mdi mdi-account-key', '生成和管理Multipass登录令牌', 'Weline_Multipass::menu_multipass_management')]
@@ -23,6 +22,7 @@ class Account extends BackendController
 {
     private MultipassSite $multipassSite;
     private MultipassService $multipassService;
+    private ?AccountFacadeResolver $accountFacades = null;
 
     public function __construct(
         MultipassSite $multipassSite
@@ -123,55 +123,19 @@ class Account extends BackendController
             $search = trim($this->request->getParam('search', ''));
             
             if ($userType === 'frontend') {
-                /** @var FrontendUser $userModel */
-                $userModel = ObjectManager::getInstance(FrontendUser::class);
-                $userModel->clear();
-                
-                if (!empty($search)) {
-                    // 使用 concat_like 进行多字段模糊查询
-                    $userModel->concat_like('username,email', "%$search%");
-                }
-                
-                $users = $userModel
-                    ->order(FrontendUser::schema_fields_ID, 'DESC')
-                    ->pagination(1, 20)
-                    ->select()
-                    ->fetch();
+                $result = $this->accountFacades()->frontend()->search($search, 1, 20);
             } else {
-                /** @var BackendUser $userModel */
-                $userModel = ObjectManager::getInstance(BackendUser::class);
-                $userModel->clear();
-                
-                // 先设置未删除条件
-                $userModel->where(BackendUser::schema_fields_is_deleted, 0);
-                
-                if (!empty($search)) {
-                    // 使用 concat_like 进行多字段模糊查询
-                    $userModel->concat_like('username,email', "%$search%");
-                }
-                
-                $users = $userModel
-                    ->order(BackendUser::schema_fields_ID, 'DESC')
-                    ->pagination(1, 20)
-                    ->select()
-                    ->fetch();
+                $result = $this->accountFacades()->backend()->search($search, 1, 20);
             }
             
-            // 格式化用户数据
             $userList = [];
-            foreach ($users->getItems() as $user) {
-                $userList[] = [
-                    'user_id' => $user->getId() ?: $user->getData('user_id'),
-                    'id' => $user->getId() ?: $user->getData('user_id'),
-                    'username' => $user->getData('username') ?: '',
-                    'email' => $user->getData('email') ?: '',
-                    'avatar' => $user->getData('avatar') ?: ''
-                ];
+            foreach ($result->getUsers() as $user) {
+                $userList[] = $user->toSelectorArray();
             }
             
             return $this->success(__('获取成功'), [
                 'users' => $userList,
-                'pagination' => $users->getPagination()
+                'pagination' => $result->getPagination()
             ]);
             
         } catch (\Exception $e) {
@@ -218,11 +182,9 @@ class Account extends BackendController
             
             // 获取用户信息
             if ($userType === 'frontend') {
-                /** @var FrontendUser $user */
-                $user = ObjectManager::getInstance(FrontendUser::class);
-                $user->load($userId);
+                $user = $this->accountFacades()->frontend()->find((int) $userId);
                 
-                if (!$user->getId()) {
+                if ($user === null) {
                     return $this->error(__('用户不存在'), '', 404);
                 }
                 
@@ -231,15 +193,13 @@ class Account extends BackendController
                     'avatar' => $user->getAvatar() ?: ''
                 ];
             } else {
-                /** @var BackendUser $user */
-                $user = ObjectManager::getInstance(BackendUser::class);
-                $user->load($userId);
+                $user = $this->accountFacades()->backend()->find((int) $userId);
                 
-                if (!$user->getId()) {
+                if ($user === null) {
                     return $this->error(__('用户不存在'), '', 404);
                 }
                 
-                if (!$user->getIsEnabled()) {
+                if (!$user->isEnabled()) {
                     return $this->error(__('用户已被禁用'), '', 403);
                 }
                 
@@ -279,5 +239,9 @@ class Account extends BackendController
             return $this->error(__('Token生成失败：%{1}', [$e->getMessage()]), '', 500);
         }
     }
-}
 
+    private function accountFacades(): AccountFacadeResolver
+    {
+        return $this->accountFacades ??= ObjectManager::getInstance(AccountFacadeResolver::class);
+    }
+}

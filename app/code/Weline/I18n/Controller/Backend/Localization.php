@@ -896,19 +896,30 @@ class Localization extends BaseController
     public function postActivate()
     {
         $localeCode = (string)$this->request->getPost('locale_code');
+        $isAsyncRequest = $this->isAsyncRequest();
 
         if ($localeCode === '') {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请选择要激活的区域'));
+            }
             Message::error(__('请选择要激活的区域'));
             return $this->redirect($this->buildListUrl());
         }
 
         try {
             $summary = $this->lifecycle->activateLocale($localeCode);
-            Message::success(__('地区 %{1} 已安装并启用，所属国家 %{2} 已同步启用', [
+            $message = (string)__('地区 %{1} 已安装并启用，所属国家 %{2} 已同步启用', [
                 $summary['locale_code'] ?? $localeCode,
                 $summary['country']['display_name'] ?? ($summary['country_code'] ?? ''),
-            ]));
+            ]);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, $summary);
+            }
+            Message::success($message);
         } catch (\Exception $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -921,18 +932,29 @@ class Localization extends BaseController
     public function postDeactivate()
     {
         $localeCode = (string)$this->request->getPost('locale_code');
+        $isAsyncRequest = $this->isAsyncRequest();
 
         if ($localeCode === '') {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请选择要停用的区域'));
+            }
             Message::error(__('请选择要停用的区域'));
             return $this->redirect($this->buildListUrl());
         }
 
         try {
             $summary = $this->lifecycle->deactivateLocale($localeCode);
-            Message::success(__('地区 %{1} 已停用，所属国家状态已自动同步', [
+            $message = (string)__('地区 %{1} 已停用，所属国家状态已自动同步', [
                 $summary['locale_code'] ?? $localeCode,
-            ]));
+            ]);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, $summary);
+            }
+            Message::success($message);
         } catch (\Exception $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -945,19 +967,30 @@ class Localization extends BaseController
     public function postInstall()
     {
         $localeCode = (string)$this->request->getPost('locale_code');
+        $isAsyncRequest = $this->isAsyncRequest();
 
         if ($localeCode === '') {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请选择要安装的区域'));
+            }
             Message::error(__('请选择要安装的区域'));
             return $this->redirect($this->buildListUrl());
         }
 
         try {
             $summary = $this->lifecycle->installLocale($localeCode);
-            Message::success(__('地区 %{1} 已安装，所属国家 %{2} 已同步安装', [
+            $message = (string)__('地区 %{1} 已安装，所属国家 %{2} 已同步安装', [
                 $summary['locale_code'] ?? $localeCode,
                 $summary['country']['display_name'] ?? ($summary['country_code'] ?? ''),
-            ]));
+            ]);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, $summary);
+            }
+            Message::success($message);
         } catch (\Exception $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -970,18 +1003,29 @@ class Localization extends BaseController
     public function postUninstall()
     {
         $localeCode = (string)$this->request->getPost('locale_code');
+        $isAsyncRequest = $this->isAsyncRequest();
 
         if ($localeCode === '') {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请选择要卸载的区域'));
+            }
             Message::error(__('请选择要卸载的区域'));
             return $this->redirect($this->buildListUrl());
         }
 
         try {
             $summary = $this->lifecycle->uninstallLocale($localeCode);
-            Message::success(__('地区 %{1} 已卸载，语言包和缓存已同步清理', [
+            $message = (string)__('地区 %{1} 已卸载，语言包和缓存已同步清理', [
                 $summary['locale_code'] ?? $localeCode,
-            ]));
+            ]);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, $summary);
+            }
+            Message::success($message);
         } catch (\Exception $exception) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, $exception->getMessage());
+            }
             Message::exception($exception);
         }
 
@@ -1040,6 +1084,7 @@ class Localization extends BaseController
      */
     public function postSyncNames()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         try {
             $currentLang = $this->getSafeCurrentLocaleCode();
             $force = (bool)$this->request->getPost('force', false);
@@ -1054,8 +1099,15 @@ class Localization extends BaseController
             }
             
             $this->syncLocaleNames($currentLang);
-            Message::success(__('区域名称数据同步完成'));
+            $message = (string)__('区域名称数据同步完成');
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, ['locale' => $currentLang, 'force' => $force]);
+            }
+            Message::success($message);
         } catch (\Exception $e) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('同步失败：%{1}', [$e->getMessage()]));
+            }
             Message::error(__('同步失败：%{1}', [$e->getMessage()]));
         }
         
@@ -1068,9 +1120,21 @@ class Localization extends BaseController
      */
     public function postCleanupLocales()
     {
+        $isAsyncRequest = $this->isAsyncRequest();
         try {
             $cleanedLocales = $this->cleanupUninstalledCountryLocales();
             $cleanedLocaleNames = $this->cleanupOrphanedLocaleNames();
+
+            $message = ($cleanedLocales > 0 || $cleanedLocaleNames > 0)
+                ? (string)__('清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录', [$cleanedLocales, $cleanedLocaleNames])
+                : (string)__('数据已是最新，无需清理');
+
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, [
+                    'cleaned_locales' => $cleanedLocales,
+                    'cleaned_locale_names' => $cleanedLocaleNames,
+                ]);
+            }
 
             if ($cleanedLocales > 0 || $cleanedLocaleNames > 0) {
                 Message::success(__('清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录', [
@@ -1099,6 +1163,9 @@ class Localization extends BaseController
             }
             
         } catch (\Exception $e) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('清理失败：%{1}', [$e->getMessage()]));
+            }
             Message::error('清理失败：' . $e->getMessage());
         }
         
@@ -1112,8 +1179,12 @@ class Localization extends BaseController
     {
         $action = (string)$this->request->getPost('action');
         $localeCodes = array_values(array_unique(array_filter(array_map('strval', (array)$this->request->getPost('locale_codes', [])))));
+        $isAsyncRequest = $this->isAsyncRequest();
 
         if ($action === '' || empty($localeCodes)) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请选择操作和区域'));
+            }
             Message::error(__('请选择操作和区域'));
             return $this->redirect($this->buildListUrl());
         }
@@ -1153,10 +1224,27 @@ class Localization extends BaseController
                 'install' => __('已批量安装 %{1} 个地区', [$successCount]),
                 'uninstall' => __('已批量卸载 %{1} 个地区', [$successCount]),
             ];
-            Message::success($successMessages[$action] ?? __('已处理 %{1} 个地区', [$successCount]));
+            $message = (string)($successMessages[$action] ?? __('已处理 %{1} 个地区', [$successCount]));
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(true, $message, [
+                    'action' => $action,
+                    'success_count' => $successCount,
+                    'error_count' => count($errors),
+                    'errors' => array_slice($errors, 0, 5),
+                ]);
+            }
+            Message::success($message);
         }
 
         if (!empty($errors)) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse($successCount > 0, (string)__('共有 %{1} 个地区处理失败', [count($errors)]), [
+                    'action' => $action,
+                    'success_count' => $successCount,
+                    'error_count' => count($errors),
+                    'errors' => array_slice($errors, 0, 5),
+                ]);
+            }
             Message::warning(__('共有 %{1} 个地区处理失败', [count($errors)]));
             Message::warning(implode('<br>', array_slice($errors, 0, 5)));
         }

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 /**
  * 通用模态框组件
@@ -64,7 +64,7 @@ class Modal implements TaglibInterface
             $t_copy_failed = addslashes((string)__('复制失败'));
             $t_close = addslashes((string)__('关闭'));
 
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
 
             $sizeClass = match ($size) {
                 'sm' => 'weline-modal--sm',

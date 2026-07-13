@@ -184,6 +184,9 @@ WLS mode (connection reuse):
 
 ConnectionPoolManager:
   • Maintains connection pool (max connections, idle timeout)
+  • Issues one non-copyable ConnectionLease per checked-out PDO
+  • Lease release/discard/destruct is idempotent; no out-of-pool overflow
+  • requestEndCleanup rolls back transactions and invalidates retained leases
   • Auto-reconnect (detects disconnection)
   • Health check (periodic ping)
 
@@ -194,6 +197,7 @@ ConnectionPoolManager:
 Supported databases:
   • MySQL / MariaDB  → Framework\Database\Connection\Mysql\*
   • PostgreSQL       → Framework\Database\Connection\Pgsql\*
+  • SQLite           → Framework\Database\Connection\Adapter\Sqlite\*
 
 Adapter layers:
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -205,10 +209,26 @@ Adapter layers:
 │   ↓                                                                     │
 │ Mysql\Query / Pgsql\Query (dialect conversion)                          │
 │   ↓                                                                     │
+│ ConnectionLease (bounded ownership / request cleanup fence)              │
+│   ↓                                                                     │
 │ PdoConnection (PDO wrapper)                                             │
 │   ↓                                                                     │
 │ PDO (PHP native)                                                        │
 └────────────────────────────────────────────────────────────────────────┘
+
+SQLite busy/locked retry:
+  • Connector disables the native busy handler immediately after PDO opens
+  • case_sensitive_like, foreign_keys, pre_sql/journal/schema bootstrap and
+    sqlite_version validation share one connection-bootstrap RetryBudget
+  • Query prepare + execute use one immutable RetryBudget deadline
+  • Dynamic request default 50ms; configuration is hard-capped at 150ms
+  • CLI/setup may use an explicit larger budget, but never an unbounded wait
+  • Native PRAGMA busy_timeout is disabled; framework owns all retry timing
+  • Legacy ConfigProvider/pre_sql busy_timeout values cannot re-enable native wait
+  • WLS waits only by safe Fiber yield; without it, fail fast with a structured
+    DatabaseRetryTimeoutException
+  • Non-busy PDO errors are rethrown unchanged; only uncommitted busy/locked
+    statements are retryable
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Critical Constraints                                                          │

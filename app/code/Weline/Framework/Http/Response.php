@@ -2,6 +2,7 @@
 
 namespace Weline\Framework\Http;
 
+use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\Message;
@@ -179,7 +180,7 @@ class Response implements ResponseInterface
     public function setData(mixed $data): static
     {
         /** @var DataObject $dataObject */
-        $dataObject = ObjectManager::getInstance(DataObject::class);
+        $dataObject = ContainerRuntime::get()->create(DataObject::class);
         $dataObject->setData($data);
 
         $contentType = (string)$this->getRequest()->getContentType();

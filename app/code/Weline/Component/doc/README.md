@@ -19,18 +19,23 @@
 - 目录：`app/code/Weline/Component`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 
+组件后台页通过 `Weline\Admin\Api\Controller\BaseController` 接入 Admin 发布的
+后台页面契约；模块清单与 Composer 均将 Admin 声明为必需依赖，不引用 Admin 的
+内部 Controller 实现。
+
 ## 代码面概览
 
 入口文件：
 - `app/code/Weline/Component/composer.json`
 - `app/code/Weline/Component/etc/backend/menu.xml`
 
+- `Api`：跨模块公开渲染契约。`OffCanvasRendererInterface` 只接受数据数组并返回 HTML。 文件数：1
 - `Block`：视图数据块与模板输出辅助层。 文件数：3
 - `Controller`：前后台 HTTP 控制器与路由入口。 文件数：3
 - `Controller/Backend`：后台控制器入口；变更前同步检查 ACL、菜单和返回路径。 文件数：2
 - `Model`：ORM 模型与字段 schema。 文件数：1
 - `Observer`：事件观察者与订阅逻辑。 文件数：1
-- `Service`：业务编排与模块服务层。 文件数：1
+- `Service`：业务编排与模块服务层。 文件数：2
 - `etc`：模块配置。 文件数：4
 - `i18n`：国际化资源。 文件数：2
 - `view/blocks`：区块模板/片段视图。 文件数：3
@@ -55,6 +60,9 @@
 ## 维护规则
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
+- 跨模块渲染 OffCanvas 必须使用 `Weline\Component\Api\OffCanvasRendererInterface`。
+  `Service/OffCanvasRenderer` 是无状态薄适配器，内部仍以单个命名参数 `data` 创建原 Block，
+  并严格执行 `__init()` 后 `render()`；调用模块不得引用 `Component\Block\OffCanvas`。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。

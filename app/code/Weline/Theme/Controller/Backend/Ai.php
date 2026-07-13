@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Controller\Backend;
 
-use Weline\Ai\Service\AiService;
+use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Sse\SseWriter;
@@ -14,7 +14,7 @@ use Weline\Theme\Service\ThemeAiPayloadValidator;
 class Ai extends BackendController
 {
     public function __construct(
-        private readonly AiService $aiService,
+        private readonly AiRuntimeInterface $aiRuntime,
         private readonly ThemeAiDraftService $themeAiDraftService,
         private readonly ThemeAiPayloadValidator $payloadValidator,
     ) {
@@ -28,7 +28,7 @@ class Ai extends BackendController
                 'success' => true,
                 'data' => [
                     'scenario' => $scenario,
-                    'agents' => $this->aiService->getAgentsForScenario($scenario),
+                    'agents' => $this->aiRuntime->getAgentsForScenario($scenario),
                 ],
             ]);
         } catch (\Throwable $throwable) {
@@ -135,7 +135,7 @@ class Ai extends BackendController
                 'agent_code' => $agentCode,
             ]);
 
-            $result = $this->aiService->executeAgent(
+            $result = $this->aiRuntime->executeAgent(
                 $agentCode,
                 $prompt,
                 $modelCode,

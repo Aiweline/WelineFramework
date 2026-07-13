@@ -9,7 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class MarketplaceMetaI18nSubmitter
 {
-    public const EVENT_NAME = 'Weline_I18n::collect_translations';
+    public const EVENT_NAME = 'Weline_Framework_MarketplaceMeta::collect_translations';
 
     public function __construct(
         private readonly ?EventsManager $eventsManager = null
