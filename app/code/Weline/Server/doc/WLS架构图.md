@@ -196,12 +196,14 @@ accept/TLS -> 单次请求解析 -> 真实客户端身份
 Worker exact-word L1
   -> Worker route/module dictionary L1
   -> phrase Shared Memory route/module snapshot L2
-  -> scoped provider query (source_module IN current modules, single-flight)
   -> owning module i18n CSV
+  -> Worker global exact-word L1
+  -> phrase Shared Memory exact-word record
+  -> md5(word + locale) indexed DB lookup (single-flight)
   -> source word
 ```
 
-路由、Controller、Layout、Query 在请求中登记的模块共同组成词典范围；模块集合变化时生成新的进程快照，但绝不包含未参与请求的模块。Shared L2 只在 Worker L1 失效时访问，随后该 Worker 直接查本地哈希。翻译发布和 cache epoch 会同时使进程词哈希与模块快照失效；普通 request cleanup 只删除 request id、used words 和本次翻译结果，不丢弃常驻 L1。
+路由、Controller、Layout、Query 在请求中登记的模块共同组成词典范围；模块集合变化时生成新的进程快照，但绝不包含未参与请求的模块。Shared L2 只在 Worker L1 失效时访问，随后该 Worker 直接查本地哈希，连模块元数据和 `filemtime/filesize` 也不再触碰。翻译发布和 cache epoch 会同时使进程词哈希与模块快照失效；失效后的首次读取才重新计算文件版本并回源，普通 request cleanup 只删除 request id、used words 和本次翻译结果，不丢弃常驻 L1。
 
 `Weline\I18n\Parser` 只是 Framework Parser 的兼容桥，不再维护第二份全 locale 缓存。WLS 启动预热也不扫描所有 active module 或 `generated/language/{locale}.php`。这条边界既避免 16 Worker 重复持有全量字典，也避免把 1MB 级序列化数组送入 Shared Memory 协议。
 
