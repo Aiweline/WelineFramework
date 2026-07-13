@@ -3513,7 +3513,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         array $requestHeaders = []
     ): array
     {
-        $startedAt = \microtime(true);
+        // READY is a process-liveness gate, so its duration must use a
+        // monotonic clock. A VM/NTP wall-clock correction during concurrent
+        // Worker bootstrap can make microtime(true) move backwards and publish
+        // an impossible negative first-render duration, causing Master to
+        // reject an otherwise healthy Worker indefinitely.
+        $startedAtNanoseconds = \hrtime(true);
         $host = $this->normalizeInternalWarmupHost($host)
             ?? throw new \InvalidArgumentException('Invalid internal warmup host.');
         $path = $this->normalizeInternalWarmupPath($path);
@@ -3599,7 +3604,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'set_cookie_names' => $cookieNames,
             'full_uri' => $fpcReceipt['full_uri'] ?? $requestFullUri,
             'fpc_receipt' => $fpcReceipt,
-            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            'elapsed_ms' => \round(\max(
+                0.0,
+                (\hrtime(true) - $startedAtNanoseconds) / 1_000_000.0
+            ), 2),
         ];
         unset($result, $request, $response);
 

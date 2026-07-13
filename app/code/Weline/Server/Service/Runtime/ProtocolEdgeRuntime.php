@@ -233,9 +233,17 @@ final class ProtocolEdgeRuntime
     public static function adminPortForInstance(string $instanceName, int $mainPort): int
     {
         $offset = MasterProcess::getProjectPortOffset();
-        $candidate = 30000 + ($mainPort % 10000) + ($offset % 5000);
-        if ($candidate > 65000) {
-            $candidate = 30000 + (\abs((int)\crc32($instanceName)) % 20000);
+        // Keep Caddy's loopback-only control socket below the default dynamic
+        // client-port ranges used by Linux (32768+), macOS and Windows
+        // (49152+). The previous 30k-50k formula intermittently collided with
+        // a short-lived local connection and made an otherwise healthy WLS
+        // cold start fail with EADDRINUSE. Instance, public port and project
+        // offset keep the mapping deterministic across config generation,
+        // process launch and reload.
+        $hash = (int)\sprintf('%u', \crc32($instanceName . ':' . $mainPort . ':' . $offset));
+        $candidate = 10000 + ($hash % 7000);
+        if ($candidate === $mainPort) {
+            $candidate = 10000 + (($candidate - 9999) % 7000);
         }
 
         return $candidate;
