@@ -1639,32 +1639,38 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $isHomepage = $path === '/';
                 $pathKey = $this->dynamicWarmupPathKey($host, $path);
                 $ownsPathLock = false;
+                $renderLockToken = null;
                 try {
                     $ownsPathLock = $this->acquireDynamicWarmupPathLock($pathKey);
                     if (!$ownsPathLock) {
-                        $sharedReady = $this->waitForDynamicWarmupPathReady($pathKey);
-                        $sharedSample = \is_array($sharedReady['sample'] ?? null)
-                            ? $sharedReady['sample']
-                            : [];
-                        if ($isHomepage
-                            && !empty($sharedReady['ok'])
-                            && ($sharedSample['ready'] ?? null) === true
-                        ) {
-                            $sharedSample['cache'] = 'shared-owner:' . \trim((string)($sharedSample['cache'] ?? ''), ':');
-                            $sharedSample['reason'] = 'ready:shared-owner ' . \trim((string)($sharedSample['reason'] ?? 'rendered'));
-                            $result['samples'][] = $sharedSample;
-                            $result['warmed']++;
-                            continue;
-                        }
+                        $this->waitForDynamicWarmupPathReady($pathKey);
+                        // Shared readiness only proves that the owner finished
+                        // generation-wide work. Router/controller/template
+                        // caches remain process-local, so every peer must still
+                        // execute its own bounded render before it can be READY.
+                        // Skipping here leaves most Workers cold and creates a
+                        // 100ms+ tail on the first public request routed to each
+                        // process.
+                    }
+
+                    // Shared generation prerequisites are published once, but
+                    // controller/router/template caches are process-local. A
+                    // cold 16-Worker batch used to let every peer render at the
+                    // same instant after the owner proof arrived, turning an
+                    // otherwise 10-30ms local render into a 300ms+ CPU-contention
+                    // spike. Serialize only this bounded bootstrap render; the
+                    // lock is never used by public request traffic.
+                    $renderLockToken = $this->acquireDynamicWarmupRenderLock($pathKey);
+                    if ($renderLockToken === null) {
+                        throw new \RuntimeException('Timed out waiting for the process-local warmup render slot.');
                     }
 
                     if ($isHomepage) {
                         // The mandatory READY gate above has already proved
                         // this worker owns a process-local homepage FPC hit.
-                        // Exactly one owner warms the dynamic controller /
-                        // template chain for this generation. Peer workers
-                        // consume the immutable shared proof instead of
-                        // creating a cold-start render storm.
+                        // One owner publishes generation-wide prerequisites;
+                        // after observing that proof, every peer warms its own
+                        // controller/template chain before advertising READY.
                         $attempts = 0;
                         do {
                             $attempts++;
@@ -1743,6 +1749,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         \w_log_warning('[WlsRuntime] dynamic first-render warmup failed ' . $message);
                     }
                 } finally {
+                    if ($renderLockToken !== null) {
+                        $this->releaseDynamicWarmupRenderLock($pathKey, $renderLockToken);
+                    }
                     if ($ownsPathLock) {
                         $this->releaseDynamicWarmupPathLock($pathKey);
                     }
@@ -2629,6 +2638,63 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         } while (\microtime(true) < $deadline);
 
         return [];
+    }
+
+    private function acquireDynamicWarmupRenderLock(string $pathKey): ?string
+    {
+        $coordinator = $this->dynamicWarmupCoordinator();
+        if ($coordinator === null) {
+            return 'local:' . (string)\getmypid();
+        }
+
+        $token = (string)\getmypid()
+            . ':' . (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: '0')
+            . ':' . \bin2hex(\random_bytes(6));
+        $deadline = \microtime(true) + (\max(5000, $this->dynamicWarmupPathWaitMs()) / 1000);
+        do {
+            try {
+                if ($coordinator->cas(
+                    self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                    'render.' . $pathKey,
+                    null,
+                    $token,
+                    30
+                )) {
+                    return $token;
+                }
+            } catch (\Throwable) {
+                // Shared state is an optimization boundary. A transient IPC
+                // failure must not deadlock Worker startup.
+                return 'local:' . $token;
+            }
+
+            SchedulerSystem::yieldDelay(5);
+        } while (\microtime(true) < $deadline);
+
+        return null;
+    }
+
+    private function releaseDynamicWarmupRenderLock(string $pathKey, string $token): void
+    {
+        if (\str_starts_with($token, 'local:')) {
+            return;
+        }
+
+        $coordinator = $this->dynamicWarmupCoordinator();
+        if ($coordinator === null) {
+            return;
+        }
+
+        try {
+            $coordinator->cas(
+                self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                'render.' . $pathKey,
+                $token,
+                null,
+                1
+            );
+        } catch (\Throwable) {
+        }
     }
 
     /** @param array<string,mixed> $sample */
