@@ -1,6 +1,6 @@
 # 进度
 
-状态：`ready_for_commit_windows_fpm_pending`
+状态：`published_windows_fpm_pending`
 
 - 已建立隔离分支和 worktree，代码智能上下文已初始化。
 - 已冻结原始脏工作区；只在 `/Users/weline/Project/Official/.codex-wls-release-20260713` 修改，原分支未删除。
@@ -94,3 +94,4 @@
 - 当前仍缺 Windows 原生 Dispatcher/event DLL 和 FPM 完整矩阵，因此不把跨平台总计划标记 complete。
 - 最终静态门禁：8 个 PHP 文件语法通过，benchmark 定向测试 8 项通过（1 项按既有条件跳过），Semgrep 以 `HEAD` 为基线扫描 85 条规则后新增 finding 为 0；`git diff --check`、`architecture:check`（83 模块/4045 PHP/7171 引用）、`framework:compile`（39 Provider/0 延迟）和 `server:policy:check`（12 条规则）全部通过。
 - 最终状态核对中 macOS 专用实例仍为 Direct 4/4 Worker + Protocol Edge READY，四个动态首页回执 9.35–9.50ms。自动验收结束后已用统一 stop flow 停止 `ai-test-wls-final-mac-20260714-0320`；9930 TCP/UDP、28133–28136 私有端口、38133 控制端口及对应 PID 全部释放。另一智能体 9890 实例仍保持运行，未触碰。
+- 核心提交 `848c2c0f9` 已以纯 fast-forward 推送至 Gitee/GitHub 的 `codex/wls-tls13-extreme-performance` 与 `master`，四个远端引用核对为同一完整 SHA；本地未检出的 master 引用也只做原子快进。没有 force、reset、merge commit、分支/worktree 删除或文件恢复，`AGENTS.md/CLAUDE.md` 继续保持未暂存。

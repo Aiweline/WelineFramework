@@ -57,3 +57,5 @@ READY 动态首页的旧失败也已收口：冷链第一次有效渲染超过 7
 本轮仍不能声明完整跨平台发布：Windows 原生 `auto -> dispatcher`、Direct/independent 拒绝、event DLL ABI 与长稳矩阵，以及 FPM 对照没有当前 runner 的权威证据。功能分支和隔离 worktree继续保留，不删除、恢复或覆盖其他智能体文件。
 
 最终收口门禁全部通过：PHP 语法、8 项 benchmark 定向测试、Semgrep 新增 0 finding、架构检查、框架编译和 12 条运行时策略检查。专用 macOS 实例停止前仍为 Direct 4/4 READY，动态首渲染 9.35–9.50ms；随后通过标准 stop flow 完整释放 9930、28133–28136、38133 和全部关联 PID。另一智能体 9890 实例仍在，未被操作。
+
+核心代码与架构文档提交 `848c2c0f9` 已同步到 Gitee/GitHub 的功能分支和 master，四个远端引用一致且全部是 fast-forward。本地 master 在未被任何 worktree 检出的前提下原子快进；功能分支、隔离 worktree和其他智能体的未暂存文件全部保留。
