@@ -732,6 +732,12 @@ class MasterProcess
         if (isset($this->config['gateway']) && \is_array($this->config['gateway'])) {
             $wls['gateway'] = \array_merge(\is_array($wls['gateway'] ?? null) ? $wls['gateway'] : [], $this->config['gateway']);
         }
+        if (isset($this->config['http']) && \is_array($this->config['http'])) {
+            $wls['http'] = \array_merge(
+                \is_array($wls['http'] ?? null) ? $wls['http'] : [],
+                $this->config['http'],
+            );
+        }
         if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
             $configuredRuntime = \is_array($this->config['runtime'] ?? null)
                 ? $this->config['runtime']
@@ -1192,7 +1198,14 @@ class MasterProcess
             'ssl_enabled',
             'ssl_cert',
             'ssl_key',
+            'http_protocol_selection',
+            'http_protocols',
+            'http_preferred_protocol',
+            'protocol_edge_enabled',
+            'protocol_edge_binary',
+            'tls_session_resumption',
             'dispatcher_enabled',
+            'dispatcher_port',
             'worker_port',
             'worker_base_port',
             'gateway',

@@ -2016,6 +2016,7 @@ unknown,unknown
 实际运行时选择：,实际运行时选择：
 拓扑：,拓扑：
 数据面：,数据面：
+HTTP 协议：,HTTP 协议：
 策略：,策略：
 Endpoint：,Endpoint：
 选择原因：,选择原因：

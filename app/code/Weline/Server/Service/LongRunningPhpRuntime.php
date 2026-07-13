@@ -55,6 +55,7 @@ class LongRunningPhpRuntime
         return \in_array($script, [
             'dispatcher.php',
             'http_redirect_worker.php',
+            'protocol_edge.php',
             'session_server.php',
             'worker.php',
             'worker_ssl.php',

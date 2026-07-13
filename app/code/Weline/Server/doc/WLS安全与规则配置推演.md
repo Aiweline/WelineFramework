@@ -13,7 +13,7 @@
 
 | 能力 | Dispatcher 拓扑 | Direct 拓扑 |
 |---|---|---|
-| IP/CIDR 、连接数/速率、slowloris | Dispatcher L4 Gate | Worker AcceptGate |
+| IP/CIDR、连接数/速率、slowloris | legacy 公网入口由 Dispatcher L4 Gate 执行；协议边缘模式下 Dispatcher 只执行私有 upstream 的实例总量/总速率/超时，真实客户端规则由 Worker 逐请求执行 | legacy 公网入口由 Worker AcceptGate 执行；协议边缘模式下 AcceptGate 只执行实例总量/总速率/超时，真实客户端规则由 Worker 逐请求执行 |
 | Worker 选择、后端连接、背压、failover | Dispatcher | 不存在 |
 | TLS/SNI/证书/握手失败 | Worker | Worker |
 | Host、后台 Key、Origin Token | Worker | Worker |
@@ -21,9 +21,9 @@
 | Static/FPC/Router/Controller | Worker | Worker |
 | 维护模式 | Dispatcher 可切维护池，Worker 仍校验 epoch | Worker 本地直接响应 |
 
-Dispatcher 拓扑使用 PROXY Protocol v2 把经过认证的客户端 peer 元数据传给 Worker。Direct 使用公开 socket 的真实 peer。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
+legacy Dispatcher 拓扑使用带实例认证的 PROXY Protocol v2 把公网连接 peer 传给 Worker；legacy Direct 使用公开 socket 的真实 peer。协议边缘模式不同：Caddy 会在多个公网客户端之间复用私有 HTTP/1.1 upstream，连接级 PROXY v2 无法表达同一连接中每个请求的身份，因此不得用它伪造逐请求客户端 IP。Edge 每请求覆盖实例 token、`X-Forwarded-For` 和公开协议，Dispatcher 只透传原始 HTTP 字节，Worker 在确认 loopback + token 后按请求计算 canonical client identity。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
 
-Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx/Caddy 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
+Loopback 只是 transport peer，不是隐式业务白名单或 Origin 凭据。WLS 自管协议边缘启用时，AcceptGate 仅把“持有实例 edge token 的配置 + loopback socket peer”作为私有连接池的 transport whitelist，避免把不同公网客户端聚合为 `127.0.0.1` 后误触发每 IP 连接封禁；实例总连接/总速率和慢 upstream 超时仍生效。WorkerPolicyKernel 随后仍按 canonical client IP 完整执行 Origin Token、ban、限流和攻击规则。普通 Nginx/Caddy 反代若未配置 `trusted_proxy_cidrs` 则不采信转发头；只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过对应业务规则，`trusted_proxy_cidrs` 本身不授予业务白名单权限。
 
 ## 3. RuntimePolicyBundle
 
@@ -113,6 +113,8 @@ AcceptGate
 
 “语义只解析一次”是数据契约，不是文档口号：`WorkerPolicyKernel` 只接受分帧器验证后且无尾部字节的单条请求，完成唯一一次请求行/Header 语义解析，产生不可变 `WorkerPolicyDecision` / Framework `RequestEnvelope`。该快照同时携带 method、HTTP protocol、已规范化 path、原始 target/query、小写 Header map、body、canonical client IP、trusted-proxy 结论和 policy digest。Static/FPC 与动态路由必须消费同一份 Decision；动态路由 `WlsRequest::fromEnvelope()` 直接水合，不再调用 `fromRaw()` 或重复扫描 HTTP 头。
 
+公开 h2/h3 由协议边缘解复用为私有 h1 时，Decision 同时保留 `transport_protocol=HTTP/1.1` 与经过认证的 `client_protocol=HTTP/2.0|HTTP/3.0`。协议边缘每次覆盖 `X-WLS-Edge-Token`、`X-WLS-Client-Protocol`、`X-Forwarded-For` 和 `X-Forwarded-Proto`；Worker 必须先确认 socket peer 为 loopback，再用常量时间比较实例 token。失败返回 403/400，成功后立即删除内部认证 Header，模块、日志、FPC key 和 Hook 都不能看到 token。Direct 与 Dispatcher 都执行这条边界，区别只在边缘的 upstream 是 Worker 还是内部 Dispatcher。
+
 `WorkerStaticResponseL1::lookup()` 只接受该 Decision；GET/HEAD、`If-None-Match` / `If-Modified-Since`、HTTP/1.0/1.1 和 Connection close/keep-alive 都从快照判定。后续 `WorkerFullPageCacheFastPath` 也只消费该 Decision，并在 SSE/upgrade、`Cache-Control: no-cache/no-store/max-age=0`、`Pragma: no-cache` 和显式 warmup/bypass 时拒绝命中。HTTP 与 stream TLS 在 Static/FPC 命中后直接进入 transport 写缓冲收尾，EventBuffer 使用显式 hit 结果跳过响应头重扫描；三者都不再在普通热命中调用冷 static handler、文件系统、ObjectManager、同步 telemetry 或 post-response queue。`cache_clear(cache_epoch)` 在 ACK 前清空每个 Worker 的 Static L1 与 FPC Process L1。
 
 fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-Weline-Performance-Diagnostics: 1` 显式开启，且仍需通过 DeveloperAccessPolicy。DEV 模式本身不再导致所有 Static/FPC 请求生成随机 request-id 并写 TraceStore。`X-WLS-Benchmark-Worker: 1` 是独立的平台 benchmark 归因契约，仅返回 Worker ID/port/PID，不开启面板 trace，也不绕过 Origin Token、ban、限流或攻击规则。业务路径高压必须使用专用测试实例，并仅对实际压测源 IP 显式配置 whitelist CIDR；不得用裸 Header 伪造安全绕过。
@@ -133,6 +135,8 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - Slowloris 只统计超过 `grace_seconds` 仍未完成 TLS/HTTP 请求帧的连接。默认宽限为 1.5 秒，明显高于 fresh-TLS 的 `<1s` 运行门槛；正常 c32/c128 并发不能因事件循环调度超过旧的 250ms 窗口而被误判。宽限后仍使用实例级每 IP 10 条上限和 30 秒总超时，不能把提高宽限解释为取消慢连接防护。
 - `server:security:unblock` 由 Master 同时广播给当前实例的业务 Worker、维护 Worker 与 Dispatcher。各进程会同步清除请求策略内核、Connection AcceptGate、共享状态和进程内分布式 Ban。`--clear-all` 只按当前实例 hash 前缀删除共享 Ban，不得清空其他 WLS 实例。
 - Dispatcher 不再构建 `AttackDetector`、不读取或轮询攻击规则文件，也不重复维护 whitelist/CIDR 索引。其 accept 热路的唯一安全事实源是当前已激活 Bundle 构建的 `ConnectionAcceptGatePool`；URI/Header/Body 攻击规则只在 WorkerPolicyKernel 执行。
+- 协议边缘到 Dispatcher/Worker 的 keep-alive 连接可能承载多个公网客户端，连接级 PROXY v2 不能作为逐请求身份。私有 AcceptGate 只豁免 edge loopback 的每 IP transport 配额，不豁免实例总量，也不改变 WorkerPolicyKernel 的 canonical client IP、Ban 或请求限流。
+- HTTP Protocol Edge 不执行 Host、后台 Key、Origin Token、URI/Header/Body 攻击、请求限流或 Static/FPC。它只处理 TLS/QUIC、ALPN、session ticket、连接池和 READY upstream；因此不能在 Edge 添加一份会与 Worker 漂移的业务规则。
 - 攻击日志进入进程 ring buffer 后批量提交；请求热路径不直接 ORM、写 JSON 或同步 IPC。
 - TLS 握手和握手后的首请求都必须有总 deadline。macOS shared-FD 路径只对新握手连接执行 200ms 有界首读泵送，不允许将兼容补偿扩展为普通 keep-alive 的全连接扫描或秒级等待。
 - `server:wls_error_scan` 使用增量 cursor 流式读取：单次最多 32 MiB、单文件最多 8 MiB、总 deadline 250 ms、单块 64 KiB。未结束的超长行只持久化 8 KiB 摘要、模式尾部和匹配状态；轮转以 inode/device/size 识别，多个日志按 cursor 轮转起点公平续扫。首次发现既有日志直接从 EOF 建 cursor，不再为了统计行号扫描整个历史文件。
@@ -141,7 +145,8 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 
 - 对同一请求语料对比 Dispatcher/direct 的状态码、Header、Body、封禁、限流和缓存来源，结果必须一致。
 - 三种 transport 必须一致拒绝 TE+CL、任何未支持 TE/chunked 和冲突的重复 CL；同一连接一次写入两条完整请求时，必须按顺序返回两个响应，不得把尾部当作第一请求 body 或静默丢弃。
-- 伪造 XFF/CF Header 不能覆盖非受信 peer；Dispatcher 的 PROXY v2 元数据必须通过实例认证。
+- 伪造 XFF/CF Header 不能覆盖非受信 peer；legacy Dispatcher 的 PROXY v2 元数据必须通过实例认证，协议边缘模式必须用 loopback + edge token 认证逐请求 envelope，不能把连接级 PROXY v2 当作复用请求的客户端身份。
+- 绕过协议边缘直打私有 Worker、伪造 edge token/client protocol、或从非 loopback peer 带 token，必须在 Static/FPC 前拒绝。Worker 接收到的 h2/h3 client protocol 只能来自已认证边缘。
 - loopback peer 未显式命中 whitelist CIDR 时，必须与公网 peer 一样执行 Origin Token、ban、限流和攻击规则；trusted proxy 不等于 whitelist。
 - 对已声明实例 Host 的 Bundle，`host_policy_strict=true`、context digest 与最终 Start 配置一致；正确 Host 可通过，任意非托管 Host 必须在缓存和 Router 前 403。staged/rollback 的旧 Host context 不得激活。
 - 16 Worker 全局限流仍为一份实例总额。

@@ -77,6 +77,12 @@ class Dispatcher
 
     /** Digest-aware L4 gate ownership for public Dispatcher sockets. */
     private ConnectionAcceptGatePool $connectionAcceptGates;
+
+    /**
+     * The Dispatcher is a private loopback upstream behind Protocol Edge.
+     * Public client identity is then request-scoped and enforced by Workers.
+     */
+    private bool $protocolEdgeIngressEnabled = false;
     
     /**
      * 实例名称
@@ -437,13 +443,18 @@ class Dispatcher
     }
 
     /**
-     * 读取实例配置判断是否 HTTPS 模式
+     * Detect whether the Dispatcher-to-Worker hop uses TLS. Public HTTPS is
+     * independent: when the protocol edge terminates TLS/QUIC, the private
+     * Dispatcher backend is authenticated plain HTTP/1.1.
      */
     private function detectHttpsEnabled(string $instanceName): bool
     {
         $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (\is_file($instanceFile)) {
             $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
+            if (\is_array($instData) && !empty($instData['protocol_edge_enabled'])) {
+                return false;
+            }
             if (\is_array($instData) && \array_key_exists('ssl_enabled', $instData)) {
                 return !empty($instData['ssl_enabled']);
             }
@@ -477,6 +488,10 @@ class Dispatcher
     public function configure(array $config): void
     {
         $this->passthroughCore->configure($config);
+
+        if (isset($config['protocol_edge_ingress_enabled'])) {
+            $this->protocolEdgeIngressEnabled = (bool)$config['protocol_edge_ingress_enabled'];
+        }
         
         if (isset($config['connection_timeout'])) {
             $this->connectionTimeout = (int) $config['connection_timeout'];
@@ -2285,7 +2300,14 @@ class Dispatcher
             if (@\socket_getpeername($clientSocket, $addr)) {
                 $clientIp = $addr;
             }
-            $acceptDecision = $this->connectionAcceptGates->accept((string)$connId, $clientIp);
+            $trustedProtocolEdge = $this->protocolEdgeIngressEnabled
+                && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($clientIp);
+            $acceptDecision = $this->connectionAcceptGates->accept(
+                (string)$connId,
+                $clientIp,
+                null,
+                $trustedProtocolEdge,
+            );
             if (!$acceptDecision->allowed) {
                 @\socket_close($clientSocket);
                 $accepted++;
