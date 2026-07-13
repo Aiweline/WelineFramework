@@ -6,7 +6,7 @@ namespace Weline\AppStore\Service;
 
 use Weline\AppStore\Model\AppStoreInstalledModule;
 use Weline\Database\Api\ModuleArtifactProviderInterface;
-use Weline\Database\Service\Artifact\LocalModuleArtifactProvider;
+use Weline\Database\Api\ModuleArtifactStore;
 
 final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInterface
 {
@@ -15,7 +15,7 @@ final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInte
     public function __construct(
         private readonly AppStoreInstalledModule $installedModule,
         private readonly ModuleInstallerService $installer,
-        private readonly LocalModuleArtifactProvider $localArtifacts,
+        private readonly ModuleArtifactStore $localArtifacts,
     ) {
     }
 
