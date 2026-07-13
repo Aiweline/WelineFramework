@@ -8,6 +8,7 @@ use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
 use Weline\Customer\Service\CustomerAccountService;
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Customer\Service\PasswordResetService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
@@ -19,13 +20,7 @@ use Weline\Framework\Session\SessionFactory;
 
 class AccountQueryProvider implements QueryProviderInterface
 {
-    private const AUTH_REDIRECT_PATH_PREFIXES = [
-        'customer/account/login',
-        'customer/account/register',
-        'customer/account/forgot-password',
-        'customer/account/challenge',
-        'customer/account/logout',
-    ];
+    private readonly CustomerAuthReturnUrlService $authReturnUrlService;
 
     public function __construct(
         private readonly Customer $customerModel,
@@ -33,8 +28,11 @@ class AccountQueryProvider implements QueryProviderInterface
         private readonly PasswordResetService $passwordResetService,
         private readonly SessionFactory $sessionFactory,
         private readonly Request $request,
-        private readonly EventsManager $eventsManager
+        private readonly EventsManager $eventsManager,
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null
     ) {
+        $this->authReturnUrlService = $authReturnUrlService
+            ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
     }
 
     public function getProviderName(): string
@@ -102,7 +100,10 @@ class AccountQueryProvider implements QueryProviderInterface
     private function login(array $params): array
     {
         $session = $this->sessionFactory->createFrontendSession();
-        $redirectUrl = $this->normalizeRedirectTarget((string)($params['redirect_url'] ?? $params['redirect'] ?? ''));
+        $redirectUrl = $this->authReturnUrlService->resolve(
+            $session,
+            (string)($params['redirect_url'] ?? $params['redirect'] ?? '')
+        );
         if ($session->isLoggedIn()) {
             return $this->success('Already signed in.', [
                 'redirect' => '/customer/account',
@@ -136,7 +137,10 @@ class AccountQueryProvider implements QueryProviderInterface
             if (is_array($challenge) && !empty($challenge['redirect'])) {
                 return $this->success('Please complete two-factor verification.', [
                     'status' => 'challenge_required',
-                    'redirect' => $this->formatClientRedirect((string)$challenge['redirect']),
+                    'redirect' => $this->authReturnUrlService->formatInternalNavigation(
+                        (string)$challenge['redirect'],
+                        '/customer/account/login'
+                    ),
                     'challenge_token' => (string)($challenge['challenge_token'] ?? ''),
                     'expires_at' => (int)($challenge['expires_at'] ?? 0),
                 ]);
@@ -157,13 +161,9 @@ class AccountQueryProvider implements QueryProviderInterface
             'session' => $session,
         ]));
 
-        $referer = $session->get('login_referer');
-        $session->delete('login_referer');
-        $target = $redirectUrl !== ''
-            ? $this->formatClientRedirect($redirectUrl)
-            : (is_string($referer) && $referer !== '' && $this->isValidReferer($referer)
-                ? $this->formatClientRedirect($referer)
-                : '/customer/account');
+        $target = $this->authReturnUrlService->formatRedirect(
+            $this->authReturnUrlService->consume($session, $redirectUrl)
+        );
 
         return $this->success('Signed in successfully.', [
             'redirect' => $target,
@@ -186,7 +186,10 @@ class AccountQueryProvider implements QueryProviderInterface
         $password = (string)($params['password'] ?? '');
         $confirmPassword = (string)($params['confirm_password'] ?? $params['password_confirm'] ?? '');
         $agreeTerms = $this->toBool($params['agree_terms'] ?? false);
-        $redirectUrl = $this->normalizeRedirectTarget((string)($params['redirect_url'] ?? $params['redirect'] ?? ''));
+        $redirectUrl = $this->authReturnUrlService->resolve(
+            $session,
+            (string)($params['redirect_url'] ?? $params['redirect'] ?? '')
+        );
         $referralCode = trim((string)($params['ref'] ?? $params['referral_code'] ?? ''));
 
         if ($firstName === '' || $lastName === '') {
@@ -217,8 +220,9 @@ class AccountQueryProvider implements QueryProviderInterface
             }
 
             $this->customerAccountService->loginCustomer($user);
+            $target = $this->authReturnUrlService->consume($session, $redirectUrl);
             return $this->success('Registration succeeded. Welcome.', [
-                'redirect' => $redirectUrl !== '' ? $this->formatClientRedirect($redirectUrl) : '/customer/account',
+                'redirect' => $this->authReturnUrlService->formatRedirect($target),
                 'user' => $this->customerPayload($user),
             ]);
         } catch (\Throwable $throwable) {
@@ -314,9 +318,14 @@ class AccountQueryProvider implements QueryProviderInterface
         }
 
         $result = $this->getChallengeHandler()->completeChallenge($challengeToken, $code);
+        $session = $this->sessionFactory->createFrontendSession();
+        $target = $this->authReturnUrlService->consume(
+            $session,
+            (string)($result['redirect_url'] ?? 'customer/account')
+        );
         return $this->success('Two-factor verification succeeded.', [
             'status' => 'authenticated',
-            'redirect' => $this->formatClientRedirect((string)($result['redirect_url'] ?? 'customer/account')),
+            'redirect' => $this->authReturnUrlService->formatRedirect($target),
         ]);
     }
 
@@ -399,94 +408,6 @@ class AccountQueryProvider implements QueryProviderInterface
         if ($adminPath !== '') {
             Cookie::set('w_sandbox', $enabled ? '1' : '', $enabled ? 0 : -1, ['path' => '/' . ltrim($adminPath, '/')]);
         }
-    }
-
-    private function normalizeRedirectTarget(string $redirectUrl): string
-    {
-        $redirectUrl = $this->decodeRedirectTarget($redirectUrl);
-        if ($redirectUrl === '' || str_starts_with($redirectUrl, '//')) {
-            return '';
-        }
-        if ((bool)preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
-            if (!$this->isValidReferer($redirectUrl)) {
-                return '';
-            }
-            $path = trim((string)(parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
-            $query = trim((string)(parse_url($redirectUrl, PHP_URL_QUERY) ?? ''));
-            $redirectUrl = $path . ($query !== '' ? '?' . $query : '');
-        } else {
-            $redirectUrl = ltrim($redirectUrl, '/');
-        }
-        if ($redirectUrl === '') {
-            return '';
-        }
-        foreach (self::AUTH_REDIRECT_PATH_PREFIXES as $blocked) {
-            if (preg_match('#^' . preg_quote($blocked, '#') . '(\\?|$)#', $redirectUrl) === 1) {
-                return '';
-            }
-        }
-
-        return $redirectUrl;
-    }
-
-    private function formatClientRedirect(string $redirectUrl): string
-    {
-        $redirectUrl = $this->decodeRedirectTarget($redirectUrl);
-        if ($redirectUrl === '') {
-            return '/customer/account';
-        }
-        if (str_contains($redirectUrl, '://') && $this->isValidReferer($redirectUrl)) {
-            return $redirectUrl;
-        }
-        $normalized = ltrim($redirectUrl, '/');
-        if ($normalized === '' || $normalized === 'customer/account/index') {
-            return '/customer/account';
-        }
-
-        return '/' . $normalized;
-    }
-
-    private function decodeRedirectTarget(string $redirectUrl): string
-    {
-        $redirectUrl = trim($redirectUrl);
-        for ($i = 0; $i < 2 && $redirectUrl !== ''; $i++) {
-            $decoded = rawurldecode($redirectUrl);
-            if ($decoded === $redirectUrl) {
-                break;
-            }
-            $redirectUrl = trim($decoded);
-        }
-
-        return $redirectUrl;
-    }
-
-    private function isValidReferer(string $referer): bool
-    {
-        if ($referer === '' || str_starts_with($referer, '//') || str_contains($referer, '\\')) {
-            return false;
-        }
-        if (str_starts_with($referer, '/')) {
-            return true;
-        }
-        if ((bool)preg_match('/^[a-z][a-z0-9+.-]*:/i', $referer)) {
-            $target = parse_url($referer);
-            $base = parse_url((string)(Env::getInstance()->getBaseUrl() ?? ''));
-            return is_array($target) && is_array($base)
-                && strtolower((string)($target['scheme'] ?? '')) === strtolower((string)($base['scheme'] ?? ''))
-                && strtolower((string)($target['host'] ?? '')) === strtolower((string)($base['host'] ?? ''))
-                && (int)($target['port'] ?? $this->defaultPort((string)($target['scheme'] ?? ''))) === (int)($base['port'] ?? $this->defaultPort((string)($base['scheme'] ?? '')));
-        }
-
-        return trim((string)parse_url($referer, PHP_URL_PATH), '/') !== '';
-    }
-
-    private function defaultPort(string $scheme): int
-    {
-        return match (strtolower($scheme)) {
-            'https' => 443,
-            'http' => 80,
-            default => 0,
-        };
     }
 
     private function toBool(mixed $value): bool

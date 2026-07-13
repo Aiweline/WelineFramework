@@ -44,6 +44,7 @@ class LoginPostRequestModeTest extends TestCase
         $controller->expects($this->once())->method('redirect')->with('/customer/account/login')->willReturn('redirected');
 
         $this->setProtectedProperty($controller, 'request', $request);
+        $this->setFrontendSession($controller, $this->createSessionDouble());
 
         $this->assertSame('redirected', $controller->postIndex());
     }
