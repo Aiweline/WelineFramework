@@ -121,6 +121,10 @@ final class ProtocolEdgeDependencyBootstrapper
         $modules = $this->run([$binary, 'list-modules'], self::PROBE_TIMEOUT_SECONDS);
         $hasReverseProxy = $modules['success']
             && \str_contains($modules['output'], 'http.handlers.reverse_proxy');
+        $hasPersistentSessionTickets = !$selection->tlsSessionResumption
+            || ($modules['success']
+                && \str_contains($modules['output'], 'tls.stek.distributed')
+                && \str_contains($modules['output'], 'caddy.storage.file_system'));
         $hasHttp3 = true;
         $buildInfoOutput = '';
         if ($selection->supports(HttpProtocolSelection::HTTP_3)) {
@@ -131,7 +135,7 @@ final class ProtocolEdgeDependencyBootstrapper
         }
 
         return [
-            'success' => $hasReverseProxy && $hasHttp3,
+            'success' => $hasReverseProxy && $hasPersistentSessionTickets && $hasHttp3,
             'version' => \trim($version['output']),
             'output' => $this->tail($modules['output'] . PHP_EOL . $buildInfoOutput),
         ];
