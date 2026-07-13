@@ -11,15 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Block;
 
+use Weline\Backend\Api\View\BackendThemeConfigInterface;
+use Weline\Backend\Api\View\ThemePreviewModeProviderInterface;
 use Weline\Backend\Model\BackendUserConfig;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Theme\Helper\LayoutScanner;
-use Weline\Theme\Service\PreviewContextService;
-use Weline\Theme\Service\ThemeContextService;
 
-class ThemeConfig extends \Weline\Framework\View\Block
+class ThemeConfig extends \Weline\Framework\View\Block implements BackendThemeConfigInterface
 {
     public const        area = 'backend_';
     public const        theme_Session_Config = 'backend_theme_config';
@@ -47,6 +47,11 @@ class ThemeConfig extends \Weline\Framework\View\Block
         $userId = $this->userConfig->getCurrentUserId();
         $this->userConfig = $userId > 0 ? $this->userConfig->load($userId) : $this->userConfig;
         $this->userConfig->setId($userId);
+    }
+
+    public function reloadForCurrentUser(): void
+    {
+        $this->__init();
     }
 
     public function getOriginThemeConfig($key = '')
@@ -109,24 +114,15 @@ class ThemeConfig extends \Weline\Framework\View\Block
         return $data;
     }
 
-    public function getThemeModel()
+    public function getThemeModel(): string
     {
         try {
-            /** @var PreviewContextService $previewContextService */
-            $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
-            if ($previewContextService->shouldUseStoredContext()) {
-                $context = $previewContextService->getCurrentContext();
-                $previewThemeId = $previewContextService->getThemeIdForArea('backend', $context, false);
-                if ($previewThemeId > 0) {
-                    /** @var ThemeContextService $themeContext */
-                    $themeContext = ObjectManager::getInstance(ThemeContextService::class);
-                    $previewTheme = $themeContext->resolveTheme('backend');
-                    if ($previewTheme && $previewTheme->getId()) {
-                        $previewColor = LayoutScanner::getColorConfig($previewTheme, 'backend');
-                        if ($previewColor) {
-                            return $previewColor === 'light' ? '' : $previewColor;
-                        }
-                    }
+            $previewModeProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(ThemePreviewModeProviderInterface::class);
+            if ($previewModeProvider instanceof ThemePreviewModeProviderInterface) {
+                $previewMode = $previewModeProvider->resolveBackendMode();
+                if ($previewMode !== null) {
+                    return $previewMode;
                 }
             }
         } catch (\Throwable) {

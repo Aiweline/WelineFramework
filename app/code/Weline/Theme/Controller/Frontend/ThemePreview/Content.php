@@ -16,6 +16,7 @@ use Weline\Theme\Service\EditorModeAssetInjector;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
+use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
 class Content extends FrontendController
@@ -145,7 +146,7 @@ class Content extends FrontendController
         string $scope
     ): ?array {
         [$targetType, $targetId] = $this->resolvePreviewTarget();
-        if ($targetType === '' || $targetId <= 0) {
+        if ($targetType === '') {
             return null;
         }
 
@@ -183,19 +184,18 @@ class Content extends FrontendController
      */
     private function resolvePreviewTarget(): array
     {
-        $targetType = strtolower(trim((string)$this->readPreviewRequestValue('theme_layout_target_type')));
-        $targetId = (int)$this->readPreviewRequestValue('theme_layout_target_id');
-        if ($targetType !== '' && $targetId > 0) {
-            return [$targetType, $targetId];
-        }
-
-        $sourceTargetType = strtolower(trim((string)$this->readPreviewRequestValue('theme_layout_source_target_type')));
-        $sourceTargetId = (int)$this->readPreviewRequestValue('theme_layout_source_target_id');
-        if ($sourceTargetType !== '' && $sourceTargetId > 0) {
-            return [$sourceTargetType, $sourceTargetId];
-        }
-
-        return ['', 0];
+        /** @var ThemeTargetIdentityResolver $identityResolver */
+        $identityResolver = ObjectManager::getInstance(ThemeTargetIdentityResolver::class);
+        return $identityResolver->resolveFirst([
+            [
+                'target_type' => $this->readPreviewRequestValue('theme_layout_target_type'),
+                'target_id' => $this->readPreviewRequestValue('theme_layout_target_id'),
+            ],
+            [
+                'target_type' => $this->readPreviewRequestValue('theme_layout_source_target_type'),
+                'target_id' => $this->readPreviewRequestValue('theme_layout_source_target_id'),
+            ],
+        ]);
     }
 
     private function readPreviewRequestValue(string $key): mixed

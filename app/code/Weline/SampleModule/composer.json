@@ -1,0 +1,14 @@
+{
+    "name": "weline/module-sample-module",
+    "description": "WelineFramework SampleModule module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\SampleModule\\": ""
+        }
+    }
+}

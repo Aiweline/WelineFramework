@@ -25,6 +25,7 @@ class ModuleVersionHistory extends Model
     public const schema_primary_key = 'id';
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
     public const schema_fields_ID = 'id';
+    #[Col('varchar', 100, nullable: false, comment: 'Module Name')]
     public const schema_fields_MODULE_NAME = 'module_name';
     #[Col('varchar', 50, nullable: false, comment: 'From Version')]
     public const schema_fields_FROM_VERSION = 'from_version';
@@ -134,4 +135,3 @@ class ModuleVersionHistory extends Model
         return $stats;
     }
 }
-

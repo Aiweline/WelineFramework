@@ -1,0 +1,17 @@
+{
+    "name": "weline/module-index",
+    "description": "WelineFramework Index module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4"
+    },
+    "suggest": {
+        "weline/module-seo": "Publishes the homepage sitemap provider when Seo is installed."
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Index\\": ""
+        }
+    }
+}

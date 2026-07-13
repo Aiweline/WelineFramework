@@ -19,7 +19,7 @@ use Weline\TranslationService\Helper\LanguageCodeConverter;
 /**
  * 翻译记录管理控制器
  */
-class Record extends \Weline\Admin\Controller\BaseController
+class Record extends \Weline\Framework\App\Controller\BackendPageController
 {
     /**
      * @var TranslationRecord
@@ -309,4 +309,3 @@ class Record extends \Weline\Admin\Controller\BaseController
         return $this->json($stats);
     }
 }
-

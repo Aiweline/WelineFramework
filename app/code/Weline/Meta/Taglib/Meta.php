@@ -12,10 +12,10 @@ declare(strict_types=1);
 namespace Weline\Meta\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Dictionary;
-use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Taglib\TaglibInterface;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Helper\MetaData;
-use Weline\Taglib\TaglibInterface;
 
 class Meta implements TaglibInterface
 {
@@ -139,17 +139,11 @@ class Meta implements TaglibInterface
                         // 获取当前语言
                         $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
 
-                        // 从I18n Dictionary获取翻译
-                        /** @var LocaleDictionary $localeDict */
-                        $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-                        $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-                        
-                        if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                            if (!empty($translation)) {
-                                return $translation;
-                            }
+                        // 通过 I18n 公开契约获取翻译。
+                        $translation = self::dictionaryRepository()
+                            ->getEntry($translationKey, $locale)?->translation;
+                        if (!empty($translation)) {
+                            return $translation;
                         }
                     }
                 }
@@ -176,6 +170,17 @@ class Meta implements TaglibInterface
         return null;
     }
 
+    private static function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
     static function document(): string
     {
         return 'Meta标签，用于在模板中读取元数据、配置值或翻译值。' . 
@@ -188,4 +193,3 @@ class Meta implements TaglibInterface
                '注意：默认值不需要引号包裹，直接使用|后面的内容';
     }
 }
-

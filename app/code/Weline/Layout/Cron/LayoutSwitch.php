@@ -14,7 +14,7 @@ declare(strict_types=1);
 
 namespace Weline\Layout\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Layout\Model\Layout;
 use Weline\Layout\Model\LayoutSchedule;

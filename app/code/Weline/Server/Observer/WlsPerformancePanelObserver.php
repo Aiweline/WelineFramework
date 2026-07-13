@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Server\Observer;
 
-use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\DeveloperAccessPolicy;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Server\Service\WlsPerformanceTraceStore;
 
@@ -37,7 +38,7 @@ class WlsPerformancePanelObserver implements ObserverInterface
 
     public function isPanelAllowed(): bool
     {
-        return (new PanelAccessService())->canAccessApi($this->request);
+        return ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessApi($this->request);
     }
 
     /**

@@ -9,7 +9,7 @@
 
 namespace Weline\Theme\Observer;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
@@ -24,6 +24,7 @@ use Weline\Framework\View\Template;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemeModeResolver;
+use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeMetaIdentityService;
@@ -61,15 +62,19 @@ class ControllerFetchFileBefore implements ObserverInterface
 
     private ThemePageTypeResolver $pageTypeResolver;
 
+    private ThemeModeResolver $themeModeResolver;
+
     public function __construct(
         WelineTheme $welineTheme,
         ThemeContextService $themeContext,
-        ThemePageTypeResolver $pageTypeResolver
+        ThemePageTypeResolver $pageTypeResolver,
+        ThemeModeResolver $themeModeResolver,
     )
     {
         $this->welineTheme = $welineTheme;
         $this->themeContext = $themeContext;
         $this->pageTypeResolver = $pageTypeResolver;
+        $this->themeModeResolver = $themeModeResolver;
     }
 
     private static function registerStateManager(): void
@@ -170,7 +175,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         
         // 设置主题相关数据到 theme 对象中（由Helper处理业务逻辑，不在模板中处理）
         $template = Template::getInstance();
-        $welineThemeColorMode = ThemeModeResolver::getThemeMode($area);
+        $welineThemeColorMode = $this->themeModeResolver->resolve($area);
         $requestCache = self::requestCacheState();
         
         // 获取当前主题：预览 / 激活由 ThemeContextService 统一解析
@@ -685,13 +690,22 @@ class ControllerFetchFileBefore implements ObserverInterface
     private function appendVirtualLayoutTarget(array &$targets, string $targetType, int $targetId): void
     {
         $targetType = strtolower(trim($targetType));
-        /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
-        $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
-        if (!$targetTypeRegistry->has($targetType) || $targetId <= 0) {
+        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL) {
             return;
         }
 
-        $targets[$targetType . ':' . $targetId] = [
+        $targetKey = $targetType . ':' . $targetId;
+        if (isset($targets[$targetKey])) {
+            return;
+        }
+
+        /** @var ThemeTargetTypeRegistry $targetTypeRegistry */
+        $targetTypeRegistry = ObjectManager::getInstance(ThemeTargetTypeRegistry::class);
+        if (!$targetTypeRegistry->isValidTarget($targetType, $targetId)) {
+            return;
+        }
+
+        $targets[$targetKey] = [
             'target_type' => $targetType,
             'target_id' => $targetId,
         ];
@@ -706,7 +720,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         foreach ($targets as $target) {
             $targetType = strtolower(trim((string)($target['target_type'] ?? '')));
             $targetId = (int)($target['target_id'] ?? 0);
-            if ($targetType === '' || $targetId <= 0) {
+            if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL || $targetId < 0) {
                 continue;
             }
             $parts[] = $targetType . ':' . $targetId;
@@ -727,7 +741,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         $target = $targets[0];
         $targetType = (string)($target['target_type'] ?? '');
         $targetId = (int)($target['target_id'] ?? 0);
-        if ($targetType === '' || $targetId <= 0) {
+        if ($targetType === '' || $targetType === ThemeVirtualLayout::TARGET_GLOBAL || $targetId < 0) {
             return '';
         }
 

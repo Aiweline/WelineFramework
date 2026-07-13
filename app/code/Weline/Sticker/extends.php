@@ -17,6 +17,11 @@ declare(strict_types=1);
 return [
     'type' => 'module', // module 或 theme
     'documentation' => 'extends.md', // 文档文件路径（相对于模块根目录）
+    'scanner' => [
+        'target_shape' => 'nested_vendor_module',
+        'metadata' => ['is_sticker_extension' => true],
+        'type_field' => 'sticker_type',
+    ],
     'extends' => [
         'Sticker' => [
             'path' => 'extends/module/Weline_Sticker',

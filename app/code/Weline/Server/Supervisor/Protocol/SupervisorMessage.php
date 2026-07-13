@@ -42,7 +42,8 @@ final class SupervisorMessage
         string $launchNonce,
         string $msgId,
         string $leaseId = '',
-        int $generation = 0
+        int $generation = 0,
+        string $authSecret = '',
     ): string {
         $payload = [
             'type' => self::TYPE_HELLO,
@@ -60,8 +61,39 @@ final class SupervisorMessage
         if ($generation > 0) {
             $payload['generation'] = $generation;
         }
+        if ($authSecret !== '') {
+            $payload['auth_ts'] = \time();
+            $payload['auth_nonce'] = \bin2hex(\random_bytes(16));
+            $payload['auth_mac'] = \hash_hmac('sha256', self::helloAuthenticationPayload($payload), $authSecret);
+        }
 
         return self::encode($payload);
+    }
+
+    /** @param array<string, mixed> $message */
+    public static function verifyHelloAuthentication(
+        array $message,
+        string $authSecret,
+        int $now = 0,
+        int $maxClockSkewSec = 30,
+    ): bool {
+        if ($authSecret === '') {
+            return true;
+        }
+        $timestamp = (int)($message['auth_ts'] ?? 0);
+        $nonce = (string)($message['auth_nonce'] ?? '');
+        $receivedMac = \strtolower((string)($message['auth_mac'] ?? ''));
+        $now = $now > 0 ? $now : \time();
+        if ($timestamp <= 0
+            || \abs($now - $timestamp) > \max(1, $maxClockSkewSec)
+            || \preg_match('/^[a-f0-9]{32}$/', $nonce) !== 1
+            || \preg_match('/^[a-f0-9]{64}$/', $receivedMac) !== 1) {
+            return false;
+        }
+
+        $expectedMac = \hash_hmac('sha256', self::helloAuthenticationPayload($message), $authSecret);
+
+        return \hash_equals($expectedMac, $receivedMac);
     }
 
     public static function leaseAssign(SlotLease $lease, string $msgId = '', string $channel = ''): string
@@ -83,8 +115,18 @@ final class SupervisorMessage
         return self::encode($payload);
     }
 
-    public static function ready(string $slotId, string $leaseId, int $generation, int $port, string $msgId, string $channel = ''): string
-    {
+    /**
+     * @param array<string, mixed> $readiness
+     */
+    public static function ready(
+        string $slotId,
+        string $leaseId,
+        int $generation,
+        int $port,
+        string $msgId,
+        string $channel = '',
+        array $readiness = [],
+    ): string {
         $payload = [
             'type' => self::TYPE_READY,
             'msg_id' => $msgId,
@@ -97,6 +139,21 @@ final class SupervisorMessage
         ];
         if ($channel !== '') {
             $payload['channel'] = $channel;
+        }
+        foreach ([
+            'readiness_protocol_version',
+            'readiness_capabilities',
+            'topology',
+            'policy_digest',
+            'container_registry_digest',
+            'warmup_state',
+            'homepage_fpc',
+            'dynamic_first_render',
+            'listen_capabilities',
+        ] as $field) {
+            if (\array_key_exists($field, $readiness)) {
+                $payload[$field] = $readiness[$field];
+            }
         }
 
         return self::encode($payload);
@@ -270,13 +327,44 @@ final class SupervisorMessage
         return self::encode($payload);
     }
 
-    public static function channelReject(string $msgId, string $expectedChannel, string $receivedChannel): string
+    public static function channelReject(
+        string $msgId,
+        string $expectedChannel,
+        string $receivedChannel,
+        string $reason = 'channel_mismatch',
+        string $expectedInstance = '',
+        string $receivedInstance = '',
+    ): string
     {
-        return self::encode([
+        $payload = [
             'type' => self::TYPE_CHANNEL_REJECT,
             'msg_id' => $msgId,
             'expected_channel' => $expectedChannel,
             'received_channel' => $receivedChannel,
+            'reason' => $reason,
+        ];
+        if ($expectedInstance !== '' || $receivedInstance !== '') {
+            $payload['expected_instance'] = $expectedInstance;
+            $payload['received_instance'] = $receivedInstance;
+        }
+
+        return self::encode($payload);
+    }
+
+    /** @param array<string, mixed> $message */
+    private static function helloAuthenticationPayload(array $message): string
+    {
+        return \implode("\n", [
+            (string)($message['instance'] ?? ''),
+            (string)($message['channel'] ?? ''),
+            (string)($message['role'] ?? ''),
+            (string)($message['slot_id'] ?? ''),
+            (string)(int)($message['pid'] ?? 0),
+            (string)($message['launch_nonce'] ?? ''),
+            (string)($message['lease_id'] ?? ''),
+            (string)(int)($message['generation'] ?? 0),
+            (string)(int)($message['auth_ts'] ?? 0),
+            (string)($message['auth_nonce'] ?? ''),
         ]);
     }
 }

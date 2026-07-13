@@ -204,19 +204,13 @@
             page = page || 1;
             this.currentPage = page;
             
-            var params = new URLSearchParams({
+            var req = window.Weline.Api.resource('ai').providerGetUsageList({
                 page: page,
                 limit: 20,
                 date_from: this.currentDateFrom,
-                date_to: this.currentDateTo
+                date_to: this.currentDateTo,
+                account_id: this.accountId || 0
             });
-            
-            if (this.accountId) {
-                params.append('account_id', this.accountId);
-            }
-            
-            var url = '<?= $this->getBackendUrl('*/backend/provider/getUsageList') ?>?' + params;
-            var req = window.Weline.Api.get(url, { silent: true });
             req.then(function(res) {
                 var data = (res && res.data) || res;
                     if (data.success) {

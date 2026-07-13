@@ -2,9 +2,6 @@
 
 namespace Weline\EditorManager;
 
-use Weline\Framework\DataObject\DataObject;
-
-abstract class EditorManager extends DataObject implements EditorManagerInterface
+abstract class EditorManager extends \Weline\EditorManager\Api\Editor\EditorManager implements EditorManagerInterface
 {
-    use  EditorManagerTrait;
 }

@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Cdn\Api;
 
+use Weline\Framework\Cache\Contract\EdgeCacheAdapterInterface;
+
 /**
  * CDN适配器接口
  * 
@@ -18,7 +20,7 @@ namespace Weline\Cdn\Api;
  * 
  * @package Weline_Cdn
  */
-interface AdapterInterface
+interface AdapterInterface extends EdgeCacheAdapterInterface
 {
     /**
      * 获取适配器代码
@@ -179,4 +181,3 @@ interface AdapterInterface
      */
     public function getRealIpHeaderKeys(): array;
 }
-

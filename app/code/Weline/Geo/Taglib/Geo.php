@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Geo\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class Geo implements TaglibInterface
 {

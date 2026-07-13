@@ -11,11 +11,12 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller\ThemeConfig;
 
-use Weline\Admin\Controller\BaseController as AdminBaseController;
+use Weline\Backend\Api\Runtime\BackendThemeCacheInvalidatorInterface;
 use Weline\Backend\Block\ThemeConfig;
 use Weline\Backend\Model\BackendUserConfig;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class Set extends BackendController
 {
@@ -23,6 +24,7 @@ class Set extends BackendController
 
     public function __construct(
         ThemeConfig $themeConfig,
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
     ) {
         $this->themeConfig = $themeConfig;
     }
@@ -73,7 +75,10 @@ class Set extends BackendController
             }
             $this->themeConfig->setThemeConfig($themeConfig);
             $this->persistThemeConfigForCurrentUser($themeConfig);
-            AdminBaseController::clearRuntimeFullPageCache();
+            $cacheInvalidator = $this->runtimeProviderResolver->resolve(BackendThemeCacheInvalidatorInterface::class);
+            if ($cacheInvalidator instanceof BackendThemeCacheInvalidatorInterface) {
+                $cacheInvalidator->invalidate();
+            }
             return $this->fetchJson($this->success());
         } catch (\Exception $exception) {
             return $this->fetchJson($this->exception($exception));

@@ -203,6 +203,16 @@ php bin/w http:request /
 
 只有在具体路由会真实渲染该 layout shell 时，HTTP 或 Browser 冒烟才可以作为布局渲染证据。仅返回 preview content 容器的接口不能证明 layout shell 已渲染。
 
+后台主题编辑器收到前台布局类型（例如 `homepage/default`）时，预览路由会优先回退到
+`backend/layouts/dashboard/default.phtml`；仅在 Dashboard 布局不可用时才回退到
+`backend/layouts/default/default.phtml`。回退后必须同步更新预览上下文的 `target_value`，
+避免布局文件与草稿/插槽数据仍使用不同的页面类型。
+
+后台 Dashboard 预览必须渲染真实后台壳层，包括 Header、导航/侧栏、内容区域、Footer、
+右侧配置层及后台公共静态资源；编辑模式不能用独立的简化 HTML 画布替代正式布局。
+预览页额外显示固定的“预览模式”提示与“退出预览”入口，该提示只由编辑器预览注入，
+不得进入正式后台页面。
+
 ## Demo 参考
 
 本仓库提供了两个最小示例：

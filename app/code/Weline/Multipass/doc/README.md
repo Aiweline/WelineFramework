@@ -18,6 +18,24 @@
 - 模块代码：`Weline_Multipass`
 - 目录：`app/code/Weline/Multipass`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 身份桥接固定依赖 Backend、Customer、Framework、Frontend 与 SystemConfig；开发者应用自动审批读取 `Weline\SystemConfig\Api\ConfigReader`，因此 SystemConfig 是显式必需依赖。
+- Multipass 的 PHP Controller/Service 只能通过
+  `BackendAccountFacadeInterface`、`FrontendAccountFacadeInterface` 和
+  `CustomerAccountFacadeInterface` 读取或登录账号；跨模块只接收 data-only Identity DTO，
+  不引用 Backend/Frontend/Customer Model、Query Builder 或内部 Service。
+- AES-128-CBC + HMAC-SHA256 Multipass token 的签发/校验仍由本模块
+  `MultipassService` 完成；账户 facade 只在 token 校验成功后执行身份映射与 Session 写入，
+  不接收或传播密码哈希。
+- 旧 `frontend_user` 自动登录链仍受其未实现 Framework `AuthenticableInterface` 的历史
+  限制；本轮只保持该路径原有行为并清除内部 API 耦合，不能把 token 加解密通过等同于
+  旧前台 Session 登录已通过。
+- 旧前台账户非空搜索仍会因 `frontend_user` 缺少 `email` 列而抛数据库异常；当前 facade
+  保持相同异常类型与错误码。该 schema/身份体系缺口必须独立修复，不能用 fallback 或
+  模糊字段降级掩盖。
+- `account.sidebar.content` Hook 只解析 Customer 发布的
+  `AccountSidebarProjectionProviderInterface`，通过 data-only projection 取得当前请求分区、
+  customer ID 与 website ID；模板不得引用 Customer Model、Session 或内部 gate。系统默认站点
+  `website_id=0` 保持有效，不会被当成缺失站点。
 
 ## 代码面概览
 

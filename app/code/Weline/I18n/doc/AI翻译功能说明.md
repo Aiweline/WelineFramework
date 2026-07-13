@@ -19,8 +19,8 @@ I18n AI 翻译采用“后台配置 + Queue 自动消费”的模型，不再注
   -> AiTranslationQueueService 入队
   -> Queue 自动消费 AiTranslateQueue
   -> AiTranslationService 扫描未翻译词
-  -> I18nAiTranslationAdapter 批量调用 Weline_Ai::translate
-  -> AiTranslationObserver 调用 Weline\Ai\Service\TranslationService
+  -> I18nAiTranslationAdapter 发布 Weline_I18n::machine_translate
+  -> Weline_Ai 可选 TranslationRequestObserver 调用翻译服务
   -> 写入 i18n_locale_dictionary
   -> AiTranslationPublisher 发布语言文件并清理缓存
   -> 若仍有剩余词，继续创建下一批 Queue
@@ -29,7 +29,7 @@ I18n AI 翻译采用“后台配置 + Queue 自动消费”的模型，不再注
 ## 核心类
 
 - `AiTranslationConfig`：读取、保存、归一化配置，过滤未安装或未启用语言。
-- `I18nAiTranslationAdapter`：I18n 侧适配器，只暴露批量翻译入口，继续复用 `Weline_Ai::translate`。
+- `I18nAiTranslationAdapter`：I18n 侧适配器，只发布中立事件，不依赖 AI 内部类。
 - `AiTranslationService`：持续扫描词库，收集未翻译词，调用 AI，校验译文并写入词典。
 - `AiTranslationQueueService`：创建翻译队列，使用 `i18n:ai_translation:{locale}` 作为业务去重键。
 - `AiTranslateQueue`：Queue 执行器，校验参数、执行批量翻译、必要时创建下一批队列。

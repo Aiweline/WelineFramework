@@ -36,7 +36,39 @@ class InMemoryMetricsAggregator implements MetricsAggregatorInterface, MetricsQu
         $instance = (string)($event['instance'] ?? 'default');
         $hostRaw = (string)($event['host'] ?? '');
         $host = $hostRaw !== '' ? \strtolower($hostRaw) : 'unknown';
-        $bucketTs = $this->bucketTs((int)($event['ts'] ?? \time()));
+        $bucketTs = $this->bucketTs((int)($event['bucket_ts'] ?? $event['ts'] ?? \time()));
+        $requestCount = \max(0, \min(4096, (int)($event['request_count'] ?? 0)));
+        if ($requestCount > 0) {
+            $errorCount = \max(0, \min($requestCount, (int)($event['error_count'] ?? 0)));
+            $latencyTotal = \max(0, (int)($event['latency_total_ms'] ?? 0));
+            $latencyMax = \max(0, \min(600_000, (int)($event['latency_max_ms'] ?? 0)));
+            $bytesOut = \max(0, (int)($event['bytes_out'] ?? 0));
+            $this->recordAggregateBucket(
+                $instance,
+                '*',
+                $bucketTs,
+                $requestCount,
+                $errorCount,
+                $latencyTotal,
+                $latencyMax,
+                $bytesOut,
+            );
+            $this->recordAggregateBucket(
+                $instance,
+                $host,
+                $bucketTs,
+                $requestCount,
+                $errorCount,
+                $latencyTotal,
+                $latencyMax,
+                $bytesOut,
+            );
+            self::$recordCount += $requestCount;
+            if (self::$recordCount % self::MEMORY_CHECK_INTERVAL < $requestCount) {
+                $this->checkMemoryPressure();
+            }
+            return;
+        }
         $status = (int)($event['status'] ?? 200);
         $latency = (int)\max(0, (int)($event['latency_ms'] ?? 0));
         $bytesOut = (int)\max(0, (int)($event['bytes_out'] ?? 0));
@@ -52,6 +84,39 @@ class InMemoryMetricsAggregator implements MetricsAggregatorInterface, MetricsQu
 
         // Do not flush to the database from the Master IPC hot path. A synchronous
         // metrics write can block status/reload control commands under load.
+    }
+
+    private function recordAggregateBucket(
+        string $instance,
+        string $host,
+        int $bucketTs,
+        int $requestCount,
+        int $errorCount,
+        int $latencyTotalMs,
+        int $latencyMaxMs,
+        int $bytesOut,
+    ): void {
+        $key = $this->buildKey($instance, $host, $bucketTs);
+        if (!isset(self::$buckets[$key])) {
+            self::$buckets[$key] = [
+                'instance' => $instance,
+                'host' => $host,
+                'bucket_ts' => $bucketTs,
+                'request_count' => 0,
+                'error_count' => 0,
+                'bytes_out' => 0,
+                'latency_total_ms' => 0,
+                'latency_max_ms' => 0,
+            ];
+        }
+        self::$buckets[$key]['request_count'] = (int)self::$buckets[$key]['request_count'] + $requestCount;
+        self::$buckets[$key]['error_count'] = (int)self::$buckets[$key]['error_count'] + $errorCount;
+        self::$buckets[$key]['bytes_out'] = (int)self::$buckets[$key]['bytes_out'] + $bytesOut;
+        self::$buckets[$key]['latency_total_ms'] = (int)self::$buckets[$key]['latency_total_ms'] + $latencyTotalMs;
+        self::$buckets[$key]['latency_max_ms'] = \max(
+            (int)self::$buckets[$key]['latency_max_ms'],
+            $latencyMaxMs,
+        );
     }
 
     /**

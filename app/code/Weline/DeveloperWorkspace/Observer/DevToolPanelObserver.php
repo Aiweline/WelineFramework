@@ -11,13 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Observer;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\DeveloperWorkspace\Api\HookNames;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -210,6 +210,10 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function storeTracePayload(string $requestId): void
     {
+        if (!$this->shouldStoreTracePayload($requestId)) {
+            return;
+        }
+
         try {
             $payload = RequestLifecycleTrace::exportCompactPayload();
             if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
@@ -225,6 +229,40 @@ class DevToolPanelObserver implements ObserverInterface
         } catch (\Throwable $e) {
             $this->logToConsole('debug', 'DevToolPanel trace store skipped: ' . $e->getMessage());
         }
+    }
+
+    private function shouldStoreTracePayload(string $requestId): bool
+    {
+        if (\defined('ENV_TEST') && ENV_TEST) {
+            return true;
+        }
+        if (!Runtime::isPersistent()) {
+            return true;
+        }
+
+        $header = $this->request->getHeader('X-Weline-Trace');
+        if (\is_array($header)) {
+            $header = $header[0] ?? '';
+        }
+        $query = $this->request->getGet('weline_trace', '');
+        foreach ([$header, $query] as $candidate) {
+            if (\in_array(\strtolower(\trim((string)$candidate)), ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+        }
+
+        $rate = (float)Env::get('dev_tool.panel.wls_trace_sample_rate', 0.0);
+        $rate = \max(0.0, \min(1.0, $rate));
+        if ($rate <= 0.0) {
+            return false;
+        }
+        if ($rate >= 1.0) {
+            return true;
+        }
+
+        $bucket = (int)(\hexdec(\substr(\hash('sha256', $requestId), 0, 8)) % 10000);
+
+        return $bucket < (int)\round($rate * 10000);
     }
 
     private function injectRequestMetaScript(string $result, string $requestId): string
@@ -529,8 +567,8 @@ HTML;
             $extraSearchAreasHtml = '';
             try {
                 $template = Template::getInstance();
-                $extraTabsHtml = $template->getHook(HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_TABS_AFTER);
-                $extraSearchAreasHtml = $template->getHook(HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_SEARCH_AREAS_AFTER);
+                $extraTabsHtml = $template->getHook(HookNames::DEVTOOL_PANEL_TABS_AFTER);
+                $extraSearchAreasHtml = $template->getHook(HookNames::DEVTOOL_PANEL_SEARCH_AREAS_AFTER);
             } catch (\Throwable $e) {
                 // Missing hook registrations must not break the panel.
             }
@@ -573,8 +611,8 @@ HTML;
         ];
 
         foreach ([
-            HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_TABS_AFTER,
-            HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_SEARCH_AREAS_AFTER,
+            HookNames::DEVTOOL_PANEL_TABS_AFTER,
+            HookNames::DEVTOOL_PANEL_SEARCH_AREAS_AFTER,
         ] as $hookName) {
             $parts[] = 'hook=' . $hookName;
             try {

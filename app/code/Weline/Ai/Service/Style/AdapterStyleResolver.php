@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service\Style;
 
-use Weline\Ai\Interface\AdapterStyleBindingInterface;
+use Weline\Ai\Api\AdapterStyleBindingInterface;
 use Weline\Ai\Model\AiStyle;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\SkillStyleTrace;

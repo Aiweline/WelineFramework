@@ -11,13 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database;
 
+use Weline\Framework\App\Localization\LocaleNameProviderInterface;
 use Weline\Framework\Database\Helper\Tool;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\I18n\LocalModel;
-use Weline\I18n\Model\Locals;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * 业务模型基类
@@ -252,15 +252,15 @@ abstract class Model extends AbstractModel implements ModelInterface
         return $model->select()->fetchArray();
     }
 
-    public function loadLocalDescription(string $local_code = '', string|LocalModel $model = ''): static
+    public function loadLocalDescription(string $local_code = '', string|AbstractModel $model = ''): static
     {
         if (empty($model)) {
             $model = $this::class . '\\LocalDescription';
         }
         if (is_string($model)) {
             $model = ObjectManager::make($model);
-            if (!$model instanceof LocalModel) {
-                throw new \InvalidArgumentException(__('参数必须是LocalModel的子类或者LocalModel实例'));
+            if (!$model instanceof AbstractModel) {
+                throw new \InvalidArgumentException(__('参数必须是模型子类或模型实例'));
             }
         }
         if (empty($local_code)) {
@@ -286,13 +286,13 @@ abstract class Model extends AbstractModel implements ModelInterface
         if (empty($field)) {
             $field = $model_local_field . '_name';
         }
-        /**@var Locals $local */
-        $local = ObjectManager::make(Locals::class);
-        $local = $local->where(Locals::schema_fields_CODE, $localCode)
-            ->where(Locals::schema_fields_TARGET_CODE, Cookie::getLangLocal())
-            ->find()->fetch();
-        if ($local->getId()) {
-            $this->setData($field, $local->getName());
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(LocaleNameProviderInterface::class);
+        if ($provider instanceof LocaleNameProviderInterface) {
+            $name = $provider->resolveName((string)$localCode, Cookie::getLangLocal());
+            if ($name !== null) {
+                $this->setData($field, $name);
+            }
         }
         return $this;
     }

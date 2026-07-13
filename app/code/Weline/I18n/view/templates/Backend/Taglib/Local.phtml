@@ -1,6 +1,7 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
+<script src="@static(Weline_I18n::js/backend-admin.js)"></script>
 <!-- start page message -->
 <div class='row'>
     <template>Weline_Component::message.phtml</template>
@@ -20,7 +21,7 @@
                            placeholder='@lang{请输入关键词}'></block>
                 </div>
                 <form id="localTranslationForm" role='form' class='needs-validation' novalidate=''
-                      action='{{action}}' method='post'>
+                      action='{{action}}' method='post' data-async-action='taglib-local-save'>
                     <!--基础信息-->
                     <div class='row form-group'>
                         <empty name="local_descriptions">

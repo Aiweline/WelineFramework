@@ -14,11 +14,10 @@ namespace Weline\Server\Console\Ssl;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\SslCertificateService;
-use Weline\Websites\Model\Website;
-use Weline\Websites\Model\WebsiteDomain;
 
 /**
  * ssl:auto - 自动申请/续签 SSL 证书（含 localhost 自签）
@@ -43,7 +42,8 @@ class Auto extends CommandAbstract
     
     public function __construct(
         SslCertificateService $sslService,
-        SslCertificate $certModel
+        SslCertificate $certModel,
+        private readonly RuntimeProviderResolver $providerResolver,
     ) {
         $this->sslService = $sslService;
         $this->certModel = $certModel;
@@ -340,31 +340,16 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
      */
     protected function syncWebsiteDomains(string $email, string $webroot): void
     {
-        $this->printer->note(__('从 Weline_Websites 同步域名...'));
+        $this->printer->note(__('同步网站域名') . '...');
         
-        // 获取所有网站域名
-        $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
-        $domains = $domainModel->clearQuery()
-            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
-            ->select()
-            ->fetchArray();
-        
-        if (empty($domains)) {
-            // 尝试从 Website 模型获取
-            $websiteModel = ObjectManager::getInstance(Website::class);
-            $websites = $websiteModel->clearQuery()->select()->fetchArray();
-            
-            foreach ($websites as $website) {
-                $url = $website[Website::schema_fields_URL] ?? '';
-                $domain = $this->extractDomainFromUrl($url);
-                
-                if ($domain) {
-                    $domains[] = [
-                        WebsiteDomain::schema_fields_DOMAIN => $domain,
-                        WebsiteDomain::schema_fields_WEBSITE_ID => $website[Website::schema_fields_ID],
-                    ];
-                }
-            }
+        try {
+            $source = $this->providerResolver->resolve(ActiveCertificateDomainSourceInterface::class);
+            $domains = $source instanceof ActiveCertificateDomainSourceInterface
+                ? $source->getActiveCertificateDomains(2000)
+                : [];
+        } catch (\Throwable $throwable) {
+            $this->printer->warning(__('站点域名查询不可用：%{1}', [$throwable->getMessage()]));
+            return;
         }
         
         if (empty($domains)) {
@@ -376,8 +361,8 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
         echo "\n";
         
         foreach ($domains as $domainData) {
-            $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN] ?? '';
-            $websiteId = (int) ($domainData[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0);
+            $domain = \trim((string)($domainData['domain'] ?? ''));
+            $websiteId = (int)($domainData['website_id'] ?? 0);
             
             if (empty($domain) || $domain === 'localhost' || \filter_var($domain, FILTER_VALIDATE_IP)) {
                 continue;
@@ -431,15 +416,6 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
         } else {
             $this->printer->error(__('✗ %{1}', [$result['message']]));
         }
-    }
-    
-    /**
-     * 从 URL 提取域名
-     */
-    protected function extractDomainFromUrl(string $url): string
-    {
-        $parsed = \parse_url($url);
-        return $parsed['host'] ?? '';
     }
     
     /**

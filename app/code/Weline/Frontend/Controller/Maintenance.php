@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Controller;
 
-use Weline\Backend\Model\Config as BackendConfig;
-use Weline\FileManager\Helper\Image as ImageHelper;
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Asset\MediaUrl;
 
 class Maintenance extends FrontendController
 {
@@ -27,11 +27,11 @@ class Maintenance extends FrontendController
     private function assignMaintenanceLogo(): void
     {
         try {
-            $backendConfig = ObjectManager::getInstance(BackendConfig::class);
+            $backendConfig = ObjectManager::getInstance(BackendConfigStore::class);
             $logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend') ?: '';
             $logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend') ?: '';
-            $this->assign('maintenance_logo_dark', $logoDark !== '' ? ImageHelper::pathToMediaUrl($logoDark, 200, 200) : '');
-            $this->assign('maintenance_logo_light', $logoLight !== '' ? ImageHelper::pathToMediaUrl($logoLight, 200, 200) : '');
+            $this->assign('maintenance_logo_dark', $logoDark !== '' ? MediaUrl::fromPath($logoDark, 200, 200) : '');
+            $this->assign('maintenance_logo_light', $logoLight !== '' ? MediaUrl::fromPath($logoLight, 200, 200) : '');
         } catch (\Throwable $e) {
             $this->assign('maintenance_logo_dark', '');
             $this->assign('maintenance_logo_light', '');

@@ -1,24 +1,27 @@
 {
-  "name": "weline/module-cms",
-  "description": "Weline CMS page module based on Theme and Meta layout targets.",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "weline/module-backend-activity": "*"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Cms\\": ""
+    "name": "weline/module-cms",
+    "description": "Weline CMS page module based on Theme and Meta layout targets.",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-backend-activity": "@dev",
+        "weline/module-theme": "@dev"
     },
-    "psr-0": {
-      "Weline\\Cms\\": ""
-    }
-  },
-  "license": "MIT"
+    "suggest": {
+        "weline/module-seo": "Publishes CMS pages through the optional SEO URL and sitemap integration.",
+        "weline/module-trash": "Enables the optional CMS trash and restore integration."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Cms\\": ""
+        }
+    },
+    "license": "MIT"
 }

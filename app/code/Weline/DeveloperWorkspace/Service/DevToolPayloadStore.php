@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service;
 
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
+use Weline\Framework\Cache\Contract\SharedCacheStateFactoryInterface;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
-use Weline\Server\Service\MemoryStateFacade;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 class DevToolPayloadStore
 {
     private const NAMESPACE = 'dev_tool_payload';
     private const DEFAULT_TTL = 60;
 
-    private ?MemoryStateFacade $memory = null;
+    private ?SharedCacheStateInterface $memory = null;
     private bool $memoryResolved = false;
 
     /**
@@ -114,7 +116,7 @@ class DevToolPayloadStore
         return \sha1(\json_encode($query, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '');
     }
 
-    private function memory(): ?MemoryStateFacade
+    private function memory(): ?SharedCacheStateInterface
     {
         if ($this->memoryResolved) {
             return $this->memory;
@@ -125,12 +127,17 @@ class DevToolPayloadStore
             return null;
         }
 
-        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
             return null;
         }
 
         try {
-            $this->memory = new MemoryStateFacade($this->cachePolicy()->memoryOptions([
+            $factory = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(SharedCacheStateFactoryInterface::class);
+            if (!$factory instanceof SharedCacheStateFactoryInterface) {
+                return null;
+            }
+            $this->memory = $factory->create($this->cachePolicy()->memoryOptions([
                 'consumer_code' => self::NAMESPACE,
                 'prefer_direct_connect' => true,
                 'pool_size' => 1,

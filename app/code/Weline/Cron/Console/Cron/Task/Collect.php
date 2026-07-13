@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface as FrameworkCronTaskInterface;
 use Weline\Cron\Model\CronTask;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
@@ -70,12 +70,22 @@ class Collect implements CommandInterface
             );
             foreach ($tasks as $task) {
                 try {
-                    /** @var \Weline\Cron\CronTaskInterface $taskObject */
+                    if (!class_exists($task)) {
+                        continue;
+                    }
+                    $reflection = new \ReflectionClass($task);
+                    if (
+                        !$reflection->isInstantiable()
+                        || !$reflection->implementsInterface(FrameworkCronTaskInterface::class)
+                    ) {
+                        continue;
+                    }
+                    /** @var FrameworkCronTaskInterface $taskObject */
                     $taskObject = ObjectManager::getInstance($task);
                 } catch (\Throwable) {
                     continue;
                 }
-                if (!$taskObject instanceof CronTaskInterface) {
+                if (!$taskObject instanceof FrameworkCronTaskInterface) {
                     continue;
                 }
                 // 先标记为已收集，避免 save() 异常或后续逻辑导致本类未入列表，removeStaleTaskRecords 误删本条

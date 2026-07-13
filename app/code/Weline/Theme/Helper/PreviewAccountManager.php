@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
-use Weline\Framework\DataObject\DataObject;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Frontend\Model\FrontendUser;
+use Weline\Theme\Api\PreviewAccountProviderInterface;
 use Weline\Theme\Model\WelineTheme;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
 class PreviewAccountManager
 {
@@ -22,9 +22,9 @@ class PreviewAccountManager
      * 确保预览用户存在（通过主题ID）
      *
      * @param int $themeId
-     * @return FrontendUser|null
+     * @return AuthenticableInterface|null
      */
-    public static function ensurePreviewUserByThemeId(int $themeId): ?FrontendUser
+    public static function ensurePreviewUserByThemeId(int $themeId): ?AuthenticableInterface
     {
         /** @var WelineTheme $theme */
         $theme = ObjectManager::getInstance(WelineTheme::class);
@@ -39,92 +39,27 @@ class PreviewAccountManager
      * 确保预览用户存在
      *
      * @param WelineTheme $theme
-     * @return FrontendUser|null
+     * @return AuthenticableInterface|null
      */
-    public static function ensurePreviewUser(WelineTheme $theme): ?FrontendUser
+    public static function ensurePreviewUser(WelineTheme $theme): ?AuthenticableInterface
     {
         $config = $theme->getConfig();
         $previewConfig = self::normalizePreviewConfig($config['preview_user'] ?? []);
-
-        $tableExists = false;
-        try {
-            /** @var FrontendUser $user */
-            $user = ObjectManager::getInstance(FrontendUser::class);
-            $user->where('username', $previewConfig['username'])->find()->fetch();
-            $tableExists = true;
-        } catch (\PDOException $e) {
-            // 如果前端用户表不存在，返回 null（跳过预览用户创建）
-            if (str_contains($e->getMessage(), 'does not exist') || 
-                str_contains($e->getMessage(), 'Undefined table') ||
-                str_contains($e->getMessage(), 'relation') && str_contains($e->getMessage(), 'does not exist')) {
-                return null;
-            }
-            throw $e;
-        }
-
-        // 如果表不存在，直接返回 null
-        if (!$tableExists) {
+        $provider = self::getProvider();
+        if (!$provider) {
             return null;
         }
 
-        $isNewUser = false;
-
-        if (!$user->getId()) {
-            try {
-                $user->reset();
-                $user->setUsername($previewConfig['username'])
-                    ->setEmail($previewConfig['email'])
-                    ->setPassword($previewConfig['password'])
-                    ->setStatus(1)
-                    ->save();
-                $isNewUser = true;
-            } catch (\PDOException $e) {
-                // 如果保存时表不存在，返回 null
-                if (str_contains($e->getMessage(), 'does not exist') || 
-                    str_contains($e->getMessage(), 'Undefined table') ||
-                    str_contains($e->getMessage(), 'relation') && str_contains($e->getMessage(), 'does not exist')) {
-                    return null;
-                }
-                throw $e;
-            }
-        } else {
-            $updated = false;
-            if ($previewConfig['email'] !== $user->getData('email')) {
-                $user->setEmail($previewConfig['email']);
-                $updated = true;
-            }
-            if (!password_verify($previewConfig['password'], $user->getPassword())) {
-                $user->setPassword($previewConfig['password']);
-                $updated = true;
-            }
-            if ($updated) {
-                try {
-                    $user->save();
-                } catch (\PDOException $e) {
-                    // 如果保存时表不存在，返回 null
-                    if (str_contains($e->getMessage(), 'does not exist') || 
-                        str_contains($e->getMessage(), 'Undefined table') ||
-                        str_contains($e->getMessage(), 'relation') && str_contains($e->getMessage(), 'does not exist')) {
-                        return null;
-                    }
-                    throw $e;
-                }
-            }
+        $user = $provider->ensurePreviewAccount(
+            $previewConfig['username'],
+            $previewConfig['email'],
+            $previewConfig['password'],
+        );
+        if (!$user) {
+            return null;
         }
 
-        if ($isNewUser) {
-            /** @var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch(
-                'Weline_Weline_Frontend_Account_Register::register_after',
-                new DataObject([
-                    'user' => $user,
-                    'source' => 'theme_preview'
-                ])
-            );
-        }
-
-        $previewConfig['user_id'] = $user->getId();
+        $previewConfig['user_id'] = $user->getAuthIdentifier();
         $config['preview_user'] = $previewConfig;
         $theme->setConfig($config)->save();
 
@@ -146,14 +81,22 @@ class PreviewAccountManager
 
         /** @var AuthenticatedSessionInterface $frontendSession */
         $frontendSession = SessionFactory::getInstance()->createFrontendSession();
-        if ($frontendSession->isLoggedIn() && $frontendSession->getUserId() === $user->getId()) {
+        if (
+            $frontendSession->isLoggedIn()
+            && (string)$frontendSession->getUserId() === (string)$user->getAuthIdentifier()
+        ) {
             return;
         }
 
         $frontendSession->login($user);
-        $user->setSessionId($frontendSession->getSessionId())
-            ->setLoginIp((string) (\w_env('server.remote_addr', '127.0.0.1') ?? '127.0.0.1'))
-            ->save();
+        $provider = self::getProvider();
+        if ($provider) {
+            $provider->recordPreviewLogin(
+                $user,
+                $frontendSession->getId(),
+                (string)(\w_env('server.remote_addr', '127.0.0.1') ?? '127.0.0.1'),
+            );
+        }
     }
 
     /**
@@ -171,7 +114,10 @@ class PreviewAccountManager
         }
 
         $previewUserId = self::getPreviewUserId();
-        if ($previewUserId && $frontendSession->getUserId() !== $previewUserId) {
+        if ($previewUserId === null) {
+            return;
+        }
+        if ((string)$frontendSession->getUserId() !== (string)$previewUserId) {
             return;
         }
 
@@ -181,14 +127,19 @@ class PreviewAccountManager
     /**
      * 获取配置中的预览用户 ID
      *
-     * @return int|null
+     * @return int|string|null
      */
-    private static function getPreviewUserId(): ?int
+    private static function getPreviewUserId(): int|string|null
     {
-        /** @var FrontendUser $user */
-        $user = ObjectManager::getInstance(FrontendUser::class);
-        $user->where('username', self::DEFAULT_USERNAME)->find()->fetch();
-        return $user->getId() ?: null;
+        return self::getProvider()?->findPreviewAccountId(self::DEFAULT_USERNAME);
+    }
+
+    private static function getProvider(): ?PreviewAccountProviderInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(PreviewAccountProviderInterface::class);
+
+        return $provider instanceof PreviewAccountProviderInterface ? $provider : null;
     }
 
     /**
@@ -229,4 +180,3 @@ class PreviewAccountManager
         return 'Preview@' . bin2hex(random_bytes(3)) . random_int(100, 999);
     }
 }
-

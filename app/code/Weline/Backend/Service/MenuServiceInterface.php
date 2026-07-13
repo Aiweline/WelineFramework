@@ -8,7 +8,7 @@ namespace Weline\Backend\Service;
  *
  * - 上层（拦截器、登录跳转、菜单渲染）只依赖本接口，不直接依赖 Menu/Acl/RoleAccess 模型
  */
-interface MenuServiceInterface
+interface MenuServiceInterface extends \Weline\Backend\Api\Menu\MenuReaderInterface
 {
     /**
      * 根据角色 ID 获取菜单树（用于左侧导航渲染）。
@@ -57,4 +57,3 @@ interface MenuServiceInterface
      */
     public function findMenuNodeByRoute(int $roleId, string $routePath): ?array;
 }
-

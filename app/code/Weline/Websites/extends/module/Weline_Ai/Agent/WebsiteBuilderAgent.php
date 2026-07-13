@@ -10,13 +10,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Extends\Module\Weline_Ai\Agent;
 
-use Weline\Ai\Agent\AgentResult;
-use Weline\Ai\Interface\AgentInterface;
-use Weline\Ai\Interface\ToolInterface;
-use Weline\Ai\Model\AiModel;
+use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Api\AgentInterface;
+use Weline\Ai\Api\AiModel;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Websites\Service\AI\Tool\CheckDomainAvailabilityTool;
 use Weline\Websites\Service\AI\Tool\GetRegistrarAccountsTool;
 use Weline\Websites\Service\AI\Tool\PurchaseDomainAndBuildSiteTool;
@@ -28,6 +26,11 @@ class WebsiteBuilderAgent implements AgentInterface
     private const HARD_MAX_ITERATIONS = 30;
 
     private ?array $tools = null;
+
+    public function __construct(
+        private readonly ?object $providerFactory = null,
+    ) {
+    }
 
     public function getCode(): string
     {
@@ -108,11 +111,11 @@ PROMPT;
         array $params = [],
         ?callable $streamCallback = null
     ): AgentResult {
-        $tools = array_filter($this->getTools(), fn(ToolInterface $t) => $t->isEnabled());
-        $toolDefs = array_map(fn(ToolInterface $t) => [
-            'name' => $t->getName(),
-            'description' => $t->getDescription(),
-            'parameters' => $t->getParameters(),
+        $tools = array_filter($this->getTools(), static fn(object $tool): bool => $tool->isEnabled());
+        $toolDefs = array_map(static fn(object $tool): array => [
+            'name' => $tool->getName(),
+            'description' => $tool->getDescription(),
+            'parameters' => $tool->getParameters(),
         ], array_values($tools));
         $toolMap = [];
         foreach ($tools as $t) {
@@ -128,8 +131,13 @@ PROMPT;
             ['role' => 'user', 'content' => $prompt],
         ];
 
-        /** @var ProviderFactory $providerFactory */
-        $providerFactory = $params['provider_factory'] ?? ObjectManager::getInstance(ProviderFactory::class);
+        $providerFactory = $params['provider_factory'] ?? $this->providerFactory;
+        if (!\is_object($providerFactory) || !\method_exists($providerFactory, 'getProvider')) {
+            return AgentResult::failure(
+                __('AI 提供者工厂未注入'),
+                $this->getCode()
+            );
+        }
         $provider = $providerFactory->getProvider($model);
 
         $iteration = 0;

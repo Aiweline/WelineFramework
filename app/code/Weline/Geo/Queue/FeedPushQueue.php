@@ -15,15 +15,16 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\Platform;
 use Weline\Geo\Service\PushService;
-use Weline\Queue\Model\Queue;
-use Weline\Queue\QueueInterface;
+use Weline\Queue\Api\QueueConsumerInterface;
+use Weline\Queue\Api\QueueStatus;
+use Weline\Queue\Api\QueueTaskContextInterface;
 
 /**
  * Feed推送队列处理器
  * 
  * @package Weline_Geo
  */
-class FeedPushQueue implements QueueInterface
+class FeedPushQueue implements QueueConsumerInterface
 {
     /**
      * 队列名称
@@ -59,18 +60,18 @@ class FeedPushQueue implements QueueInterface
     /**
      * 执行队列任务
      * 
-     * @param Queue $queue
+     * @param QueueTaskContextInterface $queue
      * @return string
      */
-    public function execute(Queue &$queue): string
+    public function execute(QueueTaskContextInterface $queue): string
     {
         try {
             $content = json_decode($queue->getContent(), true);
             
             if (empty($content['feed_id'])) {
                 $queue->setResult('错误：缺少feed_id参数');
-                $queue->setStatus(Queue::status_error);
-                $queue->save();
+                $queue->setStatus(QueueStatus::ERROR);
+                $queue->persist();
                 return '错误：缺少feed_id参数';
             }
 
@@ -84,16 +85,16 @@ class FeedPushQueue implements QueueInterface
 
             if (!$feed->getId()) {
                 $queue->setResult("错误：Feed ID {$feedId} 不存在");
-                $queue->setStatus(Queue::status_error);
-                $queue->save();
+                $queue->setStatus(QueueStatus::ERROR);
+                $queue->persist();
                 return "错误：Feed ID {$feedId} 不存在";
             }
 
             // 检查是否启用自动推送
             if ($pushType === 'scheduled' && !$feed->isAutoPush()) {
                 $queue->setResult("Feed已关闭自动推送，跳过推送");
-                $queue->setStatus(Queue::status_done);
-                $queue->save();
+                $queue->setStatus(QueueStatus::DONE);
+                $queue->persist();
                 return "Feed已关闭自动推送，跳过推送";
             }
 
@@ -152,14 +153,14 @@ class FeedPushQueue implements QueueInterface
 
             $resultMsg = "推送完成。成功: {$successCount}, 失败: {$failCount}\n" . implode("\n", $results);
             $queue->setResult($resultMsg);
-            $queue->setStatus($failCount === 0 ? Queue::status_done : Queue::status_error);
-            $queue->save();
+            $queue->setStatus($failCount === 0 ? QueueStatus::DONE : QueueStatus::ERROR);
+            $queue->persist();
 
             return $resultMsg;
         } catch (\Exception $e) {
             $queue->setResult("错误：" . $e->getMessage());
-            $queue->setStatus(Queue::status_error);
-            $queue->save();
+            $queue->setStatus(QueueStatus::ERROR);
+            $queue->persist();
             return "错误：" . $e->getMessage();
         }
     }
@@ -167,10 +168,10 @@ class FeedPushQueue implements QueueInterface
     /**
      * 验证任务数据
      * 
-     * @param Queue $queue
+     * @param QueueTaskContextInterface $queue
      * @return bool
      */
-    public function validate(Queue &$queue): bool
+    public function validate(QueueTaskContextInterface $queue): bool
     {
         $content = json_decode($queue->getContent(), true);
         
@@ -187,4 +188,3 @@ class FeedPushQueue implements QueueInterface
         return true;
     }
 }
-

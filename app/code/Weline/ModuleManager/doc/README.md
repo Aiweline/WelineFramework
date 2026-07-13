@@ -18,6 +18,13 @@
 - 模块代码：`Weline_ModuleManager`
 - 目录：`app/code/Weline/ModuleManager`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 依赖清单以 `etc/module.php` 为准：Admin 是必需依赖；I18n 提供翻译收集与词典契约，Ai 提供可选自动翻译。缺少可选模块时，模块创建主流程不得发生类加载错误。
+- 模型表登记统一排除 Framework 的 `SchemaDiffExcludedModelInterface`；不再为 EAV 动态值表硬编码模块内部类，因此 ModuleManager 无需依赖 Eav。
+- 可选 AI 翻译只通过 `Weline\Ai\Api\TranslationService` 迁移契约解析；
+  ModuleManager 不手工组装 Ai 的 Service、缓存或模型管理内部对象。
+- 跨模块需要按名称查模块 ID、按名称模糊匹配 ID 或读取模块展示元数据时，只解析
+  `Weline\ModuleManager\Api\ModuleCatalogInterface`。它返回 final readonly
+  `ModuleCatalogEntry`，不暴露 Module Model、Query Builder 或可写能力；目录查询不会新建事务。
 
 ## 代码面概览
 

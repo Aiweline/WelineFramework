@@ -3,13 +3,12 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller;
 
+use Weline\Backend\Api\Maintenance\MaintenanceOperationsProviderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\Message;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Maintenance\Helper\IpMatcher;
-use Weline\Maintenance\Service\BackupManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * 系统维护模式控制器
@@ -20,6 +19,11 @@ use Weline\Maintenance\Service\BackupManager;
 #[Acl('Weline_Backend::system_maintenance', '系统维护模式', 'mdi-tools', '系统维护模式', 'Weline_Backend::system_service_group')]
 class Maintenance extends BackendController
 {
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
+    ) {
+    }
+
     /**
      * 维护模式管理首页
      * 
@@ -115,7 +119,8 @@ class Maintenance extends BackendController
             
             // 验证IP白名单格式
             foreach ($bypassConfig['ip_whitelist'] as $ip) {
-                if (!empty($ip) && !IpMatcher::isValidCidr($ip)) {
+                $operations = $this->maintenanceOperations();
+                if (!empty($ip) && (!$operations || !$operations->isValidCidr($ip))) {
                     return $this->jsonResponse(false, __('IP白名单格式错误：%{1}', $ip));
                 }
             }
@@ -176,12 +181,14 @@ class Maintenance extends BackendController
             $backupConfig = $env->getConfig('maintenance.backup', []);
             if (!empty($backupConfig['auto_backup_before_maintenance'])) {
                 try {
-                    /** @var BackupManager $backupManager */
-                    $backupManager = ObjectManager::getInstance(BackupManager::class);
+                    $operations = $this->maintenanceOperations();
+                    if (!$operations) {
+                        throw new \RuntimeException((string)__('维护操作 Provider 不可用'));
+                    }
                     $backupTypes = $backupConfig['backup_types'] ?? ['database', 'code'];
                     
                     foreach ($backupTypes as $type) {
-                        $backupManager->createBackup($type, $this->session->getLoginUserID());
+                        $operations->createBackup((string)$type, $this->session->getLoginUserID());
                     }
                 } catch (\Exception $e) {
                     // 备份失败不影响维护模式开启，但记录错误
@@ -215,6 +222,12 @@ class Maintenance extends BackendController
             'log_bypass' => false,
         ]);
     }
+
+    private function maintenanceOperations(): ?MaintenanceOperationsProviderInterface
+    {
+        $provider = $this->runtimeProviderResolver->resolve(MaintenanceOperationsProviderInterface::class);
+        return $provider instanceof MaintenanceOperationsProviderInterface ? $provider : null;
+    }
     
     /**
      * JSON响应
@@ -234,4 +247,3 @@ class Maintenance extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 }
-

@@ -141,13 +141,23 @@ class CountryLocaleLifecycleService
         $locale = $this->ensureLocaleRecordExists($localeCode);
         $countryCode = (string)$locale->getData(Locale::schema_fields_COUNTRY_CODE);
 
+        $this->makeLocaleModel()->reset()
+            ->where(Locale::schema_fields_CODE, $localeCode)
+            ->update([Locale::schema_fields_IS_INSTALL => 1])
+            ->fetch();
+        $locale = $this->getLocaleRecord($localeCode);
         if ((int)$locale->getData(Locale::schema_fields_IS_INSTALL) !== 1) {
-            $locale->setData(Locale::schema_fields_IS_INSTALL, 1)->save();
+            throw new \RuntimeException((string)__('区域安装状态写入失败：%{1}', [$localeCode]));
         }
 
         $country = $this->ensureCountryExists($countryCode);
+        $this->makeCountryModel()->reset()
+            ->where(Countries::schema_fields_CODE, $countryCode)
+            ->update([Countries::schema_fields_IS_INSTALL => 1])
+            ->fetch();
+        $country = $this->getCountryRecord($countryCode);
         if ((int)$country->getData(Countries::schema_fields_IS_INSTALL) !== 1) {
-            $country->setData(Countries::schema_fields_IS_INSTALL, 1)->save();
+            throw new \RuntimeException((string)__('国家安装状态写入失败：%{1}', [$countryCode]));
         }
 
         $countrySummary = $this->syncCountryState($countryCode);
@@ -591,13 +601,7 @@ class CountryLocaleLifecycleService
         \Weline\Framework\Phrase\Parser::clearWorkerCaches();
         \Weline\I18n\Parser::clearWorkerCaches();
 
-        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
-        if (class_exists($dispatchClass)) {
-            try {
-                ObjectManager::getInstance($dispatchClass)->cacheClear();
-            } catch (\Throwable) {
-            }
-        }
+        ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
     }
 
     private function findActiveInstalledLocaleCode(string $countryCode): ?string

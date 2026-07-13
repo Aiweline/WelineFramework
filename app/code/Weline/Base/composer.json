@@ -1,6 +1,6 @@
 {
     "name": "weline/base",
-    "description": "Weline Base模块 - 统一管理所有Weline模块依赖",
+    "description": "Weline Base聚合包 - 统一管理Weline默认发行模块依赖",
     "type": "weline-module",
     "license": "proprietary",
     "authors": [
@@ -10,9 +10,9 @@
         }
     ],
     "require": {
-        "php": "^8.1",
+        "php": "^8.4",
         "weline/framework": "@dev",
-        "weline/two-factor-auth": "@dev",
+        "weline/module-two-factor-auth": "@dev",
         "weline/module-acl": "@dev",
         "weline/module-admin": "@dev",
         "weline/module-ai": "@dev",
@@ -25,7 +25,7 @@
         "weline/module-visitor": "@dev",
         "weline/module-customer": "@dev",
         "weline/module-data-table": "@dev",
-        "weline/deploy-module": "@dev",
+        "weline/module-deploy": "@dev",
         "weline/module-developer-workspace": "@dev",
         "weline/module-eav": "@dev",
         "weline/module-editor-manager": "@dev",
@@ -41,7 +41,7 @@
         "weline/module-module-router": "@dev",
         "weline/module-parts": "@dev",
         "weline/module-queue": "@dev",
-        "weline/session-manager": "@dev",
+        "weline/module-session-manager": "@dev",
         "weline/module-smtp": "@dev",
         "weline/module-system-config": "@dev",
         "weline/module-taglib": "@dev",

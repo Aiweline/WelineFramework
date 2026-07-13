@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Api\Service;
 
-use Weline\Acl\Model\Acl;
+use Weline\Acl\Api\Scope\ScopeCatalogInterface;
 use Weline\Api\Model\ApiApp;
 use Weline\Api\Model\ApiAppAuthorizationCode;
 use Weline\Api\Model\ApiAppInstallation;
@@ -189,9 +189,9 @@ class ApiAppService
         foreach ($scopeRows as $row) {
             $this->newScopeModel()->clear()
                 ->setInstallationId($installationId)
-                ->setSourceId((string)$row[Acl::schema_fields_SOURCE_ID])
-                ->setAccessMode((string)$row[Acl::schema_fields_ACCESS_MODE])
-                ->setScopeGroup((string)($row[Acl::schema_fields_SCOPE_GROUP] ?? ''))
+                ->setSourceId((string)$row[ScopeCatalogInterface::FIELD_SOURCE_ID])
+                ->setAccessMode((string)$row[ScopeCatalogInterface::FIELD_ACCESS_MODE])
+                ->setScopeGroup((string)($row[ScopeCatalogInterface::FIELD_SCOPE_GROUP] ?? ''))
                 ->save();
         }
     }

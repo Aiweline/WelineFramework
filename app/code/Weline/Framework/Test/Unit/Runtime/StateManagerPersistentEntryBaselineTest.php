@@ -35,7 +35,7 @@ final class StateManagerPersistentEntryBaselineTest extends TestCase
     public function testOmitListMatchesEntryBaselineCoverage(): void
     {
         $omit = WlsConcurrency::callbackNamesOmittableWithPeerFibers();
-        self::assertContains('template_instance', $omit);
+        self::assertNotContains('template_instance', $omit);
         self::assertContains('virtual_theme_context', $omit);
         self::assertContains('view_hook_runtime_cache', $omit);
         self::assertNotContains('session_instances', $omit);

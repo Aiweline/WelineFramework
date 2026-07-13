@@ -4,8 +4,7 @@ declare(strict_types=1);
 /**
  * Weline Server - 解封/清理封禁列表
  *
- * 通过 IPC 通知 Dispatcher 解封指定 IP 或清空全部封禁（含 rate_limit、SSL 握手失败等）。
- * 封禁数据在 Dispatcher 进程内存中，不持久化。
+ * 通过 IPC 通知当前实例的 Worker 与 Dispatcher 解封指定 IP 或清空全部封禁。
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -14,9 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server\Security;
 
 use Weline\Framework\Console\CommandAbstract;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\Control\IpcControlGateway;
-use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * server:security:unblock - 解封 IP 或清空全部封禁
@@ -39,14 +36,6 @@ class Unblock extends CommandAbstract
                 $this->printer->note(__('示例：php bin/w server:security:unblock --clear-all'));
                 return;
             }
-        }
-
-        /** @var ServerInstanceManager $manager */
-        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        $stats = $manager->getRunningStats();
-        if (($stats['dispatchers'] ?? 0) === 0) {
-            $this->printer->warning(__('未检测到运行中的 WLS Dispatcher，无需执行解封'));
-            return;
         }
 
         $result = (new IpcControlGateway())->securityUnblock(

@@ -14,16 +14,16 @@ namespace Weline\Cron\Console\Cron;
 
 use Weline\Framework\Console\CommandInterface;
 
-use Weline\Backend\Model\Config;
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\Output\Cli\Printing;
 
 abstract class BaseCommand implements \Weline\Framework\Console\CommandInterface
 {
     /**
-     * @var \Weline\Backend\Model\Config
+     * @var BackendConfigStore
      */
-    protected Config $config;
+    protected BackendConfigStore $config;
     /**
      * @var \Weline\Framework\Output\Cli\Printing
      */
@@ -34,7 +34,7 @@ abstract class BaseCommand implements \Weline\Framework\Console\CommandInterface
     protected Schedule $schedule;
 
     function __construct(
-        Config   $config,
+        BackendConfigStore $config,
         Printing $printing,
         Schedule $schedule
     )

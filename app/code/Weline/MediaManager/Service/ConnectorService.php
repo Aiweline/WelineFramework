@@ -7,12 +7,12 @@ namespace Weline\MediaManager\Service;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\MediaManager\Helper\MimeTypes;
-use Weline\Storage\Service\StorageManager;
+use Weline\Storage\Api\StorageCatalogInterface;
 
 class ConnectorService
 {
     private ?ThumbnailService $thumbnailService = null;
-    private ?StorageManager $storageManager = null;
+    private ?StorageCatalogInterface $storageCatalog = null;
     
     private function getThumbnailService(): ThumbnailService
     {
@@ -22,14 +22,14 @@ class ConnectorService
         return $this->thumbnailService;
     }
     
-    private function getStorageManager(): ?StorageManager
+    private function getStorageManager(): ?StorageCatalogInterface
     {
-        if ($this->storageManager === null) {
-            if (\class_exists(StorageManager::class)) {
-                $this->storageManager = ObjectManager::getInstance(StorageManager::class);
+        if ($this->storageCatalog === null) {
+            if (\interface_exists(StorageCatalogInterface::class)) {
+                $this->storageCatalog = ObjectManager::getInstance(StorageCatalogInterface::class);
             }
         }
-        return $this->storageManager;
+        return $this->storageCatalog;
     }
 
     /**
@@ -111,7 +111,7 @@ class ConnectorService
         $storageManager = $this->getStorageManager();
         if ($storageManager !== null) {
             try {
-                $list = $storageManager->getStorageList();
+                $list = $storageManager->all();
                 foreach ($list as $item) {
                     $storages[] = [
                         'name' => $item['name'],

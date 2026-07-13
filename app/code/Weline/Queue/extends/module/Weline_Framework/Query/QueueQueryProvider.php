@@ -14,7 +14,9 @@ use Weline\Queue\Model\Queue\Type;
 /**
  * 任务队列统一入口：模块间一律通过 w_query('queue', ...) 读写队列，避免直接依赖 Queue 模型类。
  *
- * 说明：实现 {@see \Weline\Queue\QueueInterface} 的消费类在 execute(Queue $queue) 中仍接收模型实例，属框架契约，与业务侧 CRUD 分离。
+ * 新消费类实现 {@see \Weline\Queue\Api\QueueConsumerInterface}，只接收
+ * {@see \Weline\Queue\Api\QueueTaskContextInterface}。旧 {@see \Weline\Queue\QueueInterface}
+ * 仅作第三方兼容桥，收集和执行管线仍保持支持。
  */
 class QueueQueryProvider implements QueryProviderInterface
 {

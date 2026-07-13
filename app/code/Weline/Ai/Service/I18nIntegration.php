@@ -13,9 +13,10 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locale\Name;
-use Weline\I18n\Model\I18n;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\I18n\Api\Localization\Data\LocaleNameRecord;
+use Weline\I18n\Api\Localization\LocaleNameCatalogInterface;
+use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
 
 /**
  * I18n模块集成服务
@@ -28,19 +29,8 @@ use Weline\I18n\Model\I18n;
  */
 class I18nIntegration
 {
-    /**
-     * @var Name
-     */
-    private Name $i18nLocaleName;
-
-    /**
-     * 构造函数
-     * 
-     * @param Name $i18nLocaleName
-     */
-    public function __construct(Name $i18nLocaleName)
+    public function __construct(private readonly RuntimeProviderResolver $runtimeProviders)
     {
-        $this->i18nLocaleName = $i18nLocaleName;
     }
 
     /**
@@ -50,15 +40,12 @@ class I18nIntegration
      */
     public function getSupportedLocales(): array
     {
-        $locales = $this->i18nLocaleName->getCollection()
-            ->fetch();
-        
         $supportedLocales = [];
-        foreach ($locales as $locale) {
+        foreach ($this->localeNameCatalog()?->all() ?? [] as $locale) {
             $supportedLocales[] = [
-                'locale_code' => $locale->getData(Name::schema_fields_LOCALE_CODE),
-                'display_locale_code' => $locale->getData(Name::schema_fields_DISPLAY_LOCALE_CODE),
-                'display_name' => $locale->getData(Name::schema_fields_DISPLAY_NAME)
+                'locale_code' => $locale->localeCode,
+                'display_locale_code' => $locale->displayLocaleCode,
+                'display_name' => $locale->displayName,
             ];
         }
         
@@ -74,12 +61,20 @@ class I18nIntegration
     {
         // 从I18n模块获取默认语言，如果没有则使用zh-CN
         try {
-            /** @var I18n $i18nModel */
-            $i18nModel = ObjectManager::getInstance(I18n::class);
-            return $i18nModel->getLocalByCode('zh-CN');
-        } catch (\Exception $e) {
+            return $this->localeRepository()->resolveCode('zh-CN');
+        } catch (\Throwable) {
             return 'zh-CN';
         }
+    }
+
+    private function localeRepository(): LocaleRepositoryInterface
+    {
+        $repository = $this->runtimeProviders->resolve(LocaleRepositoryInterface::class);
+        if (!$repository instanceof LocaleRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n locale repository provider is unavailable.');
+        }
+
+        return $repository;
     }
 
     /**
@@ -90,12 +85,7 @@ class I18nIntegration
      */
     public function isLocaleSupported(string $localeCode): bool
     {
-        $locale = $this->i18nLocaleName->reset()
-            ->where(Name::schema_fields_LOCALE_CODE, $localeCode)
-            ->find()
-            ->fetch();
-        
-        return $locale ? true : false;
+        return $this->localeNameCatalog()?->containsLocaleCode($localeCode) ?? false;
     }
 
     /**
@@ -106,20 +96,23 @@ class I18nIntegration
      */
     public function getLocaleInfo(string $localeCode): ?array
     {
-        $locale = $this->i18nLocaleName->reset()
-            ->where(Name::schema_fields_LOCALE_CODE, $localeCode)
-            ->find()
-            ->fetch();
-        
-        if (!$locale) {
+        $locale = $this->localeNameCatalog()?->firstByLocaleCode($localeCode);
+        if (!$locale instanceof LocaleNameRecord) {
             return null;
         }
         
         return [
-            'locale_code' => $locale->getData(Name::schema_fields_LOCALE_CODE),
-            'display_locale_code' => $locale->getData(Name::schema_fields_DISPLAY_LOCALE_CODE),
-            'display_name' => $locale->getData(Name::schema_fields_DISPLAY_NAME)
+            'locale_code' => $locale->localeCode,
+            'display_locale_code' => $locale->displayLocaleCode,
+            'display_name' => $locale->displayName,
         ];
+    }
+
+    private function localeNameCatalog(): ?LocaleNameCatalogInterface
+    {
+        $catalog = $this->runtimeProviders->resolve(LocaleNameCatalogInterface::class);
+
+        return $catalog instanceof LocaleNameCatalogInterface ? $catalog : null;
     }
 
     /**

@@ -4,9 +4,9 @@ declare(strict_types=1);
 namespace Weline\Admin\Service;
 
 use Weline\Admin\Helper\MenuUrlValidator;
-use Weline\Acl\Service\AclService;
-use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Service\MenuServiceInterface;
+use Weline\Acl\Api\Authorization\AuthorizationServiceInterface;
+use Weline\Backend\Api\Auth\BackendLoginAccount;
+use Weline\Backend\Api\Menu\MenuReaderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
@@ -25,8 +25,8 @@ class BackendLoginReturnUrlService
     ];
 
     public function __construct(
-        private readonly AclService $aclService,
-        private readonly MenuServiceInterface $menuService,
+        private readonly AuthorizationServiceInterface $aclService,
+        private readonly MenuReaderInterface $menuService,
         private readonly Request $request,
         private readonly Url $url
     ) {
@@ -68,7 +68,7 @@ class BackendLoginReturnUrlService
         return !$this->isApiOrInterfacePath($path);
     }
 
-    public function resolveForUser(BackendUser $user, string $explicitReturnUrl = ''): ?string
+    public function resolveForUser(BackendLoginAccount $user, string $explicitReturnUrl = ''): ?string
     {
         $candidate = $this->validateForUser($user, $explicitReturnUrl);
         if ($candidate !== null) {
@@ -111,7 +111,7 @@ class BackendLoginReturnUrlService
         return $this->ensureSameOrigin($candidate);
     }
 
-    public function validateForUser(BackendUser $user, string $candidate): ?string
+    public function validateForUser(BackendLoginAccount $user, string $candidate): ?string
     {
         $normalized = $this->normalizeCandidateUrl($candidate);
         if ($normalized === null) {
@@ -134,7 +134,7 @@ class BackendLoginReturnUrlService
         return $this->aclService->isRouteAllowed($roleId, $routePath, 'GET') ? $normalized : null;
     }
 
-    public function resolveDefaultRedirectTarget(BackendUser $user): string
+    public function resolveDefaultRedirectTarget(BackendLoginAccount $user): string
     {
         $roleId = $this->resolveRoleId($user);
         if ($roleId > 0) {
@@ -269,11 +269,10 @@ class BackendLoginReturnUrlService
         return false;
     }
 
-    private function resolveRoleId(BackendUser $user): int
+    private function resolveRoleId(BackendLoginAccount $user): int
     {
-        $role = $user->getRoleModel();
-        if ($role && $role->getId()) {
-            return (int)$role->getId();
+        if ($user->getRoleId() > 0) {
+            return $user->getRoleId();
         }
 
         return (int)$user->getId() === 1 ? 1 : 0;

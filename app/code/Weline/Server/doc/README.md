@@ -17,7 +17,8 @@
 |---|---|
 | Windows 启动慢、Worker 批量拉起 | [WLS 运行时架构](WLS架构图.md)、[启动与关闭链路](WLS启动与关闭链路图.md) |
 | Worker 掉线、整池重载、路由为空 | [WLS 运行时架构](WLS架构图.md)、[IPC 控制通道](IPC控制通道架构.md) |
-| 请求转发、TLS、Worker 故障转移 | [Dispatcher 分流架构](Dispatcher分流架构设计.md) |
+| 请求转发、Worker 故障转移 | [Dispatcher 分流架构](Dispatcher分流架构设计.md) |
+| TLS 1.3、密钥交换策略、HTTPS 压测 | [WLS 模式部署指南](WLS模式部署指南.md#5-https--ssl)、[WLS 运行时架构](WLS架构图.md#37-tls-13-进程性能策略与实测证据) |
 | 首页预热、常驻内存、请求长尾 | [WLS 运行时架构](WLS架构图.md) |
 | Session/Memory 服务异常 | [共享服务架构](WLS_Session共享服务架构.md) |
 | SSE/长连接 | [SSE 无阻塞检测方法](SSE无阻塞检测方法.md)、[WLS EventBuffer SSL Worker](WLS-EventBuffer-SSL-Worker.md) |

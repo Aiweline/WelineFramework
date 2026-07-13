@@ -12,12 +12,13 @@ declare(strict_types=1);
 namespace Weline\Framework\View;
 
 use Weline\Framework\App\Debug;
+use Weline\Framework\Compilation\CompiledExtensionRegistry;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\View\Block\Csrf;
 use Weline\Framework\View\Exception\TemplateException;
-use Weline\Hook\HookData;
 
 // 优化组件
 use Weline\Framework\View\Taglib\Parser\PhpExtractor;
@@ -519,9 +520,10 @@ class Taglib
      */
     private function resetCompileScopedTagState(): void
     {
-        $slotTaglibClass = \Weline\Theme\Taglib\Slot::class;
-        if (\class_exists($slotTaglibClass) && \method_exists($slotTaglibClass, 'clearRegisteredSlots')) {
-            $slotTaglibClass::clearRegisteredSlots();
+        $resetter = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CompileStateResetterInterface::class);
+        if ($resetter instanceof CompileStateResetterInterface) {
+            $resetter->resetCompileState();
         }
     }
     
@@ -1392,7 +1394,7 @@ class Taglib
                             
                             try {
                                 // 使用 HookData 检查 hook 是否存在
-                                $hook_exists = \Weline\Hook\HookData::hookExists($hook_name);
+                                $hook_exists = CompiledExtensionRegistry::hookExists($hook_name);
                                 // 检查 hook 是否有实现文件
                                 if ($hook_exists) {
                                     try {
@@ -1415,8 +1417,6 @@ class Taglib
                                 // 在开发环境下，检查 hook 是否有规约
                                 if (defined('DEV') && DEV) {
                                     try {
-                                        $hookRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Hook\HookRegistry::class);
-                                        
                                         // 在开发环境下，如果 generated/hooks.php 不存在，提示需要运行 setup:upgrade
                                         $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
                                         if (!file_exists($registryFile)) {
@@ -1428,9 +1428,9 @@ class Taglib
                                         }
                                         
                                         // 如果钩子没有规约，提示需要运行 setup:upgrade
-                                        if (!$hookRegistry->hasSpec($hook_name)) {
+                                        if (!CompiledExtensionRegistry::hookHasSpec($hook_name)) {
                                             // 重新检查
-                                            if (!$hookRegistry->hasSpec($hook_name)) {
+                                            if (!CompiledExtensionRegistry::hookHasSpec($hook_name)) {
                                                 // 解析模块名
                                                 $moduleName = '';
                                                 if (str_contains($hook_name, '::')) {
@@ -1569,8 +1569,6 @@ class Taglib
                             
                             if (defined('DEV') && DEV) {
                                 try {
-                                    $hookRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Hook\HookRegistry::class);
-                                    
                                     // 在开发环境下，如果 generated/hooks.php 不存在，提示需要运行 setup:upgrade
                                     $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
                                     if (!file_exists($registryFile)) {
@@ -1581,7 +1579,7 @@ class Taglib
                                         );
                                     }
                                     
-                                    if (!$hookRegistry->hasSpec($hook_name)) {
+                                    if (!CompiledExtensionRegistry::hookHasSpec($hook_name)) {
                                         // 解析模块名
                                         $moduleName = '';
                                         if (str_contains($hook_name, '::')) {
@@ -1874,20 +1872,20 @@ class Taglib
                 }
             ],
             'block' => [
-                'doc' => '@block{Weline\Admin\Block\Demo|Weline_Admin::block/demo.phtml}或者@block(Weline\Admin\Block\Demo|Weline_Admin::block/demo.phtml)或者' . htmlentities('<block class="Weline\Admin\Block\Demo" template="Weline_Admin::block/demo.phtml"/>') . '或者' . htmlentities('<block>Weline\Admin\Block\Demo|Weline_Admin::block/demo.phtml</block>'),
+                'doc' => '@block{Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml}或者@block(Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml)或者' . htmlentities('<block class="Vendor\Module\Block\Demo" template="Vendor_Module::block/demo.phtml"/>') . '或者' . htmlentities('<block>Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml</block>'),
                 'tag' => 1,
                 'attr' => ['class' => 0, 'template' => 0, 'cache' => 0],
                 'tag-self-close-with-attrs' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
                         switch ($tag_key) {
-                            //<block>Weline\Admin\Block\Demo|template=Weline_Admin::block/demo.phtml|cache=300</block>
+                            //<block>Vendor\Module\Block\Demo|template=Vendor_Module::block/demo.phtml|cache=300</block>
                             case 'tag':
                                 $data = explode('|', $tag_data[2]);
                                 $data = array_merge($data, $attributes);
                                 $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
                                 break;
-                            // @block{Weline\Admin\Block\Demo|Weline_Admin::block/demo.phtml}
+                            // @block{Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml}
                             case '@tag{}':
                             case '@tag()':
                                 $data = explode('|', $tag_data[1]);
@@ -1896,14 +1894,14 @@ class Taglib
                                     throw new TemplateException(
                                         __(
                                             "@block标签语法使用错误：未指定block类:[{$template_html}]。示例：%{1}或者%{2}",
-                                            [htmlentities('@block(Weline\Admin\Block\Demo|template=Weline_Admin::block/demo.phtml)'), htmlentities('@block{Weline\Admin\Block\Demo|template=Weline_Admin::block/demo.phtml}')]
+                                            [htmlentities('@block(Vendor\Module\Block\Demo|template=Vendor_Module::block/demo.phtml)'), htmlentities('@block{Vendor\Module\Block\Demo|template=Vendor_Module::block/demo.phtml}')]
                                         )
                                     );
                                 }
                                 $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
                                 break;
-                            // <block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml'/>
-                            // 或者内联格式 @block(Weline\Demo\Block\Demo) 会解析为 value 属性
+                            // <block class='Vendor\Module\Block\Demo' template='Vendor_Module::templates/demo.phtml'/>
+                            // 或者内联格式 @block(Vendor\Module\Block\Demo) 会解析为 value 属性
                             case 'tag-self-close-with-attrs':
                                 // 支持内联格式：@block(ClassName) 会设置 value 属性
                                 // 将 value 属性作为 class 的备选
@@ -1914,7 +1912,7 @@ class Taglib
                                 
                                 if (!isset($attributes['class']) || !$attributes['class']) {
                                     $template_html = htmlentities($tag_data[0]);
-                                    throw new TemplateException(__("block标签语法使用错误:[{$template_html}]：未指定block类。示例：%{1}", htmlentities("<block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml' vars='item|pageSize|page'/>")));
+                                    throw new TemplateException(__("block标签语法使用错误:[{$template_html}]：未指定block类。示例：%{1}", htmlentities("<block class='Vendor\Module\Block\Demo' template='Vendor_Module::templates/demo.phtml' vars='item|pageSize|page'/>")));
                                 }
                                 // 变量导入
                                 $vars_string = '[';
@@ -2056,7 +2054,7 @@ class Taglib
                         // 成对标签 <js>path</js>：编译期 tag_data[1]=rawContent（路径）、tag_data[2]=编译后子内容；运行时 tag_data[1]=rawAttributes、tag_data[2]=content（路径）
                         $path = trim($tag_data[1] ?? '') ?: trim($tag_data[2] ?? '');
                         if ($path === '' && defined('DEV') && DEV) {
-                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js>Weline_Admin::assets/js/app.js</js>']));
+                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js>Vendor_Module::assets/js/app.js</js>']));
                         }
                         $url = $template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, $path);
                         if (defined('DEV') && DEV && preg_match('#/view/statics/\s*[\'"]?\s*$#', $url)) {

@@ -275,6 +275,54 @@ class LinuxProcessDriver extends AbstractProcessDriver
         
         return !$this->isRunningByPid($pid);
     }
+
+    /**
+     * @inheritDoc
+     */
+    public function killProcessOnce(int $pid, bool $tree = false): bool
+    {
+        if (!$this->isValidPid($pid)) {
+            return false;
+        }
+
+        $pids = $tree ? $this->getProcessTreePids($pid) : [];
+        $pids[] = $pid; // 父进程最后终止，避免它在子进程快照完成前退出。
+        $pids = \array_values(\array_unique(\array_map('intval', $pids)));
+        $functions = $this->detectAvailableFunctions();
+        $rootSignalAccepted = false;
+
+        foreach ($pids as $targetPid) {
+            if ($targetPid <= 0) {
+                continue;
+            }
+
+            if ($functions['posix_kill']) {
+                if (\function_exists('posix_clear_last_error')) {
+                    @\posix_clear_last_error();
+                }
+                $sent = @\posix_kill($targetPid, self::SIGKILL);
+                $errno = \function_exists('posix_get_last_error') ? (int) \posix_get_last_error() : 0;
+                if ($targetPid === $pid) {
+                    // ESRCH 表示目标在信号前自行退出，由上层 fresh probe 最终确认。
+                    $rootSignalAccepted = $sent || $errno === 3;
+                }
+                continue;
+            }
+
+            $output = [];
+            $exitCode = 0;
+            $executed = $this->executeCommand(
+                'kill -' . self::SIGKILL . ' ' . $targetPid . ' 2>/dev/null',
+                $output,
+                $exitCode
+            );
+            if ($targetPid === $pid) {
+                $rootSignalAccepted = $executed && $exitCode === 0;
+            }
+        }
+
+        return $rootSignalAccepted;
+    }
     
     /**
      * @inheritDoc
@@ -526,62 +574,78 @@ class LinuxProcessDriver extends AbstractProcessDriver
      */
     public function isRunningByPid(int $pid): bool
     {
+        return $this->probeProcessState($pid) === self::PROCESS_STATE_RUNNING;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function probeProcessState(int $pid, bool $fresh = false): string
+    {
+        unset($fresh); // POSIX 探测不使用进程内状态缓存。
+
         if (!$this->isValidPid($pid)) {
-            return false;
+            return self::PROCESS_STATE_EXITED;
         }
-        
-        // 方案1：/proc 文件系统（Linux 特有，零开销，< 0.1ms）
-        // 参考 Symfony Process 的做法
-        if (\is_dir("/proc/{$pid}")) {
-            // 额外检查进程状态，排除僵尸进程
-            $statusFile = "/proc/{$pid}/status";
-            if (\is_file($statusFile)) {
-                $status = @\file_get_contents($statusFile);
-                if ($status !== false) {
-                    // 检查进程状态：Z = 僵尸进程（已退出但未被回收）
-                    if (\preg_match('/^State:\s+Z/m', $status)) {
-                        return false; // 僵尸进程不算运行中
-                    }
-                    return true;
-                }
+
+        // Linux 快路径：目录存在即可证明 PID 当前存在；status 可进一步排除 zombie。
+        $procDir = "/proc/{$pid}";
+        if (\is_dir($procDir)) {
+            $status = @\file_get_contents($procDir . '/status');
+            if (\is_string($status) && \preg_match('/^State:\s+Z/m', $status) === 1) {
+                return self::PROCESS_STATE_EXITED;
             }
-            return true; // /proc/{pid} 目录存在 = 进程存在
+
+            // hidepid/短暂权限问题可能让 status 不可读，但已存在的 PID 目录仍是有效存活证据。
+            return self::PROCESS_STATE_RUNNING;
         }
-        
-        // 方案2：posix_kill($pid, 0)（POSIX 标准信号检测，零开销）
-        // 发送信号 0 不会影响进程，只检查进程是否存在
-        // 参考 AMPHP Process 的做法
+
+        // POSIX signal 0 不发送信号，仅查询 PID。只有 ESRCH 能确定进程不存在；
+        // EPERM 反而证明进程存在，其余 errno 必须保持 unknown。
         $functions = $this->detectAvailableFunctions();
         if ($functions['posix_kill']) {
-            $result = @\posix_kill($pid, 0);
-            if ($result) {
-                return true;
+            if (\function_exists('posix_clear_last_error')) {
+                @\posix_clear_last_error();
             }
-            // posix_kill 返回 false 时检查错误码：
-            // ESRCH (3) = 进程不存在
-            // EPERM (1) = 权限不足（进程存在但无权操作）
-            $errno = \posix_get_last_error();
-            if ($errno === 1) { // EPERM = 进程存在但属于其他用户
-                return true;
+            if (@\posix_kill($pid, 0)) {
+                return self::PROCESS_STATE_RUNNING;
             }
-            return false; // ESRCH 或其他错误 = 进程不存在
+
+            $errno = \function_exists('posix_get_last_error') ? (int) \posix_get_last_error() : 0;
+            if ($errno === 1) { // EPERM
+                return self::PROCESS_STATE_RUNNING;
+            }
+            if ($errno === 3) { // ESRCH
+                return self::PROCESS_STATE_EXITED;
+            }
+
+            return self::PROCESS_STATE_UNKNOWN;
         }
-        
-        // 方案3：ps -p（通用回退，所有 Unix/macOS 系统支持）
+
+        // macOS/通用 Unix 回退。命令执行失败或输出不可解析不能当作 PID 已退出。
         $output = [];
         $exitCode = 0;
-        $this->executeCommand("ps -p {$pid} -o pid= 2>/dev/null", $output, $exitCode);
-        
-        // 使用 -o pid= 避免表头，如果有输出就说明进程存在
-        if ($exitCode === 0 && !empty($output)) {
-            foreach ($output as $line) {
-                if ($this->sanitizePid($line) === $pid) {
-                    return true;
-                }
-            }
+        $executed = $this->executeCommand("ps -p {$pid} -o pid=,stat= 2>/dev/null", $output, $exitCode);
+        if (!$executed) {
+            return self::PROCESS_STATE_UNKNOWN;
         }
-        
-        return false;
+
+        foreach ($output as $line) {
+            if (\preg_match('/^\s*(\d+)\s+(\S+)/', (string) $line, $matches) !== 1
+                || (int) $matches[1] !== $pid) {
+                continue;
+            }
+
+            return \str_starts_with(\strtoupper((string) $matches[2]), 'Z')
+                ? self::PROCESS_STATE_EXITED
+                : self::PROCESS_STATE_RUNNING;
+        }
+
+        if ($exitCode === 1 && $output === []) {
+            return self::PROCESS_STATE_EXITED;
+        }
+
+        return self::PROCESS_STATE_UNKNOWN;
     }
     
     /**

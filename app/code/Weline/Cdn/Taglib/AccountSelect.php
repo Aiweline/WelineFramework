@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace Weline\Cdn\Taglib;
 
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\Http\Url;
 
 /**
@@ -86,7 +86,7 @@ class AccountSelect implements TaglibInterface
                 }
             }
 
-            $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
 

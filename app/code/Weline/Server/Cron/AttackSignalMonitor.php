@@ -18,7 +18,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Manager\ObjectManager;
@@ -30,14 +30,14 @@ use Weline\Server\Service\AttackSignalFileService;
 class AttackSignalMonitor implements CronTaskInterface
 {
     /**
-     * CDN 攻击检测事件名称
+     * Server-owned attack detection event. Optional edge integrations may listen.
      */
-    private const CDN_ATTACK_EVENT = 'Weline_Cdn::security::attack_detected';
+    private const ATTACK_DETECTED_EVENT = 'Weline_Server::security::attack_detected';
     
     /**
-     * CDN 攻击恢复事件名称
+     * Server-owned attack recovery event. Optional edge integrations may listen.
      */
-    private const CDN_RECOVERY_EVENT = 'Weline_Cdn::security::attack_recovered';
+    private const ATTACK_RECOVERED_EVENT = 'Weline_Server::security::attack_recovered';
     
     /**
      * @inheritDoc
@@ -99,13 +99,13 @@ class AttackSignalMonitor implements CronTaskInterface
         try {
             // 1. 检查是否应该通知 CDN 开启攻击防护
             if (AttackSignalFileService::shouldNotifyCdn()) {
-                $result = $this->notifyCdnAttack();
+                $result = $this->dispatchAttackDetected();
                 $messages[] = $result;
             }
             
             // 2. 检查是否应该恢复（关闭攻击防护）
             if (AttackSignalFileService::shouldRecover()) {
-                $result = $this->notifyCdnRecovery();
+                $result = $this->dispatchAttackRecovered();
                 $messages[] = $result;
             }
             
@@ -128,7 +128,7 @@ class AttackSignalMonitor implements CronTaskInterface
      * 
      * @return string
      */
-    private function notifyCdnAttack(): string
+    private function dispatchAttackDetected(): string
     {
         // 获取攻击摘要
         $summary = AttackSignalFileService::getAttackSummary();
@@ -153,10 +153,10 @@ class AttackSignalMonitor implements CronTaskInterface
             'all_signals' => $signals,
         ]);
         
-        // 广播 CDN 攻击事件
+        // Broadcast the Server-owned signal; optional edge providers may listen.
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch(self::CDN_ATTACK_EVENT, $eventData);
+        $eventsManager->dispatch(self::ATTACK_DETECTED_EVENT, $eventData);
         
         // 标记已通知并设置攻击模式
         AttackSignalFileService::markCdnNotified();
@@ -173,7 +173,7 @@ class AttackSignalMonitor implements CronTaskInterface
      * 
      * @return string
      */
-    private function notifyCdnRecovery(): string
+    private function dispatchAttackRecovered(): string
     {
         // 获取攻击模式信息
         $modeInfo = AttackSignalFileService::getAttackModeInfo();
@@ -187,10 +187,10 @@ class AttackSignalMonitor implements CronTaskInterface
             'duration' => \time() - ($modeInfo['started_at'] ?? \time()),
         ]);
         
-        // 广播 CDN 恢复事件
+        // Broadcast the Server-owned recovery signal.
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch(self::CDN_RECOVERY_EVENT, $eventData);
+        $eventsManager->dispatch(self::ATTACK_RECOVERED_EVENT, $eventData);
         
         // 关闭攻击模式
         AttackSignalFileService::setAttackMode(false);

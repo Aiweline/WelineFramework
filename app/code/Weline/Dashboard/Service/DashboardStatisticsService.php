@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Weline\Dashboard\Service;
 
-use Weline\Acl\Model\Acl;
+use Weline\Acl\Api\Statistics\MenuStatisticsInterface;
 use Weline\Dashboard\Model\DashboardView;
-use Weline\Websites\Model\Website;
-use Weline\Widget\Service\WidgetRegistry;
+use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
+use Weline\Widget\Api\WidgetRegistryInterface;
 
 class DashboardStatisticsService
 {
     private const VISIBLE_SIDEBAR_ENTRY_COUNT = 2;
 
     public function __construct(
-        private readonly Acl $acl,
+        private readonly MenuStatisticsInterface $menuStatistics,
         private readonly DashboardView $dashboardView,
-        private readonly Website $website,
-        private readonly WidgetRegistry $widgetRegistry
+        private readonly WebsiteCatalogInterface $websiteCatalog,
+        private readonly WidgetRegistryInterface $widgetRegistry
     ) {
     }
 
@@ -56,11 +56,7 @@ class DashboardStatisticsService
     private function countActiveBackendMenus(): int
     {
         return $this->safeCount(function (): int {
-            return (int)$this->acl->reset()
-                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-                ->where(Acl::schema_fields_IS_BACKEND, 1)
-                ->where(Acl::schema_fields_IS_ENABLE, 1)
-                ->count(Acl::schema_fields_SOURCE_ID);
+            return $this->menuStatistics->countActiveBackendMenus();
         });
     }
 
@@ -76,7 +72,7 @@ class DashboardStatisticsService
     private function countWebsites(): int
     {
         return $this->safeCount(function (): int {
-            return (int)$this->website->reset()->count(Website::schema_fields_ID);
+            return $this->websiteCatalog->count();
         });
     }
 

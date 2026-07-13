@@ -13,6 +13,10 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Compilation\FrameworkCompiler;
+use Weline\Framework\Container\CompiledContainer;
+use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\System\Process\Processer;
@@ -31,11 +35,16 @@ use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Log\LogConfig;
+use Weline\Server\Service\Policy\RuntimePolicyControlService;
+use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
+use Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
+use Weline\Server\Service\Runtime\TlsProcessProfileConfigurator;
 use Weline\Server\Service\Runtime\WlsRuntimeProfile;
 
 /**
@@ -67,6 +76,15 @@ class Start extends CommandAbstract
 
     private const PUBLIC_HOST_IP_PROBE_TIMEOUT_MS = 1200;
 
+    /**
+     * 启动维护事务必须在一个总 deadline 内看到控制操作终态。
+     * Direct Master 仅在全部 READY Worker ACK 后提交 maintenance_mode，
+     * 因此“operation 已退出队列 + 状态相符”才允许启动命令报告成功。
+     */
+    private const MAINTENANCE_SYNC_TIMEOUT_SEC = 12.0;
+
+    private const MAINTENANCE_SYNC_POLL_INTERVAL_USEC = 50_000;
+
     private const PUBLIC_IPV4_PROBE_URLS = [
         'https://checkip.amazonaws.com',
         'https://api.ipify.org',
@@ -74,6 +92,18 @@ class Start extends CommandAbstract
 
     private const PUBLIC_IPV6_PROBE_URLS = [
         'https://api64.ipify.org',
+    ];
+
+    /**
+     * Container is promoted last: until every data-only registry is complete,
+     * an old Master can still replace a Worker with its original digest.
+     */
+    private const FRAMEWORK_RUNTIME_REGISTRY_FILES = [
+        'modules.php',
+        'query_providers.php',
+        'runtime_policy_providers.php',
+        'template_cache_policies.php',
+        'container.php',
     ];
 
     /**
@@ -130,6 +160,31 @@ class Start extends CommandAbstract
      * 启动完成后尾部输出的延迟告警（用于确保提示位于最后且醒目）
      */
     private ?string $deferredStartupWarning = null;
+
+    /**
+     * Last startup preflight profile, reused by the post-start advisor so it
+     * cannot drift from the resolver or rerun a listener capability probe.
+     */
+    private ?WlsRuntimeProfile $latestRuntimeProfile = null;
+
+    private string $latestRuntimeStrategy = RuntimeStrategyResolver::STRATEGY_AUTO;
+
+    /**
+     * 平滑重启临时修改维护态前的持久配置快照。
+     *
+     * @var array{instance_name:string, enabled:bool}|null
+     */
+    private ?array $restartMaintenanceSnapshot = null;
+
+    private bool $restartMaintenanceShutdownRegistered = false;
+
+    /**
+     * 旧实例停止前确认正在监听的数据面/控制面端口。
+     * Session/Memory 共享 sidecar 不属于单实例重启交接。
+     *
+     * @var list<int>
+     */
+    private array $restartHandoffPorts = [];
     
     /**
      * @inheritDoc
@@ -153,7 +208,7 @@ class Start extends CommandAbstract
             $this->startCliServer($args, $data);
             return;
         }
-        
+
         // 检测可用函数
         $this->detectAvailableFunctions();
         
@@ -257,6 +312,61 @@ class Start extends CommandAbstract
         // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
         $this->traceStartupPhase($instanceName, 'config:before');
         $config = $this->getServerConfig($instanceName, $args);
+
+        // 依赖决策必须基于与最终 RuntimeSelection 相同的 requested/effective
+        // 拓扑事实。Direct 缺失依赖时 fail-closed；显式 Dispatcher 只把
+        // ext-event 当作可选优化，安装失败也不允许改写拓扑。
+        // master-only 是已经过父进程预检的内部重入路径，禁止重复安装。
+        $runtimeResolver = new RuntimeStrategyResolver();
+        try {
+            $dependencyTopologyIntent = $runtimeResolver->resolveTopologyIntent($config, $args);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
+        if (!isset($args['master-only']) && !\getenv('WLS_MASTER_ONLY')) {
+            /** @var RuntimeDependencyBootstrapper $dependencyBootstrapper */
+            $dependencyBootstrapper = ObjectManager::getInstance(RuntimeDependencyBootstrapper::class);
+            $dependencyResult = $dependencyBootstrapper->ensureOptimalRuntime(
+                $args,
+                $dependencyTopologyIntent['requested'],
+                $dependencyTopologyIntent['effective'],
+                empty($config['no_ssl']) && ($config['https'] ?? true) !== false,
+            );
+            $dependencyStatus = (string)($dependencyResult['status'] ?? 'failed');
+            $dependencyMessage = (string)($dependencyResult['message'] ?? '');
+
+            if ($dependencyStatus === 'failed') {
+                $this->printer->error(__('WLS 最优运行时依赖自动安装失败：%{1}', [$dependencyMessage]));
+                if (!empty($dependencyResult['output'])) {
+                    $this->printer->note((string)$dependencyResult['output']);
+                }
+                if ($dependencyTopologyIntent['effective']->isDirect()) {
+                    $this->printer->note(__('Direct 不会静默降级；请修复当前 PHP 的 sockets/OpenSSL/ext-event，或显式使用 --dispatcher。'));
+                }
+                return;
+            }
+
+            if ($dependencyStatus === 'platform_optimal' || $dependencyStatus === 'skipped') {
+                $this->printer->note($dependencyMessage);
+                if (!empty($dependencyResult['output'])) {
+                    $this->printer->note((string)$dependencyResult['output']);
+                }
+            } elseif ($dependencyStatus === 'installed') {
+                $this->printer->success(__('WLS 运行时依赖已自动安装并验证。'));
+                if (!empty($dependencyResult['restart_required'])) {
+                    $this->printer->note(__('正在使用已加载新扩展的 PHP 进程继续启动...'));
+                    // 此时尚未创建任何 WLS 子进程；先释放实例启动锁，
+                    // 否则重入的 server:start 会被父进程自己阻塞。
+                    $this->releaseStartLock();
+                    $exitCode = $dependencyBootstrapper->relaunchCurrentStartCommand();
+                    if ($exitCode !== 0) {
+                        $this->printer->error(__('依赖安装后的 WLS 重新启动失败，退出码：%{1}', [$exitCode]));
+                    }
+                    return;
+                }
+            }
+        }
         $this->traceStartupPhase($instanceName, 'config:after', [
             'host' => (string)($config['host'] ?? ''),
             'port' => (int)($config['port'] ?? 0),
@@ -286,6 +396,7 @@ class Start extends CommandAbstract
             'public_host' => (string)($config['public_host'] ?? $host),
         ]);
         $publicHost = (string)($config['public_host'] ?? $host);
+        $config['public_host'] = $publicHost;
         $daemon = $this->resolveDaemonMode($config, $foregroundMode);
         
         // --no-ssl 时仅 HTTP（端口保持 80）；否则默认启用 HTTPS
@@ -347,7 +458,73 @@ class Start extends CommandAbstract
                 $sslMapSync->regenerateCertificateMap(false);
             }
         }
-        
+
+        // 在停止旧实例前完成拓扑、事件循环与策略能力预检，避免预检失败造成停机。
+        $this->traceStartupPhase($instanceName, 'runtime-strategy:before');
+        $runtimeProfile = $this->detectRuntimeProfile($this->resolveServerListenHost((string)$host));
+        try {
+            $runtimeStrategy = $runtimeResolver->resolve($config, $args, $runtimeProfile);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
+        if ((string)$runtimeStrategy['requested_topology'] !== $dependencyTopologyIntent['requested']->value
+            || (string)$runtimeStrategy['effective_topology'] !== $dependencyTopologyIntent['effective']->value
+        ) {
+            $this->printer->error(__('WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。'));
+            return;
+        }
+        $policyTopology = (string)$runtimeStrategy['topology'];
+        if ($policyTopology === 'independent') {
+            $policyTopology = 'direct';
+        }
+        $count = (int)$runtimeStrategy['worker_count'];
+        $config['worker_count'] = $count;
+        $config['runtime_strategy'] = (string)$runtimeStrategy['runtime_strategy'];
+        $config['requested_topology'] = (string)$runtimeStrategy['requested_topology'];
+        $config['topology'] = (string)$runtimeStrategy['topology'];
+        if (!\is_array($config['runtime'] ?? null)) {
+            $config['runtime'] = [];
+        }
+        $config['runtime']['topology'] = (string)$runtimeStrategy['topology'];
+        $config['runtime']['listener_mode'] = (string)$runtimeStrategy['direct_listener_mode'];
+        $config['direct_listener_mode'] = (string)$runtimeStrategy['direct_listener_mode'];
+        $config['event_loop'] = (string)$runtimeStrategy['event_loop_driver'];
+        $config['loop']['driver'] = (string)$runtimeStrategy['event_loop_driver'];
+        $config['supervisor']['enabled'] = (bool)$runtimeStrategy['supervisor_enabled'];
+        $dispatcherEnabled = (bool)$runtimeStrategy['dispatcher_enabled'];
+        $supportsReusePort = $runtimeProfile->supportsReusePort();
+        $useDirectMode = (string)$runtimeStrategy['topology'] === 'direct';
+        foreach ((new RuntimeDiagnosticsFormatter())->formatStartupSummary($runtimeProfile, $runtimeStrategy) as $runtimeLine) {
+            if (\str_starts_with($runtimeLine, 'WARNING:') || \str_starts_with($runtimeLine, 'Warning:')) {
+                $this->printer->warning($runtimeLine);
+            } else {
+                $this->printer->note($runtimeLine);
+            }
+        }
+        try {
+            $tlsProcessProfile = (new TlsProcessProfileConfigurator())->activate($config, $sslEnabled);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
+        if (!\is_array($config['ssl'] ?? null)) {
+            $config['ssl'] = [];
+        }
+        $config['ssl']['key_exchange_profile'] = $tlsProcessProfile['requested'];
+        $config['ssl']['effective_key_exchange_profile'] = $tlsProcessProfile['effective'];
+        $config['ssl']['process_openssl_conf'] = $tlsProcessProfile['openssl_conf'];
+        if ($sslEnabled) {
+            $this->printer->note(
+                'TLS key exchange: ' . $tlsProcessProfile['effective'] . ' - ' . $tlsProcessProfile['reason']
+            );
+        }
+        $this->traceStartupPhase($instanceName, 'runtime-strategy:after', [
+            'topology' => (string)$runtimeStrategy['topology'],
+            'event_loop' => (string)$runtimeStrategy['event_loop_driver'],
+            'workers' => (int)$count,
+        ]);
+
         // 检查是否强制重启（-r）及是否强制直接切换（-f：不等待 worker 空闲，直接停再启）
         // 仅承认帮助文档明示的开关 -r / --restart；--force 未文档化，过去会隐式触发 -r 平滑路径，
         // 容易让用户在毫不知情下进入"停旧实例 + 等空闲"分支，移除以减少认知裂缝。
@@ -457,11 +634,53 @@ class Start extends CommandAbstract
             'redirect_residue' => $instanceRedirectResidue,
             'redirect_occupant' => $redirectOccupantWls,
         ]);
-        if ($instanceRunning || $instanceRedirectResidue) {
-            if (!$forceRestart) {
-                $this->showAlreadyRunningInfo($instanceName, $port);
-                return;
+        if (($instanceRunning || $instanceRedirectResidue) && !$forceRestart) {
+            $this->showAlreadyRunningInfo($instanceName, $port);
+            return;
+        }
+
+        // Only a confirmed fresh start or explicit restart may publish a new
+        // compiled generation. This gate still runs before stopping the old
+        // instance, so compile/registry failures cannot manufacture downtime.
+        try {
+            $this->traceStartupPhase($instanceName, 'framework-compile:before');
+            $compiledRuntime = $this->compileFrameworkRuntimeRegistries(
+                $policyTopology,
+                $instanceName,
+                $config,
+            );
+            $containerRegistryDigest = $compiledRuntime['container_registry_digest'];
+            $policyCheck = $compiledRuntime['policy_check'];
+            $this->traceStartupPhase($instanceName, 'framework-compile:after', [
+                'container_registry_digest' => $containerRegistryDigest,
+                'policy_valid' => (bool)($policyCheck['valid'] ?? false),
+            ]);
+        } catch (\Throwable $exception) {
+            $this->printer->error(__('WLS 编译运行时预检失败：%{1}', [$exception->getMessage()]));
+            return;
+        }
+        if (empty($policyCheck['valid'])) {
+            $this->printer->error(__('WLS 运行时策略不支持当前拓扑：%{1}', [$runtimeStrategy['topology']]));
+            foreach ((array)($policyCheck['errors'] ?? []) as $policyError) {
+                $this->printer->note('  - ' . (string)$policyError);
             }
+            if ((string)$runtimeStrategy['topology'] === 'direct') {
+                $this->printer->note(__('Direct 不会静默忽略关键策略；请修复策略能力，或显式使用 --dispatcher。'));
+            }
+            return;
+        }
+        // The staging validator is intentionally discarded. Policy activation
+        // later reloads the atomically promoted final registry.
+        $policyControl = new RuntimePolicyControlService();
+        $runtimeStrategy['policy_compatible'] = true;
+        $runtimeStrategy['policy_digest'] = (string)($policyCheck['bundle']['digest'] ?? '');
+        $runtimeStrategy['container_registry_digest'] = $containerRegistryDigest;
+        if (!\is_array($config['runtime'] ?? null)) {
+            $config['runtime'] = [];
+        }
+        $config['runtime']['container_registry_digest'] = $containerRegistryDigest;
+
+        if ($instanceRunning || $instanceRedirectResidue) {
             // 强制重启：先停旧 Master，其通过 IPC 广播 shutdown，子进程收后不复活
             if ($forceSwitch) {
                 if ($instanceRedirectResidue) {
@@ -470,15 +689,18 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 }
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
+                $this->beginRestartMaintenanceTransaction($instanceName);
                 $forceSwitchStopStart = \microtime(true);
                 $this->traceStartupPhase($instanceName, 'force-switch-stop:before');
                 if (!$this->stopExistingServer($instanceName, $port, $count, true, 0, true)) {
+                    $this->rollbackRestartMaintenanceTransactionIfPending();
                     return;
                 }
                 $this->traceStartupPhase($instanceName, 'force-switch-stop:after', [
                     'elapsed_ms' => (int) \round((\microtime(true) - $forceSwitchStopStart) * 1000),
                 ]);
-                // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
+                // -r -f 是停机型切换：新实例启动结束后仍由启动事务恢复原始 system.maintenance，
+                // 既不残留本次临时状态，也不覆盖运维人员原本主动开启的维护态。
                 $maintenanceResetAfterForceSwitch = true;
                 $waited = 0;
                 $this->traceStartupPhase($instanceName, 'force-switch-port-settle:before', [
@@ -490,73 +712,18 @@ class Start extends CommandAbstract
                     'skipped' => true,
                 ]);
             } else {
-                $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...'));
+                $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式并等待全部 Worker 请求排空...'));
+                $this->beginRestartMaintenanceTransaction($instanceName);
                 $this->enableMaintenanceMode($instanceName);
                 $maintenanceEnabledByUs = true;
-                
-                // 通过健康检查接口智能等待
-                $maxWait = (int) ($args['wait'] ?? 30);
-                $maxWait = $maxWait > 0 ? $maxWait : 30;
-                $waited = $this->waitForIdleWorkers($host, $port, $count, $maxWait, $sslEnabled ?? false, $instanceName);
-                
-                if ($waited) {
-                    $this->printer->success(__('所有 Worker 已空闲，开始切换...'));
-                } else {
-                    $this->printer->warning(__('等待超时，强制切换...'));
-                }
+                $this->printer->success(__('全部 READY Worker 已完成维护门禁与请求排水，开始切换...'));
                 
                 if (!$this->stopExistingServer($instanceName, $port, $count)) {
+                    $this->disableMaintenanceMode($instanceName);
                     return;
                 }
-                SchedulerSystem::sleep(1);
             }
         }
-
-        // ========== 架构模式检测：默认 Dispatcher，显式直连可选 ==========
-        // 
-        // 直连模式：多 Worker 直接监听同一端口，内核负载均衡（SO_REUSEPORT）
-        //   - 要求：Linux 3.9+ 内核
-        //   - 定位：可选性能模式，需要显式 --direct 或 topology=direct
-        //   - 架构：客户端 → Worker1/2/3/...(直接处理 SSL)
-        //
-        // Dispatcher 模式（默认方案）：单进程 Dispatcher 分发给多 Worker
-        //   - 适用：默认生产拓扑，便于统一分流、观测、排障
-        //   - 架构：客户端 → Dispatcher(单进程SSL) → Worker(多进程HTTP)
-        //
-        // --direct: 启用直连模式（SO_REUSEPORT，多 Worker 复用同一端口）
-        // --no-dispatcher: 禁用 Dispatcher，每个 Worker 使用独立端口
-        // --dispatcher / --force-dispatcher: 强制 Dispatcher 模式
-        $this->traceStartupPhase($instanceName, 'runtime-strategy:before');
-        $runtimeProfile = $this->detectRuntimeProfile();
-        try {
-            $runtimeStrategy = (new RuntimeStrategyResolver())->resolve($config, $args, $runtimeProfile);
-        } catch (\RuntimeException $exception) {
-            $this->printer->error($exception->getMessage());
-            return;
-        }
-        $count = (int)$runtimeStrategy['worker_count'];
-        $config['worker_count'] = $count;
-        $config['runtime_strategy'] = (string)$runtimeStrategy['runtime_strategy'];
-        $config['topology'] = (string)$runtimeStrategy['topology'];
-        $config['event_loop'] = (string)$runtimeStrategy['event_loop_driver'];
-        $config['loop']['driver'] = (string)$runtimeStrategy['event_loop_driver'];
-        $config['supervisor']['enabled'] = (bool)$runtimeStrategy['supervisor_enabled'];
-        $dispatcherEnabled = (bool)$runtimeStrategy['dispatcher_enabled'];
-        $supportsReusePort = $runtimeProfile->supportsReusePort();
-        $useDirectMode = (bool)$runtimeStrategy['direct_reuse_port'];
-
-        foreach ((new RuntimeDiagnosticsFormatter())->formatStartupSummary($runtimeProfile, $runtimeStrategy) as $runtimeLine) {
-            if (\str_starts_with($runtimeLine, 'WARNING:') || \str_starts_with($runtimeLine, 'Warning:')) {
-                $this->printer->warning($runtimeLine);
-            } else {
-                $this->printer->note($runtimeLine);
-            }
-        }
-        $this->traceStartupPhase($instanceName, 'runtime-strategy:after', [
-            'topology' => (string)$runtimeStrategy['topology'],
-            'event_loop' => (string)$runtimeStrategy['event_loop_driver'],
-            'workers' => (int)$count,
-        ]);
 
         // Worker 基础端口：默认 10000 + 项目偏移量，确保多项目不冲突
         $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
@@ -573,6 +740,7 @@ class Start extends CommandAbstract
         } catch (\RuntimeException $exception) {
             $this->printer->note(__('共享状态运行时解析失败: %{1}', [$exception->getMessage()]));
             $this->printer->error($exception->getMessage());
+            $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
         $sessionServerPort = (int) ($sharedStateRuntime['session']['port'] ?? 0);
@@ -615,6 +783,7 @@ class Start extends CommandAbstract
         if ($forceRestart && !$forceSwitch && ($mainPortInspect['in_use'] ?? false)) {
             $this->printer->error(__('强制重启后主端口 %{1} 仍被占用，已中止启动，避免同名实例切换到新端口。', [$port]));
             $this->printer->note(__('请先确认旧实例已完全停止，再重新执行启动命令。'));
+            $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
         if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
@@ -656,6 +825,7 @@ class Start extends CommandAbstract
             $this->printer->note('     php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-p <port>');
             $this->printer->note(__('  3. 查看端口占用：'));
             $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
+            $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
         $this->traceStartupPhase($instanceName, 'main-port-preflight:after', [
@@ -673,6 +843,7 @@ class Start extends CommandAbstract
             if (!$this->acquireWorkerPortAllocationLock()) {
                 $this->printer->error(__('无法分配 Worker 端口：全局端口分配锁正被其他启动流程占用'));
                 $this->printer->note(__('请稍后重试，或等待其他实例启动完成'));
+                $this->rollbackRestartMaintenanceTransactionIfPending();
                 return;
             }
             $workerPortAllocationLocked = true;
@@ -690,6 +861,7 @@ class Start extends CommandAbstract
             if ($forceRestart && !$forceSwitch && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
                 $this->printer->error(__('强制重启前仍检测到旧实例 [%{1}] 的残留 WLS 进程或端口，已中止启动。', [$instanceName]));
                 $this->printer->note(__('必须先完成旧实例清理，禁止自动切换主端口或 Worker 端口启动第二个同名实例。'));
+                $this->rollbackRestartMaintenanceTransactionIfPending();
                 return;
             }
 
@@ -775,6 +947,7 @@ class Start extends CommandAbstract
                 }
                 $this->printer->note(__('  2. 或使用框架命令释放：php bin/w server:kill-port %{1} -f', [$httpRedirectPort]));
                 $this->printer->note(__('  3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
+                $this->rollbackRestartMaintenanceTransactionIfPending();
                 return;
             }
 
@@ -799,6 +972,7 @@ class Start extends CommandAbstract
                 $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试', [
                     $occupantPid > 0 ? (string) $occupantPid : '?',
                 ]));
+                $this->rollbackRestartMaintenanceTransactionIfPending();
                 return;
             }
 
@@ -808,11 +982,13 @@ class Start extends CommandAbstract
         // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
         $this->traceStartupPhase($instanceName, 'permission-check:before');
         if (!$this->ensurePrivilegedPortPermission($port, $httpRedirectPort, $sslEnabled)) {
+            $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
         
         // Linux/macOS 下检测 socket 权限（即使高端口也可能因系统安全设置需要 sudo）
         if (!$this->ensureUnixSocketPermission($host, $port)) {
+            $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
         $this->traceStartupPhase($instanceName, 'permission-check:after');
@@ -826,7 +1002,10 @@ class Start extends CommandAbstract
             $this->printer->note(__('提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。', [$count, $workerPort, $workerPort + $count - 1]));
         } elseif ($useDirectMode && $count > 1) {
             // 直连模式
-            $this->printer->note(__('提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。', [$port]));
+            $listenerLabel = (string)$runtimeStrategy['direct_listener_mode'] === 'shared_fd'
+                ? __('Master 共享监听 FD')
+                : 'SO_REUSEPORT';
+            $this->printer->note(__('提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。', [$listenerLabel, $port]));
         }
 
         // 检查端口是否被占用（框架进程占用时最多重试 3 次，仍占用则按 Master 前缀清理逃逸 Master 后再试）
@@ -842,14 +1021,14 @@ class Start extends CommandAbstract
             if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
-                    $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+                    $this->printer->note(__('维护状态已恢复到重启前配置（端口检查未通过）。'));
                 }
                 return;
             }
             if (!$this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart, $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
-                    $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+                    $this->printer->note(__('维护状态已恢复到重启前配置（端口检查未通过）。'));
                 }
                 return;
             }
@@ -857,13 +1036,13 @@ class Start extends CommandAbstract
             // 直连模式：
             // - SO_REUSEPORT: 多 Worker 复用同一端口，只检查主端口
             // - 非 SO_REUSEPORT: 仍按连续端口检查
-            $checkResult = $supportsReusePort
+            $checkResult = $useDirectMode
                 ? $this->checkAndReleasePort($host, $port, $forceRestart, 'Worker(Main)', $instanceName)
-                : $this->checkAndReleasePorts($host, $port, $count, $forceRestart, $instanceName);
+                : $this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart, $instanceName);
             if (!$checkResult) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
-                    $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+                    $this->printer->note(__('维护状态已恢复到重启前配置（端口检查未通过）。'));
                 }
                 return;
             }
@@ -892,6 +1071,7 @@ class Start extends CommandAbstract
                         $processName,
                     ]));
                     $this->printer->note(__('请先停止实例 [%{1}]，或改用非 443 主端口启动。', [$redirectOwner]));
+                    $this->rollbackRestartMaintenanceTransactionIfPending();
                     return;
                 }
 
@@ -944,12 +1124,28 @@ class Start extends CommandAbstract
         
             // 创建 Worker 脚本路径（Dispatcher 模式下使用非 SSL 脚本）
             wls_http_redirect_conflict_done:
+            // 旧代已退出、新 Master/Worker 尚未创建：在此激活启动预检选中的同一份策略。
+            // Worker READY 会以该 digest 为准，禁止同一代出现编译参数不同的混合策略。
+            try {
+                $policyBundle = $policyControl->activateForStart(
+                    $instanceName,
+                    $policyTopology,
+                    $config,
+                );
+                $runtimeStrategy['policy_digest'] = $policyBundle->digest;
+            } catch (\Throwable $exception) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                    $this->disableMaintenanceMode($instanceName);
+                }
+                $this->printer->error(__('WLS 启动策略激活失败：%{1}', [$exception->getMessage()]));
+                return;
+            }
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($windowMode);
             $listenHost = $this->resolveServerListenHost((string)$host);
             $this->traceStartupPhase($instanceName, 'save-instance:before');
-            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, $dispatcherEnabled, $workerPort, $httpRedirectPort, $windowMode, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost, \is_array($config['gateway'] ?? null) ? $config['gateway'] : []);
+            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, $dispatcherEnabled, $workerPort, $httpRedirectPort, $windowMode, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost, \is_array($config['gateway'] ?? null) ? $config['gateway'] : [], $runtimeStrategy);
             $this->traceStartupPhase($instanceName, 'save-instance:after');
         } finally {
             if ($workerPortAllocationLocked) {
@@ -985,6 +1181,9 @@ class Start extends CommandAbstract
         // Master 统一管理：Dispatcher、Worker、HTTP Redirect
         $config['worker_port'] = $workerPort;
         $config['dispatcher_enabled'] = $dispatcherEnabled;
+        $config['master_mode'] = $useDirectMode
+            ? MasterProcess::MODE_DIRECT
+            : ($dispatcherEnabled ? MasterProcess::MODE_DISPATCHER : MasterProcess::MODE_INDEPENDENT);
         $config['orchestrator_runtime_options'] = $this->buildOrchestratorRuntimeOptions($windowMode);
         // 同步 daemon 标志到 config（$daemon 已根据 --frontend 参数覆盖，
         // 但 $config['daemon'] 仍是 env 默认值 true，导致 MasterProcess::log() 跳过控制台输出）
@@ -1028,7 +1227,9 @@ class Start extends CommandAbstract
                 $this->printGoodbye(true, __('所有服务已就绪，可使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
                 $this->flushDeferredStartupWarning();
             }
-            return;
+            // Convert the final READY decision into an explicit command status
+            // only after lock, maintenance and startup-output finalizers ran.
+            return $this->resolveStartupCommandExitCode($startupCompleted);
         }
 
         // 前台运行：Master 将占用当前终端
@@ -1048,7 +1249,8 @@ class Start extends CommandAbstract
             $instanceName,
             $maintenanceEnabledByUs,
             $maintenanceResetAfterForceSwitch,
-            true
+            true,
+            false
         );
 
         // Master owns all child-process startup.
@@ -1056,32 +1258,77 @@ class Start extends CommandAbstract
         $this->runMasterProcess($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $windowMode);
     }
 
+    protected function resolveStartupCommandExitCode(bool $startupCompleted): int
+    {
+        return $startupCompleted ? 0 : 1;
+    }
+
     /**
      * 启动流程结束后统一关闭"由本次启动引入"的维护态，避免提前关导致空窗期裸 RST。
      *
      * - $maintenanceEnabledByUs：本次启动主动开启的维护态（-r 平滑路径）
      * - $maintenanceResetAfterForceSwitch：-r -f 停机型切换时残留维护态的兜底清理
-     * - $startupCompleted=false：保持维护态，让流量继续走 503 友好态而非裸 RST
+     * - $startupCompleted=false：启动事务失败，必须恢复重启前的持久维护态
+     * - $runtimeControlAvailable=false：前台 Master 尚未进入控制循环，只提交持久快照；
+     *   Worker READY 时由 Master 初始维护态门禁统一应用，不能在此时自连 IPC。
      */
     protected function finalizeMaintenanceModeAfterStartup(
         string $instanceName,
         bool $maintenanceEnabledByUs,
         bool $maintenanceResetAfterForceSwitch,
-        bool $startupCompleted
+        bool $startupCompleted,
+        bool $runtimeControlAvailable = true
     ): void {
         if (!$maintenanceEnabledByUs && !$maintenanceResetAfterForceSwitch) {
             return;
         }
+        $originalMaintenanceEnabled = $this->restartMaintenanceSnapshot !== null
+            && $this->restartMaintenanceSnapshot['instance_name'] === $instanceName
+            && $this->restartMaintenanceSnapshot['enabled'];
+        if ($runtimeControlAvailable) {
+            $this->disableMaintenanceMode($instanceName, $startupCompleted);
+        } else {
+            $this->restoreRestartMaintenanceConfigurationOnly($instanceName);
+        }
         if (!$startupCompleted) {
-            $this->printer->warning(__('新 Master 未在预期时间内就绪，维护态保留以避免裸 RST；待 server:status 显示就绪后请手动执行 php bin/w sys:maintenance off。'));
+            $this->printer->warning(__('新 Master 未在预期时间内就绪，已回滚到重启前的维护态，禁止在启动失败后污染持久配置。'));
             return;
         }
-        $this->disableMaintenanceMode($instanceName);
-        if ($maintenanceResetAfterForceSwitch && !$maintenanceEnabledByUs) {
+        if ($originalMaintenanceEnabled) {
+            $this->printer->success(__('已恢复重启前的维护模式（保持开启）。'));
+        } elseif ($maintenanceResetAfterForceSwitch && !$maintenanceEnabledByUs) {
             $this->printer->success(__('已清理残留维护态，恢复业务流量模式。'));
         } else {
             $this->printer->success(__('维护模式已关闭。'));
         }
+    }
+
+    /**
+     * 前台 Master 与启动命令处于同一进程；runMasterProcess() 之前没有可用
+     * control endpoint。这里只恢复持久事务，Master 随后以该权威状态启动，
+     * 并在 Worker READY 路径应用同一维护门禁。
+     */
+    protected function restoreRestartMaintenanceConfigurationOnly(string $instanceName): void
+    {
+        $snapshot = $this->restartMaintenanceSnapshot;
+        if ($snapshot === null || $snapshot['instance_name'] !== $instanceName) {
+            return;
+        }
+
+        try {
+            $restored = Env::getInstance()->setConfig('system.maintenance', $snapshot['enabled']);
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                (string)__('恢复重启前维护态失败：%{1}', [$throwable->getMessage()]),
+                0,
+                $throwable
+            );
+        }
+        if (!$restored) {
+            throw new \RuntimeException((string)__('恢复重启前维护态失败，请检查 app/etc/env.php 写入权限。'));
+        }
+
+        $this->restartMaintenanceSnapshot = null;
     }
 
     /**
@@ -1367,6 +1614,60 @@ class Start extends CommandAbstract
             $this->printer->error(__('实例文件无效'));
             return;
         }
+        $endpointSchemaVersion = (int)($data['schema_version'] ?? 2);
+        if ($endpointSchemaVersion > RuntimeSelection::ENDPOINT_SCHEMA_VERSION) {
+            $this->printer->error(__('master-only 启动已拒绝：不支持实例 endpoint schema v%{1}。', [$endpointSchemaVersion]));
+            return;
+        }
+
+        $persistedRuntimeSelection = null;
+        if ($endpointSchemaVersion === RuntimeSelection::ENDPOINT_SCHEMA_VERSION) {
+            try {
+                if (!\is_array($data['runtime_selection'] ?? null)) {
+                    throw new \RuntimeException('WLS endpoint schema v3 requires runtime_selection.');
+                }
+                $persistedRuntimeSelection = RuntimeSelection::fromArray($data['runtime_selection']);
+                $persistedRuntimeSelection->assertEndpointProjection($data);
+                if (!$persistedRuntimeSelection->policyCompatible) {
+                    throw new \RuntimeException('WLS endpoint policy compatibility is false.');
+                }
+                if (!\is_string($data['runtime_strategy'] ?? null) || \trim($data['runtime_strategy']) === '') {
+                    throw new \RuntimeException('WLS endpoint schema v3 requires runtime_strategy.');
+                }
+                if (!\is_string($data['policy_digest'] ?? null) || \trim($data['policy_digest']) === '') {
+                    throw new \RuntimeException('WLS endpoint schema v3 requires policy_digest.');
+                }
+                if (!\is_string($data['container_registry_digest'] ?? null)
+                    || \preg_match('/^[a-f0-9]{64}$/D', \strtolower(\trim($data['container_registry_digest']))) !== 1
+                ) {
+                    throw new \RuntimeException('WLS endpoint schema v3 requires container_registry_digest.');
+                }
+                if (!\is_bool($data['supervisor_enabled'] ?? null)) {
+                    throw new \RuntimeException('WLS endpoint schema v3 requires boolean supervisor_enabled.');
+                }
+                if (!\is_string($data['supervisor_reason'] ?? null) || \trim($data['supervisor_reason']) === '') {
+                    throw new \RuntimeException('WLS endpoint schema v3 requires supervisor_reason.');
+                }
+            } catch (\RuntimeException $exception) {
+                $this->printer->error(__('master-only 启动已拒绝：实例 endpoint schema v3 校验失败（%{1}）。', [
+                    $exception->getMessage(),
+                ]));
+                return;
+            }
+        }
+        $expectedContainerDigest = \strtolower(\trim((string)($data['container_registry_digest'] ?? '')));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $expectedContainerDigest) !== 1) {
+            $this->printer->error(__('master-only 启动已拒绝：实例缺少有效的 container_registry_digest。'));
+            return;
+        }
+        try {
+            ContainerRuntime::preflight($expectedContainerDigest);
+        } catch (\Throwable $exception) {
+            $this->printer->error(__('master-only 启动已拒绝：编译容器预检失败（%{1}）。', [
+                $exception->getMessage(),
+            ]));
+            return;
+        }
         // master-only 权限门禁（Unix）：
         // 避免子进程/复活链路在非 root 下拉起 Master，导致后续子进程绑定 80/443 失败。
         // 注意：setcap cap_net_bind_service 授权后，非 root 用户也可绑定特权端口，
@@ -1401,6 +1702,21 @@ class Start extends CommandAbstract
         $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
         $workerBasePort = (int)($data['worker_base_port'] ?? $defaultWorkerBasePort);
         $workerCount = (int)($data['count'] ?? 1);
+        $effectiveTopology = $persistedRuntimeSelection instanceof RuntimeSelection
+            ? $persistedRuntimeSelection->effectiveTopology->value
+            : (string)($data['topology'] ?? (
+                !empty($data['master_mode']) && MasterProcess::isDirectMode((string)$data['master_mode'])
+                    ? 'direct'
+                    : ($dispatcherEnabled ? 'dispatcher' : 'independent')
+            ));
+        if ($effectiveTopology === 'independent') {
+            $this->printer->error(__('master-only 启动已拒绝：independent 拓扑尚不具备完整 READY 和策略保证，请使用 direct 或 --dispatcher。'));
+            return;
+        }
+        if (IS_WIN && $effectiveTopology !== 'dispatcher') {
+            $this->printer->error(__('master-only 启动已拒绝：Windows 只支持 Dispatcher 透传拓扑。'));
+            return;
+        }
         $orchestratorRuntimeOptions = \is_array($data['orchestrator_runtime_options'] ?? null)
             ? $data['orchestrator_runtime_options']
             : [];
@@ -1409,6 +1725,20 @@ class Start extends CommandAbstract
             'public_host' => (string)($data['public_host'] ?? ($data['host'] ?? '127.0.0.1')),
             'port' => $port,
             'worker_count' => $workerCount,
+            'topology' => $effectiveTopology,
+            'runtime_strategy' => (string)($data['runtime_strategy'] ?? 'auto'),
+            'event_loop' => (string)($data['event_loop_driver'] ?? 'auto'),
+            'loop' => ['driver' => (string)($data['event_loop_driver'] ?? 'auto')],
+            'supervisor' => [
+                'enabled' => (bool)($data['supervisor_enabled'] ?? false),
+            ],
+            'runtime' => [
+                'topology' => $effectiveTopology,
+                'listener_mode' => (string)($data['direct_listener_mode'] ?? ''),
+                'container_registry_digest' => (string)($data['container_registry_digest'] ?? ''),
+            ],
+            'direct_listener_mode' => (string)($data['direct_listener_mode'] ?? ''),
+            'ssl' => ['engine' => (string)($data['ssl_engine'] ?? 'stream')],
             'dispatcher_enabled' => $dispatcherEnabled,
             'worker_port' => $workerPort,
             'worker_base_port' => $workerBasePort,
@@ -1443,7 +1773,12 @@ class Start extends CommandAbstract
         LogConfig::bootstrapVerbose($enableLog);
 
         // 读取 Master 运行模式。
-        $masterMode = (string)($data['master_mode'] ?? MasterProcess::MODE_LEGACY);
+        $masterMode = (string)($data['master_mode'] ?? match ($effectiveTopology) {
+            'direct' => MasterProcess::MODE_DIRECT,
+            'dispatcher' => MasterProcess::MODE_DISPATCHER,
+            'independent' => MasterProcess::MODE_INDEPENDENT,
+            default => MasterProcess::MODE_LEGACY,
+        });
         $mainPort = (int)($data['main_port'] ?? $port);
         
         /** @var MasterProcess $master */
@@ -2452,6 +2787,12 @@ class Start extends CommandAbstract
         $workerCount = $config['worker_count'] ?? null;
         $workerBasePort = isset($config['worker_base_port']) ? (int) $config['worker_base_port'] : null;
         $workerPort = isset($config['worker_port']) ? (int) $config['worker_port'] : null;
+        $masterMode = (string)($config['master_mode'] ?? match ((string)($config['topology'] ?? '')) {
+            'direct' => MasterProcess::MODE_DIRECT,
+            'dispatcher' => MasterProcess::MODE_DISPATCHER,
+            'independent' => MasterProcess::MODE_INDEPENDENT,
+            default => MasterProcess::MODE_LEGACY,
+        });
 
         /** @var MasterProcess $master */
         $master = ObjectManager::getInstance(MasterProcess::class);
@@ -2462,7 +2803,7 @@ class Start extends CommandAbstract
                 $workerCount,
                 $workerBasePort,
                 $workerPort,
-                MasterProcess::MODE_LEGACY,
+                $masterMode,
                 (int) ($config['port'] ?? 0)
             )->setPrinter($this->printer)
                 ->setOnStartedCallback(function () {
@@ -2529,7 +2870,7 @@ class Start extends CommandAbstract
         int $mainPort
     ): MasterProcess {
         $runtimeWorkerBasePort = $workerBasePort;
-        if ($masterMode !== MasterProcess::MODE_LINUX_DIRECT && $workerPort !== null && $workerPort > 0) {
+        if (!MasterProcess::isDirectMode($masterMode) && $workerPort !== null && $workerPort > 0) {
             $runtimeWorkerBasePort = $workerPort - 1;
         }
 
@@ -2753,16 +3094,69 @@ class Start extends CommandAbstract
     protected function enableMaintenanceMode(string $instanceName): void
     {
         $this->setFrameworkMaintenanceMode(true);
-        $this->syncWlsMaintenanceMode($instanceName, true);
+        $this->syncWlsMaintenanceMode($instanceName, true, true);
+    }
+
+    protected function beginRestartMaintenanceTransaction(string $instanceName): void
+    {
+        if ($this->restartMaintenanceSnapshot === null) {
+            $this->restartMaintenanceSnapshot = [
+                'instance_name' => $instanceName,
+                'enabled' => (bool) (Env::get('system.maintenance', false) ?? false),
+            ];
+        }
+
+        if (!$this->restartMaintenanceShutdownRegistered) {
+            \register_shutdown_function([$this, 'rollbackRestartMaintenanceTransactionIfPending']);
+            $this->restartMaintenanceShutdownRegistered = true;
+        }
+    }
+
+    /**
+     * 覆盖 execute() 内所有失败 return/fatal 的最终回滚保险。
+     * 正常成功路径会先恢复并清空快照，因此 shutdown 时为 no-op。
+     */
+    public function rollbackRestartMaintenanceTransactionIfPending(bool $requireRuntimeSync = false): void
+    {
+        $snapshot = $this->restartMaintenanceSnapshot;
+        if ($snapshot === null) {
+            return;
+        }
+
+        try {
+            $restored = Env::getInstance()->setConfig('system.maintenance', $snapshot['enabled']);
+        } catch (\Throwable $throwable) {
+            $this->printer->error(__('恢复重启前维护态失败：%{1}', [$throwable->getMessage()]));
+            return;
+        }
+        if (!$restored) {
+            $this->printer->error(__('恢复重启前维护态失败，请检查 app/etc/env.php 写入权限。'));
+            return;
+        }
+
+        $this->syncWlsMaintenanceMode(
+            $snapshot['instance_name'],
+            $snapshot['enabled'],
+            $requireRuntimeSync
+        );
+        // 必须在持久态与运行态都恢复后才提交事务；若 required 同步抛错，
+        // 保留快照让 shutdown 回调再做一次 best-effort 补偿。
+        $this->restartMaintenanceSnapshot = null;
     }
 
     /**
      * 关闭维护模式（平滑重启完成后关闭）
      */
-    protected function disableMaintenanceMode(string $instanceName): void
+    protected function disableMaintenanceMode(string $instanceName, bool $requireRuntimeSync = false): void
     {
+        if ($this->restartMaintenanceSnapshot !== null
+            && $this->restartMaintenanceSnapshot['instance_name'] === $instanceName) {
+            $this->rollbackRestartMaintenanceTransactionIfPending($requireRuntimeSync);
+            return;
+        }
+
         $this->setFrameworkMaintenanceMode(false);
-        $this->syncWlsMaintenanceMode($instanceName, false);
+        $this->syncWlsMaintenanceMode($instanceName, false, $requireRuntimeSync);
     }
 
     protected function setFrameworkMaintenanceMode(bool $enabled): void
@@ -2770,238 +3164,146 @@ class Start extends CommandAbstract
         Env::getInstance()->setConfig('system.maintenance', $enabled);
     }
 
-    /**
-     * 从 Master endpoint 读取 Worker 监听端口列表，用于平滑重启时的健康检查。
-     * - Dispatcher 模式：Worker 监听内网端口，与主端口不同。
-     * - 直连模式 / SO_REUSEPORT：所有 Worker 共用主端口。
-     * - endpoint 缺失或字段缺失：使用当前启动参数计算默认端口区间。
-     *
-     * @return array<int, int>
-     */
-    protected function resolveExistingInstanceWorkerPorts(?string $instanceName, int $port, int $workerCount): array
+    protected function syncWlsMaintenanceMode(
+        ?string $instanceName,
+        bool $enabled,
+        bool $required = false
+    ): bool
     {
-        if ($instanceName !== null && $instanceName !== '') {
-            try {
-                $info = $this->getInstanceManager()->getPersistedInstanceInfo($instanceName);
-            } catch (\Throwable $e) {
-                $info = null;
-            }
-            if ($info !== null && $info->dispatcherEnabled && $info->workerBasePort > 0) {
-                return \range($info->workerBasePort, $info->workerBasePort + \max(1, $workerCount) - 1);
-            }
-        }
-        // 无 endpoint 时使用当前启动参数计算默认端口区间。
-        return \range($port, $port + \max(1, $workerCount) - 1);
-    }
-
-    /**
-     * 读取旧实例的 Worker 是否启用 SSL。Dispatcher 模式下 Worker 本身使用 HTTP（SSL 在 Dispatcher 卸载），
-     * 因此即使主端口为 HTTPS，对 Worker 健康检查也要走 HTTP，否则握手失败拿不到 health 数据。
-     */
-    protected function resolveExistingInstanceWorkerSslEnabled(?string $instanceName, bool $sslEnabledFallback): bool
-    {
-        if ($instanceName !== null && $instanceName !== '') {
-            try {
-                $info = $this->getInstanceManager()->getInstanceInfo($instanceName, false);
-            } catch (\Throwable $e) {
-                $info = null;
-            }
-            if (\is_array($info)) {
-                $dispatcherEnabled = (bool) ($info['dispatcher_enabled'] ?? false);
-                if ($dispatcherEnabled) {
-                    // Dispatcher 模式下 Worker 端走 HTTP
-                    return false;
-                }
-                return (bool) ($info['ssl_enabled'] ?? $sslEnabledFallback);
-            }
-        }
-        return $sslEnabledFallback;
-    }
-
-    protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
-    {
+        $startedAtNs = \hrtime(true);
         try {
-            /** @var BroadcastControlDispatchService $dispatchService */
-            $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
-            $result = $dispatchService->setMaintenanceMode($enabled, $instanceName);
-
-            if (($result['attempted'] ?? []) === []) {
-                return;
+            /** @var IpcControlGateway $gateway */
+            $gateway = ObjectManager::getInstance(IpcControlGateway::class);
+            if ($instanceName !== null && $instanceName !== '') {
+                // 启动刚完成时实例管理器的运行态缓存可能尚未收敛；显式实例必须
+                // 直接使用 Master endpoint，不能让广播层 attempted=[] 伪装成功。
+                $commandResult = $gateway->setMaintenanceMode($instanceName, $enabled);
+                $result = [
+                    'success' => !empty($commandResult['success']),
+                    'attempted' => [$instanceName],
+                    'results_by_instance' => [$instanceName => $commandResult],
+                    'message' => (string)($commandResult['message'] ?? 'unknown'),
+                ];
+            } else {
+                /** @var BroadcastControlDispatchService $dispatchService */
+                $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
+                $result = $dispatchService->setMaintenanceMode($enabled, null);
             }
 
-            if (!empty($result['success'])) {
-                $this->printer->note(__('WLS 维护模式已同步：%{1}', [$result['message'] ?? 'ok']));
-                return;
+            $attempted = \array_values(\array_filter(
+                (array)($result['attempted'] ?? []),
+                static fn(mixed $name): bool => \is_string($name) && $name !== ''
+            ));
+            if ($attempted === []) {
+                if ($required) {
+                    throw new \RuntimeException('no controllable WLS instance accepted the maintenance command');
+                }
+                return false;
             }
 
-            $this->printer->warning(__('WLS 维护模式同步未完全成功：%{1}', [$result['message'] ?? 'unknown']));
+            if (empty($result['success'])) {
+                throw new \RuntimeException((string)($result['message'] ?? 'control command rejected'));
+            }
+
+            /** @var array<string, string|null> $pending */
+            $pending = [];
+            foreach ($attempted as $targetInstance) {
+                $commandResult = (array)(($result['results_by_instance'] ?? [])[$targetInstance] ?? []);
+                $commandData = (array)($commandResult['data'] ?? []);
+                $operationId = (string)($commandData['operation_id'] ?? '');
+                $pending[$targetInstance] = $operationId !== '' ? $operationId : null;
+            }
+
+            $deadlineNs = $startedAtNs + (int)(self::MAINTENANCE_SYNC_TIMEOUT_SEC * 1_000_000_000);
+            $lastObserved = [];
+
+            while ($pending !== [] && \hrtime(true) < $deadlineNs) {
+                foreach ($pending as $targetInstance => $operationId) {
+                    $remainingSec = ($deadlineNs - \hrtime(true)) / 1_000_000_000;
+                    if ($remainingSec <= 0) {
+                        break 2;
+                    }
+
+                    $status = $gateway->getStatus(
+                        $targetInstance,
+                        \max(0.1, \min(0.75, $remainingSec))
+                    );
+                    if (empty($status['success'])) {
+                        $lastObserved[$targetInstance] = (string)($status['message'] ?? 'status unavailable');
+                        continue;
+                    }
+
+                    $statusData = (array)($status['data'] ?? []);
+                    if (!\array_key_exists('maintenance_mode', $statusData)) {
+                        $lastObserved[$targetInstance] = 'malformed_status:maintenance_mode_missing';
+                        continue;
+                    }
+                    $actualEnabled = (bool)$statusData['maintenance_mode'];
+                    $operationActive = false;
+                    if ($operationId !== null) {
+                        $controlOperation = $statusData['control_operation'] ?? null;
+                        if (!\is_array($controlOperation)
+                            || !\array_key_exists('active', $controlOperation)
+                            || !\array_key_exists('queued', $controlOperation)
+                            || !\is_array($controlOperation['queued'])
+                        ) {
+                            $lastObserved[$targetInstance] = 'malformed_status:control_operation_missing';
+                            continue;
+                        }
+                        $active = \is_array($controlOperation['active'])
+                            ? $controlOperation['active']
+                            : [];
+                        $operationActive = (string)($active['id'] ?? '') === $operationId;
+                        if (!$operationActive) {
+                            foreach ($controlOperation['queued'] as $queued) {
+                                if ((string)($queued['id'] ?? '') === $operationId) {
+                                    $operationActive = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    $lastObserved[$targetInstance] = 'maintenance_mode='
+                        . ($actualEnabled ? 'true' : 'false')
+                        . ($operationId !== null
+                            ? ', operation=' . $operationId . ($operationActive ? ':pending' : ':terminal')
+                            : ', operation=immediate');
+                    if (!$operationActive && $actualEnabled === $enabled) {
+                        unset($pending[$targetInstance]);
+                    }
+                }
+
+                if ($pending !== []) {
+                    $remainingUsec = (int)\max(0, ($deadlineNs - \hrtime(true)) / 1_000);
+                    SchedulerSystem::usleep(\min(self::MAINTENANCE_SYNC_POLL_INTERVAL_USEC, $remainingUsec));
+                }
+            }
+
+            if ($pending !== []) {
+                $details = [];
+                foreach (\array_keys($pending) as $targetInstance) {
+                    $details[] = $targetInstance . ': ' . ($lastObserved[$targetInstance] ?? 'not observed');
+                }
+                throw new \RuntimeException(
+                    'maintenance control did not reach the requested terminal state within '
+                    . self::MAINTENANCE_SYNC_TIMEOUT_SEC . 's (' . \implode('; ', $details) . ')'
+                );
+            }
+
+            $this->printer->note(__('WLS 维护模式已确认落地：%{1}', [
+                ($enabled ? 'enabled' : 'disabled') . ', instances=' . \count($attempted),
+            ]));
+            return true;
         } catch (\Throwable $throwable) {
-            $this->printer->warning(__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]));
-        }
-    }
-    
-    /**
-     * 通过健康检查接口等待所有 Worker 空闲
-     * 
-     * @param string $host 主机地址
-     * @param int $port 端口
-     * @param int $workerCount Worker 数量
-     * @param int $maxWait 最大等待秒数
-     * @param bool $sslEnabled 是否 HTTPS
-     * @param string|null $instanceName 实例名，用于读取真实 Worker 端口列表
-     * @return bool 是否成功等待到空闲
-     */
-    protected function waitForIdleWorkers(string $host, int $port, int $workerCount, int $maxWait, bool $sslEnabled = false, ?string $instanceName = null): bool
-    {
-        $startTime = \time();
-        $checkInterval = 500000; // 500ms
-        $scheme = $sslEnabled ? 'https' : 'http';
-        $healthUrl = "/_wls/health";
-
-        // 旧实例的 Worker 真实监听端口（Dispatcher 模式与主端口不同）从实例文件读取。
-        // 读取失败 / 字段缺失时回退到旧的 port+i 算法，至少不退化。
-        $workerPorts = $this->resolveExistingInstanceWorkerPorts($instanceName, $port, $workerCount);
-        $workerSslEnabled = $this->resolveExistingInstanceWorkerSslEnabled($instanceName, $sslEnabled);
-        
-        $this->printer->note(__('正在检测 Worker 状态（最长等待 %{1} 秒）...', [$maxWait]));
-        
-        $lastActiveRequests = -1;
-        
-        while ((\time() - $startTime) < $maxWait) {
-            $totalActiveRequests = 0;
-            $healthyWorkers = 0;
-            
-            // 检查所有 Worker 端口的健康状态
-            foreach ($workerPorts as $workerPort) {
-                if ($workerPort <= 0) {
-                    continue;
-                }
-                $health = $this->checkWorkerHealth($host, $workerPort, $workerSslEnabled);
-                
-                if ($health !== null) {
-                    $healthyWorkers++;
-                    $totalActiveRequests += ($health['active_requests'] ?? 0);
-                }
+            $message = (string)__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]);
+            if ($required) {
+                $this->printer->error($message);
+                throw new \RuntimeException($message, 0, $throwable);
             }
-            
-            // 只在状态变化时输出
-            if ($totalActiveRequests !== $lastActiveRequests) {
-                if ($totalActiveRequests > 0) {
-                    $this->printer->note(__('当前有 %{1} 个请求正在处理...', [$totalActiveRequests]));
-                }
-                $lastActiveRequests = $totalActiveRequests;
-            }
-            
-            // 所有 Worker 都空闲
-            if ($healthyWorkers > 0 && $totalActiveRequests === 0) {
-                return true;
-            }
-            
-            // 如果没有健康的 Worker，说明服务器可能已经停止或无法访问
-            if ($healthyWorkers === 0) {
-                $this->printer->note(__('无法连接到 Worker，直接切换...'));
-                return true;
-            }
-            
-            SchedulerSystem::usleep($checkInterval);
+            $this->printer->warning($message);
+            return false;
         }
-        
-        return false;
-    }
-    
-    /**
-     * 检查单个 Worker 的健康状态
-     * 
-     * 优先尝试 SSL，失败后回退到 TCP（Windows 兼容性）
-     * 
-     * @param string $host 主机地址
-     * @param int $port 端口
-     * @param bool $sslEnabled 是否 HTTPS（会同时尝试 SSL 和 TCP）
-     * @return array|null 健康信息或 null（连接失败）
-     */
-    protected function checkWorkerHealth(string $host, int $port, bool $sslEnabled = false): ?array
-    {
-        $socket = null;
-        
-        // 优先尝试 SSL 连接
-        if ($sslEnabled) {
-            $context = \stream_context_create([
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true,
-                ],
-            ]);
-            $socket = @\stream_socket_client(
-                "ssl://{$host}:{$port}",
-                $errno,
-                $errstr,
-                2,
-                STREAM_CLIENT_CONNECT,
-                $context
-            );
-        }
-        
-        // 如果 SSL 失败或未启用 SSL，尝试 TCP（Windows 兼容性回退）
-        if (!$socket) {
-            $socket = @\stream_socket_client(
-                "tcp://{$host}:{$port}",
-                $errno,
-                $errstr,
-                2,
-                STREAM_CLIENT_CONNECT
-            );
-        }
-        
-        if (!$socket) {
-            return null;
-        }
-        
-        // 发送 HTTP 请求
-        $request = "GET /_wls/health HTTP/1.1\r\n";
-        $request .= "Host: {$host}:{$port}\r\n";
-        $request .= "Connection: close\r\n";
-        $request .= "\r\n";
-        
-        @\fwrite($socket, $request);
-        
-        // 读取响应
-        $response = '';
-        \stream_set_timeout($socket, 2);
-        while (!@\feof($socket)) {
-            $chunk = @\fread($socket, 8192);
-            if ($chunk === false || $chunk === '') {
-                break;
-            }
-            $response .= $chunk;
-        }
-        @\fclose($socket);
-        
-        if (empty($response)) {
-            return null;
-        }
-        
-        // 解析 JSON body
-        $parts = \explode("\r\n\r\n", $response, 2);
-        $body = $parts[1] ?? '';
-        
-        if (empty($body)) {
-            return null;
-        }
-        
-        $data = \json_decode($body, true);
-        
-        if (!\is_array($data)) {
-            return null;
-        }
-        
-        // 健康检查返回 maintenance 或 healthy 都算成功
-        $status = $data['status'] ?? '';
-        if ($status !== 'healthy' && $status !== 'maintenance') {
-            return null;
-        }
-        
-        return $data;
     }
     
     /**
@@ -3045,6 +3347,7 @@ class Start extends CommandAbstract
             'worker_memory_limit' => '256M',
             'runtime_strategy' => 'auto',
             'topology' => 'auto',
+            'runtime' => ['strategy' => 'auto', 'topology' => 'auto'],
             'event_loop' => 'auto',
             'loop' => ['driver' => 'auto'],
             'supervisor' => ['enabled' => 'auto'],
@@ -3056,6 +3359,8 @@ class Start extends CommandAbstract
         // 1. 加载已保存的实例配置（配置记忆）
         // 优先级：命令行参数 > env 配置 > 已保存实例配置 > 默认值
         $savedConfig = $this->loadSavedInstanceConfig($instanceName);
+        $savedWorkerCountExplicit = \is_array($savedConfig)
+            && \array_key_exists('worker_count', $savedConfig);
         if ($savedConfig) {
             // 移除已保存配置中的 worker_base_port，强制使用带项目偏移的默认值
             // 这确保了多项目部署时端口不会冲突（旧配置文件可能包含不带偏移的端口）
@@ -3068,9 +3373,12 @@ class Start extends CommandAbstract
         $envConfig = $this->getEnvConfig();
         
         $wlsServers = ($envConfig['wls'] ?? [])['servers'] ?? [];
+        $instanceTopologyExplicit = false;
         // 2. 多实例：wls.servers[实例名]
         if ($instanceName !== 'default' && isset($wlsServers[$instanceName]) && \is_array($wlsServers[$instanceName])) {
             $instanceConfig = $wlsServers[$instanceName];
+            $instanceRuntime = \is_array($instanceConfig['runtime'] ?? null) ? $instanceConfig['runtime'] : [];
+            $instanceTopologyExplicit = \array_key_exists('topology', $instanceRuntime);
             // 移除 env 配置中的 worker_base_port，强制使用带项目偏移的默认值
             unset($instanceConfig['worker_base_port']);
             $config = \array_merge($config, $instanceConfig);
@@ -3084,6 +3392,28 @@ class Start extends CommandAbstract
             unset($baseWls['worker_base_port']);
             $config = \array_merge($config, $baseWls);
             $config['source'] = __('env.wls');
+        }
+
+        // 实例显式拓扑高于全局 wls.runtime.topology。普通 host/port 仍保持原有合并规则。
+        $savedRuntime = \is_array($savedConfig['runtime'] ?? null) ? $savedConfig['runtime'] : [];
+        if (\array_key_exists('topology', $savedRuntime)) {
+            if (!\is_array($config['runtime'] ?? null)) {
+                $config['runtime'] = [];
+            }
+            $config['runtime']['topology'] = (string)$savedRuntime['topology'];
+            $config['_instance_topology_explicit'] = true;
+        } elseif ($instanceTopologyExplicit) {
+            $config['_instance_topology_explicit'] = true;
+        } elseif (\array_key_exists('topology', $savedConfig ?? [])) {
+            // 仅读兼容旧实例根级 topology。
+            $config['topology'] = (string)$savedConfig['topology'];
+        }
+        if ($savedWorkerCountExplicit) {
+            // A count remembered from an explicit -c/--count belongs to this
+            // instance and therefore outranks the global wls.worker_count
+            // default. Runtime-resolved auto counts are never persisted here.
+            $config['worker_count'] = \max(1, (int)$savedConfig['worker_count']);
+            $config['_instance_worker_count_explicit'] = true;
         }
 
         $config = $this->applyGatewayTrafficModeTopology($config);
@@ -3318,8 +3648,16 @@ class Start extends CommandAbstract
         }
         
         // 4. 计算实际 Worker 数量（runtime auto strategy）
-        $profile = $this->detectRuntimeProfile();
+        $profile = $this->detectRuntimeProfile(
+            $this->resolveServerListenHost((string)($config['host'] ?? '127.0.0.1'))
+        );
         $strategyName = (string)($config['runtime_strategy'] ?? ($config['runtime']['strategy'] ?? 'auto'));
+        $this->latestRuntimeStrategy = $strategyName;
+        // Preserve the user/config intent for RuntimeStrategy diagnostics.
+        // getServerConfig resolves the effective integer before the final
+        // RuntimeSelection pass; without this field an automatic choice is
+        // incorrectly reported as an explicit Worker count.
+        $config['worker_count_requested'] = $config['worker_count'];
         $config['worker_count'] = (new RuntimeStrategyResolver())->resolveWorkerCount(
             $config['worker_count'],
             (string)($config['mode'] ?? 'io'),
@@ -3452,8 +3790,10 @@ class Start extends CommandAbstract
         $trafficMode = \strtolower(\trim(\str_replace('-', '_', $trafficMode)));
         if ($trafficMode === 'direct_listen') {
             $config['topology'] = 'direct';
+            $config['_legacy_topology_source'] = 'legacy.gateway.traffic_mode';
         } elseif ($trafficMode === 'passthrough') {
             $config['topology'] = 'dispatcher';
+            $config['_legacy_topology_source'] = 'legacy.gateway.traffic_mode';
         }
 
         return $config;
@@ -3521,8 +3861,8 @@ class Start extends CommandAbstract
                 if (!$sslService->canReuseConfiguredCertificate($certPath, $keyPath)) {
                     $config['ssl_cert'] = '';
                     $config['ssl_key'] = '';
-                // 本地/内网环境：仅使用适用于当前 host 的证书，否则触发自动签发
-                } elseif ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $certificateHost)) {
+                // 已配置证书必须覆盖当前 Host；公网证书也不能因“文件有效”而误复用到其它域名。
+                } elseif (!$sslService->certificateMatchesHost($certPath, $certificateHost)) {
                     $config['ssl_cert'] = '';
                     $config['ssl_key'] = '';
                 } else {
@@ -3537,7 +3877,14 @@ class Start extends CommandAbstract
                     false
                 );
                 $certInfo = $sslService->parseCertificate($certPath);
-                $this->ensureAdditionalSslCertificates($instanceName, $config, $certificateHost, $sslService);
+                $this->ensureAdditionalSslCertificates(
+                    $instanceName,
+                    $config,
+                    $certificateHost,
+                    $sslService,
+                    $certPath,
+                    $keyPath
+                );
                 return [
                     'success' => true,
                     'cert_path' => $certPath,
@@ -3553,12 +3900,17 @@ class Start extends CommandAbstract
         // 2. 确定域名
         // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
         $domain = $certificateHost;
-        if (!$needsLocalCert) {
-            $startupCertResult = $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
-            if ($startupCertResult !== null) {
-                $this->ensureAdditionalSslCertificates($instanceName, $config, $domain, $sslService);
-                return $startupCertResult;
-            }
+        $startupCertResult = $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
+        if ($startupCertResult !== null) {
+            $this->ensureAdditionalSslCertificates(
+                $instanceName,
+                $config,
+                $domain,
+                $sslService,
+                (string)($startupCertResult['cert_path'] ?? ''),
+                (string)($startupCertResult['key_path'] ?? '')
+            );
+            return $startupCertResult;
         }
 
         $webroot = $this->resolveAcmeWebrootForStartup($instanceName, $config);
@@ -3632,7 +3984,14 @@ class Start extends CommandAbstract
                     ]));
                 }
             }
-            $this->ensureAdditionalSslCertificates($instanceName, $config, $domain, $sslService);
+            $this->ensureAdditionalSslCertificates(
+                $instanceName,
+                $config,
+                $domain,
+                $sslService,
+                (string)($result['cert_path'] ?? ''),
+                (string)($result['key_path'] ?? '')
+            );
         } else {
             $deferredFallback = $this->tryBuildDeferredStartupSslFallback(
                 $sslService,
@@ -3671,6 +4030,11 @@ class Start extends CommandAbstract
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
         if (!\is_file($certPath) || !\is_file($keyPath)) {
+            return null;
+        }
+        // 本地证书除有效期/密钥外还必须能复用当前本地 CA；否则仍交给 ensureCertificate 重签。
+        if ($sslService->needsSelfSignedCertificate($domain)
+            && !$sslService->hasValidLocalCertificate($domain)) {
             return null;
         }
         if (!$sslService->canReuseConfiguredCertificate($certPath, $keyPath)) {
@@ -4043,7 +4407,9 @@ class Start extends CommandAbstract
         string $instanceName,
         array $config,
         string $primaryDomain,
-        SslCertificateService $sslService
+        SslCertificateService $sslService,
+        string $selectedCertPath = '',
+        string $selectedKeyPath = ''
     ): void {
         $domains = $this->collectAdditionalCertificateDomains($instanceName, $config, $primaryDomain);
         if ($domains === []) {
@@ -4051,7 +4417,22 @@ class Start extends CommandAbstract
         }
 
         $webroot = $this->resolveAcmeWebrootForStartup($instanceName, $config);
+        $selectedCertificateReusable = $selectedCertPath !== ''
+            && $selectedKeyPath !== ''
+            && $sslService->canReuseConfiguredCertificate($selectedCertPath, $selectedKeyPath);
         foreach ($domains as $domain) {
+            // 当前已选证书（尤其是 *.weline.test）覆盖该 Host 时无需再次 ensure，
+            // 避免“复用证书”仍刷新映射并向全部历史实例广播 reload。
+            if ($selectedCertificateReusable
+                && $sslService->certificateMatchesHost($selectedCertPath, $domain)) {
+                continue;
+            }
+
+            $startupCertResult = $this->tryUseStartupCertificateFiles($sslService, $domain, $domain);
+            if ($startupCertResult !== null) {
+                continue;
+            }
+
             $email = Env::get('admin_email', 'admin@' . $domain);
             $result = $sslService->ensureCertificate($domain, $webroot, $email);
             if (($result['success'] ?? false) !== true
@@ -4368,10 +4749,13 @@ class Start extends CommandAbstract
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
         $wildcard = LocalDomainPolicy::currentWildcardDomain();
 
-        if (!$sslService->hasValidLocalCertificate($wildcard)) {
-            $this->printer->note(__('正在为本地泛域名 %{1} 准备 SSL 证书...', [$wildcard]));
+        if ($sslService->hasValidLocalCertificate($wildcard)) {
+            // ensureCertificate 的“已有证书”分支仍会重建映射并广播；启动阶段已有有效证书时直接复用。
+            $this->ensureLocalDevelopmentCaTrusted($sslService);
+            return;
         }
 
+        $this->printer->note(__('正在为本地泛域名 %{1} 准备 SSL 证书...', [$wildcard]));
         $email = Env::get('admin_email', 'admin@localhost');
         $result = $sslService->ensureCertificate($wildcard, $this->resolveAcmeWebrootForStartup('default', []), $email);
         if (($result['success'] ?? false) === true) {
@@ -4461,39 +4845,14 @@ class Start extends CommandAbstract
      */
     protected function calculateWorkerCount($workerCount, string $mode): int
     {
-        // 如果是具体数字，直接返回
-        if (\is_int($workerCount) && $workerCount > 0) {
-            return $workerCount;
-        }
-        
-        // 如果是数字字符串，转换
-        if (\is_string($workerCount) && \is_numeric($workerCount)) {
-            return (int) $workerCount;
-        }
-        
-        // 智能模式：根据环境、CPU 核心数和工作模式计算
-        $deployMode = Env::system('deploy') ?? 'dev';
-        
-        // 开发环境：固定 4 个 Worker，兼顾并发与调试体验
-        if ($deployMode === 'dev') {
-            $cpuCount = $this->getCpuCoreCount();
-            return \min(\max(4, (int)\ceil($cpuCount / 2)), 8);
-        }
-        
-        // 生产环境：根据 CPU 核心数和工作模式计算
-        $cpuCount = $this->getCpuCoreCount();
-        
-        // 根据工作模式计算
-        if ($mode === 'cpu') {
-            // CPU 密集型：Worker = CPU 核心数
-            $count = $cpuCount;
-        } else {
-            // I/O 密集型（默认）：Worker = CPU 核心数 * 2
-            $count = $cpuCount * 2;
-        }
-        
-        // 限制范围：最少 2 个，最多 16 个
-        return \min(\max(2, $count), 16);
+        $profile = $this->latestRuntimeProfile ?? $this->detectRuntimeProfile();
+
+        return (new RuntimeStrategyResolver())->resolveWorkerCount(
+            $workerCount,
+            $mode,
+            $this->latestRuntimeStrategy,
+            $profile
+        );
     }
     
     /**
@@ -4520,9 +4879,9 @@ class Start extends CommandAbstract
         return 4; // 默认 4 核
     }
 
-    protected function detectRuntimeProfile(): WlsRuntimeProfile
+    protected function detectRuntimeProfile(?string $listenHost = null): WlsRuntimeProfile
     {
-        return (new RuntimeCapabilityDetector())->detect();
+        return $this->latestRuntimeProfile = (new RuntimeCapabilityDetector())->detect($listenHost);
     }
     
     /**
@@ -4657,7 +5016,10 @@ class Start extends CommandAbstract
             $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$workerPort} - " . ($workerPort + $count - 1) . " ({$workerProtocol})"));
         } else {
             if ($directReusePortEnabled) {
-                $this->printer->note(\sprintf('║  端口模式：%-50s║', __('SO_REUSEPORT 同端口复用')));
+                $directLabel = PHP_OS_FAMILY === 'Darwin'
+                    ? __('Master 共享监听 FD')
+                    : __('SO_REUSEPORT 同端口复用');
+                $this->printer->note(\sprintf('║  端口模式：%-50s║', $directLabel));
                 $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$port} (共享端口)"));
             } else {
                 $this->printer->note(\sprintf('║  端口范围：%-50s║', "{$port} - " . ($port + $count - 1)));
@@ -5148,6 +5510,14 @@ class Start extends CommandAbstract
         bool $restartCleanup = false
     ): bool
     {
+        // endpoint/IPC 可能在 Stop 完成时被删除，因此必须先固化旧代实际监听集。
+        // 不记录 Session/Memory 共享 sidecar，它们的生命周期不属于单实例重启交接。
+        $this->restartHandoffPorts = $this->captureRestartHandoffPorts(
+            $instanceName,
+            $port,
+            $count,
+            $workerPort
+        );
         $mainStop = ObjectManager::getInstance(MainStop::class);
         $mainStop->execute($this->buildStopExistingServerArgs($instanceName, $fastLocal, $restartCleanup), []);
         if ($this->waitForRestartCleanupComplete($instanceName, $port, $count, $workerPort, $fastLocal)) {
@@ -5159,6 +5529,94 @@ class Start extends CommandAbstract
         return false;
     }
 
+    /**
+     * 在停止旧实例前捕获其实际正在 LISTEN 的主/控制/Dispatcher/Worker/Redirect 端口。
+     * 候选值可来自 endpoint 或有界 IPC 服务快照，最终只保留当下真实占用的端口。
+     *
+     * @return list<int>
+     */
+    protected function captureRestartHandoffPorts(
+        string $instanceName,
+        int $mainPort,
+        int $workerCount,
+        int $workerPort = 0
+    ): array {
+        $candidates = [$mainPort];
+        $rawData = null;
+        $instanceManager = $this->getInstanceManager();
+
+        try {
+            $rawData = $instanceManager->getRawInstanceData($instanceName);
+        } catch (\Throwable) {
+            $rawData = null;
+        }
+
+        if (\is_array($rawData)) {
+            foreach (['port', 'main_port', 'control_port', 'dispatcher_port', 'http_redirect_port'] as $field) {
+                $candidate = (int)($rawData[$field] ?? 0);
+                if ($candidate > 0) {
+                    $candidates[] = $candidate;
+                }
+            }
+
+            $topology = \strtolower((string)($rawData['topology'] ?? $rawData['master_mode'] ?? ''));
+            $direct = \in_array($topology, ['direct', 'linux-direct'], true);
+            $recordedWorkerPort = (int)($rawData['worker_port'] ?? 0);
+            $recordedWorkerCount = \max(1, (int)($rawData['count'] ?? $workerCount));
+            if ($recordedWorkerPort > 0) {
+                $lastOffset = $direct ? 0 : $recordedWorkerCount - 1;
+                for ($offset = 0; $offset <= $lastOffset; $offset++) {
+                    $candidates[] = $recordedWorkerPort + $offset;
+                }
+            }
+        } elseif ($workerPort > 0) {
+            for ($offset = 0; $offset < \max(1, $workerCount); $offset++) {
+                $candidates[] = $workerPort + $offset;
+            }
+        }
+
+        // IPC 只给 400ms 总预算；失败仍使用上面的持久 endpoint，不阻塞成秒级启动扫描。
+        try {
+            $info = $instanceManager->getInstanceInfoWithIpcTimeout($instanceName, false, 0.4);
+        } catch (\Throwable) {
+            $info = null;
+        }
+        if ($info !== null) {
+            foreach ([$info->port, $info->controlPort, $info->httpRedirectPort] as $candidate) {
+                $candidate = (int)$candidate;
+                if ($candidate > 0) {
+                    $candidates[] = $candidate;
+                }
+            }
+            foreach ($info->services as $service) {
+                $role = (string)($service->role ?? '');
+                if (!\in_array($role, ['worker', 'dispatcher', 'redirect', 'http_redirect'], true)) {
+                    continue;
+                }
+                $candidate = (int)($service->port ?? 0);
+                if ($candidate > 0) {
+                    $candidates[] = $candidate;
+                }
+            }
+        }
+
+        $candidates = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $candidates),
+            static fn (int $candidate): bool => $candidate > 0
+        )));
+        \sort($candidates);
+
+        Processer::clearPortCache();
+        $listening = [];
+        foreach ($candidates as $candidate) {
+            if (Processer::isPortInUse($candidate)) {
+                $listening[] = $candidate;
+            }
+        }
+
+        return $listening;
+    }
+
     protected function waitForRestartCleanupComplete(
         string $instanceName,
         int $mainPort,
@@ -5167,17 +5625,29 @@ class Start extends CommandAbstract
         bool $fastLocal = false
     ): bool
     {
-        $deadline = \microtime(true) + ($fastLocal ? 6.0 : 12.0);
-        do {
+        $timeoutNanoseconds = (int)(($fastLocal ? 6.0 : 12.0) * 1_000_000_000);
+        $deadline = \hrtime(true) + $timeoutNanoseconds;
+        while (true) {
             Processer::clearPortCache();
             if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal)) {
                 return true;
             }
-            SchedulerSystem::usleep($fastLocal ? 100000 : 300000);
-        } while (\microtime(true) < $deadline);
+
+            $remainingNanoseconds = $deadline - \hrtime(true);
+            if ($remainingNanoseconds <= 0) {
+                break;
+            }
+            $waitMicroseconds = (int)\min(100_000, \max(1_000, \intdiv($remainingNanoseconds, 1_000)));
+            SchedulerSystem::usleep($waitMicroseconds);
+        }
 
         Processer::clearPortCache();
-        return !$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal);
+        if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal)) {
+            return true;
+        }
+
+        $this->reportRestartHandoffTimeout($instanceName);
+        return false;
     }
 
     protected function hasRestartCleanupResidue(
@@ -5188,46 +5658,74 @@ class Start extends CommandAbstract
         bool $fastLocal = false
     ): bool
     {
-        $ports = [$mainPort, $this->resolvePreferredControlPort($mainPort)];
-        if ($mainPort === self::DEFAULT_PORT_HTTPS) {
-            $ports[] = self::DEFAULT_PORT;
+        if ($this->restartHandoffPorts === []) {
+            $this->restartHandoffPorts = $this->captureRestartHandoffPorts(
+                $instanceName,
+                $mainPort,
+                $workerCount,
+                $workerPort
+            );
         }
 
-        $includeWorkerPorts = !$fastLocal || $workerPort > 0;
-        if ($includeWorkerPorts) {
-            $workerBase = $workerPort > 0
-                ? $workerPort
-                : (10000 + MasterProcess::getProjectPortOffset() + $mainPort);
-            for ($i = 0; $i < $workerCount; $i++) {
-                $ports[] = $workerBase + $i;
-            }
-        }
-
-        $ownScope = $this->getCurrentProjectScopeToken();
-        foreach (\array_values(\array_unique(\array_filter($ports, static fn (int $port): bool => $port > 0))) as $port) {
-            $inspect = $this->inspectPortOccupantWithHistory($port);
-            if (!($inspect['in_use'] ?? false) || !($inspect['is_weline'] ?? false)) {
-                continue;
-            }
-
-            // 严格按项目作用域识别"自家残留"：
-            // - 只有自家 scope 视为残留
-            // - 其它项目作用域占用 → 不是自家残留，跳过
-            $scope = (string) ($inspect['scope'] ?? '');
-            if ($scope !== '' && $scope === $ownScope) {
+        // 交接期间任一目标端口仍在 LISTEN 都必须 fail closed。
+        // owner/scope 不参与放行判断，否则 unknown/orphan/foreign 会被误判为“已清理”。
+        foreach ($this->restartHandoffPorts as $handoffPort) {
+            if (Processer::isPortInUse($handoffPort)) {
                 return true;
             }
         }
 
-        if (!$fastLocal) {
-            foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
-                if (Processer::getProcessIdsByPrefix($prefix) !== []) {
+        // 即使端口已释放，旧 Master/Worker 仍可能在退出窗口内再拉子进程。
+        // 只检查本项目+本实例 scoped 前缀，不杀 unknown/foreign 进程。
+        foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
+            foreach (Processer::getProcessIdsByPrefix($prefix) as $candidatePid) {
+                if ($candidatePid > 0 && Processer::processExists((int)$candidatePid)) {
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+    /**
+     * 超时后才查 owner，仅用于诊断；此方法不杀进程、不切换端口、不修改交接结果。
+     */
+    protected function reportRestartHandoffTimeout(string $instanceName): void
+    {
+        foreach ($this->restartHandoffPorts as $handoffPort) {
+            if (!Processer::isPortInUse($handoffPort)) {
+                continue;
+            }
+
+            $inspect = $this->inspectPortOccupantWithHistory($handoffPort);
+            $this->printer->warning(__(
+                '重启交接超时：端口 %{1} 仍在监听（PID=%{2}，进程=%{3}，作用域=%{4}，状态=%{5}）',
+                [
+                    $handoffPort,
+                    (int)($inspect['pid'] ?? 0),
+                    (string)($inspect['process_name'] ?? 'unknown'),
+                    (string)($inspect['scope'] ?? 'unknown'),
+                    (string)($inspect['state'] ?? 'unknown'),
+                ]
+            ));
+        }
+
+        foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
+            $livePids = [];
+            foreach (Processer::getProcessIdsByPrefix($prefix) as $candidatePid) {
+                $candidatePid = (int)$candidatePid;
+                if ($candidatePid > 0 && Processer::processExists($candidatePid)) {
+                    $livePids[] = $candidatePid;
+                }
+            }
+            if ($livePids !== []) {
+                $this->printer->warning(__('重启交接超时：scoped 进程前缀 %{1} 仍有 PID %{2}', [
+                    $prefix,
+                    \implode(',', $livePids),
+                ]));
+            }
+        }
     }
 
     /**
@@ -5860,7 +6358,7 @@ class Start extends CommandAbstract
     protected function extractReservedWorkerPortsFromInstanceData(array $instanceData): array
     {
         $masterMode = (string) ($instanceData['master_mode'] ?? MasterProcess::MODE_LEGACY);
-        if ($masterMode === MasterProcess::MODE_LINUX_DIRECT) {
+        if (($instanceData['topology'] ?? '') === 'direct' || MasterProcess::isDirectMode($masterMode)) {
             return [];
         }
 
@@ -5877,9 +6375,29 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $windowMode = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = '', array $gatewayRuntime = []): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $windowMode = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = '', array $gatewayRuntime = [], array $runtimeSelection = []): void
     {
+        $selection = $runtimeSelection['runtime_selection'] ?? null;
+        if (\is_array($selection)) {
+            $selection = RuntimeSelection::fromArray($selection);
+        }
+        if (!$selection instanceof RuntimeSelection) {
+            throw new \RuntimeException('WLS Start must persist a complete RuntimeSelection.');
+        }
+        if ($selection->effectiveTopology->value === 'independent') {
+            throw new \RuntimeException('WLS independent topology is not startable.');
+        }
+        $containerRegistryDigest = \strtolower(\trim((string)($runtimeSelection['container_registry_digest'] ?? '')));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $containerRegistryDigest) !== 1) {
+            throw new \RuntimeException('WLS Start must persist a valid container_registry_digest.');
+        }
+
+        $selectionData = $selection->toArray();
+        $effectiveTopology = $selection->effectiveTopology->value;
+        $dispatcherEnabled = $selection->isDispatcher();
+        $useDirectMode = $selection->isDirect();
         $instanceData = [
+            'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
             'name' => $instanceName,
             'host' => $host,
             'public_host' => $publicHost !== '' ? $publicHost : $host,
@@ -5889,6 +6407,24 @@ class Start extends CommandAbstract
             'ssl_enabled' => $sslEnabled,
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
+            'runtime_selection' => $selectionData,
+            'topology' => $effectiveTopology,
+            'requested_topology' => $selection->requestedTopology->value,
+            'effective_topology' => $effectiveTopology,
+            'topology_source' => $selection->source,
+            'topology_reason' => $selection->reason,
+            'topology_reason_codes' => $selection->reasonCodes,
+            'runtime_strategy' => (string)($runtimeSelection['runtime_strategy'] ?? 'auto'),
+            'os_family' => $selection->osFamily,
+            'event_loop_driver' => $selection->eventLoopDriver,
+            'direct_listener_mode' => $selection->listenerMode,
+            'listener_strategy' => $selection->listenerMode,
+            'ssl_engine' => $selection->sslEngine,
+            'policy_compatible' => $selection->policyCompatible,
+            'policy_digest' => (string)($runtimeSelection['policy_digest'] ?? ''),
+            'container_registry_digest' => $containerRegistryDigest,
+            'supervisor_enabled' => (bool)($runtimeSelection['supervisor_enabled'] ?? false),
+            'supervisor_reason' => (string)($runtimeSelection['supervisor_reason'] ?? ''),
             'started_at' => \date('Y-m-d H:i:s'),
             'started_timestamp' => \time(),
             'pid' => \getmypid(),
@@ -5949,19 +6485,277 @@ class Start extends CommandAbstract
         // - 独立端口模式：每个 Worker 使用独立端口
         // - Dispatcher 模式：Worker 使用内网端口，Dispatcher 监听主端口
         if ($useDirectMode) {
-            $instanceData['master_mode'] = MasterProcess::MODE_LINUX_DIRECT;
+            $instanceData['master_mode'] = MasterProcess::MODE_DIRECT;
             $instanceData['main_port'] = $port;
         } elseif (!$dispatcherEnabled) {
             // 独立端口模式（非直连、非 Dispatcher）
-            $instanceData['master_mode'] = MasterProcess::MODE_LEGACY;
+            $instanceData['master_mode'] = MasterProcess::MODE_INDEPENDENT;
             $instanceData['main_port'] = $workerPort;
         } else {
             // Dispatcher 模式
-            $instanceData['master_mode'] = MasterProcess::MODE_LEGACY;
+            $instanceData['master_mode'] = MasterProcess::MODE_DISPATCHER;
             $instanceData['main_port'] = 0;
         }
         
         $this->getInstanceManager()->saveInstance($instanceName, $instanceData);
+    }
+
+    /**
+     * Compile and validate a complete generation outside the live registry,
+     * then promote it under one directory lock. No staging path is returned or
+     * logged, and a failed promotion restores the exact previous byte set.
+     *
+     * @return array{
+     *     container_registry_digest:string,
+     *     policy_check:array{valid:bool,errors:list<string>,source:string,bundle:array<string,mixed>}
+     * }
+     */
+    private function compileFrameworkRuntimeRegistries(
+        string $policyTopology,
+        string $instanceName,
+        array $compileContext = [],
+    ): array
+    {
+        $finalDirectory = BP . 'generated' . DS . 'framework';
+        $hookRegistry = BP . 'generated' . DS . 'hooks.php';
+        $stagingRoot = BP . 'var' . DS . 'tmp' . DS . 'framework-start-stage-'
+            . (string)(\getmypid() ?: 0)
+            . '-'
+            . \bin2hex(\random_bytes(8));
+        $stagingDirectory = $stagingRoot . DS . 'framework';
+        $stagingHookRegistry = $stagingRoot . DS . 'hooks.php';
+        $publisher = new AtomicCompiledFilePublisher();
+        $finalSnapshots = [];
+        $runtimeContainerInstalled = false;
+
+        try {
+            if (!@\mkdir($stagingRoot, 0700, true) && !\is_dir($stagingRoot)) {
+                throw new \RuntimeException('Unable to create private framework registry staging directory.');
+            }
+
+            // Template policies consume hooks.php but framework:compile does
+            // not own it. Compile against one immutable copy, then fence the
+            // live hook digest both before and after final promotion.
+            $hookSnapshot = $this->snapshotCompiledArtifact($hookRegistry);
+            if ($hookSnapshot['exists']) {
+                $publisher->publish($stagingHookRegistry, (string)$hookSnapshot['content']);
+                AtomicCompiledFilePublisher::releaseProcessLocks();
+            }
+
+            /** @var FrameworkCompiler $compiler */
+            $compiler = ObjectManager::getInstance(FrameworkCompiler::class);
+            $compiler->compile(
+                BP . 'app' . DS . 'code' . DS . 'Weline',
+                $stagingDirectory,
+            );
+
+            $stagedSnapshots = [];
+            foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
+                $stagedPath = $stagingDirectory . DS . $fileName;
+                $snapshot = $this->snapshotCompiledArtifact($stagedPath);
+                if (!$snapshot['exists']) {
+                    throw new \RuntimeException("Framework registry staging output is missing: {$fileName}.");
+                }
+                $stagedSnapshots[$fileName] = $snapshot;
+            }
+
+            $stagedContainer = new CompiledContainer(
+                $stagingDirectory . DS . 'container.php',
+                false,
+            );
+            $containerRegistryDigest = $stagedContainer->registryDigest();
+            if (\preg_match('/^[a-f0-9]{64}$/D', $containerRegistryDigest) !== 1) {
+                throw new \RuntimeException('Staged compiled container registry digest is invalid.');
+            }
+
+            $stagedPolicyControl = new RuntimePolicyControlService(
+                new RuntimePolicyCompiler($stagingDirectory . DS . 'runtime_policy_providers.php'),
+            );
+            $policyCheck = $stagedPolicyControl->check(
+                $policyTopology,
+                $instanceName,
+                $compileContext,
+            );
+            if (empty($policyCheck['valid'])) {
+                // Invalid policy is a normal preflight result. The final files
+                // have not been locked or touched at this point.
+                return [
+                    'container_registry_digest' => $containerRegistryDigest,
+                    'policy_check' => $policyCheck,
+                ];
+            }
+
+            $this->assertCompiledArtifactSnapshot($hookRegistry, $hookSnapshot, 'hook registry');
+            $publisher->acquireDirectoryLock($finalDirectory);
+            foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
+                $finalSnapshots[$fileName] = $this->snapshotCompiledArtifact(
+                    $finalDirectory . DS . $fileName,
+                );
+            }
+            $this->assertCompiledArtifactSnapshot($hookRegistry, $hookSnapshot, 'hook registry');
+
+            try {
+                foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
+                    $publisher->publish(
+                        $finalDirectory . DS . $fileName,
+                        (string)$stagedSnapshots[$fileName]['content'],
+                    );
+                }
+                foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
+                    $this->assertCompiledArtifactSnapshot(
+                        $finalDirectory . DS . $fileName,
+                        $stagedSnapshots[$fileName],
+                        $fileName,
+                    );
+                }
+                ContainerRuntime::preflight($containerRegistryDigest);
+                $runtimeContainerInstalled = true;
+                $this->assertCompiledArtifactSnapshot($hookRegistry, $hookSnapshot, 'hook registry');
+            } catch (\Throwable $promotionException) {
+                $rollbackErrors = $this->restoreCompiledArtifactSnapshots(
+                    $finalDirectory,
+                    $finalSnapshots,
+                    $publisher,
+                );
+                if ($runtimeContainerInstalled) {
+                    try {
+                        if (($finalSnapshots['container.php']['exists'] ?? false) === true) {
+                            ContainerRuntime::preflight();
+                        } else {
+                            ContainerRuntime::set(null);
+                        }
+                    } catch (\Throwable $containerRestoreException) {
+                        $rollbackErrors[] = 'container runtime restore: ' . $containerRestoreException->getMessage();
+                    }
+                }
+                if ($rollbackErrors !== []) {
+                    throw new \RuntimeException(
+                        'Framework registry promotion failed and rollback verification failed: '
+                        . \implode('; ', $rollbackErrors),
+                        0,
+                        $promotionException,
+                    );
+                }
+                throw $promotionException;
+            }
+
+            return [
+                'container_registry_digest' => $containerRegistryDigest,
+                'policy_check' => $policyCheck,
+            ];
+        } catch (\Throwable $exception) {
+            $message = \str_replace(
+                [$stagingRoot, \str_replace('\\', '/', $stagingRoot)],
+                '[private framework staging]',
+                $exception->getMessage(),
+            );
+            throw new \RuntimeException($message, 0, $exception);
+        } finally {
+            AtomicCompiledFilePublisher::releaseProcessLocks();
+            $this->removePrivateStagingDirectory($stagingRoot);
+        }
+    }
+
+    /**
+     * @return array{exists:bool,content:?string,sha256:string}
+     */
+    private function snapshotCompiledArtifact(string $path): array
+    {
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            \clearstatcache(true, $path);
+            if (!\is_file($path)) {
+                if (!\file_exists($path) && !\is_link($path)) {
+                    return ['exists' => false, 'content' => null, 'sha256' => ''];
+                }
+                throw new \RuntimeException('Compiled registry path is not a regular file.');
+            }
+
+            $before = @\hash_file('sha256', $path);
+            $content = @\file_get_contents($path);
+            $after = @\hash_file('sha256', $path);
+            if (\is_string($before)
+                && \is_string($content)
+                && \is_string($after)
+                && $before !== ''
+                && \hash_equals($before, $after)
+                && \hash_equals($before, \hash('sha256', $content))
+            ) {
+                return ['exists' => true, 'content' => $content, 'sha256' => $before];
+            }
+        }
+
+        throw new \RuntimeException('Compiled registry changed while it was being snapshotted.');
+    }
+
+    /**
+     * @param array{exists:bool,content:?string,sha256:string} $snapshot
+     */
+    private function assertCompiledArtifactSnapshot(string $path, array $snapshot, string $label): void
+    {
+        $actual = $this->snapshotCompiledArtifact($path);
+        if ($actual['exists'] !== $snapshot['exists']
+            || ($snapshot['exists'] && !\hash_equals($snapshot['sha256'], $actual['sha256']))
+        ) {
+            throw new \RuntimeException("Compiled {$label} changed during startup transaction.");
+        }
+    }
+
+    /**
+     * @param array<string, array{exists:bool,content:?string,sha256:string}> $snapshots
+     * @return list<string>
+     */
+    private function restoreCompiledArtifactSnapshots(
+        string $directory,
+        array $snapshots,
+        AtomicCompiledFilePublisher $publisher,
+    ): array {
+        $errors = [];
+        foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
+            $snapshot = $snapshots[$fileName] ?? null;
+            if (!\is_array($snapshot)) {
+                $errors[] = "{$fileName}: original snapshot missing";
+                continue;
+            }
+            $path = $directory . DS . $fileName;
+            try {
+                if ($snapshot['exists']) {
+                    $publisher->publish($path, (string)$snapshot['content']);
+                } elseif ((\file_exists($path) || \is_link($path)) && !@\unlink($path)) {
+                    throw new \RuntimeException('unable to remove newly published artifact');
+                }
+                $this->assertCompiledArtifactSnapshot($path, $snapshot, $fileName . ' rollback');
+            } catch (\Throwable $exception) {
+                $errors[] = $fileName . ': ' . $exception->getMessage();
+            }
+        }
+        return $errors;
+    }
+
+    private function removePrivateStagingDirectory(string $directory): void
+    {
+        if ($directory === '' || (!\is_dir($directory) && !\is_link($directory))) {
+            return;
+        }
+        if (\is_link($directory)) {
+            @\unlink($directory);
+            return;
+        }
+        $entries = @\scandir($directory);
+        if (!\is_array($entries)) {
+            return;
+        }
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $directory . DS . $entry;
+            if (\is_dir($path) && !\is_link($path)) {
+                $this->removePrivateStagingDirectory($path);
+            } else {
+                @\unlink($path);
+            }
+        }
+        @\rmdir($directory);
     }
 
     protected function startForegroundManagedProcess(string $command): int
@@ -6120,15 +6914,38 @@ class Start extends CommandAbstract
         }
         
         // 仅保存可复用的配置项（不包含运行时状态）
+        $existingSavedConfig = $this->loadSavedInstanceConfig($instanceName) ?? [];
         $savedConfig = [];
         
         // 从当前合并后的配置中提取可复用项
         // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 wls.https 为准
-        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'worker_base_port', 'worker_memory_limit', 'dispatcher_memory_limit'];
+        $persistKeys = ['host', 'public_host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'worker_base_port', 'worker_memory_limit', 'dispatcher_memory_limit'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];
             }
+        }
+
+        $existingRuntime = \is_array($existingSavedConfig['runtime'] ?? null)
+            ? $existingSavedConfig['runtime']
+            : [];
+        if (\array_key_exists('topology', $existingRuntime)) {
+            $savedConfig['runtime']['topology'] = (string)$existingRuntime['topology'];
+        }
+        $topologyExplicit = isset($args['topology'])
+            || isset($args['direct'])
+            || isset($args['no-dispatcher'])
+            || isset($args['no_dispatcher'])
+            || isset($args['dispatcher'])
+            || isset($args['force-dispatcher']);
+        if ($topologyExplicit && isset($config['requested_topology'])) {
+            $savedConfig['runtime']['topology'] = (string)$config['requested_topology'];
+        }
+        if (\array_key_exists('worker_count', $existingSavedConfig)) {
+            $savedConfig['worker_count'] = \max(1, (int)$existingSavedConfig['worker_count']);
+        }
+        if (isset($args['count']) || isset($args['c'])) {
+            $savedConfig['worker_count'] = \max(1, (int)($args['count'] ?? $args['c']));
         }
         
         // 记录保存时间
@@ -6404,13 +7221,14 @@ PHP;
      */
     protected function getRecommendedConfig(): array
     {
-        $cpuCores = $this->getCpuCoreCount();
+        $profile = $this->latestRuntimeProfile ?? $this->detectRuntimeProfile();
+        $resolver = new RuntimeStrategyResolver();
         
         return [
             // Worker 配置
             'worker_count' => [
-                'io' => $cpuCores * 2,      // I/O 密集型
-                'cpu' => $cpuCores,         // CPU 密集型
+                'io' => $resolver->resolveWorkerCount('auto', 'io', $this->latestRuntimeStrategy, $profile),
+                'cpu' => $resolver->resolveWorkerCount('auto', 'cpu', $this->latestRuntimeStrategy, $profile),
             ],
             // PHP 扩展
             'extensions' => [
@@ -6446,30 +7264,14 @@ PHP;
     {
         $issues = [];
         $recommended = $this->getRecommendedConfig();
-        $cpuCores = $this->getCpuCoreCount();
         
         // 0. 检查事件循环（最重要的性能因素！）
         $eventLoopIssues = $this->detectEventLoopIssues();
         $issues = \array_merge($issues, $eventLoopIssues);
         
         // 1. 检查 Worker 数量
-        // Windows 上多进程开销大，推荐值不超过 CPU 核心数
-        $multiplier = $mode === 'io' ? 2 : 1;
-        $recommendedWorkers = $recommended['worker_count'][$mode] ?? $cpuCores * $multiplier;
-        
-        // Windows 上限制最大推荐值
-        if (IS_WIN) {
-            $deployMode = Env::system('deploy') ?? 'dev';
-            if ($deployMode === 'dev') {
-                $recommendedWorkers = \min(\max(4, (int)\ceil($cpuCores / 2)), 8);
-            } else {
-                $recommendedWorkers = \min($recommendedWorkers, $cpuCores);
-            }
-            $multiplier = 1;
-        }
-        
-        // 限制在合理范围内（2-16）
-        $recommendedWorkers = \min(\max(2, $recommendedWorkers), 16);
+        $normalizedMode = \strtolower(\trim($mode)) === 'cpu' ? 'cpu' : 'io';
+        $recommendedWorkers = (int)$recommended['worker_count'][$normalizedMode];
         
         if ($workerCount < $recommendedWorkers) {
             $platformNote = IS_WIN ? __('（Windows 建议不超过 CPU 核心数）') : '';
@@ -6518,9 +7320,9 @@ PHP;
         if (!IS_WIN && $dispatcherEnabled && $supportsReusePort && !$directReusePortEnabled) {
             $issues['direct_reuse_port'] = [
                 'level' => 'info',
-                'message' => __('当前使用默认 Dispatcher 模式；Linux/Mac 可按压测结果评估 SO_REUSEPORT 直连模式'),
-                'benefit' => __('可减少 Dispatcher 中转开销，但会改变流量分发与排障路径，建议仅在压测验证后启用'),
-                'action' => __('使用 --direct 或 wls.topology = direct 显式启用'),
+                'message' => __('当前显式使用 Dispatcher 模式；Linux auto 使用 SO_REUSEPORT 直连，macOS auto 使用 Master 共享监听 FD 直连'),
+                'benefit' => __('Dispatcher 适合需要集中转发的兼容场景；峰值性能优先使用 auto/direct'),
+                'action' => __('移除 --dispatcher，或配置 wls.runtime.topology = auto/direct'),
             ];
         }
         
@@ -6581,12 +7383,10 @@ PHP;
             $issues['event_loop'] = [
                 'level' => 'critical', // 最高优先级
                 'message' => __('未安装 event 扩展，使用 stream_select 回退方案'),
-                'benefit' => __('安装后性能提升 100-200%%，QPS 从 15,000 提升至 30,000+'),
+                'benefit' => __('安装后将使用 libevent 事件循环；实际收益以 server:benchmark 同机对比为准'),
                 'action' => IS_WIN 
                     ? __('Windows: 下载 php_event.dll 并在 php.ini 中添加 extension=event')
                     : __('Linux/Mac: pecl install event && echo "extension=event" >> php.ini'),
-                'current_performance' => '15,000 QPS',
-                'optimal_performance' => '30,000-50,000 QPS',
             ];
         }
         
@@ -6902,34 +7702,35 @@ PHP;
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
                 '--no-daemon' => __('前台运行（查看实时日志）'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
-                '-r, --restart' => __('平滑重启：开维护模式（新请求返回503）、通过健康检查等待现有请求完成后切换'),
+                '-r, --restart' => __('平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换'),
                 '-f' => __('与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）；仅 --cli 时 -f 表示前台运行'),
-                '--wait <秒>' => __('平滑重启最长等待秒数，默认 30（实际会通过健康检查尽快切换）'),
                 '--no-ssl' => __('仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）'),
                 '--ssl-cert <path>' => __('SSL 证书文件路径（启用 HTTPS）'),
                 '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
                 '--worker-memory-limit <size>' => __('Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）'),
                 '--dispatcher-memory-limit <size>' => __('Dispatcher 进程 PHP memory_limit（默认跟随 Worker）'),
                 '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability/compatibility（默认 auto）'),
-                '--topology <mode>' => __('拓扑：auto/direct/dispatcher/independent（默认 auto）'),
+                '--topology <mode>' => __('拓扑：auto/direct/dispatcher（默认 auto；independent 已禁止启动）'),
                 '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
+                '--no-auto-deps' => __('显式禁用启动前依赖自动安装；Direct 仍 fail-closed，Dispatcher 可使用有界 select'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
-                '--direct' => __('直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）'),
-                '--no-dispatcher' => __('独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口'),
-                '--dispatcher' => __('强制 Dispatcher 模式'),
+                '--direct' => __('直连模式：Linux 使用 SO_REUSEPORT，macOS 使用 Master 共享监听 FD'),
+                '--no-dispatcher' => __('已禁用：independent 尚不具备完整 READY/策略保证，请使用 direct 或 --dispatcher'),
+                '--dispatcher' => __('Linux/macOS 显式改用 Dispatcher；Windows 默认且只能使用此模式'),
                 '--help' => __('显示帮助信息'),
             ],
             [
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
+                __('拓扑优先级') => __('CLI > 当前实例显式拓扑 > wls.runtime.topology > 旧 wls.topology/gateway > auto'),
                 __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
                 __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
-                __('事件循环') => __('auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因'),
-                __('默认拓扑') => __('auto 默认 Dispatcher；Linux/Mac 支持 SO_REUSEPORT 时可用 --direct 显式启用直连模式'),
+                __('事件循环') => __('Linux/macOS Direct 自动安装 sockets/Event 且失败即停止；显式 Dispatcher 的 Event 安装失败时保持 Dispatcher + 有界 select'),
+                __('默认拓扑') => __('Linux 在 SO_REUSEPORT 真实分流探测通过后 direct；macOS 在共享 FD 真实 accept 分布探测通过后 direct；Windows 固定 Dispatcher'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
-                __('SSL 协议') => __('支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本'),
+                __('SSL 协议') => __('仅支持 TLS 1.2/1.3；空值或无效 wls.ssl.protocols 会在启动前被拒绝'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
                 __('80/443 端口') => __('默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap'),
                 __('HTTP 重定向端口') => __('固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker'),

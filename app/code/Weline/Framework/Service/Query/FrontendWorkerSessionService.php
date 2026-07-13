@@ -186,7 +186,7 @@ final class FrontendWorkerSessionService
                 'channel' => $channel,
                 'params' => $params,
                 'expires_at' => $now + self::STREAM_TICKET_TTL,
-                'url' => '/api/framework/stream?ticket=' . \rawurlencode($ticket),
+                'url' => $this->buildStreamUrl($ticket),
             ];
         });
     }
@@ -474,5 +474,20 @@ final class FrontendWorkerSessionService
     private function hash(string $value): string
     {
         return \hash('sha256', $value);
+    }
+
+    private function buildStreamUrl(string $ticket): string
+    {
+        try {
+            $prefix = \trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/');
+        } catch (\Throwable) {
+            $prefix = 'api';
+        }
+
+        if ($prefix === '') {
+            $prefix = 'api';
+        }
+
+        return '/' . $prefix . '/framework/stream?ticket=' . \rawurlencode($ticket);
     }
 }

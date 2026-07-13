@@ -16,7 +16,8 @@ use Weline\Framework\Event\EventRegistry;
 use Weline\Framework\Extends\ExtendsRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Plugin\PluginRegistry;
-use Weline\Hook\HookRegistry;
+use Weline\Framework\Registry\ExtensionRegistryRefresherInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * 注册表更新服务
@@ -151,8 +152,11 @@ class RegistryUpdateService
                 w_log_info(__('正在更新 Hook 注册表...'), [], 'registry_update.log');
             }
             RegistryProgress::section('Hook registry');
-            /** @var HookRegistry $hookRegistry */
-            $hookRegistry = ObjectManager::getInstance(HookRegistry::class);
+            $hookRegistry = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(ExtensionRegistryRefresherInterface::class);
+            if (!$hookRegistry instanceof ExtensionRegistryRefresherInterface) {
+                throw new \RuntimeException('Hook registry refresher provider is missing.');
+            }
             // 系统升级时，允许solo hook冲突，只记录警告，不阻止保存
             // 但是文档检查必须通过，否则直接抛出异常停止系统更新
             $ok = $hookRegistry->refresh(true);
@@ -339,9 +343,12 @@ class RegistryUpdateService
                 w_log_info(__('正在增量更新 Hook 注册表（模块：%{1}）...', [implode(', ', $moduleNames)]), [], 'registry_update.log');
             }
             RegistryProgress::section('Hook registry incremental');
-            /** @var HookRegistry $hookRegistry */
-            $hookRegistry = ObjectManager::getInstance(HookRegistry::class);
-            $ok = $hookRegistry->refreshForModules($moduleNames, true);
+            $hookRegistry = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(ExtensionRegistryRefresherInterface::class);
+            if (!$hookRegistry instanceof ExtensionRegistryRefresherInterface) {
+                throw new \RuntimeException('Hook registry refresher provider is missing.');
+            }
+            $ok = $hookRegistry->refreshModules($moduleNames, true);
             if ($ok) {
                 RegistryProgress::log('Hook registry incremental generated file refreshed');
                 $this->releaseRegistryMemory('Hook registry incremental', $hookRegistry);

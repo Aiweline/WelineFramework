@@ -80,6 +80,7 @@ Weline Framework 提供了统一的API接口开发规范，确保所有API接口
   - `api_admin`: 后端API区域前缀（如 `'api_admin' => 'J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE'`）
 - 货币和语言前缀从当前用户会话或网站配置中获取
 - 路由注册时只注册 `[模组前缀]/[路由]` 部分，区域前缀和i18n前缀在URL生成时动态添加
+- 区域/API 路径段（例如 `api` 或 `API`）永远不作为货币代码解析；货币识别会先排除已配置的区域路由前缀
 
 **在 `@example` 注释中的使用**：
 - `Path` 字段应使用完整路径，包含区域前缀、货币、语言（如果适用）
@@ -1789,4 +1790,3 @@ public function $METHOD_NAME$($PARAMETERS$): array
 **文档版本**: 1.0  
 **创建日期**: 2025-01-XX  
 **最后更新**: 2025-01-XX
-

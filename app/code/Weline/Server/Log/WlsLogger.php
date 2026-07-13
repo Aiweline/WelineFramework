@@ -348,15 +348,31 @@ class WlsLogger
     public function log(string $level, string $message, array $context = []): void
     {
         $level = LogLevel::normalize($level);
+        if (!LogLevel::isAtLeast($level, $this->minLevel)) {
+            return;
+        }
+
+        // 生产默认关闭 WLS verbose 时，Worker 热路径仍会经过大量
+        // info/debug 调用点。没有任何有效输出 sink 时必须在日期、内存、
+        // context 和进程标签格式化前返回；ERROR/FATAL 仍保留 error_log 兜底。
+        $isCritical = $level === LogLevel::ERROR || $level === LogLevel::FATAL;
+        $hasActiveIpcSink = $this->ipcLogSink !== null
+            && LogConfig::isDevMode()
+            && LogConfig::isVerboseWlsLog();
+        if (!$isCritical
+            && !$this->fileEnabled
+            && !$this->stdoutEnabled
+            && $this->devDebugLogFile === null
+            && !$hasActiveIpcSink
+        ) {
+            return;
+        }
+
         $this->ensureProcessTagResolved();
 
         $contextInstance = $context['instance'] ?? null;
         if (\is_scalar($contextInstance) && (string)$contextInstance !== '') {
             $this->setInstanceName((string)$contextInstance);
-        }
-
-        if (!LogLevel::isAtLeast($level, $this->minLevel)) {
-            return;
         }
 
         // 内存压力检测：如果内存使用超过 90%，丢弃非关键日志

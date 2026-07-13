@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
-use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Model\Document as DocumentModel;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;

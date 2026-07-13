@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Strategy;
 
+use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 
@@ -94,6 +95,11 @@ final class WlsStrategy implements SessionStrategyInterface
      */
     public function initialize(?string $sessionId, array &$data): string
     {
+        if ($this->isInternalHomepageFpcPrimeRequest()) {
+            $data = [];
+            return '';
+        }
+
         if ($sessionId === null || $sessionId === '') {
             $sessionId = \w_env_cookie(self::SESSION_NAME) ?? '';
         }
@@ -133,6 +139,10 @@ final class WlsStrategy implements SessionStrategyInterface
      */
     public function regenerate(string $oldSessionId, array $data, bool $deleteOld, int $ttl): string
     {
+        if ($this->isInternalHomepageFpcPrimeRequest()) {
+            return '';
+        }
+
         $newId = $this->generateSessionId();
 
         if ($deleteOld && $oldSessionId !== '') {
@@ -158,6 +168,10 @@ final class WlsStrategy implements SessionStrategyInterface
      */
     public function setCookie(string $sessionId, int $lifetime = 0): void
     {
+        if ($this->isInternalHomepageFpcPrimeRequest()) {
+            return;
+        }
+
         $headerCollector = HeaderCollector::getInstance();
         
         $expires = $lifetime > 0 ? \time() + $lifetime : 0;
@@ -199,5 +213,15 @@ final class WlsStrategy implements SessionStrategyInterface
     private function generateSessionId(): string
     {
         return \bin2hex(\random_bytes(16));
+    }
+
+    /**
+     * The READY-gate homepage prime is an internal, anonymous cache build.
+     * It must never allocate persistent session state or emit Set-Cookie,
+     * including when controller/template code starts Session lazily.
+     */
+    private function isInternalHomepageFpcPrimeRequest(): bool
+    {
+        return InternalHomepagePrime::isCurrentRequest();
     }
 }

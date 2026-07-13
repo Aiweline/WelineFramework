@@ -26,6 +26,7 @@ use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionLease;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
@@ -61,7 +62,7 @@ final class Connector extends Query implements ConnectorInterface
     protected ?PDO $link = null;
     protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
-    protected bool $fromPool = false; // 标记连接是否来自连接池
+    private ?ConnectionLease $lease = null;
 
     private ?MysqlDialect $dialect = null;
 
@@ -72,8 +73,11 @@ final class Connector extends Query implements ConnectorInterface
 
     public function create(): static
     {
-        if ($this->link !== null) {
+        if ($this->link !== null && $this->lease?->isActive()) {
             return $this;
+        }
+        if ($this->link !== null || $this->lease !== null) {
+            $this->close();
         }
 
         $db_type = $this->configProvider->getDbType();
@@ -82,7 +86,7 @@ final class Connector extends Query implements ConnectorInterface
         }
 
         // 从连接池获取连接
-        $this->link = ConnectionPool::getConnection(
+        $lease = ConnectionPool::acquire(
             $this->configProvider,
             function () use ($db_type) {
                 $dsn = "{$db_type}:host={$this->configProvider->getHostName()}:{$this->configProvider->getHostPort()};dbname={$this->configProvider->getDatabase()};charset={$this->configProvider->getCharset()};collate={$this->configProvider->getCollate()}";
@@ -101,13 +105,20 @@ final class Connector extends Query implements ConnectorInterface
                 }
             }
         );
-        $this->fromPool = true;
+        $this->lease = $lease;
+        $this->link = $lease->getConnection();
         try {
-            $this->getDialect()->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
+            $serverVersion = (string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION);
+            try {
+                $this->getDialect()->validateVersion($serverVersion);
+            } catch (\Throwable $e) {
+                w_log_warning(__('MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
+            }
+            $this->wrappedConnection = new PdoConnection($this->link, 'mysql');
         } catch (\Throwable $e) {
-            w_log_warning(__('MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
+            $this->discardCurrentConnection();
+            throw $e;
         }
-        $this->wrappedConnection = new PdoConnection($this->link, 'mysql');
         return $this;
     }
 
@@ -122,15 +133,33 @@ final class Connector extends Query implements ConnectorInterface
 
     public function close(): void
     {
-        // 如果连接来自连接池，归还到池中；否则直接释放
-        if ($this->link !== null) {
-            if ($this->fromPool) {
-                ConnectionPool::releaseConnection($this->link, $this->configProvider);
-            }
-            $this->link = null;
-            $this->wrappedConnection = null;
-            $this->fromPool = false;
-        }
+        $lease = $this->detachCurrentConnection();
+        $lease?->release();
+    }
+
+    private function discardCurrentConnection(): void
+    {
+        $lease = $this->detachCurrentConnection();
+        $lease?->discard();
+    }
+
+    private function detachCurrentConnection(): ?ConnectionLease
+    {
+        $lease = $this->lease;
+        $this->lease = null;
+        $this->link = null;
+        $this->wrappedConnection = null;
+        return $lease;
+    }
+
+    public function __clone()
+    {
+        // A lease is an ownership token, never a cloneable connection value.
+        $this->lease = null;
+        $this->link = null;
+        $this->wrappedConnection = null;
+        $this->query = null;
+        $this->PDOStatement = null;
     }
 
     /**

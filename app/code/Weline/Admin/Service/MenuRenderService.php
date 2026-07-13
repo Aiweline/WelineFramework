@@ -11,15 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Service;
 
-use Weline\Acl\Model\Role;
 use Weline\Admin\Model\MenuAccessLog;
-use Weline\Backend\Service\BackendWarmupContext;
-use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Api\Auth\BackendUserContext;
+use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
+use Weline\Backend\Api\Menu\MenuReaderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
-use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Http\Request;
 
 /**
@@ -42,10 +40,8 @@ class MenuRenderService
      */
     private MenuAccessLog $menuAccessLogModel;
 
-    /**
-     * @var AuthenticatedSessionInterface
-     */
-    private AuthenticatedSessionInterface $session;
+    private ?BackendUserContextProviderInterface $userContextProvider = null;
+    private ?MenuReaderInterface $menuReader = null;
 
     /**
      * @var array<string, array<string, string>>
@@ -71,7 +67,6 @@ class MenuRenderService
         MenuAccessLog $menuAccessLogModel
     ) {
         $this->menuAccessLogModel = $menuAccessLogModel;
-        $this->session = SessionFactory::getInstance()->createBackendSession();
     }
 
     /**
@@ -94,8 +89,8 @@ class MenuRenderService
         $prefix = rtrim($this->getRequest()->getUrlBuilder()->getBackendUrl('/'), '/');
         
         // 调试：检测异常的 URL 前缀
-        // 正常的后端 URL 应该包含货币和语言路径段，如 /backend/USD/zh_Hans_CN
-        // 如果只有 /backend 而没有货币语言，说明 $_SERVER 变量可能未正确设置
+        // 后端 URL 可按当前上下文携带货币和语言路径段，如 /backend/USD/zh_Hans_CN；
+        // 默认货币/语言可能不会输出，因此不能把缺少本地化段当作异常。
         $backendKey = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? '';
         $expectedMinLength = strlen($backendKey) + 10; // backend + /XXX/xx_XX 至少
         if (strlen($prefix) < $expectedMinLength) {
@@ -126,19 +121,14 @@ class MenuRenderService
     /**
      * 获取当前登录用户
      * 
-     * @return BackendUser|null
+     * @return BackendUserContext|null
      */
-    public function getCurrentUser(): ?BackendUser
+    public function getCurrentUser(): ?BackendUserContext
     {
-        if (\class_exists(BackendWarmupContext::class)) {
-            $warmupUser = BackendWarmupContext::currentUser();
-            if ($warmupUser instanceof BackendUser) {
-                return $warmupUser;
-            }
+        if ($this->userContextProvider === null) {
+            $this->userContextProvider = ObjectManager::getInstance(BackendUserContextProviderInterface::class);
         }
-
-        $this->session = SessionFactory::getInstance()->createBackendSession();
-        return $this->session->getLoginUser();
+        return $this->userContextProvider->current();
     }
 
     /**
@@ -153,10 +143,10 @@ class MenuRenderService
             return [];
         }
 
-        // WLS 兼容逻辑已在 MenuService 中处理，这里只根据 userId 调用服务
-        /** @var \Weline\Backend\Service\MenuServiceInterface $menuService */
-        $menuService = ObjectManager::getInstance(\Weline\Backend\Service\MenuService::class);
-        return $menuService->getMenuTreeByUserId((int)$user->getId());
+        if ($this->menuReader === null) {
+            $this->menuReader = ObjectManager::getInstance(MenuReaderInterface::class);
+        }
+        return $this->menuReader->getMenuTreeByUserId($user->getId());
     }
 
     /**

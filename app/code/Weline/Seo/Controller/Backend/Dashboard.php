@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Controller\Backend;
 
-use Weline\Admin\Controller\BaseController;
+use Weline\Framework\App\Controller\BackendPageController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoSubject;
@@ -25,7 +25,7 @@ use Weline\Seo\Service\SuggestionService;
  * @package Weline_Seo
  */
 #[Acl('Weline_Seo::seo_dashboard', 'SEO总览', 'mdi-view-dashboard-outline', 'SEO总览', 'Weline_Backend::seo_group')]
-class Dashboard extends BaseController
+class Dashboard extends BackendPageController
 {
     private ObjectManager $objectManager;
 
@@ -203,4 +203,3 @@ class Dashboard extends BaseController
         }
     }
 }
-

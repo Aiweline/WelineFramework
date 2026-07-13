@@ -1,25 +1,23 @@
 {
-  "name": "weline/module-ck-editor-editor-manager",
-  "description": "WelineFramework 集成CKEditor富文本编辑器管理器",
-  "minimum-stability": "stable",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "weline/module-editor-manager": "@dev"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\CKEditorEditorManager\\": ""
+    "name": "weline/module-ck-editor-editor-manager",
+    "description": "WelineFramework 集成CKEditor富文本编辑器管理器",
+    "minimum-stability": "stable",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-editor-manager": "@dev"
     },
-    "psr-0": {
-      "Weline\\CKEditorEditorManager\\": ""
-    }
-  },
-  "license": "MIT"
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\CKEditorEditorManager\\": ""
+        }
+    },
+    "license": "MIT"
 }

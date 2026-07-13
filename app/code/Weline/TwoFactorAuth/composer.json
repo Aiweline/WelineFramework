@@ -1,5 +1,5 @@
 {
-    "name": "weline/two-factor-auth",
+    "name": "weline/module-two-factor-auth",
     "description": "完全自主开发的双因素身份验证模块 - 标准TOTP实现，兼容所有主流2FA应用",
     "type": "weline-module",
     "license": "MIT",
@@ -19,8 +19,9 @@
     ],
     "require": {
         "php": "^8.4",
+        "endroid/qr-code": "^6.0",
         "weline/framework": "@dev",
-        "endroid/qr-code": "^6.0"
+        "weline/module-customer": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.0",

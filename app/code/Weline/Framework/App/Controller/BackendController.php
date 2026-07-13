@@ -14,6 +14,8 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\BackendWarmupProviderInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 
@@ -42,6 +44,7 @@ class BackendController extends PcController
 
     public function __init()
     {
+        $this->assertBackendAreaKey();
         $this->normalizeBackendRuntimeContext();
         $this->getEventManager()->dispatch('Weline_Framework_App::backend_controller_init_before');
         $this->cache = $this->getControllerCache();
@@ -65,6 +68,45 @@ class BackendController extends PcController
         $this->loginCheck();
     }
 
+    /**
+     * Backend controllers are reachable only through the configured backend area key.
+     *
+     * Validate the preserved client URI before normalizing the runtime context. This
+     * keeps a stale/misrouted frontend context from being promoted to backend merely
+     * because controller resolution reached this base class.
+     */
+    private function assertBackendAreaKey(): void
+    {
+        $initializedVars = \get_object_vars($this);
+        if (!isset($initializedVars['request']) || !$initializedVars['request'] instanceof Request) {
+            $this->request = ObjectManager::getInstance(Request::class);
+        }
+
+        $requestUri = (string)(
+            $this->request->getServer('WELINE_ORIGIN_REQUEST_URI')
+            ?: $this->request->getServer('REQUEST_URI')
+        );
+        $isCli = \defined('CLI') && CLI;
+        $isHttpRequest = !$isCli || \w_env('request.uri') !== null || $requestUri !== '';
+        if (!$isHttpRequest) {
+            return;
+        }
+
+        $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        $path = \parse_url($requestUri, PHP_URL_PATH);
+        if ($backendPrefix === '' || !\is_string($path)) {
+            $this->noRouter();
+            return;
+        }
+
+        $path = \ltrim(\rawurldecode($path), '/');
+        $separator = \strpos($path, '/');
+        $firstSegment = $separator === false ? $path : \substr($path, 0, $separator);
+        if ($firstSegment === '' || !\hash_equals($backendPrefix, $firstSegment)) {
+            $this->noRouter();
+        }
+    }
+
     private function normalizeBackendRuntimeContext(): void
     {
         WelineEnv::set('area', 'backend', 'BackendController normalize');
@@ -78,13 +120,9 @@ class BackendController extends PcController
         $this->request->setServer('WELINE_AREA', 'backend');
         $this->request->setServer('WELINE_IS_BACKEND', '1');
 
-        if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)
-            && \Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($this->request)
-        ) {
-            $warmupUser = \Weline\Backend\Service\BackendWarmupContext::resolveWarmupUser($this->request);
-            if ($warmupUser !== null) {
-                \Weline\Backend\Service\BackendWarmupContext::installForUser($warmupUser);
-            }
+        $warmup = $this->backendWarmupProvider();
+        if ($warmup !== null) {
+            $warmup->installRequestContext($this->request);
         }
     }
 
@@ -94,10 +132,7 @@ class BackendController extends PcController
             return;
         }
 
-        if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)
-            && \Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($this->request)
-            && \Weline\Backend\Service\BackendWarmupContext::isActive()
-        ) {
+        if ($this->backendWarmupProvider()?->shouldBypassLogin($this->request) === true) {
             return;
         }
 
@@ -144,6 +179,17 @@ class BackendController extends PcController
                 
                 $this->noRouter();
             }
+        }
+    }
+
+    private function backendWarmupProvider(): ?BackendWarmupProviderInterface
+    {
+        try {
+            $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(BackendWarmupProviderInterface::class);
+            return $provider instanceof BackendWarmupProviderInterface ? $provider : null;
+        } catch (\Throwable) {
+            return null;
         }
     }
 

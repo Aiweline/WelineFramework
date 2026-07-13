@@ -60,7 +60,8 @@ The module declares WLS plugin identity in `etc/marketplace/meta.json`:
 - Adds a recent audit feed backed by `var/log/wls/db-manager-audit.jsonl`.
 - Adds an operator-selected runtime action:
   `none` only saves the Profile, while `reload` calls
-  `IpcControlGateway::reloadAsync(<instance>, force)`.
+  the public `Weline\Server\Api\Control\RuntimeReloadGateway::forceReloadAsync()` boundary.
+  DbManager does not import Server IPC messages or the internal control gateway.
 - Allows the connection-test form to test the saved `Project Profile` after it
   is enabled.
 

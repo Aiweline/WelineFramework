@@ -135,19 +135,6 @@ class Collect implements CommandInterface
             $this->printing->warning(__('模板缓存清理失败：%{1}', [$e->getMessage()]));
         }
         
-        // 清理菜单相关缓存
-        $this->printing->note(__('清理菜单相关缓存...'));
-        try {
-            // 清理菜单URL验证器缓存
-            if (class_exists(\Weline\Admin\Helper\MenuUrlValidator::class)) {
-                \Weline\Admin\Helper\MenuUrlValidator::clearCache();
-            }
-            
-            $this->printing->success(__('菜单相关缓存已清理！'));
-        } catch (\Throwable $e) {
-            $this->printing->warning(__('菜单缓存清理失败：%{1}', [$e->getMessage()]));
-        }
-        
         $this->printing->success(__('菜单收集和系统更新完成！菜单已生效。'));
     }
 
@@ -173,7 +160,7 @@ class Collect implements CommandInterface
             ],
             [
                 '全量收集' => 'php bin/w menu:collect',
-                '增量收集指定模块' => 'php bin/w menu:collect -m Weline_Admin',
+                '增量收集指定模块' => 'php bin/w menu:collect -m Weline_Backend',
             ],
             'php bin/w menu:collect [-m|--module=<模块名>]'
         );

@@ -31,6 +31,7 @@ namespace Weline\Server\Dispatcher;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Protocol\ProxyProtocolV2;
 use Weline\Server\Service\InternalRequestLabel;
 
 // 确保 SOCKET_EAGAIN 常量存在（Windows 兼容）
@@ -40,6 +41,13 @@ if (!\defined('SOCKET_EAGAIN')) {
 
 class PassthroughCore
 {
+    /**
+     * A Dispatcher request must not synchronously walk an entire Worker pool.
+     * On macOS the effective public listen backlog is commonly only 128; one
+     * long failover sweep is enough to overflow it and manufacture ECONNREFUSED.
+     */
+    private const MAX_CONNECT_ATTEMPTS_PER_PHASE = 3;
+
     /**
      * WOULDBLOCK 错误码列表（跨平台）
      * - 11: EAGAIN/EWOULDBLOCK (Linux/Unix)
@@ -175,6 +183,11 @@ class PassthroughCore
      */
     private bool $workerSslEnabled = false;
 
+    /** Dispatcher backend identity preface; Workers accept it optionally. */
+    private bool $proxyProtocolV2Enabled = false;
+    private string $proxyProtocolV2Secret = '';
+    private bool $proxyProtocolV2RequireAuthentication = false;
+
     /**
      * 是否启用 SNI 路由
      */
@@ -269,6 +282,14 @@ class PassthroughCore
      * @var array<int, bool>
      */
     private array $workerClosed = [];
+
+    /**
+     * Plain-HTTP response framing state. TLS tunnels remain opaque and keep the
+     * conservative idle-timeout cleanup path.
+     *
+     * @var array<int, array{header:string,header_bytes:int,received:int,expected_total:?int,complete:bool,connection_close:bool,chunked:bool,chunk_phase:string,chunk_buffer:string,chunk_remaining:int}>
+     */
+    private array $httpResponseStates = [];
 
     /**
      * 客户端上行（client->worker）是否已半关闭（FIN）
@@ -452,6 +473,23 @@ class PassthroughCore
     {
         if (isset($config['sni_routing_enabled'])) {
             $this->sniRoutingEnabled = (bool) $config['sni_routing_enabled'];
+        }
+        if (isset($config['proxy_protocol_v2_enabled'])) {
+            $this->proxyProtocolV2Enabled = (bool)$config['proxy_protocol_v2_enabled'];
+        }
+        if (isset($config['proxy_protocol_v2_secret'])) {
+            $this->proxyProtocolV2Secret = (string)$config['proxy_protocol_v2_secret'];
+        }
+        if (isset($config['proxy_protocol_v2_require_auth'])) {
+            $this->proxyProtocolV2RequireAuthentication = (bool)$config['proxy_protocol_v2_require_auth'];
+        }
+        if ($this->proxyProtocolV2Enabled
+            && $this->proxyProtocolV2RequireAuthentication
+            && $this->proxyProtocolV2Secret === ''
+        ) {
+            throw new \InvalidArgumentException(
+                'Dispatcher PROXY v2 requires the instance master token for backend authentication.'
+            );
         }
         if (isset($config['learning_mode_enabled'])) {
             $this->learningModeEnabled = (bool) $config['learning_mode_enabled'];
@@ -638,7 +676,7 @@ class PassthroughCore
             'response_first_line' => '',
             'response_status_line' => '',
         ];
-        
+
         $this->stats['active_connections']++;
         
         return true;
@@ -885,7 +923,12 @@ class PassthroughCore
             return false;
         }
 
+        $attempts = 0;
         foreach ($this->maintenanceWorkerPorts as $maintenancePort) {
+            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+                break;
+            }
+            $attempts++;
             $maintenanceSocket = $this->connectToWorker($maintenancePort);
             if ($maintenanceSocket !== false) {
                 $this->recordWorkerSuccess($maintenancePort);
@@ -931,7 +974,11 @@ class PassthroughCore
             return false;
         }
 
-        if ($this->workerSslEnabled && $this->hasLessLoadedWorker($workerPort)) {
+        // IP/SNI cache is an affinity hint, not a hard routing decision. Plain HTTP
+        // needs the same load correction as TLS; otherwise all requests from a NAT,
+        // reverse proxy, or localhost benchmark remain pinned to one Worker until
+        // its accept queue is exhausted while the rest of the pool stays idle.
+        if ($this->hasLessLoadedWorker($workerPort)) {
             return false;
         }
 
@@ -1003,6 +1050,16 @@ class PassthroughCore
             'response_first_line' => '',
             'response_status_line' => '',
         ];
+
+        if ($this->proxyProtocolV2Enabled) {
+            $this->workerWriteBuffers[$connId] = ProxyProtocolV2::encode(
+                $clientIp,
+                0,
+                $this->workerHost,
+                $workerPort,
+                $this->proxyProtocolV2Secret,
+            );
+        }
         
         $this->stats['active_connections']++;
         
@@ -1047,6 +1104,7 @@ class PassthroughCore
             ? $this->orderWorkerPortsByActiveLoad($startIndex)
             : $this->orderWorkerPortsRoundRobin($startIndex);
 
+        $attempts = 0;
         foreach ($candidatePorts as $port) {
 
             // 跳过已尝试的端口
@@ -1066,6 +1124,11 @@ class PassthroughCore
             if ($this->isWorkerSaturated($port)) {
                 continue;
             }
+
+            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+                break;
+            }
+            $attempts++;
             
             $workerSocket = $this->connectToWorker($port);
             if ($workerSocket !== false) {
@@ -1102,6 +1165,7 @@ class PassthroughCore
         $count = \count($this->workerPorts);
         $startIndex = $this->connectionCounter > 0 ? (($this->connectionCounter - 1) % $count) : 0;
 
+        $attempts = 0;
         for ($i = 0; $i < $count; $i++) {
             $index = ($startIndex + $i) % $count;
             $port = $this->workerPorts[$index];
@@ -1118,6 +1182,11 @@ class PassthroughCore
             if ($this->isWorkerBlacklisted((int)$port)) {
                 continue;
             }
+
+            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+                break;
+            }
+            $attempts++;
 
             $workerSocket = $this->connectToWorker((int)$port);
             if ($workerSocket !== false) {
@@ -1142,6 +1211,7 @@ class PassthroughCore
     {
         $excludePort = $this->normalizeExcludePortForWorkerPool($excludePort);
 
+        $attempts = 0;
         foreach ($this->workerPorts as $port) {
             if ($port === $excludePort) {
                 continue;
@@ -1154,6 +1224,11 @@ class PassthroughCore
             if (!$this->isWorkerBlacklisted($port)) {
                 continue;
             }
+
+            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+                break;
+            }
+            $attempts++;
             
             $workerSocket = $this->connectToWorker($port);
             if ($workerSocket !== false) {
@@ -1284,8 +1359,15 @@ class PassthroughCore
         // P0-2：用可配置的 workerConnectSelectTimeoutSec 替代旧 0.3-0.5s 硬上限。
         // 默认 0.02s 对 localhost Worker 绰绰有余；远端后端可通过 worker_connect_select_timeout_sec 覆盖。
         // 高并发失败路径下，单次 connect 的最差阻塞从 500ms → 100ms。
-        $failoverTimeout = \max(0.01, \min(
-            $connectTimeoutOverride ?? $this->workerConnectSelectTimeoutSec,
+        $requestedTimeout = $connectTimeoutOverride ?? $this->workerConnectSelectTimeoutSec;
+        if (\in_array(\strtolower($this->workerHost), ['127.0.0.1', '::1', 'localhost'], true)) {
+            // A loopback connect either completes immediately or should yield
+            // to another READY Worker. Keeping the historical 20ms per port
+            // here can block the single Dispatcher loop for hundreds of ms.
+            $requestedTimeout = \min($requestedTimeout, 0.002);
+        }
+        $failoverTimeout = \max(0.001, \min(
+            $requestedTimeout,
             (float) $this->connectTimeout
         ));
         $seconds = (int) $failoverTimeout;
@@ -3614,6 +3696,7 @@ class PassthroughCore
             $length = \strlen($data);
             $this->connections[$connId]['last_worker_to_client_at'] = \microtime(true);
             if (!$this->workerSslEnabled) {
+                $this->trackHttpResponseProgress($connId, $data);
                 $this->recordWorkerResponseIngress($connId, $data, $workerPort);
             }
             $this->markWorkerResponsive($connId, $workerPort);
@@ -3756,6 +3839,177 @@ class PassthroughCore
         }
         if ($this->trafficTraceEnabled) {
             $this->logWarmup($message, 'INFO');
+        }
+    }
+
+    private function trackHttpResponseProgress(int $connId, string $data): void
+    {
+        if ($data === '' || !isset($this->connections[$connId])) {
+            return;
+        }
+
+        $state = $this->httpResponseStates[$connId] ?? [
+            'header' => '',
+            'header_bytes' => 0,
+            'received' => 0,
+            'expected_total' => null,
+            'complete' => false,
+            'connection_close' => false,
+            'chunked' => false,
+            'chunk_phase' => 'size',
+            'chunk_buffer' => '',
+            'chunk_remaining' => 0,
+        ];
+        if ($state['complete']) {
+            // Keep-alive connection: a new HTTP status line starts the next
+            // response and therefore a fresh framing budget.
+            if (!\str_starts_with($data, 'HTTP/')) {
+                return;
+            }
+            $state = [
+                'header' => '',
+                'header_bytes' => 0,
+                'received' => 0,
+                'expected_total' => null,
+                'complete' => false,
+                'connection_close' => false,
+                'chunked' => false,
+                'chunk_phase' => 'size',
+                'chunk_buffer' => '',
+                'chunk_remaining' => 0,
+            ];
+        }
+
+        $state['received'] += \strlen($data);
+        $chunkData = '';
+        if ($state['header_bytes'] === 0) {
+            $state['header'] .= $data;
+            $headerEnd = \strpos($state['header'], "\r\n\r\n");
+            if ($headerEnd === false) {
+                // A response header beyond 64 KiB is malformed for WLS framing
+                // purposes. Stop accumulating while retaining conservative
+                // timeout cleanup instead of amplifying memory usage.
+                if (\strlen($state['header']) > 65536) {
+                    $state['header'] = '';
+                    $state['header_bytes'] = -1;
+                }
+                $this->httpResponseStates[$connId] = $state;
+                return;
+            }
+
+            $state['header_bytes'] = $headerEnd + 4;
+            $header = \substr($state['header'], 0, $state['header_bytes']);
+            $chunkData = \substr($state['header'], $state['header_bytes']);
+            $state['header'] = '';
+
+            $isHttp10 = \preg_match('/^HTTP\/1\.0\b/i', $header) === 1;
+            $hasKeepAlive = \preg_match('/\r\nConnection:\s*keep-alive\s*\r\n/i', $header) === 1;
+            $state['connection_close'] = \preg_match('/\r\nConnection:\s*close\s*\r\n/i', $header) === 1
+                || ($isHttp10 && !$hasKeepAlive);
+
+            $requestLine = (string)($this->connections[$connId]['request_line'] ?? '');
+            $method = \strtoupper((string)(\strtok($requestLine, ' ') ?: ''));
+            $status = 0;
+            if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/i', $header, $statusMatch) === 1) {
+                $status = (int)$statusMatch[1];
+            }
+            $hasNoBody = $method === 'HEAD' || $status === 204 || $status === 304;
+            if ($hasNoBody) {
+                $state['expected_total'] = $state['header_bytes'];
+                $state['complete'] = true;
+            } elseif (\preg_match('/\r\nContent-Length:\s*(\d+)\s*\r\n/i', $header, $lengthMatch) === 1) {
+                $state['expected_total'] = $state['header_bytes'] + (int)$lengthMatch[1];
+            } elseif (\preg_match('/\r\nTransfer-Encoding:\s*[^\r\n]*\bchunked\b/i', $header) === 1) {
+                $state['chunked'] = true;
+            }
+        } elseif ($state['header_bytes'] > 0 && $state['chunked']) {
+            $chunkData = $data;
+        }
+
+        if (!$state['complete'] && $state['expected_total'] !== null) {
+            $state['complete'] = $state['received'] >= $state['expected_total'];
+        }
+        if (!$state['complete'] && $state['chunked'] && $chunkData !== '') {
+            $this->advanceChunkedResponseState($state, $chunkData);
+        }
+
+        $this->httpResponseStates[$connId] = $state;
+    }
+
+    /**
+     * @param array{header:string,header_bytes:int,received:int,expected_total:?int,complete:bool,connection_close:bool,chunked:bool,chunk_phase:string,chunk_buffer:string,chunk_remaining:int} $state
+     */
+    private function advanceChunkedResponseState(array &$state, string $data): void
+    {
+        $state['chunk_buffer'] .= $data;
+        while (!$state['complete']) {
+            if ($state['chunk_phase'] === 'size') {
+                $lineEnd = \strpos($state['chunk_buffer'], "\r\n");
+                if ($lineEnd === false) {
+                    if (\strlen($state['chunk_buffer']) > 128) {
+                        $state['chunk_buffer'] = '';
+                        $state['chunk_phase'] = 'invalid';
+                    }
+                    return;
+                }
+                $sizeLine = \trim(\substr($state['chunk_buffer'], 0, $lineEnd));
+                $state['chunk_buffer'] = \substr($state['chunk_buffer'], $lineEnd + 2);
+                $sizeToken = \strtok($sizeLine, ';');
+                if ($sizeToken === false || $sizeToken === '' || \preg_match('/^[0-9a-f]+$/i', $sizeToken) !== 1) {
+                    $state['chunk_phase'] = 'invalid';
+                    $state['chunk_buffer'] = '';
+                    return;
+                }
+                $state['chunk_remaining'] = (int)\hexdec($sizeToken);
+                $state['chunk_phase'] = $state['chunk_remaining'] === 0 ? 'trailers' : 'data';
+                continue;
+            }
+
+            if ($state['chunk_phase'] === 'data') {
+                $available = \strlen($state['chunk_buffer']);
+                if ($available < $state['chunk_remaining']) {
+                    $state['chunk_remaining'] -= $available;
+                    $state['chunk_buffer'] = '';
+                    return;
+                }
+                $state['chunk_buffer'] = \substr($state['chunk_buffer'], $state['chunk_remaining']);
+                $state['chunk_remaining'] = 0;
+                $state['chunk_phase'] = 'data_crlf';
+                continue;
+            }
+
+            if ($state['chunk_phase'] === 'data_crlf') {
+                if (\strlen($state['chunk_buffer']) < 2) {
+                    return;
+                }
+                if (!\str_starts_with($state['chunk_buffer'], "\r\n")) {
+                    $state['chunk_phase'] = 'invalid';
+                    $state['chunk_buffer'] = '';
+                    return;
+                }
+                $state['chunk_buffer'] = \substr($state['chunk_buffer'], 2);
+                $state['chunk_phase'] = 'size';
+                continue;
+            }
+
+            if ($state['chunk_phase'] === 'trailers') {
+                if (\str_starts_with($state['chunk_buffer'], "\r\n")) {
+                    $state['complete'] = true;
+                    return;
+                }
+                $trailersEnd = \strpos($state['chunk_buffer'], "\r\n\r\n");
+                if ($trailersEnd === false) {
+                    if (\strlen($state['chunk_buffer']) > 65536) {
+                        $state['chunk_phase'] = 'invalid';
+                        $state['chunk_buffer'] = '';
+                    }
+                    return;
+                }
+                $state['complete'] = true;
+                return;
+            }
+
+            return;
         }
     }
 
@@ -3932,6 +4186,27 @@ class PassthroughCore
         $connId = \spl_object_id($clientSocket);
         return !empty($this->clientInputClosed[$connId]);
     }
+
+    public function isHttpResponseComplete($clientSocket): bool
+    {
+        if ($this->workerSslEnabled) {
+            return false;
+        }
+
+        $connId = \spl_object_id($clientSocket);
+        return !empty($this->httpResponseStates[$connId]['complete']);
+    }
+
+    public function shouldCloseClientAfterHttpResponse($clientSocket): bool
+    {
+        if ($this->workerSslEnabled) {
+            return false;
+        }
+
+        $connId = \spl_object_id($clientSocket);
+        return !empty($this->httpResponseStates[$connId]['complete'])
+            && !empty($this->httpResponseStates[$connId]['connection_close']);
+    }
     
     /**
      * H15: 获取所有有待发送缓冲数据的连接 ID
@@ -4048,6 +4323,7 @@ class PassthroughCore
             unset($this->workerClosed[$connId]);
             unset($this->connectionTerminalReasons[$connId]);
             unset($this->clientInputClosed[$connId]);
+            unset($this->httpResponseStates[$connId]);
             unset($this->requestIngressLogCountByConn[$connId]);
             unset($this->lastLoggedHttpRequestLineByConn[$connId]);
             return;
@@ -4079,6 +4355,7 @@ class PassthroughCore
         unset($this->workerClosed[$connId]);
         unset($this->connectionTerminalReasons[$connId]);
         unset($this->clientInputClosed[$connId]);
+        unset($this->httpResponseStates[$connId]);
         unset($this->requestIngressLogCountByConn[$connId]);
         unset($this->lastLoggedHttpRequestLineByConn[$connId]);
         
@@ -4103,6 +4380,7 @@ class PassthroughCore
         $this->workerWriteBuffers = [];
         $this->workerClosed = [];
         $this->clientInputClosed = [];
+        $this->httpResponseStates = [];
         $this->requestIngressLogCountByConn = [];
         $this->lastLoggedHttpRequestLineByConn = [];
         $this->stats['active_connections'] = 0;
@@ -4343,6 +4621,12 @@ class PassthroughCore
         if (!$this->backendPoolEnabled) {
             return false;
         }
+        if ($this->proxyProtocolV2Enabled) {
+            // A PROXY preface is valid only at the beginning of a backend TCP
+            // connection. Reusing it for another client would either inject a
+            // second preface mid-stream or retain the previous client identity.
+            return false;
+        }
         if ($this->workerSslEnabled) {
             // SSL 透传链路禁止复用后端 socket，避免跨连接 TLS 状态污染。
             return false;
@@ -4411,7 +4695,10 @@ class PassthroughCore
         }
         if ($peek === false) {
             $err = \socket_last_error($socket);
-            if (\in_array($err, self::WOULDBLOCK_ERRORS, true)) {
+            $isWouldBlock = \in_array($err, self::WOULDBLOCK_ERRORS, true)
+                || (\defined('SOCKET_EAGAIN') && $err === (int)\SOCKET_EAGAIN)
+                || (\defined('SOCKET_EWOULDBLOCK') && $err === (int)\SOCKET_EWOULDBLOCK);
+            if ($isWouldBlock) {
                 \socket_clear_error($socket);
                 return true;
             }

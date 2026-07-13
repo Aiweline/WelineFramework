@@ -485,9 +485,26 @@ class ServerInstanceManager
             'master_enabled',
             'master_started_at',
             'master_mode',
+            'runtime_selection',
+            'topology',
+            'requested_topology',
+            'effective_topology',
+            'topology_source',
+            'topology_reason',
+            'topology_reason_codes',
+            'runtime_strategy',
+            'os_family',
+            'event_loop_driver',
+            'direct_listener_mode',
+            'listener_strategy',
+            'ssl_engine',
+            'policy_compatible',
+            'policy_digest',
+            'container_registry_digest',
             'orchestrator_mode',
             'control_plane_mode',
             'supervisor_enabled',
+            'supervisor_reason',
             'supervisor_channel',
             'supervisor_endpoint',
             'control_port',
@@ -1233,6 +1250,13 @@ class ServerInstanceManager
             return [];
         }
 
+        // Startup events are durable diagnostics and therefore also contain
+        // retired direct-reload surge slots (for example worker #1100).  The
+        // runtime fallback is a view of the current desired generation, so it
+        // must never promote those historical auxiliary slots back into the
+        // status tree after Master IPC times out.
+        $desiredWorkerCount = (int)($runtimeData['count'] ?? 0);
+
         $latestByWorker = [];
         foreach ($events as $event) {
             if (!\is_array($event) || (string)($event['kind'] ?? '') !== 'worker_ready') {
@@ -1241,7 +1265,9 @@ class ServerInstanceManager
 
             $workerId = (int)($event['worker_id'] ?? $event['instance_id'] ?? 0);
             $port = (int)($event['port'] ?? 0);
-            if ($workerId <= 0 || $port <= 0) {
+            if ($workerId <= 0
+                || $port <= 0
+                || ($desiredWorkerCount > 0 && $workerId > $desiredWorkerCount)) {
                 continue;
             }
 

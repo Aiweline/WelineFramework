@@ -2,24 +2,11 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <!-- 模块升级事件监听 -->
-    <event name="Weline_Framework_Module::module_upgrade">
-        <observer name="Weline_Database::module_upgrade" instance="Weline\Database\Observer\ModuleUpgradeObserver" disabled="false" shared="true" sort="0"/>
-    </event>
-    
-    <!-- 系统升级事件监听 -->
+    <!--
+      迁移只由 setup:upgrade 完成后的单一权威观察器执行。
+      module_upgrade 的载荷是 modules[]，不再同时执行第二遍迁移。
+    -->
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Database::setup_upgrade" instance="Weline\Database\Observer\SetupUpgradeObserver" disabled="false" shared="true" sort="0"/>
     </event>
-    
-    <!-- 模块安装事件监听 -->
-    <event name="Weline_Framework_Module::module_install_after">
-        <observer name="Weline_Database::module_install" instance="Weline\Database\Observer\ModuleUpgradeObserver" disabled="false" shared="true" sort="0"/>
-    </event>
-    
-    <!-- 模块卸载事件监听 -->
-    <event name="Framework_Module::module_uninstall_after">
-        <observer name="Weline_Database::module_uninstall" instance="Weline\Database\Observer\ModuleUpgradeObserver" disabled="false" shared="true" sort="0"/>
-    </event>
 </config>
-

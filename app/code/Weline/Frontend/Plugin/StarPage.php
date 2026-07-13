@@ -11,11 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Plugin;
 
-use Weline\Backend\Config\KeysInterface;
+use Weline\Backend\Api\Config\KeysInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
 
 class StarPage
 {

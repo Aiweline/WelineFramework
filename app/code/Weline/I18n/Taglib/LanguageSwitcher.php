@@ -9,7 +9,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 
 class LanguageSwitcher implements TaglibInterface
 {

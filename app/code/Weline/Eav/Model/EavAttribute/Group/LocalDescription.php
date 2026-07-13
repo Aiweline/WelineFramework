@@ -15,7 +15,7 @@ namespace Weline\Eav\Model\EavAttribute\Group;
 
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Framework\Database\Schema\Attribute\Col;
-use Weline\I18n\LocalModel;
+use Weline\I18n\Api\Localization\LocalModel;
 
 class LocalDescription extends LocalModel
 {

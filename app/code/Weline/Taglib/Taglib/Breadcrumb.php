@@ -18,7 +18,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Taglib;
 
-class Breadcrumb implements \Weline\Taglib\TaglibInterface
+class Breadcrumb implements \Weline\Framework\Taglib\TaglibInterface
 {
     static Request|null $request = null;
 

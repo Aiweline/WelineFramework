@@ -390,30 +390,9 @@ class StateManager
             \Weline\Framework\Manager\ObjectManager::removeInstance($class);
         }
 
-        if (\class_exists(\Weline\Theme\Service\SlotRendererService::class, false)) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Theme\Service\SlotRendererService::class);
-        }
-        if (\class_exists(\Weline\Backend\Block\ThemeConfig::class, false)) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Backend\Block\ThemeConfig::class);
-        }
-        if (\class_exists(\Weline\Frontend\Block\ThemeConfig::class, false)) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Frontend\Block\ThemeConfig::class);
-        }
-        if (\class_exists(\Weline\Theme\Helper\ThemeData::class, false)) {
-            \Weline\Theme\Helper\ThemeData::resetRequestState();
-        }
-        if (\class_exists(\Weline\Theme\Service\PreviewTokenService::class, false)) {
-            \Weline\Theme\Service\PreviewTokenService::resetRequestState();
-        }
-        if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
-            \Weline\Websites\Data\WebsiteData::resetRequestState();
-        }
-        if (\class_exists(\Weline\Admin\Service\MenuRenderService::class, false)) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Admin\Service\MenuRenderService::class);
-        }
-        if (\class_exists(\Weline\Acl\Taglib\Acl::class, false)) {
-            \Weline\Acl\Taglib\Acl::resetRequestState();
-        }
+        \Weline\Framework\Manager\ObjectManager::getInstance(
+            ModuleRequestResetterRegistry::class
+        )->resetRequest();
         if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)) {
             \Weline\Framework\Manager\MessageManager::resetRequestState();
         }
@@ -430,9 +409,6 @@ class StateManager
                 }
             } catch (\Throwable) {
             }
-        }
-        if (\class_exists(\Weline\Widget\Taglib\Widget::class, false)) {
-            \Weline\Widget\Taglib\Widget::resetRequestState();
         }
         if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
             \Weline\Framework\View\Taglib::clearStaticCaches();
@@ -529,7 +505,7 @@ class StateManager
         // WLS 下必须显式重置，否则上个请求的路由缓存会泄漏到下个请求。
         self::registerResetCallback('process_url_cache_static', function () {
             try {
-                $processUrlCacheClass = 'Weline\\Framework\\Router\\Cache\\ProcessUrlCache';
+                $processUrlCacheClass = \Weline\Framework\Router\Cache\ProcessUrlCache::class;
                 if (\class_exists($processUrlCacheClass, false) && \method_exists($processUrlCacheClass, 'resetRequestState')) {
                     $processUrlCacheClass::resetRequestState();
                 }
@@ -556,12 +532,10 @@ class StateManager
         \Weline\Framework\Manager\ResultManager::registerStateResets();
         
         // ========== 3. 请求上下文 ==========
-        
-        // RequestContext — 请求 ID、区域、语言、货币等请求级上下文
-        self::registerResetCallback('request_context', function () {
-            RequestContext::cleanup();
-        });
-        
+        // RequestContext 必须在所有作用域清理器之后再释放。
+        // Template、模块 RequestResetter 等使用 request scope id 精确删除当前 Fiber 的状态；
+        // 若先 cleanup，它们会丢失 scope key，导致每个请求的对象永久滞留在静态数组。
+
         // SseContext — SSE 连接、启用标志、回调等请求级状态
         self::registerResetCallback('sse_context', function () {
             if (\class_exists(\Weline\Framework\Http\Sse\SseContext::class, false)) {
@@ -569,12 +543,6 @@ class StateManager
             }
         });
 
-        self::registerResetCallback('website_data_request_state', function () {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
-                \Weline\Websites\Data\WebsiteData::resetRequestState();
-            }
-        });
-        
         // ========== 4. 用户 / 会话状态 ==========
         
         // Env::$user — 当前请求的用户标识，不能泄漏到下一个请求
@@ -706,37 +674,12 @@ class StateManager
         // mergedCacheConfig 是进程级热缓存（DB 合并后的 cache 配置），
         // 每请求清空会导致重复 DB 合并与性能回退，仅在 setConfig('cache')/reload 时失效。
         
-        // ========== 8. 主题插槽渲染缓存 ==========
-        // SlotRendererService 持有 layoutCache/widgetCache/orphanWidgets，都是请求级数据。
-        // WLS 下实例被 ObjectManager 缓存后这些数组不会清零，发布后旧缓存导致渲染重复。
-        self::registerResetCallback('slot_renderer_cache', function () {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(
-                \Weline\Theme\Service\SlotRendererService::class
-            );
-        });
-
-        // ThemeConfig Block 在模板中常通过 ObjectManager::getInstance() 直接获取。
-        // WLS 下若复用旧实例，会持有上一请求的 Session 引用，出现主题模式偶发回退。
-        self::registerResetCallback('theme_config_blocks', function () {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Backend\Block\ThemeConfig::class);
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Frontend\Block\ThemeConfig::class);
-        });
-        
-        // Taglib Slot 静态注册表 — 编译期用于重复 slot ID 检测，不能跨请求残留
-        self::registerStaticReset(\Weline\Theme\Taglib\Slot::class, 'registeredSlots', []);
-
-        // ThemeData 请求态缓存（当前主题/区域/performance 缓存）在 WLS 下必须每请求清理
-        self::registerResetCallback('theme_data_request_state', function () {
-            if (\class_exists(\Weline\Theme\Helper\ThemeData::class, false)) {
-                \Weline\Theme\Helper\ThemeData::resetRequestState();
-            }
-        });
-
-        // 预览 token 检测结果是请求级静态状态，跨请求会导致预览串用户
-        self::registerResetCallback('preview_token_request_state', function () {
-            if (\class_exists(\Weline\Theme\Service\PreviewTokenService::class, false)) {
-                \Weline\Theme\Service\PreviewTokenService::resetRequestState();
-            }
+        // ========== 8. 模块请求态清理 ==========
+        // Framework 只调用公共契约，具体清理逻辑由各模块的 Api Runtime resetter 维护。
+        self::registerResetCallback('module_request_resetters', function () {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                ModuleRequestResetterRegistry::class
+            )->resetRequest();
         });
 
         // Session::flushOnShutdown 队列在常驻进程中不会自动按请求清理，需主动重置
@@ -749,48 +692,8 @@ class StateManager
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Session\Session::class);
         });
         
-        // ========== 9. 缓存事件防重复标志 ==========
-        // CacheFlushedObserver：同一请求内多次 flush 只通知 WLS 一次，下次请求重置
-        self::registerResetCallback('cache_flushed_observer', function () {
-            \Weline\Server\Observer\CacheFlushedObserver::resetRequestState();
-        });
-        // WlsMemoryAdapter 统计重置（仅重置 hits/misses 统计，不清空内存缓存数据）
-        self::registerResetCallback('wls_memory_adapter_reset', function () {
-            \Weline\Framework\Cache\Adapter\WlsMemoryAdapter::resetRequestState();
-        });
-        
-        // ========== 10. 菜单相关缓存 ==========
-        // MenuUrlValidator::$menuPathsCache — 菜单路径验证缓存
-        // 虽然菜单路径通常进程内不变，但如果菜单发生变更（动态添加/删除），
-        // 旧缓存会导致验证结果错误。为安全起见，每请求重置。
-        self::registerStaticReset(\Weline\Admin\Helper\MenuUrlValidator::class, 'menuPathsCache', null);
-        
-        // MenuRenderService — 单例实例持有 Request 对象
-        // WLS 下 MenuRenderService 被 ObjectManager 缓存，其 $request 成员指向旧请求。
-        // 虽然已将 backendUrlPrefix 改为动态获取，但为保险起见，每请求清除实例。
-        self::registerResetCallback('menu_render_service', function () {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(
-                \Weline\Admin\Service\MenuRenderService::class
-            );
-        });
-        
-        // ========== 11. ACL 权限缓存 ==========
-        // Acl\Taglib\Acl — 权限检查标签中的请求级缓存
-        // WLS 下静态缓存会跨请求保留，导致不同用户使用同一份权限缓存
-        // 必须在每次请求结束时重置
-        self::registerResetCallback('acl_taglib_reset', function () {
-            \Weline\Acl\Taglib\Acl::resetRequestState();
-        });
-
-        // ========== 12. Taglib / Widget 请求级静态缓存 ==========
-        // WMeta::$ids — Meta 标签唯一 ID 记录，跨请求会累积导致误判重复
-        self::registerStaticReset(\Weline\Meta\Taglib\WMeta::class, 'ids', []);
-        // Widget::$renderCache — Widget 渲染结果缓存，只应在单次请求内有效
-        self::registerStaticReset(\Weline\Widget\Taglib\Widget::class, 'renderCache', []);
-
-        // ========== 13. DataTable 字段模板缓存 ==========
-        // Field::$templateFields — DataTable 字段定义缓存，必须每请求重置
-        self::registerStaticReset(\Weline\DataTable\Taglib\Field::class, 'templateFields', []);
+        // Server-owned cache adapter request state is cleared by the module's
+        // compiled RequestResetter; Framework never names a concrete adapter.
 
         // ========== 14. SessionFactory 事件解析缓存 ==========
         // resolveViaEvent() 的静态缓存可能在不同请求环境下不一致，需请求结束后重置
@@ -817,12 +720,6 @@ class StateManager
             }
         });
 
-        // Widget 渲染缓存只允许请求内命中，防止跨请求模板参数串用
-        self::registerResetCallback('widget_taglib_cache', function () {
-            if (\class_exists(\Weline\Widget\Taglib\Widget::class, false)) {
-                \Weline\Widget\Taglib\Widget::resetRequestState();
-            }
-        });
         self::registerResetCallback('view_hook_runtime_cache', function () {
             if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
                 \Weline\Framework\View\Taglib::clearStaticCaches();
@@ -843,11 +740,6 @@ class StateManager
                 \Weline\Framework\Manager\MessageManager::resetRequestState();
             }
         });
-
-        // ========== 16. Theme 模块状态污染 ==========
-
-        // LayoutDependencyTracker 依赖缓存 - 布局依赖关系可能变化
-        self::registerStaticReset(\Weline\Theme\Helper\LayoutDependencyTracker::class, 'dependencyCache', []);
 
         // ========== 17. Debug 模块状态污染 ==========
 
@@ -872,11 +764,6 @@ class StateManager
         // 已在 registerFrameworkResets 中通过 Url::registerStateResets() 注册
         // （已在第 409 行注册）
 
-        // ========== 23. Admin 模块状态污染 ==========
-
-        // MenuUrlValidator 白名单缓存 - 菜单白名单可能动态变化
-        self::registerStaticReset(\Weline\Admin\Helper\MenuUrlValidator::class, 'whitelistCache', null);
-
         // ========== 24. 其他模块的静态变量污染 ==========
 
         // 在开发模式下自动检测未注册的静态变量
@@ -884,6 +771,11 @@ class StateManager
             if (\class_exists(\Weline\Framework\Runtime\StatePollutionDetector::class, false)) {
                 \Weline\Framework\Runtime\StatePollutionDetector::autoDetect();
             }
+        });
+
+        // 必须是最后一个核心回调：上面的 Template/模块/会话清理仍需要当前 request scope id。
+        self::registerResetCallback('request_context', function () {
+            RequestContext::cleanup();
         });
     }
 }

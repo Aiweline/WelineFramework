@@ -99,7 +99,7 @@ class DefaultModel extends BackendController
         
         foreach ($scannedAdapters as $adapter) {
             // $adapter 是 ScenarioAdapterInterface 实例
-            if ($adapter instanceof \Weline\Ai\Interface\ScenarioAdapterInterface) {
+            if ($adapter instanceof \Weline\Ai\Api\ScenarioAdapterInterface) {
                 $adapterCode = $adapter->getCode();
                 // 如果场景代码不在基础服务类型列表中，则添加
                 if (!isset($serviceTypes[$adapterCode])) {

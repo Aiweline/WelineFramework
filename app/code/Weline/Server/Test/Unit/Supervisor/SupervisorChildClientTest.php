@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Supervisor;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Telemetry\WorkerTelemetryReporter;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -123,7 +124,11 @@ final class SupervisorChildClientTest extends TestCase
             $server = new SupervisorServer($runtime);
             $server->start(ControlEndpoint::tcp('127.0.0.1', $port));
 
-            self::assertTrue($client->tryReconnect());
+            self::assertTrue(
+                $client->tryReconnect(),
+                'reconnect snapshot=' . \json_encode($runtime->slotSnapshot())
+                . ', sessions=' . \json_encode($server->sessionsSnapshot()),
+            );
             self::assertTrue($client->isConnected());
             self::assertTrue($client->isReadyStateConfirmed());
         } finally {
@@ -132,7 +137,7 @@ final class SupervisorChildClientTest extends TestCase
         }
     }
 
-    public function testCloseOnlyReleasesLeaseAfterShutdownMessage(): void
+    public function testCloseReleasesOwnedLeaseAndAllowsReplacement(): void
     {
         $runtime = $this->createRuntime('ut-instance');
         $server = new SupervisorServer($runtime);
@@ -172,7 +177,7 @@ final class SupervisorChildClientTest extends TestCase
 
             $client->close();
             $server->poll(0, 10000);
-            self::assertNotNull($runtime->supervisor()->leases()->get('worker#3'));
+            self::assertNull($runtime->supervisor()->leases()->get('worker#3'));
 
             self::assertTrue($client->connect('127.0.0.1', 0));
             self::assertTrue($client->register(
@@ -184,13 +189,22 @@ final class SupervisorChildClientTest extends TestCase
                 instanceCode: 'ut-instance',
                 msgId: 'hello-3b',
             ));
+            $replacementBeforeReady = $server->sessionsSnapshot();
+            $clientLeaseProperty = new \ReflectionProperty($client, 'leaseId');
+            $clientLeaseProperty->setAccessible(true);
+            $clientGenerationProperty = new \ReflectionProperty($client, 'generation');
+            $clientGenerationProperty->setAccessible(true);
             self::assertTrue($client->sendReady(
                 role: 'worker',
                 workerId: 3,
                 port: 18083,
                 launchId: 'launch-3b',
                 msgId: 'ready-3b',
-            ));
+            ), 'replacement_before=' . \json_encode($replacementBeforeReady)
+                . ', client_lease=' . (string)$clientLeaseProperty->getValue($client)
+                . '/' . (int)$clientGenerationProperty->getValue($client)
+                . ', replacement snapshot=' . \json_encode($runtime->slotSnapshot())
+                . ', sessions=' . \json_encode($server->sessionsSnapshot()));
 
             $sessionIds = \array_keys($server->sessions());
             self::assertNotSame([], $sessionIds);
@@ -218,6 +232,168 @@ final class SupervisorChildClientTest extends TestCase
             $client->close();
             $server->close();
         }
+    }
+
+    public function testLifecycleStatusAndLogMethodsEncodeAndSendControlMessages(): void
+    {
+        [$client, $peer, $listener] = $this->createRawClient();
+
+        try {
+            $client->rememberRegistration(
+                role: ControlMessage::ROLE_WORKER,
+                pid: 12004,
+                port: 18084,
+                workerId: 4,
+                launchId: 'launch-4',
+                instanceCode: 'ut-instance',
+                msgId: 'hello-4',
+            );
+
+            self::assertTrue($client->sendWorkerLoopStarted(4, 18084, 12004));
+            self::assertTrue($client->sendDrainingComplete(reason: 'unit-drain'));
+            self::assertTrue($client->sendStatusReport(7, 8192, 99));
+            self::assertTrue($client->sendLogLine('unit-log', 'INFO', 'Worker#4'));
+            $client->flushPendingWrites(0.25);
+            $messages = $this->readControlMessages($peer, 4);
+
+            self::assertSame([
+                ControlMessage::TYPE_WORKER_LOOP_STARTED,
+                ControlMessage::TYPE_DRAINING_COMPLETE,
+                ControlMessage::TYPE_STATUS_REPORT,
+                ControlMessage::TYPE_LOG,
+            ], \array_column($messages, 'type'));
+            self::assertSame(4, $messages[1]['worker_id'] ?? null);
+            self::assertSame(18084, $messages[1]['port'] ?? null);
+            self::assertSame('hello-4', $messages[1]['msg_id'] ?? null);
+            self::assertSame('unit-drain', $messages[1]['reason'] ?? null);
+            self::assertSame(7, $messages[2]['connections'] ?? null);
+            self::assertSame('unit-log', $messages[3]['line'] ?? null);
+        } finally {
+            $client->close();
+            @\fclose($peer);
+            @\fclose($listener);
+        }
+    }
+
+    public function testLogAndTelemetryOverflowDoNotDisconnectControlSession(): void
+    {
+        [$client, $peer, $listener] = $this->createRawClient();
+
+        try {
+            $maxWriteBuffer = new \ReflectionProperty($client, 'maxWriteBufferSize');
+            $maxWriteBuffer->setAccessible(true);
+            $maxWriteBuffer->setValue($client, 1);
+
+            self::assertFalse($client->sendLogLine('overflow', 'WARNING', 'Worker#5'));
+            self::assertTrue($client->isConnected());
+
+            $reporter = WorkerTelemetryReporter::boot('ut-instance');
+            $reporter->record($client, 'example.test', 500, 10, 128);
+            self::assertTrue($client->isConnected());
+
+            $sendBatch = new \ReflectionMethod($reporter, 'sendBatch');
+            $sendBatch->setAccessible(true);
+            $sendBatch->invoke($reporter, $client, [[
+                'host' => 'example.test',
+                'bucket_ts' => 1_711_111_080,
+                'request_count' => 1,
+                'error_count' => 0,
+                'bytes_out' => 128,
+                'latency_total_ms' => 10,
+                'latency_max_ms' => 10,
+            ]]);
+            self::assertTrue($client->isConnected());
+        } finally {
+            WorkerTelemetryReporter::reset();
+            $client->close();
+            @\fclose($peer);
+            @\fclose($listener);
+        }
+    }
+
+    public function testImmediateTelemetryBurstIsCoalescedUntilForcedFlush(): void
+    {
+        [$client, $peer, $listener] = $this->createRawClient();
+
+        try {
+            $reporter = WorkerTelemetryReporter::boot('ut-instance');
+            $reporter->record($client, 'example.test', 500, 10, 128);
+
+            $lastImmediateSentAt = new \ReflectionProperty($reporter, 'lastImmediateSentAt');
+            $lastImmediateSentAt->setAccessible(true);
+            $lastImmediateSentAt->setValue($reporter, \microtime(true));
+            $reporter->record($client, 'example.test', 503, 20, 256);
+
+            $client->flushPendingWrites(0.25);
+            $messages = $this->readControlMessages($peer, 1);
+            self::assertCount(1, $messages);
+            self::assertSame(500, $messages[0]['status'] ?? null);
+
+            $reporter->flush($client);
+            $client->flushPendingWrites(0.25);
+            $messages = $this->readControlMessages($peer, 1);
+            self::assertCount(1, $messages);
+            self::assertSame(503, $messages[0]['status'] ?? null);
+            self::assertSame(256, $messages[0]['bytes_out'] ?? null);
+        } finally {
+            WorkerTelemetryReporter::reset();
+            $client->close();
+            @\fclose($peer);
+            @\fclose($listener);
+        }
+    }
+
+    /** @return array{0:SupervisorChildClient,1:resource,2:resource} */
+    private function createRawClient(): array
+    {
+        $listener = \stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($listener, (string)$errstr);
+        $address = \stream_socket_get_name($listener, false);
+        self::assertIsString($address);
+        $socket = \stream_socket_client('tcp://' . $address, $clientErrno, $clientErrstr, 1);
+        self::assertIsResource($socket, (string)$clientErrstr);
+        $peer = \stream_socket_accept($listener, 1);
+        self::assertIsResource($peer);
+        \stream_set_blocking($socket, false);
+        \stream_set_blocking($peer, false);
+
+        $client = new SupervisorChildClient(
+            instanceName: 'ut-instance',
+            channelId: 'channel-ut-instance',
+            endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+        );
+        $socketProperty = new \ReflectionProperty($client, 'socket');
+        $socketProperty->setAccessible(true);
+        $socketProperty->setValue($client, $socket);
+
+        return [$client, $peer, $listener];
+    }
+
+    /** @param resource $peer @return list<array<string, mixed>> */
+    private function readControlMessages($peer, int $expectedCount): array
+    {
+        $buffer = '';
+        $messages = [];
+        $deadline = \microtime(true) + 1.0;
+        while (\count($messages) < $expectedCount && \microtime(true) < $deadline) {
+            $chunk = @\fread($peer, 65536);
+            if (\is_string($chunk) && $chunk !== '') {
+                $buffer .= $chunk;
+            }
+            while (($newline = \strpos($buffer, "\n")) !== false) {
+                $line = \substr($buffer, 0, $newline);
+                $buffer = (string)\substr($buffer, $newline + 1);
+                $decoded = ControlMessage::decode($line);
+                if ($decoded !== []) {
+                    $messages[] = $decoded;
+                }
+            }
+            if (\count($messages) < $expectedCount) {
+                \usleep(1000);
+            }
+        }
+
+        return $messages;
     }
 
     private function createRuntime(string $instanceName): SupervisorRuntime

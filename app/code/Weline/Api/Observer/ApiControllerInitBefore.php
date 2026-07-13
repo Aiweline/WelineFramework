@@ -17,8 +17,8 @@ use Weline\Api\Service\ApiAppTokenService;
 use Weline\Api\Service\IpWhitelistService;
 use Weline\Api\Service\TokenService;
 use Weline\Api\Service\UserAgentRestrictionService;
-use Weline\Backend\Model\BackendUser;
-use Weline\Customer\Model\Customer as AuthCustomer;
+use Weline\Backend\Api\Auth\BackendApiAuthenticationInterface;
+use Weline\Customer\Api\Auth\CustomerIdentityProviderInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Env as FrameworkEnv;
@@ -27,6 +27,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\PublicApiAuthRouteMatcher;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * API闁硅矇鍐ㄧ厬闁革絻鍔岄崹鍨叏鐎ｎ亜顕ч柛鎾崇　bserver
@@ -46,6 +47,7 @@ class ApiControllerInitBefore implements ObserverInterface
     private TokenService $tokenService;
     private ?ApiAppTokenService $apiAppTokenService;
     private PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher;
+    private RuntimeProviderResolver $runtimeProviders;
 
     public function __construct(
         Request $request,
@@ -54,7 +56,8 @@ class ApiControllerInitBefore implements ObserverInterface
         UserAgentRestrictionService $userAgentRestrictionService,
         TokenService $tokenService,
         PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher,
-        ?ApiAppTokenService $apiAppTokenService = null
+        ?ApiAppTokenService $apiAppTokenService = null,
+        ?RuntimeProviderResolver $runtimeProviders = null,
     ) {
         $this->request = $request;
         $this->apiSecurityService = $apiSecurityService;
@@ -62,6 +65,7 @@ class ApiControllerInitBefore implements ObserverInterface
         $this->userAgentRestrictionService = $userAgentRestrictionService;
         $this->tokenService = $tokenService;
         $this->publicApiAuthRouteMatcher = $publicApiAuthRouteMatcher;
+        $this->runtimeProviders = $runtimeProviders ?? ObjectManager::getInstance(RuntimeProviderResolver::class);
         $this->apiAppTokenService = $apiAppTokenService;
     }
 
@@ -478,17 +482,21 @@ class ApiControllerInitBefore implements ObserverInterface
 
         $actorType = strtolower((string) $context->getActorType());
         if ($actorType === 'backend') {
-            /** @var BackendUser $backendUser */
-            $backendUser = ObjectManager::getInstance(BackendUser::class);
-            $backendUser->load((int) $context->getActorId());
-            if (!$backendUser->getId()) {
+            $provider = $this->runtimeProviders->resolve(BackendApiAuthenticationInterface::class);
+            $actor = $provider instanceof BackendApiAuthenticationInterface
+                ? $provider->loadActor((int)$context->getActorId())
+                : null;
+            if ($actor === null) {
                 $this->returnError(401, __('Token is invalid or expired.'));
+                return true;
             }
-            if (!$backendUser->getIsEnabled() || $backendUser->getIsDeleted()) {
+            if (!$actor->isEnabled() || $actor->isDeleted()) {
                 $this->returnError(403, __('User has been disabled.'));
+                return true;
             }
 
-            $role = $backendUser->getRoleModel();
+            $backendUser = $actor->getUser();
+            $role = $actor->getRole();
             $this->bindWeShopActorContext($context, $backendUser, $role);
             $event->setData('user', $backendUser);
             if ($role) {
@@ -567,11 +575,13 @@ class ApiControllerInitBefore implements ObserverInterface
             $this->returnError(403, __('This token cannot access frontend customer APIs.'));
         }
 
-        /** @var AuthCustomer $customer */
-        $customer = ObjectManager::getInstance(AuthCustomer::class);
-        $customer->load((int) $context->getActorId());
-        if (!$customer->getId()) {
+        $provider = $this->runtimeProviders->resolve(CustomerIdentityProviderInterface::class);
+        $customer = $provider instanceof CustomerIdentityProviderInterface
+            ? $provider->find((int)$context->getActorId())
+            : null;
+        if ($customer === null) {
             $this->returnError(401, __('Token is invalid or expired.'));
+            return true;
         }
 
         $this->bindWeShopActorContext($context, $customer);
@@ -690,4 +700,3 @@ class ApiControllerInitBefore implements ObserverInterface
         ), [], 'api');
     }
 }
-

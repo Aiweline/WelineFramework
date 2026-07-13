@@ -1,0 +1,15 @@
+{
+    "name": "weline/module-cart",
+    "description": "WelineFramework Cart module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Cart\\": ""
+        }
+    }
+}

@@ -13,8 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
-use Weline\Ai\Interface\AdapterModelBindingInterface;
-use Weline\Ai\Interface\ScenarioAdapterInterface;
+use Weline\Ai\Api\AdapterModelBindingInterface;
+use Weline\Ai\Api\ScenarioAdapterInterface;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Framework\System\File\Scan;

@@ -46,6 +46,7 @@
         
         <!-- 系统服务 -->
         <menu source="Weline_Backend::system_service_group" name="system_service_group" title="系统服务" icon="mdi mdi-server" order="300"/>
+        <menu source="Weline_Framework::system_service_group" name="framework_system_service_group" title="框架服务" parent="Weline_Backend::system_service_group" icon="mdi mdi-cube-outline" order="10"/>
         
         <!-- 系统维护 -->
         <menu source="Weline_Backend::system_maintenance" name="system_maintenance" title="系统维护" icon="mdi mdi-tools" order="400">

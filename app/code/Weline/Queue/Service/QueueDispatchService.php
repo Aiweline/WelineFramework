@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Service;
 
-use Weline\Cron\Helper\Process;
+use Weline\Cron\Api\Process\ProcessControlInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\System\Process\Processer;
 use Weline\Queue\DeadWorkerRecoverableQueueInterface;
 use Weline\Queue\Model\Queue;
@@ -15,9 +16,11 @@ class QueueDispatchService
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
     private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [];
+    private ?ProcessControlInterface $processControl = null;
 
     public function __construct(
         private readonly Queue $queue,
+        private readonly RuntimeProviderResolver $runtimeProviders,
     ) {
     }
 
@@ -95,7 +98,9 @@ class QueueDispatchService
             if (!$queue instanceof Queue) {
                 continue;
             }
-            $queueName = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
+            $queueName = $this->processControl()->normalizeTaskName(
+                'queue-' . $queue->getName() . '-' . $queue->getId(),
+            );
             $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName, $queue);
             $queuePid = (int)($queue->getPid() ?: 0);
             $pidAlive = $queuePid > 0 && Processer::isRunningByPid($queuePid);
@@ -217,7 +222,9 @@ class QueueDispatchService
             return false;
         }
 
-        $queueName = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
+        $queueName = $this->processControl()->normalizeTaskName(
+            'queue-' . $queue->getName() . '-' . $queue->getId(),
+        );
         $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName, $queue);
         $pid = Processer::create($processName, true, false, true);
         if (!$pid) {
@@ -439,5 +446,19 @@ class QueueDispatchService
         $haystack = $output . PHP_EOL . (string)$queue->getResult() . PHP_EOL . (string)$queue->getProcess();
 
         return \str_contains($haystack, 'QUEUE_DONE');
+    }
+
+    private function processControl(): ProcessControlInterface
+    {
+        if ($this->processControl instanceof ProcessControlInterface) {
+            return $this->processControl;
+        }
+
+        $provider = $this->runtimeProviders->resolve(ProcessControlInterface::class);
+        if (!$provider instanceof ProcessControlInterface) {
+            throw new \RuntimeException('cron_process_control_provider_unavailable');
+        }
+
+        return $this->processControl = $provider;
     }
 }

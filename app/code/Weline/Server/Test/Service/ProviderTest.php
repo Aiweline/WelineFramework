@@ -97,6 +97,9 @@ class ProviderTest extends TestCase
                 'wls' => [
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
+                    'runtime' => [
+                        'listener_mode' => 'reuseport',
+                    ],
                 ],
             ],
         );
@@ -108,6 +111,41 @@ class ProviderTest extends TestCase
         $this->assertContains('9981', $command->arguments);
         $this->assertContains('--reuseport', $command->arguments);
         $this->assertContains('--defer-ssl', $command->arguments);
+    }
+
+    public function testDirectSharedListenerWorkerUsesInheritedFdWithoutReusePort(): void
+    {
+        $provider = new WorkerProvider();
+        $context = new ServiceContext(
+            instanceName: 'direct-shared-instance',
+            epoch: 1,
+            controlPort: 19001,
+            masterPid: 12346,
+            host: '127.0.0.1',
+            mainPort: 9982,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'direct',
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 4,
+                    'runtime' => [
+                        'topology' => 'direct',
+                        'listener_mode' => 'shared_fd',
+                    ],
+                ],
+            ],
+        );
+
+        $command = $provider->buildCommand(1, $context);
+
+        $this->assertContains('--listen-fd=3', $command->arguments);
+        $this->assertNotContains('--reuseport', $command->arguments);
+        $this->assertContains('--wls-runtime-topology=direct', $command->arguments);
     }
 
     public function testWorkerProviderPort(): void

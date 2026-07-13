@@ -1,26 +1,23 @@
 {
-  "name": "weline/module-db-manager",
-  "description": "WLS Panel database profile manager",
-  "minimum-stability": "stable",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "weline/module-backend": "*",
-    "weline/module-server": "*"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\DbManager\\": ""
+    "name": "weline/module-db-manager",
+    "description": "WLS Panel database profile manager",
+    "minimum-stability": "stable",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/module-server": "@dev"
     },
-    "psr-0": {
-      "Weline\\DbManager\\": ""
-    }
-  },
-  "license": "MIT"
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\DbManager\\": ""
+        }
+    },
+    "license": "MIT"
 }

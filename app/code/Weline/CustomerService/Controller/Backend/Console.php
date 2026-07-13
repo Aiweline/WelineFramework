@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Controller\Backend;
 
-use Weline\Backend\Model\BackendUser;
 use Weline\CustomerService\Model\ChatMessage;
 use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\ServiceAgent;
@@ -537,4 +536,3 @@ class Console extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 }
-

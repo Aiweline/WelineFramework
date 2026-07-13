@@ -5,21 +5,26 @@ declare(strict_types=1);
 namespace Weline\CacheManager\Service;
 
 use Weline\CacheManager\Model\Cache as CacheRecord;
-use Weline\Cron\Model\CronTask;
+use Weline\Cron\Api\Task\CronTaskCatalogInterface;
+use Weline\Cron\Api\Task\CronTaskRecord;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\RuntimeRoutingPolicyInterface;
+use Weline\Framework\Runtime\SharedStateAdminProviderInterface;
 
 final class CacheAdminService
 {
     private bool $sharedStateResolved = false;
 
-    private mixed $sharedStateAdminService = null;
+    private ?SharedStateAdminProviderInterface $sharedStateAdminService = null;
 
     public function __construct(
-        private readonly CacheManager $cacheManager
+        private readonly CacheManager $cacheManager,
+        private readonly ?RuntimeProviderResolver $runtimeProviderResolver = null,
     ) {
     }
 
@@ -446,11 +451,17 @@ final class CacheAdminService
             return false;
         }
 
-        if (!\class_exists(\Weline\Server\Service\Runtime\RoutingPolicyRegistry::class)) {
+        try {
+            $resolver = $this->runtimeProviderResolver
+                ?? ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $policy = $resolver->resolve(RuntimeRoutingPolicyInterface::class);
+        } catch (\Throwable) {
             return true;
         }
 
-        return \Weline\Server\Service\Runtime\RoutingPolicyRegistry::shouldHijackCacheFile();
+        return $policy instanceof RuntimeRoutingPolicyInterface
+            ? $policy->shouldHijackCacheFile()
+            : true;
     }
 
     /**
@@ -527,7 +538,7 @@ final class CacheAdminService
         }
     }
 
-    private function getSharedStateAdminService(): mixed
+    private function getSharedStateAdminService(): ?SharedStateAdminProviderInterface
     {
         if ($this->sharedStateResolved) {
             return $this->sharedStateAdminService;
@@ -535,14 +546,13 @@ final class CacheAdminService
 
         $this->sharedStateResolved = true;
 
-        if (!\class_exists(\Weline\Server\Service\Control\SharedStateAdminService::class)) {
-            return null;
-        }
-
         try {
-            $this->sharedStateAdminService = ObjectManager::getInstance(
-                \Weline\Server\Service\Control\SharedStateAdminService::class
-            );
+            $resolver = $this->runtimeProviderResolver
+                ?? ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $provider = $resolver->resolve(SharedStateAdminProviderInterface::class);
+            $this->sharedStateAdminService = $provider instanceof SharedStateAdminProviderInterface
+                ? $provider
+                : null;
         } catch (\Throwable) {
             $this->sharedStateAdminService = null;
         }
@@ -551,18 +561,17 @@ final class CacheAdminService
     }
 
     /**
-     * @return array<int, mixed>
+     * @return list<CronTaskRecord>
      */
     private function loadCronTasks(): array
     {
         try {
-            /** @var CronTask $cronTaskModel */
-            $cronTaskModel = ObjectManager::getInstance(CronTask::class);
-            return $cronTaskModel->where('name', '%cache%', 'like')
-                ->order('last_run_time', 'DESC')
-                ->select()
-                ->fetch()
-                ->getItems();
+            $resolver = $this->runtimeProviderResolver
+                ?? ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $catalog = $resolver->resolve(CronTaskCatalogInterface::class);
+            return $catalog instanceof CronTaskCatalogInterface
+                ? $catalog->listByNameContains('cache')
+                : [];
         } catch (\Throwable) {
             return [];
         }

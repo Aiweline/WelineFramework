@@ -13,6 +13,7 @@ namespace Weline\Currency\Api;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * 汇率API服务实现
@@ -315,7 +316,7 @@ class ExchangeRateApi implements ExchangeRateApiInterface
                 // 如果不是最后一次尝试，等待后重试
                 if ($attempt < $this->maxRetries - 1) {
                     $delay = $this->retryDelays[$attempt] ?? 1;
-                    sleep($delay);
+                    SchedulerSystem::sleep((int) $delay);
                 }
             }
         }
@@ -324,4 +325,3 @@ class ExchangeRateApi implements ExchangeRateApiInterface
         throw new Exception(__('API请求失败，已重试 %{1} 次: %{2}', [$this->maxRetries, $lastException->getMessage()]));
     }
 }
-

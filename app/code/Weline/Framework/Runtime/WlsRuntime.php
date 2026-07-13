@@ -15,7 +15,9 @@ namespace Weline\Framework\Runtime;
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Context;
+use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Hook\Config\HookReader;
@@ -34,11 +36,6 @@ use Weline\Framework\Session\Session;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
-use Weline\I18n\Parser as I18nParser;
-use Weline\Server\Log\LogConfig;
-use Weline\Server\Service\DynamicWarmup\HotPathDiscoveryService;
-use Weline\Server\Service\MemoryStateFacade;
-use Weline\Server\Service\WlsPerformanceTraceStore;
 /**
  * WLS 运行时
  * 
@@ -48,18 +45,21 @@ use Weline\Server\Service\WlsPerformanceTraceStore;
  * - 请求结束调用 reset() 清理状态
  * - 常驻内存，高性能
  */
-class WlsRuntime implements RuntimeInterface
+class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterface
 {
     private const DYNAMIC_WARMUP_COORDINATOR_NS = 'wls_dynamic_warmup';
-    private const FRONTEND_START_PAGE_CONFIG_KEY = 'frontend_start_page_path';
-    private const FRONTEND_START_PAGE_CONFIG_MODULE = 'Weline_Websites';
+    private const HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX = 'wls_homepage_warmup:';
+    private const HOMEPAGE_WARMUP_OWNER_KEY = 'owner';
+    private const HOMEPAGE_WARMUP_READY_KEY = 'ready';
+    private const HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS = 2;
+    private const HOMEPAGE_WARMUP_READY_TTL_SECONDS = 120;
 
     /**
      * 是否已初始化
      */
     private bool $bootstrapped = false;
 
-    private static ?MemoryStateFacade $dynamicWarmupCoordinator = null;
+    private static ?SharedCacheStateInterface $dynamicWarmupCoordinator = null;
     private static bool $dynamicWarmupCoordinatorResolved = false;
     
     /**
@@ -74,13 +74,25 @@ class WlsRuntime implements RuntimeInterface
 
     private ?WorkerPreloadManager $preloadManager = null;
 
+    private ?RequestPipelineInterface $requestPipeline = null;
+
     private array $preloadPhasesCompleted = [];
 
     private bool $readyGateWorkerBootstrapWarmupCompleted = false;
 
+    /**
+     * @var array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}|null
+     */
+    private ?array $readyGateHomepageFpcProof = null;
+
     private bool $readyGateWorkerRegistryWarmupCompleted = false;
 
     private bool $readyGateDynamicFirstRenderWarmupCompleted = false;
+
+    /**
+     * @var array{ready:bool,host:string,path:string,status_code:int,body_length:int,elapsed_ms:float,target_ms:float,attempts:int,fpc_status:string,cache:string,reason:string}
+     */
+    private array $readyGateDynamicFirstRenderProof = [];
 
     private bool $homepageKeepWarmRunning = false;
 
@@ -88,7 +100,14 @@ class WlsRuntime implements RuntimeInterface
 
     private float $homepageLastNaturalHitAt = 0.0;
 
+    private float $homepageNaturalHitRescheduleNotBefore = 0.0;
+
     private string $homepageCacheFullUri = '';
+
+    /**
+     * @var array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     */
+    private array $homepageCacheWarmupReceipt = [];
 
     /**
      * 请求计数
@@ -150,6 +169,11 @@ class WlsRuntime implements RuntimeInterface
             \define('WLS_MODE', true);
         }
         Runtime::setMode(RuntimeInterface::MODE_WLS);
+
+        // Cold-start fail-closed gate. Registry loading and validation happen
+        // once per Worker before App bootstrap; requests only read the cached
+        // compiled container and can never fall back to ObjectManager.
+        ContainerRuntime::preflight();
         
         // 定义框架核心常量（原本在 bootstrap.php 中定义）
         if (!\defined('VENDOR_PATH')) {
@@ -220,31 +244,47 @@ class WlsRuntime implements RuntimeInterface
         }
 
         if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $rawFlag = '0';
+            $rawFlag = '1';
         }
 
         $flag = \strtolower(\trim((string)$rawFlag));
         return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync', 'async', 'deferred'], true);
     }
 
-    public function runReadyGateWorkerBootstrapWarmup(): void
+    /**
+     * @return array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}
+     */
+    public function runReadyGateWorkerBootstrapWarmup(): array
     {
         if ($this->readyGateWorkerBootstrapWarmupCompleted) {
-            return;
-        }
-        if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
-            $this->readyGateWorkerBootstrapWarmupCompleted = true;
-            $this->scheduleNextHomepageKeepWarm();
-            return;
+            return $this->readyGateHomepageFpcProof
+                ?? throw new \LogicException('Worker READY warmup completed without homepage FPC proof.');
         }
 
         $startedAt = \microtime(true);
         $backendResult = $this->newBackendFirstRenderWarmupResult();
+        $dynamicResult = $this->newDynamicFirstRenderWarmupResult();
         $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
 
         $this->logReadyGateWarmupStep('route_assert_begin', $workerId, $startedAt);
         $this->assertGeneratedRouteFilesReady();
         $this->logReadyGateWarmupStep('route_assert_done', $workerId, $startedAt);
+
+        // Homepage process FPC is the non-optional business READY gate. It is
+        // deliberately independent from optional registry/backend/dynamic
+        // warmups and their fail-open switches.
+        $this->readyGateHomepageFpcProof = $this->runRequiredHomepageProcessFpcReadyGate(
+            $workerId,
+            $startedAt
+        );
+
+        if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
+            $this->logReadyGateWarmupStep('optional_bootstrap_skipped', $workerId, $startedAt);
+            $this->readyGateWorkerBootstrapWarmupCompleted = true;
+            $this->scheduleNextHomepageKeepWarm();
+            return $this->readyGateHomepageFpcProof;
+        }
+
         if ($this->shouldRunReadyGateWorkerRegistryWarmup()) {
             $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
             $this->router ??= ObjectManager::getInstance(Router::class);
@@ -292,10 +332,10 @@ class WlsRuntime implements RuntimeInterface
             }
         }
 
-        $dynamicResult = $this->newDynamicFirstRenderWarmupResult();
         $this->logReadyGateWarmupStep('dynamic_begin', $workerId, $startedAt);
         if ($this->shouldRunReadyGateDynamicFirstRenderWarmup()) {
             $dynamicResult = $this->runReadyGateDynamicFirstRenderWarmup();
+            $this->readyGateDynamicFirstRenderProof = $this->buildDynamicFirstRenderReadyProof($dynamicResult);
             $this->readyGateDynamicFirstRenderWarmupCompleted = true;
             $this->logReadyGateWarmupStep(
                 'dynamic_done warmed=' . (int)($dynamicResult['warmed'] ?? 0)
@@ -321,6 +361,22 @@ class WlsRuntime implements RuntimeInterface
         } else {
             $this->logReadyGateWarmupStep('dynamic_skipped', $workerId, $startedAt);
         }
+        if ($this->readyGateDynamicFirstRenderProof === []) {
+            throw new \RuntimeException(
+                'READY gate dynamic first-render proof is mandatory for business workers.'
+            );
+        }
+
+        // Optional registry/controller warmups may reset request-local state or
+        // leave the first subsequent homepage lookup at Shared L2. Rehydrate
+        // and prove Process L1 only after every warmup step, so READY describes
+        // the state that will actually receive public traffic.
+        $this->logReadyGateWarmupStep('homepage_fpc_final_begin', $workerId, $startedAt);
+        $this->readyGateHomepageFpcProof = $this->runRequiredHomepageProcessFpcReadyGate(
+            $workerId,
+            $startedAt
+        );
+        $this->logReadyGateWarmupStep('homepage_fpc_final_done', $workerId, $startedAt);
 
         $this->readyGateWorkerBootstrapWarmupCompleted = true;
         $this->scheduleNextHomepageKeepWarm();
@@ -330,10 +386,96 @@ class WlsRuntime implements RuntimeInterface
                 . ' backend_failed=' . (int)($backendResult['failed'] ?? 0)
                 . ' dynamic_warmed=' . (int)($dynamicResult['warmed'] ?? 0)
                 . ' dynamic_failed=' . (int)($dynamicResult['failed'] ?? 0)
+                . ' homepage_fpc_source=' . $this->readyGateHomepageFpcProof['source']
                 . ' hosts=' . \json_encode($backendResult['hosts'] ?? [], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
                 . ' paths=' . \json_encode($backendResult['paths'] ?? [], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
                 . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
         }
+
+        return $this->readyGateHomepageFpcProof;
+    }
+
+    /**
+     * @return array{ready:bool,host:string,path:string,status_code:int,body_length:int,elapsed_ms:float,target_ms:float,attempts:int,fpc_status:string,cache:string,reason:string}
+     */
+    public function readyGateDynamicFirstRenderProof(): array
+    {
+        return $this->readyGateDynamicFirstRenderProof;
+    }
+
+    /**
+     * @param array{samples?:list<array<string,mixed>>} $result
+     * @return array{ready:bool,host:string,path:string,status_code:int,body_length:int,elapsed_ms:float,target_ms:float,attempts:int,fpc_status:string,cache:string,reason:string}
+     */
+    private function buildDynamicFirstRenderReadyProof(array $result): array
+    {
+        foreach ((array)($result['samples'] ?? []) as $sample) {
+            if (!\is_array($sample) || (string)($sample['path'] ?? '') !== '/') {
+                continue;
+            }
+
+            return [
+                'ready' => (bool)($sample['ready'] ?? false),
+                'host' => (string)($sample['host'] ?? ''),
+                'path' => '/',
+                'status_code' => (int)($sample['status'] ?? 0),
+                'body_length' => (int)($sample['body_length'] ?? 0),
+                'elapsed_ms' => (float)($sample['elapsed_ms'] ?? 0.0),
+                'target_ms' => (float)($sample['target_ms'] ?? 0.0),
+                'attempts' => (int)($sample['attempts'] ?? 0),
+                'fpc_status' => \strtoupper((string)($sample['fpc_status'] ?? '')),
+                'cache' => (string)($sample['cache'] ?? ''),
+                'reason' => (string)($sample['reason'] ?? ''),
+            ];
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array{hit:bool,fpc_status:string,source:string,full_uri:string,reason:string,http_status:int}
+     */
+    private function runRequiredHomepageProcessFpcReadyGate(int $workerId, float $startedAt): array
+    {
+        $this->logReadyGateWarmupStep('homepage_fpc_begin', $workerId, $startedAt);
+        $host = $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
+        $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, true);
+        $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
+        $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
+        $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
+        $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+            ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
+        $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
+        $fullUri = \trim((string)($meta['full_uri'] ?? ''));
+        $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
+        $hit = (bool)($validation['ok'] ?? false)
+            && $fpcStatus === 'HIT'
+            && \str_starts_with($source, 'process')
+            && $fullUri !== '';
+        $proof = [
+            'hit' => $hit,
+            'fpc_status' => $fpcStatus,
+            'source' => $source,
+            'full_uri' => $fullUri,
+            'reason' => $reason,
+            'http_status' => (int)($meta['status_code'] ?? 0),
+        ];
+        if (!$hit) {
+            throw new \RuntimeException(
+                'READY gate homepage process FPC proof failed worker=' . $workerId
+                . ' fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
+                . ' source=' . ($source !== '' ? $source : 'missing')
+                . ' uri=' . ($fullUri !== '' ? $fullUri : 'missing')
+                . ' reason=' . $reason
+            );
+        }
+
+        $this->logReadyGateWarmupStep(
+            'homepage_fpc_done source=' . $source . ' status=' . $proof['http_status'],
+            $workerId,
+            $startedAt
+        );
+        return $proof;
     }
 
     private function shouldRunReadyGateWorkerBootstrapWarmup(): bool
@@ -402,24 +544,90 @@ class WlsRuntime implements RuntimeInterface
             $this->scheduleNextHomepageKeepWarm($now);
             return false;
         }
+        if ($now < $this->homepageKeepWarmNextAt) {
+            return false;
+        }
         if ($this->homepageLastNaturalHitAt > 0.0
             && ($now - $this->homepageLastNaturalHitAt) < $this->homepageKeepWarmIntervalSeconds()
         ) {
+            // The natural-hit fast path updates the exact last-hit timestamp
+            // but bounds schedule recomputation. If the old deadline happens
+            // to mature inside that one-second window, advance it once here.
             $this->scheduleNextHomepageKeepWarm($this->homepageLastNaturalHitAt);
             return false;
         }
 
-        return $now >= $this->homepageKeepWarmNextAt;
+        return true;
     }
 
     public function noteHomepageNaturalHit(string $requestTarget): void
     {
-        if (!$this->isRootRequestUri($requestTarget)) {
+        if ($requestTarget !== '' && $requestTarget !== '/' && !$this->isRootRequestUri($requestTarget)) {
             return;
         }
 
-        $this->homepageLastNaturalHitAt = \microtime(true);
-        $this->scheduleNextHomepageKeepWarm($this->homepageLastNaturalHitAt);
+        $now = \microtime(true);
+        $this->homepageLastNaturalHitAt = $now;
+        if ($now < $this->homepageNaturalHitRescheduleNotBefore) {
+            return;
+        }
+
+        // A high-QPS homepage can produce thousands of natural hits per second.
+        // Keep the latest-hit timestamp exact while bounding Env/jitter schedule
+        // recomputation to once per second per Worker.
+        $this->homepageNaturalHitRescheduleNotBefore = $now + 1.0;
+        $this->scheduleNextHomepageKeepWarm($now);
+    }
+
+    /**
+     * Return the exact immutable homepage identity proven during READY.
+     *
+     * The public request can omit the default language/currency cookies while
+     * the warmup receipt intentionally carries them. Reconstructing that
+     * identity in a transport adapter creates a different FPC variant and
+     * forces every otherwise-hot homepage request back through Framework.
+     * Only an anonymous root request for the same scheme and host may reuse
+     * the receipt; all personalized/non-root requests retain their own facts.
+     *
+     * @return array{full_uri:string,cookie_header:string}|null
+     */
+    public function resolveHomepageFastPathIdentity(
+        string $requestFullUri,
+        string $cookieHeader = ''
+    ): ?array {
+        if (\trim($cookieHeader) !== '') {
+            return null;
+        }
+
+        $receipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
+        if ($receipt === []) {
+            return null;
+        }
+
+        try {
+            $request = \parse_url($requestFullUri);
+            $warmed = \parse_url($receipt['full_uri']);
+        } catch (\ValueError) {
+            return null;
+        }
+        if (!\is_array($request) || !\is_array($warmed)) {
+            return null;
+        }
+
+        $requestPath = (string)($request['path'] ?? '/');
+        $warmedPath = (string)($warmed['path'] ?? '/');
+        if (($requestPath === '' ? '/' : $requestPath) !== '/'
+            || ($warmedPath === '' ? '/' : $warmedPath) !== '/'
+            || \strtolower((string)($request['scheme'] ?? '')) !== \strtolower((string)($warmed['scheme'] ?? ''))
+            || \strtolower((string)($request['host'] ?? '')) !== \strtolower((string)($warmed['host'] ?? ''))
+        ) {
+            return null;
+        }
+
+        return [
+            'full_uri' => $receipt['full_uri'],
+            'cookie_header' => $receipt['cookie_header'],
+        ];
     }
 
     /**
@@ -597,7 +805,7 @@ class WlsRuntime implements RuntimeInterface
     {
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_FAIL_OPEN');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_fail_open', '1');
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_fail_open', '0');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'fail_open'], true);
@@ -636,10 +844,7 @@ class WlsRuntime implements RuntimeInterface
         }
 
         try {
-            $discovery = ObjectManager::getInstance(HotPathDiscoveryService::class);
-            $paths = $discovery instanceof HotPathDiscoveryService
-                ? $discovery->discover(\max($maxPaths * 4, 16))
-                : [];
+            $paths = $this->wlsRuntimeAdapter()?->discoverHotPaths(\max($maxPaths * 4, 16)) ?? [];
         } catch (\Throwable) {
             $paths = [];
         }
@@ -738,40 +943,10 @@ class WlsRuntime implements RuntimeInterface
      */
     private function readyGateDynamicCriticalWarmupPaths(): array
     {
-        return [
-            '/',
-            '/catalog/category/clothing',
-            '/en_US/catalog/category/clothing',
-            '/USD/en_US/catalog/category/clothing',
-            '/zh_Hans_CN/catalog/category/clothing',
-            '/CNY/zh_Hans_CN/catalog/category/clothing',
-            '/product/demo-category-81-sports',
-            '/en_US/product/demo-category-81-sports',
-            '/product/demo-category-45-clothing',
-            '/en_US/product/demo-category-45-clothing',
-            '/catalog/category/clothing/sports',
-            '/en_US/catalog/category/clothing/sports',
-            '/USD/en_US/catalog/category/clothing/sports',
-            '/zh_Hans_CN/catalog/category/clothing/sports',
-            '/CNY/zh_Hans_CN/catalog/category/clothing/sports',
-            '/catalog/category/clothing/women',
-            '/en_US/catalog/category/clothing/women',
-            '/USD/en_US/catalog/category/clothing/women',
-            '/zh_Hans_CN/catalog/category/clothing/women',
-            '/CNY/zh_Hans_CN/catalog/category/clothing/women',
-            '/catalog/category/clothing/men',
-            '/en_US/catalog/category/clothing/men',
-            '/USD/en_US/catalog/category/clothing/men',
-            '/zh_Hans_CN/catalog/category/clothing/men',
-            '/CNY/zh_Hans_CN/catalog/category/clothing/men',
-            '/USD/en_US/product/demo-category-81-sports',
-            '/zh_Hans_CN/product/demo-category-81-sports',
-            '/CNY/zh_Hans_CN/product/demo-category-81-sports',
-            '/USD/en_US/product/demo-category-45-clothing',
-            '/zh_Hans_CN/product/demo-category-45-clothing',
-            '/CNY/zh_Hans_CN/product/demo-category-45-clothing',
-            '/product/demo-category-126-food',
-        ];
+        // Framework only owns the universal homepage contract. Business
+        // Modules publish their own business paths through the runtime adapter
+        // or explicit instance configuration.
+        return ['/'];
     }
 
     /**
@@ -790,18 +965,14 @@ class WlsRuntime implements RuntimeInterface
         }
 
         $paths = [];
-        try {
-            $discovery = ObjectManager::getInstance(HotPathDiscoveryService::class);
-        } catch (\Throwable) {
-            $discovery = null;
-        }
+        $adapter = $this->wlsRuntimeAdapter();
 
         foreach ($configured as $path) {
             if (!\is_scalar($path)) {
                 continue;
             }
-            $normalized = $discovery instanceof HotPathDiscoveryService
-                ? $discovery->normalizeFrontendPagePath($path)
+            $normalized = $adapter !== null
+                ? $adapter->normalizeFrontendPagePath($path)
                 : $this->normalizeInternalWarmupPath((string)$path);
             if ($normalized !== null && $normalized !== '') {
                 $paths[$normalized] = $normalized;
@@ -813,12 +984,10 @@ class WlsRuntime implements RuntimeInterface
 
     private function isReadyGateDynamicControllerCachePath(string $path): bool
     {
-        $lower = \strtolower($path);
-        return $lower === '/'
-            || \preg_match('#^/[a-z]{2}_[a-z0-9_]+/?$#i', $lower) === 1
-            || \str_contains($lower, '/catalog/category/')
-            || \str_contains($lower, '/product/')
-            || \str_contains($lower, '/product/view');
+        // Hot-path discovery belongs to the runtime provider. Framework only
+        // verifies that the provider returned a valid frontend page path; it
+        // must not know module-owned route conventions.
+        return $this->normalizeDynamicWarmupPathList([$path]) !== [];
     }
 
     private function assertGeneratedRouteFilesReady(): void
@@ -1034,14 +1203,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function backendWarmupControllerCacheSource(array $headers): string
     {
-        foreach (['X-WLS-Controller-Cache', 'X-WLS-Admin-View-Cache'] as $headerName) {
-            $value = $this->warmupHeaderValue($headers, $headerName);
-            if ($value !== '') {
-                return \strtolower($value);
-            }
-        }
-
-        return '';
+        return \strtolower($this->warmupHeaderValue($headers, 'X-WLS-Controller-Cache'));
     }
 
     private function backendWarmupCacheIsReady(string $cache): bool
@@ -1058,7 +1220,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function backendWarmupStoreStatus(array $headers, string $cache = ''): string
     {
-        foreach (['X-WLS-Admin-View-Cache-Full-Html', 'X-WLS-Admin-View-Cache-Store'] as $headerName) {
+        foreach (['X-WLS-Controller-Cache-Full-Html', 'X-WLS-Controller-Cache-Store'] as $headerName) {
             $value = $this->warmupHeaderValue($headers, $headerName);
             if ($value !== '') {
                 return \strtolower($value);
@@ -1146,8 +1308,9 @@ class WlsRuntime implements RuntimeInterface
 
     private function resolveReadyGateBackendWarmupUserId(): int
     {
-        if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)) {
-            return \Weline\Backend\Service\BackendWarmupContext::resolveWarmupUserId();
+        $provider = $this->runtimeProvider(BackendWarmupProviderInterface::class);
+        if ($provider instanceof BackendWarmupProviderInterface) {
+            return $provider->resolveWarmupUserId();
         }
 
         $raw = \getenv('WLS_WORKER_BACKEND_WARMUP_USER_ID');
@@ -1446,10 +1609,7 @@ class WlsRuntime implements RuntimeInterface
             $paths = \array_slice(\array_values($pathsOverride), 0, $effectiveMaxPaths);
         } else {
             try {
-                $discovery = ObjectManager::getInstance(HotPathDiscoveryService::class);
-                $paths = $discovery instanceof HotPathDiscoveryService
-                    ? $discovery->discover($effectiveMaxPaths)
-                    : ['/'];
+                $paths = $this->wlsRuntimeAdapter()?->discoverHotPaths($effectiveMaxPaths) ?? ['/'];
             } catch (\Throwable $e) {
                 $paths = ['/'];
                 $result['errors'][] = 'path discovery failed: ' . $e->getMessage();
@@ -1480,26 +1640,56 @@ class WlsRuntime implements RuntimeInterface
                 $pathKey = $this->dynamicWarmupPathKey($host, $path);
                 $ownsPathLock = false;
                 try {
-                    if ($isHomepage) {
-                        // Every worker verifies a process-local homepage hit;
-                        // the shared FPC lock still prevents duplicate rendering.
-                        $attempts = 1;
-                        $transaction = $this->runHomepageFpcWarmupTransaction($host, $sequence);
-                        $warmupMeta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
-                        $validation = \is_array($transaction['validation'] ?? null)
-                            ? $transaction['validation']
-                            : ['ok' => false, 'reason' => 'homepage validation missing', 'cache' => ''];
-                    } else {
-                        $ownsPathLock = $this->acquireDynamicWarmupPathLock($pathKey);
-                        if (!$ownsPathLock) {
-                            $this->waitForDynamicWarmupPathReady($pathKey);
+                    $ownsPathLock = $this->acquireDynamicWarmupPathLock($pathKey);
+                    if (!$ownsPathLock) {
+                        $sharedReady = $this->waitForDynamicWarmupPathReady($pathKey);
+                        $sharedSample = \is_array($sharedReady['sample'] ?? null)
+                            ? $sharedReady['sample']
+                            : [];
+                        if ($isHomepage
+                            && !empty($sharedReady['ok'])
+                            && ($sharedSample['ready'] ?? null) === true
+                        ) {
+                            $sharedSample['cache'] = 'shared-owner:' . \trim((string)($sharedSample['cache'] ?? ''), ':');
+                            $sharedSample['reason'] = 'ready:shared-owner ' . \trim((string)($sharedSample['reason'] ?? 'rendered'));
+                            $result['samples'][] = $sharedSample;
+                            $result['warmed']++;
+                            continue;
                         }
+                    }
 
+                    if ($isHomepage) {
+                        // The mandatory READY gate above has already proved
+                        // this worker owns a process-local homepage FPC hit.
+                        // Exactly one owner warms the dynamic controller /
+                        // template chain for this generation. Peer workers
+                        // consume the immutable shared proof instead of
+                        // creating a cold-start render storm.
                         $attempts = 0;
                         do {
                             $attempts++;
                             $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
-                            $validation = $this->validateDynamicFirstRenderWarmup($warmupMeta, $targetMs);
+                            $validation = $this->validateDynamicFirstRenderWarmup(
+                                $warmupMeta,
+                                $targetMs,
+                                false
+                            );
+                            if ($validation['ok'] || $attempts >= $maxAttempts) {
+                                break;
+                            }
+                            $sequence++;
+                            SchedulerSystem::yield();
+                        } while (true);
+                    } else {
+                        $attempts = 0;
+                        do {
+                            $attempts++;
+                            $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
+                            $validation = $this->validateDynamicFirstRenderWarmup(
+                                $warmupMeta,
+                                $targetMs,
+                                true
+                            );
                             if ($validation['ok'] || $attempts >= $maxAttempts) {
                                 break;
                             }
@@ -1507,46 +1697,48 @@ class WlsRuntime implements RuntimeInterface
                             SchedulerSystem::yield();
                         } while (true);
                     }
+                    $warmupHeaders = \is_array($warmupMeta['headers'] ?? null)
+                        ? $warmupMeta['headers']
+                        : [];
+                    $sample = [
+                        'host' => $host,
+                        'path' => $path,
+                        'status' => (int)($warmupMeta['status_code'] ?? 0),
+                        'cache' => $validation['cache'],
+                        'store' => $this->dynamicWarmupStoreStatus($warmupMeta['headers'] ?? []),
+                        'body_length' => (int)($warmupMeta['body_length'] ?? 0),
+                        'formatted_http' => (bool)($warmupMeta['formatted_http'] ?? false),
+                        'elapsed_ms' => (float)($warmupMeta['elapsed_ms'] ?? 0.0),
+                        'target_ms' => $targetMs,
+                        'attempts' => $attempts,
+                        'fpc_status' => \strtoupper(
+                            $this->warmupHeaderValue($warmupHeaders, 'X-WLS-FPC-Status')
+                            ?: $this->warmupHeaderValue($warmupHeaders, 'X-Weline-FPC')
+                        ),
+                        'ready' => (bool)$validation['ok'],
+                        'reason' => $validation['reason'],
+                    ];
                     if (\count($result['samples']) < 8 || $path === '/') {
-                        $result['samples'][] = [
-                            'host' => $host,
-                            'path' => $path,
-                            'status' => (int)($warmupMeta['status_code'] ?? 0),
-                            'cache' => $validation['cache'],
-                            'store' => $this->dynamicWarmupStoreStatus($warmupMeta['headers'] ?? []),
-                            'body_length' => (int)($warmupMeta['body_length'] ?? 0),
-                            'formatted_http' => (bool)($warmupMeta['formatted_http'] ?? false),
-                            'elapsed_ms' => (float)($warmupMeta['elapsed_ms'] ?? 0.0),
-                            'target_ms' => $targetMs,
-                            'attempts' => $attempts,
-                            'ready' => (bool)$validation['ok'],
-                            'reason' => $validation['reason'],
-                        ];
+                        $result['samples'][] = $sample;
                     }
                     if (!$validation['ok']) {
                         $result['failed']++;
                         $message = $host . $path . ': ' . $validation['reason'];
                         $result['errors'][] = $message;
-                        if (!$isHomepage) {
-                            $this->markDynamicWarmupPathReady($pathKey, false, $validation['reason']);
-                        }
+                        $this->markDynamicWarmupPathReady($pathKey, false, $validation['reason'], $sample);
                         if (\function_exists('w_log_warning')) {
                             \w_log_warning('[WlsRuntime] dynamic first-render warmup not ready ' . $message);
                         }
                         continue;
                     }
 
-                    if (!$isHomepage) {
-                        $this->markDynamicWarmupPathReady($pathKey, true, $validation['reason']);
-                    }
+                    $this->markDynamicWarmupPathReady($pathKey, true, $validation['reason'], $sample);
                     $result['warmed']++;
                 } catch (\Throwable $e) {
                     $result['failed']++;
                     $message = $host . $path . ': ' . $e->getMessage();
                     $result['errors'][] = $message;
-                    if (!$isHomepage) {
-                        $this->markDynamicWarmupPathReady($pathKey, false, $e->getMessage());
-                    }
+                    $this->markDynamicWarmupPathReady($pathKey, false, $e->getMessage());
                     if (\function_exists('w_log_warning')) {
                         \w_log_warning('[WlsRuntime] dynamic first-render warmup failed ' . $message);
                     }
@@ -1584,14 +1776,19 @@ class WlsRuntime implements RuntimeInterface
             ?? throw new \InvalidArgumentException('Invalid homepage warmup host.');
         $fullUri = $this->resolveInternalWarmupScheme() . '://' . $host . '/';
         $cacheFullUri = $this->homepageCacheFullUri !== '' ? $this->homepageCacheFullUri : $fullUri;
+        $activeReceipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
+        if ($activeReceipt === []) {
+            $activeReceipt = $this->buildHomepageWarmupReceipt($cacheFullUri);
+        } else {
+            $cacheFullUri = $activeReceipt['full_uri'];
+        }
 
-        // READY may elect one shared publisher. Runtime keep-warm cycles only
-        // refresh from an existing fresh shared entry and never cold-render.
+        // READY elects exactly one shared publisher. Runtime keep-warm cycles
+        // only refresh from an existing fresh shared entry and never cold-render.
         $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
-        $pulledFromShared = $coordinator->warmProcessCacheForFullUri(
-            $cacheFullUri,
-            'GET',
-            '',
+        $pulledFromShared = $this->warmHomepageProcessCacheForReceipt(
+            $coordinator,
+            $activeReceipt,
             !$allowPrime
         );
         if (!$pulledFromShared) {
@@ -1601,42 +1798,219 @@ class WlsRuntime implements RuntimeInterface
                     'validation' => ['ok' => false, 'reason' => 'shared-fpc-miss', 'cache' => ''],
                 ];
             }
-            $primeMeta = $this->runInternalWarmupRequest(
-                $host,
-                '/',
-                $sequence,
-                'homepage-fpc-prime',
-                [
-                    'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
-                ],
-                [
-                    'User-Agent' => 'WLS-Homepage-Warmup/1.0',
-                    'Accept-Encoding' => 'identity',
-                    'X-WLS-Dynamic-Warmup' => '1',
-                    'X-WLS-FPC-Prime' => '1',
-                ]
+            $candidateReceipts = [];
+            $this->addHomepageWarmupReceipt($candidateReceipts, $activeReceipt);
+            $this->addHomepageWarmupReceipt(
+                $candidateReceipts,
+                $this->buildHomepageWarmupReceipt($fullUri)
             );
-            $primeValidation = $this->validateHomepageWarmupResponse($primeMeta, false);
-            if (!$primeValidation['ok']) {
-                return ['meta' => $primeMeta, 'validation' => $primeValidation];
+            $waitMs = \max(250, \min(10000, (int)Env::get(
+                'wls.worker.homepage_warmup_peer_wait_ms',
+                3000
+            )));
+
+            $sharedCoordinator = $this->dynamicWarmupCoordinator();
+            if ($sharedCoordinator === null) {
+                return [
+                    'meta' => ['full_uri' => $cacheFullUri],
+                    'validation' => [
+                        'ok' => false,
+                        'reason' => 'homepage-warmup-coordinator-unavailable',
+                        'cache' => '',
+                    ],
+                ];
             }
-            if (\is_string($primeMeta['full_uri'] ?? null) && $primeMeta['full_uri'] !== '') {
-                $cacheFullUri = $primeMeta['full_uri'];
+
+            $coordinationPool = $this->homepageWarmupCoordinationPool($fullUri);
+            $ownerToken = $this->homepageWarmupOwnerToken();
+            $ownerLease = null;
+            $publishedReceipt = $this->readHomepageWarmupPublishedReceipt(
+                $sharedCoordinator,
+                $coordinationPool
+            );
+            $this->addHomepageWarmupReceipt($candidateReceipts, $publishedReceipt);
+            $ownsPrimeLease = $this->tryAcquireHomepageWarmupLease(
+                $sharedCoordinator,
+                $coordinationPool,
+                $ownerToken,
+                $ownerLease
+            );
+            $deadline = \microtime(true) + ($waitMs / 1000);
+
+            // A follower never enters Router/Controller. It only hydrates the
+            // exact fresh Shared L2 entry, or atomically takes over after the
+            // previous owner's short lease expires.
+            while (!$ownsPrimeLease && \microtime(true) < $deadline) {
+                $publishedReceipt = $this->readHomepageWarmupPublishedReceipt(
+                    $sharedCoordinator,
+                    $coordinationPool
+                );
+                $this->addHomepageWarmupReceipt($candidateReceipts, $publishedReceipt);
+                foreach ($candidateReceipts as $candidateReceipt) {
+                    if ($this->warmHomepageProcessCacheForReceipt(
+                        $coordinator,
+                        $candidateReceipt,
+                        true
+                    )) {
+                        $activeReceipt = $candidateReceipt;
+                        $cacheFullUri = $activeReceipt['full_uri'];
+                        $pulledFromShared = true;
+                        break 2;
+                    }
+                }
+
+                $remainingMs = (int)\max(0, \ceil(($deadline - \microtime(true)) * 1000));
+                if ($remainingMs <= 0) {
+                    break;
+                }
+                $ownsPrimeLease = $this->tryAcquireHomepageWarmupLease(
+                    $sharedCoordinator,
+                    $coordinationPool,
+                    $ownerToken,
+                    $ownerLease
+                );
+                if ($ownsPrimeLease) {
+                    break;
+                }
+                SchedulerSystem::yieldDelay(\min(10, $remainingMs));
+            }
+
+            $primeMeta = [];
+            if ($ownsPrimeLease) {
+                try {
+                    // Close the miss->CAS race: another owner may have
+                    // published immediately before this Worker acquired.
+                    $publishedReceipt = $this->readHomepageWarmupPublishedReceipt(
+                        $sharedCoordinator,
+                        $coordinationPool
+                    );
+                    $this->addHomepageWarmupReceipt($candidateReceipts, $publishedReceipt);
+                    foreach ($candidateReceipts as $candidateReceipt) {
+                        if ($this->warmHomepageProcessCacheForReceipt(
+                            $coordinator,
+                            $candidateReceipt,
+                            true
+                        )) {
+                            $activeReceipt = $candidateReceipt;
+                            $cacheFullUri = $activeReceipt['full_uri'];
+                            $pulledFromShared = true;
+                            break;
+                        }
+                    }
+
+                    if (!$pulledFromShared) {
+                        $primeMeta = $this->runInternalWarmupRequest(
+                            $host,
+                            '/',
+                            $sequence,
+                            'homepage-fpc-prime',
+                            [
+                                'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
+                                'WLS_INTERNAL_HOMEPAGE_PRIME' => '1',
+                            ],
+                            [
+                                'User-Agent' => 'WLS-Homepage-Warmup/1.0',
+                                'Accept-Encoding' => 'identity',
+                                'X-WLS-Dynamic-Warmup' => '1',
+                                'X-WLS-FPC-Prime' => '1',
+                            ]
+                        );
+                        $primeValidation = $this->validateHomepageWarmupResponse($primeMeta, false);
+                        if (!$primeValidation['ok']) {
+                            return ['meta' => $primeMeta, 'validation' => $primeValidation];
+                        }
+                        $primeReceipt = $this->normalizeHomepageWarmupReceipt($primeMeta['fpc_receipt'] ?? []);
+                        if ($primeReceipt === []) {
+                            return [
+                                'meta' => $primeMeta,
+                                'validation' => [
+                                    'ok' => false,
+                                    'reason' => 'homepage-fpc-receipt-missing',
+                                    'cache' => (string)($primeValidation['cache'] ?? ''),
+                                ],
+                            ];
+                        }
+                        $activeReceipt = $primeReceipt;
+                        $cacheFullUri = $activeReceipt['full_uri'];
+                        $this->addHomepageWarmupReceipt($candidateReceipts, $activeReceipt);
+
+                        // Publishing is not considered successful until this
+                        // owner can read the same exact entry back from Shared
+                        // L2 and install it into Process L1.
+                        $publishDeadline = \microtime(true) + ($waitMs / 1000);
+                        do {
+                            foreach ($candidateReceipts as $candidateReceipt) {
+                                if ($this->warmHomepageProcessCacheForReceipt(
+                                    $coordinator,
+                                    $candidateReceipt,
+                                    true
+                                )) {
+                                    $activeReceipt = $candidateReceipt;
+                                    $cacheFullUri = $activeReceipt['full_uri'];
+                                    $pulledFromShared = true;
+                                    break 2;
+                                }
+                            }
+
+                            $remainingMs = (int)\max(0, \ceil(($publishDeadline - \microtime(true)) * 1000));
+                            if ($remainingMs <= 0) {
+                                break;
+                            }
+                            SchedulerSystem::yieldDelay(\min(10, $remainingMs));
+                        } while (\microtime(true) < $publishDeadline);
+
+                    }
+                    if ($pulledFromShared) {
+                        $this->publishHomepageWarmupReceipt(
+                            $sharedCoordinator,
+                            $coordinationPool,
+                            $activeReceipt
+                        );
+                    }
+                } finally {
+                    $this->releaseHomepageWarmupLease(
+                        $sharedCoordinator,
+                        $coordinationPool,
+                        $ownerLease
+                    );
+                }
+            }
+
+            if (!$pulledFromShared) {
+                $primeHeaders = \is_array($primeMeta['headers'] ?? null) ? $primeMeta['headers'] : [];
+                $primeFpc = $this->warmupHeaderValue($primeHeaders, 'X-WLS-FPC-Status')
+                    ?: $this->warmupHeaderValue($primeHeaders, 'X-Weline-FPC');
+                $primeSource = $this->warmupHeaderValue($primeHeaders, 'X-WLS-Performance-FPC-Source');
+                return [
+                    'meta' => [
+                        'full_uri' => $cacheFullUri,
+                        'status_code' => (int)($primeMeta['status_code'] ?? 0),
+                    ],
+                    'validation' => [
+                        'ok' => false,
+                        'reason' => 'shared-fpc-publish-timeout'
+                            . ':prime-status=' . (int)($primeMeta['status_code'] ?? 0)
+                            . ':prime-fpc=' . ($primeFpc !== '' ? $primeFpc : 'none')
+                            . ':prime-source=' . ($primeSource !== '' ? $primeSource : 'none')
+                            . ':prime-uri=' . (string)($primeMeta['full_uri'] ?? 'none'),
+                        'cache' => '',
+                    ],
+                ];
             }
         }
 
         $cached = $coordinator->getFormattedCachedResponseForFullUri(
-            $cacheFullUri,
-            'GET',
+            $activeReceipt['full_uri'],
+            $activeReceipt['method'],
             'text/html,application/xhtml+xml',
             'identity',
-            '',
+            $activeReceipt['cookie_header'],
             false,
             true
         );
         if (!\is_array($cached) || !\is_string($cached['response'] ?? null)) {
             return [
-                'meta' => [],
+                'meta' => ['full_uri' => $cacheFullUri],
                 'validation' => ['ok' => false, 'reason' => 'process-cache-miss', 'cache' => ''],
             ];
         }
@@ -1651,18 +2025,365 @@ class WlsRuntime implements RuntimeInterface
             'formatted_http' => true,
             'set_cookie_count' => 0,
             'elapsed_ms' => 0.0,
-            'full_uri' => $cacheFullUri,
+            'full_uri' => $activeReceipt['full_uri'],
+            'fpc_receipt' => $activeReceipt,
         ];
 
         $validation = $this->validateHomepageWarmupResponse($probeMeta, true);
         if ($validation['ok']) {
-            $this->homepageCacheFullUri = $cacheFullUri;
+            $this->homepageCacheFullUri = $activeReceipt['full_uri'];
+            $this->homepageCacheWarmupReceipt = $activeReceipt;
         }
 
         return [
             'meta' => $probeMeta,
             'validation' => $validation,
         ];
+    }
+
+    private function homepageWarmupCoordinationPool(string $fullUri): string
+    {
+        $metadata = $this->readCurrentInstanceWarmupMetadata();
+        $instance = \trim((string)($metadata['instance_name'] ?? $metadata['name'] ?? (
+            $_SERVER['WLS_INSTANCE_NAME']
+                ?? $_SERVER['WLS_INSTANCE']
+                ?? $_ENV['WLS_INSTANCE_NAME']
+                ?? $_ENV['WLS_INSTANCE']
+                ?? \getenv('WLS_INSTANCE')
+                ?: 'default'
+        )));
+        $epoch = $this->workerArgValue('epoch')
+            ?: (string)($metadata['master_epoch'] ?? $metadata['epoch'] ?? '0');
+        $policyDigest = \strtolower(\trim((string)($metadata['policy_digest'] ?? (
+            $_SERVER['WLS_POLICY_DIGEST']
+                ?? $_ENV['WLS_POLICY_DIGEST']
+                ?? \getenv('WLS_POLICY_DIGEST')
+                ?: ''
+        ))));
+        $cacheEpoch = $this->workerArgValue('cache-epoch')
+            ?: (string)($metadata['cache_epoch'] ?? (
+                $_SERVER['WLS_CACHE_EPOCH']
+                    ?? $_ENV['WLS_CACHE_EPOCH']
+                    ?? \getenv('WLS_CACHE_EPOCH')
+                    ?: '0'
+            ));
+        $identity = \implode('|', [
+            $instance !== '' ? $instance : 'default',
+            $epoch,
+            $policyDigest,
+            $cacheEpoch,
+            \strtolower(\trim($fullUri)),
+        ]);
+
+        return self::HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX . \hash('sha256', $identity);
+    }
+
+    private function workerArgValue(string $name): string
+    {
+        $prefix = '--' . \trim($name) . '=';
+        $argv = $_SERVER['argv'] ?? ($GLOBALS['argv'] ?? []);
+        foreach (\is_array($argv) ? $argv : [] as $argument) {
+            if (\is_string($argument) && \str_starts_with($argument, $prefix)) {
+                return \trim(\substr($argument, \strlen($prefix)));
+            }
+        }
+
+        return '';
+    }
+
+    private function homepageWarmupOwnerToken(): string
+    {
+        try {
+            $nonce = \bin2hex(\random_bytes(8));
+        } catch (\Throwable) {
+            $nonce = \str_replace('.', '', \uniqid('', true));
+        }
+
+        return (string)\getmypid()
+            . ':' . (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: '0')
+            . ':' . $nonce;
+    }
+
+    private function tryAcquireHomepageWarmupLease(
+        SharedCacheStateInterface $coordinator,
+        string $pool,
+        string $ownerToken,
+        ?array &$acquiredLease
+    ): bool {
+        try {
+            $currentLease = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_OWNER_KEY);
+            $nowMs = (int)\floor(\microtime(true) * 1000);
+            $newLease = [
+                'token' => $ownerToken,
+                'expires_at_ms' => $nowMs + (self::HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS * 1000),
+            ];
+            $expected = null;
+            if ($currentLease !== null) {
+                if (!\is_array($currentLease)
+                    || (int)($currentLease['expires_at_ms'] ?? 0) > $nowMs
+                ) {
+                    return false;
+                }
+                $expected = $currentLease;
+            }
+
+            $acquired = $coordinator->compareAndSetCache(
+                $pool,
+                self::HOMEPAGE_WARMUP_OWNER_KEY,
+                $expected,
+                $newLease,
+                30
+            );
+            if ($acquired) {
+                $acquiredLease = $newLease;
+            }
+            return $acquired;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function releaseHomepageWarmupLease(
+        SharedCacheStateInterface $coordinator,
+        string $pool,
+        ?array $ownerLease
+    ): void {
+        if ($ownerLease === null) {
+            return;
+        }
+        try {
+            $coordinator->compareAndSetCache(
+                $pool,
+                self::HOMEPAGE_WARMUP_OWNER_KEY,
+                $ownerLease,
+                null,
+                0
+            );
+        } catch (\Throwable) {
+            // Explicit expires_at_ms is the owner-crash fence. Never block
+            // READY cleanup on a best-effort release.
+        }
+    }
+
+    /**
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     */
+    private function readHomepageWarmupPublishedReceipt(
+        SharedCacheStateInterface $coordinator,
+        string $pool
+    ): array {
+        try {
+            $ready = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_READY_KEY);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $this->normalizeHomepageWarmupReceipt(
+            \is_array($ready) ? ($ready['receipt'] ?? []) : []
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $receipt
+     */
+    private function publishHomepageWarmupReceipt(
+        SharedCacheStateInterface $coordinator,
+        string $pool,
+        array $receipt
+    ): void {
+        $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
+        if ($receipt === []) {
+            return;
+        }
+
+        try {
+            $coordinator->setCache($pool, self::HOMEPAGE_WARMUP_READY_KEY, [
+                'receipt' => $receipt,
+                'pid' => \getmypid(),
+                'worker_id' => (int)($_SERVER['WLS_WORKER_ID']
+                    ?? $_ENV['WLS_WORKER_ID']
+                    ?? \getenv('WLS_WORKER_ID')
+                    ?: 0),
+                'published_at' => \microtime(true),
+            ], self::HOMEPAGE_WARMUP_READY_TTL_SECONDS);
+        } catch (\Throwable) {
+            // Followers retain their bounded takeover path when shared state is
+            // transiently unavailable.
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $receipt
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     */
+    private function normalizeHomepageWarmupReceipt(mixed $receipt): array
+    {
+        if (!\is_array($receipt) || (int)($receipt['version'] ?? 0) !== 1) {
+            return [];
+        }
+        $fullUri = $this->normalizeHomepageWarmupFullUri($receipt['full_uri'] ?? '');
+        $method = \strtoupper(\trim((string)($receipt['method'] ?? '')));
+        $cookieHeader = $this->normalizeHomepageWarmupCookieHeader($receipt['cookie_header'] ?? '');
+        $identityDigest = \strtolower(\trim((string)($receipt['identity_digest'] ?? '')));
+        if ($fullUri === ''
+            || $method !== 'GET'
+            || $cookieHeader === null
+            || \preg_match('/^[a-f0-9]{64}$/D', $identityDigest) !== 1
+        ) {
+            return [];
+        }
+
+        return [
+            'version' => 1,
+            'full_uri' => $fullUri,
+            'method' => 'GET',
+            'cookie_header' => $cookieHeader,
+            'identity_digest' => $identityDigest,
+        ];
+    }
+
+    private function encodeHomepageWarmupReceipt(mixed $receipt): string
+    {
+        $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
+        if ($receipt === []) {
+            return '';
+        }
+        $json = \json_encode($receipt, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        if (!\is_string($json) || $json === '') {
+            return '';
+        }
+
+        return \rtrim(\strtr(\base64_encode($json), '+/', '-_'), '=');
+    }
+
+    /**
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     */
+    private function decodeHomepageWarmupReceipt(mixed $encoded): array
+    {
+        if (!\is_string($encoded)
+            || $encoded === ''
+            || \strlen($encoded) > 2048
+            || \preg_match('/^[A-Za-z0-9_-]+$/D', $encoded) !== 1
+        ) {
+            return [];
+        }
+        $padding = (4 - (\strlen($encoded) % 4)) % 4;
+        $json = \base64_decode(\strtr($encoded . \str_repeat('=', $padding), '-_', '+/'), true);
+        if (!\is_string($json) || $json === '') {
+            return [];
+        }
+        $receipt = \json_decode($json, true);
+
+        return $this->normalizeHomepageWarmupReceipt($receipt);
+    }
+
+    /**
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     */
+    private function buildHomepageWarmupReceipt(string $fullUri, string $cookieHeader = ''): array
+    {
+        $fullUri = $this->normalizeHomepageWarmupFullUri($fullUri);
+        $cookieHeader = $this->normalizeHomepageWarmupCookieHeader($cookieHeader);
+        if ($fullUri === '' || $cookieHeader === null) {
+            return [];
+        }
+
+        return [
+            'version' => 1,
+            'full_uri' => $fullUri,
+            'method' => 'GET',
+            'cookie_header' => $cookieHeader,
+            'identity_digest' => \hash('sha256', 'fallback|' . $fullUri . '|' . $cookieHeader),
+        ];
+    }
+
+    private function normalizeHomepageWarmupCookieHeader(mixed $cookieHeader): ?string
+    {
+        if (!\is_string($cookieHeader) || \strlen($cookieHeader) > 512) {
+            return null;
+        }
+        if (\trim($cookieHeader) === '') {
+            return '';
+        }
+
+        $allowed = ['WELINE_USER_LANG' => '', 'WELINE_USER_CURRENCY' => ''];
+        foreach (\preg_split('/;\s*/', \trim($cookieHeader), -1, \PREG_SPLIT_NO_EMPTY) ?: [] as $part) {
+            if (!\str_contains($part, '=')) {
+                return null;
+            }
+            [$name, $value] = \explode('=', $part, 2);
+            $name = \trim($name);
+            if (!\array_key_exists($name, $allowed)) {
+                return null;
+            }
+            $value = \urldecode(\trim($value));
+            if ($value === '' || \strlen($value) > 64 || \preg_match('/^[A-Za-z0-9_.-]+$/D', $value) !== 1) {
+                return null;
+            }
+            $allowed[$name] = $value;
+        }
+        if ($allowed['WELINE_USER_LANG'] === '' || $allowed['WELINE_USER_CURRENCY'] === '') {
+            return null;
+        }
+
+        return 'WELINE_USER_LANG=' . \rawurlencode($allowed['WELINE_USER_LANG'])
+            . '; WELINE_USER_CURRENCY=' . \rawurlencode($allowed['WELINE_USER_CURRENCY']);
+    }
+
+    /**
+     * @param array<string,array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}> $receipts
+     * @param array<string,mixed> $receipt
+     */
+    private function addHomepageWarmupReceipt(array &$receipts, array $receipt): void
+    {
+        $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
+        if ($receipt !== []) {
+            $receipts[$receipt['identity_digest']] = $receipt;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $receipt
+     */
+    private function warmHomepageProcessCacheForReceipt(
+        FullPageCacheCoordinator $coordinator,
+        array $receipt,
+        bool $forceSharedRead
+    ): bool {
+        $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
+        return $receipt !== [] && $coordinator->warmProcessCacheForFullUri(
+            $receipt['full_uri'],
+            $receipt['method'],
+            $receipt['cookie_header'],
+            $forceSharedRead
+        );
+    }
+
+    private function normalizeHomepageWarmupFullUri(mixed $fullUri): string
+    {
+        if (!\is_string($fullUri)) {
+            return '';
+        }
+        $fullUri = \trim($fullUri);
+        if ($fullUri === '' || \strlen($fullUri) > 4096) {
+            return '';
+        }
+
+        try {
+            $parts = \parse_url($fullUri);
+        } catch (\ValueError) {
+            return '';
+        }
+        if (!\is_array($parts)
+            || !\in_array(\strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || !\is_string($parts['host'] ?? null)
+            || (string)$parts['host'] === ''
+        ) {
+            return '';
+        }
+
+        return $fullUri;
     }
 
     /**
@@ -1684,7 +2405,15 @@ class WlsRuntime implements RuntimeInterface
         if ((int)($meta['set_cookie_count'] ?? 0) > 0
             || $this->warmupHeaderValue($headers, 'Set-Cookie') !== ''
         ) {
-            return ['ok' => false, 'reason' => 'set-cookie', 'cache' => $source];
+            $cookieNames = \array_values(\array_filter(
+                \array_map('strval', (array)($meta['set_cookie_names'] ?? [])),
+                static fn(string $name): bool => $name !== '',
+            ));
+            return [
+                'ok' => false,
+                'reason' => 'set-cookie' . ($cookieNames !== [] ? ':' . \implode(',', $cookieNames) : ''),
+                'cache' => $source,
+            ];
         }
 
         $cacheControl = \strtolower($this->warmupHeaderValue($headers, 'Cache-Control'));
@@ -1738,11 +2467,16 @@ class WlsRuntime implements RuntimeInterface
      * @param array<string, mixed> $warmupMeta
      * @return array{ok: bool, reason: string, cache: string}
      */
-    private function validateDynamicFirstRenderWarmup(array $warmupMeta, float $targetMs): array
+    private function validateDynamicFirstRenderWarmup(
+        array $warmupMeta,
+        float $targetMs,
+        bool $requireControllerCache = true
+    ): array
     {
         $headers = \is_array($warmupMeta['headers'] ?? null) ? $warmupMeta['headers'] : [];
         $statusCode = (int)($warmupMeta['status_code'] ?? 0);
         $elapsedMs = (float)($warmupMeta['elapsed_ms'] ?? 0.0);
+        $bodyLength = (int)($warmupMeta['body_length'] ?? 0);
         $cache = $this->dynamicWarmupControllerCacheSource($headers);
 
         if ($statusCode < 200 || $statusCode >= 400) {
@@ -1755,11 +2489,14 @@ class WlsRuntime implements RuntimeInterface
             return ['ok' => false, 'reason' => 'fpc=HIT', 'cache' => $cache];
         }
 
-        if (!$this->dynamicWarmupCacheIsReady($cache)) {
+        if ($requireControllerCache && !$this->dynamicWarmupCacheIsReady($cache)) {
             return ['ok' => false, 'reason' => 'cache=' . ($cache !== '' ? $cache : 'missing'), 'cache' => $cache];
         }
+        if (!$requireControllerCache && $bodyLength <= 0) {
+            return ['ok' => false, 'reason' => 'empty-body', 'cache' => $cache];
+        }
 
-        if ($targetMs > 0.0 && $elapsedMs > $targetMs) {
+        if ($targetMs > 0.0 && $elapsedMs >= $targetMs) {
             $reason = 'elapsed_ms=' . \round($elapsedMs, 2) . ' target_ms=' . \round($targetMs, 2);
             if (!$this->shouldBlockDynamicWarmupOnTargetMs()) {
                 return [
@@ -1776,13 +2513,23 @@ class WlsRuntime implements RuntimeInterface
             ];
         }
 
-        return ['ok' => true, 'reason' => 'ready', 'cache' => $cache];
+        return [
+            'ok' => true,
+            'reason' => $requireControllerCache ? 'ready:controller-cache' : 'ready:rendered',
+            'cache' => $cache,
+        ];
     }
 
     private function shouldBlockDynamicWarmupOnTargetMs(): bool
     {
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_WARMUP_BLOCK_ON_TARGET_MS');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            // The first-render target is a release/performance gate, not a
+            // process-liveness condition. On a many-worker cold start every
+            // process can render concurrently and temporarily exceed the
+            // target even though the response and controller cache are valid.
+            // Keeping strict mode opt-in prevents load-driven restart storms
+            // while preserving the explicit diagnostic mode.
             $rawFlag = Env::get('wls.worker.dynamic_warmup_block_on_target_ms', '0');
         }
 
@@ -1794,14 +2541,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function dynamicWarmupControllerCacheSource(array $headers): string
     {
-        foreach (['X-WLS-Controller-Cache', 'X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache'] as $headerName) {
-            $value = $this->warmupHeaderValue($headers, $headerName);
-            if ($value !== '') {
-                return \strtolower($value);
-            }
-        }
-
-        return '';
+        return \strtolower($this->warmupHeaderValue($headers, 'X-WLS-Controller-Cache'));
     }
 
     private function dynamicWarmupCacheIsReady(string $cache): bool
@@ -1818,14 +2558,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function dynamicWarmupStoreStatus(array $headers): string
     {
-        foreach (['X-WLS-Category-View-Cache-Store', 'X-WLS-Product-View-Cache-Store'] as $headerName) {
-            $value = $this->warmupHeaderValue($headers, $headerName);
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        return '';
+        return $this->warmupHeaderValue($headers, 'X-WLS-Controller-Cache-Store');
     }
 
     private function dynamicFirstRenderTargetMs(): float
@@ -1873,11 +2606,12 @@ class WlsRuntime implements RuntimeInterface
         }
     }
 
-    private function waitForDynamicWarmupPathReady(string $pathKey): void
+    /** @return array<string,mixed> */
+    private function waitForDynamicWarmupPathReady(string $pathKey): array
     {
         $coordinator = $this->dynamicWarmupCoordinator();
         if ($coordinator === null) {
-            return;
+            return [];
         }
 
         $deadline = \microtime(true) + ($this->dynamicWarmupPathWaitMs() / 1000);
@@ -1885,17 +2619,20 @@ class WlsRuntime implements RuntimeInterface
             try {
                 $ready = $coordinator->get(self::DYNAMIC_WARMUP_COORDINATOR_NS, 'ready.' . $pathKey);
                 if (\is_array($ready)) {
-                    return;
+                    return $ready;
                 }
             } catch (\Throwable) {
-                return;
+                return [];
             }
 
             SchedulerSystem::yieldDelay(50);
         } while (\microtime(true) < $deadline);
+
+        return [];
     }
 
-    private function markDynamicWarmupPathReady(string $pathKey, bool $ok, string $reason): void
+    /** @param array<string,mixed> $sample */
+    private function markDynamicWarmupPathReady(string $pathKey, bool $ok, string $reason, array $sample = []): void
     {
         $coordinator = $this->dynamicWarmupCoordinator();
         if ($coordinator === null) {
@@ -1908,6 +2645,7 @@ class WlsRuntime implements RuntimeInterface
                 'reason' => $reason,
                 'pid' => \getmypid(),
                 'worker_id' => (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0),
+                'sample' => $sample,
                 'ts' => \microtime(true),
             ], 120);
         } catch (\Throwable) {
@@ -1937,7 +2675,7 @@ class WlsRuntime implements RuntimeInterface
         return \max(100, \min(30000, (int)$raw));
     }
 
-    private function dynamicWarmupCoordinator(): ?MemoryStateFacade
+    private function dynamicWarmupCoordinator(): ?SharedCacheStateInterface
     {
         if (self::$dynamicWarmupCoordinatorResolved) {
             return self::$dynamicWarmupCoordinator;
@@ -1945,7 +2683,7 @@ class WlsRuntime implements RuntimeInterface
         self::$dynamicWarmupCoordinatorResolved = true;
 
         try {
-            self::$dynamicWarmupCoordinator = new MemoryStateFacade([
+            self::$dynamicWarmupCoordinator = $this->wlsRuntimeAdapter()?->createSharedState([
                 'consumer_code' => self::DYNAMIC_WARMUP_COORDINATOR_NS,
                 'prefer_direct_connect' => true,
                 'persistent' => true,
@@ -1956,6 +2694,24 @@ class WlsRuntime implements RuntimeInterface
         }
 
         return self::$dynamicWarmupCoordinator;
+    }
+
+    private function wlsRuntimeAdapter(): ?WlsRuntimeAdapterInterface
+    {
+        try {
+            return ObjectManager::getInstance(WlsRuntimeAdapterResolver::class)->resolve();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function runtimeProvider(string $contract): ?object
+    {
+        try {
+            return ObjectManager::getInstance(RuntimeProviderResolver::class)->resolve($contract);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function shouldRunDeferredWorkerBootstrapObserverWarmup(): bool
@@ -2204,7 +2960,8 @@ class WlsRuntime implements RuntimeInterface
 
     private function runDeferredFpcProcessPullWarmup(bool $ownerBuildAheadRan): void
     {
-        if (!\class_exists(\Weline\Theme\Observer\WorkerBootstrapWarmup::class)) {
+        $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
+        if (!$warmup instanceof FpcWarmupProviderInterface) {
             return;
         }
 
@@ -2227,11 +2984,8 @@ class WlsRuntime implements RuntimeInterface
         $completedRounds = 0;
         for ($round = 1; $round <= $rounds; $round++) {
             try {
-                $warmup = ObjectManager::getInstance(\Weline\Theme\Observer\WorkerBootstrapWarmup::class);
-                if (\method_exists($warmup, 'warmFpcFastPathPayloadsForReady')) {
-                    $warmup->warmFpcFastPathPayloadsForReady();
-                    $completedRounds++;
-                }
+                $warmup->warmProcessFastPathPayloads();
+                $completedRounds++;
             } catch (\Throwable $e) {
                 if (\function_exists('w_log_warning')) {
                     \w_log_warning('[WlsRuntime] FPC process-pull warmup failed worker=' . $workerId
@@ -2566,39 +3320,16 @@ class WlsRuntime implements RuntimeInterface
      */
     private function resolveFpcBuildAheadPaths(): array
     {
-        $paths = [
-            '/',
-            '/en_US/catalog/category/sports',
-            '/USD/en_US/catalog/category/sports',
-            '/zh_Hans_CN/catalog/category/sports',
-            '/CNY/zh_Hans_CN/catalog/category/sports',
-            '/en_US/catalog/category/men/shirts',
-            '/USD/en_US/catalog/category/men/shirts',
-            '/zh_Hans_CN/catalog/category/men/shirts',
-            '/CNY/zh_Hans_CN/catalog/category/men/shirts',
-            '/en_US/catalog/category/women',
-            '/USD/en_US/catalog/category/women',
-            '/zh_Hans_CN/catalog/category/women',
-            '/CNY/zh_Hans_CN/catalog/category/women',
-            '/en_US/catalog/category/gear',
-            '/en_US/catalog/category/running-gear',
-            '/USD/en_US/catalog/category/running-gear',
-            '/zh_Hans_CN/catalog/category/running-gear',
-            '/CNY/zh_Hans_CN/catalog/category/running-gear',
-            '/en_US/product/demo-category-81-sports',
-            '/en_US/product/demo-category-45-clothing',
-            '/product/demo-category-81-sports',
-            '/product/demo-category-45-clothing',
-        ];
+        // Framework owns only the universal homepage contract. Modules publish
+        // additional page paths through FpcWarmupProviderInterface.
+        $paths = ['/'];
 
         try {
-            if (\class_exists(\Weline\Theme\Observer\WorkerBootstrapWarmup::class)) {
-                $warmup = ObjectManager::getInstance(\Weline\Theme\Observer\WorkerBootstrapWarmup::class);
-                if (\method_exists($warmup, 'getFpcWarmupPaths')) {
-                    $resolved = $warmup->getFpcWarmupPaths();
-                    if (\is_array($resolved) && $resolved !== []) {
-                        $paths = $resolved;
-                    }
+            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
+            if ($warmup instanceof FpcWarmupProviderInterface) {
+                $resolved = $warmup->warmupPaths();
+                if ($resolved !== []) {
+                    $paths = $resolved;
                 }
             }
         } catch (\Throwable) {
@@ -2690,10 +3421,20 @@ class WlsRuntime implements RuntimeInterface
         ], $serverOverrides);
 
         $request = WlsRequest::fromRaw($rawRequest, $server);
+        // Keep only a transport-origin fallback here. The exact FPC identity
+        // can change when `/` is mapped to the configured start-page route and
+        // is returned later through the internal receipt before Context reset.
+        $requestFullUri = (string)($request->getServer('WELINE_FULL_REQUEST_URI')
+            ?: ($scheme . '://' . $host . $path));
 
+        // The first synthetic request may run on the Worker bootstrap Fiber.
+        // Clear response state left by bootstrap providers so the anonymous
+        // homepage prime cannot inherit unrelated localization/session cookies.
+        \Weline\Framework\Http\HeaderCollector::reset();
         $result = $this->handle($request);
         $response = $request->getResponse();
         $responseHeaders = \method_exists($response, 'getHeaders') ? (array)$response->getHeaders() : [];
+        $responseCookies = \method_exists($response, 'getCookies') ? (array)$response->getCookies() : [];
         $formattedResult = $this->parseFormattedWarmupResult((string)$result);
         foreach ($formattedResult['headers'] as $name => $value) {
             $responseHeaders[(string)$name] = $value;
@@ -2714,6 +3455,10 @@ class WlsRuntime implements RuntimeInterface
         if ($statusCode <= 0 && $formattedResult['status_code'] > 0) {
             $statusCode = $formattedResult['status_code'];
         }
+        $cookieNames = $this->warmupCookieNames($responseCookies, $pendingCookies, $responseHeaders);
+        $fpcReceipt = $this->decodeHomepageWarmupReceipt(
+            $this->warmupHeaderValue($responseHeaders, 'X-WLS-Internal-FPC-Receipt')
+        );
         $meta = [
             'headers' => $responseHeaders,
             'status_code' => $statusCode,
@@ -2721,13 +3466,57 @@ class WlsRuntime implements RuntimeInterface
                 ? $formattedResult['body_length']
                 : \strlen((string)$result),
             'formatted_http' => $formattedResult['status_code'] > 0,
-            'set_cookie_count' => \count($pendingCookies),
-            'full_uri' => (string)($request->getServer('WELINE_FULL_REQUEST_URI') ?: ''),
+            'set_cookie_count' => \count($cookieNames),
+            'set_cookie_names' => $cookieNames,
+            'full_uri' => $fpcReceipt['full_uri'] ?? $requestFullUri,
+            'fpc_receipt' => $fpcReceipt,
             'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
         ];
         unset($result, $request, $response);
 
         return $meta;
+    }
+
+    /**
+     * Return cookie names only. Values are deliberately excluded from startup
+     * diagnostics because session/auth cookies are secrets.
+     *
+     * @param array<int|string, mixed> $responseCookies
+     * @param array<int|string, mixed> $pendingCookies
+     * @param array<string, mixed> $headers
+     * @return list<string>
+     */
+    private function warmupCookieNames(array $responseCookies, array $pendingCookies, array $headers): array
+    {
+        $names = [];
+        foreach ([$responseCookies, $pendingCookies] as $cookies) {
+            foreach ($cookies as $key => $cookie) {
+                $name = \is_array($cookie) ? (string)($cookie['name'] ?? '') : (\is_string($key) ? $key : '');
+                $name = \trim($name);
+                if ($name !== '' && \preg_match('/^[A-Za-z0-9_.-]{1,128}$/D', $name) === 1) {
+                    $names[$name] = true;
+                }
+            }
+        }
+        foreach ($headers as $name => $value) {
+            if (\strcasecmp((string)$name, 'Set-Cookie') !== 0) {
+                continue;
+            }
+            foreach ((array)$value as $line) {
+                if (\preg_match('/^\s*([^=;\s]{1,128})=/', (string)$line, $match) === 1) {
+                    $names[(string)$match[1]] = true;
+                }
+            }
+        }
+
+        $names = \array_keys($names);
+        \sort($names, \SORT_STRING);
+        return $names;
+    }
+
+    private function isInternalHomepageFpcPrimeRequest(): bool
+    {
+        return InternalHomepagePrime::isCurrentRequest();
     }
 
     /**
@@ -2808,9 +3597,12 @@ class WlsRuntime implements RuntimeInterface
         }
 
         if ($this->isWorkerWarmupStepEnabled('i18n', $bootstrapDefaults)) {
-            $this->warmupStep(static function (): void {
+            $this->warmupStep(function (): void {
                 PhraseParser::preloadWorkerDictionaries();
-                I18nParser::preloadWorkerDictionaries();
+                $provider = $this->runtimeProvider(DictionaryWarmupProviderInterface::class);
+                if ($provider instanceof DictionaryWarmupProviderInterface) {
+                    $provider->preloadWorkerDictionaries();
+                }
             }, 'i18n dictionaries');
             SchedulerSystem::yield();
         }
@@ -2843,6 +3635,7 @@ class WlsRuntime implements RuntimeInterface
     {
         return [
             'Weline_Framework_Runtime::worker_bootstrap_after',
+            'Weline_Framework::App::pre_route_gate',
             'Weline_Framework::App::run_before',
             'Weline_Framework::App::run_after',
             'Weline_Framework::App::url_parsed_after',
@@ -2895,22 +3688,23 @@ class WlsRuntime implements RuntimeInterface
 
     private function installBackendWarmupContext(Request $request): void
     {
-        if (!\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)) {
-            return;
+        $provider = $this->runtimeProvider(BackendWarmupProviderInterface::class);
+        if ($provider instanceof BackendWarmupProviderInterface) {
+            $provider->installRequestContext($request);
         }
+    }
 
-        if (!\Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($request)) {
-            \Weline\Backend\Service\BackendWarmupContext::clear();
-            return;
+    private function requestPipeline(): RequestPipelineInterface
+    {
+        return $this->requestPipeline ??= new RequestPipeline($this);
+    }
+
+    public function afterRequestPipelineStage(string $stage, float $elapsedMilliseconds): void
+    {
+        unset($elapsedMilliseconds);
+        if ($stage === RequestPipeline::STAGE_URL || $stage === RequestPipeline::STAGE_ROUTE) {
+            $this->releaseCompletedRequestPhase($stage);
         }
-
-        $warmupUser = \Weline\Backend\Service\BackendWarmupContext::resolveWarmupUser($request);
-        if ($warmupUser === null) {
-            \Weline\Backend\Service\BackendWarmupContext::clear();
-            return;
-        }
-
-        \Weline\Backend\Service\BackendWarmupContext::installForUser($warmupUser);
     }
     
     /**
@@ -2926,7 +3720,12 @@ class WlsRuntime implements RuntimeInterface
             return self::buildRawBenchmarkResponse();
         }
 
-        $isInternalWarmup = (string)($request->getServer('WLS_INTERNAL_WARMUP') ?? '') === '1';
+        $parsedServer = \method_exists($request, 'getParsedServerSnapshot')
+            ? (array)$request->getParsedServerSnapshot()
+            : [];
+        $isInternalWarmup = (string)($parsedServer['WLS_INTERNAL_WARMUP']
+            ?? $request->getServer('WLS_INTERNAL_WARMUP')
+            ?? '') === '1';
         $requestOriginalUri = (string)($request->getUri() ?: '/');
 
         // 确保已初始化
@@ -3019,7 +3818,9 @@ class WlsRuntime implements RuntimeInterface
                     'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
                     'request_count' => $this->requestCount,
                 ];
-                WelineEnv::getInstance()->initFromRequest($request);
+                // GlobalsEmulator::emulate() 已用当前原始请求建立完整 Context。
+                // 这里不能再次从复用的 ServerBag 重建，否则会用上一请求覆盖
+                // WLS_INTERNAL_* 等仅由传输层注入的 server 标记。
                 // WLS 常驻进程必须在当前 Request/$_SERVER 已就位后创建请求 ID。
                 // Template、PreparedContentStore 等请求级状态依赖 RequestContext
                 // 分片；缺失时会退回到 Fiber/连接级实例，导致模板数据跨请求串味。
@@ -3033,12 +3834,6 @@ class WlsRuntime implements RuntimeInterface
             \Weline\Framework\App\State::resetRequestPathLocalizationCache();
             if ($request !== null) {
                 $request->invalidateUriCache();
-            }
-            if (\class_exists(\Weline\Acl\Service\AclService::class, false)) {
-                \Weline\Acl\Service\AclService::resetRequestCache();
-            }
-            if (\class_exists(\Weline\Acl\Observer\RouteBefore::class, false)) {
-                \Weline\Acl\Observer\RouteBefore::resetRequestCache();
             }
             try {
                 $processUrlCacheClass = 'Weline\\Framework\\Router\\Cache\\ProcessUrlCache';
@@ -3074,59 +3869,38 @@ class WlsRuntime implements RuntimeInterface
             }
             
             WelineEnv::set('wls.request_count', (string) $this->requestCount, 'WlsRuntime handle');
-            // WLS 请求入口：在 dispatchRunBefore 之前重置 URL 解析器请求级缓存。
-            // StateManager::reset() 在请求结束时运行，但 run_before 观察者可能在 URL parser
-            // 之前就生成 URL，此时 static 属性（parserServer/parserMatchs/parserCache 等）
-            // 仍持有上一个请求的残留值，导致 URL 拼接时生成错误的 website_url 前缀。
+            // WLS 请求入口：在统一 Pipeline 的 PreRouteGate/URL 阶段前重置
+            // parserServer/parserMatchs/parserCache 等请求级静态状态，防止上一
+            // 请求的 website/locale 前缀污染当前 URL。
             if (Runtime::isPersistent()) {
                 \Weline\Framework\Http\Url::resetParserRequestCaches();
             }
-            $traceEnabled = RequestLifecycleTrace::isEnabled();
-            $t1 = \microtime(true);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::pushCurrentParent('run_before');
+            // FPM/WLS share the same application-stage executor. Worker
+            // policy/static/FPC L1 already ran in the transport layer; this
+            // pipeline owns pre-route gate -> URL/apply -> internal FPC ->
+            // before -> lazy session -> router/controller -> after.
+            $pipelineExecution = $this->requestPipeline()->execute(
+                $app,
+                false,
+                !$this->isInternalHomepageFpcPrimeRequest(),
+            );
+            foreach ($pipelineExecution->timings as $name => $durationMs) {
+                $timing[$name] = $durationMs;
             }
-            $app->dispatchRunBefore();
-            $t2 = \microtime(true);
-            $timing['run_before_ms'] = \round(($t2 - $t1) * 1000, 2);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('run_before', $timing['run_before_ms'], 'framework');
-            }
-            // 如果run_before事件耗时过长，记录警告
-            if ($timing['run_before_ms'] > 100) {
-                w_log_warning('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
-            }
-            
-            // URL 解析
-            // 注意：Url 类的静态变量重置现在由 StateManager 自动处理
-            // 通过 Url::registerStateResets() 注册到 StateManager
-            $urlParserStart = \microtime(true);
-            $parse = $app->parseUrl();
-            $urlParserEnd = \microtime(true);
-            $timing['url_parser_call_ms'] = \round(($urlParserEnd - $urlParserStart) * 1000, 2);
+            $parse = $pipelineExecution->parsedUrl;
             if (\is_array($parse) && isset($parse['_perf']) && \is_array($parse['_perf'])) {
                 $timing['url_parser_perf'] = $parse['_perf'];
             }
-            if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan('url_parser::parse', $timing['url_parser_call_ms'], 'framework', 'url_parser');
+            if ($timing['run_before_ms'] > 100) {
+                w_log_warning('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
             }
-            
-            if (\is_array($parse)) {
-                $processUrlStart = \microtime(true);
-                $app->applyParsedUrl($parse);
-                $processUrlEnd = \microtime(true);
-                $timing['process_url_parse_ms'] = \round(($processUrlEnd - $processUrlStart) * 1000, 2);
-                if ($traceEnabled) {
-                    RequestLifecycleTrace::recordSpan('url_parser::apply', $timing['process_url_parse_ms'], 'framework', 'url_parser');
-                }
+            if ($timing['run_after_ms'] > 100) {
+                w_log_warning('[WLS Performance Warning] run_after event took ' . $timing['run_after_ms'] . 'ms');
             }
-            // 关键修复：Url::parser() 修改了 $_SERVER['REQUEST_URI']（去除了区域/货币/语言前缀）
-            // 如果在 parser 之前有代码调用了 Request::getUri()（如 run_before 事件观察者），
-            // 原始 URI 已被缓存在 Request 对象上，必须清除，否则 Router 会使用旧 URI 导致间歇性 404
-            $cachedFpcResponse = RequestContext::get('wls.fpc.cached_response');
+
+            $cachedFpcResponse = $pipelineExecution->earlyResponse;
             if ($cachedFpcResponse instanceof Response) {
-                RequestContext::set('wls.fpc.cached_response', null);
+                RequestPipeline::clearEarlyResponse();
                 $timing['fpc_hit'] = true;
                 $timing['fpc_source'] = (string)(RequestContext::get('wls.fpc.hit_source', '') ?: 'unknown');
                 $timing['fpc_process_items'] = (int)(RequestContext::get('wls.fpc.process_items', 0) ?: 0);
@@ -3145,61 +3919,21 @@ class WlsRuntime implements RuntimeInterface
                 if (!empty($this->getPerformanceConfig()['response_headers_enabled'])) {
                     $this->applyPerformanceHeaders($timing, $request);
                 }
-                $this->applyDynamicFirstRenderHeaders($timing, $request, true);
+                $this->applyDynamicFirstRenderHeaders($timing, $request, true, $cachedFpcResponse);
                 $this->decorateCachedFpcResponseForTelemetry($cachedFpcResponse, $request);
 
                 return $cachedFpcResponse->toHttpString();
             }
-            $t3 = \microtime(true);
-            $timing['url_parser_ms'] = \round(($t3 - $t2) * 1000, 2);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan('url_parser', $timing['url_parser_ms'], 'framework');
-            }
             unset($parse, $cachedFpcResponse, $appApplyUrlProfile);
-            $this->releaseCompletedRequestPhase('url_parser');
-            
-            // WLS：StateManager::reset() 会在请求结束时 removeInstance(Router\Core)，bootstrap 里缓存的
-            // $this->router 会变成指向已脱离 ObjectManager 的孤儿实例；若继续对其 __init/start，
-            // 会出现 request_area / is_backend 与当前 $_SERVER 不一致（误判后台、命中错误路由缓存）。
-            // 每请求必须从 OM 取当前 Router 单例再初始化。
-            $routerInitStart = \microtime(true);
-            $router = $app->initializeRouter();
-            $routerInitEnd = \microtime(true);
-            $timing['router_init_ms'] = \round(($routerInitEnd - $routerInitStart) * 1000, 2);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
-            }
-            // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie 与无意义 IO
-            $sessionStart = \microtime(true);
-            $app->startSessionIfNeeded();
-            $timing['session_start_ms'] = \round((\microtime(true) - $sessionStart) * 1000, 2);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan('router_start::session', $timing['session_start_ms'], 'framework', 'router_start');
-            }
-            // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
-            $routerStartStart = \microtime(true);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::pushCurrentParent('router_start');
-            }
-            $result = $app->runRouter($router);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::popCurrentParent();
-            }
-            $routerStartEnd = \microtime(true);
-            $timing['router_start_call_ms'] = \round(($routerStartEnd - $routerStartStart) * 1000, 2);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan('router_start::dispatch', $timing['router_start_call_ms'], 'framework', 'router_start');
-            }
-            $t4 = \microtime(true);
-            $timing['router_start_ms'] = \round(($t4 - $t3) * 1000, 2);
-            $accountTiming = RequestContext::get('account.index.timing');
-            if (\is_array($accountTiming) && $accountTiming !== []) {
-                $timing['account'] = $accountTiming;
-            }
-            $accountSidebarContentTiming = RequestContext::get('account.sidebar_content.timing');
-            if (\is_array($accountSidebarContentTiming) && $accountSidebarContentTiming !== []) {
-                $timing['account_sidebar_content'] = $accountSidebarContentTiming;
-            }
+            $result = $pipelineExecution->result;
+            // Preserve the historical aggregate metric while the shared
+            // pipeline also exposes each fixed stage independently.
+            $timing['router_start_ms'] = \round(
+                (float)$timing['session_start_ms']
+                + (float)$timing['router_init_ms']
+                + (float)$timing['router_start_call_ms'],
+                2
+            );
             $queryBinTiming = RequestContext::get('query_bin.timing');
             if (\is_array($queryBinTiming) && $queryBinTiming !== []) {
                 $timing['query_bin'] = $queryBinTiming;
@@ -3207,14 +3941,6 @@ class WlsRuntime implements RuntimeInterface
             $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
             if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
                 $timing['app_apply_url'] = $appApplyUrlProfile;
-            }
-            $categoryViewProfile = RequestContext::get('category.view.profile');
-            if (\is_array($categoryViewProfile) && $categoryViewProfile !== []) {
-                $timing['category_view'] = $categoryViewProfile;
-            }
-            $productViewProfile = RequestContext::get('product.view.profile');
-            if (\is_array($productViewProfile) && $productViewProfile !== []) {
-                $timing['product_view'] = $productViewProfile;
             }
             $templateProfile = RequestContext::get('view.template.profile');
             if (\is_array($templateProfile) && $templateProfile !== []) {
@@ -3224,49 +3950,24 @@ class WlsRuntime implements RuntimeInterface
             if (\is_array($routerProfile) && $routerProfile !== []) {
                 $timing['router_profile'] = $routerProfile;
             }
-            if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
-            }
             unset(
-                $router,
-                $accountTiming,
-                $accountSidebarContentTiming,
+                $pipelineExecution,
                 $queryBinTiming,
                 $appApplyUrlProfile,
-                $categoryViewProfile,
-                $productViewProfile,
                 $templateProfile,
                 $routerProfile
             );
-            $this->releaseCompletedRequestPhase('router_start');
-            // 触发 run_after 事件
-            $runAfterStart = \microtime(true);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::pushCurrentParent('run_after');
-            }
-            $result = $app->dispatchRunAfter($result);
-            $runAfterEnd = \microtime(true);
-            $timing['run_after_ms'] = \round(($runAfterEnd - $runAfterStart) * 1000, 2);
-            if ($traceEnabled) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('run_after', $timing['run_after_ms'], 'framework');
-            }
-            $t5 = \microtime(true);
-            
-            // 如果run_after事件耗时过长，记录警告
-            if ($timing['run_after_ms'] > 100) {
-                w_log_warning('[WLS Performance Warning] run_after event took ' . $timing['run_after_ms'] . 'ms');
-            }
-            
+
             // 计算总耗时（用于性能监控）
-            $t5_end = \microtime(true);
-            $timing['total_ms'] = \round(($t5_end - $t0) * 1000, 2);
+            $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             
             // 如果总耗时超过阈值或 DEV 模式，按配置追加性能响应头
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
             $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
-            if (!empty($performanceConfig['response_headers_enabled']) && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
+            if ($this->shouldEmitDynamicFirstRenderHeaders($request)
+                || (!empty($performanceConfig['response_headers_enabled'])
+                    && ($timing['total_ms'] >= $slowThreshold || $isDev))) {
                 // 尝试将性能数据添加到响应头（如果响应对象可用）
                 try {
                     $request = ObjectManager::getInstance(Request::class);
@@ -3314,25 +4015,9 @@ class WlsRuntime implements RuntimeInterface
             $resultStr = $app->broadcastTelemetry($resultStr, $request, true);
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
             $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
-            $accountTiming = RequestContext::get('account.index.timing');
-            if (\is_array($accountTiming) && $accountTiming !== []) {
-                $timing['account'] = $accountTiming;
-            }
-            $accountSidebarContentTiming = RequestContext::get('account.sidebar_content.timing');
-            if (\is_array($accountSidebarContentTiming) && $accountSidebarContentTiming !== []) {
-                $timing['account_sidebar_content'] = $accountSidebarContentTiming;
-            }
             $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
             if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
                 $timing['app_apply_url'] = $appApplyUrlProfile;
-            }
-            $categoryViewProfile = RequestContext::get('category.view.profile');
-            if (\is_array($categoryViewProfile) && $categoryViewProfile !== []) {
-                $timing['category_view'] = $categoryViewProfile;
-            }
-            $productViewProfile = RequestContext::get('product.view.profile');
-            if (\is_array($productViewProfile) && $productViewProfile !== []) {
-                $timing['product_view'] = $productViewProfile;
             }
             $templateProfile = RequestContext::get('view.template.profile');
             if (\is_array($templateProfile) && $templateProfile !== []) {
@@ -3351,7 +4036,10 @@ class WlsRuntime implements RuntimeInterface
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
             $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
-            if (!empty($performanceConfig['response_headers_enabled']) && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
+            $emitBenchmarkTiming = $this->shouldEmitDynamicFirstRenderHeaders($request);
+            if ($emitBenchmarkTiming
+                || (!empty($performanceConfig['response_headers_enabled'])
+                    && ($timing['total_ms'] >= $slowThreshold || $isDev))) {
                 $this->applyPerformanceHeaders($timing, $request);
             }
             try {
@@ -3470,13 +4158,14 @@ class WlsRuntime implements RuntimeInterface
             // 记录错误日志（DEV 环境）
             if ($e instanceof \OverflowException && \str_contains($e->getMessage(), 'WLS output capture exceeded')) {
                 $compaction = [];
-                if (\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class, false)) {
-                    try {
-                        $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse('fiber_output_buffer_overflow');
-                    } catch (\Throwable) {
-                        $compaction = [];
+                try {
+                    $adapter = $this->wlsRuntimeAdapter();
+                    if ($adapter !== null) {
+                        $compaction = $adapter->compactResponseMemory();
+                        $adapter->requestDrainAfterResponse('fiber_output_buffer_overflow');
                     }
+                } catch (\Throwable) {
+                    $compaction = [];
                 }
                 w_log_warning(
                     '[WlsRuntime] Fiber output capture overflow; worker will drain after response. '
@@ -3565,14 +4254,6 @@ class WlsRuntime implements RuntimeInterface
             if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
                 $timing['app_apply_url'] = $appApplyUrlProfile;
             }
-            $categoryViewProfile = RequestContext::get('category.view.profile');
-            if (\is_array($categoryViewProfile) && $categoryViewProfile !== []) {
-                $timing['category_view'] = $categoryViewProfile;
-            }
-            $productViewProfile = RequestContext::get('product.view.profile');
-            if (\is_array($productViewProfile) && $productViewProfile !== []) {
-                $timing['product_view'] = $productViewProfile;
-            }
             $templateProfile = RequestContext::get('view.template.profile');
             if (\is_array($templateProfile) && $templateProfile !== []) {
                 $timing['template_profile'] = $templateProfile;
@@ -3584,9 +4265,7 @@ class WlsRuntime implements RuntimeInterface
             if (!$isInternalWarmup) {
                 $this->recordPerformanceTiming($timing, $isDev);
             }
-            if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
-                \Weline\Server\Log\WlsLogger::flush_(true);
-            }
+            $this->wlsRuntimeAdapter()?->flushLogs();
             Context::leave();
             unset(
                 $timing,
@@ -3603,12 +4282,8 @@ class WlsRuntime implements RuntimeInterface
                 $cookie,
                 $errorContent,
                 $headers,
-                $accountTiming,
-                $accountSidebarContentTiming,
                 $queryBinTiming,
                 $appApplyUrlProfile,
-                $categoryViewProfile,
-                $productViewProfile,
                 $templateProfile,
                 $routerProfile,
                 $pageBuilderRenderProfile
@@ -3679,57 +4354,9 @@ class WlsRuntime implements RuntimeInterface
 
     private function resolveConfiguredStartPageRoute(Request $request): string
     {
-        $systemConfigClass = \Weline\SystemConfig\Model\SystemConfig::class;
-        if (\class_exists($systemConfigClass)) {
-            try {
-                $configModel = ObjectManager::getInstance($systemConfigClass);
-                $scope = $this->resolveStartPageScope($request, $configModel);
-                $frontendArea = \defined($systemConfigClass . '::area_FRONTEND')
-                    ? \constant($systemConfigClass . '::area_FRONTEND')
-                    : 'frontend';
-                $backendArea = \defined($systemConfigClass . '::area_BACKEND')
-                    ? \constant($systemConfigClass . '::area_BACKEND')
-                    : 'backend';
-                $configs = [
-                    [self::FRONTEND_START_PAGE_CONFIG_KEY, self::FRONTEND_START_PAGE_CONFIG_MODULE, $frontendArea],
-                ];
-                if (\class_exists(\Weline\Backend\Config\KeysInterface::class)) {
-                    $configs[] = [
-                        \Weline\Backend\Config\KeysInterface::key_start_page_path,
-                        \Weline\Backend\Config\KeysInterface::start_module,
-                        $backendArea,
-                    ];
-                }
-
-                foreach ($configs as [$key, $module, $area]) {
-                    $result = $configModel->getConfig(
-                        key: $key,
-                        module: $module,
-                        area: $area,
-                        default: '',
-                        scope: $scope
-                    );
-                    if (\is_scalar($result) && trim((string)$result) !== '') {
-                        return trim((string)$result);
-                    }
-                }
-            } catch (\Throwable) {
-            }
-        }
-
-        $legacyConfigClass = \Weline\Backend\Model\Config::class;
-        if (\class_exists($legacyConfigClass) && \class_exists(\Weline\Backend\Config\KeysInterface::class)) {
-            try {
-                $configModel = ObjectManager::getInstance($legacyConfigClass);
-                $result = $configModel->getConfig(
-                    \Weline\Backend\Config\KeysInterface::key_start_page_path,
-                    \Weline\Backend\Config\KeysInterface::start_module
-                );
-                if (\is_scalar($result)) {
-                    return trim((string)$result);
-                }
-            } catch (\Throwable) {
-            }
+        $provider = $this->runtimeProvider(StartPageRouteProviderInterface::class);
+        if ($provider instanceof StartPageRouteProviderInterface) {
+            return $provider->resolveConfiguredRoute($request);
         }
 
         return '';
@@ -3759,7 +4386,7 @@ class WlsRuntime implements RuntimeInterface
         }
 
         $websiteId = (int)$eventData->getData('website_id');
-        if ($websiteId > 0) {
+        if ($eventData->hasData('website_id') && $websiteId >= 0) {
             $request->setServer('WELINE_WEBSITE_ID', (string)$websiteId);
             WelineEnv::set('server.WELINE_WEBSITE_ID', (string)$websiteId, 'WlsRuntime detect website');
         }
@@ -3831,29 +4458,6 @@ class WlsRuntime implements RuntimeInterface
         }
 
         return $scheme . '://' . $host . ($uri === '' || \str_starts_with($uri, '/') ? $uri : '/' . $uri);
-    }
-
-    private function resolveStartPageScope(Request $request, object $configModel): string
-    {
-        $this->ensureWebsiteContextForStartPage($request);
-
-        $websiteCode = trim(RequestContext::getWelineWebsiteCode());
-        if ($websiteCode === '') {
-            $websiteCode = trim((string)$request->getServer('WELINE_WEBSITE_CODE'));
-        }
-        if ($websiteCode === '') {
-            $websiteCode = trim((string)($_SERVER['WELINE_WEBSITE_CODE'] ?? ''));
-        }
-
-        if ($websiteCode !== '' && \method_exists($configModel, 'normalizeScope')) {
-            return (string)$configModel->normalizeScope($websiteCode);
-        }
-
-        $systemConfigClass = \Weline\SystemConfig\Model\SystemConfig::class;
-
-        return \defined($systemConfigClass . '::SCOPE_GLOBAL')
-            ? (string)\constant($systemConfigClass . '::SCOPE_GLOBAL')
-            : 'global';
     }
 
     private function buildStartPageRouteUri(string $mappedPath, string $currentUri, string $websitePathPrefix = ''): ?string
@@ -3937,15 +4541,18 @@ class WlsRuntime implements RuntimeInterface
      */
     private function releaseCompletedRequestPhase(string $phase): void
     {
-        if (!Runtime::isPersistent()
-            || !\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class)) {
+        if (!Runtime::isPersistent() || !WlsConcurrency::canCompactProcessCaches()) {
             return;
         }
 
         try {
+            $adapter = $this->wlsRuntimeAdapter();
+            if ($adapter === null) {
+                return;
+            }
             $threshold = (float)(Env::get('wls.memory_guard.phase_compact_threshold', 0.70) ?: 0.70);
-            $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compactIfPressure($threshold);
-            if ($compaction !== null && \defined('DEV') && DEV && LogConfig::isVerboseWlsLog()) {
+            $compaction = $adapter->compactResponseMemoryIfPressure($threshold);
+            if ($compaction !== null && \defined('DEV') && DEV && $adapter->isVerboseLog()) {
                 w_log_debug(
                     '[WlsRuntime] phase memory compact phase=' . $phase
                     . ' memory_usage=' . \memory_get_usage(true)
@@ -3962,12 +4569,8 @@ class WlsRuntime implements RuntimeInterface
     private function clearRequestContextProfileSnapshots(): void
     {
         foreach ([
-            'account.index.timing',
-            'account.sidebar_content.timing',
             'query_bin.timing',
             'app.apply_url.profile',
-            'category.view.profile',
-            'product.view.profile',
             'view.template.profile',
             'router.start.profile',
         ] as $key) {
@@ -4476,15 +5079,20 @@ class WlsRuntime implements RuntimeInterface
         }
     }
 
-    private function applyDynamicFirstRenderHeaders(array $timing, ?Request $request, bool $fpcHit): void
+    private function applyDynamicFirstRenderHeaders(
+        array $timing,
+        ?Request $request,
+        bool $fpcHit,
+        ?Response $targetResponse = null
+    ): void
     {
         try {
             $request ??= ObjectManager::getInstance(Request::class);
-            if (!$request || !method_exists($request, 'getResponse')) {
+            if ($targetResponse === null && (!$request || !method_exists($request, 'getResponse'))) {
                 return;
             }
 
-            $response = $request->getResponse();
+            $response = $targetResponse ?? $request->getResponse();
             if (!$response || !method_exists($response, 'setHeader')) {
                 return;
             }
@@ -4492,6 +5100,17 @@ class WlsRuntime implements RuntimeInterface
             $response->setHeader('X-WLS-First-Render-Total-Ms', (string)($timing['total_ms'] ?? 0));
             $response->setHeader('X-WLS-Warmup-Status', $this->currentWarmupStatus());
             $response->setHeader('X-WLS-FPC-Status', $this->currentFpcStatus($response, $fpcHit));
+            if ($this->isInternalHomepageFpcPrimeRequest()) {
+                $receipt = ObjectManager::getInstance(FullPageCacheCoordinator::class)
+                    ->currentInternalHomepageWarmupReceipt();
+                $encodedReceipt = $this->encodeHomepageWarmupReceipt($receipt);
+                if ($encodedReceipt !== '') {
+                    // Internal-only identity handoff. This header is never
+                    // emitted for public traffic and x-wls-* is excluded from
+                    // cached response headers by FullPageCacheCoordinator.
+                    $response->setHeader('X-WLS-Internal-FPC-Receipt', $encodedReceipt);
+                }
+            }
             $controllerCache = $this->resolveControllerCacheSource($timing, $response);
             if ($controllerCache !== '') {
                 $response->setHeader('X-WLS-Controller-Cache', $controllerCache);
@@ -4557,20 +5176,22 @@ class WlsRuntime implements RuntimeInterface
 
     private function resolveControllerCacheSource(array $timing, Response $response): string
     {
-        foreach (['X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache'] as $headerName) {
-            $value = $response->getHeader($headerName);
-            if (\is_scalar($value) && \trim((string)$value) !== '') {
-                return \strtolower(\trim((string)$value));
-            }
+        $header = $response->getHeader('X-WLS-Controller-Cache');
+        if (\is_scalar($header) && \trim((string)$header) !== '') {
+            return \strtolower(\trim((string)$header));
         }
 
-        foreach (['category_view', 'product_view'] as $profileKey) {
-            $profile = $timing[$profileKey] ?? null;
+        // Modules may expose a generic runtime-cache lookup span. The module
+        // profile key and span prefix remain opaque to Framework.
+        foreach ($timing as $profile) {
             if (!\is_array($profile)) {
                 continue;
             }
             foreach (\array_reverse($profile) as $step) {
-                if (!\is_array($step) || ($step['name'] ?? '') !== ($profileKey === 'category_view' ? 'category::runtime_cache_get' : 'product::runtime_cache_get')) {
+                $name = \is_array($step) && \is_scalar($step['name'] ?? null)
+                    ? (string)$step['name']
+                    : '';
+                if ($name === '' || !\str_ends_with($name, '::runtime_cache_get')) {
                     continue;
                 }
                 $meta = \is_array($step['meta'] ?? null) ? $step['meta'] : [];
@@ -4644,7 +5265,7 @@ class WlsRuntime implements RuntimeInterface
     {
         if (!$isDev
             && !(\defined('DEBUG') && DEBUG)
-            && !\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)->canAccessApi()
+            && !\Weline\Framework\Manager\ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessApi()
         ) {
             return;
         }
@@ -4655,7 +5276,7 @@ class WlsRuntime implements RuntimeInterface
             $timing['worker_id'] = (string)($timing['worker_id'] ?? ($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: ''));
             $timing['worker_port'] = (string)($timing['worker_port'] ?? ($_SERVER['WLS_WORKER_PORT'] ?? $_ENV['WLS_WORKER_PORT'] ?? \getenv('WLS_WORKER_PORT') ?: ''));
             $timing['instance'] = (string)($timing['instance'] ?? ($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''));
-            ObjectManager::getInstance(WlsPerformanceTraceStore::class)->record([], $timing);
+            $this->wlsRuntimeAdapter()?->recordPerformanceTrace($timing);
         } catch (\Throwable) {
         }
     }
@@ -4711,7 +5332,7 @@ class WlsRuntime implements RuntimeInterface
     private function shouldDecorateCachedFpcResponseForTelemetry(): bool
     {
         try {
-            return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)->canAccessApi();
+            return \Weline\Framework\Manager\ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessApi();
         } catch (\Throwable) {
             return false;
         }
@@ -4725,7 +5346,7 @@ class WlsRuntime implements RuntimeInterface
 
         $serverConfig = Env::getInstance()->getConfig('wls') ?? [];
         $performanceConfig = \is_array($serverConfig['performance'] ?? null) ? $serverConfig['performance'] : [];
-        $verbose = LogConfig::isVerboseWlsLog();
+        $verbose = $this->wlsRuntimeAdapter()?->isVerboseLog() ?? false;
         $this->performanceConfig = \array_merge([
             'slow_request_threshold_ms' => 500,
             'response_headers_enabled' => $verbose,

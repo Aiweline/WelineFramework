@@ -15,7 +15,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Taglib\TaglibInterface;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Taglib\TaglibRegistry;
 
 class Collect implements CommandInterface

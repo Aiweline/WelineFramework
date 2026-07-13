@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 工作模式：
  * 1. 接受客户端 TCP 连接
  * 2. Peek ClientHello 提取 SNI（HTTPS 场景）
- * 3. 攻击探测（频率限制、恶意特征等）
+ * 3. 执行已发布 RuntimePolicyBundle 的 L4 连接准入规则
  * 4. 查询路由缓存或轮询选择 Worker
  * 5. 建立到 Worker 的 TCP 连接
  * 6. 双向透传数据
@@ -29,15 +29,19 @@ use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Log\LogLevel;
-use Weline\Server\Security\AttackDetector;
+use Weline\Server\Security\ConnectionAcceptGatePool;
+use Weline\Server\Security\GlobalRateLimiter;
 use Weline\Server\Service\MainLoopUnblockedLogConfig;
-use Weline\Server\Service\AttackLogService;
-use Weline\Server\Service\AttackSignalFileService;
+use Weline\Server\Service\MemoryStateFacade;
+use Weline\Server\Service\Policy\DispatcherPolicyControl;
+use Weline\Server\Service\Runtime\RoutingPolicyRegistry;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\StatusLogService;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Protocol\SupervisorMessage;
+
+require_once \dirname(__DIR__) . '/bin/worker_http_message.php';
 
 class Dispatcher
 {
@@ -62,16 +66,6 @@ class Dispatcher
     private PassthroughCore $passthroughCore;
     
     /**
-     * 攻击探测器
-     */
-    private AttackDetector $attackDetector;
-    
-    /**
-     * 是否启用攻击探测
-     */
-    private bool $attackDetectionEnabled = true;
-
-    /**
      * Fast path for ordinary TLS ClientHello traffic.
      */
     private bool $fastTlsPathEnabled = true;
@@ -80,6 +74,9 @@ class Dispatcher
      * Bound each accept burst so active tunnels can flush between fresh connects.
      */
     private int $maxAcceptPerLoop = 64;
+
+    /** Digest-aware L4 gate ownership for public Dispatcher sockets. */
+    private ConnectionAcceptGatePool $connectionAcceptGates;
     
     /**
      * 实例名称
@@ -202,8 +199,6 @@ class Dispatcher
     private float $lastAllWorkersUnavailableLogAt = 0.0;
     private float $lastAllWorkersUnavailableRecoveryAt = 0.0;
     private int $lastAllWorkersDownReported = 0;
-    /** @var array<string, float> */
-    private array $masterBackendAlertLoggedAt = [];
 
     /**
      * 启动保护：窗口期内未达到最小 READY 阈值时，对外返回 503 而非直接断开。
@@ -332,18 +327,9 @@ class Dispatcher
     private float $lastMainLoopUnblockedLogAt = 0.0;
     
     /**
-     * 封禁拦截日志限流记录（IP => 上次记录时间）
-     */
-    private array $banLogThrottle = [];
-    /**
      * 半关闭空连接快速回收日志限流（IP => 上次记录时间）
      */
     private array $halfClosedFastCloseLogThrottle = [];
-    
-    /**
-     * 封禁日志限流间隔（秒）
-     */
-    private int $banLogInterval = 60;
     /**
      * 半关闭空连接快速回收日志限流间隔（秒）
      */
@@ -354,6 +340,9 @@ class Dispatcher
      * 用于判断连接是否有有效数据交换（避免 SSL 失败误判）
      */
     private array $connectionBytes = [];
+
+    /** @var array<int, true> */
+    private array $clientOutputShutdown = [];
     
     /**
      * 构造函数
@@ -386,7 +375,35 @@ class Dispatcher
         // $this->passthroughCore->setSpinWaitTickCallback(function (): void {
         //     $this->pumpSpinWaitControlTick();
         // });
-        $this->attackDetector = AttackDetector::getInstance()->setInstanceName($instanceName);
+        $policyDigest = DispatcherPolicyControl::boot($instanceName);
+        $activePolicy = RoutingPolicyRegistry::getActiveBundle();
+        if ($activePolicy === null) {
+            throw new \RuntimeException('Dispatcher connection gate has no active runtime policy bundle.');
+        }
+        $policyState = null;
+        try {
+            $policyState = new MemoryStateFacade([
+                'consumer_code' => $instanceName . ':dispatcher-accept:' . (string)(\getmypid() ?: 0),
+                'prefer_direct_connect' => true,
+                'fail_fast_on_unhealthy' => true,
+                'connect_timeout' => 0.02,
+                'timeout' => 0.02,
+                'acquire_timeout' => 0.005,
+                'pool_size' => 1,
+            ]);
+        } catch (\Throwable) {
+            // The gate's local partitions remain fail-closed/conservative.
+            $policyState = null;
+        }
+        $this->connectionAcceptGates = ConnectionAcceptGatePool::boot(
+            topology: 'dispatcher',
+            instanceName: $instanceName,
+            state: $policyState,
+            readyWorkers: 1,
+            workerOrdinal: 0,
+            initialBundle: $activePolicy,
+        );
+        WlsLogger::info_('[DispatcherPolicy] active digest=' . $policyDigest . ' topology=dispatcher');
         $this->startTime = \time();
         // 注册 PID
         if ($processName) {
@@ -487,9 +504,6 @@ class Dispatcher
             $this->workerHealthAuditEnabled = (bool)$config['worker_health_audit_enabled'];
         }
         
-        if (isset($config['attack_detection_enabled'])) {
-            $this->attackDetectionEnabled = (bool) $config['attack_detection_enabled'];
-        }
         if (isset($config['fast_tls_path_enabled'])) {
             $this->fastTlsPathEnabled = (bool) $config['fast_tls_path_enabled'];
         }
@@ -501,11 +515,6 @@ class Dispatcher
         }
         if (isset($config['main_loop_unblocked_log_interval_sec'])) {
             $this->mainLoopUnblockedLogIntervalSec = \max(0.0, (float) $config['main_loop_unblocked_log_interval_sec']);
-        }
-        
-        // 传递攻击探测规则配置
-        if (isset($config['attack_rules'])) {
-            $this->attackDetector->updateRules($config['attack_rules']);
         }
         
         // HTTP 重定向端口配置
@@ -619,66 +628,6 @@ class Dispatcher
         $this->log('[MaintenanceFlow] ' . $message, $level);
     }
 
-    private function reportAllWorkersUnavailableToMaster(): void
-    {
-        if ($this->ipcClient === null || !$this->ipcClient->isConnected()) {
-            return;
-        }
-
-        $businessPool = \array_values(\array_map('intval', $this->passthroughCore->getWorkerPorts()));
-        $maintenanceCandidates = \array_values(\array_map('intval', $this->passthroughCore->getMaintenanceWorkerPorts()));
-        \sort($businessPool, SORT_NUMERIC);
-        \sort($maintenanceCandidates, SORT_NUMERIC);
-
-        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
-        $healthy = (int) ($healthSummary['healthy'] ?? 0);
-        $total = (int) ($healthSummary['total'] ?? 0);
-        $maintenancePort = $this->passthroughCore->getMaintenancePort();
-
-        $signature = 'all_workers_unavailable:'
-            . \implode(',', $businessPool)
-            . '|'
-            . \implode(',', $maintenanceCandidates)
-            . '|'
-            . $maintenancePort
-            . '|'
-            . $healthy
-            . '/'
-            . $total;
-        $now = \microtime(true);
-        $last = (float) ($this->masterBackendAlertLoggedAt[$signature] ?? 0.0);
-        if (($now - $last) < 3.0) {
-            return;
-        }
-        $this->masterBackendAlertLoggedAt[$signature] = $now;
-        if (\count($this->masterBackendAlertLoggedAt) > 128) {
-            $this->masterBackendAlertLoggedAt = \array_slice($this->masterBackendAlertLoggedAt, -64, 64, true);
-        }
-
-        $sent = $this->ipcClient->send(ControlMessage::dispatcherAlert(
-            $this->instanceName,
-            'all_workers_unavailable',
-            [
-                'dispatcher_port' => $this->port,
-                'worker_pool_size' => \count($businessPool),
-                'business_pool' => $businessPool,
-                'maintenance_candidates' => $maintenanceCandidates,
-                'maintenance_port' => $maintenancePort,
-                'healthy' => $healthy,
-                'total' => $total,
-            ],
-            ControlMessage::ROLE_WORKER
-        ));
-        if ($sent) {
-            $this->logMaintenanceOperation(
-                '已向 Master 上报业务/维护 Worker 全不可用，signature=' . $signature,
-                'WARN',
-                'master_backend_alert:' . $signature,
-                3.0
-            );
-        }
-    }
-
     private function scheduleAllWorkersUnavailableRecovery(string $source): void
     {
         $now = \microtime(true);
@@ -696,7 +645,10 @@ class Dispatcher
 
         $this->lastWorkerProbeTime = 0.0;
         $this->pumpSpinWaitControlTick();
-        $this->reportAllWorkersUnavailableToMaster();
+        // A failed connect round is an overload signal, not proof that every
+        // Worker process is dead. The deferred audit will report only ports
+        // that fail an explicit application-health probe; escalating here used
+        // to turn short accept pressure into a pool-wide recovery storm.
     }
 
     private function hasPendingWorkerHealthAuditJob(): bool
@@ -786,6 +738,11 @@ class Dispatcher
         }
         
         $this->ipcClient = $this->createIpcClient();
+        GlobalRateLimiter::setBanDeltaPublisher(function (string $deltaInstance, string $ip, int $expiresAt): void {
+            if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+                $this->ipcClient->send(ControlMessage::policyStateDelta($deltaInstance, $ip, $expiresAt), false);
+            }
+        });
         $this->ipcClient->setSelfTag('Dispatcher');
         // DEV 模式下输出详细 IPC SEND/RECV 明细
         $this->ipcClient->setVerboseLog($this->isDevMode);
@@ -873,17 +830,26 @@ class Dispatcher
         }
 
         if ($this->ipcClient->isConnected()) {
-            $ipcSocket = $this->ipcClient->getSocket();
+            // hasPendingWrites() also schedules the periodic Supervisor
+            // heartbeat. Do this on every control tick so an idle Dispatcher
+            // does not depend on Master downlink traffic to keep its lease.
+            $hasPendingWrites = $this->ipcClient->hasPendingWrites();
+            $ipcSocket = $this->ipcClient->isConnected() ? $this->ipcClient->getSocket() : null;
             if ($ipcSocket && \is_resource($ipcSocket)) {
                 $ipcRead = [$ipcSocket];
-                $ipcWrite = [];
+                $ipcWrite = $hasPendingWrites ? [$ipcSocket] : [];
                 $ipcExcept = [];
                 $ipcChanged = @\stream_select($ipcRead, $ipcWrite, $ipcExcept, 0, 0);
                 if ($ipcChanged > 0) {
-                    $this->ipcClient->handleReadable();
+                    if (\in_array($ipcSocket, $ipcRead, true)) {
+                        $this->ipcClient->handleReadable();
+                    }
+                    if (\in_array($ipcSocket, $ipcWrite, true)) {
+                        $this->ipcClient->handleWritable();
+                    }
                 }
+                return;
             }
-            return;
         }
 
         if (!$this->ipcReceivedShutdown) {
@@ -1145,7 +1111,12 @@ class Dispatcher
      */
     private function applyWorkerPoolSnapshot(array $workers, int $version, string $scope = 'business'): void
     {
-        if ($scope !== 'business') {
+        if (!\in_array($scope, ['business', ControlMessage::ROLE_MAINTENANCE], true)) {
+            $this->log(
+                'Ignoring unsupported POOL_SNAPSHOT scope=' . ($scope !== '' ? $scope : '(empty)')
+                . ', version=' . $version,
+                'WARN'
+            );
             return;
         }
 
@@ -1162,10 +1133,44 @@ class Dispatcher
                 continue;
             }
             $ports[$port] = $port;
-            $acceptedWorkers[] = $this->normalizeWorkerDescriptor($worker, ControlMessage::ROLE_WORKER);
+            $acceptedWorkers[] = $this->normalizeWorkerDescriptor(
+                $worker,
+                $scope === ControlMessage::ROLE_MAINTENANCE
+                    ? ControlMessage::ROLE_MAINTENANCE
+                    : ControlMessage::ROLE_WORKER
+            );
         }
 
         $normalizedPorts = \array_values($ports);
+        if ($scope === ControlMessage::ROLE_MAINTENANCE) {
+            // HybridControlPlaneServer intentionally transports route tables as
+            // Supervisor pool snapshots. Maintenance is a first-class scope:
+            // apply it synchronously so applyMaintenanceWorkerPoolSync() can
+            // return the per-port WORKER_POOL_ACK barrier expected by Master.
+            $this->applyMaintenanceWorkerPoolSync($normalizedPorts, 'POOL_SNAPSHOT');
+            $this->lastAppliedWorkerPoolSnapshotVersion = $version;
+
+            if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+                $this->ipcClient->send(ControlMessage::encode([
+                    'type' => ControlMessage::TYPE_POOL_SNAPSHOT_ACK,
+                    'scope' => $scope,
+                    'version' => $version,
+                    'accepted' => true,
+                ]));
+            }
+
+            $this->log(
+                'Applied maintenance POOL_SNAPSHOT, version=' . $version
+                . ', workers=' . \count($normalizedPorts),
+                'INFO'
+            );
+            return;
+        }
+
+        // A business snapshot is also the authoritative exit from an explicit
+        // maintenance route. The healthy business pool remains resident, so it
+        // can be selected immediately while the idempotent snapshot job runs.
+        $this->passthroughCore->setMaintenanceRoutingActive(false);
         $this->deferredWorkerPoolJobs[] = [
             'type' => 'set_pool',
             'ports' => $normalizedPorts,
@@ -1622,6 +1627,17 @@ class Dispatcher
             return;
         }
         switch ($type) {
+            case ControlMessage::TYPE_POLICY_STATE_DELTA:
+            case ControlMessage::TYPE_POLICY_PREPARE:
+            case ControlMessage::TYPE_POLICY_ACTIVATE:
+            case ControlMessage::TYPE_POLICY_COMMIT:
+            case ControlMessage::TYPE_POLICY_ROLLBACK:
+                $policyReply = DispatcherPolicyControl::handle($msg);
+                if ($policyReply !== null && $this->ipcClient !== null && $this->ipcClient->isConnected()) {
+                    $this->ipcClient->send($policyReply);
+                }
+                break;
+
             case SupervisorMessage::TYPE_POOL_SNAPSHOT:
                 $workers = \is_array($msg['workers'] ?? null) ? $msg['workers'] : [];
                 $version = (int)($msg['version'] ?? 0);
@@ -1674,11 +1690,17 @@ class Dispatcher
 
             case ControlMessage::TYPE_SECURITY_UNBLOCK:
                 if (!empty($msg['clear_all'])) {
-                    $this->attackDetector->clearAllBlocks();
+                    $this->connectionAcceptGates->clearBans(null, true);
                     $this->log('已清空全部封禁列表', 'INFO');
                 } elseif (!empty($msg['ip'])) {
-                    $this->attackDetector->unblock((string) $msg['ip']);
-                    $this->log("已解封 IP: {$msg['ip']}", 'INFO');
+                    $packedIp = @\inet_pton(\trim((string)$msg['ip']));
+                    $ip = \is_string($packedIp) ? (string)\inet_ntop($packedIp) : '';
+                    if ($ip !== '') {
+                        $this->connectionAcceptGates->clearBans($ip);
+                        $this->log("已解封 IP: {$ip}", 'INFO');
+                    } else {
+                        $this->log('忽略无效的 security_unblock IP', 'WARN');
+                    }
                 }
                 break;
 
@@ -1758,6 +1780,10 @@ class Dispatcher
                 // IPC 控制通道：处理消息（非阻塞读取）
                 $this->pumpIpcOnce();
 
+                // Slow/incomplete sockets are promoted only after their grace
+                // deadline; ordinary fresh accepts never enter shared state.
+                $this->sweepConnectionAcceptGates();
+
                 // 孤儿检测：定期检查 Master PID 是否存活
                 $this->selectAndProcess();
                 $this->checkMasterPidAlive();
@@ -1777,6 +1803,7 @@ class Dispatcher
 
                 // 推进首字节未到的 pending 维护页队列（P0-5）
                 $this->pumpPendingMaintenancePageQueue();
+                $this->reconcileConnectionAcceptGates();
 
                 // 事件处理
                 // 定期统计
@@ -1987,13 +2014,6 @@ class Dispatcher
             $this->log("清理超时连接: {$closedCount} 个", 'HEALTH');
         }
         
-        // 清理过期的封禁日志限流记录（保留最近 5 分钟内的）
-        $expireThreshold = $now - 300;
-        foreach ($this->banLogThrottle as $ip => $logTime) {
-            if ($logTime < $expireThreshold) {
-                unset($this->banLogThrottle[$ip]);
-            }
-        }
     }
 
     /**
@@ -2007,7 +2027,12 @@ class Dispatcher
         $this->cleanupStalledResponseConnections();
         
         // 准备 socket 列表
-        $readSockets = [$this->serverSocket];
+        // POLICY_PREPARE closes only the public accept gate. Existing proxy
+        // streams remain in this select set and drain normally; the kernel
+        // backlog absorbs new connects without manufacturing 503 responses.
+        $readSockets = DispatcherPolicyControl::canAcceptConnections()
+            ? [$this->serverSocket]
+            : [];
         $workerSockets = [];
         $writeSockets = [];
         $clientWriteSockets = [];
@@ -2048,6 +2073,11 @@ class Dispatcher
         $microTimeout = $hasBuffers ? 250 : 5000; // 活跃写缓冲用更短等待片，降低高并发转发尾延迟。
         if ($hasActiveConnections || $hasWorkerBuffers) {
             $microTimeout = 250;
+        }
+
+        if ($readSockets === [] && $writeSockets === []) {
+            SchedulerSystem::usleep(1_000);
+            return;
         }
         
         $changed = @\socket_select($readSockets, $writeSockets, $exceptSockets, $timeout, $microTimeout);
@@ -2181,7 +2211,9 @@ class Dispatcher
             if (!$this->passthroughCore->hasBufferedData($clientSocket) 
                 && $this->passthroughCore->isWorkerClosedWithBuffer($clientSocket)) {
                 $this->closeConnection($connId, 'forward_to_worker_failed');
+                continue;
             }
+            $this->shutdownCompletedHttpCloseResponse($clientSocket, $connId);
         }
     }
     
@@ -2213,7 +2245,9 @@ class Dispatcher
         if (!$this->passthroughCore->hasBufferedData($clientSocket)
             && $this->passthroughCore->isWorkerClosedWithBuffer($clientSocket)) {
             $this->closeConnection($connId, 'forward_to_worker_failed');
+            return;
         }
+        $this->shutdownCompletedHttpCloseResponse($clientSocket, $connId);
     }
 
     private function flushWorkerBuffer(int $connId): void
@@ -2251,6 +2285,13 @@ class Dispatcher
             if (@\socket_getpeername($clientSocket, $addr)) {
                 $clientIp = $addr;
             }
+            $acceptDecision = $this->connectionAcceptGates->accept((string)$connId, $clientIp);
+            if (!$acceptDecision->allowed) {
+                @\socket_close($clientSocket);
+                $accepted++;
+                continue;
+            }
+            $clientIp = $acceptDecision->peerIp;
             if ($this->shouldLogIngressDiagnostics()) {
                 $this->log(
                     "[DispatcherIngress] ACCEPT client={$clientIp} connId={$connId} dispatcher_port={$this->port} active="
@@ -2277,48 +2318,6 @@ class Dispatcher
             if (!$fastTlsPath && $this->httpsEnabled && $this->handlePlainHttpRedirect($clientSocket, $connId, $clientIp)) {
                 $accepted++;
                 continue;
-            }
-            
-            // 攻击探测（在建立 Worker 连接前）
-            // 本地与可信回源 IP 白名单，跳过攻击检测
-            $isTrustedIp = $this->isTrustedSourceIp($clientIp);
-            
-            // SSL 握手失败封禁检查（独立于通用攻击检测，非本地 IP 才封禁）
-            if (!$isTrustedIp && $this->attackDetector->isSslBanned($clientIp)) {
-                // 封禁拦截日志限流：同一 IP 每 60 秒最多记录一次
-                $now = \time();
-                $lastLog = $this->banLogThrottle[$clientIp] ?? 0;
-                if (($now - $lastLog) >= $this->banLogInterval) {
-                    $this->banLogThrottle[$clientIp] = $now;
-                    $this->log("SSL 封禁拦截: {$clientIp} — IP 因频繁 SSL 握手失败被封禁（后续拦截 {$this->banLogInterval}s 内不再记录）", 'BAN');
-                }
-                @\socket_close($clientSocket);
-                $accepted++;
-                continue;
-            }
-            
-            if (!$fastTlsPath && $this->attackDetectionEnabled && !$isTrustedIp) {
-                // 获取 SNI（如果可用）用于攻击探测
-                $sni = $this->passthroughCore->extractSniFromSocketPublic($clientSocket);
-                
-                $detection = $this->attackDetector->detect(
-                    $clientIp,
-                    '/', // TCP 代理模式下没有 URI，使用根路径
-                    'CONNECT',
-                    [],
-                    ''
-                );
-                
-                if ($detection['is_attack'] && $detection['should_block']) {
-                    $this->log("攻击检测: {$clientIp} - {$detection['type']}: {$detection['reason']}", 'WARN');
-                    
-                    // 记录攻击信号（供后续请求使用）
-                    $this->recordAttackSignal($clientIp, $sni, $detection);
-                    
-                    @\socket_close($clientSocket);
-                    $accepted++;
-                    continue;
-                }
             }
             
             // 尝试建立到 Worker 的连接（含故障转移：失败时自动尝试其他 Worker）
@@ -2869,10 +2868,18 @@ HTML;
 
     private function buildAllWorkersUnavailableDevOverlay(): string
     {
-        return <<<'HTML'
+        $context = \htmlspecialchars(
+            'maintenance_routing_active=' . ($this->passthroughCore->isMaintenanceRoutingActive() ? 'true' : 'false')
+            . ', ' . $this->formatMaintenanceRoutingContext(),
+            \ENT_QUOTES | \ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+
+        return <<<HTML
     <aside class="wls-dev-alert" role="status" aria-live="polite" style="position:fixed;right:18px;bottom:18px;z-index:2147483647;max-width:min(420px,calc(100vw - 36px));padding:14px 16px;border:1px solid #fca5a5;border-left:6px solid #dc2626;border-radius:10px;background:#fee2e2;color:#7f1d1d;box-shadow:0 18px 50px rgba(127,29,29,0.22);text-align:left;font-size:14px;line-height:1.55;">
         <strong style="display:block;margin-bottom:4px;color:#991b1b;font-size:15px;">DEV：当前所有 Worker 不可用</strong>
         <span>Dispatcher 已进入维护页响应。请检查 Worker 自检、IPC 入池、端口占用和 Master 复活队列。</span>
+        <code style="display:block;margin-top:8px;overflow-wrap:anywhere;">{$context}</code>
     </aside>
 HTML;
     }
@@ -3132,7 +3139,25 @@ HTML;
             return true;
         }
 
-        $request = $this->parseAcmeHttp01Request($raw) ?? $request;
+        $frame = \wlsParseHttpRequestFrame($raw, 65536, 0);
+        if (($frame['status'] ?? '') !== 'complete'
+            || (int)($frame['consumed'] ?? 0) !== \strlen($raw)
+        ) {
+            // ACME is the only HTTP response emitted before Worker policy.
+            // Apply the shared request-framing boundary here as well so TE/CL,
+            // folded headers and pipelined tails cannot gain a shortcut.
+            @\socket_close($clientSocket);
+            return true;
+        }
+
+        $request = $this->parseAcmeHttp01Request($raw);
+        if ($request === null) {
+            // The Dispatcher ACME shortcut is a transport-system path that
+            // bypasses the Worker policy pipeline. Never serve from an earlier
+            // partial peek when the complete request line is not canonical.
+            @\socket_close($clientSocket);
+            return true;
+        }
         $host = $this->extractHttpHostForAcme($raw, (string)$request['target']);
         $body = $this->resolveAcmeHttp01ChallengeBody($host, (string)$request['token']);
 
@@ -3153,28 +3178,32 @@ HTML;
      */
     private function parseAcmeHttp01Request(string $raw): ?array
     {
-        if (!\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $raw, $m)) {
+        if (\preg_match(
+            '/^([A-Z][A-Z0-9-]{0,31})\s+(\S{1,65535})\s+HTTP\/(1\.0|1\.1)\r?\n/D',
+            $raw,
+            $m,
+        ) !== 1) {
             return null;
         }
 
         $method = \strtoupper((string)$m[1]);
-        if ($method !== 'GET' && $method !== 'HEAD') {
+        if ($method !== 'GET') {
             return null;
         }
 
         $target = (string)$m[2];
-        $path = $target;
-        if (\preg_match('/^https?:\/\//i', $target)) {
+        try {
             $parsedPath = \parse_url($target, \PHP_URL_PATH);
-            $path = \is_string($parsedPath) && $parsedPath !== '' ? $parsedPath : '/';
-        } else {
-            $queryAt = \strpos($target, '?');
-            if ($queryAt !== false) {
-                $path = \substr($target, 0, $queryAt);
-            }
+        } catch (\ValueError) {
+            return null;
         }
+        $path = \is_string($parsedPath) && $parsedPath !== '' ? $parsedPath : '/';
 
-        if (!\preg_match('#^/\.well-known/acme-challenge/([A-Za-z0-9_-]+)/?$#', $path, $matches)) {
+        if (\preg_match(
+            '#^/\.well-known/acme-challenge/([A-Za-z0-9_-]{1,256})/?$#D',
+            $path,
+            $matches,
+        ) !== 1) {
             return null;
         }
 
@@ -3529,26 +3558,6 @@ HTML;
     }
     
     /**
-     * 记录攻击信号（非阻塞方式）
-     *
-     * 直接写入攻击信号文件，由 Cron 定时任务异步处理 CDN 通知
-     *
-     * @param string $clientIp 客户端 IP
-     * @param string $sni SNI
-     * @param array $detection 检测结果
-     */
-    private function recordAttackSignal(string $clientIp, string $sni, array $detection): void
-    {
-        // 非阻塞写入攻击信号文件
-        AttackSignalFileService::recordAttack(
-            $clientIp,
-            $sni,
-            $detection['type'],
-            $detection['reason']
-        );
-    }
-    
-    /**
      * 处理客户端数据（转发到 Worker）
      *
      * @param resource $clientSocket 客户端 socket
@@ -3589,6 +3598,19 @@ HTML;
                 && !$this->passthroughCore->hasBufferedData($clientSocket)) {
                 $this->logHalfClosedFastCloseIfNeeded($connId, 'event');
                 $this->closeConnection($connId, 'client_half_closed_without_request');
+                return;
+            }
+            // The client has closed its upload side after a fully framed HTTP
+            // response was already delivered. Keeping both sockets for the
+            // generic 30-second half-close grace leaks two FDs per short-lived
+            // request and exhausts macOS' default 1024-FD process limit.
+            if ($clientInputClosed
+                && $inBytes > 0
+                && $outBytes > 0
+                && $this->passthroughCore->isHttpResponseComplete($clientSocket)
+                && !$this->passthroughCore->hasBufferedData($clientSocket)
+                && !$this->passthroughCore->hasWorkerBufferedData($clientSocket)) {
+                $this->closeConnection($connId, 'client_half_closed_after_complete_response');
             }
             return;
         }
@@ -3596,6 +3618,13 @@ HTML;
         // result === 0: 暂无数据（WOULDBLOCK），连接正常，不做任何操作
         
         if ($result > 0) {
+            $this->connectionAcceptGates->beginRequest((string)$connId);
+            // Dispatcher is an opaque L4 proxy and must not keep a valid
+            // application request in "incomplete" state until the backend
+            // responds (a slow controller could legitimately exceed the L4
+            // timeout). Receiving forwardable client bytes completes this L4
+            // progress cycle; direct Workers enforce full HTTP framing.
+            $this->connectionAcceptGates->markRequestComplete((string)$connId);
             $this->connectionLastActivity[$connId] = \microtime(true);
             $this->bytesCount['in'] += $result;
             if (isset($this->connectionBytes[$connId])) {
@@ -3641,6 +3670,56 @@ HTML;
                 }
             }
         }
+
+        $this->shutdownCompletedHttpCloseResponse($clientSocket, $connId);
+    }
+
+    /**
+     * Finish short plain-HTTP responses from the server side. Waiting for the
+     * client FIN makes the client ephemeral port own TIME_WAIT; a Dispatcher
+     * adds a second short TCP hop and can otherwise exhaust both dynamic-port
+     * sets after roughly 16k fresh requests on macOS.
+     */
+    private function shutdownCompletedHttpCloseResponse($clientSocket, int $connId): void
+    {
+        if (isset($this->clientOutputShutdown[$connId])
+            || $this->httpsEnabled
+            || $this->passthroughCore->hasBufferedData($clientSocket)
+            || !$this->passthroughCore->shouldCloseClientAfterHttpResponse($clientSocket)
+        ) {
+            return;
+        }
+
+        if (@\socket_shutdown($clientSocket, 1)) {
+            $this->clientOutputShutdown[$connId] = true;
+        }
+    }
+
+    /** Close transport sockets selected by the topology-neutral slow gate. */
+    private function sweepConnectionAcceptGates(): void
+    {
+        foreach ($this->connectionAcceptGates->sweep() as $directive) {
+            $connId = (int)$directive->connectionId;
+            if (isset($this->clientConnections[$connId])) {
+                $this->closeConnection($connId, $directive->reason);
+                continue;
+            }
+            $pending = $this->pendingMaintenancePageQueue[$connId]['socket'] ?? null;
+            if ($pending !== null) {
+                @\socket_shutdown($pending, 2);
+                @\socket_close($pending);
+                unset($this->pendingMaintenancePageQueue[$connId]);
+            }
+        }
+    }
+
+    /** Reconcile legacy close/error branches without touching closeConnection(). */
+    private function reconcileConnectionAcceptGates(): void
+    {
+        $this->connectionAcceptGates->reconcileMapsIfDue(
+            $this->clientConnections,
+            $this->pendingMaintenancePageQueue,
+        );
     }
     
     /**
@@ -3667,7 +3746,8 @@ HTML;
         unset(
             $this->connectionAcceptTime[$connId],
             $this->connectionLastActivity[$connId],
-            $this->connectionBytes[$connId]
+            $this->connectionBytes[$connId],
+            $this->clientOutputShutdown[$connId]
         );
     }
 
@@ -3922,13 +4002,6 @@ HTML;
      */
     private function shutdown(): void
     {
-        // 刷新攻击日志缓冲区
-        try {
-            AttackLogService::flush();
-        } catch (\Throwable $e) {
-            // 忽略刷新失败
-        }
-        
         // 通知 Master 即将退出（IPC exited 消息）
         if ($this->ipcClient && $this->ipcClient->isConnected()) {
             $this->ipcClient->send(ControlMessage::exited(
@@ -3993,49 +4066,4 @@ HTML;
         ];
     }
 
-    private function isTrustedSourceIp(string $ip): bool
-    {
-        if (\in_array($ip, ['127.0.0.1', '::1', 'localhost'], true)
-            || \str_starts_with($ip, '192.168.')
-            || \str_starts_with($ip, '10.')
-            || \str_starts_with($ip, '172.')) {
-            return true;
-        }
-
-        $rules = $this->attackDetector->getRules();
-        $trusted = $rules['cdn_trusted_ips'] ?? [];
-        if (!($trusted['enabled'] ?? true)) {
-            return false;
-        }
-        $ipRules = $trusted['ips'] ?? [];
-        foreach ((array)$ipRules as $item) {
-            $pattern = \trim((string)$item);
-            if ($pattern === '') {
-                continue;
-            }
-            if ($this->ipMatches($ip, $pattern)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function ipMatches(string $ip, string $pattern): bool
-    {
-        if ($ip === $pattern) {
-            return true;
-        }
-        if (!\str_contains($pattern, '/')) {
-            return false;
-        }
-        [$subnet, $mask] = \explode('/', $pattern, 2);
-        $maskBits = (int)$mask;
-        $ipLong = \ip2long($ip);
-        $subnetLong = \ip2long($subnet);
-        if ($ipLong === false || $subnetLong === false || $maskBits < 0 || $maskBits > 32) {
-            return false;
-        }
-        $maskLong = $maskBits === 0 ? 0 : (~0 << (32 - $maskBits));
-        return (($ipLong & $maskLong) === ($subnetLong & $maskLong));
-    }
 }

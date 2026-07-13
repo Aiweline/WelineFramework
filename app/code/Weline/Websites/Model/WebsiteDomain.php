@@ -372,40 +372,20 @@ class WebsiteDomain extends Model
      */
     public function hasValidCertificate(): bool
     {
-        $certId = $this->getCertId();
-        try {
-            if (\class_exists(\Weline\Server\Model\SslCertificate::class)) {
-                if ($certId) {
-                    /** @var \Weline\Server\Model\SslCertificate $certModel */
-                    $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(
-                        \Weline\Server\Model\SslCertificate::class
-                    );
-                    $certModel->clearQuery()
-                        ->where('cert_id', $certId)
-                        ->find()
-                        ->fetch();
-
-                    if ($certModel->getCertId()) {
-                        return $certModel->getStatus() === \Weline\Server\Model\SslCertificate::STATUS_ACTIVE
-                            && !$certModel->isExpired();
-                    }
-                }
-
-                // 未绑定 cert_id 时仍以证书管理表中覆盖本域名的记录为准（不依赖 HTTPS 探测）
-                $resolved = \Weline\Server\Model\SslCertificate::resolveForWebsiteInfrastructure(
-                    null,
-                    $this->getDomain()
-                );
-                if ($resolved !== null && $resolved->getCertId() > 0) {
-                    return $resolved->getStatus() === \Weline\Server\Model\SslCertificate::STATUS_ACTIVE
-                        && !$resolved->isExpired();
-                }
-            }
-        } catch (\Throwable $e) {
-            // 忽略错误
+        $domain = \strtolower(\trim($this->getDomain()));
+        if ($domain === '' || !\function_exists('w_query')) {
+            return false;
         }
 
-        return false;
+        $certId = (int)$this->getCertId();
+        try {
+            return (bool)\w_query('server', 'hasValidManagedCertificate', [
+                'hostname' => $domain,
+                'preferred_cert_id' => $certId > 0 ? $certId : null,
+            ]);
+        } catch (\Throwable) {
+            return false;
+        }
     }
     
     /**

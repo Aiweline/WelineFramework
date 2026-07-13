@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Observer;
 
-use Weline\Ai\Service\AiService;
+use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 /**
  * 翻译事件观察者
@@ -22,11 +22,13 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class TranslationObserver implements ObserverInterface
 {
-    private AiService $aiService;
+    private bool $aiRuntimeResolved = false;
+    private ?AiRuntimeInterface $aiRuntime = null;
 
-    public function __construct(AiService $aiService)
+    public function __construct(
+        private readonly RuntimeProviderResolver $runtimeProviderResolver,
+    )
     {
-        $this->aiService = $aiService;
     }
 
     /**
@@ -98,6 +100,10 @@ class TranslationObserver implements ObserverInterface
         if (empty(trim($text))) {
             return $text;
         }
+        $aiRuntime = $this->aiRuntime();
+        if (!$aiRuntime instanceof AiRuntimeInterface) {
+            return $text;
+        }
 
         // 构建翻译提示词
         $sourceLangName = $this->getLanguageName($sourceLocale);
@@ -107,7 +113,7 @@ class TranslationObserver implements ObserverInterface
 
         try {
             // 调用 AI 服务进行翻译
-            $translatedText = $this->aiService->generate(
+            $translatedText = $aiRuntime->generate(
                 $prompt,
                 null, // 使用默认模型
                 'translation', // 翻译场景
@@ -127,6 +133,21 @@ class TranslationObserver implements ObserverInterface
             // 翻译失败时返回原文
             return $text;
         }
+    }
+
+    private function aiRuntime(): ?AiRuntimeInterface
+    {
+        if ($this->aiRuntimeResolved) {
+            return $this->aiRuntime;
+        }
+
+        $this->aiRuntimeResolved = true;
+        if (!interface_exists(AiRuntimeInterface::class)) {
+            return null;
+        }
+
+        $provider = $this->runtimeProviderResolver->resolve(AiRuntimeInterface::class);
+        return $this->aiRuntime = $provider instanceof AiRuntimeInterface ? $provider : null;
     }
 
     /**

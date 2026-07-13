@@ -71,7 +71,7 @@ view/hooks/Weline_Backend--backend--partials--head--before.phtml
 ## 相关文件
 
 - **Hook 规约文件**：`app/code/Weline/Backend/hook.php`
-- **Hook 接口定义**：`app/code/Weline/Framework/Hook/HookInterface.php`
+- **Hook 规约定义**：`app/code/Weline/Backend/hook.php`
 - **使用位置**：`app/code/Weline/Backend/view/blocks/header/base.phtml`
 
 ## 扩展开发

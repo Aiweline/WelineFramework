@@ -235,6 +235,35 @@ class SseWriter
     }
 
     /**
+     * Send a non-cursor SSE control event.
+     *
+     * Control frames deliberately omit the SSE `id:` field so they cannot
+     * advance the browser Last-Event-ID cursor. This is used for connection
+     * lifecycle messages such as runtime_open and runtime_reset; persisted
+     * business events must continue to use sendEvent() with their sequence.
+     *
+     * @param string $event Event name
+     * @param mixed $data Event payload (JSON encoded when needed)
+     */
+    public function sendControlEvent(string $event, mixed $data = null): self
+    {
+        if (!$this->started) {
+            $this->start();
+        }
+
+        $this->checkHeartbeat();
+        $dataStr = $this->encodeJsonForSseData($data);
+
+        $this->writeWithRetry("event: {$event}\n");
+        $this->writeDataLines($dataStr);
+        $this->writeWithRetry("\n");
+
+        $this->yieldAfterSend();
+
+        return $this;
+    }
+
+    /**
      * 发送数据（无事件名）
      *
      * @param mixed $data 数据（会自动 JSON 编码）

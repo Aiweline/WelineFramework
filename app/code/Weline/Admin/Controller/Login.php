@@ -15,10 +15,9 @@ use Weline\Admin\Helper\Data;
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Admin\Service\BackendLoginReturnUrlService;
 use Weline\Admin\Service\BackendVerificationCodeGate;
-use Weline\Backend\Service\MenuService;
-use Weline\Backend\Service\MenuServiceInterface;
-use Weline\Backend\Model\BackendUserToken;
-use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Api\Auth\BackendInteractiveAuthInterface;
+use Weline\Backend\Api\Auth\BackendLoginAccount;
+use Weline\Backend\Api\Menu\MenuReaderInterface;
 use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
@@ -28,11 +27,11 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\Strategy\WlsStrategy;
-use Weline\Backend\Model\Config as BackendConfig;
-use Weline\FileManager\Helper\Image as ImageHelper;
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Text;
+use Weline\Framework\View\Asset\MediaUrl;
 
 class Login extends \Weline\Framework\App\Controller\BackendController
 {
@@ -45,15 +44,15 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private const DEFAULT_LOGIN_LOGO_URL = '/Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
     protected ?string $layoutType = null;
     
-    protected BackendUser $adminUser;
+    protected BackendInteractiveAuthInterface $adminUser;
     private Data $helper;
     private MessageManager $messageManager;
-    private ?MenuServiceInterface $menuService = null;
+    private ?MenuReaderInterface $menuService = null;
     private ?BackendLoginReturnUrlService $returnUrlService = null;
     private BackendVerificationCodeGate $backendVerificationCodeGate;
 
     public function __construct(
-        BackendUser           $adminUser,
+        BackendInteractiveAuthInterface $adminUser,
         MessageManager        $messageManager,
         Data                  $helper,
         mixed                 $backendVerificationCodeGateOrMenuService = null,
@@ -62,7 +61,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->adminUser = $adminUser;
         $this->helper = $helper;
         $this->messageManager = $messageManager;
-        if ($backendVerificationCodeGateOrMenuService instanceof MenuServiceInterface) {
+        if ($backendVerificationCodeGateOrMenuService instanceof MenuReaderInterface) {
             // 兼容旧 compiled_factories.php：旧工厂第 4 个参数仍会传 MenuService。
             $this->menuService = $backendVerificationCodeGateOrMenuService;
         }
@@ -118,7 +117,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->assign('backend_verification_code_url', $this->getBackendUrlSameOrigin('admin/login/verification-code'));
         }
         # 登录页：使用后台配置（Logo、站点名）
-        $backendConfig = ObjectManager::getInstance(BackendConfig::class);
+        $backendConfig = ObjectManager::getInstance(BackendConfigStore::class);
         $backendConfigs = $backendConfig->getConfigs('Weline_Backend');
         $logoDark = (string)($backendConfigs['logo_dark'] ?? '');
         $logoLight = (string)($backendConfigs['logo_light'] ?? '');
@@ -146,8 +145,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $lockedUsername = $s->get('backend_disable_login_username') ?? $this->request->getParam('username') ?? '';
             $cleared = false;
             if ($lockedUsername !== '') {
-                $user = clone $this->adminUser;
-                $user->reset()->where('username', $lockedUsername)->find()->fetch();
+                $user = $this->adminUser->findByUsername((string)$lockedUsername) ?? BackendLoginAccount::empty();
                 $uid = $user->getId();
                 $attemptTimes = $user->getAttemptTimes();
                 if ($uid && $attemptTimes <= 6) {
@@ -228,7 +226,11 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         if ($adminUsernameUser->getAttemptTimes() > 6) {
             w_auth_log('login_post_locked', '尝试次数超限，账户锁定', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'attempt_times' => $adminUsernameUser->getAttemptTimes(), 'session' => $this->getSessionDataForLog()]);
-            $adminUsernameUser->setSessionId($this->session->getId())->setAttemptIp($this->request->clientIP())->save();
+            $this->adminUser->recordAttemptContext(
+                $adminUsernameUser->getId(),
+                (string)$this->session->getId(),
+                $this->request->clientIP(),
+            );
             $s = $this->session;
             $s->set('backend_disable_login', true);
             $s->set('backend_disable_login_username', $adminUsernameUser->getUsername());
@@ -243,11 +245,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         # 自增尝试登录次数
         try {
-            $adminUsernameUser->addAttemptTimes()->save();
+            $adminUsernameUser = $this->adminUser->incrementAttemptTimes($adminUsernameUser->getId());
         } catch (\Exception $exception) {
-            $adminUsernameUser->setSessionId($this->session->getId())
-                ->setAttemptIp($this->request->clientIP())
-                ->save();
+            $this->adminUser->recordAttemptContext(
+                $adminUsernameUser->getId(),
+                (string)$this->session->getId(),
+                $this->request->clientIP(),
+            );
             MessageManager::error(__('登录异常！'));
             $this->redirect($this->getLoginUrlWithReturnUrl($returnUrl));
             return;
@@ -267,16 +271,20 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 w_auth_log('login_post_captcha_error', '验证码错误', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
                 MessageManager::error(__($verificationCodeState['error_message']));
             }
-            $adminUsernameUser->setSessionId($this->session->getId())
-                ->setAttemptIp($this->request->clientIP())
-                ->save();
+            $this->adminUser->recordAttemptContext(
+                $adminUsernameUser->getId(),
+                (string)$this->session->getId(),
+                $this->request->clientIP(),
+            );
             $this->redirect($this->getLoginUrlWithReturnUrl($returnUrl));
             return;
         }
         # 尝试登录
         $password = $this->request->getParam('password');
-        $storedPassword = $adminUsernameUser->getPassword();
-        $passwordVerifyResult = $storedPassword && password_verify($password, $storedPassword);
+        $passwordVerifyResult = $this->adminUser->verifyPassword(
+            $adminUsernameUser->getId(),
+            (string)$password,
+        );
         if ($passwordVerifyResult) {
             if ($this->dispatchPasswordVerifiedLoginExtension($adminUsernameUser, $returnUrl)) {
                 return;
@@ -289,10 +297,9 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     $this->session->start('');
                 }
                 // 调用login方法（只传入一个参数）
-                $this->session->login($adminUsernameUser);
+                $this->adminUser->installSessionIdentity($this->session, $adminUsernameUser);
                 // 检查用户是否有角色，如果没有角色，显示友好提示并退出登录（user_id=1 视为超管，无角色记录也允许登录）
-                $userRole = $adminUsernameUser->getRole();
-                $hasRole = (bool)($userRole && $userRole->getRoleId());
+                $hasRole = $adminUsernameUser->getRoleId() > 0;
                 $isSuperAdminById = (int) $adminUsernameUser->getId() === 1;
                 if (!$hasRole && !$isSuperAdminById) {
                     w_auth_log('login_post_no_role', '账户未分配角色，拒绝登录', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
@@ -302,7 +309,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     return;
                 }
                 // 写入 ACL 上下文到 Session，路由校验时直接读 Session 免去每次请求 2 次 DB
-                $aclRoleId = $userRole && $userRole->getRoleId() ? (int) $userRole->getRoleId() : ($isSuperAdminById ? 1 : 0);
+                $aclRoleId = $hasRole ? $adminUsernameUser->getRoleId() : ($isSuperAdminById ? 1 : 0);
                 $this->session->getSession()->set('backend_acl_role_id', $aclRoleId);
                 $this->session->getSession()->set('backend_acl_is_enabled', $adminUsernameUser->getIsEnabled() ? 1 : 0);
                 w_auth_log('login_post_success', '登录成功，写入 Session ACL 上下文', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'acl_role_id' => $aclRoleId, 'session_id_hint' => \substr($this->session->getId(), 0, 8) . '...', 'session' => $this->getSessionDataForLog()]);
@@ -310,27 +317,25 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 w_auth_log('login_post_exception', '登录过程异常', ['user_id' => $adminUsernameUser->getId(), 'message' => $e->getMessage(), 'session' => $this->getSessionDataForLog()]);
                 throw $e;
             }
-            $adminUsernameUser->setSessionId($this->session->getId())
-                ->setLoginIp($this->request->clientIP());
             # 重置 尝试登录次数
-            $adminUsernameUser->resetAttemptTimes()->save();
+            $adminUsernameUser = $this->adminUser->completeLogin(
+                $adminUsernameUser->getId(),
+                (string)$this->session->getId(),
+                $this->request->clientIP(),
+            );
             # 登录成功后清理验证码相关的session数据
             $this->clearBackendVerificationCodeState();
             $this->syncSandboxCookie($adminUsernameUser->isSandboxAccount());
             # 检测是否记住我
             if ($this->request->getParam('remember')) {
-                /**@var BackendUserToken $backendUserToken */
-                $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
-                $backendUserToken->load($adminUsernameUser->getId());
                 $token = Text::random_string(32);
                 $rememberTtl = 7 * 24 * 60 * 60;
                 $token_expire_time = \time() + $rememberTtl;
-                $backendUserToken
-                    ->setData($backendUserToken::schema_fields_ID, $adminUsernameUser->getId())
-                    ->setData($backendUserToken::schema_fields_type, 'admin_login_remember_me')
-                    ->setData($backendUserToken::schema_fields_token, $token)
-                    ->setData($backendUserToken::schema_fields_token_expire_time, $token_expire_time)
-                    ->save();
+                $this->adminUser->storeRememberToken(
+                    $adminUsernameUser->getId(),
+                    $token,
+                    $token_expire_time,
+                );
                 Cookie::set('w_ut', $token, $rememberTtl, ['path' => '/']);
                 $this->session->set('remember_expire_time', $token_expire_time);
             } else {
@@ -338,9 +343,11 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
         } else {
             w_auth_log('login_post_password_fail', '密码验证失败', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
-            $adminUsernameUser->setSessionId($this->session->getId())
-                ->setAttemptIp($this->request->clientIP())
-                ->save();
+            $this->adminUser->recordAttemptContext(
+                $adminUsernameUser->getId(),
+                (string)$this->session->getId(),
+                $this->request->clientIP(),
+            );
             MessageManager::error(__('登录凭据错误！'));
             // 用户未登录，无需 logout；logout 会 destroy session 导致 MessageManager 的错误信息丢失
             $this->redirect($this->getLoginUrlWithReturnUrl($returnUrl));
@@ -381,9 +388,9 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     /**
      * 优先跳回上次访问的地址（须验证当前用户对该路由有权限）。
      *
-     * @param BackendUser|null $user 已登录用户，null 时从 session 加载
+     * @param BackendLoginAccount|null $user 已登录用户，null 时从 session 加载
      */
-    private function redirectReferer(?BackendUser $user = null, string $returnUrl = ''): void
+    private function redirectReferer(?BackendLoginAccount $user = null, string $returnUrl = ''): void
     {
         $user ??= $this->loadCurrentBackendUser();
         if ($user) {
@@ -425,15 +432,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    private function loadCurrentBackendUser(): ?BackendUser
+    private function loadCurrentBackendUser(): ?BackendLoginAccount
     {
         $userId = $this->session->getUserId();
         if (!$userId) {
             return null;
         }
-        $user = clone $this->adminUser;
-        $user->load((int)$userId);
-        return $user->getId() ? $user : null;
+        return $this->adminUser->find((int)$userId);
     }
 
     /**
@@ -453,25 +458,23 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
-    private function userHasRoutePermission(BackendUser $user, string $routePath): bool
+    private function userHasRoutePermission(BackendLoginAccount $user, string $routePath): bool
     {
-        $role = $user->getRoleModel();
-        if (!$role || !$role->getId()) {
+        if ($user->getRoleId() <= 0) {
             return (int)$user->getId() === 1; // 超管无角色也放行
         }
-        return $this->getMenuService()->findMenuNodeByRoute((int)$role->getId(), $routePath) !== null;
+        return $this->getMenuService()->findMenuNodeByRoute($user->getRoleId(), $routePath) !== null;
     }
 
     /**
      * 获取默认跳转目标：优先使用角色第一个可访问菜单，否则 admin。
      */
-    private function resolveDefaultRedirectTarget(?BackendUser $user = null): string
+    private function resolveDefaultRedirectTarget(?BackendLoginAccount $user = null): string
     {
         $user ??= $this->loadCurrentBackendUser();
         if ($user) {
-            $role = $user->getRoleModel();
-            if ($role && $role->getId()) {
-                $defaultRoute = $this->getMenuService()->getDefaultEntryRoute((int)$role->getId());
+            if ($user->getRoleId() > 0) {
+                $defaultRoute = $this->getMenuService()->getDefaultEntryRoute($user->getRoleId());
                 if ($defaultRoute !== null && $defaultRoute !== '') {
                     return $defaultRoute;
                 }
@@ -480,10 +483,10 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         return 'admin';
     }
 
-    private function getMenuService(): MenuServiceInterface
+    private function getMenuService(): MenuReaderInterface
     {
         if ($this->menuService === null) {
-            $this->menuService = ObjectManager::getInstance(MenuService::class);
+            $this->menuService = ObjectManager::getInstance(MenuReaderInterface::class);
         }
 
         return $this->menuService;
@@ -639,17 +642,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->session->getSession()->delete('backend_acl_role_id');
         $this->session->getSession()->delete('backend_acl_is_enabled');
         if ($userId) {
-            $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
-            $backendUserToken->reset()
-                ->where($backendUserToken::schema_fields_ID, (int)$userId)
-                ->where($backendUserToken::schema_fields_type, 'admin_login_remember_me')
-                ->find()
-                ->fetch();
-            if ($backendUserToken->getId()) {
-                $backendUserToken->setData($backendUserToken::schema_fields_token, '')
-                    ->setData($backendUserToken::schema_fields_token_expire_time, 0)
-                    ->save();
-            }
+            $this->adminUser->invalidateRememberTokenForUser((int)$userId);
         }
         Cookie::set('w_ut', '', -1, ['path' => '/']);
         Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
@@ -763,7 +756,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
      *
      * @return bool 已处理并完成响应（含重定向）时返回 true
      */
-    private function dispatchPasswordVerifiedLoginExtension(BackendUser $adminUsernameUser, string $returnUrl = ''): bool
+    private function dispatchPasswordVerifiedLoginExtension(BackendLoginAccount $adminUsernameUser, string $returnUrl = ''): bool
     {
         $loginEventData = new DataObject([
             'user' => $adminUsernameUser,
@@ -872,7 +865,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return self::DEFAULT_LOGIN_LOGO_URL;
         }
 
-        return ImageHelper::pathToMediaUrl($configuredPath, 125, 125);
+        return MediaUrl::fromPath($configuredPath, 125, 125);
     }
 
     private function shouldUseThemeLoginLogo(string $configuredPath): bool

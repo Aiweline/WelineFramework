@@ -44,7 +44,9 @@ class CountryDataUpdateService
             // 检查是否已有国家数据
             $existingCount = $this->countries->clearQuery()->count();
             if ($existingCount > 0) {
-                // 已有数据，检查是否需要更新显示名称
+                // 已有数据也要补齐新加入的全球国家，不能把历史上的部分数据集
+                // 当成完整数据集，否则印度等国家永远无法被搜索到。
+                $this->syncMissingCountries();
                 $this->updateMissingDisplayNames();
                 return true;
             }
@@ -162,6 +164,65 @@ class CountryDataUpdateService
                 $this->localeNames->rollBack();
                 Message::exception($e);
             }
+        }
+    }
+
+    /**
+     * 将全球国家目录中数据库缺失的国家补入主表。
+     * 已存在国家不做更新，确保安装和激活状态不被覆盖。
+     */
+    private function syncMissingCountries(): void
+    {
+        $countryNames = $this->i18n->getCountries(Cookie::getLangLocal());
+        if (empty($countryNames)) {
+            return;
+        }
+
+        $existingCountries = $this->countries->clearQuery()
+            ->select()
+            ->fetch()
+            ->getItems();
+        $existingCodes = [];
+        foreach ($existingCountries as $country) {
+            $existingCodes[(string)$country->getData(Countries::schema_fields_CODE)] = true;
+        }
+
+        $missingCountries = [];
+        $missingNames = [];
+        foreach ($countryNames as $code => $countryName) {
+            $code = strtoupper((string)$code);
+            if ($code === '' || isset($existingCodes[$code])) {
+                continue;
+            }
+
+            $missingCountries[] = [
+                Countries::schema_fields_CODE => $code,
+                Countries::schema_fields_FLAG => (string)$this->i18n->getCountryFlag($code),
+                Countries::schema_fields_IS_ACTIVE => 0,
+                Countries::schema_fields_IS_INSTALL => 0,
+            ];
+            $missingNames[] = [
+                Name::schema_fields_COUNTRY_CODE => $code,
+                Name::schema_fields_DISPLAY_NAME => $countryName,
+                Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+            ];
+        }
+
+        if (empty($missingCountries)) {
+            return;
+        }
+
+        $this->countries->beginTransaction();
+        try {
+            $this->countries->clear()->insert($missingCountries, Countries::schema_fields_CODE)->fetch();
+            $this->localeNames->clear()->insert(
+                $missingNames,
+                Name::schema_fields_COUNTRY_CODE . ',' . Name::schema_fields_DISPLAY_LOCALE_CODE
+            )->fetch();
+            $this->countries->commit();
+        } catch (\Throwable $throwable) {
+            $this->countries->rollBack();
+            throw $throwable;
         }
     }
 

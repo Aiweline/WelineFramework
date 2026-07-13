@@ -12,9 +12,10 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Helper;
 
+use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\App\Exception;
 
-class Data extends \Weline\Backend\Model\Config
+class Data extends BackendConfigStore
 {
     const smtp_host = 'smtp_host';
     const smtp_auth = 'smtp_auth';

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service\Document;
 
-use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Api\ConfigStore as SystemConfig;
 
 class DocumentTranslationConfigService
 {

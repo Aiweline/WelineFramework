@@ -6,8 +6,7 @@ namespace Weline\PhpManager\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\PhpManager\Model\WlsPhpProfile;
 use Weline\PhpManager\Service\Adapter\WindowsBundledPhpExtensionAdapter;
-use Weline\Server\IPC\ControlMessage;
-use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Api\Control\RuntimeReloadGateway;
 
 class WlsPhpExtensionExecutionService
 {
@@ -16,18 +15,18 @@ class WlsPhpExtensionExecutionService
     private readonly WlsPhpProfileService $profileService;
     private readonly WlsPhpExtensionPlanService $planService;
     private readonly WindowsBundledPhpExtensionAdapter $adapter;
-    private readonly IpcControlGateway $ipcControlGateway;
+    private readonly RuntimeReloadGateway $runtimeReloadGateway;
 
     public function __construct(
         ?WlsPhpProfileService $profileService = null,
         ?WlsPhpExtensionPlanService $planService = null,
         ?WindowsBundledPhpExtensionAdapter $adapter = null,
-        ?IpcControlGateway $ipcControlGateway = null
+        ?RuntimeReloadGateway $runtimeReloadGateway = null
     ) {
         $this->profileService = $profileService ?? ObjectManager::getInstance(WlsPhpProfileService::class);
         $this->planService = $planService ?? ObjectManager::getInstance(WlsPhpExtensionPlanService::class);
         $this->adapter = $adapter ?? new WindowsBundledPhpExtensionAdapter();
-        $this->ipcControlGateway = $ipcControlGateway ?? ObjectManager::getInstance(IpcControlGateway::class);
+        $this->runtimeReloadGateway = $runtimeReloadGateway ?? ObjectManager::getInstance(RuntimeReloadGateway::class);
     }
 
     /**
@@ -160,11 +159,11 @@ class WlsPhpExtensionExecutionService
             ];
         }
 
-        $result = $this->ipcControlGateway->reloadAsync($instance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
+        $result = $this->runtimeReloadGateway->forceReloadAsync($instance, 8.0);
         return [
             'action' => $action,
-            'success' => !empty($result['success']),
-            'message' => \mb_substr((string)($result['message'] ?? __('WLS reload request failed.')), 0, 220),
+            'success' => $result->success,
+            'message' => \mb_substr($result->message, 0, 220),
         ];
     }
 

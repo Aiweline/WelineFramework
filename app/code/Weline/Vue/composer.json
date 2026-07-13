@@ -1,0 +1,15 @@
+{
+    "name": "weline/module-vue",
+    "description": "WelineFramework Vue module",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "weline/module-taglib": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Vue\\": ""
+        }
+    }
+}

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
-use Weline\Backend\Model\Config as BackendConfig;
-use Weline\FileManager\Helper\Image as ImageHelper;
+use Weline\Backend\Api\Config\BackendConfigStore;
+use Weline\FileManager\Api\Image as ImageHelper;
 use Weline\Framework\View\Template;
 
 /**
@@ -21,7 +21,7 @@ class SiteBrand
     public const DEFAULT_ICON_STATIC = 'Weline_Theme::theme/frontend/assets/images/theme/icon.png';
 
     public function __construct(
-        private readonly BackendConfig $backendConfig,
+        private readonly BackendConfigStore $backendConfig,
     ) {
     }
 
@@ -116,10 +116,9 @@ class SiteBrand
             return $url;
         }
 
-        return $this->resolveStaticUrl(
-            $template,
-            self::DEFAULT_LOGO_BACKEND_STATIC,
-            '/Weline/Theme/view/theme/backend/assets/images/theme/logo.png',
-        );
+        // Theme assets live under view/theme, while fetchTagSourceFile('statics', ...)
+        // maps them to view/statics. Use the canonical theme route directly so the
+        // unconfigured backend logo is the same Weline mark as the login page.
+        return '/Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
     }
 }

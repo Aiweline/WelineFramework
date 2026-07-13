@@ -246,7 +246,10 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                             </button>
                                             <a class="btn btn-sm btn-outline-danger"
                                                href="#"
-                                               data-confirm-href="@backend-url('*/backend/dictionary/delete')?md5=<?= urlencode($md5) ?>"
+                                               data-async-href="@backend-url('*/backend/dictionary/delete')?md5=<?= urlencode($md5) ?>"
+                                               data-async-action="dictionary-delete"
+                                               data-async-remove-row="1"
+                                               data-async-success-message="<?= htmlspecialchars(__('翻译已删除，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
                                                data-confirm-message="<?= htmlspecialchars(__('确定删除 %{1} 的译文吗？', [$word]), ENT_QUOTES, 'UTF-8') ?>"
                                                data-confirm-type="danger">
                                                 <?= __('删除') ?>
@@ -275,7 +278,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 <div class="modal fade" id="dictionary-add-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="@backend-url('*/backend/dictionary/add')" class="i18n-admin-form">
+            <form method="post" action="@backend-url('*/backend/dictionary/add')" class="i18n-admin-form" data-async-action="dictionary-add">
                 <div class="modal-header">
                     <h5 class="modal-title"><?= __('添加翻译') ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
@@ -320,7 +323,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 <div class="modal fade" id="dictionary-edit-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form">
+            <form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form" data-async-action="dictionary-edit">
                 <div class="modal-header">
                     <h5 class="modal-title"><?= __('编辑') ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
@@ -394,14 +397,14 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 (function () {
     var localeCode = <?= json_encode($localeCode, $jsonForScriptFlags) ?>;
     var endpoints = {
-        collectWords: "@backend-url('*/backend/dictionary/collectWords')",
-        clearLocale: "@backend-url('*/backend/dictionary/clearLocale')",
-        clearAll: "@backend-url('*/backend/dictionary/clearAll')",
-        currentTranslationMode: "@backend-url('*/backend/dictionary/currentTranslationMode')",
-        checkAutoRegister: "@backend-url('*/backend/dictionary/checkAutoRegister')",
-        enableAutoRegister: "@backend-url('*/backend/dictionary/enableAutoRegister')",
-        disableAutoRegister: "@backend-url('*/backend/dictionary/disableAutoRegister')",
-        setTranslationMode: "@backend-url('*/backend/dictionary/setTranslationMode')"
+        collectWords: 'dictionary-collect',
+        clearLocale: 'dictionary-clear-locale',
+        clearAll: 'dictionary-clear-all',
+        currentTranslationMode: 'dictionary-current-translation-mode',
+        checkAutoRegister: 'dictionary-check-auto-register',
+        enableAutoRegister: 'dictionary-auto-register-enable',
+        disableAutoRegister: 'dictionary-auto-register-disable',
+        setTranslationMode: 'dictionary-translation-mode'
     };
 
     function updateProgress(progress) {
@@ -435,27 +438,17 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
         document.getElementById('dictionary-auto-register-toggle').dataset.enabled = data.auto_register ? '1' : '0';
     }
 
-    function postJson(url, payload) {
-        return fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'same-origin',
-            body: new URLSearchParams(payload)
-        }).then(function (response) {
-            return response.json();
+    function postJson(action, payload) {
+        return Promise.resolve(window.Weline.Api.resource('i18n_admin')).then(function (api) {
+            return api.action({
+                action: action,
+                payload: payload || {}
+            }, {silent: true});
         });
     }
 
     function loadModeState() {
-        fetch(endpoints.currentTranslationMode, {
-            headers: {'X-Requested-With': 'XMLHttpRequest'},
-            credentials: 'same-origin'
-        }).then(function (response) {
-            return response.json();
-        }).then(function (data) {
+        postJson(endpoints.currentTranslationMode, {locale_code: localeCode}).then(function (data) {
             updateModeState(data);
         }).catch(function () {
             I18nAdminUI.toast('warning', '<?= addslashes(__('加载失败')) ?>');
@@ -493,9 +486,9 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                 postJson(endpoints.collectWords, {}).then(function (result) {
                     if (result.success) {
                         I18nAdminUI.toast('success', result.message || '<?= addslashes(__('收集完成')) ?>');
-                        window.setTimeout(function () {
-                            window.location.reload();
-                        }, 600);
+                        if (result.progress) {
+                            updateProgress(result.progress);
+                        }
                         return;
                     }
 
@@ -525,9 +518,6 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                 postJson(endpoint, payload || {}).then(function (result) {
                     if (result.success) {
                         I18nAdminUI.toast('success', result.message || '<?= addslashes(__('清理完成')) ?>');
-                        window.setTimeout(function () {
-                            window.location.reload();
-                        }, 600);
                         return;
                     }
 
@@ -596,12 +586,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                     }
 
                     I18nAdminUI.toast('success', result.message || '<?= addslashes(__('保存成功')) ?>');
-                    return fetch(endpoints.checkAutoRegister, {
-                        headers: {'X-Requested-With': 'XMLHttpRequest'},
-                        credentials: 'same-origin'
-                    }).then(function (response) {
-                        return response.json();
-                    }).then(function (statusResult) {
+                    return postJson(endpoints.checkAutoRegister, {locale_code: localeCode}).then(function (statusResult) {
                         updateModeState({
                             mode: document.getElementById('dictionary-mode-chip').textContent,
                             mode_name: document.getElementById('dictionary-mode-chip').textContent,
@@ -619,14 +604,18 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
         form.addEventListener('submit', function (event) {
             event.preventDefault();
 
-            var formData = new FormData(form);
-            fetch(form.action, {
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin',
-                headers: {'X-Requested-With': 'XMLHttpRequest'}
-            }).then(function (response) {
-                return response.json();
+            var fileInput = form.querySelector('input[type="file"]');
+            var file = fileInput && fileInput.files ? fileInput.files[0] : null;
+            if (!file) {
+                I18nAdminUI.toast('error', '<?= addslashes(__('请选择要导入的CSV文件')) ?>');
+                return;
+            }
+
+            file.text().then(function (content) {
+                return postJson('dictionary-import', {
+                    file_name: file.name,
+                    csv_content: content
+                });
             }).then(function (result) {
                 if (!result.success) {
                     I18nAdminUI.toast('error', result.message || '<?= addslashes(__('导入失败!')) ?>');
@@ -634,9 +623,9 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                 }
 
                 I18nAdminUI.toast('success', result.message || '<?= addslashes(__('导入完成!')) ?>');
-                window.setTimeout(function () {
-                    window.location.href = "@backend-url('*/backend/dictionary')?locale_code=" + encodeURIComponent(localeCode);
-                }, 600);
+                if (result.progress) {
+                    updateProgress(result.progress);
+                }
             }).catch(function (error) {
                 I18nAdminUI.toast('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
             });

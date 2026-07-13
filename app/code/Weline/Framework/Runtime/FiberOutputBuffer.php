@@ -456,12 +456,10 @@ final class FiberOutputBuffer
         $message = '[FiberOutputBufferOverflow] '
             . (\json_encode($context, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
 
-        if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
-            try {
-                \Weline\Server\Log\WlsLogger::warning_($message);
-                return;
-            } catch (\Throwable) {
-            }
+        try {
+            \w_log_warning($message, [], 'wls');
+            return;
+        } catch (\Throwable) {
         }
 
         \error_log($message);
@@ -526,17 +524,15 @@ final class FiberOutputBuffer
 
     private static function logRecovered(string $reason, int $previousLevel): void
     {
-        if (!\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
-            return;
-        }
-
         try {
-            \Weline\Server\Log\WlsLogger::warning_(
+            \w_log_warning(
                 '[FiberOutputBufferRecovered] reason=' . ($reason !== '' ? $reason : 'unknown')
                 . ' uri=' . (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)')
                 . ' previous_level=' . $previousLevel
                 . ' current_ob_level=' . \ob_get_level()
-                . ' new_level=' . self::$installedLevel
+                . ' new_level=' . self::$installedLevel,
+                [],
+                'wls',
             );
         } catch (\Throwable) {
             // Recovery must not fail because diagnostics are unavailable.
@@ -555,12 +551,10 @@ final class FiberOutputBuffer
             . ' uri=' . (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)')
             . ' state=' . (\json_encode(self::debugState(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
 
-        if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
-            try {
-                \Weline\Server\Log\WlsLogger::warning_($message);
-                return;
-            } catch (\Throwable) {
-            }
+        try {
+            \w_log_warning($message, [], 'wls');
+            return;
+        } catch (\Throwable) {
         }
 
         \error_log($message);

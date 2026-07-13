@@ -1,24 +1,31 @@
 {
-  "name": "weline/module-customer",
-  "description": "Weline Framework front customer management module",
-  "type": "weline-module",
-  "require": {
-    "php": "^8.1"
-  },
-  "authors": [
-    {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
-    }
-  ],
-  "autoload": {
-    "psr-4": {
-      "Weline\\Customer\\": ""
+    "name": "weline/module-customer",
+    "description": "Weline Framework front customer management module",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/module-backend": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-frontend": "@dev"
     },
-    "psr-0": {
-      "Weline\\Customer\\": ""
-    }
-  },
-  "license": "MIT"
+    "suggest": {
+        "weline/module-currency": "Adds currency dictionaries to the customer account shell.",
+        "weline/module-i18n": "Adds locale dictionaries to the customer account shell.",
+        "weline/module-order": "Adds order dictionaries to the customer account shell.",
+        "weline/module-seo": "Adds SEO dictionaries to the customer account shell.",
+        "weline/module-shipping": "Adds shipping dictionaries to the customer account shell.",
+        "weline/module-theme": "Enables authenticated customer accounts for Theme previews."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Customer\\": ""
+        }
+    },
+    "license": "MIT"
 }
-

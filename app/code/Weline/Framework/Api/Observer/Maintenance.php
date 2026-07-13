@@ -21,8 +21,6 @@ use Weline\Framework\Event\ObserverInterface;
 class Maintenance implements ObserverInterface
 {
     private const DEFAULT_RETRY_AFTER = 60;
-    private const OPTIONAL_MAINTENANCE_URL_PARSER = 'Weline\\Maintenance\\Helper\\UrlParser';
-
     /**
      * @inheritDoc
      */
@@ -107,21 +105,21 @@ class Maintenance implements ObserverInterface
 
     private function isApiRequest(string $uri): bool
     {
-        $parserClass = self::OPTIONAL_MAINTENANCE_URL_PARSER;
-        if (class_exists($parserClass) && method_exists($parserClass, 'isApiRequest')) {
-            return (bool)$parserClass::isApiRequest($uri);
-        }
-
-        $normalizedUri = trim((string)$uri, '/');
+        $normalizedUri = trim((string)(parse_url($uri, PHP_URL_PATH) ?: $uri), '/');
         if ($normalizedUri === '') {
             return false;
         }
 
-        return str_contains($normalizedUri, '/api/')
-            || str_starts_with($normalizedUri, 'api/')
-            || str_contains($normalizedUri, '/rest/');
+        $firstSegment = explode('/', $normalizedUri, 2)[0] ?? '';
+        foreach (['rest_frontend', 'rest_backend'] as $area) {
+            $prefix = trim(Env::getAreaRoutePrefix($area), '/');
+            if ($prefix !== '' && strcasecmp($firstSegment, $prefix) === 0) {
+                return true;
+            }
+        }
+
+        return strcasecmp($firstSegment, 'api') === 0 || strcasecmp($firstSegment, 'rest') === 0;
     }
 }
-
 
 

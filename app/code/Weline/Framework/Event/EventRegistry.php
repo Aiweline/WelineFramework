@@ -944,7 +944,7 @@ class EventRegistry implements EventRegistryInterface
         
         $message .= "📝 事件命名规范建议：\n";
         $message .= "   推荐格式：{模块名}::{事件功能名}\n";
-        $message .= "   示例：Weline_Admin::user_login, Weline_Order::order_created\n";
+        $message .= "   示例：Vendor_Account::user_login, Vendor_Order::order_created\n";
         $message .= "   这样可以有效避免事件名冲突\n\n";
         
         $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
@@ -1204,4 +1204,3 @@ class EventRegistry implements EventRegistryInterface
         return false;
     }
 }
-

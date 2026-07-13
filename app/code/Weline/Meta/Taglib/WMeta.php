@@ -12,14 +12,19 @@ declare(strict_types=1);
 namespace Weline\Meta\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Taglib;
-use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
-use Weline\I18n\Model\Meta\LocalModel as MetaLocalModel;
-use Weline\Taglib\TaglibInterface;
+use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 
 class WMeta implements TaglibInterface
 {
     private static $ids = [];
+
+    public static function resetRequestState(): void
+    {
+        self::$ids = [];
+    }
 
     static public function name(): string
     {
@@ -88,178 +93,10 @@ class WMeta implements TaglibInterface
             // 1. @meta::theme.component.pagination.info.name（完整路径，使用I18n Dictionary）
             // 2. @meta.info.name（需要补全前缀，使用I18n Dictionary）
             // 3. info.name（需要补全前缀和 @meta::，需要提供 prefix 属性，使用I18n Dictionary）
-            // 4. theme.frontend.layouts.default（meta_identify，使用LocalModel，省略Model）
-            // 5. theme.frontend.layouts.default.name（meta_identify + 字段路径，使用LocalModel，省略Model）
+            // 4. theme.frontend.layouts.default.name（统一规范化为 @meta:: 字典键）
             $metaKey = trim($content);
-            $useLocalModel = false;
-            $metaIdentify = null;
-            $fieldPath = 'name'; // 默认字段路径
-            
-            // 检查是否是 meta_identify 格式（不包含 @meta:: 或 @meta.，且包含至少2个点号分隔的部分）
-            // 例如：theme.frontend.layouts.default 或 theme.frontend.layouts.default.name
-            if (!str_starts_with($metaKey, '@meta::') && !str_starts_with($metaKey, '@meta.')) {
-                // 检查是否可能是 meta_identify 格式
-                $parts = explode('.', $metaKey);
-                if (count($parts) >= 2) {
-                    // 尝试判断：如果最后一部分是常见字段名（name, description等），则可能是 meta_identify.field
-                    $commonFields = ['name', 'description', 'title', 'label', 'value'];
-                    $lastPart = end($parts);
-                    
-                    if (in_array($lastPart, $commonFields) && count($parts) >= 3) {
-                        // 可能是 meta_identify.field 格式
-                        $metaIdentify = implode('.', array_slice($parts, 0, -1));
-                        $fieldPath = $lastPart;
-                        $useLocalModel = true;
-                    } elseif (count($parts) >= 2) {
-                        // 可能是纯 meta_identify 格式（默认使用 name 字段）
-                        $metaIdentify = $metaKey;
-                        $fieldPath = 'name';
-                        $useLocalModel = true;
-                    }
-                }
-            }
-            
-            // 如果使用 LocalModel，直接获取翻译值
-            if ($useLocalModel && $metaIdentify) {
-                // 获取当前语言
-                $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
-                
-                // 使用 LocalModel 获取翻译值
-                $translatedValue = MetaLocalModel::getTranslatedValue($metaIdentify, $fieldPath, $locale);
-                
-                // 如果没有翻译值，尝试从 Meta 表获取默认值
-                if ($translatedValue === null) {
-                    /** @var \Weline\Meta\Model\Meta $metaModel */
-                    $metaModel = ObjectManager::getInstance(\Weline\Meta\Model\Meta::class);
-                    $metaModel->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $metaIdentify)->find()->fetch();
-                    
-                    if ($metaModel->getId()) {
-                        $metaData = json_decode($metaModel->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA) ?? '{}', true);
-                        
-                        // 尝试从 meta_data 中获取字段值
-                        if ($fieldPath === 'name') {
-                            if (isset($metaData['name'])) {
-                                $translatedValue = $metaData['name'];
-                            } elseif (isset($metaData['meta']['name'])) {
-                                $translatedValue = $metaData['meta']['name'];
-                            }
-                        } else {
-                            // 尝试从嵌套结构中获取
-                            $keys = explode('.', $fieldPath);
-                            $value = $metaData;
-                            foreach ($keys as $key) {
-                                if (isset($value[$key])) {
-                                    $value = $value[$key];
-                                } else {
-                                    $value = null;
-                                    break;
-                                }
-                            }
-                            $translatedValue = is_string($value) ? $value : null;
-                        }
-                    }
-                }
-                
-                $defaultValue = $translatedValue ?? $content;
-                
-                // 如果 type 不是 translate，直接返回翻译值
-                if ($type !== 'translate') {
-                    return htmlspecialchars($defaultValue);
-                }
-                
-                // type="translate" 时，显示翻译按钮和模态框
-                /** @var \Weline\Framework\Http\Request $request */
-                $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-                
-                // 生成唯一ID
-                $idName = 'meta-local-' . md5($metaIdentify . '.' . $fieldPath);
-                if (in_array($idName, $ids)) {
-                    $idName .= '-' . count($ids);
-                }
-                $ids[] = $idName;
-                
-                // 构建翻译URL（使用 LocalModel）
-                $actionParams = [
-                    'model' => MetaLocalModel::class,
-                    'field' => $fieldPath,
-                    'id' => $metaIdentify
-                ];
-                if ($request->isBackend()) {
-                    $actionParams['isIframe'] = '1';
-                    $action = $request->getUrlBuilder()->getBackendUrl('i18n/backend/taglib/local', $actionParams);
-                } else {
-                    $action = $request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', $actionParams);
-                }
-                
-                $closeText = __('关闭');
-                $titleText = __('翻译窗口');
-                $refreshText = __('刷新');
-                $submitText = __('提交');
-                $displayValue = htmlspecialchars($defaultValue);
-                
-                return <<<TAG
-                    <a class='d-flex align-items-center link-info gap-1' style='cursor: pointer'
-                        data-bs-toggle='offcanvas'
-                        data-bs-target='#{$idName}' 
-                        aria-controls='{$idName}'
-                        data-href='{$action}&value={$displayValue}'>
-                        <span>{$displayValue}</span>
-                        <i class='ri-translate'></i>
-                    </a>
-                    <!-- {$idName} -->
-                    <div class='offcanvas  offcanvas-end w-75 h-100' tabindex='-1' id='{$idName}' 
-                         aria-labelledby='{$idName}Label'>
-                        <div class='offcanvas-header'>
-                            <h5 id='{$idName}Label'>
-                                <lang>{$titleText}</lang>
-                            </h5>
-                            <div class="d-flex gap-2 ms-auto">
-                                <button id="{$idName}SubmitBtn" type='submit' class='btn btn-primary btn-sm'>
-                                    <i class="ri-save-line me-1"></i>{$submitText}
-                                </button>
-                                <a id="{$idName}IframeRefreshBtn" class='btn btn-info btn-sm' 
-                                   aria-label='{$refreshText}'>
-                                    <i class="ri-refresh-line me-1"></i>{$refreshText}
-                                </a>
-                                <button type='button' class='btn-close btn-sm' data-bs-dismiss='offcanvas'
-                                        aria-label='{$closeText}'></button>
-                            </div>
-                        </div>
-                        <div class='offcanvas-body'>
-                            <div class='position-relative w-100 h-100 '>
-                                <iframe id='{$idName}Iframe' class='w-100 h-100'
-                                        data-src="{$action}&value={$displayValue}"
-                                        frameborder='0'></iframe>
-                            </div>
-                        </div>
-                    </div>
-                    <script>
-                        $('#{$idName}').on('show.bs.offcanvas', function (e) {
-                            let Iframe = $('#{$idName}Iframe')
-                            Iframe.attr('src', Iframe.attr('data-src'))
-                        })
-                        $('#{$idName}IframeRefreshBtn').on('click', function (e) {
-                            let Iframe = $('#{$idName}Iframe')
-                            Iframe.attr('src', Iframe.attr('data-src'))
-                        })
-                        $('#{$idName}SubmitBtn').on('click', function (e) {
-                            const btn = $(this);
-                            const Iframe = $('#{$idName}Iframe');
-                            const iframeDoc = Iframe[0].contentWindow?.document;
-                            if (!iframeDoc) {
-                                console.error('Iframe document not accessible');
-                                return;
-                            }
-                            const form = iframeDoc.querySelector('form');
-                            if (form) {
-                                form.submit();
-                            }
-                        });
-                    </script>
-TAG;
-            }
-            
-            // 原有的处理逻辑（使用 I18n Dictionary）
+
+            // 所有形式统一使用 I18n Dictionary。
             // 如果已经是完整路径（以 @meta:: 开头），直接使用
             if (str_starts_with($metaKey, '@meta::')) {
                 // 已经是完整路径，不需要处理
@@ -310,18 +147,14 @@ TAG;
 \$locale = \\Weline\\Framework\\Http\\Cookie::getLangLocal() ?? 'zh_Hans_CN';
 \$scope = {$scopePhpCode};
 \$metaKeyWithScope = \$metaKey . (\$scope !== 'default' ? '|scope:' . \$scope : '');
-\$localeDict = \\Weline\\Framework\\Manager\\ObjectManager::getInstance()->get(\\Weline\\I18n\\Model\\Locale\\Dictionary::class);
-\$md5 = \\Weline\\I18n\\Model\\Locale\\Dictionary::generateMd5(\$metaKeyWithScope, \$locale);
-\$localeDict->load(\$md5, \\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_MD5);
 \$translation = '';
-if (\$localeDict->getId()) {
-    \$translation = \$localeDict->getData(\\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_TRANSLATE);
-}
-if (empty(\$translation) && \$scope !== 'default') {
-    \$md5Default = \\Weline\\I18n\\Model\\Locale\\Dictionary::generateMd5(\$metaKey, \$locale);
-    \$localeDict->load(\$md5Default, \\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_MD5);
-    if (\$localeDict->getId()) {
-        \$translation = \$localeDict->getData(\\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_TRANSLATE);
+\$dictionary = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(
+    \\Weline\\Framework\\Runtime\\RuntimeProviderResolver::class,
+)->resolve(\\Weline\\I18n\\Api\\Translation\\DictionaryRepositoryInterface::class);
+if (\$dictionary instanceof \\Weline\\I18n\\Api\\Translation\\DictionaryRepositoryInterface) {
+    \$translation = \$dictionary->getEntry(\$metaKeyWithScope, \$locale)?->translation ?? '';
+    if (empty(\$translation) && \$scope !== 'default') {
+        \$translation = \$dictionary->getEntry(\$metaKey, \$locale)?->translation ?? '';
     }
 }
 \$defaultValue = \$translation ?: '{$content}';
@@ -329,25 +162,13 @@ if (empty(\$translation) && \$scope !== 'default') {
 PHP;
                 $defaultValue = '<?=$defaultValue?>';
             } else {
-                /** @var LocaleDictionary $localeDict */
-                $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
-                
                 // 先尝试带 scope 的 key
-                $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-                $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
-                
-                $translation = '';
-                if ($localeDict->getId()) {
-                    $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                }
+                $dictionary = self::dictionaryRepository();
+                $translation = $dictionary->getEntry($metaKeyWithScope, $locale)?->translation ?? '';
                 
                 // 如果没有找到，尝试不带 scope 的 key（使用默认值）
                 if (empty($translation) && $scope !== 'default') {
-                    $md5Default = LocaleDictionary::generateMd5($metaKey, $locale);
-                    $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
-                    if ($localeDict->getId()) {
-                        $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
-                    }
+                    $translation = $dictionary->getEntry($metaKey, $locale)?->translation ?? '';
                 }
 
                 // 如果没有翻译，使用默认值（从标签内容中提取，如果有的话）
@@ -497,6 +318,17 @@ TAG;
         };
     }
 
+    private static function dictionaryRepository(): DictionaryRepositoryInterface
+    {
+        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DictionaryRepositoryInterface::class);
+        if (!$provider instanceof DictionaryRepositoryInterface) {
+            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
+        }
+
+        return $provider;
+    }
+
     static function tag_self_close(): bool
     {
         return false;
@@ -524,4 +356,3 @@ TAG;
                '可以省略@meta前缀，标签会自动补全完整路径。';
     }
 }
-

@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Session\Storage\SharedSessionStateInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\SessionStateFacadeInterface;
 use Weline\Server\Session\Client\SessionClient;
 use Weline\Server\Shared\Service\SharedMemoryService;
 
-class SessionStateFacade implements SessionStateFacadeInterface
+class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionStateInterface
 {
     private SharedStateServiceManager $manager;
     private SessionClient $sessionClient;

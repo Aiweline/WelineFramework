@@ -30,7 +30,8 @@ The first implementation slice provides:
 - guarded Project Profile form with confirmation checkbox;
 - project-scoped persistence in `w_php_manager_project_profile`;
 - audit log entries in `var/log/wls/php-manager-audit.jsonl`;
-- optional WLS reload request through `IpcControlGateway::reloadAsync()`;
+- optional WLS reload request through the public
+  `Weline\Server\Api\Control\RuntimeReloadGateway::forceReloadAsync()` boundary;
 - PHP Profile inheritance map that compares runtime values, project Profile
   values, effective values, override/alignment state, and required-extension
   satisfaction before an operator applies php.ini;
@@ -66,6 +67,8 @@ The first implementation slice provides:
   explicit checkbox, an audit record, and an optional operator-selected WLS
   reload request.
 - Runtime changes require an explicit runtime action and target instance.
+- PHP Manager never imports Server IPC message constants or the internal control gateway;
+  the public reload boundary preserves the selected instance and eight-second request budget.
 
 ## Future Slices
 

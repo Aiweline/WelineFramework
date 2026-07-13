@@ -46,5 +46,5 @@ final class CoroutineRuntime
     {
         return $this->loop->backend();
     }
-}
 
+}
