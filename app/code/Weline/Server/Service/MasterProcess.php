@@ -738,6 +738,12 @@ class MasterProcess
                 $this->config['http'],
             );
         }
+        if (isset($this->config['ssl']) && \is_array($this->config['ssl'])) {
+            $wls['ssl'] = \array_merge(
+                \is_array($wls['ssl'] ?? null) ? $wls['ssl'] : [],
+                $this->config['ssl'],
+            );
+        }
         if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
             $configuredRuntime = \is_array($this->config['runtime'] ?? null)
                 ? $this->config['runtime']
