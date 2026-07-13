@@ -12,51 +12,7 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
-if (!\function_exists('wlsEventNormalizeMemoryLimit')) {
-    function wlsEventNormalizeMemoryLimit(mixed $value, string $default = '256M'): string
-    {
-        if (\is_int($value) || \is_float($value)) {
-            $value = (string)(int)$value;
-        }
-        $value = \strtoupper(\trim((string)$value));
-        $default = \strtoupper(\trim($default)) ?: '256M';
-        if ($value === '') {
-            return $default;
-        }
-        if ($value === '-1') {
-            return '-1';
-        }
-        if (\preg_match('/^[1-9]\d*$/', $value)) {
-            return $value . 'M';
-        }
-        if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
-            return $value;
-        }
-
-        return $default;
-    }
-}
-
-if (!\function_exists('wlsEventMemoryLimitToBytes')) {
-    function wlsEventMemoryLimitToBytes(string $value): int
-    {
-        $value = \strtoupper(\trim($value));
-        if ($value === '' || $value === '-1') {
-            return 0;
-        }
-        if (!\preg_match('/^(\d+)([KMG])?$/', $value, $matches)) {
-            return 0;
-        }
-
-        $bytes = (int)$matches[1];
-        return match ((string)($matches[2] ?? '')) {
-            'K' => $bytes * 1024,
-            'M' => $bytes * 1024 * 1024,
-            'G' => $bytes * 1024 * 1024 * 1024,
-            default => $bytes,
-        };
-    }
-}
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_runtime_common.php';
 
 if (!\function_exists('wlsEventMakeAbsolutePath')) {
     function wlsEventMakeAbsolutePath(string $path, string $basePath): string
@@ -160,7 +116,7 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--wls-loop-driver=')) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
-        $wlsMemoryLimit = wlsEventNormalizeMemoryLimit(\substr($arg, 15));
+        $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--worker-count=')) {
         $workerCount = \max(1, (int)\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--wls-runtime-topology=')) {
@@ -449,7 +405,7 @@ $requestCount = 0;
 $activeRequests = 0;
 $maintenanceDrainState = new \Weline\Server\Service\Runtime\WorkerMaintenanceDrainState($isMaintenanceWorker);
 $waitingForAck = $controlPort > 0 || $supervisorEnabled;
-$maxMemoryBytes = wlsEventMemoryLimitToBytes($wlsMemoryLimit);
+$maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);
 if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
 }
