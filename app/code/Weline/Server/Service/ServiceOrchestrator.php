@@ -9915,12 +9915,16 @@ class ServiceOrchestrator
             $oldInstance = $this->registry->getInstance($entry['role'], $entry['instanceId']);
             $oldRestarts = $oldInstance?->restarts ?? 0;
             $port = (int)($entry['port'] ?? ($oldInstance?->port ?? 0));
-            // 旧实例已经重新连回 Master，取消本次复活
+            // REGISTER/reconnect is not routable readiness. Only a live IPC
+            // client that completed the full READY contract may cancel the
+            // recovery fence.
             if ($oldInstance !== null
+                && $oldInstance->state === ServiceInstance::STATE_READY
                 && $oldInstance->ipcClientId !== null
-                && \in_array($oldInstance->state, [ServiceInstance::STATE_REGISTERED, ServiceInstance::STATE_READY], true)
+                && ($this->controlServer === null
+                    || $this->controlServer->clientExists($oldInstance->ipcClientId))
             ) {
-                WlsLogger::info_("[Orchestrator] {$entry['role']}#{$entry['instanceId']} 已恢复 IPC 连接，取消待执行复活");
+                WlsLogger::info_("[Orchestrator] {$entry['role']}#{$entry['instanceId']} 已恢复 READY，取消待执行复活");
                 unset($this->resurrectQueue[$key]);
                 continue;
             }
@@ -10847,12 +10851,6 @@ class ServiceOrchestrator
             $this->persistServicesInfo($this->context);
         }
 
-        $resurrectKey = $instance->getKey();
-        if (isset($this->resurrectQueue[$resurrectKey])) {
-            unset($this->resurrectQueue[$resurrectKey]);
-            WlsLogger::info_("[Orchestrator] {$instance->role}#{$instance->instanceId} 已重新注册，取消待执行复活");
-        }
-
         if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
             $this->sendRoutingPolicyToWorker($instance);
         } elseif ($instance->role === ControlMessage::ROLE_DISPATCHER) {
@@ -11304,6 +11302,19 @@ class ServiceOrchestrator
             }
             $this->registry->updateInstance($instance);
             WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (已发送 ACK, port={$instance->port})");
+        }
+
+        // REGISTER only proves that a child reached the control plane. Keep a
+        // pending recovery fenced until the complete policy/warmup/listener
+        // READY contract has been validated and acknowledged. Otherwise a
+        // rejected child can reconnect repeatedly, cancel its own recovery on
+        // every REGISTER and exhaust the slot budget into a full-group restart.
+        $resurrectKey = $instance->getKey();
+        if (isset($this->resurrectQueue[$resurrectKey])) {
+            unset($this->resurrectQueue[$resurrectKey]);
+            WlsLogger::info_(
+                "[Orchestrator] {$instance->role}#{$instance->instanceId} 已完成 READY，取消待执行复活"
+            );
         }
 
         // Worker 就绪：通过 Registry 单一事实源 + 版本化全量路由表向所有 Dispatcher 收敛。
