@@ -244,7 +244,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $rawFlag = '1';
+            // READY already owns the mandatory homepage/dynamic bootstrap.
+            // Keep the post-READY registry pass opt-in so a Worker never
+            // repeats the same preload immediately after becoming routable.
+            $rawFlag = '0';
         }
 
         $flag = \strtolower(\trim((string)$rawFlag));
