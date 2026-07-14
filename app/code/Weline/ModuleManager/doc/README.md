@@ -65,6 +65,7 @@
 ## 本模块文档资产
 
 - `app/code/Weline/Database/doc/开发/模块代码与数据库一致性回滚.md`
+- `app/code/Weline/ModuleManager/doc/后台模块列表检索与过滤.md`
 - `app/code/Weline/ModuleManager/doc/模块卸载数据库备份与恢复系统架构.md`
 - `app/code/Weline/ModuleManager/doc/模块备份恢复API文档.md`
 - `app/code/Weline/ModuleManager/doc/模块备份恢复使用指南.md`

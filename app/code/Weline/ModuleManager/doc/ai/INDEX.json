@@ -1,0 +1,53 @@
+{
+    "schema_version": "module-knowledge-index.v1",
+    "ownership_marker": "weline:mcp-index:auto-generated",
+    "module": "Weline_ModuleManager",
+    "module_root": "app/code/Weline/ModuleManager",
+    "source_of_truth": [
+        "module_source",
+        "app/code/Weline/ModuleManager/doc"
+    ],
+    "source_digest": "e58a61228f58e423811b0ff056995a08d34a1d0c9933faefe6ae7b80e0965ae7",
+    "code_digest": "58ee54c62e08cc4baffb9ba0aecd9568caeb7248aa92624735cc5379c5dfd0f0",
+    "docs_digest": "29ab87578d92a3359ca26fd08d43174bff3409c944f33d30d74c2ce4a901077f",
+    "drift_status": "fresh",
+    "documents": [
+        {
+            "path": "app/code/Weline/ModuleManager/doc/AI-INDEX.md",
+            "content_hash": "sha256:d405861f60808f574e966546dd42929779d2c296e2fd274b8570f299b5b1939c"
+        },
+        {
+            "path": "app/code/Weline/ModuleManager/doc/README.md",
+            "content_hash": "sha256:682bf7139ce5717cc2fc2e9b71d4816a6814d801a50c6dc93eb2ba4fc185b7f1"
+        },
+        {
+            "path": "app/code/Weline/ModuleManager/doc/后台模块列表检索与过滤.md",
+            "content_hash": "sha256:2dc555ae20259c2635f51f22956a81048818ce7e1f32d6199286e47325116379"
+        },
+        {
+            "path": "app/code/Weline/ModuleManager/doc/模块卸载数据库备份与恢复系统架构.md",
+            "content_hash": "sha256:756937d0483776f6840678c009dbeb159f5126016d222f0688f6d6c2193465e5"
+        },
+        {
+            "path": "app/code/Weline/ModuleManager/doc/模块备份恢复API文档.md",
+            "content_hash": "sha256:f49e2d2775010e697e8fd2c36cdc8b5da8bff7b0a5b43fd3afe08fecdd4e479f"
+        },
+        {
+            "path": "app/code/Weline/ModuleManager/doc/模块备份恢复使用指南.md",
+            "content_hash": "sha256:953d76a292caf6392511313ab9c7b74b9a9ee7293828f67f1adba0bf5bb6fa47"
+        },
+        {
+            "path": "app/code/Weline/ModuleManager/doc/模块备份恢复数据流程图.md",
+            "content_hash": "sha256:ac6d21f11a2eb98b41c67a8a1edabe97eac908f854fa20504a5f90525369a83b"
+        }
+    ],
+    "skills": [
+        {
+            "name": "weline-modulemanager-knowledge",
+            "path": "app/code/Weline/ModuleManager/doc/ai/skills/weline-modulemanager-knowledge/SKILL.md",
+            "meta_path": "app/code/Weline/ModuleManager/doc/ai/skills/weline-modulemanager-knowledge/.skill-meta.json",
+            "status": "validated",
+            "source_digest": "e58a61228f58e423811b0ff056995a08d34a1d0c9933faefe6ae7b80e0965ae7"
+        }
+    ]
+}

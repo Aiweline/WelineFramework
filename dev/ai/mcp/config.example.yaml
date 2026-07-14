@@ -1,0 +1,166 @@
+# Weline Project Intelligence MCP is local-only. Keep API keys in environment variables.
+data_dir: ~/.learning-mcp
+mode: local
+
+collector:
+  redact_secrets: true
+  allow_cross_project: false
+  max_event_bytes: 8388608
+
+analysis:
+  # Deterministic offline analysis. Set to openai only after reviewing
+  # docs/SECURITY.md and configuring both model fields below.
+  provider: none
+  api_key_env: OPENAI_API_KEY
+  base_url: https://api.openai.com/v1
+  extractor_model: ""
+  verifier_model: ""
+  max_session_tokens: 50000
+  request_timeout: 60s
+  require_non_model_evidence_for_technical_rules: true
+
+retrieval:
+  minimum_status: validated
+  max_items: 5
+  token_budget: 1800
+  include_candidates: false
+
+promotion:
+  automatic: false
+  allowed_targets:
+    - repository_knowledge
+    - agents_md_proposal
+    - skill_proposal
+    - test_proposal
+
+privacy:
+  raw_retention: 90d
+  redact_before_model: true
+
+scheduler:
+  # Long-running learningd uses this poll interval.
+  poll_interval: 10s
+  # Active sessions are analyzed incrementally after this idle period,
+  # even when Codex has not emitted Stop.
+  session_idle_after: 15m
+  # learningctl scheduler install uses this launchd interval on macOS.
+  launchd_interval: 10m
+  max_attempts: 5
+  lease: 2m
+  # Stop queues work and forks a short one-shot PHP worker.
+  auto_process_on_stop: true
+
+# Persistent per-project code, documentation, symbol, skill, FTS, sparse-vector, and compressed content index.
+# The first build reads eligible Git files; subsequent queries and batch content reads use the database.
+# SessionStart and PostToolUse schedule non-blocking incremental refreshes; MCP edits reindex exact paths immediately.
+index:
+  enabled: true
+  auto_refresh: true
+  refresh_interval: 10s
+  max_file_bytes: 524288
+  max_chunk_chars: 6000
+  context_token_budget: 6000
+  vector_dimensions: 2048
+  # Keep only the highest-weight sparse terms per chunk; 24 bounds large-repo storage.
+  vector_max_terms: 24
+  include_tests: false
+  allowed_extensions:
+    - php
+    - phtml
+    - md
+    - markdown
+    - txt
+    - json
+    - yaml
+    - yml
+    - xml
+    - toml
+    - ini
+    - csv
+    - sql
+    - js
+    - jsx
+    - ts
+    - tsx
+    - vue
+    - css
+    - scss
+    - less
+    - html
+    - htm
+    - sh
+    - bash
+    - zsh
+    - go
+    - py
+    - java
+    - kt
+    - rs
+    - c
+    - cc
+    - cpp
+    - h
+    - hpp
+    - proto
+  excluded_paths:
+    - .git/**
+    - .gitnexus/**
+    - .codex/code-intelligence/**
+    - vendor/**
+    - **/vendor/**
+    - node_modules/**
+    - **/node_modules/**
+    - generated/**
+    - var/**
+    - pub/static/**
+    - pub/media/**
+    - **/view/tpl/**
+    - **/static/libs/**
+    - dev/ai/archive/**
+    - **/test/**
+    - **/tests/**
+    - **/Test/**
+    - **/*.min.*
+    - **/*.map
+
+# Two-phase local editing. prepare_edit seals content; apply_edit receives only the one-time token.
+editing:
+  enabled: true
+  ticket_ttl: 10m
+  max_files: 20
+  max_file_bytes: 1048576
+  max_total_bytes: 4194304
+  allowed_roots:
+    - app/code
+    - dev/ai/mcp
+  denied_paths:
+    - .git/**
+    - .codex/**
+    - .agents/**
+    - .gitnexus/**
+    - vendor/**
+    - **/vendor/**
+    - generated/**
+    - var/**
+    - pub/static/**
+    - pub/media/**
+    - **/view/tpl/**
+    - **/.env
+    - **/.env.*
+    - **/auth.json
+    - **/*.pem
+    - **/*.key
+    - app/etc/env.php
+
+knowledge:
+  auto_generate_skills: true
+  auto_doc_sync: false
+  generated_skill_status: validated
+  codex:
+    # Explicit opt-in. The nested Codex process is ephemeral/read-only and may only return doc-sync.v1 JSON.
+    enabled: false
+    # Leave empty to use CODEX_CLI_PATH, PATH, or the ChatGPT.app bundled CLI.
+    binary: ""
+    model: ""
+    timeout: 120s
+    max_context_chars: 60000

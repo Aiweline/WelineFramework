@@ -1,0 +1,88 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook session-start --config /absolute/path/to/config.yaml --inject-project-context --inject-project-rules",
+            "timeout": 5,
+            "statusMessage": "Resolving project index and validated learning"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook user-prompt --config /absolute/path/to/config.yaml",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook pre-tool-use --config /absolute/path/to/config.yaml",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook post-tool-use --config /absolute/path/to/config.yaml",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook pre-compact --config /absolute/path/to/config.yaml",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook post-compact --config /absolute/path/to/config.yaml",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook stop --config /absolute/path/to/config.yaml",
+            "timeout": 5,
+            "statusMessage": "Queuing evidence-backed PHP learning analysis"
+          }
+        ]
+      }
+    ]
+  }
+}
