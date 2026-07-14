@@ -19,6 +19,8 @@ use Weline\Server\Service\Runtime\HttpProtocolSelection;
  */
 class ServiceContext
 {
+    private ?bool $protocolEdgeEnabled = null;
+
     public function __construct(
         public readonly string $instanceName,
         public readonly int $epoch,
@@ -160,10 +162,13 @@ class ServiceContext
      */
     public function isProtocolEdgeEnabled(): bool
     {
-        return HttpProtocolSelection::fromConfig(
-            ['http' => \is_array($this->getConfig('wls.http', []))
-                ? $this->getConfig('wls.http', [])
-                : []],
+        if ($this->protocolEdgeEnabled !== null) {
+            return $this->protocolEdgeEnabled;
+        }
+
+        $httpConfig = $this->getConfig('wls.http', []);
+        return $this->protocolEdgeEnabled = HttpProtocolSelection::fromConfig(
+            ['http' => \is_array($httpConfig) ? $httpConfig : []],
             $this->sslEnabled,
         )->isProtocolEdgeEnabled();
     }

@@ -51,8 +51,8 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
     public function getReloadStrategy(): string
     {
         // Code reloads keep the established public TLS/QUIC listener and its
-        // connections alive. Instance-isolated STEKs preserve resumability
-        // when Caddy reprovisions TLS during route/certificate reloads.
+        // connections alive. Instance-isolated ticket keys preserve TLS 1.3
+        // resumption while the Worker generation changes underneath it.
         return 'none';
     }
 
@@ -68,13 +68,13 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
 
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
+        $selection = ProtocolEdgeRuntime::selection($context);
         $binary = ProtocolEdgeRuntime::resolveBinary($context);
         if ($binary === '') {
-            throw new \RuntimeException('The verified Caddy protocol-edge binary is unavailable to Master.');
+            throw new \RuntimeException('The verified WLS protocol-edge binary is unavailable to Master.');
         }
 
         $configFile = ProtocolEdgeRuntime::writeConfig($context);
-        $selection = ProtocolEdgeRuntime::selection($context);
         $tokenFile = ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
         $script = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin' . DS . 'protocol_edge.php';
         $processName = MasterProcess::buildScopedProcessName(
@@ -84,7 +84,7 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
         $arguments = [
             $context->instanceName,
             (string)$context->mainPort,
-            '--caddy-binary=' . $binary,
+            ($selection->isNativeProtocolEdge() ? '--edge-binary=' : '--caddy-binary=') . $binary,
             '--config=' . $configFile,
             '--pid-file=' . ProtocolEdgeRuntime::pidFile($context->instanceName),
             '--token-file=' . $tokenFile,

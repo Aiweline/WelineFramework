@@ -64,6 +64,12 @@ class Stop extends CommandAbstract
     private bool $lastResidualCleanupComplete = true;
     private bool $lastIpcStopFlowStillActive = false;
 
+    /**
+     * Keep the historical one-argument protected extension point compatible;
+     * restart cleanup supplies its preservation policy as invocation state.
+     */
+    private bool $preserveSharedStateConsumersForRestartCleanup = false;
+
     /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
     private const IPC_TIMEOUT = 6;
     private const IPC_FORCE_TIMEOUT = 3;
@@ -430,7 +436,7 @@ class Stop extends CommandAbstract
                         $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
                         return;
                     }
-                    $this->releaseSharedStateConsumersForInstance($name, $restartCleanup);
+                    $this->invokeReleaseSharedStateConsumersForInstance($name, $restartCleanup);
                     $manager->deleteInstance($name);
                     $this->cleanupPidFiles($name, $instanceInfo);
                     $this->releaseStartLock($name);
@@ -447,7 +453,7 @@ class Stop extends CommandAbstract
                 $this->printer->warning(__('实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。', [$name]));
                 return;
             }
-            $this->releaseSharedStateConsumersForInstance($name, $restartCleanup);
+            $this->invokeReleaseSharedStateConsumersForInstance($name, $restartCleanup);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -474,7 +480,7 @@ class Stop extends CommandAbstract
                 $this->printer->warning(__('实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。', [$name]));
                 return;
             }
-            $this->releaseSharedStateConsumersForInstance($name, $restartCleanup);
+            $this->invokeReleaseSharedStateConsumersForInstance($name, $restartCleanup);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -506,7 +512,7 @@ class Stop extends CommandAbstract
                 $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
                 return;
             }
-            $this->releaseSharedStateConsumersForInstance($name, $restartCleanup);
+            $this->invokeReleaseSharedStateConsumersForInstance($name, $restartCleanup);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -546,7 +552,7 @@ class Stop extends CommandAbstract
         }
         
         // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
-        $this->releaseSharedStateConsumersForInstance($name, $restartCleanup);
+        $this->invokeReleaseSharedStateConsumersForInstance($name, $restartCleanup);
 
         // 标记 endpoint 停止；运行态恢复必须回到 Master IPC，不从文件推断拓扑。
         $manager->deleteInstance($name);
@@ -2084,9 +2090,23 @@ class Stop extends CommandAbstract
     /**
      * 停止实例时从共享服务 registry 移除消费者；残留清理因此不会误杀仍被其它 WLS 实例使用的 Session/Memory 进程。
      */
-    protected function releaseSharedStateConsumersForInstance(string $instanceName, bool $preserveForRestartCleanup = false): void
+    private function invokeReleaseSharedStateConsumersForInstance(
+        string $instanceName,
+        bool $preserveForRestartCleanup
+    ): void
     {
-        if ($preserveForRestartCleanup) {
+        $previous = $this->preserveSharedStateConsumersForRestartCleanup;
+        $this->preserveSharedStateConsumersForRestartCleanup = $previous || $preserveForRestartCleanup;
+        try {
+            $this->releaseSharedStateConsumersForInstance($instanceName);
+        } finally {
+            $this->preserveSharedStateConsumersForRestartCleanup = $previous;
+        }
+    }
+
+    protected function releaseSharedStateConsumersForInstance(string $instanceName): void
+    {
+        if ($this->preserveSharedStateConsumersForRestartCleanup) {
             return;
         }
 
