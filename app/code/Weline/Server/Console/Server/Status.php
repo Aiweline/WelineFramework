@@ -332,6 +332,7 @@ class Status extends CommandAbstract
             : [];
         $httpPreferredProtocol = \trim((string)($runtime['http_preferred_protocol'] ?? ''));
         $protocolEdgeEnabled = $runtime['protocol_edge_enabled'] ?? null;
+        $protocolEdge = \trim((string)($runtime['protocol_edge'] ?? ''));
         $tlsSessionResumption = $runtime['tls_session_resumption'] ?? null;
         $digest = \strtolower(\trim((string)($runtime['policy_digest'] ?? '')));
         $digestSource = 'endpoint';
@@ -385,7 +386,9 @@ class Status extends CommandAbstract
             $this->printer->note($prefix . __('HTTP 协议：')
                 . 'auto=' . ($httpProtocols !== [] ? \implode(' -> ', $httpProtocols) : '-')
                 . ', preferred=' . ($httpPreferredProtocol !== '' ? $httpPreferredProtocol : '-')
-                . ', edge=' . ($protocolEdgeEnabled === null ? '-' : ($protocolEdgeEnabled ? 'enabled' : 'disabled'))
+                . ', edge=' . ($protocolEdge !== ''
+                    ? $protocolEdge
+                    : ($protocolEdgeEnabled === null ? '-' : ($protocolEdgeEnabled ? 'enabled' : 'disabled')))
                 . ', tls-resumption=' . ($tlsSessionResumption === null ? '-' : ($tlsSessionResumption ? 'enabled' : 'disabled')));
         }
         $compatible = $runtime['policy_compatible'] ?? null;

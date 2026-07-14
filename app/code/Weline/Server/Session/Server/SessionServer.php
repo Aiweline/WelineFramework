@@ -20,6 +20,7 @@ declare(strict_types=1);
 namespace Weline\Server\Session\Server;
 
 use Weline\Framework\Session\Storage\FileStorage;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Socket\ListenSocketOptions;
@@ -77,6 +78,8 @@ final class SessionServer
     private int $authTokenVersion = 0; // Token 版本号，每次生成新 token 时递增
     private float $lastTokenFileCheck = 0.0; // 上次检查 token 文件的时间
     private float $lastListenOwnerCheckAt = 0.0;
+    private int $selectFailureStreak = 0;
+    private float $lastSelectFailureLogAt = 0.0;
 
     /** Token 文件路径 */
     private string $tokenFilePath = '';
@@ -362,7 +365,21 @@ final class SessionServer
         $tvUsec = $timeoutUsec % 1000000;
 
         $changed = @\stream_select($read, $write, $except, $tvSec, $tvUsec);
-        if ($changed === false || $changed === 0) {
+        if ($changed === false) {
+            ++$this->selectFailureStreak;
+            $recovered = $this->recoverClientsAfterSelectFailure();
+            if ($recovered === 0) {
+                // Windows returns immediately when stream_select() sees a
+                // socket whose native handle became invalid. Never retry that
+                // failure in a tight loop: one stale client must not consume a
+                // complete CPU core while the sidecar remains otherwise idle.
+                SchedulerSystem::usleep(\min(10_000, 1_000 * $this->selectFailureStreak));
+            }
+            $this->doMaintenance();
+            return 0;
+        }
+        $this->selectFailureStreak = 0;
+        if ($changed === 0) {
             $this->doMaintenance();
             return 0;
         }
@@ -396,6 +413,97 @@ final class SessionServer
         $this->doMaintenance();
 
         return $processed;
+    }
+
+    /**
+     * Remove sockets that make stream_select() fail before it can report EOF.
+     *
+     * Windows commonly leaves a peer-closed TCP stream in CLOSE_WAIT while
+     * PHP's stream metadata still reports eof=false. A native MSG_PEEK is the
+     * reliable discriminator: 0 means EOF, WSAEWOULDBLOCK means a healthy idle
+     * connection, and any other socket error means the descriptor is unusable.
+     */
+    private function recoverClientsAfterSelectFailure(): int
+    {
+        $recovered = 0;
+        foreach (\array_keys($this->clients) as $clientId) {
+            $socket = $this->clients[$clientId]['socket'] ?? null;
+            if (!\is_resource($socket)) {
+                unset($this->clients[$clientId]);
+                ++$recovered;
+                continue;
+            }
+
+            $metadata = @\stream_get_meta_data($socket);
+            if ($metadata === false || ($metadata['eof'] ?? false) || ($metadata['timed_out'] ?? false)) {
+                $this->disconnectClient($clientId);
+                ++$recovered;
+                continue;
+            }
+
+            if (\function_exists('socket_import_stream') && \function_exists('socket_recv')) {
+                $nativeSocket = @\socket_import_stream($socket);
+                if ($nativeSocket !== false) {
+                    @\socket_set_nonblock($nativeSocket);
+                    if (\function_exists('socket_clear_error')) {
+                        @\socket_clear_error($nativeSocket);
+                    }
+                    $peekBuffer = '';
+                    $peekFlags = \defined('MSG_PEEK') ? (int) \constant('MSG_PEEK') : 2;
+                    $peeked = @\socket_recv($nativeSocket, $peekBuffer, 1, $peekFlags);
+                    if ($peeked === 0) {
+                        $this->disconnectClient($clientId);
+                        ++$recovered;
+                        continue;
+                    }
+                    if ($peeked === false) {
+                        $error = (int) @\socket_last_error($nativeSocket);
+                        if (\function_exists('socket_clear_error')) {
+                            @\socket_clear_error($nativeSocket);
+                        }
+                        if (!\in_array($error, $this->wouldBlockSocketErrors(), true)) {
+                            $this->disconnectClient($clientId);
+                            ++$recovered;
+                        }
+                    }
+                    continue;
+                }
+            }
+
+            $peeked = @\stream_socket_recvfrom($socket, 1, \STREAM_PEEK);
+            if ($peeked === '') {
+                $this->disconnectClient($clientId);
+                ++$recovered;
+            }
+        }
+
+        if ($recovered === 0) {
+            $now = \microtime(true);
+            if (($now - $this->lastSelectFailureLogAt) >= 30.0) {
+                $this->lastSelectFailureLogAt = $now;
+                $this->log(
+                    'stream_select failed without a recoverable client; applying bounded retry backoff'
+                    . " clients=" . \count($this->clients)
+                    . " streak={$this->selectFailureStreak}"
+                );
+            }
+        }
+
+        return $recovered;
+    }
+
+    /** @return list<int> */
+    private function wouldBlockSocketErrors(): array
+    {
+        $errors = [11, 35, 10035];
+        if (\defined('SOCKET_EAGAIN')) {
+            $errors[] = (int) \constant('SOCKET_EAGAIN');
+        }
+        if (\defined('SOCKET_EWOULDBLOCK')) {
+            $errors[] = (int) \constant('SOCKET_EWOULDBLOCK');
+        }
+
+        return \array_values(\array_unique($errors));
     }
 
     /**
@@ -446,12 +554,13 @@ final class SessionServer
         }
         $data = @\fread($socket, 65536);
 
-        // 非阻塞模式下空读不一定是断连，需结合 feof 判断。
-        if ($data === false || ($data === '' && @\feof($socket))) {
+        // This read only runs after stream_select() reported the plain TCP
+        // socket as readable. With no competing reader, an empty read is EOF.
+        // Windows can keep feof() false briefly after a peer reset; retaining
+        // that socket makes select() return immediately forever and burns one
+        // full CPU core in the shared Session/Memory sidecar.
+        if ($data === false || $data === '') {
             $this->disconnectClient($clientId);
-            return 0;
-        }
-        if ($data === '') {
             return 0;
         }
 

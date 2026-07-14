@@ -39,6 +39,14 @@ class ObjectManager implements ManagerInterface
      * 格式：['ClassName::methodName' => ['params' => [...], 'dependencies' => [...]]]
      */
     private static array $methodParamsMetadata = [];
+
+    /**
+     * Object-valued PHP defaults recovered from legacy compiled metadata.
+     * Old reflection_metadata.php files represented `new Service()` as null.
+     *
+     * @var array<string, mixed>
+     */
+    private static array $metadataDefaultValueCache = [];
     
     /**
      * 预编译反射元数据（从 generated/reflection_metadata.php 加载）
@@ -997,6 +1005,7 @@ class ObjectManager implements ManagerInterface
 
         $metadataEntries = \count(self::$reflections)
             + \count(self::$methodParamsMetadata)
+            + \count(self::$metadataDefaultValueCache)
             + \count(self::$staticClassCache)
             + \count(self::$classExistsCache)
             + \count(self::$constructorCache)
@@ -1010,6 +1019,7 @@ class ObjectManager implements ManagerInterface
         if ($metadataEntries > 0 || $aggressive) {
             self::$reflections = [];
             self::$methodParamsMetadata = [];
+            self::$metadataDefaultValueCache = [];
             self::$staticClassCache = [];
             self::$classExistsCache = [];
             self::$constructorCache = [];
@@ -2069,8 +2079,16 @@ class ObjectManager implements ManagerInterface
                 if ($existingDependency !== null) {
                     $paramArr[] = $existingDependency;
                 } elseif (($paramMeta['hasDefault'] ?? false) === true) {
-                    // 如果参数有默认值且实例不存在，使用默认值（避免不必要的实例化）
-                    $paramArr[] = $paramMeta['defaultValue'] ?? null;
+                    // Legacy reflection_metadata.php could not serialize a
+                    // `new Service()` default and stored null instead. Recover
+                    // that rare value from real reflection once, while a
+                    // genuine nullable class default remains null.
+                    $paramArr[] = self::resolveMetadataDefaultValue(
+                        $metadata,
+                        $paramMeta,
+                        $className,
+                        $isClass,
+                    );
                 } else {
                     // 递归获取依赖参数
                     try {
@@ -2142,7 +2160,12 @@ class ObjectManager implements ManagerInterface
                 $typeName = $paramMeta['typeName'] ?? null;
                 
                 if ($hasDefault) {
-                    $defaultValue = $paramMeta['defaultValue'] ?? null;
+                    $defaultValue = self::resolveMetadataDefaultValue(
+                        $metadata,
+                        $paramMeta,
+                        $className,
+                        $isClass,
+                    );
                     // PHP 8 性能优化：确保数组类型参数的默认值是数组
                     if ($typeName === 'array' && !is_array($defaultValue)) {
                         $defaultValue = [];
@@ -2156,6 +2179,70 @@ class ObjectManager implements ManagerInterface
         }
         
         return $paramArr;
+    }
+
+    /**
+     * Restore object defaults lost by older precompiled reflection metadata.
+     *
+     * Metadata generated before defaultValueCaptured existed cannot
+     * distinguish `Type $value = new Type()` from `?Type $value = null`.
+     * Reflection is therefore used only for the ambiguous class/null shape and
+     * cached for the lifetime of the process. All ordinary metadata stays on
+     * the zero-reflection path.
+     */
+    private static function resolveMetadataDefaultValue(
+        array $metadata,
+        array $paramMeta,
+        string $className,
+        bool $isClass,
+    ): mixed {
+        $defaultValue = $paramMeta['defaultValue'] ?? null;
+        $captured = $paramMeta['defaultValueCaptured'] ?? !(
+            $isClass
+            && ($paramMeta['hasDefault'] ?? false) === true
+            && $defaultValue === null
+        );
+        if ($captured) {
+            return $defaultValue;
+        }
+
+        $methodName = (string)($metadata['methodName'] ?? '__construct');
+        $parameterIndex = (int)($paramMeta['index'] ?? -1);
+        $parameterName = (string)($paramMeta['name'] ?? '');
+        $cacheKey = $className . '::' . $methodName . ':' . $parameterIndex . ':' . $parameterName;
+        if (\array_key_exists($cacheKey, self::$metadataDefaultValueCache)) {
+            return self::$metadataDefaultValueCache[$cacheKey];
+        }
+
+        try {
+            $class = self::getReflectionInstance($className);
+            if (!$class->hasMethod($methodName)) {
+                return self::$metadataDefaultValueCache[$cacheKey] = $defaultValue;
+            }
+            $parameters = $class->getMethod($methodName)->getParameters();
+            $parameter = $parameters[$parameterIndex] ?? null;
+            if (!$parameter instanceof \ReflectionParameter
+                || ($parameterName !== '' && $parameter->getName() !== $parameterName)
+            ) {
+                $parameter = null;
+                foreach ($parameters as $candidate) {
+                    if ($candidate->getName() === $parameterName) {
+                        $parameter = $candidate;
+                        break;
+                    }
+                }
+            }
+            if (!$parameter instanceof \ReflectionParameter || !$parameter->isDefaultValueAvailable()) {
+                return self::$metadataDefaultValueCache[$cacheKey] = $defaultValue;
+            }
+            return self::$metadataDefaultValueCache[$cacheKey] = $parameter->getDefaultValue();
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                "Unable to restore compiled default value for {$className}::{$methodName}({$parameterName}).",
+                0,
+                $throwable,
+            );
+        }
     }
 
     /**

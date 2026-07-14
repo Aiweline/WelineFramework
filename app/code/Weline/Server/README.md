@@ -251,7 +251,7 @@ php bin/w server:benchmark --instance api-server -c 500 -n 50000
 
 ### 事件循环（最重要！）
 
-Weline Server 支持多种事件循环。`server:start` 会先检查当前 PHP：在有可验证安装链的 Linux/macOS 上，缺少 `ext-event` 时会自动安装、启用并用新 PHP 进程继续启动。默认不会在安装失败后静默降级。
+Weline Server 支持多种事件循环。`server:start` 会先检查当前 PHP：Linux/macOS 缺少 `ext-event` 时通过可验证安装链自动安装；Windows PHP 8.4 只下载官方 PECL event 3.1.4 的精确 ABI 包，并校验固定 SHA-256。两类平台都必须由同一 `PHP_BINARY` 新进程实际加载 `EventBase/Event` 后才启用。
 
 | 事件循环 | 性能 | 安装方式 | 说明 |
 |---------|------|---------|------|
@@ -278,9 +278,10 @@ php bin/w env:install event -y
 ```
 
 **Windows:**
-1. 只使用与当前 PHP 版本、架构、TS/NTS 和编译器 ABI 全部匹配的 `php_event.dll`。
-2. DLL 已存在于当前 PHP `extension_dir` 时，启动预检会尝试启用并验证。
-3. 没有可验证 DLL 时使用 Windows 稳定兼容运行时；框架不会自动下载不明 ABI 的二进制文件。
+1. PHP 8.4 缺少 event 时，启动预检只从官方 PECL 下载 event 3.1.4，并严格匹配架构、TS/NTS 与 VS17 ABI。
+2. 每个受支持包都有固定 SHA-256；只提取 `php_event.dll` 与同包 `pthreadVC2.dll`，已有文件先保留备份再原子发布。
+3. 安装后使用同一 `PHP_BINARY` 新进程验证 `extension_loaded('event')`、`EventBase` 与 `Event`；验证通过前不会创建 Master/Dispatcher/Worker。
+4. 当前 ABI 没有固定可信包或实际加载失败时，使用 Windows 稳定 `Dispatcher + stream/select` 运行时，绝不猜测或跨版本加载 DLL。
 
 生产镜像建议在构建阶段执行 `env:install`；不允许启动时修改系统的只读容器可预装依赖，并用 `--no-auto-deps` 明确关闭启动安装。
 

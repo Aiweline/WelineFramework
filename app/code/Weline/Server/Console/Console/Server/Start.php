@@ -182,7 +182,7 @@ class Start implements CommandInterface
         if ($currentMode === 'prod' || $currentMode === 'production') {
             $this->printer->error(__('⚠️  警告：当前处于生产环境模式（%{1}）！', [$currentMode]));
             $this->printer->error(__('⚠️  PHP内置服务器仅供开发和测试使用，不适合生产环境！'));
-            $this->printer->error(__('⚠️  生产环境请使用Nginx或Apache等专业Web服务器！'));
+            $this->printer->error(__('⚠️  生产环境请使用 WLS Native Protocol Engine，不要使用 PHP 内置开发服务器！'));
             $this->printer->error(__('⚠️  继续使用PHP内置服务器可能导致性能问题和安全风险！'));
             
             // 使用echo直接输出提示，不换行，然后等待输入

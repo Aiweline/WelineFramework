@@ -10,12 +10,8 @@ declare(strict_types=1);
  * 包含健康检查接口 /_wls/health（仅本地访问）
  * 维护模式由框架自动处理
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │  ⚠ WLS 默认仅监听 127.0.0.1，仅本机可访问                                      │
- * │  外网访问需用 Nginx/Caddy 等反向代理转发到 127.0.0.1:9090                        │
- * │  Nginx 示例：proxy_pass https://127.0.0.1:9090;                              │
- * │  需直连外网时：php bin/w server:start --host 0.0.0.0                          │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * 公网 TLS、HTTP/3、HTTP/2 与 HTTP/1.1 由 WLS Native Protocol Engine 统一处理。
+ * Worker 只执行统一策略内核和应用请求管线，不要求外置反向代理。
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -353,18 +349,6 @@ $fpcFastPath = null;
 
 try {
     WlsLogger::info_("Worker 启动，监听 tcp://{$host}:{$port}");
-    // 深橙色输出 WLS 配置提示
-    if (\defined('STDOUT') && \is_resource(STDOUT)) {
-        $tips = [
-            "\033[38;5;208m⚠ WLS 默认仅监听 127.0.0.1，仅本机可访问\033[0m",
-            "\033[38;5;208m外网访问需用 Nginx/Caddy 等反向代理转发到 127.0.0.1:9090\033[0m",
-            "\033[38;5;208mNginx 示例：proxy_pass https://127.0.0.1:9090;\033[0m",
-            "\033[38;5;208m需直连外网时：php bin/w server:start --host 0.0.0.0\033[0m",
-        ];
-        foreach ($tips as $tip) {
-            \fwrite(STDOUT, $tip . "\n");
-        }
-    }
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
     $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
@@ -1351,21 +1335,21 @@ $requestGcInterval = \is_numeric($configuredRequestGcInterval)
     : 512;
 $lastRequestGcCount = 0;
 
-// 最大请求数限制（可选的内存保护措施）。
+// 最大请求数限制是兼容性的显式 opt-in；默认长期常驻，由内存压力守卫在压实后仍超限时排水。
 // 固定相同阈值会让均衡负载下的所有 Worker 同时回收，形成全池空档；
-// 因此按稳定的 Worker 槽位错峰，不使用随机数，保证 Windows/macOS/Linux 行为一致且可测。
+// 显式启用时按稳定的 Worker 槽位错峰，不使用随机数，保证 Windows/macOS/Linux 行为一致且可测。
 $configuredMaxRequests = $wlsInstance['worker_max_requests']
     ?? $wls['worker_max_requests']
     ?? $wlsInstance['max_request']
     ?? $wls['max_request']
-    ?? 100000;
-$maxRequestsBase = \is_numeric($configuredMaxRequests) ? \max(0, (int)$configuredMaxRequests) : 100000;
+    ?? 0;
+$maxRequestsBase = \is_numeric($configuredMaxRequests) ? \max(0, (int)$configuredMaxRequests) : 0;
 $configuredRecycleStagger = $wlsInstance['worker_recycle_stagger_requests']
     ?? $wls['worker_recycle_stagger_requests']
-    ?? 2500;
+    ?? 10000;
 $recycleStaggerRequests = \is_numeric($configuredRecycleStagger)
     ? \max(0, (int)$configuredRecycleStagger)
-    : 2500;
+    : 10000;
 $maxRequests = $maxRequestsBase > 0
     ? $maxRequestsBase + (\max(0, $workerId - 1) * $recycleStaggerRequests)
     : 0;
@@ -2110,12 +2094,20 @@ while (true) {
         }
     }
     
-    // 最大请求数限制：处理超过指定请求数后优雅重启（可选的内存保护）
-    if ($maxRequests > 0 && $requestCount >= $maxRequests && empty($connections)) {
+    // 显式启用的最大请求数限制：达到槽位预算时立即停止接入并排水。
+    // 不能继续等待 empty($connections)：协议边缘会复用上游 Keep-Alive，等待会让
+    // 所有槽位在客户端连接统一释放时集中退出，造成短暂的全池空档。
+    if ($maxRequests > 0 && $requestCount >= $maxRequests && !$shouldExit) {
         WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，触发优雅重启");
         $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
-        $sendExitReasonToMaster($plannedExitReason);
         $shouldExit = true;
+        $ipcDraining = true;
+        $drainStartTime = \time();
+        if ($socket && \is_resource($socket)) {
+            @\fclose($socket);
+            $socket = null;
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+        }
     }
     
     // 构建 stream_select 读数组
