@@ -10,13 +10,16 @@ use Weline\Framework\App\Env;
  * Installs one-time runtime dependencies before WLS creates any managed process.
  *
  * Linux/macOS use ext-event when the current PHP build can install it safely.
- * Windows keeps the stable stream TLS path unless a matching event DLL already
- * exists beside the active PHP build; unverified cross-version DLL downloads are
- * intentionally forbidden.
+ * Windows installs only the pinned official PECL package whose PHP minor,
+ * architecture, TS/NTS and compiler ABI exactly match the active PHP build.
+ * If no such package can be verified, the stable Dispatcher stream/select path
+ * remains the platform-optimal fallback; cross-version DLL guessing is forbidden.
  */
 final class RuntimeDependencyBootstrapper
 {
     public const REENTRY_ENV = 'WLS_RUNTIME_DEPENDENCY_BOOTSTRAPPED';
+
+    private const REENTRY_ARG = 'wls-runtime-dependency-reentry';
 
     private const INSTALL_TIMEOUT_SECONDS = 900;
     private const RELAUNCH_TIMEOUT_SECONDS = 300;
@@ -35,6 +38,7 @@ final class RuntimeDependencyBootstrapper
     {
         $posix = \in_array(PHP_OS_FAMILY, ['Darwin', 'Linux'], true);
         $direct = $effectiveTopology->isDirect();
+        $reentry = $this->isReentry($args);
 
         if ($direct && !$posix) {
             return $this->result(
@@ -85,7 +89,7 @@ final class RuntimeDependencyBootstrapper
 
         if (PHP_OS_FAMILY === 'Windows') {
             if (!$opensslReady) {
-                if ((string)\getenv(self::REENTRY_ENV) === '1') {
+                if ($reentry) {
                     return $this->result(
                         'failed',
                         (string)__('OpenSSL 安装后当前 Windows PHP 二进制仍无法加载该扩展；已拒绝自动安装循环。')
@@ -126,6 +130,12 @@ final class RuntimeDependencyBootstrapper
             // 子进程能实际加载 EventBase/Event 的结果，避免残留、TS/NTS、
             // x86/x64 或 PHP minor 版本不匹配的 php_event.dll 拖垮整个 WLS。
             if ($this->freshPhpCanUseEvent()) {
+                if ($reentry && !$this->canUseEvent()) {
+                    return $this->result(
+                        'platform_optimal',
+                        (string)__('独立 PHP 探针可加载 event，但依赖重入进程仍未加载；为避免重复重启，WLS 将使用稳定的 Dispatcher + stream/select 运行时。')
+                    );
+                }
                 return $this->afterSuccessfulInstall(
                     (string)__('Windows event 运行时已由当前 PHP 二进制实际加载验证。'),
                     false,
@@ -134,12 +144,55 @@ final class RuntimeDependencyBootstrapper
                 );
             }
 
-            return $this->result(
-                'platform_optimal',
-                (string)__('当前 Windows PHP ABI（%{1}）没有可实际加载的可信 event DLL；WLS 将使用稳定的 Dispatcher + stream/select 运行时，不会尝试加载未验证 DLL。', [
-                    $this->describeCurrentPhpAbi(),
-                ])
-            );
+            if ($reentry) {
+                return $this->result(
+                    'platform_optimal',
+                    (string)__('官方 event 包安装后仍无法由当前 Windows PHP ABI（%{1}）加载；WLS 将使用稳定的 Dispatcher + stream/select 运行时，且不会重复安装。', [
+                        $this->describeCurrentPhpAbi(),
+                    ])
+                );
+            }
+
+            $lock = $this->acquireInstallLock();
+            if ($lock === null) {
+                return $this->result(
+                    'platform_optimal',
+                    (string)__('无法获取 Windows event 安装锁；WLS 将使用稳定的 Dispatcher + stream/select 运行时。')
+                );
+            }
+
+            try {
+                if ($this->freshPhpCanUseEvent()) {
+                    return $this->afterSuccessfulInstall(
+                        (string)__('其他 WLS 启动进程已安装并验证 Windows event 运行时。'),
+                        false,
+                        $sslRequired,
+                        true,
+                    );
+                }
+
+                $install = $this->installExtension('event');
+                if ($install['success'] && $this->freshPhpCanUseEvent()) {
+                    return $this->afterSuccessfulInstall(
+                        (string)__('Windows event 已从官方 PECL 精确 ABI 包安装，并由当前 PHP 二进制实际加载验证。'),
+                        false,
+                        $sslRequired,
+                        true,
+                    );
+                }
+
+                return [
+                    'status' => 'platform_optimal',
+                    'message' => (string)__('当前 Windows PHP ABI（%{1}）没有可实际加载的可信 event DLL；WLS 将使用稳定的 Dispatcher + stream/select 运行时，不会加载未验证 DLL。', [
+                        $this->describeCurrentPhpAbi(),
+                    ]),
+                    'restart_required' => false,
+                    'output' => $this->tail((string)$install['output']),
+                ];
+            } finally {
+                @\flock($lock, \LOCK_UN);
+                @\fclose($lock);
+            }
         }
 
         if (!\in_array(PHP_OS_FAMILY, ['Darwin', 'Linux', 'Windows'], true)) {
@@ -155,7 +208,7 @@ final class RuntimeDependencyBootstrapper
             );
         }
 
-        if ((string)\getenv(self::REENTRY_ENV) === '1') {
+        if ($reentry) {
             return ($direct || !$opensslReady)
                 ? $this->result(
                     'failed',
@@ -271,6 +324,7 @@ final class RuntimeDependencyBootstrapper
 
         $command = [PHP_BINARY, $this->resolveBinWPath(), ...\array_slice($argv, 2)];
         \array_splice($command, 2, 0, ['server:start']);
+        $command[] = '--' . self::REENTRY_ARG;
 
         $previous = \getenv(self::REENTRY_ENV);
         \putenv(self::REENTRY_ENV . '=1');
@@ -540,6 +594,19 @@ final class RuntimeDependencyBootstrapper
             }
         }
         return false;
+    }
+
+    /**
+     * The CLI marker is authoritative because some Windows launch chains do
+     * not preserve a process-local putenv() value across every wrapper. The
+     * environment marker remains for compatibility with older relaunches.
+     *
+     * @param array<int|string, mixed> $args
+     */
+    private function isReentry(array $args): bool
+    {
+        return (string)\getenv(self::REENTRY_ENV) === '1'
+            || $this->hasFlag($args, [self::REENTRY_ARG]);
     }
 
     /**

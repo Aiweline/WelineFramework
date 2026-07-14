@@ -18,12 +18,18 @@ final class ArchitectureAnalyzer
         '/Framework/Runtime/SchedulerSystem.php',
         '/Server/Service/MasterCleanupBootstrap.php',
     ];
+    private readonly ModuleManifestReader $manifestReader;
+    private readonly ModuleGraphValidator $graphValidator;
+    private readonly ComposerMetadataValidator $composerValidator;
 
     public function __construct(
-        private readonly ModuleManifestReader $manifestReader = new ModuleManifestReader(),
-        private readonly ModuleGraphValidator $graphValidator = new ModuleGraphValidator(),
-        private readonly ComposerMetadataValidator $composerValidator = new ComposerMetadataValidator(),
+        ?ModuleManifestReader $manifestReader = null,
+        ?ModuleGraphValidator $graphValidator = null,
+        ?ComposerMetadataValidator $composerValidator = null,
     ) {
+        $this->manifestReader = $manifestReader ?? new ModuleManifestReader();
+        $this->graphValidator = $graphValidator ?? new ModuleGraphValidator();
+        $this->composerValidator = $composerValidator ?? new ComposerMetadataValidator();
     }
 
     public function analyze(string $modulesRoot, bool $allowLegacy = false): Report
@@ -148,7 +154,8 @@ final class ArchitectureAnalyzer
                 continue;
             }
             $path = $file->getPathname();
-            if (preg_match('#/(?:Test|tests?|doc|generated|vendor)/#i', $path) === 1) {
+            $normalizedPath = str_replace('\\', '/', $path);
+            if (preg_match('#/(?:Test|tests?|doc|generated|vendor)/#i', $normalizedPath) === 1) {
                 continue;
             }
             yield $path;

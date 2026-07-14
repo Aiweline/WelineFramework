@@ -17,6 +17,7 @@ final readonly class HttpProtocolSelection
     public const HTTP_3 = 'h3';
     public const HTTP_2 = 'h2';
     public const HTTP_1 = 'h1';
+    public const EDGE_NATIVE = 'native';
     public const EDGE_CADDY = 'caddy';
     public const EDGE_DISABLED = 'disabled';
 
@@ -48,7 +49,7 @@ final readonly class HttpProtocolSelection
         if (!\in_array($preferred, $protocols, true)) {
             throw new \InvalidArgumentException('Preferred HTTP protocol must exist in the enabled protocol list.');
         }
-        if (!\in_array($edge, [self::EDGE_CADDY, self::EDGE_DISABLED], true)) {
+        if (!\in_array($edge, [self::EDGE_NATIVE, self::EDGE_CADDY, self::EDGE_DISABLED], true)) {
             throw new \InvalidArgumentException('Unsupported HTTP protocol edge: ' . $edge);
         }
         if ($this->requiresProtocolEdge() && $edge === self::EDGE_DISABLED) {
@@ -87,8 +88,8 @@ final readonly class HttpProtocolSelection
             || \in_array(self::HTTP_2, $protocols, true);
         if ($requiresEdge && $edge === self::EDGE_DISABLED) {
             throw new \RuntimeException(
-                'WLS native Workers currently speak HTTP/1.1; enabling HTTP/2 or HTTP/3 requires '
-                . 'wls.http.protocol_edge=auto/caddy.'
+                'WLS Workers currently speak HTTP/1.1; enabling HTTP/2 or HTTP/3 requires '
+                . 'wls.http.protocol_edge=auto/native (or explicit caddy compatibility mode).'
             );
         }
 
@@ -108,7 +109,7 @@ final readonly class HttpProtocolSelection
     {
         $protocols = self::normalizeProtocols($data['protocols'] ?? self::DEFAULT_PROTOCOLS);
         $preferred = self::normalizeProtocol($data['preferred'] ?? self::HTTP_3);
-        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_CADDY, $protocols);
+        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_NATIVE, $protocols);
 
         return new self(
             $protocols,
@@ -120,6 +121,16 @@ final readonly class HttpProtocolSelection
     }
 
     public function isProtocolEdgeEnabled(): bool
+    {
+        return $this->edge !== self::EDGE_DISABLED;
+    }
+
+    public function isNativeProtocolEdge(): bool
+    {
+        return $this->edge === self::EDGE_NATIVE;
+    }
+
+    public function isCaddyProtocolEdge(): bool
     {
         return $this->edge === self::EDGE_CADDY;
     }
@@ -221,21 +232,22 @@ final readonly class HttpProtocolSelection
     private static function normalizeEdge(mixed $edge, array $protocols): string
     {
         if (\is_bool($edge)) {
-            $edge = $edge ? self::EDGE_CADDY : self::EDGE_DISABLED;
+            $edge = $edge ? self::EDGE_NATIVE : self::EDGE_DISABLED;
         }
         $edge = \strtolower(\trim((string)$edge));
         if ($edge === '' || $edge === 'auto') {
             return \in_array(self::HTTP_3, $protocols, true)
                 || \in_array(self::HTTP_2, $protocols, true)
-                ? self::EDGE_CADDY
+                ? self::EDGE_NATIVE
                 : self::EDGE_DISABLED;
         }
 
         return match ($edge) {
-            'caddy', 'on', 'enabled', 'true', '1' => self::EDGE_CADDY,
+            'native', 'wls', 'on', 'enabled', 'true', '1' => self::EDGE_NATIVE,
+            'caddy' => self::EDGE_CADDY,
             'off', 'disabled', 'false', '0', 'none' => self::EDGE_DISABLED,
             default => throw new \RuntimeException(
-                'wls.http.protocol_edge must be auto, caddy, or disabled.'
+                'wls.http.protocol_edge must be auto, native, caddy, or disabled.'
             ),
         };
     }
