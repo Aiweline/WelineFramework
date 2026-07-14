@@ -45,6 +45,45 @@ Composer,Composer
 开启,Enable
 关闭,Close
 回滚,回滚
+系统配置,"System configuration"
+一致,Consistent
+漂移,Drifted
+未知,Unknown
+"集中检索模块状态、版本与 Schema 一致性","Search module status, versions, and schema consistency in one place"
+"显示 %{1}–%{2}，共 %{3} 个模块","Showing %{1}–%{2} of %{3} modules"
+"已启用 %{1} 个筛选条件","%{1} filters active"
+"当前页 %{1} 项","%{1} items on this page"
+搜索模块,"Search modules"
+模块名、描述、命名空间、路由或版本,"Module name, description, namespace, route, or version"
+运行状态,"Runtime status"
+全部状态,"All statuses"
+已启用,Enabled
+已禁用,Disabled
+模块类型,"Module type"
+全部类型,"All types"
+"Schema 状态","Schema status"
+"全部 Schema 状态","All schema statuses"
+每页显示,"Items per page"
+"%{1} 项","%{1} items"
+筛选,Filter
+重置,Reset
+筛选会在全部模块中执行，分页会保留当前条件,"Filters run across all modules and pagination preserves them"
+清除全部筛选,"Clear all filters"
+模块,Module
+版本,Version
+Schema,Schema
+没有找到匹配的模块,"No matching modules found"
+请调整搜索词或筛选条件后重试,"Adjust the search term or filters and try again"
+清除筛选,"Clear filters"
+暂无描述,"No description"
+当前,Current
+代码,Code
+数据库,Database
+点击禁用模块,"Click to disable module"
+点击启用模块,"Click to enable module"
+核心模块不允许在线回滚,"Core modules cannot be rolled back online"
+回滚到可用版本,"Roll back to an available version"
+"第 %{1} 页，每页 %{2} 项","Page %{1}, %{2} items per page"
 正在读取可用目标版本...,正在读取可用目标版本...
 没有可用的精确版本制品，或当前状态不允许回滚,没有可用的精确版本制品，或当前状态不允许回滚
 选择目标版本,选择目标版本
