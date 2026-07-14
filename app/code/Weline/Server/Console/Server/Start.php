@@ -14,6 +14,7 @@ namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Compilation\FrameworkCompileManifest;
 use Weline\Framework\Compilation\FrameworkCompiler;
 use Weline\Framework\Container\CompiledContainer;
 use Weline\Framework\Container\ContainerRuntime;
@@ -101,13 +102,7 @@ class Start extends CommandAbstract
      * Container is promoted last: until every data-only registry is complete,
      * an old Master can still replace a Worker with its original digest.
      */
-    private const FRAMEWORK_RUNTIME_REGISTRY_FILES = [
-        'modules.php',
-        'query_providers.php',
-        'runtime_policy_providers.php',
-        'template_cache_policies.php',
-        'container.php',
-    ];
+    private const FRAMEWORK_RUNTIME_REGISTRY_FILES = FrameworkCompileManifest::GENERATION_FILES;
 
     /**
      * 启动中实例的 worker 端口预留 TTL（秒）
@@ -169,6 +164,7 @@ class Start extends CommandAbstract
      * cannot drift from the resolver or rerun a listener capability probe.
      */
     private ?WlsRuntimeProfile $latestRuntimeProfile = null;
+    private ?string $latestRuntimeProfileListenHost = null;
 
     private string $latestRuntimeStrategy = RuntimeStrategyResolver::STRATEGY_AUTO;
 
@@ -180,6 +176,13 @@ class Start extends CommandAbstract
     private ?array $restartMaintenanceSnapshot = null;
 
     private bool $restartMaintenanceShutdownRegistered = false;
+
+    /**
+     * Required-sync is invocation state rather than part of the protected
+     * extension signature. Existing Start subclasses may still override the
+     * historical two-argument, void method without a PHP signature break.
+     */
+    private bool $wlsMaintenanceSyncRequired = false;
 
     /**
      * 旧实例停止前确认正在监听的数据面/控制面端口。
@@ -1798,12 +1801,12 @@ class Start extends CommandAbstract
         $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled();
         $protocolEdgeBinary = \trim((string)($data['protocol_edge_binary'] ?? ''));
         if ($protocolEdgeEnabled
-            && ($protocolEdgeBinary === '' || !\is_file($protocolEdgeBinary) || !\is_executable($protocolEdgeBinary))
+            && !ProtocolEdgeRuntime::isRunnableBinary($protocolEdgeBinary)
         ) {
             $this->printer->error(__('master-only 启动已拒绝：预检通过的 HTTP 协议边缘二进制已不可用。'));
             return;
         }
-        // 协议边缘启用时由 Caddy 终止 TLS，Worker 保持私有 HTTP/1.1 长连接。
+        // 协议边缘启用时由 WLS Native Engine 终止 TLS/QUIC，Worker 保持私有 HTTP/1.1 长连接。
         $workerScript = $this->ensureWorkerScript($sslEnabled && !$protocolEdgeEnabled);
         $port = (int)($data['port'] ?? 443);
         $workerPort = (int)($data['worker_port'] ?? $port);
@@ -2128,6 +2131,7 @@ class Start extends CommandAbstract
     ): array {
         $argv = [
             $phpBinary,
+            ...\Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
             $script,
             'server:start',
             $instanceName,
@@ -2160,8 +2164,15 @@ class Start extends CommandAbstract
         bool $windowMode = false
     ): string {
         $phpCommand = '"' . \str_replace('"', '\"', $phpBinary) . '"';
-        $command = $phpCommand
-            . ' ' . \escapeshellarg($script)
+        $phpArguments = \implode(' ', \array_map(
+            'escapeshellarg',
+            \Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments()
+        ));
+        $command = $phpCommand;
+        if ($phpArguments !== '') {
+            $command .= ' ' . $phpArguments;
+        }
+        $command .= ' ' . \escapeshellarg($script)
             . ' server:start '
             . \escapeshellarg($instanceName)
             . ' --master-only';
@@ -2835,8 +2846,8 @@ class Start extends CommandAbstract
     }
     
     /**
-     * 输出 Windows 下未安装 event 时的 HTTPS 提示（SSL 握手阻塞约 60s，建议安装 event）
-     * 与 showWindowsNginxProxyHint 相同的框式格式化输出。
+     * Explain the Windows Worker loop fallback. Public TLS/ALPN/QUIC is owned
+     * by the native WLS protocol engine and does not depend on ext-event.
      */
     protected function printWindowsEventHttpsWarning(): void
     {
@@ -2855,18 +2866,14 @@ class Start extends CommandAbstract
         $iniFile = \php_ini_loaded_file() ?: __('(未找到，请 php --ini 查看)');
         echo "\n";
         $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
-        $this->printer->warning(__('║  【Windows + HTTPS】当前未安装 PHP event 扩展。                              ║'));
-        $this->printer->warning(__('║  在此环境下运行 HTTPS 会出现 SSL 握手阻塞（每次新连接可能卡住约 60 秒）。  ║'));
-        $this->printer->warning(__('║  强烈建议安装 event 后再使用 HTTPS。                                        ║'));
+        $this->printer->warning(__('║  【Windows Worker】当前未安装可信且 ABI 匹配的 PHP event 扩展。             ║'));
+        $this->printer->warning(__('║  Worker 将使用稳定的 stream/select 事件循环；不会关闭任何安全策略。         ║'));
+        $this->printer->warning(__('║  HTTP/3、HTTP/2、TLS 1.3 与会话复用仍由 WLS Native Protocol Engine 提供。  ║'));
         $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
-        $this->printer->warning(__('║  下载 event：https://windows.php.net/downloads/pecl/releases/event/           ║'));
-        $this->printer->warning(__('║  选 3.0.x，按 PHP 版本/ts|nts/x64|x86 选 zip，php_event.dll 放入 ext 目录，  ║'));
-        $this->printer->warning(__('║  在 php.ini 添加 extension=event。                                           ║'));
+        $this->printer->warning(__('║  WLS 只会自动安装 PHP版本、架构、TS/NTS 与依赖均可验证的 event DLL。       ║'));
+        $this->printer->warning(__('║  不会为了显示“已安装”而加载来源不明或 ABI 不匹配的 DLL。                    ║'));
         $this->printer->warning(__('║  ext 目录：%{1}                                                                ║', [$extPath]));
         $this->printer->warning(__('║  php.ini：%{1}                                                                 ║', [$iniFile]));
-        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
-        $this->printer->warning(__('║  当前已允许继续启动 HTTPS；若无法接受握手阻塞，请安装 event 或使用         ║'));
-        $this->printer->warning(__('║  --no-ssl / wls.https=false 仅跑 HTTP。                               ║'));
         $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
     }
     
@@ -3204,7 +3211,7 @@ class Start extends CommandAbstract
     protected function enableMaintenanceMode(string $instanceName): void
     {
         $this->setFrameworkMaintenanceMode(true);
-        $this->syncWlsMaintenanceMode($instanceName, true, true);
+        $this->invokeWlsMaintenanceModeSync($instanceName, true, true);
     }
 
     protected function beginRestartMaintenanceTransaction(string $instanceName): void
@@ -3244,7 +3251,7 @@ class Start extends CommandAbstract
             return;
         }
 
-        $this->syncWlsMaintenanceMode(
+        $this->invokeWlsMaintenanceModeSync(
             $snapshot['instance_name'],
             $snapshot['enabled'],
             $requireRuntimeSync
@@ -3266,7 +3273,7 @@ class Start extends CommandAbstract
         }
 
         $this->setFrameworkMaintenanceMode(false);
-        $this->syncWlsMaintenanceMode($instanceName, false, $requireRuntimeSync);
+        $this->invokeWlsMaintenanceModeSync($instanceName, false, $requireRuntimeSync);
     }
 
     protected function setFrameworkMaintenanceMode(bool $enabled): void
@@ -3274,12 +3281,24 @@ class Start extends CommandAbstract
         Env::getInstance()->setConfig('system.maintenance', $enabled);
     }
 
-    protected function syncWlsMaintenanceMode(
+    private function invokeWlsMaintenanceModeSync(
         ?string $instanceName,
         bool $enabled,
-        bool $required = false
-    ): bool
+        bool $required
+    ): void
     {
+        $previous = $this->wlsMaintenanceSyncRequired;
+        $this->wlsMaintenanceSyncRequired = $previous || $required;
+        try {
+            $this->syncWlsMaintenanceMode($instanceName, $enabled);
+        } finally {
+            $this->wlsMaintenanceSyncRequired = $previous;
+        }
+    }
+
+    protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
+    {
+        $required = $this->wlsMaintenanceSyncRequired;
         $startedAtNs = \hrtime(true);
         try {
             /** @var IpcControlGateway $gateway */
@@ -3308,7 +3327,7 @@ class Start extends CommandAbstract
                 if ($required) {
                     throw new \RuntimeException('no controllable WLS instance accepted the maintenance command');
                 }
-                return false;
+                return;
             }
 
             if (empty($result['success'])) {
@@ -3404,7 +3423,6 @@ class Start extends CommandAbstract
             $this->printer->note(__('WLS 维护模式已确认落地：%{1}', [
                 ($enabled ? 'enabled' : 'disabled') . ', instances=' . \count($attempted),
             ]));
-            return true;
         } catch (\Throwable $throwable) {
             $message = (string)__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]);
             if ($required) {
@@ -3412,7 +3430,6 @@ class Start extends CommandAbstract
                 throw new \RuntimeException($message, 0, $throwable);
             }
             $this->printer->warning($message);
-            return false;
         }
     }
     
@@ -4999,6 +5016,12 @@ class Start extends CommandAbstract
 
     protected function detectRuntimeProfile(?string $listenHost = null): WlsRuntimeProfile
     {
+        $profileKey = \strtolower(\trim((string)$listenHost));
+        if ($this->latestRuntimeProfile !== null && $this->latestRuntimeProfileListenHost === $profileKey) {
+            return $this->latestRuntimeProfile;
+        }
+
+        $this->latestRuntimeProfileListenHost = $profileKey;
         return $this->latestRuntimeProfile = (new RuntimeCapabilityDetector())->detect($listenHost);
     }
     
@@ -6721,6 +6744,44 @@ class Start extends CommandAbstract
         $runtimeContainerInstalled = false;
 
         try {
+            // Reuse is allowed only while holding the same generation lock as
+            // promotion and only after exact source + artifact content hashes
+            // match. Invalid/missing manifests fall through to a full compile.
+            $publisher->acquireDirectoryLock($finalDirectory);
+            try {
+                $freshness = (new FrameworkCompileManifest())->validate(
+                    BP . 'app' . DS . 'code' . DS . 'Weline',
+                    $finalDirectory,
+                );
+                if ($freshness['fresh']) {
+                    $compiledContainer = new CompiledContainer(
+                        $finalDirectory . DS . 'container.php',
+                        false,
+                    );
+                    $containerRegistryDigest = $compiledContainer->registryDigest();
+                    if (\preg_match('/^[a-f0-9]{64}$/D', $containerRegistryDigest) !== 1) {
+                        throw new \RuntimeException('Reused compiled container registry digest is invalid.');
+                    }
+                    $policyControl = new RuntimePolicyControlService(
+                        new RuntimePolicyCompiler($finalDirectory . DS . 'runtime_policy_providers.php'),
+                    );
+                    $policyCheck = $policyControl->check(
+                        $policyTopology,
+                        $instanceName,
+                        $compileContext,
+                    );
+                    if (!empty($policyCheck['valid'])) {
+                        ContainerRuntime::preflight($containerRegistryDigest);
+                    }
+                    return [
+                        'container_registry_digest' => $containerRegistryDigest,
+                        'policy_check' => $policyCheck,
+                    ];
+                }
+            } finally {
+                AtomicCompiledFilePublisher::releaseProcessLocks();
+            }
+
             if (!@\mkdir($stagingRoot, 0700, true) && !\is_dir($stagingRoot)) {
                 throw new \RuntimeException('Unable to create private framework registry staging directory.');
             }
@@ -7721,34 +7782,19 @@ PHP;
     }
     
     /**
-     * 显示 Windows 下 Nginx/Caddy HTTPS 代理提示
-     *
-     * Windows 上 PHP 的 SSL accept 会阻塞约 60 秒（底层 OpenSSL/WinSock 限制），
-     * 故建议使用 TCP 模式，由 Nginx 或 Caddy 做 SSL 终结并反代到本端口。
+     * Display the Windows native protocol ownership boundary. The historical
+     * method name is retained for compatibility with downstream overrides.
      */
     protected function showWindowsNginxProxyHint(string $host, int $port): void
     {
+        unset($host);
         echo "\n";
-        $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
-        $this->printer->warning(__('║  Windows 环境：建议使用 TCP 模式，用 Nginx 或 Caddy 做 SSL 处理。            ║'));
-        $this->printer->warning(__('║  由 Nginx/Caddy 监听 443 做 HTTPS，反代到本端口。                            ║'));
-        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
-        $this->printer->warning(__('║  Nginx 配置示例（假设 Nginx HTTPS 监听 443，反代到 %{1}）：          ║', [$port]));
-        $this->printer->warning(__('║                                                                              ║'));
-        $this->printer->warning(__('║    server {                                                                  ║'));
-        $this->printer->warning(__('║        listen 443 ssl;                                                       ║'));
-        $this->printer->warning(__('║        server_name your-domain.com;                                          ║'));
-        $this->printer->warning(__('║        ssl_certificate     /path/to/cert.pem;                                ║'));
-        $this->printer->warning(__('║        ssl_certificate_key /path/to/key.pem;                                 ║'));
-        $this->printer->warning(__('║        location / {                                                          ║'));
-        $this->printer->warning(__('║            proxy_pass http://%{1}:%{2};                                    ║', [$host, $port]));
-        $this->printer->warning(__('║            proxy_set_header Host $host;                                      ║'));
-        $this->printer->warning(__('║            proxy_set_header X-Real-IP $remote_addr;                          ║'));
-        $this->printer->warning(__('║        }                                                                     ║'));
-        $this->printer->warning(__('║    }                                                                         ║'));
-        $this->printer->warning(__('║                                                                              ║'));
-        $this->printer->warning(__('║  配置完成后，访问 https://your-domain.com 即可                              ║'));
-        $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
+        $this->printer->note(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
+        $this->printer->note(__('║  Windows 公网协议由 WLS Native Protocol Engine 原生处理，无需反向代理。    ║'));
+        $this->printer->note(__('║  同一端口 %{1} 自动协商 HTTP/3 → HTTP/2 → HTTP/1.1，并复用 TLS 会话。      ║', [$port]));
+        $this->printer->note(__('║  Windows Dispatcher 是 WLS 内部数据面，只负责透传与 L4 门禁。              ║'));
+        $this->printer->note(__('║  默认链路完全由 WLS 自己提供，不启动或依赖任何外置 Web 服务器。            ║'));
+        $this->printer->note(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
     }
 
     /**
@@ -7793,10 +7839,13 @@ PHP;
         
         $this->printer->separator('─');
         
-        // 代理转发说明（默认 127.0.0.1 仅本机）
-        $this->printer->note(__('代理转发：WLS 默认仅监听 127.0.0.1。外网访问需用 Nginx/Caddy 反向代理：'));
-        $this->printer->note('  proxy_pass ' . $scheme . '://' . $host . ':' . $portNum . ';');
-        $this->printer->note(__('直连外网时：') . 'php bin/w server:start --host 0.0.0.0');
+        $this->printer->note(__('公网协议由 WLS Native Protocol Engine 原生处理，无需外置 Web 服务器。'));
+        if ($sslEnabled) {
+            $this->printer->note(__('同一端口自动协商 HTTP/3 → HTTP/2 → HTTP/1.1，并复用 TLS 会话。'));
+        }
+        if (!$this->isUsablePublicHost($host)) {
+            $this->printer->note(__('当前仅绑定本机；需要外网直连时使用：') . 'php bin/w server:start --host 0.0.0.0');
+        }
         $this->printer->separator('─');
         
         // 常用命令
@@ -7923,7 +7972,7 @@ PHP;
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
                 __('HTTP 自动协商') => __('HTTPS 默认 h3/h2/h1：QUIC HTTP/3、ALPN HTTP/2、HTTP/1.1 自动回退；状态由 server:status/doctor 展示'),
                 __('连接复用') => __('默认开启 TLS session ticket；HTTP/2/3 多路复用与协议边缘到 Worker 的私有 keep-alive 连接池'),
-                __('协议边缘依赖') => __('h2/h3 使用 WLS-owned Caddy；启动前自动安装并验证 reverse proxy + QUIC，失败不静默降级'),
+                __('协议边缘依赖') => __('h2/h3 默认使用 WLS Native Protocol Engine；启动前自动构建并验证 ALPN + QUIC，失败不静默降级；Caddy 仅为显式兼容模式'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
                 __('SSL 协议') => __('仅支持 TLS 1.2/1.3；空值或无效 wls.ssl.protocols 会在启动前被拒绝'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),

@@ -995,7 +995,7 @@ class Processer
     }
 
     /**
-     * Windows：用 PowerShell Start-Process，且 ArgumentList 为字符串数组，避免「整段命令行」经 ANSI/控制台编码后损坏（中文 BP、中文参数等），导致 PID 回传为空。
+     * Windows：优先以原生 argv 直接创建独立 PHP 子进程，PowerShell Start-Process 仅作兼容回退。
      *
      * @param list<string> $argv [php.exe 路径, 脚本绝对路径, ...脚本 argv]
      * @param string       $cwd  WorkingDirectory（一般为 BP）
@@ -1023,20 +1023,56 @@ class Processer
         $processInfo = self::ensureProcessName($pnameForRegistry);
         $pname = $processInfo['command'];
 
+        $stdoutLog = '';
+        $stderrLog = '';
+        if ($enableLog) {
+            $logFile = self::getLogFile($pname);
+            $stdoutLog = $logFile . '.stdout.log';
+            $stderrLog = $logFile . '.stderr.log';
+            self::setOutput(
+                $pname,
+                PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . " (Windows direct argv)\n" . $pname . PHP_EOL,
+                true
+            );
+        }
+
+        $directStartedAt = \microtime(true);
+        $directAttempt = self::startWindowsDetachedPhpProcessDirect(
+            $argv,
+            $cwd,
+            $stdoutLog,
+            $stderrLog
+        );
+        if ($directAttempt['pid'] > 0) {
+            $pid = self::setPid($pname, $directAttempt['pid']);
+            if ($enableLog) {
+                self::setOutput(
+                    $pname,
+                    '[INFO] windows direct argv success: pid=' . $pid
+                    . ', cost_ms=' . (int) \round((\microtime(true) - $directStartedAt) * 1000)
+                    . PHP_EOL,
+                    true
+                );
+            }
+
+            return $pid;
+        }
+
+        if ($enableLog && $directAttempt['error'] !== '') {
+            self::setOutput(
+                $pname,
+                '[WARN] windows direct argv unavailable; using PowerShell compatibility fallback: '
+                . $directAttempt['error'] . PHP_EOL,
+                true
+            );
+        }
+
         $scriptPath = self::writeWindowsStartScriptArgv($argv, $cwd);
         if ($scriptPath === null) {
             return 0;
         }
 
         $nullDevice = 'NUL';
-        if ($enableLog) {
-            self::setOutput(
-                $pname,
-                PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . " (Windows argv Start-Process)\n" . $pname . PHP_EOL,
-                true
-            );
-        }
-
         $descriptorspec = [
             0 => ['file', $nullDevice, 'r'],
             1 => ['pipe', 'w'],
@@ -1066,14 +1102,16 @@ class Processer
         if (\is_resource($psProcess)) {
             $output = '';
             $stderr = '';
-            // 非阻塞读取 PID 回传，避免 PowerShell 脚本异常挂起拖慢 Master 启动编排。
             if (isset($psPipes[1])) {
                 @\stream_set_blocking($psPipes[1], false);
             }
             if (isset($psPipes[2])) {
                 @\stream_set_blocking($psPipes[2], false);
             }
-            $deadline = \microtime(true) + 0.35;
+            // This is only the child-PID handshake. It returns as soon as
+            // Start-Process responds and never waits for framework bootstrap.
+            // Windows ARM/x64 emulation may need more than the former 350ms.
+            $deadline = \microtime(true) + 4.0;
             while (\microtime(true) < $deadline) {
                 if (isset($psPipes[1])) {
                     $chunk = @\fread($psPipes[1], 256);
@@ -1102,12 +1140,17 @@ class Processer
                 @\fclose($psPipes[2]);
             }
             $status = @\proc_get_status($psProcess);
-            self::finishWindowsDetachedHelperProcess($psProcess, $status);
-            @\unlink($scriptPath);
+            // proc_terminate() on a still-starting PowerShell helper crashes
+            // PHP 8.4 x64 under Windows ARM emulation. A one-shot helper that
+            // already returned its PID exits naturally; leave it alone if the
+            // status has not caught up yet.
+            if (($status['running'] ?? false) !== true) {
+                self::finishWindowsDetachedHelperProcess($psProcess, $status);
+                @\unlink($scriptPath);
+            }
 
             if ($output !== '' && \ctype_digit($output) && (int) $output > 0) {
-                $pid = (int) $output;
-                $pid = self::setPid($pname, $pid);
+                $pid = self::setPid($pname, (int) $output);
             }
 
             if ($enableLog && $stderr !== '') {
@@ -3991,9 +4034,60 @@ PHP;
     ): array {
         $timingStartedAt ??= \microtime(true);
         $itemCount = \count($batchLaunchItems);
-        $resultBudgetSeconds = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout($itemCount);
-        $parallelism ??= self::resolveWindowsBatchCreateHelperParallelism($itemCount);
-        $parallelism = \min(\max(1, $itemCount), \max(1, \min(8, $parallelism)));
+        $directCount = 0;
+        $fallbackLaunchItems = [];
+        $directSubmitSeconds = 0.0;
+        $directPidRecordSeconds = 0.0;
+        foreach ($batchLaunchItems as $item) {
+            if (!empty($item['foreground'])) {
+                $fallbackLaunchItems[] = $item;
+                continue;
+            }
+
+            $argv = [(string) ($item['php'] ?? '')];
+            foreach (($item['argument_list'] ?? []) as $argument) {
+                $argv[] = (string) $argument;
+            }
+            $directStartedAt = \microtime(true);
+            $attempt = self::startWindowsDetachedPhpProcessDirect(
+                $argv,
+                (string) ($item['cwd'] ?? BP),
+                (string) ($item['stdout_log'] ?? ''),
+                (string) ($item['stderr_log'] ?? '')
+            );
+            $directSubmitSeconds += \microtime(true) - $directStartedAt;
+            if ($attempt['pid'] <= 0) {
+                $item['direct_launch_error'] = $attempt['error'];
+                $fallbackLaunchItems[] = $item;
+                continue;
+            }
+
+            $recordStartedAt = \microtime(true);
+            $key = (string) ($item['key'] ?? '');
+            $results[$key] = self::recordWindowsBatchCreatePid($item, $attempt['pid']);
+            $directPidRecordSeconds += \microtime(true) - $recordStartedAt;
+            $directCount++;
+        }
+        $timings['submit'] = (float) ($timings['submit'] ?? 0.0) + $directSubmitSeconds;
+        $timings['pid_record'] = (float) ($timings['pid_record'] ?? 0.0) + $directPidRecordSeconds;
+
+        if ($fallbackLaunchItems === []) {
+            self::logWindowsBatchCreateTiming(
+                'direct_proc_open',
+                $timingStartedAt,
+                $timings,
+                0,
+                $itemCount
+            );
+
+            return $results;
+        }
+
+        $batchLaunchItems = $fallbackLaunchItems;
+        $fallbackCount = \count($batchLaunchItems);
+        $resultBudgetSeconds = self::resolveWindowsBatchCreateNonBlockingResultRowTimeout($fallbackCount);
+        $parallelism ??= self::resolveWindowsBatchCreateHelperParallelism($fallbackCount);
+        $parallelism = \min(\max(1, $fallbackCount), \max(1, \min(8, $parallelism)));
         $groups = \array_fill(0, $parallelism, []);
 
         foreach ($batchLaunchItems as $index => $item) {
@@ -4045,7 +4139,7 @@ PHP;
                 );
             }
         }
-        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+        $timings['submit'] = (float) ($timings['submit'] ?? 0.0) + (\microtime(true) - $phaseStartedAt);
         $deadline = \microtime(true) + $resultBudgetSeconds;
 
         $phaseStartedAt = \microtime(true);
@@ -4130,10 +4224,10 @@ PHP;
                 $results[$key] = 0;
             }
         }
-        $timings['pid_record'] = \microtime(true) - $phaseStartedAt;
+        $timings['pid_record'] = (float) ($timings['pid_record'] ?? 0.0) + (\microtime(true) - $phaseStartedAt);
 
         self::logWindowsBatchCreateTiming(
-            'parallel_helpers',
+            $directCount > 0 ? 'direct_proc_open+parallel_helpers' : 'parallel_helpers',
             $timingStartedAt,
             $timings,
             \count($helpers),
@@ -4141,6 +4235,95 @@ PHP;
         );
 
         return $results;
+    }
+
+    /**
+     * Launch a managed PHP child through CreateProcess without a shell.
+     *
+     * PHP's Windows proc_open array form preserves argv boundaries and returns
+     * the real child PID immediately. Redirecting every standard handle to a
+     * file/NUL and creating a new process group lets the child outlive normal
+     * parent resource cleanup without opening another console window. Do not
+     * proc_close() or proc_terminate() the live child resource here.
+     *
+     * @param list<string> $argv
+     * @return array{pid: int, error: string}
+     */
+    private static function startWindowsDetachedPhpProcessDirect(
+        array $argv,
+        string $cwd,
+        string $stdoutPath = '',
+        string $stderrPath = ''
+    ): array {
+        if (!IS_WIN || \count($argv) < 2 || \trim((string) ($argv[0] ?? '')) === '') {
+            return ['pid' => 0, 'error' => 'invalid Windows PHP argv'];
+        }
+
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = (string) $msg;
+
+            return true;
+        });
+        try {
+            $process = \proc_open(
+                \array_values(\array_map(
+                    static fn (mixed $argument): string => self::normalizeWindowsDirectProcessArgument((string) $argument),
+                    $argv
+                )),
+                [
+                    0 => ['file', 'NUL', 'r'],
+                    1 => ['file', $stdoutPath !== '' ? $stdoutPath : 'NUL', $stdoutPath !== '' ? 'a' : 'w'],
+                    2 => ['file', $stderrPath !== '' ? $stderrPath : 'NUL', $stderrPath !== '' ? 'a' : 'w'],
+                ],
+                $pipes,
+                $cwd,
+                null,
+                [
+                    'bypass_shell' => true,
+                    'create_process_group' => true,
+                ]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+
+        if (!\is_resource($process)) {
+            return [
+                'pid' => 0,
+                'error' => $lastError !== null && $lastError !== '' ? $lastError : 'proc_open returned no process',
+            ];
+        }
+
+        $status = @\proc_get_status($process);
+        $pid = (int) ($status['pid'] ?? 0);
+
+        return [
+            'pid' => $pid > 0 ? $pid : 0,
+            'error' => $pid > 0
+                ? ''
+                : ($lastError !== null && $lastError !== '' ? $lastError : 'proc_get_status returned no child PID'),
+        ];
+    }
+
+    private static function normalizeWindowsDirectProcessArgument(string $argument): string
+    {
+        // Managed commands are first serialized as a Windows command line.
+        // Values such as --master-lease-file="C:\\path" therefore retain
+        // syntactic quotes when the existing lightweight tokenizer sees an
+        // embedded quote. Start-Process used to strip them while rebuilding a
+        // command line; proc_open(array) intentionally does not. Remove only a
+        // complete paired value wrapper so literal quotes remain untouched.
+        if (\preg_match('/^(.*=)"((?:[^"\\\\]|\\\\.)*)"$/s', $argument, $matches) === 1) {
+            return (string) $matches[1] . self::decodeQuotedCommandLineToken((string) $matches[2]);
+        }
+
+        $length = \strlen($argument);
+        if ($length >= 2 && $argument[0] === '"' && $argument[$length - 1] === '"') {
+            return self::decodeQuotedCommandLineToken(\substr($argument, 1, -1));
+        }
+
+        return $argument;
     }
 
     /**
@@ -4378,10 +4561,18 @@ PHP;
 
         $configured = (float) (Env::get('system.processer.windows_batch_create_nonblocking_result_timeout_sec', 0) ?? 0);
         if ($configured > 0.0) {
-            return \max(0.05, \min(1.0, $configured));
+            return \max(0.05, \min(2.0, $configured));
         }
 
-        return \min(0.6, \max(0.2, 0.08 + ($pendingCount * 0.04)));
+        // Wait only for the bounded launch-result rows, never for framework
+        // bootstrap or READY. Windows ARM/x64 emulation can spend close to one
+        // second in the first Start-Process call of each parallel lane. The old
+        // 600ms ceiling returned an all-zero PID map, so the Orchestrator's
+        // critical fail-fast probe mistook "launch submitted" for "exited".
+        // Helpers still return immediately when every row is ready; 1.5s keeps
+        // the 16-Worker batchCreate p95 budget below 2s while giving each lane
+        // enough time to publish its authoritative child PID.
+        return \min(1.5, \max(0.75, 0.5 + ($pendingCount * 0.125)));
     }
 
     /**
@@ -6722,7 +6913,60 @@ POWERSHELL;
     public static function writePidIndex(array $data): bool
     {
         $path = self::getPidIndexFile();
-        return self::atomicWrite($path, \json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE));
+        $payload = \json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE);
+        if (!\is_string($payload)) {
+            return false;
+        }
+
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            return self::atomicWrite($path, $payload);
+        }
+
+        // Windows cannot rename a temporary file over pid_index.json while
+        // another process has the target open for a shared-lock read. During
+        // concurrent WLS startup that made otherwise valid registrations lose
+        // only their pid_index row while their per-process record and
+        // name_index row survived. Readers already take LOCK_SH, so serialize
+        // the Windows replacement directly on the target with LOCK_EX.
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0777, true);
+        }
+        $fp = @\fopen($path, 'c+b');
+        if (!\is_resource($fp)) {
+            return false;
+        }
+        if (!@\flock($fp, \LOCK_EX)) {
+            @\fclose($fp);
+            return false;
+        }
+
+        try {
+            if (!@\ftruncate($fp, 0) || !@\rewind($fp)) {
+                return false;
+            }
+
+            $length = \strlen($payload);
+            $written = 0;
+            while ($written < $length) {
+                $bytes = @\fwrite($fp, \substr($payload, $written));
+                if (!\is_int($bytes) || $bytes <= 0) {
+                    return false;
+                }
+                $written += $bytes;
+            }
+            if (!@\fflush($fp)) {
+                return false;
+            }
+            if (\function_exists('fsync')) {
+                @\fsync($fp);
+            }
+
+            return true;
+        } finally {
+            @\flock($fp, \LOCK_UN);
+            @\fclose($fp);
+        }
     }
     
     /**
@@ -7056,7 +7300,11 @@ POWERSHELL;
             return '';
         }
 
-        $pattern = "/--" . \preg_quote($name, '/') . "(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s]+))/i";
+        // Windows may quote the whole argument ("--launch-id=value") instead
+        // of only its value (--launch-id="value"). The unquoted branch must
+        // stop at either quote boundary or it contaminates the identity value
+        // with the trailing quote and rejects a valid managed process lease.
+        $pattern = "/--" . \preg_quote($name, '/') . "(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s\"']+))/i";
         if (!\preg_match($pattern, $commandLine, $matches)) {
             return '';
         }
