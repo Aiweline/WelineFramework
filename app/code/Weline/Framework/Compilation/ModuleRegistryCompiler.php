@@ -11,12 +11,18 @@ use Weline\Framework\Module\Manifest\ModuleManifestReader;
 final class ModuleRegistryCompiler
 {
     public const FORMAT_VERSION = 1;
+    private readonly ModuleManifestReader $manifestReader;
+    private readonly ModuleGraphValidator $graphValidator;
+    private readonly CompiledPhpArrayWriter $writer;
 
     public function __construct(
-        private readonly ModuleManifestReader $manifestReader = new ModuleManifestReader(),
-        private readonly ModuleGraphValidator $graphValidator = new ModuleGraphValidator(),
-        private readonly CompiledPhpArrayWriter $writer = new CompiledPhpArrayWriter(),
+        ?ModuleManifestReader $manifestReader = null,
+        ?ModuleGraphValidator $graphValidator = null,
+        ?CompiledPhpArrayWriter $writer = null,
     ) {
+        $this->manifestReader = $manifestReader ?? new ModuleManifestReader();
+        $this->graphValidator = $graphValidator ?? new ModuleGraphValidator();
+        $this->writer = $writer ?? new CompiledPhpArrayWriter();
     }
 
     /**

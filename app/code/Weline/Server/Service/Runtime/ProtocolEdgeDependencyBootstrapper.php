@@ -8,8 +8,9 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
- * Installs and verifies the ABI-independent Caddy protocol edge before Master,
- * Dispatcher or Worker processes are created.
+ * Installs/builds and verifies the ABI-independent WLS protocol edge before
+ * Master, Dispatcher or Worker processes are created. Caddy is supported only
+ * when an instance explicitly selects the compatibility adapter.
  */
 final class ProtocolEdgeDependencyBootstrapper
 {
@@ -18,6 +19,23 @@ final class ProtocolEdgeDependencyBootstrapper
     private const PROBE_TIMEOUT_SECONDS = 20;
     private const HTTP3_LIVE_PROBE_TIMEOUT_SECONDS = 5;
     private const MAX_OUTPUT_BYTES = 1048576;
+    private const NATIVE_ENGINE_VERSION = '2.0.0';
+    private const GO_VERSION = '1.26.4';
+    private const GO_ARCHIVE_SHA256 = [
+        'darwin-amd64' => '05dc9b5f9997744520aaebb3d5deaa7c755371aebbfb7f97c2511a9f3367538d',
+        'darwin-arm64' => 'b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53',
+        'linux-amd64' => '1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f',
+        'linux-arm64' => 'ef758ae7c6cf9267c9c0ef080b8965f453d89ab2d25d9eb22de4405925238768',
+        'windows-amd64' => '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345',
+        'windows-arm64' => '62247f56fb7d7b827d237152c4e3fcd69a24d0fa9430dc73dbda7593ae82bc8d',
+    ];
+    private const WINDOWS_CADDY_VERSION = '2.11.4';
+    private const WINDOWS_CADDY_BASE_URL = 'https://github.com/caddyserver/caddy/releases/download/v'
+        . self::WINDOWS_CADDY_VERSION;
+    private const WINDOWS_CADDY_PACKAGE_SHA256 = [
+        'amd64' => '1708333f79e274c7697285afe6d592ab39314e0b131e9ec6bea08ad27df62ebf',
+        'arm64' => 'c7f16da93728f61455f77c04eac1ff4de06a38da281ed6d3dcbfae795be2a936',
+    ];
 
     /**
      * @param array<int|string, mixed> $args
@@ -37,12 +55,14 @@ final class ProtocolEdgeDependencyBootstrapper
             ];
         }
 
+        $engineName = $selection->isNativeProtocolEdge() ? 'WLS Native Protocol Engine' : 'Caddy compatibility edge';
+
         $binary = ProtocolEdgeRuntime::resolveBinary($config);
         $probe = $binary !== '' ? $this->probe($binary, $selection) : null;
         if (\is_array($probe) && $probe['success']) {
             return [
                 'status' => 'ready',
-                'message' => (string)__('HTTP/3、HTTP/2、HTTP/1.1 协商运行时已验证：%{1}', [$probe['version']]),
+                'message' => (string)__('%{1} 已验证：%{2}', [$engineName, $probe['version']]),
                 'binary' => $binary,
             ];
         }
@@ -50,7 +70,7 @@ final class ProtocolEdgeDependencyBootstrapper
         if ($this->hasFlag($args, ['no-auto-deps', 'no-auto-dependencies'])) {
             return [
                 'status' => 'failed',
-                'message' => (string)__('HTTP/2/HTTP/3 需要 Caddy 协议边缘，但 --no-auto-deps 禁止自动安装。'),
+                'message' => (string)__('HTTP/2/HTTP/3 需要 %{1}，但 --no-auto-deps 禁止自动安装。', [$engineName]),
                 'binary' => '',
                 'output' => (string)($probe['output'] ?? ''),
             ];
@@ -78,7 +98,7 @@ final class ProtocolEdgeDependencyBootstrapper
                 ];
             }
 
-            $install = $this->installForCurrentPlatform();
+            $install = $this->installForCurrentPlatform($selection);
             $binary = ProtocolEdgeRuntime::resolveBinary($config);
             $probe = $binary !== '' ? $this->probe($binary, $selection) : null;
             if (!$install['success'] || !\is_array($probe) || !$probe['success']) {
@@ -86,7 +106,8 @@ final class ProtocolEdgeDependencyBootstrapper
                 return [
                     'status' => 'failed',
                     'message' => (string)__(
-                        'Caddy 自动安装后仍无法验证 HTTP/3/HTTP/2 能力；WLS 已在创建子进程前停止。'
+                        '%{1} 自动安装后仍无法验证 HTTP/3/HTTP/2 能力；WLS 已在创建子进程前停止。',
+                        [$engineName]
                     ),
                     'binary' => '',
                     'output' => $this->tail($output),
@@ -95,7 +116,7 @@ final class ProtocolEdgeDependencyBootstrapper
 
             return [
                 'status' => 'installed',
-                'message' => (string)__('Caddy 协议边缘已自动安装并验证：%{1}', [$probe['version']]),
+                'message' => (string)__('%{1} 已自动安装并验证：%{2}', [$engineName, $probe['version']]),
                 'binary' => $binary,
                 'output' => $this->tail((string)$install['output']),
             ];
@@ -110,6 +131,10 @@ final class ProtocolEdgeDependencyBootstrapper
      */
     public function probe(string $binary, HttpProtocolSelection $selection): array
     {
+        if ($selection->isNativeProtocolEdge()) {
+            return $this->probeNativeEngine($binary, $selection);
+        }
+
         $version = $this->run([$binary, 'version'], self::PROBE_TIMEOUT_SECONDS);
         if (!$version['success'] || \preg_match('/\bv?2\.[0-9]+\.[0-9]+\b/', $version['output']) !== 1) {
             return [
@@ -143,6 +168,61 @@ final class ProtocolEdgeDependencyBootstrapper
             'success' => $hasReverseProxy && $hasPersistentSessionTickets && $hasHttp3,
             'version' => \trim($version['output']),
             'output' => $this->tail($modules['output'] . PHP_EOL . $buildInfoOutput),
+        ];
+    }
+
+    /**
+     * @return array{success:bool,version:string,output:string}
+     */
+    private function probeNativeEngine(string $binary, HttpProtocolSelection $selection): array
+    {
+        $result = $this->run([$binary, 'probe'], self::PROBE_TIMEOUT_SECONDS);
+        $report = \json_decode(\trim($result['output']), true);
+        if (!$result['success'] || !\is_array($report)) {
+            return [
+                'success' => false,
+                'version' => '',
+                'output' => $this->tail($result['output']),
+            ];
+        }
+        $protocols = \is_array($report['protocols'] ?? null) ? $report['protocols'] : [];
+        $tls = \is_array($report['tls'] ?? null) ? $report['tls'] : [];
+        $features = \is_array($report['features'] ?? null) ? $report['features'] : [];
+        $sourceDigest = \strtolower(\trim((string)($report['source_digest'] ?? '')));
+        $expectedSourceDigest = $this->nativeEngineSourceDigest();
+        [$expectedOs, $expectedArchitecture] = \explode('-', $this->nativePlatformKey(), 2);
+        $platformMatches = ($report['os'] ?? '') === $expectedOs
+            && ($report['arch'] ?? '') === $expectedArchitecture;
+        $requiredProtocols = \array_values(\array_filter(
+            $selection->protocols,
+            static fn (mixed $protocol): bool => \is_string($protocol),
+        ));
+        $protocolsAvailable = \array_diff($requiredProtocols, $protocols) === [];
+        $requiredFeatures = [
+            'quic',
+            'alpn',
+            'upstream_keepalive',
+            'atomic_reload',
+        ];
+        if ($selection->tlsSessionResumption) {
+            $requiredFeatures[] = 'tls_session_tickets';
+        }
+        $featuresAvailable = \array_diff($requiredFeatures, $features) === [];
+        $success = ($report['name'] ?? '') === 'wls-protocol-edge'
+            && ($report['probe_ok'] ?? false) === true
+            && $protocolsAvailable
+            && \in_array('tls1.3', $tls, true)
+            && $featuresAvailable
+            && $platformMatches
+            && $expectedSourceDigest !== ''
+            && \hash_equals($expectedSourceDigest, $sourceDigest);
+        $version = \trim((string)($report['version'] ?? ''));
+        $goVersion = \trim((string)($report['go_version'] ?? ''));
+
+        return [
+            'success' => $success,
+            'version' => \trim('WLS Native ' . $version . ' (' . $goVersion . ')'),
+            'output' => $success ? '' : $this->tail($result['output']),
         ];
     }
 
@@ -302,10 +382,441 @@ final class ProtocolEdgeDependencyBootstrapper
     }
 
     /**
+     * Build the WLS-owned data plane from its pinned Go module. Go is a build
+     * dependency only; the resulting engine is a self-contained executable.
+     *
      * @return array{success:bool,output:string}
      */
-    private function installForCurrentPlatform(): array
+    private function installNativeEngine(HttpProtocolSelection $selection): array
     {
+        $go = $this->resolveUsableGoBinary();
+        $toolchainOutput = '';
+        if ($go === '') {
+            $installed = $this->installManagedGoToolchain();
+            $toolchainOutput = $installed['output'];
+            if (!$installed['success']) {
+                return $installed;
+            }
+            $go = $this->resolveUsableGoBinary();
+        }
+        if ($go === '') {
+            return ['success' => false, 'output' => 'Go toolchain installation completed but no usable Go binary was found.'];
+        }
+
+        $source = $this->nativeEngineSourceDirectory();
+        if (!\is_file($source . DS . 'go.mod') || !\is_file($source . DS . 'go.sum')) {
+            return ['success' => false, 'output' => 'WLS native protocol-edge source module is incomplete.'];
+        }
+
+        $target = ProtocolEdgeRuntime::managedNativeBinaryPath();
+        $directory = \dirname($target);
+        if (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory)) {
+            return ['success' => false, 'output' => 'Unable to create the WLS native protocol-edge runtime directory.'];
+        }
+        $cacheRoot = Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'go-cache';
+        foreach ([$cacheRoot . DS . 'build', $cacheRoot . DS . 'modules'] as $cacheDirectory) {
+            if (!\is_dir($cacheDirectory)
+                && !@\mkdir($cacheDirectory, 0755, true)
+                && !\is_dir($cacheDirectory)
+            ) {
+                return ['success' => false, 'output' => 'Unable to create the managed Go build cache.'];
+            }
+        }
+
+        $token = \bin2hex(\random_bytes(8));
+        $candidate = $target . '.install-' . $token;
+        $commit = 'unknown';
+        $git = $this->findExecutable('git');
+        if ($git !== '') {
+            $commitProbe = $this->run([$git, 'rev-parse', '--short=12', 'HEAD'], 10, BP);
+            if ($commitProbe['success'] && \preg_match('/^[a-f0-9]{7,40}$/D', \trim($commitProbe['output'])) === 1) {
+                $commit = \trim($commitProbe['output']);
+            }
+        }
+        $environment = \getenv();
+        $environment = \is_array($environment) ? $environment : [];
+        $environment['GOTOOLCHAIN'] = 'local';
+        $environment['CGO_ENABLED'] = '0';
+        $environment['GOFLAGS'] = '-mod=readonly';
+        $environment['GOCACHE'] = $cacheRoot . DS . 'build';
+        $environment['GOMODCACHE'] = $cacheRoot . DS . 'modules';
+        $ldflags = '-s -w -buildid= -X main.buildVersion=' . self::NATIVE_ENGINE_VERSION
+            . ' -X main.buildCommit=' . $commit
+            . ' -X main.buildSourceDigest=' . $this->nativeEngineSourceDigest();
+        $build = $this->run([
+            $go,
+            'build',
+            '-trimpath',
+            '-buildvcs=false',
+            '-ldflags=' . $ldflags,
+            '-o',
+            $candidate,
+            '.',
+        ], self::INSTALL_TIMEOUT_SECONDS, $source, $environment);
+        if (!$build['success']) {
+            return [
+                'success' => false,
+                'output' => $this->tail($toolchainOutput . PHP_EOL . $build['output']),
+            ];
+        }
+        @\chmod($candidate, 0755);
+
+        try {
+            $probe = $this->probeNativeEngine($candidate, $selection);
+            if (!$probe['success']) {
+                return [
+                    'success' => false,
+                    'output' => 'Built WLS native engine failed its capability probe: ' . $probe['output'],
+                ];
+            }
+            $publish = $this->publishManagedFile($candidate, $target, $token);
+            if (!$publish['success']) {
+                return $publish;
+            }
+
+            return [
+                'success' => true,
+                'output' => $this->tail(
+                    $toolchainOutput . PHP_EOL
+                    . 'Built and installed ' . $probe['version'] . ' from the pinned WLS source module.'
+                ),
+            ];
+        } finally {
+            // Installer-owned random-suffix candidate only.
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            @\unlink($candidate);
+        }
+    }
+
+    private function resolveUsableGoBinary(): string
+    {
+        foreach ([$this->managedGoBinary(), $this->findExecutable('go')] as $candidate) {
+            if ($candidate === ''
+                || !\is_file($candidate)
+                || (PHP_OS_FAMILY !== 'Windows' && !\is_executable($candidate))
+            ) {
+                continue;
+            }
+            $version = $this->run([$candidate, 'version'], 10);
+            if ($version['success']
+                && \preg_match('/\bgo1\.([0-9]+)(?:\.[0-9]+)?\b/', $version['output'], $matches) === 1
+                && (int)$matches[1] >= 25
+            ) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    private function nativeEngineSourceDirectory(): string
+    {
+        return BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS
+            . 'native' . DS . 'protocol-edge';
+    }
+
+    private function nativeEngineSourceDigest(): string
+    {
+        $directory = $this->nativeEngineSourceDirectory();
+        $files = [
+            $directory . DS . 'go.mod',
+            $directory . DS . 'go.sum',
+            ...((array)\glob($directory . DS . '*.go')),
+        ];
+        $files = \array_values(\array_unique(\array_filter(
+            $files,
+            static fn (mixed $path): bool => \is_string($path) && \is_file($path),
+        )));
+        \sort($files, \SORT_STRING);
+        if ($files === []) {
+            return '';
+        }
+        $hash = \hash_init('sha256');
+        foreach ($files as $file) {
+            \hash_update($hash, \basename($file) . "\0");
+            $handle = @\fopen($file, 'rb');
+            if (!\is_resource($handle)) {
+                return '';
+            }
+            try {
+                \hash_update_stream($hash, $handle);
+            } finally {
+                @\fclose($handle);
+            }
+            \hash_update($hash, "\0");
+        }
+
+        return \hash_final($hash);
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function installManagedGoToolchain(): array
+    {
+        $platform = $this->nativePlatformKey();
+        $expectedHash = self::GO_ARCHIVE_SHA256[$platform] ?? '';
+        if ($expectedHash === '') {
+            return ['success' => false, 'output' => 'No verified Go toolchain is defined for platform: ' . $platform];
+        }
+        [$os, $architecture] = \explode('-', $platform, 2);
+        $extension = $os === 'windows' ? 'zip' : 'tar.gz';
+        $filename = 'go' . self::GO_VERSION . '.' . $os . '-' . $architecture . '.' . $extension;
+        $url = 'https://go.dev/dl/' . $filename;
+        $base = Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'toolchains' . DS . 'go';
+        $final = $base . DS . self::GO_VERSION . DS . $platform;
+        if (!\is_dir(\dirname($final))
+            && !@\mkdir(\dirname($final), 0755, true)
+            && !\is_dir(\dirname($final))
+        ) {
+            return ['success' => false, 'output' => 'Unable to create the managed Go toolchain directory.'];
+        }
+
+        $token = \bin2hex(\random_bytes(8));
+        $archive = $base . DS . $filename . '.download-' . $token;
+        $staging = $base . DS . '.extract-' . $token;
+        if (!@\mkdir($staging, 0700, true) && !\is_dir($staging)) {
+            return ['success' => false, 'output' => 'Unable to create the managed Go extraction directory.'];
+        }
+        try {
+            $download = $this->downloadVerifiedFile($url, $archive, $expectedHash);
+            if (!$download['success']) {
+                return $download;
+            }
+            if ($os === 'windows') {
+                $extracted = $this->extractVerifiedZip($archive, $staging);
+            } else {
+                $tar = $this->findExecutable('tar');
+                $extracted = $tar === ''
+                    ? ['success' => false, 'output' => 'tar is required to extract the verified Go toolchain.']
+                    : $this->run([$tar, '-xzf', $archive, '-C', $staging], 180, $staging);
+            }
+            if (!$extracted['success']) {
+                return ['success' => false, 'output' => $this->tail($extracted['output'])];
+            }
+            $goBinary = $staging . DS . 'go' . DS . 'bin' . DS . ($os === 'windows' ? 'go.exe' : 'go');
+            if (!\is_file($goBinary)) {
+                return ['success' => false, 'output' => 'Verified Go archive did not contain the expected compiler.'];
+            }
+            @\chmod($goBinary, 0755);
+            $version = $this->run([$goBinary, 'version'], 10, $staging);
+            if (!$version['success'] || !\str_contains($version['output'], 'go' . self::GO_VERSION)) {
+                return ['success' => false, 'output' => 'Extracted Go compiler failed version verification.'];
+            }
+
+            $published = $this->publishManagedDirectory($staging, $final, $token);
+            if (!$published['success']) {
+                return $published;
+            }
+            return [
+                'success' => true,
+                'output' => 'Installed verified Go ' . self::GO_VERSION . ' for ' . $platform . '.',
+            ];
+        } finally {
+            // Installer-owned random-suffix archive only.
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            @\unlink($archive);
+        }
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function extractVerifiedZip(string $archive, string $destination): array
+    {
+        if (!\class_exists(\ZipArchive::class)) {
+            return ['success' => false, 'output' => 'ZipArchive is required to extract the verified Go toolchain.'];
+        }
+        $zip = new \ZipArchive();
+        if ($zip->open($archive) !== true) {
+            return ['success' => false, 'output' => 'Unable to open the verified Go archive.'];
+        }
+        try {
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entry = \str_replace('\\', '/', (string)$zip->getNameIndex($index));
+                if ($entry === ''
+                    || \str_starts_with($entry, '/')
+                    || \preg_match('#(^|/)\.\.(?:/|$)#', $entry) === 1
+                    || \preg_match('/^[A-Za-z]:/', $entry) === 1
+                ) {
+                    return ['success' => false, 'output' => 'Verified Go archive contains an unsafe path.'];
+                }
+            }
+            if (!$zip->extractTo($destination)) {
+                return ['success' => false, 'output' => 'Unable to extract the verified Go archive.'];
+            }
+        } finally {
+            $zip->close();
+        }
+        return ['success' => true, 'output' => 'Verified Go archive extracted.'];
+    }
+
+    private function managedGoBinary(): string
+    {
+        $platform = $this->nativePlatformKey();
+        $binary = \str_starts_with($platform, 'windows-') ? 'go.exe' : 'go';
+
+        $root = Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'toolchains' . DS . 'go' . DS
+            . self::GO_VERSION . DS . $platform;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $marker = $root . DS . '.complete';
+            $expected = self::GO_VERSION . ' ' . $platform;
+            if (!\is_file($marker) || \trim((string)@\file_get_contents($marker)) !== $expected) {
+                return '';
+            }
+        }
+
+        return $root . DS . 'go' . DS . 'bin' . DS . $binary;
+    }
+
+    private function nativePlatformKey(): string
+    {
+        $os = match (PHP_OS_FAMILY) {
+            'Darwin' => 'darwin',
+            'Linux' => 'linux',
+            'Windows' => 'windows',
+            default => \strtolower(PHP_OS_FAMILY),
+        };
+        $architecture = PHP_OS_FAMILY === 'Windows'
+            ? $this->windowsNativeArchitecture()
+            : \strtolower(\trim((string)\php_uname('m')));
+        $architecture = match ($architecture) {
+            'x86_64', 'x64', 'amd64' => 'amd64',
+            'aarch64', 'arm64' => 'arm64',
+            default => $architecture,
+        };
+
+        return $os . '-' . $architecture;
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function publishManagedFile(string $candidate, string $target, string $token): array
+    {
+        $backup = '';
+        if (\is_file($target)) {
+            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token;
+            if (!@\rename($target, $backup)) {
+                return ['success' => false, 'output' => 'Unable to preserve the existing managed WLS engine.'];
+            }
+        }
+        if (@\rename($candidate, $target)) {
+            @\chmod($target, 0755);
+            return ['success' => true, 'output' => 'Managed WLS protocol engine published atomically.'];
+        }
+        if ($backup !== '' && !\is_file($target)) {
+            @\rename($backup, $target);
+        }
+
+        return ['success' => false, 'output' => 'Unable to atomically publish the managed WLS protocol engine.'];
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function publishManagedDirectory(string $candidate, string $target, string $token): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return $this->publishManagedDirectoryOnWindows($candidate, $target, $token);
+        }
+
+        $backup = '';
+        if (\is_dir($target)) {
+            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token;
+            if (!@\rename($target, $backup)) {
+                return ['success' => false, 'output' => 'Unable to preserve the existing managed Go toolchain.'];
+            }
+        }
+        if (@\rename($candidate, $target)) {
+            return ['success' => true, 'output' => 'Managed Go toolchain published atomically.'];
+        }
+        if ($backup !== '' && !\is_dir($target)) {
+            @\rename($backup, $target);
+        }
+
+        return ['success' => false, 'output' => 'Unable to atomically publish the managed Go toolchain.'];
+    }
+
+    /**
+     * Windows can retain an executable handle briefly after the compiler
+     * version probe. Publishing the extracted directory with rename() is then
+     * unreliable even on the same volume. A completion marker provides the
+     * visibility fence: no consumer can resolve a partially copied toolchain.
+     *
+     * @return array{success:bool,output:string}
+     */
+    private function publishManagedDirectoryOnWindows(string $candidate, string $target, string $token): array
+    {
+        if (!\is_dir($candidate)) {
+            return ['success' => false, 'output' => 'Managed Go toolchain candidate is missing.'];
+        }
+        if (!\is_dir($target) && !@\mkdir($target, 0755, true) && !\is_dir($target)) {
+            return ['success' => false, 'output' => 'Unable to create the managed Go toolchain target.'];
+        }
+
+        $marker = $target . DS . '.complete';
+        $temporaryMarker = $target . DS . '.complete-' . $token;
+        // Installer-owned marker only. Removing it fences a prior incomplete
+        // or damaged installation before any files are replaced.
+        // nosemgrep: php.lang.security.unlink-use.unlink-use
+        @\unlink($marker);
+        $copied = $this->copyManagedDirectoryContents($candidate, $target);
+        if (!$copied['success']) {
+            return $copied;
+        }
+
+        $payload = self::GO_VERSION . ' ' . $this->nativePlatformKey() . PHP_EOL;
+        if (@\file_put_contents($temporaryMarker, $payload, \LOCK_EX) === false
+            || !@\rename($temporaryMarker, $marker)
+        ) {
+            // Installer-owned random-suffix marker only.
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            @\unlink($temporaryMarker);
+            return ['success' => false, 'output' => 'Unable to publish the managed Go completion marker.'];
+        }
+
+        return [
+            'success' => true,
+            'output' => 'Managed Go toolchain published with a Windows-safe completion fence.',
+        ];
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function copyManagedDirectoryContents(string $source, string $target): array
+    {
+        try {
+            $iterator = new \FilesystemIterator($source, \FilesystemIterator::SKIP_DOTS);
+            foreach ($iterator as $entry) {
+                if ($entry->isLink()) {
+                    return ['success' => false, 'output' => 'Managed Go archive contains an unsupported link.'];
+                }
+                $destination = $target . DS . $entry->getFilename();
+                if ($entry->isDir()) {
+                    if (!\is_dir($destination)
+                        && !@\mkdir($destination, 0755, true)
+                        && !\is_dir($destination)
+                    ) {
+                        return ['success' => false, 'output' => 'Unable to create a managed Go subdirectory.'];
+                    }
+                    $copied = $this->copyManagedDirectoryContents($entry->getPathname(), $destination);
+                    if (!$copied['success']) {
+                        return $copied;
+                    }
+                    continue;
+                }
+                if (!$entry->isFile() || !@\copy($entry->getPathname(), $destination)) {
+                    return ['success' => false, 'output' => 'Unable to copy a managed Go toolchain file.'];
+                }
+            }
+        } catch (\Throwable $throwable) {
+            return ['success' => false, 'output' => 'Unable to copy the managed Go toolchain: ' . $throwable->getMessage()];
+        }
+
+        return ['success' => true, 'output' => 'Managed Go toolchain files copied.'];
+    }
+
+    /**
+     * @return array{success:bool,output:string}
+     */
+    private function installForCurrentPlatform(HttpProtocolSelection $selection): array
+    {
+        if ($selection->isNativeProtocolEdge()) {
+            return $this->installNativeEngine($selection);
+        }
+
         if (PHP_OS_FAMILY === 'Darwin') {
             $brew = $this->findExecutable('brew');
             if ($brew === '') {
@@ -316,9 +827,18 @@ final class ProtocolEdgeDependencyBootstrapper
         }
 
         if (PHP_OS_FAMILY === 'Windows') {
+            // Prefer the project-local, fixed-digest package. It needs no
+            // administrator rights and selects native ARM64 on Windows ARM,
+            // instead of relying on an x64 package-manager shim.
+            $verified = $this->installVerifiedWindowsCaddy($selection);
+            if ($verified['success']) {
+                return $verified;
+            }
+            $fallbackOutput = [$verified['output']];
+
             $winget = $this->findExecutable('winget');
             if ($winget !== '') {
-                return $this->run([
+                $install = $this->run([
                     $winget,
                     'install',
                     '--id',
@@ -328,17 +848,32 @@ final class ProtocolEdgeDependencyBootstrapper
                     '--accept-package-agreements',
                     '--accept-source-agreements',
                 ], self::INSTALL_TIMEOUT_SECONDS);
+                if ($install['success']) {
+                    return $install;
+                }
+                $fallbackOutput[] = $install['output'];
             }
             $choco = $this->findExecutable('choco');
             if ($choco !== '') {
-                return $this->run([$choco, 'install', 'caddy', '-y'], self::INSTALL_TIMEOUT_SECONDS);
+                $install = $this->run([$choco, 'install', 'caddy', '-y'], self::INSTALL_TIMEOUT_SECONDS);
+                if ($install['success']) {
+                    return $install;
+                }
+                $fallbackOutput[] = $install['output'];
             }
             $scoop = $this->findExecutable('scoop');
             if ($scoop !== '') {
-                return $this->run([$scoop, 'install', 'caddy'], self::INSTALL_TIMEOUT_SECONDS);
+                $install = $this->run([$scoop, 'install', 'caddy'], self::INSTALL_TIMEOUT_SECONDS);
+                if ($install['success']) {
+                    return $install;
+                }
+                $fallbackOutput[] = $install['output'];
             }
 
-            return ['success' => false, 'output' => 'winget, Chocolatey, or Scoop is required to install Caddy on Windows.'];
+            return [
+                'success' => false,
+                'output' => $this->tail(\implode(PHP_EOL, \array_filter($fallbackOutput, 'strlen'))),
+            ];
         }
 
         if (PHP_OS_FAMILY === 'Linux') {
@@ -373,6 +908,204 @@ final class ProtocolEdgeDependencyBootstrapper
         return ['success' => false, 'output' => 'This platform has no verified Caddy auto-installer.'];
     }
 
+    /**
+     * Install one immutable official Windows release and validate its complete
+     * HTTP/1.1 + HTTP/2 + HTTP/3 feature set before publishing it atomically.
+     *
+     * @return array{success:bool,output:string}
+     */
+    private function installVerifiedWindowsCaddy(HttpProtocolSelection $selection): array
+    {
+        if (!\class_exists(\ZipArchive::class)) {
+            return ['success' => false, 'output' => 'Verified Windows Caddy installation requires ZipArchive.'];
+        }
+
+        $architecture = $this->windowsNativeArchitecture();
+        $expectedHash = self::WINDOWS_CADDY_PACKAGE_SHA256[$architecture] ?? '';
+        if ($expectedHash === '') {
+            return [
+                'success' => false,
+                'output' => 'No fixed Caddy digest is available for Windows architecture: ' . $architecture,
+            ];
+        }
+
+        $packageName = 'caddy_' . self::WINDOWS_CADDY_VERSION . '_windows_' . $architecture . '.zip';
+        $url = self::WINDOWS_CADDY_BASE_URL . '/' . $packageName;
+        $managedBinary = ProtocolEdgeRuntime::managedBinaryPath();
+        $directory = \dirname($managedBinary);
+        if (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory)) {
+            return ['success' => false, 'output' => 'Unable to create the managed Caddy runtime directory.'];
+        }
+        if (!\is_writable($directory)) {
+            return ['success' => false, 'output' => 'Managed Caddy runtime directory is not writable: ' . $directory];
+        }
+
+        $token = \bin2hex(\random_bytes(8));
+        $archive = $directory . DIRECTORY_SEPARATOR . $packageName . '.download-' . $token;
+        $candidate = $managedBinary . '.install-' . $token . '.exe';
+        try {
+            $download = $this->downloadVerifiedFile($url, $archive, $expectedHash);
+            if (!$download['success']) {
+                return $download;
+            }
+
+            $zip = new \ZipArchive();
+            if ($zip->open($archive) !== true) {
+                return ['success' => false, 'output' => 'Unable to open the verified Caddy archive.'];
+            }
+            $entryName = '';
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entry = (string)$zip->getNameIndex($index);
+                if (\strtolower(\basename(\str_replace('\\', '/', $entry))) === 'caddy.exe') {
+                    $entryName = $entry;
+                    break;
+                }
+            }
+            if ($entryName === '') {
+                $zip->close();
+                return ['success' => false, 'output' => 'Verified Caddy archive does not contain caddy.exe.'];
+            }
+
+            $source = $zip->getStream($entryName);
+            $destination = @\fopen($candidate, 'xb');
+            if (!\is_resource($source) || !\is_resource($destination)) {
+                if (\is_resource($source)) {
+                    @\fclose($source);
+                }
+                if (\is_resource($destination)) {
+                    @\fclose($destination);
+                }
+                $zip->close();
+                return ['success' => false, 'output' => 'Unable to extract the verified Caddy executable.'];
+            }
+            try {
+                $bytes = \stream_copy_to_stream($source, $destination);
+                @\fflush($destination);
+            } finally {
+                @\fclose($source);
+                @\fclose($destination);
+                $zip->close();
+            }
+            if (!\is_int($bytes) || $bytes <= 0) {
+                return ['success' => false, 'output' => 'Verified Caddy executable is empty.'];
+            }
+            @\chmod($candidate, 0755);
+
+            $probe = $this->probe($candidate, $selection);
+            if (!$probe['success']) {
+                return [
+                    'success' => false,
+                    'output' => 'Downloaded Caddy failed the runtime capability probe: ' . $probe['output'],
+                ];
+            }
+
+            $publish = $this->publishWindowsBinary($candidate, $managedBinary, $token);
+            if (!$publish['success']) {
+                return $publish;
+            }
+
+            return [
+                'success' => true,
+                'output' => 'Installed official Caddy ' . self::WINDOWS_CADDY_VERSION
+                    . ' for Windows ' . $architecture . ' with verified SHA-256; ' . $probe['version'],
+            ];
+        } finally {
+            // Installer-owned fixed directory and random-suffix files only.
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            @\unlink($archive);
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            @\unlink($candidate);
+        }
+    }
+
+    private function windowsNativeArchitecture(): string
+    {
+        // Windows on ARM can run an x64 PHP binary without setting
+        // PROCESSOR_ARCHITEW6432. In that case PROCESSOR_ARCHITECTURE and
+        // php_uname() describe the emulated process, while the processor
+        // identifier still describes the native ARM host.
+        $processorIdentifier = \strtolower(\trim((string)\getenv('PROCESSOR_IDENTIFIER')));
+        if (\str_contains($processorIdentifier, 'arm')) {
+            return 'arm64';
+        }
+        $architecture = \strtolower(\trim((string)(
+            \getenv('PROCESSOR_ARCHITEW6432') ?: \getenv('PROCESSOR_ARCHITECTURE') ?: ''
+        )));
+        if (\str_contains($architecture, 'arm64')) {
+            return 'arm64';
+        }
+        if (\str_contains($architecture, 'amd64') || \str_contains($architecture, 'x86_64')) {
+            return 'amd64';
+        }
+
+        return $architecture !== '' ? $architecture : 'unknown';
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function downloadVerifiedFile(string $url, string $target, string $expectedHash): array
+    {
+        $context = \stream_context_create([
+            'http' => [
+                'follow_location' => 1,
+                'max_redirects' => 5,
+                'timeout' => 120,
+                'user_agent' => 'WelineFramework-WLS/' . PHP_VERSION,
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]);
+        $source = @\fopen($url, 'rb', false, $context);
+        $destination = @\fopen($target, 'xb');
+        if (!\is_resource($source) || !\is_resource($destination)) {
+            if (\is_resource($source)) {
+                @\fclose($source);
+            }
+            if (\is_resource($destination)) {
+                @\fclose($destination);
+            }
+            return ['success' => false, 'output' => 'Unable to download the verified dependency package over HTTPS.'];
+        }
+        try {
+            $bytes = \stream_copy_to_stream($source, $destination);
+            @\fflush($destination);
+        } finally {
+            @\fclose($source);
+            @\fclose($destination);
+        }
+        if (!\is_int($bytes) || $bytes <= 0) {
+            return ['success' => false, 'output' => 'Verified dependency package download was empty.'];
+        }
+
+        $actualHash = \hash_file('sha256', $target);
+        if (!\is_string($actualHash) || !\hash_equals($expectedHash, \strtolower($actualHash))) {
+            return ['success' => false, 'output' => 'Dependency package SHA-256 mismatch; installation refused.'];
+        }
+
+        return ['success' => true, 'output' => 'Dependency package digest verified.'];
+    }
+
+    /** @return array{success:bool,output:string} */
+    private function publishWindowsBinary(string $candidate, string $target, string $token): array
+    {
+        $backup = '';
+        if (\is_file($target)) {
+            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token;
+            if (!@\rename($target, $backup)) {
+                return ['success' => false, 'output' => 'Unable to preserve the existing managed Caddy binary.'];
+            }
+        }
+        if (@\rename($candidate, $target)) {
+            return ['success' => true, 'output' => 'Managed Caddy binary published atomically.'];
+        }
+        if ($backup !== '' && !\is_file($target)) {
+            @\rename($backup, $target);
+        }
+
+        return ['success' => false, 'output' => 'Unable to atomically publish the managed Caddy binary.'];
+    }
+
     private function findExecutable(string $name): string
     {
         $binaryName = PHP_OS_FAMILY === 'Windows' && !\str_ends_with(\strtolower($name), '.exe')
@@ -380,13 +1113,13 @@ final class ProtocolEdgeDependencyBootstrapper
             : $name;
         foreach (\array_filter(\explode(PATH_SEPARATOR, (string)(\getenv('PATH') ?: '')), 'strlen') as $directory) {
             $candidate = \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $binaryName;
-            if (\is_file($candidate) && \is_executable($candidate)) {
+            if (ProtocolEdgeRuntime::isRunnableBinary($candidate)) {
                 return $candidate;
             }
         }
         foreach (['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'] as $directory) {
             $candidate = $directory . DIRECTORY_SEPARATOR . $binaryName;
-            if (\is_file($candidate) && \is_executable($candidate)) {
+            if (ProtocolEdgeRuntime::isRunnableBinary($candidate)) {
                 return $candidate;
             }
         }
@@ -428,7 +1161,12 @@ final class ProtocolEdgeDependencyBootstrapper
      * @param list<string> $command
      * @return array{success:bool,exit_code:int,output:string,timed_out:bool}
      */
-    private function run(array $command, int $timeoutSeconds): array
+    private function run(
+        array $command,
+        int $timeoutSeconds,
+        ?string $workingDirectory = null,
+        ?array $environment = null,
+    ): array
     {
         if (!\function_exists('proc_open')) {
             return ['success' => false, 'exit_code' => 127, 'output' => 'proc_open is unavailable.', 'timed_out' => false];
@@ -438,7 +1176,7 @@ final class ProtocolEdgeDependencyBootstrapper
             0 => ['file', $null, 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
-        ], $pipes, \defined('BP') ? BP : null, null, ['bypass_shell' => true]);
+        ], $pipes, $workingDirectory ?? (\defined('BP') ? BP : null), $environment, ['bypass_shell' => true]);
         if (!\is_resource($process)) {
             return ['success' => false, 'exit_code' => 126, 'output' => 'Unable to launch dependency process.', 'timed_out' => false];
         }

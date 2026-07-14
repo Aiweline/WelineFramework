@@ -10,8 +10,8 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\MasterProcess;
 
 /**
- * Filesystem, port and immutable Caddy configuration helpers for the public
- * HTTP protocol edge. L7 policy remains exclusively inside WorkerPolicyKernel.
+ * Filesystem, port and immutable configuration helpers for the WLS-owned
+ * public HTTP protocol edge. L7 policy remains exclusively in WorkerPolicyKernel.
  */
 final class ProtocolEdgeRuntime
 {
@@ -51,7 +51,7 @@ final class ProtocolEdgeRuntime
 
     public static function configFile(string $instanceName): string
     {
-        return self::runtimeDirectory($instanceName) . DS . 'Caddyfile';
+        return self::runtimeDirectory($instanceName) . DS . 'edge.conf';
     }
 
     public static function nativeConfigFile(string $instanceName): string
@@ -64,9 +64,14 @@ final class ProtocolEdgeRuntime
         return self::runtimeDirectory($instanceName) . DS . 'stek';
     }
 
+    public static function sessionTicketKeyFile(string $instanceName): string
+    {
+        return self::runtimeDirectory($instanceName) . DS . 'session-ticket-keys.json';
+    }
+
     public static function pidFile(string $instanceName): string
     {
-        return self::runtimeDirectory($instanceName) . DS . 'caddy.pid';
+        return self::runtimeDirectory($instanceName) . DS . 'edge-child.pid';
     }
 
     public static function activeStateFile(string $instanceName): string
@@ -279,6 +284,9 @@ final class ProtocolEdgeRuntime
 
         $directory = self::runtimeDirectory($context->instanceName);
         self::ensurePrivateDirectory($directory);
+        if ($selection->isNativeProtocolEdge()) {
+            return self::writeWlsNativeConfig($context, $selection, $publishedUpstreams);
+        }
         $token = self::readToken($context->instanceName);
         $serverName = self::normalizeServerName($context->publicHost ?: $context->host);
         $authority = self::formatAuthority($serverName, $context->mainPort);
@@ -375,6 +383,87 @@ final class ProtocolEdgeRuntime
         return $path;
     }
 
+    /**
+     * Compile the WLS-owned protocol engine's immutable listener, TLS and
+     * upstream contract. The engine only terminates protocols and reuses
+     * connections; WorkerPolicyKernel remains authoritative for every L7 rule.
+     *
+     * @param list<int|string>|null $publishedUpstreams
+     */
+    private static function writeWlsNativeConfig(
+        ServiceContext $context,
+        HttpProtocolSelection $selection,
+        ?array $publishedUpstreams,
+    ): string {
+        $resolvedUpstreams = self::normalizePublishedUpstreams($context, $publishedUpstreams);
+        $serverName = self::normalizeServerName($context->publicHost ?: $context->host);
+        $listenHost = self::normalizeListenHost($context->host);
+        $healthHost = self::formatAuthority($serverName, $context->mainPort);
+        $sslConfig = $context->getConfig('wls.ssl', []);
+        $tlsSelection = (new TlsProcessProfileConfigurator())->resolveConfiguration([
+            'ssl' => \is_array($sslConfig) ? $sslConfig : [],
+        ]);
+        $tlsProtocols = $tlsSelection['protocols'];
+        $tlsMinimum = \in_array('tls1.2', $tlsProtocols, true) ? 'tls1.2' : 'tls1.3';
+        $tlsMaximum = \in_array('tls1.3', $tlsProtocols, true) ? 'tls1.3' : 'tls1.2';
+        $upstreamCount = \count($resolvedUpstreams);
+
+        $payload = \json_encode([
+            'schema_version' => 1,
+            'instance' => $context->instanceName,
+            'public' => [
+                'address' => self::formatAuthority($listenHost, $context->mainPort, true),
+                'host' => $serverName,
+                'port' => $context->mainPort,
+            ],
+            'admin_address' => '127.0.0.1:' . self::adminPort($context),
+            'protocols' => $selection->protocols,
+            'preferred' => $selection->preferred,
+            'alt_svc' => $selection->altSvc,
+            'tls' => [
+                'certificate_file' => $context->sslCert,
+                'private_key_file' => $context->sslKey,
+                'minimum_version' => $tlsMinimum,
+                'maximum_version' => $tlsMaximum,
+                'session_resumption' => $selection->tlsSessionResumption,
+                'session_ticket_key_file' => self::sessionTicketKeyFile($context->instanceName),
+                'session_ticket_rotation' => '12h',
+                'session_ticket_max_keys' => 4,
+            ],
+            'proxy' => [
+                'upstreams' => $resolvedUpstreams,
+                'token_file' => self::ensureTokenFile($context->instanceName),
+                'health_host' => $healthHost,
+                'health_path' => '/_wls/health',
+                'health_interval' => '2s',
+                'health_timeout' => '500ms',
+                'dial_timeout' => '250ms',
+                'response_header_timeout' => '30s',
+                'idle_connection_timeout' => '2m',
+                'max_idle_connections' => \max(1024, $upstreamCount * 256),
+                'max_idle_per_upstream' => \max(128, $upstreamCount * 64),
+                'max_connections_per_upstream' => \max(512, $upstreamCount * 128),
+            ],
+            'timeouts' => [
+                'read_header' => '5s',
+                'read_body' => '30s',
+                'write' => '30s',
+                'idle' => '2m',
+            ],
+            'limits' => [
+                'max_header_bytes' => 65536,
+            ],
+            'keep_alive' => [
+                'tcp_interval' => '30s',
+                'quic_idle' => '2m',
+            ],
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT | \JSON_THROW_ON_ERROR);
+        $path = self::configFile($context->instanceName);
+        self::writeAtomically($path, $payload . PHP_EOL, 0600);
+
+        return $path;
+    }
+
     public static function configDigest(string $instanceName): string
     {
         $path = self::configFile($instanceName);
@@ -461,29 +550,40 @@ final class ProtocolEdgeRuntime
     public static function resolveBinary(ServiceContext|array|null $source = null): string
     {
         $configured = '';
+        $edge = HttpProtocolSelection::EDGE_NATIVE;
         if ($source instanceof ServiceContext) {
             $configured = \trim((string)$source->getConfig('wls.http.protocol_edge_binary', ''));
+            $edge = self::selection($source)->edge;
         } elseif (\is_array($source)) {
             $http = \is_array($source['http'] ?? null) ? $source['http'] : [];
             $configured = \trim((string)($http['protocol_edge_binary'] ?? ''));
+            $protocols = $http['protocols'] ?? HttpProtocolSelection::DEFAULT_PROTOCOLS;
+            $edge = HttpProtocolSelection::fromArray([
+                'protocols' => $protocols,
+                'preferred' => $http['preferred'] ?? HttpProtocolSelection::HTTP_3,
+                'edge' => $http['protocol_edge'] ?? $http['edge'] ?? HttpProtocolSelection::EDGE_NATIVE,
+            ])->edge;
         }
-        $environment = \trim((string)(\getenv('WLS_CADDY_BINARY') ?: ''));
+        $native = $edge === HttpProtocolSelection::EDGE_NATIVE;
+        $environment = \trim((string)(\getenv($native ? 'WLS_PROTOCOL_EDGE_BINARY' : 'WLS_CADDY_BINARY') ?: ''));
         foreach ([$configured, $environment] as $candidate) {
-            if ($candidate !== '' && \is_file($candidate) && \is_executable($candidate)) {
+            if (self::isRunnableBinary($candidate)) {
                 return $candidate;
             }
         }
 
-        $binaryName = PHP_OS_FAMILY === 'Windows' ? 'caddy.exe' : 'caddy';
+        $binaryName = $native
+            ? (PHP_OS_FAMILY === 'Windows' ? 'wls-protocol-edge.exe' : 'wls-protocol-edge')
+            : (PHP_OS_FAMILY === 'Windows' ? 'caddy.exe' : 'caddy');
         $path = (string)(\getenv('PATH') ?: '');
         foreach (\array_filter(\explode(PATH_SEPARATOR, $path), 'strlen') as $directory) {
             $candidate = \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $binaryName;
-            if (\is_file($candidate) && \is_executable($candidate)) {
+            if (self::isRunnableBinary($candidate)) {
                 return $candidate;
             }
         }
-        foreach (self::commonBinaryPaths($binaryName) as $candidate) {
-            if (\is_file($candidate) && \is_executable($candidate)) {
+        foreach (self::commonBinaryPaths($binaryName, $native) as $candidate) {
+            if (self::isRunnableBinary($candidate)) {
                 return $candidate;
             }
         }
@@ -492,15 +592,56 @@ final class ProtocolEdgeRuntime
     }
 
     /**
+     * PHP running under Windows x64 emulation reports native ARM64 PE files as
+     * non-executable even though CreateProcess can launch them. Capability
+     * probes remain the final authority on Windows; POSIX still requires the
+     * executable permission bit.
+     */
+    public static function isRunnableBinary(string $candidate): bool
+    {
+        return $candidate !== ''
+            && \is_file($candidate)
+            && (PHP_OS_FAMILY === 'Windows' || \is_executable($candidate));
+    }
+
+    /**
+     * Project-local dependency path used by the verified Windows installer.
+     * Keeping the binary under var avoids administrator-only Program Files
+     * writes and makes the selected version stable across service accounts.
+     */
+    public static function managedBinaryPath(): string
+    {
+        $binaryName = PHP_OS_FAMILY === 'Windows' ? 'caddy.exe' : 'caddy';
+
+        return Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'caddy' . DS . $binaryName;
+    }
+
+    /**
+     * Project-local WLS-native protocol engine. It is built or installed
+     * before Master creates any child process and is never resolved through a
+     * third-party web-server package.
+     */
+    public static function managedNativeBinaryPath(): string
+    {
+        $binaryName = PHP_OS_FAMILY === 'Windows' ? 'wls-protocol-edge.exe' : 'wls-protocol-edge';
+
+        return Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'protocol-edge' . DS . $binaryName;
+    }
+
+    /**
      * @return list<string>
      */
-    private static function commonBinaryPaths(string $binaryName): array
+    private static function commonBinaryPaths(string $binaryName, bool $native): array
     {
+        if ($native) {
+            return [self::managedNativeBinaryPath()];
+        }
         if (PHP_OS_FAMILY === 'Windows') {
             $programFiles = \rtrim((string)(\getenv('ProgramFiles') ?: 'C:\\Program Files'), '/\\');
             $localAppData = \rtrim((string)(\getenv('LOCALAPPDATA') ?: ''), '/\\');
 
             return \array_values(\array_filter([
+                self::managedBinaryPath(),
                 $programFiles . '\\Caddy\\' . $binaryName,
                 $localAppData !== '' ? $localAppData . '\\Microsoft\\WinGet\\Links\\' . $binaryName : '',
             ]));
@@ -578,6 +719,26 @@ final class ProtocolEdgeRuntime
         }
 
         return \strtolower($host);
+    }
+
+    private static function normalizeListenHost(string $host): string
+    {
+        $host = \trim($host);
+        if (\str_contains($host, '://')) {
+            $parsed = \parse_url($host, PHP_URL_HOST);
+            $host = \is_string($parsed) ? $parsed : '';
+        } elseif ($host !== '' && $host[0] === '[') {
+            $end = \strpos($host, ']');
+            $host = $end === false ? \trim($host, '[]') : \substr($host, 1, $end - 1);
+        } elseif (\substr_count($host, ':') === 1) {
+            [$host] = \explode(':', $host, 2);
+        }
+        $host = \trim($host, '[]');
+        if ($host === '' || $host === '*') {
+            return '0.0.0.0';
+        }
+
+        return $host;
     }
 
     private static function formatAuthority(string $host, int $port, bool $alwaysPort = false): string

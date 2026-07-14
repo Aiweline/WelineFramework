@@ -82,17 +82,44 @@ class SharedStateServiceManager
         $sessionPrepare = $sessionNeedsStartup
             ? $this->prepareSharedService($sessionDefinition, $requesterInstanceName, $frontend, $forceRestart)
             : $sessionProbe;
+        $prepared = [ControlMessage::ROLE_SESSION_SERVER => $sessionPrepare];
+        if ($memoryDefinition !== null) {
+            $prepared[ControlMessage::ROLE_MEMORY_SERVER] = $memoryNeedsStartup
+                ? $this->prepareSharedService($memoryDefinition, $requesterInstanceName, $frontend, $forceRestart)
+                : $memoryProbe;
+        }
 
-        // 组装结果
+        // Launch every missing sidecar before waiting. Session and Memory are
+        // independent processes and must not turn a sub-second bootstrap into
+        // two serial readiness waits.
+        $resolved = [];
+        $pendingDefinitions = [];
+        foreach ($prepared as $role => $prepare) {
+            if (($prepare['status'] ?? '') === 'ready') {
+                $resolved[$role] = \is_array($prepare['runtime'] ?? null) ? $prepare['runtime'] : [];
+                continue;
+            }
+            $definition = \is_array($prepare['definition'] ?? null) ? $prepare['definition'] : [];
+            if ($definition !== []) {
+                $pendingDefinitions[] = $definition;
+            }
+        }
+        if ($pendingDefinitions !== []) {
+            foreach ($this->waitUntilSharedServicesReadyBatch($pendingDefinitions) as $role => $roleRuntime) {
+                $resolved[$role] = $roleRuntime;
+            }
+        }
+
         $runtime = [
-            'session' => $this->runtimeFromPreparedSharedService($sessionPrepare, $sessionDefinition),
+            'session' => \is_array($resolved[ControlMessage::ROLE_SESSION_SERVER] ?? null)
+                ? $resolved[ControlMessage::ROLE_SESSION_SERVER]
+                : [],
         ];
 
         if ($memoryDefinition !== null) {
-            $memoryPrepare = $memoryNeedsStartup
-                ? $this->prepareSharedService($memoryDefinition, $requesterInstanceName, $frontend, $forceRestart)
-                : $memoryProbe;
-            $runtime['memory'] = $this->runtimeFromPreparedSharedService($memoryPrepare, $memoryDefinition);
+            $runtime['memory'] = \is_array($resolved[ControlMessage::ROLE_MEMORY_SERVER] ?? null)
+                ? $resolved[ControlMessage::ROLE_MEMORY_SERVER]
+                : [];
         } else {
             $runtime['memory'] = $this->buildRoleDefinition(
                 ControlMessage::ROLE_MEMORY_SERVER,
@@ -205,24 +232,6 @@ class SharedStateServiceManager
     }
 
     /**
-     * @param array<string, mixed> $prepare
-     * @param array<string, mixed> $definition
-     * @return array<string, mixed>
-     */
-    private function runtimeFromPreparedSharedService(array $prepare, array $definition): array
-    {
-        if (($prepare['status'] ?? '') === 'ready') {
-            return \is_array($prepare['runtime'] ?? null) ? $prepare['runtime'] : [];
-        }
-
-        $pendingDefinition = \is_array($prepare['definition'] ?? null) ? $prepare['definition'] : $definition;
-        $role = (string) ($pendingDefinition['role'] ?? $definition['role'] ?? '');
-        $ready = $this->waitUntilSharedServicesReadyBatch([$pendingDefinition]);
-
-        return \is_array($ready[$role] ?? null) ? $ready[$role] : [];
-    }
-
-    /**
      * 完成探测 / 强制停止 / 拉起共享服务进程。
      * 健康协议复用和 OS 端口绑定是唯一启动并发保护。
      *
@@ -294,6 +303,8 @@ class SharedStateServiceManager
             throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
         }
 
+        $definition['_launched_pid'] = $pid;
+
         return ['status' => 'pending', 'definition' => $definition];
     }
 
@@ -347,6 +358,20 @@ class SharedStateServiceManager
             SchedulerSystem::yield();
 
             foreach ($pending as $roleKey => $definition) {
+                $launchedPid = (int)($definition['_launched_pid'] ?? 0);
+                if ($launchedPid > 0) {
+                    // During a known launch, a failed auth ping only means the
+                    // child has not published its listener/token yet. Avoid
+                    // running an OS process-table inspection on every poll.
+                    if (!$this->probeRunningSharedService(
+                        $definition,
+                        (string)($definition['token_file_name'] ?? '')
+                    )) {
+                        continue;
+                    }
+                    $definition['_authenticated_probe_verified'] = true;
+                }
+
                 $probe = $this->probeDefinition($definition);
                 if (!((bool) ($probe['healthy'] ?? false))) {
                     if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null) {
@@ -428,6 +453,8 @@ class SharedStateServiceManager
         if ($pid <= 0) {
             throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
         }
+
+        $definition['_launched_pid'] = $pid;
 
         $prepare = ['status' => 'pending', 'definition' => $definition];
 
@@ -741,18 +768,38 @@ class SharedStateServiceManager
         $role = (string) $definition['role'];
         $configuredTokenFileName = (string) $definition['token_file_name'];
         $runtimeFile = $this->readRuntimeFile($role);
-        $healthy = $this->probeRunningSharedService($definition, $configuredTokenFileName);
+        $healthy = (bool)($definition['_authenticated_probe_verified'] ?? false)
+            || $this->probeRunningSharedService($definition, $configuredTokenFileName);
 
         if ($healthy) {
             $runtimePid = 0;
+            $launchedPid = (int)($definition['_launched_pid'] ?? 0);
+            if ($launchedPid > 0) {
+                $registryRecord = $this->createRegistry()->getRecord($role);
+                $registryToken = \basename((string)($registryRecord['token_file_name'] ?? ''));
+                if ((int)($registryRecord['pid'] ?? 0) === $launchedPid
+                    && (int)($registryRecord['port'] ?? 0) === (int)$definition['port']
+                    && $registryToken === \basename($configuredTokenFileName)
+                ) {
+                    // The child publishes this record only after owning the
+                    // listen socket. Combined with the authenticated ping, the
+                    // exact launcher PID is a complete one-hop identity proof.
+                    $runtimePid = $launchedPid;
+                }
+            }
             $runtimeFilePid = (int)($runtimeFile['pid'] ?? 0);
             $sameRuntimePort = (int)($runtimeFile['port'] ?? 0) === (int)$definition['port'];
-            if ($sameRuntimePort && $runtimeFilePid > 0 && Processer::isRunningByPid($runtimeFilePid)) {
+            if ($runtimePid <= 0
+                && $sameRuntimePort
+                && $runtimeFilePid > 0
+                && Processer::isRunningByPid($runtimeFilePid)
+            ) {
                 // A successful authenticated protocol probe plus the live PID
                 // already persisted for this exact port is sufficient. Avoid a
                 // second process-table/command-line inspection on every ensure.
                 $runtimePid = $runtimeFilePid;
-            } else {
+            }
+            if ($runtimePid <= 0) {
                 $runtimePid = $this->resolveValidatedLivePortOwnerPid($definition);
             }
             $runtime = $this->buildRuntimeMetadata(
@@ -761,6 +808,11 @@ class SharedStateServiceManager
                 \is_string($runtimeFile['started_at'] ?? null) ? (string) $runtimeFile['started_at'] : null,
                 \date('c')
             );
+            // Internal one-hop proof: the authenticated protocol probe and
+            // exact live PID validation above already established this
+            // sidecar identity. Reconciliation consumes and removes this
+            // marker before runtime metadata is persisted.
+            $runtime['_authenticated_identity_verified'] = $runtimePid > 0;
 
             return [
                 'healthy' => true,
@@ -771,7 +823,14 @@ class SharedStateServiceManager
 
         $port = (int) $definition['port'];
         $portOccupied = $this->isPortOccupied($port);
+        $inspection = null;
         if (!$portOccupied) {
+            // A wedged listener can keep the kernel port while refusing new
+            // TCP connects. Fall back to strict process/role inspection before
+            // declaring the port free and launching a duplicate sidecar.
+            $inspection = $this->inspectRunningSharedService($definition, $configuredTokenFileName);
+        }
+        if (!$portOccupied && !(bool)($inspection['in_use'] ?? false)) {
             $runtime = \array_merge($this->buildRuntimeMetadata($definition, 0, null, null), $runtimeFile);
             $runtime['healthy'] = false;
 
@@ -782,7 +841,7 @@ class SharedStateServiceManager
             ];
         }
 
-        $inspection = $this->inspectRunningSharedService($definition, $configuredTokenFileName);
+        $inspection ??= $this->inspectRunningSharedService($definition, $configuredTokenFileName);
         if (!(bool) ($inspection['reusable'] ?? false)) {
             return [
                 'healthy' => false,
@@ -851,13 +910,53 @@ class SharedStateServiceManager
             return false;
         }
 
-        if (!$this->probeRunningSharedService(['host' => $host, 'port' => $port], $tokenFileName)
-            && !$this->probeTcpPortInUse($host, $port)
-        ) {
+        $protocolHealthy = $this->probeRunningSharedService(['host' => $host, 'port' => $port], $tokenFileName);
+        $inspection = $this->inspectRunningSharedService([
+            'role' => $role,
+            'host' => $host,
+            'port' => $port,
+        ], $tokenFileName);
+        if (!$protocolHealthy && !(bool)($inspection['in_use'] ?? false)) {
             return false;
         }
 
-        return $this->sendSharedServiceServerShutdown($record);
+        $shutdownRequested = $this->sendSharedServiceServerShutdown($record);
+        if ($shutdownRequested && $this->waitForSharedServicePortRelease($host, $port, 2.0)) {
+            return true;
+        }
+
+        // The token file can disappear after a failed bootstrap while the
+        // shared sidecar itself is still alive. Never kill by port alone:
+        // require the existing inspector to prove project, role and shared
+        // process identity before the bounded PID fallback is allowed.
+        if (!(bool)($inspection['reusable'] ?? false)) {
+            return !$this->probeTcpPortInUse($host, $port);
+        }
+
+        $pid = (int)($inspection['pid'] ?? 0);
+        if ($pid <= 0 || !Processer::isRunningByPid($pid)) {
+            return !$this->probeTcpPortInUse($host, $port);
+        }
+        $killed = (bool)Processer::killByPid($pid, true);
+        if (!$killed && Processer::isRunningByPid($pid)) {
+            return false;
+        }
+        Processer::waitForExit([$pid], 2.0);
+
+        return $this->waitForSharedServicePortRelease($host, $port, 1.0);
+    }
+
+    private function waitForSharedServicePortRelease(string $host, int $port, float $timeoutSec): bool
+    {
+        $deadline = \microtime(true) + \max(0.05, $timeoutSec);
+        do {
+            if (!$this->probeTcpPortInUse($host, $port, 0.05)) {
+                return true;
+            }
+            SchedulerSystem::yieldDelay(25);
+        } while (\microtime(true) < $deadline);
+
+        return !$this->probeTcpPortInUse($host, $port, 0.05);
     }
 
     protected function sendSharedServiceConsumerShutdown(string $role, string $consumerCode, array $runtime): bool
@@ -977,7 +1076,11 @@ class SharedStateServiceManager
         // 与 Framework Processer 需同版本部署；旧版无 createWindowsDetachedPhpArgv 时回退 create()。
         if (\defined('IS_WIN') && IS_WIN && \method_exists(Processer::class, 'createWindowsDetachedPhpArgv') && !$frontend) {
             $argv = \array_merge(
-                [PHP_BINARY, $command->getAbsoluteScript()],
+                [
+                    PHP_BINARY,
+                    ...LongRunningPhpRuntime::startupCliArguments(),
+                    $command->getAbsoluteScript(),
+                ],
                 \array_map(static fn (mixed $a): string => (string) $a, $command->arguments)
             );
             if ($processName !== null && $processName !== '') {
@@ -1501,6 +1604,12 @@ class SharedStateServiceManager
         // intentionally observation-only; authenticated ensure/start paths own
         // all registry and runtime-file writes.
         unset($registry);
+        $authenticatedIdentityVerified = (bool)($runtime['_authenticated_identity_verified'] ?? false);
+        unset($runtime['_authenticated_identity_verified']);
+        if ($authenticatedIdentityVerified) {
+            return $runtime;
+        }
+
         $port = (int) ($runtime['port'] ?? 0);
         if ($port <= 0) {
             return $runtime;
