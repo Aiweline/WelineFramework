@@ -310,7 +310,7 @@ WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理
 ```
 
 - `performance` 是默认值。WLS 在派生 Master/Worker 子进程前生成 `var/server/tls/openssl-performance-{hash}.cnf`，其中只有 `Groups = X25519:P-256`；不强制 TLS 1.3 ciphersuite。
-- 默认 h3/h2 协议入口会读取同一份实例级 TLS 契约：`protocols` 会转换为 WLS Native TLS 配置的精确 min/max，`performance` 会在公网握手上显式使用 `x25519 + secp256r1`。因此 `['tls1.3']` 不再只约束 PHP Worker 而遗漏公开协议入口；实例级 `wls.servers.<name>.ssl` 也会进入 Master 的不可变运行上下文。
+- 默认 h3/h2 协议入口会读取同一份实例级 TLS 契约：`protocols` 会转换为 WLS Native TLS 配置的精确 min/max，`performance` 在 Go TLS 入口固定为 `X25519,P-256`，`system` 才保留 Go 运行时默认组。有效 profile 会同时写入实例、Endpoint、Master IPC 和 benchmark 元数据。因此 `['tls1.3']` 与密钥交换 profile 不再只约束 PHP Worker 而遗漏公开协议入口；实例级 `wls.servers.<name>.ssl` 也会进入 Master 的不可变运行上下文。
 - 若运维已在 WLS 启动环境设置 `OPENSSL_CONF`，WLS 完整保留该配置，不生成覆盖。这是最高优先级的进程级 OpenSSL 策略入口。
 - `system` 用于显式保留系统 OpenSSL group 策略，适合运维要求混合后量子组或统一系统密码策略的环境。
 - `protocols` 未配置时默认为 `['tls1.2', 'tls1.3']`；一旦显式配置，空字符串、空数组、非字符串元素或 TLS 1.0/1.1/未知值都在创建子进程前被拒绝，不再回退到 `TLS_SERVER`。
@@ -323,6 +323,8 @@ WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理
 生命周期索引与 maintenance ACK 收口后的最终复核为：100,000 次 keep-alive 10,313.37 QPS、p95 18.669ms；20,000 次稳态 fresh TLS 1,869.76 QPS、p95 21.201ms、`max/min=1.036`；与 rolling reload 重叠的 20,000 次 fresh TLS 0 错误、p95 28.330ms、max 105.782ms。reload 后只保留 1 Master + 4 canonical Worker，PID 索引无短命 launcher 或 surge 残留。空闲 TLS preconnect 存在时 maintenance enable/disable 仍能全量 ACK，避免浏览器预连接拖住 restart。
 
 2026-07-14 当前 macOS 专用实例补充验证了持久票据与新协议边缘配置：同一张 TLS 1.3 票据跨两轮 Worker upstream reload 及协议边缘完整停启均为 `Reused`。首页 Process FPC c32×2,500 为 10,736.43 QPS、p95 4.089ms；health c128×100,000 为 15,084.92 QPS、p95 11.960ms；fresh TLS c32×2,000 为 3,246.75 QPS、p95 11.055ms、`max/min=1.131`，全部 0 错误。另一次与 rolling reload 重叠的 100,000 请求为 0 错误、14,065.69 QPS、p95 13.670ms、max 50.546ms，收敛后仍为 4/4 canonical Worker。
+
+2026-07-15 当前 Native 代码代再次验证：旧 TLS 1.3 ticket 跨完整 Master + Protocol Edge 重启仍为 `Reused`；macOS Direct 的 HTTP/2 health c128×1,000,000 为 0 错误、15,720.26 QPS、p95 13.675ms、p99 18.969ms、max 228.168ms，HTTP/3 health c128×100,000 为 0 错误、12,845.60 QPS。首页 Process FPC 的 HTTP/2 / HTTP/3 各 100,000 请求均 0 错误。Windows 11 ARM64 实机已完成 `auto -> dispatcher`、h1/h2/h3、TLS 1.3 X25519 与 session resume；空闲 Windows 的 4/16 Worker 长稳仍应作为发布环境门禁单独执行，不能使用受其它长期任务满载的 VM 数字替代。
 
 ```bash
 # 默认即 HTTPS（自动证书或 app/etc/ssl/）
@@ -364,13 +366,14 @@ php bin/w server:benchmark -p 9443 --ssl --tls-version 1.3 --no-keepalive
 | Worker 异常退出 | 进程崩溃 | Master 默认启用，会自动重启异常 Worker |
 | TLS 1.3 启动前失败 | 当前 PHP/OpenSSL 构建不支持 TLS 1.3 stream server | 切换到与当前平台匹配且暴露 `STREAM_CRYPTO_METHOD_TLSv1_3_SERVER` 的 PHP/OpenSSL，不删除协议门禁兜底 |
 | HTTP/2/3 原生协议预检失败 | WLS Native 二进制缺失、平台/架构不匹配、ALPN/QUIC/session-ticket/upstream-pool/atomic-reload probe 未通过，或固定 Go 工具链无法安装 | 查看启动时构建/probe 输出；修复网络、证书或平台依赖后重试，不要静默关闭协议或持久会话复用；`wls.http.protocol_edge_binary` 只接受已验证的 WLS Native 产物 |
+| Windows Native Edge 在公开端口 bind 前健康检查超时 | 内部 Dispatcher 未识别 Edge 的 loopback + 实例 token 健康探针，或 token/header 被中间层改写 | 核对 Dispatcher/Edge 为同一实例与 digest；只有精确 `GET /_wls/health HTTP/1.1` 的认证内部探针允许透传，其它明文请求仍应跳转 HTTPS |
 | h1/h2 正常但 h3 不可达 | 同一公开端口的 UDP 未放行，或上游 NAT/LB 不转发 QUIC | 放行并转发该端口的 UDP；用支持 HTTP/3 的 curl/浏览器复测 |
 | 请求 `performance` 但状态显示 `external` | 启动环境已存在 `OPENSSL_CONF` | 这是运维配置优先的预期行为；核对该文件的 group/cipher 策略，不要期待 WLS 覆盖 |
 
 ---
 
 **版本：** 2.0.0-dev
-**更新时间：** 2026-07-14
-**状态：** macOS 已用 WLS Native Protocol Engine 验证 h1/h2/h3 自动协商、TLS 会话复用（含 reload/完整进程重启后的持久 ticket key ring）、Direct/Dispatcher 策略一致和首页 Process FPC。Linux 既有长稳证据来自旧兼容边缘，需要补跑 WLS Native；Windows 原生协议二进制已完成构建/probe，但 Dispatcher 启动与长稳门禁尚未完成，不能由 macOS 数据代替。
+**更新时间：** 2026-07-15
+**状态：** macOS 已用 WLS Native Protocol Engine 验证 h1/h2/h3、TLS 1.3、跨完整重启 session reuse、Direct 策略和百万请求；Linux Native 长稳已完成；Windows 11 ARM64 已验证 Native 构建、`auto -> dispatcher`、三协议、TLS 1.3/X25519、session resume、首页 FPC 与后台 Key。Windows 空闲环境的 4/16 Worker 冷启动和长稳仍需独立复验，不能用当前受 5 个外部常驻 PHP 任务占满约 5/6 CPU 的 VM 数据替代。
 
 动态路径预热默认只包含首页 `/`。业务模块需要预热商品、分类或账户页面时，应显式配置 `wls.worker.dynamic_critical_paths` / `wls.worker.dynamic_hot_paths`，或通过 `Weline_Server::dispatcher::warmup_paths` 发布真实路由；Server 不内置任何演示业务 URL。

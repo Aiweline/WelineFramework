@@ -1,6 +1,6 @@
 # 结果
 
-状态：`macos_linux_release_gates_passed_windows_fpm_pending`
+状态：`validated_cross_platform_candidate_windows_scale_pending`
 
 已落地三个定向修复：每 Worker 动态预热串行门禁、READY-only 单槽恢复提交、Darwin shared listener 500us busy cooldown。失败实验（1000us cooldown、一次 Worker 重连风暴、动态首渲染 310.95ms）均保留在验证记录中，没有作为通过数据删除。
 
@@ -65,3 +65,15 @@ READY 动态首页的旧失败也已收口：冷链第一次有效渲染超过 7
 FPM 对照因此已关闭。跨平台总计划仍不能标记完成：当前没有可用的 Windows 原生 VM、主机或 CI runner，尚无法真实验证 `auto -> dispatcher`、Direct/independent 启动前拒绝、event DLL ABI 匹配、批量启动和长稳。这是唯一剩余的发布证据缺口，没有用静态 Windows 分支检查或 macOS/Linux 数据伪装通过。
 
 同轮 Windows 静态门禁发现停止命令的平台判定是 private，导致定向测试不能覆写平台驱动。修复仅放宽为 protected；GitNexus 评估 LOW，30 项 Windows/Runtime/Socket 定向测试全通过。随后真实启动 Direct 2 Worker 实例，首页 200、裸后台 404，再用实际 `server:stop` 完整释放 Master、Worker、控制端口和自治共享 sidecar。这关闭了一个可静态发现的 Windows 分支缺口，但仍不把 macOS 上的模拟覆写当成 Windows 原生验收。
+
+2026-07-15 又完成 Native TLS profile 与 Windows Dispatcher 启动闭环。Go Edge 的 `performance` 现在固定 `X25519,P-256`，`system` 才采用 Go 默认组；有效 profile 已贯穿 Start、实例记录、Endpoint、Master IPC、Native 配置和 benchmark 元数据。Windows 的真实启动故障定位为 Native Edge 在 bind 前发送的认证 loopback `/_wls/health` 被 Dispatcher 301 到尚未 READY 的公开 HTTPS 端口。Dispatcher 现在仅对 loopback、精确请求行、完整且不超过 8 KiB 的头块、唯一且常量时间匹配实例 token/client-protocol 的内部探针透传，WorkerPolicyKernel 随后再次鉴权；普通明文请求仍保持 HTTPS 重定向和安全规则。
+
+Parallels Windows 11 ARM64 的当前代码单 Worker实例约 3 秒达到 Master + Dispatcher + Native Edge + Worker 全部 READY，h1/h2/h3 各 100/100 返回实际 1.1/2/3；TLS 1.3 / CHACHA20-POLY1305 / X25519 首连与二连为 `resume=false/true`，动态首渲染 65.72ms，首页 Process FPC、后台 Key 404/200 均通过。显式 direct/independent 在创建子进程前拒绝。当前 VM 同时有 5 个非本任务 PHP cron 长期占用约 5/6 CPU；4 Worker 受污染轮的 `batchCreate` 为 809ms，首个 Worker 2.948s READY，但其余进程遭调度饥饿，故不把该轮当作空闲 Windows 的 4/16 Worker或 QPS发布门槛，也未停止、暂停或修改这些外部任务。
+
+macOS 当前代码专用实例 `ai-test-tls13-h3-20260715-033139` 完整停启约 2 秒达到 Direct 4/4 预热 READY，h1/h2/h3、Process FPC、后台 Key 404/200 全部通过。OpenSSL 3 的 TLS 1.3 ticket 在同进程二连及完整 Master + Native Edge 重启后都显示 `Reused`。HTTP/2 health 1,000,000 请求为 0 错误、15,720.26 QPS、p95 13.675ms、p99 18.969ms、max 228.168ms，四 Worker `max/min=1.003`；HTTP/3 health 100,000 请求为 0 错误、12,845.60 QPS。首页 Process FPC 的 HTTP/2 / HTTP/3 各 100,000 请求均 0 错误，分别为 17,199.47 / 10,447.17 QPS。临时 loopback 白名单已经恢复为空，正式策略 digest `f58c7af630ac5ea37560d7b9e5d892ddd26c56ee9b8eb70ec8e0dbf50a6464e1` 已由全部关键进程两阶段 ACK 为 active。
+
+Browser 同代验收只访问专用 `https://127.0.0.1:10977/`：首页标题/H1、文档/API/快速开发/优势/后台入口可见；带 Key 登录页显示完整中文登录表单，两页 Console error/warn 为 0。Browser 对裸 `/admin/login` 的直接导航被客户端本地策略拦截，因此没有伪报页面可见；同代真实 HTTPS 已独立验证裸/带 Key 为 404/200。生产 9981 未操作。
+
+当前候选代码已经取得 macOS、Linux、Windows ARM64 的真实协议和启动证据，但跨平台总计划仍不标记 complete：Windows 空闲环境的 4/16 Worker 冷启动、长稳和完整性能矩阵仍需在不受外部长期任务占满 CPU 的窗口复验。此状态明确区分“实现与核心协议通过”和“全部发布规模门槛完成”。
+
+最终源码门禁为全绿：PHP 语法、Go `gofmt/test/vet/build`、`git diff --check`、Semgrep 168 条规则/11 个目标 0 finding、architecture:check（83 模块/4046 PHP/7173 引用/0 finding）、framework:compile（39 Provider/0 deferred）和 12 条运行时策略检查全部通过。自动验收后已通过统一 stop flow 停止 `ai-test-tls13-h3-20260715-033139`；10977 TCP/UDP、29180–29183、39180 与对应 Master/Edge/Worker PID 均已释放，生产 9981 和其它实例未操作。

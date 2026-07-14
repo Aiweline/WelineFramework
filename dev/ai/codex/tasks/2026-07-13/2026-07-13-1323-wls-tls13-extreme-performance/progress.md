@@ -1,6 +1,16 @@
 # 进度
 
-状态：`validated`
+状态：`validated_cross_platform_candidate_windows_scale_pending`
+
+- 2026-07-15 Native TLS profile 已真正贯穿公开协议入口：Go Edge 的 `performance` 固定 `X25519,P-256`，`system` 使用 Go 默认组；有效 profile 同步进入实例、Endpoint、Master IPC 与 benchmark 运行时元数据。PHP 9 个修改文件语法通过，Native Go `test/vet/build` 通过，6 组相关现有 PHPUnit 入口均为 0 退出。
+- Windows Dispatcher 启动失败的真实根因不是 Go/HTTP3 bind，而是 Edge 在 bind 前经内部 Dispatcher 发出的认证明文 `/_wls/health` 被 301 到尚未 READY 的公开 HTTPS 端口。现只允许 loopback + 实例 token + 精确请求行 + 唯一协议头的健康探针绕过重定向，WorkerPolicyKernel 再次鉴权；普通明文请求语义不变。Parallels Windows 11 ARM64 当前代码单 Worker 实例约 3 秒全部 READY，h1/h2/h3 各 100/100，TLS 1.3 / CHACHA20 / X25519 二连 resume=true，首页 Process FPC、后台 Key 404/200、动态首渲染 65.72ms 均通过。
+- Windows 4 Worker 复验时 VM 内 5 个非本任务 PHP cron 持续占约 5/6 CPU。`batchCreate` 仍为 809ms、Worker 2 在 2.948s READY；其余 Worker 被调度饥饿到 61.8s，Worker 1 未 READY 后 fail-fast 完整清理。未结束/暂停这些外部任务，也未把该受污染轮次当作 Windows QPS 或 READY 基线；此前同 VM 空闲轮已有 4 Worker 6/6 READY 与 HTTP/2 100,000/100,000 证据。
+- macOS 当前代码完整停启约 2 秒 4/4 Worker 预热 READY，实际 h1/h2/h3 均 200，首页 Process FPC HIT，裸/带 Key 后台为 404/200。OpenSSL 3 首连 TLS 1.3 / TLS_AES_128_GCM_SHA256 / X25519，二连以及完整 Master + Native Edge 重启后均为 `Reused`。
+- 最终 macOS 报告：HTTP/2 health c128×1,000,000 为 1,000,000/1,000,000、0 错误、15,720.26 QPS、p95 13.675ms、p99 18.969ms、max 228.168ms，四 Worker `max/min=1.003`；HTTP/3 health c128×100,000 为 0 错误、12,845.60 QPS、p95 16.679ms、max 76.704ms。专用 loopback 白名单下首页 HTTP/2 / HTTP/3 各 100,000 请求均 0 错误，分别 17,199.47 / 10,447.17 QPS；白名单随后恢复为空，正式 `f58c7a…64e1` digest 已由所有关键进程两阶段 ACK 为 active。
+- 2026-07-15 Browser 同代复验只使用专用 `https://127.0.0.1:10977/`：首页标题/H1、文档/API/快速开发/优势/后台入口可见，带 Key 登录页显示管理员、密码、记住我和登录按钮，两页 Console error/warn 均为 0。Browser 客户端直接导航裸 `/admin/login` 被本地客户端策略拦截，故没有伪报可见性；同代真实 HTTPS 已独立核对裸/带 Key 为 404/200。生产 9981 未操作。
+- 最终门禁通过：9 个 PHP 文件语法、Go `gofmt/test/vet/build`、`git diff --check`、Semgrep 168 条规则/11 个源码目标 0 finding、architecture:check（83 模块/4046 PHP/7173 引用/0 finding）、framework:compile（39 Provider/0 deferred）、policy check（12 条规则/白名单 0）全部成功。自动验收后已用统一 stop flow 停止专用实例；10977 TCP/UDP、29180–29183、39180 与 Master/Edge/4 Worker PID 均已释放，生产 9981 和其他实例未操作。
+
+- 2026-07-15 完成审计重新以当前 `28cfa2fb` 代码为准。发现 WLS Native Protocol Engine 的 Go TLS 配置把 `X25519MLKEM768` 固定排在第一位，而 PHP/文档声明默认 `performance = X25519:P-256`，公开 h3/h2 握手没有真正继承实例级 key-exchange profile。GitNexus 对 `writeWlsNativeConfig`、`buildRuntimeState`、`validateConfig` 与 `tlsConfig` 的上游风险均为 LOW；当前正在补齐配置传递并重新执行 macOS 与 Parallels Windows 11 ARM 协议、复用和压测门禁。
 
 - 2026-07-14 Windows 11 ARM 准备阶段确认官方 PECL 已提供 PHP 8.4 / event 3.1.4 的 VS17、x64/x86、TS/NTS 精确包，而旧启动路径只检查本地 DLL。现已补齐启动前自动安装：四种 ABI 各自固定 SHA-256，只从官方地址下载，只提取 `php_event.dll + pthreadVC2.dll`，已有文件备份后原子发布，并由同一 `PHP_BINARY` 新进程实际加载验证；无固定可信包或验证失败才保持 Dispatcher + stream/select，绝不跨 ABI 猜测。PHP 语法、`git diff --check` 与 Runtime/Start/Windows taskkill/socket 六组定向入口均通过；Windows 原生运行证据仍等待 Parallels VM 完成安装，不能提前记为平台通过。
 

@@ -12,7 +12,7 @@ POSIX Auto Direct + HTTPS Protocol Edge:
 │  Role: Registry, policy/config digest, hot reload, orphan detection      │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
-     ├─▶ Protocol Edge (Caddy) ◀── Client h3/QUIC, h2/h1 ALPN
+     ├─▶ WLS Native Protocol Edge ◀── Client h3/QUIC, h2/h1 ALPN
      │        │ private h1 keep-alive pool + instance token
      │        ├─▶ READY Worker-1 (PID 1001)
      │        ├─▶ READY Worker-2 (PID 1002)
@@ -30,7 +30,7 @@ Windows Auto Dispatcher + HTTPS Protocol Edge:
 │  Role: Registry, policy/config digest, monitoring                        │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
-     ├─▶ Protocol Edge (Caddy) ◀── Client h3/QUIC, h2/h1 ALPN
+     ├─▶ WLS Native Protocol Edge ◀── Client h3/QUIC, h2/h1 ALPN
      │        │ private h1 keep-alive + instance token
      │        ▼
 ┌──────────────────────────────────────────────────────────────────────────┐

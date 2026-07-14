@@ -42,6 +42,7 @@ type tlsConfig struct {
 	PrivateKeyFile        string `json:"private_key_file"`
 	MinimumVersion        string `json:"minimum_version"`
 	MaximumVersion        string `json:"maximum_version"`
+	KeyExchangeProfile    string `json:"key_exchange_profile"`
 	SessionResumption     bool   `json:"session_resumption"`
 	SessionTicketKeyFile  string `json:"session_ticket_key_file"`
 	SessionTicketRotation string `json:"session_ticket_rotation"`
@@ -190,6 +191,12 @@ func validateConfig(cfg *edgeConfig) error {
 	}
 	if cfg.TLS.MinimumVersion == "tls1.3" && cfg.TLS.MaximumVersion == "tls1.2" {
 		return errors.New("TLS version range is inverted")
+	}
+	if cfg.TLS.KeyExchangeProfile == "" {
+		cfg.TLS.KeyExchangeProfile = "performance"
+	}
+	if cfg.TLS.KeyExchangeProfile != "performance" && cfg.TLS.KeyExchangeProfile != "system" {
+		return errors.New("TLS key_exchange_profile must be performance or system")
 	}
 	if cfg.TLS.SessionResumption && !filepath.IsAbs(cfg.TLS.SessionTicketKeyFile) {
 		return errors.New("session_ticket_key_file must be absolute")
