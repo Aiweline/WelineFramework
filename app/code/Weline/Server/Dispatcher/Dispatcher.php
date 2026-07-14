@@ -3402,6 +3402,16 @@ HTML;
             return false;
         }
 
+        // The public TLS/QUIC edge cannot start until its Dispatcher upstream
+        // is healthy. Forward only the loopback + instance-token authenticated
+        // health probe; every ordinary plaintext request still receives HTTPS
+        // redirection, and WorkerPolicyKernel verifies the token again.
+        if (\str_starts_with(\strtoupper($peek), 'GET /_W')
+            && $this->shouldForwardProtocolEdgeHealthProbe($clientSocket, $clientIp)
+        ) {
+            return false;
+        }
+
         // 优先转发到 http_redirect_worker
         $redirectPort = $this->passthroughCore->getHttpRedirectPort();
         if ($redirectPort > 0) {
@@ -3426,6 +3436,49 @@ HTML;
 
         // 回退：内联返回 301
         return $this->sendInlineHttpRedirect($clientSocket, $connId, $clientIp);
+    }
+
+    private function shouldForwardProtocolEdgeHealthProbe($clientSocket, string $clientIp): bool
+    {
+        if (!$this->protocolEdgeIngressEnabled
+            || !\Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($clientIp)
+        ) {
+            return false;
+        }
+
+        $rawHeaders = $this->peekAcceptedHttpHeaderBlock($clientSocket, 8192, 0.05);
+        return $rawHeaders !== ''
+            && $this->passthroughCore->isAuthenticatedProtocolEdgeHealthProbe($rawHeaders);
+    }
+
+    private function peekAcceptedHttpHeaderBlock($clientSocket, int $maxBytes, float $timeoutSec): string
+    {
+        $maxBytes = \max(256, \min($maxBytes, 65536));
+        $deadline = \microtime(true) + \max(0.0, $timeoutSec);
+
+        do {
+            $peek = '';
+            $peekLen = @\socket_recv($clientSocket, $peek, $maxBytes, \MSG_PEEK);
+            if ($peekLen !== false && $peekLen > 0 && $peek !== '') {
+                $headerEnd = \strpos($peek, "\r\n\r\n");
+                if ($headerEnd !== false) {
+                    return \substr($peek, 0, $headerEnd + 4);
+                }
+                if ($peekLen >= $maxBytes) {
+                    return '';
+                }
+            }
+
+            if (\microtime(true) >= $deadline) {
+                return '';
+            }
+            $read = [$clientSocket];
+            $write = $except = [];
+            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - \microtime(true)) * 1_000_000));
+            @\socket_select($read, $write, $except, 0, $remainingUsec);
+        } while (\microtime(true) < $deadline);
+
+        return '';
     }
 
     private function peekAcceptedClientBytes($clientSocket, int $length, float $timeoutSec): string
