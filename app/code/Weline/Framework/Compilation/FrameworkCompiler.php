@@ -30,7 +30,7 @@ final class FrameworkCompiler
                 $modulesRoot,
                 $outputDirectory . DS . 'modules.php',
             );
-            return [
+            $result = [
                 'modules' => $modules,
                 'container' => $this->containerCompiler->compile(
                     $outputDirectory . DS . 'container.php',
@@ -48,6 +48,11 @@ final class FrameworkCompiler
                     \dirname($outputDirectory) . DS . 'hooks.php',
                 ),
             ];
+            $result['compile_manifest'] = (new FrameworkCompileManifest())->write(
+                $modulesRoot,
+                $outputDirectory,
+            );
+            return $result;
         } finally {
             // server:start may fork/exec after control-plane compilation. Do
             // not let a compile lock descriptor escape into Master/Workers.

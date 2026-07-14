@@ -120,6 +120,10 @@ final readonly class RuntimeEndpointMetadata
         $protocolEdgeEnabled = \array_key_exists('protocol_edge_enabled', $endpoint)
             ? (bool)$endpoint['protocol_edge_enabled']
             : null;
+        $protocolEdge = self::firstNonEmptyString([
+            $endpoint['protocol_edge'] ?? null,
+            $httpProtocolSelection['edge'] ?? null,
+        ]);
         $tlsSessionResumption = \array_key_exists('tls_session_resumption', $endpoint)
             ? (bool)$endpoint['tls_session_resumption']
             : (\array_key_exists('tls_session_resumption', $httpProtocolSelection)
@@ -166,6 +170,7 @@ final readonly class RuntimeEndpointMetadata
             'http_protocols' => $httpProtocols,
             'http_preferred_protocol' => $httpPreferredProtocol,
             'protocol_edge_enabled' => $protocolEdgeEnabled,
+            'protocol_edge' => $protocolEdge,
             'tls_session_resumption' => $tlsSessionResumption,
             'policy_compatible' => $policyCompatible,
             'policy_digest' => self::firstNonEmptyString([

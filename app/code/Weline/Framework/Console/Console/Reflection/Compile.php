@@ -460,7 +460,18 @@ class Compile extends CommandAbstract
                 $body = "new {$fqcnForNew}()";
             } else {
                 $args = [];
-                foreach ($constructor['params'] as $param) {
+                $constructorParams = \array_values($constructor['params']);
+                // A compiled factory has no caller-supplied arguments. Omit
+                // every trailing optional parameter so PHP evaluates the
+                // constructor's real default expression. Reflection can
+                // materialize `new Service()` defaults as objects, but those
+                // objects cannot be serialized safely into generated PHP;
+                // converting them to null breaks non-nullable parameters.
+                while ($constructorParams !== []
+                    && !empty($constructorParams[\array_key_last($constructorParams)]['hasDefault'])) {
+                    \array_pop($constructorParams);
+                }
+                foreach ($constructorParams as $param) {
                     if (($param['isClass'] ?? false) && empty($param['hasDefault'])) {
                         $depClass = $param['typeName'] ?? '';
                         if ($depClass !== '') {

@@ -17,7 +17,7 @@ flowchart TB
     C -->|--master-only| M1["runMasterOnly(instance)<br/>schema v3 校验 RuntimeSelection 与投影<br/>从 instance.json 恢复 Master 运行态"]
     C -->|默认 WLS| D["acquireStartLock(instance)"]
     D --> E["getServerConfig()<br/>解析 host/port/count/frontend/ssl"]
-    E --> E1["RuntimeSelection + HttpProtocolSelection 预检<br/>参数冲突、平台能力、策略兼容、Caddy/QUIC 依赖安装与复验"]
+    E --> E1["RuntimeSelection + HttpProtocolSelection 预检<br/>参数冲突、平台能力、策略兼容、WLS Native ALPN/QUIC 构建与复验"]
     E1 --> E2{"effective topology 是 independent?"}
     E2 -->|是| E3["在创建进程前拒绝<br/>要求 direct 或 Dispatcher"]
     E2 -->|否| F{"是否需要先清旧实例?"}
@@ -88,7 +88,7 @@ flowchart TB
 ## 关键分支说明
 
 - 新启动在停止旧实例之前产生不可变 `RuntimeSelection` 与 `HttpProtocolSelection`，并以 endpoint schema v3 写入完整数组。`--master-only` 不再从多个布尔/字符串重新推导；v3 中任一 topology/listener/event/SSL/HTTP protocol/policy 投影缺失或冲突就在绑定端口前拒绝。旧 v2 只做读取兼容，Master 运行期不会在没有完整 selection 时把它标记为 v3。
-- h2/h3 启用时，Caddy v2、reverse proxy 和 QUIC 构建必须在 Master 创建前通过真实 probe；缺失时平台安装器在带 30 秒锁 deadline 的单一控制面安装并复验。失败中止启动，不在子进程已经创建后静默改成 h1。
+- h2/h3 启用时，WLS Native Protocol Engine 的当前平台二进制、ALPN、QUIC、session ticket、upstream keep-alive 与 atomic reload 必须在 Master 创建前通过真实 probe；缺失时单一控制面在带 30 秒锁 deadline 的流程中安装固定摘要 Go 工具链、构建自包含二进制并复验。失败中止启动，不在子进程已经创建后静默改成 h1。
 - `independent` 尚无完整 READY/策略保证，`RuntimeStrategyResolver` 和旧 endpoint 的 `--master-only` 重入都明确拒绝，不允许进入永远无法 READY 的运行态。
 - `server:start -r` 在调用 `server:stop` 前会固化旧实例当下真实监听的主端口、控制端口、Dispatcher/Worker 端口和 Redirect 端口（排除可跨实例复用的 Session/Memory sidecar）。停止后在一个 monotonic 总 deadline 内反复清理端口探测缓存，只有目标端口全部无监听且本项目+本实例 scoped 进程前缀全部无存活 PID 才能继续。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动。
@@ -140,7 +140,7 @@ flowchart TB
 - 旧 `linux-direct` 只做读取兼容，新状态统一写为 `direct`；新实例的 SSL engine 默认为 `stream`。
 - 当前 `RuntimeStrategyResolver` 在启动预检阶段同时拒绝 `event_buffer + direct` 与 `event_buffer + authenticated PROXY v2 Dispatcher`；Windows 原生 EventBuffer 也明确拒绝。EventBuffer Adapter 仍属实验代码，不是当前受支持拓扑的可选 SSL engine，不得再把它描述为 macOS/Linux Dispatcher+TLS 可用路径。
 - Worker 通过 `--public-origin` 获得对外 scheme/authority；READY 首页预热与真实 HTTP/HTTPS FPC key 一致，实例文件只是兼容兜底。
-- macOS shared-FD TLS 与 200ms 首读衔接只属于协议边缘关闭的 legacy Worker-TLS 路径；默认协议边缘由 Caddy 终结 TLS/QUIC，Worker 使用私有 h1 keep-alive。
+- macOS shared-FD TLS 与 200ms 首读衔接只属于协议引擎关闭的 legacy Worker-TLS 路径；默认由 WLS Native Protocol Engine 终结公开 TLS/QUIC，Worker 使用私有 h1 keep-alive。
 
 ## 平台验收边界
 
@@ -154,7 +154,7 @@ flowchart TB
 - 每批 DRAIN 前按实时 Registry 再校验容量；不足时拒绝摘批。
 - force 只有在 maintenance 池已被所有 Dispatcher ACK 后才允许整池单批，否则自动降级为安全分批。
 - 每批先统一置 DRAINING 并发布一次摘批快照，批内全部 READY 后再发布一次加回快照。
-- Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC。协议边缘模式还必须先发布 READY upstream 集合并等待 Caddy active config digest ACK，才能排水旧槽；canonical 全部 READY 后，surge 按冻结身份租约退场。
+- Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC。原生协议模式还必须先发布 READY upstream 集合并等待 WLS Native active config digest ACK，才能排水旧槽；canonical 全部 READY 后，surge 按冻结身份租约退场。
 - 普通、stream TLS 与 EventBuffer Worker 的 DRAIN 都先停止公开 accept，并完成已分派请求与待写响应。维护模式 ACK 是另一条更短的屏障：策略先立即生效，业务 Worker 至少跨过一个 transport loop，再等待 active request/Fiber 与 response output 清空；空闲 preconnect、未完成 TLS/HTTP 和 slowloris 不得阻塞 ACK。EventBuffer 已完整落入 PHP buffer 的流水线请求属于已接纳工作，按每 tick 有界预算通过同一 WorkerPolicyKernel 生成响应后再 ACK；只有不完整输入可忽略。
 - 所有 drain/exit 等待使用总 deadline；到期后报告仍在途的具体阶段，不能用无界等待或静默关闭掩盖长尾。
 

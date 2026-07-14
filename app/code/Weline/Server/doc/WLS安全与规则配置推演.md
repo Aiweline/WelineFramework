@@ -21,7 +21,7 @@
 | Static/FPC/Router/Controller | Worker | Worker |
 | 维护模式 | Dispatcher 可切维护池，Worker 仍校验 epoch | Worker 本地直接响应 |
 
-legacy Dispatcher 拓扑使用带实例认证的 PROXY Protocol v2 把公网连接 peer 传给 Worker；legacy Direct 使用公开 socket 的真实 peer。协议边缘模式不同：Caddy 会在多个公网客户端之间复用私有 HTTP/1.1 upstream，连接级 PROXY v2 无法表达同一连接中每个请求的身份，因此不得用它伪造逐请求客户端 IP。Edge 每请求覆盖实例 token、`X-Forwarded-For` 和公开协议，Dispatcher 只透传原始 HTTP 字节，Worker 在确认 loopback + token 后按请求计算 canonical client identity。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
+legacy Dispatcher 拓扑使用带实例认证的 PROXY Protocol v2 把公网连接 peer 传给 Worker；legacy Direct 使用公开 socket 的真实 peer。默认 WLS Native Protocol Engine 会在多个公网客户端之间复用私有 HTTP/1.1 upstream，连接级 PROXY v2 无法表达同一连接中每个请求的身份，因此不得用它伪造逐请求客户端 IP。原生入口每请求覆盖实例 token、`X-Forwarded-For` 和公开协议，Dispatcher 只透传原始 HTTP 字节，Worker 在确认 loopback + token 后按请求计算 canonical client identity。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
 
 Loopback 只是 transport peer，不是隐式业务白名单或 Origin 凭据。WLS 自管协议边缘启用时，AcceptGate 仅把“持有实例 edge token 的配置 + loopback socket peer”作为私有连接池的 transport whitelist，避免把不同公网客户端聚合为 `127.0.0.1` 后误触发每 IP 连接封禁；实例总连接/总速率和慢 upstream 超时仍生效。WorkerPolicyKernel 随后仍按 canonical client IP 完整执行 Origin Token、ban、限流和攻击规则。普通 Nginx/Caddy 反代若未配置 `trusted_proxy_cidrs` 则不采信转发头；只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过对应业务规则，`trusted_proxy_cidrs` 本身不授予业务白名单权限。
 

@@ -147,12 +147,12 @@ class Doctor extends CommandAbstract
             $http = $httpSelection->toArray();
             if ($httpSelection->isProtocolEdgeEnabled()) {
                 $configuredBinary = \trim((string)($endpoint['protocol_edge_binary'] ?? ''));
-                $binary = $configuredBinary !== '' && \is_file($configuredBinary) && \is_executable($configuredBinary)
+                $binary = ProtocolEdgeRuntime::isRunnableBinary($configuredBinary)
                     ? $configuredBinary
                     : ProtocolEdgeRuntime::resolveBinary($config);
                 $probe = $binary !== ''
                     ? (new ProtocolEdgeDependencyBootstrapper())->probe($binary, $httpSelection)
-                    : ['success' => false, 'version' => '', 'output' => 'Caddy binary not found.'];
+                    : ['success' => false, 'version' => '', 'output' => 'WLS protocol-edge binary not found.'];
                 $http['dependency'] = [
                     'status' => !empty($probe['success']) ? 'ready' : 'unavailable',
                     'binary' => $binary,

@@ -568,9 +568,22 @@ class MasterProcess
     private function cleanupStaleInstanceFiles(): void
     {
         try {
-            $budgetMs = (float)(Env::get('wls.master.startup_stale_cleanup_budget_ms', 500) ?? 500);
+            // One Windows command-line ownership scan can exceed five seconds,
+            // so it cannot honor a sub-second startup budget. Stale records
+            // are diagnostic only and server:clean remains the explicit
+            // cleanup path. Keep the configurable POSIX sweep unchanged.
+            $defaultBudgetMs = \PHP_OS_FAMILY === 'Windows' ? 0.0 : 500.0;
+            $budgetMs = (float)(Env::get('wls.master.startup_stale_cleanup_budget_ms', $defaultBudgetMs) ?? $defaultBudgetMs);
             if ($budgetMs < 0.0) {
                 $budgetMs = 0.0;
+            }
+            if ($budgetMs <= 0.0) {
+                $this->traceStartupPhase('master-stale-cleanup:budget', [
+                    'budget_ms' => 0,
+                    'cleaned' => 0,
+                    'skipped' => true,
+                ]);
+                return;
             }
             $cleaned = (new ServerInstanceManager())->cleanupStaleInstancesForStartup($this->instanceName, $budgetMs);
             $this->traceStartupPhase('master-stale-cleanup:budget', [

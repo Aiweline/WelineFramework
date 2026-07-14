@@ -48,8 +48,21 @@ class Benchmark extends CommandAbstract
         $totalRequests = (int) ($args['requests'] ?? $args['n'] ?? 10000);
         $path = $this->resolveBenchmarkPath($args);
         $tlsVersion = $this->normalizeTlsVersion($args['tls-version'] ?? $args['tls_version'] ?? 'auto');
+        $httpVersion = $this->normalizeHttpVersion($args['http-version'] ?? $args['http_version'] ?? 'auto');
+        $acceptEncoding = $this->normalizeAcceptEncoding(
+            $args['accept-encoding'] ?? $args['accept_encoding'] ?? 'gzip'
+        );
         if (!$ssl && $tlsVersion !== 'auto') {
             $this->printer->error(__('--tls-version 仅适用于 HTTPS 压测，请同时使用 --ssl 或选择 HTTPS 实例。'));
+            return;
+        }
+        if (!$ssl && \in_array($httpVersion, ['2', '3'], true)) {
+            $this->printer->error(__('--http-version 2/3 仅适用于 HTTPS WLS；明文端点请选择 auto 或 1.1。'));
+            return;
+        }
+        $unsupportedHttpVersionReason = $this->unsupportedHttpVersionReason($httpVersion);
+        if ($unsupportedHttpVersionReason !== null) {
+            $this->printer->error($unsupportedHttpVersionReason);
             return;
         }
         // keep-alive 会让 Dispatcher/direct 都按 TCP 连接粘滞到某个 Worker；验证连接级分流时可禁用复用
@@ -68,6 +81,8 @@ class Benchmark extends CommandAbstract
             $ssl,
             $tlsVersion,
         );
+        $benchmarkContext['requested_http_version'] = $httpVersion;
+        $benchmarkContext['accept_encoding'] = $acceptEncoding;
         
         // 修复 Git Bash 路径转换问题（如 /_wls/health 被转成 C:/Program Files/Git/_wls/health）
         $scheme = $ssl ? 'https' : 'http';
@@ -102,6 +117,8 @@ class Benchmark extends CommandAbstract
         if ($ssl) {
             $this->printer->note(\sprintf('║  TLS 版本：%-50s║', $tlsVersion));
         }
+        $this->printer->note(\sprintf('║  HTTP 协商：%-49s║', $httpVersion));
+        $this->printer->note(\sprintf('║  内容编码：%-49s║', $acceptEncoding));
         $runtimeMetadata = \is_array($serverConfig['runtime_metadata'] ?? null)
             ? $serverConfig['runtime_metadata']
             : [];
@@ -521,6 +538,8 @@ class Benchmark extends CommandAbstract
         $statusCodes = [];
         $workerHits = [];
         $cacheSources = [];
+        $httpVersionHits = [];
+        $contentEncodingHits = [];
         $startedAtNanoseconds = \hrtime(true);
         
         // 检查 curl 扩展
@@ -530,22 +549,31 @@ class Benchmark extends CommandAbstract
         }
         
         // 基础选项
+        $requestedHttpVersion = (string)($benchmarkContext['requested_http_version'] ?? 'auto');
+        $acceptEncoding = (string)($benchmarkContext['accept_encoding'] ?? 'gzip');
         $baseOpts = [
-            CURLOPT_RETURNTRANSFER => true,
+            // Benchmark only needs status and response headers. Copying every
+            // response body into a PHP string makes the client the bottleneck
+            // for large FPC pages and reports a false server-side QPS ceiling.
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_WRITEFUNCTION => static fn($handle, string $chunk): int => \strlen($chunk),
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_HTTP_VERSION => $this->curlHttpVersionOption($requestedHttpVersion, $ssl),
             CURLOPT_USERAGENT => 'Weline-Server-Benchmark/2.0',
         ];
+        $clientHeaders = ['X-WLS-Benchmark-Worker: 1'];
+        if ($acceptEncoding !== 'identity') {
+            // Set the wire header directly instead of CURLOPT_ENCODING: the
+            // latter decompresses in the PHP client and contaminates latency.
+            $clientHeaders[] = 'Accept-Encoding: ' . $acceptEncoding;
+        }
         if ($noKeepAlive) {
             // 分流压测模式：每个请求尽量新建连接，让 Dispatcher 在“连接级”重新选择 Worker
             $baseOpts[CURLOPT_FORBID_REUSE] = true;
             $baseOpts[CURLOPT_FRESH_CONNECT] = true;
             $baseOpts[CURLOPT_TCP_KEEPALIVE] = 0;
-            $baseOpts[CURLOPT_HTTPHEADER] = [
-                'Connection: close',
-                'X-WLS-Benchmark-Worker: 1',
-            ];
+            $baseOpts[CURLOPT_HTTPHEADER] = \array_merge(['Connection: close'], $clientHeaders);
         } else {
             // 性能压测模式：启用连接复用（Keep-Alive）
             $baseOpts[CURLOPT_FORBID_REUSE] = false;      // 允许连接复用
@@ -553,11 +581,9 @@ class Benchmark extends CommandAbstract
             $baseOpts[CURLOPT_TCP_KEEPALIVE] = 1;         // 启用 TCP Keep-Alive
             $baseOpts[CURLOPT_TCP_KEEPIDLE] = 60;         // Keep-Alive 空闲时间
             $baseOpts[CURLOPT_TCP_KEEPINTVL] = 30;        // Keep-Alive 间隔
-            $baseOpts[CURLOPT_HTTPHEADER] = [
-                'Connection: keep-alive',
-                'Keep-Alive: timeout=60, max=1000',
-                'X-WLS-Benchmark-Worker: 1',
-            ];
+            // HTTP/1.1 persistence and HTTP/2/3 multiplexing are defaults.
+            // Do not inject hop-by-hop Connection headers into H2/H3 requests.
+            $baseOpts[CURLOPT_HTTPHEADER] = $clientHeaders;
         }
         if ($ssl) {
             $baseOpts[CURLOPT_SSL_VERIFYPEER] = false;
@@ -668,10 +694,17 @@ class Benchmark extends CommandAbstract
                     
                     if ($info['result'] === CURLE_OK) {
                         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        $actualHttpVersion = $this->curlHttpVersionLabel(
+                            (int)\curl_getinfo($ch, CURLINFO_HTTP_VERSION)
+                        );
+                        $httpVersionHits[$actualHttpVersion] = ($httpVersionHits[$actualHttpVersion] ?? 0) + 1;
                         $statusCodes[(string)$httpCode] = ($statusCodes[(string)$httpCode] ?? 0) + 1;
                         if ($httpCode >= 200 && $httpCode < 400) {
                             $results[] = $elapsed;
                             $headers = $this->parseResponseHeaders($headerBuffers[$key] ?? '');
+                            $contentEncoding = \strtolower(\trim((string)($headers['content-encoding'] ?? 'identity')));
+                            $contentEncoding = $contentEncoding !== '' ? $contentEncoding : 'identity';
+                            $contentEncodingHits[$contentEncoding] = ($contentEncodingHits[$contentEncoding] ?? 0) + 1;
                             $workerMarker = $this->extractWorkerMarker($headers, $workerHeader);
                             if ($workerMarker !== '') {
                                 $workerHits[$workerMarker] = ($workerHits[$workerMarker] ?? 0) + 1;
@@ -741,6 +774,9 @@ class Benchmark extends CommandAbstract
             0.0,
             (\hrtime(true) - $startedAtNanoseconds) / 1_000_000_000.0
         );
+        $benchmarkContext['actual_http_versions'] = $httpVersionHits;
+        $benchmarkContext['response_content_encodings'] = $contentEncodingHits;
+        $benchmarkContext['benchmark_client']['response_body_mode'] = 'discard';
         
         // 生成报告
         $this->generateReport(
@@ -873,8 +909,19 @@ class Benchmark extends CommandAbstract
         echo "\n";
         
         // 保存报告
+        $protocolHits = (array)($benchmarkContext['actual_http_versions'] ?? []);
+        if ($protocolHits !== []) {
+            \arsort($protocolHits);
+            $this->printer->setup(__('实际 HTTP 协议'));
+            echo "\n";
+            foreach ($protocolHits as $protocol => $count) {
+                $this->printer->note(__('%{1}：%{2}', [$protocol, $count]));
+            }
+            echo "\n";
+        }
+
         $report = [
-            'report_schema_version' => 3,
+            'report_schema_version' => 4,
             'generated_at' => \date(DATE_ATOM),
             'target_url' => $targetUrl,
             'total_requests' => $totalCompleted,
@@ -887,6 +934,10 @@ class Benchmark extends CommandAbstract
             'fresh_connection' => (bool)($benchmarkContext['fresh_connection'] ?? false),
             'fresh_tls' => (bool)($benchmarkContext['fresh_tls'] ?? false),
             'tls_version' => $benchmarkContext['tls_version'] ?? null,
+            'requested_http_version' => $benchmarkContext['requested_http_version'] ?? 'auto',
+            'actual_http_versions' => $protocolHits,
+            'accept_encoding' => $benchmarkContext['accept_encoding'] ?? 'identity',
+            'response_content_encodings' => (array)($benchmarkContext['response_content_encodings'] ?? []),
             'instance_name' => (string)($benchmarkContext['instance_name'] ?? ''),
             'instance' => (string)($benchmarkContext['instance_name'] ?? ''),
             'target_attribution' => (string)($benchmarkContext['target_attribution'] ?? 'unattributed'),
@@ -1004,6 +1055,8 @@ class Benchmark extends CommandAbstract
                 '-h, --host <ip>' => __('指定主机（可选，默认 127.0.0.1）'),
                 '-s, --ssl' => __('指定端口为 HTTPS（与 -p 合用；自动探测时根据实例配置）'),
                 '--tls-version <auto|1.2|1.3>' => __('强制 HTTPS 压测使用指定 TLS 版本（默认 auto）'),
+                '--http-version <auto|1.1|2|3>' => __('HTTP 协议：auto 默认经 ALPN 协商 H2 并自动回退 H1；可显式验证 H3'),
+                '--accept-encoding <gzip|identity>' => __('响应内容编码（默认 gzip，模拟生产浏览器且不在压测客户端解压）'),
                 '--no-keepalive, --spread' => __('禁用 keep-alive/连接复用（更利于验证连接级分流；HTTPS 时亦是 fresh TLS）'),
                 '--worker-header <name>' => __('命中 Worker 统计使用的响应头（可逗号分隔；默认自动探测 X-WLS-Worker-PID/Id/Port）'),
                 '--worker-balance-threshold <ratio>' => __('分流倾斜阈值，按 max/min 判定（默认 1.5，超过则 WARN）'),
@@ -1020,8 +1073,90 @@ class Benchmark extends CommandAbstract
                 __('指定端口') => 'php bin/w server:benchmark -p 9000',
                 __('指定 HTTPS 端口') => 'php bin/w server:benchmark -p 9443 --ssl',
                 __('TLS 1.3 fresh connection') => 'php bin/w server:benchmark -p 9443 --ssl --tls-version 1.3 --no-keepalive',
+                __('HTTP/2 首页 FPC') => 'php bin/w server:benchmark --instance api-server --path / --http-version 2',
+                __('HTTP/3 首页 FPC') => 'php bin/w server:benchmark --instance api-server --path / --http-version 3',
             ]
         );
+    }
+
+    private function normalizeHttpVersion(mixed $value): string
+    {
+        $value = \strtolower(\trim((string)$value));
+        return match ($value) {
+            '', 'auto', 'default', 'negotiate' => 'auto',
+            '1', '1.1', 'h1', 'http1', 'http/1.1' => '1.1',
+            '2', '2.0', 'h2', 'http2', 'http/2', 'http/2.0' => '2',
+            '3', '3.0', 'h3', 'http3', 'http/3', 'http/3.0' => '3',
+            default => throw new \InvalidArgumentException(
+                '--http-version must be auto, 1.1, 2, or 3.'
+            ),
+        };
+    }
+
+    /**
+     * Reject explicit protocols that the benchmark client cannot emit.
+     *
+     * The WLS endpoint may support HTTP/3 through the native protocol edge
+     * while the PHP/libcurl bundled on the current platform does not. Running
+     * the full request count in that situation only produces CURLE_NOT_BUILT_IN
+     * and can be mistaken for a server regression.
+     */
+    private function unsupportedHttpVersionReason(string $httpVersion): ?string
+    {
+        if (!\in_array($httpVersion, ['2', '3'], true) || !\function_exists('curl_version')) {
+            return null;
+        }
+
+        $curl = (array)\curl_version();
+        $features = \is_array($curl['feature_list'] ?? null) ? $curl['feature_list'] : [];
+        $featureName = $httpVersion === '3' ? 'HTTP3' : 'HTTP2';
+        if (($features[$featureName] ?? false) === true) {
+            return null;
+        }
+
+        $protocol = $httpVersion === '3' ? 'HTTP/3' : 'HTTP/2';
+        $curlVersion = (string)($curl['version'] ?? 'unknown');
+        return __(
+            '当前 PHP/libcurl 压测客户端不支持 %{protocol}（libcurl %{version}）；这是客户端能力限制，不代表 WLS 服务端不支持。请使用具备该协议能力的 curl/浏览器/QUIC 客户端验证。',
+            ['protocol' => $protocol, 'version' => $curlVersion],
+        );
+    }
+
+    private function normalizeAcceptEncoding(mixed $value): string
+    {
+        $value = \strtolower(\trim((string)$value));
+        return match ($value) {
+            '', 'gzip' => 'gzip',
+            'identity', 'none', 'off' => 'identity',
+            default => throw new \InvalidArgumentException(
+                '--accept-encoding must be gzip or identity.'
+            ),
+        };
+    }
+
+    private function curlHttpVersionOption(string $httpVersion, bool $ssl): int
+    {
+        return match ($httpVersion) {
+            '1.1' => CURL_HTTP_VERSION_1_1,
+            '2' => $ssl && \defined('CURL_HTTP_VERSION_2TLS')
+                ? CURL_HTTP_VERSION_2TLS
+                : throw new \RuntimeException('The current PHP cURL build cannot negotiate HTTP/2 over TLS.'),
+            '3' => $ssl && \defined('CURL_HTTP_VERSION_3')
+                ? CURL_HTTP_VERSION_3
+                : throw new \RuntimeException('The current PHP cURL build cannot request HTTP/3.'),
+            default => CURL_HTTP_VERSION_NONE,
+        };
+    }
+
+    private function curlHttpVersionLabel(int $version): string
+    {
+        return match ($version) {
+            CURL_HTTP_VERSION_1_0 => 'HTTP/1.0',
+            CURL_HTTP_VERSION_1_1 => 'HTTP/1.1',
+            CURL_HTTP_VERSION_2_0 => 'HTTP/2',
+            \defined('CURL_HTTP_VERSION_3') ? CURL_HTTP_VERSION_3 : -1 => 'HTTP/3',
+            default => 'unknown:' . $version,
+        };
     }
 
     /**

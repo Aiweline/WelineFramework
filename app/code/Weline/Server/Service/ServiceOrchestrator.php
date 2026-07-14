@@ -2581,23 +2581,23 @@ class ServiceOrchestrator
                     continue;
                 }
 
-                if (!($inspect['is_weline'] ?? false)) {
-                    if ($this->isLaunchPortOwnedByInstance($instance, $inspect)) {
-                        continue;
-                    }
+                // The Windows detached launcher may not return the service PID
+                // before the child binds its port. The current random launch
+                // identity in the observed command line is still authoritative
+                // and must not be mistaken for a stale WLS generation.
+                if ($this->isLaunchPortOwnedByInstance($instance, $inspect)) {
+                    continue;
+                }
 
+                if (!($inspect['is_weline'] ?? false)) {
                     return "{$role}#{$instance->instanceId} cannot become READY because port {$port} is occupied by a non-WLS process"
                         . ' (' . $this->describeLaunchPortOccupant($role, $port, $inspect) . ')';
                 }
 
                 $ownerPid = (int)($inspect['pid'] ?? 0);
                 if (!$processRunning && $ownerPid > 0 && !$instance->matchesManagedPid($ownerPid)) {
-                    $processName = \trim((string)$instance->getMeta('process_name', ''));
-                    $ownerName = \trim((string)($inspect['pname'] ?? ''));
-                    if ($processName === '' || $ownerName !== '--name=' . $processName) {
-                        return "{$role}#{$instance->instanceId} did not register; port {$port} is still owned by stale WLS pid {$ownerPid}"
-                            . ' (' . $this->describeLaunchPortOccupant($role, $port, $inspect) . ')';
-                    }
+                    return "{$role}#{$instance->instanceId} did not register; port {$port} is still owned by stale WLS pid {$ownerPid}"
+                        . ' (' . $this->describeLaunchPortOccupant($role, $port, $inspect) . ')';
                 }
 
                 if ($trackingPid > 0 && !$processRunning) {
@@ -2619,12 +2619,26 @@ class ServiceOrchestrator
     private function isLaunchPortOwnedByInstance(ServiceInstance $instance, array $inspect): bool
     {
         $ownerPid = (int)($inspect['pid'] ?? 0);
-        if ($ownerPid <= 0 || !$instance->matchesManagedPid($ownerPid)) {
+        if ($ownerPid <= 0) {
             return false;
         }
 
-        return (bool)($inspect['pid_running'] ?? false)
-            || $ownerPid === $instance->getTrackingPid();
+        if ($instance->matchesManagedPid($ownerPid)) {
+            return (bool)($inspect['pid_running'] ?? false)
+                || $ownerPid === $instance->getTrackingPid();
+        }
+
+        $launchId = \trim($instance->launchId);
+        $processName = \trim((string)$instance->getMeta('process_name', ''));
+        $ownerCommand = \trim((string)($inspect['pname'] ?? ''));
+        if ($launchId === '' || $processName === '' || $ownerCommand === '') {
+            return false;
+        }
+
+        $normalizedCommand = \str_replace(['"', "'"], '', $ownerCommand);
+
+        return \str_contains($normalizedCommand, '--launch-id=' . $launchId)
+            && \str_contains($normalizedCommand, '--name=' . $processName);
     }
 
     /**
@@ -4174,6 +4188,20 @@ class ServiceOrchestrator
         }
 
         $host = $this->resolveFastBindProbeHost();
+        if (\extension_loaded('sockets')
+            && \function_exists('socket_create')
+            && \function_exists('socket_bind')
+        ) {
+            $socketHost = \strcasecmp($host, 'localhost') === 0 ? '127.0.0.1' : $host;
+            $family = \str_contains($socketHost, ':') ? \AF_INET6 : \AF_INET;
+            $socket = @\socket_create($family, \SOCK_STREAM, \SOL_TCP);
+            if ($socket !== false) {
+                $bound = @\socket_bind($socket, $socketHost, $port);
+                @\socket_close($socket);
+                return $bound;
+            }
+        }
+
         $addressHost = \str_contains($host, ':') && !\str_starts_with($host, '[')
             ? '[' . $host . ']'
             : $host;
@@ -4214,6 +4242,37 @@ class ServiceOrchestrator
     {
         if ($configuredPort <= 0) {
             return $configuredPort;
+        }
+        if ($this->bulkLaunchPortCheckActive && $this->shouldUseFastBindProbeForPortChecks()) {
+            $directCheckStartedAt = \microtime(true);
+            $directWorkerPublicPort = $this->isDirectWorkerPublicPort($role, $configuredPort);
+            $directCheckElapsedMs = (int) \round((\microtime(true) - $directCheckStartedAt) * 1000);
+            $bindProbeElapsedMs = 0;
+            $bindable = false;
+            if (!$directWorkerPublicPort) {
+                $bindProbeStartedAt = \microtime(true);
+                $bindable = $this->isPortFreeByBindProbe($configuredPort);
+                $bindProbeElapsedMs = (int) \round((\microtime(true) - $bindProbeStartedAt) * 1000);
+            }
+            if ((string) \getenv('WLS_STARTUP_TRACE') === '1') {
+                $this->traceStartup('launch_port_fast_probe', [
+                    'role' => $role,
+                    'instance_id' => $instanceId,
+                    'port' => $configuredPort,
+                    'direct_public' => $directWorkerPublicPort,
+                    'direct_check_ms' => $directCheckElapsedMs,
+                    'bindable' => $bindable,
+                    'bind_probe_ms' => $bindProbeElapsedMs,
+                ]);
+            }
+            if ($bindable) {
+                // Start already allocated the complete generation port plan.
+                // A real bind probe closes the race without invoking netstat
+                // plus a per-PID command-line scan for every child on Windows.
+                // Occupied ports still fall through to strict ownership
+                // validation below.
+                return $configuredPort;
+            }
         }
         if ($this->bulkLaunchPortCheckActive
             && (bool)($context->getConfig('wls.orchestrator.skip_bulk_launch_port_reprobe', true) ?? true)
@@ -4534,6 +4593,7 @@ class ServiceOrchestrator
 
         $argv = [
             PHP_BINARY,
+            ...LongRunningPhpRuntime::startupCliArguments(),
             $command->getAbsoluteScript(),
             ...\array_map(static fn (mixed $arg): string => (string) $arg, $command->arguments),
         ];
@@ -7460,7 +7520,13 @@ class ServiceOrchestrator
                 $liveIdentity,
                 $launchId,
                 $expectedPname,
-                true
+                // getProcessCommandLine(..., true) immediately above already
+                // captured a fresh OS identity and populated the driver's
+                // per-PID cache. Reusing that exact snapshot here avoids a
+                // second Windows CIM query during reload preflight. The
+                // termination path still performs its own fresh identity
+                // fence immediately before sending any signal.
+                false
             );
             $state = (string)($probe['state'] ?? Processer::PROCESS_STATE_UNKNOWN);
             $reason = (string)($probe['reason'] ?? 'probe_result_missing');
@@ -12132,14 +12198,17 @@ class ServiceOrchestrator
             echo "{$B}  ╚" . \str_repeat('═', $tableWidth) . "╝{$R}\n";
             echo "\n";
 
-            // 使用说明 - 深橙色提示
+            // Canonical public-protocol guidance belongs to the Master banner,
+            // not to every Worker process.
             echo self::ANSI_BOLD . self::ANSI_GREEN . "  " . $this->translateMessage('使用说明：') . self::ANSI_RESET . "\n";
             $tips = [
-                $this->translateMessage('WLS 默认仅监听 127.0.0.1，仅本机可访问'),
-                $this->translateMessage('外网访问需用 Nginx/Caddy 等反向代理转发到 %{1}:%{2}', [$bindHost, $mainPort]),
-                $this->translateMessage('Nginx 示例：') . "proxy_pass {$protocol}://{$bindHost}:{$mainPort};",
-                $this->translateMessage('需直连外网时：') . "php bin/w server:start --host 0.0.0.0",
+                $this->translateMessage('公网 TLS 与 HTTP 协议由 WLS Native Protocol Engine 原生处理，无需外置 Web 服务器'),
+                $this->translateMessage('HTTPS 自动协商 HTTP/3 → HTTP/2 → HTTP/1.1，并复用 TLS 会话与多路流'),
             ];
+            if ($bindHost === '127.0.0.1' || $bindHost === '::1' || \strtolower($bindHost) === 'localhost') {
+                $tips[] = $this->translateMessage('当前仅绑定本机；需要外网直连时使用：')
+                    . 'php bin/w server:start --host 0.0.0.0';
+            }
             foreach ($tips as $tip) {
                 echo "  " . self::ANSI_BRIGHT_ORANGE . "• " . self::ANSI_RESET . self::ANSI_ORANGE . $tip . self::ANSI_RESET . "\n";
             }

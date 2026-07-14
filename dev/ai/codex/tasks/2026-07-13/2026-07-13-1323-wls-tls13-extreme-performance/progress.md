@@ -1,6 +1,8 @@
 # 进度
 
-状态：`published_windows_pending`
+状态：`validated`
+
+- 2026-07-14 Windows 11 ARM 准备阶段确认官方 PECL 已提供 PHP 8.4 / event 3.1.4 的 VS17、x64/x86、TS/NTS 精确包，而旧启动路径只检查本地 DLL。现已补齐启动前自动安装：四种 ABI 各自固定 SHA-256，只从官方地址下载，只提取 `php_event.dll + pthreadVC2.dll`，已有文件备份后原子发布，并由同一 `PHP_BINARY` 新进程实际加载验证；无固定可信包或验证失败才保持 Dispatcher + stream/select，绝不跨 ABI 猜测。PHP 语法、`git diff --check` 与 Runtime/Start/Windows taskkill/socket 六组定向入口均通过；Windows 原生运行证据仍等待 Parallels VM 完成安装，不能提前记为平台通过。
 
 - 已建立隔离分支和 worktree，代码智能上下文已初始化。
 - 已冻结原始脏工作区；只在 `/Users/weline/Project/Official/.codex-wls-release-20260713` 修改，原分支未删除。
@@ -101,3 +103,14 @@
 - Windows 定向静态门禁首轮暴露 `Stop::isWindowsPlatform()` 为 private，现有测试无法注入 Windows 平台，误走 POSIX/`Processer::killProcessTreeByPid()` 分支。GitNexus 上游影响为 LOW（2 个直接调用、8 个总符号、1 个模块、0 条识别流程）；只将可见性改为 protected，默认 `PHP_OS` 判定和停止语义不变。Runtime/Start/Windows taskkill/socket 定向集现为 30/30、81 assertions。
 - 修复后专用 `ai-test-stop-platform-20260714-0407` 在 9942 以 Direct 2 Worker 约 2 秒 READY，两个动态首渲染为 9.40/9.54ms，首页 200、裸 `/admin/login` 404。统一 `server:stop` 流程完整退出 Master/Worker，9942/38145 和稍后自治退出的 28173/28174 均无监听；9890/9981 未触碰。
 - 本轮最终门禁：Stop PHP 语法、30/30 定向测试（81 assertions）、Semgrep 85 条规则 0 finding、`git diff --check`、architecture:check（83 模块/4045 PHP/7171 引用）、framework:compile（39 Provider/0 延迟）、policy check（12 条）全部通过。GitNexus 强制重建后 staged 检测为 4 文件/5 符号、0 影响流程、LOW；未暂存的 `AGENTS.md/CLAUDE.md` 明确排除。
+- 用户确认 WLS 必须自己拥有公网协议栈，不能把 Caddy 当作默认服务器。现已将产品边界固定为：WLS Native Protocol Engine 直接拥有 TLS/QUIC/ALPN、h3/h2/h1 自动协商、session ticket、stream multiplexing、READY upstream keep-alive 与 atomic reload；Windows Dispatcher 只在原生入口之后承担 WLS 内部 L4 调度。Caddy 只保留 `wls.http.protocol_edge=caddy` 显式迁移兼容，不是默认依赖或生产推荐。
+- 已移除 Worker 每进程输出的 Nginx/Caddy 前置代理旧提示，Master/Start 统一显示 WLS 原生协议所有权；架构图、部署指南、启动/关闭链路、EventBuffer 说明和安全规则推演同步改为 Native 权威表述。历史 Caddy 压测数据保留并明确标记为替换前基线，避免篡改验证记录或将旧数据冒充 Native 结果。
+- 2026-07-15 最终 Native 代码代在 macOS 专用实例 `ai-test-mac-compile-20260715`（10976）完成正确 `/_wls/health` 1,000,000 请求门禁：1,000,000/1,000,000 均为 HTTP/2 200，0 错误，14,939.53 QPS，p95 7.950ms、p99 12.097ms、max 55.894ms；四个 Worker 命中 252,540/251,406/249,630/246,424，PID 全程未变化，RSS 在预热后下降并进入平台期。早先误用 `/__wls_health` 得到的 429/404/502 轮次已明确作废，绝不计入稳定性证据。
+- Worker 请求数回收改为显式 opt-in，默认 `worker_max_requests=0`；显式阈值到达后先关闭公开 listener 进入 drain，不再等待持久连接表自然归零，避免压力结束时多个超限 Worker 同批退出造成 502。该修复后的百万门禁无意外 Worker 重启。
+- Windows 11 ARM / PHP 8.4.23 专用 Dispatcher 实例 `ai-test-win-reuse-20260715`（10975）完整启动约 2 秒，状态为 Master + Dispatcher + Native Protocol Edge + 4 Worker，6/6 READY；四个动态首渲染为 26.86–31.23ms。Windows 命令行身份解析已排除整段引号尾部，rolling reload 能逐槽完成，替换 Worker 的单槽 spawn 为 7–8ms、READY 为 0.70–0.84s。
+- Windows `pid_index.json` 不再用可能被共享读句柄拒绝的临时文件覆盖：POSIX 继续原子 rename，Windows 在同一目标文件上 `LOCK_EX + truncate + full write + flush/fsync`。完整停启和 rolling reload 后，当前 4 个 Worker PID 5992/5948/9244/6768 均存在于 pid index、独立 PID record 和 name index，且每个 record 都带 `pname + launch_id`；没有再出现“进程已 READY 但 pid index 丢槽”的情况。
+- Windows 正确 `/_wls/health` HTTP/2 c64×100,000 报告为 `C:\\WelineFramework\\var\\log\\wls\\benchmark_report_20260715_023642_160935_wls-health_pid7724.json`：100,000/100,000 均为 200，0 错误，5,277.49 QPS，p95 19.009ms、p99 24.114ms、max 752.022ms；四 Worker 分布 25.148%/25.124%/24.918%/24.810%，压测后仍为 6/6 READY。Windows PHP/libcurl 不具备 HTTP/3 客户端能力时，`server:benchmark --http-version 3` 现在立即明确报告客户端限制，不再生成 10,000 个伪服务器错误；WLS 服务端 HTTP/3 已由外部 Go 客户端验证。
+- 为保持下游扩展兼容，`Start::syncWlsMaintenanceMode()` 恢复历史两参数 `void` 覆盖签名，required-sync 作为一次调用的内部状态传递；`Stop::releaseSharedStateConsumersForInstance()` 同样恢复历史单参数 `void` 覆盖签名，restart-cleanup preservation 只在调用包装层传递。GitNexus 对两处上游影响均为 LOW，旧匿名扩展不再发生 PHP compile fatal，运行时 required/preserve 语义保持不变。
+- 最终静态门禁：31 个修改/新增 PHP 文件语法通过；Native Go `gofmt + go test ./... + go vet ./... + go build -trimpath` 通过；`git diff --check` 通过；`framework:compile` 连续两轮成功（83 模块、39 QueryProvider、0 deferred）；`architecture:check --json` 为 83 模块/4,046 PHP/7,173 引用、0 finding；`server:policy:check` 为 12 条规则且 valid。Semgrep `auto` 在 36 个修改文件执行 168 条适用规则，3 个 finding 均位于 HEAD 已存在的 `removeLogFile()/execute()` 通用 `unlink/exec/shell_exec` 行，本次新增行 finding 为 0。
+- 相关现有测试为 118/118、535 assertions 全部通过，覆盖 ObjectManager 默认对象恢复、Processer PID 写入、Benchmark、Start runtime config、LongRunningPhpRuntime、Orchestrator startup、Session 生命周期和 Worker recycle。扩大到 Server Unit + Framework Process/ObjectManager 的 931 项套件后为 8 errors、26 failures、2 skipped，其余通过；失败已逐项归类为当前分支既有旧契约/环境夹具（例如已移除辅助方法、共享 sidecar 旧停机预期、测试引用不存在的 `Aiweline\\Admin` 类），未把整套测试伪报为全绿，也未通过回退新架构来迎合旧断言。
+- Browser 同代验收专用 `https://pa3f84a7b.weline.test:10976/`：默认首页标题/H1、文档/API/后台入口可见；裸 `/admin/login` 可见结果为 `Not Found`；`/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/admin/login` 显示“登录 Weline 管理面板”、管理员/密码/记住我/登录按钮，Console error/warn 为 0。验收标签已关闭，生产 9981 未操作。
