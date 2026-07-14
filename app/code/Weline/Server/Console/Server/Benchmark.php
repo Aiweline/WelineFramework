@@ -1174,6 +1174,30 @@ class Benchmark extends CommandAbstract
         $runtime = isset($serverConfig['runtime_metadata']) && \is_array($serverConfig['runtime_metadata'])
             ? $serverConfig['runtime_metadata']
             : [];
+        $targetAttribution = (string)($serverConfig['target_attribution'] ?? 'unattributed');
+        $instanceName = (string)($serverConfig['instance'] ?? '');
+        if ($instanceName !== '' && \in_array($targetAttribution, [
+            'explicit_instance',
+            'single_running_instance',
+            'unique_live_endpoint_match',
+        ], true)) {
+            try {
+                /** @var ServerInstanceManager $manager */
+                $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+                $status = $manager->getMasterIpcStatusResult($instanceName, 1.0);
+                $live = \is_array($status['data'] ?? null) ? $status['data'] : [];
+                $livePolicyDigest = \strtolower(\trim((string)($live['policy_digest'] ?? '')));
+                if (!empty($status['success']) && \preg_match('/^[a-f0-9]{64}$/D', $livePolicyDigest) === 1) {
+                    $runtime['policy_digest'] = $livePolicyDigest;
+                    $runtime['policy_state'] = (string)($live['policy_state'] ?? 'unknown');
+                    $metadataSource = \trim((string)($runtime['metadata_source'] ?? 'endpoint'));
+                    $runtime['metadata_source'] = ($metadataSource !== '' ? $metadataSource : 'endpoint')
+                        . '+master_ipc';
+                }
+            } catch (\Throwable) {
+                // Endpoint metadata remains a safe fallback when live IPC is transiently unavailable.
+            }
+        }
         $curl = \function_exists('curl_version') ? (array)\curl_version() : [];
 
         return [
@@ -1184,8 +1208,8 @@ class Benchmark extends CommandAbstract
             'fresh_connection' => $noKeepAlive,
             'fresh_tls' => $ssl && $noKeepAlive,
             'tls_version' => $ssl ? $tlsVersion : null,
-            'instance_name' => (string)($serverConfig['instance'] ?? ''),
-            'target_attribution' => (string)($serverConfig['target_attribution'] ?? 'unattributed'),
+            'instance_name' => $instanceName,
+            'target_attribution' => $targetAttribution,
             'connect_host' => (string)($serverConfig['host'] ?? ''),
             'authority_host' => (string)($serverConfig['authority_host'] ?? $serverConfig['host'] ?? ''),
             'runtime_metadata_source' => $runtime['metadata_source'] ?? null,

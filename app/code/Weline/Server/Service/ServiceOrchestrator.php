@@ -12448,6 +12448,7 @@ class ServiceOrchestrator
             'protocol_edge_enabled',
             'protocol_edge_binary',
             'tls_session_resumption',
+            'tls_key_exchange_profile',
             'dispatcher_enabled',
             'dispatcher_port',
             'worker_port',

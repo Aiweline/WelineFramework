@@ -51,7 +51,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private const HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX = 'wls_homepage_warmup:';
     private const HOMEPAGE_WARMUP_OWNER_KEY = 'owner';
     private const HOMEPAGE_WARMUP_READY_KEY = 'ready';
-    private const HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS = 2;
+    private const HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS = 8;
+    private const HOMEPAGE_WARMUP_READY_ATTEMPTS = 4;
     private const HOMEPAGE_WARMUP_READY_TTL_SECONDS = 120;
 
     /**
@@ -442,43 +443,71 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         $this->logReadyGateWarmupStep('homepage_fpc_begin', $workerId, $startedAt);
         $host = $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
-        $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, true);
-        $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
-        $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
-        $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
-        $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
-            ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
-        $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
-        $fullUri = \trim((string)($meta['full_uri'] ?? ''));
-        $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
-        $hit = (bool)($validation['ok'] ?? false)
-            && $fpcStatus === 'HIT'
-            && \str_starts_with($source, 'process')
-            && $fullUri !== '';
-        $proof = [
-            'hit' => $hit,
-            'fpc_status' => $fpcStatus,
-            'source' => $source,
-            'full_uri' => $fullUri,
-            'reason' => $reason,
-            'http_status' => (int)($meta['status_code'] ?? 0),
+        $maxAttempts = \max(1, \min(6, (int)Env::get(
+            'wls.worker.homepage_warmup_ready_attempts',
+            self::HOMEPAGE_WARMUP_READY_ATTEMPTS
+        )));
+        $lastProof = [
+            'hit' => false,
+            'fpc_status' => '',
+            'source' => '',
+            'full_uri' => '',
+            'reason' => 'homepage validation missing',
+            'http_status' => 0,
         ];
-        if (!$hit) {
-            throw new \RuntimeException(
-                'READY gate homepage process FPC proof failed worker=' . $workerId
-                . ' fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
-                . ' source=' . ($source !== '' ? $source : 'missing')
-                . ' uri=' . ($fullUri !== '' ? $fullUri : 'missing')
-                . ' reason=' . $reason
-            );
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $transaction = $this->runHomepageFpcWarmupTransaction($host, $attempt, true);
+            $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
+            $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
+            $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
+            $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+                ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
+            $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
+            $fullUri = \trim((string)($meta['full_uri'] ?? ''));
+            $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
+            $hit = (bool)($validation['ok'] ?? false)
+                && $fpcStatus === 'HIT'
+                && \str_starts_with($source, 'process')
+                && $fullUri !== '';
+            $lastProof = [
+                'hit' => $hit,
+                'fpc_status' => $fpcStatus,
+                'source' => $source,
+                'full_uri' => $fullUri,
+                'reason' => $reason,
+                'http_status' => (int)($meta['status_code'] ?? 0),
+            ];
+            if ($hit) {
+                $this->logReadyGateWarmupStep(
+                    'homepage_fpc_done source=' . $source
+                    . ' status=' . $lastProof['http_status']
+                    . ' attempt=' . $attempt . '/' . $maxAttempts,
+                    $workerId,
+                    $startedAt
+                );
+                return $lastProof;
+            }
+
+            if ($attempt < $maxAttempts) {
+                $this->logReadyGateWarmupStep(
+                    'homepage_fpc_retry attempt=' . $attempt . '/' . $maxAttempts
+                    . ' reason=' . $reason,
+                    $workerId,
+                    $startedAt
+                );
+                SchedulerSystem::yieldDelay(\min(25, 5 * $attempt));
+            }
         }
 
-        $this->logReadyGateWarmupStep(
-            'homepage_fpc_done source=' . $source . ' status=' . $proof['http_status'],
-            $workerId,
-            $startedAt
+        throw new \RuntimeException(
+            'READY gate homepage process FPC proof failed worker=' . $workerId
+            . ' attempts=' . $maxAttempts
+            . ' fpc=' . ($lastProof['fpc_status'] !== '' ? $lastProof['fpc_status'] : 'missing')
+            . ' source=' . ($lastProof['source'] !== '' ? $lastProof['source'] : 'missing')
+            . ' uri=' . ($lastProof['full_uri'] !== '' ? $lastProof['full_uri'] : 'missing')
+            . ' reason=' . $lastProof['reason']
         );
-        return $proof;
     }
 
     private function shouldRunReadyGateWorkerBootstrapWarmup(): bool
