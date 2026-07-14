@@ -425,6 +425,7 @@ final class ProtocolEdgeRuntime
                 'private_key_file' => $context->sslKey,
                 'minimum_version' => $tlsMinimum,
                 'maximum_version' => $tlsMaximum,
+                'key_exchange_profile' => $tlsSelection['requested'],
                 'session_resumption' => $selection->tlsSessionResumption,
                 'session_ticket_key_file' => self::sessionTicketKeyFile($context->instanceName),
                 'session_ticket_rotation' => '12h',

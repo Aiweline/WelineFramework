@@ -78,15 +78,11 @@ func buildRuntimeState(loaded *loadedConfig) (*runtimeState, error) {
 		return nil, fmt.Errorf("load TLS certificate: %w", err)
 	}
 	tlsProfile := &tls.Config{
-		Certificates: []tls.Certificate{certificate},
-		MinVersion:   tlsVersion(loaded.config.TLS.MinimumVersion),
-		MaxVersion:   tlsVersion(loaded.config.TLS.MaximumVersion),
-		CurvePreferences: []tls.CurveID{
-			tls.X25519MLKEM768,
-			tls.X25519,
-			tls.CurveP256,
-		},
-		NextProtos: tcpALPN(loaded.config),
+		Certificates:     []tls.Certificate{certificate},
+		MinVersion:       tlsVersion(loaded.config.TLS.MinimumVersion),
+		MaxVersion:       tlsVersion(loaded.config.TLS.MaximumVersion),
+		CurvePreferences: tlsCurvePreferences(loaded.config.TLS.KeyExchangeProfile),
+		NextProtos:       tcpALPN(loaded.config),
 	}
 	if err := configureTicketKeys(tlsProfile, loaded.config.TLS, loaded.durations.ticketRotation); err != nil {
 		return nil, err
@@ -352,6 +348,14 @@ func tlsVersion(version string) uint16 {
 		return tls.VersionTLS13
 	}
 	return tls.VersionTLS12
+}
+
+func tlsCurvePreferences(profile string) []tls.CurveID {
+	if profile == "system" {
+		return nil
+	}
+
+	return []tls.CurveID{tls.X25519, tls.CurveP256}
 }
 
 func safeZeroRTTMethod(method string) bool {
