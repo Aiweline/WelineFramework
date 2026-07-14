@@ -559,6 +559,7 @@ class Start extends CommandAbstract
         $config['ssl']['key_exchange_profile'] = $tlsProcessProfile['requested'];
         $config['ssl']['effective_key_exchange_profile'] = $tlsProcessProfile['effective'];
         $config['ssl']['process_openssl_conf'] = $tlsProcessProfile['openssl_conf'];
+        $runtimeStrategy['tls_key_exchange_profile'] = $tlsProcessProfile['effective'];
         if ($sslEnabled) {
             $this->printer->note(
                 'TLS key exchange: ' . $tlsProcessProfile['effective'] . ' - ' . $tlsProcessProfile['reason']
@@ -1850,7 +1851,10 @@ class Start extends CommandAbstract
                 'container_registry_digest' => (string)($data['container_registry_digest'] ?? ''),
             ],
             'direct_listener_mode' => (string)($data['direct_listener_mode'] ?? ''),
-            'ssl' => ['engine' => (string)($data['ssl_engine'] ?? 'stream')],
+            'ssl' => [
+                'engine' => (string)($data['ssl_engine'] ?? 'stream'),
+                'key_exchange_profile' => (string)($data['tls_key_exchange_profile'] ?? 'performance'),
+            ],
             'http' => \array_merge($httpProtocolSelection->toConfig(), [
                 'protocol_edge_binary' => $protocolEdgeBinary,
             ]),
@@ -6618,6 +6622,7 @@ class Start extends CommandAbstract
             'protocol_edge_enabled' => $protocolEdgeEnabled,
             'protocol_edge_binary' => $protocolEdgeBinary,
             'tls_session_resumption' => $httpProtocolSelection->tlsSessionResumption,
+            'tls_key_exchange_profile' => (string)($runtimeSelection['tls_key_exchange_profile'] ?? ''),
             'runtime_selection' => $selectionData,
             'topology' => $effectiveTopology,
             'requested_topology' => $selection->requestedTopology->value,
