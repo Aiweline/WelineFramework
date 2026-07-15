@@ -2,6 +2,10 @@
 
 状态：`validated_cross_platform_candidate_windows_scale_pending`
 
+- 2026-07-15 P4 最小收敛：`WlsRuntime::bootstrap()` 与 `WorkerFullPageCacheFastPath` 构造迁入 `worker_runtime_common.php` 的两个 transport-neutral helper；三入口仍保留各自日志、SSL trace、异常、listener/event-loop 和连接状态。入口行数为 5,169 / 6,141 / 2,053，公共运行时 361 行。
+- 专用 10979 实例约 2 秒 4/4 READY，动态首渲染 10.42–10.84ms；h1/h2/h3、TLS 1.3 `New -> Reused`、Process FPC、后台 Key 404/200 全通过。H3 10,000 请求 0 错误、14,557.04 QPS、p95 3.79ms；H2 100,000 请求 0 错误、14,594.52 QPS、p95 14.53ms、p99 18.342ms、max 53.141ms。Browser 两页 Console 0 error/warn；PHP lint、diff、架构、编译、策略与 Semgrep 0 finding；实例及端口已清理。
+- 核心 `ac55605ba` 已纯快进到 Gitee/GitHub 的功能分支和 master。分项 5 站均因非 Git 或既有脏改动安全停止；分仓 --all 正式执行为 6 no-change、25 dirty 拒绝覆盖、ThemeFancy 远端不可克隆，未产生 tag/push/Packagist 假成功。
+
 - 2026-07-15 Native TLS profile 已真正贯穿公开协议入口：Go Edge 的 `performance` 固定 `X25519,P-256`，`system` 使用 Go 默认组；有效 profile 同步进入实例、Endpoint、Master IPC 与 benchmark 运行时元数据。PHP 9 个修改文件语法通过，Native Go `test/vet/build` 通过，6 组相关现有 PHPUnit 入口均为 0 退出。
 - Windows Dispatcher 启动失败的真实根因不是 Go/HTTP3 bind，而是 Edge 在 bind 前经内部 Dispatcher 发出的认证明文 `/_wls/health` 被 301 到尚未 READY 的公开 HTTPS 端口。现只允许 loopback + 实例 token + 精确请求行 + 唯一协议头的健康探针绕过重定向，WorkerPolicyKernel 再次鉴权；普通明文请求语义不变。Parallels Windows 11 ARM64 当前代码单 Worker 实例约 3 秒全部 READY，h1/h2/h3 各 100/100，TLS 1.3 / CHACHA20 / X25519 二连 resume=true，首页 Process FPC、后台 Key 404/200、动态首渲染 65.72ms 均通过。
 - Windows 4 Worker 复验时 VM 内 5 个非本任务 PHP cron 持续占约 5/6 CPU。`batchCreate` 仍为 809ms、Worker 2 在 2.948s READY；其余 Worker 被调度饥饿到 61.8s，Worker 1 未 READY 后 fail-fast 完整清理。未结束/暂停这些外部任务，也未把该受污染轮次当作 Windows QPS 或 READY 基线；此前同 VM 空闲轮已有 4 Worker 6/6 READY 与 HTTP/2 100,000/100,000 证据。

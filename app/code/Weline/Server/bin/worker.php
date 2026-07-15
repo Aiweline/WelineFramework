@@ -349,14 +349,8 @@ $fpcFastPath = null;
 
 try {
     WlsLogger::info_("Worker 启动，监听 tcp://{$host}:{$port}");
-    $runtime = new \Weline\Framework\Runtime\WlsRuntime();
-    $runtime->bootstrap();
-    $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
-        \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Framework\Router\FullPageCacheCoordinator::class
-        ),
-        $runtime,
-    );
+    $runtime = wlsBootstrapFrameworkRuntime();
+    $fpcFastPath = wlsCreateWorkerFullPageCacheFastPath($runtime);
     WlsLogger::info_("框架运行时初始化成功");
 
     // 共享服务检查延迟到后台进行，不阻塞 IPC 连接
