@@ -900,6 +900,15 @@ class Benchmark extends CommandAbstract
             \arsort($httpVersionHits);
             $benchmarkContext['http_version_negotiated'] = (string)\array_key_first($httpVersionHits);
             $benchmarkContext['http_version_hits'] = $httpVersionHits;
+            if ($httpVersion !== 'auto' && !isset($httpVersionHits[$httpVersion])) {
+                $mismatchedSuccesses = \count($results);
+                if ($mismatchedSuccesses > 0) {
+                    $errors += $mismatchedSuccesses;
+                    $results = [];
+                    $detail = 'protocol_mismatch:requested=' . $httpVersion . ':negotiated=' . (string)$benchmarkContext['http_version_negotiated'];
+                    $errorDetails[$detail] = ($errorDetails[$detail] ?? 0) + $mismatchedSuccesses;
+                }
+            }
         }
         
         // 生成报告
