@@ -1441,6 +1441,12 @@ class Benchmark extends CommandAbstract
             return $requested;
         }
 
+        $policy = (array)($capabilities['default_policy'] ?? []);
+        $policyEffective = $this->normalizeHttpVersion($policy['effective_preferred'] ?? '');
+        if ($policyEffective !== 'auto') {
+            return $policyEffective;
+        }
+
         $curl = (array)($capabilities['curl_client'] ?? []);
         $adapters = (array)($capabilities['wls_adapters'] ?? []);
         $curlHttp3 = (bool)($curl['http3_constant'] ?? false) && (bool)($curl['http3_feature'] ?? false);
@@ -1457,6 +1463,7 @@ class Benchmark extends CommandAbstract
 
         return '1.1';
     }
+
 
     private function curlHttpVersionOption(string $httpVersion): int
     {
