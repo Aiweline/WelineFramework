@@ -27,15 +27,11 @@ final class HttpProtocolCapabilityProbe
         $http2AdapterSelfTest = $this->http2AdapterSelfTest();
         $http2Enabled = $streamAlpn && (bool)($http2AdapterSelfTest['ok'] ?? false);
         $http3Readiness = $this->buildHttp3Readiness($curl, $ffiRuntime, $nghttp3, $ngtcp2, $udpSocket, $quicTransportAdapter);
+        $wlsAdapters = $this->buildWlsAdapterSnapshot($http2Enabled, $http2AdapterSelfTest, $http3Readiness, $quicTransportAdapter);
+        $defaultPolicy = $this->buildDefaultPolicy($curl, $wlsAdapters);
 
         return [
-            'default_policy' => [
-                'target_preferred' => 'http/3',
-                'effective_preferred' => $http2Enabled ? 'http/2' : 'http/1.1',
-                'fallback' => ['http/2', 'http/1.1'],
-                'http3_when_available' => true,
-                'selection_rule' => 'prefer HTTP/3 only when the WLS QUIC adapter and client both support it; otherwise HTTP/2, then HTTP/1.1',
-            ],
+            'default_policy' => $defaultPolicy,
             'php' => [
                 'version' => \PHP_VERSION,
                 'os_family' => \PHP_OS_FAMILY,
@@ -67,44 +63,94 @@ final class HttpProtocolCapabilityProbe
             ],
             'udp' => $udpSocket,
             'http3_readiness' => $http3Readiness,
-            'wls_adapters' => [
-                'http1' => [
-                    'enabled' => true,
-                    'transport' => 'stream',
-                    'notes' => 'Current WorkerPolicyKernel and WlsRequest path accepts HTTP/1.0 and HTTP/1.1 text requests.',
+            'wls_adapters' => $wlsAdapters,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $curl
+     * @param array<string,mixed> $wlsAdapters
+     * @return array{target_preferred:string,effective_preferred:string,fallback:list<string>,negotiation_order:list<string>,http3_when_available:bool,selection_rule:string}
+     */
+    private function buildDefaultPolicy(array $curl, array $wlsAdapters): array
+    {
+        $effective = $this->selectEffectiveHttpVersion($curl, $wlsAdapters);
+
+        return [
+            'target_preferred' => 'http/3',
+            'effective_preferred' => 'http/' . $effective,
+            'fallback' => ['http/2', 'http/1.1'],
+            'negotiation_order' => ['http/3', 'http/2', 'http/1.1'],
+            'http3_when_available' => true,
+            'selection_rule' => 'prefer HTTP/3 only when both the benchmark/client runtime and WLS QUIC adapter support it; otherwise HTTP/2, then HTTP/1.1',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $curl
+     * @param array<string,mixed> $wlsAdapters
+     */
+    private function selectEffectiveHttpVersion(array $curl, array $wlsAdapters): string
+    {
+        $curlHttp3 = \defined('CURL_HTTP_VERSION_3') && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP3');
+        if ($curlHttp3 && (bool)($wlsAdapters['http3']['enabled'] ?? false)) {
+            return '3';
+        }
+
+        $curlHttp2 = \defined('CURL_HTTP_VERSION_2_0') && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP2');
+        if ($curlHttp2 && (bool)($wlsAdapters['http2']['enabled'] ?? false)) {
+            return '2';
+        }
+
+        return '1.1';
+    }
+
+    /**
+     * @param array<string,mixed> $http2AdapterSelfTest
+     * @param array<string,mixed> $http3Readiness
+     * @param array{available:bool,adapter:string,reason:string,capabilities:array<string,bool>,missing:list<string>} $quicTransportAdapter
+     * @return array<string,mixed>
+     */
+    private function buildWlsAdapterSnapshot(bool $http2Enabled, array $http2AdapterSelfTest, array $http3Readiness, array $quicTransportAdapter): array
+    {
+        return [
+            'http1' => [
+                'enabled' => true,
+                'transport' => 'stream',
+                'notes' => 'Current WorkerPolicyKernel and WlsRequest path accepts HTTP/1.0 and HTTP/1.1 text requests.',
+            ],
+            'http2' => [
+                'enabled' => $http2Enabled,
+                'foundation' => [
+                    'frame_codec' => \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class),
+                    'hpack_decoder' => \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class),
+                    'hpack_huffman' => true,
+                    'connection_adapter' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
+                    'response_writer' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
+                    'adapter_self_test' => (bool)($http2AdapterSelfTest['ok'] ?? false),
                 ],
-                'http2' => [
-                    'enabled' => $http2Enabled,
-                    'foundation' => [
-                        'frame_codec' => \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class),
-                        'hpack_decoder' => \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class),
-                        'hpack_huffman' => true,
-                        'connection_adapter' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
-                        'response_writer' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
-                        'adapter_self_test' => (bool)($http2AdapterSelfTest['ok'] ?? false),
-                    ],
-                    'reason' => $http2Enabled
-                        ? 'HTTP/2 ALPN and Worker connection adapter self-test passed; WLS can negotiate h2 and bridge requests through the unified policy pipeline.'
-                        : (string)($http2AdapterSelfTest['reason'] ?? 'HTTP/2 adapter or ALPN capability is unavailable.'),
-                    'requires' => ['alpn_h2', 'hpack_huffman', 'worker_alpn_dispatch'],
-                ],
-                'http3' => [
-                    'enabled' => (bool)($http3Readiness['ready'] ?? false),
-                    'transport' => 'quic/udp',
-                    'adapter' => $quicTransportAdapter['adapter'],
-                    'adapter_reason' => $quicTransportAdapter['reason'],
-                    'adapter_capabilities' => $quicTransportAdapter['capabilities'],
-                    'foundation' => $http3Readiness['checks'],
-                    'reason' => (bool)($http3Readiness['ready'] ?? false)
-                        ? 'HTTP/3 QUIC/UDP adapter and protocol prerequisites are ready; WLS may advertise h3 when the runtime selects it.'
-                        : 'HTTP/3 requires a WLS QUIC/UDP transport adapter; current readiness: ' . $http3Readiness['summary'],
-                    'requires' => ['udp_quic_listener', 'tls1.3_quic_stack', 'ngtcp2_or_equivalent', 'nghttp3_or_equivalent', 'worker_quic_dispatch'],
-                    'missing' => $http3Readiness['missing'],
-                    'install_hints' => $http3Readiness['install_hints'],
-                ],
+                'reason' => $http2Enabled
+                    ? 'HTTP/2 ALPN and Worker connection adapter self-test passed; WLS can negotiate h2 and bridge requests through the unified policy pipeline.'
+                    : (string)($http2AdapterSelfTest['reason'] ?? 'HTTP/2 adapter or ALPN capability is unavailable.'),
+                'requires' => ['alpn_h2', 'hpack_huffman', 'worker_alpn_dispatch'],
+            ],
+            'http3' => [
+                'enabled' => (bool)($http3Readiness['ready'] ?? false),
+                'transport' => 'quic/udp',
+                'adapter' => $quicTransportAdapter['adapter'],
+                'adapter_reason' => $quicTransportAdapter['reason'],
+                'adapter_capabilities' => $quicTransportAdapter['capabilities'],
+                'foundation' => $http3Readiness['checks'],
+                'reason' => (bool)($http3Readiness['ready'] ?? false)
+                    ? 'HTTP/3 QUIC/UDP adapter and protocol prerequisites are ready; WLS may advertise h3 when the runtime selects it.'
+                    : 'HTTP/3 requires a WLS QUIC/UDP transport adapter; current readiness: ' . $http3Readiness['summary'],
+                'requires' => ['udp_quic_listener', 'tls1.3_quic_stack', 'ngtcp2_or_equivalent', 'nghttp3_or_equivalent', 'worker_quic_dispatch'],
+                'missing' => $http3Readiness['missing'],
+                'install_hints' => $http3Readiness['install_hints'],
             ],
         ];
     }
+
 
     /** @return array{available:bool,reason:string} */
     private function probeUdpSocketRuntime(): array
