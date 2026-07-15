@@ -9,14 +9,14 @@ return [
         // 仅 dispatcher 单独覆盖时使用 'dispatcher' => ['bind_host' => '0.0.0.0']。
         'bind_host' => '0.0.0.0',
         'http' => [
-            // Public negotiation preference: QUIC HTTP/3, then ALPN HTTP/2,
-            // then HTTP/1.1. HTTP-only instances intentionally use h1 alone.
-            'protocols' => ['h3', 'h2', 'h1'],
-            'preferred' => 'h3',
-            'protocol_edge' => 'auto',
+            // The PHP Worker currently exposes HTTP/1.1 directly. HTTP/2/3
+            // stay fail-closed until the WLS-owned Transport Adapter is ready.
+            'protocols' => ['h1'],
+            'preferred' => 'h1',
+            'protocol_edge' => 'disabled',
             'protocol_edge_binary' => '',
             'tls_session_resumption' => true,
-            'alt_svc' => true,
+            'alt_svc' => false,
         ],
         'orchestrator' => [
             // 后台启动时等待“所有服务就绪”的常规时长（秒）。

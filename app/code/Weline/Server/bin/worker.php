@@ -10,8 +10,8 @@ declare(strict_types=1);
  * 包含健康检查接口 /_wls/health（仅本地访问）
  * 维护模式由框架自动处理
  *
- * 公网 TLS、HTTP/3、HTTP/2 与 HTTP/1.1 由 WLS Native Protocol Engine 统一处理。
- * Worker 只执行统一策略内核和应用请求管线，不要求外置反向代理。
+ * Worker 负责 HTTP/1.1、统一策略内核和应用请求管线；TLS Worker 负责 TLS 1.2/1.3。
+ * POSIX direct 直接接收连接，Windows Dispatcher 仅做 L4 透传，不要求外置反向代理。
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -3718,44 +3718,6 @@ function wlsDispatchRequestFiberStep(
             WlsLogger::info_("长连接饱和解除 (long_lived_count={$longLivedConnections})");
         }
     }
-}
-
-/**
- * Fiber 请求开始前清理并初始化请求级上下文。
- */
-function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
-{
-    // 关键修复：多 Fiber 并发时，新请求进入不能做“全量 reset”，否则会清掉其他挂起 Fiber 的请求级状态。
-    // 与 WlsRuntime::reset() 一致：存在并发挂起 Fiber 时，跳过会影响其他请求上下文的回调。
-    $omitCallbacks = null;
-    if (
-        \Weline\Framework\Runtime\Runtime::isPersistent()
-        && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
-    ) {
-        $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
-    }
-    \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
-
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
-    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
-
-    $resolvedConnectionId = $connectionId;
-    if ($resolvedConnectionId === null && \is_resource($conn)) {
-        $resolvedConnectionId = \get_resource_id($conn);
-    }
-
-    $context = \Weline\Framework\Context::current();
-    $context->set('meta.type', 'request');
-    $context->set('meta.mode', 'wls');
-    $context->set('runtime.connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->set('runtime.chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    \Weline\Framework\Runtime\RequestContext::setConnectionId($resolvedConnectionId === null ? null : (string)$resolvedConnectionId);
 }
 
 /**
