@@ -1,0 +1,38 @@
+{
+  "name": "aiweline/weline-codex-mcp",
+  "description": "Local-first project intelligence, transactional batch editing, and evidence-backed Skill learning for Codex.",
+  "type": "library",
+  "license": "Apache-2.0",
+  "keywords": ["codex", "mcp", "model-context-protocol", "project-intelligence", "code-index", "skill"],
+  "homepage": "https://github.com/Aiweline/Weline-Codex-Mcp",
+  "support": {
+    "issues": "https://github.com/Aiweline/Weline-Codex-Mcp/issues",
+    "source": "https://github.com/Aiweline/Weline-Codex-Mcp"
+  },
+  "require": {
+    "php": ">=8.2",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-pdo": "*",
+    "ext-pdo_sqlite": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "LearningMcp\\": "src/"
+    }
+  },
+  "bin": ["bin/learning-mcp", "bin/learningctl", "bin/learningd", "bin/weline-mcp-install"],
+  "scripts": {
+    "weline-mcp-install": "@php scripts/install.php",
+    "weline-mcp-doctor": "@php bin/learningctl doctor"
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-main": "0.9.x-dev"
+    }
+  }
+}

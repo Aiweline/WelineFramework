@@ -36,7 +36,7 @@
 - Learning SQLite：会话事件、证据、经验和审计的唯一真相源。
 - Project SQLite：代码/文档/Skill 索引、gzip 完整文本库和编辑事务的可重建覆盖层；每项目独立 WAL。
 
-模块是无 Composer 依赖的 PHP 实现。`src/bootstrap.php` 以固定顺序加载类，`bin/` 中三个脚本直接使用当前 PHP CLI。
+模块是无 Composer 运行时依赖的 PHP 实现。`src/bootstrap.php` 以固定顺序加载类，`bin/learning-mcp`、`bin/learningctl`、`bin/learningd` 三个核心入口直接使用当前 PHP CLI。独立发行额外提供 `composer.json`、`bin/weline-mcp-install` 和无依赖的 `bin/weline-mcp.js`；它们只负责安装、注册或把 STDIO/参数/信号转交给同一 PHP Server，不形成第二套协议实现。
 
 ## Project intelligence flow
 

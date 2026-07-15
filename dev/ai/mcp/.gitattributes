@@ -1,0 +1,8 @@
+* text=auto
+*.bat text eol=crlf
+*.json text eol=lf
+*.md text eol=lf
+*.php text eol=lf
+*.sh text eol=lf
+*.yaml text eol=lf
+bin/* text eol=lf
