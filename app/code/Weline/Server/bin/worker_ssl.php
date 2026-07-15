@@ -1266,6 +1266,10 @@ $socket = null;
 $reusePortBound = false;
 $sharedListenerBound = false;
 $sharedListenerSocket = null;
+$wlsHttp2NegotiationEnabled = \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class)
+    && \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class)
+    && \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class);
+$wlsTlsAlpnProtocols = $wlsHttp2NegotiationEnabled ? 'h2,http/1.1' : 'http/1.1';
 
 // 延迟 SSL 时共用：accept 后根据首包判断 HTTP 重定向或启用 SSL（同端口 http→https）
 $deferSslOptions = null;
@@ -1282,6 +1286,7 @@ if ($deferSsl) {
         'ecdh_curve' => $wlsModernTlsCurves,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
+        'alpn_protocols' => $wlsTlsAlpnProtocols,
         'SNI_enabled' => !empty($sniServerCerts),
         'SNI_server_certs' => $sniServerCerts,
     ];
@@ -1437,6 +1442,7 @@ if ($listenFd > 0) {
             'ecdh_curve' => $wlsModernTlsCurves,
             'single_dh_use' => true,
             'honor_cipher_order' => true,
+            'alpn_protocols' => $wlsTlsAlpnProtocols,
             'SNI_enabled' => !empty($sniServerCerts),
             'SNI_server_certs' => $sniServerCerts,
         ]
@@ -2181,6 +2187,13 @@ $connectionLastActivity = []; // 连接最后活动时间（用于超时清理�
 $requestLogged = []; // 记录已输出日志的连接（前端模式使用）
 $writeBuffers = [];
 $writableConnections = [];
+$connectionProtocols = [];
+$http2ConnectionAdapters = [];
+$http2PendingRequests = [];
+$GLOBALS['wlsHttp2Adapters'] = &$http2ConnectionAdapters;
+$GLOBALS['wlsHttp2ResponseStreamIds'] = [];
+/** @var array<int|string, array{connection: resource, started_at: float, retry_at: float, attempts: int}> */
+$writeZeroProgress = [];
 $pendingPeek = [];
 $pendingPeekStartTimes = [];
 $pendingHandshakes = [];
@@ -2711,6 +2724,7 @@ while (true) {
                 $requestLogged = [];
                 $writeBuffers = [];
                 $writableConnections = [];
+                $writeZeroProgress = [];
                 $pendingClose = [];
                 $handshakeStartTimes = [];
                 $postHandshakeReadPending = [];
@@ -2908,14 +2922,33 @@ while (true) {
         }
     }
     
-    // 验证 $writableConnections 中的资源
+    // 验证 $writableConnections 中的资源，并将零进展写入暂时移出 write interest。
+    // 否则已断开的 TLS stream 可能一直被报告为可写，使 event loop 空转。
+    foreach ($writeZeroProgress as $connId => $state) {
+        if (!isset($writableConnections[$connId])
+            || ($state['connection'] ?? null) !== $writableConnections[$connId]
+        ) {
+            unset($writeZeroProgress[$connId]);
+        }
+    }
     $validWritableConnections = [];
+    $queuedWriteNow = \microtime(true);
+    $queuedWriteRetryUsec = null;
     foreach ($writableConnections as $connId => $conn) {
         if (\is_resource($conn) && \get_resource_type($conn) === 'stream') {
+            $retryAt = (float) ($writeZeroProgress[$connId]['retry_at'] ?? 0.0);
+            if ($retryAt > $queuedWriteNow) {
+                $retryUsec = (int) \ceil(($retryAt - $queuedWriteNow) * 1_000_000);
+                $queuedWriteRetryUsec = $queuedWriteRetryUsec === null
+                    ? $retryUsec
+                    : \min($queuedWriteRetryUsec, $retryUsec);
+                continue;
+            }
             $validWritableConnections[$connId] = $conn;
         } else {
             unset($writableConnections[$connId]);
             unset($writeBuffers[$connId]);
+            unset($writeZeroProgress[$connId]);
         }
     }
     
@@ -2973,6 +3006,9 @@ while (true) {
     }
     if ($darwinSharedAcceptCooldownRemainingUsec > 0) {
         $loopWaitUsec = \min($loopWaitUsec, $darwinSharedAcceptCooldownRemainingUsec);
+    }
+    if ($queuedWriteRetryUsec !== null) {
+        $loopWaitUsec = \min($loopWaitUsec, \max(1000, $queuedWriteRetryUsec));
     }
 
     $waitStartedAt = \microtime(true);
@@ -3144,6 +3180,7 @@ while (true) {
         $activeRequests,
         $writableConnections,
         $writeBuffers,
+        $writeZeroProgress,
         $connections,
         $requestBuffers,
         $connectionLastActivity,
@@ -3250,7 +3287,9 @@ while (true) {
         $deferSslPreferredHost,
         $connectionPeerIps,
         $wlsRuntimeTopology,
-        $masterToken
+        $masterToken,
+        $connectionProtocols,
+        $http2ConnectionAdapters
     );
 
     wlsSslAdvanceHandshakeState(
@@ -3350,7 +3389,8 @@ while (true) {
         }
         
         $bufferedFrame = null;
-        if (isset($connectionPeerIps[$connId]) && ($requestBuffers[$connId] ?? '') !== '') {
+        $isHttp2Connection = ($connectionProtocols[$connId] ?? 'http/1.1') === 'h2';
+        if (!$isHttp2Connection && isset($connectionPeerIps[$connId]) && ($requestBuffers[$connId] ?? '') !== '') {
             $bufferedFrame = wlsParseHttpRequestFrame(
                 $requestBuffers[$connId],
                 $maxRequestHeaderBytes,
@@ -3359,7 +3399,8 @@ while (true) {
         }
 
         $data = '';
-        if (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete') {
+        $hasPendingHttp2Request = $isHttp2Connection && !empty($http2PendingRequests[$connId]);
+        if (!$hasPendingHttp2Request && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')) {
             $data = @\fread($conn, 65535);
         }
         
@@ -3395,7 +3436,7 @@ while (true) {
             continue;
         }
         
-        if ($data === '' && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')) {
+        if (!$isHttp2Connection && $data === '' && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')) {
             if (@\feof($conn)) {
                 safeCloseStream($conn);
                 unset($postHandshakeReadPending[$connId]);
@@ -3423,6 +3464,100 @@ while (true) {
             continue;
         }
         
+        if ($isHttp2Connection) {
+            if ($data === '' && empty($http2PendingRequests[$connId])) {
+                if (@\feof($conn)) {
+                    safeCloseStream($conn);
+                    unset(
+                        $postHandshakeReadPending[$connId],
+                        $connections[$connId],
+                        $requestBuffers[$connId],
+                        $connectionLastActivity[$connId],
+                        $requestLogged[$connId],
+                        $writeBuffers[$connId],
+                        $writableConnections[$connId],
+                        $pendingClose[$connId],
+                        $connectionProtocols[$connId],
+                        $http2ConnectionAdapters[$connId],
+                        $http2PendingRequests[$connId],
+                        $GLOBALS['wlsHttp2ResponseStreamIds'][$connId]
+                    );
+                    continue;
+                }
+                continue;
+            }
+
+            $connectionLastActivity[$connId] = \time();
+            \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest((string)$connId);
+            $http2Adapter = $http2ConnectionAdapters[$connId] ?? null;
+            if (!$http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
+                $http2Adapter = new \Weline\Server\Protocol\Http2\ConnectionAdapter();
+                $http2ConnectionAdapters[$connId] = $http2Adapter;
+            }
+            if ($data !== '') {
+                try {
+                    $http2Result = $http2Adapter->receive($data);
+                } catch (\Throwable $http2Error) {
+                    $http2Result = ['status' => 'error', 'write' => '', 'requests' => [], 'error' => $http2Error->getMessage()];
+                }
+                $http2Write = (string)($http2Result['write'] ?? '');
+                if ($http2Write !== '') {
+                    // HTTP/2 的 SETTINGS / ACK 必须保持在响应帧之前；统一进入写缓冲，
+                    // 避免当前循环内响应写回时覆盖控制帧，导致客户端报 framing layer。
+                    $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $http2Write;
+                    $writableConnections[$connId] = $conn;
+                }
+                if (($http2Result['status'] ?? '') === 'error') {
+                    WlsLogger::warning_('HTTP/2 frame error, closing connection connId=' . $connId . ' error=' . (string)($http2Result['error'] ?? 'unknown'));
+                    safeCloseStream($conn);
+                    unset(
+                        $connections[$connId],
+                        $requestBuffers[$connId],
+                        $connectionLastActivity[$connId],
+                        $requestLogged[$connId],
+                        $writeBuffers[$connId],
+                        $writableConnections[$connId],
+                        $pendingClose[$connId],
+                        $connectionProtocols[$connId],
+                        $http2ConnectionAdapters[$connId],
+                        $http2PendingRequests[$connId],
+                        $GLOBALS['wlsHttp2ResponseStreamIds'][$connId]
+                    );
+                    continue;
+                }
+                foreach ((array)($http2Result['requests'] ?? []) as $http2Request) {
+                    if (\is_array($http2Request)) {
+                        $http2PendingRequests[$connId][] = $http2Request;
+                    }
+                }
+            }
+            if (empty($http2PendingRequests[$connId])) {
+                continue;
+            }
+            $http2Request = \array_shift($http2PendingRequests[$connId]);
+            $rawRequest = (string)($http2Request['raw_request'] ?? '');
+            $http2StreamId = (int)($http2Request['stream_id'] ?? 0);
+            if ($rawRequest === '' || $http2StreamId <= 0) {
+                continue;
+            }
+            $frame = [
+                'status' => 'complete',
+                'request' => $rawRequest,
+                'consumed' => 0,
+                'protocol' => 'h2',
+                'stream_id' => $http2StreamId,
+            ];
+            $GLOBALS['wlsHttp2ResponseStreamIds'][$connId] = $http2StreamId;
+            unset($postHandshakeReadPending[$connId]);
+            \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->markRequestComplete((string)$connId);
+            if (!isset($requestLogged[$connId])) {
+                $requestCount++;
+            }
+            unset($requestLogged[$connId]);
+            $activeRequests++;
+            goto wls_ssl_request_frame_complete;
+        }
+
         if ($data !== '') {
             // 更新连接最后活动时间
             $connectionLastActivity[$connId] = \time();
@@ -3519,6 +3654,7 @@ while (true) {
         unset($requestLogged[$connId]); // 清理标记（如果不存在也不会报错）
         $activeRequests++;
 
+        wls_ssl_request_frame_complete:
         $transportPeerRaw = @\stream_socket_get_name($conn, true);
         $transportPeer = $connectionPeerIps[$connId]
             ?? (\is_string($transportPeerRaw) ? $transportPeerRaw : '');
@@ -4021,6 +4157,7 @@ while (true) {
         $activeRequests,
         $writableConnections,
         $writeBuffers,
+        $writeZeroProgress,
         $connections,
         $requestBuffers,
         $connectionLastActivity,
@@ -4306,6 +4443,7 @@ function wlsSslApplyPerConnectionSslForDeferHandshake(
         'ecdh_curve' => $ecdhCurve,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
+        'alpn_protocols' => \is_array($deferSslOptionsTemplate) ? (string)($deferSslOptionsTemplate['alpn_protocols'] ?? 'http/1.1') : 'http/1.1',
         'SNI_enabled' => false,
     ];
     foreach ($opts as $k => $v) {
@@ -4348,7 +4486,9 @@ function wlsSslAdvancePeekState(
     string $deferSslPreferredHost = '',
     array &$connectionPeerIps = [],
     string $runtimeTopology = 'direct',
-    string $proxyAuthenticationSecret = ''
+    string $proxyAuthenticationSecret = '',
+    array &$connectionProtocols = [],
+    array &$http2ConnectionAdapters = []
 ): void {
     if ($pendingPeek === []) {
         return;
@@ -4465,6 +4605,14 @@ function wlsSslAdvancePeekState(
         }
 
         $sniRaw = _parseSniHostFromClientHello($peeked);
+        $clientAlpnProtocols = \Weline\Server\Dispatcher\SniParser::extractAlpnProtocols($peeked);
+        $clientWantsHttp2 = \in_array('h2', $clientAlpnProtocols, true)
+            && \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class)
+            && (($deferSslOptions['alpn_protocols'] ?? '') !== 'http/1.1');
+        $connectionProtocols[$connId] = $clientWantsHttp2 ? 'h2' : 'http/1.1';
+        if ($clientWantsHttp2) {
+            $http2ConnectionAdapters[$connId] = new \Weline\Server\Protocol\Http2\ConnectionAdapter();
+        }
         $sniHostNorm = $sniRaw !== null && $sniRaw !== '' ? \strtolower(\trim((string) $sniRaw)) : null;
         $effectiveHost = $sniHostNorm;
         if ($effectiveHost === null || $effectiveHost === '') {
@@ -4685,11 +4833,13 @@ function wlsSslAdvanceHandshakeState(
  *
  * @param array<int|string, resource> $writableConnections
  * @param array<int|string, string> $writeBuffers
+ * @param array<int|string, array{connection: resource, started_at: float, retry_at: float, attempts: int}> $writeZeroProgress
  */
 function wlsSslFlushQueuedWrites(
     int $activeRequests,
     array &$writableConnections,
     array &$writeBuffers,
+    array &$writeZeroProgress,
     array &$connections,
     array &$requestBuffers,
     array &$connectionLastActivity,
@@ -4698,15 +4848,32 @@ function wlsSslFlushQueuedWrites(
     array &$longLivedConnections
 ): void {
     $maxBytesPerConnectionPerLoop = 131072; // 128KB，分片推进上限
+    $zeroProgressTimeoutSeconds = 5.0;
+    $maxZeroProgressBackoffUsec = 50_000;
     // OpenSSL 会在内部按 TLS record 分片；PHP 层一次提交 64KB，避免
     // 中等响应反复 substr/复制剩余缓冲。每连接每轮仍受 128KB 总预算限制。
     $maxChunkPerWrite = 65536;
     foreach ($writableConnections as $connId => $conn) {
         if (!isset($writeBuffers[$connId]) || $writeBuffers[$connId] === '') {
+            unset($writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId]);
+            if (isset($pendingClose[$connId])) {
+                safeCloseStream($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $pendingClose[$connId]);
+                unset($longLivedConnections[$connId]);
+            }
+            wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
             continue;
         }
         if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
-            unset($writeBuffers[$connId], $writableConnections[$connId]);
+            unset($writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId]);
+            continue;
+        }
+        $retryState = $writeZeroProgress[$connId] ?? null;
+        if (\is_array($retryState) && ($retryState['connection'] ?? null) !== $conn) {
+            unset($writeZeroProgress[$connId]);
+            $retryState = null;
+        }
+        if ((float) ($retryState['retry_at'] ?? 0.0) > \microtime(true)) {
             continue;
         }
 
@@ -4719,7 +4886,7 @@ function wlsSslFlushQueuedWrites(
             $writeAttempts++;
             if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
                 safeCloseStream($conn);
-                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
@@ -4743,7 +4910,7 @@ function wlsSslFlushQueuedWrites(
             if ($written === false) {
                 WlsLogger::warning_("缓冲区写入失败 (connId: {$connId}, 剩余: {$bufferLen} 字节)");
                 safeCloseStream($conn);
-                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
@@ -4751,18 +4918,66 @@ function wlsSslFlushQueuedWrites(
                 break;
             }
 
-            $connectionLastActivity[$connId] = \time();
-
             if ($written === 0) {
+                $zeroNow = \microtime(true);
+                $zeroState = $writeZeroProgress[$connId] ?? null;
+                if (!\is_array($zeroState) || ($zeroState['connection'] ?? null) !== $conn) {
+                    $zeroState = [
+                        'connection' => $conn,
+                        'started_at' => $zeroNow,
+                        'retry_at' => $zeroNow,
+                        'attempts' => 0,
+                    ];
+                }
+                $zeroStartedAt = (float) ($zeroState['started_at'] ?? $zeroNow);
+                $zeroAttempts = (int) ($zeroState['attempts'] ?? 0) + 1;
+                $streamMeta = \get_resource_type($conn) === 'stream'
+                    ? (@\stream_get_meta_data($conn) ?: [])
+                    : [];
+                // Read-side EOF may be a legal TCP half-close: the peer can still
+                // receive this response. Only an explicit stream timeout or the
+                // bounded zero-progress deadline makes the write side terminal.
+                $streamTimedOut = (bool) ($streamMeta['timed_out'] ?? false);
+                $zeroElapsed = $zeroNow - $zeroStartedAt;
+
+                if ($streamTimedOut || $zeroElapsed >= $zeroProgressTimeoutSeconds) {
+                    $reason = $streamTimedOut ? 'stream_timeout' : 'zero_progress_timeout';
+                    WlsLogger::warning_(
+                        "SSL 写队列无进展，关闭连接 (connId: {$connId}, reason: {$reason}, "
+                        . 'elapsed_ms: ' . (int) \round($zeroElapsed * 1000)
+                        . ", attempts: {$zeroAttempts}, 剩余: {$bufferLen} 字节)"
+                    );
+                    safeCloseStream($conn);
+                    unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
+                    unset($longLivedConnections[$connId]);
+                    if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
+                        \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+                    }
+                    break;
+                }
+
+                $backoffUsec = \min(
+                    $maxZeroProgressBackoffUsec,
+                    1000 * (1 << \min(6, \max(0, $zeroAttempts - 1)))
+                );
+                $writeZeroProgress[$connId] = [
+                    'connection' => $conn,
+                    'started_at' => $zeroStartedAt,
+                    'retry_at' => $zeroNow + ($backoffUsec / 1_000_000),
+                    'attempts' => $zeroAttempts,
+                ];
                 break;
             }
 
+            unset($writeZeroProgress[$connId]);
+            $connectionLastActivity[$connId] = \time();
             $totalWrittenThisLoop += $written;
             $writeBuffers[$connId] = \substr($buffer, $written);
 
             if ($writeBuffers[$connId] === '' || $writeBuffers[$connId] === false) {
                 unset($writeBuffers[$connId]);
                 unset($writableConnections[$connId]);
+                unset($writeZeroProgress[$connId]);
 
                 if (isset($pendingClose[$connId])) {
                     safeCloseStream($conn);
@@ -5150,6 +5365,17 @@ function sslFinalizeHttpResponseAfterHandle(
     }
     // SSE 收尾兜底：上下文标记可能先于写队列排空被重置，此时仍必须按 SSE 分支处理。
     $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
+    if (!$isSseMode) {
+        $http2Adapter = $GLOBALS['wlsHttp2Adapters'][$connId] ?? null;
+        $http2StreamId = (int)($GLOBALS['wlsHttp2ResponseStreamIds'][$connId] ?? 0);
+        if ($http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter && $http2StreamId > 0) {
+            $response = $http2Adapter->encodeResponse($http2StreamId, $response);
+            unset($GLOBALS['wlsHttp2ResponseStreamIds'][$connId]);
+            $responseLenPre = \strlen($response);
+            $trustedCacheHit = true;
+            $precomputedKeepAlive = true;
+        }
+    }
     $keepAlive = $precomputedKeepAlive ?? isKeepAlive($rawRequest);
     $bufferedBytesBeforeWrite = isset($writeBuffers[$connId]) ? \strlen($writeBuffers[$connId]) : 0;
     $forceCloseAfterResponse = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldForceConnectionClose(
@@ -5168,6 +5394,17 @@ function sslFinalizeHttpResponseAfterHandle(
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 
         if ($hasBufferedData) {
+            $isHttp2BufferedConnection = isset($GLOBALS['wlsHttp2Adapters'][$connId])
+                && $GLOBALS['wlsHttp2Adapters'][$connId] instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter;
+            if ($isHttp2BufferedConnection) {
+                // HTTP/2 缓冲区内通常是连接级 SETTINGS/ACK，响应帧必须追加在其后。
+                $writeBuffers[$connId] .= $response;
+                $writableConnections[$connId] = $conn;
+                if ($recordObservability) {
+                    WlsLogger::debug_("Worker HTTP/2 响应追加到控制帧缓冲 connId={$connId} len={$responseLen}");
+                }
+                goto ssl_finalize_skip_write;
+            }
             // 非 SSE 响应遇到缓冲区有残留数据时：直接覆盖，不再追加。
             // 防止前一个 SSE 连接关闭后缓冲区残留 SSE 数据碎片被拼到普通 HTTP 响应前面。
             $writeBuffers[$connId] = $response;
