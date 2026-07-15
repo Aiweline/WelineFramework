@@ -678,6 +678,11 @@ class Benchmark extends CommandAbstract
         $workerHits = [];
         $cacheSources = [];
         $httpVersionHits = [];
+        $newConnectionCount = 0;
+        $connectionReuseEligible = 0;
+        $knownConnectedHandles = [];
+        $connectTimeSamples = [];
+        $tlsHandshakeTimeSamples = [];
         $startTime = \microtime(true);
         
         // 检查 curl 扩展
@@ -866,10 +871,37 @@ class Benchmark extends CommandAbstract
                     $requestLatencies[] = $elapsed;
                     
                     if ($info['result'] === CURLE_OK) {
-                        $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                        $negotiatedHttpVersion = $this->curlHttpVersionName((int)\curl_getinfo($ch, CURLINFO_HTTP_VERSION));
+                        $transferInfo = \curl_getinfo($ch);
+                        $httpCode = (int)($transferInfo['http_code'] ?? \curl_getinfo($ch, CURLINFO_HTTP_CODE));
+                        $negotiatedHttpVersion = $this->curlHttpVersionName((int)($transferInfo['http_version'] ?? \curl_getinfo($ch, CURLINFO_HTTP_VERSION)));
                         $httpVersionHits[$negotiatedHttpVersion] = ($httpVersionHits[$negotiatedHttpVersion] ?? 0) + 1;
                         $statusCodes[(string)$httpCode] = ($statusCodes[(string)$httpCode] ?? 0) + 1;
+                        $numConnects = \defined('CURLINFO_NUM_CONNECTS')
+                            ? (int)\curl_getinfo($ch, \CURLINFO_NUM_CONNECTS)
+                            : (int)($transferInfo['num_connects'] ?? 0);
+                        if ($numConnects <= 0 && !isset($knownConnectedHandles[$key])) {
+                            // Older libcurl/PHP builds may not expose NUM_CONNECTS reliably.
+                            // Count the first completed transfer on a handle as one connection,
+                            // then let later transfers on the same handle count as reused.
+                            $numConnects = 1;
+                        }
+                        if ($numConnects > 0) {
+                            $newConnectionCount += $numConnects;
+                            $knownConnectedHandles[$key] = true;
+                        }
+                        $connectionReuseEligible++;
+                        $connectTimeMs = \defined('CURLINFO_CONNECT_TIME_T')
+                            ? ((float)\curl_getinfo($ch, \CURLINFO_CONNECT_TIME_T) / 1000)
+                            : ((float)($transferInfo['connect_time'] ?? 0.0) * 1000);
+                        if ($connectTimeMs > 0) {
+                            $connectTimeSamples[] = $connectTimeMs;
+                        }
+                        $tlsHandshakeMs = \defined('CURLINFO_APPCONNECT_TIME_T')
+                            ? ((float)\curl_getinfo($ch, \CURLINFO_APPCONNECT_TIME_T) / 1000)
+                            : ((float)($transferInfo['appconnect_time'] ?? 0.0) * 1000);
+                        if ($ssl && $tlsHandshakeMs > 0) {
+                            $tlsHandshakeTimeSamples[] = $tlsHandshakeMs;
+                        }
                         if ($httpCode >= 200 && $httpCode < 400) {
                             $results[] = $elapsed;
                             $headers = $this->parseResponseHeaders($headerBuffers[$key] ?? '');
@@ -938,6 +970,15 @@ class Benchmark extends CommandAbstract
         
         $endTime = \microtime(true);
         $totalTime = $endTime - $startTime;
+        $reusedRequestEstimate = \max(0, $connectionReuseEligible - $newConnectionCount);
+        $benchmarkContext['curl_new_connections'] = $newConnectionCount;
+        $benchmarkContext['curl_connection_reuse_eligible'] = $connectionReuseEligible;
+        $benchmarkContext['curl_reused_request_estimate'] = $reusedRequestEstimate;
+        $benchmarkContext['curl_connection_reuse_ratio'] = $connectionReuseEligible > 0
+            ? \round($reusedRequestEstimate / $connectionReuseEligible, 6)
+            : null;
+        $benchmarkContext['curl_connect_time_ms'] = $this->summarizeTimingSamples($connectTimeSamples);
+        $benchmarkContext['curl_tls_handshake_time_ms'] = $this->summarizeTimingSamples($tlsHandshakeTimeSamples);
         if (!empty($httpVersionHits)) {
             \arsort($httpVersionHits);
             $benchmarkContext['http_version_negotiated'] = (string)\array_key_first($httpVersionHits);
@@ -970,6 +1011,31 @@ class Benchmark extends CommandAbstract
         );
     }
     
+    /**
+     * @param list<float> $samples
+     * @return array{count:int,avg:float,min:float,max:float,p95:float,p99:float}
+     */
+    private function summarizeTimingSamples(array $samples): array
+    {
+        $count = \count($samples);
+        if ($count === 0) {
+            return ['count' => 0, 'avg' => 0.0, 'min' => 0.0, 'max' => 0.0, 'p95' => 0.0, 'p99' => 0.0];
+        }
+
+        \sort($samples);
+        $p95Index = \min((int)\floor($count * 0.95), $count - 1);
+        $p99Index = \min((int)\floor($count * 0.99), $count - 1);
+
+        return [
+            'count' => $count,
+            'avg' => \round(\array_sum($samples) / $count, 3),
+            'min' => \round((float)\min($samples), 3),
+            'max' => \round((float)\max($samples), 3),
+            'p95' => \round((float)$samples[$p95Index], 3),
+            'p99' => \round((float)$samples[$p99Index], 3),
+        ];
+    }
+
     /**
      * 生成报告
      */
@@ -1036,6 +1102,20 @@ class Benchmark extends CommandAbstract
         $this->printer->note(__('完成 QPS：%{1}', [\round($qps, 2)]));
         if ($errors > 0) {
             $this->printer->note(__('成功 QPS：%{1}', [\round($successQps, 2)]));
+        }
+        $reuseRatio = $benchmarkContext['curl_connection_reuse_ratio'] ?? null;
+        if ($reuseRatio !== null) {
+            $this->printer->note(__('连接复用估算：新建连接 %{1}/可复用请求 %{2}，复用率 %{3}%', [
+                (string)($benchmarkContext['curl_new_connections'] ?? 0),
+                (string)($benchmarkContext['curl_connection_reuse_eligible'] ?? 0),
+                \round(((float)$reuseRatio) * 100, 2),
+            ]));
+        }
+        if (!empty($benchmarkContext['curl_tls_handshake_time_ms']['count'] ?? 0)) {
+            $this->printer->note(__('TLS 握手样本：%{1} 次，P95 %{2}ms', [
+                (string)$benchmarkContext['curl_tls_handshake_time_ms']['count'],
+                (string)$benchmarkContext['curl_tls_handshake_time_ms']['p95'],
+            ]));
         }
         
         echo "\n";
@@ -1109,6 +1189,12 @@ class Benchmark extends CommandAbstract
             'connection_share_enabled' => (bool)($benchmarkContext['connection_share_enabled'] ?? false),
             'ssl_session_share_supported' => (bool)($benchmarkContext['ssl_session_share_supported'] ?? false),
             'ssl_session_share_enabled' => (bool)($benchmarkContext['ssl_session_share_enabled'] ?? false),
+            'curl_new_connections' => (int)($benchmarkContext['curl_new_connections'] ?? 0),
+            'curl_connection_reuse_eligible' => (int)($benchmarkContext['curl_connection_reuse_eligible'] ?? 0),
+            'curl_reused_request_estimate' => (int)($benchmarkContext['curl_reused_request_estimate'] ?? 0),
+            'curl_connection_reuse_ratio' => $benchmarkContext['curl_connection_reuse_ratio'] ?? null,
+            'curl_connect_time_ms' => (array)($benchmarkContext['curl_connect_time_ms'] ?? []),
+            'curl_tls_handshake_time_ms' => (array)($benchmarkContext['curl_tls_handshake_time_ms'] ?? []),
             'http_multiplex_enabled' => (bool)($benchmarkContext['http_multiplex_enabled'] ?? false),
             'http_version_requested' => $benchmarkContext['http_version_requested'] ?? null,
             'http_version_effective' => $benchmarkContext['http_version_effective'] ?? null,
