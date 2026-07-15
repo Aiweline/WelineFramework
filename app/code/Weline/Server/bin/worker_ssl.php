@@ -1270,6 +1270,8 @@ $wlsHttp2NegotiationEnabled = \class_exists(\Weline\Server\Protocol\Http2\Connec
     && \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class)
     && \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class);
 $wlsTlsAlpnProtocols = $wlsHttp2NegotiationEnabled ? 'h2,http/1.1' : 'http/1.1';
+// OpenSSL 服务端会话缓存需要稳定且实例隔离的 session_id_context；TLS 1.3 仍依赖 ticket 做恢复。
+$wlsTlsSessionIdContext = \substr(\hash('sha256', 'wls|' . $instanceName . '|' . $host . ':' . $port . '|' . $sslCert), 0, 32);
 
 // 延迟 SSL 时共用：accept 后根据首包判断 HTTP 重定向或启用 SSL（同端口 http→https）
 $deferSslOptions = null;
@@ -1286,6 +1288,8 @@ if ($deferSsl) {
         'ecdh_curve' => $wlsModernTlsCurves,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
+        'session_id_context' => $wlsTlsSessionIdContext,
+        'session_ticket' => true,
         'alpn_protocols' => $wlsTlsAlpnProtocols,
         'SNI_enabled' => !empty($sniServerCerts),
         'SNI_server_certs' => $sniServerCerts,
@@ -1442,6 +1446,8 @@ if ($listenFd > 0) {
             'ecdh_curve' => $wlsModernTlsCurves,
             'single_dh_use' => true,
             'honor_cipher_order' => true,
+            'session_id_context' => $wlsTlsSessionIdContext,
+            'session_ticket' => true,
             'alpn_protocols' => $wlsTlsAlpnProtocols,
             'SNI_enabled' => !empty($sniServerCerts),
             'SNI_server_certs' => $sniServerCerts,
@@ -4518,6 +4524,8 @@ function wlsSslApplyPerConnectionSslForDeferHandshake(
         'ecdh_curve' => $ecdhCurve,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
+        'session_id_context' => \is_array($deferSslOptionsTemplate) ? (string)($deferSslOptionsTemplate['session_id_context'] ?? '') : '',
+        'session_ticket' => \is_array($deferSslOptionsTemplate) ? (bool)($deferSslOptionsTemplate['session_ticket'] ?? true) : true,
         'alpn_protocols' => \is_array($deferSslOptionsTemplate) ? (string)($deferSslOptionsTemplate['alpn_protocols'] ?? 'http/1.1') : 'http/1.1',
         'SNI_enabled' => false,
     ];
