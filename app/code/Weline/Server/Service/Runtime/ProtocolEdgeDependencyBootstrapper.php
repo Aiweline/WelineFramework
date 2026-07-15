@@ -8,9 +8,9 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
- * Installs/builds and verifies the ABI-independent WLS protocol edge before
- * Master, Dispatcher or Worker processes are created. Caddy is supported only
- * when an instance explicitly selects the compatibility adapter.
+ * Verifies an explicitly configured compatibility protocol edge before WLS
+ * creates managed processes. The former in-repository Go engine is removed;
+ * native HTTP/2/3 remains fail-closed until a WLS Transport Adapter exists.
  */
 final class ProtocolEdgeDependencyBootstrapper
 {
@@ -19,16 +19,6 @@ final class ProtocolEdgeDependencyBootstrapper
     private const PROBE_TIMEOUT_SECONDS = 20;
     private const HTTP3_LIVE_PROBE_TIMEOUT_SECONDS = 5;
     private const MAX_OUTPUT_BYTES = 1048576;
-    private const NATIVE_ENGINE_VERSION = '2.0.0';
-    private const GO_VERSION = '1.26.4';
-    private const GO_ARCHIVE_SHA256 = [
-        'darwin-amd64' => '05dc9b5f9997744520aaebb3d5deaa7c755371aebbfb7f97c2511a9f3367538d',
-        'darwin-arm64' => 'b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53',
-        'linux-amd64' => '1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f',
-        'linux-arm64' => 'ef758ae7c6cf9267c9c0ef080b8965f453d89ab2d25d9eb22de4405925238768',
-        'windows-amd64' => '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345',
-        'windows-arm64' => '62247f56fb7d7b827d237152c4e3fcd69a24d0fa9430dc73dbda7593ae82bc8d',
-    ];
     private const WINDOWS_CADDY_VERSION = '2.11.4';
     private const WINDOWS_CADDY_BASE_URL = 'https://github.com/caddyserver/caddy/releases/download/v'
         . self::WINDOWS_CADDY_VERSION;
@@ -55,7 +45,15 @@ final class ProtocolEdgeDependencyBootstrapper
             ];
         }
 
-        $engineName = $selection->isNativeProtocolEdge() ? 'WLS Native Protocol Engine' : 'Caddy compatibility edge';
+        if ($selection->isNativeProtocolEdge()) {
+            return [
+                'status' => 'failed',
+                'message' => (string)__('内置 Go 协议边缘已移除；HTTP/2/3 将在 WLS 原生 Transport Adapter 完成前保持关闭。'),
+                'binary' => '',
+            ];
+        }
+
+        $engineName = 'Caddy compatibility edge';
 
         $binary = ProtocolEdgeRuntime::resolveBinary($config);
         $probe = $binary !== '' ? $this->probe($binary, $selection) : null;
@@ -132,7 +130,11 @@ final class ProtocolEdgeDependencyBootstrapper
     public function probe(string $binary, HttpProtocolSelection $selection): array
     {
         if ($selection->isNativeProtocolEdge()) {
-            return $this->probeNativeEngine($binary, $selection);
+            return [
+                'success' => false,
+                'version' => '',
+                'output' => 'The in-repository native protocol edge has been removed.',
+            ];
         }
 
         $version = $this->run([$binary, 'version'], self::PROBE_TIMEOUT_SECONDS);
@@ -156,7 +158,7 @@ final class ProtocolEdgeDependencyBootstrapper
         if ($selection->supports(HttpProtocolSelection::HTTP_3)) {
             $buildInfo = $this->run([$binary, 'build-info'], self::PROBE_TIMEOUT_SECONDS);
             $buildInfoOutput = $buildInfo['output'];
-            // Distribution packages commonly strip Go dependency metadata, so
+            // Distribution packages may strip dependency metadata, so
             // build-info cannot be the HTTP/3 authority. Start a real bounded
             // TCP+UDP listener on port 0 and require Caddy to acknowledge h3.
             $http3Probe = $this->probeHttp3Listener($binary);
@@ -168,61 +170,6 @@ final class ProtocolEdgeDependencyBootstrapper
             'success' => $hasReverseProxy && $hasPersistentSessionTickets && $hasHttp3,
             'version' => \trim($version['output']),
             'output' => $this->tail($modules['output'] . PHP_EOL . $buildInfoOutput),
-        ];
-    }
-
-    /**
-     * @return array{success:bool,version:string,output:string}
-     */
-    private function probeNativeEngine(string $binary, HttpProtocolSelection $selection): array
-    {
-        $result = $this->run([$binary, 'probe'], self::PROBE_TIMEOUT_SECONDS);
-        $report = \json_decode(\trim($result['output']), true);
-        if (!$result['success'] || !\is_array($report)) {
-            return [
-                'success' => false,
-                'version' => '',
-                'output' => $this->tail($result['output']),
-            ];
-        }
-        $protocols = \is_array($report['protocols'] ?? null) ? $report['protocols'] : [];
-        $tls = \is_array($report['tls'] ?? null) ? $report['tls'] : [];
-        $features = \is_array($report['features'] ?? null) ? $report['features'] : [];
-        $sourceDigest = \strtolower(\trim((string)($report['source_digest'] ?? '')));
-        $expectedSourceDigest = $this->nativeEngineSourceDigest();
-        [$expectedOs, $expectedArchitecture] = \explode('-', $this->nativePlatformKey(), 2);
-        $platformMatches = ($report['os'] ?? '') === $expectedOs
-            && ($report['arch'] ?? '') === $expectedArchitecture;
-        $requiredProtocols = \array_values(\array_filter(
-            $selection->protocols,
-            static fn (mixed $protocol): bool => \is_string($protocol),
-        ));
-        $protocolsAvailable = \array_diff($requiredProtocols, $protocols) === [];
-        $requiredFeatures = [
-            'quic',
-            'alpn',
-            'upstream_keepalive',
-            'atomic_reload',
-        ];
-        if ($selection->tlsSessionResumption) {
-            $requiredFeatures[] = 'tls_session_tickets';
-        }
-        $featuresAvailable = \array_diff($requiredFeatures, $features) === [];
-        $success = ($report['name'] ?? '') === 'wls-protocol-edge'
-            && ($report['probe_ok'] ?? false) === true
-            && $protocolsAvailable
-            && \in_array('tls1.3', $tls, true)
-            && $featuresAvailable
-            && $platformMatches
-            && $expectedSourceDigest !== ''
-            && \hash_equals($expectedSourceDigest, $sourceDigest);
-        $version = \trim((string)($report['version'] ?? ''));
-        $goVersion = \trim((string)($report['go_version'] ?? ''));
-
-        return [
-            'success' => $success,
-            'version' => \trim('WLS Native ' . $version . ' (' . $goVersion . ')'),
-            'output' => $success ? '' : $this->tail($result['output']),
         ];
     }
 
@@ -382,439 +329,15 @@ final class ProtocolEdgeDependencyBootstrapper
     }
 
     /**
-     * Build the WLS-owned data plane from its pinned Go module. Go is a build
-     * dependency only; the resulting engine is a self-contained executable.
-     *
-     * @return array{success:bool,output:string}
-     */
-    private function installNativeEngine(HttpProtocolSelection $selection): array
-    {
-        $go = $this->resolveUsableGoBinary();
-        $toolchainOutput = '';
-        if ($go === '') {
-            $installed = $this->installManagedGoToolchain();
-            $toolchainOutput = $installed['output'];
-            if (!$installed['success']) {
-                return $installed;
-            }
-            $go = $this->resolveUsableGoBinary();
-        }
-        if ($go === '') {
-            return ['success' => false, 'output' => 'Go toolchain installation completed but no usable Go binary was found.'];
-        }
-
-        $source = $this->nativeEngineSourceDirectory();
-        if (!\is_file($source . DS . 'go.mod') || !\is_file($source . DS . 'go.sum')) {
-            return ['success' => false, 'output' => 'WLS native protocol-edge source module is incomplete.'];
-        }
-
-        $target = ProtocolEdgeRuntime::managedNativeBinaryPath();
-        $directory = \dirname($target);
-        if (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory)) {
-            return ['success' => false, 'output' => 'Unable to create the WLS native protocol-edge runtime directory.'];
-        }
-        $cacheRoot = Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'go-cache';
-        foreach ([$cacheRoot . DS . 'build', $cacheRoot . DS . 'modules'] as $cacheDirectory) {
-            if (!\is_dir($cacheDirectory)
-                && !@\mkdir($cacheDirectory, 0755, true)
-                && !\is_dir($cacheDirectory)
-            ) {
-                return ['success' => false, 'output' => 'Unable to create the managed Go build cache.'];
-            }
-        }
-
-        $token = \bin2hex(\random_bytes(8));
-        $candidate = $target . '.install-' . $token;
-        $commit = 'unknown';
-        $git = $this->findExecutable('git');
-        if ($git !== '') {
-            $commitProbe = $this->run([$git, 'rev-parse', '--short=12', 'HEAD'], 10, BP);
-            if ($commitProbe['success'] && \preg_match('/^[a-f0-9]{7,40}$/D', \trim($commitProbe['output'])) === 1) {
-                $commit = \trim($commitProbe['output']);
-            }
-        }
-        $environment = \getenv();
-        $environment = \is_array($environment) ? $environment : [];
-        $environment['GOTOOLCHAIN'] = 'local';
-        $environment['CGO_ENABLED'] = '0';
-        $environment['GOFLAGS'] = '-mod=readonly';
-        $environment['GOCACHE'] = $cacheRoot . DS . 'build';
-        $environment['GOMODCACHE'] = $cacheRoot . DS . 'modules';
-        $ldflags = '-s -w -buildid= -X main.buildVersion=' . self::NATIVE_ENGINE_VERSION
-            . ' -X main.buildCommit=' . $commit
-            . ' -X main.buildSourceDigest=' . $this->nativeEngineSourceDigest();
-        $build = $this->run([
-            $go,
-            'build',
-            '-trimpath',
-            '-buildvcs=false',
-            '-ldflags=' . $ldflags,
-            '-o',
-            $candidate,
-            '.',
-        ], self::INSTALL_TIMEOUT_SECONDS, $source, $environment);
-        if (!$build['success']) {
-            return [
-                'success' => false,
-                'output' => $this->tail($toolchainOutput . PHP_EOL . $build['output']),
-            ];
-        }
-        @\chmod($candidate, 0755);
-
-        try {
-            $probe = $this->probeNativeEngine($candidate, $selection);
-            if (!$probe['success']) {
-                return [
-                    'success' => false,
-                    'output' => 'Built WLS native engine failed its capability probe: ' . $probe['output'],
-                ];
-            }
-            $publish = $this->publishManagedFile($candidate, $target, $token);
-            if (!$publish['success']) {
-                return $publish;
-            }
-
-            return [
-                'success' => true,
-                'output' => $this->tail(
-                    $toolchainOutput . PHP_EOL
-                    . 'Built and installed ' . $probe['version'] . ' from the pinned WLS source module.'
-                ),
-            ];
-        } finally {
-            // Installer-owned random-suffix candidate only.
-            // nosemgrep: php.lang.security.unlink-use.unlink-use
-            @\unlink($candidate);
-        }
-    }
-
-    private function resolveUsableGoBinary(): string
-    {
-        foreach ([$this->managedGoBinary(), $this->findExecutable('go')] as $candidate) {
-            if ($candidate === ''
-                || !\is_file($candidate)
-                || (PHP_OS_FAMILY !== 'Windows' && !\is_executable($candidate))
-            ) {
-                continue;
-            }
-            $version = $this->run([$candidate, 'version'], 10);
-            if ($version['success']
-                && \preg_match('/\bgo1\.([0-9]+)(?:\.[0-9]+)?\b/', $version['output'], $matches) === 1
-                && (int)$matches[1] >= 25
-            ) {
-                return $candidate;
-            }
-        }
-
-        return '';
-    }
-
-    private function nativeEngineSourceDirectory(): string
-    {
-        return BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS
-            . 'native' . DS . 'protocol-edge';
-    }
-
-    private function nativeEngineSourceDigest(): string
-    {
-        $directory = $this->nativeEngineSourceDirectory();
-        $files = [
-            $directory . DS . 'go.mod',
-            $directory . DS . 'go.sum',
-            ...((array)\glob($directory . DS . '*.go')),
-        ];
-        $files = \array_values(\array_unique(\array_filter(
-            $files,
-            static fn (mixed $path): bool => \is_string($path) && \is_file($path),
-        )));
-        \sort($files, \SORT_STRING);
-        if ($files === []) {
-            return '';
-        }
-        $hash = \hash_init('sha256');
-        foreach ($files as $file) {
-            \hash_update($hash, \basename($file) . "\0");
-            $handle = @\fopen($file, 'rb');
-            if (!\is_resource($handle)) {
-                return '';
-            }
-            try {
-                \hash_update_stream($hash, $handle);
-            } finally {
-                @\fclose($handle);
-            }
-            \hash_update($hash, "\0");
-        }
-
-        return \hash_final($hash);
-    }
-
-    /** @return array{success:bool,output:string} */
-    private function installManagedGoToolchain(): array
-    {
-        $platform = $this->nativePlatformKey();
-        $expectedHash = self::GO_ARCHIVE_SHA256[$platform] ?? '';
-        if ($expectedHash === '') {
-            return ['success' => false, 'output' => 'No verified Go toolchain is defined for platform: ' . $platform];
-        }
-        [$os, $architecture] = \explode('-', $platform, 2);
-        $extension = $os === 'windows' ? 'zip' : 'tar.gz';
-        $filename = 'go' . self::GO_VERSION . '.' . $os . '-' . $architecture . '.' . $extension;
-        $url = 'https://go.dev/dl/' . $filename;
-        $base = Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'toolchains' . DS . 'go';
-        $final = $base . DS . self::GO_VERSION . DS . $platform;
-        if (!\is_dir(\dirname($final))
-            && !@\mkdir(\dirname($final), 0755, true)
-            && !\is_dir(\dirname($final))
-        ) {
-            return ['success' => false, 'output' => 'Unable to create the managed Go toolchain directory.'];
-        }
-
-        $token = \bin2hex(\random_bytes(8));
-        $archive = $base . DS . $filename . '.download-' . $token;
-        $staging = $base . DS . '.extract-' . $token;
-        if (!@\mkdir($staging, 0700, true) && !\is_dir($staging)) {
-            return ['success' => false, 'output' => 'Unable to create the managed Go extraction directory.'];
-        }
-        try {
-            $download = $this->downloadVerifiedFile($url, $archive, $expectedHash);
-            if (!$download['success']) {
-                return $download;
-            }
-            if ($os === 'windows') {
-                $extracted = $this->extractVerifiedZip($archive, $staging);
-            } else {
-                $tar = $this->findExecutable('tar');
-                $extracted = $tar === ''
-                    ? ['success' => false, 'output' => 'tar is required to extract the verified Go toolchain.']
-                    : $this->run([$tar, '-xzf', $archive, '-C', $staging], 180, $staging);
-            }
-            if (!$extracted['success']) {
-                return ['success' => false, 'output' => $this->tail($extracted['output'])];
-            }
-            $goBinary = $staging . DS . 'go' . DS . 'bin' . DS . ($os === 'windows' ? 'go.exe' : 'go');
-            if (!\is_file($goBinary)) {
-                return ['success' => false, 'output' => 'Verified Go archive did not contain the expected compiler.'];
-            }
-            @\chmod($goBinary, 0755);
-            $version = $this->run([$goBinary, 'version'], 10, $staging);
-            if (!$version['success'] || !\str_contains($version['output'], 'go' . self::GO_VERSION)) {
-                return ['success' => false, 'output' => 'Extracted Go compiler failed version verification.'];
-            }
-
-            $published = $this->publishManagedDirectory($staging, $final, $token);
-            if (!$published['success']) {
-                return $published;
-            }
-            return [
-                'success' => true,
-                'output' => 'Installed verified Go ' . self::GO_VERSION . ' for ' . $platform . '.',
-            ];
-        } finally {
-            // Installer-owned random-suffix archive only.
-            // nosemgrep: php.lang.security.unlink-use.unlink-use
-            @\unlink($archive);
-        }
-    }
-
-    /** @return array{success:bool,output:string} */
-    private function extractVerifiedZip(string $archive, string $destination): array
-    {
-        if (!\class_exists(\ZipArchive::class)) {
-            return ['success' => false, 'output' => 'ZipArchive is required to extract the verified Go toolchain.'];
-        }
-        $zip = new \ZipArchive();
-        if ($zip->open($archive) !== true) {
-            return ['success' => false, 'output' => 'Unable to open the verified Go archive.'];
-        }
-        try {
-            for ($index = 0; $index < $zip->numFiles; $index++) {
-                $entry = \str_replace('\\', '/', (string)$zip->getNameIndex($index));
-                if ($entry === ''
-                    || \str_starts_with($entry, '/')
-                    || \preg_match('#(^|/)\.\.(?:/|$)#', $entry) === 1
-                    || \preg_match('/^[A-Za-z]:/', $entry) === 1
-                ) {
-                    return ['success' => false, 'output' => 'Verified Go archive contains an unsafe path.'];
-                }
-            }
-            if (!$zip->extractTo($destination)) {
-                return ['success' => false, 'output' => 'Unable to extract the verified Go archive.'];
-            }
-        } finally {
-            $zip->close();
-        }
-        return ['success' => true, 'output' => 'Verified Go archive extracted.'];
-    }
-
-    private function managedGoBinary(): string
-    {
-        $platform = $this->nativePlatformKey();
-        $binary = \str_starts_with($platform, 'windows-') ? 'go.exe' : 'go';
-
-        $root = Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'toolchains' . DS . 'go' . DS
-            . self::GO_VERSION . DS . $platform;
-        if (PHP_OS_FAMILY === 'Windows') {
-            $marker = $root . DS . '.complete';
-            $expected = self::GO_VERSION . ' ' . $platform;
-            if (!\is_file($marker) || \trim((string)@\file_get_contents($marker)) !== $expected) {
-                return '';
-            }
-        }
-
-        return $root . DS . 'go' . DS . 'bin' . DS . $binary;
-    }
-
-    private function nativePlatformKey(): string
-    {
-        $os = match (PHP_OS_FAMILY) {
-            'Darwin' => 'darwin',
-            'Linux' => 'linux',
-            'Windows' => 'windows',
-            default => \strtolower(PHP_OS_FAMILY),
-        };
-        $architecture = PHP_OS_FAMILY === 'Windows'
-            ? $this->windowsNativeArchitecture()
-            : \strtolower(\trim((string)\php_uname('m')));
-        $architecture = match ($architecture) {
-            'x86_64', 'x64', 'amd64' => 'amd64',
-            'aarch64', 'arm64' => 'arm64',
-            default => $architecture,
-        };
-
-        return $os . '-' . $architecture;
-    }
-
-    /** @return array{success:bool,output:string} */
-    private function publishManagedFile(string $candidate, string $target, string $token): array
-    {
-        $backup = '';
-        if (\is_file($target)) {
-            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token;
-            if (!@\rename($target, $backup)) {
-                return ['success' => false, 'output' => 'Unable to preserve the existing managed WLS engine.'];
-            }
-        }
-        if (@\rename($candidate, $target)) {
-            @\chmod($target, 0755);
-            return ['success' => true, 'output' => 'Managed WLS protocol engine published atomically.'];
-        }
-        if ($backup !== '' && !\is_file($target)) {
-            @\rename($backup, $target);
-        }
-
-        return ['success' => false, 'output' => 'Unable to atomically publish the managed WLS protocol engine.'];
-    }
-
-    /** @return array{success:bool,output:string} */
-    private function publishManagedDirectory(string $candidate, string $target, string $token): array
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            return $this->publishManagedDirectoryOnWindows($candidate, $target, $token);
-        }
-
-        $backup = '';
-        if (\is_dir($target)) {
-            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token;
-            if (!@\rename($target, $backup)) {
-                return ['success' => false, 'output' => 'Unable to preserve the existing managed Go toolchain.'];
-            }
-        }
-        if (@\rename($candidate, $target)) {
-            return ['success' => true, 'output' => 'Managed Go toolchain published atomically.'];
-        }
-        if ($backup !== '' && !\is_dir($target)) {
-            @\rename($backup, $target);
-        }
-
-        return ['success' => false, 'output' => 'Unable to atomically publish the managed Go toolchain.'];
-    }
-
-    /**
-     * Windows can retain an executable handle briefly after the compiler
-     * version probe. Publishing the extracted directory with rename() is then
-     * unreliable even on the same volume. A completion marker provides the
-     * visibility fence: no consumer can resolve a partially copied toolchain.
-     *
-     * @return array{success:bool,output:string}
-     */
-    private function publishManagedDirectoryOnWindows(string $candidate, string $target, string $token): array
-    {
-        if (!\is_dir($candidate)) {
-            return ['success' => false, 'output' => 'Managed Go toolchain candidate is missing.'];
-        }
-        if (!\is_dir($target) && !@\mkdir($target, 0755, true) && !\is_dir($target)) {
-            return ['success' => false, 'output' => 'Unable to create the managed Go toolchain target.'];
-        }
-
-        $marker = $target . DS . '.complete';
-        $temporaryMarker = $target . DS . '.complete-' . $token;
-        // Installer-owned marker only. Removing it fences a prior incomplete
-        // or damaged installation before any files are replaced.
-        // nosemgrep: php.lang.security.unlink-use.unlink-use
-        @\unlink($marker);
-        $copied = $this->copyManagedDirectoryContents($candidate, $target);
-        if (!$copied['success']) {
-            return $copied;
-        }
-
-        $payload = self::GO_VERSION . ' ' . $this->nativePlatformKey() . PHP_EOL;
-        if (@\file_put_contents($temporaryMarker, $payload, \LOCK_EX) === false
-            || !@\rename($temporaryMarker, $marker)
-        ) {
-            // Installer-owned random-suffix marker only.
-            // nosemgrep: php.lang.security.unlink-use.unlink-use
-            @\unlink($temporaryMarker);
-            return ['success' => false, 'output' => 'Unable to publish the managed Go completion marker.'];
-        }
-
-        return [
-            'success' => true,
-            'output' => 'Managed Go toolchain published with a Windows-safe completion fence.',
-        ];
-    }
-
-    /** @return array{success:bool,output:string} */
-    private function copyManagedDirectoryContents(string $source, string $target): array
-    {
-        try {
-            $iterator = new \FilesystemIterator($source, \FilesystemIterator::SKIP_DOTS);
-            foreach ($iterator as $entry) {
-                if ($entry->isLink()) {
-                    return ['success' => false, 'output' => 'Managed Go archive contains an unsupported link.'];
-                }
-                $destination = $target . DS . $entry->getFilename();
-                if ($entry->isDir()) {
-                    if (!\is_dir($destination)
-                        && !@\mkdir($destination, 0755, true)
-                        && !\is_dir($destination)
-                    ) {
-                        return ['success' => false, 'output' => 'Unable to create a managed Go subdirectory.'];
-                    }
-                    $copied = $this->copyManagedDirectoryContents($entry->getPathname(), $destination);
-                    if (!$copied['success']) {
-                        return $copied;
-                    }
-                    continue;
-                }
-                if (!$entry->isFile() || !@\copy($entry->getPathname(), $destination)) {
-                    return ['success' => false, 'output' => 'Unable to copy a managed Go toolchain file.'];
-                }
-            }
-        } catch (\Throwable $throwable) {
-            return ['success' => false, 'output' => 'Unable to copy the managed Go toolchain: ' . $throwable->getMessage()];
-        }
-
-        return ['success' => true, 'output' => 'Managed Go toolchain files copied.'];
-    }
-
-    /**
      * @return array{success:bool,output:string}
      */
     private function installForCurrentPlatform(HttpProtocolSelection $selection): array
     {
         if ($selection->isNativeProtocolEdge()) {
-            return $this->installNativeEngine($selection);
+            return [
+                'success' => false,
+                'output' => 'Native HTTP/2/3 is unavailable until the WLS Transport Adapter is implemented.',
+            ];
         }
 
         if (PHP_OS_FAMILY === 'Darwin') {

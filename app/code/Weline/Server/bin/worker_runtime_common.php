@@ -266,6 +266,44 @@ function wlsCountActiveFibersForAdmission(array $activeFibers): int
 }
 
 /**
+ * 进入 Fiber 请求上下文；有其他挂起请求 Fiber 时，省略会破坏同伴状态的 reset 回调。
+ */
+function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
+{
+    $omitCallbacks = null;
+    if (
+        \Weline\Framework\Runtime\Runtime::isPersistent()
+        && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
+    ) {
+        $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
+    }
+    \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
+
+    \Weline\Framework\Runtime\RequestContext::cleanup();
+    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
+    \Weline\Framework\Http\Sse\SseContext::reset();
+    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
+    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
+    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
+
+    $resolvedConnectionId = $connectionId;
+    if ($resolvedConnectionId === null && \is_resource($conn)) {
+        $resolvedConnectionId = \get_resource_id($conn);
+    }
+
+    $context = \Weline\Framework\Context::current();
+    $context->set('meta.type', 'request');
+    $context->set('meta.mode', 'wls');
+    $context->set('runtime.connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    $context->set('runtime.chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    $context->setRuntimeAttr('connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    $context->setRuntimeAttr('chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    \Weline\Framework\Runtime\RequestContext::setConnectionId(
+        $resolvedConnectionId === null ? null : (string)$resolvedConnectionId
+    );
+}
+
+/**
  * Fiber 请求结束后统一清台（响应已完成/连接已关闭后调用）。
  */
 function wlsFiberRequestContextLeave(): void

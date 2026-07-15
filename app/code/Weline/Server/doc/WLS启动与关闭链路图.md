@@ -88,7 +88,7 @@ flowchart TB
 ## 关键分支说明
 
 - 新启动在停止旧实例之前产生不可变 `RuntimeSelection` 与 `HttpProtocolSelection`，并以 endpoint schema v3 写入完整数组。`--master-only` 不再从多个布尔/字符串重新推导；v3 中任一 topology/listener/event/SSL/HTTP protocol/policy 投影缺失或冲突就在绑定端口前拒绝。旧 v2 只做读取兼容，Master 运行期不会在没有完整 selection 时把它标记为 v3。
-- h2/h3 启用时，WLS Native Protocol Engine 的当前平台二进制、ALPN、QUIC、session ticket、upstream keep-alive 与 atomic reload 必须在 Master 创建前通过真实 probe；缺失时单一控制面在带 30 秒锁 deadline 的流程中安装固定摘要 Go 工具链、构建自包含二进制并复验。失败中止启动，不在子进程已经创建后静默改成 h1。
+- 当前默认只启用 h1，不下载或构建 Go 工具链。显式请求 h2/h3 时，必须在 Master 创建前证明可验证的兼容适配器能力；缺失就中止启动，不在子进程创建后静默改协议。
 - `independent` 尚无完整 READY/策略保证，`RuntimeStrategyResolver` 和旧 endpoint 的 `--master-only` 重入都明确拒绝，不允许进入永远无法 READY 的运行态。
 - `server:start -r` 在调用 `server:stop` 前会固化旧实例当下真实监听的主端口、控制端口、Dispatcher/Worker 端口和 Redirect 端口（排除可跨实例复用的 Session/Memory sidecar）。停止后在一个 monotonic 总 deadline 内反复清理端口探测缓存，只有目标端口全部无监听且本项目+本实例 scoped 进程前缀全部无存活 PID 才能继续。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动。
@@ -126,7 +126,7 @@ flowchart TB
 
 - 所有 Master 发起的终止、滚动替换、surge 退场和 PID 文件清理都先冻结 `pid + canonical process_name + launch_id`；探测结果只允许 `running / exited / identity_mismatch / unknown` 四类处理。
 - `exited` 与 `identity_mismatch` 表示当前 PID 已不属于该租约，只清理匹配的旧记录，不向该 PID 发信号；`unknown` 必须 fail closed 并保留诊断，不能把“探测不到”当作“可以杀”。
-- Worker 终止默认不做进程树 kill；协议边缘 direct 的公开端口归 Edge，legacy direct 的公开端口是共享资源。任何单槽恢复与 surge 退场都禁止按公开端口杀进程。
+- Worker 终止默认不做进程树 kill；direct 的公开端口是共享资源，显式兼容 Edge 才独占公开端口。任何单槽恢复与 surge 退场都禁止按公开端口杀进程。
 - 进程标题只保留实例、role、slot、launch/generation 的短标识；PID/端口/生命周期文件和日志不得保存控制 token、TLS key 路径等敏感参数。
 - `name_index/pid_index/port_index` 的更新必须持有同一全局锁；清理路径锁失败时 fail closed，不允许退化为无锁删除。`port_index` 只是共享端口的建议代表，删除旧代时只有当前 owner 与冻结租约一致才可 CAS 释放，并优先提升仍存活的共享 owner。
 - 端口占用诊断必须分别报告内核 listener PID/命令和 `port_index` 建议 owner；不得把内核 Master PID 与历史 Worker 名称拼成一个伪进程事实。
@@ -134,13 +134,13 @@ flowchart TB
 
 ## 运行拓扑平台边界
 
-- Windows `auto` 固定使用 Dispatcher；Linux/macOS `auto` 使用 direct。默认 HTTPS 的公开 listener 由协议边缘拥有：POSIX Edge 直达 Worker，Windows Edge 后接内部 Dispatcher；只有关闭 Edge 的 h1 legacy 路径才使用 SO_REUSEPORT/共享 FD。三者共用 REGISTER→WARMING→READY、policy digest 与分批重载契约；业务 Worker 的 READY v3 必须证明首页 Process FPC 已热，并提交绕过 FPC 的动态首渲染回执。
+- Windows `auto` 固定使用 Dispatcher；Linux/macOS `auto` 使用 direct。当前默认 h1/HTTPS 由 Worker 处理：Linux 使用 SO_REUSEPORT，macOS 使用共享 FD，Windows Dispatcher 透传 TCP/TLS 字节。所有拓扑共用 REGISTER→WARMING→READY、policy digest 与分批重载契约；业务 Worker 的 READY v3 必须证明首页 Process FPC 已热，并提交绕过 FPC 的动态首渲染回执。
 - 拓扑/依赖预检发生在任何 Master/Worker 创建之前；POSIX direct 不满足能力时明确失败并提示显式 `--dispatcher`，不在已创建进程后静默改拓扑。
 - macOS `worker_count=auto` 使用性能核数并受内存预算限制；启动与 Doctor/建议共用同一个 resolver，显式 `-c` 保持不变。
 - 旧 `linux-direct` 只做读取兼容，新状态统一写为 `direct`；新实例的 SSL engine 默认为 `stream`。
 - 当前 `RuntimeStrategyResolver` 在启动预检阶段同时拒绝 `event_buffer + direct` 与 `event_buffer + authenticated PROXY v2 Dispatcher`；Windows 原生 EventBuffer 也明确拒绝。EventBuffer Adapter 仍属实验代码，不是当前受支持拓扑的可选 SSL engine，不得再把它描述为 macOS/Linux Dispatcher+TLS 可用路径。
 - Worker 通过 `--public-origin` 获得对外 scheme/authority；READY 首页预热与真实 HTTP/HTTPS FPC key 一致，实例文件只是兼容兜底。
-- macOS shared-FD TLS 与 200ms 首读衔接只属于协议引擎关闭的 legacy Worker-TLS 路径；默认由 WLS Native Protocol Engine 终结公开 TLS/QUIC，Worker 使用私有 h1 keep-alive。
+- macOS shared-FD TLS 使用 200ms 有界首读衔接 OpenSSL 用户态缓冲；当前默认由 Worker 终结 TLS，普通 h1 keep-alive 不进入该首读扫描。
 
 ## 平台验收边界
 

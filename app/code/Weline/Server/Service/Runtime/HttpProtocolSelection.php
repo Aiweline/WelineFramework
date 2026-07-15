@@ -73,8 +73,8 @@ final readonly class HttpProtocolSelection
         }
 
         $http = \is_array($config['http'] ?? null) ? $config['http'] : [];
-        $protocols = self::normalizeProtocols($http['protocols'] ?? self::DEFAULT_PROTOCOLS);
-        $preferred = self::normalizeProtocol($http['preferred'] ?? self::HTTP_3);
+        $protocols = self::normalizeProtocols($http['protocols'] ?? [self::HTTP_1]);
+        $preferred = self::normalizeProtocol($http['preferred'] ?? self::HTTP_1);
         if (!\in_array($preferred, $protocols, true)) {
             throw new \RuntimeException(
                 'wls.http.preferred must be one of the enabled wls.http.protocols.'
@@ -107,9 +107,9 @@ final readonly class HttpProtocolSelection
      */
     public static function fromArray(array $data): self
     {
-        $protocols = self::normalizeProtocols($data['protocols'] ?? self::DEFAULT_PROTOCOLS);
-        $preferred = self::normalizeProtocol($data['preferred'] ?? self::HTTP_3);
-        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_NATIVE, $protocols);
+        $protocols = self::normalizeProtocols($data['protocols'] ?? [self::HTTP_1]);
+        $preferred = self::normalizeProtocol($data['preferred'] ?? self::HTTP_1);
+        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_DISABLED, $protocols);
 
         return new self(
             $protocols,
