@@ -557,6 +557,10 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 
 本轮在不改 listener、TLS handshake、EventBase、连接表和写缓冲语义的前提下，将三个 Worker 重复的运行时记账与清理函数迁入 `bin/worker_runtime_common.php`。入口行数变为 HTTP 5,158、stream TLS 6,147、EventBuffer 2,059，公共运行时 339 行；EventBuffer 仍按 RuntimeSelection 在 Direct 和认证 Dispatcher 启动前拒绝，不能把语法加载通过解释为生产可用。
 
+后续最小收敛批次又将 `WlsRuntime::bootstrap()` 与 `WorkerFullPageCacheFastPath` 构造迁入两个 transport-neutral helper。HTTP、stream TLS 与 EventBuffer 入口继续保留各自的启动日志、SSL trace、异常边界、listener 和 event-loop 状态；共享 helper 不读取 socket、TLS、连接表或请求上下文，也不进入请求热路径。当前入口/公共文件行数为 HTTP 5,169、stream TLS 6,141、EventBuffer 2,053、公共运行时 361。
+
+2026-07-15 专用实例 `ai-test-worker-bootstrap-20260715-0933`（10979）约 2 秒达到 Direct 4/4 Worker + Native Edge READY，四个动态首渲染为 10.42–10.84ms。实际 HTTP/1.1、HTTP/2、HTTP/3 均为 200；HTTP/3 health 10,000/10,000、0 错误、14,557.04 QPS、p95 3.79ms，HTTP/2 health 100,000/100,000、0 错误、14,594.52 QPS、p95 14.53ms、p99 18.342ms、max 53.141ms。TLS 1.3 / `TLS_AES_128_GCM_SHA256` 首连 `New`、二连 `Reused`；首页 Process FPC HIT，裸/带 Key 后台登录为 404/200。Browser 首页和带 Key 登录表单可见、Console error/warn 为 0。PHP lint、`diff --check`、architecture:check、framework:compile、12 条策略检查和 Semgrep 85 条规则均通过；自动验收后 10979 TCP/UDP、29182–29185、39182 与全部关联 PID 已释放。
+
 验证使用当前 macOS 主机、PHP 8.4.22、4 Worker、`direct/shared_fd/event/stream`。压测时安全策略全部执行，实例级 limiter 保持启用，只将专用测试实例的额度临时提高以避免计划内的 3,000 请求上限产生 429；测试完成后恢复默认 3,000/60s。
 
 | 场景 | 结果 |
