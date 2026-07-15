@@ -4701,13 +4701,28 @@ class Start extends CommandAbstract
      */
     protected function ensureHostsFileConfigured(string $host): void
     {
-        // 只处理 .local 域名
+        // 只处理需要 hosts 的本地域名
         if (!LocalDomainPolicy::requiresHostsEntry($host)) {
             return;
         }
 
         // 跳过 localhost
         if ($host === 'localhost') {
+            return;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows' && (string)\getenv('WLS_AUTO_WRITE_WINDOWS_HOSTS') !== '1') {
+            $hostsFile = (string)(\getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32\\drivers\\etc\\hosts';
+            $content = \is_file($hostsFile) ? (string)@\file_get_contents($hostsFile) : '';
+            if ($content !== '' && \preg_match('/^\s*127\.0\.0\.1\s+.*\b' . \preg_quote($host, '/') . '\b/im', $content)) {
+                return;
+            }
+
+            $this->printer->warning(__('Windows server:start 默认不自动写 hosts，避免 UAC/权限弹窗阻塞启动。'));
+            $this->printer->note(__('请按需以管理员身份执行：'));
+            $this->printer->note('  php bin/w server:hosts:add ' . $host);
+            $this->printer->note(__('或手动添加到 hosts：127.0.0.1 %{1}', [$host]));
+            $this->printer->note(__('如需恢复启动时自动写 hosts，可显式设置 WLS_AUTO_WRITE_WINDOWS_HOSTS=1。'));
             return;
         }
 
@@ -4724,7 +4739,7 @@ class Start extends CommandAbstract
 
             if (PHP_OS_FAMILY === 'Windows') {
                 $this->printer->note(__('Windows hosts 文件位置：'));
-                $this->printer->note('  C:\Windows\System32\drivers\etc\hosts');
+                $this->printer->note('  C:\\Windows\\System32\\drivers\\etc\\hosts');
                 $this->printer->note(__('或以管理员身份运行 PowerShell 执行：'));
                 $this->printer->note('  ' . ($result['command'] ?? ''));
             } else {
