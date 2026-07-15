@@ -78,6 +78,14 @@ class Benchmark extends CommandAbstract
             $tlsVersion,
             $httpVersion,
         );
+        $effectiveHttpVersion = $this->resolveEffectiveHttpVersion(
+            $httpVersion,
+            (array)($benchmarkContext['http_protocol_capabilities'] ?? [])
+        );
+        $benchmarkContext['http_version_effective'] = $effectiveHttpVersion;
+        $benchmarkContext['http_version_auto_strategy'] = $httpVersion === 'auto'
+            ? 'prefer h3 when WLS+curl support it, else h2, else h1.1'
+            : 'explicit';
         
         // 修复 Git Bash 路径转换问题（如 /_wls/health 被转成 C:/Program Files/Git/_wls/health）
         $scheme = $ssl ? 'https' : 'http';
@@ -112,7 +120,10 @@ class Benchmark extends CommandAbstract
         if ($ssl) {
             $this->printer->note(\sprintf('║  TLS 版本：%-50s║', $tlsVersion));
         }
-        $this->printer->note(\sprintf('║  HTTP 版本：%-49s║', $httpVersion));
+        $displayHttpVersion = $httpVersion === 'auto'
+            ? 'auto -> ' . (string)($benchmarkContext['http_version_effective'] ?? 'auto')
+            : $httpVersion;
+        $this->printer->note(\sprintf('║  HTTP 版本：%-49s║', $displayHttpVersion));
         $runtimeMetadata = \is_array($serverConfig['runtime_metadata'] ?? null)
             ? $serverConfig['runtime_metadata']
             : [];
@@ -149,7 +160,7 @@ class Benchmark extends CommandAbstract
             $workerHeader,
             $workerBalanceThreshold,
             $tlsVersion,
-            $httpVersion,
+            (string)$benchmarkContext['http_version_effective'],
             $benchmarkContext
         );
     }
@@ -1065,6 +1076,8 @@ class Benchmark extends CommandAbstract
             'fresh_tls' => (bool)($benchmarkContext['fresh_tls'] ?? false),
             'tls_version' => $benchmarkContext['tls_version'] ?? null,
             'http_version_requested' => $benchmarkContext['http_version_requested'] ?? null,
+            'http_version_effective' => $benchmarkContext['http_version_effective'] ?? null,
+            'http_version_auto_strategy' => $benchmarkContext['http_version_auto_strategy'] ?? null,
             'http_version_forced' => (bool)($benchmarkContext['http_version_forced'] ?? false),
             'http_version_negotiated' => $benchmarkContext['http_version_negotiated'] ?? null,
             'http_version_hits' => (array)($benchmarkContext['http_version_hits'] ?? []),
@@ -1239,6 +1252,7 @@ class Benchmark extends CommandAbstract
             'fresh_tls' => $ssl && $noKeepAlive,
             'tls_version' => $ssl ? $tlsVersion : null,
             'http_version_requested' => $httpVersion,
+            'http_version_effective' => $httpVersion,
             'http_version_forced' => $httpVersion !== 'auto',
             'http_version_negotiated' => null,
             'http_version_hits' => [],
@@ -1336,6 +1350,30 @@ class Benchmark extends CommandAbstract
         }
 
         throw new \InvalidArgumentException('--http-version must be auto, 1.1, 2, or 3.');
+    }
+
+    /** @param array<string,mixed> $capabilities */
+    private function resolveEffectiveHttpVersion(string $requested, array $capabilities): string
+    {
+        if ($requested !== 'auto') {
+            return $requested;
+        }
+
+        $curl = (array)($capabilities['curl_client'] ?? []);
+        $adapters = (array)($capabilities['wls_adapters'] ?? []);
+        $curlHttp3 = (bool)($curl['http3_constant'] ?? false) && (bool)($curl['http3_feature'] ?? false);
+        $serverHttp3 = (bool)($adapters['http3']['enabled'] ?? false);
+        if ($curlHttp3 && $serverHttp3) {
+            return '3';
+        }
+
+        $curlHttp2 = (bool)($curl['http2_constant'] ?? false) && (bool)($curl['http2_feature'] ?? false);
+        $serverHttp2 = (bool)($adapters['http2']['enabled'] ?? false);
+        if ($curlHttp2 && $serverHttp2) {
+            return '2';
+        }
+
+        return '1.1';
     }
 
     private function curlHttpVersionOption(string $httpVersion): int

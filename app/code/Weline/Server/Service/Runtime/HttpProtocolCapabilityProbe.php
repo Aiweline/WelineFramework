@@ -27,9 +27,11 @@ final class HttpProtocolCapabilityProbe
 
         return [
             'default_policy' => [
-                'preferred' => 'http/2',
-                'fallback' => ['http/1.1'],
+                'target_preferred' => 'http/3',
+                'effective_preferred' => $http2Enabled ? 'http/2' : 'http/1.1',
+                'fallback' => ['http/2', 'http/1.1'],
                 'http3_when_available' => true,
+                'selection_rule' => 'prefer HTTP/3 only when the WLS QUIC adapter and client both support it; otherwise HTTP/2, then HTTP/1.1',
             ],
             'php' => [
                 'version' => \PHP_VERSION,
