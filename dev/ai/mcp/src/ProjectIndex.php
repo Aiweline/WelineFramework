@@ -17,6 +17,8 @@ final class ProjectIndex
     private string $databasePath;
     private ?PDO $database = null;
     private int $transactionDepth = 0;
+    private int $sqliteMmapBytes = 0;
+    private int $sqliteCacheKib = 0;
 
     /** @param array<string, mixed> $resolved */
     public function __construct(private readonly Config $config, array $resolved)
@@ -51,6 +53,10 @@ final class ProjectIndex
         ]);
         $this->database->exec('PRAGMA foreign_keys = ON');
         $this->database->exec('PRAGMA busy_timeout = 5000');
+        $this->sqliteMmapBytes = max(0, (int) $config->get('index.sqlite_mmap_bytes', 268_435_456));
+        $this->sqliteCacheKib = max(1_024, (int) $config->get('index.sqlite_cache_kib', 16_384));
+        $this->database->exec('PRAGMA mmap_size = ' . $this->sqliteMmapBytes);
+        $this->database->exec('PRAGMA cache_size = -' . $this->sqliteCacheKib);
         $this->database->exec('PRAGMA journal_mode = WAL');
         $this->database->exec('PRAGMA synchronous = NORMAL');
         $this->database->exec('PRAGMA temp_store = MEMORY');
@@ -149,6 +155,8 @@ final class ProjectIndex
                 'sparse_feature_hash' => true,
                 'compressed_file_content_store' => true,
                 'batch_indexed_file_read' => true,
+                'sqlite_mmap_bytes' => $this->sqliteMmapBytes,
+                'sqlite_cache_kib' => $this->sqliteCacheKib,
                 'neural_embeddings' => false,
                 'graph_engine' => 'sqlite_overlay',
                 'external_graph_available' => (bool) ($state['external_graph_available'] ?? false),

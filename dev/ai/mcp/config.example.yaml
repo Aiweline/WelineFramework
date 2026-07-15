@@ -8,9 +8,10 @@ collector:
   max_event_bytes: 8388608
 
 analysis:
-  # Deterministic offline analysis. Set to openai only after reviewing
-  # docs/SECURITY.md and configuring both model fields below.
-  provider: none
+  # The local Codex CLI extracts bounded, redacted session learning without an
+  # API key. Use none for correction-only deterministic analysis, or openai
+  # only after reviewing docs/SECURITY.md and configuring both model fields.
+  provider: codex
   api_key_env: OPENAI_API_KEY
   base_url: https://api.openai.com/v1
   extractor_model: ""
@@ -18,6 +19,20 @@ analysis:
   max_session_tokens: 50000
   request_timeout: 60s
   require_non_model_evidence_for_technical_rules: true
+  automatic_learning:
+    enabled: true
+    # Strong user intent or a successful test/build/lint/browser/runtime result
+    # can validate non-conflicting knowledge only after scope classification and
+    # distinct positive/negative examples are complete. Global promotion stays manual.
+    auto_validate: true
+    max_candidates: 6
+    max_existing_experiences: 100
+    max_project_matches: 12
+    duplicate_similarity: 0.86
+    related_similarity: 0.55
+    conflict_similarity: 0.62
+    project_duplicate_similarity: 0.9
+    minimum_validation_confidence: 0.9
 
 retrieval:
   minimum_status: validated
@@ -56,13 +71,20 @@ scheduler:
 index:
   enabled: true
   auto_refresh: true
-  refresh_interval: 10s
+  # A local PHP Unix-socket sidecar coalesces Hook refreshes and exits after 15 idle minutes.
+  # It starts automatically and falls back to the one-shot refresher when unavailable.
+  sidecar_enabled: true
+  # Codex writes refresh immediately; this is only the fallback for changes made outside Hook/MCP.
+  refresh_interval: 60s
   max_file_bytes: 524288
   max_chunk_chars: 6000
   context_token_budget: 6000
   vector_dimensions: 2048
   # Keep only the highest-weight sparse terms per chunk; 24 bounds large-repo storage.
   vector_max_terms: 24
+  # Warm read settings for the persistent SQLite index; mmap is virtual and demand-paged.
+  sqlite_mmap_bytes: 268435456
+  sqlite_cache_kib: 16384
   include_tests: false
   allowed_extensions:
     - php
@@ -123,7 +145,7 @@ index:
     - **/*.min.*
     - **/*.map
 
-# Two-phase local editing. prepare_edit seals content; apply_edit receives only the one-time token.
+# Compact writes keep the two-phase boundary locally: apply_compact_edit seals, applies, validates, reindexes, and can roll back without returning the one-time token to the model.
 editing:
   enabled: true
   ticket_ttl: 10m
@@ -156,9 +178,27 @@ knowledge:
   auto_generate_skills: true
   auto_doc_sync: false
   generated_skill_status: validated
+  learning_skills:
+    # Explicitly enabled for this installed local MCP: reviewed experience is grouped by
+    # read-only Codex, rendered into project and owning-module marker boundaries, indexed,
+    # and prompt-routed without scanning skill directories.
+    enabled: true
+    # Empty keeps the existing Weline behavior: project skills go to dev/ai/skills
+    # and matching app/code modules receive module-local projections.
+    # Set a repository-relative directory (for example .codex/skills) or an
+    # absolute directory to emit only project-level skills there. The environment
+    # variable LEARNING_MCP_SKILL_OUTPUT_DIR overrides this value.
+    output_directory: ""
+    minimum_confidence: 0.9
+    max_experiences: 100
+    max_skills: 12
+    max_module_skill_projections: 64
+    inject_on_prompt: true
+    prompt_skill_limit: 3
+    prompt_token_budget: 2400
   codex:
-    # Explicit opt-in. The nested Codex process is ephemeral/read-only and may only return doc-sync.v1 JSON.
-    enabled: false
+    # Enabled for strict doc-sync.v1, session-learning.v1, and learning-skills.v1 planning. The child remains ephemeral/read-only.
+    enabled: true
     # Leave empty to use CODEX_CLI_PATH, PATH, or the ChatGPT.app bundled CLI.
     binary: ""
     model: ""

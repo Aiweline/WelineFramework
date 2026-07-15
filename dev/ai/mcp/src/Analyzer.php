@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LearningMcp;
 
 use RuntimeException;
+use Throwable;
 
 interface ModelAnalyzer
 {
@@ -23,15 +24,230 @@ interface ModelAnalyzer
     public function metadata(): array;
 }
 
+final class CodexModelAnalyzer implements ModelAnalyzer
+{
+    private readonly CodexInvoker $invoker;
+
+    public function __construct(private readonly Config $config)
+    {
+        $this->invoker = new CodexInvoker($config, new ProcessRunner());
+    }
+
+    public function extract(array $bundle): array
+    {
+        return $this->invoker->extractSessionLearning($this->boundedPayload($bundle));
+    }
+
+    public function verify(array $draft, array $evidence): array
+    {
+        $verifiedIds = [];
+        $hasUserIntent = false;
+        $hasUserClaim = false;
+        $hasOutcome = false;
+        $hasContradiction = false;
+        $confidence = 0.0;
+        foreach ($evidence as $item) {
+            if (($item['verified'] ?? false) !== true) {
+                continue;
+            }
+            $type = (string) ($item['evidence_type'] ?? '');
+            $polarity = (string) ($item['polarity'] ?? '');
+            $strength = (float) ($item['strength'] ?? 0.0);
+            if ($polarity === 'supports') {
+                $verifiedIds[] = (string) $item['evidence_id'];
+                $confidence = max($confidence, $strength);
+                $hasUserIntent = $hasUserIntent || $type === 'user_intent';
+                $hasUserClaim = $hasUserClaim || $type === 'user_technical_claim';
+                $hasOutcome = $hasOutcome || in_array($type, [
+                    'test_result', 'build_result', 'lint_result', 'browser_result',
+                    'runtime_observation', 'user_confirmation', 'ci_result',
+                ], true);
+            } elseif ($polarity === 'contradicts') {
+                $hasContradiction = true;
+            }
+        }
+        $verifiedIds = Text::uniqueStrings($verifiedIds);
+        $category = (string) ($draft['category'] ?? '');
+        $knowledgeType = trim((string) ($draft['knowledge_type'] ?? ''));
+        $surface = trim((string) ($draft['surface'] ?? ''));
+        $environmentConstraints = Text::uniqueStrings(
+            is_array($draft['environment_constraints'] ?? null) ? $draft['environment_constraints'] : [],
+        );
+        $positiveExample = trim((string) ($draft['positive_example'] ?? ''));
+        $negativeExample = trim((string) ($draft['negative_example'] ?? ''));
+        $normalizeExample = static fn(string $value): string => mb_strtolower(
+            preg_replace('/\s+/u', ' ', trim($value)) ?? trim($value),
+            'UTF-8',
+        );
+        $examplesComplete = $positiveExample !== ''
+            && $negativeExample !== ''
+            && $normalizeExample($positiveExample) !== $normalizeExample($negativeExample);
+        $technical = in_array($category, [
+            'project_fact', 'architecture_decision', 'debugging_strategy', 'anti_pattern',
+            'workflow_rule', 'tool_usage', 'test_oracle', 'security_boundary',
+        ], true);
+        $decision = 'unsupported';
+        $problems = [];
+        if (!in_array($knowledgeType, [
+            'global_rule', 'project_rule', 'skill_knowledge', 'operational_observation',
+        ], true)) {
+            $problems[] = 'The learning scope classification is missing or invalid.';
+        } elseif ($category === 'temporary_context') {
+            $problems[] = 'Temporary context is not durable project learning.';
+        } elseif ($verifiedIds === []) {
+            $decision = $hasContradiction ? 'contradicted' : 'missing_evidence';
+            $problems[] = 'No verified supporting evidence remains.';
+        } elseif ($technical && $hasOutcome) {
+            $decision = 'supported';
+            $confidence = max($confidence, 0.9);
+        } elseif ($technical && $hasUserClaim) {
+            $decision = 'partially_supported';
+            $confidence = min(max($confidence, 0.6), 0.77);
+            $problems[] = 'The user-reported technical claim still needs an outcome check before automatic validation.';
+        } elseif (!$technical && $hasUserIntent) {
+            $decision = 'supported';
+            $confidence = max($confidence, 0.9);
+        } else {
+            $decision = 'unsupported';
+            $problems[] = 'The evidence type does not support this learning category.';
+        }
+        if (!$examplesComplete && in_array($decision, ['supported', 'partially_supported'], true)) {
+            $decision = 'partially_supported';
+            $confidence = min($confidence, 0.77);
+            $problems[] = 'A distinct positive example and negative example are both required before automatic validation.';
+        }
+        if ($knowledgeType === 'operational_observation'
+            && ($surface === '' || $environmentConstraints === [])
+            && in_array($decision, ['supported', 'partially_supported'], true)) {
+            $decision = 'partially_supported';
+            $confidence = min($confidence, 0.77);
+            $problems[] = 'Operational observations require a named product surface and explicit environment constraints.';
+        }
+        if ($knowledgeType === 'global_rule') {
+            $problems[] = 'Global rules always require manual scope review and promotion.';
+        }
+        if ($hasContradiction && in_array($decision, ['supported', 'partially_supported'], true)) {
+            $problems[] = 'Earlier contradicting evidence exists; only the verified supporting outcome is retained.';
+        }
+
+        return [
+            'decision' => $decision,
+            'confidence' => round(max(0.0, min(1.0, $confidence)), 3),
+            'verified_evidence_ids' => $verifiedIds,
+            'problems' => $problems,
+            'narrowed_rule' => trim((string) ($draft['reusable_rule'] ?? '')),
+            'scope_paths' => Text::uniqueStrings(is_array($draft['paths'] ?? null) ? $draft['paths'] : []),
+            'exceptions' => Text::uniqueStrings(is_array($draft['exceptions'] ?? null) ? $draft['exceptions'] : []),
+            'knowledge_type' => $knowledgeType,
+            'surface' => $surface,
+            'examples_complete' => $examplesComplete,
+        ];
+    }
+
+    public function metadata(): array
+    {
+        return [
+            'provider' => 'codex',
+            'transport' => 'local_codex_cli',
+            'extractor_prompt' => 'session-learning.v2',
+            'verifier' => 'deterministic-evidence-gate.v2',
+            'codex' => $this->invoker->metadata(),
+        ];
+    }
+
+    /** @param array<string, mixed> $bundle
+     *  @return array<string, mixed>
+     */
+    private function boundedPayload(array $bundle): array
+    {
+        $session = is_array($bundle['session'] ?? null) ? $bundle['session'] : [];
+        $events = [];
+        foreach (array_slice(is_array($bundle['events'] ?? null) ? $bundle['events'] : [], -60) as $event) {
+            if (!is_array($event)) {
+                continue;
+            }
+            $context = is_array($event['context'] ?? null) ? $event['context'] : [];
+            $events[] = [
+                'event_id' => (string) ($event['event_id'] ?? ''),
+                'type' => (string) ($event['type'] ?? ''),
+                'role' => (string) ($event['role'] ?? ''),
+                'observed_at' => (string) ($event['observed_at'] ?? ''),
+                'tool_name' => (string) ($context['tool_name'] ?? ''),
+                'content_redacted' => Text::truncate((string) ($event['content_redacted'] ?? ''), 1_200),
+            ];
+        }
+        $evidence = [];
+        $bundleEvidence = is_array($bundle['evidence'] ?? null) ? $bundle['evidence'] : [];
+        foreach (array_slice($bundleEvidence, -40) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $evidence[] = [
+                'evidence_id' => (string) ($item['evidence_id'] ?? ''),
+                'evidence_type' => (string) ($item['evidence_type'] ?? ''),
+                'source_event_id' => (string) ($item['source_event_id'] ?? ''),
+                'claim' => Text::truncate((string) ($item['claim'] ?? ''), 800),
+                'polarity' => (string) ($item['polarity'] ?? ''),
+                'strength' => (float) ($item['strength'] ?? 0.0),
+                'verified' => (bool) ($item['verified'] ?? false),
+            ];
+        }
+        $signals = [];
+        foreach (array_slice(is_array($bundle['signals'] ?? null) ? $bundle['signals'] : [], -60) as $signal) {
+            if (!is_array($signal)) {
+                continue;
+            }
+            $signals[] = [
+                'type' => (string) ($signal['type'] ?? ''),
+                'event_id' => (string) ($signal['event_id'] ?? ''),
+                'evidence_id' => (string) ($signal['evidence_id'] ?? ''),
+                'summary' => Text::truncate((string) ($signal['summary'] ?? ''), 500),
+            ];
+        }
+        $payload = [
+            'repository_root' => (string) ($session['cwd'] ?? ''),
+            'max_candidates' => (int) $this->config->get('analysis.automatic_learning.max_candidates', 6),
+            'allowed_evidence_ids' => Text::uniqueStrings(array_column($evidence, 'evidence_id')),
+            'session' => [
+                'id' => (string) ($session['id'] ?? ''),
+                'project_id' => (string) ($session['project_id'] ?? ''),
+                'cwd' => (string) ($session['cwd'] ?? ''),
+                'outcome' => (string) ($session['outcome'] ?? ''),
+            ],
+            'events' => $events,
+            'evidence' => $evidence,
+            'signals' => $signals,
+        ];
+        $maximum = max(4_096, (int) $this->config->get('knowledge.codex.max_context_chars', 60_000) - 4_096);
+        while (count($payload['events']) > 1 && strlen(Json::encode($payload)) > $maximum) {
+            array_shift($payload['events']);
+        }
+        while (count($payload['signals']) > 1 && strlen(Json::encode($payload)) > $maximum) {
+            array_shift($payload['signals']);
+        }
+        while (count($payload['evidence']) > 1 && strlen(Json::encode($payload)) > $maximum) {
+            array_shift($payload['evidence']);
+            $payload['allowed_evidence_ids'] = Text::uniqueStrings(array_column($payload['evidence'], 'evidence_id'));
+        }
+
+        return $payload;
+    }
+}
+
 final class Analyzer
 {
     private ?ModelAnalyzer $model = null;
+    private readonly LearningNoveltyService $novelty;
 
     public function __construct(
         private readonly Store $store,
         private readonly Config $config,
     ) {
-        if ($config->get('analysis.provider') === 'openai') {
+        $this->novelty = new LearningNoveltyService($store, $config);
+        if ($config->get('analysis.provider') === 'codex'
+            && $config->get('analysis.automatic_learning.enabled', true) === true) {
+            $this->model = new CodexModelAnalyzer($config);
+        } elseif ($config->get('analysis.provider') === 'openai') {
             $this->model = new OpenAIAnalyzer($config);
         }
     }
@@ -74,9 +290,28 @@ final class Analyzer
             $stored = $this->store->putEvidence($signal['evidence']);
             $evidenceIds[] = $stored['id'];
         }
+        $modelSignal = $this->model !== null
+            && $this->config->get('analysis.automatic_learning.enabled', true) === true
+            && ($corrections !== [] || $this->hasModelLearningSignal($evidenceSignals));
+        if ($modelSignal) {
+            try {
+                $modelResult = $this->analyzeWithModel($session, $events, $evidenceSignals, $signals);
+                if (($modelResult['decision'] ?? 'no_learning') !== 'no_learning' || $corrections === []) {
+                    return $modelResult;
+                }
+            } catch (Throwable $exception) {
+                $this->store->writeAudit('learningd', 'model_learning_failed', 'session', $sessionId, [
+                    'provider' => $this->model?->metadata()['provider'] ?? 'unknown',
+                    'reason' => Text::truncate($exception->getMessage(), 800),
+                    'fallback' => $corrections === [] ? 'no_learning' : 'deterministic_corrections',
+                ]);
+            }
+        }
         if ($corrections === []) {
             $this->store->writeAudit('learningd', 'no_learning', 'session', $sessionId, [
-                'reason' => 'no supported correction or retraction signal',
+                'reason' => $modelSignal
+                    ? 'automatic extractor found no durable evidence-backed learning'
+                    : 'no correction, retraction, or successful high-signal outcome',
                 'event_count' => count($events),
                 'signals' => $signals,
             ]);
@@ -88,21 +323,23 @@ final class Analyzer
                 'analyzer' => 'deterministic.php.v1',
             ];
         }
-        if ($this->model !== null) {
-            return $this->analyzeWithModel($session, $events, $evidenceSignals, $signals);
-        }
         $experienceIds = [];
+        $judgments = [];
         foreach ($corrections as $correction) {
             $experience = $this->deterministicExperience($session, $correction, $evidenceSignals);
-            $stored = $this->store->upsertExperience($experience);
-            $experienceIds[] = $stored['experience']['experience_id'];
+            $judgment = $this->novelty->persist($session, $experience);
+            $judgments[] = $judgment;
+            if (($judgment['experience_id'] ?? '') !== '') {
+                $experienceIds[] = (string) $judgment['experience_id'];
+            }
         }
 
         return [
-            'decision' => 'candidate',
+            'decision' => self::resultDecision($judgments),
             'experience_ids' => Text::uniqueStrings($experienceIds),
             'evidence_ids' => Text::uniqueStrings($evidenceIds),
             'signals' => $signals,
+            'learning_judgments' => $judgments,
             'analyzer' => 'deterministic.php.v1',
         ];
     }
@@ -124,6 +361,7 @@ final class Analyzer
             'session' => $session,
             'events' => $this->limitEvents($events),
             'evidence' => $evidence,
+            'signals' => $signals,
         ];
         $extraction = $this->model?->extract($bundle) ?? ['decision' => 'no_learning', 'experiences' => []];
         $result = [
@@ -131,9 +369,11 @@ final class Analyzer
             'experience_ids' => [],
             'evidence_ids' => array_keys($allowed),
             'signals' => $signals,
-            'analyzer' => 'model.php.v1',
+            'learning_judgments' => [],
+            'analyzer' => 'model.php.v3',
         ];
-        if ($result['decision'] === 'no_learning') {
+        if (in_array($result['decision'], ['no_learning', 'discard'], true)) {
+            $result['decision'] = 'no_learning';
             return $result;
         }
         foreach (($extraction['experiences'] ?? []) as $draft) {
@@ -174,12 +414,17 @@ final class Analyzer
                 continue;
             }
             $experience = $this->experienceFromDraft($session, $draft, $assessment, $verifiedIds);
-            $stored = $this->store->upsertExperience($experience);
-            $result['experience_ids'][] = $stored['experience']['experience_id'];
+            $judgment = $this->novelty->persist($session, $experience);
+            $result['learning_judgments'][] = $judgment;
+            if (($judgment['experience_id'] ?? '') !== '') {
+                $result['experience_ids'][] = (string) $judgment['experience_id'];
+            }
         }
         $result['experience_ids'] = Text::uniqueStrings($result['experience_ids']);
-        if ($result['experience_ids'] === []) {
+        if ($result['learning_judgments'] === []) {
             $result['decision'] = 'no_learning';
+        } else {
+            $result['decision'] = self::resultDecision($result['learning_judgments']);
         }
 
         return $result;
@@ -345,6 +590,15 @@ final class Analyzer
             ];
             $evidenceIds[] = $lastFailure['evidence']['evidence_id'];
         }
+        $knowledgeType = match ($kind) {
+            'preference_correction', 'intent_correction', 'acceptance_criteria', 'project_fact' => 'project_rule',
+            default => 'skill_knowledge',
+        };
+        $surface = $kind === 'technical_claim' ? 'project_runtime' : 'project_workflow';
+        $positiveExample = Text::truncate($directive, 1_600);
+        $negativeExample = $wrongApproaches === []
+            ? ''
+            : Text::truncate((string) ($wrongApproaches[0]['approach'] ?? ''), 1_600);
         $breakdown = self::confidenceForCorrection($kind, $wrongApproaches !== [], $successfulOutcome);
         $now = Clock::now();
 
@@ -353,7 +607,11 @@ final class Analyzer
             'project_id' => $session['project_id'],
             'schema_version' => 'experience.v1',
             'version' => 1,
-            'fingerprint' => self::fingerprint($session['project_id'], $category, $directive),
+            'fingerprint' => self::fingerprint(
+                $session['project_id'],
+                $category . ':' . $knowledgeType . ':' . $surface,
+                $directive,
+            ),
             'title' => Text::truncate((string) $correction['correction']['summary'], 100),
             'category' => $category,
             'problem_pattern' => $correction['correction']['summary'],
@@ -373,7 +631,18 @@ final class Analyzer
             'evidence_ids' => Text::uniqueStrings($evidenceIds),
             'first_seen_at' => $now,
             'last_seen_at' => $now,
-            'metadata' => ['analyzer' => 'deterministic.php.v1'],
+            'metadata' => [
+                'analyzer' => 'deterministic.php.v2',
+                'learning_classification' => [
+                    'knowledge_type' => $knowledgeType,
+                    'surface' => $surface,
+                    'environment_constraints' => [],
+                    'positive_example' => $positiveExample,
+                    'negative_example' => $negativeExample,
+                    'examples_complete' => $positiveExample !== '' && $negativeExample !== '',
+                    'classified_at' => $now,
+                ],
+            ],
             'created_at' => $now,
             'updated_at' => $now,
         ];
@@ -405,13 +674,33 @@ final class Analyzer
             'penalties' => ($assessment['decision'] ?? '') === 'partially_supported' ? 0.1 : 0.0,
         ];
         $now = Clock::now();
+        $metadata = $this->model?->metadata() ?? [];
+        $metadata['learning_classification'] = [
+            'knowledge_type' => (string) ($draft['knowledge_type'] ?? ''),
+            'surface' => (string) ($draft['surface'] ?? ''),
+            'environment_constraints' => Text::uniqueStrings(
+                is_array($draft['environment_constraints'] ?? null) ? $draft['environment_constraints'] : [],
+            ),
+            'positive_example' => (string) ($draft['positive_example'] ?? ''),
+            'negative_example' => (string) ($draft['negative_example'] ?? ''),
+            'examples_complete' => (bool) ($assessment['examples_complete'] ?? (
+                trim((string) ($draft['positive_example'] ?? '')) !== ''
+                && trim((string) ($draft['negative_example'] ?? '')) !== ''
+            )),
+            'classified_at' => $now,
+        ];
 
         return [
             'experience_id' => Ids::make('exp'),
             'project_id' => $session['project_id'],
             'schema_version' => 'experience.v1',
             'version' => 1,
-            'fingerprint' => self::fingerprint($session['project_id'], (string) $draft['category'], $rule),
+            'fingerprint' => self::fingerprint(
+                $session['project_id'],
+                (string) $draft['category'] . ':' . (string) ($draft['knowledge_type'] ?? '')
+                    . ':' . (string) ($draft['surface'] ?? ''),
+                $rule,
+            ),
             'title' => (string) $draft['title'],
             'category' => (string) $draft['category'],
             'problem_pattern' => (string) $draft['problem_pattern'],
@@ -435,7 +724,7 @@ final class Analyzer
             'evidence_ids' => $verifiedIds,
             'first_seen_at' => $now,
             'last_seen_at' => $now,
-            'metadata' => $this->model?->metadata() ?? [],
+            'metadata' => $metadata,
             'created_at' => $now,
             'updated_at' => $now,
         ];
@@ -562,6 +851,51 @@ final class Analyzer
             'browser_result', 'runtime_observation' => 0.9,
             default => 0.8,
         };
+    }
+
+    /** @param list<array<string, mixed>> $evidenceSignals */
+    private function hasModelLearningSignal(array $evidenceSignals): bool
+    {
+        foreach ($evidenceSignals as $signal) {
+            $evidence = is_array($signal['evidence'] ?? null) ? $signal['evidence'] : [];
+            if (($signal['result'] ?? '') === 'passed'
+                && in_array((string) ($evidence['evidence_type'] ?? ''), [
+                    'test_result', 'build_result', 'lint_result', 'browser_result',
+                    'runtime_observation', 'user_confirmation', 'ci_result',
+                ], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<array<string, mixed>> $judgments */
+    private static function resultDecision(array $judgments): string
+    {
+        if ($judgments === []) {
+            return 'no_learning';
+        }
+        foreach ($judgments as $judgment) {
+            if (($judgment['decision'] ?? '') === 'conflict' || ($judgment['status'] ?? '') === 'contested') {
+                return 'contested';
+            }
+        }
+        foreach ($judgments as $judgment) {
+            if (($judgment['auto_validated'] ?? false) === true
+                || in_array((string) ($judgment['status'] ?? ''), ['validated', 'promotion_eligible', 'promoted'], true)) {
+                return 'validated';
+            }
+        }
+        foreach (['enrichment', 'new', 'duplicate_experience', 'known_project_knowledge'] as $decision) {
+            foreach ($judgments as $judgment) {
+                if (($judgment['decision'] ?? '') === $decision) {
+                    return $decision === 'new' ? 'candidate' : $decision;
+                }
+            }
+        }
+
+        return 'candidate';
     }
 
     private static function evidenceId(string $eventId, string $kind): string

@@ -73,9 +73,11 @@ final class ProjectAutoContext
             ),
             $refreshNote,
             $readinessNote,
-            'Routing contract: for every coding, diagnosis, review, refactor, or documentation task, call the MCP tool resolve_task_context first with repository set to the canonical repository above and task set to the current user request.',
-            'Follow returned exact paths, hashes, symbols, module documents, and validated skills. Avoid AI-side recursive repository scans while the returned index is fresh; fall back to normal local inspection only if the MCP is unavailable or explicitly reports that indexed context cannot satisfy the task.',
-            'For writes, keep using the host approval/policy boundary. MCP edits require prepare_edit followed by apply_edit and never bypass Codex safeguards.',
+            'Primary read contract: call get_edit_bundle once with this repository and the current task. It returns only exact guarded regions, symbol impact, docs, and matched skill paths; do not recursively scan or read whole files while the index is fresh.',
+            'Primary write contract: emit only replacement operations, then call apply_compact_edit once so PHP locally seals, applies, validates, reindexes, and rolls back failed validation. Granular read/edit tools are compatibility-only.',
+            'Usage receipt contract: only after an actual MCP tools/call in the current turn, begin every subsequent user-visible progress update and the final report with the exact prefix "Weline：".',
+            'This SessionStart block alone is not usage evidence. Verify the tool result contains _weline_mcp.used=true and a receipt_id before claiming the marker.',
+            'All writes remain inside the host approval/policy boundary; this MCP never bypasses Codex safeguards.',
         ]);
 
         return [
@@ -96,9 +98,24 @@ final class ProjectAutoContext
 
     /**
      * The caller must close every inherited database handle before invoking this method.
+     * @param list<string> $paths
      */
-    public static function spawnIndex(?string $configPath, ?string $dataDir, string $repository): ?int
+    public static function spawnIndex(
+        ?string $configPath,
+        ?string $dataDir,
+        string $repository,
+        array $paths = [],
+    ): ?int
     {
+        try {
+            $config = Config::load($configPath, $dataDir);
+            $sidecarPid = IndexSidecar::enqueue($config, $repository, $paths);
+            if ($sidecarPid !== null) {
+                return $sidecarPid;
+            }
+        } catch (Throwable $exception) {
+            self::appendLog($configPath, $dataDir, $exception);
+        }
         if (!self::canSpawn()) {
             return null;
         }
@@ -122,10 +139,15 @@ final class ProjectAutoContext
             $config = Config::load($configPath, $dataDir);
             $store = new Store($config);
             try {
-                (new IntelligenceService($store, $config))->call('index_project', [
+                $input = [
                     'repository' => $repository,
                     'mode' => 'incremental',
-                ]);
+                ];
+                $paths = Text::uniqueStrings($paths);
+                if ($paths !== []) {
+                    $input['paths'] = $paths;
+                }
+                (new IntelligenceService($store, $config))->call('index_project', $input);
             } finally {
                 $store->close();
             }
@@ -133,7 +155,7 @@ final class ProjectAutoContext
             self::appendLog($configPath, $dataDir, $exception);
         }
 
-        return 0;
+        return -1;
     }
 
     private static function appendLog(?string $configPath, ?string $dataDir, Throwable $exception): void
@@ -144,7 +166,7 @@ final class ProjectAutoContext
                 return;
             }
             [$message] = Redactor::string($exception->getMessage());
-            $line = sprintf("%s SessionStart index refresh: %s\n", Clock::now(), Text::truncate($message, 2_000));
+            $line = sprintf("%s background index refresh: %s\n", Clock::now(), Text::truncate($message, 2_000));
             @file_put_contents($directory . '/auto-index.log', $line, FILE_APPEND | LOCK_EX);
         } catch (Throwable) {
         }

@@ -37,7 +37,7 @@ final class OpenAIAnalyzer implements ModelAnalyzer
             'learning_extraction',
             self::extractionSchema(),
         );
-        if (!in_array($result['decision'] ?? '', ['candidate', 'no_learning'], true)) {
+        if (!in_array($result['decision'] ?? '', ['candidate', 'no_learning', 'discard'], true)) {
             throw new RuntimeException('Extractor returned an invalid decision');
         }
 
@@ -71,8 +71,8 @@ final class OpenAIAnalyzer implements ModelAnalyzer
             'transport' => 'native_php_https',
             'extractor_model' => $this->extractorModel,
             'verifier_model' => $this->verifierModel,
-            'extractor_prompt' => 'extractor.v1',
-            'verifier_prompt' => 'verifier.v1',
+            'extractor_prompt' => 'extractor.v2',
+            'verifier_prompt' => 'verifier.v2',
         ];
     }
 
@@ -166,8 +166,10 @@ final class OpenAIAnalyzer implements ModelAnalyzer
             'type' => 'object',
             'additionalProperties' => false,
             'required' => [
-                'title', 'category', 'problem_pattern', 'trigger', 'root_cause', 'correct_approach',
-                'reusable_rule', 'evidence_ids', 'exceptions', 'paths', 'languages', 'wrong_approaches',
+                'title', 'category', 'knowledge_type', 'surface', 'environment_constraints',
+                'problem_pattern', 'trigger', 'root_cause', 'correct_approach', 'reusable_rule',
+                'positive_example', 'negative_example', 'evidence_ids', 'exceptions', 'paths',
+                'languages', 'wrong_approaches',
             ],
             'properties' => [
                 'title' => ['type' => 'string'],
@@ -179,11 +181,19 @@ final class OpenAIAnalyzer implements ModelAnalyzer
                         'security_boundary', 'temporary_context',
                     ],
                 ],
+                'knowledge_type' => [
+                    'type' => 'string',
+                    'enum' => ['global_rule', 'project_rule', 'skill_knowledge', 'operational_observation'],
+                ],
+                'surface' => ['type' => 'string'],
+                'environment_constraints' => $strings,
                 'problem_pattern' => ['type' => 'string'],
                 'trigger' => ['type' => 'string'],
                 'root_cause' => ['type' => 'string'],
                 'correct_approach' => ['type' => 'string'],
                 'reusable_rule' => ['type' => 'string'],
+                'positive_example' => ['type' => 'string'],
+                'negative_example' => ['type' => 'string'],
                 'evidence_ids' => $strings,
                 'exceptions' => $strings,
                 'paths' => $strings,
@@ -197,7 +207,7 @@ final class OpenAIAnalyzer implements ModelAnalyzer
             'additionalProperties' => false,
             'required' => ['decision', 'experiences'],
             'properties' => [
-                'decision' => ['type' => 'string', 'enum' => ['candidate', 'no_learning']],
+                'decision' => ['type' => 'string', 'enum' => ['candidate', 'no_learning', 'discard']],
                 'experiences' => ['type' => 'array', 'items' => $draft],
             ],
         ];

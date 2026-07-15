@@ -18,14 +18,21 @@
              |                                  |
        sealed local edits                 Hooks / idle scanner /
                                           Stop child / LaunchAgent
+                                                   |
+                                                   v
+                                      evidence-gated skill projector
+                                      Codex classify -> PHP render
+                                      -> dev/ai/skills -> reindex
 ```
 
 - `learningctl`：轻量 Hook 接收器和人工管理 CLI。Hook 错误默认写 stderr 并降级为非阻断。
 - `learningd`：Job Worker，负责空闲会话扫描、lease、分析、重试、死信和审计；支持 `once`、`drain`、`run`。
 - `learning-mcp`：本地 STDIO MCP Server，不监听网络端口。
 - Personal plugin：Codex Host 启动层，自动发现 `learning-mcp` 和生命周期 Hooks；MCP 本身不能在未被 Host 启动前自我注册。
-- `ProjectAutoContext`：从 Session 的 `cwd/worktree` 解析 canonical Git root，生成最多 4,000 字符的确定性路由 Context，并在 Hook stdout/数据库句柄关闭后 fork 增量索引子进程。
+- `ProjectAutoContext`：从 Session 的 `cwd/worktree` 解析 canonical Git root，生成最多 4,000 字符的确定性路由 Context，并在 Hook stdout/数据库句柄关闭后把刷新请求交给 sidecar，不可用时再 fork 一次性子进程。
+- `IndexSidecar`：用私有 Unix socket 复用 PHP/SQLite 热状态，按项目合并 100ms 内的刷新；整仓请求覆盖定点请求，15 分钟空闲后自动退出。
 - `Scheduler`：显式管理 macOS LaunchAgent；不在安装/启动 MCP 时隐式改动系统。
+- `LearningSkillService`：从已验证项目经验构造受控分类输入，调用隔离 Codex 对 ID 分组；PHP 再按经验路径确定模块归属，在项目/模块 marker-owned 边界内渲染技能、索引之索引、事务化写入和定点重索引。
 - Learning SQLite：会话事件、证据、经验和审计的唯一真相源。
 - Project SQLite：代码/文档/Skill 索引、gzip 完整文本库和编辑事务的可重建覆盖层；每项目独立 WAL。
 
@@ -33,16 +40,16 @@
 
 ## Project intelligence flow
 
-1. 已启用插件的 Codex 新任务先启动 STDIO MCP，然后由 `SessionStart` 注入 canonical repository/index 位置和 `resolve_task_context` 路由契约。
+1. 已启用插件的 Codex 新任务先启动 STDIO MCP，然后由 `SessionStart` 注入 canonical repository/index 位置和 `get_edit_bundle → apply_compact_edit` 精简路由契约。
 2. `ProjectResolver` 以 canonical Git root、remote/root fingerprint 和 HEAD 绑定项目；不同 Checkout 使用不同项目库。
-3. `ProjectAutoContext` 返回 Hook 响应后异步调用 `index_project incremental`；索引锁避免同项目并发重建。
+3. `ProjectAutoContext` 返回 Hook 响应后向 `IndexSidecar` 投递刷新；Collector 会展开 Codex 的沙箱 Node 编排工具：纯 Browser/只读嵌套调用不刷新，`apply_patch` 走精确路径，动态 Shell/终端输入/未知嵌套工具保守退化为整仓 incremental。项目锁保护最终 SQLite 事务。
 4. `ProjectIndexer` 从 Git file list 发现文件，按配置排除第三方、生成产物、密钥、测试和大文件。
 5. 只有 size/mtime/hash 变化的文件进入 Parser；删除项从 SQLite cascade 清理。
 6. PHP/PHTML 由 `token_get_all` 解析结构；Markdown 由 Heading 分块；其他文本按有界行块处理。
 7. 同一写事务更新 `indexed_files/indexed_file_contents/chunks/symbols/relations/skills`、unicode FTS、trigram FTS 和稀疏 Feature Hash。
-8. `ProjectRetriever` 合并 exact、BM25、trigram、sparse-dot、relation proximity、freshness 和脱敏反馈，按 Token Budget 组装路径 Context；路径确定后，`get_indexed_files` 用一条 join 查询批量物化最多 50 个完整文件内容。
-9. `EditService::prepare` 把模型 Draft 解析成 sealed plan；`apply` 复核 HEAD/revision/read-set，写 Journal 并原子替换。
-10. Apply/Rollback 后同步 `indexPaths(changed_paths)`，因此下一次查询立即看到变化；外部改动由 `PostToolUse` 后台刷新，并在 freshness interval 后兜底校验。
+8. `get_edit_bundle` 对全部显式 `paths[]` 先做内容 Hash 定点刷新，再由 `ProjectRetriever` 执行一次 scoped chunk SQL 并在本地排序；无路径时才合并 exact/BM25/trigram/sparse-dot。多符号上游影响以 definitions + 最多三次合并 relation SQL 计算，不再 N 次 `inspectSymbol`。
+9. `apply_compact_edit` 先解析全部 project-relative target path，按字典序获取项目内的跨进程文件锁；相同文件的其他会话进入 `flock` 等待队列，多文件计划因固定顺序不会互相死锁。锁内先定点刷新所有目标并记录 submitted/locked/refreshed revision，再让 `EditService::prepare` 封存 Draft，由 `apply` 复核 HEAD/read-set、写 Journal 并原子替换；一次性 Token 不返回模型。
+10. 文件整体 Hash 已变化时，只允许唯一文本锚点或带 digest 的 symbol/section/range 安全重定位；目标漂移则再次定点刷新索引，把 `metadata.task` 与旧锚点用于检索最新版区域，并返回 `EDIT_REPLAN_REQUIRED + latest_regions + original_task + retry_contract`。固定验证、必要回滚、最终态定点索引和知识协调都在文件锁内完成，所有成功/失败路径随后立即释放；进程异常退出时内核自动释放 `flock`。
 11. `KnowledgeService` 根据 module code/docs digest 和确定性符号事实报告漂移，并生成 `doc/ai` 派生文件的 Edit Plan。
 12. `CodexInvoker` 只在显式启用时，以 ephemeral/read-only 子进程返回 `doc-sync.v1`；所有写入仍回到外层 EditService。
 
@@ -54,12 +61,14 @@
 2. Collector 解析有界 JSON，识别项目，递归脱敏，计算内容 Hash/Dedup Key，写入不可变 Event。
 3. `Stop` 关闭 Session，以事件检查点构造 `analyze_session:<session>:php-v1:<checkpoint>` 幂等键并入队；默认 fork 短 worker。
 4. `learningd` 每轮也扫描超过 `session_idle_after` 未活动的 active Session。它不强行关闭会话，之后出现新事件时用新检查点增量分析。
-5. 分析器检测用户纠正、Agent 撤回、命令/测试/浏览器/运行时结果，先创建 Evidence，再生成 `candidate` Experience。
-6. 相同项目和指纹会合并来源、证据与版本，而不是复制规则。
-7. 人工通过 `mark_experience` 或 CLI 审核；状态门禁检查置信度、证据、结果验证和开放冲突。
-8. MCP 只把成熟、未过期、作用域匹配且无开放冲突的经验包装为 Context Pack。
-9. `record_outcome` 追加使用反馈；负面结果进入复审队列。
-10. `request_promotion` 只创建 Proposal。目标文件写入、审批、发布和回滚在当前版本外部完成。
+5. 分析器检测用户纠正、Agent 撤回和测试/构建/静态检查/浏览器/运行时结果，先创建 Evidence；有明确纠正或成功高信号结果时，隔离 Codex 以 `session-learning.v1` 提取窄范围候选，PHP 再复核 Evidence ID、类型和支持度。
+6. `LearningNoveltyService` 同时比较同项目 Experience 与 Project SQLite 的代码、文档、规则、配置和技能：重复合并、已知知识跳过、相关新增标记 enrichment、反向规则记录 Contradiction，其余标记 new。
+7. 强用户意图或成功非模型结果满足置信度和状态门禁、且无冲突时可自动转为 `validated`；弱技术主张仍为 Candidate，冲突为 Contested。人工 `mark_experience` 仍用于复核和例外处理。
+8. Worker 在分析完成后按经验版本和投影指纹排入 `sync_learning_skills`；隔离 Codex 只分组 ID，PHP 渲染项目级 `MCP学习-*`，并把路径命中的经验子集投影到各模块 `doc/ai/skills`。
+9. 项目索引之索引、模块索引/Manifest 与技能定点进入 Project SQLite；`get_edit_bundle` 从已知路径推断模块并批量取回有界正文，`UserPromptSubmit` 通过同一语义路由注入当前 Prompt 的命中技能。
+10. MCP 只把成熟、未过期、作用域匹配且无开放冲突的经验包装为 Context Pack。
+11. `record_outcome` 追加使用反馈；负面结果进入复审队列。
+12. `request_promotion` 只创建 Proposal。目标文件写入、审批、发布和回滚在当前版本外部完成。
 
 ## Periodic analysis
 
@@ -91,7 +100,7 @@ candidate -> corroborated -> validated -> promotion_eligible -> external approva
                        +-> deprecated+-> validated
 ```
 
-`promoted` 不能由 MCP/CLI 设置。用户对自身意图、偏好和验收标准的纠正权重高；用户对技术事实的主张仍需代码、测试或运行时证据验证。
+`promoted` 不能由 MCP/CLI 设置。用户对自身意图、偏好和验收标准的纠正权重高，可在无冲突时自动验证；用户对技术事实的主张仍需测试、构建、静态检查、浏览器或运行时结果验证。自动验证只改变 Experience 成熟度，不写全局政策。
 
 ## Retrieval
 
@@ -103,16 +112,13 @@ candidate -> corroborated -> validated -> promotion_eligible -> external approva
 
 Project Intelligence 使用另一套混合排序：exact identifier/path → FTS5 BM25/trigram → deterministic sparse vector → symbol relation → freshness/feedback。稀疏向量不依赖网络或模型，也不冒充 Neural Embedding；精确符号不会被语义相似度取代。检索层只负责一次确定路径，内容层再以一次数据库调用返回这批文件，避免 N 个文件产生 N 次工具往返。
 
-## Optional model path
+## Model paths
 
-当 `analysis.provider: openai`：
+默认 `analysis.provider: codex`：隔离的本机 Codex CLI 只接收脱敏、限长的 Session/Event/Evidence Bundle，以 `session-learning.v1` 返回候选；它不能读仓库、运行命令、调用 MCP 或写文件。PHP 验证所有 Evidence ID，并按证据类型确定支持度，随后由知识判重和状态门禁作最终裁决。
 
-1. Extractor 接收脱敏、限长的 Episode Bundle，通过 Responses API Structured Outputs 返回严格 JSON。
-2. 服务端检查所有 Evidence ID 必须来自本地 Evidence Index。
-3. 独立 Verifier 再次判断支持度、范围和反证。
-4. PHP 状态门禁仍是最终裁决者；模型不能直接验证、晋升或写策略文件。
+`analysis.provider: none` 保留纯 PHP 的用户纠正/撤回分析，不会从“AI 找到并验证的成功做法”中提取新规则。`analysis.provider: openai` 则继续使用 Responses API 双阶段 Structured Outputs；无论哪条模型路径，模型都不能直接验证、晋升或写策略文件。
 
-Prompt 位于 `prompts/`，JSON 契约位于 `schemas/`。默认 provider 为 `none`，完全离线。
+Prompt 位于 `prompts/`，JSON 契约位于 `schemas/`。学习技能分类是独立的第二条 Codex 路径：它只发送脱敏的已验证 Experience 摘要，并要求 `learning-skills.v1` 分组输出；规则内容不由模型生成，模块归属也由 PHP 从可信作用域路径计算。完全离线时设置 `analysis.provider: none`，并同时关闭 `knowledge.learning_skills.enabled` 与 `knowledge.codex.enabled`。
 
 ## Storage
 

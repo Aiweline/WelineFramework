@@ -10,6 +10,8 @@ use Throwable;
 
 final class ProjectIndexer
 {
+    private const EXPLICIT_INDEX_PATHS_METADATA_KEY = 'explicit_index_paths';
+
     private SparseVectorizer $vectorizer;
     private PhpSymbolParser $phpParser;
 
@@ -373,10 +375,100 @@ final class ProjectIndexer
                 }
             }
         }
+
+        // Exact paths are an explicit user/agent scope. Remember only eligible
+        // Git-ignored files so later whole-project refreshes retain them without
+        // broadening discovery to an ignored parent directory.
+        $rememberedPaths = $this->explicitIndexPaths();
+        $nextRemembered = array_fill_keys($rememberedPaths, true);
+        $candidates = $requestedPaths === null ? $rememberedPaths : $requestedPaths;
+        foreach ($candidates as $path) {
+            if (isset($paths[$path])) {
+                unset($nextRemembered[$path]);
+                continue;
+            }
+            if (!$this->pathAllowed($path)) {
+                unset($nextRemembered[$path]);
+                continue;
+            }
+            try {
+                $absolute = $this->index->absolutePath($path);
+            } catch (Throwable) {
+                unset($nextRemembered[$path]);
+                continue;
+            }
+            if (!is_file($absolute)) {
+                unset($nextRemembered[$path]);
+                continue;
+            }
+            $paths[$path] = true;
+            $nextRemembered[$path] = true;
+        }
+        $nextRememberedPaths = array_keys($nextRemembered);
+        sort($nextRememberedPaths, SORT_STRING);
+        if ($nextRememberedPaths !== $rememberedPaths) {
+            $this->storeExplicitIndexPaths($nextRememberedPaths);
+        }
+
         $result = array_keys($paths);
         sort($result, SORT_STRING);
 
         return $result;
+    }
+
+    /** @return list<string> */
+    private function explicitIndexPaths(): array
+    {
+        $statement = $this->index->pdo()->prepare(
+            'SELECT value_json FROM metadata WHERE metadata_key = :key LIMIT 1'
+        );
+        $statement->execute(['key' => self::EXPLICIT_INDEX_PATHS_METADATA_KEY]);
+        $value = $statement->fetchColumn();
+        if (!is_string($value)) {
+            return [];
+        }
+        try {
+            $decoded = Json::decode($value, []);
+        } catch (Throwable) {
+            return [];
+        }
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $paths = [];
+        foreach ($decoded as $path) {
+            if (!is_string($path) || trim($path) === '') {
+                continue;
+            }
+            try {
+                $normalized = $this->index->normalizeRelativePath($path);
+            } catch (Throwable) {
+                continue;
+            }
+            if ($normalized !== '') {
+                $paths[$normalized] = true;
+            }
+        }
+        $result = array_keys($paths);
+        sort($result, SORT_STRING);
+
+        return $result;
+    }
+
+    /** @param list<string> $paths */
+    private function storeExplicitIndexPaths(array $paths): void
+    {
+        $statement = $this->index->pdo()->prepare(
+            'INSERT INTO metadata(metadata_key, value_json, updated_at)
+             VALUES(:key, :value, :updated_at)
+             ON CONFLICT(metadata_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at'
+        );
+        $statement->execute([
+            'key' => self::EXPLICIT_INDEX_PATHS_METADATA_KEY,
+            'value' => Json::encode($paths),
+            'updated_at' => Clock::now(),
+        ]);
     }
 
     /** @return array<string, array<string,mixed>> */
@@ -445,9 +537,24 @@ final class ProjectIndexer
         return $this->extensionAllowed($extension);
     }
 
+    private function isConfiguredSkillTreePath(string $path): bool
+    {
+        $prefix = LearningSkillService::configuredRepositoryOutputPrefix(
+            $this->config,
+            $this->index->root(),
+        );
+        if ($prefix === null) {
+            return false;
+        }
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+
+        return $path === $prefix || str_starts_with($path, $prefix . '/');
+    }
+
     private function isRetainedKnowledgePath(string $path): bool
     {
-        return preg_match('~(?:^|/)AGENTS\.md$~i', $path) === 1
+        return $this->isConfiguredSkillTreePath($path)
+            || preg_match('~(?:^|/)AGENTS\.md$~i', $path) === 1
             || in_array($path, ['AI-ENTRY.md', 'AI-README.md', 'dev/ai/AI-RULES-PACK.md', 'dev/ai/global-constraints.md'], true)
             || str_starts_with($path, 'dev/ai/skills/')
             || str_starts_with($path, 'dev/ai/diagrams/')
@@ -559,6 +666,7 @@ final class ProjectIndexer
         }
         if (strcasecmp(basename($path), 'SKILL.md') === 0
             && (str_starts_with($path, 'dev/ai/skills/')
+                || $this->isConfiguredSkillTreePath($path)
                 || preg_match('~^app/code/[^/]+/[^/]+/doc/ai/skills/~', $path) === 1)) {
             return 'skill';
         }
@@ -785,6 +893,14 @@ final class ProjectIndexer
             $description = trim($paragraph[1]);
         }
 
+        $projectSkill = str_starts_with($path, 'dev/ai/skills/')
+            || $this->isConfiguredSkillTreePath($path);
+        $generatedModuleLearningSkill = preg_match(
+            '~^app/code/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/doc/ai/skills/[^/]+/SKILL\.md$~D',
+            $path
+        ) === 1 && str_contains($content, '<!-- weline:mcp-learning-skill:auto-generated -->');
+        $actionable = $projectSkill || $generatedModuleLearningSkill;
+
         return [
             'skill_id' => 'skill-' . substr(hash('sha256', $path), 0, 40),
             'path' => $path,
@@ -793,9 +909,15 @@ final class ProjectIndexer
             'module_vendor' => $module['vendor'] ?? '',
             'module_name' => $module['module'] ?? '',
             'triggers' => $triggers,
-            'status' => str_starts_with($path, 'dev/ai/skills/') ? 'canonical' : 'candidate',
+            'status' => $projectSkill ? 'canonical' : ($generatedModuleLearningSkill ? 'validated' : 'candidate'),
             'source_hash' => $hash,
-            'metadata' => ['source' => 'repository', 'actionable' => str_starts_with($path, 'dev/ai/skills/')],
+            'metadata' => [
+                'source' => 'repository',
+                'actionable' => $actionable,
+                'ownership' => $projectSkill
+                    ? 'project_skill'
+                    : ($generatedModuleLearningSkill ? 'mcp_learning_marker' : 'module_skill'),
+            ],
         ];
     }
 

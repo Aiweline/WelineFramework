@@ -8,6 +8,8 @@ use Throwable;
 
 final class McpServer
 {
+    private const SERVER_NAME = 'weline-project-intelligence';
+    private const RESPONSE_PREFIX = 'Weline：';
     private const LATEST_PROTOCOL = '2025-11-25';
     private const SUPPORTED_PROTOCOLS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
 
@@ -83,7 +85,7 @@ final class McpServer
             'protocolVersion' => $protocol,
             'capabilities' => ['tools' => ['listChanged' => false]],
             'serverInfo' => [
-                'name' => 'weline-project-intelligence',
+                'name' => self::SERVER_NAME,
                 'title' => 'Weline Project Intelligence MCP',
                 'version' => ToolService::VERSION,
             ],
@@ -105,30 +107,76 @@ final class McpServer
         try {
             $result = $this->tools->call($name, $arguments);
 
-            return [
-                'content' => [['type' => 'text', 'text' => Json::encode($result, true)]],
-                'structuredContent' => $result,
-                'isError' => false,
-            ];
+            return $this->toolResponse($name, $result, false);
         } catch (ToolException $exception) {
-            $result = $exception->envelope();
-
-            return [
-                'content' => [['type' => 'text', 'text' => Json::encode($result, true)]],
-                'structuredContent' => $result,
-                'isError' => true,
-            ];
+            return $this->toolResponse($name, $exception->envelope(), true);
         } catch (Throwable $exception) {
             [$message] = Redactor::string($exception->getMessage());
             $toolError = new ToolException('INTERNAL_ERROR', Text::truncate($message, 500), false);
-            $result = $toolError->envelope();
 
-            return [
-                'content' => [['type' => 'text', 'text' => Json::encode($result, true)]],
-                'structuredContent' => $result,
-                'isError' => true,
-            ];
+            return $this->toolResponse($name, $toolError->envelope(), true);
         }
+    }
+
+    /** @param array<string, mixed> $result */
+    private function toolResponse(string $tool, array $result, bool $isError): array
+    {
+        $receiptId = Ids::make('weline-mcp');
+        $mirrorBundleInContent = $tool === 'get_edit_bundle';
+        $result['_weline_mcp'] = [
+            'used' => true,
+            'server' => self::SERVER_NAME,
+            'version' => ToolService::VERSION,
+            'tool' => $tool,
+            'called_at' => Clock::now(),
+            'receipt_id' => $receiptId,
+            'result_digest' => Ids::hash(Json::canonical($result)),
+            'is_error' => $isError,
+            'response_format' => 'structuredContent',
+            'legacy_content' => $mirrorBundleInContent ? 'full_bundle_mirror' : 'summary_only',
+            'response_prefix' => self::RESPONSE_PREFIX,
+            'report_contract' => 'Begin every subsequent user-visible progress update and the final report in this turn with the exact response_prefix.',
+        ];
+        $contentPayload = $mirrorBundleInContent
+            ? $result
+            : $this->legacyToolSummary($tool, $result, $isError, $receiptId);
+
+        return [
+            'content' => [[
+                'type' => 'text',
+                'text' => Json::encode($contentPayload),
+            ]],
+            'structuredContent' => $result,
+            'isError' => $isError,
+        ];
+    }
+
+    /** @param array<string,mixed> $result
+     *  @return array<string,mixed>
+     */
+    private function legacyToolSummary(string $tool, array $result, bool $isError, string $receiptId): array
+    {
+        $summary = [
+            'status' => $isError ? 'error' : 'ok',
+            'tool' => $tool,
+            'receipt_id' => $receiptId,
+            'use' => 'structuredContent',
+        ];
+        foreach (['request_id', 'query_id', 'edit_id', 'state', 'region_count', 'impact_risk', 'index_revision'] as $key) {
+            if (isset($result[$key]) && (is_scalar($result[$key]) || $result[$key] === null)) {
+                $summary[$key] = $result[$key];
+            }
+        }
+        if (isset($result['paths']) && is_array($result['paths'])) {
+            $summary['path_count'] = count($result['paths']);
+        }
+        if ($isError) {
+            $error = is_array($result['error'] ?? null) ? $result['error'] : $result;
+            $summary['code'] = Text::truncate((string) ($error['code'] ?? 'ERROR'), 80);
+            $summary['message'] = Text::truncate((string) ($error['message'] ?? 'Tool call failed'), 240);
+        }
+
+        return $summary;
     }
 
     /** @param resource $output

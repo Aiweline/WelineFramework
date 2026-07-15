@@ -43,6 +43,13 @@ final class Config
             $values['data_dir'] = $environmentDataDir;
         }
         $values['data_dir'] = self::expandPath((string) $values['data_dir']);
+        $environmentSkillOutputDirectory = getenv('LEARNING_MCP_SKILL_OUTPUT_DIR');
+        if (is_string($environmentSkillOutputDirectory) && trim($environmentSkillOutputDirectory) !== '') {
+            $values['knowledge']['learning_skills']['output_directory'] = $environmentSkillOutputDirectory;
+        }
+        $values['knowledge']['learning_skills']['output_directory'] = trim(
+            (string) $values['knowledge']['learning_skills']['output_directory']
+        );
         $values['analysis']['provider'] = strtolower(trim((string) $values['analysis']['provider']));
         $values['analysis']['base_url'] = rtrim(trim((string) $values['analysis']['base_url']), '/');
         $values['retrieval']['minimum_status'] = strtolower(trim((string) $values['retrieval']['minimum_status']));
@@ -116,22 +123,28 @@ final class Config
         if ($path === '') {
             throw new RuntimeException('Path cannot be empty');
         }
-        if ($path === '~' || str_starts_with($path, '~/')) {
+        if ($path === '~' || str_starts_with($path, '~/') || str_starts_with($path, '~\\')) {
             $home = getenv('HOME');
             if (!is_string($home) || $home === '') {
-                throw new RuntimeException('HOME is unavailable for path expansion');
+                $home = getenv('USERPROFILE');
+            }
+            if (!is_string($home) || $home === '') {
+                throw new RuntimeException('HOME and USERPROFILE are unavailable for path expansion');
             }
             $path = $home . substr($path, 1);
         }
-        if (!str_starts_with($path, '/')) {
+        $absolute = str_starts_with($path, '/')
+            || str_starts_with($path, '\\')
+            || preg_match('~^[A-Za-z]:[\\\\/]~D', $path) === 1;
+        if (!$absolute) {
             $cwd = getcwd();
             if ($cwd === false) {
                 throw new RuntimeException('Unable to resolve current directory');
             }
-            $path = $cwd . '/' . $path;
+            $path = $cwd . DIRECTORY_SEPARATOR . $path;
         }
 
-        return rtrim($path, '/');
+        return rtrim($path, "/\\");
     }
 
     /** @return array<string, mixed> */
@@ -146,7 +159,7 @@ final class Config
                 'max_event_bytes' => 8_388_608,
             ],
             'analysis' => [
-                'provider' => 'none',
+                'provider' => 'codex',
                 'api_key_env' => 'OPENAI_API_KEY',
                 'base_url' => 'https://api.openai.com/v1',
                 'extractor_model' => '',
@@ -154,6 +167,18 @@ final class Config
                 'max_session_tokens' => 50_000,
                 'request_timeout' => '60s',
                 'require_non_model_evidence_for_technical_rules' => true,
+                'automatic_learning' => [
+                    'enabled' => true,
+                    'auto_validate' => true,
+                    'max_candidates' => 6,
+                    'max_existing_experiences' => 100,
+                    'max_project_matches' => 12,
+                    'duplicate_similarity' => 0.86,
+                    'related_similarity' => 0.55,
+                    'conflict_similarity' => 0.62,
+                    'project_duplicate_similarity' => 0.9,
+                    'minimum_validation_confidence' => 0.9,
+                ],
             ],
             'retrieval' => [
                 'minimum_status' => 'validated',
@@ -185,12 +210,15 @@ final class Config
             'index' => [
                 'enabled' => true,
                 'auto_refresh' => true,
-                'refresh_interval' => '10s',
+                'sidecar_enabled' => true,
+                'refresh_interval' => '60s',
                 'max_file_bytes' => 524_288,
                 'max_chunk_chars' => 6_000,
                 'context_token_budget' => 6_000,
                 'vector_dimensions' => 2_048,
                 'vector_max_terms' => 24,
+                'sqlite_mmap_bytes' => 268_435_456,
+                'sqlite_cache_kib' => 16_384,
                 'include_tests' => false,
                 'allowed_extensions' => [
                     'php', 'phtml', 'md', 'markdown', 'txt', 'json', 'yaml', 'yml', 'xml', 'toml', 'ini',
@@ -221,8 +249,19 @@ final class Config
                 'auto_generate_skills' => true,
                 'auto_doc_sync' => false,
                 'generated_skill_status' => 'validated',
+                'learning_skills' => [
+                    'enabled' => true,
+                    'output_directory' => '',
+                    'minimum_confidence' => 0.9,
+                    'max_experiences' => 100,
+                    'max_skills' => 12,
+                    'max_module_skill_projections' => 64,
+                    'inject_on_prompt' => true,
+                    'prompt_skill_limit' => 3,
+                    'prompt_token_budget' => 2_400,
+                ],
                 'codex' => [
-                    'enabled' => false,
+                    'enabled' => true,
                     'binary' => '',
                     'model' => '',
                     'timeout' => '120s',
@@ -252,6 +291,18 @@ final class Config
                 'max_session_tokens' => true,
                 'request_timeout' => true,
                 'require_non_model_evidence_for_technical_rules' => true,
+                'automatic_learning' => [
+                    'enabled' => true,
+                    'auto_validate' => true,
+                    'max_candidates' => true,
+                    'max_existing_experiences' => true,
+                    'max_project_matches' => true,
+                    'duplicate_similarity' => true,
+                    'related_similarity' => true,
+                    'conflict_similarity' => true,
+                    'project_duplicate_similarity' => true,
+                    'minimum_validation_confidence' => true,
+                ],
             ],
             'retrieval' => [
                 'minimum_status' => true,
@@ -278,12 +329,15 @@ final class Config
             'index' => [
                 'enabled' => true,
                 'auto_refresh' => true,
+                'sidecar_enabled' => true,
                 'refresh_interval' => true,
                 'max_file_bytes' => true,
                 'max_chunk_chars' => true,
                 'context_token_budget' => true,
                 'vector_dimensions' => true,
                 'vector_max_terms' => true,
+                'sqlite_mmap_bytes' => true,
+                'sqlite_cache_kib' => true,
                 'include_tests' => true,
                 'allowed_extensions' => true,
                 'excluded_paths' => true,
@@ -301,6 +355,17 @@ final class Config
                 'auto_generate_skills' => true,
                 'auto_doc_sync' => true,
                 'generated_skill_status' => true,
+                'learning_skills' => [
+                    'enabled' => true,
+                    'output_directory' => true,
+                    'minimum_confidence' => true,
+                    'max_experiences' => true,
+                    'max_skills' => true,
+                    'max_module_skill_projections' => true,
+                    'inject_on_prompt' => true,
+                    'prompt_skill_limit' => true,
+                    'prompt_token_budget' => true,
+                ],
                 'codex' => [
                     'enabled' => true,
                     'binary' => true,
@@ -355,8 +420,8 @@ final class Config
             throw new RuntimeException('Only mode=local is supported');
         }
         $provider = strtolower(trim((string) $values['analysis']['provider']));
-        if (!in_array($provider, ['none', 'openai'], true)) {
-            throw new RuntimeException('analysis.provider must be none or openai');
+        if (!in_array($provider, ['none', 'codex', 'openai'], true)) {
+            throw new RuntimeException('analysis.provider must be none, codex, or openai');
         }
         if ($provider === 'openai') {
             if (trim((string) $values['analysis']['extractor_model']) === ''
@@ -378,10 +443,12 @@ final class Config
         foreach ([
             'collector.redact_secrets', 'collector.allow_cross_project',
             'analysis.require_non_model_evidence_for_technical_rules',
+            'analysis.automatic_learning.enabled', 'analysis.automatic_learning.auto_validate',
             'retrieval.include_candidates', 'promotion.automatic',
             'privacy.redact_before_model', 'scheduler.auto_process_on_stop',
-            'index.enabled', 'index.auto_refresh', 'index.include_tests',
+            'index.enabled', 'index.auto_refresh', 'index.sidecar_enabled', 'index.include_tests',
             'editing.enabled', 'knowledge.auto_generate_skills', 'knowledge.auto_doc_sync',
+            'knowledge.learning_skills.enabled', 'knowledge.learning_skills.inject_on_prompt',
             'knowledge.codex.enabled',
         ] as $boolean) {
             if (!is_bool(self::nested($values, $boolean))) {
@@ -414,6 +481,9 @@ final class Config
         foreach ([
             'collector.max_event_bytes' => [1_024, 67_108_864],
             'analysis.max_session_tokens' => [1_000, 1_000_000],
+            'analysis.automatic_learning.max_candidates' => [1, 12],
+            'analysis.automatic_learning.max_existing_experiences' => [1, 100],
+            'analysis.automatic_learning.max_project_matches' => [1, 50],
             'retrieval.max_items' => [1, 20],
             'retrieval.token_budget' => [128, 12_000],
             'scheduler.max_attempts' => [1, 20],
@@ -422,15 +492,47 @@ final class Config
             'index.context_token_budget' => [128, 32_000],
             'index.vector_dimensions' => [128, 65_536],
             'index.vector_max_terms' => [8, 1_024],
+            'index.sqlite_mmap_bytes' => [0, 2_147_418_112],
+            'index.sqlite_cache_kib' => [1_024, 262_144],
             'editing.max_files' => [1, 200],
             'editing.max_file_bytes' => [1_024, 16_777_216],
             'editing.max_total_bytes' => [1_024, 67_108_864],
             'knowledge.codex.max_context_chars' => [1_024, 1_000_000],
+            'knowledge.learning_skills.max_experiences' => [1, 100],
+            'knowledge.learning_skills.max_skills' => [1, 24],
+            'knowledge.learning_skills.max_module_skill_projections' => [0, 256],
+            'knowledge.learning_skills.prompt_skill_limit' => [1, 5],
+            'knowledge.learning_skills.prompt_token_budget' => [128, 4_000],
         ] as $path => [$minimum, $maximum]) {
             $value = self::nested($values, $path);
             if (!is_int($value) || $value < $minimum || $value > $maximum) {
                 throw new RuntimeException(sprintf('%s must be an integer between %d and %d', $path, $minimum, $maximum));
             }
+        }
+        foreach ([
+            'analysis.automatic_learning.duplicate_similarity' => [0.5, 1.0],
+            'analysis.automatic_learning.related_similarity' => [0.1, 0.95],
+            'analysis.automatic_learning.conflict_similarity' => [0.3, 1.0],
+            'analysis.automatic_learning.project_duplicate_similarity' => [0.5, 1.0],
+            'analysis.automatic_learning.minimum_validation_confidence' => [0.78, 1.0],
+        ] as $path => [$minimum, $maximum]) {
+            $value = self::nested($values, $path);
+            if ((!is_int($value) && !is_float($value))
+                || (float) $value < $minimum
+                || (float) $value > $maximum) {
+                throw new RuntimeException(sprintf('%s must be numeric between %.2f and %.2f', $path, $minimum, $maximum));
+            }
+        }
+        if ((float) $values['analysis']['automatic_learning']['related_similarity']
+            >= (float) $values['analysis']['automatic_learning']['duplicate_similarity']) {
+            throw new RuntimeException('analysis.automatic_learning.related_similarity must be below duplicate_similarity');
+        }
+        if ((bool) $values['analysis']['automatic_learning']['auto_validate']
+            && !(bool) $values['analysis']['automatic_learning']['enabled']) {
+            throw new RuntimeException('analysis.automatic_learning.auto_validate requires automatic_learning.enabled');
+        }
+        if ($provider === 'codex' && !(bool) $values['knowledge']['codex']['enabled']) {
+            throw new RuntimeException('analysis.provider=codex requires knowledge.codex.enabled');
         }
         $targets = $values['promotion']['allowed_targets'];
         if (!is_array($targets) || $targets === [] || !array_is_list($targets)) {
@@ -452,6 +554,22 @@ final class Config
         }
         if ((bool) $values['knowledge']['auto_doc_sync'] && !(bool) $values['knowledge']['codex']['enabled']) {
             throw new RuntimeException('knowledge.auto_doc_sync requires knowledge.codex.enabled');
+        }
+        $skillOutputDirectory = $values['knowledge']['learning_skills']['output_directory'];
+        if (!is_string($skillOutputDirectory)
+            || preg_match('/[\x00-\x1F\x7F]/', $skillOutputDirectory) === 1
+            || preg_match('~(?:^|[\\\\/])\.\.(?:[\\\\/]|$)~', $skillOutputDirectory) === 1) {
+            throw new RuntimeException('knowledge.learning_skills.output_directory must be a safe path without control characters or .. segments');
+        }
+        $minimumConfidence = $values['knowledge']['learning_skills']['minimum_confidence'];
+        if (!is_int($minimumConfidence) && !is_float($minimumConfidence)) {
+            throw new RuntimeException('knowledge.learning_skills.minimum_confidence must be numeric');
+        }
+        if ((float) $minimumConfidence < 0.78 || (float) $minimumConfidence > 1.0) {
+            throw new RuntimeException('knowledge.learning_skills.minimum_confidence must be between 0.78 and 1.0');
+        }
+        if ((bool) $values['knowledge']['learning_skills']['enabled'] && !(bool) $values['knowledge']['codex']['enabled']) {
+            throw new RuntimeException('knowledge.learning_skills.enabled requires knowledge.codex.enabled');
         }
     }
 

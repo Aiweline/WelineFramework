@@ -21,6 +21,8 @@ final class EditService
         'create_file' => true,
     ];
 
+    private const MAX_PARALLEL_STAGE_WORKERS = 4;
+
     private ProcessRunner $runner;
 
     /** @var array<string, string> */
@@ -44,7 +46,7 @@ final class EditService
      * @param array<string, mixed> $draft
      * @return array<string, mixed>
      */
-    public function prepare(array $draft): array
+    public function prepare(array $draft, bool $allowTargetRebase = false): array
     {
         $this->assertEnabled();
         $schemaVersion = (string) ($draft['schema_version'] ?? '');
@@ -85,6 +87,7 @@ final class EditService
         $files = [];
         $ranges = [];
         $resolvedOperations = [];
+        $rebasedFiles = [];
         foreach ($rawOperations as $operationIndex => $rawOperation) {
             if (!is_array($rawOperation)) {
                 throw new ToolException('EDIT_PLAN_INVALID', 'Each edit operation must be an object');
@@ -130,16 +133,47 @@ final class EditService
                 throw new ToolException('EDIT_PLAN_CONFLICT', 'Existing-file operation conflicts with create_file');
             }
             $expectedFileHash = $this->requiredExpectedFileHash($operation);
-            if (!$this->hashEquals($expectedFileHash, (string) $files[$path]['hash'])) {
+            $actualFileHash = (string) $files[$path]['hash'];
+            $fileHashChanged = !$this->hashEquals($expectedFileHash, $actualFileHash);
+            if ($fileHashChanged && !$allowTargetRebase) {
                 throw new ToolException(
                     'EDIT_FILE_STALE',
                     'Edit operation expected file hash does not match the workspace',
                     true,
-                    ['path' => $path, 'actual_sha256' => $files[$path]['hash']],
+                    ['path' => $path, 'actual_sha256' => $actualFileHash],
                 );
             }
 
-            $resolved = $this->resolveRange($operation, (string) $files[$path]['content']);
+            try {
+                $resolved = $this->resolveRange($operation, (string) $files[$path]['content']);
+                if ($fileHashChanged) {
+                    $this->assertTargetCanRebase($operation, (string) $files[$path]['content'], $resolved);
+                }
+            } catch (ToolException $exception) {
+                if (!$fileHashChanged || !$allowTargetRebase) {
+                    throw $exception;
+                }
+                throw new ToolException(
+                    'EDIT_REBASE_TARGET_CHANGED',
+                    'The latest file no longer contains the previously planned target',
+                    true,
+                    [
+                        'path' => $path,
+                        'cause_code' => $exception->errorCode,
+                        'cause_details' => $exception->details,
+                        'expected_sha256' => $this->plainHash($expectedFileHash),
+                        'actual_sha256' => $actualFileHash,
+                    ],
+                );
+            }
+
+            if ($fileHashChanged) {
+                $rebasedFiles[$path] = [
+                    'path' => $path,
+                    'from_sha256' => $this->plainHash($expectedFileHash),
+                    'to_sha256' => $actualFileHash,
+                ];
+            }
             $resolved['operation_index'] = $operationIndex;
             foreach ($ranges[$path] ?? [] as $existingRange) {
                 if ($this->rangesConflict($resolved, $existingRange)) {
@@ -152,7 +186,7 @@ final class EditService
                 }
             }
             $ranges[$path][] = $resolved;
-            $resolvedOperations[] = $this->publicResolvedOperation($operation, $resolved, $expectedFileHash);
+            $resolvedOperations[] = $this->publicResolvedOperation($operation, $resolved, $actualFileHash);
         }
 
         if (count($files) > $this->maxFiles()) {
@@ -179,6 +213,7 @@ final class EditService
             $this->assertFileBudget($path, $post);
             $files[$path]['post_content'] = $post;
         }
+        ksort($files, SORT_STRING);
         foreach ($files as $file) {
             $totalBytes += strlen((string) $file['post_content']);
         }
@@ -211,6 +246,7 @@ final class EditService
                     'post_sha256' => hash('sha256', (string) $file['post_content']),
                     'pre_bytes' => strlen((string) $file['content']),
                     'post_bytes' => strlen((string) $file['post_content']),
+                    'operation_count' => ($file['create'] ?? false) === true ? 1 : count($ranges[$path] ?? []),
                     'mode' => (int) $file['mode'],
                     'before_ref' => $beforeReference,
                     'after_ref' => $afterReference,
@@ -227,6 +263,9 @@ final class EditService
                 'operations' => $resolvedOperations,
                 'validation_profile' => $validationProfile,
             ];
+            if ($rebasedFiles !== []) {
+                $plan['rebased_files'] = array_values($rebasedFiles);
+            }
             if (isset($draft['metadata']) && is_array($draft['metadata'])) {
                 [$metadata] = Redactor::value($draft['metadata']);
                 $plan['metadata'] = $metadata;
@@ -263,6 +302,7 @@ final class EditService
                 'expires_at' => $expiresAt,
                 'project_revision' => $revision,
                 'base_commit' => $currentCommit,
+                'rebased_files' => array_values($rebasedFiles),
                 'preview' => $this->snapshotPreview($snapshots),
             ];
         } catch (Throwable $exception) {
@@ -272,14 +312,18 @@ final class EditService
     }
 
     /** @return array<string, mixed> */
-    public function apply(string $token, string $planDigest = ''): array
-    {
+    public function apply(
+        string $token,
+        string $planDigest = '',
+        bool $deferIndex = false,
+        bool $allowRevisionAdvance = false,
+    ): array {
         $this->assertEnabled();
         if (trim($token) === '') {
             throw new ToolException('EDIT_TOKEN_REQUIRED', 'An edit apply token is required');
         }
 
-        return $this->withProjectLock(function () use ($token, $planDigest): array {
+        return $this->withProjectLock(function () use ($token, $planDigest, $deferIndex, $allowRevisionAdvance): array {
             $row = $this->findTransactionByToken($token);
             $state = (string) $row[$this->editStateColumn()];
             if (in_array($state, ['applied', 'applied_index_pending', 'validated', 'validation_failed'], true)) {
@@ -297,19 +341,36 @@ final class EditService
             if ($planDigest !== '' && !hash_equals((string) $row['plan_digest'], $planDigest)) {
                 throw new ToolException('EDIT_PLAN_DIGEST_MISMATCH', 'Edit plan digest does not match the prepared transaction');
             }
-            $this->assertTransactionFresh($row);
+            $this->assertTransactionFresh($row, $allowRevisionAdvance);
             $snapshots = $this->decodeSnapshots($row);
             $this->assertWorkspaceMatches($snapshots, 'pre');
             $this->updateTransaction($row, [$this->editStateColumn() => 'applying', 'error_json' => null]);
 
             $applied = [];
+            $staging = [
+                'files' => [],
+                'strategy' => 'sequential_temp_stage',
+                'workers' => 1,
+                'fork_fallbacks' => 0,
+            ];
             try {
+                $staging = $this->stageSnapshots($snapshots);
+                foreach ($snapshots as &$snapshot) {
+                    $snapshot['stage_strategy'] = $staging['strategy'];
+                    $snapshot['stage_workers'] = $staging['workers'];
+                    $snapshot['stage_fork_fallbacks'] = $staging['fork_fallbacks'];
+                }
+                unset($snapshot);
+                $this->updateTransaction($row, ['snapshots_json' => Json::encode($snapshots)]);
+
                 foreach ($snapshots as $snapshot) {
                     $applied[] = $snapshot;
-                    $this->applySnapshot($snapshot);
+                    $path = (string) $snapshot['path'];
+                    $this->commitStagedSnapshot($snapshot, $staging['files'][$path] ?? []);
                 }
             } catch (Throwable $exception) {
                 $recoveryErrors = $this->restoreSnapshots(array_reverse($applied), true);
+                $this->cleanupSnapshotDirectories($snapshots);
                 $recovered = $recoveryErrors === [];
                 $error = [
                     'message' => $exception->getMessage(),
@@ -326,30 +387,130 @@ final class EditService
                     false,
                     ['edit_id' => $row[$this->editIdColumn()], 'recovered' => $recovered],
                 );
+            } finally {
+                $this->cleanupStagedSnapshots((array) ($staging['files'] ?? []));
             }
 
             $paths = array_column($snapshots, 'path');
             $this->updateTransaction($row, [
-                $this->editStateColumn() => 'applied',
+                $this->editStateColumn() => $deferIndex ? 'applied_index_pending' : 'applied',
                 'applied_at' => Clock::now(),
-                'result_json' => Json::encode(['paths' => $paths]),
+                'result_json' => Json::encode([
+                    'paths' => $paths,
+                    'index_pending' => $deferIndex,
+                    'index_reason' => $deferIndex ? 'validation_first' : null,
+                ]),
             ]);
+            if ($deferIndex) {
+                $status = $this->status((string) $row[$this->editIdColumn()]);
+                $status['index_refresh'] = [
+                    'status' => 'pending',
+                    'reason' => 'validation_first',
+                    'recoverable' => true,
+                    'duration_ms' => 0,
+                ];
+                return $status;
+            }
+            $indexStartedAt = hrtime(true);
+            try {
+                $indexResult = $this->indexer->indexPaths($paths);
+            } catch (Throwable $exception) {
+                $indexDurationMs = self::elapsedMilliseconds($indexStartedAt);
+                [$message] = Redactor::string($exception->getMessage());
+                $this->updateTransaction($row, [
+                    $this->editStateColumn() => 'applied_index_pending',
+                    'result_json' => Json::encode([
+                        'paths' => $paths,
+                        'index_pending' => true,
+                        'index_reason' => 'index_error',
+                    ]),
+                    'error_json' => Json::encode(['index_error' => Text::truncate($message, 2_000)]),
+                ]);
+                $status = $this->status((string) $row[$this->editIdColumn()]);
+                $status['index_refresh'] = [
+                    'status' => 'pending',
+                    'error' => Text::truncate($message, 2_000),
+                    'recoverable' => true,
+                    'duration_ms' => $indexDurationMs,
+                ];
+                return $status;
+            }
+
+            $this->updateTransaction($row, [
+                'result_json' => Json::encode([
+                    'paths' => $paths,
+                    'index_pending' => false,
+                    'index_revision' => $this->index->revision(),
+                ]),
+            ]);
+            $status = $this->status((string) $row[$this->editIdColumn()]);
+            $status['index_refresh'] = [
+                'status' => 'completed',
+                'result' => $indexResult,
+                'duration_ms' => self::elapsedMilliseconds($indexStartedAt),
+            ];
+            return $status;
+        });
+    }
+
+    /**
+     * Complete a deliberately deferred postimage index refresh. This never
+     * changes workspace files and rechecks every postimage hash first.
+     *
+     * @return array<string, mixed>
+     */
+    public function refreshIndex(string $idOrToken): array
+    {
+        return $this->withProjectLock(function () use ($idOrToken): array {
+            $row = $this->findTransaction($idOrToken);
+            $state = (string) $row[$this->editStateColumn()];
+            if (!in_array($state, ['applied', 'applied_index_pending', 'validated', 'validation_failed'], true)) {
+                throw new ToolException(
+                    'EDIT_NOT_INDEXABLE',
+                    'Only a currently applied edit can refresh its deferred index',
+                    false,
+                    ['state' => $state],
+                );
+            }
+            $snapshots = $this->decodeSnapshots($row);
+            $this->assertWorkspaceMatches($snapshots, 'post');
+            $paths = array_column($snapshots, 'path');
+            $indexStartedAt = hrtime(true);
             try {
                 $indexResult = $this->indexer->indexPaths($paths);
             } catch (Throwable $exception) {
                 [$message] = Redactor::string($exception->getMessage());
                 $this->updateTransaction($row, [
-                    $this->editStateColumn() => 'applied_index_pending',
+                    'result_json' => Json::encode([
+                        'paths' => $paths,
+                        'index_pending' => true,
+                        'index_reason' => 'index_error',
+                    ]),
                     'error_json' => Json::encode(['index_error' => Text::truncate($message, 2_000)]),
                 ]);
-                $status = $this->status((string) $row[$this->editIdColumn()]);
-                $status['index_refresh'] = ['status' => 'pending', 'error' => Text::truncate($message, 2_000)];
-                return $status;
+                return [
+                    'status' => 'pending',
+                    'error' => Text::truncate($message, 2_000),
+                    'recoverable' => true,
+                    'duration_ms' => self::elapsedMilliseconds($indexStartedAt),
+                ];
             }
 
-            $status = $this->status((string) $row[$this->editIdColumn()]);
-            $status['index_refresh'] = ['status' => 'completed', 'result' => $indexResult];
-            return $status;
+            $nextState = $state === 'applied_index_pending' ? 'applied' : $state;
+            $this->updateTransaction($row, [
+                $this->editStateColumn() => $nextState,
+                'result_json' => Json::encode([
+                    'paths' => $paths,
+                    'index_pending' => false,
+                    'index_revision' => $this->index->revision(),
+                ]),
+                'error_json' => null,
+            ]);
+            return [
+                'status' => 'completed',
+                'result' => $indexResult,
+                'duration_ms' => self::elapsedMilliseconds($indexStartedAt),
+            ];
         });
     }
 
@@ -488,23 +649,175 @@ final class EditService
                 throw new ToolException('ROLLBACK_FAILED', 'Rollback encountered errors and requires manual recovery');
             }
             $paths = array_column($snapshots, 'path');
-            $this->updateTransaction($row, [$this->editStateColumn() => 'rolled_back', 'error_json' => null]);
+            $this->updateTransaction($row, [
+                $this->editStateColumn() => 'rolled_back',
+                'result_json' => Json::encode([
+                    'paths' => $paths,
+                    'index_pending' => true,
+                    'index_reason' => 'rollback',
+                ]),
+                'error_json' => null,
+            ]);
+            $indexStartedAt = hrtime(true);
             try {
                 $indexResult = $this->indexer->indexPaths($paths);
             } catch (Throwable $exception) {
+                $indexDurationMs = self::elapsedMilliseconds($indexStartedAt);
                 [$message] = Redactor::string($exception->getMessage());
                 $this->updateTransaction($row, [
                     $this->editStateColumn() => 'rolled_back_index_pending',
                     'error_json' => Json::encode(['index_error' => Text::truncate($message, 2_000)]),
                 ]);
                 $status = $this->status((string) $row[$this->editIdColumn()]);
-                $status['index_refresh'] = ['status' => 'pending', 'error' => Text::truncate($message, 2_000)];
+                $status['index_refresh'] = [
+                    'status' => 'pending',
+                    'error' => Text::truncate($message, 2_000),
+                    'recoverable' => true,
+                    'duration_ms' => $indexDurationMs,
+                ];
                 return $status;
             }
+            $this->updateTransaction($row, [
+                'result_json' => Json::encode([
+                    'paths' => $paths,
+                    'index_pending' => false,
+                    'index_revision' => $this->index->revision(),
+                ]),
+            ]);
             $status = $this->status((string) $row[$this->editIdColumn()]);
-            $status['index_refresh'] = ['status' => 'completed', 'result' => $indexResult];
+            $status['index_refresh'] = [
+                'status' => 'completed',
+                'result' => $indexResult,
+                'duration_ms' => self::elapsedMilliseconds($indexStartedAt),
+            ];
             return $status;
         });
+    }
+
+    /**
+     * Hold every target file lock for the complete compact edit lifecycle.
+     *
+     * @param array<string, mixed> $draft
+     * @param callable(array<string, mixed>): mixed $callback
+     */
+    public function withPlanFileLocks(array $draft, callable $callback): mixed
+    {
+        return $this->withFileLocks($this->planPaths($draft), $callback);
+    }
+
+    /** @param array<string, mixed> $draft
+     *  @return list<string>
+     */
+    public function planPaths(array $draft): array
+    {
+        $rawOperations = $draft['operations'] ?? null;
+        if (!is_array($rawOperations) || !array_is_list($rawOperations) || $rawOperations === []) {
+            throw new ToolException('EDIT_PLAN_INVALID', 'Edit plan operations must be a non-empty list');
+        }
+
+        $paths = [];
+        foreach ($rawOperations as $rawOperation) {
+            if (!is_array($rawOperation)) {
+                throw new ToolException('EDIT_PLAN_INVALID', 'Each edit operation must be an object');
+            }
+            $operation = $this->normalizeOperation($rawOperation);
+            $path = trim((string) ($operation['path'] ?? ''));
+            if ($path === '' && in_array(
+                (string) $operation['kind'],
+                ['replace_symbol', 'insert_before_symbol', 'insert_after_symbol'],
+                true,
+            )) {
+                $symbol = $this->resolveSymbol($operation);
+                $path = (string) ($symbol['path'] ?? '');
+            }
+            $path = $this->safePath($path);
+            $paths[$path] = true;
+        }
+
+        $paths = array_keys($paths);
+        sort($paths, SORT_STRING);
+        return $paths;
+    }
+
+    /**
+     * The kernel wait queue serializes equal paths across MCP processes. All
+     * paths are sorted before acquisition so multi-file plans cannot deadlock.
+     *
+     * @param list<string> $paths
+     * @param callable(array<string, mixed>): mixed $callback
+     */
+    private function withFileLocks(array $paths, callable $callback): mixed
+    {
+        $paths = array_values(array_unique($paths));
+        sort($paths, SORT_STRING);
+        if ($paths === []) {
+            throw new ToolException('EDIT_PLAN_INVALID', 'Edit plan did not resolve any file paths');
+        }
+
+        $directory = rtrim($this->config->dataDir(), '/') . '/edit-locks';
+        if (is_link($directory)) {
+            throw new ToolException('EDIT_LOCK_UNSAFE', 'Edit lock directory cannot be a symbolic link');
+        }
+        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+            throw new ToolException('EDIT_LOCK_FAILED', 'Unable to create edit lock directory');
+        }
+        @chmod($directory, 0700);
+
+        $projectDirectory = $directory . '/' . hash('sha256', $this->index->projectId());
+        if (is_link($projectDirectory)) {
+            throw new ToolException('EDIT_LOCK_UNSAFE', 'Project file-lock directory cannot be a symbolic link');
+        }
+        if (!is_dir($projectDirectory) && !mkdir($projectDirectory, 0700) && !is_dir($projectDirectory)) {
+            throw new ToolException('EDIT_LOCK_FAILED', 'Unable to create project file-lock directory');
+        }
+        @chmod($projectDirectory, 0700);
+
+        $handles = [];
+        $contended = [];
+        $startedAt = hrtime(true);
+        try {
+            foreach ($paths as $path) {
+                $lockPath = $projectDirectory . '/' . hash('sha256', $path) . '.lock';
+                if (is_link($lockPath)) {
+                    throw new ToolException('EDIT_LOCK_UNSAFE', 'File edit lock cannot be a symbolic link', false, ['path' => $path]);
+                }
+                $handle = fopen($lockPath, 'c+b');
+                if (!is_resource($handle) || !chmod($lockPath, 0600)) {
+                    if (is_resource($handle)) {
+                        fclose($handle);
+                    }
+                    throw new ToolException('EDIT_LOCK_FAILED', 'Unable to open a file edit lock', true, ['path' => $path]);
+                }
+                if (!flock($handle, LOCK_EX | LOCK_NB)) {
+                    $contended[] = $path;
+                    if (!flock($handle, LOCK_EX)) {
+                        fclose($handle);
+                        throw new ToolException('EDIT_LOCK_FAILED', 'Unable to wait for a file edit lock', true, ['path' => $path]);
+                    }
+                }
+                $handles[] = ['path' => $path, 'handle' => $handle];
+            }
+
+            $lockContext = [
+                'strategy' => 'sorted_per_file_flock',
+                'queue' => 'kernel_wait_queue',
+                'paths' => $paths,
+                'contended_paths' => $contended,
+                'wait_ms' => self::elapsedMilliseconds($startedAt),
+            ];
+            $result = $callback($lockContext);
+        } finally {
+            for ($index = count($handles) - 1; $index >= 0; $index--) {
+                $handle = $handles[$index]['handle'];
+                flock($handle, LOCK_UN);
+                fclose($handle);
+            }
+        }
+
+        if (is_array($result)) {
+            $result['file_lock'] = array_merge($lockContext, ['status' => 'released']);
+        }
+        return $result;
     }
 
     private function assertEnabled(): void
@@ -643,6 +956,45 @@ final class EditService
         }
 
         throw new ToolException('EDIT_KIND_UNSUPPORTED', 'Unsupported edit operation');
+    }
+
+    /** @param array<string, mixed> $operation
+     *  @param array{start:int,end:int,replacement:string} $range
+     */
+    private function assertTargetCanRebase(array $operation, string $content, array $range): void
+    {
+        $kind = (string) $operation['kind'];
+        if ($kind === 'replace_text') {
+            if (array_key_exists('occurrence', $operation)) {
+                throw new ToolException(
+                    'EDIT_REBASE_UNSAFE',
+                    'A changed file cannot safely rebase an occurrence-based text replacement',
+                    true,
+                );
+            }
+            $search = $this->textValue($operation, 'search', false);
+            if ($search === '' || substr_count($content, $search) !== 1) {
+                throw new ToolException(
+                    'EDIT_TEXT_AMBIGUOUS',
+                    'The latest file does not contain one unique copy of the previous text target',
+                    true,
+                );
+            }
+            return;
+        }
+        if ($kind === 'replace_range') {
+            if (!isset($operation['expected_digest']) || trim((string) $operation['expected_digest']) === '') {
+                throw new ToolException(
+                    'EDIT_DIGEST_REQUIRED',
+                    'A changed file requires expected_digest before a byte range can be rebased',
+                    true,
+                );
+            }
+            $this->assertExpectedDigest(
+                $operation,
+                substr($content, $range['start'], $range['end'] - $range['start']),
+            );
+        }
     }
 
     /** @param array<string, mixed> $operation
@@ -1085,20 +1437,283 @@ final class EditService
         }
     }
 
-    /** @param array<string, mixed> $snapshot */
-    private function applySnapshot(array $snapshot): void
+    /**
+     * Stage one same-directory temporary file per target. Same-path operations
+     * have already been merged into one snapshot by prepare(), so only distinct
+     * target files are eligible for concurrent writes.
+     *
+     * @param list<array<string, mixed>> $snapshots
+     * @return array{
+     *     files: array<string, array<string, mixed>>,
+     *     strategy: string,
+     *     workers: int,
+     *     fork_fallbacks: int
+     * }
+     */
+    private function stageSnapshots(array $snapshots): array
+    {
+        $staged = [];
+        try {
+            foreach ($snapshots as $snapshot) {
+                $path = $this->safePath((string) $snapshot['path']);
+                if (isset($staged[$path])) {
+                    throw new ToolException(
+                        'EDIT_PLAN_CONFLICT',
+                        'A compact transaction must contain only one postimage per target path',
+                        false,
+                        ['path' => $path],
+                    );
+                }
+                $this->assertNoSymlinkComponents($path);
+                $directories = is_array($snapshot['missing_parent_dirs'] ?? null)
+                    ? $snapshot['missing_parent_dirs']
+                    : [];
+                $this->createParentDirectories($directories);
+
+                $target = $this->index->root() . '/' . $path;
+                $parent = dirname($target);
+                if (!is_dir($parent) || is_link($parent)) {
+                    throw new ToolException('EDIT_PARENT_INVALID', 'Atomic write parent is invalid', false, ['path' => $path]);
+                }
+                $post = $this->readJournal(
+                    (string) $snapshot['after_ref'],
+                    (string) $snapshot['post_sha256'],
+                );
+                $temporary = tempnam($parent, '.learning-mcp-stage-');
+                if (!is_string($temporary)) {
+                    throw new ToolException(
+                        'EDIT_WRITE_FAILED',
+                        'Unable to allocate a same-directory staged file',
+                        false,
+                        ['path' => $path],
+                    );
+                }
+                $staged[$path] = [
+                    'path' => $path,
+                    'target' => $target,
+                    'temporary' => $temporary,
+                    'error_ref' => $temporary . '.error',
+                    'content' => $post,
+                    'post_sha256' => (string) $snapshot['post_sha256'],
+                    'mode' => (int) ($snapshot['mode'] ?? 0644),
+                ];
+            }
+
+            $canFork = count($staged) > 1
+                && function_exists('pcntl_fork')
+                && function_exists('pcntl_waitpid')
+                && function_exists('pcntl_wifexited')
+                && function_exists('pcntl_wexitstatus');
+            $workers = $canFork ? min(self::MAX_PARALLEL_STAGE_WORKERS, count($staged)) : 1;
+            $forkFallbacks = 0;
+            if ($canFork) {
+                $forkFallbacks = $this->writeStagesInParallel(array_values($staged), $workers);
+            } else {
+                foreach ($staged as $stage) {
+                    $this->writeStagedFile($stage);
+                }
+            }
+
+            foreach ($staged as &$stage) {
+                $actualHash = hash_file('sha256', (string) $stage['temporary']);
+                if (!is_string($actualHash) || !$this->hashEquals((string) $stage['post_sha256'], $actualHash)) {
+                    throw new ToolException(
+                        'EDIT_STAGE_HASH_MISMATCH',
+                        'A staged postimage failed its hash verification',
+                        false,
+                        ['path' => $stage['path']],
+                    );
+                }
+                unset($stage['content']);
+            }
+            unset($stage);
+
+            return [
+                'files' => $staged,
+                'strategy' => $canFork ? 'bounded_parallel_temp_stage' : 'sequential_temp_stage',
+                'workers' => $workers,
+                'fork_fallbacks' => $forkFallbacks,
+            ];
+        } catch (Throwable $exception) {
+            $this->cleanupStagedSnapshots($staged);
+            $this->cleanupSnapshotDirectories($snapshots);
+            throw $exception;
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $stages
+     */
+    private function writeStagesInParallel(array $stages, int $workers): int
+    {
+        $forkFallbacks = 0;
+        foreach (array_chunk($stages, max(1, $workers)) as $batch) {
+            $children = [];
+            $fallback = [];
+            foreach ($batch as $stage) {
+                $pid = pcntl_fork();
+                if ($pid === -1) {
+                    $fallback[] = $stage;
+                    continue;
+                }
+                if ($pid === 0) {
+                    $exitCode = 0;
+                    try {
+                        $this->writeStagedFile($stage);
+                    } catch (Throwable $exception) {
+                        $message = Text::truncate($exception->getMessage(), 1_000);
+                        @file_put_contents((string) $stage['error_ref'], $message, LOCK_EX);
+                        @chmod((string) $stage['error_ref'], 0600);
+                        $exitCode = 1;
+                    }
+                    exit($exitCode);
+                }
+                $children[$pid] = $stage;
+            }
+
+            $failures = [];
+            foreach ($children as $pid => $stage) {
+                $status = 0;
+                $waited = pcntl_waitpid($pid, $status);
+                $succeeded = $waited === $pid
+                    && pcntl_wifexited($status)
+                    && pcntl_wexitstatus($status) === 0;
+                $errorRef = (string) $stage['error_ref'];
+                if (!$succeeded) {
+                    $message = is_file($errorRef) ? trim((string) file_get_contents($errorRef)) : '';
+                    $failures[] = [
+                        'path' => (string) $stage['path'],
+                        'error' => $message !== '' ? Text::truncate($message, 1_000) : 'Staging worker exited unsuccessfully',
+                    ];
+                }
+                if (is_file($errorRef)) {
+                    @unlink($errorRef);
+                }
+            }
+            if ($failures !== []) {
+                throw new ToolException(
+                    'EDIT_STAGE_FAILED',
+                    'One or more parallel staging workers failed',
+                    false,
+                    ['failures' => $failures],
+                );
+            }
+            foreach ($fallback as $stage) {
+                $this->writeStagedFile($stage);
+                $forkFallbacks++;
+            }
+        }
+
+        return $forkFallbacks;
+    }
+
+    /** @param array<string, mixed> $stage */
+    private function writeStagedFile(array $stage): void
+    {
+        $temporary = (string) $stage['temporary'];
+        if (!is_file($temporary) || is_link($temporary)) {
+            throw new ToolException('EDIT_WRITE_FAILED', 'Atomic staged file is unavailable');
+        }
+        $handle = @fopen($temporary, 'wb');
+        if (!is_resource($handle)) {
+            throw new ToolException('EDIT_WRITE_FAILED', 'Unable to open the staged postimage');
+        }
+        try {
+            $remaining = (string) $stage['content'];
+            while ($remaining !== '') {
+                $written = fwrite($handle, $remaining);
+                if (!is_int($written) || $written < 1) {
+                    throw new ToolException('EDIT_WRITE_FAILED', 'Unable to write the staged postimage');
+                }
+                $remaining = (string) substr($remaining, $written);
+            }
+            if (!fflush($handle) || (function_exists('fsync') && !fsync($handle))) {
+                throw new ToolException('EDIT_WRITE_FAILED', 'Unable to flush the staged postimage');
+            }
+            fclose($handle);
+            $handle = null;
+            if (!chmod($temporary, ((int) $stage['mode']) & 0777)) {
+                throw new ToolException('EDIT_WRITE_FAILED', 'Unable to set staged postimage permissions');
+            }
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
+    }
+
+    /**
+     * Commit one already verified staged file. Renames remain ordered in the
+     * parent process so a batch has one deterministic journal/rollback order.
+     *
+     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $stage
+     */
+    private function commitStagedSnapshot(array $snapshot, array $stage): void
     {
         $path = $this->safePath((string) $snapshot['path']);
+        if ($stage === [] || !hash_equals($path, (string) ($stage['path'] ?? ''))) {
+            throw new ToolException('EDIT_STAGE_MISSING', 'The staged postimage is unavailable', false, ['path' => $path]);
+        }
         $this->assertNoSymlinkComponents($path);
-        $post = $this->readJournal((string) $snapshot['after_ref'], (string) $snapshot['post_sha256']);
-        $directories = is_array($snapshot['missing_parent_dirs'] ?? null) ? $snapshot['missing_parent_dirs'] : [];
-        $this->createParentDirectories($directories);
-        $this->atomicWrite(
-            $this->index->root() . '/' . $path,
-            $post,
-            (int) ($snapshot['mode'] ?? 0644),
-            $snapshot['action'] === 'create' ? null : (string) $snapshot['pre_sha256'],
-        );
+        $target = $this->index->root() . '/' . $path;
+        if (is_link($target)) {
+            throw new ToolException('EDIT_SYMLINK_FORBIDDEN', 'Atomic write target cannot be a symbolic link');
+        }
+        $expectedCurrentHash = $snapshot['action'] === 'create' ? null : (string) $snapshot['pre_sha256'];
+        if ($expectedCurrentHash === null) {
+            if (file_exists($target)) {
+                throw new ToolException('EDIT_FILE_STALE', 'Atomic create target now exists', true, ['path' => $path]);
+            }
+        } else {
+            if (!is_file($target)) {
+                throw new ToolException('EDIT_FILE_STALE', 'Atomic write target is missing', true, ['path' => $path]);
+            }
+            $currentHash = hash_file('sha256', $target);
+            if (!is_string($currentHash) || !$this->hashEquals($expectedCurrentHash, $currentHash)) {
+                throw new ToolException(
+                    'EDIT_FILE_STALE',
+                    'Atomic write target changed after preparation',
+                    true,
+                    ['path' => $path],
+                );
+            }
+        }
+
+        $temporary = (string) $stage['temporary'];
+        $stagedHash = is_file($temporary) && !is_link($temporary)
+            ? hash_file('sha256', $temporary)
+            : false;
+        if (!is_string($stagedHash) || !$this->hashEquals((string) $snapshot['post_sha256'], $stagedHash)) {
+            throw new ToolException('EDIT_STAGE_HASH_MISMATCH', 'Staged postimage changed before commit', false, ['path' => $path]);
+        }
+        if (!rename($temporary, $target)) {
+            throw new ToolException('EDIT_WRITE_FAILED', 'Unable to atomically replace edit target', false, ['path' => $path]);
+        }
+    }
+
+    /** @param array<string, array<string, mixed>> $staged */
+    private function cleanupStagedSnapshots(array $staged): void
+    {
+        foreach ($staged as $stage) {
+            foreach (['temporary', 'error_ref'] as $key) {
+                $path = (string) ($stage[$key] ?? '');
+                if ($path !== '' && file_exists($path) && !is_link($path)) {
+                    @unlink($path);
+                }
+            }
+        }
+    }
+
+    /** @param list<array<string, mixed>> $snapshots */
+    private function cleanupSnapshotDirectories(array $snapshots): void
+    {
+        foreach ($snapshots as $snapshot) {
+            $directories = is_array($snapshot['missing_parent_dirs'] ?? null)
+                ? $snapshot['missing_parent_dirs']
+                : [];
+            $this->removeEmptyDirectories($directories);
+        }
     }
 
     /** @param list<array<string, mixed>> $snapshots
@@ -1237,6 +1852,10 @@ final class EditService
             'pre_sha256' => $snapshot['pre_sha256'],
             'post_sha256' => $snapshot['post_sha256'],
             'byte_delta' => (int) $snapshot['post_bytes'] - (int) $snapshot['pre_bytes'],
+            'operation_count' => (int) ($snapshot['operation_count'] ?? 1),
+            'stage_strategy' => $snapshot['stage_strategy'] ?? null,
+            'stage_workers' => (int) ($snapshot['stage_workers'] ?? 0),
+            'stage_fork_fallbacks' => (int) ($snapshot['stage_fork_fallbacks'] ?? 0),
         ], $snapshots);
     }
 
@@ -1402,15 +2021,17 @@ final class EditService
     }
 
     /** @param array<string, mixed> $row */
-    private function assertTransactionFresh(array $row): void
+    private function assertTransactionFresh(array $row, bool $allowRevisionAdvance = false): void
     {
         $revision = (int) $row[$this->editRevisionColumn()];
-        if ($revision !== $this->index->revision()) {
+        $currentRevision = $this->index->revision();
+        $safeRevisionAdvance = $allowRevisionAdvance && $currentRevision > $revision;
+        if ($revision !== $currentRevision && !$safeRevisionAdvance) {
             throw new ToolException(
                 'EDIT_REVISION_STALE',
                 'Project index changed after edit preparation',
                 true,
-                ['prepared' => $revision, 'current' => $this->index->revision()],
+                ['prepared' => $revision, 'current' => $currentRevision],
             );
         }
         $commit = $this->currentCommit();
@@ -1496,6 +2117,13 @@ final class EditService
             ];
         }
         $error = Json::decode((string) ($row['error_json'] ?? ''), null);
+        $result = Json::decode((string) ($row['result_json'] ?? ''), []);
+        $result = is_array($result) ? $result : [];
+        $indexPending = (bool) ($result['index_pending'] ?? in_array(
+            (string) $row[$this->editStateColumn()],
+            ['applied_index_pending', 'rolled_back_index_pending'],
+            true,
+        ));
         return [
             'edit_id' => $row[$this->editIdColumn()],
             'state' => $row[$this->editStateColumn()],
@@ -1507,6 +2135,24 @@ final class EditService
             'applied_at' => $row['applied_at'] ?? null,
             'files' => $this->snapshotPreview($snapshotList),
             'validations' => $validations,
+            'apply_pipeline' => [
+                'strategy' => $snapshotList[0]['stage_strategy'] ?? 'not_applied',
+                'workers' => (int) ($snapshotList[0]['stage_workers'] ?? 0),
+                'fork_fallbacks' => (int) ($snapshotList[0]['stage_fork_fallbacks'] ?? 0),
+                'file_count' => count($snapshotList),
+                'operation_count' => array_sum(array_map(
+                    static fn (array $snapshot): int => (int) ($snapshot['operation_count'] ?? 1),
+                    $snapshotList,
+                )),
+                'same_file_operations' => 'merged_into_one_postimage',
+                'commit' => 'ordered_atomic_rename',
+            ],
+            'index_refresh' => [
+                'status' => $indexPending ? 'pending' : (isset($result['index_revision']) ? 'completed' : 'unknown'),
+                'reason' => $result['index_reason'] ?? null,
+                'index_revision' => $result['index_revision'] ?? null,
+                'recoverable' => $indexPending,
+            ],
             'error' => $error,
         ];
     }
@@ -1611,5 +2257,10 @@ final class EditService
     private static function timestamp(int $timestamp): string
     {
         return gmdate('Y-m-d\\TH:i:s', $timestamp) . '.000Z';
+    }
+
+    private static function elapsedMilliseconds(int $startedAt): int
+    {
+        return max(0, (int) round((hrtime(true) - $startedAt) / 1_000_000));
     }
 }

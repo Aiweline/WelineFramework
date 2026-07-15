@@ -24,14 +24,32 @@ final class Worker
         $enqueued = $scanIdleSessions
             ? $this->store->enqueueIdleSessions($this->config->duration('scheduler.session_idle_after'))
             : [];
+        $learningSkillJobs = $scanIdleSessions
+            ? $this->store->enqueueLearningSkillSyncs()
+            : [];
         $maximumAttempts = (int) $this->config->get('scheduler.max_attempts', 5);
         $job = $this->store->claimJob($this->config->duration('scheduler.lease'), $maximumAttempts);
         if ($job === null) {
-            return ['processed' => false, 'idle_jobs_enqueued' => $enqueued];
+            return [
+                'processed' => false,
+                'idle_jobs_enqueued' => $enqueued,
+                'learning_skill_jobs_enqueued' => $learningSkillJobs,
+            ];
         }
         try {
-            $result = $this->analyzer->processJob($job);
+            $result = $job['job_type'] === 'sync_learning_skills'
+                ? (new LearningSkillService($this->store, $this->config))->syncJob($job)
+                : $this->analyzer->processJob($job);
+            if ($job['job_type'] === 'sync_learning_skills') {
+                $this->assertLearningSkillClosure($result);
+            }
             $this->store->completeJob((string) $job['id'], $result);
+            if ($job['job_type'] !== 'sync_learning_skills') {
+                $learningSkillJobs = Text::uniqueStrings(array_merge(
+                    $learningSkillJobs,
+                    $this->store->enqueueLearningSkillSyncs(),
+                ));
+            }
 
             return [
                 'processed' => true,
@@ -40,6 +58,7 @@ final class Worker
                 'attempt' => $job['attempt'],
                 'result' => $result,
                 'idle_jobs_enqueued' => $enqueued,
+                'learning_skill_jobs_enqueued' => $learningSkillJobs,
             ];
         } catch (Throwable $exception) {
             $retryable = $this->retryable($exception);
@@ -143,6 +162,43 @@ final class Worker
         }
 
         return 0;
+    }
+
+    /** @param array<string, mixed> $result */
+    private function assertLearningSkillClosure(array $result): void
+    {
+        $decision = (string) ($result['decision'] ?? '');
+        $closure = is_array($result['closed_loop'] ?? null) ? $result['closed_loop'] : [];
+        $status = (string) ($closure['status'] ?? '');
+        $mode = (string) ($closure['mode'] ?? '');
+        $revision = (int) ($closure['revision'] ?? 0);
+
+        $indexedProjection = in_array(
+            $mode,
+            ['project_index_projection', 'configured_project_index_projection'],
+            true,
+        ) && $revision > 0;
+        $externalProjection = $mode === 'configured_external_skill_output'
+            && ($closure['project_index_required'] ?? true) === false
+            && trim((string) ($closure['output_directory'] ?? '')) !== '';
+
+        $valid = match ($decision) {
+            'disabled' => $status === 'not_required' && $mode === 'disabled',
+            'no_actionable_learning' => $status === 'verified' && $mode === 'learning_store_direct',
+            'already_current', 'indexes_repaired', 'cleared', 'synchronized' =>
+                $status === 'verified' && ($indexedProjection || $externalProjection),
+            default => false,
+        };
+        if ($valid) {
+            return;
+        }
+
+        throw new ToolException(
+            'LEARNING_INDEX_CLOSURE_FAILED',
+            'Learning-skill job cannot complete without a verified database closure receipt',
+            true,
+            ['decision' => $decision, 'closure_status' => $status, 'closure_mode' => $mode],
+        );
     }
 
     private function retryable(Throwable $exception): bool
