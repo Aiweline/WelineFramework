@@ -1266,10 +1266,20 @@ $socket = null;
 $reusePortBound = false;
 $sharedListenerBound = false;
 $sharedListenerSocket = null;
-$wlsHttp2NegotiationEnabled = \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class)
-    && \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class)
-    && \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class);
+$wlsHttpProtocolCapabilities = \class_exists(\Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe::class)
+    ? (new \Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe())->snapshot()
+    : [];
+$wlsHttpAdapters = \is_array($wlsHttpProtocolCapabilities['wls_adapters'] ?? null)
+    ? $wlsHttpProtocolCapabilities['wls_adapters']
+    : [];
+$wlsHttp2NegotiationEnabled = (bool)($wlsHttpAdapters['http2']['enabled'] ?? false);
+$wlsHttp3NegotiationEnabled = (bool)($wlsHttpAdapters['http3']['enabled'] ?? false);
 $wlsTlsAlpnProtocols = $wlsHttp2NegotiationEnabled ? 'h2,http/1.1' : 'http/1.1';
+if ($wlsHttp3NegotiationEnabled) {
+    // HTTP/3 uses QUIC/UDP and must be advertised through Alt-Svc or a future QUIC listener,
+    // never through this TCP TLS ALPN list.
+    WlsLogger::warning_('HTTP/3 capability is enabled but worker_ssl.php is a TCP TLS adapter; h3 ALPN is intentionally not advertised here.');
+}
 // OpenSSL 服务端会话缓存需要稳定且实例隔离的 session_id_context；TLS 1.3 仍依赖 ticket 做恢复。
 $wlsTlsSessionIdContext = \substr(\hash('sha256', 'wls|' . $instanceName . '|' . $host . ':' . $port . '|' . $sslCert), 0, 32);
 
@@ -3434,6 +3444,14 @@ while (true) {
         if (!$hasPendingHttp2Request && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')) {
             $data = @\fread($conn, 65535);
         }
+        if (!$isHttp2Connection && $wlsHttp2NegotiationEnabled && \is_string($data) && $data !== '') {
+            $http2Preface = \Weline\Server\Protocol\Http2\FrameCodec::CLIENT_CONNECTION_PREFACE;
+            if (\str_starts_with($http2Preface, $data) || \str_starts_with($data, $http2Preface)) {
+                $connectionProtocols[$connId] = 'h2';
+                $isHttp2Connection = true;
+                $http2ConnectionAdapters[$connId] ??= new \Weline\Server\Protocol\Http2\ConnectionAdapter();
+            }
+        }
         
         // fread 返回 false 表示错误
         // fread 返回空字符串只表示暂无数据（非阻塞模式），不是连接关闭
@@ -4690,7 +4708,7 @@ function wlsSslAdvancePeekState(
         $sniRaw = _parseSniHostFromClientHello($peeked);
         $clientAlpnProtocols = \Weline\Server\Dispatcher\SniParser::extractAlpnProtocols($peeked);
         $clientWantsHttp2 = \in_array('h2', $clientAlpnProtocols, true)
-            && \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class)
+            && $wlsHttp2NegotiationEnabled
             && (($deferSslOptions['alpn_protocols'] ?? '') !== 'http/1.1');
         $connectionProtocols[$connId] = $clientWantsHttp2 ? 'h2' : 'http/1.1';
         if ($clientWantsHttp2) {
