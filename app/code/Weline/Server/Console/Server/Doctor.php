@@ -93,24 +93,35 @@ class Doctor extends CommandAbstract
             )));
         } elseif ($runningSchemaV3 && $selectionData !== []) {
             $selection = RuntimeSelection::fromArray($selectionData);
-            $strategy = \array_replace($strategy, [
-                'worker_count' => \max(1, (int)($endpoint['count'] ?? $strategy['worker_count'] ?? 1)),
-                'worker_count_reason' => 'observed running endpoint schema v3',
-                'requested_topology' => $selection->requestedTopology->value,
-                'effective_topology' => $selection->effectiveTopology->value,
-                'topology' => $selection->effectiveTopology->value,
-                'topology_source' => $selection->source,
-                'dispatcher_enabled' => $selection->isDispatcher(),
-                'direct_reuse_port' => $selection->isDirect() && $selection->listenerMode === 'reuseport',
-                'direct_listener_mode' => $selection->listenerMode,
-                'listener_strategy' => $selection->listenerMode,
-                'topology_reason' => $selection->reason,
-                'topology_reason_codes' => $selection->reasonCodes,
-                'event_loop_driver' => $selection->eventLoopDriver,
-                'ssl_engine' => $selection->sslEngine,
-                'policy_compatible' => $selection->policyCompatible,
-                'runtime_selection' => $selection,
-            ]);
+            if ($selection->osFamily === $profile->osFamily()) {
+                $strategy = \array_replace($strategy, [
+                    'worker_count' => \max(1, (int)($endpoint['count'] ?? $strategy['worker_count'] ?? 1)),
+                    'worker_count_reason' => 'observed running endpoint schema v3',
+                    'requested_topology' => $selection->requestedTopology->value,
+                    'effective_topology' => $selection->effectiveTopology->value,
+                    'topology' => $selection->effectiveTopology->value,
+                    'topology_source' => $selection->source,
+                    'dispatcher_enabled' => $selection->isDispatcher(),
+                    'direct_reuse_port' => $selection->isDirect() && $selection->listenerMode === 'reuseport',
+                    'direct_listener_mode' => $selection->listenerMode,
+                    'listener_strategy' => $selection->listenerMode,
+                    'topology_reason' => $selection->reason,
+                    'topology_reason_codes' => $selection->reasonCodes,
+                    'event_loop_driver' => $selection->eventLoopDriver,
+                    'ssl_engine' => $selection->sslEngine,
+                    'policy_compatible' => $selection->policyCompatible,
+                    'runtime_selection' => $selection,
+                ]);
+            } else {
+                $strategy['warnings'] = \array_values(\array_unique(\array_merge(
+                    (array)($strategy['warnings'] ?? []),
+                    ['Ignoring running endpoint runtime_selection from ' . $selection->osFamily
+                        . ' while diagnosing current ' . $profile->osFamily() . ' runtime.']
+                )));
+                $endpointMetadata['runtime_selection_cross_runtime'] = true;
+                $endpointMetadata['runtime_selection_ignored_reason'] = 'endpoint os_family=' . $selection->osFamily
+                    . ', current os_family=' . $profile->osFamily();
+            }
         }
         $diagnostics = (new RuntimeDiagnosticsFormatter())->toDiagnosticArray($profile, $strategy);
         $diagnostics['protocols'] = (new HttpProtocolCapabilityProbe())->snapshot();
