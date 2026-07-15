@@ -309,6 +309,19 @@ class Start extends CommandAbstract
         }
         LogConfig::bootstrapVerbose($enableLog);
 
+        // 先用纯 CLI/default 拓扑意图做平台硬拒绝，避免 Windows --direct/--no-dispatcher
+        // 在读取完整配置、准备证书或访问数据库之前才失败。
+        $runtimeResolver = new RuntimeStrategyResolver();
+        try {
+            $runtimeResolver->resolveTopologyIntent([
+                'runtime' => ['topology' => 'auto'],
+                'topology' => 'auto',
+            ], $args);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
+
         // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
         $this->traceStartupPhase($instanceName, 'config:before');
         $config = $this->getServerConfig($instanceName, $args);
@@ -317,7 +330,6 @@ class Start extends CommandAbstract
         // 拓扑事实。Direct 缺失依赖时 fail-closed；显式 Dispatcher 只把
         // ext-event 当作可选优化，安装失败也不允许改写拓扑。
         // master-only 是已经过父进程预检的内部重入路径，禁止重复安装。
-        $runtimeResolver = new RuntimeStrategyResolver();
         try {
             $dependencyTopologyIntent = $runtimeResolver->resolveTopologyIntent($config, $args);
         } catch (\RuntimeException $exception) {
