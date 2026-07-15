@@ -84,8 +84,18 @@ class Benchmark extends CommandAbstract
         );
         $benchmarkContext['http_version_effective'] = $effectiveHttpVersion;
         $benchmarkContext['http_version_auto_strategy'] = $httpVersion === 'auto'
-            ? 'prefer h3 when WLS+curl support it, else h2, else h1.1'
+            ? 'target h3; use h3 only when WLS QUIC adapter + curl support it, else h2, else h1.1'
             : 'explicit';
+        try {
+            $this->assertRequestedHttpVersionIsRunnable(
+                $httpVersion,
+                $ssl,
+                (array)($benchmarkContext['http_protocol_capabilities'] ?? [])
+            );
+        } catch (\Throwable $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
         
         // 修复 Git Bash 路径转换问题（如 /_wls/health 被转成 C:/Program Files/Git/_wls/health）
         $scheme = $ssl ? 'https' : 'http';
@@ -1097,6 +1107,11 @@ class Benchmark extends CommandAbstract
             'http_version_forced' => (bool)($benchmarkContext['http_version_forced'] ?? false),
             'http_version_negotiated' => $benchmarkContext['http_version_negotiated'] ?? null,
             'http_version_hits' => (array)($benchmarkContext['http_version_hits'] ?? []),
+            'http_default_target' => $benchmarkContext['http_default_target'] ?? null,
+            'http_default_effective' => $benchmarkContext['http_default_effective'] ?? null,
+            'http_default_fallback' => (array)($benchmarkContext['http_default_fallback'] ?? []),
+            'http3_data_plane_enabled' => (bool)($benchmarkContext['http3_data_plane_enabled'] ?? false),
+            'http3_data_plane_reason' => $benchmarkContext['http3_data_plane_reason'] ?? null,
             'http_protocol_capabilities' => (array)($benchmarkContext['http_protocol_capabilities'] ?? []),
             'instance_name' => (string)($benchmarkContext['instance_name'] ?? ''),
             'instance' => (string)($benchmarkContext['instance_name'] ?? ''),
@@ -1217,7 +1232,7 @@ class Benchmark extends CommandAbstract
                 '-h, --host <ip>' => __('指定主机（可选，默认 127.0.0.1）'),
                 '-s, --ssl' => __('指定端口为 HTTPS（与 -p 合用；自动探测时根据实例配置）'),
                 '--tls-version <auto|1.2|1.3>' => __('强制 HTTPS 压测使用指定 TLS 版本（默认 auto）'),
-                '--http-version <auto|1.1|2|3>' => __('强制压测请求使用指定 HTTP 版本（默认 auto，由 cURL/ALPN 协商）'),
+                '--http-version <auto|1.1|2|3>' => __('强制压测请求使用指定 HTTP 版本；auto 目标优先 HTTP/3，当前无 QUIC 数据面时自动使用 HTTP/2/1.1'),
                 '--no-keepalive, --spread' => __('禁用 keep-alive/连接复用（更利于验证连接级分流；HTTPS 时亦是 fresh TLS）'),
                 '--worker-header <name>' => __('命中 Worker 统计使用的响应头（可逗号分隔；默认自动探测 X-WLS-Worker-PID/Id/Port）'),
                 '--worker-balance-threshold <ratio>' => __('分流倾斜阈值，按 max/min 判定（默认 1.5，超过则 WARN）'),
@@ -1258,6 +1273,12 @@ class Benchmark extends CommandAbstract
             : [];
         $curl = \function_exists('curl_version') ? (array)\curl_version() : [];
         $httpProtocolCapabilities = (new HttpProtocolCapabilityProbe())->snapshot();
+        $httpDefaultPolicy = \is_array($httpProtocolCapabilities['default_policy'] ?? null)
+            ? $httpProtocolCapabilities['default_policy']
+            : [];
+        $wlsAdapters = \is_array($httpProtocolCapabilities['wls_adapters'] ?? null)
+            ? $httpProtocolCapabilities['wls_adapters']
+            : [];
 
         return [
             'requested_requests' => $totalRequests,
@@ -1277,6 +1298,11 @@ class Benchmark extends CommandAbstract
             'http_version_forced' => $httpVersion !== 'auto',
             'http_version_negotiated' => null,
             'http_version_hits' => [],
+            'http_default_target' => (string)($httpDefaultPolicy['target_preferred'] ?? 'http/3'),
+            'http_default_effective' => (string)($httpDefaultPolicy['effective_preferred'] ?? 'http/1.1'),
+            'http_default_fallback' => (array)($httpDefaultPolicy['fallback'] ?? ['http/2', 'http/1.1']),
+            'http3_data_plane_enabled' => (bool)($wlsAdapters['http3']['enabled'] ?? false),
+            'http3_data_plane_reason' => (string)($wlsAdapters['http3']['reason'] ?? ''),
             'http_protocol_capabilities' => $httpProtocolCapabilities,
             'instance_name' => (string)($serverConfig['instance'] ?? ''),
             'target_attribution' => (string)($serverConfig['target_attribution'] ?? 'unattributed'),
@@ -1373,6 +1399,30 @@ class Benchmark extends CommandAbstract
         }
 
         throw new \InvalidArgumentException('--http-version must be auto, 1.1, 2, or 3.');
+    }
+
+    /** @param array<string,mixed> $capabilities */
+    private function assertRequestedHttpVersionIsRunnable(string $requested, bool $ssl, array $capabilities): void
+    {
+        if ($requested !== '3') {
+            return;
+        }
+        if (!$ssl) {
+            throw new \RuntimeException('HTTP/3 requires HTTPS/QUIC; use --ssl or target an HTTPS WLS instance.');
+        }
+
+        $curl = (array)($capabilities['curl_client'] ?? []);
+        $adapters = (array)($capabilities['wls_adapters'] ?? []);
+        $curlHttp3 = (bool)($curl['http3_constant'] ?? false) && (bool)($curl['http3_feature'] ?? false);
+        if (!$curlHttp3) {
+            throw new \RuntimeException('The current PHP cURL/libcurl build cannot negotiate HTTP/3. Use --http-version auto to fall back to HTTP/2/1.1.');
+        }
+
+        $serverHttp3 = (bool)($adapters['http3']['enabled'] ?? false);
+        if (!$serverHttp3) {
+            $reason = (string)($adapters['http3']['reason'] ?? 'WLS HTTP/3 data plane is unavailable.');
+            throw new \RuntimeException('WLS cannot serve HTTP/3 on this instance yet: ' . $reason . ' Use --http-version auto for HTTP/2 fallback.');
+        }
     }
 
     /** @param array<string,mixed> $capabilities */
