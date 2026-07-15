@@ -23,9 +23,10 @@ final class HttpProtocolCapabilityProbe
         $ngtcp2 = $this->probeNativeLibrary('ngtcp2', 'ngtcp2_strerror');
         $streamAlpn = $this->streamAcceptsAlpnOption();
         $udpSocket = $this->probeUdpSocketRuntime();
+        $quicTransportAdapter = $this->probeWlsQuicTransportAdapter();
         $http2AdapterSelfTest = $this->http2AdapterSelfTest();
         $http2Enabled = $streamAlpn && (bool)($http2AdapterSelfTest['ok'] ?? false);
-        $http3Readiness = $this->buildHttp3Readiness($curl, $ffiRuntime, $nghttp3, $ngtcp2, $udpSocket);
+        $http3Readiness = $this->buildHttp3Readiness($curl, $ffiRuntime, $nghttp3, $ngtcp2, $udpSocket, $quicTransportAdapter);
 
         return [
             'default_policy' => [
@@ -88,10 +89,15 @@ final class HttpProtocolCapabilityProbe
                     'requires' => ['alpn_h2', 'hpack_huffman', 'worker_alpn_dispatch'],
                 ],
                 'http3' => [
-                    'enabled' => false,
+                    'enabled' => (bool)($http3Readiness['ready'] ?? false),
                     'transport' => 'quic/udp',
+                    'adapter' => $quicTransportAdapter['adapter'],
+                    'adapter_reason' => $quicTransportAdapter['reason'],
+                    'adapter_capabilities' => $quicTransportAdapter['capabilities'],
                     'foundation' => $http3Readiness['checks'],
-                    'reason' => 'HTTP/3 requires a WLS QUIC/UDP transport adapter; current readiness: ' . $http3Readiness['summary'],
+                    'reason' => (bool)($http3Readiness['ready'] ?? false)
+                        ? 'HTTP/3 QUIC/UDP adapter and protocol prerequisites are ready; WLS may advertise h3 when the runtime selects it.'
+                        : 'HTTP/3 requires a WLS QUIC/UDP transport adapter; current readiness: ' . $http3Readiness['summary'],
                     'requires' => ['udp_quic_listener', 'tls1.3_quic_stack', 'ngtcp2_or_equivalent', 'nghttp3_or_equivalent', 'worker_quic_dispatch'],
                     'missing' => $http3Readiness['missing'],
                     'install_hints' => $http3Readiness['install_hints'],
@@ -119,14 +125,66 @@ final class HttpProtocolCapabilityProbe
     }
 
     /**
+     * @return array{available:bool,adapter:string,reason:string,capabilities:array<string,bool>,missing:list<string>}
+     */
+    private function probeWlsQuicTransportAdapter(): array
+    {
+        $interface = \Weline\Server\Protocol\Http3\QuicTransportAdapterInterface::class;
+        $adapterClass = \Weline\Server\Protocol\Http3\UnavailableQuicTransportAdapter::class;
+
+        $interfaceFile = \dirname(__DIR__, 2) . '/Protocol/Http3/QuicTransportAdapterInterface.php';
+        $adapterFile = \dirname(__DIR__, 2) . '/Protocol/Http3/UnavailableQuicTransportAdapter.php';
+        if (!\interface_exists($interface, false) && \is_file($interfaceFile)) {
+            require_once $interfaceFile;
+        }
+        if (!\class_exists($adapterClass, false) && \is_file($adapterFile)) {
+            require_once $adapterFile;
+        }
+
+        if (!\interface_exists($interface, false) || !\class_exists($adapterClass, false)) {
+            return [
+                'available' => false,
+                'adapter' => $adapterClass,
+                'reason' => 'WLS HTTP/3 QUIC adapter contract is not autoloadable.',
+                'capabilities' => [],
+                'missing' => ['wls_quic_transport_adapter'],
+            ];
+        }
+
+        $adapter = new $adapterClass();
+        if (!$adapter instanceof \Weline\Server\Protocol\Http3\QuicTransportAdapterInterface) {
+            return [
+                'available' => false,
+                'adapter' => $adapterClass,
+                'reason' => 'WLS HTTP/3 adapter does not implement QuicTransportAdapterInterface.',
+                'capabilities' => [],
+                'missing' => ['wls_quic_transport_adapter'],
+            ];
+        }
+
+        $readiness = $adapter->readiness();
+        $capabilities = \is_array($readiness['capabilities'] ?? null) ? $readiness['capabilities'] : [];
+        $missing = \is_array($readiness['missing'] ?? null) ? $readiness['missing'] : [];
+
+        return [
+            'available' => (bool)($readiness['available'] ?? false),
+            'adapter' => (string)($readiness['adapter'] ?? $adapterClass),
+            'reason' => (string)($readiness['reason'] ?? 'WLS HTTP/3 adapter readiness did not provide a reason.'),
+            'capabilities' => \array_map(static fn($value): bool => (bool)$value, $capabilities),
+            'missing' => \array_values(\array_map(static fn($value): string => (string)$value, $missing)),
+        ];
+    }
+
+    /**
      * @param array<string,mixed> $curl
      * @param array<string,mixed> $ffiRuntime
      * @param array<string,mixed> $nghttp3
      * @param array<string,mixed> $ngtcp2
      * @param array<string,mixed> $udpSocket
+     * @param array{available:bool,adapter:string,reason:string,capabilities:array<string,bool>,missing:list<string>} $quicTransportAdapter
      * @return array{ready:bool,summary:string,checks:array<string,bool>,missing:list<string>,install_hints:list<string>}
      */
-    private function buildHttp3Readiness(array $curl, array $ffiRuntime, array $nghttp3, array $ngtcp2, array $udpSocket): array
+    private function buildHttp3Readiness(array $curl, array $ffiRuntime, array $nghttp3, array $ngtcp2, array $udpSocket, array $quicTransportAdapter): array
     {
         $checks = [
             'udp_socket_runtime' => (bool)($udpSocket['available'] ?? false),
@@ -136,7 +194,7 @@ final class HttpProtocolCapabilityProbe
             'nghttp3_library' => (bool)($nghttp3['available'] ?? false),
             'nghttp3_ffi_loadable' => (bool)($nghttp3['ffi_loadable'] ?? false),
             'curl_http3_client' => \defined('CURL_HTTP_VERSION_3') && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP3'),
-            'wls_quic_transport_adapter' => false,
+            'wls_quic_transport_adapter' => (bool)($quicTransportAdapter['available'] ?? false),
         ];
         $missing = [];
         foreach ($checks as $name => $ok) {
@@ -155,7 +213,7 @@ final class HttpProtocolCapabilityProbe
             'ready' => $missing === [],
             'summary' => $missing === [] ? 'all HTTP/3 prerequisites are present' : ('missing ' . \implode(',', $missing)),
             'checks' => $checks,
-            'missing' => $missing,
+            'missing' => \array_values(\array_unique(\array_merge($missing, $quicTransportAdapter['missing'] ?? []))),
             'install_hints' => $installHints,
         ];
     }
