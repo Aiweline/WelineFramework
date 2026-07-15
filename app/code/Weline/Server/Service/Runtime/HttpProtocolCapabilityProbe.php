@@ -67,9 +67,11 @@ final class HttpProtocolCapabilityProbe
                         'frame_codec' => \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class),
                         'hpack_decoder' => \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class),
                         'hpack_huffman' => false,
+                        'connection_adapter' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
+                        'response_writer' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
                     ],
                     'reason' => 'HTTP/2 connection adapter is not active yet; advertising h2 would make clients send binary frames to the HTTP/1.1 parser.',
-                    'requires' => ['alpn_h2', 'hpack_huffman', 'h2_connection_adapter', 'h2_response_writer'],
+                    'requires' => ['alpn_h2', 'hpack_huffman', 'worker_alpn_dispatch'],
                 ],
                 'http3' => [
                     'enabled' => false,
