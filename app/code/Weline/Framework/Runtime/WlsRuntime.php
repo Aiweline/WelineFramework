@@ -1683,7 +1683,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                                 $targetMs,
                                 false
                             );
-                            if ($validation['ok'] || $attempts >= $maxAttempts) {
+                            if ($validation['ok']) {
+                                $reason = (string)($validation['reason'] ?? '');
+                                $elapsedMs = (float)($warmupMeta['elapsed_ms'] ?? 0.0);
+                                if (!\str_starts_with($reason, 'ready:slow')
+                                    || $attempts >= $maxAttempts
+                                    || $targetMs <= 0.0
+                                    || $elapsedMs < $targetMs
+                                ) {
+                                    break;
+                                }
+                            } elseif ($attempts >= $maxAttempts) {
                                 break;
                             }
                             $sequence++;
@@ -1699,7 +1709,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                                 $targetMs,
                                 true
                             );
-                            if ($validation['ok'] || $attempts >= $maxAttempts) {
+                            if ($validation['ok']) {
+                                $reason = (string)($validation['reason'] ?? '');
+                                $elapsedMs = (float)($warmupMeta['elapsed_ms'] ?? 0.0);
+                                if (!\str_starts_with($reason, 'ready:slow')
+                                    || $attempts >= $maxAttempts
+                                    || $targetMs <= 0.0
+                                    || $elapsedMs < $targetMs
+                                ) {
+                                    break;
+                                }
+                            } elseif ($attempts >= $maxAttempts) {
                                 break;
                             }
                             $sequence++;
