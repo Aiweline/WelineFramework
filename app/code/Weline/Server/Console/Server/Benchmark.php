@@ -722,20 +722,31 @@ class Benchmark extends CommandAbstract
         }
         
         $mh = \curl_multi_init();
+        $sslSessionShareSupported = \defined('CURL_LOCK_DATA_SSL_SESSION');
+        $connectionShareEnabled = !$noKeepAlive;
+        $sslSessionShareEnabled = $ssl && $connectionShareEnabled && $sslSessionShareSupported;
+        $multiplexEnabled = \defined('CURLPIPE_MULTIPLEX');
+        $benchmarkContext['connection_share_enabled'] = $connectionShareEnabled;
+        $benchmarkContext['ssl_session_share_supported'] = $sslSessionShareSupported;
+        $benchmarkContext['ssl_session_share_enabled'] = $sslSessionShareEnabled;
+        $benchmarkContext['http_multiplex_enabled'] = $multiplexEnabled;
+        $benchmarkContext['reuse_profile'] = $noKeepAlive
+            ? ($ssl ? 'fresh-tls-full-handshake' : 'fresh-connection')
+            : ($ssl ? 'keep-alive+tls-session-share+http-multiplex' : 'keep-alive+http-multiplex');
         
-        // 创建共享句柄，用于连接池复用（禁用 keep-alive 时不启用共享池）
+        // 创建共享句柄，用于连接池/SSL session 复用（fresh TLS 模式保留完整新握手语义）
         $sh = null;
-        if (!$noKeepAlive) {
+        if ($connectionShareEnabled) {
             $sh = \curl_share_init();
             \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
             \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
-            if (\defined('CURL_LOCK_DATA_SSL_SESSION')) {
+            if ($sslSessionShareEnabled) {
                 \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
             }
         }
         
         // 设置 curl_multi 管道化/复用（HTTP/1.1 管道化，HTTP/2 多路复用）
-        if (\defined('CURLPIPE_MULTIPLEX')) {
+        if ($multiplexEnabled) {
             \curl_multi_setopt($mh, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
         }
         // 限制每个主机的最大连接数，促进连接复用
@@ -1075,6 +1086,11 @@ class Benchmark extends CommandAbstract
             'fresh_connection' => (bool)($benchmarkContext['fresh_connection'] ?? false),
             'fresh_tls' => (bool)($benchmarkContext['fresh_tls'] ?? false),
             'tls_version' => $benchmarkContext['tls_version'] ?? null,
+            'reuse_profile' => $benchmarkContext['reuse_profile'] ?? null,
+            'connection_share_enabled' => (bool)($benchmarkContext['connection_share_enabled'] ?? false),
+            'ssl_session_share_supported' => (bool)($benchmarkContext['ssl_session_share_supported'] ?? false),
+            'ssl_session_share_enabled' => (bool)($benchmarkContext['ssl_session_share_enabled'] ?? false),
+            'http_multiplex_enabled' => (bool)($benchmarkContext['http_multiplex_enabled'] ?? false),
             'http_version_requested' => $benchmarkContext['http_version_requested'] ?? null,
             'http_version_effective' => $benchmarkContext['http_version_effective'] ?? null,
             'http_version_auto_strategy' => $benchmarkContext['http_version_auto_strategy'] ?? null,
@@ -1251,6 +1267,11 @@ class Benchmark extends CommandAbstract
             'fresh_connection' => $noKeepAlive,
             'fresh_tls' => $ssl && $noKeepAlive,
             'tls_version' => $ssl ? $tlsVersion : null,
+            'reuse_profile' => $noKeepAlive ? ($ssl ? 'fresh-tls-full-handshake' : 'fresh-connection') : ($ssl ? 'keep-alive+tls-session-share+http-multiplex' : 'keep-alive+http-multiplex'),
+            'connection_share_enabled' => !$noKeepAlive,
+            'ssl_session_share_supported' => \defined('CURL_LOCK_DATA_SSL_SESSION'),
+            'ssl_session_share_enabled' => $ssl && !$noKeepAlive && \defined('CURL_LOCK_DATA_SSL_SESSION'),
+            'http_multiplex_enabled' => \defined('CURLPIPE_MULTIPLEX'),
             'http_version_requested' => $httpVersion,
             'http_version_effective' => $httpVersion,
             'http_version_forced' => $httpVersion !== 'auto',
@@ -1291,6 +1312,8 @@ class Benchmark extends CommandAbstract
                 'ssl_version' => $curl['ssl_version'] ?? null,
                 'http2_supported' => (bool)($httpProtocolCapabilities['curl_client']['http2_constant'] ?? false),
                 'http3_supported' => (bool)($httpProtocolCapabilities['curl_client']['http3_constant'] ?? false),
+                'ssl_session_share_supported' => \defined('CURL_LOCK_DATA_SSL_SESSION'),
+                'http_multiplex_supported' => \defined('CURLPIPE_MULTIPLEX'),
             ],
         ];
     }
