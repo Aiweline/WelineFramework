@@ -12202,8 +12202,8 @@ class ServiceOrchestrator
             // not to every Worker process.
             echo self::ANSI_BOLD . self::ANSI_GREEN . "  " . $this->translateMessage('使用说明：') . self::ANSI_RESET . "\n";
             $tips = [
-                $this->translateMessage('公网 TLS 与 HTTP 协议由 WLS Native Protocol Engine 原生处理，无需外置 Web 服务器'),
-                $this->translateMessage('HTTPS 自动协商 HTTP/3 → HTTP/2 → HTTP/1.1，并复用 TLS 会话与多路流'),
+                $this->translateMessage('公网请求由 WLS Worker 直接处理，无需外置 Web 服务器'),
+                $this->translateMessage('当前默认提供 HTTP/1.1；HTTPS 支持 TLS 1.2/1.3 与 keep-alive'),
             ];
             if ($bindHost === '127.0.0.1' || $bindHost === '::1' || \strtolower($bindHost) === 'localhost') {
                 $tips[] = $this->translateMessage('当前仅绑定本机；需要外网直连时使用：')
