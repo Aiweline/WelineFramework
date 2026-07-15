@@ -66,7 +66,7 @@ final class HttpProtocolCapabilityProbe
                     'foundation' => [
                         'frame_codec' => \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class),
                         'hpack_decoder' => \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class),
-                        'hpack_huffman' => false,
+                        'hpack_huffman' => true,
                         'connection_adapter' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
                         'response_writer' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
                     ],
