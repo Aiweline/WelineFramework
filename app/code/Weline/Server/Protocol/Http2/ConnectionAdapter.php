@@ -81,6 +81,21 @@ final class ConnectionAdapter
                 continue;
             }
 
+            if ($type === FrameCodec::TYPE_PING && $streamId === 0) {
+                if (($flags & FrameCodec::FLAG_ACK) !== FrameCodec::FLAG_ACK) {
+                    $write .= FrameCodec::encode(FrameCodec::TYPE_PING, FrameCodec::FLAG_ACK, 0, $payload);
+                }
+                continue;
+            }
+
+            if ($type === FrameCodec::TYPE_WINDOW_UPDATE && $streamId === 0) {
+                continue;
+            }
+
+            if ($type === FrameCodec::TYPE_GOAWAY && $streamId === 0) {
+                continue;
+            }
+
             if ($streamId <= 0) {
                 return ['status' => 'error', 'write' => $write, 'requests' => $requests, 'error' => 'stream_required'];
             }
@@ -124,11 +139,6 @@ final class ConnectionAdapter
                         $requests[] = $this->buildRawRequest($streamId);
                     }
                 }
-                continue;
-            }
-
-            if ($type === FrameCodec::TYPE_PING && $streamId === 0 && (($flags & FrameCodec::FLAG_ACK) !== FrameCodec::FLAG_ACK)) {
-                $write .= FrameCodec::encode(FrameCodec::TYPE_PING, FrameCodec::FLAG_ACK, 0, $payload);
                 continue;
             }
 
