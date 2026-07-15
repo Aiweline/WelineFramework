@@ -21,6 +21,9 @@ final class HttpProtocolCapabilityProbe
         $nghttp2 = $this->probeNativeLibrary('nghttp2', 'nghttp2_strerror');
         $nghttp3 = $this->probeNativeLibrary('nghttp3', 'nghttp3_strerror');
         $ngtcp2 = $this->probeNativeLibrary('ngtcp2', 'ngtcp2_strerror');
+        $streamAlpn = $this->streamAcceptsAlpnOption();
+        $http2AdapterSelfTest = $this->http2AdapterSelfTest();
+        $http2Enabled = $streamAlpn && (bool)($http2AdapterSelfTest['ok'] ?? false);
 
         return [
             'default_policy' => [
@@ -36,7 +39,7 @@ final class HttpProtocolCapabilityProbe
                 'ffi_loaded' => \extension_loaded('FFI'),
                 'ffi_runtime' => $ffiRuntime['available'],
                 'ffi_reason' => $ffiRuntime['reason'],
-                'stream_alpn_option' => $this->streamAcceptsAlpnOption(),
+                'stream_alpn_option' => $streamAlpn,
                 // PHP streams do not expose a stable selected-ALPN accessor in
                 // this Worker path, so the Worker must only advertise h2 after a
                 // real h2 adapter is installed and self-tested.
@@ -62,15 +65,18 @@ final class HttpProtocolCapabilityProbe
                     'notes' => 'Current WorkerPolicyKernel and WlsRequest path accepts HTTP/1.0 and HTTP/1.1 text requests.',
                 ],
                 'http2' => [
-                    'enabled' => false,
+                    'enabled' => $http2Enabled,
                     'foundation' => [
                         'frame_codec' => \class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class),
                         'hpack_decoder' => \class_exists(\Weline\Server\Protocol\Http2\HpackDecoder::class),
                         'hpack_huffman' => true,
                         'connection_adapter' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
                         'response_writer' => \class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class),
+                        'adapter_self_test' => (bool)($http2AdapterSelfTest['ok'] ?? false),
                     ],
-                    'reason' => 'HTTP/2 connection adapter is not active yet; advertising h2 would make clients send binary frames to the HTTP/1.1 parser.',
+                    'reason' => $http2Enabled
+                        ? 'HTTP/2 ALPN and Worker connection adapter self-test passed; WLS can negotiate h2 and bridge requests through the unified policy pipeline.'
+                        : (string)($http2AdapterSelfTest['reason'] ?? 'HTTP/2 adapter or ALPN capability is unavailable.'),
                     'requires' => ['alpn_h2', 'hpack_huffman', 'worker_alpn_dispatch'],
                 ],
                 'http3' => [
@@ -114,6 +120,41 @@ final class HttpProtocolCapabilityProbe
             return ['available' => true, 'path' => $path, 'ffi_loadable' => true, 'reason' => 'library exists and FFI loaded symbol table'];
         } catch (\Throwable $exception) {
             return ['available' => true, 'path' => $path, 'ffi_loadable' => false, 'reason' => $exception->getMessage()];
+        }
+    }
+
+    /** @return array{ok:bool,reason:string} */
+    private function http2AdapterSelfTest(): array
+    {
+        if (!\class_exists(\Weline\Server\Protocol\Http2\FrameCodec::class)
+            || !\class_exists(\Weline\Server\Protocol\Http2\ConnectionAdapter::class)) {
+            return ['ok' => false, 'reason' => 'HTTP/2 frame codec or connection adapter class is missing'];
+        }
+
+        try {
+            $adapterClass = \Weline\Server\Protocol\Http2\ConnectionAdapter::class;
+            $frameClass = \Weline\Server\Protocol\Http2\FrameCodec::class;
+            $adapter = new $adapterClass();
+            $clientBytes = $frameClass::CLIENT_CONNECTION_PREFACE
+                . $frameClass::encode($frameClass::TYPE_SETTINGS, 0, 0)
+                . $frameClass::encode($frameClass::TYPE_WINDOW_UPDATE, 0, 0, \pack('N', 65535))
+                . $frameClass::encode(
+                    $frameClass::TYPE_HEADERS,
+                    $frameClass::FLAG_END_HEADERS | $frameClass::FLAG_END_STREAM,
+                    1,
+                    "\x82\x87\x41\x0fself-test.local\x84"
+                );
+            $received = $adapter->receive($clientBytes);
+            if (($received['status'] ?? '') !== 'ok' || empty($received['requests'][0]['raw_request'])) {
+                return ['ok' => false, 'reason' => 'HTTP/2 adapter did not emit a bridged request during self-test'];
+            }
+            $response = $adapter->encodeResponse(1, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK");
+            if ($response === '') {
+                return ['ok' => false, 'reason' => 'HTTP/2 adapter did not encode a response during self-test'];
+            }
+            return ['ok' => true, 'reason' => 'HTTP/2 adapter self-test passed'];
+        } catch (\Throwable $exception) {
+            return ['ok' => false, 'reason' => $exception->getMessage()];
         }
     }
 

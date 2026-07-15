@@ -1505,7 +1505,7 @@ CNF;
             if (\microtime(true) >= $deadline) {
                 $timedOut = true;
                 @\proc_terminate($process);
-                SchedulerSystem::usleep(100000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000);
                 $status = @\proc_get_status($process);
                 if (\is_array($status) && !empty($status['running'])) {
                     @\proc_terminate($process, 9);
@@ -1514,7 +1514,7 @@ CNF;
                 break;
             }
 
-            SchedulerSystem::usleep(50000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(50000);
         }
 
         foreach ([1, 2] as $idx) {
