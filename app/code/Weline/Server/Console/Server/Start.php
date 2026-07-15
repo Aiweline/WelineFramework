@@ -2850,8 +2850,8 @@ class Start extends CommandAbstract
     }
     
     /**
-     * Explain the Windows Worker loop fallback. Public TLS/ALPN/QUIC is owned
-     * by the native WLS protocol engine and does not depend on ext-event.
+     * Explain the Windows Worker loop fallback. The Dispatcher remains a raw
+     * TCP/L4 gate; the Worker owns HTTP/1.1 and TLS processing.
      */
     protected function printWindowsEventHttpsWarning(): void
     {
@@ -2872,7 +2872,7 @@ class Start extends CommandAbstract
         $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
         $this->printer->warning(__('║  【Windows Worker】当前未安装可信且 ABI 匹配的 PHP event 扩展。             ║'));
         $this->printer->warning(__('║  Worker 将使用稳定的 stream/select 事件循环；不会关闭任何安全策略。         ║'));
-        $this->printer->warning(__('║  HTTP/3、HTTP/2、TLS 1.3 与会话复用仍由 WLS Native Protocol Engine 提供。  ║'));
+        $this->printer->warning(__('║  当前默认协议为 HTTP/1.1；TLS 1.2/1.3 由 Worker 的 OpenSSL 实现。          ║'));
         $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
         $this->printer->warning(__('║  WLS 只会自动安装 PHP版本、架构、TS/NTS 与依赖均可验证的 event DLL。       ║'));
         $this->printer->warning(__('║  不会为了显示“已安装”而加载来源不明或 ABI 不匹配的 DLL。                    ║'));
@@ -3482,12 +3482,12 @@ class Start extends CommandAbstract
             'event_loop' => 'auto',
             'loop' => ['driver' => 'auto'],
             'http' => [
-                'protocols' => HttpProtocolSelection::DEFAULT_PROTOCOLS,
-                'preferred' => HttpProtocolSelection::HTTP_3,
-                'protocol_edge' => 'auto',
+                'protocols' => [HttpProtocolSelection::HTTP_1],
+                'preferred' => HttpProtocolSelection::HTTP_1,
+                'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                 'protocol_edge_binary' => '',
                 'tls_session_resumption' => true,
-                'alt_svc' => true,
+                'alt_svc' => false,
             ],
             'supervisor' => ['enabled' => 'auto'],
             'source' => __('默认值'),
@@ -7795,9 +7795,9 @@ PHP;
         unset($host);
         echo "\n";
         $this->printer->note(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
-        $this->printer->note(__('║  Windows 公网协议由 WLS Native Protocol Engine 原生处理，无需反向代理。    ║'));
-        $this->printer->note(__('║  同一端口 %{1} 自动协商 HTTP/3 → HTTP/2 → HTTP/1.1，并复用 TLS 会话。      ║', [$port]));
-        $this->printer->note(__('║  Windows Dispatcher 是 WLS 内部数据面，只负责透传与 L4 门禁。              ║'));
+        $this->printer->note(__('║  Windows 公网连接由 WLS Dispatcher 透传到 Worker，无需反向代理。          ║'));
+        $this->printer->note(__('║  当前端口 %{1} 默认提供 HTTP/1.1；TLS 1.2/1.3 由 Worker 处理。              ║', [$port]));
+        $this->printer->note(__('║  Windows Dispatcher 只负责连接透传与 L4 门禁，策略仍由 Worker 执行。       ║'));
         $this->printer->note(__('║  默认链路完全由 WLS 自己提供，不启动或依赖任何外置 Web 服务器。            ║'));
         $this->printer->note(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
     }
@@ -7844,9 +7844,9 @@ PHP;
         
         $this->printer->separator('─');
         
-        $this->printer->note(__('公网协议由 WLS Native Protocol Engine 原生处理，无需外置 Web 服务器。'));
+        $this->printer->note(__('公网请求由 WLS Worker 直接处理，无需外置 Web 服务器。'));
         if ($sslEnabled) {
-            $this->printer->note(__('同一端口自动协商 HTTP/3 → HTTP/2 → HTTP/1.1，并复用 TLS 会话。'));
+            $this->printer->note(__('当前默认提供 HTTP/1.1 over TLS，并支持 TLS 1.2/1.3。'));
         }
         if (!$this->isUsablePublicHost($host)) {
             $this->printer->note(__('当前仅绑定本机；需要外网直连时使用：') . 'php bin/w server:start --host 0.0.0.0');
@@ -7958,9 +7958,9 @@ PHP;
                 '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability/compatibility（默认 auto）'),
                 '--topology <mode>' => __('拓扑：auto/direct/dispatcher（默认 auto；independent 已禁止启动）'),
                 '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
-                '--no-auto-deps' => __('显式禁用启动前依赖自动安装；Direct 与 h2/h3 协议边缘仍 fail-closed，Dispatcher event 可使用有界 select'),
+                '--no-auto-deps' => __('显式禁用启动前依赖自动安装；Direct 缺少必需扩展时 fail-closed，Dispatcher event 可使用有界 select'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
-                '--direct' => __('直连拓扑：不启动 WLS Dispatcher；默认 HTTPS 协议边缘直达私有 Worker'),
+                '--direct' => __('直连拓扑：不启动 WLS Dispatcher；Worker 通过共享监听能力直接接收请求'),
                 '--no-dispatcher' => __('已禁用：independent 尚不具备完整 READY/策略保证，请使用 direct 或 --dispatcher'),
                 '--dispatcher' => __('Linux/macOS 显式改用 Dispatcher；Windows 默认且只能使用此模式'),
                 '--help' => __('显示帮助信息'),
@@ -7975,9 +7975,9 @@ PHP;
                 __('默认拓扑') => __('Linux 在 SO_REUSEPORT 真实分流探测通过后 direct；macOS 在共享 FD 真实 accept 分布探测通过后 direct；Windows 固定 Dispatcher'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
-                __('HTTP 自动协商') => __('HTTPS 默认 h3/h2/h1：QUIC HTTP/3、ALPN HTTP/2、HTTP/1.1 自动回退；状态由 server:status/doctor 展示'),
-                __('连接复用') => __('默认开启 TLS session ticket；HTTP/2/3 多路复用与协议边缘到 Worker 的私有 keep-alive 连接池'),
-                __('协议边缘依赖') => __('h2/h3 默认使用 WLS Native Protocol Engine；启动前自动构建并验证 ALPN + QUIC，失败不静默降级；Caddy 仅为显式兼容模式'),
+                __('HTTP 协议') => __('当前默认 HTTP/1.1；HTTP/2/3 在 WLS 原生 Transport Adapter 完成前保持关闭，状态由 server:status/doctor 展示'),
+                __('连接复用') => __('HTTP/1.1 keep-alive 默认启用；TLS 会话能力由当前 PHP/OpenSSL 运行时验证'),
+                __('协议扩展') => __('仓库内 Go 协议边缘已移除；Caddy 仅保留为用户显式选择的兼容模式，不是默认依赖'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
                 __('SSL 协议') => __('仅支持 TLS 1.2/1.3；空值或无效 wls.ssl.protocols 会在启动前被拒绝'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
