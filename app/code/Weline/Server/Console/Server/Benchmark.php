@@ -15,6 +15,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -1067,6 +1068,7 @@ class Benchmark extends CommandAbstract
             'http_version_forced' => (bool)($benchmarkContext['http_version_forced'] ?? false),
             'http_version_negotiated' => $benchmarkContext['http_version_negotiated'] ?? null,
             'http_version_hits' => (array)($benchmarkContext['http_version_hits'] ?? []),
+            'http_protocol_capabilities' => (array)($benchmarkContext['http_protocol_capabilities'] ?? []),
             'instance_name' => (string)($benchmarkContext['instance_name'] ?? ''),
             'instance' => (string)($benchmarkContext['instance_name'] ?? ''),
             'target_attribution' => (string)($benchmarkContext['target_attribution'] ?? 'unattributed'),
@@ -1226,6 +1228,7 @@ class Benchmark extends CommandAbstract
             ? $serverConfig['runtime_metadata']
             : [];
         $curl = \function_exists('curl_version') ? (array)\curl_version() : [];
+        $httpProtocolCapabilities = (new HttpProtocolCapabilityProbe())->snapshot();
 
         return [
             'requested_requests' => $totalRequests,
@@ -1239,6 +1242,7 @@ class Benchmark extends CommandAbstract
             'http_version_forced' => $httpVersion !== 'auto',
             'http_version_negotiated' => null,
             'http_version_hits' => [],
+            'http_protocol_capabilities' => $httpProtocolCapabilities,
             'instance_name' => (string)($serverConfig['instance'] ?? ''),
             'target_attribution' => (string)($serverConfig['target_attribution'] ?? 'unattributed'),
             'connect_host' => (string)($serverConfig['host'] ?? ''),
@@ -1271,8 +1275,8 @@ class Benchmark extends CommandAbstract
                 'event_extension_version' => \extension_loaded('event') ? (\phpversion('event') ?: null) : null,
                 'curl_version' => $curl['version'] ?? null,
                 'ssl_version' => $curl['ssl_version'] ?? null,
-                'http2_supported' => \defined('CURL_HTTP_VERSION_2_0'),
-                'http3_supported' => \defined('CURL_HTTP_VERSION_3'),
+                'http2_supported' => (bool)($httpProtocolCapabilities['curl_client']['http2_constant'] ?? false),
+                'http3_supported' => (bool)($httpProtocolCapabilities['curl_client']['http3_constant'] ?? false),
             ],
         ];
     }
