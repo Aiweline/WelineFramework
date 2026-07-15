@@ -162,14 +162,28 @@ final class ConnectionAdapter
     public function encodeResponse(int $streamId, string $httpResponse): string
     {
         [$status, $headers, $body] = $this->parseHttpResponse($httpResponse);
+        return $this->encodeSimpleResponse($streamId, $status, $headers, $body);
+    }
+
+    /**
+     * Encode a response that already has structured status/headers/body.
+     *
+     * This avoids reparsing an HTTP/1.1 response string for transport-level
+     * synthetic paths such as /_wls/health while keeping regular controller
+     * responses on encodeResponse().
+     *
+     * @param array<string,string|int|float|list<string|int|float>> $headers
+     */
+    public function encodeSimpleResponse(int $streamId, int $status, array $headers, string $body): string
+    {
         $headerBlock = self::encodeStatusHeader($status);
         foreach ($headers as $name => $values) {
-            $lower = \strtolower($name);
+            $lower = \strtolower((string)$name);
             if (\in_array($lower, ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade'], true)) {
                 continue;
             }
-            foreach ($values as $value) {
-                $headerBlock .= self::encodeLiteralHeader($lower, $value);
+            foreach ((array)$values as $value) {
+                $headerBlock .= self::encodeLiteralHeader($lower, (string)$value);
             }
         }
         return FrameCodec::encode(FrameCodec::TYPE_HEADERS, FrameCodec::FLAG_END_HEADERS, $streamId, $headerBlock)
