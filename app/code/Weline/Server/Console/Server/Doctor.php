@@ -6,6 +6,7 @@ namespace Weline\Server\Console\Server;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
@@ -45,6 +46,13 @@ class Doctor extends CommandAbstract
                 $this->printer->note($line);
             }
         }
+        $protocols = \is_array($diagnostics['protocols'] ?? null) ? $diagnostics['protocols'] : [];
+        $policy = \is_array($protocols['default_policy'] ?? null) ? $protocols['default_policy'] : [];
+        $http3 = \is_array($protocols['http3_readiness'] ?? null) ? $protocols['http3_readiness'] : [];
+        $this->printer->note('HTTP default: target=' . (string)($policy['target_preferred'] ?? 'http/3')
+            . ', effective=' . (string)($policy['effective_preferred'] ?? 'unknown'));
+        $this->printer->note('HTTP/3 readiness: ' . ((bool)($http3['ready'] ?? false) ? 'ready' : 'not ready')
+            . ' (' . (string)($http3['summary'] ?? 'unknown') . ')');
     }
 
     /**
@@ -105,6 +113,7 @@ class Doctor extends CommandAbstract
             ]);
         }
         $diagnostics = (new RuntimeDiagnosticsFormatter())->toDiagnosticArray($profile, $strategy);
+        $diagnostics['protocols'] = (new HttpProtocolCapabilityProbe())->snapshot();
         $diagnostics['instance'] = $instanceName;
         $diagnostics['config_source'] = $runningSchemaV3
             ? 'running endpoint schema v3'

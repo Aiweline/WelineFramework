@@ -22,8 +22,10 @@ final class HttpProtocolCapabilityProbe
         $nghttp3 = $this->probeNativeLibrary('nghttp3', 'nghttp3_strerror');
         $ngtcp2 = $this->probeNativeLibrary('ngtcp2', 'ngtcp2_strerror');
         $streamAlpn = $this->streamAcceptsAlpnOption();
+        $udpSocket = $this->probeUdpSocketRuntime();
         $http2AdapterSelfTest = $this->http2AdapterSelfTest();
         $http2Enabled = $streamAlpn && (bool)($http2AdapterSelfTest['ok'] ?? false);
+        $http3Readiness = $this->buildHttp3Readiness($curl, $ffiRuntime, $nghttp3, $ngtcp2, $udpSocket);
 
         return [
             'default_policy' => [
@@ -42,6 +44,8 @@ final class HttpProtocolCapabilityProbe
                 'ffi_runtime' => $ffiRuntime['available'],
                 'ffi_reason' => $ffiRuntime['reason'],
                 'stream_alpn_option' => $streamAlpn,
+                'udp_socket_runtime' => (bool)($udpSocket['available'] ?? false),
+                'udp_socket_reason' => (string)($udpSocket['reason'] ?? ''),
                 // PHP streams do not expose a stable selected-ALPN accessor in
                 // this Worker path, so the Worker must only advertise h2 after a
                 // real h2 adapter is installed and self-tested.
@@ -60,6 +64,8 @@ final class HttpProtocolCapabilityProbe
                 'nghttp3' => $nghttp3,
                 'ngtcp2' => $ngtcp2,
             ],
+            'udp' => $udpSocket,
+            'http3_readiness' => $http3Readiness,
             'wls_adapters' => [
                 'http1' => [
                     'enabled' => true,
@@ -83,10 +89,74 @@ final class HttpProtocolCapabilityProbe
                 ],
                 'http3' => [
                     'enabled' => false,
-                    'reason' => 'HTTP/3 requires a QUIC/UDP transport adapter; it cannot be served by the current TCP TLS stream Worker.',
-                    'requires' => ['udp_quic_listener', 'ngtcp2_or_equivalent', 'nghttp3_or_equivalent'],
+                    'transport' => 'quic/udp',
+                    'foundation' => $http3Readiness['checks'],
+                    'reason' => 'HTTP/3 requires a WLS QUIC/UDP transport adapter; current readiness: ' . $http3Readiness['summary'],
+                    'requires' => ['udp_quic_listener', 'tls1.3_quic_stack', 'ngtcp2_or_equivalent', 'nghttp3_or_equivalent', 'worker_quic_dispatch'],
+                    'missing' => $http3Readiness['missing'],
+                    'install_hints' => $http3Readiness['install_hints'],
                 ],
             ],
+        ];
+    }
+
+    /** @return array{available:bool,reason:string} */
+    private function probeUdpSocketRuntime(): array
+    {
+        $uri = 'udp://127.0.0.1:0';
+        $errno = 0;
+        $errstr = '';
+        $socket = @\stream_socket_server($uri, $errno, $errstr, STREAM_SERVER_BIND);
+        if (\is_resource($socket)) {
+            @\fclose($socket);
+            return ['available' => true, 'reason' => 'UDP bind probe succeeded on loopback'];
+        }
+
+        return [
+            'available' => false,
+            'reason' => $errstr !== '' ? ($errstr . ' (errno=' . $errno . ')') : 'UDP bind probe failed',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $curl
+     * @param array<string,mixed> $ffiRuntime
+     * @param array<string,mixed> $nghttp3
+     * @param array<string,mixed> $ngtcp2
+     * @param array<string,mixed> $udpSocket
+     * @return array{ready:bool,summary:string,checks:array<string,bool>,missing:list<string>,install_hints:list<string>}
+     */
+    private function buildHttp3Readiness(array $curl, array $ffiRuntime, array $nghttp3, array $ngtcp2, array $udpSocket): array
+    {
+        $checks = [
+            'udp_socket_runtime' => (bool)($udpSocket['available'] ?? false),
+            'ffi_runtime' => (bool)($ffiRuntime['available'] ?? false),
+            'ngtcp2_library' => (bool)($ngtcp2['available'] ?? false),
+            'ngtcp2_ffi_loadable' => (bool)($ngtcp2['ffi_loadable'] ?? false),
+            'nghttp3_library' => (bool)($nghttp3['available'] ?? false),
+            'nghttp3_ffi_loadable' => (bool)($nghttp3['ffi_loadable'] ?? false),
+            'curl_http3_client' => \defined('CURL_HTTP_VERSION_3') && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP3'),
+            'wls_quic_transport_adapter' => false,
+        ];
+        $missing = [];
+        foreach ($checks as $name => $ok) {
+            if (!$ok) {
+                $missing[] = $name;
+            }
+        }
+
+        $installHints = match (\PHP_OS_FAMILY) {
+            'Darwin' => ['brew install ngtcp2 nghttp3 curl-openssl', 'ensure PHP curl is linked with HTTP/3-capable libcurl'],
+            'Windows' => ['install verified ARM64-compatible ngtcp2/nghttp3/curl DLLs before enabling QUIC', 'keep Dispatcher TCP fallback on Windows until a QUIC adapter is verified'],
+            default => ['install distro packages for ngtcp2/nghttp3 and HTTP/3-capable curl', 'enable or ship a WLS QUIC/UDP transport adapter'],
+        };
+
+        return [
+            'ready' => $missing === [],
+            'summary' => $missing === [] ? 'all HTTP/3 prerequisites are present' : ('missing ' . \implode(',', $missing)),
+            'checks' => $checks,
+            'missing' => $missing,
+            'install_hints' => $installHints,
         ];
     }
 
