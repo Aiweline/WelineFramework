@@ -81,3 +81,9 @@ Browser 同代验收只访问专用 `https://127.0.0.1:10977/`：首页标题/H1
 同日继续完成一个不触碰请求热路径的 P4 最小批次：三个 Worker 入口对 Framework Runtime bootstrap 和 FPC fast-path 构造改用同一公共 helper；各 Transport Adapter 的日志、SSL trace、异常边界、listener、握手、EventBase、连接表和写缓冲保持原状。专用 10979 实例约 2 秒 4/4 READY，动态首渲染 10.42–10.84ms；实际 h1/h2/h3、TLS 1.3 ticket `New -> Reused`、Process FPC、后台 Key 404/200 均通过。HTTP/3 10,000 请求和 HTTP/2 100,000 请求均 0 错误，分别为 14,557.04 / 14,594.52 QPS。Browser 首页与带 Key 登录页可见且 Console 0 error/warn，静态/架构/策略/Semgrep 门禁全绿，实例和端口已清理。
 
 发布边界保持透明：核心提交 `ac55605ba` 已纯快进到 Gitee/GitHub 的功能分支与 master，本地未检出的 master 也原子快进。分项目标没有安全可更新站点；分仓 32 个映射仓中 6 个 no-change、25 个 dirty、ThemeFancy 远端不可克隆，因此没有创建新 tag、push 或 Packagist 刷新。Windows VM 的 5 个外部 PHP 进程仍持续占用约 480%/600% CPU，空闲机 4/16 Worker 规模门槛继续保留，未终止外部任务或伪造数据。
+
+2026-07-15 又完成一批低风险 P4 去重：后台未登录回跳地址的纯请求规范化由 HTTP/stream-TLS 两份实现收敛为 `worker_runtime_common.php` 的唯一实现，TLS 分支补齐 WLS 原始公开端口语义。入口/公共文件当前为 5,037 / 6,028 / 2,053 / 519 行，四文件净减少 87 行；传输、TLS、HTTP/2/3、FPC 和安全策略路径未改变。
+
+专用 10980 实例约 2 秒达到 5/5 READY，四 Worker 动态首渲染 10.48–10.93ms。H1/H2、后台 Key 404/200、保护页 302、TLS 1.3 fresh-connection session reuse 均通过；HTTP/3 10,000 请求为 13,514.04 QPS / p95 4.057ms，HTTP/2 100,000 请求为 13,888.49 QPS / p95 15.596ms，全部 0 错误且 max 低于 52ms。Browser 首页与中文后台登录表单可见，Console 日志为空；架构、编译、策略、Semgrep 与 diff 门禁全绿。实例、端口和 PID 已全部清理，生产 9981 未操作。
+
+当前状态仍是 `validated_cross_platform_candidate_windows_scale_pending`：实现和 macOS/Linux/Windows ARM 单 Worker/4 Worker协议证据已经存在，但受外部 PHP 长期占满 Windows VM CPU 影响，空闲环境 4/16 Worker 冷启动、完整 QPS 与长稳发布门槛仍不能如实关闭。
