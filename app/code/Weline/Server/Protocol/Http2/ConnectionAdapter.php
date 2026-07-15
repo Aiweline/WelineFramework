@@ -186,8 +186,25 @@ final class ConnectionAdapter
                 $headerBlock .= self::encodeLiteralHeader($lower, (string)$value);
             }
         }
-        return FrameCodec::encode(FrameCodec::TYPE_HEADERS, FrameCodec::FLAG_END_HEADERS, $streamId, $headerBlock)
-            . FrameCodec::encode(FrameCodec::TYPE_DATA, FrameCodec::FLAG_END_STREAM, $streamId, $body);
+        $frames = FrameCodec::encode(FrameCodec::TYPE_HEADERS, FrameCodec::FLAG_END_HEADERS, $streamId, $headerBlock);
+        if ($body === '') {
+            return $frames . FrameCodec::encode(FrameCodec::TYPE_DATA, FrameCodec::FLAG_END_STREAM, $streamId, '');
+        }
+
+        $maxFrameSize = FrameCodec::DEFAULT_MAX_FRAME_SIZE;
+        $bodyLength = \strlen($body);
+        for ($offset = 0; $offset < $bodyLength; $offset += $maxFrameSize) {
+            $chunk = \substr($body, $offset, $maxFrameSize);
+            $isLast = ($offset + $maxFrameSize) >= $bodyLength;
+            $frames .= FrameCodec::encode(
+                FrameCodec::TYPE_DATA,
+                $isLast ? FrameCodec::FLAG_END_STREAM : 0,
+                $streamId,
+                $chunk
+            );
+        }
+
+        return $frames;
     }
 
     private function buildRawRequest(int $streamId): array
