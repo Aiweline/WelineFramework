@@ -65,7 +65,7 @@ Windows Application Error / WER 记录：
 
 - Direct、认证 Dispatcher 与 Windows 原生环境都使用 `wls.ssl.engine=stream`；这是启动前强制门禁，不是运行期 fallback。
 - 若 fresh-connect 70ms 是硬目标，Windows 原生 PHP 内置 TLS 不应继续无界加复杂度。
-- 默认生产路径由 WLS Native Protocol Engine 终结公开 TLS/QUIC，并通过私有 keep-alive 连接进入 Worker；不要求外置 TLS 终止器，也不依赖 `event_buffer` 承担公网握手。
+- 默认生产路径由 stream TLS Worker 终结公开 TLS 并提供 HTTP/1.1；不要求外置 TLS 终止器，也不把实验性的 `event_buffer` 当作公网握手能力。
 - Linux/macOS 或后续 event 扩展版本可重新验证 `event_buffer`，但必须先用最小 SSL bufferevent server 通过 smoke，再分别完成 Direct 共享监听和 Dispatcher 认证前缀的协议门禁。
 
 ## 最小验收脚本

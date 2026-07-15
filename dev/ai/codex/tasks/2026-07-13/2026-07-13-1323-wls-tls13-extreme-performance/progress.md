@@ -132,3 +132,14 @@
 - 专用实例 `ai-test-backend-return-20260715-0945`（10980）约 2 秒达到 Direct/shared_fd/event/stream、Master + Native Edge + 4 Worker 共 5/5 READY，动态首渲染 10.48–10.93ms。实际 H1/H2 health 为 200，裸 `/admin/login` 为 404、带 Key 登录为 200；受保护通知详情无会话时 302 到带 Key 登录地址。TLS 1.3 两个 fresh TCP 连接的第二次明确输出 `SSL reusing session`，协商 `TLS_AES_128_GCM_SHA256 / X25519`。
 - 同代 HTTP/3 health 10,000/10,000、0 错误、13,514.04 QPS、p95 4.057ms、p99 5.197ms、max 16.036ms；HTTP/2 health 100,000/100,000、0 错误、13,888.49 QPS、p95 15.596ms、p99 20.667ms、max 51.516ms。Browser 首页与带 Key 登录页可见，表单字段完整，两页 Console 日志为空。
 - 静态门禁通过：PHP lint、`git diff --check`、architecture:check（83 模块/4,046 PHP/7,167 引用/0 finding）、framework:compile（39 Provider/0 deferred）、12 条策略检查、Semgrep 85 条规则/3 文件 0 finding。自动验收后标准 stop flow 已释放 10980 TCP/UDP、29183–29186、39183 与全部 Master/Edge/Worker PID；生产 9981 未操作。Windows 空闲环境 4/16 Worker 规模门槛仍待复验，总计划不标记 complete。
+
+## 2026-07-15 Go 协议边缘撤销与 HTTP/1.1 真实能力复验
+
+- 用户明确要求删除 Go 语言文件。原 `native/protocol-edge` 是仓内自研的 TLS 1.3、ALPN、HTTP/2、HTTP/3/QUIC 和连接复用协议边缘；本轮删除其全部受版本控制的 Go 源码及 `go.mod/go.sum`，同时移除 Go 工具链下载、校验、构建、缓存、发布和 Native 探测逻辑。
+- 删除前的动态后台并发复核发现真实阻塞：两轮 c128 共出现 235 次 30 秒 upstream response-header timeout。该证据撤销此前“Native HTTP/2/3 已稳定”的发布结论，历史 Native QPS 仅保留为失效实验记录，不能再作为当前能力或门槛证据。
+- 默认运行能力收敛为 WLS Worker 原生 HTTP/1.1 + TLS 1.2/1.3；`protocol_edge`、Alt-Svc 默认关闭。显式 Native 配置会在创建子进程前 fail-closed；Caddy 只保留为用户显式选择的兼容适配器，不是默认依赖，也不会自动安装 Go。
+- 三个 Worker 入口继续共享 Fiber 请求上下文入口，HTTP 与 stream TLS Transport Adapter 不再重复该实现；架构与部署文档同步标注当前能力、已撤销的 Go 路径和未来由 WLS Transport Adapter 原生实现 HTTP/2/3 的边界。
+- 专用实例 `ai-test-http1-no-go-20260715-1028`（10982）约 2.3 秒达到 Direct 4/4 READY，动态首渲染 11.04–11.89ms；首页 HTTP/1.1 200 且 Process FPC HIT，客户端请求 h2 时正确回退到 1.1，裸/带 Key 后台为 404/200，TLS 1.3 协商成功。
+- 首页 c32×1,500 为 1,500/1,500、0 错误、11,419.44 QPS、p95 5.081ms、p99 15.646ms、max 19.982ms。带 Key 动态后台 c128×1,200 为 1,200/1,200、0 错误、217.70 QPS、p95 824.151ms、p99 933.006ms、max 955.448ms；旧协议边缘的 30 秒请求挂起不再出现。
+- Browser 验收首页与带 Key 登录页均可见，登录字段完整，Console 为空；裸后台由同代真实 HTTPS 返回 404。自动验证后已通过标准 stop flow 停止实例，10982/私有端口无监听，生产 9981 未操作。
+- PHP lint、`architecture:check`（83 模块/4,046 PHP/7,158 跨模块引用）和运行状态复核通过。当前总计划仍未完成：HTTP/2/3 需要新的 WLS 原生 Transport Adapter，Windows 空闲环境 4/16 Worker 门槛也仍待复验。

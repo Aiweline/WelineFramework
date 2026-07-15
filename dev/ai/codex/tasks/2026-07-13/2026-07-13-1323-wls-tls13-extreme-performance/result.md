@@ -1,6 +1,6 @@
 # 结果
 
-状态：`validated_cross_platform_candidate_windows_scale_pending`
+状态：`http1_direct_validated_transport_adapter_and_windows_scale_pending`
 
 已落地三个定向修复：每 Worker 动态预热串行门禁、READY-only 单槽恢复提交、Darwin shared listener 500us busy cooldown。失败实验（1000us cooldown、一次 Worker 重连风暴、动态首渲染 310.95ms）均保留在验证记录中，没有作为通过数据删除。
 
@@ -87,3 +87,13 @@ Browser 同代验收只访问专用 `https://127.0.0.1:10977/`：首页标题/H1
 专用 10980 实例约 2 秒达到 5/5 READY，四 Worker 动态首渲染 10.48–10.93ms。H1/H2、后台 Key 404/200、保护页 302、TLS 1.3 fresh-connection session reuse 均通过；HTTP/3 10,000 请求为 13,514.04 QPS / p95 4.057ms，HTTP/2 100,000 请求为 13,888.49 QPS / p95 15.596ms，全部 0 错误且 max 低于 52ms。Browser 首页与中文后台登录表单可见，Console 日志为空；架构、编译、策略、Semgrep 与 diff 门禁全绿。实例、端口和 PID 已全部清理，生产 9981 未操作。
 
 当前状态仍是 `validated_cross_platform_candidate_windows_scale_pending`：实现和 macOS/Linux/Windows ARM 单 Worker/4 Worker协议证据已经存在，但受外部 PHP 长期占满 Windows VM CPU 影响，空闲环境 4/16 Worker 冷启动、完整 QPS 与长稳发布门槛仍不能如实关闭。
+
+## 2026-07-15 Go 协议边缘删除结果
+
+按用户明确要求，仓内 `native/protocol-edge` 的全部受版本控制 Go 源码、模块锁定文件和自动构建链路已删除。它原本承担 TLS/ALPN、HTTP/2、HTTP/3/QUIC 与连接复用，但动态后台并发验证暴露 235 次 30 秒 upstream response-header timeout，因此此前 Native Edge 的协议与性能结论已撤销，仅作为历史失败证据保留。
+
+当前默认能力为 WLS Worker 原生 HTTP/1.1、TLS 1.2/1.3、Direct/Dispatcher 拓扑和统一 WorkerPolicyKernel。Native 模式在启动前明确失败；Caddy 只保留显式兼容入口，不再作为默认组件。文档、帮助、默认配置、Master/Worker 启动输出和中英文提示均已同步，不再宣称默认 HTTP/2/3，也不会自动下载或编译 Go。
+
+专用 macOS Direct 实例 10982 在约 2.3 秒内 4/4 READY，首页 Process FPC HIT；HTTP/1.1、TLS 1.3、后台 Key 404/200 与 Browser 可见性通过。首页 c32×1,500 为 0 错误、11,419.44 QPS、p95 5.081ms；动态后台 c128×1,200 为 0 错误、p99 933.006ms、max 955.448ms，没有旧边缘的 30 秒挂起。实例已停止，生产 9981 未操作。
+
+该删除任务已完成，但 WLS 总计划不能标记完成：要恢复 HTTP/2/3，必须实现不依赖 Go/Caddy 的 WLS 原生 Transport Adapter，并重新执行多路复用、协议协商、长稳和跨平台门槛；Windows 空闲 4/16 Worker 规模验证仍待补齐。
