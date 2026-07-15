@@ -4751,37 +4751,6 @@ function logSslHandshakeFailure(string $peerName, int $connId, string $errorMsg)
 }
 
 /**
- * Fiber 请求开始前清理并初始化请求级上下文，避免前一请求残留污染当前 Fiber。
- */
-function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
-{
-    // 关键修复：Fiber 启动时必须完全重置所有请求级状态，防止复用上一个 Fiber 的残留状态
-    // 这是 WLS 多 Fiber 并发的核心隔离点：每个新 Fiber 必须从干净的全局状态开始
-    \Weline\Framework\Runtime\StateManager::reset();
-
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
-    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
-
-    $resolvedConnectionId = $connectionId;
-    if ($resolvedConnectionId === null && \is_resource($conn)) {
-        $resolvedConnectionId = \get_resource_id($conn);
-    }
-
-    $context = \Weline\Framework\Context::current();
-    $context->set('meta.type', 'request');
-    $context->set('meta.mode', 'wls');
-    $context->set('runtime.connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->set('runtime.chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    \Weline\Framework\Runtime\RequestContext::setConnectionId($resolvedConnectionId === null ? null : (string)$resolvedConnectionId);
-}
-
-/**
  * 将 SSE 数据接入 worker 现有的非阻塞写缓冲，并协作等待缓冲区排空。
  */
 function wlsSslIsSseClientConnected(

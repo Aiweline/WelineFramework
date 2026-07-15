@@ -7,7 +7,7 @@ WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器，不依赖 
 | 模式 | 说明 |
 |------|------|
 | **正常模式** | Nginx 监听 80/443，按 `server_name` 转发到 PHP-FPM 或 WLS；域名在 Nginx 与后台均需配置。 |
-| **WLS 直接对外（推荐）** | WLS 监听 **80（HTTP）/ 443（HTTPS）**，无需外置 Nginx；HTTPS 公开端口由内置协议边缘自动协商 h3/h2/h1。Linux/macOS 拓扑仍为 direct（无 WLS Dispatcher），Windows 默认 Dispatcher。 |
+| **WLS 直接对外（推荐）** | WLS 监听 **80（HTTP）/ 443（HTTPS）**，无需外置 Nginx；当前默认公开协议为 HTTP/1.1，HTTPS 支持 TLS 1.2/1.3。Linux/macOS 拓扑为 direct（无 WLS Dispatcher），Windows 默认 Dispatcher。 |
 | **WLS 自定义端口** | 使用 `-p 9981` 等监听高端口，适合与 Nginx 反代或开发环境。 |
 
 接入含义：**请求能到达 WLS 端口** + **在后台为该网站配置域名**。
@@ -28,11 +28,11 @@ WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器，不依赖 
         'topology' => 'auto', // auto | direct | dispatcher
     ],
     'http' => [
-        'protocols' => ['h3', 'h2', 'h1'],
-        'preferred' => 'h3',
-        'protocol_edge' => 'auto', // auto | native | caddy(显式兼容) | disabled
+        'protocols' => ['h1'],
+        'preferred' => 'h1',
+        'protocol_edge' => 'disabled', // caddy 仅为用户显式选择的兼容模式
         'tls_session_resumption' => true,
-        'alt_svc' => true,
+        'alt_svc' => false,
     ],
 ],
 // 多实例示例
@@ -85,12 +85,12 @@ php bin/w server:stop
 
 ### 3.0 启动依赖预检
 
-`server:start` 在创建 Master/Worker 之前先按唯一拓扑事实求出 `requested/effective topology` 和 `HttpProtocolSelection`，再决定必需依赖。Linux/macOS Direct 必须安装并验证 `sockets + ext-event`；HTTPS 在所有拓扑下还必须验证 `OpenSSL`。默认 h3/h2 使用 WLS Native Protocol Engine，启动会验证当前平台二进制、ALPN、QUIC、session ticket、upstream keep-alive 与 atomic reload；缺失时下载固定摘要的 Go 工具链并从仓库内固定模块构建自包含二进制，构建后重新探测。任一必需依赖失败即 fail-closed；不会为了“启动成功”静默关闭 HTTP/2/3、禁用持久会话复用或改写拓扑。显式 Dispatcher 的 `ext-event` 仍是可选优化。
+`server:start` 在创建 Master/Worker 之前先按唯一拓扑事实求出 `requested/effective topology` 和 `HttpProtocolSelection`，再决定必需依赖。Linux/macOS Direct 必须安装并验证 `sockets + ext-event`；HTTPS 在所有拓扑下还必须验证当前 PHP/OpenSSL。默认协议是 h1，不下载或构建 Go 工具链。任一拓扑、事件循环或 TLS 必需能力失败都 fail-closed；显式 Dispatcher 的 `ext-event` 仍是可选优化。
 
 - macOS：Homebrew 和 PECL 以当前用户运行，不使用 `sudo`。
 - Linux：按 apt/dnf/yum/apk/pacman/Docker 当前平台策略执行；非交互启动不会等待 sudo 密码。
 - Windows：HTTPS 缺失 OpenSSL 时只允许当前 PHP ABI 的扩展安装器修复；PHP 8.4 缺少 `event` 时只下载官方 PECL event 3.1.4 的精确架构/TS-NTS/VS17 包，固定 SHA-256 校验后原子发布 `php_event.dll + pthreadVC2.dll`，并由同一 `PHP_BINARY` 新子进程实际加载验证。没有固定可信包或验证失败时保持 `Dispatcher + stream/select`，不会猜测或跨版本加载二进制。
-- HTTP 协议引擎：默认构建并运行 WLS Native Protocol Engine，不安装外置 Web 服务器；Go 工具链按 OS/架构固定版本和 SHA-256 下载到 `var/server/runtime/toolchains`，只作为构建依赖，发布产物是自包含二进制。只有用户显式配置 `protocol_edge=caddy` 时才进入旧兼容安装链。
+- HTTP 协议：默认由 WLS Worker 直接提供 HTTP/1.1。仓库内 Go 协议边缘和自动构建链已删除；用户显式配置 `protocol_edge=caddy` 时才进入兼容适配链，默认不会安装外置 Web 服务器。
 - 依赖安装、reuseport probe 或 direct 策略 capability 失败时默认停止启动；Linux/macOS 如需继续必须由运维明确改用 `--dispatcher`，不静默降级。
 
 ### 3.1 架构说明（多 Master / 多 Worker / 流量分发）
@@ -100,12 +100,12 @@ php bin/w server:stop
 - **1 个 Master 进程**：不承载业务 HTTP/HTTPS，负责启动、健康监督、路由发布、平滑重载和异常 Worker 恢复。
 - **N 个 Worker 进程**：常驻内存处理框架请求；实际监听方式由 Dispatcher/direct 拓扑决定。
 - **0 或 1 个 Dispatcher**：Windows `auto` 必定启用；Linux/macOS `auto` 不启动，只有显式 `--dispatcher` 才启用。
-- **0 或 1 个 HTTP Protocol Edge**：HTTPS 默认启用，负责公开 TLS/QUIC、ALPN、session ticket 和 h2/h3 多路复用；不执行 Worker 安全与缓存策略。
+- **0 或 1 个兼容 Protocol Edge**：默认不启用；仅在用户显式选择兼容模式时存在，且不得执行 Worker 安全与缓存策略。
 - **0 或 1 个 HTTP 重定向进程**：仅需要 HTTP 到 HTTPS 重定向时存在，不承载业务请求。
 
 实例之间通过实例名区分（如 `default`、`api`），实例信息存于 `var/server/instances/{实例名}.json`，多实例互不干扰。
 
-**Master 不做数据面流量分发**。HTTPS 默认配置下，协议边缘监听公开 TCP+UDP 端口：Linux/macOS direct 直接复用到 READY Worker 的私有 loopback 端口，不创建 WLS Dispatcher；Windows/显式 Dispatcher 先进入内部 Dispatcher，再由其选择 Worker。只在显式关闭协议边缘、仅启用 h1 的 legacy 配置中，Linux 才用 SO_REUSEPORT、macOS 才由 Master 传递共享 listener FD 给 Worker。
+**Master 不做数据面流量分发**。默认 h1 配置下，Linux 使用 SO_REUSEPORT、macOS 由 Master 传递共享 listener FD 给 Worker；Windows/显式 Dispatcher 由 Dispatcher 选择 READY Worker 并透传原始 TCP/TLS 字节。只有用户显式启用兼容边缘时，Worker 才使用带实例认证的私有 loopback 入口。
 
 **总结**：
 
@@ -114,7 +114,7 @@ php bin/w server:stop
 | 多 Master（多实例） | ✅ 已实现 | 多实例 = 多份 Master+Workers，按实例名区分 |
 | Master 监控/重启 Worker | ✅ 已实现 | 健康检查、异常重启、重载信号 |
 | Master 监听 443 并分发给 Worker | ❌ 不是数据面职责 | macOS Master 只 bind/传递 listener FD，不 accept/转发；Windows Dispatcher 或 Linux 内核负责分流 |
-| 单端口 443 多 Worker 负载均衡 | ✅ 已实现 | 默认由协议边缘连接池分发；Windows 后接 Dispatcher，POSIX direct 直达 READY Worker；legacy h1 才使用 SO_REUSEPORT/共享 FD |
+| 单端口 443 多 Worker 负载均衡 | ✅ 已实现 | Windows 由 Dispatcher 分发；Linux 使用 SO_REUSEPORT；macOS 使用 Master 共享 listener FD |
 
 如果现有架构由 Nginx/LB 统一入口，上游仍应连接一个 WLS direct 公开端口或 Dispatcher 公开端口；不应绕过 READY/策略门禁直连独立 Worker 端口。
 
@@ -123,7 +123,7 @@ php bin/w server:stop
 `auto` 根据平台选择不同数据面。不同拓扑不能只看峰值 QPS，还要对照业务路径的 p95/p99、Worker 分布、TLS 和故障恢复。
 
 - **Dispatcher**：Windows 默认；Linux/macOS 显式 `--dispatcher`。使用公开主端口压测，用 Worker ID 响应头或运行时指标核对分布。
-- **direct**：Linux/macOS 默认，含义是“不启动 WLS Dispatcher”。默认 HTTPS 下协议边缘拥有公开端口，Worker 使用私有 loopback 端口；legacy h1 才由 Worker 共享公开端口。`event_buffer + direct` 仍在启动预检时拒绝。
+- **direct**：Linux/macOS 默认，含义是“不启动 WLS Dispatcher”。当前 h1/HTTPS 都由 Worker 共享公开端口并执行完整策略；`event_buffer + direct` 仍在启动预检时拒绝。
 - **macOS Direct HTTPS**：共享 FD 只用于事件就绪通知；Worker 通过原生 socket accept 后导出为可 TLS 的 stream。TLS 完成后的首个请求有 200ms 有界首读泵送，用于衔接 OpenSSL 用户态缓冲与 ext-event 内核 FD 通知；普通 keep-alive 不进入该扫描。`Darwin + shared_fd + event` 下每轮最多 accept 1 个连接；成功 accept 后在繁忙期使用 100us 冷却并保持 20ms busy 状态，持续空闲时使用 5ms 冷却，使串行 fresh TLS 也能覆盖全部 Worker。listener 的 Event watcher 始终注册，冷却只抑制本轮 accept，不能销毁/重建 watcher；该不变量避免 Worker 仍显示 READY 却永久不再接收连接。该机制是共享队列上的竞争退让，不是严格轮转；rolling surge 的新旧代 Worker 仍共同竞争同一 listener。
 - **direct 维护态**：不启动 Maintenance Worker；Master 将维护 epoch 下发给全部业务 Worker，只有全量 ACK 后才提交状态。业务 Worker 至少跨过一个 transport loop 再 ACK，等待已分派请求和待写响应，但不等待空闲 preconnect、未完成握手或 partial slowloris；EventBuffer 中已经完整的流水线请求会按有界预算经过同一 WorkerPolicyKernel 后再 ACK。
 - **independent**：只保留旧值识别，因尚不具备完整 READY/策略保证而在预检阶段拒绝启动；请在 direct 与 Dispatcher 中选择。
@@ -237,10 +237,9 @@ server {
 
 `-c 4` 不再意味着对外暴露 443/444/445/446：
 
-- 默认 HTTPS：协议边缘独占一个公开 TCP+UDP 端口，4 个 Worker 的 loopback 端口只接受带实例 token 的边缘请求。
-- Linux/macOS direct：协议边缘直接连接 READY Worker，不经过 WLS Dispatcher。
-- Windows/Dispatcher：协议边缘连接内部 Dispatcher，Worker 后端端口仍不对客户端公开。
-- 仅 h1 且协议边缘关闭：Linux 使用 SO_REUSEPORT，macOS 使用共享 listener FD。
+- Linux/macOS direct：Worker 直接共享一个公开端口；Linux 使用 SO_REUSEPORT，macOS 使用共享 listener FD。
+- Windows/Dispatcher：Dispatcher 监听公开端口并把原始 TCP/TLS 字节透传到 READY Worker，Worker 后端端口不对客户端公开。
+- 用户显式启用兼容边缘时：兼容入口独占公开端口，Worker 私有端口只接受 loopback + 实例 token。
 
 Nginx/Caddy 只需要代理到 WLS 的一个公开端口。如需跨机高可用，应由外部 LB 在多个 WLS 实例之间均衡，而不是直连某个 Worker 的内部端口。
 
@@ -252,28 +251,27 @@ Nginx/Caddy 只需要代理到 WLS 的一个公开端口。如需跨机高可用
 - **生产**：可继续用 Nginx 终结 HTTPS（80/443）反代到 WLS 高端口，或直连 WLS 80/443（需 root/setcap）。
 - **HTTP 重定向到 HTTPS**：**Master 默认启用**。HTTPS 启用时，Master 会**自动启动一个独立的 HTTP 进程**（不计入 Worker 数），监听 80 端口，将 HTTP 请求 301 重定向到 HTTPS。
 
-### 5.1 HTTP/3、HTTP/2、HTTP/1.1 自动协商
+### 5.1 当前 HTTP 协议能力
 
-默认生产配置为 `h3 + h2 + h1`：HTTP/3 客户端走 QUIC/UDP，HTTP/2 与 HTTP/1.1 通过 TLS ALPN 自动选择，旧客户端自动回退 HTTP/1.1。服务同时发布 `Alt-Svc`，支持的客户端后续连接会直接使用 HTTP/3；客户端已经发起 HTTP/3 时不会降成 HTTP/2。
+当前默认生产配置只启用 `h1`。仓库内 Go 协议边缘与自动构建链已删除，因此 WLS 不再宣称默认支持 HTTP/2/3，也不发布 `Alt-Svc`。TLS 1.2/1.3、HTTP/1.1 keep-alive、Worker 常驻缓存和统一策略内核继续由 WLS 自身提供。
 
 ```php
 'wls' => [
     'http' => [
-        'protocols' => ['h3', 'h2', 'h1'],
-        'preferred' => 'h3',
-        'protocol_edge' => 'auto',
+        'protocols' => ['h1'],
+        'preferred' => 'h1',
+        'protocol_edge' => 'disabled',
         'tls_session_resumption' => true,
-        'alt_svc' => true,
+        'alt_svc' => false,
     ],
 ],
 ```
 
-- HTTP/2 与 HTTP/3 都支持在一条连接内并发多路复用，避免为每个请求新建 TCP/TLS 连接。
-- TLS session ticket 默认开启。WLS Native Protocol Engine 使用实例隔离的 `var/server/protocol-edge/{instance}/session-ticket-keys.json`，默认每 12 小时轮换并保留 4 把密钥。代码滚动重载保持公开 listener 和既有连接；即使原生协议进程完整重启，已签发 TLS 1.3 票据仍可 `Reused`，同时不同 WLS 实例不会共享票据密钥。
-- HTTP/3 需要同一公开端口的 UDP 入站；只放行 TCP 会导致客户端继续使用 h2/h1，但服务端不能宣称 h3 网络可达。
-- `server:status` 显示实际协议顺序、preferred、edge 与 `tls-resumption`；启动日志中的能力结果来自 WLS Native 的真实 ALPN/QUIC capability probe，而不是仅看配置文件。
-- 协议边缘到 Worker 固定使用私有 HTTP/1.1 keep-alive 连接池。这是有界、可复用的 transport adapter，不把 TLS、HTTP/2 frame 或 QUIC 逻辑复制进 PHP Worker；WorkerPolicyKernel 仍是 Host、后台 Key、Origin Token、攻击防护、限流、Static/FPC 的唯一执行点。
-- 私有 keep-alive 连接可连续承载不同公网客户端的请求，因此不能用连接级 PROXY v2 表示逐请求身份。WLS 只在确认协议边缘配置已启用且 socket peer 为 loopback 时，把该连接视为可信 transport：Dispatcher/Worker AcceptGate 仍执行实例总连接、总速率和慢 upstream 超时，但每客户端 IP/CIDR、Ban 与请求限流统一读取 edge token 认证后的请求 envelope。该 transport whitelist 不是业务白名单。
+- HTTP/1.1 keep-alive 默认启用；错误响应关闭连接，请求数、空闲时间与连接年龄均必须有界。
+- TLS session resumption 只按当前 PHP/OpenSSL 实际探测结果报告；没有跨 Worker 共享 ticket 证据时不得宣称完整重启后必然复用。
+- `server:status` 显示实际协议顺序、preferred、edge 与 TLS 配置。配置 h2/h3 但没有可验证适配器时，启动在创建子进程前失败。
+- 新的 HTTP/2/3 实现必须是 WLS 自有 Transport Adapter，直接接入同一 WorkerPolicyKernel，不能复制 Host、后台 Key、Origin Token、安全、限流、Static/FPC 规则。
+- 显式兼容边缘使用的私有 keep-alive transport 仍要求 loopback + 实例 token；该 transport 信任不等于业务白名单。
 
 验证示例：
 
@@ -310,7 +308,7 @@ WLS 不在启动时预装全部语言或全部模块词典。Worker 首次处理
 ```
 
 - `performance` 是默认值。WLS 在派生 Master/Worker 子进程前生成 `var/server/tls/openssl-performance-{hash}.cnf`，其中只有 `Groups = X25519:P-256`；不强制 TLS 1.3 ciphersuite。
-- 默认 h3/h2 协议入口会读取同一份实例级 TLS 契约：`protocols` 会转换为 WLS Native TLS 配置的精确 min/max，`performance` 在 Go TLS 入口固定为 `X25519,P-256`，`system` 才保留 Go 运行时默认组。有效 profile 会同时写入实例、Endpoint、Master IPC 和 benchmark 元数据。因此 `['tls1.3']` 与密钥交换 profile 不再只约束 PHP Worker 而遗漏公开协议入口；实例级 `wls.servers.<name>.ssl` 也会进入 Master 的不可变运行上下文。
+- 当前公开 TLS 由 Worker 的 PHP/OpenSSL 处理；`protocols` 与 `key_exchange_profile` 会进入实例、Endpoint、Master IPC 和 benchmark 元数据。实例级 `wls.servers.<name>.ssl` 也会进入 Master 的不可变运行上下文，不能与 Worker 真实能力分叉。
 - 若运维已在 WLS 启动环境设置 `OPENSSL_CONF`，WLS 完整保留该配置，不生成覆盖。这是最高优先级的进程级 OpenSSL 策略入口。
 - `system` 用于显式保留系统 OpenSSL group 策略，适合运维要求混合后量子组或统一系统密码策略的环境。
 - `protocols` 未配置时默认为 `['tls1.2', 'tls1.3']`；一旦显式配置，空字符串、空数组、非字符串元素或 TLS 1.0/1.1/未知值都在创建子进程前被拒绝，不再回退到 `TLS_SERVER`。
@@ -365,8 +363,8 @@ php bin/w server:benchmark -p 9443 --ssl --tls-version 1.3 --no-keepalive
 | 子进程停在 STARTING 且 PID=0 | 批量 launcher 创建后 `pcntl_exec` 失败或子进程在注册前退出 | 查看对应 `var/process/<process>.log`；launcher 会记录脱敏后的 errno、PHP 可执行文件名和脚本名，不再静默等待到 READY 超时 |
 | Worker 异常退出 | 进程崩溃 | Master 默认启用，会自动重启异常 Worker |
 | TLS 1.3 启动前失败 | 当前 PHP/OpenSSL 构建不支持 TLS 1.3 stream server | 切换到与当前平台匹配且暴露 `STREAM_CRYPTO_METHOD_TLSv1_3_SERVER` 的 PHP/OpenSSL，不删除协议门禁兜底 |
-| HTTP/2/3 原生协议预检失败 | WLS Native 二进制缺失、平台/架构不匹配、ALPN/QUIC/session-ticket/upstream-pool/atomic-reload probe 未通过，或固定 Go 工具链无法安装 | 查看启动时构建/probe 输出；修复网络、证书或平台依赖后重试，不要静默关闭协议或持久会话复用；`wls.http.protocol_edge_binary` 只接受已验证的 WLS Native 产物 |
-| Windows Native Edge 在公开端口 bind 前健康检查超时 | 内部 Dispatcher 未识别 Edge 的 loopback + 实例 token 健康探针，或 token/header 被中间层改写 | 核对 Dispatcher/Edge 为同一实例与 digest；只有精确 `GET /_wls/health HTTP/1.1` 的认证内部探针允许透传，其它明文请求仍应跳转 HTTPS |
+| 显式配置 HTTP/2/3 后启动失败 | 当前默认 WLS Transport Adapter 尚未提供 h2/h3，或显式兼容适配器未通过能力验证 | 改回 `protocols=['h1']` 与 `protocol_edge=disabled`；不要把配置值误报为实际协议能力 |
+| 显式兼容 Edge 健康检查超时 | Dispatcher 未识别 loopback + 实例 token 健康探针，或 token/header 被中间层改写 | 核对兼容 Edge 与 Dispatcher 属于同一实例和 digest；其它明文请求仍应跳转 HTTPS或被拒绝 |
 | h1/h2 正常但 h3 不可达 | 同一公开端口的 UDP 未放行，或上游 NAT/LB 不转发 QUIC | 放行并转发该端口的 UDP；用支持 HTTP/3 的 curl/浏览器复测 |
 | 请求 `performance` 但状态显示 `external` | 启动环境已存在 `OPENSSL_CONF` | 这是运维配置优先的预期行为；核对该文件的 group/cipher 策略，不要期待 WLS 覆盖 |
 
@@ -374,6 +372,6 @@ php bin/w server:benchmark -p 9443 --ssl --tls-version 1.3 --no-keepalive
 
 **版本：** 2.0.0-dev
 **更新时间：** 2026-07-15
-**状态：** macOS 已用 WLS Native Protocol Engine 验证 h1/h2/h3、TLS 1.3、跨完整重启 session reuse、Direct 策略和百万请求；Linux Native 长稳已完成；Windows 11 ARM64 已验证 Native 构建、`auto -> dispatcher`、三协议、TLS 1.3/X25519、session resume、首页 FPC 与后台 Key。Windows 空闲环境的 4/16 Worker 冷启动和长稳仍需独立复验，不能用当前受 5 个外部常驻 PHP 任务占满约 5/6 CPU 的 VM 数据替代。
+**状态：** 当前发布能力为 HTTP/1.1 + TLS 1.2/1.3；POSIX `auto -> direct`、Windows `auto -> dispatcher`、首页 FPC、后台 Key 与策略一致性仍需在删除协议边缘后的代码代重新验证。旧 Native h2/h3 与百万请求数字属于已撤销实现，不能作为当前门禁结果；Windows 空闲环境的 4/16 Worker 冷启动和长稳仍需独立复验。
 
 动态路径预热默认只包含首页 `/`。业务模块需要预热商品、分类或账户页面时，应显式配置 `wls.worker.dynamic_critical_paths` / `wls.worker.dynamic_hot_paths`，或通过 `Weline_Server::dispatcher::warmup_paths` 发布真实路由；Server 不内置任何演示业务 URL。
