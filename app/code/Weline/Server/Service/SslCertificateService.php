@@ -1444,14 +1444,100 @@ CNF;
     protected function runTrustCommand(string $command, ?int &$exitCode = null): string
     {
         $exitCode = 1;
-        if (!\function_exists('exec')) {
+        if (!\function_exists('proc_open')) {
+            if (!\function_exists('exec')) {
+                return '';
+            }
+            $output = [];
+            @\exec($command, $output, $exitCode);
+            return \implode("\n", $output);
+        }
+
+        $timeoutMs = (int) (\getenv('WLS_SSL_TRUST_COMMAND_TIMEOUT_MS') ?: 5000);
+        if ($timeoutMs < 500) {
+            $timeoutMs = 500;
+        }
+        $deadline = \microtime(true) + ($timeoutMs / 1000.0);
+        $pipes = [];
+        $process = @\proc_open(
+            $command,
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes
+        );
+        if (!\is_resource($process)) {
             return '';
         }
 
-        $output = [];
-        @\exec($command, $output, $exitCode);
+        foreach ($pipes as $pipe) {
+            if (\is_resource($pipe)) {
+                @\stream_set_blocking($pipe, false);
+            }
+        }
+        if (isset($pipes[0]) && \is_resource($pipes[0])) {
+            @\fclose($pipes[0]);
+        }
 
-        return \implode("\n", $output);
+        $output = '';
+        $timedOut = false;
+        while (true) {
+            foreach ([1, 2] as $idx) {
+                if (isset($pipes[$idx]) && \is_resource($pipes[$idx])) {
+                    $chunk = @\stream_get_contents($pipes[$idx]);
+                    if (\is_string($chunk) && $chunk !== '') {
+                        $output .= $chunk;
+                    }
+                }
+            }
+
+            $status = @\proc_get_status($process);
+            $running = \is_array($status) && !empty($status['running']);
+            if (!$running) {
+                if (\is_array($status) && isset($status['exitcode']) && (int)$status['exitcode'] >= 0) {
+                    $exitCode = (int)$status['exitcode'];
+                }
+                break;
+            }
+
+            if (\microtime(true) >= $deadline) {
+                $timedOut = true;
+                @\proc_terminate($process);
+                SchedulerSystem::usleep(100000);
+                $status = @\proc_get_status($process);
+                if (\is_array($status) && !empty($status['running'])) {
+                    @\proc_terminate($process, 9);
+                }
+                $exitCode = 124;
+                break;
+            }
+
+            SchedulerSystem::usleep(50000);
+        }
+
+        foreach ([1, 2] as $idx) {
+            if (isset($pipes[$idx]) && \is_resource($pipes[$idx])) {
+                $chunk = @\stream_get_contents($pipes[$idx]);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $output .= $chunk;
+                }
+                @\fclose($pipes[$idx]);
+            }
+        }
+        if ($timedOut) {
+            $output .= ($output === '' ? '' : "\n") . 'WLS_SSL_TRUST_COMMAND_TIMEOUT after ' . $timeoutMs . 'ms';
+            w_log_warning('ssl_cert', 'SSL trust command timed out after ' . $timeoutMs . 'ms: ' . $command);
+            return \trim($output);
+        }
+
+        $closeCode = @\proc_close($process);
+        if ($exitCode === 1 && \is_int($closeCode) && $closeCode >= 0) {
+            $exitCode = $closeCode;
+        }
+
+        return \trim($output);
     }
 
     protected function runInteractiveTrustCommand(string $command, ?int &$exitCode = null): string
@@ -2042,6 +2128,17 @@ CNF;
         };
 
         if ($this->getOsFamily() === 'Windows') {
+            // Windows 证书信任库可能被组策略、杀软或 certutil 交互卡住。
+            // WLS 启动路径默认只负责生成可用证书，绝不阻塞或修改系统信任库；
+            // 如确需自动导入本地 CA，可显式设置 WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1。
+            if ((string)\getenv('WLS_SSL_TRUST_WINDOWS_LOCAL_CA') !== '1') {
+                return $remember([
+                    'success' => true,
+                    'trusted' => false,
+                    'message' => __('Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in.', [$caCertPath]),
+                ]);
+            }
+
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
                 return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')]);
             }

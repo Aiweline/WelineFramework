@@ -1352,15 +1352,53 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $dependencyModules = array_intersect_key($dependencyModules, array_flip($moduleNames));
         }
 
+        $normalisePath = static fn(string $path): string => rtrim(str_replace(['/', '\\'], DS, $path), DS);
+        $moduleRelativePath = static function (string $basePath, array $fallbackModule): string {
+            $normalisedBase = rtrim(str_replace(['/', '\\'], DS, $basePath), DS);
+            $parts = array_values(array_filter(explode(DS, $normalisedBase), static fn(string $part): bool => $part !== ''));
+            $count = count($parts);
+            if ($count >= 2) {
+                return $parts[$count - 2] . DS . $parts[$count - 1];
+            }
+
+            return (string)($fallbackModule['path'] ?? '');
+        };
+
         $missingModules = [];
+        $relocatedModules = [];
         foreach ($dependencyModules as $moduleName => $module) {
-            if (isset($currentModules[$moduleName])) {
+            $registerFile = (string)($module['register'] ?? '');
+            if ($registerFile === '' || !is_file($registerFile)) {
                 continue;
             }
-            if (empty($module['register']) || !is_file($module['register'])) {
+
+            $localBasePath = rtrim(dirname($registerFile), '/\\') . DS;
+            $localBasePathKey = $normalisePath($localBasePath);
+
+            if (!isset($currentModules[$moduleName])) {
+                $missingModules[$moduleName] = $registerFile;
                 continue;
             }
-            $missingModules[$moduleName] = $module['register'];
+
+            $currentBasePath = isset($currentModules[$moduleName]['base_path'])
+                ? $normalisePath((string)$currentModules[$moduleName]['base_path'])
+                : '';
+
+            if ($currentBasePath !== $localBasePathKey) {
+                $currentModules[$moduleName]['base_path'] = $localBasePath;
+                $currentModules[$moduleName]['path'] = $moduleRelativePath($localBasePath, $module);
+                $currentModules[$moduleName]['env_file'] = $localBasePath . 'etc' . DS . 'env.php';
+                $relocatedModules[] = $moduleName;
+            }
+        }
+
+        if ($relocatedModules !== []) {
+            $this->printing->note(__('检测到工作区路径变化，先修正模块路径：%{1}', [implode(', ', $relocatedModules)]));
+            /** @var ModuleHelperData $moduleData */
+            $moduleData = ObjectManager::getInstance(ModuleHelperData::class);
+            $moduleData->updateModules($currentModules);
+            Env::getInstance()->reload();
+            Env::getInstance()->getModuleList(true);
         }
 
         if ($missingModules === []) {
@@ -1372,6 +1410,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         foreach ($missingModules as $registerFile) {
             require $registerFile;
         }
+        Env::getInstance()->reload();
         Env::getInstance()->getModuleList(true);
     }
 
@@ -1543,8 +1582,33 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // prepareUpgrade() 可能为新发现模块将 Register 切到 MODULE_ONLY。
             // 路由扫描通过 Register::register() 写入；若不先恢复 ALL，
             // 所有路由只会进入 pending 队列，全量路由 batch 始终为空。
+            //
+            // Windows/macOS/Linux 之间复制或搬迁工作区时，modules.php 中可能还保留旧 base_path。
+            // route-only 模式同样必须先刷新模块列表与注册表，否则 register_installer 事件仍可能缺少
+            // Theme/I18n 等模块提供的 installer 映射，随后 pending registration 会回退到不存在的
+            // Framework\\Theme\\Handle / Framework\\I18n\\Handle。
             RegistryProgress::run(function (): void {
+                RegistryProgress::section('setup:upgrade route-only module list refresh');
+                $activeModules = Env::getInstance()->getModuleList(true);
+                RegistryProgress::count('Route-only active module list refresh finished', count($activeModules), 'modules');
+
+                RegistryProgress::section('setup:upgrade route-only registry refresh before pending');
+                /** @var RegistryUpdateService $registryService */
+                $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
+                try {
+                    $registryService->updateAllRegistries(true, false, true);
+                } catch (\RuntimeException $exception) {
+                    if (!str_contains($exception->getMessage(), 'Hook registry refresher provider is missing.')) {
+                        throw $exception;
+                    }
+
+                    RegistryProgress::log('Route-only Hook registry refresh skipped during bootstrap: ' . $exception->getMessage());
+                }
+
                 RegistryProgress::section('setup:upgrade route-only pending registrations');
+                /** @var EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $eventsManager->clearObserverCache();
                 Register::runPendingRegistrations();
                 Register::clearRegisterPhase();
             });
