@@ -2595,7 +2595,7 @@ while (true) {
         && !$ipcReceivedShutdown
         && empty($pendingHandshakes)
         && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
-        && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null)
+        && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null, $http2PendingRequests)
         && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)
     ) {
         $fiberScheduler->registerFiber();
@@ -2979,6 +2979,20 @@ while (true) {
             $validConnectionsReadable[$connIdReadable] = $connReadable;
         }
     }
+    $pendingHttp2ReadyConnections = [];
+    foreach ($http2PendingRequests as $http2ReadyConnId => $queuedHttp2Requests) {
+        if ($queuedHttp2Requests !== []
+            && isset($validConnections[$http2ReadyConnId])
+            && \is_resource($validConnections[$http2ReadyConnId])
+            && $applicationAdmissionOpen
+            && !isset($activeFibers[$http2ReadyConnId])
+            && !isset($pendingPeek[$http2ReadyConnId])
+            && !isset($pendingHandshakes[$http2ReadyConnId])
+            && !isset($longLivedConnections[$http2ReadyConnId])
+        ) {
+            $pendingHttp2ReadyConnections[$http2ReadyConnId] = $validConnections[$http2ReadyConnId];
+        }
+    }
     $readSockets = \array_merge($readSockets, $validConnectionsReadable, $pendingConns, $pendingPeekConns);
     
     // 加入 IPC 控制 socket
@@ -2998,11 +3012,12 @@ while (true) {
     // EventLoop + CoroutineRuntime：统一等待语义（select/event 后端可切换）
     $loopWaitUsec = $sslIdleSelectTimeoutUsec;
     if ($validConnectionsReadable !== []
+        || $pendingHttp2ReadyConnections !== []
         || $pendingConns !== []
         || $pendingPeekConns !== []
         || $validWritableConnections !== []
         || ($ipcSocket && $ipcClient && $ipcClient->hasPendingWrites())) {
-        $loopWaitUsec = 1000;
+        $loopWaitUsec = $pendingHttp2ReadyConnections !== [] ? 0 : 1000;
     }
     if ($darwinSharedAcceptCooldownRemainingUsec > 0) {
         $loopWaitUsec = \min($loopWaitUsec, $darwinSharedAcceptCooldownRemainingUsec);
@@ -3162,6 +3177,16 @@ while (true) {
         $error = \error_get_last();
         WlsLogger::warning_("EventLoop wait 失败: " . ($error['message'] ?? 'unknown'));
         continue;
+    }
+
+    if ($pendingHttp2ReadyConnections !== []) {
+        // HTTP/2 多路复用：同一 TLS 连接内已解析出的 stream 是用户态待处理工作，
+        // 不能等待下一次 kernel readable edge；否则并发 stream 会被额外延迟一轮甚至卡住。
+        foreach ($pendingHttp2ReadyConnections as $pendingHttp2Conn) {
+            if (!\in_array($pendingHttp2Conn, $read, true)) {
+                $read[] = $pendingHttp2Conn;
+            }
+        }
     }
 
     if (($now - $eventLoopLastMetricsLogAt) >= 30) {
@@ -3712,6 +3737,56 @@ while (true) {
                     $activeRequests--;
                     continue;
                 }
+            }
+        }
+
+        if (($frame['protocol'] ?? '') === 'h2'
+            && $method === 'GET'
+            && $uri === '/_wls/health'
+            && !\str_contains($rawRequest, 'detail=1')
+            && !\str_contains($rawRequest, 'detail=true')
+            && !\str_contains($rawRequest, 'memory=1')
+            && !\str_contains($rawRequest, 'memory=true')
+            && !\str_contains($rawRequest, 'static=1')
+            && !\str_contains($rawRequest, 'static=true')
+            && !\str_contains($rawRequest, 'objects=1')
+            && !\str_contains($rawRequest, 'objects=true')
+        ) {
+            $http2Adapter = $http2ConnectionAdapters[$connId] ?? null;
+            $http2StreamId = (int)($frame['stream_id'] ?? 0);
+            if ($http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter && $http2StreamId > 0) {
+                $allowedHealth = \Weline\Server\Service\WorkerHealthAccessPolicy::instance($instanceName)->allowsClient(
+                    $policyDecision->clientIp,
+                    $policyDecision->headers,
+                );
+                $body = $allowedHealth ? 'OK' : 'Forbidden';
+                $statusCode = $allowedHealth ? 200 : 403;
+                $h2Response = $http2Adapter->encodeSimpleResponse($http2StreamId, $statusCode, [
+                    'content-length' => \strlen($body),
+                    'x-wls-worker-id' => $workerId,
+                    'x-wls-worker-port' => $port,
+                    'x-wls-worker-pid' => \getmypid(),
+                ], $body);
+                $activeRequests = \max(0, $activeRequests - 1);
+                $existingBuffer = (string)($writeBuffers[$connId] ?? '');
+                if ($existingBuffer !== '') {
+                    $writeBuffers[$connId] = $existingBuffer . $h2Response;
+                    $writableConnections[$connId] = $conn;
+                    continue;
+                }
+                $written = @\fwrite($conn, $h2Response);
+                if ($written === false) {
+                    safeCloseStream($conn);
+                    unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                    unset($longLivedConnections[$connId]);
+                    continue;
+                }
+                if ($written < \strlen($h2Response)) {
+                    $writeBuffers[$connId] = \substr($h2Response, \max(0, (int)$written));
+                    $writableConnections[$connId] = $conn;
+                }
+                $connectionLastActivity[$connId] = \time();
+                continue;
             }
         }
 
@@ -5266,7 +5341,8 @@ function wlsWorkerHasPendingRequestWork(
     int $activeRequests,
     array $requestBuffers,
     array $writeBuffers,
-    ?int $currentConnId
+    ?int $currentConnId,
+    array $http2PendingRequests = []
 ): bool {
     if ($activeRequests > 0) {
         return true;
@@ -5286,6 +5362,15 @@ function wlsWorkerHasPendingRequestWork(
             continue;
         }
         if (\is_string($buffer) && $buffer !== '') {
+            return true;
+        }
+    }
+
+    foreach ($http2PendingRequests as $connId => $queuedRequests) {
+        if ($currentConnId !== null && (int)$connId === $currentConnId) {
+            continue;
+        }
+        if (\is_array($queuedRequests) && $queuedRequests !== []) {
             return true;
         }
     }
