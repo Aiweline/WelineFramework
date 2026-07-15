@@ -267,7 +267,14 @@ final class HpackDecoder
 
     private function validateHeader(string $name, string $value): void
     {
-        if ($name === '' || $name !== \strtolower($name) || \preg_match('/^[a-z0-9!#$%&\'*+.^_`|~-]+$/D', $name) !== 1) {
+        $isPseudoHeader = \str_starts_with($name, ':');
+        $nameToken = $isPseudoHeader ? \substr($name, 1) : $name;
+        if ($name === ''
+            || $name !== \strtolower($name)
+            || $nameToken === ''
+            || \str_contains($nameToken, ':')
+            || \preg_match('/^[a-z0-9!#$%&\'*+.^_`|~-]+$/D', $nameToken) !== 1
+        ) {
             throw new \UnexpectedValueException('Invalid HTTP/2 header name.');
         }
         if (\preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $value) === 1) {
