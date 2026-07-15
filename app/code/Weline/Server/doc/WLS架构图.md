@@ -559,6 +559,8 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 
 后续最小收敛批次又将 `WlsRuntime::bootstrap()` 与 `WorkerFullPageCacheFastPath` 构造迁入两个 transport-neutral helper。HTTP、stream TLS 与 EventBuffer 入口继续保留各自的启动日志、SSL trace、异常边界、listener 和 event-loop 状态；共享 helper 不读取 socket、TLS、连接表或请求上下文，也不进入请求热路径。当前入口/公共文件行数为 HTTP 5,169、stream TLS 6,141、EventBuffer 2,053、公共运行时 361。
 
+后台未登录回跳地址的规范化也已收敛为 `worker_runtime_common.php` 中的纯请求辅助。HTTP 与 stream-TLS 现在统一使用 `HTTP_WELINE_ORIGINAL_PORT` 还原外部端口，货币/语言路径折叠与旧 `return_url` 参数清理不再由两个入口各自维护；该辅助不参与后台 Key 判定，裸 `/admin/login` 的 404 门禁仍由统一策略内核和 Framework Router 双重保证。
+
 2026-07-15 专用实例 `ai-test-worker-bootstrap-20260715-0933`（10979）约 2 秒达到 Direct 4/4 Worker + Native Edge READY，四个动态首渲染为 10.42–10.84ms。实际 HTTP/1.1、HTTP/2、HTTP/3 均为 200；HTTP/3 health 10,000/10,000、0 错误、14,557.04 QPS、p95 3.79ms，HTTP/2 health 100,000/100,000、0 错误、14,594.52 QPS、p95 14.53ms、p99 18.342ms、max 53.141ms。TLS 1.3 / `TLS_AES_128_GCM_SHA256` 首连 `New`、二连 `Reused`；首页 Process FPC HIT，裸/带 Key 后台登录为 404/200。Browser 首页和带 Key 登录表单可见、Console error/warn 为 0。PHP lint、`diff --check`、architecture:check、framework:compile、12 条策略检查和 Semgrep 85 条规则均通过；自动验收后 10979 TCP/UDP、29182–29185、39182 与全部关联 PID 已释放。
 
 验证使用当前 macOS 主机、PHP 8.4.22、4 Worker、`direct/shared_fd/event/stream`。压测时安全策略全部执行，实例级 limiter 保持启用，只将专用测试实例的额度临时提高以避免计划内的 3,000 请求上限产生 429；测试完成后恢复默认 3,000/60s。
