@@ -14,6 +14,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -48,8 +49,15 @@ class Benchmark extends CommandAbstract
         $totalRequests = (int) ($args['requests'] ?? $args['n'] ?? 10000);
         $path = $this->resolveBenchmarkPath($args);
         $tlsVersion = $this->normalizeTlsVersion($args['tls-version'] ?? $args['tls_version'] ?? 'auto');
+        $httpVersion = $this->normalizeHttpVersion($args['http-version'] ?? $args['http_version'] ?? $args['http'] ?? 'auto');
         if (!$ssl && $tlsVersion !== 'auto') {
             $this->printer->error(__('--tls-version 仅适用于 HTTPS 压测，请同时使用 --ssl 或选择 HTTPS 实例。'));
+            return;
+        }
+        try {
+            $this->curlHttpVersionOption($httpVersion);
+        } catch (\Throwable $exception) {
+            $this->printer->error($exception->getMessage());
             return;
         }
         // keep-alive 会让 Dispatcher/direct 都按 TCP 连接粘滞到某个 Worker；验证连接级分流时可禁用复用
@@ -67,6 +75,7 @@ class Benchmark extends CommandAbstract
             $noKeepAlive,
             $ssl,
             $tlsVersion,
+            $httpVersion,
         );
         
         // 修复 Git Bash 路径转换问题（如 /_wls/health 被转成 C:/Program Files/Git/_wls/health）
@@ -102,6 +111,7 @@ class Benchmark extends CommandAbstract
         if ($ssl) {
             $this->printer->note(\sprintf('║  TLS 版本：%-50s║', $tlsVersion));
         }
+        $this->printer->note(\sprintf('║  HTTP 版本：%-49s║', $httpVersion));
         $runtimeMetadata = \is_array($serverConfig['runtime_metadata'] ?? null)
             ? $serverConfig['runtime_metadata']
             : [];
@@ -138,6 +148,7 @@ class Benchmark extends CommandAbstract
             $workerHeader,
             $workerBalanceThreshold,
             $tlsVersion,
+            $httpVersion,
             $benchmarkContext
         );
     }
@@ -214,11 +225,14 @@ class Benchmark extends CommandAbstract
         // but runtime metadata is attributed only after a unique host/port
         // match against live local WLS endpoint records.
         if (isset($args['port']) || isset($args['p'])) {
-            return $this->resolveManualPortTarget($runningInstances, $args);
+            return $this->resolveManualPortTarget($manager, $runningInstances, $args);
         }
 
         if (\count($runningInstances) === 1) {
             $name = (string)\array_key_first($runningInstances);
+            if (!$this->ensureBenchmarkInstanceReady($manager, $name)) {
+                return null;
+            }
             $target = $runningInstances[$name];
             $target['target_attribution'] = 'single_running_instance';
             return $target;
@@ -269,8 +283,7 @@ class Benchmark extends CommandAbstract
             $this->printer->error(__('实例 [%{1}] 不存在', [$instanceName]));
             return null;
         }
-        if (!$info->isMasterRunning()) {
-            $this->printer->error(__('实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。', [$instanceName]));
+        if (!$this->ensureBenchmarkInstanceReady($info, $instanceName)) {
             return null;
         }
 
@@ -315,10 +328,112 @@ class Benchmark extends CommandAbstract
         return $target;
     }
 
+    private function ensureBenchmarkInstanceReady(ServerInstanceInfo $info, string $instanceName): bool
+    {
+        if (!$info->isMasterRunning()) {
+            $this->printer->error(__('实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。', [$instanceName]));
+            return false;
+        }
+
+        $expectedWorkerCount = \max(1, (int)$info->workerCount);
+        $runningWorkerCount = 0;
+        $stoppedWorkers = [];
+        foreach ($info->getWorkers() as $service) {
+            if ($service->isRunning()) {
+                $runningWorkerCount++;
+                continue;
+            }
+            $stoppedWorkers[] = $service->displayName !== ''
+                ? $service->displayName
+                : $service->role . '#' . (string)$service->instanceId;
+        }
+
+        // Direct/shared-FD exposes one public endpoint for all Workers. A rolling
+        // surge or stale instance record may keep stopped historical Worker rows
+        // around, and old launches can miss managed-process identity checks even
+        // while the public endpoint is healthy. Prefer exact Worker process
+        // evidence; fall back to the public health endpoint before refusing a
+        // benchmark run.
+        if ($runningWorkerCount < $expectedWorkerCount) {
+            if ($this->probeBenchmarkHealthEndpoint($info)) {
+                $this->printer->warning(__('实例 [%{1}] 的 Worker 进程索引显示 %{2}/%{3}，但公开 health endpoint 已健康；继续压测并以 HTTP 结果为准。', [
+                    $instanceName,
+                    $runningWorkerCount,
+                    $expectedWorkerCount,
+                ]));
+                return true;
+            }
+
+            $this->printer->error(__('实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。', [
+                $instanceName,
+                $runningWorkerCount,
+                $expectedWorkerCount,
+            ]));
+            if (!empty($stoppedWorkers)) {
+                $this->printer->note(__('已停止 Worker：%{1}', [\implode(', ', $stoppedWorkers)]));
+            }
+            $this->printer->note(__('请先恢复 Worker，再重新压测；可执行：php bin/w server:restart %{1} -r', [$instanceName]));
+            return false;
+        }
+
+        return true;
+    }
+
+    private function probeBenchmarkHealthEndpoint(ServerInstanceInfo $info): bool
+    {
+        if ($info->port <= 0 || $info->port > 65535) {
+            return false;
+        }
+        $scheme = $info->sslEnabled ? 'https' : 'http';
+        $host = $this->formatTargetUrlHost($this->normalizeConnectHost($info->host !== '' ? $info->host : '127.0.0.1'));
+        $url = $scheme . '://' . $host . ':' . $info->port . '/_wls/health';
+
+        if (\function_exists('curl_init')) {
+            $ch = \curl_init($url);
+            if ($ch === false) {
+                return false;
+            }
+            \curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HEADER => false,
+                CURLOPT_NOBODY => false,
+                CURLOPT_TIMEOUT_MS => 1500,
+                CURLOPT_CONNECTTIMEOUT_MS => 800,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            ]);
+            $body = \curl_exec($ch);
+            $status = (int)\curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            \curl_close($ch);
+            return $status === 200 && $this->isBenchmarkHealthBody($body);
+        }
+
+        $context = \stream_context_create([
+            'http' => ['timeout' => 1.5, 'ignore_errors' => true],
+            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+        ]);
+        $body = @\file_get_contents($url, false, $context);
+        return $this->isBenchmarkHealthBody($body);
+    }
+
+    private function isBenchmarkHealthBody(mixed $body): bool
+    {
+        if (!\is_string($body)) {
+            return false;
+        }
+        $trimmed = \trim($body);
+        return $trimmed === 'OK' || \str_contains($trimmed, '"status":"healthy"');
+    }
+
     /**
      * @param array<string, array<string, mixed>> $runningInstances
      */
-    private function resolveManualPortTarget(array $runningInstances, array $args): ?array
+    private function resolveManualPortTarget(
+        ServerInstanceManager $manager,
+        array $runningInstances,
+        array $args,
+    ): ?array
     {
         $port = (int)($args['port'] ?? $args['p'] ?? 0);
         if ($port < 1 || $port > 65535) {
@@ -341,6 +456,14 @@ class Benchmark extends CommandAbstract
 
         if (\count($matches) === 1) {
             $name = (string)\array_key_first($matches);
+            $info = $manager->getInstanceInfoWithIpcTimeout($name, false, 0.0);
+            if ($info === null) {
+                $this->printer->error(__('实例 [%{1}] 状态不可读，已拒绝开始压测。', [$name]));
+                return null;
+            }
+            if (!$this->ensureBenchmarkInstanceReady($info, $name)) {
+                return null;
+            }
             $target = $matches[$name];
             $target['host'] = $host;
             $target['ssl'] = $sslRequested ? true : (bool)$target['ssl'];
@@ -512,15 +635,18 @@ class Benchmark extends CommandAbstract
         string $workerHeader = '',
         float $workerBalanceThreshold = 1.5,
         string $tlsVersion = 'auto',
+        string $httpVersion = 'auto',
         array $benchmarkContext = []
     ): void
     {
         $results = [];
+        $requestLatencies = [];
         $errors = 0;
         $errorDetails = [];
         $statusCodes = [];
         $workerHits = [];
         $cacheSources = [];
+        $httpVersionHits = [];
         $startTime = \microtime(true);
         
         // 检查 curl 扩展
@@ -534,7 +660,7 @@ class Benchmark extends CommandAbstract
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_HTTP_VERSION => $this->curlHttpVersionOption($httpVersion),
             CURLOPT_USERAGENT => 'Weline-Server-Benchmark/2.0',
         ];
         if ($noKeepAlive) {
@@ -642,11 +768,44 @@ class Benchmark extends CommandAbstract
         }
         
         $running = null;
-        $lastProgress = 0;
+        $lastProgressReportAt = \microtime(true);
+        $progressReportInterval = 0.5;
+        $reportProgress = function (bool $force = false) use (
+            &$lastProgressReportAt,
+            &$completed,
+            &$requestsSent,
+            &$activeHandles,
+            $totalRequests,
+            $startTime,
+            $progressReportInterval,
+        ): void {
+            $now = \microtime(true);
+            if (!$force && ($now - $lastProgressReportAt) < $progressReportInterval) {
+                return;
+            }
+
+            $progressPercent = $totalRequests > 0
+                ? \min(100, ($completed / $totalRequests) * 100)
+                : 0;
+            $elapsedSeconds = \max($now - $startTime, 0.001);
+            $liveQps = $completed / $elapsedSeconds;
+            $this->printer->note(__('进度：%{1}%（完成 %{2}/%{3}，活动请求 %{4}，已发送 %{5}/%{3}，耗时 %{6}s，实时 QPS %{7}）', [
+                \number_format($progressPercent, 1),
+                \number_format($completed),
+                \number_format($totalRequests),
+                \number_format(\count($activeHandles)),
+                \number_format($requestsSent),
+                \number_format($elapsedSeconds, 1),
+                \number_format($liveQps, 1),
+            ]));
+            $lastProgressReportAt = $now;
+            \flush();
+        };
         
         $this->printer->note($noKeepAlive
             ? __('压测模式：禁用 keep-alive（更利于分流验证），并发连接数=%{1}', [$batchSize])
             : __('压测模式：启用 keep-alive（性能模式），使用 %{1} 个持久连接...', [$batchSize]));
+        $reportProgress(true);
         
         do {
             // 执行请求
@@ -662,9 +821,12 @@ class Benchmark extends CommandAbstract
                 if (isset($activeHandles[$key])) {
                     $elapsed = (\microtime(true) - $activeHandles[$key]['start']) * 1000; // ms
                     $poolIndex = $activeHandles[$key]['poolIndex'];
+                    $requestLatencies[] = $elapsed;
                     
                     if ($info['result'] === CURLE_OK) {
                         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        $negotiatedHttpVersion = $this->curlHttpVersionName((int)\curl_getinfo($ch, CURLINFO_HTTP_VERSION));
+                        $httpVersionHits[$negotiatedHttpVersion] = ($httpVersionHits[$negotiatedHttpVersion] ?? 0) + 1;
                         $statusCodes[(string)$httpCode] = ($statusCodes[(string)$httpCode] ?? 0) + 1;
                         if ($httpCode >= 200 && $httpCode < 400) {
                             $results[] = $elapsed;
@@ -692,13 +854,6 @@ class Benchmark extends CommandAbstract
                     
                     $completed++;
                     
-                    // 显示进度
-                    $progress = (int)($completed / $totalRequests * 100);
-                    if ($progress >= $lastProgress + 10) {
-                        $this->printer->note(__('进度：%{1}% (%{2}/%{3})', [$progress, $completed, $totalRequests]));
-                        $lastProgress = $progress;
-                    }
-                    
                     // 从 multi handle 移除
                     \curl_multi_remove_handle($mh, $ch);
                     unset($activeHandles[$key]);
@@ -715,6 +870,9 @@ class Benchmark extends CommandAbstract
                         ];
                         $requestsSent++;
                     }
+
+                    // 首次完成、最终完成立即反馈；中间按时间节流，避免高 QPS 时刷屏。
+                    $reportProgress($completed === 1 || $completed >= $totalRequests);
                 }
             }
             
@@ -722,6 +880,8 @@ class Benchmark extends CommandAbstract
             if ($running > 0) {
                 \curl_multi_select($mh, 0.01);
             }
+            // 即使暂时没有请求完成，也持续显示真实的等待状态。
+            $reportProgress();
             
         } while ($running > 0 || \count($activeHandles) > 0);
         
@@ -736,6 +896,11 @@ class Benchmark extends CommandAbstract
         
         $endTime = \microtime(true);
         $totalTime = $endTime - $startTime;
+        if (!empty($httpVersionHits)) {
+            \arsort($httpVersionHits);
+            $benchmarkContext['http_version_negotiated'] = (string)\array_key_first($httpVersionHits);
+            $benchmarkContext['http_version_hits'] = $httpVersionHits;
+        }
         
         // 生成报告
         $this->generateReport(
@@ -749,7 +914,8 @@ class Benchmark extends CommandAbstract
             $errorDetails,
             $statusCodes,
             $benchmarkContext,
-            $cacheSources
+            $cacheSources,
+            $requestLatencies
         );
     }
     
@@ -767,28 +933,31 @@ class Benchmark extends CommandAbstract
         array $errorDetails = [],
         array $statusCodes = [],
         array $benchmarkContext = [],
-        array $cacheSources = []
+        array $cacheSources = [],
+        array $requestLatencies = []
     ): void
     {
         $successCount = \count($results);
         $totalCompleted = $successCount + $errors;
+        $latencySamples = !empty($requestLatencies) ? $requestLatencies : $results;
         
-        if (!empty($results)) {
-            \sort($results);
+        if (!empty($latencySamples)) {
+            \sort($latencySamples);
             
-            $avgTime = \array_sum($results) / \count($results);
-            $minTime = \min($results);
-            $maxTime = \max($results);
-            $medianTime = $results[(int)(\count($results) / 2)];
-            $p95Index = \min((int)(\count($results) * 0.95), \count($results) - 1);
-            $p99Index = \min((int)(\count($results) * 0.99), \count($results) - 1);
-            $p95Time = $results[$p95Index];
-            $p99Time = $results[$p99Index];
+            $avgTime = \array_sum($latencySamples) / \count($latencySamples);
+            $minTime = \min($latencySamples);
+            $maxTime = \max($latencySamples);
+            $medianTime = $latencySamples[(int)(\count($latencySamples) / 2)];
+            $p95Index = \min((int)(\count($latencySamples) * 0.95), \count($latencySamples) - 1);
+            $p99Index = \min((int)(\count($latencySamples) * 0.99), \count($latencySamples) - 1);
+            $p95Time = $latencySamples[$p95Index];
+            $p99Time = $latencySamples[$p99Index];
         } else {
             $avgTime = $minTime = $maxTime = $medianTime = $p95Time = $p99Time = 0;
         }
         
-        $qps = $totalTime > 0 ? $successCount / $totalTime : 0;
+        $qps = $totalTime > 0 ? $totalCompleted / $totalTime : 0;
+        $successQps = $totalTime > 0 ? $successCount / $totalTime : 0;
         $errorRate = $totalCompleted > 0 ? ($errors / $totalCompleted) * 100 : 0;
         if (!empty($errorDetails)) {
             \arsort($errorDetails);
@@ -813,10 +982,13 @@ class Benchmark extends CommandAbstract
         
         echo "\n";
         $this->printer->note(__('总耗时：%{1} 秒', [\round($totalTime, 3)]));
-        $this->printer->success(__('QPS：%{1}', [\round($qps, 2)]));
+        $this->printer->note(__('完成 QPS：%{1}', [\round($qps, 2)]));
+        if ($errors > 0) {
+            $this->printer->note(__('成功 QPS：%{1}', [\round($successQps, 2)]));
+        }
         
         echo "\n";
-        $this->printer->setup(__('延迟统计（毫秒）'));
+        $this->printer->setup(__('延迟统计（全部已完成请求，毫秒）'));
         echo "\n";
         $this->printer->note(__('平均：%{1}', [\round($avgTime, 3)]));
         $this->printer->note(__('最小：%{1}', [\round($minTime, 3)]));
@@ -882,6 +1054,10 @@ class Benchmark extends CommandAbstract
             'fresh_connection' => (bool)($benchmarkContext['fresh_connection'] ?? false),
             'fresh_tls' => (bool)($benchmarkContext['fresh_tls'] ?? false),
             'tls_version' => $benchmarkContext['tls_version'] ?? null,
+            'http_version_requested' => $benchmarkContext['http_version_requested'] ?? null,
+            'http_version_forced' => (bool)($benchmarkContext['http_version_forced'] ?? false),
+            'http_version_negotiated' => $benchmarkContext['http_version_negotiated'] ?? null,
+            'http_version_hits' => (array)($benchmarkContext['http_version_hits'] ?? []),
             'instance_name' => (string)($benchmarkContext['instance_name'] ?? ''),
             'instance' => (string)($benchmarkContext['instance_name'] ?? ''),
             'target_attribution' => (string)($benchmarkContext['target_attribution'] ?? 'unattributed'),
@@ -912,6 +1088,8 @@ class Benchmark extends CommandAbstract
             'error_rate' => \round($errorRate, 2),
             'total_time_seconds' => \round($totalTime, 3),
             'qps' => \round($qps, 2),
+            'success_qps' => \round($successQps, 2),
+            'latency_scope' => 'all_completed_requests',
             'latency_ms' => [
                 'avg' => \round($avgTime, 3),
                 'min' => \round($minTime, 3),
@@ -999,6 +1177,7 @@ class Benchmark extends CommandAbstract
                 '-h, --host <ip>' => __('指定主机（可选，默认 127.0.0.1）'),
                 '-s, --ssl' => __('指定端口为 HTTPS（与 -p 合用；自动探测时根据实例配置）'),
                 '--tls-version <auto|1.2|1.3>' => __('强制 HTTPS 压测使用指定 TLS 版本（默认 auto）'),
+                '--http-version <auto|1.1|2|3>' => __('强制压测请求使用指定 HTTP 版本（默认 auto，由 cURL/ALPN 协商）'),
                 '--no-keepalive, --spread' => __('禁用 keep-alive/连接复用（更利于验证连接级分流；HTTPS 时亦是 fresh TLS）'),
                 '--worker-header <name>' => __('命中 Worker 统计使用的响应头（可逗号分隔；默认自动探测 X-WLS-Worker-PID/Id/Port）'),
                 '--worker-balance-threshold <ratio>' => __('分流倾斜阈值，按 max/min 判定（默认 1.5，超过则 WARN）'),
@@ -1014,6 +1193,8 @@ class Benchmark extends CommandAbstract
                 __('分流倾斜阈值检查') => 'php bin/w server:benchmark -p 9503 --ssl --path /_wls/health --worker-balance-threshold 1.3',
                 __('指定端口') => 'php bin/w server:benchmark -p 9000',
                 __('指定 HTTPS 端口') => 'php bin/w server:benchmark -p 9443 --ssl',
+                __('HTTP/2 协商验证') => 'php bin/w server:benchmark -p 9443 --ssl --http-version 2',
+                __('HTTP/3 协商验证') => 'php bin/w server:benchmark -p 9443 --ssl --http-version 3',
                 __('TLS 1.3 fresh connection') => 'php bin/w server:benchmark -p 9443 --ssl --tls-version 1.3 --no-keepalive',
             ]
         );
@@ -1029,6 +1210,7 @@ class Benchmark extends CommandAbstract
         bool $noKeepAlive,
         bool $ssl,
         string $tlsVersion,
+        string $httpVersion,
     ): array
     {
         $runtime = isset($serverConfig['runtime_metadata']) && \is_array($serverConfig['runtime_metadata'])
@@ -1044,6 +1226,10 @@ class Benchmark extends CommandAbstract
             'fresh_connection' => $noKeepAlive,
             'fresh_tls' => $ssl && $noKeepAlive,
             'tls_version' => $ssl ? $tlsVersion : null,
+            'http_version_requested' => $httpVersion,
+            'http_version_forced' => $httpVersion !== 'auto',
+            'http_version_negotiated' => null,
+            'http_version_hits' => [],
             'instance_name' => (string)($serverConfig['instance'] ?? ''),
             'target_attribution' => (string)($serverConfig['target_attribution'] ?? 'unattributed'),
             'connect_host' => (string)($serverConfig['host'] ?? ''),
@@ -1076,6 +1262,8 @@ class Benchmark extends CommandAbstract
                 'event_extension_version' => \extension_loaded('event') ? (\phpversion('event') ?: null) : null,
                 'curl_version' => $curl['version'] ?? null,
                 'ssl_version' => $curl['ssl_version'] ?? null,
+                'http2_supported' => \defined('CURL_HTTP_VERSION_2_0'),
+                'http3_supported' => \defined('CURL_HTTP_VERSION_3'),
             ],
         ];
     }
@@ -1114,6 +1302,59 @@ class Benchmark extends CommandAbstract
         }
 
         return (int)\constant($minimumConstant) | (int)\constant($maximumConstant);
+    }
+
+    private function normalizeHttpVersion(mixed $value): string
+    {
+        $value = \strtolower(\trim((string)$value));
+        $value = \str_replace(['http/', 'http', 'h', '_'], ['', '', '', '.'], $value);
+        $value = \trim($value, '.');
+        if ($value === '' || $value === 'auto') {
+            return 'auto';
+        }
+        if (\in_array($value, ['1', '1.1', '11'], true)) {
+            return '1.1';
+        }
+        if (\in_array($value, ['2', '2.0', '20'], true)) {
+            return '2';
+        }
+        if (\in_array($value, ['3', '3.0', '30'], true)) {
+            return '3';
+        }
+
+        throw new \InvalidArgumentException('--http-version must be auto, 1.1, 2, or 3.');
+    }
+
+    private function curlHttpVersionOption(string $httpVersion): int
+    {
+        return match ($httpVersion) {
+            'auto' => \defined('CURL_HTTP_VERSION_NONE') ? (int)\constant('CURL_HTTP_VERSION_NONE') : 0,
+            '1.1' => CURL_HTTP_VERSION_1_1,
+            '2' => $this->requireCurlHttpVersionConstant('CURL_HTTP_VERSION_2_0', 'HTTP/2'),
+            '3' => $this->requireCurlHttpVersionConstant('CURL_HTTP_VERSION_3', 'HTTP/3'),
+            default => throw new \InvalidArgumentException('--http-version must be auto, 1.1, 2, or 3.'),
+        };
+    }
+
+    private function requireCurlHttpVersionConstant(string $constant, string $label): int
+    {
+        if (!\defined($constant)) {
+            throw new \RuntimeException('The current PHP cURL/libcurl build cannot request ' . $label . '.');
+        }
+
+        return (int)\constant($constant);
+    }
+
+    private function curlHttpVersionName(int $curlInfoVersion): string
+    {
+        $known = [
+            \defined('CURL_HTTP_VERSION_1_0') ? (int)\constant('CURL_HTTP_VERSION_1_0') : -10 => '1.0',
+            \defined('CURL_HTTP_VERSION_1_1') ? (int)\constant('CURL_HTTP_VERSION_1_1') : -11 => '1.1',
+            \defined('CURL_HTTP_VERSION_2_0') ? (int)\constant('CURL_HTTP_VERSION_2_0') : -20 => '2',
+            \defined('CURL_HTTP_VERSION_3') ? (int)\constant('CURL_HTTP_VERSION_3') : -30 => '3',
+        ];
+
+        return $known[$curlInfoVersion] ?? ('unknown:' . $curlInfoVersion);
     }
 
     /**
