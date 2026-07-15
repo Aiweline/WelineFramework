@@ -300,7 +300,7 @@ class Benchmark extends CommandAbstract
         array $args,
     ): ?array {
         $raw = $manager->getRawInstanceData($instanceName);
-        $info = $manager->getInstanceInfoWithIpcTimeout($instanceName, false, 0.0);
+        $info = $manager->getInstanceInfoWithIpcTimeout($instanceName, false, 0.5);
         if (!\is_array($raw) || $info === null) {
             $this->printer->error(__('实例 [%{1}] 不存在', [$instanceName]));
             return null;
@@ -358,16 +358,25 @@ class Benchmark extends CommandAbstract
         }
 
         $expectedWorkerCount = \max(1, (int)$info->workerCount);
-        $runningWorkerCount = 0;
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+        $runtimeStats = $manager->getRuntimeStatsForInstance($info, true);
+        $runtimeDesiredWorkers = (int)($runtimeStats['desired_workers'] ?? 0);
+        if ($runtimeDesiredWorkers > 0) {
+            $expectedWorkerCount = $runtimeDesiredWorkers;
+        }
+        $runningWorkerCount = \max(0, (int)($runtimeStats['workers'] ?? 0));
         $stoppedWorkers = [];
-        foreach ($info->getWorkers() as $service) {
-            if ($service->isRunning()) {
-                $runningWorkerCount++;
-                continue;
+        if ($runningWorkerCount <= 0) {
+            foreach ($info->getWorkers() as $service) {
+                if ($service->isRunning()) {
+                    $runningWorkerCount++;
+                    continue;
+                }
+                $stoppedWorkers[] = $service->displayName !== ''
+                    ? $service->displayName
+                    : $service->role . '#' . (string)$service->instanceId;
             }
-            $stoppedWorkers[] = $service->displayName !== ''
-                ? $service->displayName
-                : $service->role . '#' . (string)$service->instanceId;
         }
 
         // Direct/shared-FD exposes one public endpoint for all Workers. A rolling
@@ -378,7 +387,7 @@ class Benchmark extends CommandAbstract
         // benchmark run.
         if ($runningWorkerCount < $expectedWorkerCount) {
             if ($this->probeBenchmarkHealthEndpoint($info)) {
-                $this->printer->warning(__('实例 [%{1}] 的 Worker 进程索引显示 %{2}/%{3}，但公开 health endpoint 已健康；继续压测并以 HTTP 结果为准。', [
+                $this->printer->note(__('实例 [%{1}] 的公开 health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，本次压测以 schema v3 运行时元数据和 HTTP 结果为准。', [
                     $instanceName,
                     $runningWorkerCount,
                     $expectedWorkerCount,
