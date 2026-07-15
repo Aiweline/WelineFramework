@@ -159,7 +159,11 @@ final class Collector
             'skipped' => false,
             'redaction_count' => $redactionCount,
             'quarantined' => $quarantined,
+            'content_redacted' => $content,
         ];
+        if ($eventName === 'post-tool-use') {
+            $result['index_refresh'] = self::indexRefreshHint($redacted, (string) $projectInfo['repository']);
+        }
         if ($eventName === 'stop') {
             $this->store->closeSession($sessionId, (string) $session['outcome'], $observedAt);
             $job = $this->store->enqueueAnalysisForSession($sessionId, $projectId);
@@ -168,6 +172,388 @@ final class Collector
         }
 
         return $result;
+    }
+
+    /** @param array<string, mixed> $payload
+     *  @return array{required:bool,paths:list<string>,reason:string}
+     */
+    private static function indexRefreshHint(array $payload, string $repository): array
+    {
+        $tool = strtolower(trim((string) ($payload['tool_name'] ?? '')));
+        $input = $payload['tool_input'] ?? [];
+        if ($tool === '') {
+            return ['required' => false, 'paths' => [], 'reason' => 'missing_tool_name'];
+        }
+        if (str_contains($tool, 'apply_compact_edit')
+            || str_contains($tool, 'rollback_edit')
+            || str_contains($tool, 'index_project')) {
+            return ['required' => false, 'paths' => [], 'reason' => 'tool_reindexes_itself'];
+        }
+        if ($tool === 'mcp__node_repl__js' || $tool === 'functions.exec') {
+            return self::nodeReplRefreshHint($input, $repository);
+        }
+        if (str_starts_with($tool, 'mcp__')) {
+            foreach (['get_edit_bundle', 'get_edit_status', 'health'] as $readOnlyTool) {
+                if (str_ends_with($tool, '__' . $readOnlyTool)) {
+                    return ['required' => false, 'paths' => [], 'reason' => 'known_read_only_mcp_tool'];
+                }
+            }
+
+            return ['required' => true, 'paths' => [], 'reason' => 'unknown_mcp_tool_full_refresh'];
+        }
+
+        $paths = [];
+        $writeTool = preg_match(
+            '/(?:^|[._-])(?:apply[_-]?patch|write[_-]?file|edit[_-]?file|create[_-]?file|delete[_-]?file|move[_-]?file|rename[_-]?file)$/D',
+            $tool,
+        ) === 1;
+        if ($writeTool) {
+            self::collectToolPaths($input, $repository, $paths);
+            self::collectPatchPaths($input, $repository, $paths);
+
+            return [
+                'required' => true,
+                'paths' => array_slice(Text::uniqueStrings($paths), 0, 100),
+                'reason' => $paths === [] ? 'write_tool_full_refresh' : 'write_tool_targeted_refresh',
+            ];
+        }
+
+        if ($tool === 'bash' || str_ends_with($tool, 'exec_command') || str_ends_with($tool, 'run_command')) {
+            if (self::strictReadOnlyShell($input)) {
+                return ['required' => false, 'paths' => [], 'reason' => 'strict_read_only_shell'];
+            }
+            return ['required' => true, 'paths' => [], 'reason' => 'shell_command_full_refresh'];
+        }
+        if ($tool === 'write_stdin' || str_ends_with($tool, '__write_stdin')) {
+            $chars = is_array($input) ? (string) ($input['chars'] ?? '') : '';
+            return $chars === ''
+                ? ['required' => false, 'paths' => [], 'reason' => 'terminal_poll_only']
+                : ['required' => true, 'paths' => [], 'reason' => 'terminal_input_full_refresh'];
+        }
+
+        return ['required' => false, 'paths' => [], 'reason' => 'read_only_or_unrelated_tool'];
+    }
+
+    /** @param mixed $input
+     *  @return array{required:bool,paths:list<string>,reason:string}
+     */
+    private static function nodeReplRefreshHint(mixed $input, string $repository): array
+    {
+        $code = is_array($input)
+            ? trim((string) ($input['code'] ?? $input['script'] ?? ''))
+            : (is_string($input) ? trim($input) : '');
+        if ($code === '') {
+            return ['required' => true, 'paths' => [], 'reason' => 'node_repl_missing_code_full_refresh'];
+        }
+
+        preg_match_all('/\\btools\\.([A-Za-z0-9_]+)\\s*\\(/', $code, $matches);
+        $calls = array_map('strtolower', is_array($matches[1] ?? null) ? $matches[1] : []);
+        if ($calls === []) {
+            if (str_contains($code, 'tools.') || str_contains($code, 'tools[')) {
+                return ['required' => true, 'paths' => [], 'reason' => 'node_repl_dynamic_tool_full_refresh'];
+            }
+
+            return ['required' => false, 'paths' => [], 'reason' => 'sandboxed_node_repl_without_local_tools'];
+        }
+
+        $readOnlyCalls = [
+            'wait', 'get_goal', 'update_plan', 'view_image', 'list_mcp_resources',
+            'list_mcp_resource_templates', 'read_mcp_resource', 'codex_app__load_workspace_dependencies',
+            'codex_app__read_thread_terminal', 'web__run',
+        ];
+        $patchCount = 0;
+        $commandCount = 0;
+        $terminalCount = 0;
+        foreach ($calls as $call) {
+            if ($call === 'apply_patch') {
+                ++$patchCount;
+                continue;
+            }
+            if ($call === 'exec_command') {
+                ++$commandCount;
+                continue;
+            }
+            if ($call === 'write_stdin') {
+                ++$terminalCount;
+                continue;
+            }
+            if (in_array($call, $readOnlyCalls, true)
+                || str_ends_with($call, '__get_edit_bundle')
+                || str_ends_with($call, '__get_edit_status')
+                || str_ends_with($call, '__health')
+                || str_ends_with($call, '__apply_compact_edit')
+                || str_ends_with($call, '__rollback_edit')
+                || str_ends_with($call, '__index_project')) {
+                continue;
+            }
+
+            return ['required' => true, 'paths' => [], 'reason' => 'node_repl_unknown_nested_tool_full_refresh'];
+        }
+
+        if ($commandCount > 0) {
+            $commands = self::javascriptStringProperties($code, 'cmd');
+            if (count($commands) !== $commandCount) {
+                return ['required' => true, 'paths' => [], 'reason' => 'node_repl_dynamic_command_full_refresh'];
+            }
+            foreach ($commands as $command) {
+                if (!self::strictReadOnlyShell(['cmd' => $command])) {
+                    return ['required' => true, 'paths' => [], 'reason' => 'node_repl_shell_command_full_refresh'];
+                }
+            }
+        }
+
+        if ($terminalCount > 0) {
+            $inputs = self::javascriptStringProperties($code, 'chars');
+            if (count($inputs) !== $terminalCount || array_filter($inputs, static fn (string $chars): bool => $chars !== '') !== []) {
+                return ['required' => true, 'paths' => [], 'reason' => 'node_repl_terminal_input_full_refresh'];
+            }
+        }
+
+        if ($patchCount > 0) {
+            $paths = [];
+            self::collectPatchPaths($code, $repository, $paths);
+            if ($paths === []) {
+                foreach (self::javascriptStringLiterals($code) as $literal) {
+                    self::collectPatchPaths($literal, $repository, $paths);
+                }
+            }
+            $paths = array_slice(Text::uniqueStrings($paths), 0, 100);
+            return [
+                'required' => true,
+                'paths' => $paths,
+                'reason' => $paths === [] ? 'node_repl_patch_full_refresh' : 'node_repl_patch_targeted_refresh',
+            ];
+        }
+
+        return ['required' => false, 'paths' => [], 'reason' => 'node_repl_read_only_or_self_indexing'];
+    }
+
+    /** @return list<string> */
+    private static function javascriptStringProperties(string $code, string $property): array
+    {
+        preg_match_all(
+            '/\\b' . preg_quote($property, '/') . '\\s*:\\s*("(?:\\\\.|[^"\\\\])*")/s',
+            $code,
+            $matches,
+        );
+        $values = [];
+        foreach ($matches[1] ?? [] as $literal) {
+            $decoded = json_decode((string) $literal, true);
+            if (is_string($decoded)) {
+                $values[] = $decoded;
+            }
+        }
+
+        return $values;
+    }
+
+    /** @return list<string> */
+    private static function javascriptStringLiterals(string $code): array
+    {
+        preg_match_all('/"(?:\\\\.|[^"\\\\])*"/s', $code, $matches);
+        $values = [];
+        foreach ($matches[0] ?? [] as $literal) {
+            $decoded = json_decode((string) $literal, true);
+            if (is_string($decoded)) {
+                $values[] = $decoded;
+            }
+        }
+
+        return $values;
+    }
+
+    /** @param mixed $value
+     *  @param list<string> $paths
+     */
+    private static function collectToolPaths(mixed $value, string $repository, array &$paths, string $key = ''): void
+    {
+        if (is_string($value)) {
+            if (preg_match('/^(?:path|paths|file|files|file_path|target|target_file|destination|new_path|old_path)$/iD', $key) !== 1) {
+                return;
+            }
+            $path = self::normalizeRefreshPath($value, $repository);
+            if ($path !== null) {
+                $paths[] = $path;
+            }
+            return;
+        }
+        if (!is_array($value)) {
+            return;
+        }
+        foreach ($value as $childKey => $child) {
+            $effectiveKey = is_string($childKey) ? $childKey : $key;
+            self::collectToolPaths($child, $repository, $paths, $effectiveKey);
+        }
+    }
+
+    /** @param mixed $value
+     *  @param list<string> $paths
+     */
+    private static function collectPatchPaths(mixed $value, string $repository, array &$paths): void
+    {
+        if (is_array($value)) {
+            foreach ($value as $child) {
+                self::collectPatchPaths($child, $repository, $paths);
+            }
+            return;
+        }
+        if (!is_string($value) || !str_contains($value, '*** ')) {
+            return;
+        }
+        preg_match_all(
+            '/^\*\*\* (?:(?:Add|Update|Delete) File:|Move to:)\s*(.+?)\s*$/m',
+            $value,
+            $matches,
+        );
+        foreach ($matches[1] ?? [] as $candidate) {
+            $path = self::normalizeRefreshPath((string) $candidate, $repository);
+            if ($path !== null) {
+                $paths[] = $path;
+            }
+        }
+    }
+
+    private static function normalizeRefreshPath(string $candidate, string $repository): ?string
+    {
+        $candidate = trim(str_replace('\\', '/', $candidate), " \t\n\r\0\x0B\"'`");
+        $repository = rtrim(str_replace('\\', '/', $repository), '/');
+        if ($candidate === '' || str_contains($candidate, "\0") || preg_match('/[\r\n*?\[\]{}]/', $candidate) === 1) {
+            return null;
+        }
+        if (str_starts_with($candidate, '/')) {
+            if ($repository === '' || !str_starts_with($candidate, $repository . '/')) {
+                return null;
+            }
+            $candidate = substr($candidate, strlen($repository) + 1);
+        }
+        $candidate = preg_replace('~^(?:\./)+~', '', $candidate) ?? $candidate;
+        if ($candidate === '' || str_starts_with($candidate, '/')
+            || preg_match('~(?:^|/)\.\.(?:/|$)~D', $candidate) === 1) {
+            return null;
+        }
+
+        return $candidate;
+    }
+
+    private static function strictReadOnlyShell(mixed $input): bool
+    {
+        if (is_string($input)) {
+            $command = trim($input);
+        } elseif (is_array($input)) {
+            $command = trim((string) ($input['command'] ?? $input['cmd'] ?? $input['script'] ?? ''));
+        } else {
+            return false;
+        }
+        if ($command === '' || str_contains($command, '`') || str_contains($command, '$(')
+            || preg_match('/(?<![<>=])>(?![=])|(?<![<>=])<(?![=])/', $command) === 1) {
+            return false;
+        }
+        $segments = self::shellSegments($command);
+        if ($segments === []) {
+            return false;
+        }
+        foreach ($segments as $segment) {
+            $segment = trim($segment);
+            if ($segment === '') {
+                continue;
+            }
+            $tokens = preg_split('/\s+/', $segment) ?: [];
+            $binary = strtolower(basename(trim((string) ($tokens[0] ?? ''), "\"'")));
+            if (in_array($binary, [
+                'rg', 'grep', 'head', 'tail', 'cat', 'less', 'ls', 'pwd', 'wc', 'jq', 'yq',
+                'fd', 'stat', 'du', 'sort', 'uniq', 'tr', 'cut', 'true', 'false', 'test', '[',
+            ], true)) {
+                if (($binary === 'yq' && preg_match('/\s(?:-i|--inplace)\b/', $segment) === 1)
+                    || ($binary === 'sort' && preg_match('/\s(?:-o|--output(?:=|\s))/', $segment) === 1)) {
+                    return false;
+                }
+                continue;
+            }
+            if ($binary === 'sed'
+                && preg_match('/^sed\s+-n\s+["\']?[0-9,$]+(?:,[0-9,$]+)?p["\']?\s+/i', $segment) === 1) {
+                continue;
+            }
+            if ($binary === 'find'
+                && preg_match('/\s-(?:delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf)\b/i', $segment) !== 1) {
+                continue;
+            }
+            if ($binary === 'git'
+                && !str_contains($segment, '--output')
+                && preg_match('/^git(?:\s+-c\s+\S+)*\s+(?:diff|status|log|show|rev-parse|ls-files|grep)\b/i', $segment) === 1) {
+                continue;
+            }
+            if ($binary === 'sqlite3'
+                && preg_match('/\b(?:insert|update|delete|replace|drop|alter|create|vacuum|attach|detach|reindex)\b|\.(?:read|once|output|import|restore)\b/i', $segment) !== 1) {
+                continue;
+            }
+            if ($binary === 'php'
+                && (preg_match('/^php\s+-l\s+\S+/i', $segment) === 1
+                    || preg_match('/^php\s+bin\/w\s+server:(?:status|reload|restart)\b/i', $segment) === 1)) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /** @return list<string> */
+    private static function shellSegments(string $command): array
+    {
+        $segments = [];
+        $current = '';
+        $quote = '';
+        $escaped = false;
+        $length = strlen($command);
+        for ($offset = 0; $offset < $length; ++$offset) {
+            $character = $command[$offset];
+            if ($escaped) {
+                $current .= $character;
+                $escaped = false;
+                continue;
+            }
+            if ($character === '\\' && $quote !== "'") {
+                $current .= $character;
+                $escaped = true;
+                continue;
+            }
+            if ($quote !== '') {
+                $current .= $character;
+                if ($character === $quote) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($character === "'" || $character === '"') {
+                $quote = $character;
+                $current .= $character;
+                continue;
+            }
+            $next = $offset + 1 < $length ? $command[$offset + 1] : '';
+            if ($character === ';' || $character === "\n" || $character === "\r"
+                || $character === '|' || $character === '&') {
+                $segment = trim($current);
+                if ($segment !== '') {
+                    $segments[] = $segment;
+                }
+                $current = '';
+                if (($character === '|' || $character === '&') && $next === $character) {
+                    ++$offset;
+                }
+                continue;
+            }
+            $current .= $character;
+        }
+        if ($quote !== '' || $escaped) {
+            return [];
+        }
+        $current = trim($current);
+        if ($current !== '') {
+            $segments[] = $current;
+        }
+
+        return $segments;
     }
 
     private static function normalizeHookName(string $value): string

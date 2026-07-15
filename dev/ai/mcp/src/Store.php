@@ -440,6 +440,97 @@ final class Store
         return $ids;
     }
 
+    /** @return list<string> */
+    public function enqueueLearningSkillSyncs(int $limit = 20): array
+    {
+        if ($this->config->get('knowledge.learning_skills.enabled', false) !== true) {
+            return [];
+        }
+        $rows = $this->all(
+            'SELECT e.id, e.project_id, e.version, e.status, e.confidence, e.updated_at,
+                    s.id AS session_id, s.cwd, s.worktree
+               FROM experiences e
+               JOIN experience_sources source ON source.experience_id = e.id
+               JOIN sessions s ON s.id = source.session_id
+              ORDER BY e.project_id, e.id, s.id
+              LIMIT 10000',
+        );
+        $projects = [];
+        foreach ($rows as $row) {
+            $projectId = (string) $row['project_id'];
+            if (!isset($projects[$projectId])) {
+                $projects[$projectId] = ['experiences' => [], 'repositories' => []];
+            }
+            $projects[$projectId]['experiences'][(string) $row['id']] = [
+                'id' => (string) $row['id'],
+                'version' => (int) $row['version'],
+                'status' => (string) $row['status'],
+                'confidence' => round((float) $row['confidence'], 3),
+                'updated_at' => (string) $row['updated_at'],
+            ];
+            $repository = trim((string) ($row['worktree'] ?: $row['cwd']));
+            if ($repository !== '') {
+                $projects[$projectId]['repositories'][$repository] = true;
+            }
+        }
+
+        $ids = [];
+        $processed = 0;
+        foreach ($projects as $projectId => $state) {
+            if ($processed >= max(1, min(100, $limit))) {
+                break;
+            }
+            $repository = '';
+            foreach (array_keys($state['repositories']) as $candidate) {
+                $resolved = realpath($candidate);
+                if (!is_string($resolved) || !is_dir($resolved)) {
+                    continue;
+                }
+                try {
+                    $project = ProjectResolver::resolve($resolved);
+                } catch (Throwable) {
+                    continue;
+                }
+                if (($project['project']['id'] ?? '') === $projectId) {
+                    $repository = $resolved;
+                    break;
+                }
+            }
+            if ($repository === '') {
+                continue;
+            }
+            $experiences = array_values($state['experiences']);
+            usort($experiences, static fn(array $left, array $right): int => strcmp($left['id'], $right['id']));
+            $snapshotDigest = Ids::hash(Json::canonical([
+                'generator_version' => LearningSkillService::GENERATOR_VERSION,
+                'project_id' => $projectId,
+                'policy' => [
+                    'minimum_confidence' => (float) $this->config->get('knowledge.learning_skills.minimum_confidence', 0.9),
+                    'max_experiences' => (int) $this->config->get('knowledge.learning_skills.max_experiences', 100),
+                    'max_skills' => (int) $this->config->get('knowledge.learning_skills.max_skills', 12),
+                ],
+                'experiences' => $experiences,
+                'projection_fingerprint' => LearningSkillService::projectionFingerprint($repository, $this->config),
+            ]));
+            $job = $this->enqueueJob([
+                'job_type' => 'sync_learning_skills',
+                'project_id' => $projectId,
+                'idempotency_key' => 'sync_learning_skills:' . substr(hash('sha256', $projectId . "\n" . $snapshotDigest), 0, 40),
+                'payload' => [
+                    'repository' => $repository,
+                    'snapshot_digest' => $snapshotDigest,
+                    'generator_version' => LearningSkillService::GENERATOR_VERSION,
+                ],
+            ]);
+            if ($job['created']) {
+                $ids[] = $job['id'];
+            }
+            ++$processed;
+        }
+
+        return $ids;
+    }
+
     /** @param array<string, mixed> $evidence
      *  @return array{id:string,created:bool}
      */
@@ -613,13 +704,31 @@ final class Store
         $merged['evidence_ids'] = Text::uniqueStrings(array_merge($stored['evidence_ids'], $experience['evidence_ids']));
         $merged['source_session_count'] = count($merged['source_session_ids']);
         $merged['confidence'] = max((float) $stored['confidence'], (float) $experience['confidence']);
+        $storedMetadata = is_array($stored['metadata'] ?? null) ? $stored['metadata'] : [];
+        $candidateMetadata = is_array($experience['metadata'] ?? null) ? $experience['metadata'] : [];
+        $storedClassification = is_array($storedMetadata['learning_classification'] ?? null)
+            ? $storedMetadata['learning_classification']
+            : [];
+        $candidateClassification = is_array($candidateMetadata['learning_classification'] ?? null)
+            ? array_filter(
+                $candidateMetadata['learning_classification'],
+                static fn(mixed $value): bool => $value !== '' && $value !== [],
+            )
+            : [];
+        $merged['metadata'] = $storedMetadata;
+        if ($candidateClassification !== []) {
+            $merged['metadata']['learning_classification'] = array_replace(
+                $storedClassification,
+                $candidateClassification,
+            );
+        }
         $merged['last_seen_at'] = self::now();
         $changed = Json::canonical([
             $stored['wrong_approaches'], $stored['corrections'], $stored['verification'], $stored['exceptions'],
-            $stored['source_session_ids'], $stored['evidence_ids'], $stored['confidence'],
+            $stored['source_session_ids'], $stored['evidence_ids'], $stored['confidence'], $stored['metadata'],
         ]) !== Json::canonical([
             $merged['wrong_approaches'], $merged['corrections'], $merged['verification'], $merged['exceptions'],
-            $merged['source_session_ids'], $merged['evidence_ids'], $merged['confidence'],
+            $merged['source_session_ids'], $merged['evidence_ids'], $merged['confidence'], $merged['metadata'],
         ]);
         if (!$changed) {
             return ['experience' => $stored, 'created' => false];
@@ -808,6 +917,70 @@ final class Store
         ]);
 
         return $stored;
+    }
+
+    /** @param array<string, mixed> $details
+     *  @return array<string, mixed>
+     */
+    public function recordContradiction(string $leftId, string $rightId, array $details = []): array
+    {
+        if ($leftId === $rightId) {
+            throw new ToolException('VALIDATION_FAILED', 'A contradiction requires two different experiences');
+        }
+        $left = $this->getExperience($leftId);
+        $right = $this->getExperience($rightId);
+        if ($left['project_id'] !== $right['project_id']) {
+            throw new ToolException('PROJECT_SCOPE_VIOLATION', 'Contradicting experiences must belong to the same project');
+        }
+        $ids = [$leftId, $rightId];
+        sort($ids, SORT_STRING);
+        $contradictionId = Ids::deterministic(
+            'contradiction',
+            (string) $left['project_id'] . "\n" . $ids[0] . "\n" . $ids[1],
+        );
+        $existing = $this->one(
+            'SELECT id, project_id, left_experience_id, right_experience_id, status,
+                COALESCE(resolution_json, \'{}\') AS resolution_json, created_at, resolved_at
+             FROM contradictions WHERE id = ?',
+            [$contradictionId],
+        );
+        if ($existing !== null) {
+            $existing['resolution'] = Json::decode((string) $existing['resolution_json'], []);
+            unset($existing['resolution_json']);
+
+            return $existing;
+        }
+        [$details] = Redactor::value($details);
+        $createdAt = self::now();
+        $this->execute(
+            'INSERT INTO contradictions(id, project_id, left_experience_id, right_experience_id,
+                status, resolution_json, created_at, resolved_at)
+             VALUES(?, ?, ?, ?, \'open\', ?, ?, NULL)',
+            [
+                $contradictionId,
+                $left['project_id'],
+                $ids[0],
+                $ids[1],
+                Json::encode(is_array($details) ? $details : []),
+                $createdAt,
+            ],
+        );
+        $this->writeAudit('automatic-learning', 'record_contradiction', 'contradiction', $contradictionId, [
+            'left_experience_id' => $ids[0],
+            'right_experience_id' => $ids[1],
+            'details' => is_array($details) ? $details : [],
+        ]);
+
+        return [
+            'id' => $contradictionId,
+            'project_id' => $left['project_id'],
+            'left_experience_id' => $ids[0],
+            'right_experience_id' => $ids[1],
+            'status' => 'open',
+            'resolution' => is_array($details) ? $details : [],
+            'created_at' => $createdAt,
+            'resolved_at' => '',
+        ];
     }
 
     /** @param array<string, mixed> $feedback

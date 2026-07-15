@@ -18,6 +18,12 @@
         "hooks": [
           {
             "type": "command",
+            "command": "php /absolute/path/to/dev/ai/mcp/bin/project-routing-guard.php --config /absolute/path/to/config.yaml",
+            "timeout": 2,
+            "statusMessage": "Enforcing Weline indexed context routing"
+          },
+          {
+            "type": "command",
             "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook user-prompt --config /absolute/path/to/config.yaml",
             "timeout": 3
           }
@@ -26,8 +32,14 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|mcp__.*",
+        "matcher": "Bash|functions\\.exec|apply_patch|mcp__.*",
         "hooks": [
+          {
+            "type": "command",
+            "command": "php /absolute/path/to/dev/ai/mcp/bin/project-routing-guard.php --config /absolute/path/to/config.yaml",
+            "timeout": 2,
+            "statusMessage": "Checking Weline indexed context routing"
+          },
           {
             "type": "command",
             "command": "/absolute/path/to/dev/ai/mcp/bin/learningctl hook pre-tool-use --config /absolute/path/to/config.yaml",
@@ -38,7 +50,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|apply_patch|mcp__.*",
+        "matcher": "Bash|functions\\.exec|apply_patch|mcp__.*",
         "hooks": [
           {
             "type": "command",

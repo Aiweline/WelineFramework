@@ -116,17 +116,31 @@ final class Cli
         $store = null;
         $result = null;
         $autoContext = null;
-        $postToolRepository = null;
+        $postToolRefresh = null;
+        $learningSkillJobs = [];
         try {
             $config = self::config($options);
             $store = new Store($config);
             $result = (new Collector($store, $config))->ingest($canonicalEvent, STDIN);
+            if ($canonicalEvent === 'SessionStart'
+                || ($canonicalEvent === 'UserPromptSubmit' && empty($result['skipped']))) {
+                $learningSkillJobs = $store->enqueueLearningSkillSyncs();
+            }
             if ($canonicalEvent === 'PostToolUse'
                 && (bool) $config->get('index.enabled', true)
                 && (bool) $config->get('index.auto_refresh', true)
-                && isset($result['session_id'])) {
+                && isset($result['session_id'])
+                && !empty($result['index_refresh']['required'])) {
                 $session = $store->getSession((string) $result['session_id']);
-                $postToolRepository = trim((string) ($session['worktree'] ?: $session['cwd'])) ?: null;
+                $repository = trim((string) ($session['worktree'] ?: $session['cwd']));
+                if ($repository !== '') {
+                    $postToolRefresh = [
+                        'repository' => $repository,
+                        'paths' => Text::uniqueStrings(is_array($result['index_refresh']['paths'] ?? null)
+                            ? $result['index_refresh']['paths']
+                            : []),
+                    ];
+                }
             }
             $additionalContext = [];
             if ($injectProjectContext) {
@@ -139,11 +153,52 @@ final class Cli
                     $additionalContext[] = "Evidence-backed project learning follows. Apply it only within scope and inspect provenance before consequential decisions.\n" . implode("\n", $context);
                 }
             }
+            if ($canonicalEvent === 'UserPromptSubmit'
+                && (bool) $config->get('knowledge.learning_skills.enabled', false)
+                && (bool) $config->get('knowledge.learning_skills.inject_on_prompt', true)
+                && empty($result['quarantined'])
+                && trim((string) ($result['content_redacted'] ?? '')) !== '') {
+                try {
+                    $session = $store->getSession((string) $result['session_id']);
+                    $repository = trim((string) ($session['worktree'] ?: $session['cwd']));
+                    $skillResult = (new IntelligenceService($store, $config))->call('resolve_skill', [
+                        'repository' => $repository,
+                        'task' => (string) $result['content_redacted'],
+                        'limit' => (int) $config->get('knowledge.learning_skills.prompt_skill_limit', 3),
+                        'include_content' => true,
+                        'token_budget' => (int) $config->get('knowledge.learning_skills.prompt_token_budget', 2_400),
+                    ]);
+                    $matched = [];
+                    foreach (is_array($skillResult['skills'] ?? null) ? $skillResult['skills'] : [] as $skill) {
+                        if (!is_array($skill)
+                            || !LearningSkillService::isGeneratedSkillPath(
+                                $config,
+                                $repository,
+                                (string) ($skill['relative_path'] ?? ''),
+                            )
+                            || !str_contains((string) ($skill['content'] ?? ''), '<!-- weline:mcp-learning-skill:auto-generated -->')) {
+                            continue;
+                        }
+                        $matched[] = sprintf(
+                            "Validated generated skill: %s\nPath: %s\n%s",
+                            (string) ($skill['name'] ?? ''),
+                            (string) ($skill['relative_path'] ?? ''),
+                            (string) ($skill['content'] ?? ''),
+                        );
+                    }
+                    if ($matched !== []) {
+                        $additionalContext[] = "[Weline MCP: task-matched validated learning skills]\nThese marker-owned skills were generated from reviewed project evidence and matched the current prompt. Apply them only within their recorded scope.\n\n" . implode("\n\n", $matched);
+                    }
+                } catch (Throwable $exception) {
+                    [$message] = Redactor::string($exception->getMessage());
+                    fwrite(STDERR, 'learningctl hook skill routing (non-blocking): ' . Text::truncate($message, 500) . "\n");
+                }
+            }
             if ($additionalContext !== []) {
                 self::writeJson([
                     'continue' => true,
                     'hookSpecificOutput' => [
-                        'hookEventName' => 'SessionStart',
+                        'hookEventName' => $canonicalEvent,
                         'additionalContext' => implode("\n\n", $additionalContext),
                     ],
                 ]);
@@ -162,18 +217,25 @@ final class Cli
             return 0;
         }
         $store->close();
-        $refreshRepository = $postToolRepository;
+        $refreshRepository = is_array($postToolRefresh) ? (string) $postToolRefresh['repository'] : null;
+        $refreshPaths = is_array($postToolRefresh) ? $postToolRefresh['paths'] : [];
         if (is_array($autoContext) && (bool) ($autoContext['schedule_refresh'] ?? false)) {
             $refreshRepository = (string) $autoContext['repository'];
+            $refreshPaths = [];
         }
         if (is_string($refreshRepository) && $refreshRepository !== '') {
-            ProjectAutoContext::spawnIndex(
+            $refreshPid = ProjectAutoContext::spawnIndex(
                 $config->sourcePath,
                 $config->dataDir(),
                 $refreshRepository,
+                $refreshPaths,
             );
+            if ($refreshPid === -1) {
+                return 0;
+            }
         }
-        if (isset($result['job_id']) && (bool) $config->get('scheduler.auto_process_on_stop', true)) {
+        if ((isset($result['job_id']) || $learningSkillJobs !== [])
+            && (bool) $config->get('scheduler.auto_process_on_stop', true)) {
             Worker::spawnDrain($config->sourcePath, $config->dataDir());
         }
 
@@ -402,6 +464,10 @@ final class Cli
             if ($config->get('analysis.provider') === 'openai') {
                 $requiredChecks['allow_url_fopen'] = $checks['allow_url_fopen'];
             }
+            $codex = (new CodexInvoker($config, new ProcessRunner()))->metadata();
+            if ((bool) $config->get('knowledge.learning_skills.enabled', true)) {
+                $requiredChecks['codex_learning_skill_classifier'] = (bool) ($codex['available'] ?? false);
+            }
             $ok = !in_array(false, $requiredChecks, true) && $analyzerError === '';
             self::writeJson([
                 'ok' => $ok,
@@ -411,6 +477,17 @@ final class Cli
                 'mode' => $config->get('mode'),
                 'database' => $store->health(),
                 'analyzer' => $analyzer?->metadata() ?? ['provider' => $config->get('analysis.provider'), 'error' => $analyzerError],
+                'learning_skills' => [
+                    'enabled' => (bool) $config->get('knowledge.learning_skills.enabled', true),
+                    'output_directory' => (string) $config->get('knowledge.learning_skills.output_directory', ''),
+                    'output_mode' => trim((string) $config->get('knowledge.learning_skills.output_directory', '')) === ''
+                        ? 'legacy_repository'
+                        : 'configured_directory',
+                    'minimum_confidence' => (float) $config->get('knowledge.learning_skills.minimum_confidence', 0.9),
+                    'inject_on_prompt' => (bool) $config->get('knowledge.learning_skills.inject_on_prompt', true),
+                    'generator_version' => LearningSkillService::GENERATOR_VERSION,
+                    'codex' => $codex,
+                ],
                 'scheduler' => (new Scheduler($config))->status(),
                 'warnings' => $checks['pcntl_stop_worker']
                     ? []
