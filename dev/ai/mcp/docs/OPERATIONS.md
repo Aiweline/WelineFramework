@@ -9,7 +9,7 @@
 - `bin/learningd run`：持续轮询的前台 worker，适合进程管理器。
 - Stop Hook：默认 fork 一个短生命周期 PHP worker；`pcntl` 不可用时仍会保留 Job，等待后续 worker。
 
-不需要 WLS、HTTP 端口、Go、Node.js、Composer、Redis、PostgreSQL 或外部消息队列。
+运行时不需要 WLS、HTTP 端口、Go、Node.js、Composer、Redis、PostgreSQL 或外部消息队列。Composer 包和 Node/npm 壳只是可选发行入口；Node 最终仍启动同一 `bin/learning-mcp` PHP STDIO Server。
 
 Project Intelligence 初次索引和普通查询也不需要 WLS。默认开启的已验证经验分类需要可用的 `codex` CLI；MCP 会依次检查配置绝对路径、`CODEX_CLI_PATH`、PATH 和 ChatGPT.app bundle。文档自动同步仍关闭。
 

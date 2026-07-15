@@ -1,11 +1,21 @@
-# Weline Project Intelligence & Learning MCP
+# Weline MCP
 
-这是一个本地优先、无 Composer 依赖的 PHP MCP Server。它同时提供两条能力链：
+[简体中文（当前）](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-- Project Intelligence：预索引代码、模块文档、符号关系、知识和 Skill，向 Codex 返回精确位置与有界片段，并在本地事务化应用结构化修改。
-- Evidence-backed Learning：把用户纠正，以及 AI 找到且经测试/构建/静态检查/浏览器/运行时结果验证的正确做法，整理为项目级经验，自动判重、识别冲突并向后续任务提供带证据、作用域和成熟度的指导。
+**让 Codex 从逐文件试探，升级为任务级批量编码。**
 
-正常运行只需要现有 PHP、SQLite、Git 和 Codex App 自带的 CLI，不需要 Go、Node.js、Composer、外部向量数据库、API Key 或手工管理的服务。MCP 会自动启动同一 PHP 环境中的本地 Unix-socket 索引 sidecar，用于合并 Hook 刷新并复用 SQLite 热状态；不可用时自动退回一次性 PHP 进程。每个项目的 `project.sqlite` 同时保存文件元数据、压缩后的完整文本、Chunk、FTS、稀疏向量、符号关系和知识索引。会话提取与学习技能分类默认使用隔离的 `codex exec`；文档 Planner 共用同一只读子进程，但文档自动同步仍默认关闭。
+**省 Token、加速编码、零配置分项目、多会话不丢代码，并在每次任务后自动学习、产出 Skill。**
+
+Weline MCP 是专为 Codex 打造的本地项目智能、批量编码与自学习引擎。它把 AI 编码的工作单位从“一个文件”提升为“一个完整任务”：一次取得任务所需的精准上下文，一次提交跨文件修改，再由本地事务引擎统一完成并发保护、验证、回滚和索引更新。
+
+- Project Intelligence：持久索引代码、文档、符号关系、项目规则和 Skill，按 Token Budget 返回真正相关的有界片段、上下游影响和匹配知识。
+- Evidence-backed Learning：从用户纠正和经过测试、构建、静态检查、浏览器或运行时验证的结果中提取经验，完成证据复核、作用域判断、判重、冲突与成熟度管理，再生成项目级或模块级 `SKILL.md`。
+
+主流程收敛为：**一次 `get_edit_bundle` 批量取全，一次 `apply_compact_edit` 批量提交。**
+
+正常运行只依赖 PHP 8.2+、SQLite 扩展和 Git。Composer 与 Node.js 是可选发行入口；Node 包只是无依赖启动壳，最终仍由同一 PHP STDIO Server 接管。每个 canonical Git root 使用独立的 `project.sqlite`，不会跨项目串代码、知识、经验或 Skill。
+
+> “零配置分项目”指在 Codex 中完成一次全局注册后，后续仓库无需逐项目配置。独立包不能在 Host 发现它之前自我注册，因此首次安装仍需运行安装器或 `codex mcp add`。
 
 ## 能达到什么速度优化？
 
@@ -104,23 +114,84 @@ Full profile 中保留的学习管理工具包括：
 ./bin/learningctl doctor --config ~/.learning-mcp/config.yaml
 ```
 
-## 一键安装并启动
+## 安装与启动
 
-Unix、Linux 与 macOS：
+三种发行方式使用同一套 PHP 实现和同一份配置，任选一种即可。
+
+### 方式一：源码与跨平台启动脚本
+
+GitHub：
 
 ```bash
+git clone https://github.com/Aiweline/Weline-Codex-Mcp.git
+cd Weline-Codex-Mcp
+./start.sh
+```
+
+Gitee：
+
+```bash
+git clone https://gitee.com/aiweline/weline-codex-mcp.git
+cd weline-codex-mcp
 ./start.sh
 ```
 
 Windows CMD：
 
 ```bat
+git clone https://gitee.com/aiweline/weline-codex-mcp.git
+cd weline-codex-mcp
 start.bat
 ```
 
-两个入口都会先检查 PHP 8.2+、`pdo_sqlite`、`json`、`mbstring`、`openssl` 与 Git；缺失时使用当前系统的 Homebrew、APT、DNF/YUM、Pacman、Zypper、WinGet 或 Chocolatey 安装，首次运行还会复制 `config.example.yaml` 到用户配置目录，然后启动 STDIO MCP。安装日志只写 stderr，不会污染 JSON-RPC stdout。无交互的 MCP Host 应先在终端运行一次脚本完成需要 sudo/UAC 的安装。
+`start.sh` 与 `start.bat` 会检查 PHP 8.2+、`pdo_sqlite`、`json`、`mbstring`、`openssl` 和 Git；缺失时尝试使用 Homebrew、APT、DNF/YUM、Pacman、Zypper、WinGet 或 Chocolatey 安装。首次运行会复制示例配置到用户目录并启动 STDIO MCP。日志只写 stderr，不污染 JSON-RPC stdout。无交互 MCP Host 应先在终端运行一次，以便完成 sudo/UAC 安装。
 
-默认配置是 `~/.learning-mcp/config.yaml`（Windows 为 `%USERPROFILE%\.learning-mcp\config.yaml`）。可用 `LEARNING_MCP_CONFIG` 指定配置文件，用 `LEARNING_MCP_SKILL_OUTPUT_DIR` 覆盖技能输出目录：
+### 方式二：Composer 包
+
+Packagist 登记前可立即从 GitHub 安装：
+
+```bash
+composer global config repositories.weline-mcp vcs https://github.com/Aiweline/Weline-Codex-Mcp
+composer global require aiweline/weline-codex-mcp:^0.9
+composer global exec -- weline-mcp-install --register-codex
+```
+
+也可把 repository URL 换成 `https://gitee.com/aiweline/weline-codex-mcp`。登记 Packagist 后可直接执行：
+
+```bash
+composer global require aiweline/weline-codex-mcp
+```
+
+`weline-mcp-install` 会检查运行时、保留已有配置、缺失时创建 `~/.learning-mcp/config.yaml`，并只在显式传入 `--register-codex` 时修改 Codex MCP 配置。Composer 只负责分发，运行时不依赖 Composer。
+
+### 方式三：Node/npm 启动壳
+
+npm Registry 发布前可直接从 Git 仓库安装：
+
+```bash
+npm install -g git+https://github.com/Aiweline/Weline-Codex-Mcp.git
+codex mcp add weline -- weline-mcp
+```
+
+Gitee 源：
+
+```bash
+npm install -g git+https://gitee.com/aiweline/weline-codex-mcp.git
+codex mcp add weline -- weline-mcp
+```
+
+发布 npm Registry 后可执行：
+
+```bash
+npm install -g weline-codex-mcp
+codex mcp add weline -- weline-mcp
+```
+
+Node 壳无第三方依赖，只把 stdin/stdout/stderr、参数、环境变量、退出状态和信号交给 `bin/learning-mcp`。它不改写协议，也不启动 HTTP 端口；机器仍需 PHP 8.2+。可用 `WELINE_MCP_PHP` 或 `PHP_BINARY` 指定 PHP。
+
+### 技能输出目录
+
+默认配置为 `~/.learning-mcp/config.yaml`，Windows 为 `%USERPROFILE%\.learning-mcp\config.yaml`。可用 `LEARNING_MCP_CONFIG` 指定配置文件，用 `LEARNING_MCP_SKILL_OUTPUT_DIR` 覆盖技能输出目录：
 
 ```yaml
 knowledge:
@@ -128,30 +199,43 @@ knowledge:
     output_directory: ".codex/skills"
 ```
 
-留空保持现有 Weline 项目级与模块级投影；相对路径按每个目标仓库根解析。绝对目录也可用，但仓库外目录不会进入该项目 SQLite 索引，需由 Codex 或其他 MCP Host 把该目录作为技能目录加载。一个配置目录只能由一个项目 Manifest 管理，避免跨项目静默覆盖。
+留空保持原有项目级和模块级投影；相对路径按目标仓库根解析。绝对路径也支持，但仓库外目录不会进入该项目 SQLite 索引，需要由 MCP Host 将其作为技能目录加载。一个配置目录只能由一个项目 Manifest 管理，避免跨项目静默覆盖。
 
-## Codex 自动接入
+## Codex 接入与项目自动隔离
 
-当前工作站已安装并启用个人插件 `weline-project-intelligence@personal`：
+独立发行版只需注册一次 MCP；之后每个任务根据当前目录自动定位 canonical Git root，并选择该项目独立的索引、知识、经验与 Skill 空间。
 
-- 插件源：`/Users/weline/plugins/weline-project-intelligence`
-- 个人 marketplace：`/Users/weline/.agents/plugins/marketplace.json`
-- MCP 命令：`/Users/weline/Project/Official/框架/dev/ai/mcp/bin/learning-mcp`
-- 配置：本目录 [config.example.yaml](config.example.yaml)，数据仍写入 `~/.learning-mcp`
+源码安装：
 
-Codex 新任务启动时会自动加载 MCP，不需要手工编辑 `~/.codex/config.toml` 或合并 Hook JSON。插件安装时会对 7 类生命周期 Hook 的全部命令定义完成 hash-based trust review；Hook 内容今后如有变更，Codex 会按安全设计要求重新审核新 Hash，不会静默绕过。
+```bash
+codex mcp add weline -- /absolute/path/to/Weline-Codex-Mcp/bin/learning-mcp --config /absolute/path/to/config.yaml
+codex mcp list
+```
 
-个人插件默认启用项目路由门禁：`UserPromptSubmit` 在索引新鲜时把“一次 `get_edit_bundle`、一次 `apply_compact_edit`”作为当前 Prompt 的开发者上下文；`PreToolUse` 对 `Bash`、`functions.exec`、`apply_patch` 和文件型 MCP 中的逐文件发现/直接编辑写入 `~/.learning-mcp/project-routing-guard.jsonl`，并在 enforce 模式对已被 Hook 截获的调用返回 `permissionDecision: deny`。日志只保存项目、工具、原因和输入摘要 Hash，不保存命令正文。
+Composer 安装运行 `weline-mcp-install --register-codex`；Node 安装注册 `weline-mcp`。Codex Desktop、Codex CLI 与 IDE Extension 在同一 Host 上共享 MCP 配置。也可在 Desktop/IDE 的 **Settings → MCP servers → Add server** 中选择 STDIO，填写命令，保存后重启客户端。
 
-当 Codex 通过 `functions.exec` 调用 deferred MCP 工具时，调用脚本应优先把 `result.structuredContent` 输出到模型上下文；兼容旧包装时也可直接输出 `result.content`，因为主读取工具已镜像完整 bundle。不得丢弃这两个批量载荷后再以原生单文件读取补偿。
+手工 TOML：
 
-`WELINE_MCP_ROUTING_GUARD=enforce|audit|off` 控制门禁，默认 `enforce`。强制读取 AGENTS/Skill、用户显式文件、未索引/排除内容、验证和 MCP 明确回退等例外，应在 Shell 命令中声明 `WELINE_MCP_DIRECT_READ_REASON=mandatory|user-file|unindexed|validation|mcp-fallback`，使例外可审计。Codex 当前可对 `PreToolUse` 已截获的 Bash、`apply_patch` 和 MCP 调用执行 Host deny；但官方说明 `unified_exec` 拦截仍不完整，WebSearch 和其他非 Shell、非 MCP 工具也不在该边界内，因此剩余路径仍由 Prompt 强约束兜底，不能把个人插件描述成完整安全沙箱。
+```toml
+[mcp_servers.weline]
+command = "/absolute/path/to/Weline-Codex-Mcp/bin/learning-mcp"
+args = ["--config", "/absolute/path/to/config.yaml"]
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+```
 
-`SessionStart` 只注入 canonical repository、project ID、index DB、revision/freshness/counts 和路由契约，不把代码块或文档正文整批塞进启动 Context。路由契约要求一次提交任务、所有已知路径和符号。每个 Git root 根据 remote/root fingerprint 映射到独立 `project.sqlite`；sidecar 按项目合并刷新并复用打开的 SQLite 连接。若 Unix socket/`pcntl` 不可用，则自动退回原有一次性子进程；连子进程也无法启动时，首个索引读会同步完成 freshness 刷新。
+确认连接后使用 `/mcp` 或 `codex mcp list`。Server 是 Host 按需拉起的 STDIO 子进程，不需要网络端口。
 
-`SessionStart` 和后续 `UserPromptSubmit` 还会检查已验证经验的技能投影快照，需要时在 Hook 返回后非阻断启动 worker。`get_edit_bundle` 会从一次提交的全部已知路径推断当前模块，并从 Project SQLite 同时读取项目级、模块级及相关技能正文；当前 Prompt 也直接命中同一索引，所以不要求任务重启或目录扫描。
+独立 MCP 已包含项目识别、索引、编辑和学习能力。若还需要在 SessionStart、UserPromptSubmit、PostToolUse、Stop 等生命周期自动刷新与采集，可额外安装个人插件，或按 `examples/codex-hooks.json` 合并 Hook；Hook 不是五个核心工具的前置条件。
 
-插件是解决“MCP 必须先被 Host 发现，才能启动”的启动层；已运行的 MCP 进程无法反过来自我注册到当前 Host。因此新安装/更新插件后需要新建 Codex 任务；旧任务不会在中途动态增加工具。
+建议在项目 `AGENTS.md` 中加入：
+
+```markdown
+- Call get_edit_bundle once with the task, all known paths, and all affected symbols.
+- Use returned regions, hashes, impacts, docs, and Skills instead of repository-wide scans.
+- Submit one edit-plan.v1 and call apply_compact_edit once.
+- Use get_edit_status and rollback_edit for recovery only.
+```
 
 ## 独立 CLI 启动
 
@@ -222,18 +306,18 @@ MCP Server 是 STDIO 进程，由 Codex 按需拉起，不监听网络端口：
 
 安装不是自动发生的；只有显式执行 `scheduler install` 才会写入 `~/Library/LaunchAgents`。
 
-## 手工接入 Codex（回退方案）
+## 可选 Hook 与 worker
 
-Personal plugin 不可用时才使用此回退方案：
+五个核心 MCP 工具只需要 STDIO Server。若要在每次任务结束后自动采集证据、分析经验并投影 Skill，再按需启用 Hook 和 worker：
 
 1. 复制 [config.example.yaml](config.example.yaml)，按需修改索引、编辑、知识、数据目录和调度配置。
 2. 把 [examples/codex-hooks.json](examples/codex-hooks.json) 中的 CLI 与配置路径替换为绝对路径，再合并到受信任的 Codex Hook 配置。
-3. 把 [examples/codex-config.toml](examples/codex-config.toml) 合并到 `~/.codex/config.toml` 或受信任项目的 `.codex/config.toml`。
-4. 选择 `learningd run` 或显式安装 LaunchAgent；Stop 后短 worker 已默认启用。
+3. 选择 `learningd run`、周期性 `learningd drain`，或显式安装系统调度；安装 MCP 本身不会静默创建系统服务。
+4. 新建 Codex 任务，让 Host 重新加载新增的 MCP/Hook。
 
-Codex Hook 会把 JSON 对象写入命令 stdin。Collector 使用内容指纹和数据库唯一约束处理并发/重试。官方参考：[Codex Hooks](https://learn.chatgpt.com/docs/hooks)、[Codex MCP](https://learn.chatgpt.com/docs/extend/mcp)、[Scheduled tasks](https://learn.chatgpt.com/docs/automations)。
+Collector 使用内容指纹和数据库唯一约束处理并发与重试。官方参考：[Codex Hooks](https://learn.chatgpt.com/docs/hooks)、[Codex MCP](https://learn.chatgpt.com/docs/extend/mcp)、[Scheduled tasks](https://learn.chatgpt.com/docs/automations)。
 
-`SessionStart` 的索引路由元数据默认注入；经验部分只包含 `promoted` 或置信度不低于 `0.90` 的 `validated` 全项目经验。候选、争议、过期、废弃或带未证明细分作用域的条目不会进入 Developer Context。
+`SessionStart` 的索引路由元数据不包含整段代码正文；经验只在成熟度、证据、作用域和冲突门禁通过后进入上下文。已运行任务不会在中途动态增加刚安装的工具或 Hook。
 
 ## 审核闭环
 
