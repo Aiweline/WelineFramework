@@ -528,7 +528,7 @@ final class RuntimeDependencyBootstrapper
             return ['success' => false, 'exit_code' => 127, 'output' => (string)__('proc_open 不可用。'), 'timed_out' => false];
         }
 
-        $nullDevice = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $nullDevice = \Weline\Framework\System\Process\Processer::resolveNullDevice();
         $descriptors = [
             0 => ['file', $nullDevice, 'r'],
             1 => ['pipe', 'w'],

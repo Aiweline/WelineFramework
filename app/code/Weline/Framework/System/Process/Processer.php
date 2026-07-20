@@ -781,7 +781,7 @@ class Processer
             $enableLog = false;
             $logFile = '';
         }
-        $nullDevice = IS_WIN ? 'NUL' : '/dev/null';
+        $nullDevice = self::resolveNullDevice();
 
         // Windows 后台默认优先走 argv 快速路径（Start-Process ArgumentList 数组），
         // 失败时再回退到旧脚本路径，兼容历史行为。
@@ -4992,7 +4992,9 @@ PHP;
             $argv = [$phpBinary, ...$arguments];
             $requestedCwd = (string)($item['cwd'] ?? BP);
             $childCwd = self::resolveWindowsBatchChildWorkingDirectory($requestedCwd);
-            $nullDevice = 'NUL';
+            // Plain "NUL" breaks under UNC/Parallels shares (proc_open resolves it
+            // relative to cwd). Device-namespace \\.\NUL stays absolute.
+            $nullDevice = self::resolveNullDevice();
             $stdoutPath = (bool)($item['enable_log'] ?? false)
                 ? (string)($item['stdout_log'] ?? '')
                 : $nullDevice;
@@ -6708,6 +6710,22 @@ POWERSHELL;
         }
 
         return 2.0;
+    }
+
+    /**
+     * Null device path for proc_open/fopen descriptors.
+     *
+     * Plain `NUL` is resolved relative to the current working directory by PHP on
+     * UNC/Parallels shared folders and fails with "No such file or directory".
+     * The device-namespace form `\\.\NUL` stays absolute.
+     */
+    public static function resolveNullDevice(): string
+    {
+        if (!self::isWindows()) {
+            return '/dev/null';
+        }
+
+        return '\\\\.\\NUL';
     }
 
     private static function resolveWindowsHelperWorkingDirectory(): ?string

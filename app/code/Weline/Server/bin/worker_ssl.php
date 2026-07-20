@@ -15,6 +15,8 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_runtime_common.php';
+
 if (!\function_exists('wlsNormalizeMemoryLimit')) {
     function wlsNormalizeMemoryLimit(mixed $value, string $default = '256M'): string
     {
