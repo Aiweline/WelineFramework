@@ -124,3 +124,24 @@
   - 已完成：`Env::default_SESSION` 同步补齐 `wls_managed/wls_default/wls driver` 默认值
 - [ ] `wls-linux-direct-followup`
   - 备注：直连模式后置；需先设计 Dispatcher 能力下放 Worker 的方案
+
+## 2026-07-17 Windows 批量启动稳定性优化
+
+- [x] 16 Worker 代际令牌由逐实例 JSON 重写改为一次原子批量分配；实测 19 个 slot 分配 6–16ms。
+- [x] 初始批量启动复用 CLI 已完成的端口段预检与预留，删除 Master 对 16 个 Worker 的逐端口重复 bind 探测。
+- [x] Windows WLS 的精确 argv、非阻塞且由子进程持有 PID 的批次统一走 Master-owned `proc_open(array)`；不再为 Worker 或共享 sidecar 创建 PowerShell helper。非精确/可见窗口等非 WLS 路径才保留有界 helper。
+- [x] Maintenance Worker 启动数量收敛为 1；维护模式仍由 Dispatcher/Worker epoch 保证一致。
+- [x] 后台启动读取 endpoint 时对 `runtime_selection` 原子发布窗口执行 500ms 有界重读，并以最后完整快照兜底。
+- [x] Windows 11 ARM + PHP 8.4 x64 仿真验证：19 命令 `batchCreate=438–785ms`，phase-one 总计 `673–1361ms`，16/16 Worker READY，18/18 常驻进程运行。
+- [x] HTTPS 首页验证：规范 Host 连续请求命中 `X-Weline-Fpc: HIT`、`X-Wls-Performance-Fpc-Source: process`。
+- [x] HTTP/2 + TLS 1.3：ALPN 默认 `h2`、强制 HTTP/1.1 可回退；32 个并发 Stream 在一个 TLS 连接上 32/32 成功。首个 H2 请求完成握手后，后续请求 `connect/tcp/tls` 均为 0，耗时约 `0.75–7.37ms`。
+- [x] Windows 独占稳定性复测：Parallels Windows 11 ARM、PHP 8.4.23 NTS x64 仿真、本地磁盘副本、4 Worker、Dispatcher/event/stream TLS；H2 keep-alive `100,000/100,000`、0 错误、632.89 QPS、p95 111.588ms、p99 175.969ms、max 707.705ms，协议命中 `HTTP/2=100000`。
+- [x] 稳定性复测后 4 个 Worker PID 均未变化、无 restart，全部保持 `hot + Process FPC HIT`；Worker 总 RSS `490.94→499.38MB`，增长 1.72%。
+- [x] 修复共享 Session/Memory 已运行时健康确认长尾：复用路径用当前 token 重新执行 AUTH→PING，并从已认证 runtime 身份恢复候选观察，不再每次执行 Windows CIM 全扫描；实测共享复用阶段降至约 357ms。
+- [x] 普通后台模式的 Windows Session/Memory 冷创建改用 `Processer::batchCreate()` 真并发；仅显式 frontend 可见窗口模式保留逐个启动。
+- [x] Windows 冷创建运行门禁：独占停止实例和共享 sidecar 后，Session/Memory 两项以 `master_owned_proc_open` 一次提交 `36.309ms`，同秒取得 PID、约 1 秒完成 authenticated PING；Master 7 项子进程批量提交 `99.388ms`，READY gate 约 2 秒，4/4 Worker 均为首页 Process FPC HIT。
+- [x] 首页 Shared FPC 载荷移除未被消费的 URL/rule/router/generated 参数；共享写入必须确认成功后才能生成 receipt，Memory 日志不再出现 `frame_too_large`。内部预热遇到格式化终止响应时以真实 HTTP 状态为权威，不再用默认 200 伪装失败。
+- [x] 修复证书映射 SQLite 并发下偶发 `SQLITE_MISUSE (21)`：重试闭包内基于当前连接重新 prepare/execute，Windows 两实例并发启动未再出现 21/25。
+- [ ] 在原生 Windows ARM64 PHP 上复测完整 READY、HTTP/2/TLS 1.3、fresh TLS 与 100,000 请求稳定性。
+
+最终验证实例为 `ai-test-win-cold-20260717-2153`、端口 `9825`；全程未触碰默认端口 `9501`。自动验证完成后必须停止该实例及共享 Session/Memory，并移除临时防火墙规则。原生 Windows ARM64 PHP 尚无官方构建，本轮 x64 仿真结果不能替代上条待办。

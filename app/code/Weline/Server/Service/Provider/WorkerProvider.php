@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\SharedStateRuntimeOptions;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\HealthCheckResult;
 use Weline\Server\Service\Contract\ServiceCommand;
@@ -77,7 +76,7 @@ class WorkerProvider extends AbstractServiceProvider
         // 安全：Dispatcher 模式下 Worker 仅监听 127.0.0.1，不暴露内网端口
         // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外，Worker 端口只供本机 Dispatcher 连接
         $direct = $context->isDirect();
-        $directListenerMode = $this->resolveDirectListenerMode($context);
+        $listenerMode = $context->runtimeSelection->listenerMode;
         $host = $direct
             ? ($context->host ?: '127.0.0.1')
             : '127.0.0.1';
@@ -92,41 +91,65 @@ class WorkerProvider extends AbstractServiceProvider
         if ($context->sslEnabled && $context->sslCert && $context->sslKey) {
             $arguments[] = '--ssl-cert=' . $context->sslCert;
             $arguments[] = '--ssl-key=' . $context->sslKey;
+            if ($direct && (bool)$context->getConfig('wls.http3.enabled', false)) {
+                $nativeDigest = \strtolower(\trim((string)$context->getConfig('wls.http3.native_digest', '')));
+                $nativeFingerprint = \strtolower(\trim((string)$context->getConfig(
+                    'wls.http3.fingerprint',
+                    '',
+                )));
+                if (\preg_match('/^[a-f0-9]{64}$/D', $nativeDigest) !== 1
+                    || \preg_match('/^[a-f0-9]{32}$/D', $nativeFingerprint) !== 1
+                ) {
+                    throw new \RuntimeException('Direct HTTP/3 Worker requires a verified native fingerprint and digest.');
+                }
+                $ticketRingEpoch = (int)$context->getConfig('wls.http3.tls_ticket_ring_epoch', 0);
+                $ticketRingDigest = \strtolower(\trim((string)$context->getConfig(
+                    'wls.http3.tls_ticket_ring_digest',
+                    '',
+                )));
+                if ($ticketRingEpoch <= 0
+                    || \preg_match('/^[a-f0-9]{64}$/D', $ticketRingDigest) !== 1
+                ) {
+                    throw new \RuntimeException('Direct HTTP/3 Worker requires published TLS ticket-ring metadata.');
+                }
+                $http3Mode = match (\PHP_OS_FAMILY) {
+                    'Darwin' => 'datagram-router',
+                    'Linux' => 'reuseport-ebpf',
+                    default => throw new \RuntimeException(
+                        'Native HTTP/3 is unsupported on the selected platform data plane.'
+                    ),
+                };
+                $arguments[] = '--wls-http3=1';
+                $arguments[] = '--wls-http3-mode=' . $http3Mode;
+                $arguments[] = '--wls-http3-native-fingerprint=' . $nativeFingerprint;
+                $arguments[] = '--wls-http3-native-digest=' . $nativeDigest;
+                $arguments[] = '--wls-http3-ticket-ring-epoch=' . $ticketRingEpoch;
+                $arguments[] = '--wls-http3-ticket-ring-digest=' . $ticketRingDigest;
+            }
         }
 
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
         $arguments[] = '--worker-count=' . $this->getInstanceCount($context);
-        $topology = $context->getEffectiveTopology()->value;
-        $arguments[] = '--wls-dispatcher-enabled=' . ($context->isDispatcherEnabled() ? '1' : '0');
-        $arguments[] = '--wls-runtime-topology=' . $topology;
+        $arguments[] = '--wls-runtime-topology='
+            . $context->runtimeSelection->effectiveTopology->value;
+        $arguments[] = '--wls-listener-mode=' . $listenerMode;
         // READY 首页预热使用启动时固化的对外 origin，避免 Windows 替换 instance.json 时的短暂空窗。
         // 保持为离散 argv，不使用 environment，以便 Windows 继续走快速批量启动路径。
-        $arguments[] = '--public-origin=' . $this->buildPublicOrigin($context);
+        $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
 
-        if ($context->windowMode) {
-            $arguments[] = '--win';
-        }
-
-        if ($direct && $directListenerMode === 'shared_fd') {
+        if ($direct && $listenerMode === 'shared_fd') {
             $arguments[] = '--listen-fd=' . DirectSharedListener::INHERITED_FD;
-        } elseif ($direct && $directListenerMode === 'reuseport') {
-            $arguments[] = '--reuseport';
-        } elseif ($direct) {
+        } elseif ($direct && $listenerMode !== 'reuseport') {
             throw new \InvalidArgumentException(
-                'Direct topology requires wls.runtime.listener_mode=reuseport or shared_fd.'
+                'Direct topology requires listener mode reuseport or shared_fd.'
             );
         }
 
-        $arguments = \array_merge($arguments, $this->buildSharedStateArguments($context));
+        $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::sharedState($context));
 
-        $loopDriver = (string) $context->getConfig('wls.loop.driver', 'auto');
-        $loopDriver = \strtolower(\trim($loopDriver));
-        if ($loopDriver === '') {
-            $loopDriver = 'auto';
-        }
-        $arguments[] = '--wls-loop-driver=' . $loopDriver;
+        $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
         // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
         // 这同时覆盖 Dispatcher 透传和 direct SO_REUSEPORT 模式。
@@ -185,74 +208,17 @@ class WorkerProvider extends AbstractServiceProvider
         return false;
     }
 
-    /**
-     * @return string[]
-     */
-    private function buildSharedStateArguments(ServiceContext $context): array
-    {
-        $runtime = SharedStateRuntimeOptions::fromCliArgs([], $context->instanceName, $context->envConfig);
-        $session = $runtime->getSession();
-        $memory = $runtime->getMemory();
-
-        $sessionHost = \trim((string) ($session['host'] ?? '127.0.0.1'));
-        if ($sessionHost === '') {
-            $sessionHost = '127.0.0.1';
-        }
-        $sessionPort = (int) ($session['port'] ?? (19970 + MasterProcess::getProjectPortOffset()));
-        if ($sessionPort <= 0) {
-            $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
-        }
-        $sessionTokenFileName = \trim((string) ($session['token_file_name'] ?? 'session_server.token'));
-        if ($sessionTokenFileName === '') {
-            $sessionTokenFileName = 'session_server.token';
-        }
-
-        $memoryHost = \trim((string) ($memory['host'] ?? '127.0.0.1'));
-        if ($memoryHost === '') {
-            $memoryHost = '127.0.0.1';
-        }
-        $memoryPort = (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset()));
-        if ($memoryPort <= 0) {
-            $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
-        }
-        $memoryTokenFileName = \trim((string) ($memory['token_file_name'] ?? 'memory_server.token'));
-        if ($memoryTokenFileName === '') {
-            $memoryTokenFileName = 'memory_server.token';
-        }
-
-        return [
-            '--session-host=' . $sessionHost,
-            '--session-port=' . $sessionPort,
-            '--session-token-file-name=' . $sessionTokenFileName,
-            '--memory-host=' . $memoryHost,
-            '--memory-port=' . $memoryPort,
-            '--memory-token-file-name=' . $memoryTokenFileName,
-        ];
-    }
-
     private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
     {
-        $engine = \strtolower(\trim((string)$context->getConfig('wls.ssl.engine', 'stream')));
-        if ($engine === '') {
-            $engine = 'stream';
-        }
+        $engine = $context->runtimeSelection->sslEngine;
         if ($engine === 'event_buffer' && PHP_OS_FAMILY === 'Windows') {
-            throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer is not supported on native Windows: '
-                . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
-            );
+            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer is disabled on native Windows because its live TLS accept path has no passing runtime self-test; use stream.');
         }
-        if ($engine === 'event_buffer' && $context->isDirect()) {
-            throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer does not support direct mode. '
-                . 'Use wls.ssl.engine=stream for direct mode.'
-            );
+        if ($engine === 'event_buffer' && $context->runtimeSelection->isDirect()) {
+            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer does not support direct mode; use stream.');
         }
-        if ($engine === 'event_buffer' && $context->isDispatcherEnabled()) {
-            throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface before TLS. '
-                . 'Use wls.ssl.engine=stream; Dispatcher startup will not silently corrupt the TLS stream.'
-            );
+        if ($engine === 'event_buffer' && $context->runtimeSelection->isDispatcher()) {
+            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface; use stream.');
         }
 
         return match ($engine) {
@@ -264,57 +230,4 @@ class WorkerProvider extends AbstractServiceProvider
         };
     }
 
-    private function resolveDirectListenerMode(ServiceContext $context): string
-    {
-        if (!$context->isDirect()) {
-            return 'single';
-        }
-        $mode = \strtolower(\trim((string)$context->getConfig('wls.runtime.listener_mode', '')));
-        if ($mode === '') {
-            // Read compatibility for an instance created before listener_mode
-            // became part of RuntimeSelection. New starts always set it.
-            $mode = PHP_OS_FAMILY === 'Darwin' ? 'shared_fd' : 'reuseport';
-        }
-
-        return $mode;
-    }
-
-    private function buildPublicOrigin(ServiceContext $context): string
-    {
-        $scheme = $context->sslEnabled ? 'https' : 'http';
-        $rawHost = \trim((string)($context->publicHost ?: $context->host ?: '127.0.0.1'));
-        $rawIpv6 = \trim($rawHost, '[]');
-        if (!\str_contains($rawHost, '://')
-            && \filter_var($rawIpv6, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
-        ) {
-            $parts = ['host' => $rawIpv6];
-        } else {
-            $candidate = \str_contains($rawHost, '://') ? $rawHost : $scheme . '://' . $rawHost;
-            try {
-                $parts = \parse_url($candidate);
-            } catch (\ValueError) {
-                $parts = [];
-            }
-        }
-        if (!\is_array($parts)) {
-            $parts = [];
-        }
-
-        $host = \trim((string)($parts['host'] ?? ''));
-        if ($host === '') {
-            $host = '127.0.0.1';
-        }
-        $authority = \filter_var($host, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
-            ? '[' . \trim($host, '[]') . ']'
-            : $host;
-        $port = isset($parts['port'])
-            ? (int)$parts['port']
-            : $context->mainPort;
-        $defaultPort = $context->sslEnabled ? 443 : 80;
-        if ($port > 0 && $port <= 65535 && $port !== $defaultPort) {
-            $authority .= ':' . $port;
-        }
-
-        return $scheme . '://' . $authority;
-    }
 }

@@ -14,6 +14,11 @@ namespace Weline\Server\Protocol\Http3;
 interface QuicTransportAdapterInterface
 {
     /**
+     * Stop admitting new HTTP/3 streams and begin graceful connection drain.
+     */
+    public function beginDrain(): void;
+
+    /**
      * @return array{
      *     available:bool,
      *     adapter:string,

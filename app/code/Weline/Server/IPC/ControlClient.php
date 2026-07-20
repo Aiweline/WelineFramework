@@ -448,6 +448,16 @@ class ControlClient implements ChildControlClientInterface
         $leaseId = $launchId;
         $generation = $epoch;
         if ($this->registerInfo) {
+            // READY retries often pass the explicit role/identity tuple. Keep
+            // the original registration correlation id in that path too;
+            // otherwise a delayed ACK is echoed without msg_id and a strict
+            // Worker correctly rejects an otherwise valid Master response.
+            if ($msgId === '') {
+                $msgId = (string)($this->registerInfo['msg_id'] ?? '');
+                if ($msgId === '' && $launchId !== '') {
+                    $msgId = $launchId;
+                }
+            }
             $slotId = (string)($this->registerInfo['slot_id'] ?? $slotId);
             $leaseId = (string)($this->registerInfo['lease_id'] ?? $leaseId);
             $generation = (int)($this->registerInfo['generation'] ?? $generation);
@@ -765,7 +775,8 @@ class ControlClient implements ChildControlClientInterface
             case ControlMessage::TYPE_ACK_READY:
             case ControlMessage::TYPE_READY_ACK:
                 $accepted = !\array_key_exists('accepted', $msg) || (bool)($msg['accepted'] ?? false);
-                $this->readyStateConfirmed = $accepted;
+                $readyPhase = \strtolower(\trim((string)($msg['ready_phase'] ?? 'final')));
+                $this->readyStateConfirmed = $accepted && $readyPhase === 'final';
                 break;
 
             case ControlMessage::TYPE_SHUTDOWN:

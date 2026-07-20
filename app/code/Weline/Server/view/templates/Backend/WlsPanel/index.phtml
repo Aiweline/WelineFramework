@@ -60,14 +60,14 @@ $securityTypeOptions = is_array($panelSecurityData['type_options'] ?? null) ? ar
 $gatewayModeConfig = is_array($panelGatewaySettings['config'] ?? null) ? $panelGatewaySettings['config'] : [];
 $gatewayModeEnabled = !empty($gatewayModeConfig['enabled']);
 $gatewayModeListen = trim((string)($gatewayModeConfig['listen'] ?? '0.0.0.0:443'));
-$gatewayTrafficMode = trim((string)($gatewayModeConfig['traffic_mode'] ?? 'auto'));
-$gatewayTrafficModeLabel = trim((string)($gatewayModeConfig['traffic_mode_label'] ?? __('自动')));
-$gatewayTrafficModeOptions = is_array($gatewayModeConfig['traffic_mode_options'] ?? null) ? array_values($gatewayModeConfig['traffic_mode_options']) : [];
+$gatewayRequestedTopology = trim((string)($gatewayModeConfig['requested_topology'] ?? 'auto'));
+$gatewayRequestedTopologyLabel = trim((string)($gatewayModeConfig['requested_topology_label'] ?? __('自动')));
+$gatewayTopologyOptions = is_array($gatewayModeConfig['topology_options'] ?? null) ? array_values($gatewayModeConfig['topology_options']) : [];
 $gatewayModeEffectiveEnabled = !empty($gatewayModeConfig['effective_enabled']);
 $gatewayModeEffectiveListen = trim((string)($gatewayModeConfig['effective_listen'] ?? $gatewayModeListen));
-$gatewayEffectiveTrafficMode = trim((string)($gatewayModeConfig['effective_traffic_mode'] ?? $gatewayTrafficMode));
-$gatewayEffectiveTrafficModeLabel = trim((string)($gatewayModeConfig['effective_traffic_mode_label'] ?? $gatewayTrafficModeLabel));
-$gatewayEffectiveTrafficModeHint = trim((string)($gatewayModeConfig['effective_traffic_mode_hint'] ?? ''));
+$gatewayEffectiveTopology = trim((string)($gatewayModeConfig['effective_topology'] ?? ''));
+$gatewayEffectiveTopologyLabel = trim((string)($gatewayModeConfig['effective_topology_label'] ?? __('未知')));
+$gatewayEffectiveTopologyHint = trim((string)($gatewayModeConfig['effective_topology_hint'] ?? ''));
 $gatewayDirectListenCapability = is_array($gatewayModeConfig['direct_listen_capability'] ?? null) ? $gatewayModeConfig['direct_listen_capability'] : [];
 $gatewayDirectListenSupported = !empty($gatewayDirectListenCapability['supported']);
 $gatewayDirectListenLabel = trim((string)($gatewayDirectListenCapability['label'] ?? ''));
@@ -556,7 +556,10 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
      data-wls-shell="standalone"
      data-wls-theme="light"
      data-wls-auto-refresh="<?= htmlspecialchars($panelAutoRefresh, ENT_QUOTES, 'UTF-8') ?>">
-    <aside class="wls-shell-sidebar" aria-label="<?= __('WLS 面板导航') ?>">
+    <aside id="wls-shell-sidebar"
+           class="wls-shell-sidebar"
+           aria-label="<?= __('WLS 面板导航') ?>"
+           data-wls-menu-drawer>
         <div class="wls-shell-brand">
             <span class="wls-shell-kicker"><?= __('WLS 独立后台') ?></span>
             <strong><?= __('WLS 面板') ?></strong>
@@ -673,15 +676,35 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
             <?php endif; ?>
         </nav>
     </aside>
+    <button class="wls-shell-backdrop"
+            type="button"
+            data-wls-menu-backdrop
+            aria-label="<?= __('关闭菜单') ?>"
+            hidden></button>
 
     <main class="wls-shell-main" data-wls-main>
         <header class="wls-shell-header">
-            <div>
-                <span class="wls-shell-kicker"
-                      data-wls-page-kicker
-                      data-wls-page-kicker-default="<?= $escapeHtml(__('独立服务器面板')) ?>"><?= __('独立服务器面板') ?></span>
-                <h1 data-wls-page-title
-                    data-wls-page-title-default="<?= $escapeHtml((string)$panelTitle) ?>"><?= $panelTitle ?></h1>
+            <div class="wls-shell-header-start">
+                <button class="wls-menu-toggle"
+                        type="button"
+                        data-wls-menu-toggle
+                        data-wls-menu-open-label="<?= $escapeHtml(__('打开菜单')) ?>"
+                        data-wls-menu-close-label="<?= $escapeHtml(__('关闭菜单')) ?>"
+                        aria-controls="wls-shell-sidebar"
+                        aria-expanded="false"
+                        aria-label="<?= $escapeHtml(__('打开菜单')) ?>">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                        <path d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                    <span class="wls-visually-hidden" data-wls-menu-toggle-label><?= __('打开菜单') ?></span>
+                </button>
+                <div>
+                    <span class="wls-shell-kicker"
+                          data-wls-page-kicker
+                          data-wls-page-kicker-default="<?= $escapeHtml(__('独立服务器面板')) ?>"><?= __('独立服务器面板') ?></span>
+                    <h1 data-wls-page-title
+                        data-wls-page-title-default="<?= $escapeHtml((string)$panelTitle) ?>"><?= $panelTitle ?></h1>
+                </div>
             </div>
             <div class="wls-shell-actions">
                 <button type="button"
@@ -2527,8 +2550,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <strong><?= $gatewayRunningInstanceCount ?></strong>
                     </article>
                     <article>
-                        <span><?= __('流量模式') ?></span>
-                        <strong><?= $escapeHtml($gatewayEffectiveTrafficModeLabel !== '' ? $gatewayEffectiveTrafficModeLabel : __('自动')) ?></strong>
+                        <span><?= __('生效拓扑') ?></span>
+                        <strong><?= $escapeHtml($gatewayEffectiveTopologyLabel !== '' ? $gatewayEffectiveTopologyLabel : __('未知')) ?></strong>
                     </article>
                 </div>
                 <form class="wls-gateway-config-form" method="post" action="<?= $escapeHtml($gatewaySaveUrl) ?>">
@@ -2557,19 +2580,19 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                    placeholder="0.0.0.0:443"
                                    required>
                         </label>
-                        <label class="wls-form-field" data-wls-gateway-traffic-mode>
-                            <span><?= __('流量模式') ?></span>
-                            <select name="gateway_traffic_mode">
-                                <?php foreach ($gatewayTrafficModeOptions as $trafficOption): ?>
+                        <label class="wls-form-field" data-wls-gateway-topology>
+                            <span><?= __('请求拓扑') ?></span>
+                            <select name="runtime_topology">
+                                <?php foreach ($gatewayTopologyOptions as $topologyOption): ?>
                                     <?php
-                                    $trafficValue = trim((string)($trafficOption['value'] ?? ''));
-                                    $trafficLabel = trim((string)($trafficOption['label'] ?? $trafficValue));
-                                    if ($trafficValue === '') {
+                                    $topologyValue = trim((string)($topologyOption['value'] ?? ''));
+                                    $topologyOptionLabel = trim((string)($topologyOption['label'] ?? $topologyValue));
+                                    if ($topologyValue === '') {
                                         continue;
                                     }
                                     ?>
-                                    <option value="<?= $escapeHtml($trafficValue) ?>" <?= $gatewayTrafficMode === $trafficValue ? 'selected' : '' ?>>
-                                        <?= $escapeHtml($trafficLabel !== '' ? $trafficLabel : $trafficValue) ?>
+                                    <option value="<?= $escapeHtml($topologyValue) ?>" <?= $gatewayRequestedTopology === $topologyValue ? 'selected' : '' ?>>
+                                        <?= $escapeHtml($topologyOptionLabel !== '' ? $topologyOptionLabel : $topologyValue) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -2605,16 +2628,16 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </label>
                     </div>
                     <span class="wls-help-text">
-                        <?= __('工作进程重载只刷新运行时工作进程。监听、网关角色或流量模式变更需要重启目标实例。') ?>
-                        <?php if ($gatewayEffectiveTrafficModeHint !== ''): ?>
-                            <?= $escapeHtml($gatewayEffectiveTrafficModeHint) ?>
+                        <?= __('工作进程重载只刷新运行时工作进程。监听、网关角色或请求拓扑变更需要重启目标实例。') ?>
+                        <?php if ($gatewayEffectiveTopologyHint !== ''): ?>
+                            <?= $escapeHtml($gatewayEffectiveTopologyHint) ?>
                         <?php endif; ?>
                     </span>
                     <div class="wls-gateway-effective-row">
                         <span><?= __('生效监听') ?>: <strong><?= $escapeHtml($gatewayModeEffectiveListen !== '' ? $gatewayModeEffectiveListen : '0.0.0.0:443') ?></strong></span>
                         <span><?= __('已保存监听') ?>: <strong><?= $escapeHtml($gatewayModeListen !== '' ? $gatewayModeListen : '0.0.0.0:443') ?></strong></span>
-                        <span><?= __('生效模式') ?>: <strong><?= $escapeHtml($gatewayEffectiveTrafficModeLabel !== '' ? $gatewayEffectiveTrafficModeLabel : __('自动')) ?></strong></span>
-                        <span><?= __('已保存模式') ?>: <strong><?= $escapeHtml($gatewayTrafficModeLabel !== '' ? $gatewayTrafficModeLabel : __('自动')) ?></strong></span>
+                        <span><?= __('生效拓扑') ?>: <strong><?= $escapeHtml($gatewayEffectiveTopologyLabel !== '' ? $gatewayEffectiveTopologyLabel : __('未知')) ?></strong></span>
+                        <span><?= __('请求拓扑') ?>: <strong><?= $escapeHtml($gatewayRequestedTopologyLabel !== '' ? $gatewayRequestedTopologyLabel : __('自动')) ?></strong></span>
                     </div>
                     <div class="wls-gateway-effective-row" data-wls-direct-listen-capability="<?= $gatewayDirectListenSupported ? 'supported' : 'unavailable' ?>">
                         <span>
@@ -2702,8 +2725,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             $instanceName = (string)($instance['name'] ?? '');
                             $listenLabel = trim((string)($instance['listen'] ?? ''));
                             $mainListenLabel = trim((string)($instance['main_listen'] ?? ''));
-                            $topologyLabel = trim((string)($instance['topology'] ?? ''));
-                            $directReusePort = !empty($instance['direct_reuse_port']);
+                            $runtimeTopology = trim((string)($instance['runtime_topology'] ?? ''));
+                            $listenerMode = trim((string)($instance['listener_mode'] ?? ''));
+                            $isDirect = !empty($instance['is_direct']);
                             $controlPort = (int)($instance['control_port'] ?? 0);
                             $gatewayEnabled = !empty($instance['gateway_enabled']);
                             $gatewayRunning = !empty($instance['gateway_running']);
@@ -2712,8 +2736,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             $instanceRunning = !empty($instance['instance_running']);
                             $instanceStatusLabel = $gatewayRunning ? __('就绪') : ($gatewayEnabled ? __('已启用') : __('已停用'));
                             $instanceMasterLabel = $instanceRunning ? __('运行中') : __('已停止');
-                            $instanceTopologyLabel = $topologyLabel !== '' ? $topologyLabel : (string)__('未知');
-                            $instanceTopologyDisplay = $instanceTopologyLabel . ($directReusePort ? ' / ' . (string)__('SO_REUSEPORT') : '');
+                            $instanceTopologyLabel = $runtimeTopology !== '' ? $runtimeTopology : (string)__('未知');
+                            $instanceTopologyDisplay = $instanceTopologyLabel
+                                . ($listenerMode !== '' ? ' / ' . $listenerMode : '');
                             $instanceProcessLabel = __('%{1}/%{2} ready', [$gatewayReadyCount, $gatewayProcessCount]);
                             $instanceDetailId = 'wls-gateway-instance-detail-' . $instanceIndex;
                             $instanceSearchText = strtolower(trim(implode(' ', [
@@ -2757,7 +2782,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 </td>
                                 <td>
                                     <span class="wls-project-path-cell">
-                                        <small><?= $escapeHtml($directReusePort ? __('直连监听') : __('代理/运行时')) ?></small>
+                                        <small><?= $escapeHtml($isDirect ? __('直连监听') : ($runtimeTopology === 'dispatcher' ? __('派遣器监听') : __('运行时监听'))) ?></small>
                                         <code><?= $escapeHtml($instanceTopologyDisplay) ?></code>
                                     </span>
                                 </td>
@@ -3292,7 +3317,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
     color-scheme: light;
     min-height: 100vh;
     display: grid;
-    grid-template-columns: clamp(210px, 16vw, 252px) minmax(0, 1fr);
+    --wls-sidebar-width: clamp(232px, 17vw, 272px);
+    grid-template-columns: var(--wls-sidebar-width) minmax(0, 1fr);
     background: var(--wls-bg);
     color: var(--wls-text);
     overflow-x: hidden;
@@ -3370,6 +3396,9 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     padding: 24px 16px;
     z-index: 2;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.wls-shell-backdrop {
+    display: none;
 }
 .wls-shell-brand {
     display: grid;
@@ -3568,6 +3597,15 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-shell-header > div {
     min-width: 0;
 }
+.wls-shell-header-start {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+}
+.wls-shell-header-start > div {
+    min-width: 0;
+}
 .wls-shell-header h1,
 .wls-section h2,
 .wls-security-page h2,
@@ -3625,6 +3663,33 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-icon-button {
     gap: 7px;
     min-width: 92px;
+}
+.wls-menu-toggle {
+    align-items: center;
+    background: var(--wls-surface);
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    color: var(--wls-text);
+    cursor: pointer;
+    display: none;
+    flex: 0 0 auto;
+    height: 42px;
+    justify-content: center;
+    padding: 0;
+    width: 42px;
+}
+.wls-menu-toggle svg {
+    fill: none;
+    height: 20px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 2;
+    width: 20px;
+}
+.wls-menu-toggle:focus-visible,
+.wls-shell-backdrop:focus-visible {
+    outline: 3px solid var(--wls-focus-ring);
+    outline-offset: 2px;
 }
 .wls-inline-action-form {
     margin: 0;
@@ -5172,30 +5237,27 @@ a.wls-meta-value:hover {
 }
 @media (max-width: 1100px) {
     .wls-standalone-shell {
-        grid-template-columns: minmax(0, 1fr);
+        --wls-sidebar-width: 216px;
+        grid-template-columns: var(--wls-sidebar-width) minmax(0, 1fr);
     }
     .wls-shell-sidebar {
         grid-column: 1;
         grid-row: 1;
-        position: relative;
-        top: auto;
-        height: auto;
-        overflow: visible;
-        padding: 16px;
+        padding: 18px 12px;
     }
     .wls-shell-brand {
         padding-bottom: 14px;
     }
     .wls-shell-nav {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
     }
     .wls-shell-nav-divider {
-        grid-column: 1 / -1;
+        grid-column: auto;
     }
     .wls-shell-main {
-        grid-column: 1;
-        grid-row: 2;
-        min-height: 0;
+        grid-column: 2;
+        grid-row: 1;
+        min-height: 100vh;
         padding: 22px 18px 32px;
     }
     .wls-shell-header {
@@ -5234,31 +5296,9 @@ a.wls-meta-value:hover {
     }
 }
 @media (max-width: 900px) {
-    .wls-standalone-shell {
-        grid-template-columns: minmax(0, 1fr);
-    }
-    .wls-shell-sidebar {
-        grid-column: 1;
-        grid-row: 1;
-        position: relative;
-        top: auto;
-        height: auto;
-        overflow: visible;
-        padding: 16px;
-    }
-    .wls-shell-brand {
-        padding-bottom: 14px;
-    }
-    .wls-shell-nav {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .wls-shell-nav-divider {
-        grid-column: 1 / -1;
-    }
     .wls-shell-main {
-        grid-column: 1;
-        grid-row: 2;
-        min-height: 0;
+        grid-column: 2;
+        grid-row: 1;
         padding: 18px 14px 28px;
     }
     .wls-shell-header,
@@ -5290,7 +5330,6 @@ a.wls-meta-value:hover {
     .wls-icon-button {
         flex: 1 1 auto;
     }
-    .wls-metric-grid,
     .wls-action-grid,
     .wls-project-grid,
     .wls-plugin-refresh-grid,
@@ -5306,6 +5345,9 @@ a.wls-meta-value:hover {
     .wls-gateway-apply-form,
     .wls-filter-bar {
         grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .wls-shell-header h1 {
         font-size: 24px;
@@ -5370,6 +5412,69 @@ a.wls-meta-value:hover {
         flex-direction: column;
     }
 }
+@media (max-width: 760px) {
+    body.wls-panel-menu-open {
+        overflow: hidden;
+    }
+    .wls-standalone-shell {
+        display: block;
+        min-height: 100dvh;
+    }
+    .wls-shell-sidebar {
+        bottom: 0;
+        box-shadow: 18px 0 36px rgba(0, 0, 0, 0.28);
+        height: 100dvh;
+        left: 0;
+        max-height: none;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 18px 14px;
+        pointer-events: none;
+        position: fixed;
+        right: auto;
+        top: 0;
+        transform: translateX(-102%);
+        transition: transform 220ms ease, visibility 220ms ease;
+        visibility: hidden;
+        width: min(84vw, 286px);
+        z-index: 100;
+    }
+    .wls-standalone-shell.is-menu-open .wls-shell-sidebar {
+        pointer-events: auto;
+        transform: translateX(0);
+        visibility: visible;
+    }
+    .wls-shell-backdrop {
+        background: rgba(4, 11, 14, 0.62);
+        border: 0;
+        cursor: pointer;
+        display: block;
+        inset: 0;
+        padding: 0;
+        position: fixed;
+        z-index: 90;
+    }
+    .wls-shell-backdrop[hidden] {
+        display: none;
+    }
+    .wls-shell-main {
+        min-height: 100dvh;
+        padding: 16px 12px 24px;
+        width: 100%;
+    }
+    .wls-shell-header-start {
+        width: 100%;
+    }
+    .wls-menu-toggle {
+        display: inline-flex;
+    }
+    .wls-shell-nav {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-shell-nav-divider {
+        grid-column: auto;
+    }
+}
 @media (max-width: 520px) {
     .wls-shell-sidebar {
         padding: 14px 12px;
@@ -5380,6 +5485,9 @@ a.wls-meta-value:hover {
     .wls-shell-nav {
         grid-template-columns: minmax(0, 1fr);
     }
+    .wls-metric-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
     .wls-shell-actions {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -5387,6 +5495,16 @@ a.wls-meta-value:hover {
     .wls-shell-actions .wls-primary-button,
     .wls-shell-actions .wls-secondary-button {
         width: 100%;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .wls-shell-sidebar,
+    .wls-plugin-nav-toggle span,
+    .wls-primary-button,
+    .wls-secondary-button,
+    .wls-icon-button,
+    .wls-menu-toggle {
+        transition: none !important;
     }
 }
 </style>
@@ -5446,6 +5564,76 @@ a.wls-meta-value:hover {
     button.addEventListener('click', function () {
         applyTheme(shell.getAttribute('data-wls-theme') === 'dark' ? 'light' : 'dark');
     });
+})();
+
+(function () {
+    const shell = document.querySelector('[data-wls-shell="standalone"]');
+    if (!shell) {
+        return;
+    }
+
+    const sidebar = shell.querySelector('[data-wls-menu-drawer]');
+    const toggle = shell.querySelector('[data-wls-menu-toggle]');
+    const backdrop = shell.querySelector('[data-wls-menu-backdrop]');
+    if (!sidebar || !toggle || !backdrop) {
+        return;
+    }
+
+    const mobileQuery = window.matchMedia('(max-width: 760px)');
+    const openLabel = toggle.getAttribute('data-wls-menu-open-label') || '';
+    const closeLabel = toggle.getAttribute('data-wls-menu-close-label') || '';
+    const toggleLabel = toggle.querySelector('[data-wls-menu-toggle-label]');
+
+    const setMenuState = function (open, focusFirst, restoreFocus) {
+        const isMobile = mobileQuery.matches;
+        const isOpen = isMobile && open;
+        shell.classList.toggle('is-menu-open', isOpen);
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggle.setAttribute('aria-label', isOpen ? closeLabel : openLabel);
+        if (toggleLabel) {
+            toggleLabel.textContent = isOpen ? closeLabel : openLabel;
+        }
+        sidebar.setAttribute('aria-hidden', isMobile && !isOpen ? 'true' : 'false');
+        sidebar.toggleAttribute('inert', isMobile && !isOpen);
+        backdrop.hidden = !isOpen;
+        document.body.classList.toggle('wls-panel-menu-open', isOpen);
+
+        if (isOpen && focusFirst) {
+            const firstFocusable = sidebar.querySelector('a, button');
+            if (firstFocusable) {
+                firstFocusable.focus();
+            }
+        } else if (!isOpen && restoreFocus) {
+            toggle.focus();
+        }
+    };
+
+    toggle.addEventListener('click', function () {
+        setMenuState(!shell.classList.contains('is-menu-open'), true, false);
+    });
+    backdrop.addEventListener('click', function () {
+        setMenuState(false, false, true);
+    });
+    sidebar.addEventListener('click', function (event) {
+        if (event.target.closest('a')) {
+            setMenuState(false, false, false);
+        }
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && shell.classList.contains('is-menu-open')) {
+            setMenuState(false, false, true);
+        }
+    });
+
+    const syncResponsiveState = function () {
+        setMenuState(false, false, false);
+    };
+    if (typeof mobileQuery.addEventListener === 'function') {
+        mobileQuery.addEventListener('change', syncResponsiveState);
+    } else if (typeof mobileQuery.addListener === 'function') {
+        mobileQuery.addListener(syncResponsiveState);
+    }
+    syncResponsiveState();
 })();
 
 (function () {

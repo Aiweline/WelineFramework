@@ -1,6 +1,16 @@
 # WLS IPC 控制通道架构
 
-> 状态：现行协议摘要，2026-07-11。消息常量以 `IPC/ControlMessage.php` 为准。
+## Linux HTTP/3 路由激活闭环（readiness v7）
+
+Linux Direct HTTP/3 把“socket 已绑定”和“允许接流量”拆成两个状态。Worker 首次 READY 仅上报 `reuseport-ebpf/staged` 以及 route identity；Master 通过 `ack_ready` 返回 `ready_phase=activate + http3_route`，但不设置 `STATE_READY`。Worker 完成本地 eBPF 激活后发送 `http3_route_activated`，Master 对当前 IPC client、slot、lease、generation、owner epoch、activation id、native digest、namespace digest、socket cookie、program/map id 做全量相等校验，成功后才返回 `ready_phase=final`。
+
+`register` 只承载子进程身份，不得混入 READY ACK 字段。`ControlClient` 与 `SupervisorChildClient` 只把 `final` 视为 READY confirmed。Hybrid Supervisor 对 preliminary ACK 原样透传，不提前 `resolveDeferredReady()`；激活回执属于关键 passthrough 消息。READY 闭环使用统一 3 秒总预算，Worker 每 0.5 秒重发同一 READY，Master 在预算内复用同一个 activation id 并重发 activate。Worker 始终从 `SubprocessControlKernel` 获取当前 client，避免启动重连后向旧连接写回执。
+
+相同 client/slot/lease/generation、activation id、native digest 和完整 route status 的重复激活回执是幂等消息：Master 补发同一 `final` ACK，不断开已经健康的 Worker。任何身份、代际、摘要或 route status 不一致仍 fail closed；断线会清除 pending activation，超过总预算直接拒绝该子进程。
+
+Surge Worker 的 eligibility 在 argv 构建和进程 spawn 前固化为 false；其 final ACK 携带 `action=hold`，因此可以完成 TCP/FPC 预热，但不能发布 Linux HTTP/3 listener slot。
+
+> 状态：现行协议摘要，2026-07-17。消息常量与超时预算以 `IPC/ControlMessage.php` 为准。
 
 WLS 使用 NDJSON 控制通道连接 CLI、Master、Dispatcher、Worker 和其它子服务。控制面传递身份、READY、路由快照、排水、重载、停止与遥测；用户 HTTP/TLS 流量始终走独立数据面。
 

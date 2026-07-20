@@ -101,6 +101,7 @@ if (!\defined('BP')) {
 if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
+require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';

@@ -34,7 +34,7 @@ final class SharedStateProtocolProbe
         if (!\defined('BP')) {
             return false;
         }
-        $path = BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR . $tokenBasename;
+        $path = SharedStateRuntimeScope::tokenFilePath($tokenBasename);
         if (!\is_file($path) || !\is_readable($path)) {
             return false;
         }
@@ -65,7 +65,7 @@ final class SharedStateProtocolProbe
         if (!\defined('BP')) {
             return false;
         }
-        $path = BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR . $tokenBasename;
+        $path = SharedStateRuntimeScope::tokenFilePath($tokenBasename);
         if (!\is_file($path) || !\is_readable($path)) {
             return false;
         }
@@ -85,8 +85,26 @@ final class SharedStateProtocolProbe
         }
 
         $defaultBasename = \trim($defaultBasename);
-        if ($defaultBasename === '') {
-            $defaultBasename = $port === 19971 ? 'memory_server.token' : 'session_server.token';
+        $defaultCandidates = $defaultBasename !== '' ? [$defaultBasename] : [];
+        if ($defaultCandidates === []) {
+            $memoryDefaultPort = 19971 + MasterProcess::getProjectPortOffset();
+            $roles = ($port === 19971 || $port === $memoryDefaultPort)
+                ? ['memory_server', 'session_server']
+                : ['session_server', 'memory_server'];
+            foreach ($roles as $role) {
+                $defaultCandidates[] = SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
+            }
+        }
+        $defaultCandidates = \array_values(\array_unique(\array_map('basename', $defaultCandidates)));
+        $defaultBasename = (string)($defaultCandidates[0] ?? '');
+
+        // Authenticated sidecars reject a bare PING. Probe the caller's known
+        // token first so a busy token directory cannot hide a healthy service
+        // behind the bounded fallback scan.
+        foreach ($defaultCandidates as $candidate) {
+            if (self::pingWithTokenBasename($host, $port, $candidate)) {
+                return $candidate;
+            }
         }
 
         if (self::rawPingOnly($host, $port)) {
@@ -97,7 +115,7 @@ final class SharedStateProtocolProbe
             return null;
         }
 
-        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR;
+        $dir = SharedStateRuntimeScope::tokenDirectory();
         if (!\is_dir($dir)) {
             return null;
         }
@@ -106,6 +124,9 @@ final class SharedStateProtocolProbe
         \sort($paths, \SORT_STRING);
         $n = 0;
         foreach ($paths as $path) {
+            if (\in_array(\basename($path), $defaultCandidates, true)) {
+                continue;
+            }
             if (++$n > 48) {
                 break;
             }
