@@ -13,11 +13,8 @@ declare(strict_types=1);
 namespace Weline\Ai\Controller\Frontend;
 
 use Weline\Ai\Model\AiModel;
-use Weline\Ai\Model\AiApiKey;
-use Weline\Ai\Service\AiService;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\Message;
 
 /**
  * AI聊天界面控制器
@@ -25,25 +22,15 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 提供聊天界面
  * - 支持文本、图片、音频、视频等多媒体聊天
- * - 实时流式响应
+ * - 通过可恢复后台任务提供流式响应
  * - 聊天历史记录
  */
 class Chat extends FrontendController
 {
     /**
-     * @var AiService
-     */
-    private AiService $aiService;
-
-    /**
      * @var AiModel
      */
     private AiModel $aiModel;
-
-    /**
-     * @var AiApiKey
-     */
-    private AiApiKey $aiApiKey;
 
     /**
      * @var AdapterScanner
@@ -53,20 +40,14 @@ class Chat extends FrontendController
     /**
      * 构造函数
      * 
-     * @param AiService $aiService
      * @param AiModel $aiModel
-     * @param AiApiKey $aiApiKey
      * @param AdapterScanner $adapterScanner
      */
     public function __construct(
-        AiService $aiService,
         AiModel $aiModel,
-        AiApiKey $aiApiKey,
         AdapterScanner $adapterScanner
     ) {
-        $this->aiService = $aiService;
         $this->aiModel = $aiModel;
-        $this->aiApiKey = $aiApiKey;
         $this->adapterScanner = $adapterScanner;
     }
 
@@ -83,135 +64,30 @@ class Chat extends FrontendController
         // 获取可用的AI模型
         $models = $this->aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->where(AiModel::schema_fields_PRIMARY_MODALITY, AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)
+            ->order(AiModel::schema_fields_IS_DEFAULT, 'DESC')
+            ->order(AiModel::schema_fields_ID, 'ASC')
             ->select()
             ->fetch();
+        $modelItems = $models->getItems();
+        $fallbackModelCode = '';
+        if ($modelItems !== []) {
+            $firstModel = $modelItems[0];
+            $fallbackModelCode = (string)(is_array($firstModel)
+                ? ($firstModel[AiModel::schema_fields_MODEL_CODE] ?? '')
+                : $firstModel->getData(AiModel::schema_fields_MODEL_CODE));
+        }
 
         // 获取可用的场景适配器
         $adapters = $this->adapterScanner->getAllActiveAdapters();
 
         $this->assign('page_title', __('AI聊天'));
-        $this->assign('models', $models->getItems());
+        $this->assign('models', $modelItems);
+        $this->assign('fallback_model_code', $fallbackModelCode);
         $this->assign('adapters', $adapters);
         $this->assign('is_logged_in', $isLoggedIn);
 
         return $this->fetch();
-    }
-
-    /**
-     * 发送消息（AJAX）
-     * 
-     * @return string
-     */
-    public function send(): string
-    {
-        if (!$this->isLoggedIn()) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('请先登录')
-            ]);
-        }
-
-        if (!$this->request->isPost()) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('无效的请求方法')
-            ]);
-        }
-
-        $message = $this->request->getPost('message', '');
-        $modelCode = $this->request->getPost('model_code', null);
-        $scenarioCode = $this->request->getPost('scenario_code', null);
-        $locale = $this->request->getPost('locale', null);
-
-        if (empty($message)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('消息内容不能为空')
-            ]);
-        }
-
-        try {
-            // 调用AI服务生成响应
-            $response = $this->aiService->generate(
-                $message,
-                $modelCode,
-                $scenarioCode,
-                $locale
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'data' => [
-                    'message' => $message,
-                    'response' => $response,
-                    'model_code' => $modelCode,
-                    'scenario_code' => $scenarioCode,
-                    'timestamp' => time()
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('生成失败：%1', $e->getMessage())
-            ]);
-        }
-    }
-
-    /**
-     * 流式响应（Server-Sent Events）
-     * 
-     * @return void
-     */
-    public function stream(): void
-    {
-        if (!$this->isLoggedIn()) {
-            echo "event: error\n";
-            echo "data: " . json_encode(['message' => __('请先登录')]) . "\n\n";
-            flush();
-            return;
-        }
-
-        $message = $this->request->getGet('message', '');
-        $modelCode = $this->request->getGet('model_code', null);
-        $scenarioCode = $this->request->getGet('scenario_code', null);
-        $locale = $this->request->getGet('locale', null);
-
-        if (empty($message)) {
-            echo "event: error\n";
-            echo "data: " . json_encode(['message' => __('消息内容不能为空')]) . "\n\n";
-            flush();
-            return;
-        }
-
-        // 设置SSE响应头
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('Connection: keep-alive');
-        header('X-Accel-Buffering: no'); // 禁用nginx缓冲
-
-        try {
-            // 流式生成响应
-            $this->aiService->generateStream(
-                $message,
-                function($chunk) {
-                    echo "event: message\n";
-                    echo "data: " . json_encode(['chunk' => $chunk]) . "\n\n";
-                    flush();
-                },
-                $modelCode,
-                $scenarioCode,
-                $locale
-            );
-
-            // 发送完成事件
-            echo "event: done\n";
-            echo "data: " . json_encode(['message' => 'Stream completed']) . "\n\n";
-            flush();
-        } catch (\Exception $e) {
-            echo "event: error\n";
-            echo "data: " . json_encode(['message' => $e->getMessage()]) . "\n\n";
-            flush();
-        }
     }
 
     /**
@@ -260,4 +136,3 @@ class Chat extends FrontendController
     }
 
 }
-

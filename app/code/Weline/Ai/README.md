@@ -33,10 +33,10 @@
    - `Provider` - 供应商账户
    - `DefaultModel` - 默认模型配置
 
-5. **✅ API接口**
-   - `Chat` - 聊天API控制器
-   - 支持流式和非流式响应
-   - 完整的错误处理和参数验证
+5. **✅ 可恢复聊天任务**
+   - `ai.chat_generation` - 独立 Runner 中执行的聊天生成任务
+   - `runtime_task` - 启动、续租、状态和明确取消
+   - `StreamHandle` - 支持重连、补发和断网保护的事件订阅
 
 6. **✅ CLI命令工具**
    - `ModelCollectCommand` - 模型收集命令
@@ -50,15 +50,28 @@
 
 ### 核心特性
 
-#### 🚀 双服务模式
+#### 🚀 内部服务与可恢复运行时
 ```php
-// PHP静态方法模式
+// 仅受控 CLI、Runner 或模块内部服务可直接调用；
+// 不得在 HTTP 请求或 SSE 控制器中执行后直接写入响应。
 $response = AiService::generateText('你好，AI！');
+```
 
-// 流式生成
-AiService::generateTextStream('写文章', function($chunk) {
-    echo $chunk;
+浏览器聊天必须启动可恢复任务，再通过 `StreamHandle` 订阅事件：
+
+```js
+const api = await Weline.load('api');
+const task = await api.resource('runtime_task').start({
+  type_code: 'ai.chat_generation',
+  input: { message: '写文章', request_id: crypto.randomUUID() }
+}, { silent: true });
+
+const stream = api.createStream(task.stream_channel, {
+  task_id: task.task_id,
+  lease_id: task.lease_id,
 });
+stream.addEventListener('chunk', (event) => renderChunk(JSON.parse(event.data).chunk));
+// 页面关闭仅 stream.close() 退订；明确取消才 stream.cancel(reason)。
 ```
 
 #### 🔧 场景适配器
@@ -84,11 +97,11 @@ AiService::generateTextStream('写文章', function($chunk) {
 
 ### 使用示例
 
-#### 基本使用
+#### 内部服务使用（CLI / Runner）
 ```php
 use Weline\Ai\Service\AiService;
 
-// 简单文本生成
+// 仅受控 CLI、Runner 或模块内部服务可直接调用。
 $response = AiService::generateText('介绍人工智能');
 
 // 翻译功能
@@ -110,14 +123,23 @@ $code = AiService::generateText(
 );
 ```
 
-#### API调用
+#### 浏览器聊天
+
+浏览器或 HTTP 页面不在连接内执行生成。使用 `runtime_task.start` 启动
+`ai.chat_generation`，然后使用 `Weline.Api.createStream()` 订阅任务事件；断开后重连会按事件 ID
+补发，只有显式 `stream.cancel(reason)` 才会请求停止任务。
+
+前台未登录访客也可以启动聊天任务，但 owner 必须是服务端从当前 frontend session 派生出的
+`session:{session_id}`；浏览器不得自行提交或伪造 owner。已登录前台用户继续使用服务端派生的
+`frontend:*` owner。
+
+真实生成还需要至少一个已激活、连接可用的供应商账户，以及一个已配置的 `text` 默认模型。
+若“使用默认模型”没有对应配置，SSE/Runtime 仍可工作，但生成任务会在模型解析阶段失败，不能
+作为 SSE 故障处理。可先运行以下只读检查：
+
 ```bash
-curl -X POST http://your-domain/ai/api/chat/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "你好，AI！",
-    "scenario_code": "text_generation"
-  }'
+php bin/w ai:debug
+php bin/w ai:model:default-model action=list
 ```
 
 #### CLI管理
@@ -129,7 +151,7 @@ php bin/w ai:model:collect
 php bin/w ai:adapter:scan
 
 # 管理默认模型
-php bin/w ai:default-model:manage --action=list
+php bin/w ai:model:default-model action=list
 ```
 
 ### 技术架构
