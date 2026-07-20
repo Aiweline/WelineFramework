@@ -40,6 +40,7 @@
 "light 或 dark","light 或 dark"
 "Theme 虚拟部件智能体","Theme 虚拟部件智能体"
 "用于生成、微调和验证 Weline Theme 的虚拟部件 JSON 与模板内容。","用于生成、微调和验证 Weline Theme 的虚拟部件 JSON 与模板内容。"
+"AI 查询入口不可用。","AI 查询入口不可用。"
 "AI 调用失败：%{1}","AI 调用失败：%{1}"
 准备进入下一轮智能体调用,准备进入下一轮智能体调用
 "智能体未能生成最终 JSON 输出","智能体未能生成最终 JSON 输出"
@@ -549,9 +550,6 @@
 "LayoutAssetsGenerator: 更新内容模板编译文件失败 - %{1}","LayoutAssetsGenerator: 更新内容模板编译文件失败 - %{1}"
 "LayoutAssetsGenerator: 更新编译文件失败 - %{1}","LayoutAssetsGenerator: 更新编译文件失败 - %{1}"
 退出预览失败,退出预览失败
-预览模式,预览模式
-当前正在预览后台主题，页面操作不会离开主题编辑流程。,当前正在预览后台主题，页面操作不会离开主题编辑流程。
-退出预览,退出预览
 发布失败,发布失败
 网络错误，请重试,网络错误，请重试
 确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。,确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。
@@ -605,7 +603,6 @@
 "Save layout config","Save layout config"
 "Layout config saved.","Layout config saved."
 缺少源文案。,缺少源文案。
-"AI 查询入口不可用。","AI 查询入口不可用。"
 AI翻译已回填,AI翻译已回填
 "主题配置 AI 翻译失败：%{1}","主题配置 AI 翻译失败：%{1}"
 配置数据格式错误,配置数据格式错误
@@ -650,6 +647,9 @@ AI翻译已回填,AI翻译已回填
 设置,设置
 后台,后台
 次要,次要
+预览模式,预览模式
+当前正在预览后台主题，页面操作不会离开主题编辑流程。,当前正在预览后台主题，页面操作不会离开主题编辑流程。
+退出预览,退出预览
 Default,Default
 "主题目标类型或 ID 无效。","主题目标类型或 ID 无效。"
 "AI 翻译未返回有效 JSON。","AI 翻译未返回有效 JSON。"
@@ -844,6 +844,42 @@ Dashboard,Dashboard
 参数配置,参数配置
 参数保存成功,参数保存成功
 参数保存失败,参数保存失败
+购物车是空的,购物车是空的
+您的购物车是空的,您的购物车是空的
+继续购物,继续购物
+Theme,Theme
+Home,Home
+Products,Products
+Solutions,Solutions
+Contact,Contact
+Support,Support
+"Help Center","Help Center"
+Orders,Orders
+Returns,Returns
+FAQ,FAQ
+Policies,Policies
+Privacy,Privacy
+Terms,Terms
+Cookie,Cookie
+Disclaimer,Disclaimer
+WeChat,WeChat
+Douyin,Douyin
+YouTube,YouTube
+Instagram,Instagram
+"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
+"Get updates","Get updates"
+"Email address","Email address"
+Subscribe,Subscribe
+"Back to top","Back to top"
+"Weline Framework","Weline Framework"
+Weline,Weline
+Docs,Docs
+"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
+Search...,Search...
+Search,Search
+Account,Account
+Cart,Cart
+"Toggle navigation","Toggle navigation"
 指标区,指标区
 只放关键数值、KPI、状态数字。,只放关键数值、KPI、状态数字。
 "最多 4 个","最多 4 个"
@@ -927,7 +963,6 @@ Dashboard,Dashboard
 订单提交成功！,订单提交成功！
 订单号：,订单号：
 查看订单,查看订单
-继续购物,继续购物
 拖拽部件或容器到此处,拖拽部件或容器到此处
 "空白布局不会渲染 header、footer 或面包屑","空白布局不会渲染 header、footer 或面包屑"
 支持富文本、Banner、图片、视频等部件,支持富文本、Banner、图片、视频等部件
@@ -1059,8 +1094,6 @@ Product,Product
 "产品网格区域 - 控制器渲染产品列表","产品网格区域 - 控制器渲染产品列表"
 "分页区域 - 控制器渲染分页组件","分页区域 - 控制器渲染分页组件"
 "推荐产品区域 - 拖拽推荐部件到此处","推荐产品区域 - 拖拽推荐部件到此处"
-购物车是空的,购物车是空的
-您的购物车是空的,您的购物车是空的
 登录页工具,登录页工具
 "这里预留账户导航 slot，可由会员模块接入真实菜单。","这里预留账户导航 slot，可由会员模块接入真实菜单。"
 我的订单,我的订单
@@ -1318,30 +1351,6 @@ Product,Product
 网络错误,网络错误
 无法连接到服务器，请检查网络连接。,无法连接到服务器，请检查网络连接。
 分页导航,分页导航
-Theme,Theme
-Home,Home
-Products,Products
-Solutions,Solutions
-Contact,Contact
-Support,Support
-"Help Center","Help Center"
-Orders,Orders
-Returns,Returns
-FAQ,FAQ
-Policies,Policies
-Privacy,Privacy
-Terms,Terms
-Cookie,Cookie
-Disclaimer,Disclaimer
-WeChat,WeChat
-Douyin,Douyin
-YouTube,YouTube
-Instagram,Instagram
-"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
-"Get updates","Get updates"
-"Email address","Email address"
-Subscribe,Subscribe
-"Back to top","Back to top"
 NEW,NEW
 SALE,SALE
 缺货,缺货
@@ -1349,17 +1358,8 @@ SALE,SALE
 加入购物车,加入购物车
 暂时缺货,暂时缺货
 已添加,已添加
-"Weline Framework","Weline Framework"
 示例分类,示例分类
 当前页面,当前页面
-Weline,Weline
-Docs,Docs
-"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
-Search...,Search...
-Search,Search
-Account,Account
-Cart,Cart
-"Toggle navigation","Toggle navigation"
 网站Logo,网站Logo
 搜索商品...,搜索商品...
 搜索,搜索
@@ -1845,7 +1845,6 @@ Section,Section
 编辑,编辑
 点击配置此部件,点击配置此部件
 无模板,无模板
-批量生成预览图进度,批量生成预览图进度
 暂无主题,暂无主题
 系统中还没有安装任何主题,系统中还没有安装任何主题
 请使用命令行安装主题：,请使用命令行安装主题：
@@ -1879,35 +1878,57 @@ AI创建虚拟主题,AI创建虚拟主题
 "AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。"
 创建虚拟主题,创建虚拟主题
 准备生成...,准备生成...
+取消任务,取消任务
 正在生成预览图，请稍候...,正在生成预览图，请稍候...
-前台,前台
-主题已设为%{1}主题,主题已设为%{1}主题
-激活失败,激活失败
-正在生成,正在生成
-预览图已更新,预览图已更新
-自动生成中,自动生成中
-自动生成完成,自动生成完成
-自动生成失败,自动生成失败
-生成,生成
-预览图,预览图
-中...,中...
-预览图已刷新,预览图已刷新
-刷新失败,刷新失败
+"可恢复任务 API 不可用。","可恢复任务 API 不可用。"
+后台任务启动响应无效。,后台任务启动响应无效。
+虚拟主题任务失败,虚拟主题任务失败
+用户明确取消,用户明确取消
 暂无可选技能,暂无可选技能
 正在创建,正在创建
 AI目录加载失败,AI目录加载失败
 请选择参照主题,请选择参照主题
 正在按参照主题全部布局类型创建虚拟主题草稿...,正在按参照主题全部布局类型创建虚拟主题草稿...
-虚拟主题创建失败,虚拟主题创建失败
+正在创建虚拟主题草稿,正在创建虚拟主题草稿
+正在创建虚拟主题草稿...,正在创建虚拟主题草稿...
 虚拟主题草稿已创建,虚拟主题草稿已创建
 已创建虚拟主题草稿,已创建虚拟主题草稿
 已覆盖布局类型,已覆盖布局类型
 打开可视化编辑,打开可视化编辑
+虚拟主题创建失败,虚拟主题创建失败
+预览图已更新,预览图已更新
+正在生成,正在生成
+未找到预览图任务结果,未找到预览图任务结果
+预览图生成已取消,预览图生成已取消
+客户端失联超时，预览图任务已停止,客户端失联超时，预览图任务已停止
+预览图任务无法安全恢复,预览图任务无法安全恢复
+预览图任务事件达到资源上限,预览图任务事件达到资源上限
+连接暂时中断，正在重连…,连接暂时中断，正在重连…
+无法启动预览图任务,无法启动预览图任务
+自动生成中,自动生成中
+前台,前台
+自动生成完成,自动生成完成
+自动生成失败,自动生成失败
 正在批量生成预览图，请稍候...,正在批量生成预览图，请稍候...
 批量生成已完成，但存在失败项,批量生成已完成，但存在失败项
 批量生成完成,批量生成完成
-批量生成失败,批量生成失败
+已恢复预览图任务订阅,已恢复预览图任务订阅
+批量预览图生成失败,批量预览图生成失败
+批量预览图生成已取消,批量预览图生成已取消
+客户端失联超时，批量预览图任务已停止,客户端失联超时，批量预览图任务已停止
+批量预览图任务无法安全恢复,批量预览图任务无法安全恢复
+批量预览图任务事件达到资源上限,批量预览图任务事件达到资源上限
+无法启动批量预览图任务,无法启动批量预览图任务
+用户取消批量预览图任务,用户取消批量预览图任务
+取消任务失败,取消任务失败
+用户取消预览图任务,用户取消预览图任务
 "主题已设置为 %{1} 主题","主题已设置为 %{1} 主题"
+激活失败,激活失败
+生成,生成
+预览图,预览图
+中...,中...
+预览图已刷新,预览图已刷新
+刷新失败,刷新失败
 结算成功页,结算成功页
 结算失败页,结算失败页
 账户认证,账户认证
@@ -1927,6 +1948,30 @@ AI目录加载失败,AI目录加载失败
 目标类型不能为空,目标类型不能为空
 全局,全局
 分类商品默认,分类商品默认
+开始生成虚拟主题草稿,开始生成虚拟主题草稿
+虚拟主题布局草稿已保存,虚拟主题布局草稿已保存
+正在生成虚拟主题布局草稿,正在生成虚拟主题布局草稿
+"虚拟主题 AI 外部副作用在确认前中断，无法安全恢复。","虚拟主题 AI 外部副作用在确认前中断，无法安全恢复。"
+"AI 运行时不可用。","AI 运行时不可用。"
+虚拟主题草稿保存失败,虚拟主题草稿保存失败
+虚拟布局草稿已保存,虚拟布局草稿已保存
+开始生成主题预览图,开始生成主题预览图
+主题预览图已保存,主题预览图已保存
+主题预览图生成失败,主题预览图生成失败
+主题预览图生成在确认保存前中断，无法安全恢复。,主题预览图生成在确认保存前中断，无法安全恢复。
+开始翻译主题配置文案,开始翻译主题配置文案
+"主题配置 AI 翻译已生成","主题配置 AI 翻译已生成"
+源语言无效。,源语言无效。
+"主题配置 AI 翻译在确认前中断，无法安全恢复。","主题配置 AI 翻译在确认前中断，无法安全恢复。"
+"主题配置 AI 翻译失败。","主题配置 AI 翻译失败。"
+"AI 输出不是有效 JSON","AI 输出不是有效 JSON"
+虚拟部件校验未通过,虚拟部件校验未通过
+开始微调虚拟部件草稿,开始微调虚拟部件草稿
+开始生成虚拟部件草稿,开始生成虚拟部件草稿
+智能体进入新一轮思考,智能体进入新一轮思考
+智能体执行失败,智能体执行失败
+智能体响应为空或超过可恢复任务限制,智能体响应为空或超过可恢复任务限制
+"主题 AI 副作用在确认结果前中断，无法安全恢复。","主题 AI 副作用在确认结果前中断，无法安全恢复。"
 继续编辑,继续编辑
 "%{1} 正在编辑此页面","%{1} 正在编辑此页面"
 其他用户,其他用户

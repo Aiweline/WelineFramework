@@ -1,6 +1,10 @@
 ﻿"SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}","SQLite driver is not available: %{1}. Available drivers: %{2}.%{3}"
 "SQLite database directory is not writable: %{1}","SQLite database directory is not writable: %{1}"
 "SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}",SQLite
+"SQLite 表 %{1} 不存在待修改列 %{2}","SQLite 表 %{1} 不存在待修改列 %{2}"
+"SQLite 外键定义不完整","SQLite 外键定义不完整"
+"SQLite 表结构无法解析: %{1}","SQLite 表结构无法解析: %{1}"
+"SQLite 表 %{1} 没有可复制列","SQLite 表 %{1} 没有可复制列"
 "：此索引的column需要array类型,当前类型",": The column for this index needs to be of array type, current type"
 未知的索引类型：,"Unknown index type:"
 数据库SQL:%{1},"Database SQL: %{1}"
@@ -82,6 +86,7 @@
 "扫描到 %{count} 个数据库适配器","Scanned %{count} database adapters"
 参数必须是模型子类或模型实例,参数必须是模型子类或模型实例
 "本地化字段不能为空! %{model}中找不到%{field}字段","Localization field cannot be empty! Field %{field} not found in %{model}"
+同一数据库连接范围内不能并行开启两个独立事务,同一数据库连接范围内不能并行开启两个独立事务
 "执行 %{1} 时表不存在，自动执行 install 安装表...","When executing %{1}, the table does not exist, automatically running install to create the table..."
 数据库操作失败（%{1}）：%{2},"Database operation failed (%{1}): %{2}"
 "数据库更新失败：%{1}。若为连接/版本问题，请查看 var/log/database_version.log。","Database update failed: %{1}. If it is a connection/version issue, please check var/log/database_version.log."
@@ -100,6 +105,9 @@
 "表 %{1} 列 %{2} 的备份数据为空","Backup data for table %{1} column %{2} is empty"
 "表 %{1} 列 %{2} 数据恢复完成，共 %{3} 条记录","Table %{1} column %{2} data recovery completed, total %{3} records"
 "恢复列数据失败: %{1}","Failed to restore column data: %{1}"
+"表 %{1} 列 %{2} 安全恢复完成：恢复 %{3}，无变化 %{4}，冲突 %{5}","表 %{1} 列 %{2} 安全恢复完成：恢复 %{3}，无变化 %{4}，冲突 %{5}"
+"恢复表 %{1} 数据时目标表不存在","恢复表 %{1} 数据时目标表不存在"
+"表 %{1} 安全恢复完成：恢复 %{2}，无变化 %{3}，冲突 %{4}","表 %{1} 安全恢复完成：恢复 %{2}，无变化 %{3}，冲突 %{4}"
 "迁移 %{1} 的备份数据清理完成","Migration backup data cleanup for %{1} completed"
 "清理备份数据失败: %{1}","Failed to Clear Backup Data: %{1}"
 "备份记录不存在: %{1}","Backup record does not exist: %{1}"
@@ -137,6 +145,7 @@
 详细统计:,"Detailed statistics:"
 "可用=%{1}, 使用中=%{2}, 总数=%{3}/%{4}, 新建=%{5}, 错误=%{6}","Available=%{1}, In Use=%{2}, Total=%{3}/%{4}, New=%{5}, Error=%{6}"
 "连接池预热失败: %{1}","Connection pool warm-up failed: %{1}"
+"不支持的数据库驱动 %{1}","不支持的数据库驱动 %{1}"
 "创建数据库连接失败: %{1}","Failed to create database connection: %{1}"
 "此命令仅适用于 PostgreSQL 数据库","This command only applies to PostgreSQL databases"
 序列修复完成！,"Sequence repair completed!"
@@ -164,8 +173,10 @@
 "执行失败: %{1}","Execution failed: %{1}"
 查询结果为空,"Query result is empty"
 索引器列表,"Indexer List"
+请求前置门禁,请求前置门禁
+"在 URL 解析和 FPC 前执行维护模式等强制门禁；观察者不得派发控制器或执行业务集成。","在 URL 解析和 FPC 前执行维护模式等强制门禁；观察者不得派发控制器或执行业务集成。"
 应用运行前,"Before Application Runs"
-应用运行前，你可以在这里做一些初始化操作。,"Before the application runs, you can perform some initialization here."
+"URL 已解析且 early response 未命中后、Session/Router 前执行。","URL 已解析且 early response 未命中后、Session/Router 前执行。"
 应用运行后,"After Application Runs"
 应用运行后，你可以在这里做一些后续操作。,"After the application runs, you can perform some follow-up operations here."
 "WLS worker bootstrap after","WLS worker bootstrap after"
@@ -348,6 +359,14 @@ ACL分发,"ACL distribution"
 "query_help 不支持的操作：%{1}","query_help 不支持的操作：%{1}"
 "query_help provider 操作需要参数 provider 或 module","query_help provider 操作需要参数 provider 或 module"
 "query_help operation 操作需要参数 provider 与 operation","query_help operation 操作需要参数 provider 与 operation"
+运行时任务查询器不支持的操作：%{1},运行时任务查询器不支持的操作：%{1}
+可恢复后台任务,可恢复后台任务
+读取任务状态、续租、显式取消及订阅持久事件。,读取任务状态、续租、显式取消及订阅持久事件。
+启动已注册的可恢复后台任务。任务类型、幂等键和策略由服务端处理器冻结。,启动已注册的可恢复后台任务。任务类型、幂等键和策略由服务端处理器冻结。
+读取当前用户可访问的后台任务状态。,读取当前用户可访问的后台任务状态。
+续期当前页面的任务客户端租约。,续期当前页面的任务客户端租约。
+使用幂等意图明确请求取消后台任务。,使用幂等意图明确请求取消后台任务。
+订阅或从持久事件游标重放后台任务事件。,订阅或从持久事件游标重放后台任务事件。
 "开始增量重建模块 %{1} 的扩展注册表...","Incrementally rebuilding extension registry for module %{1}..."
 开始重建扩展注册表...,"Starting extension registry rebuild..."
 "✓ 扩展注册表已重建完成。","✓ The extended registry has been rebuilt."
@@ -364,6 +383,7 @@ PHPUnit报告服务器未运行,"PHPUnit reporting server is not running"
 "未检测到可用覆盖率驱动（Xdebug/PCOV/phpdbg），PHPUnit 可能无法生成覆盖率报告","No coverage driver detected (Xdebug/PCOV/phpdbg), PHPUnit may not be able to generate coverage reports"
 "使用 Pest 测试框架运行测试...","Running tests with Pest testing framework..."
 "提示：默认使用 PHPUnit，如需使用 Pest，请添加 --pest 参数","Tip: PHPUnit is used by default; to use Pest, add the --pest parameter."
+没有收集到可执行测试，已终止且返回失败状态。,没有收集到可执行测试，已终止且返回失败状态。
 所有测试通过！,"All tests passed!"
 "测试失败，退出代码: %{1}","Test failed, exit code: %{1}"
 "检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）","Non-interactive environment detected, skipped starting the web report server (to avoid background process accumulation)."
@@ -403,7 +423,10 @@ PHPUnit报告服务器未运行,"PHPUnit reporting server is not running"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━,━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 失败的测试用例：,"Failed Test Cases:"
 "%{1}. %{2}","%{1}. %{2}"
+测试运行器未确认执行任何测试，本次运行按失败处理。,测试运行器未确认执行任何测试，本次运行按失败处理。
+"测试运行失败，退出代码: %{1}","测试运行失败，退出代码: %{1}"
 "✓ 测试完成！","✓ Test completed!"
+"✗ 测试失败！","✗ 测试失败！"
 提示：测试已完成。,"Tip: Testing is complete."
 "报告摘要: http://localhost:%{1}/report/index.html","Report Summary: http://localhost:%{1}/report/index.html"
 "覆盖率 HTML: http://localhost:%{1}/coverage-html/index.html","Coverage HTML: http://localhost:%{1}/coverage-html/index.html"
@@ -779,6 +802,13 @@ dev=true,dev=true
 "SSE 请求处理失败，请稍后重试。","SSE request processing failed, please try again later."
 "SSE 请求被终止。","SSE request terminated."
 "SSE 请求失败。","SSE request failed."
+"模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本","模块 %{1} 版本 %{2} 已存在不同的 Schema checkpoint；请先提升模块版本"
+"无效的模块语义版本: %{1}","无效的模块语义版本: %{1}"
+"模块 %{1} 版本 %{2} 的 Schema checkpoint 状态或类型无效","模块 %{1} 版本 %{2} 的 Schema checkpoint 状态或类型无效"
+"模块 %{1} 版本 %{2} 的 Schema checkpoint 数据损坏","模块 %{1} 版本 %{2} 的 Schema checkpoint 数据损坏"
+"模块 %{1} 版本 %{2} 的 Schema checkpoint 校验和不一致","模块 %{1} 版本 %{2} 的 Schema checkpoint 校验和不一致"
+"模块 %{1} 版本 %{2} 存在冲突的 Schema checkpoints","模块 %{1} 版本 %{2} 存在冲突的 Schema checkpoints"
+"Schema checkpoint 包含无效的表或指纹","Schema checkpoint 包含无效的表或指纹"
 "ModelSetup: Model 未初始化，请先调用 putModel()","ModelSetup: Model is not initialized, please call putModel() first"
 "表不存在: %{1}","Table does not exist: %{1}"
 源表不存在：%1,源表不存在：%1
@@ -1903,6 +1933,12 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 "类型 %{1} 的值仅接受：0或1","The value of type %{1} only accepts: 0 or 1"
 "类型 %{1} 设置为：%{1}","Type %{1} is set to: %{1}"
 设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1,"Set whether to append random characters at the end of static files to prevent browser caching and ensure real-time response to modifications. Accepted values: 0 or 1"
+"必须提供 --task-id。","必须提供 --task-id。"
+未找到可恢复任务。,未找到可恢复任务。
+查看可恢复后台任务的持久状态,查看可恢复后台任务的持久状态
+"可恢复任务 Runner 失败：%{1}","可恢复任务 Runner 失败：%{1}"
+"可恢复任务 Runner 无法启动：%{1}","可恢复任务 Runner 无法启动：%{1}"
+"执行一个已预占 fencing 的可恢复后台任务 Runner","执行一个已预占 fencing 的可恢复后台任务 Runner"
 "架构检查：%{1} 个模块，%{2} 个 PHP 文件，%{3} 条跨模块引用。","架构检查：%{1} 个模块，%{2} 个 PHP 文件，%{3} 条跨模块引用。"
 "其余 %{1} 条问题已省略，使用 --json 查看全部。","其余 %{1} 条问题已省略，使用 --json 查看全部。"
 "架构门禁失败：发现 %{1} 条违规。","架构门禁失败：发现 %{1} 条违规。"

@@ -9,6 +9,7 @@ use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\ResumableTaskEventStreamInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeUnavailableException;
+use Weline\Framework\Runtime\Resumable\ResumableTaskStarterInterface;
 use Weline\Framework\Runtime\Resumable\TaskEventReplay;
 use Weline\Framework\Runtime\Resumable\TaskLease;
 use Weline\Framework\Runtime\Resumable\TaskOwner;
@@ -17,6 +18,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Service\Runtime\ResumableTaskOwnerResolver;
+use Weline\Framework\Service\Runtime\ResumableTaskStoreException;
 
 /**
  * Browser-facing control and subscription surface for resumable tasks.
@@ -33,6 +35,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
 
     public function __construct(
         private readonly ResumableTaskRuntimeInterface $runtime,
+        private readonly ResumableTaskStarterInterface $starter,
         private readonly ResumableTaskOwnerResolver $ownerResolver,
         private readonly Request $request,
         private readonly int $pollIntervalMilliseconds = self::DEFAULT_POLL_INTERVAL_MILLISECONDS,
@@ -54,6 +57,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
+            'start' => $this->start($params),
             'status' => $this->status($params),
             'touch' => $this->touch($params),
             'cancel' => $this->cancel($params),
@@ -72,6 +76,17 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
             'description' => (string)__('读取任务状态、续租、显式取消及订阅持久事件。'),
             'module' => 'Weline_Framework',
             'operations' => [
+                [
+                    'name' => 'start',
+                    'description' => (string)__('启动已注册的可恢复后台任务。任务类型、幂等键和策略由服务端处理器冻结。'),
+                    'mode' => 'write',
+                    'frontend' => true,
+                    'graph' => false,
+                    'params' => [
+                        ['name' => 'type_code', 'type' => 'string', 'required' => true, 'max_length' => 128],
+                        ['name' => 'input', 'type' => 'map', 'required' => true],
+                    ],
+                ],
                 [
                     'name' => 'status',
                     'description' => (string)__('读取当前用户可访问的后台任务状态。'),
@@ -123,6 +138,29 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    /** @param array<string,mixed> $params */
+    private function start(array $params): array
+    {
+        $typeCode = $this->requireIdentifier($params, 'type_code');
+        $input = $params['input'] ?? null;
+        if (!\is_array($input) || \array_is_list($input)) {
+            throw new FrontendQueryException('validation_error', 'Runtime task input must be a map.', 422);
+        }
+
+        $owner = $this->resolveOwner();
+        try {
+            return $this->starter->startForOwner($typeCode, $input, $owner)->toArray();
+        } catch (ResumableTaskAccessDeniedException $exception) {
+            throw new FrontendQueryException('not_found', 'Runtime task was not found.', 404, $exception);
+        } catch (ResumableTaskStoreException|\InvalidArgumentException $exception) {
+            throw new FrontendQueryException('validation_error', 'Invalid runtime task start request.', 422, $exception);
+        } catch (ResumableTaskRuntimeUnavailableException $exception) {
+            throw new FrontendQueryException('runtime_unavailable', 'Resumable task runtime is unavailable.', 503, $exception);
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException('runtime_unavailable', 'Resumable task runtime is unavailable.', 503, $exception);
+        }
     }
 
     /** @param array<string,mixed> $params */

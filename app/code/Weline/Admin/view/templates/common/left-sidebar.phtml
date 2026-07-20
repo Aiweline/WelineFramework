@@ -184,7 +184,7 @@ if ($dataLayout !== 'horizontal'):
             background: var(--backend-color-sidebar-bg);
             border-right: 1px solid var(--backend-color-sidebar-border);
             box-shadow: var(--backend-sidebar-shadow);
-            contain: layout style;
+            /* 禁止 contain:layout —— 会迫使 overflow 非 visible，收起态 hover 横向展开会被裁切 */
         }
 
         .vertical-menu [data-simplebar] {
@@ -425,12 +425,28 @@ if ($dataLayout !== 'horizontal'):
         }
 
         body.vertical-collpsed .vertical-menu {
-            overflow: visible;
+            overflow: visible !important;
+            /* 高于主内容，避免 hover 展开层被右侧卡片盖住（基线 z-index:5 过低） */
+            z-index: 1005 !important;
+            contain: none !important;
+        }
+
+        body.vertical-collpsed .vertical-menu .simplebar-mask,
+        body.vertical-collpsed .vertical-menu .simplebar-content-wrapper,
+        body.vertical-collpsed .vertical-menu .simplebar-offset,
+        body.vertical-collpsed .vertical-menu .simplebar-content {
+            overflow: visible !important;
         }
 
         body.vertical-collpsed #sidebar-menu {
             padding-left: 0.5rem;
             padding-right: 0.5rem;
+            overflow: visible !important;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li {
+            position: relative;
+            white-space: nowrap;
         }
 
         body.vertical-collpsed #sidebar-menu > ul > li > a {
@@ -438,50 +454,110 @@ if ($dataLayout !== 'horizontal'):
             padding-left: 0.8rem;
             padding-right: 0.8rem;
             border-radius: var(--backend-border-radius-lg);
+            overflow: visible;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li > a span {
+            display: none;
         }
 
         body.vertical-collpsed #sidebar-menu > ul > li > a.has-arrow::after {
             display: none;
         }
 
-        body.vertical-collpsed #sidebar-menu > ul > li > a:hover {
-            transform: translateX(0) scale(1.02);
+        /* 收起态 hover：横向展开标题（与 Skote 基线一致，并兼容本模板 flex 布局） */
+        body.vertical-collpsed #sidebar-menu > ul > li:hover > a {
+            position: relative;
+            z-index: 1006;
+            width: calc(190px + 70px);
+            justify-content: flex-start;
+            padding-left: 1.15rem;
+            padding-right: 1.15rem;
+            color: var(--backend-color-primary, #0bb197);
+            background: var(--backend-color-sidebar-hover, #f5f5f5);
+            box-shadow: var(--backend-dropdown-shadow, 0 12px 24px rgba(15, 23, 42, 0.12));
+            transform: none;
+            border-radius: var(--backend-border-radius-lg);
+            overflow: visible;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li:hover > a.waves-effect {
+            overflow: visible;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li:hover > a i {
+            color: var(--backend-color-primary, #0bb197);
+            transform: none;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li:hover > a span {
+            display: inline !important;
+            padding-left: 0.35rem;
+            white-space: nowrap;
         }
 
         body.vertical-collpsed #sidebar-menu > ul > li > ul.sub-menu,
         body.vertical-collpsed .menu-search-submenu,
         body.vertical-collpsed .menu-frequent-submenu {
-            display: block;
-            top: 0;
-            left: calc(100% + 0.75rem) !important;
+            display: none;
+            position: absolute !important;
+            /* 紧贴展开标题下方，避免空隙导致移入二级时丢失 :hover */
+            top: 100% !important;
+            left: 70px !important;
             right: auto !important;
-            width: min(280px, calc(100vw - 96px)) !important;
-            min-width: 240px !important;
-            max-width: 280px !important;
+            width: 190px !important;
+            min-width: 190px !important;
+            max-width: 190px !important;
+            margin: 0 !important;
             padding: 0.55rem;
+            max-height: none !important;
             border: 1px solid var(--backend-color-card-border);
-            border-radius: var(--backend-border-radius-xl);
+            border-radius: 0 var(--backend-border-radius-xl) var(--backend-border-radius-xl) var(--backend-border-radius-xl);
             background: var(--backend-color-card-bg) !important;
             box-shadow: var(--backend-dropdown-shadow);
             opacity: 0;
             visibility: hidden;
-            transform: translate3d(-10px, 0, 0) scale(0.98);
-            transform-origin: left center;
+            overflow: visible !important;
+            transform: none;
+            transform-origin: left top;
             pointer-events: none;
-            transition: opacity 0.18s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+            z-index: 1007 !important;
+            transition: opacity 0.18s ease, visibility 0s linear 0.2s;
+        }
+
+        /* 标题与二级之间的隐形桥接，防止斜向移动时穿过空隙丢 hover */
+        body.vertical-collpsed #sidebar-menu > ul > li:hover > ul.sub-menu::before,
+        body.vertical-collpsed .menu-search-item:hover .menu-search-submenu::before,
+        body.vertical-collpsed .menu-frequent-item:hover .menu-frequent-submenu::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: -14px;
+            height: 14px;
+            background: transparent;
+        }
+
+        /* 收起态不常驻展开 mm-active/mm-show 子菜单，仅 hover 弹出 */
+        body.vertical-collpsed #sidebar-menu ul li.mm-active > ul.sub-menu,
+        body.vertical-collpsed #sidebar-menu ul li.active > ul.sub-menu,
+        body.vertical-collpsed #sidebar-menu ul li ul.sub-menu.mm-show {
+            display: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
 
         body.vertical-collpsed #sidebar-menu > ul > li:hover > ul.sub-menu,
-        body.vertical-collpsed #sidebar-menu > ul > li.mm-active > ul.sub-menu,
+        body.vertical-collpsed #sidebar-menu > ul > li > ul.sub-menu:hover,
         body.vertical-collpsed .menu-search-item:hover .menu-search-submenu,
         body.vertical-collpsed .menu-frequent-item:hover .menu-frequent-submenu,
         body.vertical-collpsed .menu-search-submenu:hover,
         body.vertical-collpsed .menu-frequent-submenu:hover {
-            display: block;
-            opacity: 1;
-            visibility: visible;
-            transform: translate3d(0, 0, 0) scale(1);
-            pointer-events: auto;
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
             transition-delay: 0s;
         }
 
@@ -489,6 +565,7 @@ if ($dataLayout !== 'horizontal'):
         body.vertical-collpsed .menu-search-submenu li > a,
         body.vertical-collpsed .menu-frequent-submenu li > a {
             white-space: normal;
+            pointer-events: auto;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -546,18 +623,19 @@ if ($dataLayout !== 'horizontal'):
             white-space: nowrap !important;
         }
         
-        /* 折叠状态下，菜单形式的搜索和常用菜单子菜单样式 - 宽度和位置与普通菜单hover展开一致 */
+        /* 折叠状态下，菜单形式的搜索和常用菜单子菜单样式 - 与普通菜单 hover 展开一致（LTR: left） */
         body.vertical-collpsed .menu-search-submenu,
         body.vertical-collpsed .menu-frequent-submenu {
             width: 190px !important;
             min-width: 190px !important;
             max-width: 190px !important;
             position: absolute !important;
-            right: 70px !important;
+            left: 70px !important;
+            right: auto !important;
             background-color: #ffffff;
-            box-shadow: -3px 5px 12px -4px rgba(18, 19, 21, 0.1);
+            box-shadow: 3px 5px 12px -4px rgba(18, 19, 21, 0.1);
             height: auto !important;
-            z-index: 9999;
+            z-index: 1007;
         }
         
         /* 折叠状态下，默认隐藏搜索子菜单，只在hover时显示（CSS控制） */
@@ -1393,21 +1471,37 @@ if ($dataLayout !== 'horizontal'):
             background-color: #1b2c3f !important;
         }
         
-        /* 修复hover菜单显示 - 使用与原CSS相同的选择器格式 */
+        /* 收起态 hover 子菜单：LTR 向右展开（覆盖 app.css 误用的 right:70px） */
         body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul {
             display: block !important;
             position: absolute !important;
-            right: 70px !important;
+            top: 100% !important;
+            left: 70px !important;
+            right: auto !important;
             width: 190px !important;
-            z-index: 9999 !important;
+            margin: 0 !important;
+            z-index: 1007 !important;
+            pointer-events: auto !important;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
         
-        /* 三级菜单hover显示 */
-        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul ul {
+        /* 三级菜单 hover 显示 */
+        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul ul,
+        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li > ul li:hover > ul {
             display: block !important;
             position: absolute !important;
             left: 190px !important;
-            z-index: 10000 !important;
+            right: auto !important;
+            top: 0 !important;
+            z-index: 1008 !important;
+            pointer-events: auto !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li:hover {
+            z-index: 1010;
         }
 
         /* ===== Theme Variable Compatibility Overrides ===== */

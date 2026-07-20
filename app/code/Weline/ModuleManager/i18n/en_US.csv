@@ -14,42 +14,17 @@
 "表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。","Table already exists! It has been created by model %{2} under module %{1}. Please change the table name for the current model."
 "模块状态变更后注册表更新失败: %{1}","Registry update failed after module status change: %{1}"
 操作成功！,"Operation successful!"
-一共有,total
-条数据,"items of data"
-ID,ID
-模组,Module
-状态,Status
-描述,Description
-类型,Type
-基础命名空间,"Base Namespace"
-基础路径,"Base Path"
-上一个版本,"Previous version"
-当前版本,"Current version"
-代码版本,代码版本
-数据库版本,数据库版本
-Schema状态,Schema状态
-漂移警告,漂移警告
-路由,Route
-创建时间,"Create time"
-更新时间,"Update time"
-启用,Enable
-禁用,Disable
+系统,System
+系统配置,"System configuration"
 第三方,"Third Party"
 Composer,Composer
-系统,System
-模组管理,"Module management"
-模组控制器,"Module controller"
-操作,Operation
-未验证,未验证
-无,无
-开启,Enable
-关闭,Close
-回滚,回滚
-系统配置,"System configuration"
 一致,Consistent
 漂移,Drifted
+未验证,未验证
 未知,Unknown
+模组管理,"Module management"
 "集中检索模块状态、版本与 Schema 一致性","Search module status, versions, and schema consistency in one place"
+模组控制器,"Module controller"
 "显示 %{1}–%{2}，共 %{3} 个模块","Showing %{1}–%{2} of %{3} modules"
 "已启用 %{1} 个筛选条件","%{1} filters active"
 "当前页 %{1} 项","%{1} items on this page"
@@ -70,19 +45,29 @@ Composer,Composer
 筛选会在全部模块中执行，分页会保留当前条件,"Filters run across all modules and pagination preserves them"
 清除全部筛选,"Clear all filters"
 模块,Module
+状态,Status
+类型,Type
 版本,Version
 Schema,Schema
+路由,Route
+更新时间,"Update time"
+操作,Operation
 没有找到匹配的模块,"No matching modules found"
 请调整搜索词或筛选条件后重试,"Adjust the search term or filters and try again"
 清除筛选,"Clear filters"
 暂无描述,"No description"
+启用,Enable
+禁用,Disable
 当前,Current
 代码,Code
 数据库,Database
 点击禁用模块,"Click to disable module"
 点击启用模块,"Click to enable module"
+开启,Enable
+关闭,Close
 核心模块不允许在线回滚,"Core modules cannot be rolled back online"
 回滚到可用版本,"Roll back to an available version"
+回滚,回滚
 "第 %{1} 页，每页 %{2} 项","Page %{1}, %{2} items per page"
 正在读取可用目标版本...,正在读取可用目标版本...
 没有可用的精确版本制品，或当前状态不允许回滚,没有可用的精确版本制品，或当前状态不允许回滚

@@ -590,7 +590,7 @@ body[data-layout="horizontal"] .footer {
 .vertical-collpsed .vertical-menu {
     position: absolute;
     width: 70px !important;
-    z-index: 5;
+    z-index: 1005;
 }
 
 .vertical-collpsed .vertical-menu .simplebar-mask,
@@ -665,12 +665,13 @@ body[data-layout="horizontal"] .footer {
 
 .vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul {
     display: block;
-    right: 70px;
+    left: 70px;
+    right: auto;
     position: absolute;
     width: 190px;
     height: auto !important;
-    -webkit-box-shadow: -3px 5px 12px -4px rgba(18, 19, 21, 0.1);
-    box-shadow: -3px 5px 12px -4px rgba(18, 19, 21, 0.1);
+    -webkit-box-shadow: 3px 5px 12px -4px rgba(18, 19, 21, 0.1);
+    box-shadow: 3px 5px 12px -4px rgba(18, 19, 21, 0.1);
 }
 
 .vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul ul {
