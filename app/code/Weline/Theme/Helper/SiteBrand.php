@@ -71,11 +71,11 @@ class SiteBrand
             return $configured;
         }
 
-        return $this->resolveStaticUrl(
-            $template,
-            self::DEFAULT_ICON_STATIC,
-            '/Weline/Theme/view/theme/frontend/assets/images/theme/icon.png',
-        );
+        // Same as backend logos: theme assets live under view/theme.
+        // fetchTagSourceFile('statics', ...) incorrectly maps them to view/statics.
+        unset($template);
+
+        return '/Weline/Theme/view/theme/frontend/assets/images/theme/icon.png';
     }
 
     public function resolveAppleTouchIconUrl(Template $template): string
@@ -85,12 +85,9 @@ class SiteBrand
             return $configured;
         }
 
-        $url = trim((string)$template->fetchTagSourceFile('statics', 'Weline_Theme::theme/frontend/assets/images/theme/apple-touch-icon.png'));
-        if ($url !== '') {
-            return $url;
-        }
+        unset($template);
 
-        return $this->resolveIconUrl($template, 180);
+        return '/Weline/Theme/view/theme/frontend/assets/images/theme/apple-touch-icon.png';
     }
 
     public function resolveFrontendLogoUrl(Template $template, int $width = 240, int $height = 80): string
@@ -102,11 +99,12 @@ class SiteBrand
             }
         }
 
-        return $this->resolveStaticUrl(
-            $template,
-            self::DEFAULT_LOGO_FRONTEND_STATIC,
-            '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png',
-        );
+        // Theme assets live under view/theme, while fetchTagSourceFile('statics', ...)
+        // maps them to view/statics (404). Use the canonical theme route so the
+        // unconfigured frontend logo is the default W + yellow ribbon mark.
+        unset($template);
+
+        return '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
     }
 
     public function resolveBackendLogoUrl(Template $template, string $configKey, int $width, int $height): string
