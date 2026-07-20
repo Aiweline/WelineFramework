@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://learning-mcp.local/schemas/event.v1.json",
+  "title": "Learning MCP Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "project_id", "session_id", "observed_at", "source", "type", "content_hash", "dedup_key", "trust", "context"],
+  "properties": {
+    "schema_version": {"const": "event.v1"},
+    "event_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "turn_id": {"type": "string"},
+    "episode_id": {"type": "string"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "source": {"type": "string", "minLength": 1},
+    "type": {"type": "string", "minLength": 1},
+    "role": {"type": "string"},
+    "content_redacted": {"type": "string"},
+    "content_hash": {"type": "string", "minLength": 1},
+    "dedup_key": {"type": "string", "minLength": 1},
+    "raw_ref": {"type": "string"},
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "score"],
+      "properties": {
+        "class": {"type": "string"},
+        "score": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "context": {"type": "object"},
+    "metadata": {"type": "object"}
+  }
+}

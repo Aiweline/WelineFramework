@@ -195,7 +195,8 @@ class LinuxScriptExecutor implements InstallScriptExecutorInterface
     {
         switch ($extension) {
             case 'php':
-                return 'php ' . escapeshellarg($scriptPath) . ' ' . escapeshellarg($action);
+                $phpBinary = PHP_BINARY !== '' ? PHP_BINARY : 'php';
+                return escapeshellarg($phpBinary) . ' ' . escapeshellarg($scriptPath) . ' ' . escapeshellarg($action);
             case 'sh':
                 return 'bash ' . escapeshellarg($scriptPath) . ' ' . escapeshellarg($action);
             default:
@@ -214,13 +215,28 @@ class LinuxScriptExecutor implements InstallScriptExecutorInterface
             $env = [];
         }
 
-        $path = $env['PATH'] ?? '/usr/local/bin:/usr/bin:/bin';
-        $prefix = '/usr/local/bin';
-        $home = getenv('HOME');
-        if ($home !== false && $home !== '') {
-            $prefix .= ':' . $home . '/.local/bin';
+        $pathKey = PHP_OS_FAMILY === 'Windows' ? 'Path' : 'PATH';
+        $path = $env[$pathKey] ?? $env['PATH'] ?? $env['Path'] ?? '/usr/local/bin:/usr/bin:/bin';
+        $separator = PHP_OS_FAMILY === 'Windows' ? ';' : ':';
+        $prefixParts = [];
+        $phpDir = dirname(PHP_BINARY);
+        if ($phpDir !== '' && is_dir($phpDir)) {
+            $prefixParts[] = $phpDir;
         }
-        $env['PATH'] = $prefix . ':' . $path;
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $prefixParts[] = '/usr/local/bin';
+            $home = getenv('HOME');
+            if ($home !== false && $home !== '') {
+                $prefixParts[] = $home . '/.local/bin';
+            }
+        }
+        $prefix = implode($separator, array_unique(array_filter($prefixParts)));
+        $resolvedPath = $prefix !== '' ? $prefix . $separator . $path : $path;
+        $env[$pathKey] = $resolvedPath;
+        $env['PATH'] = $resolvedPath;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $env['Path'] = $resolvedPath;
+        }
 
         return $env;
     }

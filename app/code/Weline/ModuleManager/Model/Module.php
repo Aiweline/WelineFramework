@@ -37,9 +37,16 @@ class Module extends Model
     public const schema_fields_PATH           = 'path';
     #[Col(type: 'varchar', length: 32, nullable: true, comment: '版本')]
     public const schema_fields_VERSION        = 'version';
+    #[Col(type: 'varchar', length: 32, nullable: true, comment: '代码制品版本投影')]
+    public const schema_fields_CODE_VERSION   = 'code_version';
+    #[Col(type: 'varchar', length: 32, nullable: true, comment: '数据库迁移游标版本投影')]
+    public const schema_fields_DATABASE_VERSION = 'database_version';
+    #[Col(type: 'varchar', length: 32, nullable: false, default: 'unknown', comment: 'Schema 一致性状态')]
+    public const schema_fields_SCHEMA_STATUS = 'schema_status';
+    #[Col(type: 'text', nullable: true, comment: '版本或 Schema 漂移警告')]
+    public const schema_fields_DRIFT_WARNING = 'drift_warning';
     #[Col(type: 'varchar', length: 32, nullable: true, comment: '上一版本')]
     public const schema_fields_LAST_VERSION   = 'last_version';
     #[Col(type: 'varchar', length: 64, nullable: true, comment: '路由')]
     public const schema_fields_ROUTER         = 'router';
 }
-

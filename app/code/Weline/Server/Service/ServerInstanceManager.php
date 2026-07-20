@@ -11,6 +11,7 @@ use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
  * 服务器实例管理器（单一职责）
@@ -84,6 +85,18 @@ class ServerInstanceManager
     {
         $rawData = $this->getRawInstanceData($name);
         if ($rawData === null) {
+            return null;
+        }
+
+        // A stopped endpoint is persisted as restart configuration, not as a
+        // live runtime authority. Do not rehydrate strict runtime_selection
+        // for an inactive record merely because another instance is scanning
+        // ports/status. Keep suspicious stopped records visible only when an
+        // exact tracked process is still alive.
+        if ($validateStale
+            && $this->shouldPurgeStoppedInstanceRecord($rawData)
+            && !$this->hasTrackedRunningProcess($name, $rawData)
+        ) {
             return null;
         }
 
@@ -287,57 +300,6 @@ class ServerInstanceManager
         return $cleaned;
     }
 
-    /**
-     * 清理当前没有运行中 Master/服务的 endpoint 记录。
-     *
-     * server:clean 的语义是“没运行就删”，不依赖 lifecycle_state 必须先被标记为 stopped。
-     *
-     * @return string[] 已清理的实例名称列表
-     */
-    public function cleanupStaleInstancesForStartup(?string $excludeName = null, float $budgetMs = 500.0): int
-    {
-        $cleaned = 0;
-        $deadline = $budgetMs > 0.0 ? \microtime(true) + ($budgetMs / 1000.0) : 0.0;
-        $now = \time();
-
-        foreach ($this->listRawInstanceNames() as $name) {
-            if ($excludeName !== null && $name === $excludeName) {
-                continue;
-            }
-            if ($deadline > 0.0 && \microtime(true) >= $deadline) {
-                break;
-            }
-            $rawData = $this->getRawInstanceData((string)$name);
-            if (!\is_array($rawData) || $rawData === []) {
-                continue;
-            }
-            if ($this->isStartLockHeld((string)$name)) {
-                continue;
-            }
-
-            $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
-            if (\in_array($lifecycleState, ['stopped', 'stale_cleanup', 'master_exited'], true)) {
-                continue;
-            }
-
-            $updatedAt = (int)($rawData['updated_at'] ?? $rawData['started_timestamp'] ?? 0);
-            $staleAfterSec = (int)(Env::get('wls.master.startup_stale_instance_age_sec', 60) ?? 60);
-            if ($staleAfterSec < 1) {
-                $staleAfterSec = 1;
-            }
-            if ($updatedAt > 0 && ($now - $updatedAt) < $staleAfterSec) {
-                continue;
-            }
-
-            if (!$this->hasTrackedRunningProcess((string)$name, $rawData, null)) {
-                $this->cleanupStaleInstanceArtifacts((string)$name, $rawData);
-                $cleaned++;
-            }
-        }
-
-        return $cleaned;
-    }
-
     public function cleanupInactiveInstances(): array
     {
         $cleanedNames = [];
@@ -425,17 +387,26 @@ class ServerInstanceManager
      */
     public function findRunningInstanceNameByPort(int $port): ?string
     {
-        foreach ($this->getAllInstanceInfo() as $name => $info) {
-            $status = $this->getMasterIpcStatus($name);
+        foreach ($this->listRawInstanceNames() as $name) {
+            $rawData = $this->getRawInstanceData($name);
+            if ($rawData === null || $this->shouldPurgeStoppedInstanceRecord($rawData)) {
+                continue;
+            }
+
+            // Port ownership discovery is a control-plane liveness query. It
+            // must not parse every persisted instance into a runtime object,
+            // and a dead endpoint must not add seconds to server:start.
+            $status = $this->getMasterIpcStatus($name, 0.15);
             if ($status === null || !((bool)($status['running'] ?? false))) {
                 continue;
             }
 
-            if ($info->port === $port) {
+            if ((int)($rawData['port'] ?? 0) === $port) {
                 return $name;
             }
 
-            if ($info->httpRedirectPort > 0 && $info->httpRedirectPort === $port) {
+            $httpRedirectPort = $this->resolveHttpRedirectPort($rawData);
+            if ($httpRedirectPort > 0 && $httpRedirectPort === $port) {
                 return $name;
             }
 
@@ -476,100 +447,27 @@ class ServerInstanceManager
     private function filterEndpointRecord(array $data): array
     {
         $allowedFields = [
-            'schema_version',
-            'name',
-            'instance_name',
-            'pid',
-            'launcher_pid',
-            'master_pid',
-            'master_enabled',
-            'master_started_at',
-            'master_mode',
-            'runtime_selection',
-            'topology',
-            'requested_topology',
-            'effective_topology',
-            'topology_source',
-            'topology_reason',
-            'topology_reason_codes',
-            'runtime_strategy',
-            'os_family',
-            'event_loop_driver',
-            'direct_listener_mode',
-            'listener_strategy',
-            'ssl_engine',
-            'policy_compatible',
-            'policy_digest',
-            'container_registry_digest',
-            'orchestrator_mode',
-            'control_plane_mode',
-            'supervisor_enabled',
-            'supervisor_reason',
-            'supervisor_channel',
-            'supervisor_endpoint',
-            'control_port',
-            'control_token',
-            'control_token_created_at',
-            'epoch',
-            'master_epoch',
-            'host',
-            'public_host',
-            'port',
-            'main_port',
-            'count',
-            'daemon',
-            'ssl_enabled',
-            'ssl_cert',
-            'ssl_key',
-            'dispatcher_enabled',
-            'dispatcher_port',
-            'worker_port',
-            'worker_base_port',
-            'worker_memory_limit',
-            'dispatcher_memory_limit',
-            'session_server_port',
-            'session_server_token_file_name',
-            'memory_server_port',
-            'memory_server_token_file_name',
-            'shared_state',
-            'gateway',
-            'orchestrator_runtime_options',
-            'http_redirect_port',
-            'started_by',
-            'started_at',
-            'started_timestamp',
-            'php_version',
-            'os',
-            'window_mode',
-            'frontend',
-            'enable_log',
-            'runtime_state',
-            'last_verified_at',
-            'startup_phase',
-            'lifecycle_state',
-            'stopped_reason',
-            'stopped_at',
-            'stopped_timestamp',
-            'server_ready_at',
-            'server_ready_service_count',
-            'startup_event_seq',
-            'startup_events',
-            'startup_failure_reason',
-            'startup_failure_at',
-            'startup_failure_timestamp',
-            'startup_failure_pending',
-            'startup_failure_class',
-            'startup_failure_code',
-            'startup_failure_context',
-            'startup_failure_diagnostics',
-            'master_exited_pid',
-            'retained_pids',
-            'retained_pid_count',
-            'retained_at',
-            'retained_timestamp',
-            'slot_generations',
-            'slot_generations_updated_at',
-            'updated_at',
+            'schema_version', 'name', 'instance_name', 'pid', 'launcher_pid',
+            'master_pid', 'master_enabled', 'master_started_at', 'runtime_selection',
+            'policy_digest', 'container_registry_digest', 'orchestrator_mode',
+            'control_plane_mode', 'supervisor_enabled', 'supervisor_reason',
+            'supervisor_channel', 'supervisor_endpoint', 'control_port', 'control_token',
+            'control_token_created_at', 'epoch', 'master_epoch', 'host', 'public_host',
+            'port', 'main_port', 'count', 'daemon', 'ssl_enabled', 'ssl_cert', 'ssl_key',
+            'http3',
+            'dispatcher_port', 'worker_port', 'worker_base_port', 'worker_memory_limit',
+            'dispatcher_memory_limit', 'session_server_port', 'session_server_token_file_name',
+            'memory_server_port', 'memory_server_token_file_name', 'shared_state', 'gateway',
+            'orchestrator_runtime_options', 'http_redirect_port', 'started_by', 'started_at',
+            'started_timestamp', 'php_version', 'os', 'window_mode', 'enable_log',
+            'runtime_state', 'last_verified_at', 'startup_phase', 'lifecycle_state',
+            'stopped_reason', 'stopped_at', 'stopped_timestamp', 'server_ready_at',
+            'server_ready_service_count', 'startup_event_seq', 'startup_events',
+            'startup_failure_reason', 'startup_failure_at', 'startup_failure_timestamp',
+            'startup_failure_pending', 'startup_failure_class', 'startup_failure_code',
+            'startup_failure_context', 'startup_failure_diagnostics', 'master_exited_pid',
+            'retained_pids', 'retained_pid_count', 'retained_at', 'retained_timestamp',
+            'slot_generations', 'slot_generations_updated_at', 'updated_at',
         ];
 
         $filtered = [];
@@ -577,6 +475,13 @@ class ServerInstanceManager
             if (\array_key_exists($field, $data)) {
                 $filtered[$field] = $data[$field];
             }
+        }
+        if (\is_array($filtered['gateway'] ?? null)
+            && \array_key_exists('traffic_mode', $filtered['gateway'])
+        ) {
+            throw new \RuntimeException(
+                'Removed WLS endpoint field "gateway.traffic_mode" is not supported; use wls.runtime.topology.'
+            );
         }
 
         return $filtered;
@@ -593,6 +498,78 @@ class ServerInstanceManager
             $data['pid'] = $masterPid;
             return $this->filterEndpointRecord($data);
         });
+    }
+
+    /**
+     * Publish a terminal Master bootstrap failure so the parent start command
+     * can stop immediately instead of waiting for a control port that can never
+     * appear.
+     *
+     * @param list<string> $diagnostics
+     */
+    public function recordStartupFailure(
+        string $instanceName,
+        string $code,
+        string $reason,
+        string $failureClass = 'master_bootstrap',
+        array $diagnostics = []
+    ): void {
+        $file = $this->getInstanceFile($instanceName);
+        if (!\is_file($file)) {
+            throw new \RuntimeException('Cannot record WLS startup failure: instance endpoint is missing.');
+        }
+
+        $reason = \trim($reason);
+        if ($reason === '') {
+            $reason = 'Unknown Master bootstrap failure.';
+        }
+        $reason = \substr($reason, 0, 2000);
+        $normalizedDiagnostics = [];
+        foreach ($diagnostics as $diagnostic) {
+            $diagnostic = \trim((string)$diagnostic);
+            if ($diagnostic !== '') {
+                $normalizedDiagnostics[] = \substr($diagnostic, 0, 1000);
+            }
+            if (\count($normalizedDiagnostics) >= 8) {
+                break;
+            }
+        }
+
+        $now = \time();
+        $saved = $this->atomicUpdateJson(
+            $file,
+            function (array $data) use (
+                $instanceName,
+                $code,
+                $reason,
+                $failureClass,
+                $normalizedDiagnostics,
+                $now
+            ): array {
+                $data['pid'] = 0;
+                $data['master_pid'] = 0;
+                $data['master_enabled'] = false;
+                $data['startup_phase'] = 'failed';
+                $data['lifecycle_state'] = 'failed';
+                $data['startup_failure_reason'] = $reason;
+                $data['startup_failure_code'] = \strtoupper(\trim($code));
+                $data['startup_failure_class'] = \trim($failureClass);
+                $data['startup_failure_at'] = \date('Y-m-d H:i:s', $now);
+                $data['startup_failure_timestamp'] = $now;
+                $data['startup_failure_pending'] = [];
+                $data['startup_failure_context'] = [
+                    'instance' => $instanceName,
+                    'pid' => (int)\getmypid(),
+                ];
+                $data['startup_failure_diagnostics'] = $normalizedDiagnostics;
+                $data['updated_at'] = $now;
+
+                return $this->filterEndpointRecord($data);
+            }
+        );
+        if (!$saved) {
+            throw new \RuntimeException('Failed to atomically publish WLS startup failure.');
+        }
     }
 
     /**
@@ -1027,38 +1004,45 @@ class ServerInstanceManager
     private function buildInstanceInfo(string $name, array $rawData, float $ipcTimeout = 1.5): ServerInstanceInfo
     {
         $runtimeData = $rawData;
+        $runtimeSelection = RuntimeSelection::fromEndpoint($runtimeData);
+        if (\is_array($runtimeData['gateway'] ?? null)
+            && \array_key_exists('traffic_mode', $runtimeData['gateway'])
+        ) {
+            throw new \RuntimeException(
+                'Removed WLS endpoint field "gateway.traffic_mode" is not supported; use wls.runtime.topology.'
+            );
+        }
+
         $ipcStatus = $ipcTimeout > 0.0 ? $this->getMasterIpcStatus($name, $ipcTimeout) : null;
         $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData);
         $services = $ipcStatus === null ? [] : $this->buildServiceInfoListFromIpcStatus($ipcStatus);
         if ($services === []) {
-            $services = $this->buildServiceInfoListFromRuntimeFallback($name, $runtimeData);
+            $services = $this->buildServiceInfoListFromRuntimeFallback($name, $runtimeData, $runtimeSelection);
         }
         $services = $this->mergeSharedStateServiceInfo($services, $runtimeData);
 
         return new ServerInstanceInfo(
             name: $name,
-            masterPid: (int) ($runtimeData['master_pid'] ?? 0),
-            controlPort: (int) ($runtimeData['control_port'] ?? 0),
-            host: (string) ($runtimeData['host'] ?? '127.0.0.1'),
-            port: (int) ($runtimeData['port'] ?? 0),
-            sslEnabled: (bool) ($runtimeData['ssl_enabled'] ?? false),
-            dispatcherEnabled: (bool) ($runtimeData['dispatcher_enabled'] ?? false),
-            workerCount: (int) ($runtimeData['count'] ?? 0),
-            workerBasePort: (int) ($runtimeData['worker_port'] ?? $runtimeData['port'] ?? 0),
+            masterPid: (int)($runtimeData['master_pid'] ?? 0),
+            controlPort: (int)($runtimeData['control_port'] ?? 0),
+            host: (string)($runtimeData['host'] ?? '127.0.0.1'),
+            port: (int)($runtimeData['port'] ?? 0),
+            sslEnabled: (bool)($runtimeData['ssl_enabled'] ?? false),
+            runtimeSelection: $runtimeSelection,
+            workerCount: (int)($runtimeData['count'] ?? 0),
+            workerBasePort: (int)($runtimeData['worker_port'] ?? $runtimeData['port'] ?? 0),
             httpRedirectPort: $httpRedirectPort,
-            startedAt: (string) ($runtimeData['started_at'] ?? ''),
-            startedTimestamp: (int) ($runtimeData['started_timestamp'] ?? 0),
+            startedAt: (string)($runtimeData['started_at'] ?? ''),
+            startedTimestamp: (int)($runtimeData['started_timestamp'] ?? 0),
             services: ServerInstanceInfo::sortServicesByPriority($services),
-            controlToken: (string) ($runtimeData['control_token'] ?? ''),
-            startupFailureReason: (string) ($runtimeData['startup_failure_reason'] ?? ''),
-            startupFailureCode: (string) ($runtimeData['startup_failure_code'] ?? ''),
-            startupFailureClass: (string) ($runtimeData['startup_failure_class'] ?? ''),
+            controlToken: (string)($runtimeData['control_token'] ?? ''),
+            startupFailureReason: (string)($runtimeData['startup_failure_reason'] ?? ''),
+            startupFailureCode: (string)($runtimeData['startup_failure_code'] ?? ''),
+            startupFailureClass: (string)($runtimeData['startup_failure_class'] ?? ''),
             startupFailureContext: \is_array($runtimeData['startup_failure_context'] ?? null)
-                ? $runtimeData['startup_failure_context']
-                : [],
+                ? $runtimeData['startup_failure_context'] : [],
             startupFailureDiagnostics: \is_array($runtimeData['startup_failure_diagnostics'] ?? null)
-                ? \array_values($runtimeData['startup_failure_diagnostics'])
-                : [],
+                ? \array_values($runtimeData['startup_failure_diagnostics']) : [],
         );
     }
 
@@ -1187,10 +1171,13 @@ class ServerInstanceManager
      *
      * @return list<ServiceInfo>
      */
-    private function buildServiceInfoListFromRuntimeFallback(string $name, array $runtimeData): array
-    {
+    private function buildServiceInfoListFromRuntimeFallback(
+        string $name,
+        array $runtimeData,
+        RuntimeSelection $runtimeSelection
+    ): array {
         $services = [];
-        if ((bool)($runtimeData['dispatcher_enabled'] ?? false)) {
+        if ($runtimeSelection->isDispatcher()) {
             $dispatcher = $this->buildDispatcherServiceInfoFromPortOwner($name, $runtimeData);
             if ($dispatcher !== null) {
                 $services[] = $dispatcher;
@@ -1653,13 +1640,22 @@ class ServerInstanceManager
     }
 
     /**
+     * @param array<string, string>|null $rejected Invalid records rejected by the v4 contract.
      * @return array<string, ServerInstanceInfo>
      */
-    public function getAllPersistedInstanceInfo(): array
+    public function getAllPersistedInstanceInfo(?array &$rejected = null): array
     {
         $instances = [];
+        $rejected = [];
+
         foreach ($this->listPersistedInstanceNames() as $name) {
-            $info = $this->getPersistedInstanceInfo($name);
+            try {
+                $info = $this->getPersistedInstanceInfo($name);
+            } catch (\RuntimeException $exception) {
+                $rejected[$name] = $exception->getMessage();
+                continue;
+            }
+
             if ($info !== null) {
                 $instances[$name] = $info;
             }

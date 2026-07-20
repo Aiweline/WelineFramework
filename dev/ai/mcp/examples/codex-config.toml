@@ -1,0 +1,34 @@
+# Merge this section into ~/.codex/config.toml or a trusted project's
+# .codex/config.toml. Replace both paths with absolute local paths.
+[mcp_servers.weline_project_intelligence]
+command = "/absolute/path/to/dev/ai/mcp/bin/learning-mcp"
+args = ["--config", "/absolute/path/to/config.yaml"]
+startup_timeout_sec = 20
+tool_timeout_sec = 180
+enabled_tools = [
+  "project_index_status",
+  "index_project",
+  "resolve_task_context",
+  "search_project_knowledge",
+  "get_indexed_document",
+  "get_indexed_files",
+  "inspect_symbol",
+  "resolve_skill",
+  "get_skill",
+  "record_index_feedback",
+  "prepare_edit",
+  "apply_edit",
+  "get_edit_status",
+  "validate_change",
+  "rollback_edit",
+  "check_document_drift",
+  "sync_module_knowledge",
+  "get_relevant_guidance",
+  "search_experiences",
+  "explain_experience",
+  "list_candidates",
+  "record_outcome",
+  "request_promotion",
+  "mark_experience",
+  "health",
+]

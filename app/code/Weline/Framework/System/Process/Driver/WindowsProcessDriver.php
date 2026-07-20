@@ -100,16 +100,10 @@ class WindowsProcessDriver extends AbstractProcessDriver
     private static float $taskListPidMapTtl = 1.5;
 
     /**
-     * 进程内 `Get-CimInstance Win32_Process` 全表缓存（pid => commandLine）
+     * 进程内命令行短 TTL 缓存（pid => commandLine）。
      *
-     * 背景：`getProcessCommandLine($pid)` 是 `isWelineServerProcess` / `isProcessManagerCreated`
-     * 等"己方进程鉴权"路径的核心调用；单次 PowerShell CIM 按 PID 查询 ~1s，status / stop
-     * 反复鉴权时会堆 5-10 次 ≈ 5-10s。
-     *
-     * 这里也走"全表 + 短 TTL + per-pid 兜底"策略：
-     * - fetchAllProcessCommandLines() 一次拉全表（~2-3s）填满 map；
-     * - 每个 PID 真正被查询时优先读 map，未命中再跑 per-pid PowerShell 并把结果回写（避免反复单查）。
-     * - 这与"为命令行做 per-pid 单查的零碎 PowerShell"相比，最坏一次性，最好直接命中。
+     * 单 PID 查询仍保留兼容路径；reload 等已冻结 PID 集合的调用通过一次定向 CIM
+     * 查询填充相同缓存，避免逐 PID 拉起 PowerShell，也不扫描系统全部进程。
      *
      * @var array<int, string>
      */
@@ -1269,14 +1263,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         //
         // 因此改为纯 per-pid 缓存：第一次单查（~1s）后所有重复鉴权 O(1)。
         // 仅当 commandLine 缓存项已经过 TTL 时才会让单条查询重新落到 PowerShell。
-        $now = \microtime(true);
-        if (self::$commandLineCacheAt > 0
-            && ($now - self::$commandLineCacheAt) >= self::$commandLineCacheTtl
-        ) {
-            // TTL 过期：清空已缓存条目，让本次以及后续单查都拿到最新结果
-            self::$commandLineCache = [];
-            self::$commandLineCacheAt = 0.0;
-        }
+        $this->expireCommandLineCacheIfStale();
         if (\array_key_exists($pid, self::$commandLineCache)) {
             return self::$commandLineCache[$pid];
         }
@@ -1316,6 +1303,100 @@ class WindowsProcessDriver extends AbstractProcessDriver
         // 显式记录为空字符串，避免下次再走 per-pid 慢路径
         $this->rememberCommandLine($pid, '');
         return '';
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getProcessCommandLines(array $pids): array
+    {
+        $normalizedPids = [];
+        foreach ($pids as $pid) {
+            $pid = (int)$pid;
+            if ($this->isValidPid($pid)) {
+                $normalizedPids[$pid] = true;
+            }
+        }
+        if ($normalizedPids === []) {
+            return [];
+        }
+
+        $this->expireCommandLineCacheIfStale();
+        $commandLines = [];
+        $missingPids = [];
+        foreach (\array_keys($normalizedPids) as $pid) {
+            if (\array_key_exists($pid, self::$commandLineCache)) {
+                $commandLines[$pid] = self::$commandLineCache[$pid];
+                continue;
+            }
+            $missingPids[$pid] = true;
+        }
+
+        if ($missingPids !== [] && $this->resolveWindowsCommandPath('powershell') !== null) {
+            $filter = \implode(' OR ', \array_map(
+                static fn(int $pid): string => 'ProcessId=' . $pid,
+                \array_keys($missingPids)
+            ));
+            $powershell = '$rows=@(Get-CimInstance Win32_Process -Filter \''
+                . $filter
+                . '\' -ErrorAction SilentlyContinue | Select-Object ProcessId,CommandLine);'
+                . '$rows|ConvertTo-Json -Compress';
+            $output = [];
+            $exitCode = 0;
+            $executed = $this->executeCommand(
+                'powershell -NoProfile -NonInteractive -Command "' . $powershell . '" 2>NUL',
+                $output,
+                $exitCode
+            );
+            if ($executed && $exitCode === 0) {
+                self::$powershellAvailable = true;
+            }
+
+            if ($executed && $exitCode === 0 && $output !== []) {
+                $decoded = \json_decode(\trim(\implode("\n", $output)), true);
+                if (\is_array($decoded)) {
+                    if (\array_key_exists('ProcessId', $decoded)) {
+                        $decoded = [$decoded];
+                    }
+                    foreach ($decoded as $row) {
+                        if (!\is_array($row)) {
+                            continue;
+                        }
+                        $pid = (int)($row['ProcessId'] ?? 0);
+                        if (!isset($missingPids[$pid])) {
+                            continue;
+                        }
+                        $commandLine = \trim((string)($row['CommandLine'] ?? ''));
+                        $this->rememberCommandLine($pid, $commandLine);
+                        $commandLines[$pid] = $commandLine;
+                        unset($missingPids[$pid]);
+                    }
+                }
+            }
+        }
+
+        foreach (\array_keys($missingPids) as $pid) {
+            $this->rememberCommandLine($pid, '');
+            $commandLines[$pid] = '';
+        }
+
+        $ordered = [];
+        foreach (\array_keys($normalizedPids) as $pid) {
+            $ordered[$pid] = (string)($commandLines[$pid] ?? '');
+        }
+
+        return $ordered;
+    }
+
+    private function expireCommandLineCacheIfStale(): void
+    {
+        $now = \microtime(true);
+        if (self::$commandLineCacheAt > 0
+            && ($now - self::$commandLineCacheAt) >= self::$commandLineCacheTtl
+        ) {
+            self::$commandLineCache = [];
+            self::$commandLineCacheAt = 0.0;
+        }
     }
 
     /**

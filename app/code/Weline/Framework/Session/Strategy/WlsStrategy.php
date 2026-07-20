@@ -45,8 +45,14 @@ final class WlsStrategy implements SessionStrategyInterface
     /** Cookie HttpOnly */
     private bool $cookieHttpOnly;
 
-    /** Cookie SameSite */
+    /** Cookie SameSite (fallback; final value resolves at Set-Cookie time) */
     private string $cookieSameSite;
+
+    /** Explicit session.cookie_samesite from env (empty = auto) */
+    private string $configuredCookieSameSite;
+
+    /** Explicit session.cookie_partitioned from env (null = auto) */
+    private mixed $configuredCookiePartitioned;
 
     /** Cookie 生存时间（秒），0 表示浏览器会话 */
     private int $cookieLifetime;
@@ -66,7 +72,9 @@ final class WlsStrategy implements SessionStrategyInterface
         $this->cookieDomain = $config['cookie_domain'] ?? '';
         $this->cookieSecure = (bool)($config['cookie_secure'] ?? (w_env('server.https') === 'on'));
         $this->cookieHttpOnly = (bool)($config['cookie_httponly'] ?? true);
-        $this->cookieSameSite = $config['cookie_samesite'] ?? 'Lax';
+        $this->configuredCookieSameSite = \trim((string)($config['cookie_samesite'] ?? ''));
+        $this->configuredCookiePartitioned = $config['cookie_partitioned'] ?? null;
+        $this->cookieSameSite = $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : 'Lax';
         $this->cookieLifetime = (int)($config['cookie_lifetime'] ?? 86400 * 30);
     }
 
@@ -101,7 +109,7 @@ final class WlsStrategy implements SessionStrategyInterface
         }
 
         if ($sessionId === null || $sessionId === '') {
-            $sessionId = \w_env_cookie(self::SESSION_NAME) ?? '';
+            $sessionId = \w_env_cookie(\Weline\Framework\Session\SessionCookieNameResolver::resolve()) ?? '';
         }
 
         if ($sessionId === '') {
@@ -175,16 +183,19 @@ final class WlsStrategy implements SessionStrategyInterface
         $headerCollector = HeaderCollector::getInstance();
         
         $expires = $lifetime > 0 ? \time() + $lifetime : 0;
+        $cookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolve();
+        $secure = $this->resolveCookieSecure();
+        $sameSite = $this->resolveCookieSameSite($secure);
         
         $headerCollector->setCookie(
-            self::SESSION_NAME,
+            $cookieName,
             $sessionId,
             $expires,
             $this->cookiePath,
             $this->cookieDomain,
-            $this->cookieSecure,
+            $secure,
             $this->cookieHttpOnly,
-            $this->cookieSameSite
+            $sameSite
         );
     }
 
@@ -194,16 +205,35 @@ final class WlsStrategy implements SessionStrategyInterface
     private function clearCookie(): void
     {
         $headerCollector = HeaderCollector::getInstance();
+        $secure = $this->resolveCookieSecure();
         
         $headerCollector->setCookie(
-            self::SESSION_NAME,
+            \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
             '',
             \time() - 42000,
             $this->cookiePath,
             $this->cookieDomain,
-            $this->cookieSecure,
+            $secure,
             $this->cookieHttpOnly,
-            $this->cookieSameSite
+            $this->resolveCookieSameSite($secure)
+        );
+    }
+
+    private function resolveCookieSecure(): bool
+    {
+        if ($this->cookieSecure) {
+            return true;
+        }
+
+        return \function_exists('w_env') && \w_env('server.https') === 'on';
+    }
+
+    private function resolveCookieSameSite(bool $secure): string
+    {
+        return \Weline\Framework\Session\SessionCookieNameResolver::resolveSameSite(
+            $secure,
+            $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : null,
+            $this->configuredCookiePartitioned,
         );
     }
 

@@ -41,6 +41,25 @@ HOSTS;
         self::assertSame(1, substr_count($result, '# Weline WLS Auto-Config Start'));
     }
 
+    public function testRewriteDomainIpRepairsWrongManagedLocalEntry(): void
+    {
+        $content = <<<HOSTS
+127.0.0.1 localhost
+# Weline WLS Auto-Config Start
+192.168.88.10 shop-a.weline.test
+# Weline WLS Auto-Config End
+HOSTS;
+
+        $rewrite = new ReflectionMethod(HostsFileManager::class, 'rewriteDomainIpInContent');
+        $rewrite->setAccessible(true);
+        $result = $rewrite->invoke(null, $content, 'shop-a.weline.test', '127.0.0.1');
+
+        self::assertStringContainsString('127.0.0.1 shop-a.weline.test', $result);
+        self::assertStringNotContainsString('192.168.88.10 shop-a.weline.test', $result);
+        self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('shop-a.weline.test', '10.0.0.8'));
+        self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('demo.local.test', '203.0.113.9'));
+    }
+
     public function testUnixAdminCommandUsesHostsCommandEntryPoint(): void
     {
         if (!\defined('BP')) {

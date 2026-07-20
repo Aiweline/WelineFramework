@@ -123,6 +123,23 @@ class WlsRequest extends Request
         return \implode('-', \array_map(static fn(string $part): string => \ucfirst($part), \explode('-', $name)));
     }
 
+    /**
+     * Join delimiter for duplicate request headers.
+     * Cookie MUST use "; " so each cookie-pair remains parseable (RFC 6265 / RFC 9113).
+     */
+    private static function duplicateHeaderJoinDelimiter(string $normalizedName): string
+    {
+        return \strcasecmp($normalizedName, 'Cookie') === 0 ? '; ' : ', ';
+    }
+
+    private static function appendDuplicateHeaderValue(
+        string $normalizedName,
+        string $existing,
+        string $value
+    ): string {
+        return $existing . self::duplicateHeaderJoinDelimiter($normalizedName) . $value;
+    }
+
     public function getUrlPath(string $url = ''): string
     {
         return parent::getUrlPath($url);
@@ -263,12 +280,34 @@ class WlsRequest extends Request
             $uri = ($targetPath !== '' ? $targetPath : $envelope->path)
                 . ($query !== '' ? '?' . $query : '');
             $protocol = \strtoupper(\trim((string)($envelope->attributes['protocol'] ?? 'HTTP/1.1')));
-            if (!\in_array($protocol, ['HTTP/1.0', 'HTTP/1.1'], true)) {
+            if (!\in_array($protocol, ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2', 'HTTP/3'], true)) {
                 throw new \InvalidArgumentException('Unsupported HTTP protocol in request envelope.');
             }
             $headers = [];
             foreach ($envelope->headers as $name => $value) {
-                $headers[self::normalizeHeaderName($name)] = $value;
+                $normalized = self::normalizeHeaderName($name);
+                if (\is_array($value)) {
+                    $parts = [];
+                    foreach ($value as $item) {
+                        if (\is_string($item) && $item !== '') {
+                            $parts[] = $item;
+                        }
+                    }
+                    $value = $parts === []
+                        ? ''
+                        : \implode(self::duplicateHeaderJoinDelimiter($normalized), $parts);
+                } elseif (!\is_string($value)) {
+                    $value = (string)$value;
+                }
+                if (isset($headers[$normalized]) && $headers[$normalized] !== '' && $value !== '') {
+                    $headers[$normalized] = self::appendDuplicateHeaderValue(
+                        $normalized,
+                        $headers[$normalized],
+                        $value
+                    );
+                } else {
+                    $headers[$normalized] = $value;
+                }
             }
             if (!isset($headers['Host']) && $envelope->host !== '') {
                 $headers['Host'] = $envelope->host;
@@ -301,8 +340,10 @@ class WlsRequest extends Request
                     $name = self::normalizeHeaderName((string)\trim($name));
                     $value = \trim($value);
                     if (isset($headers[$name]) && $headers[$name] !== '') {
-                        // RFC 7230: 重复头按逗号拼接（Cookie/Set-Cookie 不在请求头场景）。
-                        $headers[$name] .= ',' . $value;
+                        // RFC 9110: most duplicate headers use comma join.
+                        // Cookie MUST use "; " (RFC 6265 / RFC 9113 §8.2.3) —
+                        // comma join collapses later cookies into the first value.
+                        $headers[$name] = self::appendDuplicateHeaderValue($name, $headers[$name], $value);
                     } else {
                         $headers[$name] = $value;
                     }

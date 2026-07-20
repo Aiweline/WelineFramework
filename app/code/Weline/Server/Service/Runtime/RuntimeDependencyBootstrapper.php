@@ -7,19 +7,18 @@ namespace Weline\Server\Service\Runtime;
 use Weline\Framework\App\Env;
 
 /**
- * Installs one-time runtime dependencies before WLS creates any managed process.
+ * Validates runtime dependencies before WLS creates any managed process.
  *
- * Linux/macOS use ext-event when the current PHP build can install it safely.
- * Windows keeps the stable stream TLS path unless a matching event DLL already
- * exists beside the active PHP build; unverified cross-version DLL downloads are
- * intentionally forbidden.
+ * Normal server:start never modifies PHP or the host. Installation is an
+ * explicit operator action through --install-deps; Windows still refuses
+ * unverified cross-version DLL downloads.
  */
 final class RuntimeDependencyBootstrapper
 {
     public const REENTRY_ENV = 'WLS_RUNTIME_DEPENDENCY_BOOTSTRAPPED';
 
     private const INSTALL_TIMEOUT_SECONDS = 900;
-    private const RELAUNCH_TIMEOUT_SECONDS = 300;
+    private const RELAUNCH_TIMEOUT_SECONDS = 1800;
     private const MAX_CAPTURE_BYTES = 1048576;
 
     /**
@@ -49,6 +48,15 @@ final class RuntimeDependencyBootstrapper
             );
         }
 
+        $installRequested = $this->hasFlag($args, ['install-deps', 'install-dependencies']);
+        $installDisabled = $this->hasFlag($args, ['no-auto-deps', 'no-auto-dependencies']);
+        if ($installRequested && $installDisabled) {
+            return $this->result(
+                'failed',
+                (string)__('不能同时使用 --install-deps 与 --no-auto-deps。')
+            );
+        }
+
         $opensslReady = !$sslRequired || $this->canUseOpenSsl();
         if ($direct && $this->canUseSockets() && $this->canUseEvent() && $opensslReady) {
             return $this->result(
@@ -67,20 +75,32 @@ final class RuntimeDependencyBootstrapper
             );
         }
 
-        if ($this->hasFlag($args, ['no-auto-deps', 'no-auto-dependencies'])) {
+        if (!$installRequested || $installDisabled) {
             if (!$opensslReady) {
                 return $this->result(
                     'failed',
-                    (string)__('HTTPS 需要当前 PHP 二进制加载 OpenSSL；--no-auto-deps 已禁止自动安装。')
+                    (string)__('HTTPS 需要当前 PHP 二进制预先加载 OpenSSL；server:start 默认不会安装或编译依赖。')
                 );
             }
             if ($direct) {
+                $missing = [];
+                if (!$this->canUseSockets()) {
+                    $missing[] = 'sockets';
+                }
+                if (!$this->canUseEvent()) {
+                    $missing[] = 'ext-event';
+                }
                 return $this->result(
                     'failed',
-                    (string)__('Direct 需要当前 PHP 二进制加载 sockets/ext-event；--no-auto-deps 不会把 Direct 静默降级。')
+                    (string)__('Direct 运行时缺少预装依赖：%{1}。普通启动不会现场安装或编译；请先安装，或显式使用 --install-deps。', [
+                        \implode(', ', $missing),
+                    ])
                 );
             }
-            return $this->result('skipped', (string)__('已显式禁用运行时依赖自动安装。'));
+            return $this->result(
+                'platform_optimal',
+                (string)__('server:start 仅完成依赖探测；Dispatcher 将使用当前 PHP 已有能力和有界 stream_select。')
+            );
         }
 
         if (PHP_OS_FAMILY === 'Windows') {
@@ -88,7 +108,7 @@ final class RuntimeDependencyBootstrapper
                 if ((string)\getenv(self::REENTRY_ENV) === '1') {
                     return $this->result(
                         'failed',
-                        (string)__('OpenSSL 安装后当前 Windows PHP 二进制仍无法加载该扩展；已拒绝自动安装循环。')
+                        (string)__('本次显式 OpenSSL 安装后当前 Windows PHP 二进制仍无法加载该扩展；已拒绝重复安装循环。')
                     );
                 }
                 $lock = $this->acquireInstallLock();
@@ -101,7 +121,7 @@ final class RuntimeDependencyBootstrapper
                         if (!$install['success'] || !$this->freshPhpCanUseOpenSsl()) {
                             return [
                                 'status' => 'failed',
-                                'message' => (string)__('OpenSSL 自动安装未能为当前 Windows PHP ABI（%{1}）生成可用扩展。', [
+                                'message' => (string)__('本次显式 OpenSSL 安装未能为当前 Windows PHP ABI（%{1}）生成可用扩展。', [
                                     $this->describeCurrentPhpAbi(),
                                 ]),
                                 'restart_required' => false,
@@ -146,12 +166,12 @@ final class RuntimeDependencyBootstrapper
             if (!$opensslReady) {
                 return $this->result(
                     'failed',
-                    (string)__('HTTPS 需要当前 PHP 二进制加载 OpenSSL；当前平台没有可验证的自动安装器。')
+                    (string)__('HTTPS 需要当前 PHP 二进制加载 OpenSSL；当前平台不支持通过 --install-deps 安全安装。')
                 );
             }
             return $this->result(
                 'platform_optimal',
-                (string)__('当前平台没有安全的 ext-event 自动安装器；WLS 将使用兼容运行时。')
+                (string)__('当前平台不支持通过 --install-deps 安全安装 ext-event；WLS 将使用兼容运行时。')
             );
         }
 
@@ -159,7 +179,7 @@ final class RuntimeDependencyBootstrapper
             return ($direct || !$opensslReady)
                 ? $this->result(
                     'failed',
-                    (string)__('依赖安装后 sockets/OpenSSL/ext-event 仍不可用；已拒绝自动安装循环。')
+                    (string)__('本次显式依赖安装后 sockets/OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。')
                 )
                 : $this->result(
                     'platform_optimal',
@@ -231,14 +251,14 @@ final class RuntimeDependencyBootstrapper
                         }
                         return [
                             'status' => 'platform_optimal',
-                            'message' => (string)__('%{1} 自动安装未能为 PHP %{2} 生成可用扩展；保持显式 Dispatcher 并使用有界 stream_select。', [$dependency, PHP_BINARY]),
+                            'message' => (string)__('%{1} 本次显式安装未能为 PHP %{2} 生成可用扩展；保持显式 Dispatcher 并使用有界 stream_select。', [$dependency, PHP_BINARY]),
                             'restart_required' => false,
                             'output' => $detail,
                         ];
                     }
                     return [
                         'status' => 'failed',
-                        'message' => (string)__('%{1} 自动安装未能为 PHP %{2} 生成可用扩展。', [$dependency, PHP_BINARY]),
+                        'message' => (string)__('%{1} 本次显式安装未能为 PHP %{2} 生成可用扩展。', [$dependency, PHP_BINARY]),
                         'restart_required' => false,
                         'output' => $detail,
                     ];
@@ -269,8 +289,13 @@ final class RuntimeDependencyBootstrapper
             return 125;
         }
 
-        $command = [PHP_BINARY, $this->resolveBinWPath(), ...\array_slice($argv, 2)];
-        \array_splice($command, 2, 0, ['server:start']);
+        $command = [
+            PHP_BINARY,
+            ...$this->phpConfigurationArguments(),
+            $this->resolveBinWPath(),
+            'server:start',
+            ...\array_slice($argv, 2),
+        ];
 
         $previous = \getenv(self::REENTRY_ENV);
         \putenv(self::REENTRY_ENV . '=1');
@@ -420,6 +445,25 @@ final class RuntimeDependencyBootstrapper
     {
         $candidate = \defined('BP') ? BP . 'bin' . DS . 'w' : '';
         return $candidate !== '' && \is_file($candidate) ? $candidate : 'bin/w';
+    }
+
+    /** @return list<string> */
+    private function phpConfigurationArguments(): array
+    {
+        $arguments = [];
+        $loadedIni = \php_ini_loaded_file();
+        if (\is_string($loadedIni) && $loadedIni !== '' && \is_file($loadedIni)) {
+            $arguments[] = '-c';
+            $arguments[] = $loadedIni;
+        }
+        if (\extension_loaded('FFI')) {
+            $ffiEnable = \ini_get('ffi.enable');
+            if (\is_string($ffiEnable) && $ffiEnable !== '') {
+                $arguments[] = '-d';
+                $arguments[] = 'ffi.enable=' . $ffiEnable;
+            }
+        }
+        return $arguments;
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Control;
 
 use Weline\Server\Service\SharedStateProtocolProbe;
+use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Server\Service\SessionStateFacade;
@@ -247,7 +248,10 @@ class SharedStateAdminService
             $basePort = $role === self::ROLE_MEMORY ? 19971 : 19970;
             $port = $basePort + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
         }
-        $defaultTokenFileName = (string) ($runtime['token_file_name'] ?? ($role === self::ROLE_MEMORY ? 'memory_server.token' : 'session_server.token'));
+        $defaultTokenFileName = (string) ($runtime['token_file_name'] ?? '');
+        if ($defaultTokenFileName === '') {
+            $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
+        }
         $probeTokenFileName = null;
         $ping = false;
         $stats = [];
