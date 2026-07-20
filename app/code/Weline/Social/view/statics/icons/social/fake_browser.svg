@@ -1,0 +1,10 @@
+<svg class="weline-social-platform-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="fake_browser">
+  <rect width="48" height="48" rx="10" fill="#0f766e"/>
+  <rect x="8" y="12" width="32" height="24" rx="3" fill="#ffffff" fill-opacity=".95"/>
+  <rect x="8" y="12" width="32" height="7" rx="3" fill="#99f6e4"/>
+  <circle cx="12.5" cy="15.5" r="1.2" fill="#0f766e"/>
+  <circle cx="16.5" cy="15.5" r="1.2" fill="#0f766e"/>
+  <circle cx="20.5" cy="15.5" r="1.2" fill="#0f766e"/>
+  <rect x="12" y="24" width="18" height="2.2" rx="1" fill="#0f766e" fill-opacity=".55"/>
+  <rect x="12" y="28.5" width="12" height="2.2" rx="1" fill="#0f766e" fill-opacity=".35"/>
+</svg>
