@@ -37,8 +37,8 @@ flowchart TB
     Q --> R["runLoopWithDeferredChildStartup()"]
     R --> S["startAllChildServices()<br/>按依赖阶段批量拉起子服务"]
     S --> S1["Windows: 固定 K 路 launcher<br/>macOS/Linux: 短命 PHP/pcntl launcher"]
-    S1 --> T["REGISTER → READY gate<br/>首页 shared publish + process hit"]
-    T --> T1["waitForStartupAcceptance()<br/>等待关键角色与路由 ACK 达标"]
+    S1 --> T["REGISTER → READY gate<br/>Worker 首页 shared publish + process hit<br/>Protocol Edge active config digest"]
+    T --> T1["waitForStartupAcceptance()<br/>等待关键角色、策略与 Edge/Dispatcher 路由 ACK 达标"]
     T1 --> U["persistServicesInfo()<br/>broadcastRoutingPolicyToWorkers()"]
     U --> V["armServerReadyNotification()<br/>startup_phase -> running"]
     V --> W["释放 start lock<br/>进入常驻主循环"]
@@ -65,8 +65,8 @@ flowchart TB
     H1 --> I["IPC ACTION_STOP -> Master"]
     I --> J["MasterProcess::stopWithProgress()<br/>ServiceOrchestrator::requestStop()"]
     J --> K["主循环调度 stopAll()"]
-    K --> L["阶段1: Dispatcher DRAIN<br/>停止派发新请求"]
-    L --> M["阶段2: 等待 Dispatcher 排水完成"]
+    K --> L["阶段1: Protocol Edge / Dispatcher DRAIN<br/>停止接纳或派发新请求"]
+    L --> M["阶段2: 等待公开连接与 Dispatcher 排水完成"]
     M --> N["阶段3: releaseSharedStateConsumersForStopFlow()<br/>并发终止非共享进程"]
     N --> O["阶段4: verifyAndKillRemainingProcesses()"]
     O --> P["阶段5: closeIpcServer()<br/>Master 退出"]
@@ -150,7 +150,7 @@ flowchart TB
 - 每批 DRAIN 前按实时 Registry 再校验容量；不足时拒绝摘批。
 - 普通 reload 只有在 maintenance/standby 容量已确认时才可整池切换；显式 `server:reload -f` 是用户接受短暂停机的强制契约，Windows Dispatcher 一次并发重建全池且不再静默降级为分批，POSIX Direct 仍先完成 new-first surge 再替换 canonical Worker。
 - 每批先统一置 DRAINING 并发布一次摘批快照，批内全部 READY 后再发布一次加回快照。
-- Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC，再分批替换 canonical 槽；canonical 全部 READY 后，surge 按冻结身份租约排水和退场。
+- Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC。原生协议模式还必须先发布 READY upstream 集合并等待 WLS Native active config digest ACK，才能排水旧槽；canonical 全部 READY 后，surge 按冻结身份租约退场。
 - 普通、stream TLS 与 EventBuffer Worker 的 DRAIN 都先停止公开 accept，并完成已分派请求与待写响应。维护模式 ACK 是另一条更短的屏障：策略先立即生效，业务 Worker 至少跨过一个 transport loop，再等待 active request/Fiber 与 response output 清空；空闲 preconnect、未完成 TLS/HTTP 和 slowloris 不得阻塞 ACK。EventBuffer 已完整落入 PHP buffer 的流水线请求属于已接纳工作，按每 tick 有界预算通过同一 WorkerPolicyKernel 生成响应后再 ACK；只有不完整输入可忽略。
 - 所有 drain/exit 等待使用总 deadline；到期后报告仍在途的具体阶段，不能用无界等待或静默关闭掩盖长尾。
 
@@ -172,6 +172,9 @@ flowchart TB
   - `runLoopWithDeferredChildStartup()`
   - `requestStop()`
   - `stopAll()`
+- `app/code/Weline/Server/Service/Runtime/HttpProtocolSelection.php`
+- `app/code/Weline/Server/Service/Runtime/ProtocolEdgeRuntime.php`
+- `app/code/Weline/Server/Service/Provider/ProtocolEdgeProvider.php`
 - `app/code/Weline/Server/Console/Server/Stop.php`
   - `execute()`
   - `stopInstance()`

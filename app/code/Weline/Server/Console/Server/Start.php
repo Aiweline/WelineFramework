@@ -14,6 +14,7 @@ namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Compilation\FrameworkCompileManifest;
 use Weline\Framework\Compilation\FrameworkCompiler;
 use Weline\Framework\Container\CompiledContainer;
 use Weline\Framework\Container\ContainerRuntime;
@@ -44,6 +45,9 @@ use Weline\Server\Service\Runtime\PhpRuntimeSafetyProfile;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
+use Weline\Server\Service\Runtime\ProtocolEdgeDependencyBootstrapper;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
 use Weline\Server\Service\Runtime\TlsProcessProfileConfigurator;
@@ -170,6 +174,7 @@ class Start extends CommandAbstract
      * cannot drift from the resolver or rerun a listener capability probe.
      */
     private ?WlsRuntimeProfile $latestRuntimeProfile = null;
+    private ?string $latestRuntimeProfileListenHost = null;
 
     private string $latestRuntimeStrategy = RuntimeStrategyResolver::STRATEGY_AUTO;
 
@@ -181,6 +186,13 @@ class Start extends CommandAbstract
     private ?array $restartMaintenanceSnapshot = null;
 
     private bool $restartMaintenanceShutdownRegistered = false;
+
+    /**
+     * Required-sync is invocation state rather than part of the protected
+     * extension signature. Existing Start subclasses may still override the
+     * historical two-argument, void method without a PHP signature break.
+     */
+    private bool $wlsMaintenanceSyncRequired = false;
 
     /**
      * 旧实例停止前确认正在监听的数据面/控制面端口。
@@ -577,6 +589,60 @@ class Start extends CommandAbstract
         $dispatcherEnabled = $runtimeSelection->isDispatcher();
         $supportsReusePort = $runtimeProfile->supportsReusePort();
         $useDirectMode = $runtimeSelection->isDirect();
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolveFromWlsSection($config);
+        $explicitProtocolEdge = \in_array(
+            \strtolower(\trim((string)(($config['http']['protocol_edge'] ?? '')))),
+            ['native', 'wls', 'caddy', 'on', 'enabled', 'true', '1'],
+            true,
+        );
+        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS && !$explicitProtocolEdge) {
+            if (!\is_array($config['http'] ?? null)) {
+                $config['http'] = [];
+            }
+            $config['http']['protocol_edge'] = HttpProtocolSelection::EDGE_DISABLED;
+        }
+        try {
+            $httpProtocolSelection = HttpProtocolSelection::fromConfig($config, $sslEnabled);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error(__('WLS HTTP 协议配置无效：%{1}', [$exception->getMessage()]));
+            return 1;
+        }
+        $protocolEdgeBinary = '';
+        if ($httpProtocolSelection->isProtocolEdgeEnabled()
+            && ($edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS || $explicitProtocolEdge)
+        ) {
+            $protocolEdgeDependency = (new ProtocolEdgeDependencyBootstrapper())->ensureAvailable(
+                $args,
+                $config,
+                $httpProtocolSelection,
+            );
+            if ((string)($protocolEdgeDependency['status'] ?? 'failed') === 'failed') {
+                $this->printer->error(__('WLS HTTP/3、HTTP/2 协商依赖预检失败：%{1}', [
+                    (string)($protocolEdgeDependency['message'] ?? ''),
+                ]));
+                if (!empty($protocolEdgeDependency['output'])) {
+                    $this->printer->note((string)$protocolEdgeDependency['output']);
+                }
+                return 1;
+            }
+            $protocolEdgeBinary = (string)($protocolEdgeDependency['binary'] ?? '');
+            $this->printer->note((string)($protocolEdgeDependency['message'] ?? ''));
+        }
+        $config['http'] = \array_merge(
+            \is_array($config['http'] ?? null) ? $config['http'] : [],
+            $httpProtocolSelection->toConfig(),
+            ['protocol_edge_binary' => $protocolEdgeBinary],
+        );
+        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled()
+            && ($edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS || $explicitProtocolEdge);
+        $runtimeStrategy['http_protocol_selection'] = $httpProtocolSelection->toArray();
+        $runtimeStrategy['protocol_edge_enabled'] = $protocolEdgeEnabled;
+        $runtimeStrategy['protocol_edge_binary'] = $protocolEdgeBinary;
+        $this->printer->note(__('HTTP 自动协商：%{1}（优先 %{2}，TLS 会话复用：%{3}）', [
+            \implode(' -> ', $httpProtocolSelection->protocols),
+            $httpProtocolSelection->preferred,
+            $httpProtocolSelection->tlsSessionResumption ? __('开启') : __('关闭'),
+        ]));
         foreach ((new RuntimeDiagnosticsFormatter())->formatStartupSummary($runtimeProfile, $runtimeStrategy) as $runtimeLine) {
             if (\str_starts_with($runtimeLine, 'WARNING:') || \str_starts_with($runtimeLine, 'Warning:')) {
                 $this->printer->warning($runtimeLine);
@@ -596,6 +662,7 @@ class Start extends CommandAbstract
         $config['ssl']['key_exchange_profile'] = $tlsProcessProfile['requested'];
         $config['ssl']['effective_key_exchange_profile'] = $tlsProcessProfile['effective'];
         $config['ssl']['process_openssl_conf'] = $tlsProcessProfile['openssl_conf'];
+        $runtimeStrategy['tls_key_exchange_profile'] = $tlsProcessProfile['effective'];
         if ($sslEnabled) {
             $this->printer->note(
                 'TLS key exchange: ' . $tlsProcessProfile['effective'] . ' - ' . $tlsProcessProfile['reason']
@@ -607,7 +674,6 @@ class Start extends CommandAbstract
             'runtime_verified' => false,
             'reason' => $sslEnabled ? 'HTTP/3 requires POSIX Direct topology.' : 'HTTP/3 requires TLS.',
         ];
-        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolveFromWlsSection($config);
         $this->printer->note(__('边缘适配器：%{1}', [$edgeAdapter->name()]));
         if ($edgeAdapter->expectsPlaintextBackend() && $sslEnabled) {
             $this->printer->warning(__(
@@ -939,7 +1005,7 @@ class Start extends CommandAbstract
         // Worker 端口计算移至端口冲突检测之后，避免重复计算
         // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
-        $workerSslEnabled = $sslEnabled;
+        $workerSslEnabled = $sslEnabled && !$protocolEdgeEnabled;
         
         // ========== HTTP Redirect：固定规则：仅 HTTPS=443 时启用 80；非 443 不启独立 Worker ==========
         $httpRedirectPort = 0;
@@ -1011,8 +1077,15 @@ class Start extends CommandAbstract
             'in_use' => (bool)($mainPortInspect['in_use'] ?? false),
         ]);
 
-        $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts($port, $dispatcherEnabled);
-        $requiresWorkerPortAllocationLock = !$useDirectMode && $count > 1;
+        $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts(
+            $port,
+            $dispatcherEnabled || $protocolEdgeEnabled,
+        );
+        if ($protocolEdgeEnabled) {
+            $reservedWorkerPorts[] = ProtocolEdgeRuntime::adminPortForInstance($instanceName, $port);
+            $reservedWorkerPorts = \array_values(\array_unique($reservedWorkerPorts));
+        }
+        $requiresWorkerPortAllocationLock = $protocolEdgeEnabled || (!$useDirectMode && $count > 1);
         $workerPortAllocationLocked = false;
         if ($requiresWorkerPortAllocationLock) {
             $this->traceStartupPhase($instanceName, 'worker-port-lock:before', [
@@ -1034,7 +1107,13 @@ class Start extends CommandAbstract
                 'dispatcher' => $dispatcherEnabled,
                 'direct' => $useDirectMode,
             ]);
-            $workerPort = $this->resolveInitialWorkerPort($port, $workerBasePort, $count, $dispatcherEnabled, $useDirectMode);
+            $workerPort = $this->resolveInitialWorkerPort(
+                $port,
+                $workerBasePort,
+                $count,
+                $dispatcherEnabled || $protocolEdgeEnabled,
+                $useDirectMode && !$protocolEdgeEnabled,
+            );
 
             if ($forceRestart && !$forceSwitch && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
                 $this->reportRestartHandoffTimeout($instanceName);
@@ -1053,7 +1132,9 @@ class Start extends CommandAbstract
                 $count,
                 500,
                 $instanceName,
-                $reservedWorkerPorts
+                $reservedWorkerPorts,
+                $protocolEdgeEnabled,
+                $dispatcherEnabled,
             );
             if ($nextWorkerPort !== $workerPort) {
                 $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}', [
@@ -1188,7 +1269,29 @@ class Start extends CommandAbstract
             'dispatcher' => $dispatcherEnabled,
             'skipped' => $skipPostStopPortInspection,
         ]);
-        if (!$skipPostStopPortInspection && $dispatcherEnabled) {
+        if (!$skipPostStopPortInspection && $protocolEdgeEnabled) {
+            if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'HTTP Protocol Edge', $instanceName)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                    $this->disableMaintenanceMode($instanceName);
+                }
+                return;
+            }
+            if (!$this->checkAndReleasePorts('127.0.0.1', $workerPort, $count, $forceRestart, $instanceName)) {
+                if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                    $this->disableMaintenanceMode($instanceName);
+                }
+                return;
+            }
+            if ($dispatcherEnabled) {
+                $edgeDispatcherPort = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
+                if (!$this->checkAndReleasePort('127.0.0.1', $edgeDispatcherPort, $forceRestart, 'Internal Dispatcher', $instanceName)) {
+                    if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
+                        $this->disableMaintenanceMode($instanceName);
+                    }
+                    return;
+                }
+            }
+        } elseif (!$skipPostStopPortInspection && $dispatcherEnabled) {
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
             if (!$this->checkAndReleasePort($host, $port, $restartCleanupPerformed, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
@@ -1927,7 +2030,33 @@ class Start extends CommandAbstract
         }
 
         $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
-        $workerScript = $this->ensureWorkerScript($sslEnabled);
+        try {
+            $httpProtocolSelection = \is_array($data['http_protocol_selection'] ?? null)
+                ? HttpProtocolSelection::fromArray($data['http_protocol_selection'])
+                : HttpProtocolSelection::fromConfig([
+                    'http' => [
+                        'protocols' => [HttpProtocolSelection::HTTP_1],
+                        'preferred' => HttpProtocolSelection::HTTP_1,
+                        'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                    ],
+                ], $sslEnabled);
+        } catch (\RuntimeException $exception) {
+            throw new \RuntimeException(
+                'Master-only startup rejected invalid HTTP protocol selection: ' . $exception->getMessage(),
+                0,
+                $exception
+            );
+        }
+        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled();
+        $protocolEdgeBinary = \trim((string)($data['protocol_edge_binary'] ?? ''));
+        if ($protocolEdgeEnabled
+            && !ProtocolEdgeRuntime::isRunnableBinary($protocolEdgeBinary)
+        ) {
+            throw new \RuntimeException(
+                'Master-only startup rejected: protocol edge binary is not runnable.'
+            );
+        }
+        $workerScript = $this->ensureWorkerScript($sslEnabled && !$protocolEdgeEnabled);
         $port = (int)($data['port'] ?? 443);
         $workerPort = (int)($data['worker_port'] ?? $port);
         $workerBasePort = (int)($data['worker_base_port'] ?? (10000 + MasterProcess::getProjectPortOffset()));
@@ -1949,6 +2078,9 @@ class Start extends CommandAbstract
             ],
             'loop' => ['driver' => $persistedRuntimeSelection->eventLoopDriver],
             'ssl' => ['engine' => $persistedRuntimeSelection->sslEngine],
+            'http' => \array_merge($httpProtocolSelection->toConfig(), [
+                'protocol_edge_binary' => $protocolEdgeBinary,
+            ]),
             'http3' => \is_array($data['http3'] ?? null) ? $data['http3'] : [],
             'supervisor' => ['enabled' => (bool)$data['supervisor_enabled']],
             'worker_port' => $workerPort,
@@ -2339,6 +2471,7 @@ class Start extends CommandAbstract
     ): array {
         $argv = [
             $phpBinary,
+            ...\Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
             $script,
             'server:start',
             $instanceName,
@@ -2985,24 +3118,18 @@ class Start extends CommandAbstract
         string $lastProgress,
         int $waitStepMs
     ): array {
-        $maxDrainMs = 1200;
-        $quietMs = 0;
-        $drainedMs = 0;
-        $waitStepMs = \max(50, \min(250, $waitStepMs));
+        unset($waitStepMs);
 
-        while ($drainedMs < $maxDrainMs && $quietMs < 400) {
-            SchedulerSystem::usleep($waitStepMs * 1000);
-            $drainedMs += $waitStepMs;
-            $beforeSeq = $lastSeq;
-            [$lastSeq, $lastProgress] = $this->emitBackgroundStartupEvents(
-                $this->readBackgroundStartupData($instanceFile),
-                $lastSeq,
-                $lastProgress
-            );
-            $quietMs = $lastSeq > $beforeSeq ? 0 : $quietMs + $waitStepMs;
-        }
-
-        return [$lastSeq, $lastProgress];
+        // `startup_phase=running` is written only after every required child
+        // has reached READY and its startup event has been persisted. A fixed
+        // post-READY quiet window delayed a successful CLI start by at least
+        // 400ms without adding correctness. Re-read once to cover the atomic
+        // file replacement boundary, then return immediately.
+        return $this->emitBackgroundStartupEvents(
+            $this->readBackgroundStartupData($instanceFile),
+            $lastSeq,
+            $lastProgress
+        );
     }
     
     /**
@@ -3026,18 +3153,14 @@ class Start extends CommandAbstract
         $iniFile = \php_ini_loaded_file() ?: __('(未找到，请 php --ini 查看)');
         echo "\n";
         $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
-        $this->printer->warning(__('║  【Windows + HTTPS】当前未安装 PHP event 扩展。                              ║'));
-        $this->printer->warning(__('║  在此环境下运行 HTTPS 会出现 SSL 握手阻塞（每次新连接可能卡住约 60 秒）。  ║'));
-        $this->printer->warning(__('║  强烈建议安装 event 后再使用 HTTPS。                                        ║'));
+        $this->printer->warning(__('║  【Windows Worker】当前未安装可信且 ABI 匹配的 PHP event 扩展。             ║'));
+        $this->printer->warning(__('║  Worker 将使用稳定的 stream/select 事件循环；不会关闭任何安全策略。         ║'));
+        $this->printer->warning(__('║  当前默认协议为 HTTP/1.1；TLS 1.2/1.3 由 Worker 的 OpenSSL 实现。          ║'));
         $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
-        $this->printer->warning(__('║  下载 event：https://windows.php.net/downloads/pecl/releases/event/           ║'));
-        $this->printer->warning(__('║  选 3.0.x，按 PHP 版本/ts|nts/x64|x86 选 zip，php_event.dll 放入 ext 目录，  ║'));
-        $this->printer->warning(__('║  在 php.ini 添加 extension=event。                                           ║'));
+        $this->printer->warning(__('║  WLS 只会自动安装 PHP版本、架构、TS/NTS 与依赖均可验证的 event DLL。       ║'));
+        $this->printer->warning(__('║  不会为了显示“已安装”而加载来源不明或 ABI 不匹配的 DLL。                    ║'));
         $this->printer->warning(__('║  ext 目录：%{1}                                                                ║', [$extPath]));
         $this->printer->warning(__('║  php.ini：%{1}                                                                 ║', [$iniFile]));
-        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
-        $this->printer->warning(__('║  当前已允许继续启动 HTTPS；若无法接受握手阻塞，请安装 event 或使用         ║'));
-        $this->printer->warning(__('║  --no-ssl / wls.https=false 仅跑 HTTP。                               ║'));
         $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
     }
     
@@ -3387,7 +3510,7 @@ class Start extends CommandAbstract
     protected function enableMaintenanceMode(string $instanceName): void
     {
         $this->setFrameworkMaintenanceMode(true);
-        $this->syncWlsMaintenanceMode($instanceName, true, true);
+        $this->invokeWlsMaintenanceModeSync($instanceName, true, true);
     }
 
     protected function beginRestartMaintenanceTransaction(string $instanceName): void
@@ -3427,7 +3550,7 @@ class Start extends CommandAbstract
             return;
         }
 
-        $this->syncWlsMaintenanceMode(
+        $this->invokeWlsMaintenanceModeSync(
             $snapshot['instance_name'],
             $snapshot['enabled'],
             $requireRuntimeSync
@@ -3449,7 +3572,7 @@ class Start extends CommandAbstract
         }
 
         $this->setFrameworkMaintenanceMode(false);
-        $this->syncWlsMaintenanceMode($instanceName, false, $requireRuntimeSync);
+        $this->invokeWlsMaintenanceModeSync($instanceName, false, $requireRuntimeSync);
     }
 
     protected function setFrameworkMaintenanceMode(bool $enabled): void
@@ -3457,12 +3580,24 @@ class Start extends CommandAbstract
         Env::getInstance()->setConfig('system.maintenance', $enabled);
     }
 
-    protected function syncWlsMaintenanceMode(
+    private function invokeWlsMaintenanceModeSync(
         ?string $instanceName,
         bool $enabled,
-        bool $required = false
-    ): bool
+        bool $required
+    ): void
     {
+        $previous = $this->wlsMaintenanceSyncRequired;
+        $this->wlsMaintenanceSyncRequired = $previous || $required;
+        try {
+            $this->syncWlsMaintenanceMode($instanceName, $enabled);
+        } finally {
+            $this->wlsMaintenanceSyncRequired = $previous;
+        }
+    }
+
+    protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
+    {
+        $required = $this->wlsMaintenanceSyncRequired;
         $startedAtNs = \hrtime(true);
         try {
             /** @var IpcControlGateway $gateway */
@@ -3491,7 +3626,7 @@ class Start extends CommandAbstract
                 if ($required) {
                     throw new \RuntimeException('no controllable WLS instance accepted the maintenance command');
                 }
-                return false;
+                return;
             }
 
             if (empty($result['success'])) {
@@ -3587,7 +3722,6 @@ class Start extends CommandAbstract
             $this->printer->note(__('WLS 维护模式已确认落地：%{1}', [
                 ($enabled ? 'enabled' : 'disabled') . ', instances=' . \count($attempted),
             ]));
-            return true;
         } catch (\Throwable $throwable) {
             $message = (string)__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]);
             if ($required) {
@@ -3595,7 +3729,6 @@ class Start extends CommandAbstract
                 throw new \RuntimeException($message, 0, $throwable);
             }
             $this->printer->warning($message);
-            return false;
         }
     }
     
@@ -3642,6 +3775,14 @@ class Start extends CommandAbstract
             'runtime' => ['strategy' => 'auto', 'topology' => 'auto'],
             'event_loop' => 'auto',
             'loop' => ['driver' => 'auto'],
+            'http' => [
+                'protocols' => [HttpProtocolSelection::HTTP_1],
+                'preferred' => HttpProtocolSelection::HTTP_1,
+                'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                'protocol_edge_binary' => '',
+                'tls_session_resumption' => true,
+                'alt_svc' => false,
+            ],
             'supervisor' => ['enabled' => 'auto'],
             'source' => __('默认值'),
         ];
@@ -5198,6 +5339,12 @@ class Start extends CommandAbstract
 
     protected function detectRuntimeProfile(?string $listenHost = null): WlsRuntimeProfile
     {
+        $profileKey = \strtolower(\trim((string)$listenHost));
+        if ($this->latestRuntimeProfile !== null && $this->latestRuntimeProfileListenHost === $profileKey) {
+            return $this->latestRuntimeProfile;
+        }
+
+        $this->latestRuntimeProfileListenHost = $profileKey;
         return $this->latestRuntimeProfile = (new RuntimeCapabilityDetector())->detect($listenHost);
     }
     
@@ -5317,6 +5464,12 @@ class Start extends CommandAbstract
         $cpuCores = $this->getCpuCoreCount();
         $protocol = $sslEnabled ? 'https' : 'http';
         $workerPort = $workerPort ?: $port;
+        $endpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
+        $endpoint = \is_array($endpoint) ? $endpoint : [];
+        $protocolEdgeEnabled = (bool)($endpoint['protocol_edge_enabled'] ?? false);
+        $httpProtocols = \is_array($endpoint['http_protocols'] ?? null)
+            ? \array_values(\array_filter(\array_map('strval', $endpoint['http_protocols'])))
+            : [];
         
         $this->printer->note('╔══════════════════════════════════════════════════════════════╗');
         $this->printer->note('║                   服务器启动配置                               ║');
@@ -5325,7 +5478,24 @@ class Start extends CommandAbstract
         $this->printer->note(\sprintf('║  监听地址：%-50s║', "{$protocol}://{$host}:{$port}"));
         $this->printer->note(\sprintf('║  Worker 数：%-49s║', "{$count} (CPU: {$cpuCores} 核)"));
         
-        if ($dispatcherEnabled) {
+        if ($protocolEdgeEnabled) {
+            $protocolLabel = $httpProtocols !== []
+                ? \strtoupper(\implode('/', $httpProtocols))
+                : 'H3/H2/H1';
+            $transportLabel = \in_array(HttpProtocolSelection::HTTP_3, $httpProtocols, true)
+                ? 'TCP + UDP/QUIC'
+                : 'TCP';
+            $this->printer->note(\sprintf('║  HTTP 协商：%-49s║', $protocolLabel . ' (' . $transportLabel . ')'));
+            if ($dispatcherEnabled) {
+                $dispatcherPort = (int)($endpoint['dispatcher_port'] ?? 0);
+                $dispatcherLabel = $dispatcherPort > 0
+                    ? 'Dispatcher ' . $dispatcherPort . ' → Worker '
+                    : 'Dispatcher → Worker ';
+                $this->printer->note(\sprintf('║  内部拓扑：%-49s║', $dispatcherLabel . $workerPort . ' - ' . ($workerPort + $count - 1)));
+            } else {
+                $this->printer->note(\sprintf('║  Worker 端口：%-47s║', $workerPort . ' - ' . ($workerPort + $count - 1) . ' (loopback)'));
+            }
+        } elseif ($dispatcherEnabled) {
             $this->printer->note(\sprintf('║  流量分发：%-50s║', __('Dispatcher 模式（TCP 透传）')));
             $dispatcherProtocol = $sslEnabled ? 'TCP→SSL' : 'TCP';
             $this->printer->note(\sprintf('║  Dispatcher：%-48s║', "端口 {$port} ({$dispatcherProtocol})"));
@@ -6489,7 +6659,9 @@ class Start extends CommandAbstract
         int $count,
         int $maxScan = 500,
         ?string $ignoreInstanceName = null,
-        array $extraReservedPorts = []
+        array $extraReservedPorts = [],
+        bool $protocolEdgeEnabled = false,
+        bool $protocolEdgeDispatcherEnabled = false,
     ): int
     {
         $reservedPorts = $this->getReservedWorkerPortsFromOtherInstances($ignoreInstanceName);
@@ -6504,7 +6676,12 @@ class Start extends CommandAbstract
         $base = \max($startPort, 1);
         for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
             $hasConflict = false;
-            foreach ($this->buildWorkerAllocationCandidatePorts($base, $count) as $port) {
+            foreach ($this->buildWorkerAllocationCandidatePorts(
+                $base,
+                $count,
+                $protocolEdgeEnabled,
+                $protocolEdgeDispatcherEnabled,
+            ) as $port) {
                 if ($this->isWorkerPortAllocated($port) || isset($reservedPortLookup[$port])) {
                     $hasConflict = true;
                     break;
@@ -6520,7 +6697,12 @@ class Start extends CommandAbstract
     /**
      * @return list<int>
      */
-    protected function buildWorkerAllocationCandidatePorts(int $workerPort, int $count): array
+    protected function buildWorkerAllocationCandidatePorts(
+        int $workerPort,
+        int $count,
+        bool $protocolEdgeEnabled = false,
+        bool $protocolEdgeDispatcherEnabled = false,
+    ): array
     {
         if ($workerPort <= 0) {
             return [];
@@ -6537,7 +6719,20 @@ class Start extends CommandAbstract
             $ports[] = $maintenancePort + $i;
         }
 
-        return \array_values(\array_unique($ports));
+        if ($protocolEdgeEnabled) {
+            $ports = \array_merge(
+                $ports,
+                ProtocolEdgeRuntime::directReloadSurgePortsFromWorkerRange($workerPort, $count),
+            );
+            if ($protocolEdgeDispatcherEnabled) {
+                $ports[] = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
+            }
+        }
+
+        return \array_values(\array_filter(
+            \array_unique($ports),
+            static fn (int $port): bool => $port > 0 && $port <= 65535,
+        ));
     }
 
     protected function resolveInitialWorkerPort(
@@ -8178,6 +8373,9 @@ PHP;
                 __('默认拓扑') => __('Linux 在 SO_REUSEPORT 真实分流探测通过后 direct；macOS 在共享 FD 真实 accept 分布探测通过后 direct；Windows 固定 Dispatcher'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
+                __('HTTP 协议') => __('当前默认 HTTP/1.1；HTTP/2/3 在 WLS 原生 Transport Adapter 完成前保持关闭，状态由 server:status/doctor 展示'),
+                __('连接复用') => __('HTTP/1.1 keep-alive 默认启用；TLS 会话能力由当前 PHP/OpenSSL 运行时验证'),
+                __('协议扩展') => __('仓库内 Go 协议边缘已移除；Caddy 仅保留为用户显式选择的兼容模式，不是默认依赖'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
                 __('SSL 协议') => __('仅支持 TLS 1.2/1.3；空值或无效 wls.ssl.protocols 会在启动前被拒绝'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
