@@ -81,13 +81,13 @@ $instanceName = $argv[4] ?? 'default';
 // 解析命令行参数
 $processName = '';
 $isFrontend = false;
-$useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
-$listenFd = 0;          // macOS direct: Master 预绑定的共享监听 FD
+$wlsListenerMode = '';
+$listenFd = 0;          // POSIX direct: Master 预绑定的共享监听 FD
 $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $workerCount = 1;
-$wlsRuntimeTopology = 'auto';
+$wlsRuntimeTopology = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
@@ -95,10 +95,10 @@ $publicOrigin = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
-    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend') {
         $isFrontend = true;
-    } elseif ($arg === '--reuseport' || $arg === '-reuseport') {
-        $useReusePort = true;
+    } elseif (\str_starts_with($arg, '--wls-listener-mode=')) {
+        $wlsListenerMode = \strtolower(\trim((string)\substr($arg, 20)));
     } elseif (\str_starts_with($arg, '--listen-fd=')) {
         $listenFd = (int)\substr($arg, 12);
     } elseif (\str_starts_with($arg, '--control-port=')) {
@@ -129,12 +129,28 @@ foreach ($argv as $arg) {
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
 
-if ($listenFd > 0 && $useReusePort) {
-    \fwrite(\STDERR, "--listen-fd and --reuseport are mutually exclusive.\n");
+if (!\in_array($wlsRuntimeTopology, ['direct', 'dispatcher'], true)) {
+    \fwrite(\STDERR, "--wls-runtime-topology must be direct or dispatcher.\n");
     exit(1);
 }
-if ($listenFd > 0 && ($listenFd < 3 || $wlsRuntimeTopology !== 'direct' || \PHP_OS_FAMILY === 'Windows')) {
-    \fwrite(\STDERR, "--listen-fd requires POSIX direct topology and an inherited descriptor >= 3.\n");
+if (!\in_array($wlsListenerMode, ['single', 'reuseport', 'shared_fd'], true)) {
+    \fwrite(\STDERR, "--wls-listener-mode must be single, reuseport, or shared_fd.\n");
+    exit(1);
+}
+if (($wlsRuntimeTopology === 'dispatcher' && $wlsListenerMode !== 'single')
+    || ($wlsRuntimeTopology === 'direct' && $wlsListenerMode === 'single')
+) {
+    \fwrite(\STDERR, "Listener mode does not match the selected WLS topology.\n");
+    exit(1);
+}
+$useReusePort = $wlsListenerMode === 'reuseport';
+if ($wlsListenerMode === 'shared_fd') {
+    if ($listenFd < 3 || $wlsRuntimeTopology !== 'direct' || \PHP_OS_FAMILY === 'Windows') {
+        \fwrite(\STDERR, "shared_fd requires POSIX direct topology and an inherited descriptor >= 3.\n");
+        exit(1);
+    }
+} elseif ($listenFd !== 0) {
+    \fwrite(\STDERR, "--listen-fd is only valid with --wls-listener-mode=shared_fd.\n");
     exit(1);
 }
 
@@ -146,6 +162,7 @@ if (!\defined('BP')) {
 if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
+require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 
 // Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
@@ -169,6 +186,11 @@ $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $orchestratorEpoch
 );
 $childMasterGuard->assertAliveOrExit('启动前 Master 自治检查');
+\Weline\Server\Service\Runtime\WorkerProcessLease::register(
+    $processName,
+    $orchestratorLaunchId,
+    $orchestratorEpoch
+);
 
 // IPC control port. Prefer the explicit Master-provided argument; the endpoint
 // file is only a bootstrap pointer when the argument is absent.
@@ -328,21 +350,7 @@ WlsLogger::getInstance()
     ->setProcessTag($processTag);
 // ========== 日志系统结束 ==========
 
-// 注册 PID 到 Processer（启用快速 PID 查找）
-if ($processName) {
-    $managedProcessIdentity = '--name=' . $processName;
-    if ($orchestratorLaunchId !== '') {
-        $managedProcessIdentity .= ' --launch-id=' . $orchestratorLaunchId;
-    }
-    if ($orchestratorEpoch > 0) {
-        $managedProcessIdentity .= ' --epoch=' . $orchestratorEpoch;
-    }
-    \Weline\Framework\System\Process\Processer::setPid($managedProcessIdentity, \getmypid());
-    // 注册监听端口（启用快速端口→PID 查找）
-    if ($port > 0) {
-        \Weline\Framework\System\Process\Processer::setProcessPorts($managedProcessIdentity, [$port]);
-    }
-}
+// 子进程只发布脱敏的 generation lease；Master/IPC 仍是槽位、READY 与监听能力权威。
 
 // 初始化路由提示服务（用于 TCP 透传模式下的智能路由）
 $kernel = null;
@@ -429,39 +437,33 @@ try {
     // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
     // 不再在这里同步等待 SharedStateServiceManager::ensureRuntime()
 
-    // 从 env.php 读取共享服务地址，连接池在请求 Fiber 内按需建立
-    $projectOffset = \Weline\Server\Service\MasterProcess::getProjectPortOffset();
-    $wls = $_wlsEnvConfig['wls'] ?? [];
-
-    // Session 配置
-    $sessionConfig = \is_array($wls['session'] ?? null) ? $wls['session'] : [];
-    $wlsServer = \is_array($sessionConfig['wls_server'] ?? null) ? $sessionConfig['wls_server'] : [];
-    $sessionHost = \trim((string) ($wlsServer['host'] ?? $sessionConfig['host'] ?? '127.0.0.1'));
+    // Use only the Master/runtime-provided shared service addresses.
+    $sessionHost = \trim((string) ($sessionRuntime['host'] ?? '127.0.0.1'));
     if ($sessionHost === '') {
         $sessionHost = '127.0.0.1';
     }
-    $sessionPort = (int) ($wlsServer['port'] ?? $sessionConfig['port'] ?? (19970 + $projectOffset));
+    $sessionPort = (int) ($sessionRuntime['port'] ?? 0);
     if ($sessionPort <= 0) {
-        $sessionPort = 19970 + $projectOffset;
+        $sessionPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
     }
-    $sessionTokenFileName = \trim((string) ($wlsServer['token_file_name'] ?? $sessionConfig['token_file_name'] ?? 'session_server.token'));
+    $defaultSessionTokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $sessionPort);
+    $sessionTokenFileName = \trim((string) ($sessionRuntime['token_file_name'] ?? $defaultSessionTokenFileName));
     if ($sessionTokenFileName === '') {
-        $sessionTokenFileName = 'session_server.token';
+        $sessionTokenFileName = $defaultSessionTokenFileName;
     }
 
-    // Memory 配置
-    $memoryService = \is_array($wls['memory_service'] ?? null) ? $wls['memory_service'] : [];
-    $memoryHost = \trim((string) ($memoryService['host'] ?? '127.0.0.1'));
+    $memoryHost = \trim((string) ($memoryRuntime['host'] ?? '127.0.0.1'));
     if ($memoryHost === '') {
         $memoryHost = '127.0.0.1';
     }
-    $memoryPort = (int) ($memoryService['port'] ?? (19971 + $projectOffset));
+    $memoryPort = (int) ($memoryRuntime['port'] ?? 0);
     if ($memoryPort <= 0) {
-        $memoryPort = 19971 + $projectOffset;
+        $memoryPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
     }
-    $memoryTokenFileName = \trim((string) ($memoryService['token_file_name'] ?? 'memory_server.token'));
+    $defaultMemoryTokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $memoryPort);
+    $memoryTokenFileName = \trim((string) ($memoryRuntime['token_file_name'] ?? $defaultMemoryTokenFileName));
     if ($memoryTokenFileName === '') {
-        $memoryTokenFileName = 'memory_server.token';
+        $memoryTokenFileName = $defaultMemoryTokenFileName;
     }
 
     WlsLogger::info_("[Session] Session service address configured {$sessionHost}:{$sessionPort}");
@@ -687,7 +689,7 @@ $supportsReusePort = $useReusePort && (
 );
 
 // Master 只有在最终 RuntimeSelection=direct/reuseport 且真实 probe 通过后才会
-// 下发 --reuseport。Worker 不再二次猜测 Linux 内核版本；以实际 set/bind/listen
+// 下发 --wls-listener-mode=reuseport。Worker 不再二次猜测内核能力；以实际 set/bind/listen
 // 与 READY 作为最终门禁。
 if ($useReusePort && !$supportsReusePort) {
     WlsLogger::error_("RuntimeSelection 要求 SO_REUSEPORT，但当前 Worker 缺少 sockets/SO_REUSEPORT 原语");
@@ -964,7 +966,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     }
 
     WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup start worker={$workerId}");
-    $poolWarmup = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools(
+    $poolWarmup = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmReadyMemory(
         $workerId,
         $instanceName,
         [
@@ -983,7 +985,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     $poolWarmupErrors = \is_array($poolWarmup['errors'] ?? null) ? $poolWarmup['errors'] : [];
     if ($poolWarmupErrors !== []) {
         throw new \RuntimeException(
-            'READY gate shared runtime connection warmup failed: '
+            'READY gate memory connection warmup failed: '
             . (\json_encode($poolWarmupErrors, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}')
         );
     }
@@ -1354,6 +1356,8 @@ $connectionPeerIps = [];
 $writeBuffers = [];
 /** @var array<int, resource> */
 $writableConnections = [];
+/** @var array<int, array{connection: resource, started_at: float, retry_at: float, attempts: int}> */
+$writeZeroProgress = [];
 /** @var array<int, true> 缓冲区排空后关闭 */
 $pendingClose = [];
 $requestCount = 0;
@@ -1664,8 +1668,10 @@ $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足�
 
 // 进入事件循环后向 Master 上报一次（IPC 重连后会再次上报）
 $workerLoopStartedSent = false;
-$sharedRuntimeConnectionWarmupStarted = $readyGateSharedRuntimeConnectionWarmupCompleted;
-$sharedRuntimeConnectionWarmupNotBefore = \microtime(true);
+$sharedRuntimeConnectionWarmupStarted = false;
+$sharedRuntimeConnectionWarmupNotBefore = \microtime(true)
+    + 0.10
+    + ((($workerId * 53) % 700) / 1000);
 $deferredWorkerBootstrapWarmupStarted = false;
 $deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
 $homepageKeepWarmFiber = null;
@@ -1963,11 +1969,12 @@ while (true) {
                     if (isset($connections[$cid]) && \is_resource($connections[$cid])) {
                         @\fclose($connections[$cid]);
                     }
-                    if (isset($activeFibers[$cid])) {
-                        $fiberScheduler->cancelTimersForFiber($activeFibers[$cid]['fiber']);
-                        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$cid]['fiber']);
-                        $fiberScheduler->unregisterFiber();
-                    }
+                    wlsCancelActiveFiberForHttpConnection(
+                        $activeFibers,
+                        $cid,
+                        $fiberScheduler,
+                        $activeRequests
+                    );
                     unset(
                         $connections[$cid],
                         $requestBuffers[$cid],
@@ -2004,34 +2011,57 @@ while (true) {
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
             
-            // 2. 排水超时 → 强制关闭所有剩余连接
+            // 2. 软排水期限：只允许清理空闲连接。响应 Fiber/写缓冲仍在推进时
+            // 必须继续事件循环，禁止丢弃响应后伪报 draining_complete。
             if ($drainElapsed >= $maxDrainTime) {
-                $remaining = \count($connections);
-                WlsLogger::warning_("排水超时（{$drainElapsed}秒 >= {$maxDrainTime}秒），强制关闭剩余 {$remaining} 个连接");
-                foreach ($connections as $cid => $cconn) {
-                    @\fclose($cconn);
+                $hasPendingApplicationWork = $activeRequests > 0 || $activeFibers !== [];
+                if (!$hasPendingApplicationWork) {
+                    foreach ($writeBuffers as $drainWriteBuffer) {
+                        if (\is_string($drainWriteBuffer) && $drainWriteBuffer !== '') {
+                            $hasPendingApplicationWork = true;
+                            break;
+                        }
+                    }
                 }
-                $connections = [];
-                $requestBuffers = [];
-                $connectionLastActivity = [];
-                $requestLogged = [];
-                $writeBuffers = [];
-                $writableConnections = [];
-                $pendingClose = [];
-                $longLivedConnections = [];
-                $activeFibers = [];
-                
-                if ($plannedExitReason === '') {
-                    $plannedExitReason = $ipcReceivedShutdown
-                        ? "shutdown_command_timeout:worker={$workerId},remaining={$remaining}"
-                        : "drain_or_reload_timeout:worker={$workerId},remaining={$remaining}";
+                if ($hasPendingApplicationWork) {
+                    static $lastDrainExtensionLogAt = 0.0;
+                    $drainNow = \microtime(true);
+                    if (($drainNow - $lastDrainExtensionLogAt) >= 1.0) {
+                        WlsLogger::warning_(
+                            "排水软期限已到，等待活跃响应安全写完（active={$activeRequests}, fibers="
+                            . \count($activeFibers) . ', write_buffers=' . \count($writeBuffers) . ')'
+                        );
+                        $lastDrainExtensionLogAt = $drainNow;
+                    }
+                } else {
+                    $remaining = \count($connections);
+                    WlsLogger::info_("排水软期限已到，关闭剩余 {$remaining} 个空闲连接");
+                    foreach ($connections as $cid => $cconn) {
+                        @\fclose($cconn);
+                    }
+                    $connections = [];
+                    $requestBuffers = [];
+                    $connectionLastActivity = [];
+                    $requestLogged = [];
+                    $writeBuffers = [];
+                    $writableConnections = [];
+                    $writeZeroProgress = [];
+                    $pendingClose = [];
+                    $longLivedConnections = [];
+                    $activeFibers = [];
+
+                    if ($plannedExitReason === '') {
+                        $plannedExitReason = $ipcReceivedShutdown
+                            ? "shutdown_command_idle_cleanup:worker={$workerId},remaining={$remaining}"
+                            : "drain_or_reload_idle_cleanup:worker={$workerId},remaining={$remaining}";
+                    }
+                    $sendExitReasonToMaster($plannedExitReason);
+                    if ($ipcClient && $ipcClient->isConnected()) {
+                        $ipcClient->sendDrainingComplete($workerId, $port, '', $plannedExitReason);
+                        $ipcClient->flushPendingWrites(0.2);
+                    }
+                    $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（空闲连接清理）');
                 }
-                $sendExitReasonToMaster($plannedExitReason);
-                if ($ipcClient && $ipcClient->isConnected()) {
-                    $ipcClient->sendDrainingComplete($workerId, $port, '', $plannedExitReason);
-                    $ipcClient->flushPendingWrites(0.2);
-                }
-                $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（超时强制退出）');
             }
         } elseif (empty($connections)) {
             // 非排水模式退出（如 shutdown 命令）
@@ -2059,12 +2089,12 @@ while (true) {
                 if (isset($longLivedConnections[$connId])) {
                     unset($longLivedConnections[$connId]);
                 }
-                if (isset($activeFibers[$connId])) {
-                    $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
-                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
-                    $fiberScheduler->unregisterFiber();
-                    unset($activeFibers[$connId]);
-                }
+                wlsCancelActiveFiberForHttpConnection(
+                    $activeFibers,
+                    $connId,
+                    $fiberScheduler,
+                    $activeRequests
+                );
             }
         }
     }
@@ -2191,9 +2221,28 @@ while (true) {
     
     $read = $readSockets;
     $write = [];
-    foreach ($writableConnections as $wc) {
+    foreach ($writeZeroProgress as $connId => $state) {
+        if (!isset($writableConnections[$connId])
+            || ($state['connection'] ?? null) !== $writableConnections[$connId]
+        ) {
+            unset($writeZeroProgress[$connId]);
+        }
+    }
+    $queuedWriteNow = \microtime(true);
+    $queuedWriteRetryUsec = null;
+    foreach ($writableConnections as $connId => $wc) {
         if (\is_resource($wc)) {
+            $retryAt = (float) ($writeZeroProgress[$connId]['retry_at'] ?? 0.0);
+            if ($retryAt > $queuedWriteNow) {
+                $retryUsec = (int) \ceil(($retryAt - $queuedWriteNow) * 1_000_000);
+                $queuedWriteRetryUsec = $queuedWriteRetryUsec === null
+                    ? $retryUsec
+                    : \min($queuedWriteRetryUsec, $retryUsec);
+                continue;
+            }
             $write[] = $wc;
+        } else {
+            unset($writableConnections[$connId], $writeBuffers[$connId], $writeZeroProgress[$connId]);
         }
     }
     if ($ipcSocket && $ipcClient && $ipcClient->hasPendingWrites()) {
@@ -2203,6 +2252,9 @@ while (true) {
 
     // EventLoop + CoroutineRuntime：统一等待语义（select/event 后端可切换）
     $loopWaitUsec = ($readableClientCount > 0 || $write !== []) ? 1000 : 100000;
+    if ($queuedWriteRetryUsec !== null) {
+        $loopWaitUsec = \min($loopWaitUsec, \max(1000, $queuedWriteRetryUsec));
+    }
     $changed = $coroutineRuntime->wait($read, $write, $except, $loopWaitUsec);
     // #endregion
 
@@ -2265,6 +2317,7 @@ while (true) {
         $activeRequests,
         $writableConnections,
         $writeBuffers,
+        $writeZeroProgress,
         $connections,
         $requestBuffers,
         $connectionLastActivity,
@@ -2797,11 +2850,13 @@ function wlsAcceptHttpConnections(
  *
  * @param array<int, resource> $writableConnections
  * @param array<int, string> $writeBuffers
+ * @param array<int, array{connection: resource, started_at: float, retry_at: float, attempts: int}> $writeZeroProgress
  */
 function wlsHttpFlushQueuedWrites(
     int $activeRequests,
     array &$writableConnections,
     array &$writeBuffers,
+    array &$writeZeroProgress,
     array &$connections,
     array &$requestBuffers,
     array &$connectionLastActivity,
@@ -2810,15 +2865,32 @@ function wlsHttpFlushQueuedWrites(
     array &$longLivedConnections
 ): void {
     $maxBytesPerConnectionPerLoop = 131072;
+    $zeroProgressTimeoutSeconds = 5.0;
+    $maxZeroProgressBackoffUsec = 50_000;
     // stream/socket 本身已是非阻塞，一次提交 64KB 可避免中等响应在 PHP 层
     // 反复 substr/复制剩余缓冲；每连接每轮仍受 128KB 总预算限制。
     $maxChunkPerWrite = 65536;
     foreach ($writableConnections as $connId => $conn) {
         if (!isset($writeBuffers[$connId]) || $writeBuffers[$connId] === '') {
+            unset($writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId]);
+            if (isset($pendingClose[$connId])) {
+                @\fclose($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $pendingClose[$connId]);
+                unset($longLivedConnections[$connId]);
+            }
+            wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
             continue;
         }
         if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
-            unset($writeBuffers[$connId], $writableConnections[$connId]);
+            unset($writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId]);
+            continue;
+        }
+        $retryState = $writeZeroProgress[$connId] ?? null;
+        if (\is_array($retryState) && ($retryState['connection'] ?? null) !== $conn) {
+            unset($writeZeroProgress[$connId]);
+            $retryState = null;
+        }
+        if ((float) ($retryState['retry_at'] ?? 0.0) > \microtime(true)) {
             continue;
         }
 
@@ -2831,7 +2903,7 @@ function wlsHttpFlushQueuedWrites(
             $writeAttempts++;
             if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
                 @\fclose($conn);
-                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
@@ -2854,7 +2926,7 @@ function wlsHttpFlushQueuedWrites(
             if ($written === false) {
                 WlsLogger::warning_("HTTP 写队列写入失败 (connId: {$connId}, 剩余: {$bufferLen} 字节)");
                 @\fclose($conn);
-                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
@@ -2862,18 +2934,66 @@ function wlsHttpFlushQueuedWrites(
                 break;
             }
 
-            $connectionLastActivity[$connId] = \time();
-
             if ($written === 0) {
+                $zeroNow = \microtime(true);
+                $zeroState = $writeZeroProgress[$connId] ?? null;
+                if (!\is_array($zeroState) || ($zeroState['connection'] ?? null) !== $conn) {
+                    $zeroState = [
+                        'connection' => $conn,
+                        'started_at' => $zeroNow,
+                        'retry_at' => $zeroNow,
+                        'attempts' => 0,
+                    ];
+                }
+                $zeroStartedAt = (float) ($zeroState['started_at'] ?? $zeroNow);
+                $zeroAttempts = (int) ($zeroState['attempts'] ?? 0) + 1;
+                $streamMeta = \get_resource_type($conn) === 'stream'
+                    ? (@\stream_get_meta_data($conn) ?: [])
+                    : [];
+                // Read-side EOF may be a legal TCP half-close: the peer can still
+                // receive this response. Only an explicit stream timeout or the
+                // bounded zero-progress deadline makes the write side terminal.
+                $streamTimedOut = (bool) ($streamMeta['timed_out'] ?? false);
+                $zeroElapsed = $zeroNow - $zeroStartedAt;
+
+                if ($streamTimedOut || $zeroElapsed >= $zeroProgressTimeoutSeconds) {
+                    $reason = $streamTimedOut ? 'stream_timeout' : 'zero_progress_timeout';
+                    WlsLogger::warning_(
+                        "HTTP 写队列无进展，关闭连接 (connId: {$connId}, reason: {$reason}, "
+                        . 'elapsed_ms: ' . (int) \round($zeroElapsed * 1000)
+                        . ", attempts: {$zeroAttempts}, 剩余: {$bufferLen} 字节)"
+                    );
+                    @\fclose($conn);
+                    unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
+                    unset($longLivedConnections[$connId]);
+                    if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
+                        \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+                    }
+                    break;
+                }
+
+                $backoffUsec = \min(
+                    $maxZeroProgressBackoffUsec,
+                    1000 * (1 << \min(6, \max(0, $zeroAttempts - 1)))
+                );
+                $writeZeroProgress[$connId] = [
+                    'connection' => $conn,
+                    'started_at' => $zeroStartedAt,
+                    'retry_at' => $zeroNow + ($backoffUsec / 1_000_000),
+                    'attempts' => $zeroAttempts,
+                ];
                 break;
             }
 
+            unset($writeZeroProgress[$connId]);
+            $connectionLastActivity[$connId] = \time();
             $totalWrittenThisLoop += $written;
             $writeBuffers[$connId] = \substr($buffer, $written);
 
             if ($writeBuffers[$connId] === '' || $writeBuffers[$connId] === false) {
                 unset($writeBuffers[$connId]);
                 unset($writableConnections[$connId]);
+                unset($writeZeroProgress[$connId]);
 
                 if (isset($pendingClose[$connId])) {
                     @\fclose($conn);
@@ -3032,6 +3152,34 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
 }
 
 /**
+ * 取消普通 HTTP 连接上的请求 Fiber，并确保 activeRequests 只递减一次。
+ *
+ * @param array<int,array<string,mixed>> $activeFibers
+ */
+function wlsCancelActiveFiberForHttpConnection(
+    array &$activeFibers,
+    int $connectionId,
+    \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
+    int &$activeRequests
+): bool {
+    if (!\array_key_exists($connectionId, $activeFibers)) {
+        return false;
+    }
+
+    $state = $activeFibers[$connectionId];
+    unset($activeFibers[$connectionId]);
+    $fiber = \is_array($state) ? ($state['fiber'] ?? null) : null;
+    if ($fiber instanceof \Fiber) {
+        $fiberScheduler->cancelTimersForFiber($fiber);
+        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
+        $fiberScheduler->unregisterFiber();
+    }
+    $activeRequests = \max(0, $activeRequests - 1);
+
+    return true;
+}
+
+/**
  * Step-2: 普通 HTTP 连接读阶段推进。
  *
  * @param array<int, array<string, mixed>> $activeFibers
@@ -3078,13 +3226,12 @@ function wlsHttpReadStep(
         if (isset($longLivedConnections[$connId])) {
             unset($longLivedConnections[$connId]);
         }
-        if (isset($activeFibers[$connId])) {
-            $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
-            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
-            $fiberScheduler->unregisterFiber();
-            unset($activeFibers[$connId]);
-        }
-        $activeRequests = \max(0, $activeRequests - 1);
+        wlsCancelActiveFiberForHttpConnection(
+            $activeFibers,
+            $connId,
+            $fiberScheduler,
+            $activeRequests
+        );
         return ['closed' => true, 'request_ready' => false];
     }
 
@@ -3125,14 +3272,14 @@ function wlsHttpReadStep(
             unset($longLivedConnections[$connId]);
             WlsLogger::info_("客户端断开，长连接已清理 (connId: {$connId}, 剩余长连接数: " . \count($longLivedConnections) . ")");
         }
-        if (isset($activeFibers[$connId])) {
-            $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
-            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
-            $fiberScheduler->unregisterFiber();
-            unset($activeFibers[$connId]);
+        if (wlsCancelActiveFiberForHttpConnection(
+            $activeFibers,
+            $connId,
+            $fiberScheduler,
+            $activeRequests
+        )) {
             WlsLogger::info_("客户端断开，Fiber 已清理 (connId: {$connId}, 剩余活跃 Fiber: " . \count($activeFibers) . ")");
         }
-        $activeRequests = \max(0, $activeRequests - 1);
         return ['closed' => true, 'request_ready' => false];
     }
     if ($data === '' && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')) {
@@ -3150,13 +3297,12 @@ function wlsHttpReadStep(
             if (isset($longLivedConnections[$connId])) {
                 unset($longLivedConnections[$connId]);
             }
-            if (isset($activeFibers[$connId])) {
-                $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
-                \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
-                $fiberScheduler->unregisterFiber();
-                unset($activeFibers[$connId]);
-            }
-            $activeRequests = \max(0, $activeRequests - 1);
+            wlsCancelActiveFiberForHttpConnection(
+                $activeFibers,
+                $connId,
+                $fiberScheduler,
+                $activeRequests
+            );
             return ['closed' => true, 'request_ready' => false];
         }
         // 非阻塞 socket 空读只表示“当前无数据可读”，并不等于连接断开。
@@ -4004,6 +4150,14 @@ function sendResponseAndCleanup(
     // 禁止回退到普通 HTTP 分支导致提前关连。
     $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
     $keepAlive = $precomputedKeepAlive ?? isKeepAlive($rawRequest);
+    if ($ipcDraining && !$isSseMode) {
+        // The connection will be retired after this response. Advertise that
+        // fact before the first byte is written so keep-alive clients do not
+        // attempt one more request and report a length/EOF failure.
+        $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
+        $keepAlive = false;
+        $responseLenPre = \strlen($response);
+    }
     $bufferedBytesBeforeWrite = isset($writeBuffers[$connId]) ? \strlen($writeBuffers[$connId]) : 0;
     $forceCloseAfterResponse = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldForceConnectionClose(
         $keepAlive,

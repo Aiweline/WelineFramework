@@ -5,6 +5,20 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 try {
+    require_once __DIR__ . '/../app/code/Weline/Framework/Console/PhpCliRuntimePreflight.php';
+    $runtimePreflightExitCode = \Weline\Framework\Console\PhpCliRuntimePreflight::enforce(
+        $argv,
+        __FILE__,
+        dirname(__DIR__),
+    );
+    if ($runtimePreflightExitCode !== null) {
+        exit($runtimePreflightExitCode);
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, '[Weline CLI runtime preflight failed] ' . $e->getMessage() . PHP_EOL);
+    exit(70);
+}
+try {
     require __DIR__ . '/../app/bootstrap.php';
 } catch (Exception $e) {
     $chr = chr(27);

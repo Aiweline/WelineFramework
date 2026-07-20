@@ -13,6 +13,11 @@ namespace Weline\Server\Protocol\Http3;
  */
 final class UnavailableQuicTransportAdapter implements QuicTransportAdapterInterface
 {
+    public function beginDrain(): void
+    {
+        // No native runtime exists, so there is no transport state to drain.
+    }
+
     /**
      * @return array{
      *     available:bool,

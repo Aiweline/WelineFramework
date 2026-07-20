@@ -1106,7 +1106,7 @@ class Env extends DataObject
         if (!is_file(Env::path_MODULES_FILE)) {
             return [];
         }
-        
+
         // 检查文件是否可读
         if (!is_readable(Env::path_MODULES_FILE)) {
             $error = error_get_last();
@@ -1119,11 +1119,22 @@ class Env extends DataObject
         }
         try {
             $this->module_list = (array)require Env::path_MODULES_FILE;
+            foreach ($this->module_list as &$module) {
+                if (!is_array($module)) {
+                    continue;
+                }
+                $module['base_path'] = self::resolveModuleBasePath(
+                    (string)($module['base_path'] ?? ''),
+                    (string)($module['path'] ?? '')
+                );
+            }
+            unset($module);
             $this->module_list = $this->ensureFrameworkFirstInModuleList($this->module_list);
         } catch (\Throwable $e) {
             // 如果是权限错误，提供更友好的提示
-            if (strpos($e->getMessage(), 'Permission denied') !== false || 
-                strpos($e->getMessage(), 'errno=13') !== false) {
+            if (strpos($e->getMessage(), 'Permission denied') !== false
+                || strpos($e->getMessage(), 'errno=13') !== false
+            ) {
                 throw new \Weline\Framework\Exception\Core(
                     __('读取模块列表失败：%{1}。请检查文件权限，并确认 Web 与 CLI 运行用户一致。', [
                         Env::path_MODULES_FILE,
@@ -1138,6 +1149,44 @@ class Env extends DataObject
         self::$module_configs = [];
 
         return $this->module_list;
+    }
+
+    /**
+     * Rebase generated in-project module paths when metadata is consumed on a
+     * different operating system or from a different project root.
+     *
+     * External module paths remain untouched unless the stable module path has
+     * a real counterpart below the current BP/app/code directory.
+     */
+    public static function resolveModuleBasePath(string $basePath, string $modulePath = ''): string
+    {
+        $basePath = trim($basePath);
+        $modulePath = trim(str_replace('\\', '/', $modulePath), '/');
+        $normalizedBasePath = $basePath === ''
+            ? ''
+            : rtrim(str_replace(['/', '\\'], DS, $basePath), DS) . DS;
+
+        if ($modulePath === ''
+            || str_contains($modulePath, "\0")
+            || preg_match('#(?:^|/)\.\.(?:/|$)#', $modulePath)
+        ) {
+            return $normalizedBasePath;
+        }
+
+        $candidate = rtrim((string)BP, '/\\')
+            . DS . 'app' . DS . 'code' . DS
+            . str_replace('/', DS, $modulePath) . DS;
+
+        $isForeignPlatformPath = PHP_OS_FAMILY === 'Windows'
+            ? (str_starts_with($basePath, '/') && !str_starts_with($basePath, '//'))
+            : (preg_match('#^[A-Za-z]:[\\\\/]#', $basePath) === 1
+                || str_starts_with($basePath, '\\\\'));
+
+        if ($basePath !== '' && !$isForeignPlatformPath && is_dir($basePath)) {
+            return $normalizedBasePath;
+        }
+
+        return is_dir($candidate) ? $candidate : $normalizedBasePath;
     }
 
     /**

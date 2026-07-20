@@ -182,8 +182,8 @@ class PooledConnection implements PooledConnectionInterface
             }
             $this->buffer .= $chunk;
 
-            // 防止缓冲区无限增长（限制 2MB）
-            if (\strlen($this->buffer) > 2097152) {
+            // 与 SessionProtocol 共享严格有界的 16 MiB 缓冲上限。
+            if (\strlen($this->buffer) > SessionProtocol::MAX_BUFFER_BYTES) {
                 $this->close();
                 return null;
             }

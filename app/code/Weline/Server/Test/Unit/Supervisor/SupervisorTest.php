@@ -104,6 +104,59 @@ final class SupervisorTest extends TestCase
         self::assertSame(SlotLease::STATE_LEASED, $current->state);
     }
 
+    public function testPortlessRuntimeWatchdogCanBecomeReadyWhileWorkerStillNeedsPort(): void
+    {
+        $supervisor = $this->createSupervisor();
+
+        $watchdogLease = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_HELLO,
+            'msg_id' => 'watchdog-hello',
+            'instance' => 'default',
+            'channel' => 'channel-default',
+            'role' => 'runtime_watchdog',
+            'slot_id' => 'runtime_watchdog#1',
+            'pid' => 3101,
+            'launch_nonce' => 'watchdog-launch',
+        ]));
+        $watchdogReady = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_READY,
+            'msg_id' => 'watchdog-ready',
+            'channel' => 'channel-default',
+            'slot_id' => 'runtime_watchdog#1',
+            'lease_id' => $watchdogLease['lease_id'],
+            'generation' => $watchdogLease['generation'],
+            'listen' => ['port' => 0],
+        ]));
+
+        self::assertTrue((bool)$watchdogReady['accepted']);
+        self::assertSame(SlotLease::STATE_READY, $supervisor->leases()->get('runtime_watchdog#1')?->state);
+        self::assertSame(0, $supervisor->leases()->get('runtime_watchdog#1')?->port);
+
+        $workerLease = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_HELLO,
+            'msg_id' => 'worker-hello',
+            'instance' => 'default',
+            'channel' => 'channel-default',
+            'role' => 'worker',
+            'slot_id' => 'worker#9',
+            'pid' => 3102,
+            'launch_nonce' => 'worker-launch',
+        ]));
+        $workerReady = SupervisorMessage::decode((string)$supervisor->handle([
+            'type' => SupervisorMessage::TYPE_READY,
+            'msg_id' => 'worker-ready',
+            'channel' => 'channel-default',
+            'slot_id' => 'worker#9',
+            'lease_id' => $workerLease['lease_id'],
+            'generation' => $workerLease['generation'],
+            'listen' => ['port' => 0],
+        ]));
+
+        self::assertFalse((bool)$workerReady['accepted']);
+        self::assertSame('invalid_ready_payload', $workerReady['reason']);
+        self::assertSame(SlotLease::STATE_LEASED, $supervisor->leases()->get('worker#9')?->state);
+    }
+
     public function testHeartbeatUpdatesOnlyCurrentLease(): void
     {
         $supervisor = $this->createSupervisor();

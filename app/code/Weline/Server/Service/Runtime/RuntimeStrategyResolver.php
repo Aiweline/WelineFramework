@@ -8,7 +8,6 @@ final class RuntimeStrategyResolver
     public const STRATEGY_AUTO = 'auto';
     public const STRATEGY_PERFORMANCE = 'performance';
     public const STRATEGY_STABILITY = 'stability';
-    public const STRATEGY_COMPATIBILITY = 'compatibility';
 
     /**
      * @param array<string, mixed> $config
@@ -21,7 +20,12 @@ final class RuntimeStrategyResolver
         $loop = \is_array($config['loop'] ?? null) ? $config['loop'] : [];
         $strategy = $this->normalizeStrategy($config['runtime_strategy'] ?? ($runtime['strategy'] ?? self::STRATEGY_AUTO));
         $requestedWorkerCount = $config['worker_count_requested'] ?? ($config['worker_count'] ?? 'auto');
-        $workerCount = $this->resolveWorkerCount($config['worker_count'] ?? 'auto', (string)($config['mode'] ?? 'io'), $strategy, $profile);
+        $workerCount = $this->resolveWorkerCount(
+            $config['worker_count'] ?? 'auto',
+            (string)($config['mode'] ?? 'io'),
+            $strategy,
+            $profile
+        );
         $topology = $this->resolveTopology($config, $args, $profile);
         $eventLoop = $this->resolveEventLoopDriver(
             (string)($config['event_loop'] ?? ($loop['driver'] ?? 'auto')),
@@ -30,6 +34,21 @@ final class RuntimeStrategyResolver
         $sslEngine = $this->resolveSslEngine($config);
         $extensions = $profile->get('extensions', []);
         $sslRequired = empty($config['no_ssl']) && ($config['https'] ?? true) !== false;
+        try {
+            $tlsSessionCache = TlsSessionCacheConfig::fromSslConfig(
+                \is_array($config['ssl'] ?? null) ? $config['ssl'] : []
+            );
+        } catch (\InvalidArgumentException $exception) {
+            throw new \RuntimeException($exception->getMessage(), 0, $exception);
+        }
+        if ($sslRequired && $tlsSessionCache->enabled()) {
+            TlsSessionCacheRuntime::assertApiAvailable();
+            if ($sslEngine !== 'stream') {
+                throw new \RuntimeException(
+                    'wls.ssl.session_cache=external requires wls.ssl.engine=stream and the defer-SSL per-connection SNI path.'
+                );
+            }
+        }
         if ($sslRequired
             && \is_array($extensions)
             && \array_key_exists('openssl', $extensions)
@@ -61,14 +80,13 @@ final class RuntimeStrategyResolver
                 );
             }
         }
-        $supervisor = $this->resolveSupervisor($config, $profile, $strategy);
 
+        $supervisor = $this->resolveSupervisor($config, $profile, $strategy);
         $warnings = \array_merge(
             $topology['warnings'],
             $eventLoop['warnings'],
             $supervisor['warnings']
         );
-
         $selection = new RuntimeSelection(
             requestedTopology: $topology['requested'],
             effectiveTopology: $topology['effective'],
@@ -86,21 +104,13 @@ final class RuntimeStrategyResolver
             'runtime_strategy' => $strategy,
             'status' => $this->resolveStatus($warnings, $topology, $eventLoop, $supervisor),
             'worker_count' => $workerCount,
-            'worker_count_reason' => $this->workerCountReason($requestedWorkerCount, (string)($config['mode'] ?? 'io'), $profile, $strategy),
-            'requested_topology' => $selection->requestedTopology->value,
-            'effective_topology' => $selection->effectiveTopology->value,
-            'topology' => $selection->effectiveTopology->value,
-            'topology_source' => $selection->source,
-            'dispatcher_enabled' => $topology['dispatcher_enabled'],
-            'direct_reuse_port' => $topology['direct_reuse_port'],
-            'direct_listener_mode' => $selection->listenerMode,
-            'listener_strategy' => $selection->listenerMode,
-            'topology_reason' => $selection->reason,
-            'topology_reason_codes' => $selection->reasonCodes,
-            'event_loop_driver' => $eventLoop['driver'],
+            'worker_count_reason' => $this->workerCountReason(
+                $requestedWorkerCount,
+                (string)($config['mode'] ?? 'io'),
+                $profile,
+                $strategy
+            ),
             'event_loop_reason' => $eventLoop['reason'],
-            'ssl_engine' => $selection->sslEngine,
-            'policy_compatible' => $selection->policyCompatible,
             'supervisor_enabled' => $supervisor['enabled'],
             'supervisor_reason' => $supervisor['reason'],
             'warnings' => $warnings,
@@ -135,7 +145,7 @@ final class RuntimeStrategyResolver
             $count = \min(\max(1, $profile->performanceCpuCores()), 16);
         } else {
             $count = $mode === 'cpu' ? $cpu : $cpu * 2;
-            if ($strategy === self::STRATEGY_STABILITY || $strategy === self::STRATEGY_COMPATIBILITY) {
+            if ($strategy === self::STRATEGY_STABILITY) {
                 $count = $mode === 'cpu' ? $cpu : (int) \ceil($cpu * 1.5);
             }
             $count = \min(\max(2, $count), 16);
@@ -169,9 +179,9 @@ final class RuntimeStrategyResolver
         ['requested' => $requested, 'source' => $source] = $this->resolveRequestedTopology($config, $args);
 
         if ($osFamily === 'Windows') {
-            if ($requested === RequestedTopology::Direct || $requested === RequestedTopology::Independent) {
+            if ($requested === RequestedTopology::Direct) {
                 throw new \RuntimeException(
-                    'Windows supports only WLS Dispatcher topology; direct/independent/no-dispatcher modes are not supported.'
+                    'Windows supports only WLS Dispatcher topology; --direct is not supported.'
                 );
             }
 
@@ -189,19 +199,10 @@ final class RuntimeStrategyResolver
         }
 
         if (!\in_array($osFamily, ['Linux', 'Darwin'], true)) {
-            if ($requested === RequestedTopology::Direct || $requested === RequestedTopology::Independent) {
-                throw new \RuntimeException(
-                    'This platform supports only WLS Dispatcher topology; direct/independent modes require Linux or macOS.'
-                );
-            }
-
-            return [
-                'requested' => $requested,
-                'effective' => EffectiveTopology::Dispatcher,
-                'source' => $source,
-                'reason' => 'auto selected Dispatcher compatibility topology on this platform',
-                'reason_code' => 'other_platform_dispatcher',
-            ];
+            throw new \RuntimeException(
+                'WLS supports only Windows Dispatcher or Linux/macOS Direct and Dispatcher topologies; '
+                . 'the current platform "' . $osFamily . '" is unsupported.'
+            );
         }
 
         if ($requested === RequestedTopology::Dispatcher) {
@@ -211,16 +212,6 @@ final class RuntimeStrategyResolver
                 'source' => $source,
                 'reason' => 'explicit Dispatcher topology',
                 'reason_code' => 'explicit_dispatcher',
-            ];
-        }
-
-        if ($requested === RequestedTopology::Independent) {
-            return [
-                'requested' => $requested,
-                'effective' => EffectiveTopology::Independent,
-                'source' => $source,
-                'reason' => 'deprecated independent diagnostic topology',
-                'reason_code' => 'deprecated_independent',
             ];
         }
 
@@ -240,18 +231,23 @@ final class RuntimeStrategyResolver
     private function normalizeStrategy(mixed $strategy): string
     {
         $strategy = \strtolower(\trim((string)$strategy));
-        return \in_array($strategy, [
+        if (!\in_array($strategy, [
             self::STRATEGY_AUTO,
             self::STRATEGY_PERFORMANCE,
             self::STRATEGY_STABILITY,
-            self::STRATEGY_COMPATIBILITY,
-        ], true) ? $strategy : self::STRATEGY_AUTO;
+        ], true)) {
+            throw new \RuntimeException(
+                'WLS runtime strategy must be one of auto/performance/stability; received "' . $strategy . '".'
+            );
+        }
+
+        return $strategy;
     }
 
     /**
      * @param array<string, mixed> $config
      * @param array<int|string, mixed> $args
-     * @return array{requested:RequestedTopology,effective:EffectiveTopology,topology:string,source:string,dispatcher_enabled:bool,direct_reuse_port:bool,reason:string,reason_code:string,warnings:string[]}
+     * @return array{requested:RequestedTopology,effective:EffectiveTopology,source:string,listener_mode:string,reason:string,reason_code:string,warnings:string[]}
      */
     private function resolveTopology(
         array $config,
@@ -269,17 +265,6 @@ final class RuntimeStrategyResolver
                 $source,
                 $intent['reason'],
                 $intent['reason_code'],
-            );
-        }
-
-        if ($intent['effective'] === EffectiveTopology::Independent) {
-            return $this->topologyResult(
-                $requested,
-                EffectiveTopology::Independent,
-                $source,
-                $intent['reason'],
-                $intent['reason_code'],
-                ['Independent topology is deprecated; use direct or Dispatcher topology.'],
             );
         }
 
@@ -322,136 +307,88 @@ final class RuntimeStrategyResolver
      */
     private function resolveRequestedTopology(array $config, array $args): array
     {
-        $cliRequests = [];
-        if (isset($args['topology'])) {
-            $cliRequests['cli.topology'] = $this->parseRequestedTopology($args['topology'], 'CLI --topology');
-        }
-        if (isset($args['direct'])) {
-            $cliRequests['cli.direct'] = RequestedTopology::Direct;
-        }
-        if (isset($args['no-dispatcher']) || isset($args['no_dispatcher'])) {
-            $cliRequests['cli.no-dispatcher'] = RequestedTopology::Independent;
-        }
-        if (isset($args['dispatcher']) || isset($args['force-dispatcher'])) {
-            $cliRequests['cli.dispatcher'] = RequestedTopology::Dispatcher;
-        }
-        if ($cliRequests !== []) {
-            $values = \array_values(\array_unique(\array_map(
-                static fn(RequestedTopology $topology): string => $topology->value,
-                $cliRequests
-            )));
-            if (\count($values) > 1) {
-                throw new \RuntimeException('Conflicting WLS topology CLI options: ' . \implode(', ', \array_keys($cliRequests)) . '.');
+        $removedCliOptions = [
+            'topology' => '--topology',
+            'no-dispatcher' => '--no-dispatcher',
+            'no_dispatcher' => '--no_dispatcher',
+            'force-dispatcher' => '--force-dispatcher',
+        ];
+        foreach ($removedCliOptions as $key => $option) {
+            if (\array_key_exists($key, $args)) {
+                throw new \RuntimeException(
+                    'Removed WLS topology option ' . $option . ' is not supported; use only --direct or --dispatcher.'
+                );
             }
+        }
 
-            return [
-                'requested' => \reset($cliRequests),
-                'source' => (string)\array_key_first($cliRequests),
-            ];
+        $direct = isset($args['direct']);
+        $dispatcher = isset($args['dispatcher']);
+        if ($direct && $dispatcher) {
+            throw new \RuntimeException('Conflicting WLS topology CLI options: --direct and --dispatcher.');
+        }
+        if ($direct) {
+            return ['requested' => RequestedTopology::Direct, 'source' => 'cli.direct'];
+        }
+        if ($dispatcher) {
+            return ['requested' => RequestedTopology::Dispatcher, 'source' => 'cli.dispatcher'];
+        }
+
+        foreach ([
+            'topology',
+            '_legacy_topology_source',
+            'master_mode',
+            'dispatcher_enabled',
+            'direct_reuse_port',
+        ] as $legacyKey) {
+            if (\array_key_exists($legacyKey, $config)) {
+                throw new \RuntimeException(
+                    'Removed WLS topology configuration "wls.' . $legacyKey
+                    . '" is not supported; use only wls.runtime.topology.'
+                );
+            }
+        }
+
+        $gateway = $config['gateway'] ?? null;
+        if (\is_array($gateway) && \array_key_exists('traffic_mode', $gateway)) {
+            throw new \RuntimeException(
+                'Removed WLS topology configuration "wls.gateway.traffic_mode" is not supported; '
+                . 'use only wls.runtime.topology.'
+            );
         }
 
         $runtime = \is_array($config['runtime'] ?? null) ? $config['runtime'] : [];
-        $runtimeValue = $this->parseRequestedTopology($runtime['topology'] ?? 'auto', 'wls.runtime.topology');
-        if (!empty($config['_instance_topology_explicit'])) {
-            return ['requested' => $runtimeValue, 'source' => 'instance.runtime.topology'];
+        $hasRuntimeTopology = \array_key_exists('topology', $runtime);
+        if (!empty($config['_instance_topology_explicit']) && !$hasRuntimeTopology) {
+            throw new \RuntimeException(
+                'The instance topology marker requires an explicit wls.runtime.topology value.'
+            );
         }
-        if ($runtimeValue !== RequestedTopology::Auto) {
-            return ['requested' => $runtimeValue, 'source' => 'wls.runtime.topology'];
-        }
-
-        $legacySource = \trim((string)($config['_legacy_topology_source'] ?? ''));
-        $legacySource = $legacySource !== '' ? $legacySource : 'legacy.wls.topology';
-        $legacyValue = $this->parseRequestedTopology($config['topology'] ?? 'auto', 'legacy wls.topology');
-        if ($legacyValue !== RequestedTopology::Auto) {
-            return ['requested' => $legacyValue, 'source' => $legacySource];
+        if (!$hasRuntimeTopology) {
+            return ['requested' => RequestedTopology::Auto, 'source' => 'auto'];
         }
 
-        $legacyRequests = [];
-        $gateway = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
-        $trafficMode = \strtolower(\trim(\str_replace('-', '_', (string)($gateway['traffic_mode'] ?? ''))));
-        if ($trafficMode === 'direct_listen') {
-            $legacyRequests['legacy.gateway.traffic_mode'] = RequestedTopology::Direct;
-        } elseif ($trafficMode === 'passthrough') {
-            $legacyRequests['legacy.gateway.traffic_mode'] = RequestedTopology::Dispatcher;
-        }
-
-        $directReusePort = !empty($config['direct_reuse_port']);
-        if ($directReusePort) {
-            $legacyRequests['legacy.direct_reuse_port'] = RequestedTopology::Direct;
-        }
-
-        $masterMode = \strtolower(\trim((string)($config['master_mode'] ?? '')));
-        if (\in_array($masterMode, ['direct', 'linux-direct'], true)) {
-            $legacyRequests['legacy.master_mode'] = RequestedTopology::Direct;
-        } elseif (\in_array($masterMode, ['dispatcher', 'windows-dispatcher'], true)) {
-            $legacyRequests['legacy.master_mode'] = RequestedTopology::Dispatcher;
-        } elseif ($masterMode === 'independent') {
-            $legacyRequests['legacy.master_mode'] = RequestedTopology::Independent;
-        }
-
-        if (\array_key_exists('dispatcher_enabled', $config)) {
-            $dispatcherEnabled = $this->parseLegacyBoolean($config['dispatcher_enabled'], 'legacy dispatcher_enabled');
-            if ($dispatcherEnabled) {
-                $legacyRequests['legacy.dispatcher_enabled'] = RequestedTopology::Dispatcher;
-            } elseif (!$directReusePort && $masterMode === '') {
-                // A lone legacy false represented the old independent mode.
-                // Keep recognizing it so the normal independent fail-closed
-                // gate can explain the migration instead of silently changing
-                // the requested topology.
-                $legacyRequests['legacy.dispatcher_enabled'] = RequestedTopology::Independent;
-            }
-        }
-
-        if ($legacyRequests !== []) {
-            $values = \array_values(\array_unique(\array_map(
-                static fn(RequestedTopology $topology): string => $topology->value,
-                $legacyRequests
-            )));
-            if (\count($values) > 1) {
-                throw new \RuntimeException(
-                    'Conflicting legacy WLS topology configuration: ' . \implode(', ', \array_keys($legacyRequests)) . '.'
-                );
-            }
-
-            return [
-                'requested' => \reset($legacyRequests),
-                'source' => (string)\array_key_first($legacyRequests),
-            ];
-        }
-
-        return ['requested' => RequestedTopology::Auto, 'source' => 'auto'];
+        $requested = $this->parseRequestedTopology($runtime['topology'], 'wls.runtime.topology');
+        return [
+            'requested' => $requested,
+            'source' => !empty($config['_instance_topology_explicit'])
+                ? 'instance.runtime.topology'
+                : 'wls.runtime.topology',
+        ];
     }
 
-    private function parseLegacyBoolean(mixed $value, string $source): bool
-    {
-        if (\is_bool($value)) {
-            return $value;
-        }
-        if (\is_int($value) && \in_array($value, [0, 1], true)) {
-            return $value === 1;
-        }
 
-        $normalized = \strtolower(\trim((string)$value));
-        if (\in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
-            return true;
-        }
-        if (\in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
-            return false;
-        }
-
-        throw new \RuntimeException($source . ' must be a boolean value.');
-    }
 
     private function parseRequestedTopology(mixed $value, string $source): RequestedTopology
     {
         $normalized = \strtolower(\trim((string)$value));
         if ($normalized === '') {
-            $normalized = RequestedTopology::Auto->value;
+            throw new \RuntimeException($source . ' must not be empty.');
         }
+
         $topology = RequestedTopology::tryFrom($normalized);
         if (!$topology instanceof RequestedTopology) {
             throw new \RuntimeException(
-                $source . ' must be one of auto/direct/dispatcher/independent; received "' . $normalized . '".'
+                $source . ' must be one of auto/direct/dispatcher; received "' . $normalized . '".'
             );
         }
 
@@ -460,7 +397,7 @@ final class RuntimeStrategyResolver
 
     /**
      * @param string[] $warnings
-     * @return array{requested:RequestedTopology,effective:EffectiveTopology,topology:string,source:string,dispatcher_enabled:bool,direct_reuse_port:bool,listener_mode:string,reason:string,reason_code:string,warnings:string[]}
+     * @return array{requested:RequestedTopology,effective:EffectiveTopology,source:string,listener_mode:string,reason:string,reason_code:string,warnings:string[]}
      */
     private function topologyResult(
         RequestedTopology $requested,
@@ -474,10 +411,7 @@ final class RuntimeStrategyResolver
         return [
             'requested' => $requested,
             'effective' => $effective,
-            'topology' => $effective->value,
             'source' => $source,
-            'dispatcher_enabled' => $effective->isDispatcher(),
-            'direct_reuse_port' => $effective->isDirect() && $listenerMode === 'reuseport',
             'listener_mode' => $effective->isDirect() ? $listenerMode : 'single',
             'reason' => $reason,
             'reason_code' => $reasonCode,
@@ -512,7 +446,14 @@ final class RuntimeStrategyResolver
             $requested = 'auto';
         }
 
+        $nativeExtensionIsolationRequired = PhpRuntimeSafetyProfile::requiresNativeExtensionIsolation();
         if ($requested === 'event') {
+            if ($nativeExtensionIsolationRequired) {
+                throw new \RuntimeException(
+                    'wls.event_loop=event is unsafe on Windows ARM64 while PHP runs through x64 emulation; '
+                    . 'use the native ARM64 PHP runtime or wls.event_loop=select.'
+                );
+            }
             if (!$profile->canUseEventLoop()) {
                 throw new \RuntimeException('wls.event_loop=event requires PHP event extension and EventBase/Event classes.');
             }
@@ -523,6 +464,16 @@ final class RuntimeStrategyResolver
             return ['driver' => 'select', 'reason' => 'explicit select event loop', 'warnings' => []];
         }
 
+        if ($nativeExtensionIsolationRequired) {
+            return [
+                'driver' => 'select',
+                'reason' => 'auto selected stable stream_select for Windows ARM64 with x64 PHP emulation',
+                'warnings' => [
+                    'PHP event extension is disabled for this runtime because native extension crashes were reproduced under x64 emulation.',
+                ],
+            ];
+        }
+
         if ($profile->canUseEventLoop()) {
             return ['driver' => 'event', 'reason' => 'auto selected PHP event extension', 'warnings' => []];
         }
@@ -530,9 +481,10 @@ final class RuntimeStrategyResolver
         return [
             'driver' => 'select',
             'reason' => 'auto fallback to stream_select because PHP event extension is unavailable',
-            'warnings' => ['PHP event extension is missing; stream_select compatibility mode is slower.'],
+            'warnings' => ['PHP event extension is missing; stream_select is slower.'],
         ];
     }
+
 
     /**
      * @param array<string, mixed> $config
@@ -556,17 +508,10 @@ final class RuntimeStrategyResolver
             ];
         }
 
-        if ($strategy === self::STRATEGY_COMPATIBILITY) {
-            return [
-                'enabled' => false,
-                'reason' => 'compatibility strategy keeps supervisor disabled',
-                'warnings' => ['Supervisor is disabled by compatibility strategy.'],
-            ];
-        }
         if ($profile->isWindows()) {
             return [
                 'enabled' => false,
-                'reason' => 'auto disabled on Windows; legacy control plane avoids Supervisor reconnect churn',
+                'reason' => 'auto disabled on Windows; native Master control plane avoids Supervisor reconnect churn',
                 'warnings' => ['Supervisor is disabled automatically on Windows; use --supervisor=on only when validating Supervisor HA.'],
             ];
         }
@@ -589,18 +534,17 @@ final class RuntimeStrategyResolver
      */
     private function resolveStatus(array $warnings, array $topology, array $eventLoop, array $supervisor): string
     {
-        if (($topology['topology'] ?? '') === 'direct'
+        if (($topology['effective'] ?? null) === EffectiveTopology::Direct
             && ($eventLoop['driver'] ?? '') === 'event'
             && !empty($supervisor['enabled'])
             && $warnings === []) {
             return 'optimal';
         }
-
-        if (($topology['topology'] ?? '') === 'dispatcher') {
-            return $warnings === [] ? 'stable' : 'compatibility';
+        if (($topology['effective'] ?? null) === EffectiveTopology::Dispatcher && $warnings === []) {
+            return 'stable';
         }
 
-        return $warnings === [] ? 'degraded' : 'compatibility';
+        return 'degraded';
     }
 
     private function workerCountReason(mixed $workerCount, string $mode, WlsRuntimeProfile $profile, string $strategy): string
