@@ -11,6 +11,7 @@ return [
         'Weline_Frontend' => '*',
         'Weline_I18n' => '*',
         'Weline_Queue' => '*',
+        'Weline_SystemConfig' => '*',
     ],
     "optional" => [
     ],

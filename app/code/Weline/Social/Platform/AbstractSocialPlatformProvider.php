@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Social\Platform;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Social\Interface\SocialPlatformConfigTesterInterface;
 use Weline\Social\Interface\SocialPlatformProviderInterface;
+use Weline\Social\Service\SocialHttpClient;
+use Weline\Social\Service\SocialPlatformAppConfig;
 
 abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderInterface, SocialPlatformConfigTesterInterface
 {
@@ -33,14 +36,22 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
         $definition['icon'] = (string)($definition['icon'] ?? $definition['code']);
         $definition['status'] = (string)($definition['status'] ?? 'documented');
         $definition['supports_fake_publish'] = (bool)($definition['supports_fake_publish'] ?? false);
+        $definition['sort_order'] = (int)($definition['sort_order'] ?? 1000);
+        if (!\array_key_exists('supports_one_click_auth', $definition)) {
+            $definition['supports_one_click_auth'] = \in_array('oauth2', $definition['auth_modes'], true);
+        }
 
         return $definition;
     }
 
+    public function supportsOneClickAuth(): bool
+    {
+        return (bool)($this->getDefinition()['supports_one_click_auth'] ?? false);
+    }
+
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
-        $definition = $this->getDefinition();
-        if (!\in_array('oauth2', $definition['auth_modes'], true) && !\in_array('oauth1', $definition['auth_modes'], true)) {
+        if (!$this->supportsOneClickAuth()) {
             return null;
         }
 
@@ -105,12 +116,69 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
     }
 
     /**
+     * @param array<string, mixed> $draft
+     * @return array{title:string,content:string,link:string,image_url:string,message:string}
+     */
+    protected function normalizeDraftPayload(array $draft): array
+    {
+        $variant = \is_array($draft['variant'] ?? null) ? $draft['variant'] : [];
+        $title = \trim((string)($variant['title'] ?? $draft['title'] ?? ''));
+        $content = \trim((string)($variant['content'] ?? $draft['content'] ?? ''));
+        $link = \trim((string)($variant['link'] ?? $draft['link'] ?? $draft['url'] ?? ''));
+        $imageUrl = \trim((string)($variant['image_url'] ?? $draft['image_url'] ?? ''));
+        if ($imageUrl === '' && \is_array($draft['assets'] ?? null)) {
+            foreach ($draft['assets'] as $asset) {
+                if (!\is_array($asset)) {
+                    continue;
+                }
+                $candidate = \trim((string)($asset['url'] ?? $asset['src'] ?? ''));
+                if ($candidate !== '') {
+                    $imageUrl = $candidate;
+                    break;
+                }
+            }
+        }
+
+        $message = \trim($title !== '' && $content !== '' ? ($title . "\n\n" . $content) : ($content !== '' ? $content : $title));
+        if ($link !== '' && !\str_contains($message, $link)) {
+            $message = \trim($message . ($message !== '' ? "\n\n" : '') . $link);
+        }
+
+        return [
+            'title' => $title,
+            'content' => $content,
+            'link' => $link,
+            'image_url' => $imageUrl,
+            'message' => $message,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $account
+     * @return array<string, mixed>
+     */
+    protected function accountCredentials(array $account): array
+    {
+        return \is_array($account['credentials'] ?? null) ? $account['credentials'] : [];
+    }
+
+    protected function http(): SocialHttpClient
+    {
+        return ObjectManager::getInstance(SocialHttpClient::class);
+    }
+
+    protected function appConfig(): SocialPlatformAppConfig
+    {
+        return ObjectManager::getInstance(SocialPlatformAppConfig::class);
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
     protected function redact(array $payload): array
     {
-        $sensitive = ['token', 'access_token', 'refresh_token', 'secret', 'client_secret', 'password', 'authorization', 'api_key'];
+        $sensitive = ['token', 'access_token', 'refresh_token', 'secret', 'client_secret', 'password', 'authorization', 'api_key', 'app_secret'];
         foreach ($payload as $key => $value) {
             if (\in_array(\strtolower((string)$key), $sensitive, true)) {
                 $payload[$key] = '***';
@@ -122,5 +190,27 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
         }
 
         return $payload;
+    }
+
+    protected function apiErrorMessage(array $response, string $fallback): string
+    {
+        $json = \is_array($response['json'] ?? null) ? $response['json'] : [];
+        if (isset($json['error']) && \is_array($json['error'])) {
+            $message = \trim((string)($json['error']['message'] ?? ''));
+            if ($message !== '') {
+                return $message;
+            }
+        }
+        foreach (['message', 'error_description', 'error', 'errmsg'] as $key) {
+            $value = \trim((string)($json[$key] ?? ''));
+            if ($value !== '' && $value !== '0') {
+                return $value;
+            }
+        }
+        if (!empty($response['error'])) {
+            return (string)$response['error'];
+        }
+
+        return $fallback . ' (HTTP ' . (int)($response['status'] ?? 0) . ')';
     }
 }

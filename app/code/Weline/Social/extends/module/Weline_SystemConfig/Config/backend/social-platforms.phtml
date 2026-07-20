@@ -1,0 +1,57 @@
+<?php
+/**
+ * @meta.title {default="融媒体平台应用",description="Weline_Social 大型平台 App/Client 应用级凭据"}
+ * @meta.description {default="一键授权平台在此配置 App ID/Secret；WhatsApp/微信等人工平台可配置默认应用参数。账户级 Token 仍在融媒体账户中保存。"}
+ * @config.area {backend}
+ * @config.sort {40}
+ * @config.acl {Weline_Social::social}
+ */
+?>
+
+<w:config:group code="social_meta" label="Meta（Facebook / Instagram）" description="Facebook 与 Instagram 共用或分别配置 Meta 应用。" sort="10">
+    <w:config:field key="social/platform/facebook/app_id" label="Facebook App ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/facebook/app_secret" label="Facebook App Secret" type="password" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/facebook/graph_version" label="Graph API 版本" type="text" value-type="string" default="v21.0" scope="global,website" />
+    <w:config:field key="social/platform/instagram/app_id" label="Instagram App ID（可留空复用 Facebook）" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/instagram/app_secret" label="Instagram App Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_google" label="Google（YouTube）" description="YouTube Data API OAuth 客户端。" sort="20">
+    <w:config:field key="social/platform/youtube/client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/youtube/client_secret" label="OAuth Client Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_tiktok" label="TikTok" description="TikTok Login Kit / Content Posting 应用。" sort="30">
+    <w:config:field key="social/platform/tiktok/client_key" label="Client Key" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/tiktok/client_secret" label="Client Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_whatsapp" label="WhatsApp Cloud API" description="人工配置为主；可存默认 WABA 信息。" sort="40">
+    <w:config:field key="social/platform/whatsapp/waba_id" label="默认 WABA ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:hint>账户仍需填写 Phone Number ID 与 Access Token。</w:config:hint>
+</w:config:group>
+
+<w:config:group code="social_wechat" label="微信公众号" description="服务号 AppID/AppSecret，人工配置。" sort="50">
+    <w:config:field key="social/platform/wechat/app_id" label="默认 AppID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/wechat/app_secret" label="默认 AppSecret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_x" label="X / Twitter" description="X API OAuth 2.0 客户端。" sort="60">
+    <w:config:field key="social/platform/x/client_id" label="Client ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/x/client_secret" label="Client Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_linkedin" label="LinkedIn" description="LinkedIn Marketing / Share OAuth 客户端。" sort="70">
+    <w:config:field key="social/platform/linkedin/client_id" label="Client ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/linkedin/client_secret" label="Client Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_pinterest" label="Pinterest" description="Pinterest API 应用。" sort="80">
+    <w:config:field key="social/platform/pinterest/app_id" label="App ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/pinterest/app_secret" label="App Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
+
+<w:config:group code="social_snapchat" label="Snapchat" description="Snap Kit / Marketing API 应用。" sort="90">
+    <w:config:field key="social/platform/snapchat/client_id" label="Client ID" type="text" value-type="string" default="" scope="global,website" />
+    <w:config:field key="social/platform/snapchat/client_secret" label="Client Secret" type="password" value-type="string" default="" scope="global,website" />
+</w:config:group>
