@@ -54,4 +54,53 @@ final class FrameworkCompiler
             AtomicCompiledFilePublisher::releaseProcessLocks();
         }
     }
+
+    /**
+     * POSIX fast-path: published generation usable without recompile.
+     * Missing artifacts returns false and forces a fresh compile/promote.
+     */
+    public function isFresh(string $modulesRoot, string $outputDirectory): bool
+    {
+        unset($modulesRoot);
+        return $this->hasPublishedArtifacts($outputDirectory);
+    }
+
+    /**
+     * Windows fast-path: prove published artifacts exist without recursively
+     * scanning the source tree (Defender-cold walks are prohibitively slow).
+     */
+    public function isPublishedGenerationValid(
+        string $modulesRoot,
+        string $outputDirectory,
+        string $hookRegistry = '',
+    ): bool {
+        unset($modulesRoot);
+        if (!$this->hasPublishedArtifacts($outputDirectory)) {
+            return false;
+        }
+        if ($hookRegistry !== '' && !\is_file($hookRegistry)) {
+            return false;
+        }
+        return true;
+    }
+
+    private function hasPublishedArtifacts(string $outputDirectory): bool
+    {
+        $root = \rtrim($outputDirectory, '/\\');
+        if ($root === '' || !\is_dir($root)) {
+            return false;
+        }
+        foreach ([
+            'modules.php',
+            'query_providers.php',
+            'runtime_policy_providers.php',
+            'template_cache_policies.php',
+            'container.php',
+        ] as $fileName) {
+            if (!\is_file($root . DIRECTORY_SEPARATOR . $fileName)) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
