@@ -25,12 +25,6 @@ final class Add extends CommandAbstract
             return;
         }
 
-        $ip = \trim((string) ($args['ip'] ?? '127.0.0.1'));
-        if ($ip === '' || !self::isValidIp($ip)) {
-            $this->printer->error(__('无效的 IP：%{1}', [$ip]));
-            return;
-        }
-
         $positional = [];
         foreach ($args as $key => $arg) {
             if (\is_int($key) && !\str_starts_with((string) $arg, '-')) {
@@ -42,7 +36,7 @@ final class Add extends CommandAbstract
         $domain = \trim((string) ($args['domain'] ?? $positional[0] ?? ''));
         if ($domain === '') {
             $this->printer->error(__('请指定域名，例如：php bin/w server:hosts:add shop123.weline.test'));
-            $this->printer->note(__('可选：--ip=127.0.0.1（默认）'));
+            $this->printer->note(__('*.weline.test 固定写入 127.0.0.1，无需也不应指定其它 IP'));
             return;
         }
 
@@ -56,10 +50,19 @@ final class Add extends CommandAbstract
             return;
         }
 
+        // Managed local domains always map to loopback; ignore --ip / LAN / public IP.
+        $requestedIp = \trim((string) ($args['ip'] ?? ''));
+        $ip = HostsFileManager::resolveIpForDomain($domain, $requestedIp !== '' ? $requestedIp : HostsFileManager::LOOPBACK_IPV4);
+        if ($requestedIp !== '' && $requestedIp !== $ip) {
+            $this->printer->note(__('托管本地域名 %{1} 固定使用 %{2}，已忽略传入 IP %{3}', [$domain, $ip, $requestedIp]));
+        }
+
         $result = HostsFileManager::addDomain($domain, $ip);
         if ($result['success']) {
             if (($result['already_exists'] ?? false) === true) {
                 $this->printer->note($result['message']);
+            } elseif (($result['repaired'] ?? false) === true) {
+                $this->printer->success($result['message']);
             } else {
                 $this->printer->success($result['message']);
             }
@@ -85,22 +88,17 @@ final class Add extends CommandAbstract
             && LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
     }
 
-    private static function isValidIp(string $ip): bool
-    {
-        return \filter_var($ip, FILTER_VALIDATE_IP) !== false;
-    }
-
     public function tip(): string
     {
-        return __('向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test）');
+        return __('向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test → 127.0.0.1）');
     }
 
     public function help(): array|string
     {
         return [
-            __('用法') => 'php bin/w server:hosts:add <域名> [--ip=127.0.0.1]',
+            __('用法') => 'php bin/w server:hosts:add <域名>',
             __('示例') => 'php bin/w server:hosts:add myshop.weline.test',
-            __('说明') => __('与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用'),
+            __('说明') => __('与 server:start 使用同一套 HostsFileManager；*.weline.test 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用'),
         ];
     }
 }
