@@ -195,6 +195,11 @@ final class RuntimeCapabilityDetector
         }
 
         if (PHP_OS_FAMILY === 'Windows' && !empty($functions['shell_exec'])) {
+            $registryMemoryMb = $this->detectWindowsRegistryMemoryMb();
+            if ($registryMemoryMb !== null) {
+                return $registryMemoryMb;
+            }
+
             $powershell = $this->resolveWindowsCommandPath('powershell');
             if ($powershell !== null) {
                 $cmd = $this->quoteWindowsCommand($powershell)
@@ -207,6 +212,125 @@ final class RuntimeCapabilityDetector
         }
 
         return null;
+    }
+
+    private function detectWindowsRegistryMemoryMb(): ?int
+    {
+        if (PHP_INT_SIZE < 8) {
+            return null;
+        }
+
+        $reg = $this->resolveWindowsCommandPath('reg');
+        if ($reg === null) {
+            return null;
+        }
+
+        $command = $this->quoteWindowsCommand($reg)
+            . ' query "HKLM\HARDWARE\RESOURCEMAP\System Resources\Physical Memory"'
+            . ' /v .Translated 2>NUL';
+        $output = @\shell_exec($command);
+        if (!\is_string($output)
+            || !\preg_match('/REG_RESOURCE_LIST\s+([0-9a-f]+)/i', $output, $match)
+        ) {
+            return null;
+        }
+
+        $hex = (string)($match[1] ?? '');
+        if ($hex === '' || (\strlen($hex) % 2) !== 0) {
+            return null;
+        }
+
+        $resourceList = @\hex2bin($hex);
+        return \is_string($resourceList)
+            ? $this->parseWindowsPhysicalMemoryResourceListMb($resourceList)
+            : null;
+    }
+
+    /**
+     * Decode the packed CM_RESOURCE_LIST stored in the Physical Memory
+     * registry value. Windows encodes ordinary ranges in bytes and large
+     * ranges with the low 8, 16, or 32 bits omitted according to Flags.
+     */
+    private function parseWindowsPhysicalMemoryResourceListMb(string $resourceList): ?int
+    {
+        $size = \strlen($resourceList);
+        if ($size < 20) {
+            return null;
+        }
+
+        $header = \unpack('Vcount', \substr($resourceList, 0, 4));
+        $fullDescriptorCount = (int)($header['count'] ?? 0);
+        if ($fullDescriptorCount < 1 || $fullDescriptorCount > 64) {
+            return null;
+        }
+
+        $offset = 4;
+        $totalBytes = 0;
+        for ($fullIndex = 0; $fullIndex < $fullDescriptorCount; $fullIndex++) {
+            if (($offset + 16) > $size) {
+                return null;
+            }
+
+            $partialHeader = \unpack('Vcount', \substr($resourceList, $offset + 12, 4));
+            $partialDescriptorCount = (int)($partialHeader['count'] ?? 0);
+            if ($partialDescriptorCount < 1 || $partialDescriptorCount > 4096) {
+                return null;
+            }
+            $offset += 16;
+
+            $deviceSpecificBytes = 0;
+            for ($partialIndex = 0; $partialIndex < $partialDescriptorCount; $partialIndex++) {
+                if (($offset + 20) > $size) {
+                    return null;
+                }
+
+                $type = \ord($resourceList[$offset]);
+                $flagsData = \unpack('vflags', \substr($resourceList, $offset + 2, 2));
+                $lengthData = \unpack('Vlength', \substr($resourceList, $offset + 12, 4));
+                $flags = (int)($flagsData['flags'] ?? 0);
+                $length = (int)($lengthData['length'] ?? 0);
+
+                $multiplier = match ($type) {
+                    3 => 1,
+                    7 => match (true) {
+                        ($flags & 0x0200) !== 0 => 256,
+                        ($flags & 0x0400) !== 0 => 65536,
+                        ($flags & 0x0800) !== 0 => 4294967296,
+                        default => 0,
+                    },
+                    default => 0,
+                };
+                if ($multiplier > 0 && $length > 0) {
+                    if ($length > \intdiv(PHP_INT_MAX - $totalBytes, $multiplier)) {
+                        return null;
+                    }
+                    $totalBytes += $length * $multiplier;
+                }
+
+                // CmResourceTypeDeviceSpecific must be the last descriptor;
+                // its private payload follows the descriptor array.
+                if ($type === 5) {
+                    if ($partialIndex !== ($partialDescriptorCount - 1)) {
+                        return null;
+                    }
+                    $dataSize = \unpack('Vlength', \substr($resourceList, $offset + 4, 4));
+                    $deviceSpecificBytes = (int)($dataSize['length'] ?? 0);
+                }
+
+                $offset += 20;
+            }
+
+            if ($deviceSpecificBytes < 0 || ($offset + $deviceSpecificBytes) > $size) {
+                return null;
+            }
+            $offset += $deviceSpecificBytes;
+        }
+
+        if ($offset !== $size || $totalBytes <= 0) {
+            return null;
+        }
+
+        return (int)\floor($totalBytes / 1048576);
     }
 
     /**
@@ -305,7 +429,11 @@ final class RuntimeCapabilityDetector
         $counts = [0, 0];
         $connected = 0;
 
-        for ($index = 0; $index < 128; $index++) {
+        // A 128-connection sample can exceed the 1.5 ratio by ordinary hash
+        // variance and intermittently reject a healthy Linux kernel. Keep the
+        // strict balance gate, but use a large local-only sample so the result
+        // represents listener capability instead of one short random burst.
+        for ($index = 0; $index < 512; $index++) {
             $client = @\socket_create($familyName === 'ipv6' ? \AF_INET6 : \AF_INET, \SOCK_STREAM, \SOL_TCP);
             if (!$client instanceof \Socket) {
                 continue;
@@ -317,15 +445,18 @@ final class RuntimeCapabilityDetector
             $this->drainProbeAccepts($first, $counts[0]);
             $this->drainProbeAccepts($second, $counts[1]);
         }
-        $deadline = \microtime(true) + 0.15;
+        $deadlineNanoseconds = \hrtime(true) + 150_000_000;
         do {
             $before = $counts[0] + $counts[1];
             $this->drainProbeAccepts($first, $counts[0]);
             $this->drainProbeAccepts($second, $counts[1]);
-            if ($counts[0] + $counts[1] >= $connected || ($counts[0] + $counts[1]) === $before) {
+            if ($counts[0] + $counts[1] >= $connected) {
                 break;
             }
-        } while (\microtime(true) < $deadline);
+            if (($counts[0] + $counts[1]) === $before) {
+                SchedulerSystem::usleep(1000);
+            }
+        } while (\hrtime(true) < $deadlineNanoseconds);
 
         $min = \min($counts);
         $max = \max($counts);

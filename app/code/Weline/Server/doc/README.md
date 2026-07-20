@@ -32,6 +32,7 @@
 
 - Master `ServiceRegistry`：进程生命周期、槽位、代际和 READY。
 - Dispatcher 的版本化 `SET_ROUTE_TABLE` 快照：数据面路由。
+- Compatibility Protocol Edge active config digest：仅在用户显式启用兼容适配器时存在；不是业务策略权威。
 - SharedState registry：Session/Memory sidecar；只能由认证后的写路径修正。
 - `var/server/instances/*.json`：CLI endpoint 发现，不是运行时共识。
 - PID/端口索引：可重建缓存，不是存活或身份的最终事实源。

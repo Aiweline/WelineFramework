@@ -280,7 +280,14 @@ class WlsRequest extends Request
             $uri = ($targetPath !== '' ? $targetPath : $envelope->path)
                 . ($query !== '' ? '?' . $query : '');
             $protocol = \strtoupper(\trim((string)($envelope->attributes['protocol'] ?? 'HTTP/1.1')));
-            if (!\in_array($protocol, ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2', 'HTTP/3'], true)) {
+            if (!\in_array($protocol, [
+                'HTTP/1.0',
+                'HTTP/1.1',
+                'HTTP/2',
+                'HTTP/2.0',
+                'HTTP/3',
+                'HTTP/3.0',
+            ], true)) {
                 throw new \InvalidArgumentException('Unsupported HTTP protocol in request envelope.');
             }
             $headers = [];
