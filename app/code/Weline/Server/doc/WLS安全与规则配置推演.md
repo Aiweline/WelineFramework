@@ -23,7 +23,7 @@
 
 Dispatcher 拓扑使用 PROXY Protocol v2 把经过认证的客户端 peer 元数据传给 Worker。Direct 使用公开 socket 的真实 peer。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
 
-Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx/Caddy 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
+Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
 
 ## 3. RuntimePolicyBundle
 

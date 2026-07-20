@@ -531,8 +531,17 @@ class MasterProcess
         $http3Config = \is_array($envConfig['wls']['http3'] ?? null)
             ? $envConfig['wls']['http3']
             : [];
+        $edgeAllowsNativeHttp3 = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+            ->resolve($envConfig)
+            ->allowsNativeHttp3();
+        if (!$edgeAllowsNativeHttp3) {
+            $http3Config['enabled'] = false;
+            $http3Config['edge_status'] = 'retained_inactive';
+            $envConfig['wls']['http3'] = $http3Config;
+        }
         if ($runtimeSelection->isDirect()
             && $this->sslEnabled
+            && $edgeAllowsNativeHttp3
             && (bool)($http3Config['enabled'] ?? false)
         ) {
             $nativeDigest = \strtolower(\trim((string)($http3Config['native_digest'] ?? '')));

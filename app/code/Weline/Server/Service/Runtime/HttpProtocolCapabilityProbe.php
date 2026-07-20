@@ -38,11 +38,14 @@ final class HttpProtocolCapabilityProbe
             $http3Readiness,
             $quicTransportAdapter
         );
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve();
+        $wlsAdapters = $this->applyEdgeAdapterGate($wlsAdapters, $edgeAdapter);
         $tlsSessionReuse = (new TlsSessionResumptionCapabilityProbe())->snapshot($wlsAdapters);
-        $defaultPolicy = $this->buildDefaultPolicy($curl, $wlsAdapters, $tlsSessionReuse, $tlsAlpn);
+        $defaultPolicy = $this->buildDefaultPolicy($curl, $wlsAdapters, $tlsSessionReuse, $tlsAlpn, $edgeAdapter);
 
         return [
             'default_policy' => $defaultPolicy,
+            'edge' => $edgeAdapter->doctorSnapshot(),
             'tls_alpn' => $tlsAlpn,
             'php' => [
                 'version' => \PHP_VERSION,
@@ -88,7 +91,8 @@ final class HttpProtocolCapabilityProbe
         array $curl,
         array $wlsAdapters,
         array $tlsResumption,
-        array $tlsAlpn
+        array $tlsAlpn,
+        ?\Weline\Server\Service\Edge\EdgeAdapterInterface $edgeAdapter = null
     ): array
     {
         $effective = $this->selectEffectiveHttpVersion($curl, $wlsAdapters);
@@ -97,6 +101,9 @@ final class HttpProtocolCapabilityProbe
         $http3ClientReady = \defined('CURL_HTTP_VERSION_3ONLY')
             && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP3');
         $http3AutoReady = $http3Ready && $http3ClientReady;
+        $edgeIsNginx = $edgeAdapter !== null
+            && $edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+        $targetPreferred = $edgeIsNginx ? 'http/1.1' : 'http/2';
         $streamTls = \is_array($tlsResumption['stream'] ?? null) ? $tlsResumption['stream'] : [];
         $sharedContextSessionReuseVerified = (bool)($streamTls['shared_ssl_context'] ?? false)
             && (bool)($streamTls['stream_context_ticket_callback_supported'] ?? false)
@@ -126,13 +133,16 @@ final class HttpProtocolCapabilityProbe
             && (bool)($http3Capabilities['tls_cross_worker_session_resumption_verified'] ?? false);
 
         return [
-            'target_preferred' => 'http/2',
+            'target_preferred' => $targetPreferred,
             'effective_preferred' => 'http/' . $effective,
             'fallback' => $http3AutoReady ? ['http/2', 'http/1.1'] : ['http/1.1'],
-            'negotiation_order' => $http3AutoReady
-                ? ['http/3', 'http/2', 'http/1.1']
-                : ['http/2', 'http/1.1'],
-            'http3_when_available' => true,
+            'negotiation_order' => $edgeIsNginx
+                ? ['http/1.1']
+                : ($http3AutoReady
+                    ? ['http/3', 'http/2', 'http/1.1']
+                    : ['http/2', 'http/1.1']),
+            'http3_when_available' => !$edgeIsNginx,
+            'edge_adapter' => $edgeAdapter?->name() ?? \Weline\Server\Service\Edge\EdgeAdapterResolver::DEFAULT_ADAPTER,
             'http3_runtime_ready' => $http3Ready,
             'http3_client_ready' => $http3ClientReady,
             'http3_selection' => $http3AutoReady
@@ -339,6 +349,42 @@ final class HttpProtocolCapabilityProbe
                 'install_hints' => $http3Readiness['install_hints'],
             ],
         ];
+    }
+
+    /**
+     * Keep native protocol implementations, but disable negotiation when edge adapter is nginx.
+     *
+     * @param array<string, mixed> $wlsAdapters
+     * @return array<string, mixed>
+     */
+    private function applyEdgeAdapterGate(
+        array $wlsAdapters,
+        \Weline\Server\Service\Edge\EdgeAdapterInterface $edgeAdapter
+    ): array {
+        $wlsAdapters['edge_adapter'] = $edgeAdapter->name();
+        if ($edgeAdapter->allowsNativeHttp2() && $edgeAdapter->allowsNativeHttp3()) {
+            $wlsAdapters['http2']['edge_status'] = 'active_when_verified';
+            $wlsAdapters['http3']['edge_status'] = 'active_when_verified';
+            return $wlsAdapters;
+        }
+
+        if (!$edgeAdapter->allowsNativeHttp2()) {
+            $wlsAdapters['http2']['enabled'] = false;
+            $wlsAdapters['http2']['edge_status'] = 'retained_inactive';
+            $wlsAdapters['http2']['reason'] = 'Native HTTP/2 retained but inactive because wls.edge.adapter='
+                . $edgeAdapter->name()
+                . '; set wls.edge.adapter=wls to enable WLS negotiation.';
+        }
+        if (!$edgeAdapter->allowsNativeHttp3()) {
+            $wlsAdapters['http3']['enabled'] = false;
+            $wlsAdapters['http3']['runtime_verified'] = false;
+            $wlsAdapters['http3']['edge_status'] = 'retained_inactive';
+            $wlsAdapters['http3']['reason'] = 'Native HTTP/3 retained but inactive because wls.edge.adapter='
+                . $edgeAdapter->name()
+                . '; Nginx should terminate HTTP/3, or set wls.edge.adapter=wls.';
+        }
+
+        return $wlsAdapters;
     }
 
 

@@ -49,9 +49,50 @@ class Doctor extends CommandAbstract
         $protocols = \is_array($diagnostics['protocols'] ?? null) ? $diagnostics['protocols'] : [];
         $policy = \is_array($protocols['default_policy'] ?? null) ? $protocols['default_policy'] : [];
         $adapters = \is_array($protocols['wls_adapters'] ?? null) ? $protocols['wls_adapters'] : [];
+        $edge = \is_array($protocols['edge'] ?? null) ? $protocols['edge'] : [];
         $http3Adapter = \is_array($adapters['http3'] ?? null) ? $adapters['http3'] : [];
         $http3Ready = (bool)($http3Adapter['enabled'] ?? false)
             && (bool)($http3Adapter['runtime_verified'] ?? false);
+        $this->printer->note(__('边缘适配器：%{1}（原生 HTTP/2=%{2}，原生 HTTP/3=%{3}）', [
+            (string)($edge['adapter'] ?? ($policy['edge_adapter'] ?? 'nginx')),
+            (string)($edge['native_http2'] ?? ($adapters['http2']['edge_status'] ?? __('未知'))),
+            (string)($edge['native_http3'] ?? ($adapters['http3']['edge_status'] ?? __('未知'))),
+        ]));
+        if (($edge['adapter'] ?? '') === 'nginx') {
+            $reloadConfigured = (bool)($edge['reload_command_configured'] ?? false);
+            $this->printer->note(__('Nginx 边缘 reload 命令：%{1}', [
+                $reloadConfigured ? (string)($edge['reload_command'] ?? '') : __('未配置（证书更新后不会自动 reload）'),
+            ]));
+            $managed = \is_array($edge['managed_nginx'] ?? null) ? $edge['managed_nginx'] : [];
+            if ($managed !== []) {
+                $isManaged = (bool)($managed['managed'] ?? false);
+                $managedMode = (string)($managed['managed_mode'] ?? ($isManaged ? 'true' : 'false'));
+                $hostBinary = (string)($managed['host_nginx_binary'] ?? '');
+                if ($isManaged) {
+                    $this->printer->note(__('Nginx 模式：WLS 托管（本项目 extend/server/nginx，managed=%{1}）', [$managedMode]));
+                    $this->printer->note(__('托管 Nginx：已安装=%{1}，运行中=%{2}，HTTP=%{3}，HTTPS=%{4}，偏移=%{5}', [
+                        (bool)($managed['installed'] ?? false) ? __('是') : __('否'),
+                        (bool)($managed['running'] ?? false) ? __('是') : __('否'),
+                        (string)($managed['listen_http'] ?? ''),
+                        (string)($managed['listen_https'] ?? ''),
+                        (string)($managed['project_offset'] ?? ''),
+                    ]));
+                } elseif ($managedMode === 'auto' && $hostBinary !== '') {
+                    $this->printer->note(__(
+                        'Nginx 模式：自动检测为宿主机（%{1}）— WLS 仅处理业务回源，不安装/不启停托管 Nginx',
+                        [$hostBinary]
+                    ));
+                } else {
+                    $this->printer->note(__(
+                        'Nginx 模式：宿主机（managed=false）— WLS 仅处理业务回源，不安装/不启停托管 Nginx；由用户自配系统 Nginx 反代'
+                    ));
+                }
+            } else {
+                $this->printer->note(__(
+                    'Nginx 模式：边缘适配器为 nginx（未读到托管快照时，请检查 wls.edge.nginx 配置）'
+                ));
+            }
+        }
         $this->printer->note(__('HTTP 默认：目标=%{1}，实际=%{2}', [
             (string)($policy['target_preferred'] ?? 'http/2'),
             (string)($policy['effective_preferred'] ?? __('未知')),

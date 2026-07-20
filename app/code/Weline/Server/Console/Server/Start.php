@@ -607,7 +607,23 @@ class Start extends CommandAbstract
             'runtime_verified' => false,
             'reason' => $sslEnabled ? 'HTTP/3 requires POSIX Direct topology.' : 'HTTP/3 requires TLS.',
         ];
-        if ($sslEnabled && $runtimeSelection->isDirect()) {
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolveFromWlsSection($config);
+        $this->printer->note(__('边缘适配器：%{1}', [$edgeAdapter->name()]));
+        if ($edgeAdapter->expectsPlaintextBackend() && $sslEnabled) {
+            $this->printer->warning(__(
+                '当前 wls.edge.adapter=nginx，建议使用 --no-ssl 明文回源，由 Nginx 终结 TLS/HTTP2/HTTP3；继续启用 WLS SSL 时仅协商 HTTP/1.1。'
+            ));
+        }
+        if (isset($args['install-nginx']) || isset($args['install_nginx'])) {
+            $this->printer->note(__('正在按请求安装本项目托管 Nginx...'));
+            $installResult = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv()->install(false);
+            if (!($installResult['ok'] ?? false)) {
+                $this->printer->error((string)($installResult['message'] ?? __('托管 Nginx 安装失败')));
+                return 1;
+            }
+            $this->printer->success((string)$installResult['message']);
+        }
+        if ($sslEnabled && $runtimeSelection->isDirect() && $edgeAdapter->allowsNativeHttp3()) {
             if (!\in_array(\PHP_OS_FAMILY, ['Darwin', 'Linux'], true)) {
                 $this->printer->error(__('HTTP/3 Direct 仅支持 macOS/Linux；当前平台必须使用 Dispatcher 的 HTTP/2/HTTP/1.1。'));
                 return;
@@ -655,6 +671,12 @@ class Start extends CommandAbstract
                 'runtime_verified' => (bool)$config['http3']['runtime_verified'],
                 'fingerprint' => (string)($config['http3']['fingerprint'] ?? ''),
             ]);
+        } elseif ($sslEnabled && $runtimeSelection->isDirect() && !$edgeAdapter->allowsNativeHttp3()) {
+            $config['http3']['reason'] = 'Native HTTP/3 retained but inactive (wls.edge.adapter=' . $edgeAdapter->name() . ').';
+            $this->printer->note(__(
+                '边缘适配器为 %{1}：WLS 原生 HTTP/3 保留但不启用；请由 Nginx 终结 HTTP/3，或设置 wls.edge.adapter=wls。',
+                [$edgeAdapter->name()]
+            ));
         }
         $this->traceStartupPhase($instanceName, 'runtime-strategy:after', [
             'topology' => $runtimeSelection->effectiveTopology->value,
@@ -1368,7 +1390,7 @@ class Start extends CommandAbstract
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
             $this->traceStartupPhase($instanceName, 'master-background:before');
-            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $foregroundMode, $windowMode);
+            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $foregroundMode, $windowMode, $args);
             $this->traceStartupPhase($instanceName, 'master-background:after', [
                 'completed' => $startupCompleted,
             ]);
@@ -2033,7 +2055,8 @@ class Start extends CommandAbstract
         string $host = '127.0.0.1',
         int $port = 443,
         bool $foregroundMode = false,
-        bool $windowMode = false
+        bool $windowMode = false,
+        array $args = []
     ): bool {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
@@ -2228,6 +2251,7 @@ class Start extends CommandAbstract
                     [$lastMasterPid, $lastControlPort]
                 ));
                 $this->printer->success(__('所有服务已就绪，启动完成。'));
+                $this->maybeStartManagedNginxAfterReady((int)$port, is_array($args) ? $args : []);
                 $this->printer->note(__(
                     '使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'
                 ));
@@ -8125,6 +8149,8 @@ PHP;
                 '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability（默认 auto）'),
                 '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
                 '--install-deps' => __('显式调用 env:install 安装缺失运行时依赖；可能运行包管理器/PECL并修改 PHP 配置，普通 server:start 不会执行这些操作'),
+                '--install-nginx' => __('显式安装/校验本项目托管 Nginx（可能联网）；managed=true 启动时若缺失也会自动安装'),
+                '--no-nginx' => __('跳过本项目托管 Nginx 的自动启动（仍可稍后 server:nginx:start）'),
                 '--no-auto-deps' => __('兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
                 '--direct' => __('直连模式：Linux 使用 SO_REUSEPORT，macOS 使用 Master 共享监听 FD'),
@@ -8578,6 +8604,69 @@ PHP;
         );
         $this->printer->note($this->colorize(str_repeat('═', $width), 'Blue'));
         $this->printer->note('');
+    }
+
+    /**
+     * After WLS is READY, optionally start the per-project managed nginx edge.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function maybeStartManagedNginxAfterReady(int $upstreamPort, array $args): void
+    {
+        if (isset($args['no-nginx']) || isset($args['no_nginx'])) {
+            $this->printer->note(__('已跳过托管 Nginx 自动启动（--no-nginx）'));
+            return;
+        }
+        try {
+            $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
+            if (!$service->isEdgeNginxManaged() || !$service->paths()->autoStartEnabled()) {
+                if (!$service->paths()->managedEnabled()
+                    && (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve()->name()
+                        === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+                ) {
+                    $hostBinary = $service->paths()->detectHostNginxBinary();
+                    if ($service->paths()->managedMode() === 'auto' && $hostBinary !== null) {
+                        $this->printer->note(__(
+                            '已自动检测到宿主机 Nginx（%{1}）：跳过托管 Nginx，WLS 仅处理业务回源。',
+                            [$hostBinary]
+                        ));
+                    } else {
+                        $this->printer->note(__(
+                            '宿主机 Nginx 模式（wls.edge.nginx.managed=false）：不启动托管 Nginx，WLS 仅处理业务回源。'
+                        ));
+                    }
+                }
+                return;
+            }
+            if ($service->paths()->managedMode() === 'auto') {
+                $this->printer->note(__(
+                    '未检测到宿主机 Nginx：将使用本项目托管 Nginx（extend/server/nginx）。'
+                ));
+            }
+            if (!$service->paths()->isInstalled()) {
+                $this->printer->note(__(
+                    '托管 Nginx 未安装，正在按当前平台自动安装到 extend/server/nginx（macOS/Linux 源码编译，Windows 官方 zip）...'
+                ));
+            }
+            $result = $service->prepareAndStart($upstreamPort, '127.0.0.1');
+            if (!($result['ok'] ?? false)) {
+                $this->printer->warning(__('托管 Nginx 启动失败：%{1}', [(string)$result['message']]));
+                return;
+            }
+            $details = \is_array($result['details'] ?? null) ? $result['details'] : [];
+            $this->printer->success(__('托管 Nginx 已启动'));
+            if ($details !== []) {
+                $this->printer->note(__('边缘 HTTP %{1} → WLS %{2}', [
+                    (string)($details['listen_http'] ?? ''),
+                    (string)($details['upstream'] ?? ''),
+                ]));
+                if (!empty($details['ssl'])) {
+                    $this->printer->note(__('边缘 HTTPS %{1}', [(string)($details['listen_https'] ?? '')]));
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->printer->warning(__('托管 Nginx 启动异常：%{1}', [$e->getMessage()]));
+        }
     }
 
     /**
