@@ -16,11 +16,16 @@ use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Pool\CachePool;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\FactoryObjectInterface;
 use Weline\Framework\Runtime\RequestScope;
 
 class ObjectManager implements ManagerInterface
 {
+    private const PRECOMPILED_METADATA_FORMAT = 'weline-reflection-metadata/v2';
+
+    private const COMPILED_FACTORY_FORMAT = 'weline-compiled-factories/v2';
+
     public const unserializable_class = [
         \PDO::class,
         \WeakMap::class
@@ -45,6 +50,9 @@ class ObjectManager implements ManagerInterface
      * 性能优化：避免 FPM 模式下每次请求都执行反射操作
      */
     private static ?array $precompiledMetadata = null;
+
+    /** @var array<string, string> */
+    private static array $precompiledMetadataSourceSignatures = [];
     
     /**
      * 预编译元数据是否已尝试加载
@@ -87,6 +95,12 @@ class ObjectManager implements ManagerInterface
      */
     private static ?array $compiledFactories = null;
 
+    /** @var array<class-string, string> */
+    private static array $compiledFactorySourceSignatures = [];
+
+    /** @var array<string, string|null> */
+    private static array $currentSourceSignatures = [];
+
     /**
      * 编译型工厂是否已尝试加载
      */
@@ -95,6 +109,113 @@ class ObjectManager implements ManagerInterface
     private static ?array $generatedPluginRegistry = null;
     private static ?int $generatedPluginRegistryMtime = null;
     private static array $interceptorGenerationInProgress = [];
+
+    /**
+     * Authoritative contract bindings compiled from etc/module.php.
+     *
+     * FrameworkCompiler temporarily installs its staging registry so a first
+     * compile never reads a stale final generation. Runtime uses the immutable
+     * final registry and keeps it process-local.
+     */
+    private static ?ServiceProviderRegistry $serviceProviderRegistry = null;
+
+    /** @var array<string, class-string|null> */
+    private static array $serviceProviderImplementationCache = [];
+
+    public static function replaceServiceProviderRegistry(
+        ?ServiceProviderRegistry $registry,
+    ): ?ServiceProviderRegistry {
+        $previous = self::$serviceProviderRegistry;
+        self::$serviceProviderRegistry = $registry;
+        self::$serviceProviderImplementationCache = [];
+
+        return $previous;
+    }
+
+    private static function resolveProvidedImplementation(string $contract): ?string
+    {
+        if (\array_key_exists($contract, self::$serviceProviderImplementationCache)) {
+            return self::$serviceProviderImplementationCache[$contract];
+        }
+
+        $explicitRegistry = self::$serviceProviderRegistry !== null;
+        $registry = self::$serviceProviderRegistry ??= new ServiceProviderRegistry();
+        try {
+            $implementation = $registry->implementationFor($contract);
+        } catch (\RuntimeException $error) {
+            if ($explicitRegistry) {
+                throw $error;
+            }
+
+            // The bootstrap command may run before the first compiled registry
+            // exists. Unbound third-party interfaces can still use their
+            // explicit Factory migration bridge during that control-plane gap.
+            $implementation = null;
+        }
+
+        if ($implementation !== null) {
+            if ($implementation === $contract
+                || !\class_exists($implementation, true)
+                || !\is_a($implementation, $contract, true)
+            ) {
+                throw new Exception(
+                    "模块 Provider 绑定无效：{$contract} => {$implementation}",
+                );
+            }
+        }
+
+        return self::$serviceProviderImplementationCache[$contract] = $implementation;
+    }
+
+    private static function instantiateInterface(
+        string $contract,
+        array $arguments,
+        bool $shared,
+        bool $cache,
+    ): object {
+        $implementation = self::resolveProvidedImplementation($contract);
+        if ($implementation !== null) {
+            $instance = self::getInstance($implementation, $arguments, $shared, $cache);
+            if (!$instance instanceof $contract) {
+                throw new Exception(
+                    "模块 Provider 实现类型不匹配：{$contract} => {$implementation}",
+                );
+            }
+            if ($shared) {
+                self::setScopedInstance($contract, $instance);
+            }
+
+            return $instance;
+        }
+
+        $factoryClass = $contract . 'Factory';
+        if (!self::cachedClassExists($factoryClass)) {
+            throw new Exception(
+                "接口 {$contract} 未在 etc/module.php provides 声明实现，且迁移工厂 {$factoryClass} 不存在，无法实例化",
+            );
+        }
+
+        $factoryClass = self::parserClass($factoryClass);
+        $factory = self::instantiateObject(
+            self::getReflectionInstance($factoryClass),
+            $factoryClass,
+            [],
+        );
+        self::callInitMethod($factory);
+        if (!$factory instanceof FactoryObjectInterface) {
+            throw new Exception("工厂类 {$factoryClass} 没有实现 FactoryObjectInterface 接口");
+        }
+
+        $instance = $factory->create();
+        if (!\is_object($instance) || !$instance instanceof $contract) {
+            throw new Exception("工厂类 {$factoryClass} 返回了不匹配 {$contract} 的实例");
+        }
+        if ($shared) {
+            self::setScopedInstance($contract, $instance);
+        }
+
+        return $instance;
+    }
 
     private function __clone()
     {
@@ -559,32 +680,10 @@ class ObjectManager implements ManagerInterface
         
         $isInterface = self::$interfaceCache[$class];
         
-        // 如果确认是接口，使用工厂类创建实现类实例
+        // etc/module.php provides is authoritative. Factory remains only as
+        // the explicit third-party migration bridge for unbound interfaces.
         if ($isInterface) {
-            // 确保工厂类存在（使用class_exists确保autoload生效）
-            if (class_exists($factoryClass, true)) {
-                // 直接实例化工厂类，不经过initClassInstance（避免自动调用create）
-                // 我们需要工厂类实例，而不是实现类实例
-                $factory_new_class = self::parserClass($factoryClass);
-                $factory_refClass = self::getReflectionInstance($factory_new_class);
-                $factory = self::instantiateObject($factory_refClass, $factory_new_class, []);
-                // 只调用__init，不调用processFactoryClass
-                self::callInitMethod($factory);
-                
-                if ($factory instanceof FactoryObjectInterface) {
-                    $instance = $factory->create();
-                    // 缓存接口实例（实际缓存的是实现类实例）
-                    if ($shared) {
-                        self::setScopedInstance($class, $instance);
-                    }
-                    return $instance;
-                } else {
-                    throw new Exception("工厂类 {$factoryClass} 没有实现 FactoryObjectInterface 接口");
-                }
-            } else {
-                // 接口存在但没有工厂类，抛出异常
-                throw new Exception("接口 {$class} 没有对应的工厂类 {$factoryClass}，无法实例化");
-            }
+            return self::instantiateInterface($class, $arguments, $shared, $cache);
         }
         
         // 解析类名（处理拦截器和工厂类）
@@ -593,7 +692,10 @@ class ObjectManager implements ManagerInterface
         // 编译工厂快速路径：无参且存在编译闭包时直接实例化，跳过所有反射
         if ($arguments === []) {
             self::loadCompiledFactories();
-            if (self::$compiledFactories !== null && isset(self::$compiledFactories[$new_class])) {
+            if (self::$compiledFactories !== null
+                && isset(self::$compiledFactories[$new_class])
+                && self::compiledFactoryIsCurrent($new_class)
+            ) {
                 $new_object = (self::$compiledFactories[$new_class])();
                 $new_object = self::initClassInstance($class, $new_object);
                 if ($shared) {
@@ -606,31 +708,13 @@ class ObjectManager implements ManagerInterface
             }
         }
         
-        // 再次检查解析后的类名是否是接口（防止parserClass返回接口）
-        // 必须在isStaticClass之前检查，因为isStaticClass会调用getReflectionInstance
+        // 防止 parserClass 返回接口；仍走同一份 Provider 权威解析。
         if (interface_exists($new_class, true)) {
-            $factoryClass = $new_class . 'Factory';
-            if (self::cachedClassExists($factoryClass)) {
-                // 直接实例化工厂类，不经过initClassInstance（避免自动调用create）
-                $factory_new_class = self::parserClass($factoryClass);
-                $factory_refClass = self::getReflectionInstance($factory_new_class);
-                $factory = self::instantiateObject($factory_refClass, $factory_new_class, []);
-                // 只调用__init，不调用processFactoryClass
-                self::callInitMethod($factory);
-                
-                if ($factory instanceof FactoryObjectInterface) {
-                    $instance = $factory->create();
-                    if ($shared) {
-                        self::setScopedInstance($class, $instance);
-                        self::setScopedInstance($new_class, $instance);
-                    }
-                    return $instance;
-                } else {
-                    throw new Exception("工厂类 {$factoryClass} 没有实现 FactoryObjectInterface 接口");
-                }
-            } else {
-                throw new Exception("接口 {$new_class} 没有对应的工厂类 {$factoryClass}，无法实例化");
+            $instance = self::instantiateInterface($new_class, $arguments, $shared, $cache);
+            if ($shared && $class !== $new_class) {
+                self::setScopedInstance($class, $instance);
             }
+            return $instance;
         }
         
         // 检测静态类（静态类禁止实例化）
@@ -1020,6 +1104,7 @@ class ObjectManager implements ManagerInterface
             self::$generatedPluginRegistry = null;
             self::$generatedPluginRegistryMtime = null;
             self::$interceptorGenerationInProgress = [];
+            self::$currentSourceSignatures = [];
         }
 
         return [
@@ -1818,7 +1903,16 @@ class ObjectManager implements ManagerInterface
         self::$precompiledLoaded = true;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_metadata.php';
         if (\is_file($file)) {
-            self::$precompiledMetadata = include $file;
+            $payload = include $file;
+            if (\is_array($payload)
+                && ($payload['format'] ?? null) === self::PRECOMPILED_METADATA_FORMAT
+                && (int)($payload['php_version_id'] ?? 0) === \PHP_VERSION_ID
+                && \is_array($payload['metadata'] ?? null)
+                && \is_array($payload['source_signatures'] ?? null)
+            ) {
+                self::$precompiledMetadata = $payload['metadata'];
+                self::$precompiledMetadataSourceSignatures = $payload['source_signatures'];
+            }
         }
     }
 
@@ -1834,7 +1928,106 @@ class ObjectManager implements ManagerInterface
         self::$compiledFactoriesLoaded = true;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'compiled_factories.php';
         if (\is_file($file)) {
-            self::$compiledFactories = include $file;
+            $payload = include $file;
+            if (\is_array($payload)
+                && ($payload['format'] ?? null) === self::COMPILED_FACTORY_FORMAT
+                && (int)($payload['php_version_id'] ?? 0) === \PHP_VERSION_ID
+                && \is_array($payload['factories'] ?? null)
+                && \is_array($payload['source_signatures'] ?? null)
+            ) {
+                self::$compiledFactories = $payload['factories'];
+                self::$compiledFactorySourceSignatures = $payload['source_signatures'];
+            }
+        }
+    }
+
+    private static function compiledFactoryIsCurrent(string $className): bool
+    {
+        $expected = self::$compiledFactorySourceSignatures[$className] ?? null;
+        if (!\is_string($expected)
+            || \preg_match('/^[a-f0-9]{64}$/D', $expected) !== 1
+            || !(self::$compiledFactories[$className] ?? null) instanceof \Closure
+        ) {
+            unset(self::$compiledFactories[$className], self::$compiledFactorySourceSignatures[$className]);
+            return false;
+        }
+
+        $current = self::currentSourceSignature($className, null, true);
+        if (!\is_string($current) || !\hash_equals($expected, $current)) {
+            unset(self::$compiledFactories[$className], self::$compiledFactorySourceSignatures[$className]);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static function precompiledMetadataIsCurrent(string $className, string $methodName): bool
+    {
+        $cacheKey = $className . '::' . $methodName;
+        $expected = self::$precompiledMetadataSourceSignatures[$cacheKey] ?? null;
+        if (!\is_string($expected) || \preg_match('/^[a-f0-9]{64}$/D', $expected) !== 1) {
+            return false;
+        }
+
+        $current = self::currentSourceSignature($className, $methodName, false);
+        return \is_string($current) && \hash_equals($expected, $current);
+    }
+
+    private static function currentSourceSignature(
+        string $className,
+        ?string $methodName,
+        bool $factoryMode,
+    ): ?string {
+        $cacheKey = $className . '::' . ($factoryMode ? '@factory' : (string)$methodName);
+        if (\array_key_exists($cacheKey, self::$currentSourceSignatures)) {
+            return self::$currentSourceSignatures[$cacheKey];
+        }
+
+        try {
+            $class = self::getReflectionInstance($className);
+            $method = null;
+            if ($factoryMode) {
+                $constructor = $class->getConstructor();
+                if ($constructor !== null && $constructor->isPrivate() && $class->hasMethod('getInstance')) {
+                    $candidate = $class->getMethod('getInstance');
+                    if ($candidate->isStatic() && $candidate->getNumberOfRequiredParameters() === 0) {
+                        $method = $candidate;
+                    }
+                }
+                $method ??= $constructor;
+            } elseif ($methodName !== null && $class->hasMethod($methodName)) {
+                $method = $class->getMethod($methodName);
+            }
+
+            $files = [];
+            $classFile = $class->getFileName();
+            if (\is_string($classFile) && $classFile !== '') {
+                $files[$classFile] = true;
+            }
+            if ($method instanceof \ReflectionMethod) {
+                $declarationFile = $method->getDeclaringClass()->getFileName();
+                if (\is_string($declarationFile) && $declarationFile !== '') {
+                    $files[$declarationFile] = true;
+                }
+            }
+            if ($files === []) {
+                return self::$currentSourceSignatures[$cacheKey] = null;
+            }
+
+            $paths = \array_keys($files);
+            \sort($paths, \SORT_STRING);
+            $context = \hash_init('sha256');
+            foreach ($paths as $path) {
+                $digest = (string)@\hash_file('sha256', $path);
+                if (\preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1) {
+                    return self::$currentSourceSignatures[$cacheKey] = null;
+                }
+                \hash_update($context, $digest . "\0");
+            }
+
+            return self::$currentSourceSignatures[$cacheKey] = \hash_final($context);
+        } catch (\Throwable) {
+            return self::$currentSourceSignatures[$cacheKey] = null;
         }
     }
     
@@ -1850,7 +2043,10 @@ class ObjectManager implements ManagerInterface
         if (!isset(self::$methodParamsMetadata[$cacheKey])) {
             // 优先使用预编译元数据（避免运行时反射）
             self::loadPrecompiledMetadata();
-            if (self::$precompiledMetadata !== null && isset(self::$precompiledMetadata[$cacheKey])) {
+            if (self::$precompiledMetadata !== null
+                && isset(self::$precompiledMetadata[$cacheKey])
+                && self::precompiledMetadataIsCurrent($className, $methodsName)
+            ) {
                 $metadata = self::$precompiledMetadata[$cacheKey];
             } else {
                 // 回退到运行时反射解析
@@ -2079,28 +2275,11 @@ class ObjectManager implements ManagerInterface
                             throw new Exception(__('不支持静态类实例化：%{1}。静态类应直接使用，无需通过 ObjectManager 实例化。请修改构造函数，移除对静态类的依赖注入。', $paramTypeName));
                         }
                         
-                        // 如果是接口，尝试查找对应的工厂类
                         $actualClass = $paramTypeName;
-                        try {
-                            $refParamType = new \ReflectionClass($paramTypeName);
-                            if ($refParamType->isInterface()) {
-                                $factoryClass = $paramTypeName . 'Factory';
-                                if (self::cachedClassExists($factoryClass)) {
-                                    $actualClass = $factoryClass;
-                                } else {
-                                    // 如果找不到工厂类，抛出明确的异常
-                                    throw new Exception("接口 {$paramTypeName} 没有对应的工厂类 {$factoryClass}，无法实例化。请创建工厂类或使用其他方式获取实例。");
-                                }
-                            }
-                        } catch (\ReflectionException $e) {
-                            // 不是接口或类不存在，继续正常流程
-                        } catch (\Exception $e) {
-                            // 如果是接口但没有工厂类，直接抛出异常
-                            throw $e;
-                        }
-                        
-                        $args = self::getMethodParams($actualClass);
-                        // 实例化依赖对象
+                        $args = interface_exists($actualClass, true)
+                            ? []
+                            : self::getMethodParams($actualClass);
+                        // 接口由 module.php provides 权威解析；具体类沿用原 DI。
                         try {
                             $newObj = ObjectManager::getInstance($actualClass, $args);
                         } catch (\ReflectionException $e) {
