@@ -2914,3 +2914,4 @@ proc_open不可用，使用传统方式启动后台进程,"proc_open is not avai
 "未检测到宿主机 Nginx：将使用本项目托管 Nginx（extend/server/nginx）。","No host Nginx detected: using per-project managed Nginx (extend/server/nginx)."
 "Nginx 模式：WLS 托管（本项目 extend/server/nginx，managed=%{1}）","Nginx mode: WLS-managed (project extend/server/nginx, managed=%{1})"
 "Nginx 模式：自动检测为宿主机（%{1}）— WLS 仅处理业务回源，不安装/不启停托管 Nginx","Nginx mode: auto-detected host (%{1}) — WLS backend only; does not install/start managed Nginx"
+"证书持久层恢复失败，已跳过并继续启动：%{1}","Certificate store restore failed; skipped and continuing startup: %{1}"
