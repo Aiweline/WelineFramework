@@ -140,7 +140,6 @@ Marketplace,Marketplace
 "Confirm the PHP profile save before submitting.","Confirm the PHP profile save before submitting."
 "Runtime reload skipped.","Runtime reload skipped."
 "Select a running WLS instance before requesting reload.","Select a running WLS instance before requesting reload."
-"WLS reload request failed.","WLS reload request failed."
 "Profile Aligned","Profile Aligned"
 "Profile Override","Profile Override"
 Satisfied,Satisfied

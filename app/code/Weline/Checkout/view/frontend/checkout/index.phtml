@@ -351,9 +351,18 @@ $copy = [
     }
 
     function setMessage(value, type) {
+        if (!message) {
+            return;
+        }
         message.textContent = text(value);
         message.classList.toggle('is-error', type === 'error');
         message.classList.toggle('is-success', type === 'success');
+    }
+
+    function setText(node, value) {
+        if (node) {
+            node.textContent = text(value);
+        }
     }
 
     function money(amount) {
@@ -389,6 +398,9 @@ $copy = [
     }
 
     function renderItems(items) {
+        if (!itemsBox) {
+            return;
+        }
         itemsBox.innerHTML = '';
         if (!items.length) {
             const empty = document.createElement('p');
@@ -415,6 +427,9 @@ $copy = [
     }
 
     function renderMethods(container, methods, name) {
+        if (!container) {
+            return;
+        }
         container.innerHTML = '';
         if (!methods.length) {
             const empty = document.createElement('p');
@@ -453,9 +468,9 @@ $copy = [
     function renderTotals() {
         const subtotal = Number(checkoutState.cart.subtotal || 0);
         const shipping = selectedShippingAmount();
-        subtotalNode.textContent = money(subtotal);
-        shippingAmountNode.textContent = money(shipping);
-        grandTotalNode.textContent = money(subtotal + shipping);
+        setText(subtotalNode, money(subtotal));
+        setText(shippingAmountNode, money(shipping));
+        setText(grandTotalNode, money(subtotal + shipping));
     }
 
     function render(data) {
@@ -467,7 +482,9 @@ $copy = [
         renderMethods(shippingBox, checkoutState.shippingMethods, 'shipping_method');
         renderMethods(paymentBox, checkoutState.paymentMethods, 'payment_method');
         renderTotals();
-        submitButton.disabled = Boolean(checkoutState.cart.is_empty) || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
+        if (submitButton) {
+            submitButton.disabled = Boolean(checkoutState.cart.is_empty) || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
+        }
         if (checkoutState.cart.is_empty) {
             setMessage(copy.empty_cart, 'error');
         } else {
@@ -502,57 +519,67 @@ $copy = [
         }, 350);
     }
 
-    form.addEventListener('change', function (event) {
-        if (event.target && event.target.name === 'shipping_method') {
-            renderTotals();
-            return;
-        }
-        if (event.target && ['country_code', 'province', 'city', 'postal_code'].indexOf(event.target.name) !== -1) {
-            scheduleReload();
-        }
-    });
-
-    form.addEventListener('submit', async function (event) {
-        event.preventDefault();
-        if (!form.reportValidity()) {
-            setMessage(copy.required, 'error');
-            return;
-        }
-        const shippingMethod = selectedValue('shipping_method');
-        const paymentMethod = selectedValue('payment_method');
-        if (!shippingMethod || !paymentMethod) {
-            setMessage(copy.required, 'error');
-            return;
-        }
-        submitButton.disabled = true;
-        submitButton.textContent = copy.submitting;
-        setMessage(copy.submitting, '');
-        try {
-            const api = await getApi();
-            const result = await api.placeOrder({
-                shipping_address: formAddress(),
-                shipping_method: shippingMethod,
-                payment_method: paymentMethod,
-            });
-            const redirect = text(result && result.redirect);
-            if (redirect) {
-                setMessage(result.requires_action ? copy.payment_redirect : copy.payment_pending, 'success');
-                window.location.href = redirect;
+    if (form) {
+        form.addEventListener('change', function (event) {
+            if (event.target && event.target.name === 'shipping_method') {
+                renderTotals();
                 return;
             }
-            setMessage(copy.payment_pending, 'success');
-        } catch (error) {
-            setMessage(error.message || copy.load_failed, 'error');
-            submitButton.disabled = false;
-            submitButton.textContent = copy.submit;
-        }
-    });
+            if (event.target && ['country_code', 'province', 'city', 'postal_code'].indexOf(event.target.name) !== -1) {
+                scheduleReload();
+            }
+        });
 
-    shippingBox.addEventListener('change', renderTotals);
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            if (!form.reportValidity()) {
+                setMessage(copy.required, 'error');
+                return;
+            }
+            const shippingMethod = selectedValue('shipping_method');
+            const paymentMethod = selectedValue('payment_method');
+            if (!shippingMethod || !paymentMethod) {
+                setMessage(copy.required, 'error');
+                return;
+            }
+            if (submitButton) {
+                submitButton.disabled = true;
+                setText(submitButton, copy.submitting);
+            }
+            setMessage(copy.submitting, '');
+            try {
+                const api = await getApi();
+                const result = await api.placeOrder({
+                    shipping_address: formAddress(),
+                    shipping_method: shippingMethod,
+                    payment_method: paymentMethod,
+                });
+                const redirect = text(result && result.redirect);
+                if (redirect) {
+                    setMessage(result.requires_action ? copy.payment_redirect : copy.payment_pending, 'success');
+                    window.location.href = redirect;
+                    return;
+                }
+                setMessage(copy.payment_pending, 'success');
+            } catch (error) {
+                setMessage(error.message || copy.load_failed, 'error');
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    setText(submitButton, copy.submit);
+                }
+            }
+        });
+    }
+
+    if (shippingBox) {
+        shippingBox.addEventListener('change', renderTotals);
+    }
 
     loadCheckout().catch(function (error) {
         setMessage(error.message || copy.load_failed, 'error');
-        submitButton.disabled = true;
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
     });
 })();
 </script>

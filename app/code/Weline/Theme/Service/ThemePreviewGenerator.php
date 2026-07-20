@@ -20,8 +20,12 @@ class ThemePreviewGenerator
      */
     public const DEFAULT_CONCURRENCY = 2;
 
-    public static function generatePreviewImage(WelineTheme $theme, string $area = 'frontend', bool $force = false): string|false
-    {
+    public static function generatePreviewImage(
+        WelineTheme $theme,
+        string $area = 'frontend',
+        bool $force = false,
+        ?string $captureBaseUrl = null,
+    ): string|false {
         $themeId = $theme->getId();
         if (!$themeId) {
             return false;
@@ -36,7 +40,7 @@ class ThemePreviewGenerator
             return $previewPath;
         }
 
-        $previewUrl = self::getPreviewUrl($themeId, $area);
+        $previewUrl = self::getPreviewUrl($themeId, $area, $captureBaseUrl);
 
         try {
             return self::captureScreenshot($previewUrl, $previewPath);
@@ -377,25 +381,64 @@ class ThemePreviewGenerator
         return \ltrim($normalized, '/');
     }
 
-    public static function getPreviewUrl(int $themeId, string $area = 'frontend'): string
+    public static function getPreviewUrl(int $themeId, string $area = 'frontend', ?string $captureBaseUrl = null): string
     {
-        /** @var \Weline\Framework\Http\Url $url */
-        $url = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
-
-        if ($area === 'backend') {
-            return $url->getBackendUrl('admin', [
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        $query = $area === 'backend'
+            ? [
                 'preview_theme' => $themeId,
                 'preview_gen' => '1',
-            ]);
+            ]
+            : [
+                'preview_theme' => $themeId,
+                'preview_area' => 'frontend',
+                'editor_area' => 'frontend',
+                'page_type' => 'homepage',
+                'preview_gen' => '1',
+            ];
+
+        $base = self::normalizeCaptureBaseUrl($captureBaseUrl);
+        if ($base !== null) {
+            if ($area === 'backend') {
+                $backendPrefix = \trim((string)Env::getAreaRoutePrefix('backend'), '/');
+                $path = ($backendPrefix !== '' ? '/' . $backendPrefix : '') . '/admin';
+            } else {
+                $path = '/theme/frontend/theme-preview/gateway';
+            }
+
+            return $base . $path . '?' . \http_build_query($query);
         }
 
-        return $url->getFrontendUrl('theme/frontend/theme-preview/gateway', [
-            'preview_theme' => $themeId,
-            'preview_area' => 'frontend',
-            'editor_area' => 'frontend',
-            'page_type' => 'homepage',
-            'preview_gen' => '1',
-        ]);
+        /** @var \Weline\Framework\Http\Url $url */
+        $url = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+        if ($area === 'backend') {
+            return $url->getBackendUrl('admin', $query);
+        }
+
+        return $url->getFrontendUrl('theme/frontend/theme-preview/gateway', $query);
+    }
+
+    public static function normalizeCaptureBaseUrl(?string $captureBaseUrl): ?string
+    {
+        $candidate = \trim((string)$captureBaseUrl);
+        if ($candidate === '') {
+            return null;
+        }
+
+        $parts = \parse_url($candidate);
+        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return null;
+        }
+
+        $scheme = \strtolower((string)$parts['scheme']);
+        if (!\in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        $host = (string)$parts['host'];
+        $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+
+        return $scheme . '://' . $host . $port;
     }
 
     private static function themeSupportsArea(WelineTheme $theme, string $area): bool

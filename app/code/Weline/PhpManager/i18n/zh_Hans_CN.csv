@@ -140,7 +140,6 @@ Marketplace,插件商城
 "Confirm the PHP profile save before submitting.","提交前请确认 PHP Profile 保存操作。"
 "Runtime reload skipped.",已跳过运行时重载。
 "Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
-"WLS reload request failed.","WLS 重载请求失败。"
 "Profile Aligned","Profile 已对齐"
 "Profile Override","Profile 覆盖"
 Satisfied,已满足

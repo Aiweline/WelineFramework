@@ -5,10 +5,12 @@ return [
     "version" => '1.0.0',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_Cart' => '*',
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
         'Weline_Payment' => '*',
+        'Weline_Shipping' => '*',
     ],
     "optional" => [
     ],

@@ -1314,46 +1314,61 @@
 
         showDefaultError(error) {
             const message = error && error.message ? error.message : 'Request failed';
-            const Toast = this.resolveToastComponent();
-            if (Toast) {
-                if (typeof Toast.error === 'function') {
-                    Toast.error(message);
-                    return;
+            try {
+                const Toast = this.resolveToastComponent();
+                if (Toast) {
+                    if (typeof Toast.error === 'function') {
+                        Toast.error(message);
+                        return;
+                    }
+                    if (typeof Toast.show === 'function') {
+                        Toast.show(message, 'error');
+                        return;
+                    }
                 }
-                if (typeof Toast.show === 'function') {
-                    Toast.show(message, 'error');
-                    return;
+
+                if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('weline:api:error', {
+                        detail: { message, error },
+                    }));
+                }
+
+                this.renderFallbackToast(message);
+            } catch (toastError) {
+                console.error('[Weline.Api] showDefaultError failed:', toastError);
+                try {
+                    this.renderFallbackToast(message);
+                } catch (fallbackError) {
+                    console.error('[Weline.Api]', message, fallbackError);
                 }
             }
-
-            if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
-                window.dispatchEvent(new CustomEvent('weline:api:error', {
-                    detail: { message, error },
-                }));
-            }
-
-            this.renderFallbackToast(message);
         }
 
         resolveToastComponent() {
             const area = this.resolveArea();
+            const themeNotice = window.Weline?.Theme?.Notice || window.Weline?.Notice || null;
             const backendCandidates = [
                 window.BackendToast,
                 window.AdminToast,
                 window.WelineBackendToast,
                 window.Weline?.BackendToast,
                 window.Weline?.Toast,
+                themeNotice,
                 window.Toast,
             ];
             const frontendCandidates = [
                 window.FrontendToast,
                 window.WelineFrontendToast,
                 window.Weline?.FrontendToast,
+                window.Weline?.Toast,
+                themeNotice,
                 window.WeShop && typeof window.WeShop.showNotification === 'function'
                     ? { show: window.WeShop.showNotification.bind(window.WeShop) }
                     : null,
-                window.Weline?.Toast,
-                window.Toast,
+                // Bootstrap Toast 只有实例方法，不能当全局 Toast.error/show 用。
+                window.Toast && (typeof window.Toast.error === 'function' || (
+                    typeof window.Toast.show === 'function' && typeof window.Toast.getOrCreateInstance !== 'function'
+                )) ? window.Toast : null,
             ];
             const candidates = area === 'backend'
                 ? backendCandidates.concat(frontendCandidates)

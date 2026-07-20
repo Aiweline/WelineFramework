@@ -73,6 +73,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             'validatePreviewToken' => $this->validatePreviewToken($params),
             'editorRequest' => $this->editorRequest($params),
             'setBackendThemeMode' => $this->setBackendThemeMode($params),
+            'activateTheme', 'activate_theme' => $this->activateTheme($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Theme 查询器不支持的操作：%{1}', $operation)
             ),
@@ -310,6 +311,17 @@ class ThemeQueryProvider implements QueryProviderInterface
             'msg' => (string)__('同步成功'),
             'message' => (string)__('同步成功'),
         ];
+    }
+
+    /**
+     * @return array{success:bool,status:string,message:string,theme_id?:int,area?:?string}
+     */
+    private function activateTheme(array $params): array
+    {
+        $themeId = (int)($params['theme_id'] ?? $params['themeId'] ?? 0);
+        $area = isset($params['area']) ? (string)$params['area'] : null;
+
+        return $this->themeContext->activateThemeForArea($themeId, $area);
     }
 
     private function getActiveTheme(array $params): ?array
@@ -1354,6 +1366,16 @@ class ThemeQueryProvider implements QueryProviderInterface
                         ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('light 或 dark')],
                         ['name' => 'rtl_mode', 'type' => 'bool', 'required' => false],
                         ['name' => 'rtl', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'activateTheme',
+                    'description' => __('按区域激活主题'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'theme_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('frontend 或 backend')],
                     ],
                 ],
             ],

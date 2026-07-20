@@ -43,6 +43,16 @@ class Config extends BackendController
             $normalizedLocale
         );
 
+        $guideKeys = $this->normalizeGuideKeys((string)($guideParams['guide_key'] ?? ''));
+        $guideLocate = trim((string)($guideParams['guide_locate'] ?? ''));
+        if ($guideLocate === '' || ($guideKeys !== [] && !\in_array($guideLocate, $guideKeys, true))) {
+            $guideLocate = $guideKeys[0] ?? '';
+        }
+        if ($guideLocate !== '') {
+            $guideParams['guide_locate'] = $guideLocate;
+        }
+        $guideTargets = $this->resolveGuideTargets($guideKeys, $templateService, $selectedArea);
+
         $this->assign('page_title', __('统一配置中心'));
         $this->assign('modules', $modules);
         $this->assign('tree', $tree);
@@ -55,12 +65,18 @@ class Config extends BackendController
         $this->assign('post_url', $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config'));
         $this->assign('guide_params', $guideParams);
         $this->assign('guide_key', (string)($guideParams['guide_key'] ?? ''));
+        $this->assign('guide_keys', $guideKeys);
+        $this->assign('guide_locate', $guideLocate);
+        $this->assign('guide_targets', $guideTargets);
         $this->assign('guide_title', (string)($guideParams['guide_title'] ?? ''));
         $this->assign('guide_summary', (string)($guideParams['guide_summary'] ?? ''));
         $this->assign('guide_return', (string)($guideParams['guide_return'] ?? ''));
         $this->assign('guide_step', (string)($guideParams['guide_step'] ?? ''));
         $this->assign('guide', [
             'key' => (string)($guideParams['guide_key'] ?? ''),
+            'keys' => $guideKeys,
+            'locate' => $guideLocate,
+            'targets' => $guideTargets,
             'title' => (string)($guideParams['guide_title'] ?? ''),
             'summary' => (string)($guideParams['guide_summary'] ?? ''),
             'return' => (string)($guideParams['guide_return'] ?? ''),
@@ -194,7 +210,9 @@ class Config extends BackendController
     {
         $params = [];
         foreach ([
-            'guide_key' => 240,
+            'guide_key' => 2000,
+            'guide_keys' => 2000,
+            'guide_locate' => 240,
             'guide_title' => 120,
             'guide_summary' => 360,
             'guide_return' => 800,
@@ -206,6 +224,8 @@ class Config extends BackendController
             if ($value === '') {
                 continue;
             }
+            // 登录 return_url / 多次跳转可能反复 encode，先还原再截断
+            $value = $this->decodeGuideValue($value);
             $value = mb_substr($value, 0, max(1, (int)$limit));
             if ($name === 'guide_return') {
                 $value = $this->safeGuideReturnUrl($value);
@@ -220,11 +240,146 @@ class Config extends BackendController
                 ? $this->request->getPost('highlight', '')
                 : $this->request->getGet('highlight', '')));
             if ($highlight !== '') {
-                $params['guide_key'] = mb_substr($highlight, 0, 240);
+                $params['guide_key'] = mb_substr($this->decodeGuideValue($highlight), 0, 2000);
             }
         }
 
+        // 合并 guide_keys 与 guide_key，统一为逗号分隔的多目标列表
+        $mergedKeys = $this->normalizeGuideKeys(
+            (string)($params['guide_key'] ?? ''),
+            (string)($params['guide_keys'] ?? '')
+        );
+        unset($params['guide_keys']);
+        if ($mergedKeys !== []) {
+            $params['guide_key'] = \implode(',', $mergedKeys);
+            $locate = $this->decodeGuideValue(trim((string)($params['guide_locate'] ?? '')));
+            if ($locate === '' || !\in_array($locate, $mergedKeys, true)) {
+                $params['guide_locate'] = $mergedKeys[0];
+            } else {
+                $params['guide_locate'] = $locate;
+            }
+        } else {
+            unset($params['guide_key'], $params['guide_locate']);
+        }
+
         return $params;
+    }
+
+    /**
+     * 还原被多次 urlencode 的引导参数（最多 5 次），避免页面显示 %2F / %E9... 乱码。
+     */
+    private function decodeGuideValue(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        for ($i = 0; $i < 5; $i++) {
+            if (!\preg_match('/%[0-9A-Fa-f]{2}/', $value)) {
+                break;
+            }
+            $decoded = \rawurldecode($value);
+            if ($decoded === $value) {
+                $decoded = \urldecode($value);
+            }
+            if ($decoded === $value) {
+                break;
+            }
+            $value = $decoded;
+        }
+
+        return \trim($value);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeGuideKeys(string ...$rawParts): array
+    {
+        $keys = [];
+        foreach ($rawParts as $raw) {
+            $raw = $this->decodeGuideValue($raw);
+            if ($raw === '') {
+                continue;
+            }
+            foreach (\preg_split('/[\s,|;]+/', $raw) ?: [] as $part) {
+                $part = $this->decodeGuideValue(\trim((string)$part));
+                if ($part === '' || \in_array($part, $keys, true)) {
+                    continue;
+                }
+                $keys[] = mb_substr($part, 0, 240);
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * @param list<string> $keys
+     * @return list<array{index:int,key:string,label:string,module:string,area:string,code:string,found:bool}>
+     */
+    private function resolveGuideTargets(
+        array $keys,
+        SystemConfigTemplateService $templateService,
+        string $preferredArea
+    ): array {
+        if ($keys === []) {
+            return [];
+        }
+
+        $lookup = [];
+        $areas = \array_values(\array_unique(\array_filter([
+            $preferredArea,
+            SystemConfig::area_BACKEND,
+            SystemConfig::area_FRONTEND,
+        ], static fn(string $area): bool => $area !== '')));
+
+        foreach ($areas as $area) {
+            $tree = $templateService->getTree(null, $area, null);
+            foreach (($tree['modules'] ?? []) as $moduleRow) {
+                $moduleName = (string)($moduleRow['module'] ?? '');
+                foreach (($moduleRow['areas'] ?? []) as $areaRow) {
+                    $areaName = (string)($areaRow['area'] ?? $area);
+                    foreach (($areaRow['templates'] ?? []) as $template) {
+                        $code = (string)($template['code'] ?? '');
+                        foreach (($template['fields'] ?? []) as $field) {
+                            $fieldKey = (string)($field['key'] ?? '');
+                            if ($fieldKey === '' || isset($lookup[$fieldKey])) {
+                                continue;
+                            }
+                            $lookup[$fieldKey] = [
+                                'key' => $fieldKey,
+                                'label' => (string)($field['label'] ?? $fieldKey),
+                                'module' => $moduleName,
+                                'area' => $areaName,
+                                'code' => $code,
+                                'found' => true,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        $targets = [];
+        foreach ($keys as $index => $key) {
+            if (isset($lookup[$key])) {
+                $targets[] = \array_merge($lookup[$key], ['index' => (int)$index]);
+                continue;
+            }
+            $targets[] = [
+                'index' => (int)$index,
+                'key' => $key,
+                'label' => $key,
+                'module' => '',
+                'area' => $preferredArea,
+                'code' => '',
+                'found' => false,
+            ];
+        }
+
+        return $targets;
     }
 
     private function safeGuideReturnUrl(string $url): string

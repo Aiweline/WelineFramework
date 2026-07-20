@@ -90,7 +90,8 @@ app/code/{Vendor}/{Module}/extends/module/Weline_SystemConfig/Config/{area}/{cod
 
 - `module`: 配置模板所属模块，例如 `WeShop_Payment`
 - `area`: 配置区域，例如 `backend` 或 `frontend`
-- `guide_key`: 需要高亮的完整配置 key
+- `guide_key`: 需要高亮的完整配置 key；支持逗号/分号/空格分隔的多个 key（也可传 `guide_keys`）
+- `guide_locate`: 当前要定位的 key（多目标时用于标记「当前定位」；缺省为第一个 key）
 - `guide_title`: 顶部引导卡片标题
 - `guide_summary`: 顶部引导卡片说明
 - `guide_step`: 向导步骤编号或短标签
@@ -105,15 +106,16 @@ app/code/{Vendor}/{Module}/extends/module/Weline_SystemConfig/Config/{area}/{cod
 $url = $urlBuilder->getBackendUrl('weline_systemconfig/backend/config', [
     'module' => 'Vendor_Module',
     'area' => 'backend',
-    'guide_key' => 'vendor_module/payment/enabled',
-    'guide_title' => (string)__('配置支付开关'),
-    'guide_summary' => (string)__('启用后该支付方式才会进入结账可选项。'),
+    'guide_key' => 'vendor_module/oauth/client_id,vendor_module/oauth/client_secret',
+    'guide_locate' => 'vendor_module/oauth/client_secret',
+    'guide_title' => (string)__('配置 OAuth 应用'),
+    'guide_summary' => (string)__('请依次填写 Client ID 与 Client Secret。'),
     'guide_step' => '03',
     'guide_return' => $urlBuilder->getBackendUrl('vendor_module/backend/readiness'),
 ]);
 ```
 
-配置中心会在顶部展示引导卡片，定位并高亮匹配 `guide_key` 的字段。保存或回滚配置后，引导参数会继续保留，方便运营按步骤完成配置。
+配置中心会在顶部展示引导卡片，并在右侧提供悬浮定位菜单。多个 `guide_key` 都会标记为引导目标；当前项由 `guide_locate` 标识。点击菜单项时：若目标已在当前页则平滑滚动定位，若不在当前页（例如模块筛选不同）则刷新到对应模块页面后再定位。保存或回滚配置后，引导参数会继续保留。
 
 ### 配置读取
 ```php

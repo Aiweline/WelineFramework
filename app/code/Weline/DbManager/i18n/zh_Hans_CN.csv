@@ -547,7 +547,6 @@ Removed,已移除
 "Unable to write app/etc/env.php from the selected backup.","无法使用所选备份写回 app/etc/env.php。"
 "Runtime reload skipped.",已跳过运行时重载。
 "Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
-"WLS reload request failed.","WLS 重载请求失败。"
 "Source DBA connection is incomplete: %{1}","源 DBA 连接配置不完整：%{1}"
 "Enable and save the Project Profile before executing lifecycle SQL.","执行生命周期 SQL 前，请先保存并启用项目 Profile。"
 "Lifecycle SQL plan has no executable statements.","Lifecycle SQL plan has no executable statements."
@@ -658,7 +657,6 @@ Removed,已移除
 "Env default","Env default"
 "Confirm the database profile save before submitting.","Confirm the database profile save before submitting."
 "Select a target WLS instance before requesting reload.","Select a target WLS instance before requesting reload."
-"WLS runtime reload requested.","WLS runtime reload requested."
 "Type COPY_ENV_PASSWORD to copy the source env profile password.","请输入 COPY_ENV_PASSWORD 才能复制源 env profile 密码。"
 "Source env profile was not found.","未找到源 env profile。"
 "The selected source env profile has no password to copy.","选择的源 env profile 没有可复制的密码。"

@@ -37,6 +37,19 @@ php bin/console setup:upgrade
    - 描述（可选）
 5. 保存账户
 
+Cloudflare API Token 权限说明见：`doc/Cloudflare-API-Token-Permissions.md`。
+
+### 2.1 配置 Cloudflare OAuth（一键授权，可选）
+
+若使用 OAuth 一键授权（而非手工填 API Token）：
+
+1. 打开系统配置 → 模块 **Weline_Cdn** → **Cloudflare OAuth 应用**
+2. 在 Cloudflare 按 **Weline 必选** 创建 OAuth Client（响应类型 **Code**，授权类型 **Authorization Code**，认证方法 **Client Secret Post/Basic**）
+3. 回调 URL 填：`https://{域名}/{后台key}/cdn/backend/oauth/callback`
+4. 将 Client ID / Secret / Scopes 填回本站配置
+
+字段组合、错误选型与排错见：`doc/Cloudflare-OAuth-Client-Setup.md`。
+
 ### 3. 添加域名
 
 1. 进入后台：**CDN管理 > 域名管理**

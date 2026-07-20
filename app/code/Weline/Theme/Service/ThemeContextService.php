@@ -232,6 +232,121 @@ class ThemeContextService implements ThemeContextProviderInterface
         return $theme;
     }
 
+    /**
+     * @return array{success:bool,status:string,message:string,theme_id?:int,area?:?string}
+     */
+    public function activateThemeForArea(int $themeId, ?string $area = null): array
+    {
+        if ($themeId <= 0) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => (string)__('请选择主题'),
+            ];
+        }
+
+        $area = \strtolower(\trim((string)$area));
+        $normalizedArea = \in_array($area, [self::AREA_FRONTEND, self::AREA_BACKEND], true)
+            ? $area
+            : null;
+
+        $theme = $this->newThemeModel();
+        $theme->clearData()->clearQuery()->load($themeId);
+        if (!$theme->getId()) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => (string)__('主题不存在'),
+            ];
+        }
+
+        if ($normalizedArea !== null && !$this->themeSupportsArea($theme, $normalizedArea)) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => (string)__('主题不支持 %{1} 区域', [$normalizedArea]),
+            ];
+        }
+
+        try {
+            if ($normalizedArea === self::AREA_FRONTEND) {
+                if ($this->safeToggleAreaThemeActivation($theme, $themeId, WelineTheme::schema_fields_IS_ACTIVE_FRONTEND)) {
+                    $theme->_cache->delete('theme_frontend');
+                } else {
+                    $this->activateThemeFallback($theme, $themeId);
+                }
+            } elseif ($normalizedArea === self::AREA_BACKEND) {
+                if ($this->safeToggleAreaThemeActivation($theme, $themeId, WelineTheme::schema_fields_IS_ACTIVE_BACKEND)) {
+                    $theme->_cache->delete('theme_backend');
+                } else {
+                    $this->activateThemeFallback($theme, $themeId);
+                }
+            } else {
+                $this->activateThemeFallback($theme, $themeId);
+            }
+
+            $theme->_cache->delete('theme');
+            $theme->_cache->delete('theme_parent_' . $themeId);
+            $this->clearActivationRuntimeCaches($theme, $normalizedArea);
+
+            return [
+                'success' => true,
+                'status' => 'success',
+                'message' => (string)__('主题激活成功'),
+                'theme_id' => $themeId,
+                'area' => $normalizedArea,
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => (string)__('激活失败：%{1}', [$throwable->getMessage()]),
+            ];
+        }
+    }
+
+    private function safeToggleAreaThemeActivation(WelineTheme $theme, int $themeId, string $field): bool
+    {
+        try {
+            $theme->clearQuery();
+            $theme->where($field, 1)
+                ->update([$field => 0])->fetch();
+            $theme->clearQuery();
+            $theme->where(WelineTheme::schema_fields_ID, $themeId)
+                ->update([$field => 1])->fetch();
+
+            return true;
+        } catch (\Throwable $throwable) {
+            if ($this->isMissingThemeActivationFieldError($throwable, $field)) {
+                return false;
+            }
+
+            throw $throwable;
+        }
+    }
+
+    private function activateThemeFallback(WelineTheme $theme, int $themeId): void
+    {
+        $theme->clearQuery();
+        $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)
+            ->update([WelineTheme::schema_fields_IS_ACTIVE => 0])->fetch();
+        $theme->clearQuery();
+        $theme->where(WelineTheme::schema_fields_ID, $themeId)
+            ->update([WelineTheme::schema_fields_IS_ACTIVE => 1])->fetch();
+    }
+
+    private function isMissingThemeActivationFieldError(\Throwable $throwable, string $field): bool
+    {
+        $message = \strtolower($throwable->getMessage());
+        if (!\str_contains($message, \strtolower($field))) {
+            return false;
+        }
+
+        return \str_contains($message, 'undefined column')
+            || \str_contains($message, 'does not exist')
+            || \str_contains($message, 'column');
+    }
+
     private function clearActivationRuntimeCaches(WelineTheme $theme, ?string $area): void
     {
         try {

@@ -1536,12 +1536,21 @@
             ].join('');
 
             if (options.title) {
-                toast.querySelector('.weline-notice-toast__title').textContent = options.title;
+                const titleNode = toast.querySelector('.weline-notice-toast__title');
+                if (titleNode) {
+                    titleNode.textContent = options.title;
+                }
             }
-            toast.querySelector('.weline-notice-toast__message').textContent = options.message || '';
-            toast.querySelector('.weline-notice-toast__close').addEventListener('click', function () {
-                closeToast(toast);
-            });
+            const messageNode = toast.querySelector('.weline-notice-toast__message');
+            if (messageNode) {
+                messageNode.textContent = options.message || '';
+            }
+            const closeNode = toast.querySelector('.weline-notice-toast__close');
+            if (closeNode) {
+                closeNode.addEventListener('click', function () {
+                    closeToast(toast);
+                });
+            }
 
             region.appendChild(toast);
             requestAnimationFrame(function () {
@@ -2187,6 +2196,10 @@
 
             Notice: ThemeNotice
         },
+
+        // 兼容 Weline.Api / 业务页对 Toast 命名的引用
+        Toast: ThemeNotice,
+        Notice: ThemeNotice,
 
         /**
          * 主题工具函数

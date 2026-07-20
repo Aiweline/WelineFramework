@@ -349,13 +349,10 @@ JSON格式错误,"JSON format error"
 适配器,Adapter
 编辑,Edit
 返回,Back
-添加账户,"Add Account"
-保存,Save
-刷新,Refresh
 搜索账户名称或描述,"Search account name or description"
 所有适配器,"All Adapters"
 暂无账户数据,"No account data"
-"点击""添加账户""按钮创建第一个CDN账户","Click the ""Add Account"" button to create your first CDN account"
+点击「添加账户」按钮创建第一个CDN账户,"Click the 「Add Account」 button to create your first CDN account"
 默认账户,"Default Account"
 激活,Activate
 未激活,"Not activated"
@@ -389,6 +386,7 @@ JSON格式错误,"JSON format error"
 "请在 app/etc/env.php 的 server.origin_token 中配置","Please configure it in server.origin_token in app/etc/env.php"
 "CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。","When the CDN returns to the origin, the token can be passed through a custom header and verified at the origin site."
 设置为该适配器的默认账户,"Set as Default Account for This Adapter"
+保存,Save
 添加域名,"Add Domain"
 搜索域名,"Search Domain"
 全部状态,"All Statuses"

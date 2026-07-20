@@ -587,7 +587,7 @@ body[data-layout="horizontal"] .footer {
 .vertical-collpsed .vertical-menu {
     position: absolute;
     width: 70px !important;
-    z-index: 5;
+    z-index: 1005;
 }
 
 .vertical-collpsed .vertical-menu .simplebar-mask,

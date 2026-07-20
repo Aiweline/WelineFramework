@@ -61,7 +61,7 @@ class SocialOauthService
                 'success' => false,
                 'authorization_url' => '',
                 'state' => $state,
-                'message' => (string)__('未配置平台应用凭据，请先到统一配置中心填写 App/Client 信息。'),
+                'message' => (string)__('未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。'),
             ];
         }
 
