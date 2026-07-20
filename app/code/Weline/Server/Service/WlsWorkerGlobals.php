@@ -349,9 +349,9 @@ class WlsWorkerGlobals
      */
     public static function resetStd(?string $stdoutFile = null): void
     {
-        // Windows 使用 NUL，Unix 使用 /dev/null
-        $nullDevice = DIRECTORY_SEPARATOR === '/' ? '/dev/null' : 'NUL';
-        if ($stdoutFile === null || $stdoutFile === '/dev/null' || $stdoutFile === 'NUL') {
+        // Windows: device-namespace \\.\NUL (plain NUL breaks under UNC/Parallels).
+        $nullDevice = \Weline\Framework\System\Process\Processer::resolveNullDevice();
+        if ($stdoutFile === null || $stdoutFile === '/dev/null' || $stdoutFile === 'NUL' || $stdoutFile === '\\\\.\\NUL') {
             self::$stdin = fopen($nullDevice, 'r');
             self::$stdout = fopen($nullDevice, 'a');
             self::$stderr = fopen($nullDevice, 'a');
