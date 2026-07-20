@@ -48,6 +48,27 @@
 
 登录后台后进入“应用与扩展 → AI 中心 → 默认模型”，即可配置文本、图像、翻译、代码等服务类型的全局默认模型。
 
+### 前台聊天的模型与失败提示
+
+`/ai/frontend/chat` 仅展示并使用已启用的文本模型。未指定模型时，运行时先解析场景/全局默认模型；
+若未设置全局默认模型，则稳定选择一个已启用的文本模型，而不会回退到历史硬编码模型。
+供应商连接、余额或模型配置不可用时，聊天任务会以可读的 `ai_generation_failed` 结果结束，提示用户检查所选模型与供应商连接；
+不会把这类配置问题笼统显示为 Runner 崩溃。
+
+### 后台模型选择 QueryProvider 契约
+
+默认模型选择器通过 bin-query 调用 `ai.listModels`，该 operation 仅向已登录后台会话开放，
+不会回退到 Controller URL 或原生浏览器请求。浏览器调用前先加载完整 API 模块：
+
+```javascript
+const api = await Weline.load('api');
+const models = await api.resource('ai').listModels({});
+```
+
+可选参数 `primary_modality`（兼容别名 `modality`）用于按主要模态过滤。返回项的稳定模型标识字段是
+`model_code`，并包含 `name`、`supplier`、`primary_modality`、`capabilities`、`is_active` 与
+`is_default`；选择器不得依赖历史字段 `code` 或必定存在的 `version`。
+
 ### 技术栈
 - **框架**: WelineFramework
 - **语言**: PHP 8.4+
@@ -74,6 +95,8 @@ Agent 扩展需要按既定 `AiModel` 直接调用供应商时，通过
 `AgentModelExecutorInterface` 执行；需要自行组织供应商会话时只使用
 `Provider\ProviderRuntimeInterface` 及其返回的公开 Session 契约。供应商选择、ORM 模型还原、
 流式回调适配和 `ProviderFactory` 均留在 Ai 模块内部，扩展模块不得直接触达。
+Agent 执行器向扩展注入的公开会话键固定为 `provider_runtime`；不再提供或读取
+`provider_factory` 别名，避免把内部 ORM ProviderFactory 边界重新泄露给扩展模块。
 `Weline\Ai\Api\TranslationService` 是一版迁移桥，与旧
 `Weline\Ai\Service\TranslationService` 保持同一运行时类、构造参数和策略常量；
 新调用方不得再直接引用 Ai 的 `Service`/`Model` 内部命名空间。
@@ -103,6 +126,7 @@ Resolver、Registry、Service 或 ORM Model。
 
 ## 📅 更新记录
 
+- **2026-07-13**: 前台聊天仅选择已启用文本模型；未配置全局默认模型时使用稳定的活动模型回退，并将供应商失败作为可操作的 AI 生成失败反馈。
 - **2026-07-12**: 依赖清单以 `etc/module.php` 为准；后台管理入口显式依赖 `Weline_Admin`、`Weline_Backend` 与 `Weline_Framework`，I18n 集成为可选依赖。
 - **2025-10-26**: 创建文档中心，规范文档结构
 - **2025-01-26**: 模块开发完成，通过测试
