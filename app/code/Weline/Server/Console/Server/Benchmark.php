@@ -2718,6 +2718,22 @@ class Benchmark extends CommandAbstract
     /** @param array<string,mixed> $capabilities */
     private function assertRequestedHttpVersionIsRunnable(string $requested, bool $ssl, array $capabilities): void
     {
+        if ($requested === 'auto' || $requested === '1.1') {
+            return;
+        }
+
+        $edge = \is_array($capabilities['edge'] ?? null) ? $capabilities['edge'] : [];
+        $edgeName = (string)($edge['adapter'] ?? ($capabilities['default_policy']['edge_adapter'] ?? ''));
+        if ($edgeName === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+            && \in_array($requested, ['2', '3'], true)
+        ) {
+            throw new \RuntimeException(
+                'wls.edge.adapter=nginx：请对 Nginx 边缘压测 HTTP/' . $requested
+                . '，或设置 wls.edge.adapter=wls 后再对 WLS 端口使用 --http-version '
+                . $requested . '。'
+            );
+        }
+
         if ($requested !== '3') {
             return;
         }

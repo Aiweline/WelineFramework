@@ -7,6 +7,7 @@
 - **模块名**: `Weline_Server`
 - **类型**: 基础设施模块
 - **协议支持**: HTTP/1.1、HTTP/2、HTTP/3（可选原生组件）、WebSocket、TCP、UDP
+- **前置反代**: 需要统一入口时推荐 Nginx 前置到 WLS；详见 `doc/WLS模式部署指南.md`
 
 ## 🚀 快速开始
 
@@ -466,11 +467,13 @@ Worker::runAll();
 
 | 协议 | 类 | 说明 |
 |-----|-----|------|
-| HTTP/1.1 | `Protocol\Http` | HTTP/1.1，作为 HTTP/2/HTTP/3 不可用时的自动回退 |
-| HTTP/2 | `Protocol\Http2\ConnectionAdapter` | HTTPS 默认目标，支持 Keep-Alive 与多路复用 |
-| HTTP/3 | `Protocol\Http3\WorkerQuicRuntime` | 可选原生 QUIC 数据面；仅显式构建且运行证据就绪时自动协商 |
+| HTTP/1.1 | `Protocol\Http` | 默认生产数据面（`wls.edge.adapter=nginx`）；亦为自研模式下 HTTP/2/HTTP/3 不可用时的回退 |
+| HTTP/2 | `Protocol\Http2\ConnectionAdapter` | 自研边缘（`wls.edge.adapter=wls`）下 HTTPS 目标；代码保留，nginx 适配器下 `retained_inactive` |
+| HTTP/3 | `Protocol\Http3\WorkerQuicRuntime` | 可选原生 QUIC；需 `adapter=wls` + `server:http3:build` 且证据就绪 |
 | WebSocket | `Protocol\WebSocket` | WebSocket 协议 |
 | Text | `Protocol\Text` | 文本协议（换行符分隔） |
+
+边缘终结由 `Service\Edge\*` 适配器隔离：默认 **Nginx**（对外 TLS/H2/H3），WLS 明文回源；切换 `wls` 恢复自研协商。
 
 ## 📁 目录结构
 

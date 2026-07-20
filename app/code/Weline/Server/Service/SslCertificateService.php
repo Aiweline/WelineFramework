@@ -6520,8 +6520,9 @@ CNF;
             return;
         }
 
-        // 通知所有运行中的实例热重载 SNI 证书映射（无需重启即可生效新证书）
-        ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)
-            ->reloadSslCert();
+        // 按边缘适配器互斥处理：nginx → edge reload；wls → ssl_cert_reload IPC
+        ObjectManager::getInstance(\Weline\Server\Service\Edge\EdgeAdapterResolver::class)
+            ->resolve()
+            ->onCertificateMaterialUpdated('');
     }
 }

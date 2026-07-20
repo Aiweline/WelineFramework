@@ -319,7 +319,7 @@ final class WorkerPolicyKernel
             ],
         );
 
-        // A loopback transport peer is common when Nginx/Caddy proxies to a
+        // A loopback transport peer is common when Nginx proxies to a
         // direct Worker. It is transport metadata, not proof that the original
         // client is local. Only the compiled, explicit whitelist may bypass
         // bans, quotas and request attack rules.

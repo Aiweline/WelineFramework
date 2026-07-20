@@ -429,6 +429,8 @@ WLS 默认允许 TLS 1.2/1.3，`wls.ssl.key_exchange_profile` 默认为 `perform
 
 ### 3.7.1 HTTP/1.1、HTTP/2、HTTP/3 与 TLS 复用事实边界
 
+**边缘适配器**：默认 `wls.edge.adapter=nginx` 时，对外协议由 Nginx 终结，WLS 仅服务 HTTP/1.1；`Protocol/Http2` 与 `Protocol/Http3` 代码保留但运行时 `retained_inactive`。显式 `wls.edge.adapter=wls` 时恢复下列自研数据面行为。
+
 #### Linux Direct HTTP/3：双 UDP + eBPF 路由提交
 
 Linux Direct 使用 `reuseport-ebpf` 数据面。每个 Worker 创建两个同端口 UDP socket：listener 只接收未知 Initial，connection socket 只承接已登记 server CID。共享 eBPF 索引按 20 字节 server CID 先查连接 SOCKHASH，未知长首部再按 canonical slot 查 listener SOCKMAP；短首部 CID miss 直接丢弃，禁止退回内核随机分发。
@@ -438,8 +440,8 @@ Worker 启动只进入 `staged`，此时不写 listener map，也不开放应用
 原生提交以 listener-map 更新作为最后一步；owner fence 按 `(owner_epoch, generation)` 单调比较，同代不同 socket cookie 拒绝覆盖。排水时仅当前 owner 可以移除新连接 slot，既有 CID 继续由 connection SOCKHASH 定向到原 Worker，直至连接自然结束。
 
 - HTTP/1.1 是当前完整数据面，Keep-Alive 在同一 TCP/TLS 连接上复用握手。
-- HTTP/2 的 Frame/HPACK/WorkerPolicyKernel 桥接、独立 Stream Fiber、连接级流控和公平调度已实现，默认 TCP TLS 协商顺序为 `h2,http/1.1`；协议分类以握手后的解密 H2 preface 为准，不把 ClientHello offer 当最终协商结果。Adapter 宣告 `SETTINGS_MAX_CONCURRENT_STREAMS=64`；Worker 每轮解析准入预算默认 32（可配但夹在 16–32），并以 512KiB 待写高水位、pending-response gate、RST/GOAWAY 和连接轮转提供有界背压。Windows 实测 32 个同时在途 Stream 共用一个 TLS 连接且全部成功。
-- HTTP/3 已由 WLS 自带的 ngtcp2/nghttp3/OpenSSL 原生 QUIC Adapter 提供，不依赖 Caddy、Nginx 或 Go sidecar。TCP ALPN 仍只协商 `h2,http/1.1`；客户端显式使用 QUIC，或在 Adapter、UDP listener、策略和预热全部 READY 后依据 WLS 发布的 `Alt-Svc` 升级，才进入 H3。任一 H3 capability、自检或 READY 门禁失败时都不得发布 `Alt-Svc`，也不得把“本机 curl 支持 H3”误当成服务端已就绪。
+- HTTP/2 的 Frame/HPACK/WorkerPolicyKernel 桥接、独立 Stream Fiber、连接级流控和公平调度已实现；在 `wls.edge.adapter=wls` 时默认 TCP TLS 协商顺序为 `h2,http/1.1`（`nginx` 适配器下 WLS 仅 `http/1.1`）。协议分类以握手后的解密 H2 preface 为准，不把 ClientHello offer 当最终协商结果。Adapter 宣告 `SETTINGS_MAX_CONCURRENT_STREAMS=64`；Worker 每轮解析准入预算默认 32（可配但夹在 16–32），并以 512KiB 待写高水位、pending-response gate、RST/GOAWAY 和连接轮转提供有界背压。Windows 实测 32 个同时在途 Stream 共用一个 TLS 连接且全部成功。
+- HTTP/3 已由 WLS 自带的 ngtcp2/nghttp3/OpenSSL 原生 QUIC Adapter 提供（自研边缘模式下）。默认生产由 Nginx 终结 HTTP/3。TCP ALPN 在自研模式下仍只协商 `h2,http/1.1`；客户端显式使用 QUIC，或在 Adapter、UDP listener、策略和预热全部 READY 后依据 WLS 发布的 `Alt-Svc` 升级，才进入 H3。任一 H3 capability、自检、边缘适配器为 nginx 或 READY 门禁失败时都不得发布 `Alt-Svc`，也不得把“本机 curl 支持 H3”误当成服务端已就绪。
 - Linux 不把第二套共享 `libssl.so.3` 注入已经加载系统 OpenSSL 的 PHP。只有显式 `server:http3:build` 才以固定摘要源码构建 owner-only 的 PIC-static OpenSSL/ngtcp2/nghttp3 bundle，再用 version script、`--exclude-libs` 和 `-Bsymbolic-functions` 封装进 `libwls_transport.so`；发布前必须证明私有库没有出现在 `DT_NEEDED`、动态导出只包含版本化 WLS ABI，并通过真实 H3 loopback。普通 `server:start` 仅调用只读选择器复用已发布且强证据仍有效的组件，失败时关闭 H3/Alt-Svc 而不影响 Direct TCP 的 H2/H1。`linux_pic_static_dependency_bundle` 还必须同时匹配当前 Linux 平台/架构、ready manifest、`pic-static` linkage 和当前版本化运行证据；通用 native availability 或 macOS evidence 不能推导 Linux readiness。依赖目录逃逸、owner 不一致或 group/other 可写都会在 FFI load 前 fail-closed。
 - macOS Direct 使用一个 Master 所有的公开 UDP Router，把连接 ID 稳定路由到认证 AF_UNIX Worker channel，避免 Darwin `SO_REUSEPORT` 把同一 QUIC 连接的包交给不同 Worker；Router 保存终止包墓碑，使滚动重载后到达的旧连接包得到明确 CONNECTION_CLOSE，而不是等待客户端超时。当前真实 QUIC loopback 和 macOS 多 Worker 已验证；Linux/Windows 仍必须分别通过平台门禁，不能复用 macOS 结论。
 - H3 只替换传输和分帧层，解码后的请求仍进入同一个 `WorkerPolicyKernel`、`RequestEnvelope`、Static/FPC、Router/Controller 与 Cleanup 管线；后台 Key、Host、Origin Token、限流、封禁和攻击规则不能因协议切换绕过。
