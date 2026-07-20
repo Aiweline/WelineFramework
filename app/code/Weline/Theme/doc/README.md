@@ -134,6 +134,8 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 
 后台“外观与 Logo”未配置 `logo_dark`、`logo_light` 或 `logo_sm` 时，后台顶栏与登录页统一回退到
 `Weline_Theme/view/theme/backend/assets/images/theme/logo.png`（W 字母黄色丝带标识）；小 Logo 不再回退到站点 favicon。
+前台未配置 `logo_light` / `logo_dark` 时同样回退到
+`Weline_Theme/view/theme/frontend/assets/images/theme/logo.png`（同一套 W 字母黄色丝带标识），不走错误的 `view/statics` 静态映射。
 
 ## 常用文档地图
 
