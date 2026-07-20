@@ -52,7 +52,12 @@ final class ResumableTaskHandlerRegistry
         }
 
         $definitions = [];
-        foreach ($this->configurationFiles ?? $this->discoverConfigurationFiles() as $file) {
+        // ObjectManager supplies an empty array for optional array arguments.
+        // Empty means "use enabled-module discovery", not "disable every
+        // handler"; only a non-empty test list overrides discovery.
+        foreach (($this->configurationFiles !== null && $this->configurationFiles !== [])
+            ? $this->configurationFiles
+            : $this->discoverConfigurationFiles() as $file) {
             $module = $this->moduleForConfigurationFile($file);
             $declared = require $file;
             if (!is_array($declared)) {
@@ -82,8 +87,16 @@ final class ResumableTaskHandlerRegistry
     {
         $files = [];
         $env = Env::getInstance();
-        foreach (array_keys($env->getActiveModules()) as $moduleName) {
-            $file = rtrim($env->getModulePath($moduleName), '/\\') . '/etc/resumable_tasks.php';
+        foreach ($env->getActiveModules() as $moduleName => $module) {
+            // Env's DataObject accessor is not the module-path resolver. Its
+            // value is normally empty, which silently made every registered
+            // task type undiscoverable. Active module metadata already owns
+            // the canonical absolute base path for app and vendor modules.
+            $modulePath = is_array($module) ? trim((string)($module['base_path'] ?? '')) : '';
+            if ($modulePath === '') {
+                continue;
+            }
+            $file = rtrim($modulePath, '/\\') . '/etc/resumable_tasks.php';
             if (is_file($file)) {
                 $files[] = $file;
             }

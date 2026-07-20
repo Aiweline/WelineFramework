@@ -127,13 +127,6 @@ biz_key,biz_key
 好的,OK
 错误！,Error!
 未知错误！,"Unknown error!"
-运行中,Running
-已完成,Completed
-出错,Error
-已暂停,Paused
-等待中,Waiting
-队列结果详情,"Queue result details"
-关闭,Close
 管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器,"Manage the registered queue types in the system, enabling or disabling specific types of queue processors."
 暂无队列类型数据,"No queue type data"
 启用,Enable
@@ -151,6 +144,11 @@ ID,ID
 执行注意事项,"Execution notes"
 筛选,Filter
 全部状态,"All Statuses"
+等待中,Waiting
+运行中,Running
+已完成,Completed
+出错,Error
+已暂停,Paused
 批量删除,"Batch delete"
 批量暂停,"Batch pause"
 批量继续,"Batch continue"
@@ -224,6 +222,8 @@ dir：,dir：
 正在执行...,Executing...
 查看全部,"View all"
 暂无队列数据,"No queue data"
+队列结果详情,"Queue result details"
+关闭,Close
 自动消费,Auto-consume
 暂停,Pause
 重试,Retry
@@ -267,9 +267,6 @@ dir：,dir：
 "队列 #%{1} 正在运行中，禁止重复运行（pid=%{2}）。","Queue #%{1} is currently running, duplicate execution is not allowed (pid=%{2})."
 "如需接管，请使用 --force；系统会先终止当前同 ID 任务后再启动新任务。","To take over, use --force; the system will first terminate the current task with the same ID before starting a new task."
 "强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。","Force mode: detected queue #%{1} is running (pid=%{2}), will terminate old task before continuing."
-"终止队列 #%{1} 旧任务失败（pid=%{2}），已中止本次运行。","Terminate queue #%{1} old task failed (pid=%{2}), current run aborted."
-"已终止队列 #%{1} 旧任务（pid=%{2}）。","Terminated old task for queue #%{1} (pid=%{2})."
-"强制接管：已终止同 ID 旧任务，准备重新执行。","Force takeover: terminated old task with same ID, ready to re-execute."
 "检测到历史运行进程不存在，已自动回收为 pending。","Detected that no historical running process exists, automatically recycled to pending."
 已启用强制模式(-f)：本次执行将优先使用队列类中的强制重建逻辑。,"Force mode (-f) enabled: This execution will prioritize the forced rebuild logic in the queue class."
 已清空该队列历史输出，本次仅展示最新执行过程。,"Cleared the queue's historical output; only the latest execution process is shown."

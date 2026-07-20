@@ -360,9 +360,9 @@ URL,URL
 下载备份：,"Download backup:"
 确定要删除这个备份吗？,"Are you sure you want to delete this backup?"
 删除备份：,"Delete backup:"
+用户不存在，请联系管理员,用户不存在，请联系管理员
+用户不存在！,用户不存在！
 "框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。","Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml."
-系统菜单,"System Menu"
-用户菜单,"User menu"
 模块不存在：%{1},"Module does not exist: %{1}"
 其他,Other
 "请指定 --username=、--user_id= 或 --email= 之一","Please specify one of --username=, --user_id=, or --email="

@@ -33,7 +33,7 @@ php bin/w server:restart -r # Restart test instance when master-level changes re
 php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation, or after user acceptance
 ```
 
-每次仓库修改（包括规则和文档）都必须：先创建任务记录，修改后使用 Codex 内置 Browser 验证，记录 URL/操作/可见结果/控制台/WLS 状态；验证发现事实变化时，在同一任务内同步更新当前文档并再次核对。
+每次仓库修改（包括规则和文档）都必须：先创建任务记录，修改后使用 Codex 内置 Browser 验证，记录 URL/操作/可见结果/控制台/WLS 状态；验证发现事实变化时，在同一任务内同步更新当前文档并再次核对。最终回复必须写清「改了什么功能 → 在哪个完整 URL 验证」，优先给出当前测试实例上可点击的绝对链接，方便用户用内置 Browser 验收。
 
 Git commit + dual push（用户明确要求提交时；`origin`=Gitee，`github`=GitHub）：
 

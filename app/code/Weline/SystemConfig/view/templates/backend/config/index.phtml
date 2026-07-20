@@ -25,12 +25,55 @@ if ($postUrl === '') {
 }
 $guideData = is_array($this->getData('guide')) ? $this->getData('guide') : [];
 $assignedGuideParams = is_array($guide_params ?? null) ? $guide_params : [];
-$guideKey = trim((string)($guideData['key'] ?? $assignedGuideParams['guide_key'] ?? ($guide_key ?? '')));
-$guideTitle = trim((string)($guideData['title'] ?? $assignedGuideParams['guide_title'] ?? ($guide_title ?? '')));
-$guideSummary = trim((string)($guideData['summary'] ?? $assignedGuideParams['guide_summary'] ?? ($guide_summary ?? '')));
-$guideStep = trim((string)($guideData['step'] ?? $assignedGuideParams['guide_step'] ?? ($guide_step ?? '')));
+$decodeGuideDisplay = static function (string $value): string {
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+    for ($i = 0; $i < 5; $i++) {
+        if (!preg_match('/%[0-9A-Fa-f]{2}/', $value)) {
+            break;
+        }
+        $decoded = rawurldecode($value);
+        if ($decoded === $value) {
+            $decoded = urldecode($value);
+        }
+        if ($decoded === $value) {
+            break;
+        }
+        $value = $decoded;
+    }
+    return trim($value);
+};
+$guideKey = $decodeGuideDisplay((string)($guideData['key'] ?? $assignedGuideParams['guide_key'] ?? ($guide_key ?? '')));
+$guideKeys = is_array($guideData['keys'] ?? null)
+    ? array_values(array_filter(array_map('strval', $guideData['keys'])))
+    : (is_array($guide_keys ?? null) ? array_values(array_filter(array_map('strval', $guide_keys))) : []);
+$guideKeys = array_values(array_filter(array_map(static function ($key) use ($decodeGuideDisplay): string {
+    return $decodeGuideDisplay((string)$key);
+}, $guideKeys), static fn(string $key): bool => $key !== ''));
+if ($guideKeys === [] && $guideKey !== '') {
+    foreach (preg_split('/[\s,|;]+/', $guideKey) ?: [] as $part) {
+        $part = $decodeGuideDisplay((string)$part);
+        if ($part !== '' && !in_array($part, $guideKeys, true)) {
+            $guideKeys[] = $part;
+        }
+    }
+}
+$guideLocate = $decodeGuideDisplay((string)($guideData['locate'] ?? $assignedGuideParams['guide_locate'] ?? ($guide_locate ?? '')));
+if ($guideLocate === '' || ($guideKeys !== [] && !in_array($guideLocate, $guideKeys, true))) {
+    $guideLocate = $guideKeys[0] ?? '';
+}
+$guideTargets = is_array($guideData['targets'] ?? null)
+    ? $guideData['targets']
+    : (is_array($guide_targets ?? null) ? $guide_targets : []);
+$guideTitle = $decodeGuideDisplay((string)($guideData['title'] ?? $assignedGuideParams['guide_title'] ?? ($guide_title ?? '')));
+$guideSummary = $decodeGuideDisplay((string)($guideData['summary'] ?? $assignedGuideParams['guide_summary'] ?? ($guide_summary ?? '')));
+$guideStep = $decodeGuideDisplay((string)($guideData['step'] ?? $assignedGuideParams['guide_step'] ?? ($guide_step ?? '')));
 $guideReturn = trim((string)($guideData['return'] ?? $assignedGuideParams['guide_return'] ?? ($guide_return ?? '')));
-$guideActive = $guideKey !== '' || $guideTitle !== '' || $guideSummary !== '';
+$guideActive = $guideKeys !== [] || $guideTitle !== '' || $guideSummary !== '';
+$guideKeySet = $guideKeys !== [] ? array_fill_keys($guideKeys, true) : [];
+$guideKeyIndex = $guideKeys !== [] ? array_flip($guideKeys) : [];
 $moduleRows = $tree['modules'] ?? [];
 $totalTemplates = 0;
 $totalFields = 0;
@@ -59,7 +102,8 @@ $parseOptions = static function (string $options): array {
 $guideParams = [];
 if ($guideActive) {
     foreach ([
-        'guide_key' => $guideKey,
+        'guide_key' => $guideKeys !== [] ? implode(',', $guideKeys) : $guideKey,
+        'guide_locate' => $guideLocate,
         'guide_title' => $guideTitle,
         'guide_summary' => $guideSummary,
         'guide_step' => $guideStep,
@@ -72,10 +116,65 @@ if ($guideActive) {
 }
 $configUrl = static function (array $params = []) use ($postUrl, $guideParams): string {
     $params = array_merge($guideParams, $params);
-    $query = http_build_query($params);
+    $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
     $url = $postUrl . ($query !== '' ? '?' . $query : '');
     return htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
 };
+$guideTargetNav = [];
+foreach ($guideTargets as $guideTarget) {
+    if (!is_array($guideTarget)) {
+        continue;
+    }
+    $targetKey = trim((string)($guideTarget['key'] ?? ''));
+    if ($targetKey === '') {
+        continue;
+    }
+    $targetModule = trim((string)($guideTarget['module'] ?? ''));
+    $targetArea = trim((string)($guideTarget['area'] ?? $selectedArea));
+    $navParams = [
+        'area' => $targetArea !== '' ? $targetArea : $selectedArea,
+        'scope' => $scope,
+        'locale' => $locale,
+        'guide_locate' => $targetKey,
+    ];
+    if ($targetModule !== '') {
+        $navParams['module'] = $targetModule;
+    }
+    $guideTargetNav[$targetKey] = [
+        'index' => (int)($guideTarget['index'] ?? count($guideTargetNav)),
+        'key' => $targetKey,
+        'label' => trim((string)($guideTarget['label'] ?? $targetKey)),
+        'module' => $targetModule,
+        'area' => $targetArea,
+        'code' => trim((string)($guideTarget['code'] ?? '')),
+        'found' => !empty($guideTarget['found']),
+        'href' => html_entity_decode($configUrl($navParams), ENT_QUOTES, 'UTF-8'),
+    ];
+}
+foreach ($guideKeys as $index => $targetKey) {
+    if (isset($guideTargetNav[$targetKey])) {
+        continue;
+    }
+    $guideTargetNav[$targetKey] = [
+        'index' => (int)$index,
+        'key' => $targetKey,
+        'label' => $targetKey,
+        'module' => '',
+        'area' => $selectedArea,
+        'code' => '',
+        'found' => false,
+        'href' => html_entity_decode($configUrl([
+            'area' => $selectedArea,
+            'scope' => $scope,
+            'locale' => $locale,
+            'guide_locate' => $targetKey,
+        ]), ENT_QUOTES, 'UTF-8'),
+    ];
+}
+uksort($guideTargetNav, static function (string $a, string $b) use ($guideKeyIndex): int {
+    return ((int)($guideKeyIndex[$a] ?? 9999)) <=> ((int)($guideKeyIndex[$b] ?? 9999));
+});
+$guideTargetNav = array_values($guideTargetNav);
 $templateInstance = $this;
 $adapterQueryParams = static function (array $adapter): array {
     $query = trim((string)($adapter['query'] ?? ''));
@@ -314,6 +413,11 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
         background: #fff3d6;
     }
 
+    .wsc-field-table tbody tr.wsc-guide-target--focused {
+        background: #ffeccc;
+        box-shadow: inset 4px 0 0 #ea580c, 0 0 0 2px rgba(234, 88, 12, .25);
+    }
+
     .wsc-guide-target-badge {
         margin-left: 8px;
         padding: 2px 7px;
@@ -321,6 +425,255 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
         color: #fff;
         font-size: 11px;
         vertical-align: middle;
+    }
+
+    .wsc-guide-target-badge.is-current {
+        background: #ea580c;
+    }
+
+    .wsc-guide-key-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    .wsc-guide-key-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: 4px 10px;
+        border: 1px solid #ffd6a6;
+        border-radius: 999px;
+        background: #fff;
+        color: #9a5b00;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .wsc-guide-key-chip.is-current {
+        border-color: #ea580c;
+        background: #fff7ed;
+        color: #c2410c;
+        font-weight: 700;
+    }
+
+    .wsc-guide-key-chip code {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .wsc-guide-float {
+        position: fixed;
+        right: 18px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1040;
+        width: min(280px, calc(100vw - 36px));
+        max-height: min(70vh, 520px);
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #ffd6a6;
+        border-radius: 14px;
+        background: rgba(255, 253, 249, .96);
+        box-shadow: 0 18px 40px rgba(154, 91, 0, .16);
+        backdrop-filter: blur(8px);
+        transition: width .2s ease, max-height .2s ease, border-radius .2s ease;
+    }
+
+    .wsc-guide-float-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #ffe2b8;
+        flex: 0 0 auto;
+    }
+
+    .wsc-guide-float-heading {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .wsc-guide-float-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #9a5b00;
+    }
+
+    .wsc-guide-float-current {
+        display: block;
+        margin-top: 2px;
+        font-size: 11px;
+        color: #c2410c;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .wsc-guide-float-toggle {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ffd6a6;
+        border-radius: 8px;
+        background: #fff;
+        color: #9a5b00;
+        padding: 0;
+        cursor: pointer;
+    }
+
+    .wsc-guide-float-toggle:hover {
+        background: #fff7ed;
+        border-color: #fb923c;
+        color: #c2410c;
+    }
+
+    .wsc-guide-float-body {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    .wsc-guide-float-list {
+        margin: 0;
+        padding: 8px;
+        list-style: none;
+        overflow: auto;
+    }
+
+    .wsc-guide-float-item {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        text-align: left;
+        color: #7c2d12;
+        cursor: pointer;
+    }
+
+    .wsc-guide-float-item:hover {
+        background: #fff7ed;
+        border-color: #ffd6a6;
+    }
+
+    .wsc-guide-float-item.is-current {
+        background: #ffedd5;
+        border-color: #fb923c;
+        box-shadow: inset 3px 0 0 #ea580c;
+    }
+
+    .wsc-guide-float-item.is-missing {
+        opacity: .72;
+    }
+
+    .wsc-guide-float-num {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #fff1d6;
+        color: #9a5b00;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .wsc-guide-float-item.is-current .wsc-guide-float-num {
+        background: #ea580c;
+        color: #fff;
+    }
+
+    .wsc-guide-float-label {
+        min-width: 0;
+    }
+
+    .wsc-guide-float-label strong {
+        display: block;
+        font-size: 13px;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .wsc-guide-float-label code {
+        display: block;
+        margin-top: 2px;
+        font-size: 11px;
+        color: #b45309;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .wsc-guide-float-mode {
+        font-size: 11px;
+        color: #a16207;
+        white-space: nowrap;
+    }
+
+    .wsc-guide-float-footer {
+        padding: 10px 12px 12px;
+        border-top: 1px solid #ffe2b8;
+        flex: 0 0 auto;
+    }
+
+    .wsc-guide-float.is-collapsed {
+        width: auto;
+        max-height: none;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+
+    .wsc-guide-float.is-collapsed .wsc-guide-float-header {
+        padding: 8px 10px 8px 12px;
+        border-bottom: 0;
+        gap: 6px;
+    }
+
+    .wsc-guide-float.is-collapsed .wsc-guide-float-current,
+    .wsc-guide-float.is-collapsed .wsc-guide-float-body {
+        display: none;
+    }
+
+    .wsc-guide-float.is-collapsed .wsc-guide-float-title {
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 991.98px) {
+        .wsc-guide-float {
+            right: 12px;
+            left: 12px;
+            top: auto;
+            bottom: 16px;
+            transform: none;
+            width: auto;
+            max-height: 38vh;
+        }
+
+        .wsc-guide-float.is-collapsed {
+            left: auto;
+            width: auto;
+            max-height: none;
+        }
     }
 
     .wsc-template-header {
@@ -436,6 +789,34 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
         line-height: 1.55;
     }
 
+    .wsc-config-hint {
+        white-space: pre-wrap;
+        line-height: 1.55;
+        margin: 0.5rem 0 0.75rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 0.35rem;
+        border: 1px solid transparent;
+        font-size: 0.875rem;
+    }
+
+    .wsc-config-hint--info {
+        color: #084298;
+        background: #cfe2ff;
+        border-color: #b6d4fe;
+    }
+
+    .wsc-config-hint--warning {
+        color: #664d03;
+        background: #fff3cd;
+        border-color: #ffecb5;
+    }
+
+    .wsc-config-hint--danger {
+        color: #842029;
+        background: #f8d7da;
+        border-color: #f5c2c7;
+    }
+
     .wsc-form-actions {
         display: grid;
         grid-template-columns: minmax(220px, 360px) auto;
@@ -520,15 +901,37 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                         <?php if ($guideSummary !== ''): ?>
                             <div class="text-muted"><?= htmlspecialchars($guideSummary, ENT_QUOTES, 'UTF-8') ?></div>
                         <?php endif; ?>
-                        <?php if ($guideKey !== ''): ?>
-                            <code class="wsc-guide-key"><?= htmlspecialchars($guideKey, ENT_QUOTES, 'UTF-8') ?></code>
+                        <?php if ($guideTargetNav !== []): ?>
+                            <div class="wsc-guide-key-list" data-wsc-guide-key-list="1">
+                                <?php foreach ($guideTargetNav as $navItem): ?>
+                                    <?php
+                                    $navKey = (string)$navItem['key'];
+                                    $navIsCurrent = $navKey === $guideLocate;
+                                    ?>
+                                    <button
+                                        class="wsc-guide-key-chip<?= $navIsCurrent ? ' is-current' : '' ?>"
+                                        type="button"
+                                        data-wsc-guide-locate-key="<?= htmlspecialchars($navKey, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-wsc-guide-href="<?= htmlspecialchars((string)$navItem['href'], ENT_QUOTES, 'UTF-8') ?>"
+                                        title="<?= htmlspecialchars((string)$navItem['label'], ENT_QUOTES, 'UTF-8') ?>"
+                                    >
+                                        <span><?= (int)$navItem['index'] + 1 ?></span>
+                                        <code><?= htmlspecialchars($navKey, ENT_QUOTES, 'UTF-8') ?></code>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="d-flex flex-wrap gap-2 justify-content-end">
-                        <?php if ($guideKey !== ''): ?>
-                            <a class="btn btn-warning btn-sm" href="#wsc-guide-target">
-                                <i class="mdi mdi-crosshairs-gps me-1"></i><lang>定位配置项</lang>
-                            </a>
+                        <?php if ($guideLocate !== ''): ?>
+                            <button
+                                class="btn btn-warning btn-sm"
+                                type="button"
+                                data-wsc-guide-locate="1"
+                                data-wsc-guide-locate-key="<?= htmlspecialchars($guideLocate, ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                                <i class="mdi mdi-crosshairs-gps me-1"></i><lang>定位当前项</lang>
+                            </button>
                         <?php endif; ?>
                         <?php if ($guideReturn !== ''): ?>
                             <a class="btn btn-outline-warning btn-sm" href="<?= htmlspecialchars($guideReturn, ENT_QUOTES, 'UTF-8') ?>">
@@ -688,9 +1091,9 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                             <?php foreach (($areaRow['templates'] ?? []) as $template): ?>
                                 <?php
                                 $templateFields = is_array($template['fields'] ?? null) ? $template['fields'] : [];
-                                $templateHasGuideField = $guideKey !== '' && count(array_filter(
+                                $templateHasGuideField = $guideKeySet !== [] && count(array_filter(
                                     $templateFields,
-                                    static fn($field): bool => (string)($field['key'] ?? '') === $guideKey
+                                    static fn($field): bool => isset($guideKeySet[(string)($field['key'] ?? '')])
                                 )) > 0;
                                 ?>
                                 <div class="wsc-template-card<?= $templateHasGuideField ? ' wsc-guide-template' : '' ?>">
@@ -719,12 +1122,57 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                         $groupCode = (string)($group['code'] ?? '');
                                         $fields = array_values(array_filter($template['fields'] ?? [], static fn($field) => (string)($field['group'] ?? '') === $groupCode));
                                         $adapters = array_values(array_filter($template['adapters'] ?? [], static fn($adapter) => (string)($adapter['group'] ?? '') === $groupCode));
+                                        $hints = array_values(array_filter($template['hints'] ?? [], static fn($hint) => (string)($hint['group'] ?? '') === $groupCode));
                                         ?>
                                         <div class="mt-3">
                                             <div class="fw-semibold"><?= htmlspecialchars((string)($group['label'] ?? $groupCode)) ?></div>
                                             <?php if (!empty($group['description'])): ?>
                                                 <div class="text-muted small mb-2"><?= htmlspecialchars((string)$group['description']) ?></div>
                                             <?php endif; ?>
+
+                                            <?php foreach ($adapters as $adapter): ?>
+                                                <?php
+                                                $adapter = is_array($adapter) ? $adapter : [];
+                                                $adapterLink = $adapterAction($adapter);
+                                                $adapterUrl = (string)($adapterLink['url'] ?? '');
+                                                $adapterTarget = (string)($adapterLink['target'] ?? '');
+                                                $adapterActionLabel = (string)($adapterLink['label'] ?? __('打开'));
+                                                $adapterTargetAttr = $adapterTarget !== ''
+                                                    ? ' target="' . htmlspecialchars($adapterTarget, ENT_QUOTES, 'UTF-8') . '"'
+                                                    : '';
+                                                $adapterRelAttr = $adapterTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
+                                                ?>
+                                                <div class="wsc-adapter-entry mb-2">
+                                                    <div class="wsc-adapter-copy">
+                                                        <i class="mdi mdi-open-in-new me-1"></i>
+                                                        <strong><?= htmlspecialchars((string)($adapter['label'] ?? $adapter['code'] ?? '')) ?></strong>
+                                                        <span class="text-muted ms-2"><?= htmlspecialchars((string)($adapter['description'] ?? '')) ?></span>
+                                                    </div>
+                                                    <?php if ($adapterUrl !== ''): ?>
+                                                        <a class="btn btn-outline-primary btn-sm wsc-adapter-action"
+                                                           href="<?= htmlspecialchars($adapterUrl, ENT_QUOTES, 'UTF-8') ?>"<?= $adapterTargetAttr ?><?= $adapterRelAttr ?>>
+                                                            <i class="mdi mdi-arrow-right me-1"></i><?= htmlspecialchars($adapterActionLabel, ENT_QUOTES, 'UTF-8') ?>
+                                                        </a>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endforeach; ?>
+
+                                            <?php foreach ($hints as $hint): ?>
+                                                <?php
+                                                $hint = is_array($hint) ? $hint : [];
+                                                $hintText = trim((string)($hint['text'] ?? $hint['description'] ?? ''));
+                                                if ($hintText === '') {
+                                                    continue;
+                                                }
+                                                $hintType = strtolower(trim((string)($hint['type'] ?? 'info')));
+                                                if (!in_array($hintType, ['info', 'warning', 'danger'], true)) {
+                                                    $hintType = 'info';
+                                                }
+                                                ?>
+                                                <div class="wsc-config-hint wsc-config-hint--<?= htmlspecialchars($hintType, ENT_QUOTES, 'UTF-8') ?>" role="note">
+                                                    <?= htmlspecialchars($hintText, ENT_QUOTES, 'UTF-8') ?>
+                                                </div>
+                                            <?php endforeach; ?>
 
                                             <?php if (!empty($fields)): ?>
                                                 <div class="wsc-field-table-wrap">
@@ -754,14 +1202,22 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                             $baseVersion = (int)($field['base_version'] ?? 0);
                                                             $source = is_array($field['effective_source'] ?? null) ? $field['effective_source'] : null;
                                                             $options = $parseOptions((string)($field['options'] ?? ''));
-                                                            $fieldGuideTarget = $guideKey !== '' && $fieldKey === $guideKey;
+                                                            $fieldGuideTarget = isset($guideKeySet[$fieldKey]);
+                                                            $fieldGuideIndex = $fieldGuideTarget ? (int)($guideKeyIndex[$fieldKey] ?? 0) : -1;
+                                                            $fieldGuideCurrent = $fieldGuideTarget && $fieldKey === $guideLocate;
+                                                            $fieldGuideId = $fieldGuideTarget ? 'wsc-guide-target-' . $fieldGuideIndex : '';
                                                             ?>
-                                                            <tr class="<?= $fieldGuideTarget ? 'wsc-guide-target' : '' ?>"<?= $fieldGuideTarget ? ' id="wsc-guide-target" data-guide-key="' . htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
+                                                            <tr
+                                                                class="<?= $fieldGuideTarget ? 'wsc-guide-target' : '' ?><?= $fieldGuideCurrent ? ' wsc-guide-target--focused' : '' ?>"
+                                                                <?= $fieldGuideTarget ? ' id="' . htmlspecialchars($fieldGuideId, ENT_QUOTES, 'UTF-8') . '" data-guide-key="' . htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
+                                                            >
                                                                 <td>
                                                                     <div class="wsc-field-title">
                                                                         <?= htmlspecialchars((string)($field['label'] ?? $fieldKey)) ?>
                                                                         <?php if ($fieldGuideTarget): ?>
-                                                                            <span class="wsc-guide-target-badge"><lang>引导目标</lang></span>
+                                                                            <span class="wsc-guide-target-badge<?= $fieldGuideCurrent ? ' is-current' : '' ?>">
+                                                                                <?= htmlspecialchars((string)($fieldGuideCurrent ? __('当前定位') : __('引导目标')), ENT_QUOTES, 'UTF-8') ?>
+                                                                            </span>
                                                                         <?php endif; ?>
                                                                     </div>
                                                                     <code class="wsc-field-key"><?= htmlspecialchars($fieldKey) ?></code>
@@ -817,33 +1273,6 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                     </table>
                                                 </div>
                                             <?php endif; ?>
-
-                                            <?php foreach ($adapters as $adapter): ?>
-                                                <?php
-                                                $adapter = is_array($adapter) ? $adapter : [];
-                                                $adapterLink = $adapterAction($adapter);
-                                                $adapterUrl = (string)($adapterLink['url'] ?? '');
-                                                $adapterTarget = (string)($adapterLink['target'] ?? '');
-                                                $adapterActionLabel = (string)($adapterLink['label'] ?? __('打开'));
-                                                $adapterTargetAttr = $adapterTarget !== ''
-                                                    ? ' target="' . htmlspecialchars($adapterTarget, ENT_QUOTES, 'UTF-8') . '"'
-                                                    : '';
-                                                $adapterRelAttr = $adapterTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
-                                                ?>
-                                                <div class="wsc-adapter-entry mb-2">
-                                                    <div class="wsc-adapter-copy">
-                                                        <i class="mdi mdi-open-in-new me-1"></i>
-                                                        <strong><?= htmlspecialchars((string)($adapter['label'] ?? $adapter['code'] ?? '')) ?></strong>
-                                                        <span class="text-muted ms-2"><?= htmlspecialchars((string)($adapter['description'] ?? '')) ?></span>
-                                                    </div>
-                                                    <?php if ($adapterUrl !== ''): ?>
-                                                        <a class="btn btn-outline-primary btn-sm wsc-adapter-action"
-                                                           href="<?= htmlspecialchars($adapterUrl, ENT_QUOTES, 'UTF-8') ?>"<?= $adapterTargetAttr ?><?= $adapterRelAttr ?>>
-                                                            <i class="mdi mdi-arrow-right me-1"></i><?= htmlspecialchars($adapterActionLabel, ENT_QUOTES, 'UTF-8') ?>
-                                                        </a>
-                                                    <?php endif; ?>
-                                                </div>
-                                            <?php endforeach; ?>
                                         </div>
                                     <?php endforeach; ?>
 
@@ -922,21 +1351,380 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
 </div>
 </div>
 
-<?php if ($guideKey !== ''): ?>
+<?php if ($guideTargetNav !== []): ?>
+    <?php
+    $currentNavLabel = $guideLocate;
+    foreach ($guideTargetNav as $navItem) {
+        if ((string)$navItem['key'] === $guideLocate) {
+            $currentNavLabel = (string)$navItem['label'];
+            break;
+        }
+    }
+    ?>
+    <aside class="wsc-guide-float" id="wsc-guide-float" aria-label="<?= htmlspecialchars((string)__('引导定位'), ENT_QUOTES, 'UTF-8') ?>">
+        <div class="wsc-guide-float-header">
+            <div class="wsc-guide-float-heading">
+                <div class="wsc-guide-float-title"><lang>引导定位</lang></div>
+                <div class="wsc-guide-float-current" data-wsc-guide-current-label title="<?= htmlspecialchars($currentNavLabel, ENT_QUOTES, 'UTF-8') ?>">
+                    <?= htmlspecialchars((string)__('当前：%{1}', [$currentNavLabel]), ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            </div>
+            <button
+                class="wsc-guide-float-toggle"
+                type="button"
+                data-wsc-guide-float-toggle="1"
+                aria-expanded="true"
+                aria-controls="wsc-guide-float-body"
+                title="<?= htmlspecialchars((string)__('收起'), ENT_QUOTES, 'UTF-8') ?>"
+            >
+                <i class="mdi mdi-chevron-right" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="wsc-guide-float-body" id="wsc-guide-float-body">
+            <ol class="wsc-guide-float-list">
+                <?php foreach ($guideTargetNav as $navItem): ?>
+                    <?php
+                    $navKey = (string)$navItem['key'];
+                    $navIsCurrent = $navKey === $guideLocate;
+                    $navFound = !empty($navItem['found']);
+                    ?>
+                    <li>
+                        <button
+                            class="wsc-guide-float-item<?= $navIsCurrent ? ' is-current' : '' ?><?= $navFound ? '' : ' is-missing' ?>"
+                            type="button"
+                            data-wsc-guide-locate-key="<?= htmlspecialchars($navKey, ENT_QUOTES, 'UTF-8') ?>"
+                            data-wsc-guide-href="<?= htmlspecialchars((string)$navItem['href'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-wsc-guide-label="<?= htmlspecialchars((string)$navItem['label'], ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                            <span class="wsc-guide-float-num"><?= (int)$navItem['index'] + 1 ?></span>
+                            <span class="wsc-guide-float-label">
+                                <strong><?= htmlspecialchars((string)$navItem['label'], ENT_QUOTES, 'UTF-8') ?></strong>
+                                <code><?= htmlspecialchars($navKey, ENT_QUOTES, 'UTF-8') ?></code>
+                            </span>
+                            <span class="wsc-guide-float-mode" data-wsc-guide-mode>
+                                <?= htmlspecialchars((string)($navFound ? __('定位') : __('未找到')), ENT_QUOTES, 'UTF-8') ?>
+                            </span>
+                        </button>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+            <?php if ($guideReturn !== ''): ?>
+                <div class="wsc-guide-float-footer">
+                    <a class="btn btn-outline-warning btn-sm w-100" href="<?= htmlspecialchars($guideReturn, ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="mdi mdi-arrow-left me-1"></i><lang>返回引导</lang>
+                    </a>
+                </div>
+            <?php endif; ?>
+        </div>
+    </aside>
+<?php endif; ?>
+
+<?php if ($guideKeys !== []): ?>
 <script>
     (function () {
-        var target = document.getElementById('wsc-guide-target');
-        if (!target) {
-            return;
-        }
-        window.setTimeout(function () {
+        var initialLocate = <?= json_encode($guideLocate, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var notFoundMsg = <?= json_encode((string)__('未找到引导配置项，请确认已选中对应模块。'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var currentPrefix = <?= json_encode((string)__('当前：%{1}', ['__LABEL__']), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var modeSamePage = <?= json_encode((string)__('同页'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var modeJump = <?= json_encode((string)__('跳转'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var modeMissing = <?= json_encode((string)__('未找到'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var badgeCurrent = <?= json_encode((string)__('当前定位'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var badgeTarget = <?= json_encode((string)__('引导目标'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var guideParamNames = ['guide_key', 'guide_keys', 'guide_title', 'guide_summary', 'guide_locate', 'guide_step', 'guide_return'];
+        var currentKey = '';
+
+        var decodeGuideValue = function (value) {
+            var cur = String(value || '').trim();
+            if (!cur) {
+                return '';
+            }
+            for (var i = 0; i < 5; i++) {
+                if (!/%[0-9A-Fa-f]{2}/.test(cur)) {
+                    break;
+                }
+                try {
+                    var next = decodeURIComponent(cur.replace(/\+/g, '%20'));
+                    if (next === cur) {
+                        break;
+                    }
+                    cur = next;
+                } catch (e) {
+                    break;
+                }
+            }
+            return cur.trim();
+        };
+
+        initialLocate = decodeGuideValue(initialLocate);
+        currentKey = initialLocate || '';
+
+        var findTarget = function (key) {
+            key = decodeGuideValue(key);
+            if (!key) {
+                return null;
+            }
+            var rows = document.querySelectorAll('[data-guide-key]');
+            for (var i = 0; i < rows.length; i++) {
+                if (decodeGuideValue(rows[i].getAttribute('data-guide-key') || '') === key) {
+                    return rows[i];
+                }
+            }
+            return null;
+        };
+
+        var findTriggerByKey = function (key) {
+            key = decodeGuideValue(key);
+            var preferred = document.querySelectorAll('.wsc-guide-float-item[data-wsc-guide-locate-key]');
+            for (var i = 0; i < preferred.length; i++) {
+                if (decodeGuideValue(preferred[i].getAttribute('data-wsc-guide-locate-key') || '') === key) {
+                    return preferred[i];
+                }
+            }
+            var buttons = document.querySelectorAll('[data-wsc-guide-locate-key]');
+            for (var j = 0; j < buttons.length; j++) {
+                if (decodeGuideValue(buttons[j].getAttribute('data-wsc-guide-locate-key') || '') === key) {
+                    return buttons[j];
+                }
+            }
+            return null;
+        };
+
+        var syncModeLabels = function () {
+            document.querySelectorAll('[data-wsc-guide-locate-key]').forEach(function (btn) {
+                var key = decodeGuideValue(btn.getAttribute('data-wsc-guide-locate-key') || '');
+                var mode = btn.querySelector('[data-wsc-guide-mode]');
+                if (!mode) {
+                    return;
+                }
+                if (findTarget(key)) {
+                    mode.textContent = modeSamePage;
+                    btn.classList.remove('is-missing');
+                } else if (btn.getAttribute('data-wsc-guide-href')) {
+                    mode.textContent = modeJump;
+                } else {
+                    mode.textContent = modeMissing;
+                    btn.classList.add('is-missing');
+                }
+            });
+        };
+
+        var setCurrentUi = function (key, label) {
+            currentKey = decodeGuideValue(key || '');
+            document.querySelectorAll('.wsc-guide-float-item, .wsc-guide-key-chip').forEach(function (el) {
+                var itemKey = decodeGuideValue(el.getAttribute('data-wsc-guide-locate-key') || '');
+                el.classList.toggle('is-current', itemKey !== '' && itemKey === currentKey);
+            });
+            document.querySelectorAll('tr.wsc-guide-target').forEach(function (row) {
+                var rowKey = decodeGuideValue(row.getAttribute('data-guide-key') || '');
+                var isCurrent = rowKey !== '' && rowKey === currentKey;
+                row.classList.toggle('wsc-guide-target--focused', isCurrent);
+                var badge = row.querySelector('.wsc-guide-target-badge');
+                if (badge) {
+                    badge.classList.toggle('is-current', isCurrent);
+                    badge.textContent = isCurrent ? badgeCurrent : badgeTarget;
+                }
+            });
+            var currentLabelEl = document.querySelector('[data-wsc-guide-current-label]');
+            if (currentLabelEl) {
+                var text = label || key || '';
+                currentLabelEl.textContent = String(currentPrefix).replace('__LABEL__', text);
+                currentLabelEl.setAttribute('title', text);
+            }
+        };
+
+        var sanitizeGuideSearchParams = function (url) {
+            guideParamNames.forEach(function (name) {
+                if (!url.searchParams.has(name)) {
+                    return;
+                }
+                var decoded = decodeGuideValue(url.searchParams.get(name) || '');
+                if (decoded === '') {
+                    url.searchParams.delete(name);
+                } else {
+                    url.searchParams.set(name, decoded);
+                }
+            });
+            return url;
+        };
+
+        var replaceLocateInUrl = function (key) {
+            try {
+                var url = sanitizeGuideSearchParams(new URL(window.location.href));
+                key = decodeGuideValue(key);
+                if (key) {
+                    url.searchParams.set('guide_locate', key);
+                } else {
+                    url.searchParams.delete('guide_locate');
+                }
+                window.history.replaceState({}, '', url.toString());
+            } catch (e) {
+                // ignore
+            }
+        };
+
+        var locateOnPage = function (key) {
+            key = decodeGuideValue(key);
+            var target = findTarget(key);
+            if (!target) {
+                return false;
+            }
+            var templateCard = target.closest('.wsc-template-card');
+            if (templateCard) {
+                templateCard.classList.add('wsc-guide-template');
+            }
+            var label = '';
+            var floatBtn = findTriggerByKey(key);
+            if (floatBtn) {
+                label = floatBtn.getAttribute('data-wsc-guide-label') || '';
+            }
+            setCurrentUi(key, label);
+            replaceLocateInUrl(key);
             target.scrollIntoView({behavior: 'smooth', block: 'center'});
-            target.classList.add('wsc-guide-target--focused');
             var control = target.querySelector('input:not([type="hidden"]), select, textarea, button');
             if (control && typeof control.focus === 'function') {
-                control.focus({preventScroll: true});
+                try {
+                    control.focus({preventScroll: true});
+                } catch (e) {
+                    control.focus();
+                }
             }
-        }, 180);
+            return true;
+        };
+
+        var navigateToTarget = function (trigger, key) {
+            key = decodeGuideValue(key);
+            var href = (trigger && trigger.getAttribute)
+                ? (trigger.getAttribute('data-wsc-guide-href') || '')
+                : '';
+            if (!href) {
+                var fallback = findTriggerByKey(key);
+                href = fallback ? (fallback.getAttribute('data-wsc-guide-href') || '') : '';
+            }
+            if (!href) {
+                if (typeof BackendToast !== 'undefined' && BackendToast.warning) {
+                    BackendToast.warning(notFoundMsg);
+                }
+                return false;
+            }
+            try {
+                var url = sanitizeGuideSearchParams(new URL(href, window.location.href));
+                if (key) {
+                    url.searchParams.set('guide_locate', key);
+                }
+                window.location.assign(url.toString());
+            } catch (e) {
+                window.location.href = href;
+            }
+            return true;
+        };
+
+        var locateKey = function (key, trigger) {
+            key = decodeGuideValue(key);
+            if (!key) {
+                return false;
+            }
+            if (locateOnPage(key)) {
+                return true;
+            }
+            return navigateToTarget(trigger || findTriggerByKey(key), key);
+        };
+
+        var autoLocateWithRetry = function (attempt) {
+            if (!initialLocate) {
+                return;
+            }
+            if (locateOnPage(initialLocate)) {
+                return;
+            }
+            if (attempt < 8) {
+                window.setTimeout(function () {
+                    autoLocateWithRetry(attempt + 1);
+                }, 120 + attempt * 80);
+            }
+        };
+
+        var collapseLabel = <?= json_encode((string)__('收起'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var expandLabel = <?= json_encode((string)__('展开'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var floatPanel = document.getElementById('wsc-guide-float');
+        var floatToggle = floatPanel
+            ? floatPanel.querySelector('[data-wsc-guide-float-toggle]')
+            : null;
+        var floatStorageKey = 'wsc-guide-float-collapsed';
+
+        var setFloatCollapsed = function (collapsed) {
+            if (!floatPanel || !floatToggle) {
+                return;
+            }
+            floatPanel.classList.toggle('is-collapsed', !!collapsed);
+            floatToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            floatToggle.setAttribute('title', collapsed ? expandLabel : collapseLabel);
+            var icon = floatToggle.querySelector('i');
+            if (icon) {
+                icon.className = collapsed ? 'mdi mdi-chevron-left' : 'mdi mdi-chevron-right';
+            }
+            try {
+                window.sessionStorage.setItem(floatStorageKey, collapsed ? '1' : '0');
+            } catch (e) {
+                // ignore
+            }
+        };
+
+        var readFloatCollapsed = function () {
+            try {
+                return window.sessionStorage.getItem(floatStorageKey) === '1';
+            } catch (e) {
+                return false;
+            }
+        };
+
+        setFloatCollapsed(readFloatCollapsed());
+
+        syncModeLabels();
+        try {
+            var cleanUrl = sanitizeGuideSearchParams(new URL(window.location.href));
+            if (cleanUrl.toString() !== window.location.href) {
+                window.history.replaceState({}, '', cleanUrl.toString());
+            }
+        } catch (e) {
+            // ignore
+        }
+        window.setTimeout(function () {
+            autoLocateWithRetry(0);
+        }, 120);
+
+        document.addEventListener('click', function (event) {
+            if (!event.target || !event.target.closest) {
+                return;
+            }
+
+            var toggle = event.target.closest('[data-wsc-guide-float-toggle]');
+            if (toggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                setFloatCollapsed(!(floatPanel && floatPanel.classList.contains('is-collapsed')));
+                return;
+            }
+
+            if (floatPanel && floatPanel.classList.contains('is-collapsed') && floatPanel.contains(event.target)) {
+                event.preventDefault();
+                setFloatCollapsed(false);
+                return;
+            }
+
+            var trigger = event.target.closest('[data-wsc-guide-locate-key], [data-wsc-guide-locate]');
+            if (!trigger) {
+                return;
+            }
+            event.preventDefault();
+            var key = decodeGuideValue(
+                trigger.getAttribute('data-wsc-guide-locate-key') || currentKey || initialLocate || ''
+            );
+            if (!locateKey(key, trigger)) {
+                if (typeof BackendToast !== 'undefined' && BackendToast.warning) {
+                    BackendToast.warning(notFoundMsg);
+                }
+            }
+        });
     })();
 </script>
 <?php endif; ?>

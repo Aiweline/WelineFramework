@@ -57,7 +57,11 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
                 process: $process,
                 isTerminal: false,
                 allClientLeasesExpired: !$this->store->hasActiveLeases($taskId, $now->getTimestamp()),
-                runnerHeartbeatExpired: !$leaseReleased && ($executionLease === null || $executionLease <= $now->getTimestamp()),
+                // A null execution lease means the Runner has not claimed yet
+                // (still starting/recovering). That is not an expired heartbeat.
+                runnerHeartbeatExpired: !$leaseReleased
+                    && $executionLease !== null
+                    && $executionLease <= $now->getTimestamp(),
                 stopRequested: $stopRequested,
                 recoveryStopRequested: !empty($row['recovery_stop_requested']),
                 cooperativeStopDeadlineReached: $deadline !== null && $deadline <= $now->getTimestamp(),

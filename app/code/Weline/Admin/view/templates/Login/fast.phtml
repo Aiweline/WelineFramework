@@ -518,15 +518,57 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    function resetLoginSubmitState() {
+        var button = form.querySelector('[data-login-submit]');
+        form.dataset.submitting = '0';
+        if (!button) {
+            return;
+        }
+        button.classList.remove('is-loading');
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+    }
+
     form.addEventListener('submit', function (event) {
         var button = form.querySelector('[data-login-submit]');
-        if (!button || button.classList.contains('disable')) {
+        if (!button || button.classList.contains('disable') || form.dataset.submitting === '1') {
             event.preventDefault();
             return;
         }
+        form.dataset.submitting = '1';
         button.classList.add('is-loading');
-        button.disabled = true;
         button.setAttribute('aria-busy', 'true');
+        window.setTimeout(function () {
+            button.disabled = true;
+        }, 0);
+    });
+
+    form.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || event.isComposing || event.defaultPrevented) {
+            return;
+        }
+        var target = event.target;
+        if (!target || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.type === 'submit') {
+            return;
+        }
+        if (form.dataset.submitting === '1') {
+            event.preventDefault();
+            return;
+        }
+        var button = form.querySelector('[data-login-submit]');
+        if (!button || button.classList.contains('disable') || button.disabled) {
+            return;
+        }
+        if (typeof form.requestSubmit === 'function') {
+            event.preventDefault();
+            form.requestSubmit(button);
+        }
+    });
+
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted || form.dataset.submitting === '1') {
+            resetLoginSubmitState();
+        }
     });
 });
 </script>

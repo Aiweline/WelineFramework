@@ -24,6 +24,9 @@ final class ResumableTaskStateMachine
                 ResumableTaskStatus::FAILED,
                 ResumableTaskStatus::CANCELLED,
                 ResumableTaskStatus::EXPIRED,
+                // A launch identity that cannot be proven safe to stop or
+                // resume must be surfaced instead of blindly retrying it.
+                ResumableTaskStatus::RECOVERY_UNSAFE,
             ],
             ResumableTaskStatus::RUNNING => [
                 ResumableTaskStatus::COMPLETED,

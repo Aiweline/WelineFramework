@@ -7,4 +7,5 @@ return [
     \Weline\Server\Service\Provider\HttpRedirectProvider::class,
     \Weline\Server\Service\Provider\MaintenanceWorkerProvider::class,
     \Weline\Server\Service\Provider\GatewayProvider::class,
+    \Weline\Server\Service\Provider\RuntimeTaskWatchdogProvider::class,
 ];
