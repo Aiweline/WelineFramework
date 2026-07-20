@@ -50,7 +50,7 @@ final class FullPageCacheCoordinator
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
-    private const FPC_CACHE_SCHEMA_VERSION = '20260528-locale-currency-context-manifest-safe';
+    private const FPC_CACHE_SCHEMA_VERSION = '20260717-compact-response-payload-v1';
 
     /**
      * @var array<string, bool>
@@ -324,11 +324,14 @@ final class FullPageCacheCoordinator
         }
 
         self::cooperativeBuildYield();
+        // This key is owned exclusively by the response FPC. Route, rule and
+        // generated-parameter caches have independent keys in Router\Core and
+        // are never consumed while serving an FPC hit. Duplicating those data
+        // structures here made a small homepage response exceed the bounded
+        // shared-memory frame (1.6MB on Windows), delaying startup and leaving
+        // followers without a publishable homepage. Keep the shared response
+        // payload compact and let the dedicated route caches own route data.
         $payload = [
-            KeyBuilder::UNIFIED_CACHE_URL_KEY => $url,
-            KeyBuilder::UNIFIED_CACHE_RULE_KEY => $rule,
-            KeyBuilder::UNIFIED_CACHE_ROUTER_KEY => $router,
-            KeyBuilder::UNIFIED_CACHE_PARAMS_KEY => $generatedParams,
             KeyBuilder::UNIFIED_CACHE_FPC_KEY => $body,
             KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => $this->sanitizeHeaders($response->getHeaders()),
             KeyBuilder::UNIFIED_CACHE_STATUS_KEY => $response->getStatusCode(),
@@ -348,7 +351,14 @@ final class FullPageCacheCoordinator
         $payload[self::UNIFIED_CACHE_EXPIRES_AT_KEY] = \microtime(true) + $ttl;
         $unifiedCacheKey = $this->getUnifiedCacheKey($method);
         self::cooperativeBuildYield();
-        $this->cache()->set($unifiedCacheKey, $this->externalizeSharedPayload($unifiedCacheKey, $payload), $ttl);
+        $sharedPublished = $this->cache()->set(
+            $unifiedCacheKey,
+            $this->externalizeSharedPayload($unifiedCacheKey, $payload),
+            $ttl
+        );
+        if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
+            throw new \RuntimeException('Homepage warmup could not publish the compact shared FPC payload.');
+        }
         if ($this->privateSessionTokenFromVariant($variant) === '' && $this->shouldPublishSharedStalePayload($body)) {
             self::cooperativeBuildYield();
             $staleCacheKey = $this->buildStaleCacheKey($unifiedCacheKey);

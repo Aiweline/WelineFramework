@@ -173,15 +173,16 @@ class SharedStateRuntimeOptions
             $port = $defaultPort;
         }
 
+        $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $port);
         $tokenFileName = (string) (
             $args['session-token-file-name']
             ?? $runtimeSession['token_file_name']
             ?? $wlsSession['token_file_name']
             ?? $wlsServer['token_file_name']
-            ?? 'session_server.token'
+            ?? $defaultTokenFileName
         );
         if ($tokenFileName === '') {
-            $tokenFileName = 'session_server.token';
+            $tokenFileName = $defaultTokenFileName;
         }
 
         return [
@@ -228,14 +229,15 @@ class SharedStateRuntimeOptions
             $port = $defaultPort;
         }
 
+        $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $port);
         $tokenFileName = (string) (
             $args['memory-token-file-name']
             ?? $runtimeMemory['token_file_name']
             ?? $memoryConfig['token_file_name']
-            ?? 'memory_server.token'
+            ?? $defaultTokenFileName
         );
         if ($tokenFileName === '') {
-            $tokenFileName = 'memory_server.token';
+            $tokenFileName = $defaultTokenFileName;
         }
 
         return [

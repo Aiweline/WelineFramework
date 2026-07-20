@@ -334,6 +334,32 @@ class Install extends CommandAbstract
         $missingRec = $result->getMissingRecommendedExtensions();
         $unsatisfiedRec = $result->getUnsatisfiedRecommendedItems();
 
+        // FFI is topology-conditional: only POSIX Direct HTTPS requires it.
+        // Keep it out of the global recommendation list, while allowing the
+        // WLS control-plane bootstrapper to request an explicit installation.
+        if ($targetLower === 'ffi') {
+            if (\extension_loaded('FFI') && \class_exists(\FFI::class)) {
+                try {
+                    $ffi = \FFI::cdef('int abs(int);');
+                    if ((int)$ffi->abs(-1) === 1) {
+                        $this->printer->success(__('扩展 FFI 已由当前 PHP 二进制加载且运行时可用 ✔'));
+                        return;
+                    }
+                } catch (\Throwable) {
+                    // Continue into the platform installer and fresh-process verification.
+                }
+            }
+            $this->printer->note(__('正在安装 WLS Direct HTTPS 原生传输扩展: FFI'));
+            $installed = $this->tryInstallExtension('ffi');
+            if ($installed) {
+                $this->printer->success(__('扩展 FFI 已由当前 PHP 二进制启用 ✔'));
+            } else {
+                $this->printer->warning(__('扩展 FFI 自动安装失败'));
+                $this->printExtensionInstallGuide('ffi');
+            }
+            return;
+        }
+
         // 必需扩展（如 pdo_pgsql 数据库驱动）也可单独安装：env:install pdo_pgsql -y
         if (in_array($targetLower, array_map('strtolower', $missing), true)) {
             $this->printer->note(__('正在安装数据库驱动扩展: %{ext}', ['ext' => $target]));

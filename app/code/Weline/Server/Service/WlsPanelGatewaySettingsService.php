@@ -17,9 +17,9 @@ class WlsPanelGatewaySettingsService
     private const RUNTIME_ACTION_NONE = 'none';
     private const RUNTIME_ACTION_RELOAD = 'reload';
     private const RUNTIME_ACTION_RESTART = 'restart';
-    private const TRAFFIC_MODE_AUTO = 'auto';
-    private const TRAFFIC_MODE_DIRECT_LISTEN = 'direct_listen';
-    private const TRAFFIC_MODE_PASSTHROUGH = 'passthrough';
+    private const TOPOLOGY_AUTO = 'auto';
+    private const TOPOLOGY_DIRECT = 'direct';
+    private const TOPOLOGY_DISPATCHER = 'dispatcher';
 
     public function __construct(
         private readonly ServerInstanceManager $instanceManager,
@@ -37,7 +37,7 @@ class WlsPanelGatewaySettingsService
             $selection = $this->selectInstance($instances, $requestedInstance);
 
             return [
-                'config' => $this->getGatewayModeConfig(),
+                'config' => $this->getGatewayModeConfig((string)$selection['instance']),
                 'instances' => \array_values($instances),
                 'selected_instance' => $selection['instance'],
                 'auto_selected' => $selection['auto_selected'],
@@ -72,17 +72,24 @@ class WlsPanelGatewaySettingsService
             $enabled = $this->truthy($input['gateway_enabled'] ?? false);
             $listen = $this->normalizeListenAddress((string)($input['gateway_listen'] ?? ''));
             $previousConfig = $this->getGatewayModeConfig();
-            $previousTrafficMode = (string)($previousConfig['traffic_mode'] ?? self::TRAFFIC_MODE_AUTO);
-            $trafficMode = $this->normalizeTrafficMode((string)($input['gateway_traffic_mode'] ?? self::TRAFFIC_MODE_AUTO));
+            $previousRequestedTopology = (string)($previousConfig['requested_topology'] ?? self::TOPOLOGY_AUTO);
+            $requestedTopology = $this->normalizeRequestedTopology(
+                (string)($input['runtime_topology'] ?? self::TOPOLOGY_AUTO)
+            );
+            if (PHP_OS_FAMILY === 'Windows' && $requestedTopology === self::TOPOLOGY_DIRECT) {
+                throw new \InvalidArgumentException(
+                    (string)__('Windows WLS only supports dispatcher topology; direct topology is unavailable.')
+                );
+            }
 
             $env = Env::getInstance();
             $savedEnabled = $env->setConfig('wls.gateway.enabled', $enabled);
             $savedListen = $env->setConfig('wls.gateway.listen', $listen);
-            $savedTrafficMode = $env->setConfig('wls.gateway.traffic_mode', $trafficMode);
-            if (!$savedEnabled || !$savedListen || !$savedTrafficMode) {
+            $savedTopology = $env->setConfig('wls.runtime.topology', $requestedTopology);
+            if (!$savedEnabled || !$savedListen || !$savedTopology) {
                 return [
                     'success' => false,
-                    'message' => (string)__('Gateway mode configuration could not be saved.'),
+                    'message' => (string)__('Gateway configuration could not be saved.'),
                     'selected_instance' => (string)($input['gateway_instance'] ?? ''),
                 ];
             }
@@ -97,38 +104,32 @@ class WlsPanelGatewaySettingsService
                 $selectedInstance = $this->resolveSelectedRuntimeInstance($input);
             }
 
-            $runtimeActionBlocked = false;
-            $runtimeResult = $this->buildRuntimeActionBlockedResult($runtimeAction, $trafficMode);
-            if ($runtimeResult !== null) {
-                $runtimeActionBlocked = true;
-            } else {
-                $runtimeResult = $this->applyRuntimeAction($runtimeAction, $selectedInstance, $trafficMode);
-            }
-
+            $runtimeResult = $this->applyRuntimeAction($runtimeAction, $selectedInstance, $requestedTopology);
             $restartSucceeded = $runtimeAction === self::RUNTIME_ACTION_RESTART
                 && (bool)($runtimeResult['success'] ?? false);
-            $modeRestartRequired = $trafficMode !== self::TRAFFIC_MODE_AUTO && !$restartSucceeded;
-            if ($modeRestartRequired && !$runtimeActionBlocked) {
+            $topologyChanged = $previousRequestedTopology !== $requestedTopology;
+            $topologyRestartRequired = $topologyChanged && !$restartSucceeded;
+            if ($topologyRestartRequired) {
                 $runtimeResult = $this->appendRuntimeWarning(
                     $runtimeResult,
-                    (string)__('Gateway traffic mode changes require a target WLS restart before the listener topology changes.')
+                    (string)__('WLS topology changes require a target WLS restart before the listener topology changes.')
                 );
             }
 
             return [
                 'success' => true,
-                'message' => (string)__('Gateway mode configuration saved.'),
+                'message' => (string)__('Gateway configuration saved.'),
                 'selected_instance' => $selectedInstance,
                 'listen' => $listen,
                 'enabled' => $enabled,
-                'traffic_mode' => $trafficMode,
-                'traffic_mode_changed' => $previousTrafficMode !== $trafficMode,
-                'traffic_mode_restart_required' => $modeRestartRequired,
+                'requested_topology' => $requestedTopology,
+                'requested_topology_changed' => $topologyChanged,
+                'requested_topology_restart_required' => $topologyRestartRequired,
                 'runtime_action' => $runtimeAction,
-                'runtime_action_blocked' => $runtimeActionBlocked,
+                'runtime_action_blocked' => false,
                 'runtime_action_success' => (bool)($runtimeResult['success'] ?? false),
                 'runtime_action_message' => (string)($runtimeResult['message'] ?? ''),
-                'restart_required' => !$restartSucceeded,
+                'restart_required' => $topologyRestartRequired,
                 'gateway_applied' => (bool)($applyResult['success'] ?? false),
                 'gateway_apply_message' => (string)($applyResult['message'] ?? ''),
             ];
@@ -192,7 +193,7 @@ class WlsPanelGatewaySettingsService
     /**
      * @return array{success:bool,message:string,data?:array}
      */
-    private function applyRuntimeAction(string $runtimeAction, string $selectedInstance, string $trafficMode): array
+    private function applyRuntimeAction(string $runtimeAction, string $selectedInstance, string $requestedTopology): array
     {
         if ($runtimeAction === self::RUNTIME_ACTION_NONE) {
             return [
@@ -209,7 +210,7 @@ class WlsPanelGatewaySettingsService
         }
 
         if ($runtimeAction === self::RUNTIME_ACTION_RESTART) {
-            return $this->restartInstance($selectedInstance, $trafficMode);
+            return $this->restartInstance($selectedInstance, $requestedTopology);
         }
 
         $result = $this->ipcControlGateway->reloadAsync($selectedInstance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
@@ -224,26 +225,18 @@ class WlsPanelGatewaySettingsService
     /**
      * @return array{success:bool,message:string,data?:array}
      */
-    private function restartInstance(string $selectedInstance, string $trafficMode): array
+    private function restartInstance(string $selectedInstance, string $requestedTopology): array
     {
         $info = $this->instanceManager->getPersistedInstanceInfo($selectedInstance);
         if (!$info instanceof ServerInstanceInfo) {
-            return [
-                'success' => false,
-                'message' => (string)__('Selected WLS instance %{1} was not found.', [$selectedInstance]),
-                'data' => [],
-            ];
+            return ['success' => false, 'message' => (string)__('Selected WLS instance %{1} was not found.', [$selectedInstance]), 'data' => []];
         }
 
         $raw = $this->instanceManager->getRawInstanceData($selectedInstance) ?? [];
-        $command = $this->buildRestartCommand($selectedInstance, $trafficMode, $info, $raw);
+        $command = $this->buildRestartCommand($selectedInstance, $requestedTopology, $info, $raw);
         $pid = Processer::create($command, false);
         if ($pid <= 0) {
-            return [
-                'success' => false,
-                'message' => (string)__('WLS restart command was submitted but no valid PID was returned.'),
-                'data' => [],
-            ];
+            return ['success' => false, 'message' => (string)__('WLS restart command was submitted but no valid PID was returned.'), 'data' => []];
         }
 
         return [
@@ -254,7 +247,7 @@ class WlsPanelGatewaySettingsService
                 'port' => $info->port,
                 'workers' => $info->workerCount,
                 'ssl_enabled' => $info->sslEnabled,
-                'topology' => $this->restartTopology($trafficMode, $info, $raw),
+                'requested_topology' => $this->normalizeRequestedTopology($requestedTopology),
             ],
         ];
     }
@@ -264,7 +257,7 @@ class WlsPanelGatewaySettingsService
      */
     private function buildRestartCommand(
         string $selectedInstance,
-        string $trafficMode,
+        string $requestedTopology,
         ServerInstanceInfo $info,
         array $raw
     ): string {
@@ -284,9 +277,11 @@ class WlsPanelGatewaySettingsService
             $this->appendCommandOption($parts, '-c', (string)$info->workerCount);
         }
 
-        $topology = $this->restartTopology($trafficMode, $info, $raw);
-        if ($topology !== '') {
-            $this->appendCommandOption($parts, '--topology', $topology);
+        $requestedTopology = $this->normalizeRequestedTopology($requestedTopology);
+        if ($requestedTopology === self::TOPOLOGY_DIRECT) {
+            $parts[] = '--direct';
+        } elseif ($requestedTopology === self::TOPOLOGY_DISPATCHER) {
+            $parts[] = '--dispatcher';
         }
 
         if (!$info->sslEnabled) {
@@ -301,27 +296,6 @@ class WlsPanelGatewaySettingsService
         $this->appendCommandOption($parts, '--dispatcher-memory-limit', (string)($raw['dispatcher_memory_limit'] ?? ''));
 
         return \implode(' ', $parts);
-    }
-
-    /**
-     * @param array<string, mixed> $raw
-     */
-    private function restartTopology(string $trafficMode, ServerInstanceInfo $info, array $raw): string
-    {
-        $topology = $this->trafficModeTopology($trafficMode);
-        if ($topology !== '') {
-            return $topology;
-        }
-
-        $rawTopology = \strtolower(\trim((string)($raw['topology'] ?? '')));
-        if (\in_array($rawTopology, ['direct', 'dispatcher', 'independent'], true)) {
-            return $rawTopology;
-        }
-        if (!empty($raw['direct_reuse_port'])) {
-            return 'direct';
-        }
-
-        return $info->dispatcherEnabled ? 'dispatcher' : 'independent';
     }
 
     /**
@@ -341,49 +315,53 @@ class WlsPanelGatewaySettingsService
     /**
      * @return array<string, mixed>
      */
-    private function getGatewayModeConfig(): array
+    private function getGatewayModeConfig(?string $selectedInstance = null): array
     {
         $env = Env::getInstance();
-        $savedConfig = $env->getConfig('wls.gateway', []);
-        $savedConfig = \is_array($savedConfig) ? $savedConfig : [];
-        $savedEnabled = $this->truthy($savedConfig['enabled'] ?? false);
-        $savedListen = \trim((string)($savedConfig['listen'] ?? '0.0.0.0:443'));
-        $savedTrafficMode = $this->normalizeTrafficMode((string)($savedConfig['traffic_mode'] ?? self::TRAFFIC_MODE_AUTO));
+        $savedGateway = $env->getConfig('wls.gateway', []);
+        $savedGateway = \is_array($savedGateway) ? $savedGateway : [];
+        $savedRuntime = $env->getConfig('wls.runtime', []);
+        $savedRuntime = \is_array($savedRuntime) ? $savedRuntime : [];
+        $savedEnabled = $this->truthy($savedGateway['enabled'] ?? false);
+        $savedListen = \trim((string)($savedGateway['listen'] ?? '0.0.0.0:443'));
+        $requestedTopology = $this->normalizeRequestedTopology(
+            (string)($savedRuntime['topology'] ?? self::TOPOLOGY_AUTO)
+        );
 
         $envEnabled = \getenv('WLS_GATEWAY_ENABLED');
         $envListen = \getenv('WLS_GATEWAY_LISTEN');
-        $envTrafficMode = \getenv('WLS_GATEWAY_TRAFFIC_MODE');
         $hasEnabledOverride = $envEnabled !== false && \trim((string)$envEnabled) !== '';
         $hasListenOverride = $envListen !== false && \trim((string)$envListen) !== '';
-        $hasTrafficModeOverride = $envTrafficMode !== false && \trim((string)$envTrafficMode) !== '';
+        $effectiveEnabled = $hasEnabledOverride ? $this->truthy((string)$envEnabled) : $savedEnabled;
+        $effectiveListen = $hasListenOverride ? \trim((string)$envListen) : $savedListen;
 
-        $effectiveEnabled = $hasEnabledOverride
-            ? $this->truthy((string)$envEnabled)
-            : $savedEnabled;
-        $effectiveListen = $hasListenOverride
-            ? \trim((string)$envListen)
-            : $savedListen;
-        $effectiveTrafficMode = $hasTrafficModeOverride
-            ? $this->normalizeTrafficMode((string)$envTrafficMode)
-            : $savedTrafficMode;
-        $directListenCapability = $this->directListenCapability();
+        $selectedInstance = \trim((string)$selectedInstance);
+        $runtimeInfo = $selectedInstance !== ''
+            ? $this->instanceManager->getPersistedInstanceInfo($selectedInstance)
+            : null;
+        $effectiveTopology = $runtimeInfo instanceof ServerInstanceInfo
+            ? $runtimeInfo->runtimeSelection->effectiveTopology->value
+            : '';
 
         return [
             'enabled' => $savedEnabled,
             'listen' => $savedListen !== '' ? $savedListen : '0.0.0.0:443',
-            'traffic_mode' => $savedTrafficMode,
-            'traffic_mode_label' => $this->trafficModeLabel($savedTrafficMode),
+            'requested_topology' => $requestedTopology,
+            'requested_topology_label' => $this->topologyLabel($requestedTopology),
             'effective_enabled' => $effectiveEnabled,
             'effective_listen' => $effectiveListen !== '' ? $effectiveListen : '0.0.0.0:443',
-            'effective_traffic_mode' => $effectiveTrafficMode,
-            'effective_traffic_mode_label' => $this->trafficModeLabel($effectiveTrafficMode),
-            'effective_traffic_mode_hint' => $this->trafficModeHint($effectiveTrafficMode),
-            'direct_listen_capability' => $directListenCapability,
-            'traffic_mode_options' => $this->trafficModeOptions(),
-            'env_override' => $hasEnabledOverride || $hasListenOverride || $hasTrafficModeOverride,
+            'effective_topology' => $effectiveTopology,
+            'effective_topology_label' => $effectiveTopology !== ''
+                ? $this->topologyLabel($effectiveTopology)
+                : (string)__('Unknown'),
+            'effective_topology_hint' => $effectiveTopology !== ''
+                ? $this->topologyHint($effectiveTopology)
+                : '',
+            'direct_listen_capability' => $this->directListenCapability(),
+            'topology_options' => $this->topologyOptions(),
+            'env_override' => $hasEnabledOverride || $hasListenOverride,
             'env_enabled' => $hasEnabledOverride ? (string)$envEnabled : '',
             'env_listen' => $hasListenOverride ? (string)$envListen : '',
-            'env_traffic_mode' => $hasTrafficModeOverride ? (string)$envTrafficMode : '',
         ];
     }
 
@@ -395,19 +373,18 @@ class WlsPanelGatewaySettingsService
         return [
             'enabled' => false,
             'listen' => '0.0.0.0:443',
-            'traffic_mode' => self::TRAFFIC_MODE_AUTO,
-            'traffic_mode_label' => $this->trafficModeLabel(self::TRAFFIC_MODE_AUTO),
+            'requested_topology' => self::TOPOLOGY_AUTO,
+            'requested_topology_label' => $this->topologyLabel(self::TOPOLOGY_AUTO),
             'effective_enabled' => false,
             'effective_listen' => '0.0.0.0:443',
-            'effective_traffic_mode' => self::TRAFFIC_MODE_AUTO,
-            'effective_traffic_mode_label' => $this->trafficModeLabel(self::TRAFFIC_MODE_AUTO),
-            'effective_traffic_mode_hint' => $this->trafficModeHint(self::TRAFFIC_MODE_AUTO),
+            'effective_topology' => '',
+            'effective_topology_label' => (string)__('Unknown'),
+            'effective_topology_hint' => '',
             'direct_listen_capability' => $this->directListenCapability(),
-            'traffic_mode_options' => $this->trafficModeOptions(),
+            'topology_options' => $this->topologyOptions(),
             'env_override' => false,
             'env_enabled' => '',
             'env_listen' => '',
-            'env_traffic_mode' => '',
         ];
     }
 
@@ -425,7 +402,6 @@ class WlsPanelGatewaySettingsService
             $instanceName = (string)($info->name !== '' ? $info->name : $name);
             $raw = $this->instanceManager->getRawInstanceData($instanceName) ?? [];
             $gatewayConfig = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
-            $runtimeConfig = \is_array($raw['runtime'] ?? null) ? $raw['runtime'] : [];
             $statusResult = $this->instanceManager->getMasterIpcStatusResult($instanceName, 0.7);
             $statusData = !empty($statusResult['success']) && \is_array($statusResult['data'] ?? null)
                 ? $statusResult['data']
@@ -442,8 +418,9 @@ class WlsPanelGatewaySettingsService
                 'name' => $instanceName,
                 'listen' => $listen,
                 'main_listen' => $info->getListenAddress(),
-                'topology' => (string)($raw['topology'] ?? ($runtimeConfig['topology'] ?? '')),
-                'direct_reuse_port' => !empty($raw['direct_reuse_port']),
+                'runtime_topology' => $info->runtimeSelection->effectiveTopology->value,
+                'listener_mode' => $info->runtimeSelection->listenerMode,
+                'is_direct' => $info->runtimeSelection->isDirect(),
                 'control_port' => $info->controlPort,
                 'gateway_enabled' => $gatewayEnabled,
                 'gateway_running' => $gatewayReadyCount > 0,
@@ -610,90 +587,47 @@ class WlsPanelGatewaySettingsService
             : self::RUNTIME_ACTION_RELOAD;
     }
 
-    private function normalizeTrafficMode(string $trafficMode): string
+    private function normalizeRequestedTopology(string $topology): string
     {
-        $trafficMode = \strtolower(\trim(\str_replace('-', '_', $trafficMode)));
-        return \in_array($trafficMode, [self::TRAFFIC_MODE_AUTO, self::TRAFFIC_MODE_DIRECT_LISTEN, self::TRAFFIC_MODE_PASSTHROUGH], true)
-            ? $trafficMode
-            : self::TRAFFIC_MODE_AUTO;
+        $topology = \strtolower(\trim($topology));
+        if (!\in_array($topology, [self::TOPOLOGY_AUTO, self::TOPOLOGY_DIRECT, self::TOPOLOGY_DISPATCHER], true)) {
+            throw new \InvalidArgumentException(
+                'Unsupported WLS topology "' . $topology . '"; expected auto, direct, or dispatcher.'
+            );
+        }
+
+        return $topology;
     }
 
-    private function trafficModeTopology(string $trafficMode): string
-    {
-        return match ($this->normalizeTrafficMode($trafficMode)) {
-            self::TRAFFIC_MODE_DIRECT_LISTEN => 'direct',
-            self::TRAFFIC_MODE_PASSTHROUGH => 'dispatcher',
-            default => '',
-        };
-    }
 
-    private function trafficModeLabel(string $trafficMode): string
+
+    private function topologyLabel(string $topology): string
     {
-        return match ($this->normalizeTrafficMode($trafficMode)) {
-            self::TRAFFIC_MODE_DIRECT_LISTEN => (string)__('Direct listen'),
-            self::TRAFFIC_MODE_PASSTHROUGH => (string)__('Passthrough'),
+        return match ($this->normalizeRequestedTopology($topology)) {
+            self::TOPOLOGY_DIRECT => (string)__('Direct'),
+            self::TOPOLOGY_DISPATCHER => (string)__('Dispatcher'),
             default => (string)__('Auto'),
         };
     }
 
-    private function trafficModeHint(string $trafficMode): string
+    private function topologyHint(string $topology): string
     {
-        return match ($this->normalizeTrafficMode($trafficMode)) {
-            self::TRAFFIC_MODE_DIRECT_LISTEN => (string)__('Prefer SO_REUSEPORT direct worker listening when the runtime supports it. Falls back only after an explicit restart is corrected.'),
-            self::TRAFFIC_MODE_PASSTHROUGH => (string)__('Force Dispatcher/Gateway passthrough so one listener accepts traffic and routes to workers.'),
-            default => (string)__('Let WLS choose the stable topology for the current operating system and runtime profile.'),
+        return match ($this->normalizeRequestedTopology($topology)) {
+            self::TOPOLOGY_DIRECT => (string)__('Use the verified native direct listener: SO_REUSEPORT on Linux or a shared listener on macOS.'),
+            self::TOPOLOGY_DISPATCHER => (string)__('Use the WLS Dispatcher listener and route traffic to internal workers.'),
+            default => (string)__('Let WLS choose Direct on supported Linux/macOS systems and Dispatcher on Windows.'),
         };
     }
 
     /**
      * @return array<int, array{value:string,label:string,description:string}>
      */
-    private function trafficModeOptions(): array
+    private function topologyOptions(): array
     {
         return [
-            [
-                'value' => self::TRAFFIC_MODE_AUTO,
-                'label' => $this->trafficModeLabel(self::TRAFFIC_MODE_AUTO),
-                'description' => $this->trafficModeHint(self::TRAFFIC_MODE_AUTO),
-            ],
-            [
-                'value' => self::TRAFFIC_MODE_DIRECT_LISTEN,
-                'label' => $this->trafficModeLabel(self::TRAFFIC_MODE_DIRECT_LISTEN),
-                'description' => $this->trafficModeHint(self::TRAFFIC_MODE_DIRECT_LISTEN),
-            ],
-            [
-                'value' => self::TRAFFIC_MODE_PASSTHROUGH,
-                'label' => $this->trafficModeLabel(self::TRAFFIC_MODE_PASSTHROUGH),
-                'description' => $this->trafficModeHint(self::TRAFFIC_MODE_PASSTHROUGH),
-            ],
-        ];
-    }
-
-    /**
-     * @return array{success:bool,message:string,data?:array}|null
-     */
-    private function buildRuntimeActionBlockedResult(string $runtimeAction, string $trafficMode): ?array
-    {
-        if ($runtimeAction !== self::RUNTIME_ACTION_RESTART
-            || $trafficMode !== self::TRAFFIC_MODE_DIRECT_LISTEN) {
-            return null;
-        }
-
-        $capability = $this->directListenCapability();
-        if (!empty($capability['supported'])) {
-            return null;
-        }
-
-        return [
-            'success' => false,
-            'message' => (string)__(
-                'Direct listen restart was not submitted because this runtime cannot use SO_REUSEPORT. Configuration was saved; keep Auto or Passthrough on this host, or restart on a supported Linux/macOS runtime.'
-            ),
-            'data' => [
-                'reason' => 'direct_listen_unsupported',
-                'os_family' => (string)($capability['os_family'] ?? PHP_OS_FAMILY),
-                'reuse_port_constant' => (bool)($capability['reuse_port_constant'] ?? false),
-            ],
+            ['value' => self::TOPOLOGY_AUTO, 'label' => $this->topologyLabel(self::TOPOLOGY_AUTO), 'description' => $this->topologyHint(self::TOPOLOGY_AUTO)],
+            ['value' => self::TOPOLOGY_DIRECT, 'label' => $this->topologyLabel(self::TOPOLOGY_DIRECT), 'description' => $this->topologyHint(self::TOPOLOGY_DIRECT)],
+            ['value' => self::TOPOLOGY_DISPATCHER, 'label' => $this->topologyLabel(self::TOPOLOGY_DISPATCHER), 'description' => $this->topologyHint(self::TOPOLOGY_DISPATCHER)],
         ];
     }
 
@@ -704,27 +638,25 @@ class WlsPanelGatewaySettingsService
     {
         try {
             $profile = ObjectManager::getInstance(RuntimeCapabilityDetector::class)->detect();
-            $supported = $profile->supportsReusePort();
-            $osFamily = $profile->osFamily();
-            $reusePortConstant = (bool)$profile->get('reuse_port_constant', false);
+            $supported = $profile->supportsDirectListener();
 
             return [
                 'supported' => $supported,
-                'os_family' => $osFamily,
-                'reuse_port_constant' => $reusePortConstant,
-                'label' => $supported
-                    ? (string)__('Direct listen supported')
-                    : (string)__('Direct listen unavailable'),
+                'os_family' => $profile->osFamily(),
+                'listener_mode' => $profile->directListenerMode(),
+                'reuse_port_constant' => (bool)$profile->get('reuse_port_constant', false),
+                'label' => $supported ? (string)__('Direct listener supported') : (string)__('Direct listener unavailable'),
                 'message' => $supported
-                    ? (string)__('This runtime can use SO_REUSEPORT direct listen after a WLS restart with direct topology.')
-                    : (string)__('This runtime cannot use SO_REUSEPORT direct listen; keep Auto or Passthrough here and validate direct mode on a supported Linux or macOS runtime.'),
+                    ? (string)__('This runtime supports the native direct listener selected by WLS.')
+                    : (string)__('Direct listener dependencies are not ready; server:start will run the authoritative dependency bootstrap and capability probe.'),
             ];
         } catch (\Throwable $throwable) {
             return [
                 'supported' => false,
                 'os_family' => PHP_OS_FAMILY,
+                'listener_mode' => '',
                 'reuse_port_constant' => false,
-                'label' => (string)__('Direct listen capability unknown'),
+                'label' => (string)__('Direct listener capability unknown'),
                 'message' => $throwable->getMessage(),
             ];
         }

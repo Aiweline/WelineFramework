@@ -147,7 +147,7 @@ class AttackDetector
                 // SQL 注入
                 '/(\bunion\b.*\bselect\b|\bor\b\s+\d+=\d+|\band\b\s+\d+=\d+|\'.*--)/i',
                 // XSS
-                '/<script[^>]*>|javascript:|on\w+\s*=/i',
+                '/<script[^>]*>|javascript:|\bon\w+\s*=/i',
                 // 路径遍历
                 '/\.\.\/|\.\.\\\\/',
                 // 命令注入

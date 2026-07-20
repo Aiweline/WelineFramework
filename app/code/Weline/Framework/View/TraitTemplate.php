@@ -120,7 +120,9 @@ trait TraitTemplate
             $view_dir = $module_base_path . Data\DataInterface::dir . DS;
             $template_dir = $module_base_path . Data\DataInterface::dir . DS . Data\DataInterface::dir_type_TEMPLATE . DS;
             if (PROD) {
-                $compile_dir = Env::path_framework_generated_complicate . DS . $module_lists[$pre_module_name]['path'] . Data\DataInterface::dir . DS;
+                $compile_dir = Env::path_framework_generated_complicate
+                    . \rtrim((string)$module_lists[$pre_module_name]['path'], '/\\') . DS
+                    . Data\DataInterface::dir . DS;
             } else {
                 $compile_dir = $module_base_path . Data\DataInterface::dir . DS . Data\DataInterface::dir_type_TEMPLATE_COMPILE . DS;
             }
@@ -256,8 +258,10 @@ trait TraitTemplate
         $source = trim($source);
         $source = trim($source, DS);
         $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source');
+        $dataIsUrl = false;
         switch ($type) {
             case DataInterface::dir_type_STATICS:
+                $dataIsUrl = true;
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
                 # 第三方模组或当前模组
                 if ($module_name) {
@@ -303,6 +307,7 @@ trait TraitTemplate
                 // 检查是否是静态资源文件（js/css等），如果是则返回URL，否则返回文件路径
                 $isStaticResource = preg_match('/\.(js|css|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot|otf|pdf|zip)$/i', $source);
                 if ($isStaticResource) {
+                    $dataIsUrl = true;
                     list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
                     $module_name = $module_name !== '' ? $module_name : $this->getRequest()->getModuleName();
                     if ($module_name === '') {
@@ -342,11 +347,13 @@ trait TraitTemplate
                 $data = $this->getFetchFile($t_f, $module_name);
                 break;
         }
-        $data = str_replace('\\', '/', $data);
-        $data = str_replace('//', '/', $data);
+        if ($dataIsUrl) {
+            $data = str_replace('\\', '/', $data);
+            $data = (string)preg_replace('#(?<!:)//+#', '/', $data);
+        }
         
-        # 静态资源版本号处理
-        if ($rand_version_with_system && ($type === 'statics' || $type === 'theme')) {
+        # 静态资源版本号处理：只作用于 URL，不能污染 Windows/UNC 模板文件路径。
+        if ($dataIsUrl && $rand_version_with_system) {
             // 先移除已存在的版本号参数（防止重复添加）
             $data = preg_replace('/[?&]v=[^&]*/', '', $data);
             // 清理可能残留的 ? 或 &
@@ -364,7 +371,7 @@ trait TraitTemplate
         
         // 静态资源不缓存带版本号的 URL（版本号需要动态计算）
         // 只缓存基础 URL 可能导致问题，这里选择不缓存静态资源 URL
-        if ($type !== 'statics' && $type !== 'theme') {
+        if (!$dataIsUrl) {
             $this->viewCache->set($cache_key, $data);
         }
         return $data;
@@ -710,6 +717,12 @@ trait TraitTemplate
 
     private function viewEnvironmentCacheSuffix(string $scope): string
     {
-        return KeyBuilder::environmentHash(['scope' => $scope]);
+        $runtimeRoot = defined('BP') ? (string)BP : (string)(getcwd() ?: '');
+
+        return KeyBuilder::environmentHash([
+            'scope' => $scope,
+            'runtime_os' => PHP_OS_FAMILY,
+            'runtime_root' => str_replace('\\', '/', rtrim($runtimeRoot, '/\\')),
+        ]);
     }
 }

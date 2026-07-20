@@ -27,9 +27,13 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
             $host = $endpoint['host'];
             $port = $endpoint['port'];
         }
-        $options['service_type'] = (string)($options['service_type'] ?? 'Memory');
+        $serviceType = \trim((string)($options['service_type'] ?? 'Memory'));
+        $options['service_type'] = $serviceType !== '' ? $serviceType : 'Memory';
         if (!isset($options['token_file_name']) || (string)$options['token_file_name'] === '') {
-            $options['token_file_name'] = 'memory_server.token';
+            $options['token_file_name'] = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                $options['service_type'],
+                $port
+            );
         }
         if (!isset($options['pool_min_idle']) && !isset($options['min_idle'])) {
             $options['pool_min_idle'] = 0;

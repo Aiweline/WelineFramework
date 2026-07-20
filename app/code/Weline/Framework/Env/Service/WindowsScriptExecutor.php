@@ -187,16 +187,18 @@ class WindowsScriptExecutor implements InstallScriptExecutorInterface
     {
         // Windows 路径需要转换
         $scriptPath = str_replace('/', '\\', $scriptPath);
+        $safeAction = escapeshellarg($action);
 
         switch ($extension) {
             case 'php':
-                return 'php "' . $scriptPath . '" ' . $action;
+                $phpBinary = PHP_BINARY !== '' ? PHP_BINARY : 'php';
+                return '"' . $phpBinary . '" "' . $scriptPath . '" ' . $safeAction;
             case 'ps1':
-                return 'powershell -ExecutionPolicy Bypass -File "' . $scriptPath . '" ' . $action;
+                return 'powershell -ExecutionPolicy Bypass -File "' . $scriptPath . '" ' . $safeAction;
             case 'bat':
-                return 'cmd /c "' . $scriptPath . '" ' . $action;
+                return 'cmd /c "' . $scriptPath . '" ' . $safeAction;
             default:
-                return '"' . $scriptPath . '" ' . $action;
+                return '"' . $scriptPath . '" ' . $safeAction;
         }
     }
 
