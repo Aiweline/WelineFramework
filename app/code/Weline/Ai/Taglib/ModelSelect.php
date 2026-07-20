@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\Ai\Taglib;
 
 use Weline\Framework\Taglib\TaglibInterface;
-use Weline\Framework\Http\Url;
 
 class ModelSelect implements TaglibInterface
 {
@@ -32,7 +31,7 @@ class ModelSelect implements TaglibInterface
     public static function attr(): array
     {
         // 返回需要“强制校验”的属性列表；此处全部可选，因此不强制校验
-        return ['id'=>true,'name'=>true,'value'=>true,'display'=>true,'class'=>false,'style'=>false,'limit'=>false,'url'=>false];
+        return ['id'=>true,'name'=>true,'value'=>true,'display'=>true,'class'=>false,'style'=>false,'limit'=>false];
     }
 
     public static function callback(): callable
@@ -45,12 +44,6 @@ class ModelSelect implements TaglibInterface
             $class = $attributes['class'] ?? '';
             $style = $attributes['style'] ?? '';
             $limit = (int)($attributes['limit'] ?? 50);
-            $urlPath = $attributes['url'] ?? '*/backend/api/models';
-            /** @var Url $url */
-            $url = w_obj(Url::class);
-            $epUrl = $url->getBackendUrl($urlPath);
-
-            $attributes['url'] = $epUrl;
             $attributes['limit'] = $limit;
             
             // 提取 data 属性（在解析前）
@@ -97,11 +90,8 @@ class ModelSelect implements TaglibInterface
 
             // 脚本：数据加载 + 搜索 + 选中回填
             $html[] = '<script>(function(){';
-            $html[] = 'const ep = ' . json_encode($epUrl) . ';';
-            $html[] = 'const aiApi = window.Weline.Api.resource("ai");';
             $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
-            $html[] = 'const json = <?=$Taglib__json?>;';
-            $html[] = 'const limit = \'<?=$Taglib__limit?>\';';
+            $html[] = 'const limit = Math.max(1, parseInt(\'<?=$Taglib__limit?>\', 10) || 50);';
             $html[] = 'const trigger = document.getElementById(id+"_trigger");';
             $html[] = 'const box = document.getElementById(id+"_container");';
             $html[] = 'const list = document.getElementById(id+"_list");';
@@ -113,17 +103,66 @@ class ModelSelect implements TaglibInterface
             $t_no_match = __('未找到匹配的模型');
             $t_load_fail = __('加载失败');
             $t_default_model = addslashes(__('使用默认模型'));
+            $jsonFlags = JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_HEX_TAG
+                | JSON_HEX_AMP
+                | JSON_HEX_APOS
+                | JSON_HEX_QUOT
+                | JSON_INVALID_UTF8_SUBSTITUTE;
+            $html[] = 'const noMatchText = ' . json_encode((string)$t_no_match, $jsonFlags) . ';';
+            $html[] = 'const loadFailText = ' . json_encode((string)$t_load_fail, $jsonFlags) . ';';
             $html[] = <<<JS
+ let aiApiPromise = null;
+ function getAiApi(){
+   if(!aiApiPromise){
+     aiApiPromise = window.Weline.load("api").then(function(api){
+       return api.resource("ai");
+     });
+   }
+   return aiApiPromise;
+ }
+ function modelCode(model){
+   return String((model && (model.model_code || model.code)) || "");
+ }
+ function modelText(model){
+   const code = modelCode(model);
+   const name = String((model && model.name) || code);
+   const supplier = String((model && model.supplier) || "");
+   let text = name;
+   if(supplier){ text += " (" + supplier + ")"; }
+   return text;
+ }
+ function renderStatus(className, text){
+   list.replaceChildren();
+   const row = document.createElement("div");
+   row.className = className;
+   row.textContent = text;
+   list.appendChild(row);
+ }
  let cache = null;
  function render(items){
    if(!items||!items.length){
-     list.innerHTML = "__NO_MATCH__";
+     renderStatus("p-2 text-muted", noMatchText);
      return;
    }
-   list.innerHTML = items.slice(0,50).map(function(m){
-     var txt = m.name + " (" + m.supplier + ") - " + m.version;
-     return '<div class="p-2 border-bottom model-item" style="cursor:pointer" data-code="'+ m.code +'" data-text="'+ txt +'">'+ txt +'</div>';
-   }).join('');
+   list.replaceChildren();
+   items.slice(0,limit).forEach(function(model){
+     const code = modelCode(model);
+     if(!code){ return; }
+     const text = modelText(model);
+     const row = document.createElement("div");
+     row.className = "p-2 border-bottom model-item";
+     row.style.cursor = "pointer";
+     row.dataset.code = code;
+     row.dataset.text = text;
+     row.textContent = text;
+     list.appendChild(row);
+   });
+   if(!list.children.length){
+     renderStatus("p-2 text-muted", noMatchText);
+     return;
+   }
    list.querySelectorAll("[data-code]").forEach(function(el){
      el.addEventListener("click", function(){
        hidden.value = this.dataset.code;
@@ -159,30 +198,30 @@ JS;
             $html[] = <<<JS
 function firstLoad(){
   loading.style.display = "block";
-  aiApi.listModels({})
+  getAiApi()
+    .then(function(aiApi){ return aiApi.listModels({}); })
     .then(res=>{
       loading.style.display = "none";
       cache = Array.isArray(res) ? res : ((res&&res.data) ? res.data : []);
       render(cache);
       // 渲染完成后，如果有初始值，尝试设置显示文本
       if(hidden.value && cache && cache.length > 0){
-        const matched = cache.find(function(m){ return m.code === hidden.value; });
+        const matched = cache.find(function(m){ return modelCode(m) === hidden.value; });
         if(matched && (!display.textContent || display.textContent.trim() === '' || display.textContent === '{$t_default_model}')){
-          const txt = matched.name + " (" + matched.supplier + ") - " + matched.version;
-          display.textContent = txt;
+          display.textContent = modelText(matched);
         }
       }
     })
     .catch(()=>{
       loading.style.display = "none";
-      list.innerHTML = "__LOAD_FAIL__";
+      renderStatus("p-2 text-danger", loadFailText);
     });
 }
 JS;
             $html[] = <<<'JS'
 const debounce=(fn,t)=>{let id=null;return (...a)=>{clearTimeout(id);id=setTimeout(()=>fn.apply(null,a),t);}};
 JS;
-            $html[] = 'const doFilter = debounce(function(kw){ kw=(kw||"").toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var data=(cache||[]).filter(function(m){ var t=((m.name||"")+" "+(m.supplier||"")+" "+(m.code||"")+" "+(m.version||"")); return t.toLowerCase().indexOf(kw)!==-1; }); render(data); },800);';
+            $html[] = 'const doFilter = debounce(function(kw){ kw=(kw||"").toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var data=(cache||[]).filter(function(m){ var t=((m.name||"")+" "+(m.supplier||"")+" "+modelCode(m)); return t.toLowerCase().indexOf(kw)!==-1; }); render(data); },800);';
             $html[] = 'trigger.addEventListener("click", function(e){ e.stopPropagation(); box.style.top=(trigger.offsetHeight+6)+"px"; box.style.width="100%"; box.style.display="block"; firstLoad(); setTimeout(()=>search.focus(),50); });';
             $html[] = 'search.addEventListener("input", function(){ doFilter(this.value); });';
             $html[] = 'function closeOutside(ev){ if(!(box.contains(ev.target)||trigger.contains(ev.target))){ box.style.display="none"; trigger.style.display="block"; document.removeEventListener("click", closeOutside); document.removeEventListener("keydown", esc); }}';
@@ -190,38 +229,26 @@ JS;
             $html[] = 'trigger.addEventListener("click", function(){ setTimeout(function(){ document.addEventListener("click", closeOutside); document.addEventListener("keydown", esc); }, 0); });';
             // 页面加载时，如果有初始值，自动加载并设置显示文本（无论当前显示文本是什么）
             $html[] = 'if(hidden.value){';
-            $html[] = '  aiApi.listModels({}).then(res=>{';
+            $html[] = '  getAiApi().then(function(aiApi){ return aiApi.listModels({}); }).then(res=>{';
             $html[] = '    const models = Array.isArray(res) ? res : ((res&&res.data) ? res.data : []);';
-            $html[] = '    const matched = models.find(function(m){ return m.code === hidden.value; });';
+            $html[] = '    const matched = models.find(function(m){ return modelCode(m) === hidden.value; });';
             $html[] = '    if(matched){';
-            $html[] = '      const txt = matched.name + " (" + matched.supplier + ") - " + matched.version;';
+            $html[] = '      const matchedCode = modelCode(matched);';
+            $html[] = '      const txt = modelText(matched);';
             $html[] = '      // 如果显示文本为空、为默认值，或者与匹配的模型不一致，则更新显示文本';
             $html[] = '      if(!display.textContent || display.textContent.trim() === "" || display.textContent === "' . $t_default_model . '" || display.textContent !== txt){';
             $html[] = '        display.textContent = txt;';
             $html[] = '      }';
             $html[] = '      // 确保隐藏字段的值正确设置';
-            $html[] = '      if(hidden.value !== matched.code){';
-            $html[] = '        hidden.value = matched.code;';
-            $html[] = '        try{ hidden.setAttribute("value", matched.code); }catch(e){}';
-            $html[] = '        try{ window.AiModelSelectSelected = window.AiModelSelectSelected||{}; window.AiModelSelectSelected[id]=matched.code; }catch(e){}';
+            $html[] = '      if(hidden.value !== matchedCode){';
+            $html[] = '        hidden.value = matchedCode;';
+            $html[] = '        try{ hidden.setAttribute("value", matchedCode); }catch(e){}';
+            $html[] = '        try{ window.AiModelSelectSelected = window.AiModelSelectSelected||{}; window.AiModelSelectSelected[id]=matchedCode; }catch(e){}';
             $html[] = '      }';
             $html[] = '    }';
             $html[] = '  }).catch(function(){});';
             $html[] = '}';
             $html[] = '})();</script>';
-
-            // 将翻译插入到前面占位符，避免转义问题
-            $search = [
-                '"__NO_MATCH__"',
-                '"__LOAD_FAIL__"',
-            ];
-            $replace = [
-                '"<div class=\\"p-2 text-muted\\">' . addslashes($t_no_match) . '</div>"',
-                '"<div class=\\"p-2 text-danger\\">' . addslashes($t_load_fail) . '</div>"',
-            ];
-            foreach ($html as &$line) {
-                $line = str_replace($search, $replace, $line);
-            }
 
             return implode("\n", $html);
         };
@@ -289,11 +316,10 @@ JS;
   "value": "...",
   "display": "...",
   "class": "w-100",
-  "limit": 50,
-  "url": "*/backend/api/models"
+  "limit": 50
 }
 </pre>
-<p>说明：键值均为解析后的最终值；<code>id/class/limit/url</code> 等来自标签属性。</p>
+<p>说明：键值均为解析后的最终值；<code>id/class/limit</code> 等来自标签属性。</p>
 DOC;
 
         return htmlspecialchars($doc, ENT_NOQUOTES);

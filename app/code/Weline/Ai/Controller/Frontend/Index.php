@@ -98,8 +98,8 @@ class Index extends FrontendController
             ],
             [
                 'icon' => 'mdi-api',
-                'title' => __('API接口'),
-                'description' => __('提供RESTful API和流式接口，支持实时响应和批量处理'),
+                'title' => __('可恢复任务接口'),
+                'description' => __('通过后台任务和可重连事件订阅提供实时响应，短暂断网不会中断生成'),
             ],
             [
                 'icon' => 'mdi-shield-check',
@@ -136,8 +136,8 @@ class Index extends FrontendController
         // 示例代码
         $examples = [
             'basic' => [
-                'title' => __('基础文本生成'),
-                'code' => '// PHP静态方法调用
+                'title' => __('内部服务调用（CLI / Runner）'),
+                'code' => '// 仅用于受控 CLI、Runner 或模块内部服务；不得在 HTTP 请求或 SSE 控制器中直接执行。
 $result = \Weline\Ai\Service\AiService::generateText(
     $prompt = "请介绍一下人工智能",
     $modelCode = null, // 使用默认模型
@@ -146,8 +146,9 @@ $result = \Weline\Ai\Service\AiService::generateText(
 );',
             ],
             'translation' => [
-                'title' => __('翻译场景'),
-                'code' => '// 使用翻译适配器
+                'title' => __('内部翻译服务（CLI / Runner）'),
+                'code' => '// 仅用于受控 CLI、Runner 或模块内部服务。
+// 浏览器请求必须启动可恢复任务，而不是在连接内调用 AiService。
 $result = \Weline\Ai\Service\AiService::generateText(
     $prompt = "Hello, how are you?",
     $modelCode = "gpt-3.5-turbo",
@@ -161,16 +162,22 @@ $result = \Weline\Ai\Service\AiService::generateText(
 );',
             ],
             'stream' => [
-                'title' => __('流式响应'),
-                'code' => '// 流式生成
-\Weline\Ai\Service\AiService::generateTextStream(
-    $prompt = "写一篇关于AI的文章",
-    $callback = function($chunk) {
-        echo $chunk;
-        flush();
-    },
-    $modelCode = "gpt-4"
-);',
+                'title' => __('浏览器可恢复任务订阅'),
+                'code' => '// 浏览器业务请求统一通过 Weline.Api：先启动后台任务，再订阅可重连 StreamHandle。
+const api = await Weline.load("api");
+const task = await api.resource("runtime_task").start({
+    type_code: "ai.chat_generation",
+    input: { message: "写一篇关于 AI 的文章", request_id: crypto.randomUUID() }
+}, { silent: true });
+
+const stream = api.createStream(task.stream_channel, {
+    task_id: task.task_id,
+    lease_id: task.lease_id
+});
+stream.addEventListener("chunk", (event) => renderChunk(JSON.parse(event.data).chunk));
+stream.addEventListener("completed", () => stream.close());
+
+// 页面离开时只 stream.close() 退订；只有用户明确点击取消才调用 stream.cancel(reason)。',
             ],
         ];
 
@@ -208,4 +215,3 @@ $result = \Weline\Ai\Service\AiService::generateText(
         return $this->fetch();
     }
 }
-
