@@ -983,15 +983,9 @@ $fpcFastPath = null;
 try {
     WlsLogger::info_("Worker 启动，监听 ssl://{$host}:{$port}");
     $wlsStartupTrace('runtime_bootstrap_begin');
-    $runtime = new \Weline\Framework\Runtime\WlsRuntime();
-    $runtime->bootstrap();
+    $runtime = wlsBootstrapFrameworkRuntime();
     $wlsStartupTrace('fpc_coordinator_preload_begin');
-    $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
-        \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Framework\Router\FullPageCacheCoordinator::class
-        ),
-        $runtime,
-    );
+    $fpcFastPath = wlsCreateWorkerFullPageCacheFastPath($runtime);
     $wlsStartupTrace('fpc_coordinator_preloaded');
     $wlsStartupTrace('runtime_bootstrap_done');
     WlsLogger::info_("框架运行时初始化成功");
@@ -7724,7 +7718,7 @@ function handleRequest(
 
         $responseLocation = (string)($response->getHeader('Location') ?? '');
         if ($responseLocation !== '') {
-            $response->setHeader('Location', appendBackendLoginReturnUrl(
+            $response->setHeader('Location', wlsAppendBackendLoginReturnUrl(
                 $responseLocation,
                 $request,
                 $method,

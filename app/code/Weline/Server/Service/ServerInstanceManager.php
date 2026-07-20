@@ -102,7 +102,6 @@ class ServerInstanceManager
 
         $info = $this->buildInstanceInfo($name, $rawData, $ipcTimeout);
         if ($validateStale && $this->isStaleInstanceRecord($name, $rawData, $info)) {
-            $this->cleanupStaleInstanceArtifacts($name, $rawData);
             return null;
         }
 
@@ -312,6 +311,14 @@ class ServerInstanceManager
             }
 
             if ($this->isStartLockHeld($name)) {
+                continue;
+            }
+
+            // A read/status race must never turn into destructive cleanup. A
+            // fresh lease plus exact managed-process identity is authoritative
+            // even when endpoint metadata was briefly observed before the PID
+            // index was published.
+            if ($this->hasTrackedRunningProcess($name, $rawData, null)) {
                 continue;
             }
 
@@ -741,7 +748,91 @@ class ServerInstanceManager
             return true;
         }
 
+        if ($this->readLiveMasterLease($name, $rawData) !== null) {
+            return true;
+        }
+
         return $this->collectRunningTrackedPids($name, $rawData) !== [];
+    }
+
+    /**
+     * Overlay the durable endpoint view with a currently valid Master lease.
+     *
+     * The overlay is deliberately read-only: status/peek operations must not
+     * rewrite instance metadata. It also lets stop/restart recover control of a
+     * live Master after an older reader incorrectly persisted stale_cleanup.
+     *
+     * @param array<string,mixed> $rawData
+     * @return array<string,mixed>
+     */
+    private function overlayLiveMasterLease(string $name, array $rawData): array
+    {
+        $lease = $this->readLiveMasterLease($name, $rawData);
+        if ($lease === null) {
+            return $rawData;
+        }
+
+        $masterPid = (int)($lease['master_pid'] ?? 0);
+        $controlPort = (int)($lease['control_port'] ?? 0);
+        $rawData['pid'] = $masterPid;
+        $rawData['master_pid'] = $masterPid;
+        $rawData['master_enabled'] = true;
+        if ($controlPort > 0) {
+            $rawData['control_port'] = $controlPort;
+        }
+
+        if (\in_array((string)($rawData['lifecycle_state'] ?? ''), [
+            'stopped',
+            'stale_cleanup',
+            'master_exited',
+        ], true)) {
+            $rawData['startup_phase'] = 'running';
+            $rawData['lifecycle_state'] = 'running';
+        }
+
+        return $rawData;
+    }
+
+    /**
+     * Return a Master lease only after validating freshness, generation and
+     * exact process identity. PID existence alone is never trusted because of
+     * PID reuse.
+     *
+     * @param array<string,mixed> $rawData
+     * @return array<string,mixed>|null
+     */
+    private function readLiveMasterLease(string $name, array $rawData): ?array
+    {
+        $lease = (new MasterLeaseManager())->read(MasterLeaseManager::pathForInstance($name));
+        if (!\is_array($lease)
+            || (string)($lease['instance'] ?? '') !== $name
+            || (string)($lease['state'] ?? '') !== MasterLeaseManager::STATE_RUNNING) {
+            return null;
+        }
+
+        $updatedAt = (float)($lease['updated_at'] ?? 0.0);
+        if ($updatedAt <= 0.0 || (\microtime(true) - $updatedAt) > MasterLeaseManager::HEARTBEAT_STALE_SEC) {
+            return null;
+        }
+
+        $masterPid = (int)($lease['master_pid'] ?? 0);
+        $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
+        $recordEpoch = (int)($rawData['master_epoch'] ?? $rawData['epoch'] ?? 0);
+        if ($masterPid <= 0 || ($recordEpoch > 0 && $leaseEpoch > 0 && $recordEpoch !== $leaseEpoch)) {
+            return null;
+        }
+
+        $processName = MasterProcess::getMasterProcessName($name);
+        if (!Processer::isManagedProcessRunning(
+            $masterPid,
+            $processName,
+            '',
+            '--name=' . $processName
+        )) {
+            return null;
+        }
+
+        return $lease;
     }
 
     /**
@@ -950,6 +1041,13 @@ class ServerInstanceManager
      */
     private function cleanupStaleInstanceArtifacts(string $name, array $rawData): void
     {
+        // Recheck immediately before destructive cleanup. This closes the
+        // startup window where endpoint metadata is visible a few milliseconds
+        // before the PID index, while the Master lease is already authoritative.
+        if ($this->readLiveMasterLease($name, $rawData) !== null) {
+            return;
+        }
+
         $trackedPids = $this->collectTrackedPids($name, $rawData);
         foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
             Processer::removePidFile($processName);
@@ -1636,6 +1734,7 @@ class ServerInstanceManager
             return null;
         }
 
+        $rawData = $this->overlayLiveMasterLease($name, $rawData);
         return $this->buildInstanceInfo($name, $rawData, 0.0);
     }
 
