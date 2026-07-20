@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -84,7 +85,7 @@ class SessionServerProvider extends AbstractServiceProvider
 
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
-        $tokenFileName = $this->getTokenFileName($context);
+        $tokenFileName = $this->getTokenFileName($context, $port);
 
         $arguments = [
             '127.0.0.1',
@@ -123,17 +124,18 @@ class SessionServerProvider extends AbstractServiceProvider
         );
     }
 
-    private function getTokenFileName(ServiceContext $context): string
+    private function getTokenFileName(ServiceContext $context, int $port): string
     {
         $wlsSession = ($context->envConfig['wls'] ?? [])['session'] ?? [];
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
 
+        $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $port);
         $tokenFileName = (string) (
             $wlsServer['token_file_name']
             ?? $wlsSession['token_file_name']
-            ?? 'session_server.token'
+            ?? $defaultTokenFileName
         );
 
-        return $tokenFileName !== '' ? $tokenFileName : 'session_server.token';
+        return $tokenFileName !== '' ? $tokenFileName : $defaultTokenFileName;
     }
 }

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Control;
 
+use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 
@@ -60,11 +61,11 @@ class BackendStatusService
                         'worker' => $this->fetchWorkerHealth($port),
                         'session_server' => $this->fetchSessionServerHealth(
                             $port,
-                            $this->resolveSharedStateTokenFileName('session_server', (array)$inst, $metadata)
+                            $this->resolveSharedStateTokenFileName('session_server', $port, (array)$inst, $metadata)
                         ),
                         'memory_server' => $this->fetchMemoryServerHealth(
                             $port,
-                            $this->resolveSharedStateTokenFileName('memory_server', (array)$inst, $metadata)
+                            $this->resolveSharedStateTokenFileName('memory_server', $port, (array)$inst, $metadata)
                         ),
                         'dispatcher' => $this->fetchDispatcherHealth($port, $pid),
                         'redirect' => $this->fetchRedirectHealth($port, $pid),
@@ -260,22 +261,20 @@ class BackendStatusService
      * @param array<string, mixed> $instance
      * @param array<string, mixed> $metadata
      */
-    private function resolveSharedStateTokenFileName(string $role, array $instance, array $metadata): string
+    private function resolveSharedStateTokenFileName(string $role, int $port, array $instance, array $metadata): string
     {
-        $tokenFileName = \trim((string) (
-            $metadata['token_file_name']
-            ?? $instance['token_file_name']
-            ?? $metadata['configured_token_file_name']
-            ?? $instance['configured_token_file_name']
-            ?? ''
-        ));
-
-        if ($tokenFileName !== '') {
-            return $tokenFileName;
+        foreach ([
+            $metadata['token_file_name'] ?? null,
+            $instance['token_file_name'] ?? null,
+            $metadata['configured_token_file_name'] ?? null,
+            $instance['configured_token_file_name'] ?? null,
+        ] as $candidate) {
+            $tokenFileName = \trim((string)$candidate);
+            if ($tokenFileName !== '') {
+                return $tokenFileName;
+            }
         }
 
-        return $role === 'memory_server'
-            ? 'memory_server.token'
-            : 'session_server.token';
+        return SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
     }
 }

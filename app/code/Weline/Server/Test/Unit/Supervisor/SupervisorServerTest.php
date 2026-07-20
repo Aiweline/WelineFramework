@@ -66,6 +66,53 @@ final class SupervisorServerTest extends TestCase
         }
     }
 
+    public function testDeferredReadyAllowsPortlessRuntimeWatchdogAfterMasterAcceptsRegistration(): void
+    {
+        $runtime = $this->createRuntime('default');
+        $server = new SupervisorServer($runtime, deferReadyAck: true);
+        $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+        $client = @\stream_socket_client($endpoint->uri(), $errno, $errstr, 3);
+        self::assertNotFalse($client, $errstr ?: 'Failed to connect to SupervisorServer test endpoint');
+        \stream_set_blocking($client, false);
+
+        try {
+            \fwrite($client, SupervisorMessage::hello(
+                instance: 'default',
+                channel: 'channel-default',
+                role: 'runtime_watchdog',
+                slotId: 'runtime_watchdog#1',
+                pid: 12011,
+                launchNonce: 'watchdog-launch',
+                msgId: 'watchdog-hello',
+            ));
+            $leaseAssign = $this->waitForMessage($server, $client);
+            self::assertSame(SupervisorMessage::TYPE_LEASE_ASSIGN, $leaseAssign['type'] ?? null);
+
+            $sessionId = (int)array_key_first($server->sessions());
+            self::assertGreaterThan(0, $sessionId);
+            self::assertTrue($server->markSessionMasterAccepted($sessionId));
+
+            \fwrite($client, SupervisorMessage::ready(
+                slotId: 'runtime_watchdog#1',
+                leaseId: (string)$leaseAssign['lease_id'],
+                generation: (int)$leaseAssign['generation'],
+                port: 0,
+                msgId: 'watchdog-ready',
+                channel: 'channel-default',
+            ));
+            $server->poll(0, 10000);
+
+            self::assertTrue($server->resolveDeferredReady($sessionId, true));
+            self::assertSame('ready', $runtime->slotSnapshot()['slots'][0]['state']);
+            self::assertSame(0, $runtime->slotSnapshot()['slots'][0]['port']);
+        } finally {
+            if (\is_resource($client)) {
+                @\fclose($client);
+            }
+            $server->close();
+        }
+    }
+
     public function testServerRejectsWrongChannelAndKeepsRuntimeStateEmpty(): void
     {
         $runtime = $this->createRuntime('default');

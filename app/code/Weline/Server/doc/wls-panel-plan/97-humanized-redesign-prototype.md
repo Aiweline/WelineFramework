@@ -22,6 +22,8 @@ The framework backend only provides an authorized menu entry. Once the operator 
 8. Destructive or runtime actions must stay close to the affected object and show state, consequence, and recovery path.
 9. Light and dark modes must use the same layout and density.
 10. Mobile layout must preserve task order and avoid horizontal overflow.
+11. Tablet widths keep the WLS navigation in a left column; phone widths use a
+    left off-canvas drawer and never stack the full navigation above the page.
 
 ## Navigation Model
 
@@ -150,6 +152,9 @@ Rules:
 
 - The dashboard is not a dumping ground.
 - Show only summary, attention, and top-level navigation.
+- Dashboard summary metrics use a two-column tile grid from `521px` through
+  `1100px`, then one column below `520px`; cards must not leave a single narrow
+  stack with unused space beside it.
 - Large project sets use a list/table with pagination.
 - Plugin capability overview uses compact tables, not repeated plugin cards.
 - Installed plugin actions open the WLS plugin shell route so the sidebar owns secondary navigation.
@@ -327,5 +332,7 @@ WLS Panel -> iframe -> Plugin shell -> Plugin sidebar -> Anchor section
 - Each focused page has one primary job.
 - Large lists have search and pagination.
 - Desktop, tablet, and mobile have no horizontal overflow.
+- Tablet navigation stays on the left; phone navigation opens from the left as
+  an overlay with a dismissible backdrop.
 - Light/dark mode both pass.
 - Unauthorized access redirects to login with return URL preserved.

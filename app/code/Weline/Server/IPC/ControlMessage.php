@@ -18,6 +18,12 @@ use Weline\Server\Service\Policy\DispatcherPolicyControl;
 
 class ControlMessage
 {
+    /** READY→activate→receipt→final 的统一总预算。 */
+    public const READY_CONFIRM_TIMEOUT_SEC = 3.0;
+
+    /** 总预算内的幂等 READY/activate 重试间隔。 */
+    public const READY_RETRY_INTERVAL_SEC = 0.5;
+
     // ========== 消息类型常量 ==========
 
     /** 子进程 → Master：注册身份（角色、PID、端口） */
@@ -71,6 +77,9 @@ class ControlMessage
     /** Worker/Dispatcher ↔ Master：实例级封禁正缓存增量。 */
     public const TYPE_POLICY_STATE_DELTA = 'policy_state_delta';
 
+    /** Master → Workers: globally consistent Alt-Svc availability epoch. */
+    public const TYPE_HTTP3_AVAILABILITY = 'http3_availability';
+
     /** Master → Dispatcher：将指定端口加入黑名单 */
     public const TYPE_DRAIN = 'drain';
 
@@ -118,6 +127,8 @@ class ControlMessage
     public const TYPE_LEASE_ASSIGN = 'lease_assign';
     /** Master → 子进程：ready 状态确认 */
     public const TYPE_READY_ACK = 'ready_ack';
+    /** Worker → Master：Linux HTTP/3 eBPF 路由已完成身份绑定激活。 */
+    public const TYPE_HTTP3_ROUTE_ACTIVATED = 'http3_route_activated';
     /** Master → Dispatcher：Worker 池快照确认 */
     public const TYPE_POOL_SNAPSHOT_ACK = 'pool_snapshot_ack';
     /** Master → 子进程：命令已接收 */
@@ -401,7 +412,7 @@ class ControlMessage
         string $msgId = '',
         string $slotId = '',
         string $leaseId = '',
-        int $generation = 0
+        int $generation = 0,
     ): string
     {
         $data = [
@@ -431,6 +442,34 @@ class ControlMessage
         }
         self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
         return self::encode($data);
+    }
+
+    /** @param array<string,int|string> $routeStatus */
+    public static function http3RouteActivated(
+        int $workerId,
+        int $port,
+        string $msgId,
+        string $slotId,
+        string $leaseId,
+        int $generation,
+        int $ownerEpoch,
+        string $activationId,
+        string $nativeDigest,
+        array $routeStatus,
+    ): string {
+        return self::encode([
+            'type' => self::TYPE_HTTP3_ROUTE_ACTIVATED,
+            'worker_id' => $workerId,
+            'port' => $port,
+            'msg_id' => $msgId,
+            'slot_id' => $slotId,
+            'lease_id' => $leaseId,
+            'generation' => $generation,
+            'owner_epoch' => $ownerEpoch,
+            'activation_id' => $activationId,
+            'native_digest' => $nativeDigest,
+            'route_status' => $routeStatus,
+        ]);
     }
 
     /**
@@ -1115,13 +1154,16 @@ class ControlMessage
         string $msgId = '',
         string $slotId = '',
         string $leaseId = '',
-        int $generation = 0
+        int $generation = 0,
+        string $readyPhase = 'final',
+        array $http3Route = [],
     ): string
     {
         $data = [
             'type'      => self::TYPE_ACK_READY,
             'worker_id' => $workerId,
             'dispatcher_confirmed' => $dispatcherConfirmed,
+            'ready_phase' => $readyPhase !== '' ? $readyPhase : 'final',
         ];
         if ($msgId !== '') {
             $data['msg_id'] = $msgId;
@@ -1130,6 +1172,9 @@ class ControlMessage
             $data['port'] = $port;
         }
         self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
+        if ($http3Route !== []) {
+            $data['http3_route'] = $http3Route;
+        }
         return self::encode($data);
     }
 
@@ -1161,7 +1206,9 @@ class ControlMessage
         int $workerId = 0,
         int $port = 0,
         string $msgId = '',
-        string $slotId = ''
+        string $slotId = '',
+        string $readyPhase = 'final',
+        string $activationId = '',
     ): string
     {
         $data = [
@@ -1184,6 +1231,10 @@ class ControlMessage
         }
         if ($slotId !== '') {
             $data['slot_id'] = $slotId;
+        }
+        $data['ready_phase'] = $readyPhase !== '' ? $readyPhase : 'final';
+        if ($activationId !== '') {
+            $data['activation_id'] = $activationId;
         }
         return self::encode($data);
     }
@@ -1310,6 +1361,25 @@ class ControlMessage
         }
         self::appendTraceId($data, $traceId);
         return self::encode($data);
+    }
+
+    public static function http3Availability(
+        int $availabilityEpoch,
+        bool $enabled,
+        int $port,
+        int $ownerEpoch,
+        int $routeEpoch,
+        string $nativeDigest,
+    ): string {
+        return self::encode([
+            'type' => self::TYPE_HTTP3_AVAILABILITY,
+            'availability_epoch' => $availabilityEpoch,
+            'enabled' => $enabled,
+            'port' => $enabled ? $port : 0,
+            'owner_epoch' => $ownerEpoch,
+            'route_epoch' => $routeEpoch,
+            'native_digest' => \strtolower(\trim($nativeDigest)),
+        ]);
     }
 
     /**
