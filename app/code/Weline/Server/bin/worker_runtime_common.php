@@ -10,6 +10,186 @@ declare(strict_types=1);
  * must behave identically in both Workers.
  */
 
+if (!\function_exists('wlsBootstrapFrameworkRuntime')) {
+    function wlsBootstrapFrameworkRuntime(): \Weline\Framework\Runtime\WlsRuntime
+    {
+        $runtime = new \Weline\Framework\Runtime\WlsRuntime();
+        $runtime->bootstrap();
+        return $runtime;
+    }
+}
+
+if (!\function_exists('wlsCreateWorkerFullPageCacheFastPath')) {
+    function wlsCreateWorkerFullPageCacheFastPath(
+        \Weline\Framework\Runtime\WlsRuntime $runtime
+    ): \Weline\Server\Service\WorkerFullPageCacheFastPath {
+        return new \Weline\Server\Service\WorkerFullPageCacheFastPath(
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Router\FullPageCacheCoordinator::class
+            ),
+            $runtime,
+        );
+    }
+}
+
+if (!\function_exists('wlsAppendBackendLoginReturnUrl')) {
+    function wlsAppendBackendLoginReturnUrl(
+        string $redirectUrl,
+        \Weline\Framework\Http\Request $request,
+        string $method,
+        string $requestTarget,
+    ): string {
+        $method = \strtoupper($method);
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return $redirectUrl;
+        }
+
+        $redirectPath = (string) (\parse_url($redirectUrl, PHP_URL_PATH) ?: '');
+        $normalizedRedirectPath = \strtolower($redirectPath);
+        if ($normalizedRedirectPath === ''
+            || !\str_ends_with($normalizedRedirectPath, '/admin/login')
+        ) {
+            return $redirectUrl;
+        }
+
+        $uri = $requestTarget;
+        if ($uri === '') {
+            $uri = (string) ($request->getServer('WELINE_ORIGIN_REQUEST_URI')
+                ?: $request->getServer('REQUEST_URI'));
+        }
+        $queryString = (string) $request->getServer('QUERY_STRING');
+        if ($queryString !== '' && !\str_contains($uri, '?')) {
+            $uri .= '?' . $queryString;
+        }
+        if ($uri === '') {
+            return $redirectUrl;
+        }
+
+        $currentPath = \strtolower((string) (\parse_url($uri, PHP_URL_PATH) ?: ''));
+        if ($currentPath === ''
+            || \str_ends_with($currentPath, '/admin/login')
+            || \str_ends_with($currentPath, '/admin/login/post')
+            || \str_ends_with($currentPath, '/admin/login/logout')
+        ) {
+            return $redirectUrl;
+        }
+
+        $backendPrefix = \substr($redirectPath, 0, -\strlen('/admin/login'));
+        $uriPath = (string) (\parse_url($uri, PHP_URL_PATH) ?: '');
+        if ($backendPrefix !== ''
+            && $uriPath !== ''
+            && !\str_starts_with($uriPath, $backendPrefix . '/')
+        ) {
+            $uri = $backendPrefix . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+        }
+        $uri = wlsNormalizeBackendReturnUri($uri);
+
+        $scheme = $request->isSecure() ? 'https' : 'http';
+        $host = wlsResolveBackendLoginReturnHost($request, $scheme);
+        $returnUrl = $scheme . '://' . $host
+            . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+        $query = [
+            'no_access_reason' => 'not_logged_in',
+            'return_url' => $returnUrl,
+        ];
+
+        $redirectUrl = wlsRemoveBackendLoginReturnParams($redirectUrl);
+        return $redirectUrl
+            . (\str_contains($redirectUrl, '?') ? '&' : '?')
+            . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+}
+
+if (!\function_exists('wlsResolveBackendLoginReturnHost')) {
+    function wlsResolveBackendLoginReturnHost(
+        \Weline\Framework\Http\Request $request,
+        string $scheme
+    ): string {
+        $host = \trim((string) ($request->getServer('HTTP_HOST')
+            ?: $request->getServer('SERVER_NAME')
+            ?: 'localhost'));
+        if ($host === '' || \str_contains($host, ':') || \str_starts_with($host, '[')) {
+            return $host !== '' ? $host : 'localhost';
+        }
+
+        $port = \trim((string) ($request->getServer('HTTP_WELINE_ORIGINAL_PORT') ?: ''));
+        if ($port === '' || !\ctype_digit($port)) {
+            return $host;
+        }
+
+        if (($scheme === 'http' && $port === '80')
+            || ($scheme === 'https' && $port === '443')
+        ) {
+            return $host;
+        }
+
+        return $host . ':' . $port;
+    }
+}
+
+if (!\function_exists('wlsNormalizeBackendReturnUri')) {
+    function wlsNormalizeBackendReturnUri(string $uri): string
+    {
+        $path = (string) (\parse_url($uri, PHP_URL_PATH) ?: '');
+        if ($path === '') {
+            return $uri;
+        }
+
+        $segments = \explode('/', \trim($path, '/'));
+        $firstSegment = (string) ($segments[0] ?? '');
+        if (!isset($segments[1], $segments[2], $segments[3])
+            || $firstSegment === ''
+            || !wlsIsBackendReturnCurrencySegment($segments[1])
+            || !wlsIsBackendReturnLocaleSegment($segments[2])
+            || $segments[3] !== $firstSegment
+        ) {
+            return $uri;
+        }
+
+        \array_splice($segments, 3, 1);
+        $normalized = '/' . \implode('/', $segments);
+        $query = (string) (\parse_url($uri, PHP_URL_QUERY) ?: '');
+        $fragment = (string) (\parse_url($uri, PHP_URL_FRAGMENT) ?: '');
+        return $normalized
+            . ($query !== '' ? '?' . $query : '')
+            . ($fragment !== '' ? '#' . $fragment : '');
+    }
+}
+
+if (!\function_exists('wlsIsBackendReturnCurrencySegment')) {
+    function wlsIsBackendReturnCurrencySegment(string $segment): bool
+    {
+        return \Weline\Framework\App\State::isAllowedCurrencyCode($segment);
+    }
+}
+
+if (!\function_exists('wlsIsBackendReturnLocaleSegment')) {
+    function wlsIsBackendReturnLocaleSegment(string $segment): bool
+    {
+        return (bool) \preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
+    }
+}
+
+if (!\function_exists('wlsRemoveBackendLoginReturnParams')) {
+    function wlsRemoveBackendLoginReturnParams(string $url): string
+    {
+        $parts = \parse_url($url);
+        if (!\is_array($parts) || empty($parts['query'])) {
+            return $url;
+        }
+
+        \parse_str((string) $parts['query'], $params);
+        unset($params['no_access_reason'], $params['return_url']);
+        $query = \http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+        $base = ($parts['scheme'] ?? 'http') . '://' . ($parts['host'] ?? 'localhost');
+        if (isset($parts['port'])) {
+            $base .= ':' . $parts['port'];
+        }
+        $base .= $parts['path'] ?? '';
+        return $query === '' ? $base : $base . '?' . $query;
+    }
+}
+
 if (!\function_exists('wlsNormalizeMemoryLimit')) {
     function wlsNormalizeMemoryLimit(mixed $value, string $default = '256M'): string
     {
@@ -83,6 +263,44 @@ function wlsCountActiveFibersForAdmission(array $activeFibers): int
     }
 
     return $count;
+}
+
+/**
+ * 进入 Fiber 请求上下文；有其他挂起请求 Fiber 时，省略会破坏同伴状态的 reset 回调。
+ */
+function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
+{
+    $omitCallbacks = null;
+    if (
+        \Weline\Framework\Runtime\Runtime::isPersistent()
+        && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
+    ) {
+        $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
+    }
+    \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
+
+    \Weline\Framework\Runtime\RequestContext::cleanup();
+    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
+    \Weline\Framework\Http\Sse\SseContext::reset();
+    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
+    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
+    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
+
+    $resolvedConnectionId = $connectionId;
+    if ($resolvedConnectionId === null && \is_resource($conn)) {
+        $resolvedConnectionId = \get_resource_id($conn);
+    }
+
+    $context = \Weline\Framework\Context::current();
+    $context->set('meta.type', 'request');
+    $context->set('meta.mode', 'wls');
+    $context->set('runtime.connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    $context->set('runtime.chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    $context->setRuntimeAttr('connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    $context->setRuntimeAttr('chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
+    \Weline\Framework\Runtime\RequestContext::setConnectionId(
+        $resolvedConnectionId === null ? null : (string)$resolvedConnectionId
+    );
 }
 
 /**

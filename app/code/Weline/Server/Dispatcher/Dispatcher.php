@@ -77,6 +77,12 @@ class Dispatcher
 
     /** Digest-aware L4 gate ownership for public Dispatcher sockets. */
     private ConnectionAcceptGatePool $connectionAcceptGates;
+
+    /**
+     * The Dispatcher is a private loopback upstream behind Protocol Edge.
+     * Public client identity is then request-scoped and enforced by Workers.
+     */
+    private bool $protocolEdgeIngressEnabled = false;
     
     /**
      * 实例名称
@@ -433,13 +439,18 @@ class Dispatcher
     }
 
     /**
-     * 读取实例配置判断是否 HTTPS 模式
+     * Detect whether the Dispatcher-to-Worker hop uses TLS. Public HTTPS is
+     * independent: when the protocol edge terminates TLS/QUIC, the private
+     * Dispatcher backend is authenticated plain HTTP/1.1.
      */
     private function detectHttpsEnabled(string $instanceName): bool
     {
         $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (\is_file($instanceFile)) {
             $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
+            if (\is_array($instData) && !empty($instData['protocol_edge_enabled'])) {
+                return false;
+            }
             if (\is_array($instData) && \array_key_exists('ssl_enabled', $instData)) {
                 return !empty($instData['ssl_enabled']);
             }
@@ -473,6 +484,10 @@ class Dispatcher
     public function configure(array $config): void
     {
         $this->passthroughCore->configure($config);
+
+        if (isset($config['protocol_edge_ingress_enabled'])) {
+            $this->protocolEdgeIngressEnabled = (bool)$config['protocol_edge_ingress_enabled'];
+        }
         
         if (isset($config['connection_timeout'])) {
             $this->connectionTimeout = (int) $config['connection_timeout'];
@@ -2281,7 +2296,14 @@ class Dispatcher
             if (@\socket_getpeername($clientSocket, $addr)) {
                 $clientIp = $addr;
             }
-            $acceptDecision = $this->connectionAcceptGates->accept((string)$connId, $clientIp);
+            $trustedProtocolEdge = $this->protocolEdgeIngressEnabled
+                && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($clientIp);
+            $acceptDecision = $this->connectionAcceptGates->accept(
+                (string)$connId,
+                $clientIp,
+                null,
+                $trustedProtocolEdge,
+            );
             if (!$acceptDecision->allowed) {
                 @\socket_close($clientSocket);
                 $accepted++;
@@ -3376,6 +3398,16 @@ HTML;
             return false;
         }
 
+        // The public TLS/QUIC edge cannot start until its Dispatcher upstream
+        // is healthy. Forward only the loopback + instance-token authenticated
+        // health probe; every ordinary plaintext request still receives HTTPS
+        // redirection, and WorkerPolicyKernel verifies the token again.
+        if (\str_starts_with(\strtoupper($peek), 'GET /_W')
+            && $this->shouldForwardProtocolEdgeHealthProbe($clientSocket, $clientIp)
+        ) {
+            return false;
+        }
+
         // 优先转发到 http_redirect_worker
         $redirectPort = $this->passthroughCore->getHttpRedirectPort();
         if ($redirectPort > 0) {
@@ -3400,6 +3432,49 @@ HTML;
 
         // 回退：内联返回 301
         return $this->sendInlineHttpRedirect($clientSocket, $connId, $clientIp);
+    }
+
+    private function shouldForwardProtocolEdgeHealthProbe($clientSocket, string $clientIp): bool
+    {
+        if (!$this->protocolEdgeIngressEnabled
+            || !\Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($clientIp)
+        ) {
+            return false;
+        }
+
+        $rawHeaders = $this->peekAcceptedHttpHeaderBlock($clientSocket, 8192, 0.05);
+        return $rawHeaders !== ''
+            && $this->passthroughCore->isAuthenticatedProtocolEdgeHealthProbe($rawHeaders);
+    }
+
+    private function peekAcceptedHttpHeaderBlock($clientSocket, int $maxBytes, float $timeoutSec): string
+    {
+        $maxBytes = \max(256, \min($maxBytes, 65536));
+        $deadline = \microtime(true) + \max(0.0, $timeoutSec);
+
+        do {
+            $peek = '';
+            $peekLen = @\socket_recv($clientSocket, $peek, $maxBytes, \MSG_PEEK);
+            if ($peekLen !== false && $peekLen > 0 && $peek !== '') {
+                $headerEnd = \strpos($peek, "\r\n\r\n");
+                if ($headerEnd !== false) {
+                    return \substr($peek, 0, $headerEnd + 4);
+                }
+                if ($peekLen >= $maxBytes) {
+                    return '';
+                }
+            }
+
+            if (\microtime(true) >= $deadline) {
+                return '';
+            }
+            $read = [$clientSocket];
+            $write = $except = [];
+            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - \microtime(true)) * 1_000_000));
+            @\socket_select($read, $write, $except, 0, $remainingUsec);
+        } while (\microtime(true) < $deadline);
+
+        return '';
     }
 
     private function peekAcceptedClientBytes($clientSocket, int $length, float $timeoutSec): string

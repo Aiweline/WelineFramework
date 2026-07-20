@@ -7,6 +7,7 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * 维护 Worker 服务提供者
@@ -73,8 +74,10 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
+        $protocolEdgeEnabled = $context->isProtocolEdgeEnabled();
+        $workerSslEnabled = $context->sslEnabled && !$protocolEdgeEnabled;
 
-        $script = $context->sslEnabled
+        $script = $workerSslEnabled
             ? $this->resolveSslWorkerScript($scriptDir, $context)
             : $scriptDir . DS . 'worker.php';
 
@@ -82,7 +85,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
         $direct = $context->isDirect();
-        $host = $direct
+        $host = $direct && !$protocolEdgeEnabled
             ? ($context->host ?: '127.0.0.1')
             : '127.0.0.1';
 
@@ -97,7 +100,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             '--memory-limit=' . $context->getWorkerMemoryLimit(),
         ];
 
-        if ($context->sslEnabled && $context->sslCert && $context->sslKey) {
+        if ($workerSslEnabled && $context->sslCert && $context->sslKey) {
             $arguments[] = '--ssl-cert=' . $context->sslCert;
             $arguments[] = '--ssl-key=' . $context->sslKey;
         }
@@ -111,7 +114,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
 
         $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
-        if ($context->sslEnabled) {
+        if ($workerSslEnabled) {
             $arguments[] = '--defer-ssl';
         }
 

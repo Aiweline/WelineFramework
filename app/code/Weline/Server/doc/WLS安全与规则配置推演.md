@@ -13,7 +13,7 @@
 
 | 能力 | Dispatcher 拓扑 | Direct 拓扑 |
 |---|---|---|
-| IP/CIDR 、连接数/速率、slowloris | Dispatcher L4 Gate | Worker AcceptGate |
+| IP/CIDR、连接数/速率、slowloris | legacy 公网入口由 Dispatcher L4 Gate 执行；协议边缘模式下 Dispatcher 只执行私有 upstream 的实例总量/总速率/超时，真实客户端规则由 Worker 逐请求执行 | legacy 公网入口由 Worker AcceptGate 执行；协议边缘模式下 AcceptGate 只执行实例总量/总速率/超时，真实客户端规则由 Worker 逐请求执行 |
 | Worker 选择、后端连接、背压、failover | Dispatcher | 不存在 |
 | TLS/SNI/证书/握手失败 | Worker | Worker |
 | Host、后台 Key、Origin Token | Worker | Worker |
@@ -21,7 +21,7 @@
 | Static/FPC/Router/Controller | Worker | Worker |
 | 维护模式 | Dispatcher 可切维护池，Worker 仍校验 epoch | Worker 本地直接响应 |
 
-Dispatcher 拓扑使用 PROXY Protocol v2 把经过认证的客户端 peer 元数据传给 Worker。Direct 使用公开 socket 的真实 peer。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
+Dispatcher 拓扑使用带实例认证的 PROXY Protocol v2 把公网连接 peer 传给 Worker；Direct 使用公开 socket 的真实 peer。当前默认不存在会聚合多个客户端的私有协议边缘连接池。只有用户显式启用兼容边缘时，连接级 PROXY v2 才不能表达同一连接中每个请求的身份；兼容入口必须逐请求覆盖实例 token、`X-Forwarded-For` 和公开协议，Worker 在确认 loopback + token 后计算 canonical client identity。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
 
 Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
 
@@ -139,6 +139,8 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - Slowloris 只统计超过 `grace_seconds` 仍未完成 TLS/HTTP 请求帧的连接。默认宽限为 1.5 秒，明显高于 fresh-TLS 的 `<1s` 运行门槛；正常 c32/c128 并发不能因事件循环调度超过旧的 250ms 窗口而被误判。宽限后仍使用实例级每 IP 10 条上限和 30 秒总超时，不能把提高宽限解释为取消慢连接防护。
 - `server:security:unblock` 由 Master 同时广播给当前实例的业务 Worker、维护 Worker 与 Dispatcher。各进程会同步清除请求策略内核、Connection AcceptGate、共享状态和进程内分布式 Ban。`--clear-all` 只按当前实例 hash 前缀删除共享 Ban，不得清空其他 WLS 实例；指定实例可用位置参数，或 `-n <instance>` / `--instance=<instance>`。
 - Dispatcher 不再构建 `AttackDetector`、不读取或轮询攻击规则文件，也不重复维护 whitelist/CIDR 索引。其 accept 热路的唯一安全事实源是当前已激活 Bundle 构建的 `ConnectionAcceptGatePool`；URI/Header/Body 攻击规则只在 WorkerPolicyKernel 执行。
+- 协议边缘到 Dispatcher/Worker 的 keep-alive 连接可能承载多个公网客户端，连接级 PROXY v2 不能作为逐请求身份。私有 AcceptGate 只豁免 edge loopback 的每 IP transport 配额，不豁免实例总量，也不改变 WorkerPolicyKernel 的 canonical client IP、Ban 或请求限流。
+- HTTP Protocol Edge 不执行 Host、后台 Key、Origin Token、URI/Header/Body 攻击、请求限流或 Static/FPC。它只处理 TLS/QUIC、ALPN、session ticket、连接池和 READY upstream；因此不能在 Edge 添加一份会与 Worker 漂移的业务规则。
 - 攻击日志进入进程 ring buffer 后批量提交；请求热路径不直接 ORM、写 JSON 或同步 IPC。
 - TLS 握手和握手后的首请求都必须有总 deadline。macOS shared-FD 路径只对新握手连接执行 200ms 有界首读泵送，不允许将兼容补偿扩展为普通 keep-alive 的全连接扫描或秒级等待。
 - `server:wls_error_scan` 使用增量 cursor 流式读取：单次最多 32 MiB、单文件最多 8 MiB、总 deadline 250 ms、单块 64 KiB。未结束的超长行只持久化 8 KiB 摘要、模式尾部和匹配状态；轮转以 inode/device/size 识别，多个日志按 cursor 轮转起点公平续扫。首次发现既有日志直接从 EOF 建 cursor，不再为了统计行号扫描整个历史文件。

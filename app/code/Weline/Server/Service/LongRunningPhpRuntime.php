@@ -12,6 +12,29 @@ use Weline\Framework\Console\ConsoleEncoding;
  */
 class LongRunningPhpRuntime
 {
+    /**
+     * PHP tracing JIT is process-shared on Windows when CLI OPcache is enabled.
+     * Long-running WLS processes start and reload concurrently, and PHP 8.4 can
+     * crash in ntdll with 0xC0000005 while publishing/reusing that shared JIT
+     * buffer. Keep bytecode OPcache enabled, but disable only the JIT buffer at
+     * process creation time; runtime ini_set() is too late for this directive.
+     *
+     * @return list<string>
+     */
+    public static function startupCliArguments(): array
+    {
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            return [];
+        }
+
+        return [
+            '-d',
+            'opcache.jit=0',
+            '-d',
+            'opcache.jit_buffer_size=0',
+        ];
+    }
+
     public function apply(): void
     {
         $this->initConsoleEncoding();
@@ -55,6 +78,7 @@ class LongRunningPhpRuntime
         return \in_array($script, [
             'dispatcher.php',
             'http_redirect_worker.php',
+            'protocol_edge.php',
             'session_server.php',
             'worker.php',
             'worker_ssl.php',

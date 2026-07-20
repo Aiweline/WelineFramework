@@ -19,6 +19,15 @@ final class FrameworkCompileManifest
         'container.php',
     ];
 
+    public const GENERATION_FILES = [
+        'modules.php',
+        'query_providers.php',
+        'runtime_policy_providers.php',
+        'template_cache_policies.php',
+        self::FILE_NAME,
+        'container.php',
+    ];
+
     /**
      * @param array<string, array{size:int,mtime:int,ctime:int,inode:int,sha256:string}> $previousSources
      * @return array{
