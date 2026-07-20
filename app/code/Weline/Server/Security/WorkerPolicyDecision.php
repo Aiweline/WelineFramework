@@ -38,6 +38,8 @@ final readonly class WorkerPolicyDecision
         public string $policyDigest,
         public bool $trustedProxy,
         public int $cachePolicyFlags,
+        /** Client-facing protocol; transport protocol remains HTTP/1.1 behind the edge. */
+        public string $clientProtocol,
     ) {
     }
 
@@ -53,6 +55,7 @@ final readonly class WorkerPolicyDecision
         string $policyDigest,
         bool $trustedProxy,
         int $cachePolicyFlags,
+        string $clientProtocol = '',
     ): self {
         return new self(
             true,
@@ -68,6 +71,7 @@ final readonly class WorkerPolicyDecision
             $policyDigest,
             $trustedProxy,
             $cachePolicyFlags,
+            $clientProtocol !== '' ? $clientProtocol : $protocol,
         );
     }
 
@@ -99,6 +103,7 @@ final readonly class WorkerPolicyDecision
             $policyDigest,
             $trustedProxy,
             0,
+            $protocol,
         );
     }
 
@@ -111,6 +116,8 @@ final readonly class WorkerPolicyDecision
             'WLS_TRUST_FORWARDED_HEADERS' => $this->trustedProxy ? '1' : '0',
             'WLS_POLICY_DIGEST' => $this->policyDigest,
             'WLS_CACHE_POLICY_FLAGS' => $this->cachePolicyFlags,
+            'WLS_CLIENT_PROTOCOL' => $this->clientProtocol,
+            'SERVER_PROTOCOL' => $this->clientProtocol,
         ];
 
         // The Framework FPC pipeline already treats this server marker as a
@@ -174,7 +181,8 @@ final readonly class WorkerPolicyDecision
             body: $this->body,
             attributes: [
                 'target' => $this->target,
-                'protocol' => $this->protocol,
+                'protocol' => $this->clientProtocol,
+                'transport_protocol' => $this->protocol,
                 'trusted_proxy' => $this->trustedProxy,
                 'policy_digest' => $this->policyDigest,
                 'cache_policy_flags' => $this->cachePolicyFlags,

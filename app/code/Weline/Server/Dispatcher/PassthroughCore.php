@@ -33,6 +33,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Protocol\ProxyProtocolV2;
 use Weline\Server\Service\InternalRequestLabel;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 // 确保 SOCKET_EAGAIN 常量存在（Windows 兼容）
 if (!\defined('SOCKET_EAGAIN')) {
@@ -182,6 +183,9 @@ class PassthroughCore
      * Worker 是否启用 SSL
      */
     private bool $workerSslEnabled = false;
+
+    /** Authentication for Dispatcher-originated health and warmup requests. */
+    private string $workerProtocolEdgeToken = '';
 
     /** Dispatcher backend identity preface; Workers accept it optionally. */
     private bool $proxyProtocolV2Enabled = false;
@@ -482,6 +486,13 @@ class PassthroughCore
         }
         if (isset($config['proxy_protocol_v2_require_auth'])) {
             $this->proxyProtocolV2RequireAuthentication = (bool)$config['proxy_protocol_v2_require_auth'];
+        }
+        if (isset($config['worker_protocol_edge_token'])) {
+            $token = \strtolower(\trim((string)$config['worker_protocol_edge_token']));
+            if ($token !== '' && \preg_match('/^[a-f0-9]{64}$/D', $token) !== 1) {
+                throw new \InvalidArgumentException('Dispatcher Worker protocol-edge token is invalid.');
+            }
+            $this->workerProtocolEdgeToken = $token;
         }
         if ($this->proxyProtocolV2Enabled
             && $this->proxyProtocolV2RequireAuthentication
@@ -2039,6 +2050,7 @@ class PassthroughCore
         return "GET {$path} HTTP/1.1\r\n"
             . "Host: {$host}\r\n"
             . ($cookieHeader !== '' ? "Cookie: {$cookieHeader}\r\n" : '')
+            . $this->buildWorkerProtocolEdgeHeaderLine()
             . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HOMEPAGE_WARMUP)
             . "Connection: close\r\n\r\n";
     }
@@ -2879,8 +2891,70 @@ class PassthroughCore
     {
         return "GET " . self::WORKER_HEALTH_PATH . " HTTP/1.1\r\n"
             . "Host: {$this->workerHost}\r\n"
+            . $this->buildWorkerProtocolEdgeHeaderLine()
             . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HEALTH_PROBE)
             . "Connection: close\r\n\r\n";
+    }
+
+    private function buildWorkerProtocolEdgeHeaderLine(): string
+    {
+        if ($this->workerProtocolEdgeToken === '') {
+            return '';
+        }
+
+        return ProtocolEdgeRuntime::AUTH_HEADER . ': ' . $this->workerProtocolEdgeToken . "\r\n"
+            . ProtocolEdgeRuntime::CLIENT_PROTOCOL_HEADER . ": HTTP/1.1\r\n";
+    }
+
+    /**
+     * Authenticate the one plaintext request that must traverse Dispatcher
+     * before the public TLS/QUIC edge can bind its socket. WorkerPolicyKernel
+     * performs the same token check again, so this only prevents the HTTPS
+     * redirect from creating a circular startup dependency.
+     */
+    public function isAuthenticatedProtocolEdgeHealthProbe(string $rawRequest): bool
+    {
+        if ($this->workerProtocolEdgeToken === ''
+            || $rawRequest === ''
+            || \strlen($rawRequest) > 8192
+            || !\str_contains($rawRequest, "\r\n\r\n")
+        ) {
+            return false;
+        }
+
+        $headerBlock = \strstr($rawRequest, "\r\n\r\n", true);
+        if (!\is_string($headerBlock) || $headerBlock === '') {
+            return false;
+        }
+        $lines = \explode("\r\n", $headerBlock);
+        if (\array_shift($lines) !== 'GET /_wls/health HTTP/1.1') {
+            return false;
+        }
+
+        $required = [
+            \strtolower(ProtocolEdgeRuntime::AUTH_HEADER) => null,
+            \strtolower(ProtocolEdgeRuntime::CLIENT_PROTOCOL_HEADER) => null,
+        ];
+        foreach ($lines as $line) {
+            if (!\str_contains($line, ':')) {
+                continue;
+            }
+            [$name, $value] = \explode(':', $line, 2);
+            $name = \strtolower(\trim($name));
+            if (!\array_key_exists($name, $required)) {
+                continue;
+            }
+            if ($required[$name] !== null) {
+                return false;
+            }
+            $required[$name] = \trim($value);
+        }
+
+        $token = \strtolower((string)$required[\strtolower(ProtocolEdgeRuntime::AUTH_HEADER)]);
+        $clientProtocol = \strtoupper((string)$required[\strtolower(ProtocolEdgeRuntime::CLIENT_PROTOCOL_HEADER)]);
+        return \strlen($token) === \strlen($this->workerProtocolEdgeToken)
+            && \hash_equals($this->workerProtocolEdgeToken, $token)
+            && $clientProtocol === 'HTTP/1.1';
     }
 
     private function logWarmup(string $message, string $level = 'INFO'): void

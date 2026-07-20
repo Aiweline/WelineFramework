@@ -11,6 +11,7 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * Worker 服务提供者
@@ -66,7 +67,8 @@ class WorkerProvider extends AbstractServiceProvider
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
 
-        $script = $context->sslEnabled
+        $protocolEdgeEnabled = $context->isProtocolEdgeEnabled();
+        $script = $context->sslEnabled && !$protocolEdgeEnabled
             ? $this->resolveSslWorkerScript($scriptDir, $context)
             : $scriptDir . DS . 'worker.php';
 
@@ -88,7 +90,7 @@ class WorkerProvider extends AbstractServiceProvider
             $context->instanceName,
         ];
 
-        if ($context->sslEnabled && $context->sslCert && $context->sslKey) {
+        if ($context->sslEnabled && !$protocolEdgeEnabled && $context->sslCert && $context->sslKey) {
             $arguments[] = '--ssl-cert=' . $context->sslCert;
             $arguments[] = '--ssl-key=' . $context->sslKey;
             if ($direct
@@ -131,6 +133,10 @@ class WorkerProvider extends AbstractServiceProvider
             }
         }
 
+        if ($protocolEdgeEnabled) {
+            $arguments[] = '--protocol-edge-token-file=' . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+        }
+
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
@@ -156,7 +162,7 @@ class WorkerProvider extends AbstractServiceProvider
 
         // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
         // 这同时覆盖 Dispatcher 透传和 direct SO_REUSEPORT 模式。
-        if ($context->sslEnabled) {
+        if ($context->sslEnabled && !$protocolEdgeEnabled) {
             $arguments[] = '--defer-ssl';
         }
 
@@ -170,6 +176,9 @@ class WorkerProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         $basePort = $context->getWorkerBasePort();
+        if ($context->isProtocolEdgeEnabled()) {
+            return ProtocolEdgeRuntime::workerPort($context, $instanceId);
+        }
         if ($context->isDirect()) {
             return $context->mainPort;
         }

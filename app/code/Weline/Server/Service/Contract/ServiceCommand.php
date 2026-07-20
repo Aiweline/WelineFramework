@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Contract;
 
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\LongRunningPhpRuntime;
 
 /**
  * 服务启动命令
@@ -35,9 +36,14 @@ class ServiceCommand
     {
         $php = PHP_BINARY;
         $script = $this->getAbsoluteScript();
+        $phpArguments = \implode(' ', \array_map('escapeshellarg', LongRunningPhpRuntime::startupCliArguments()));
         $args = \implode(' ', \array_map('escapeshellarg', $this->arguments));
 
-        $cmd = "\"{$php}\" \"{$script}\"";
+        $cmd = "\"{$php}\"";
+        if ($phpArguments !== '') {
+            $cmd .= ' ' . $phpArguments;
+        }
+        $cmd .= " \"{$script}\"";
         if ($args !== '') {
             $cmd .= ' ' . $args;
         }

@@ -1,0 +1,868 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * WLS public protocol edge supervisor.
+ *
+ * The WLS-native engine owns public TLS/QUIC, ALPN, session resumption and
+ * multiplexed connections. Explicit Caddy compatibility mode uses the same
+ * IPC/lease supervisor and never changes WorkerPolicyKernel semantics.
+ */
+
+if (PHP_SAPI !== 'cli') {
+    return;
+}
+
+$instanceName = \trim((string)($argv[1] ?? 'default')) ?: 'default';
+$publicPort = (int)($argv[2] ?? 0);
+$options = [
+    'edge-binary' => '',
+    'caddy-binary' => '',
+    'config' => '',
+    'pid-file' => '',
+    'token-file' => '',
+    'tls-session-resumption' => '1',
+    'public-host' => 'localhost',
+    'admin-address' => '',
+    'control-port' => '0',
+    'master-pid' => '0',
+    'epoch' => '0',
+    'launch-id' => '',
+    'master-lease-file' => '',
+    'master-token' => '',
+    'name' => '',
+];
+$upstreams = [];
+$windowMode = false;
+foreach ($argv as $argument) {
+    if ($argument === '--win' || $argument === '-win') {
+        $windowMode = true;
+        continue;
+    }
+    if (!\str_starts_with($argument, '--') || !\str_contains($argument, '=')) {
+        continue;
+    }
+    [$name, $value] = \explode('=', \substr($argument, 2), 2);
+    if ($name === 'upstream') {
+        $value = \trim($value);
+        if ($value !== '') {
+            $upstreams[] = $value;
+        }
+        continue;
+    }
+    if (\array_key_exists($name, $options)) {
+        $options[$name] = $value;
+    }
+}
+
+$bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
+if (!\defined('BP')) {
+    \define('BP', $bp);
+}
+if (!\defined('DS')) {
+    \define('DS', DIRECTORY_SEPARATOR);
+}
+require_once BP . 'app' . DS . 'autoload.php';
+
+use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Runtime\System;
+use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ChildControl\ChildMasterGuard;
+use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
+use Weline\Server\IPC\ChildControl\Handler\ProtocolEdgeControlHandler;
+use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
+use Weline\Server\Log\Error\ErrorBootstrap;
+use Weline\Server\Log\LogConfig;
+use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\LongRunningPhpRuntime;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
+use Weline\Server\Service\WlsLogService;
+
+LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
+(new LongRunningPhpRuntime())->apply();
+
+$processName = \trim((string)$options['name']);
+$nativeBinary = \trim((string)$options['edge-binary']);
+$caddyBinary = \trim((string)$options['caddy-binary']);
+$nativeMode = $nativeBinary !== '';
+$dataPlaneBinary = $nativeMode ? $nativeBinary : $caddyBinary;
+$configFile = \trim((string)$options['config']);
+$pidFile = \trim((string)$options['pid-file']);
+$tokenFile = \trim((string)$options['token-file']);
+$tlsSessionResumption = !\in_array(
+    \strtolower(\trim((string)$options['tls-session-resumption'])),
+    ['0', 'false', 'off', 'no'],
+    true,
+);
+$publicHost = \trim((string)$options['public-host']) ?: 'localhost';
+$adminAddress = \trim((string)$options['admin-address']);
+$controlPort = (int)$options['control-port'];
+$masterPid = (int)$options['master-pid'];
+$epoch = (int)$options['epoch'];
+$launchId = (string)$options['launch-id'];
+$masterLeaseFile = (string)$options['master-lease-file'];
+$masterToken = (string)$options['master-token'];
+
+ErrorBootstrap::init('ProtocolEdge:' . $publicPort . '@' . $instanceName, [
+    'instance' => $instanceName,
+    'port' => $publicPort,
+    'process_name' => $processName,
+]);
+WlsLogger::getInstance()
+    ->setStdoutEnabled(LogConfig::isStdoutEnabled($windowMode, LogConfig::isDevMode()))
+    ->setProcessTag('ProtocolEdge:' . $publicPort . '@' . $instanceName);
+
+if ($processName !== '') {
+    WlsLogService::prepareProcessLogFile($processName, $instanceName, 'ProtocolEdge:' . $publicPort);
+    Processer::setPid('--name=' . $processName, (int)\getmypid());
+    if ($publicPort > 0) {
+        Processer::setProcessPorts('--name=' . $processName, [$publicPort]);
+    }
+}
+
+$fail = static function (string $message, int $code = 1): never {
+    WlsLogger::error_('[ProtocolEdge] ' . $message);
+    WlsLogger::flush_(true);
+    System::exit($code);
+};
+
+if ($publicPort <= 0 || $publicPort > 65535) {
+    $fail('Invalid public port.');
+}
+if (!ProtocolEdgeRuntime::isRunnableBinary($dataPlaneBinary)) {
+    $fail('Verified protocol-edge binary is missing or not executable.');
+}
+if ($configFile === '' || !\is_file($configFile) || $pidFile === '' || $tokenFile === '') {
+    $fail('Protocol-edge runtime files are incomplete.');
+}
+$edgeToken = \strtolower(\trim((string)@\file_get_contents($tokenFile)));
+if (\preg_match('/^[a-f0-9]{64}$/D', $edgeToken) !== 1) {
+    $fail('Protocol-edge token is invalid.');
+}
+if ($upstreams === []) {
+    $fail('No Worker/Dispatcher upstream was supplied.');
+}
+ProtocolEdgeRuntime::clearActiveState($instanceName);
+
+$childMasterGuard = new ChildMasterGuard(
+    $masterPid,
+    $masterLeaseFile,
+    $masterToken,
+    'ProtocolEdge:' . $publicPort,
+    $instanceName,
+    $epoch,
+);
+$childMasterGuard->assertAliveOrExit('协议边缘启动前 Master 自治检查');
+if ($controlPort <= 0) {
+    $controlPort = SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
+}
+
+$shutdownRequested = false;
+$certificateReloadRequested = false;
+$handler = new ProtocolEdgeControlHandler(
+    static function () use (&$shutdownRequested): void {
+        $shutdownRequested = true;
+    },
+    static function () use (&$certificateReloadRequested): void {
+        $certificateReloadRequested = true;
+    },
+);
+$kernel = new SubprocessControlKernel(
+    new ChildProcessIdentity(
+        ProtocolEdgeRuntime::ROLE,
+        (int)\getmypid(),
+        $publicPort,
+        0,
+        $epoch,
+        $launchId,
+    ),
+    $handler,
+    'ProtocolEdge',
+    LogConfig::isDevMode(),
+    $instanceName,
+);
+if (!$kernel->connectAndRegister($controlPort, false)) {
+    $fail('Unable to register with Master control plane.');
+}
+
+/** @return array{success:bool,exit_code:int,output:string,stdout:string,stderr:string} */
+$runCommand = static function (array $command, float $timeoutSec) use (&$kernel): array {
+    $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+    $process = @\proc_open($command, [
+        0 => ['file', $null, 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes, BP, null, ['bypass_shell' => true]);
+    if (!\is_resource($process)) {
+        return [
+            'success' => false,
+            'exit_code' => 126,
+            'output' => 'Unable to launch process.',
+            'stdout' => '',
+            'stderr' => 'Unable to launch process.',
+        ];
+    }
+    foreach ([1, 2] as $index) {
+        if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+            \stream_set_blocking($pipes[$index], false);
+        }
+    }
+    $deadline = \microtime(true) + \max(0.1, $timeoutSec);
+    $output = '';
+    $stdout = '';
+    $stderr = '';
+    $status = ['running' => true, 'exitcode' => -1];
+    while (($status['running'] ?? false) && \microtime(true) < $deadline) {
+        $kernel->tick();
+        $kernel->flushWrites();
+        foreach ([1, 2] as $index) {
+            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+                $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
+                if ($chunk !== '' && \strlen($output) < 262144) {
+                    $output .= \substr($chunk, 0, 262144 - \strlen($output));
+                }
+                if ($chunk !== '' && $index === 1 && \strlen($stdout) < 262144) {
+                    $stdout .= \substr($chunk, 0, 262144 - \strlen($stdout));
+                }
+                if ($chunk !== '' && $index === 2 && \strlen($stderr) < 262144) {
+                    $stderr .= \substr($chunk, 0, 262144 - \strlen($stderr));
+                }
+            }
+        }
+        $status = \proc_get_status($process);
+        if ($status['running'] ?? false) {
+            SchedulerSystem::usleep(20000);
+        }
+    }
+    if ($status['running'] ?? false) {
+        @\proc_terminate($process);
+        $exitCode = 124;
+    } else {
+        $exitCode = (int)($status['exitcode'] ?? -1);
+    }
+    foreach ([1, 2] as $index) {
+        if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+            $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
+            if ($chunk !== '' && \strlen($output) < 262144) {
+                $output .= \substr($chunk, 0, 262144 - \strlen($output));
+            }
+            if ($chunk !== '' && $index === 1 && \strlen($stdout) < 262144) {
+                $stdout .= \substr($chunk, 0, 262144 - \strlen($stdout));
+            }
+            if ($chunk !== '' && $index === 2 && \strlen($stderr) < 262144) {
+                $stderr .= \substr($chunk, 0, 262144 - \strlen($stderr));
+            }
+            @\fclose($pipes[$index]);
+        }
+    }
+    $closeCode = @\proc_close($process);
+    if ($exitCode < 0) {
+        $exitCode = (int)$closeCode;
+    }
+    return [
+        'success' => $exitCode === 0,
+        'exit_code' => $exitCode,
+        'output' => \trim($output),
+        'stdout' => \trim($stdout),
+        'stderr' => \trim($stderr),
+    ];
+};
+
+$nativeConfigFile = $nativeMode
+    ? $configFile
+    : ProtocolEdgeRuntime::nativeConfigFile($instanceName);
+/** @return array{success:bool,output:string} */
+$compileNativeConfig = static function () use (
+    $nativeMode,
+    $dataPlaneBinary,
+    $caddyBinary,
+    $configFile,
+    $instanceName,
+    $runCommand,
+    $tlsSessionResumption,
+): array {
+    if ($nativeMode) {
+        $validation = $runCommand([$dataPlaneBinary, 'check', '--config', $configFile], 10.0);
+
+        return $validation['success']
+            ? ['success' => true, 'output' => $validation['output']]
+            : ['success' => false, 'output' => 'WLS native config validation failed: ' . $validation['output']];
+    }
+
+    $adapted = $runCommand([
+        $caddyBinary,
+        'adapt',
+        '--config',
+        $configFile,
+        '--adapter',
+        'caddyfile',
+        '--pretty',
+    ], 10.0);
+    if (!$adapted['success']) {
+        return ['success' => false, 'output' => 'Caddyfile adaptation failed: ' . $adapted['output']];
+    }
+
+    try {
+        $config = \json_decode($adapted['stdout'], false, 512, \JSON_THROW_ON_ERROR);
+        if (!\is_object($config)) {
+            throw new \RuntimeException('Adapted Caddy config is not an object.');
+        }
+        $nativeConfigFile = ProtocolEdgeRuntime::writeNativeConfig(
+            $instanceName,
+            $config,
+            $tlsSessionResumption,
+        );
+    } catch (\Throwable $throwable) {
+        return ['success' => false, 'output' => 'Native Caddy config compilation failed: ' . $throwable->getMessage()];
+    }
+
+    $validation = $runCommand([$caddyBinary, 'validate', '--config', $nativeConfigFile], 10.0);
+    if (!$validation['success']) {
+        return ['success' => false, 'output' => 'Native Caddy config validation failed: ' . $validation['output']];
+    }
+
+    return ['success' => true, 'output' => $adapted['stderr']];
+};
+
+$compiledConfig = $compileNativeConfig();
+if (!$compiledConfig['success']) {
+    $fail($compiledConfig['output']);
+}
+
+// A stale data-plane child may survive an ungraceful wrapper crash. Terminate only
+// when both its executable and this exact private config path match.
+if (\is_file($pidFile)) {
+    $stalePid = (int)\trim((string)@\file_get_contents($pidFile));
+    if ($stalePid > 0 && Processer::isRunningByPid($stalePid)) {
+        $commandLine = Processer::getProcessCommandLine($stalePid, true);
+        if ($commandLine !== ''
+            && \str_contains($commandLine, $dataPlaneBinary)
+            && (\str_contains($commandLine, $configFile) || \str_contains($commandLine, $nativeConfigFile))
+        ) {
+            Processer::killProcessTreeByPid($stalePid, true);
+        } else {
+            $fail('Stale pid file points to an unverified process; refusing destructive cleanup.');
+        }
+    }
+    @\unlink($pidFile);
+}
+
+$normalizeHost = static function (string $value): string {
+    if (\str_contains($value, '://')) {
+        $parsed = \parse_url($value, PHP_URL_HOST);
+        return \is_string($parsed) && $parsed !== '' ? $parsed : 'localhost';
+    }
+    if ($value !== '' && $value[0] === '[') {
+        $end = \strpos($value, ']');
+        return $end === false ? \trim($value, '[]') : \substr($value, 1, $end - 1);
+    }
+    return \substr_count($value, ':') === 1 ? \explode(':', $value, 2)[0] : $value;
+};
+$publicHost = $normalizeHost($publicHost);
+$healthHost = $publicHost . ($publicPort === 443 ? '' : ':' . $publicPort);
+
+$probePlainHttp = static function (string $upstream) use ($healthHost, $edgeToken): bool {
+    $socket = @\stream_socket_client('tcp://' . $upstream, $errno, $errstr, 0.25, STREAM_CLIENT_CONNECT);
+    if (!\is_resource($socket)) {
+        return false;
+    }
+    \stream_set_timeout($socket, 0, 500000);
+    @\fwrite($socket, "GET /_wls/health HTTP/1.1\r\nHost: {$healthHost}\r\n"
+        . ProtocolEdgeRuntime::AUTH_HEADER . ": {$edgeToken}\r\n"
+        . ProtocolEdgeRuntime::CLIENT_PROTOCOL_HEADER . ": HTTP/1.1\r\nConnection: close\r\n\r\n");
+    $status = (string)(@\fgets($socket, 256) ?: '');
+    @\fclose($socket);
+    return \preg_match('#^HTTP/1\.[01] 2\d\d\b#', $status) === 1;
+};
+
+$upstreamDeadline = \microtime(true) + 45.0;
+$upstreamReady = false;
+while (!$shutdownRequested && \microtime(true) < $upstreamDeadline) {
+    $kernel->tick();
+    $kernel->flushWrites();
+    if ($childMasterGuard->shouldExit()) {
+        $shutdownRequested = true;
+        break;
+    }
+    foreach ($upstreams as $upstream) {
+        if ($probePlainHttp($upstream)) {
+            $upstreamReady = true;
+            break 2;
+        }
+    }
+    SchedulerSystem::usleep(50000);
+}
+if (!$upstreamReady || $shutdownRequested) {
+    $fail($shutdownRequested ? 'Startup cancelled by Master.' : 'No policy-protected upstream became healthy before deadline.');
+}
+
+$null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+$caddyProcess = null;
+$caddyPipes = [];
+$caddyPid = 0;
+$caddyOutput = '';
+$caddyOutputFiles = PHP_OS_FAMILY === 'Windows'
+    ? [
+        1 => \dirname($pidFile) . DIRECTORY_SEPARATOR . 'edge-child.stdout.log',
+        2 => \dirname($pidFile) . DIRECTORY_SEPARATOR . 'edge-child.stderr.log',
+    ]
+    : [];
+$caddyOutputOffsets = [1 => 0, 2 => 0];
+$launchCaddy = static function () use (
+    $nativeMode,
+    $dataPlaneBinary,
+    $configFile,
+    $caddyBinary,
+    $nativeConfigFile,
+    $pidFile,
+    $null,
+    &$caddyProcess,
+    &$caddyPipes,
+    &$caddyPid,
+    &$caddyOutput,
+    $caddyOutputFiles,
+    &$caddyOutputOffsets,
+): bool {
+    $pipes = [];
+    $command = $nativeMode
+        ? [$dataPlaneBinary, 'serve', '--config', $configFile]
+        : [$caddyBinary, 'run', '--config', $nativeConfigFile, '--pidfile', $pidFile];
+    $descriptors = [0 => ['file', $null, 'r']];
+    foreach ([1, 2] as $index) {
+        $outputFile = (string)($caddyOutputFiles[$index] ?? '');
+        if ($outputFile !== '') {
+            @\touch($outputFile);
+            \clearstatcache(true, $outputFile);
+            $caddyOutputOffsets[$index] = \is_file($outputFile)
+                ? \max(0, (int)@\filesize($outputFile))
+                : 0;
+            $descriptors[$index] = ['file', $outputFile, 'a'];
+        } else {
+            $descriptors[$index] = ['pipe', 'w'];
+        }
+    }
+    $process = @\proc_open($command, $descriptors, $pipes, BP, null, ['bypass_shell' => true]);
+    if (!\is_resource($process)) {
+        return false;
+    }
+    foreach ([1, 2] as $index) {
+        if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
+            \stream_set_blocking($pipes[$index], false);
+        }
+    }
+    $status = \proc_get_status($process);
+    $caddyProcess = $process;
+    $caddyPipes = $pipes;
+    $caddyPid = (int)($status['pid'] ?? 0);
+    $caddyOutput = '';
+    if ($nativeMode && $caddyPid > 0) {
+        @\file_put_contents($pidFile, (string)$caddyPid . PHP_EOL, \LOCK_EX);
+        @\chmod($pidFile, 0600);
+    }
+
+    return true;
+};
+$drainCaddyOutput = static function () use (
+    $nativeMode,
+    &$caddyPipes,
+    &$caddyOutput,
+    $caddyOutputFiles,
+    &$caddyOutputOffsets,
+): void {
+    foreach ([1, 2] as $index) {
+        $chunk = '';
+        $outputFile = (string)($caddyOutputFiles[$index] ?? '');
+        if ($outputFile !== '') {
+            \clearstatcache(true, $outputFile);
+            $size = \is_file($outputFile) ? \max(0, (int)@\filesize($outputFile)) : 0;
+            $offset = \max(0, (int)($caddyOutputOffsets[$index] ?? 0));
+            if ($size > $offset) {
+                $readOffset = $size - $offset > 262144 ? $size - 262144 : $offset;
+                $handle = @\fopen($outputFile, 'rb');
+                if (\is_resource($handle)) {
+                    if ($readOffset > 0) {
+                        @\fseek($handle, $readOffset);
+                    }
+                    $chunk = (string)(@\fread($handle, 262144) ?: '');
+                    @\fclose($handle);
+                }
+                $caddyOutputOffsets[$index] = $size;
+            }
+        } elseif (isset($caddyPipes[$index]) && \is_resource($caddyPipes[$index])) {
+            $chunk = (string)(@\stream_get_contents($caddyPipes[$index]) ?: '');
+        }
+        if ($chunk === '') {
+            continue;
+        }
+        WlsLogger::debug_('[ProtocolEdge/' . ($nativeMode ? 'Native' : 'Caddy') . '] ' . \trim($chunk));
+        $caddyOutput .= $chunk;
+        if (\strlen($caddyOutput) > 32768) {
+            $caddyOutput = \substr($caddyOutput, -32768);
+        }
+    }
+};
+if (!$launchCaddy()) {
+    $fail('Unable to launch protocol-edge data plane.');
+}
+$closeCaddyProcess = static function (bool $force = false) use (
+    &$caddyProcess,
+    &$caddyPipes,
+    &$caddyPid,
+    $pidFile,
+): void {
+    if (\is_resource($caddyProcess)) {
+        $status = \proc_get_status($caddyProcess);
+        if ($status['running'] ?? false) {
+            @\proc_terminate($caddyProcess);
+            $deadlineNanoseconds = \hrtime(true) + (int)(($force ? 0.2 : 5.0) * 1_000_000_000);
+            do {
+                $status = \proc_get_status($caddyProcess);
+                if (!($status['running'] ?? false)) {
+                    break;
+                }
+                SchedulerSystem::usleep(20000);
+            } while (\hrtime(true) < $deadlineNanoseconds);
+            $status = \proc_get_status($caddyProcess);
+            if (($status['running'] ?? false) && $caddyPid > 0) {
+                Processer::killProcessTreeByPid($caddyPid, true);
+            }
+        }
+    }
+    foreach ([1, 2] as $index) {
+        if (isset($caddyPipes[$index]) && \is_resource($caddyPipes[$index])) {
+            @\fclose($caddyPipes[$index]);
+        }
+    }
+    if (\is_resource($caddyProcess)) {
+        @\proc_close($caddyProcess);
+    }
+    $caddyProcess = null;
+    $caddyPipes = [];
+    $caddyPid = 0;
+    @\unlink($pidFile);
+};
+$terminated = false;
+$terminateCaddy = static function (bool $force = false) use (&$terminated, $closeCaddyProcess): void {
+    if ($terminated) {
+        return;
+    }
+    $terminated = true;
+    $closeCaddyProcess($force);
+};
+\register_shutdown_function(static function () use ($terminateCaddy, $instanceName): void {
+    $terminateCaddy(true);
+    ProtocolEdgeRuntime::clearActiveState($instanceName, (int)\getmypid());
+});
+if (\function_exists('pcntl_signal')) {
+    if (\defined('SIGPIPE')) {
+        \pcntl_signal(SIGPIPE, SIG_IGN);
+    }
+    \pcntl_signal(SIGINT, static function () use (&$shutdownRequested): void {
+        $shutdownRequested = true;
+    });
+    \pcntl_signal(SIGTERM, static function () use (&$shutdownRequested): void {
+        $shutdownRequested = true;
+    });
+}
+
+$lastPublicProbeError = 'not_attempted';
+$probePublic = static function () use (
+    $publicHost,
+    $publicPort,
+    $healthHost,
+    &$lastPublicProbeError,
+): bool {
+    $context = \stream_context_create([
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'allow_self_signed' => true,
+            'peer_name' => $publicHost,
+            'SNI_enabled' => true,
+            'alpn_protocols' => 'http/1.1',
+        ],
+    ]);
+    $socket = @\stream_socket_client(
+        'tls://127.0.0.1:' . $publicPort,
+        $errno,
+        $errstr,
+        0.5,
+        STREAM_CLIENT_CONNECT,
+        $context,
+    );
+    if (!\is_resource($socket)) {
+        $lastPublicProbeError = 'tls_connect_failed errno=' . $errno . ' error=' . $errstr;
+        return false;
+    }
+    \stream_set_timeout($socket, 1);
+    @\fwrite($socket, "GET /_wls/health HTTP/1.1\r\nHost: {$healthHost}\r\nConnection: close\r\n\r\n");
+    $status = (string)(@\fgets($socket, 256) ?: '');
+    $metadata = @\stream_get_meta_data($socket);
+    @\fclose($socket);
+    $healthy = \preg_match('#^HTTP/1\.[01] 2\d\d\b#', $status) === 1;
+    $lastPublicProbeError = $healthy
+        ? ''
+        : 'status=' . (\trim($status) !== '' ? \trim($status) : '(empty)')
+            . ', timed_out=' . (!empty($metadata['timed_out']) ? 'true' : 'false')
+            . ', eof=' . (!empty($metadata['eof']) ? 'true' : 'false');
+
+    return $healthy;
+};
+
+/** @return list<string> */
+$readConfiguredUpstreams = static function () use ($nativeMode, $configFile): array {
+    $config = (string)@\file_get_contents($configFile);
+    if ($nativeMode) {
+        $decoded = \json_decode($config, true);
+        $values = \is_array($decoded)
+            && \is_array($decoded['proxy'] ?? null)
+            && \is_array($decoded['proxy']['upstreams'] ?? null)
+            ? $decoded['proxy']['upstreams']
+            : [];
+
+        return \array_values(\array_filter(
+            $values,
+            static fn (mixed $value): bool => \is_string($value) && \trim($value) !== '',
+        ));
+    }
+    if ($config === ''
+        || \preg_match('/^\s*reverse_proxy\s+(.+?)\s+\{\s*$/m', $config, $matches) !== 1
+    ) {
+        return [];
+    }
+    $values = \preg_split('/\s+/', \trim((string)$matches[1]), -1, \PREG_SPLIT_NO_EMPTY);
+
+    return \is_array($values) ? \array_values($values) : [];
+};
+
+/** @return array{success:bool,status:int,body:string,error:string} */
+$nativeAdminRequest = static function (string $method, string $path) use ($adminAddress): array {
+    $socket = @\stream_socket_client('tcp://' . $adminAddress, $errno, $errstr, 0.5, STREAM_CLIENT_CONNECT);
+    if (!\is_resource($socket)) {
+        return ['success' => false, 'status' => 0, 'body' => '', 'error' => $errstr ?: ('errno=' . $errno)];
+    }
+    \stream_set_timeout($socket, 1);
+    $request = $method . ' ' . $path . " HTTP/1.1\r\nHost: " . $adminAddress
+        . "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    @\fwrite($socket, $request);
+    $response = (string)(@\stream_get_contents($socket) ?: '');
+    $metadata = @\stream_get_meta_data($socket);
+    @\fclose($socket);
+    if (\preg_match('#^HTTP/1\.[01]\s+([0-9]{3})\b#', $response, $matches) !== 1) {
+        return [
+            'success' => false,
+            'status' => 0,
+            'body' => '',
+            'error' => !empty($metadata['timed_out']) ? 'admin request timed out' : 'invalid admin response',
+        ];
+    }
+    $status = (int)$matches[1];
+    $separator = \strpos($response, "\r\n\r\n");
+    $body = $separator === false ? '' : \substr($response, $separator + 4);
+
+    return [
+        'success' => $status >= 200 && $status < 300,
+        'status' => $status,
+        'body' => $body,
+        'error' => $status >= 200 && $status < 300 ? '' : \trim($body),
+    ];
+};
+
+$nativeDigestIsActive = static function (string $expectedDigest) use ($nativeAdminRequest): bool {
+    $state = $nativeAdminRequest('GET', '/_wls/edge/state');
+    if (!$state['success']) {
+        return false;
+    }
+    $decoded = \json_decode($state['body'], true);
+    $activeDigest = \is_array($decoded) ? \strtolower(\trim((string)($decoded['config_digest'] ?? ''))) : '';
+
+    return \preg_match('/^[a-f0-9]{64}$/D', $activeDigest) === 1
+        && \hash_equals($expectedDigest, $activeDigest);
+};
+
+$activateNativeDigest = static function (string $expectedDigest) use (
+    $nativeAdminRequest,
+    $nativeDigestIsActive,
+    $kernel,
+    &$shutdownRequested,
+): array {
+    $reload = $nativeAdminRequest('POST', '/_wls/edge/reload');
+    if (!$reload['success']) {
+        return ['success' => false, 'output' => $reload['error']];
+    }
+    $deadlineNanoseconds = \hrtime(true) + 5_000_000_000;
+    do {
+        $kernel->tick();
+        $kernel->flushWrites();
+        if ($shutdownRequested) {
+            return ['success' => false, 'output' => 'activation cancelled by Master'];
+        }
+        if ($nativeDigestIsActive($expectedDigest)) {
+            return ['success' => true, 'output' => $reload['body']];
+        }
+        SchedulerSystem::usleep(20000);
+    } while (\hrtime(true) < $deadlineNanoseconds);
+
+    return ['success' => false, 'output' => 'native engine did not acknowledge digest ' . $expectedDigest];
+};
+
+$publicDeadlineNanoseconds = \hrtime(true) + 15_000_000_000;
+$publicReady = false;
+$caddyLaunchAttempts = 1;
+$expectedStartupDigest = ProtocolEdgeRuntime::configDigest($instanceName);
+while (!$shutdownRequested && \hrtime(true) < $publicDeadlineNanoseconds) {
+    $kernel->tick();
+    $kernel->flushWrites();
+    $drainCaddyOutput();
+    $caddyStatus = \proc_get_status($caddyProcess);
+    if (!($caddyStatus['running'] ?? false)) {
+        $drainCaddyOutput();
+        $lastPublicProbeError = 'data_plane_exited exit_code=' . (int)($caddyStatus['exitcode'] ?? 1)
+            . ' output=' . (\trim($caddyOutput) !== '' ? \trim($caddyOutput) : '(empty)');
+        $relaunched = false;
+        while (!$shutdownRequested
+            && $caddyLaunchAttempts < 3
+            && \hrtime(true) < $publicDeadlineNanoseconds
+        ) {
+            $closeCaddyProcess(true);
+            SchedulerSystem::usleep(50000);
+            $caddyLaunchAttempts++;
+            if ($launchCaddy()) {
+                $relaunched = true;
+                break;
+            }
+            $lastPublicProbeError = 'data_plane_relaunch_failed attempt=' . $caddyLaunchAttempts . '/3';
+        }
+        if ($relaunched) {
+            continue;
+        }
+        break;
+    }
+    if ($probePublic()
+        && (!$nativeMode || ($expectedStartupDigest !== '' && $nativeDigestIsActive($expectedStartupDigest)))
+    ) {
+        $publicReady = true;
+        break;
+    }
+    SchedulerSystem::usleep(50000);
+}
+if (!$publicReady) {
+    $terminateCaddy();
+    $fail('Public TLS protocol edge failed readiness probe: ' . $lastPublicProbeError);
+}
+$activeConfigDigest = ProtocolEdgeRuntime::configDigest($instanceName);
+if ($activeConfigDigest === '') {
+    $terminateCaddy();
+    $fail('Unable to fingerprint active protocol-edge configuration.');
+}
+if ($nativeMode && !$nativeDigestIsActive($activeConfigDigest)) {
+    $activation = $activateNativeDigest($activeConfigDigest);
+    if (!$activation['success']) {
+        $terminateCaddy();
+        $fail('WLS native engine did not activate the startup digest: ' . $activation['output']);
+    }
+}
+ProtocolEdgeRuntime::markConfigActive(
+    $instanceName,
+    $activeConfigDigest,
+    $readConfiguredUpstreams() ?: $upstreams,
+);
+if (!$kernel->sendReady()) {
+    $terminateCaddy();
+    $fail('Unable to publish protocol-edge READY.');
+}
+$failedConfigDigest = '';
+$nextConfigCheckAt = \microtime(true) + 0.25;
+
+WlsLogger::info_(
+    '[ProtocolEdge] READY public=' . $publicHost . ':' . $publicPort
+    . ' protocols=h3,h2,h1 tls_session_resumption='
+    . ($tlsSessionResumption ? 'persistent' : 'disabled')
+    . ' upstreams=' . \implode(',', $upstreams)
+);
+
+while (!$shutdownRequested) {
+    if (\function_exists('pcntl_signal_dispatch')) {
+        \pcntl_signal_dispatch();
+    }
+    $kernel->tick();
+    $kernel->flushWrites();
+    if ($childMasterGuard->shouldExit()) {
+        $shutdownRequested = true;
+        break;
+    }
+    if (!$kernel->isConnected()) {
+        $kernel->reconnect();
+    }
+    $drainCaddyOutput();
+    $caddyStatus = \proc_get_status($caddyProcess);
+    if (!($caddyStatus['running'] ?? false)) {
+        $kernel->sendExitReason('protocol_edge_data_plane_exited', (int)($caddyStatus['exitcode'] ?? 1));
+        break;
+    }
+    $now = \microtime(true);
+    $observedConfigDigest = $activeConfigDigest;
+    $nativeDigestDrifted = false;
+    if ($now >= $nextConfigCheckAt) {
+        $nextConfigCheckAt = $now + 0.25;
+        $observedConfigDigest = ProtocolEdgeRuntime::configDigest($instanceName);
+        $nativeDigestDrifted = $nativeMode && !$nativeDigestIsActive($activeConfigDigest);
+    }
+    $configChanged = $observedConfigDigest !== ''
+        && (!\hash_equals($activeConfigDigest, $observedConfigDigest)
+            || $nativeDigestDrifted);
+    if ($certificateReloadRequested || ($configChanged && $observedConfigDigest !== $failedConfigDigest)) {
+        $certificateOnlyReload = $certificateReloadRequested && !$configChanged;
+        $certificateReloadRequested = false;
+        $compiledConfig = $compileNativeConfig();
+        if (!$compiledConfig['success']) {
+            if ($configChanged) {
+                $failedConfigDigest = $observedConfigDigest;
+            }
+            WlsLogger::error_('[ProtocolEdge] Candidate configuration rejected: ' . $compiledConfig['output']);
+            SchedulerSystem::usleep(20000);
+            continue;
+        }
+        if ($nativeMode) {
+            $reload = $activateNativeDigest($observedConfigDigest);
+        } else {
+            $reload = $runCommand([
+                $caddyBinary,
+                'reload',
+                '--config',
+                $nativeConfigFile,
+                '--address',
+                $adminAddress,
+                '--force',
+            ], 10.0);
+        }
+        if ($reload['success']) {
+            $activeConfigDigest = $observedConfigDigest;
+            $failedConfigDigest = '';
+            ProtocolEdgeRuntime::markConfigActive(
+                $instanceName,
+                $activeConfigDigest,
+                $readConfiguredUpstreams(),
+            );
+            WlsLogger::info_(
+                $certificateOnlyReload
+                    ? '[ProtocolEdge] TLS certificate configuration reloaded without dropping connections.'
+                    : '[ProtocolEdge] Worker upstream configuration activated without dropping client connections.'
+            );
+        } else {
+            if ($configChanged) {
+                $failedConfigDigest = $observedConfigDigest;
+            }
+            WlsLogger::error_('[ProtocolEdge] Data-plane configuration reload failed: ' . $reload['output']);
+        }
+    }
+    SchedulerSystem::usleep(20000);
+}
+
+$terminateCaddy();
+ProtocolEdgeRuntime::clearActiveState($instanceName, (int)\getmypid());
+$kernel->sendExited();
+$kernel->close();
+WlsLogger::flush_(true);
+System::exit(0);
