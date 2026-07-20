@@ -353,29 +353,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirect($this->getLoginUrlWithReturnUrl($returnUrl));
             return;
         }
-        // 登录成功后、302 前必须落库：先持久化本请求内所有 Session，再发 Cookie 与重定向
-        $rawSession = $this->session->getSession();
-        $rawSession->save();
-        if ($rawSession instanceof Session) {
-            $rawSession->getStrategy()->writeClose();
-        }
-        Session::flushRequestSessions();
-        // WLS 下确保 Session Cookie 随 302 响应发出（双重保障，避免 Worker 合并逻辑遗漏）
-        $sid = $this->session->getId();
-        if ($sid !== '') {
-            $expire = \time() + 86400 * 30;
-            $secure = $this->request->isSecure();
-            HeaderCollector::getInstance()->setCookie(
-                WlsStrategy::SESSION_NAME,
-                $sid,
-                $expire,
-                '/',
-                '',
-                $secure,
-                true,
-                'Lax'
-            );
-        }
+        // 登录成功后、302 前必须落库并按统一 Session 策略重新签发 Cookie。
+        $this->persistBackendLoginSessionCookie();
         // 优先跳回上次访问的地址，找不到才跳转 admin
         $this->redirectReferer($adminUsernameUser, $returnUrl);
 
@@ -841,15 +820,22 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return;
         }
 
+        if ($rawSession instanceof Session) {
+            $rawSession->getStrategy()->setCookie($sid, 86400 * 30);
+            return;
+        }
+
+        // 兼容自定义 SessionInterface；框架标准 Session 始终走上面的统一策略。
+        $secure = $this->request->isSecure();
         HeaderCollector::getInstance()->setCookie(
-            WlsStrategy::SESSION_NAME,
+            \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
             $sid,
             \time() + 86400 * 30,
             '/',
             '',
-            $this->request->isSecure(),
+            $secure,
             true,
-            'Lax'
+            \Weline\Framework\Session\SessionCookieNameResolver::resolveSameSite($secure)
         );
     }
 

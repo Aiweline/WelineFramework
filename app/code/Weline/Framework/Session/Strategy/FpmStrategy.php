@@ -39,8 +39,14 @@ final class FpmStrategy implements SessionStrategyInterface
     /** Cookie HttpOnly */
     private bool $cookieHttpOnly;
 
-    /** Cookie SameSite */
+    /** Cookie SameSite (fallback; final value resolves at Set-Cookie time) */
     private string $cookieSameSite;
+
+    /** Explicit session.cookie_samesite from env (empty = auto) */
+    private string $configuredCookieSameSite;
+
+    /** Explicit session.cookie_partitioned from env (null = auto) */
+    private mixed $configuredCookiePartitioned;
 
     /**
      * 构造函数
@@ -57,7 +63,9 @@ final class FpmStrategy implements SessionStrategyInterface
         $this->cookieDomain = $config['cookie_domain'] ?? '';
         $this->cookieSecure = (bool)($config['cookie_secure'] ?? (\w_env('server.https') === 'on'));
         $this->cookieHttpOnly = (bool)($config['cookie_httponly'] ?? true);
-        $this->cookieSameSite = $config['cookie_samesite'] ?? 'Lax';
+        $this->configuredCookieSameSite = \trim((string)($config['cookie_samesite'] ?? ''));
+        $this->configuredCookiePartitioned = $config['cookie_partitioned'] ?? null;
+        $this->cookieSameSite = $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : 'Lax';
     }
 
     /**
@@ -111,7 +119,7 @@ final class FpmStrategy implements SessionStrategyInterface
             \session_write_close();
         }
 
-        \session_name(self::SESSION_NAME);
+        \session_name(\Weline\Framework\Session\SessionCookieNameResolver::resolve());
 
         if ($sessionId !== null && $sessionId !== '') {
             if (\session_status() === PHP_SESSION_ACTIVE && \session_id() !== $sessionId) {
@@ -169,7 +177,7 @@ final class FpmStrategy implements SessionStrategyInterface
             if (\ini_get('session.use_cookies')) {
                 $params = \session_get_cookie_params();
                 \setcookie(
-                    self::SESSION_NAME,
+                    \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
                     '',
                     \time() - 42000,
                     $params['path'],
@@ -221,17 +229,49 @@ final class FpmStrategy implements SessionStrategyInterface
         }
 
         $expires = $lifetime > 0 ? \time() + $lifetime : 0;
+        $secure = $this->cookieSecure || (\function_exists('w_env') && \w_env('server.https') === 'on');
+        $sameSite = \Weline\Framework\Session\SessionCookieNameResolver::resolveSameSite(
+            $secure,
+            $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : null,
+            $this->configuredCookiePartitioned,
+        );
+
+        // PHP setcookie() does not accept CHIPS "Partitioned"; emit Set-Cookie manually.
+        if (\str_contains($sameSite, 'Partitioned')) {
+            $parts = [
+                \rawurlencode(\Weline\Framework\Session\SessionCookieNameResolver::resolve()) . '=' . \rawurlencode($sessionId),
+            ];
+            if ($expires > 0) {
+                $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $expires);
+            }
+            if ($this->cookiePath !== '') {
+                $parts[] = 'Path=' . $this->cookiePath;
+            }
+            if ($this->cookieDomain !== '') {
+                $parts[] = 'Domain=' . $this->cookieDomain;
+            }
+            if ($secure) {
+                $parts[] = 'Secure';
+            }
+            if ($this->cookieHttpOnly) {
+                $parts[] = 'HttpOnly';
+            }
+            $parts[] = 'SameSite=None';
+            $parts[] = 'Partitioned';
+            \header('Set-Cookie: ' . \implode('; ', $parts), false);
+            return;
+        }
         
         \setcookie(
-            self::SESSION_NAME,
+            \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
             $sessionId,
             [
                 'expires' => $expires,
                 'path' => $this->cookiePath,
                 'domain' => $this->cookieDomain,
-                'secure' => $this->cookieSecure,
+                'secure' => $secure,
                 'httponly' => $this->cookieHttpOnly,
-                'samesite' => $this->cookieSameSite,
+                'samesite' => $sameSite,
             ]
         );
     }
