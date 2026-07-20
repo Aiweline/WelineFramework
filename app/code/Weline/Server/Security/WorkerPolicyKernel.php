@@ -29,6 +29,10 @@ require_once \dirname(__DIR__) . '/bin/worker_http_message.php';
  */
 final class WorkerPolicyKernel
 {
+    private const EDGE_AUTH_HEADER = 'x-wls-edge-token';
+
+    private const EDGE_CLIENT_PROTOCOL_HEADER = 'x-wls-client-protocol';
+
     private const MAX_ATTACK_URI_BYTES = 8192;
 
     private const MAX_ATTACK_HEADER_BYTES = 2048;
@@ -118,6 +122,9 @@ final class WorkerPolicyKernel
 
     private float $lastStateReconnectAttempt = 0.0;
 
+    /** Empty for native public/direct and legacy Dispatcher transports. */
+    private string $protocolEdgeToken = '';
+
     private function __construct(
         private readonly string $instanceName,
         private readonly string $topology,
@@ -174,7 +181,7 @@ final class WorkerPolicyKernel
             $state = null;
         }
 
-        return self::$instance = new self(
+        $instance = new self(
             $instanceName,
             $topology,
             \max(1, $readyWorkers),
@@ -183,6 +190,9 @@ final class WorkerPolicyKernel
             $state,
             $bundle,
         );
+        $instance->configureProtocolEdgeFromEnvironment();
+
+        return self::$instance = $instance;
     }
 
     public static function instance(): self
@@ -298,8 +308,52 @@ final class WorkerPolicyKernel
                 'request_shape',
             );
         }
+        $parsed['client_protocol'] = $parsed['protocol'];
 
-        $identity = $this->identityResolver->resolve($transportPeer, $parsed['headers'], $this->trustedProxyCidrs);
+        $trustedProxyCidrs = $this->trustedProxyCidrs;
+        if ($this->protocolEdgeToken !== '') {
+            $transportIp = $this->identityResolver->normalizePeer($transportPeer);
+            $loopbackTransport = $transportIp !== '' && (
+                $this->identityResolver->matchesCidr($transportIp, '127.0.0.0/8')
+                || $this->identityResolver->matchesCidr($transportIp, '::1/128')
+            );
+            $receivedToken = \trim((string)($parsed['headers'][self::EDGE_AUTH_HEADER] ?? ''));
+            if (!$loopbackTransport
+                || \strlen($receivedToken) !== \strlen($this->protocolEdgeToken)
+                || !\hash_equals($this->protocolEdgeToken, $receivedToken)
+            ) {
+                unset(
+                    $parsed['headers'][self::EDGE_AUTH_HEADER],
+                    $parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER],
+                );
+                return $this->deny($parsed, $transportIp ?: '0.0.0.0', false, 403, 'protocol_edge_auth');
+            }
+
+            $clientProtocol = $this->normalizeEdgeClientProtocol(
+                (string)($parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER] ?? '')
+            );
+            if ($clientProtocol === '') {
+                unset(
+                    $parsed['headers'][self::EDGE_AUTH_HEADER],
+                    $parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER],
+                );
+                return $this->deny($parsed, $transportIp, false, 400, 'protocol_edge_protocol');
+            }
+            $parsed['client_protocol'] = $clientProtocol;
+            $trustedProxyCidrs = \array_values(\array_unique([
+                ...$trustedProxyCidrs,
+                '127.0.0.0/8',
+                '::1/128',
+            ]));
+        }
+        // Transport authentication metadata is never exposed to application
+        // code, logs, FPC keys or module hooks, even when the edge is disabled.
+        unset(
+            $parsed['headers'][self::EDGE_AUTH_HEADER],
+            $parsed['headers'][self::EDGE_CLIENT_PROTOCOL_HEADER],
+        );
+
+        $identity = $this->identityResolver->resolve($transportPeer, $parsed['headers'], $trustedProxyCidrs);
         $clientIp = $identity['ip'];
         $trustedProxy = $identity['trusted_proxy'];
         $envelope = new RequestEnvelope(
@@ -312,7 +366,8 @@ final class WorkerPolicyKernel
             attributes: [
                 'target' => $parsed['target'],
                 'query' => $parsed['query'],
-                'protocol' => $parsed['protocol'],
+                'protocol' => $parsed['client_protocol'],
+                'transport_protocol' => $parsed['protocol'],
                 'trusted_proxy' => $trustedProxy,
                 'topology' => $this->topology,
                 'policy_digest' => $this->loadedDigest,
@@ -358,7 +413,41 @@ final class WorkerPolicyKernel
             $this->loadedDigest,
             $trustedProxy,
             $this->cachePolicyFlags,
+            (string)$parsed['client_protocol'],
         );
+    }
+
+    private function configureProtocolEdgeFromEnvironment(): void
+    {
+        $path = \trim((string)(
+            $_SERVER['WLS_PROTOCOL_EDGE_TOKEN_FILE']
+            ?? $_ENV['WLS_PROTOCOL_EDGE_TOKEN_FILE']
+            ?? \getenv('WLS_PROTOCOL_EDGE_TOKEN_FILE')
+            ?: ''
+        ));
+        if ($path === '') {
+            $this->protocolEdgeToken = '';
+            return;
+        }
+        if (!\is_file($path) || !\is_readable($path)) {
+            throw new \RuntimeException('Configured WLS protocol-edge token file is not readable.');
+        }
+        $token = \strtolower(\trim((string)@\file_get_contents($path)));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $token) !== 1) {
+            throw new \RuntimeException('Configured WLS protocol-edge token is invalid.');
+        }
+
+        $this->protocolEdgeToken = $token;
+    }
+
+    private function normalizeEdgeClientProtocol(string $protocol): string
+    {
+        return match (\strtolower(\trim($protocol))) {
+            'h3', 'http3', 'http/3', 'http/3.0' => 'HTTP/3.0',
+            'h2', 'http2', 'http/2', 'http/2.0' => 'HTTP/2.0',
+            'h1', 'http1', 'http1.1', 'http/1', 'http/1.1' => 'HTTP/1.1',
+            default => '',
+        };
     }
 
     private function installBundle(RuntimePolicyBundle $bundle): void

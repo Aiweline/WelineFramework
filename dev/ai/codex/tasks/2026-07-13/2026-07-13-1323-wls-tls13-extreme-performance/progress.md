@@ -1,0 +1,145 @@
+# 进度
+
+状态：`validated_cross_platform_candidate_windows_scale_pending`
+
+- 2026-07-15 P4 最小收敛：`WlsRuntime::bootstrap()` 与 `WorkerFullPageCacheFastPath` 构造迁入 `worker_runtime_common.php` 的两个 transport-neutral helper；三入口仍保留各自日志、SSL trace、异常、listener/event-loop 和连接状态。入口行数为 5,169 / 6,141 / 2,053，公共运行时 361 行。
+- 专用 10979 实例约 2 秒 4/4 READY，动态首渲染 10.42–10.84ms；h1/h2/h3、TLS 1.3 `New -> Reused`、Process FPC、后台 Key 404/200 全通过。H3 10,000 请求 0 错误、14,557.04 QPS、p95 3.79ms；H2 100,000 请求 0 错误、14,594.52 QPS、p95 14.53ms、p99 18.342ms、max 53.141ms。Browser 两页 Console 0 error/warn；PHP lint、diff、架构、编译、策略与 Semgrep 0 finding；实例及端口已清理。
+- 核心 `ac55605ba` 已纯快进到 Gitee/GitHub 的功能分支和 master。分项 5 站均因非 Git 或既有脏改动安全停止；分仓 --all 正式执行为 6 no-change、25 dirty 拒绝覆盖、ThemeFancy 远端不可克隆，未产生 tag/push/Packagist 假成功。
+
+- 2026-07-15 Native TLS profile 已真正贯穿公开协议入口：Go Edge 的 `performance` 固定 `X25519,P-256`，`system` 使用 Go 默认组；有效 profile 同步进入实例、Endpoint、Master IPC 与 benchmark 运行时元数据。PHP 9 个修改文件语法通过，Native Go `test/vet/build` 通过，6 组相关现有 PHPUnit 入口均为 0 退出。
+- Windows Dispatcher 启动失败的真实根因不是 Go/HTTP3 bind，而是 Edge 在 bind 前经内部 Dispatcher 发出的认证明文 `/_wls/health` 被 301 到尚未 READY 的公开 HTTPS 端口。现只允许 loopback + 实例 token + 精确请求行 + 唯一协议头的健康探针绕过重定向，WorkerPolicyKernel 再次鉴权；普通明文请求语义不变。Parallels Windows 11 ARM64 当前代码单 Worker 实例约 3 秒全部 READY，h1/h2/h3 各 100/100，TLS 1.3 / CHACHA20 / X25519 二连 resume=true，首页 Process FPC、后台 Key 404/200、动态首渲染 65.72ms 均通过。
+- Windows 4 Worker 复验时 VM 内 5 个非本任务 PHP cron 持续占约 5/6 CPU。`batchCreate` 仍为 809ms、Worker 2 在 2.948s READY；其余 Worker 被调度饥饿到 61.8s，Worker 1 未 READY 后 fail-fast 完整清理。未结束/暂停这些外部任务，也未把该受污染轮次当作 Windows QPS 或 READY 基线；此前同 VM 空闲轮已有 4 Worker 6/6 READY 与 HTTP/2 100,000/100,000 证据。
+- macOS 当前代码完整停启约 2 秒 4/4 Worker 预热 READY，实际 h1/h2/h3 均 200，首页 Process FPC HIT，裸/带 Key 后台为 404/200。OpenSSL 3 首连 TLS 1.3 / TLS_AES_128_GCM_SHA256 / X25519，二连以及完整 Master + Native Edge 重启后均为 `Reused`。
+- 最终 macOS 报告：HTTP/2 health c128×1,000,000 为 1,000,000/1,000,000、0 错误、15,720.26 QPS、p95 13.675ms、p99 18.969ms、max 228.168ms，四 Worker `max/min=1.003`；HTTP/3 health c128×100,000 为 0 错误、12,845.60 QPS、p95 16.679ms、max 76.704ms。专用 loopback 白名单下首页 HTTP/2 / HTTP/3 各 100,000 请求均 0 错误，分别 17,199.47 / 10,447.17 QPS；白名单随后恢复为空，正式 `f58c7a…64e1` digest 已由所有关键进程两阶段 ACK 为 active。
+- 2026-07-15 Browser 同代复验只使用专用 `https://127.0.0.1:10977/`：首页标题/H1、文档/API/快速开发/优势/后台入口可见，带 Key 登录页显示管理员、密码、记住我和登录按钮，两页 Console error/warn 均为 0。Browser 客户端直接导航裸 `/admin/login` 被本地客户端策略拦截，故没有伪报可见性；同代真实 HTTPS 已独立核对裸/带 Key 为 404/200。生产 9981 未操作。
+- 最终门禁通过：9 个 PHP 文件语法、Go `gofmt/test/vet/build`、`git diff --check`、Semgrep 168 条规则/11 个源码目标 0 finding、architecture:check（83 模块/4046 PHP/7173 引用/0 finding）、framework:compile（39 Provider/0 deferred）、policy check（12 条规则/白名单 0）全部成功。自动验收后已用统一 stop flow 停止专用实例；10977 TCP/UDP、29180–29183、39180 与 Master/Edge/4 Worker PID 均已释放，生产 9981 和其他实例未操作。
+
+- 2026-07-15 完成审计重新以当前 `28cfa2fb` 代码为准。发现 WLS Native Protocol Engine 的 Go TLS 配置把 `X25519MLKEM768` 固定排在第一位，而 PHP/文档声明默认 `performance = X25519:P-256`，公开 h3/h2 握手没有真正继承实例级 key-exchange profile。GitNexus 对 `writeWlsNativeConfig`、`buildRuntimeState`、`validateConfig` 与 `tlsConfig` 的上游风险均为 LOW；当前正在补齐配置传递并重新执行 macOS 与 Parallels Windows 11 ARM 协议、复用和压测门禁。
+
+- 2026-07-14 Windows 11 ARM 准备阶段确认官方 PECL 已提供 PHP 8.4 / event 3.1.4 的 VS17、x64/x86、TS/NTS 精确包，而旧启动路径只检查本地 DLL。现已补齐启动前自动安装：四种 ABI 各自固定 SHA-256，只从官方地址下载，只提取 `php_event.dll + pthreadVC2.dll`，已有文件备份后原子发布，并由同一 `PHP_BINARY` 新进程实际加载验证；无固定可信包或验证失败才保持 Dispatcher + stream/select，绝不跨 ABI 猜测。PHP 语法、`git diff --check` 与 Runtime/Start/Windows taskkill/socket 六组定向入口均通过；Windows 原生运行证据仍等待 Parallels VM 完成安装，不能提前记为平台通过。
+
+- 已建立隔离分支和 worktree，代码智能上下文已初始化。
+- 已冻结原始脏工作区；只在 `/Users/weline/Project/Official/.codex-wls-release-20260713` 修改，原分支未删除。
+- 修复每 Worker 动态首页预热：共享前置仍为单 owner，每进程本地 Router/Controller/Template 渲染通过有界 render slot 串行进入，避免 16 个冷进程同时争抢 CPU。
+- 修复单槽恢复：REGISTER 不再取消复活队列；只有 READY + 当前 IPC 会话同时成立才提交恢复。
+- Darwin `shared_fd + event` busy accept cooldown 经 100/500/1000us 对比后选用 500us；1000us 已回退。
+- macOS 16 Worker 冷启动完整 READY 约 5 秒；公开动态首页连续 20 次 16.84–28.99ms，0 失败。
+- 首页 Process FPC c32 × 10,000 五轮均 0 错误，QPS 中位 6090.32，p95 中位 9.521ms。
+- fresh TLS health c128 × 20,000：0 错误，751.43 QPS，p95 252.876ms，p99 296.22ms，max 418.778ms，16 Worker max/min=1.202。
+- 压测中终止 Worker #8：100,000/100,000、0 错误、8424.4 QPS；替补 PID 84196 同轮处理 389 请求，257ms REGISTER、1511ms READY，最终 16/16。
+- 已完成 1,000,000 请求持续压测：0 错误、10192 QPS、p95 16.593ms、p99 22.976ms、max 150.757ms；该结果只证明本机该轮持续负载，不代表跨平台计划全部完成。
+- 原生 Windows/Linux 门禁无法由当前 macOS 结果替代，文档已明确保留该边界。
+- Browser 验收：打开 `https://pa3f84a7b.weline.test:9875/`，可见默认首页、文档/API/后台入口；打开带 Key 的 `/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/admin/login`，可见“登录 Weline 管理面板”、管理员/密码输入框和登录按钮，Console error/warn 为 0。Chrome 对裸 `/admin/login` 直接导航返回 `ERR_BLOCKED_BY_CLIENT`，因此另用真实 HTTPS 请求核对为 404、无跳转；带 Key 路径为 200。
+- TLS 协商复核：TLSv1.3、X25519、AEAD-AES256-GCM-SHA384，证书验证返回 0。
+- 最终静态门禁：3 个 PHP 修改文件语法通过，`git diff --check` 通过，`architecture:check` 通过（83 模块/4038 PHP/7184 引用），`framework:compile` 通过（39 Provider/0 延迟），`server:policy:check` 通过（12 条规则）。
+- GitNexus 索引已刷新到当前隔离工作区；`ServiceOrchestrator` 超过默认 512KB 图谱上限，私有恢复方法仍返回 `UNKNOWN`，因此使用 12 个直接调用点审计、旧版本 blame、93 项启动/恢复测试和真实 kill/recovery 证据共同验收，不能伪报为图谱 low risk。
+- 重复实现审计确认一处真实回归：READY 前已完成首页/动态预热，但 `d0c44e629` 又把 READY 后 registry bootstrap 缺省值从 0 改成 1；已恢复为 opt-in。旧业务 Header/路径断言同步为 Framework 通用 Controller/header 与首页事实源，`WlsRuntimeInternalWarmupInputTest` 现为 23/23、52 assertions。
+- 单槽恢复审计确认第二处真实回归：`scheduleResurrectionWithDelay()` 把 process-tree `tracking_pid` 覆盖成 authenticated service PID；现重新分离两个 PID。readiness v3 测试夹具补齐 protocol/capability/container digest/dynamic proof，`ServiceOrchestratorStartupTest` 从 3 errors + 5 failures 恢复为 93/93、440 assertions。
+- 回归命令验证实例 `ai-test-wls-regression-20260713-1710`：macOS `auto -> direct/shared_fd/event/stream`，4 Worker 完整 READY 约 2 秒；动态首页 BYPASS-FPC 46.52ms，首页 200、裸 `/admin/login` 404、带 Key 登录页 200；TLSv1.3 / `TLS_AES_256_GCM_SHA384`。Browser 可见性验证发生在同一代码和策略的前一实例 `ai-test-wls-regression-20260713-1645`，首页和带 Key 登录表单可见、Console error/warn 0；Chrome 对 1710 使用的 9882 端口返回客户端拦截，未把两个实例混写为一份证据。
+- 回归实例与共享 Session/Memory 进程已全部停止；临时 loopback whitelist 经两阶段策略发布后已恢复 `false`。
+- 当前明确未完成：`worker.php` / `worker_ssl.php` / `worker_ssl_event.php` 仍为 5,484 / 6,472 / 2,103 行，只完成共享 HTTP helper/策略/FPC/控制面，尚未成为薄 Transport Adapter；Linux/Windows 没有本机 runner 或现有 WLS CI，原生矩阵仍缺证据。
+- 已停止 `ai-test-wls-serialized-20260713-1505`，Master/16 Worker 均退出；`wls.attack_detector.ip_whitelist.enabled` 已恢复为 `false`。
+- 代码管理审计：架构分支是 master 祖先；功能分支相对 master 为 `0 behind / 1 ahead`，`git cherry` 确认为新 patch；实现只复用一个 `wls_dynamic_warmup` SharedState，path lock 与 render slot 职责不同。
+- 核心发布：`83ccfe358` 已 fast-forward 到 `dev/master` 并推送 origin(Gitee)+github；功能分支和隔离 worktree按用户要求保留。
+- 分项预检阻塞：脚本不识别 worktree；App/Skill 非 Git，摩托车/Official-Site/WeShop 分别有 17/1285/1354 项既有脏改动，全部安全跳过。
+- 分仓 `--all` 预检：32 个映射仓中 6 个 no-change、25 个 dirty、ThemeFancy clone 失败；无可合法发布的干净差异仓，未覆盖或提交他人改动。
+- 2026-07-13 默认实例全站 403 已定位为安全策略误伤：普通 `curl/8.7.1` 被 `bad_user_agent` 判为攻击并对共享 loopback IP 封禁 300 秒，首页、后台与 API 因共用该 IP 一起不可用。已清除现存 Ban，并通过两阶段策略发布将 default 实例切换到安全配置；发布后普通 curl/浏览器首页均为 200 Process FPC HIT，裸 `/admin/login` 为 404，带 Key 后台入口正常 302。
+- 源码修复已完成：普通 UA 不再属于默认高置信攻击规则；实例/路径配额耗尽只返回 429，不再写共享 Ban；浏览器静态资源不再占 path-scan unique-path 预算。内核验证覆盖普通 curl、100 个不同 CSS、3001 次实例限流、121 次路径限流和 sqlmap 真攻击，分别得到 allow/allow/429 非 Ban/429 非 Ban/403 + shared Ban。
+- Worker 公共运行时继续收敛：新增 `bin/worker_runtime_common.php`，HTTP、stream TLS、实验 EventBuffer 三个入口共同复用 memory-limit、执行时限、Fiber admission、请求清台、响应后任务排水和内存诊断/压缩；入口行数降为 5,158 / 6,147 / 2,059，公共文件 339 行。EventBuffer 仍由 RuntimeSelection 明确拒绝，不宣称生产支持。
+- `ai-test-wls-common-20260713-1830` 完成多轮 rolling reload，旧代排水后均回到 canonical 4/4；READY 元数据四 Worker 全部 `warmup_state=hot`、首页 `FPC HIT/source=process`、policy/container digest 一致。
+- 当前代 HTTPS TLS 1.3：首页 c32×10,000 策略开启 5 轮全部 0 错误，QPS 中位 9,237.41、p95 中位 5.965ms；主机 load average 约 10–12，未把高噪声单机轮伪记为 5.5ms 绝对线通过。
+- HTTPS c128×100,000：100,000/100,000、0 错误、9,170.95 QPS、p95 19.982ms、p99 27.007ms、max 61.857ms；Worker PID 未变，RSS 由约 26.5–26.7MiB 降至约 22.3–22.7MiB。
+- Fresh TLS 1.3 health c128×20,000：20,000/20,000、0 错误、1,707.16 QPS、p95 109.52ms、p99 156.335ms、max 245.737ms，四 Worker `max/min=1.019`。OpenSSL 实际协商 TLS 1.3 / X25519 / AEAD-AES256-GCM-SHA384。
+- HTTPS rolling reload 收敛后 16 次动态首页 BYPASS-FPC 覆盖四 Worker，12.32–42.41ms，全部 `<70ms`。HTTP 独立实例 `ai-test-wls-common-http-20260713-0931` 约 2 秒 4/4 READY；首页 c32×10,000 为 14,575.29 QPS、p95 4.025ms，动态首页 8 次 13.58–37.65ms。
+- Browser 在 WLS 4/4 READY 时重载 `https://pa3f84a7b.weline.test:9885/`：标题、导航、文档/API/后台入口可见；重载 `https://pa3f84a7b.weline.test:9885/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/admin/login`：管理员、密码和登录按钮可见；两页 Console error 均为 0，裸 `/admin/login` 由真实 HTTP 核对为 404。文档中心 `/dev/tool/docs` 可见且 Console error 为 0，但不索引 Server 私有架构文档；Browser 安全策略拒绝 `file://`，因此架构 Markdown 用 `git diff --check`、在线文档索引边界与源码内容三项记录，不伪报文件页面渲染成功。
+- 新增不可变 `HttpProtocolSelection` 与 WLS-owned Caddy 协议边缘：HTTPS 默认公开 h3/h2/h1，h3 使用 QUIC/UDP，h2/h1 使用 ALPN；Caddy 复用 TLS session ticket、h2/h3 stream 和私有 h1 upstream 连接池。
+- `server:start` 在任何 Master/Worker 创建前探测 Caddy v2、reverse proxy 与 QUIC 构建；缺失时按 macOS/Linux/Windows 包管理器自动安装，安装锁总 deadline 30 秒，安装后重新验证，失败不静默降级。
+- Direct 专用实例 `ai-test-http-auto-20260713-2016`（9894）与 Dispatcher 实例 `ai-test-http-dispatcher-20260713-2105`（9895）均实际返回 HTTP version 1.1/2/3；TLS session 首连 `New`、二连 `Reused`，h2/h3 多请求复用同一连接。
+- 协议边缘使用 loopback + 每实例 256-bit token 认证私有 Worker，内部 Header 在进入模块前删除；两个拓扑直打 Worker 均 403，裸 `/admin/login` 404，带 Key 登录页 200。
+- 修复 Dispatcher 协议边缘 FPC identity：Worker fast path 不再把公开 scheme 固定为 `http`，只采信已认证 trusted proxy 的 `X-Forwarded-Proto`。Dispatcher 首页从每请求 MISS/完整渲染的 98.24 QPS 恢复为 Process FPC HIT，10,000 请求 0 错误、4,516 QPS、p95 21.656ms；复跑 4,419 QPS。
+- Direct rolling reload 使用 surge READY → edge config digest active ACK → 旧槽排水；Dispatcher 逐槽 reload 后仍 6/6。当前 Direct 10,000 请求复跑 0 错误、4,651 QPS；高负载噪声下尚未用五轮中位证明相对 Dispatcher +20%，未把早先单次峰值伪记为稳定门禁。
+- 临时 localhost whitelist 已恢复为 `false`，两实例重新两阶段发布正式策略；h1/h2/h3、FPC、后台 Key 与私有端口门禁在正式策略下复核通过。
+- Browser 最终验收使用专用 Direct 9894：默认首页标题与文档/API/后台入口可见；带 Key 登录页标题为“登录 Weline 管理面板”，管理员、密码、记住我和登录按钮可见；两页 Console error/warn 均为 0。未操作生产 9981。
+- 协议边缘连接池身份边界已补齐：Caddy 的私有 h1 keep-alive 会承载多个公网客户端，连接级 PROXY v2 不能表达每请求身份。Direct Worker 与内部 Dispatcher 仅在 edge 配置已启用且 peer 为 loopback 时跳过每 IP transport 配额，实例总连接/总速率/超时仍保留；真实客户端的 IP/CIDR、Ban、请求限流和攻击规则继续由 WorkerPolicyKernel 从 token 认证后的逐请求 envelope 执行。
+- 边界修复后两个实例完整停启约 2 秒 READY；正式策略下 h1/h2/h3 均 200、FPC HIT、裸/带 Key 后台 404/200、私有入口无 token 403。HTTP/2/3 并行请求每种协议都只建立 1 条公开连接，TLS 1.3 首连 New/二连 Reused。正式 health c128×10,000：Direct 3,541.13 QPS、Dispatcher 3,125.11 QPS，均 0 错误；临时专用源白名单首页 c32×10,000：Direct 4,931.71、Dispatcher 5,200.72 QPS，均 0 错误。白名单随后恢复 false 并重新 ACK 正式 digest。
+- 性能未伪报完成：正式首页单源首次压测的 7,005 个失败全部是默认 `3000/60s/IP` 返回 429；当前代动态 READY 证明 Direct 201.76–262.89ms、Dispatcher 210.29–251.07ms，仍未达到 `<70ms`，Direct 相对 Dispatcher +20% 也未由五轮中位证明。
+- 自动验证结束后已停止 `ai-test-http-auto-20260713-2016` 与 `ai-test-http-dispatcher-20260713-2105`；9894/9895、28097–28104、28168 的 TCP/UDP 监听均已释放。共享 Session/Memory 仍由其它实例使用，未做越权清理。
+- 2026-07-13 22:18 后用新专用实例重新验证协议层：强制 HTTP/1.1、HTTP/2、HTTP/3 均为 200；Alt-Svc 状态首次为 h2、第二次自动升级 h3；TLS 1.3 session 首连 `New`、二连 `Reused`；h2/h3 各 16 路并行请求均只建立 1 条公开连接。
+- 当前 Direct 首页 c32×10,000 五轮全部 0 错误，QPS 中位 7,853.61、p95 中位 6.082ms；Dispatcher 五轮全部 0 错误，QPS 中位 5,775.71、p95 中位 9.052ms。Direct QPS 高 35.98%、p95 低 32.81%，通过两项 20% 对照门槛。压测仅临时放行专用 loopback 测试源；`wls.attack_detector.ip_whitelist.enabled` 已恢复 `false`，两个实例均重新发布正式策略。
+- READY 首渲染根因已修复：慢但有效的第一次冷链渲染不再直接成为 READY 性能证明，而是在同一有界 attempt 预算内复验已填充的进程缓存。Direct rolling reload 后 4 Worker 为 12.80–18.75ms；Dispatcher 为 12.08–21.24ms；Direct 完整停启约 2 秒后 4 Worker 为 16.48–18.70ms，全部 `attempts=2`、FPC BYPASS、`<70ms`。
+- 当前代码代故障中压：c128×100,000 首页压测中 SIGTERM Worker #2，100,000/100,000、0 错误、6,953.05 QPS；替补 PID 14713 约 1.389 秒 READY，同轮处理 7,327 请求，最终 4/4。
+- 当前协议边缘长稳：c128×1,000,000 首页为 1,000,000/1,000,000、0 错误、6,066.32 QPS、p95 28.861ms、p99 51.702ms、max 518.477ms；四 Worker 分布 24.73%–25.45%，无意外重启。随后追加 100,000 请求后四 Worker RSS 与长稳结束采样完全一致，确认进入平台期。
+- Browser 复验 `https://pa3f84a7b.weline.test:9896/`：默认首页标题/H1、文档/API/后台入口可见；`/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/admin/login` 显示管理员、密码、记住我和登录按钮；两页 Browser error/warn 均为 0。真实 HTTPS 同代复核裸 `/admin/login` 404、带 Key 200。生产 9981 未操作。
+- 长稳结束后 loopback whitelist 已恢复 `false`；Direct/Dispatcher 分别激活正式 digest `2dcd5277…` / `4b5abaf8…`，无 staged 策略。
+- 路由级翻译缓存根因定位：Shared Memory 的历史 `frame_too_large bytes=1667263` 来自 21,055 条/约 1.88MB 的全 locale 字典，而非 TLS、HTTP/3 或首页 FPC。WLS 已停止全模块 preload；Worker 使用本地精确词哈希、当前请求模块快照、Shared phrase 快照和 `source_module IN (...)` 动态 Provider 回填，I18n Parser 收敛为 Framework Parser 兼容桥。
+- 专用 16 Worker 实例 9898 的旧超大帧计数保持 459，最新一条仍停在 15:44:32；新代码多轮停启、首页和后台请求未新增拒绝。前三轮无 DB 动态快照时 batchCreate 为 115/118/106ms、完整内部启动为 2797/2328/2208ms；启用模块范围 DB 快照后的首次冷启 batchCreate 140ms、完整内部启动 3122ms，待共享快照热启复核后再计算正式中位数。
+- 同一实例强制 HTTP/1.1、HTTP/2、HTTP/3 均返回 200；HTTP/3 客户端报告 version=3。OpenSSL 3 强制 TLS 1.3 首次 `New`、第二次 `Reused`，首页为 Process FPC HIT，裸 `/admin/login` 404、带 Key 200。并行发起的两组 benchmark 仅用于 101,000 请求 0 错误稳定性观察，不计入正式 QPS；主机另有非本任务 Worker 持续占用约 98% CPU，正式性能轮必须串行并记录负载。
+- 数据库审计确认 `zh_Hans_CN` 有 21,055 条历史译文且 `source_module` 全空；持久 Worker 因此改用精确词回源，不再把模块范围查询 miss 当成全量加载理由。链路为模块 CSV `Worker L1 -> Shared 模块快照 -> CSV`，再到 `Worker 单词 L1 -> Shared 单词记录 -> md5(word+locale) 精确 DB`。
+- 精确无归属词实测返回 `16px`：首次 L2/DB 路径 14.183ms，随后同 Worker 常驻变量 0.002ms，Worker 只新增 1 个词项。翻译请求 cleanup 不清 L1，cache epoch 才清；瞬时 Shared/DB 错误不写进程负缓存。
+- 定向测试发现并修复已有模块名边界：`getFullModuleName()` 只识别 `Weline_*`，把合法 `WeShop_Affiliate` 错写成 `Weline_WeShop_Affiliate`。现在任意 `Vendor_Module` 均保持原名，短名才补 `Weline_`；`ParserRequestModuleCacheTest` 1/1、5 assertions 通过。
+- Master endpoint/PID index 发布竞态已收口：status/读取使用经过 instance/state/heartbeat/epoch/PID/进程身份全校验的新鲜 lease 做只读 overlay，不回写 endpoint；破坏性 stale cleanup 删除前二次校验。人为损坏 endpoint 后能恢复识别真实 Master/16 Worker，endpoint mtime 不变，正常 stop 仍清理全部本实例进程。
+- 最终 16 Worker rolling reload 完成后，16 个动态 READY 为 10.81–21.77ms；实例保持 17/17。正式策略首页 c32×2,500 为 0 错误、7,090.55 QPS、p95 8.963ms；health c128×100,000 为 0 错误、12,286.74 QPS、p95 18.541ms、p99 30.351ms、max 119.856ms，16 个 Worker PID 均未变化。
+- 最终协议/安全/缓存复核：h1/h2/h3 实际 1.1/2/3，首页 Process FPC HIT、Alt-Svc h3，裸 `/admin/login` 404、带 Key 200。Browser 对首页和带 Key 登录页可见，Console error/warn 为 0。`frame_too_large` 历史计数仍为 459，最新记录仍为 15:44:32，没有新增全词典帧。
+- 现有测试：`StatusCommandTest` 9/9、16 assertions；`ServiceOrchestratorStartupTest` 93/93、440 assertions。`StopCommandFastLocalCleanupTest` 的既有匿名测试类仍使用旧方法签名，在第 3 项加载前 compile error；本轮未修改 Stop 或测试产物，以真实 16 Worker stop/recovery 证据替代该夹具，不伪报通过。
+- 自动验证结束后已正常停止 `ai-test-wls-phrase-20260714-0035`（9900）和 `ai-test-http3-extreme-20260713-2235`（9896）；两端口 TCP/UDP listener 均为 0，抽查 Master/Edge/Worker PID 均已退出。生产 9981 未操作。
+- 提交 `8fdcd24ce`（`perf(wls): harden startup and phrase hot paths`）只包含 15 个 `app/code/Weline/**` 文件；AGENTS.md、CLAUDE.md 未暂存。功能分支与 `master` 已分别 fast-forward 推送到 Gitee/GitHub，四个远端引用均为同一 SHA；分支和隔离 worktree 保留。
+- `dev` 当前含另一智能体的独立 Customer/2FA 提交 `9d3f8f276`，与本功能分支已经分叉；未 force、未覆盖、未代替对方合并。既有分项/分仓预检仍因子项目大量多人脏改动而安全跳过，不删除或恢复任何文件。
+- 本地 `master` 未被任何 worktree 检出且是本提交直接祖先，已仅快进引用到 `8fdcd24ce`；主工作区仍保持另一智能体的 `codex/welineframework-2-architecture` 与全部脏改动，未切换、未更新文件。功能 worktree/分支继续保留。
+- 2026-07-14 续审发现协议边缘 TLS 配置缺口：PHP Worker 已校验实例级 `wls.ssl.protocols/key_exchange_profile`，但 Caddy 配置仍硬编码 TLS 1.2–1.3，且 Master 没有把实例级 SSL 运行配置合并到 ServiceContext；因此 TLS 1.3-only 与 performance group 在默认 h3/h2 公网握手上并不完整生效。GitNexus 对 `ProtocolEdgeRuntime::writeConfig`、`MasterProcess::applyRuntimeWlsConfig` 和 TLS profile 解析的上游影响均评为 LOW，进入定向修复与独立实例复验。
+- 已统一 PHP/协议边缘 TLS 契约：实例级 `wls.ssl` 进入 Master ServiceContext，Caddy min/max 与 X25519/P-256 使用同一 TLS profile 解析结果；TLS 1.3-only 生成 `protocols tls1.3 tls1.3`，system profile 保持系统曲线选择。
+- 发现并收口滚动 reload 的真实复用缺口：Caddy 对 upstream-only 配置更新也会重新 provision TLS app，默认进程内 STEK 会令旧票据从 `Reused` 退化为 `New`。协议边缘现在把 Caddyfile 编译为保留 `{}`/`[]` 类型的原生 JSON，并注入实例隔离 `tls.stek.distributed + caddy.storage.file_system`；依赖门禁同时验证两模块，缺失则在创建 Master/Worker 前触发现有自动安装或 fail-closed。
+- 首轮真实启动曾因关联数组把 Caddy 空对象 `{}` 误编码成 `[]` 而在 6 秒 fail-fast；日志明确定位后改为 `stdClass` 保真编译。复跑完整冷启动约 1 秒完成 4/4 Worker 预热与 Protocol Edge READY，没有绕过失败门禁。
+- TLS 1.3 票据复核：同一票据跨两轮 Worker upstream reload 与一次完整 Protocol Edge 停启均返回 `Reused, TLSv1.3`；STEK 只存于当前实例 `var/server/protocol-edge/<instance>/stek`，不与其它实例共享。
+- 变更后协议/安全矩阵：HTTP/1.1、HTTP/2、HTTP/3 实际 version 均正确；TLS 1.2 fallback 与 TLS 1.3 均 200；首页 Process FPC HIT、Alt-Svc h3；裸 `/admin/login` 404、带 Key 200；四个私有 Worker 端口无 token 均 403。
+- 变更后性能：首页 c32×2,500 为 10,736.43 QPS / p95 4.089ms；health c128×100,000 为 15,084.92 QPS / p95 11.960ms；fresh TLS c32×2,000 为 3,246.75 QPS / p95 11.055ms / max 14.507ms / Worker `max/min=1.131`，全部 0 错误。与 rolling reload 重叠的 health c128×100,000 仍为 0 错误、14,065.69 QPS、p95 13.670ms、max 50.546ms，最终收敛为 4/4 canonical Worker。
+- Browser 同代验收 `https://pa3f84a7b.weline.test:9904/` 首页标题/H1及文档、API、后台入口可见；带 Key 登录页显示“登录 Weline 管理面板”、管理员/密码、记住我和登录按钮，Console error/warn 为 0。未提交登录表单，生产 9981 未操作。
+- 用户补充的 I18n Worker 常驻语义续审确认主体已在 `8fdcd24ce` 落地，但热 L1 命中前仍会通过版本 cache key 执行 `filemtime/filesize`。GitNexus 将 `getCurrentLayeredWords/getLayeredWords/loadModuleWords/loadLocaleWords` 评为 CRITICAL（覆盖 `__()`、前后端模板、JS 翻译接口和 WLS READY）；本轮只调整缓存键和 early return，不改翻译优先级、模块归属、exact-word DB 协议或 cache epoch。
+- 持久 Worker 现在先用 `locale + sorted request modules` 的纯内存 scope key 命中路由层，模块 L1 又在模块元数据/文件版本前返回；只有 cache epoch 清空 L1 后的首次访问才计算版本、访问 Shared Memory，Shared miss 才解析本模块 CSV。全局历史词仍按 Worker 单词 L1、Shared 单词记录、`md5(word + locale)` 精确 DB 动态累积，上限 32,768。
+- 专用 9904 rolling reload 5.5 秒完成，4 个新 Worker READY 动态首渲染为 9.44–10.39ms。cache epoch 后第一位 shared rebuild owner 为 78.63ms，随后覆盖全部 4 Worker 的 12 次动态请求为 8.93–17.32ms，全部 200；正式 first-render 命令为 5.49ms、FPC MISS、通过 `<70ms`。
+- I18n 续审后的 h1/h2/h3 实际版本为 1.1/2/3 且全部 200，裸/带 Key 后台为 404/200。首页 c32×2,500 为 0 错误、9,625.60 QPS、p95 4.782ms；health c128×10,000 为 0 错误、10,604.18 QPS、p95 21.572ms。压测时另一个非本任务 Worker 持续占用 100% CPU，数据仅作本轮无回归/无长尾证据，不替代干净主机五轮中位。
+- 新 Parser 语法、`git diff --check`、Semgrep 85 条规则（0 finding）、architecture:check（83 模块/4045 PHP/7171 引用）、framework:compile（39 Provider/0 延迟）与 policy check（12 条）均通过；Browser 重载首页标题/H1/文档/API 可见，Console error/warn 为 0。
+- TLS/STEK 独立提交为 `0e103d699`，I18n 严格进程 L1 提交为 `0ce4c6e73`；Gitee/GitHub 的功能分支和 master 均以 fast-forward 推送到 `0ce4c6e73`，本地未检出的 master 引用同步快进。`AGENTS.md/CLAUDE.md` 未暂存、未恢复，功能分支与隔离 worktree 保留。
+- Browser 最终复验带 Key 登录页显示完整中文表单且 Console error/warn 为 0；验收标签已关闭。生产 9981 未操作。
+- 自动验收后通过统一 stop flow 停止 `ai-test-wls-tls-20260714-011246`；9904 TCP/UDP、28107–28110 私有端口和 38107 控制端口 listener 均为 0，Master/Edge/4 Worker PID 全部退出。仅清理本任务 `/tmp/wls-tls13-*` 等临时证据和 4 个 `ai-config-tls*` 配置探针目录；共享服务及其他智能体实例未触碰。
+- Linux Colima Ubuntu 24.04.4 / PHP 8.4.23 已完成真实 direct 探测、ext-event 3.1.4 自动安装、h1/h2/h3、TLS 1.3 session reuse、h2/h3 多路复用、后台 Key 404/200、16 Worker 冷启动、单槽恢复和百万长稳；系统 Caddy 2.6.2 通过真实 HTTP/3 listener probe，未因裁剪 build-info 被误拒绝。
+- Linux 10 次冷启动 CLI 为 4.231–5.810s，`batchCreate` 120–383ms，内部全部 READY 2.827–3.752s。把动态预热尝试数从 3 降为 1 的五轮退化到约 11–16s，已回退；回退后三轮 4.511/6.233/4.403s，不删除失败数据。
+- Linux 1,000,000 请求为 0 错误、11,237.76 QPS、p95 21.118ms、p99 26.373ms、max 50.927ms；追加 100,000 请求 PID/RSS 稳定，Worker kill 后 856ms READY。最终实例动态首页 1.60ms、Process FPC HIT。
+- macOS 最终实例 `ai-test-wls-final-mac-20260714-0320`（9930）约 2.424s READY；h1/h2/h3 实际 1.1/2/3，TLS 1.3 ticket 跨 rolling reload 仍为 Reused，h2/h3 各 16 路只建立一条公开连接，裸/带 Key 后台为 404/200。
+- macOS 首页 c32×2,500 为 0 错误、11,093.33 QPS、p95 4.225ms；health c128×100,000 为 0 错误、8,371.54 QPS、p95 24.677ms；fresh TLS 1.3 c32×2,000 为 0 错误、3,186.85 QPS、p95 12.114ms。Browser 首页与后台登录表单可见，Console error/warn 为 0。
+- Linux VM 与 macOS 不能同时把同一个宿主 `var/` 当成节点本地运行目录；并发启动会竞争 Session/Memory token 文件。没有为此修改高风险共享服务生命周期符号，文档明确 `var/` 必须节点隔离。
+- 当前仍缺 Windows 原生 Dispatcher/event DLL 和 FPM 完整矩阵，因此不把跨平台总计划标记 complete。
+- 最终静态门禁：8 个 PHP 文件语法通过，benchmark 定向测试 8 项通过（1 项按既有条件跳过），Semgrep 以 `HEAD` 为基线扫描 85 条规则后新增 finding 为 0；`git diff --check`、`architecture:check`（83 模块/4045 PHP/7171 引用）、`framework:compile`（39 Provider/0 延迟）和 `server:policy:check`（12 条规则）全部通过。
+- 最终状态核对中 macOS 专用实例仍为 Direct 4/4 Worker + Protocol Edge READY，四个动态首页回执 9.35–9.50ms。自动验收结束后已用统一 stop flow 停止 `ai-test-wls-final-mac-20260714-0320`；9930 TCP/UDP、28133–28136 私有端口、38133 控制端口及对应 PID 全部释放。另一智能体 9890 实例仍保持运行，未触碰。
+- 核心提交 `848c2c0f9` 已以纯 fast-forward 推送至 Gitee/GitHub 的 `codex/wls-tls13-extreme-performance` 与 `master`，四个远端引用核对为同一完整 SHA；本地未检出的 master 引用也只做原子快进。没有 force、reset、merge commit、分支/worktree 删除或文件恢复，`AGENTS.md/CLAUDE.md` 继续保持未暂存。
+- FPM 对照已在同一 macOS/PHP 8.4.22/代码代上补齐：PHP-FPM 4 static children + Caddy h1/h2c，WLS 为 4 Worker `auto -> direct/shared_fd/event/stream`。带同一默认站点/语言/币种 Cookie 的首页仅 `data-request-id` 不同，归一后 SHA-256 完全一致；静态 SVG 响应也完全一致。FPM/WLS 裸 `/admin/login` 均为 404，带合法 backend key 的登录页均为 200。
+- FPM c32×1,000 五轮全部 0 错误，QPS 中位 73.09、p95 472ms、p99 496ms、max 500ms；c1×200 为 23.20 QPS / p95 44ms，c128×1,000 为 77.32 QPS / p95 1,690ms。同代 WLS 在不突破默认 `3000/60s/IP` 限流窗口的正式轮中，c32×400 五轮中位 15,784.70 QPS / p95 3ms / p99 6ms / max 7ms；c1×200 为 4,535.87 QPS，c128×500 为 13,987.19 QPS / p95 32ms，全部 0 错误且无非 2xx。早先超出限流预算的 AB 轮次明确作废，不计入 QPS 证据。
+- Browser 真实验收 FPM `:9940` 与 WLS `:9941`：标题、H1、7 个主体区块、18 个链接均一致，两页 Console error/warn 均为 0。FPM 对照项因此从剩余矩阵移除；全计划现只保留 Windows 原生 Dispatcher/event DLL/启动与长稳门禁，不用 macOS/Linux/FPM 结果代替。
+- Windows 定向静态门禁首轮暴露 `Stop::isWindowsPlatform()` 为 private，现有测试无法注入 Windows 平台，误走 POSIX/`Processer::killProcessTreeByPid()` 分支。GitNexus 上游影响为 LOW（2 个直接调用、8 个总符号、1 个模块、0 条识别流程）；只将可见性改为 protected，默认 `PHP_OS` 判定和停止语义不变。Runtime/Start/Windows taskkill/socket 定向集现为 30/30、81 assertions。
+- 修复后专用 `ai-test-stop-platform-20260714-0407` 在 9942 以 Direct 2 Worker 约 2 秒 READY，两个动态首渲染为 9.40/9.54ms，首页 200、裸 `/admin/login` 404。统一 `server:stop` 流程完整退出 Master/Worker，9942/38145 和稍后自治退出的 28173/28174 均无监听；9890/9981 未触碰。
+- 本轮最终门禁：Stop PHP 语法、30/30 定向测试（81 assertions）、Semgrep 85 条规则 0 finding、`git diff --check`、architecture:check（83 模块/4045 PHP/7171 引用）、framework:compile（39 Provider/0 延迟）、policy check（12 条）全部通过。GitNexus 强制重建后 staged 检测为 4 文件/5 符号、0 影响流程、LOW；未暂存的 `AGENTS.md/CLAUDE.md` 明确排除。
+- 用户确认 WLS 必须自己拥有公网协议栈，不能把 Caddy 当作默认服务器。现已将产品边界固定为：WLS Native Protocol Engine 直接拥有 TLS/QUIC/ALPN、h3/h2/h1 自动协商、session ticket、stream multiplexing、READY upstream keep-alive 与 atomic reload；Windows Dispatcher 只在原生入口之后承担 WLS 内部 L4 调度。Caddy 只保留 `wls.http.protocol_edge=caddy` 显式迁移兼容，不是默认依赖或生产推荐。
+- 已移除 Worker 每进程输出的 Nginx/Caddy 前置代理旧提示，Master/Start 统一显示 WLS 原生协议所有权；架构图、部署指南、启动/关闭链路、EventBuffer 说明和安全规则推演同步改为 Native 权威表述。历史 Caddy 压测数据保留并明确标记为替换前基线，避免篡改验证记录或将旧数据冒充 Native 结果。
+- 2026-07-15 最终 Native 代码代在 macOS 专用实例 `ai-test-mac-compile-20260715`（10976）完成正确 `/_wls/health` 1,000,000 请求门禁：1,000,000/1,000,000 均为 HTTP/2 200，0 错误，14,939.53 QPS，p95 7.950ms、p99 12.097ms、max 55.894ms；四个 Worker 命中 252,540/251,406/249,630/246,424，PID 全程未变化，RSS 在预热后下降并进入平台期。早先误用 `/__wls_health` 得到的 429/404/502 轮次已明确作废，绝不计入稳定性证据。
+- Worker 请求数回收改为显式 opt-in，默认 `worker_max_requests=0`；显式阈值到达后先关闭公开 listener 进入 drain，不再等待持久连接表自然归零，避免压力结束时多个超限 Worker 同批退出造成 502。该修复后的百万门禁无意外 Worker 重启。
+- Windows 11 ARM / PHP 8.4.23 专用 Dispatcher 实例 `ai-test-win-reuse-20260715`（10975）完整启动约 2 秒，状态为 Master + Dispatcher + Native Protocol Edge + 4 Worker，6/6 READY；四个动态首渲染为 26.86–31.23ms。Windows 命令行身份解析已排除整段引号尾部，rolling reload 能逐槽完成，替换 Worker 的单槽 spawn 为 7–8ms、READY 为 0.70–0.84s。
+- Windows `pid_index.json` 不再用可能被共享读句柄拒绝的临时文件覆盖：POSIX 继续原子 rename，Windows 在同一目标文件上 `LOCK_EX + truncate + full write + flush/fsync`。完整停启和 rolling reload 后，当前 4 个 Worker PID 5992/5948/9244/6768 均存在于 pid index、独立 PID record 和 name index，且每个 record 都带 `pname + launch_id`；没有再出现“进程已 READY 但 pid index 丢槽”的情况。
+- Windows 正确 `/_wls/health` HTTP/2 c64×100,000 报告为 `C:\\WelineFramework\\var\\log\\wls\\benchmark_report_20260715_023642_160935_wls-health_pid7724.json`：100,000/100,000 均为 200，0 错误，5,277.49 QPS，p95 19.009ms、p99 24.114ms、max 752.022ms；四 Worker 分布 25.148%/25.124%/24.918%/24.810%，压测后仍为 6/6 READY。Windows PHP/libcurl 不具备 HTTP/3 客户端能力时，`server:benchmark --http-version 3` 现在立即明确报告客户端限制，不再生成 10,000 个伪服务器错误；WLS 服务端 HTTP/3 已由外部 Go 客户端验证。
+- 为保持下游扩展兼容，`Start::syncWlsMaintenanceMode()` 恢复历史两参数 `void` 覆盖签名，required-sync 作为一次调用的内部状态传递；`Stop::releaseSharedStateConsumersForInstance()` 同样恢复历史单参数 `void` 覆盖签名，restart-cleanup preservation 只在调用包装层传递。GitNexus 对两处上游影响均为 LOW，旧匿名扩展不再发生 PHP compile fatal，运行时 required/preserve 语义保持不变。
+- 最终静态门禁：31 个修改/新增 PHP 文件语法通过；Native Go `gofmt + go test ./... + go vet ./... + go build -trimpath` 通过；`git diff --check` 通过；`framework:compile` 连续两轮成功（83 模块、39 QueryProvider、0 deferred）；`architecture:check --json` 为 83 模块/4,046 PHP/7,173 引用、0 finding；`server:policy:check` 为 12 条规则且 valid。Semgrep `auto` 在 36 个修改文件执行 168 条适用规则，3 个 finding 均位于 HEAD 已存在的 `removeLogFile()/execute()` 通用 `unlink/exec/shell_exec` 行，本次新增行 finding 为 0。
+- 相关现有测试为 118/118、535 assertions 全部通过，覆盖 ObjectManager 默认对象恢复、Processer PID 写入、Benchmark、Start runtime config、LongRunningPhpRuntime、Orchestrator startup、Session 生命周期和 Worker recycle。扩大到 Server Unit + Framework Process/ObjectManager 的 931 项套件后为 8 errors、26 failures、2 skipped，其余通过；失败已逐项归类为当前分支既有旧契约/环境夹具（例如已移除辅助方法、共享 sidecar 旧停机预期、测试引用不存在的 `Aiweline\\Admin` 类），未把整套测试伪报为全绿，也未通过回退新架构来迎合旧断言。
+- Browser 同代验收专用 `https://pa3f84a7b.weline.test:10976/`：默认首页标题/H1、文档/API/后台入口可见；裸 `/admin/login` 可见结果为 `Not Found`；`/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/admin/login` 显示“登录 Weline 管理面板”、管理员/密码/记住我/登录按钮，Console error/warn 为 0。验收标签已关闭，生产 9981 未操作。
+- 2026-07-15 继续执行 P4 Worker 收敛：HTTP 与 stream-TLS 重复维护的后台登录回跳地址、货币/语言路径折叠和旧参数清理已迁入 `worker_runtime_common.php`；两者统一使用 WLS 原始公开端口语义，listener、TLS、HTTP frame、EventBase 和写缓冲不变。入口行数收敛为 HTTP 5,037、stream-TLS 6,028、EventBuffer 2,053，公共运行时 519 行，四文件净减少 87 行。
+- 专用实例 `ai-test-backend-return-20260715-0945`（10980）约 2 秒达到 Direct/shared_fd/event/stream、Master + Native Edge + 4 Worker 共 5/5 READY，动态首渲染 10.48–10.93ms。实际 H1/H2 health 为 200，裸 `/admin/login` 为 404、带 Key 登录为 200；受保护通知详情无会话时 302 到带 Key 登录地址。TLS 1.3 两个 fresh TCP 连接的第二次明确输出 `SSL reusing session`，协商 `TLS_AES_128_GCM_SHA256 / X25519`。
+- 同代 HTTP/3 health 10,000/10,000、0 错误、13,514.04 QPS、p95 4.057ms、p99 5.197ms、max 16.036ms；HTTP/2 health 100,000/100,000、0 错误、13,888.49 QPS、p95 15.596ms、p99 20.667ms、max 51.516ms。Browser 首页与带 Key 登录页可见，表单字段完整，两页 Console 日志为空。
+- 静态门禁通过：PHP lint、`git diff --check`、architecture:check（83 模块/4,046 PHP/7,167 引用/0 finding）、framework:compile（39 Provider/0 deferred）、12 条策略检查、Semgrep 85 条规则/3 文件 0 finding。自动验收后标准 stop flow 已释放 10980 TCP/UDP、29183–29186、39183 与全部 Master/Edge/Worker PID；生产 9981 未操作。Windows 空闲环境 4/16 Worker 规模门槛仍待复验，总计划不标记 complete。
+
+## 2026-07-15 Go 协议边缘撤销与 HTTP/1.1 真实能力复验
+
+- 用户明确要求删除 Go 语言文件。原 `native/protocol-edge` 是仓内自研的 TLS 1.3、ALPN、HTTP/2、HTTP/3/QUIC 和连接复用协议边缘；本轮删除其全部受版本控制的 Go 源码及 `go.mod/go.sum`，同时移除 Go 工具链下载、校验、构建、缓存、发布和 Native 探测逻辑。
+- 删除前的动态后台并发复核发现真实阻塞：两轮 c128 共出现 235 次 30 秒 upstream response-header timeout。该证据撤销此前“Native HTTP/2/3 已稳定”的发布结论，历史 Native QPS 仅保留为失效实验记录，不能再作为当前能力或门槛证据。
+- 默认运行能力收敛为 WLS Worker 原生 HTTP/1.1 + TLS 1.2/1.3；`protocol_edge`、Alt-Svc 默认关闭。显式 Native 配置会在创建子进程前 fail-closed；Caddy 只保留为用户显式选择的兼容适配器，不是默认依赖，也不会自动安装 Go。
+- 三个 Worker 入口继续共享 Fiber 请求上下文入口，HTTP 与 stream TLS Transport Adapter 不再重复该实现；架构与部署文档同步标注当前能力、已撤销的 Go 路径和未来由 WLS Transport Adapter 原生实现 HTTP/2/3 的边界。
+- 专用实例 `ai-test-http1-no-go-20260715-1028`（10982）约 2.3 秒达到 Direct 4/4 READY，动态首渲染 11.04–11.89ms；首页 HTTP/1.1 200 且 Process FPC HIT，客户端请求 h2 时正确回退到 1.1，裸/带 Key 后台为 404/200，TLS 1.3 协商成功。
+- 首页 c32×1,500 为 1,500/1,500、0 错误、11,419.44 QPS、p95 5.081ms、p99 15.646ms、max 19.982ms。带 Key 动态后台 c128×1,200 为 1,200/1,200、0 错误、217.70 QPS、p95 824.151ms、p99 933.006ms、max 955.448ms；旧协议边缘的 30 秒请求挂起不再出现。
+- Browser 验收首页与带 Key 登录页均可见，登录字段完整，Console 为空；裸后台由同代真实 HTTPS 返回 404。自动验证后已通过标准 stop flow 停止实例，10982/私有端口无监听，生产 9981 未操作。
+- PHP lint、`architecture:check`（83 模块/4,046 PHP/7,158 跨模块引用）和运行状态复核通过。当前总计划仍未完成：HTTP/2/3 需要新的 WLS 原生 Transport Adapter，Windows 空闲环境 4/16 Worker 门槛也仍待复验。

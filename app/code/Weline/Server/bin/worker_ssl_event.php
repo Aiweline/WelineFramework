@@ -318,14 +318,8 @@ $runtime = null;
 $runtimeError = null;
 $fpcFastPath = null;
 try {
-    $runtime = new \Weline\Framework\Runtime\WlsRuntime();
-    $runtime->bootstrap();
-    $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
-        \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Framework\Router\FullPageCacheCoordinator::class
-        ),
-        $runtime,
-    );
+    $runtime = wlsBootstrapFrameworkRuntime();
+    $fpcFastPath = wlsCreateWorkerFullPageCacheFastPath($runtime);
     \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker runtime bootstrapped on {$host}:{$port}");
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();

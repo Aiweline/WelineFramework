@@ -4,18 +4,21 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Contract;
 
 use Weline\Server\Service\Runtime\EffectiveTopology;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
  * 服务启动上下文
  *
  * 包含启动服务所需的全局信息。
- * 
+ *
  * RuntimeSelection 是拓扑、事件循环、TLS 引擎与监听模式的唯一事实源。
  * workerCount、workerBasePort 与 workerPort 仅描述本次启动的容量和端口分配。
  */
 class ServiceContext
 {
+    private ?bool $protocolEdgeEnabled = null;
+
     public function __construct(
         public readonly string $instanceName,
         public readonly int $epoch,
@@ -128,6 +131,28 @@ class ServiceContext
         return $this->runtimeSelection->isDirect();
     }
 
+    /**
+     * Optional native protocol edge (wls.http.protocol_edge=auto/native).
+     * Nginx remains the default public TLS/H2/H3 terminator when edge adapter is nginx.
+     */
+    public function isProtocolEdgeEnabled(): bool
+    {
+        if ($this->protocolEdgeEnabled !== null) {
+            return $this->protocolEdgeEnabled;
+        }
+
+        $httpConfig = $this->getConfig('wls.http', []);
+        return $this->protocolEdgeEnabled = HttpProtocolSelection::fromConfig(
+            ['http' => \is_array($httpConfig) ? $httpConfig : []],
+            $this->sslEnabled,
+        )->isProtocolEdgeEnabled();
+    }
+
+    public function isWorkerPublicListener(): bool
+    {
+        return $this->isDirect() && !$this->isProtocolEdgeEnabled();
+    }
+
     public function getEffectiveTopology(): EffectiveTopology
     {
         return $this->runtimeSelection->effectiveTopology;
@@ -151,7 +176,7 @@ class ServiceContext
 
     /**
      * 获取 Worker 数量
-     * 
+     *
      * 优先级：运行态字段 > envConfig
      */
     public function getWorkerCount(): int|string
@@ -203,7 +228,7 @@ class ServiceContext
 
     /**
      * 获取首个 Worker 端口
-     * 
+     *
      * 优先级：运行态字段 > 基于模式计算
      */
     public function getWorkerPort(): int

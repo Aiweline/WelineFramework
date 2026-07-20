@@ -46,6 +46,7 @@ $wlsRuntimeTopology = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
+$protocolEdgeTokenFile = '';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -80,6 +81,8 @@ foreach ($argv as $arg) {
         $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
+    } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
+        $protocolEdgeTokenFile = (string)\substr($arg, 27);
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -185,6 +188,11 @@ if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
+if ($protocolEdgeTokenFile !== '') {
+    $_SERVER['WLS_PROTOCOL_EDGE_TOKEN_FILE'] = $protocolEdgeTokenFile;
+    $_ENV['WLS_PROTOCOL_EDGE_TOKEN_FILE'] = $protocolEdgeTokenFile;
+    @\putenv('WLS_PROTOCOL_EDGE_TOKEN_FILE=' . $protocolEdgeTokenFile);
 }
 
 // 定义前端模式常量（供 WlsRuntime 使用）
@@ -843,10 +851,12 @@ try {
     $maxBufferedRequestBytes = $requestFramingLimits['max_buffer_bytes'];
     WlsLogger::info_('[PolicyKernel] ready topology=' . $wlsRuntimeTopology
         . ' digest=' . $workerPolicyKernel->policyDigest());
-    if ($wlsRuntimeTopology === 'direct') {
+    if ($wlsRuntimeTopology === 'direct' && $protocolEdgeTokenFile === '') {
         $workerOrdinal = ($workerId - 1) % \max(1, $workerCount);
         $workerPolicyKernel->bootConnectionAcceptGatePool(\max(0, $workerOrdinal));
         WlsLogger::info_('[AcceptGate] direct public accept enabled ordinal=' . \max(0, $workerOrdinal));
+    } elseif ($protocolEdgeTokenFile !== '') {
+        WlsLogger::info_('[AcceptGate] public connection gate owned by authenticated protocol edge; Worker L7 policy remains enabled');
     }
 } catch (\Throwable $policyError) {
     WlsLogger::error_('[PolicyKernel] bootstrap failed: ' . $policyError->getMessage());
@@ -1345,21 +1355,21 @@ $requestGcInterval = \is_numeric($configuredRequestGcInterval)
     : 512;
 $lastRequestGcCount = 0;
 
-// 最大请求数限制（可选的内存保护措施）。
+// 最大请求数限制是兼容性的显式 opt-in；默认长期常驻，由内存压力守卫在压实后仍超限时排水。
 // 固定相同阈值会让均衡负载下的所有 Worker 同时回收，形成全池空档；
-// 因此按稳定的 Worker 槽位错峰，不使用随机数，保证 Windows/macOS/Linux 行为一致且可测。
+// 显式启用时按稳定的 Worker 槽位错峰，不使用随机数，保证 Windows/macOS/Linux 行为一致且可测。
 $configuredMaxRequests = $wlsInstance['worker_max_requests']
     ?? $wls['worker_max_requests']
     ?? $wlsInstance['max_request']
     ?? $wls['max_request']
-    ?? 100000;
-$maxRequestsBase = \is_numeric($configuredMaxRequests) ? \max(0, (int)$configuredMaxRequests) : 100000;
+    ?? 0;
+$maxRequestsBase = \is_numeric($configuredMaxRequests) ? \max(0, (int)$configuredMaxRequests) : 0;
 $configuredRecycleStagger = $wlsInstance['worker_recycle_stagger_requests']
     ?? $wls['worker_recycle_stagger_requests']
-    ?? 2500;
+    ?? 10000;
 $recycleStaggerRequests = \is_numeric($configuredRecycleStagger)
     ? \max(0, (int)$configuredRecycleStagger)
-    : 2500;
+    : 10000;
 $maxRequests = $maxRequestsBase > 0
     ? $maxRequestsBase + (\max(0, $workerId - 1) * $recycleStaggerRequests)
     : 0;
@@ -2130,12 +2140,20 @@ while (true) {
         }
     }
     
-    // 最大请求数限制：处理超过指定请求数后优雅重启（可选的内存保护）
-    if ($maxRequests > 0 && $requestCount >= $maxRequests && empty($connections)) {
+    // 显式启用的最大请求数限制：达到槽位预算时立即停止接入并排水。
+    // 不能继续等待 empty($connections)：协议边缘会复用上游 Keep-Alive，等待会让
+    // 所有槽位在客户端连接统一释放时集中退出，造成短暂的全池空档。
+    if ($maxRequests > 0 && $requestCount >= $maxRequests && !$shouldExit) {
         WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，触发优雅重启");
         $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
-        $sendExitReasonToMaster($plannedExitReason);
         $shouldExit = true;
+        $ipcDraining = true;
+        $drainStartTime = \time();
+        if ($socket && \is_resource($socket)) {
+            @\fclose($socket);
+            $socket = null;
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+        }
     }
     
     // 构建 stream_select 读数组
@@ -2316,6 +2334,7 @@ while (true) {
         $requestBuffers,
         $connectionLastActivity,
         $connectionPeerIps,
+        $protocolEdgeTokenFile !== '',
         $sharedListenerBound ? 1 : 64,
     );
 
@@ -2726,6 +2745,7 @@ function wlsAcceptHttpConnections(
     array &$requestBuffers,
     array &$connectionLastActivity,
     array &$connectionPeerIps,
+    bool $protocolEdgeIngressEnabled = false,
     int $maxAcceptPerLoop = 64,
 ): void {
     if (!$socket || !\is_resource($socket) || !\in_array($socket, $read, true)) {
@@ -2754,9 +2774,14 @@ function wlsAcceptHttpConnections(
         $acceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
         if ($acceptGates !== null) {
             $peer = @\stream_socket_get_name($conn, true);
+            $peer = \is_string($peer) ? $peer : '';
+            $trustedProtocolEdge = $protocolEdgeIngressEnabled
+                && \Weline\Server\Protocol\ProxyProtocolV2::isLoopbackPeer($peer);
             $decision = $acceptGates->accept(
                 (string)$connId,
-                \is_string($peer) ? $peer : '',
+                $peer,
+                null,
+                $trustedProtocolEdge,
             );
             if (!$decision->allowed) {
                 @\fclose($conn);
@@ -3496,7 +3521,15 @@ function wlsDispatchRequestFiberStep(
         if ($fpcCacheEnabled
             && $fpcFastPath instanceof \Weline\Server\Service\WorkerFullPageCacheFastPath
         ) {
-            $fpcHit = $fpcFastPath->lookup($policyDecision, 'http');
+            $forwardedScheme = \strtolower(\trim(\explode(
+                ',',
+                (string)($policyDecision->headers['x-forwarded-proto'] ?? ''),
+                2,
+            )[0] ?? ''));
+            $fpcScheme = $policyDecision->trustedProxy && $forwardedScheme === 'https'
+                ? 'https'
+                : 'http';
+            $fpcHit = $fpcFastPath->lookup($policyDecision, $fpcScheme);
             if ($fpcHit !== null) {
                 $handleDuration = \round((\microtime(true) - $staticFastPathStartedAt) * 1000, 2);
                 $fpcResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
@@ -3853,44 +3886,6 @@ function wlsDispatchRequestFiberStep(
             WlsLogger::info_("长连接饱和解除 (long_lived_count={$longLivedConnections})");
         }
     }
-}
-
-/**
- * Fiber 请求开始前清理并初始化请求级上下文。
- */
-function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
-{
-    // 关键修复：多 Fiber 并发时，新请求进入不能做“全量 reset”，否则会清掉其他挂起 Fiber 的请求级状态。
-    // 与 WlsRuntime::reset() 一致：存在并发挂起 Fiber 时，跳过会影响其他请求上下文的回调。
-    $omitCallbacks = null;
-    if (
-        \Weline\Framework\Runtime\Runtime::isPersistent()
-        && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
-    ) {
-        $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
-    }
-    \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
-
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
-    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
-
-    $resolvedConnectionId = $connectionId;
-    if ($resolvedConnectionId === null && \is_resource($conn)) {
-        $resolvedConnectionId = \get_resource_id($conn);
-    }
-
-    $context = \Weline\Framework\Context::current();
-    $context->set('meta.type', 'request');
-    $context->set('meta.mode', 'wls');
-    $context->set('runtime.connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->set('runtime.chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    \Weline\Framework\Runtime\RequestContext::setConnectionId($resolvedConnectionId === null ? null : (string)$resolvedConnectionId);
 }
 
 /**
@@ -4493,7 +4488,7 @@ function handleRequest(
         // 临时禁用 gzip 压缩以排除压缩问题
         $responseLocation = (string)($response->getHeader('Location') ?? '');
         if ($responseLocation !== '') {
-            $response->setHeader('Location', appendBackendLoginReturnUrl(
+            $response->setHeader('Location', wlsAppendBackendLoginReturnUrl(
                 $responseLocation,
                 $request,
                 $method,
@@ -4625,138 +4620,6 @@ function handleRequest(
  * @param string $rawRequest 原始请求（用于获取 If-Modified-Since 等头部）
  * @return string|null 如果是静态文件则返回 HTTP 响应字符串，否则返回 null
  */
-function appendBackendLoginReturnUrl(
-    string $redirectUrl,
-    \Weline\Framework\Http\Request $request,
-    string $method,
-    string $requestTarget,
-): string
-{
-    $method = \strtoupper($method);
-    if ($method !== 'GET' && $method !== 'HEAD') {
-        return $redirectUrl;
-    }
-
-    $redirectPath = (string)(\parse_url($redirectUrl, PHP_URL_PATH) ?: '');
-    $normalizedRedirectPath = \strtolower($redirectPath);
-    if ($normalizedRedirectPath === ''
-        || !\str_ends_with($normalizedRedirectPath, '/admin/login')
-    ) {
-        return $redirectUrl;
-    }
-
-    $uri = $requestTarget;
-    if ($uri === '') {
-        $uri = (string)($request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $request->getServer('REQUEST_URI'));
-    }
-    $queryString = (string)$request->getServer('QUERY_STRING');
-    if ($queryString !== '' && !\str_contains($uri, '?')) {
-        $uri .= '?' . $queryString;
-    }
-    if ($uri === '') {
-        return $redirectUrl;
-    }
-
-    $currentPath = \strtolower((string)(\parse_url($uri, PHP_URL_PATH) ?: ''));
-    if ($currentPath === ''
-        || \str_ends_with($currentPath, '/admin/login')
-        || \str_ends_with($currentPath, '/admin/login/post')
-        || \str_ends_with($currentPath, '/admin/login/logout')
-    ) {
-        return $redirectUrl;
-    }
-
-    $backendPrefix = \substr($redirectPath, 0, -\strlen('/admin/login'));
-    $uriPath = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
-    if ($backendPrefix !== '' && $uriPath !== '' && !\str_starts_with($uriPath, $backendPrefix . '/')) {
-        $uri = $backendPrefix . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
-    }
-    $uri = normalizeBackendReturnUri($uri);
-
-    $scheme = $request->isSecure() ? 'https' : 'http';
-    $host = resolveBackendLoginReturnHost($request, $scheme);
-    $returnUrl = $scheme . '://' . $host . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
-    $query = [
-        'no_access_reason' => 'not_logged_in',
-        'return_url' => $returnUrl,
-    ];
-
-    $redirectUrl = removeBackendLoginReturnParams($redirectUrl);
-    return $redirectUrl . (\str_contains($redirectUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
-}
-
-function resolveBackendLoginReturnHost(\Weline\Framework\Http\Request $request, string $scheme): string
-{
-    $host = \trim((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost'));
-    if ($host === '' || \str_contains($host, ':') || \str_starts_with($host, '[')) {
-        return $host !== '' ? $host : 'localhost';
-    }
-
-    $port = \trim((string)($request->getServer('HTTP_WELINE_ORIGINAL_PORT') ?: ''));
-    if ($port === '' || !\ctype_digit($port)) {
-        return $host;
-    }
-
-    if (($scheme === 'http' && $port === '80') || ($scheme === 'https' && $port === '443')) {
-        return $host;
-    }
-
-    return $host . ':' . $port;
-}
-
-function normalizeBackendReturnUri(string $uri): string
-{
-    $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
-    if ($path === '') {
-        return $uri;
-    }
-
-    $segments = \explode('/', \trim($path, '/'));
-    $firstSegment = (string)($segments[0] ?? '');
-    if (!isset($segments[1], $segments[2], $segments[3])
-        || $firstSegment === ''
-        || !isBackendReturnCurrencySegment($segments[1])
-        || !isBackendReturnLocaleSegment($segments[2])
-        || $segments[3] !== $firstSegment
-    ) {
-        return $uri;
-    }
-
-    \array_splice($segments, 3, 1);
-    $normalized = '/' . \implode('/', $segments);
-    $query = (string)(\parse_url($uri, PHP_URL_QUERY) ?: '');
-    $fragment = (string)(\parse_url($uri, PHP_URL_FRAGMENT) ?: '');
-    return $normalized . ($query !== '' ? '?' . $query : '') . ($fragment !== '' ? '#' . $fragment : '');
-}
-
-function isBackendReturnCurrencySegment(string $segment): bool
-{
-    return \Weline\Framework\App\State::isAllowedCurrencyCode($segment);
-}
-
-function isBackendReturnLocaleSegment(string $segment): bool
-{
-    return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
-}
-
-function removeBackendLoginReturnParams(string $url): string
-{
-    $parts = \parse_url($url);
-    if (!\is_array($parts) || empty($parts['query'])) {
-        return $url;
-    }
-
-    \parse_str((string)$parts['query'], $params);
-    unset($params['no_access_reason'], $params['return_url']);
-    $query = \http_build_query($params, '', '&', PHP_QUERY_RFC3986);
-    $base = ($parts['scheme'] ?? 'http') . '://' . ($parts['host'] ?? 'localhost');
-    if (isset($parts['port'])) {
-        $base .= ':' . $parts['port'];
-    }
-    $base .= $parts['path'] ?? '';
-    return $query === '' ? $base : $base . '?' . $query;
-}
-
 function handleStaticFile(string $uri, string $rawRequest): ?string
 {
     \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache(null);

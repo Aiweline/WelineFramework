@@ -105,6 +105,7 @@ class Core extends CommandAbstract
             'update:core',
             __('从 Git 仓库增量更新框架核心代码'),
             [
+                '[分支名]' => __('可直接指定分支，如：master；也可使用 -b/--branch'),
                 '-b, --branch=<分支名>' => __('指定分支（未配置默认分支时必填，如：main, master, dev）'),
                 '-t, --tag=<标签名>' => '指定标签版本（可选，如：v1.0.0）',
                 '--repo=<仓库地址>' => __('指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）'),
@@ -116,19 +117,20 @@ class Core extends CommandAbstract
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
                 '增量更新' => '默认使用 git fetch 增量拉取；Git 有变更的文件直接覆盖，其余文件按大小/hash 与源不一致则覆盖',
                 '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；缺失或内容不一致的核心文件会自动同步）',
-                '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
+                '工作区保护' => __('默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新'),
+                '强制更新' => __('仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录'),
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
                 '排除目录' => __('核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理'),
                 '保护文件' => 'app/etc/env.php、.env、dev/deploy/.config 等已存在时不覆盖',
             ],
             [
-                '增量更新到最新' => 'php bin/w update:core -b main  （或 core:update -b main）',
+                '增量更新到最新' => 'php bin/w core:update master  （或 update:core -b master）',
                 '强制完整更新' => 'php bin/w update:core -b main -f',
                 '指定标签' => 'php bin/w update:core -b main -t v1.0.0',
                 __('使用自定义仓库（需先配置 .env 或 env.php）') => 'php bin/w update:core -b master',
             ],
-            'php bin/w update:core -b <分支名> 或 php bin/w core:update -b <分支名>'
+            'php bin/w core:update <分支名> 或 php bin/w update:core -b <分支名>'
         );
     }
 
@@ -150,6 +152,7 @@ class Core extends CommandAbstract
         // 1. 检查 Git
         $this->printer->setup(__('步骤 1/6：检查 Git...'));
         $this->checkGit();
+        $this->assertCleanWorkingTreeUnlessForced();
 
         // 2. 验证参数
         $this->printer->setup(__('步骤 2/6：验证参数...'));
@@ -210,6 +213,59 @@ class Core extends CommandAbstract
             exit(1);
         }
         $this->printer->success(__('✓ Git 检查通过'));
+    }
+
+    /**
+     * 默认拒绝在存在未提交变更的项目中更新核心。
+     *
+     * 检查发生在任何下载、缓存清理和文件复制之前。只有显式 -f/--force
+     * 才能绕过；非 Git 安装没有“未提交变更”的语义，因此保持兼容。
+     */
+    private function assertCleanWorkingTreeUnlessForced(): void
+    {
+        if ($this->forceUpdate) {
+            $this->printer->warning(__('⚠ 已显式启用 -f/--force，跳过本地未提交变更保护'));
+            return;
+        }
+
+        $insideOutput = [];
+        $insideCode = $this->runGitCommand(BP, ['rev-parse', '--is-inside-work-tree'], $insideOutput);
+        $insideWorkTree = strtolower(trim(implode("\n", $insideOutput))) === 'true';
+        if ($insideCode !== 0 || !$insideWorkTree) {
+            $this->printer->note(__('当前项目不是 Git 工作区，跳过未提交变更检查'));
+            return;
+        }
+
+        $statusOutput = [];
+        $statusCode = $this->runGitCommand(
+            BP,
+            ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none'],
+            $statusOutput
+        );
+        if ($statusCode !== 0) {
+            $this->printer->error(__('错误：无法确认当前项目工作区是否干净，已安全取消核心更新'));
+            $this->printer->note(__('如确认允许覆盖本地变更，请显式使用 -f/--force'));
+            exit(1);
+        }
+
+        $changes = array_values(array_filter(
+            array_map(static fn (mixed $line): string => trim((string)$line), $statusOutput),
+            static fn (string $line): bool => $line !== ''
+        ));
+        if ($changes === []) {
+            $this->printer->success(__('✓ 当前项目工作区干净'));
+            return;
+        }
+
+        $this->printer->error(__('检测到 %{1} 项未提交的本地变更，已拒绝更新核心', [count($changes)]));
+        foreach (array_slice($changes, 0, 20) as $change) {
+            $this->printer->note('  ' . $change);
+        }
+        if (count($changes) > 20) {
+            $this->printer->note(__('  ……另有 %{1} 项未显示', [count($changes) - 20]));
+        }
+        $this->printer->note(__('请先提交或自行处理这些变更；确需覆盖时显式执行：php bin/w core:update <分支名> -f'));
+        exit(1);
     }
 
     /**
@@ -366,7 +422,33 @@ class Core extends CommandAbstract
 
     private function getBranch(array $args, array $config): string
     {
-        $branch = $args['branch'] ?? $args['b'] ?? $config['branch_default'] ?? null;
+        $branch = $args['branch'] ?? $args['b'] ?? null;
+        if (empty($branch)) {
+            $skipNextValue = false;
+            foreach ($args as $key => $value) {
+                if (!is_int($key) || !is_string($value) || $value === '') {
+                    continue;
+                }
+                if ($skipNextValue) {
+                    $skipNextValue = false;
+                    continue;
+                }
+                if (in_array($value, ['-b', '--branch', '-t', '--tag', '--repo'], true)) {
+                    $skipNextValue = true;
+                    continue;
+                }
+                if (
+                    $value === 'core:update'
+                    || $value === 'update:core'
+                    || str_starts_with($value, '-')
+                ) {
+                    continue;
+                }
+                $branch = $value;
+                break;
+            }
+        }
+        $branch = $branch ?: ($config['branch_default'] ?? null);
         if (empty($branch)) {
             $this->printer->error(__('错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default'));
             $this->printer->note(__('php bin/w update:core -b <分支名>'));
@@ -1253,4 +1335,3 @@ class Core extends CommandAbstract
         return $candidates;
     }
 }
-

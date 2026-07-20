@@ -334,8 +334,18 @@ class MasterResurrector
             $bp = \str_replace("'", "''", BP);
             $phpBin = \str_replace("'", "''", $phpBinary);
             $scriptRel = 'bin' . DS . 'w';
-            $instName = \str_replace("'", "''", $this->instanceName);
-            $argList = "'{$scriptRel}','server:start','{$instName}','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
+            $arguments = [
+                ...\Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
+                $scriptRel,
+                'server:start',
+                $this->instanceName,
+                '--master-only',
+                '--name=' . $masterName,
+            ];
+            $argList = \implode(',', \array_map(
+                static fn (string $argument): string => "'" . \str_replace("'", "''", $argument) . "'",
+                $arguments
+            ));
             $psCmd = "Set-Location -LiteralPath '{$bp}'; Start-Process -FilePath '{$phpBin}' -ArgumentList {$argList} -WindowStyle Hidden -WorkingDirectory '{$bp}'";
             $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
             @\exec($fullCmd . ' 2>NUL');

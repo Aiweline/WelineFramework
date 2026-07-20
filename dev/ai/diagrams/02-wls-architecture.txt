@@ -6,30 +6,36 @@
 │ Process Model (Cross-platform)                                                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-Linux Direct Mode:
+POSIX Auto Direct + HTTPS Protocol Edge:
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          Master Process (PID 1000)                        │
-│  Role: Process mgmt, hot reload, SSL cert mgmt, orphan detection         │
+│  Role: Registry, policy/config digest, hot reload, orphan detection      │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
-     ├─▶ Worker-1 (PID 1001) ──┐
-     ├─▶ Worker-2 (PID 1002)   ├─▶ Handle HTTP requests
-     ├─▶ Worker-N (PID 100N) ──┘
+     ├─▶ WLS Native Protocol Edge ◀── Client h3/QUIC, h2/h1 ALPN
+     │        │ private h1 keep-alive pool + instance token
+     │        ├─▶ READY Worker-1 (PID 1001)
+     │        ├─▶ READY Worker-2 (PID 1002)
+     │        └─▶ READY Worker-N (PID 100N)
      │
      ├─▶ SessionServer (PID 1101) ──▶ Shared Session storage
-     ├─▶ MemoryServer (PID 1102)  ──▶ Shared memory cache
-     └─▶ MaintenanceWorker (PID 1103) ──▶ Cron tasks, cleanup
+     └─▶ MemoryServer (PID 1102)  ──▶ Shared memory/cache/policy state
 
-Windows Dispatcher Mode:
+Direct means no WLS Dispatcher. Protocol Edge owns only TLS/QUIC, ALPN,
+session tickets and multiplexing; WorkerPolicyKernel owns all L7 rules/FPC.
+
+Windows Auto Dispatcher + HTTPS Protocol Edge:
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          Master Process (PID 2000)                        │
-│  Role: Config mgmt, SSL cert, monitoring                                 │
+│  Role: Registry, policy/config digest, monitoring                        │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
-     ▼
+     ├─▶ WLS Native Protocol Edge ◀── Client h3/QUIC, h2/h1 ALPN
+     │        │ private h1 keep-alive + instance token
+     │        ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                       Dispatcher Process (PID 2001)                       │
-│  Role: Receive HTTP, dispatch to Workers, aggregate responses            │
+│  Role: global L4 gate, READY routing, backpressure; no per-request rules │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
      ├─▶ Worker-1 (PID 2002) ──┐
@@ -37,8 +43,7 @@ Windows Dispatcher Mode:
      ├─▶ Worker-N (PID 200N) ──┘
      │
      ├─▶ SessionServer (PID 2101)
-     ├─▶ MemoryServer (PID 2102)
-     └─▶ MaintenanceWorker (PID 2103)
+     └─▶ MemoryServer (PID 2102)
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ IPC Architecture (NDJSON over TCP)                                           │
@@ -172,6 +177,7 @@ All WLS child processes extend AbstractServiceProvider:
 
 WorkerProvider          → HTTP Worker (handle requests)
 DispatcherProvider      → Windows Dispatcher (request distribution)
+ProtocolEdgeProvider    → Public h3/h2/h1, TLS/QUIC and session reuse
 SessionServerProvider   → Session shared service
 MemoryServerProvider    → Memory cache service
 MaintenanceWorkerProvider → Cron tasks (cleanup, stats)

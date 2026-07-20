@@ -1047,15 +1047,7 @@ class Install extends CommandAbstract
     private function tryEnableExtensionInIniLinux(string $ext): bool
     {
         $phpIniPath = php_ini_loaded_file();
-        if (!$phpIniPath) {
-            return false;
-        }
-
-        // 检查是否可写（直接或通过 sudo）
-        $canWrite = is_writable($phpIniPath);
-        $needSudo = !$canWrite && $this->hasSudo && !$this->isRoot;
-
-        if (!$canWrite && !$needSudo) {
+        if (!$phpIniPath || preg_match('/^[A-Za-z0-9_]+$/', $ext) !== 1) {
             return false;
         }
 
@@ -1071,51 +1063,128 @@ class Install extends CommandAbstract
             return false;
         }
 
-        $modified = false;
+        $writeConfig = function (string $path, string $nextContent): bool {
+            $directory = dirname($path);
+            $canWrite = (file_exists($path) && is_writable($path))
+                || (!file_exists($path) && is_dir($directory) && is_writable($directory));
+            if ($canWrite) {
+                return file_put_contents($path, $nextContent) !== false;
+            }
+            if (!$this->hasSudo || $this->isRoot) {
+                return false;
+            }
 
-        // 检查是否已有被注释的行
-        $pattern = '/^;(\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*)$/mi';
-        if (preg_match($pattern, $content)) {
-            $content = preg_replace($pattern, '$1', $content);
-            $this->printer->note(__('    取消注释: extension=%{ext}', ['ext' => $ext]));
-            $modified = true;
-        } else {
-            // 检查是否已启用
-            $enabledPattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
-            if (preg_match($enabledPattern, $content)) {
+            $tempFile = tempnam(sys_get_temp_dir(), 'php_ini_');
+            if ($tempFile === false || file_put_contents($tempFile, $nextContent) === false) {
+                if (is_string($tempFile)) {
+                    // tempnam() produced this process-owned path; it is never derived from request input.
+                    // nosemgrep: php.lang.security.unlink-use.unlink-use
+                    @unlink($tempFile);
+                }
+                return false;
+            }
+
+            $copyCommand = 'cp ' . escapeshellarg($tempFile) . ' ' . escapeshellarg($path)
+                . ' && chmod 0644 ' . escapeshellarg($path);
+            $cmd = $this->getSudoCommand('sh -c ' . escapeshellarg($copyCommand));
+            $output = [];
+            // Every variable component is either tempnam-owned or escapeshellarg-quoted.
+            // nosemgrep: php.lang.security.exec-use.exec-use
+            @exec($cmd . ' 2>&1', $output, $code);
+            // nosemgrep: php.lang.security.unlink-use.unlink-use
+            @unlink($tempFile);
+            if ($code === 0) {
+                $this->printer->note(__('    已通过 sudo 写入扩展配置: %{path}', ['path' => $path]));
                 return true;
             }
-            // 追加
-            $content .= "\nextension=" . $ext . "\n";
-            $this->printer->note(__('    添加配置: extension=%{ext}', ['ext' => $ext]));
-            $modified = true;
-        }
 
-        if (!$modified) {
             return false;
+        };
+
+        // PHP 会先处理主 php.ini，再按文件名顺序处理扫描目录。event 在
+        // sockets 之前加载会因 socket_ce 尚未注册而失败，所以扩展必须
+        // 写入独立且有序的 conf.d 文件，不能再无条件追加到主 php.ini。
+        $iniOutput = [];
+        // PHP_BINARY is process-owned and shell-quoted; the remaining arguments are constants.
+        // nosemgrep: php.lang.security.exec-use.exec-use
+        @exec(escapeshellarg(PHP_BINARY) . ' --ini 2>&1', $iniOutput, $iniCode);
+        $scanDir = '';
+        if ($iniCode === 0 || $iniOutput !== []) {
+            foreach ($iniOutput as $line) {
+                if (preg_match('/^Scan for additional \.ini files in:\s*(.+)$/i', trim($line), $match) !== 1) {
+                    continue;
+                }
+                $candidate = trim($match[1]);
+                if ($candidate !== '' && strcasecmp($candidate, '(none)') !== 0 && is_dir($candidate)) {
+                    $scanDir = $candidate;
+                }
+                break;
+            }
         }
 
-        if ($canWrite) {
-            return file_put_contents($phpIniPath, $content) !== false;
+        $enabledPattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
+        $commentedPattern = '/^\s*;\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
+        if ($scanDir !== '') {
+            $priority = $ext === 'event' ? '30' : '20';
+            $scanFile = rtrim($scanDir, '/\\') . DIRECTORY_SEPARATOR . $priority . '-' . $ext . '.ini';
+            if (!$writeConfig($scanFile, 'extension=' . $ext . PHP_EOL)) {
+                return false;
+            }
+
+            // 迁移旧安装器写入主 php.ini 的配置，否则它仍会在 sockets
+            // 等扫描扩展之前执行，并让新进程启动失败。
+            $cleanContent = preg_replace($enabledPattern, '', $content);
+            if (!is_string($cleanContent)) {
+                return false;
+            }
+            if ($cleanContent !== $content && !$writeConfig($phpIniPath, $cleanContent)) {
+                return false;
+            }
+            $this->printer->note(__('    添加有序扩展配置: %{path}', ['path' => $scanFile]));
+        } else {
+            // 没有扫描目录时只能使用主 php.ini。event 依赖 sockets；仅当
+            // sockets 在 -n 模式下已静态编译进 PHP 时，这种顺序才安全。
+            if ($ext === 'event') {
+                $staticSockets = [];
+                // PHP_BINARY and the fixed probe program are independently shell-quoted.
+                // nosemgrep: php.lang.security.exec-use.exec-use
+                @exec(
+                    escapeshellarg(PHP_BINARY)
+                    . ' -n -r ' . escapeshellarg('exit(extension_loaded("sockets") ? 0 : 1);')
+                    . ' 2>&1',
+                    $staticSockets,
+                    $staticSocketsCode,
+                );
+                if ($staticSocketsCode !== 0) {
+                    return false;
+                }
+            }
+
+            if (preg_match($enabledPattern, $content) !== 1) {
+                if (preg_match($commentedPattern, $content) === 1) {
+                    $content = preg_replace($commentedPattern, 'extension=' . $ext, $content) ?? $content;
+                } else {
+                    $content .= PHP_EOL . 'extension=' . $ext . PHP_EOL;
+                }
+                if (!$writeConfig($phpIniPath, $content)) {
+                    return false;
+                }
+                $this->printer->note(__('    添加配置: extension=%{ext}', ['ext' => $ext]));
+            }
         }
 
-        // 使用 sudo 写入
-        $tempFile = sys_get_temp_dir() . '/php_ini_temp_' . uniqid() . '.ini';
-        if (file_put_contents($tempFile, $content) === false) {
-            return false;
-        }
+        $probeOutput = [];
+        // $ext is restricted to [A-Za-z0-9_] and the complete probe is shell-quoted.
+        // nosemgrep: php.lang.security.exec-use.exec-use
+        @exec(
+            escapeshellarg(PHP_BINARY)
+            . ' -r ' . escapeshellarg('exit(extension_loaded(' . var_export($ext, true) . ') ? 0 : 1);')
+            . ' 2>&1',
+            $probeOutput,
+            $probeCode,
+        );
 
-        $cmd = $this->getSudoCommand("cp '$tempFile' '$phpIniPath'");
-        $output = [];
-        @exec($cmd . ' 2>&1', $output, $code);
-        @unlink($tempFile);
-
-        if ($code === 0) {
-            $this->printer->note(__('    已通过 sudo 修改 php.ini'));
-            return true;
-        }
-
-        return false;
+        return $probeCode === 0;
     }
 
     /**
