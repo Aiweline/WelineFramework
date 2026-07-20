@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
 
-use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Service\AiService;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
@@ -12,7 +11,6 @@ use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 
@@ -20,7 +18,6 @@ require_once __DIR__ . '/AiProviderAccountQueryProvider.php';
 
 class AiQueryProvider implements QueryProviderInterface
 {
-    private const DEFAULT_CONCURRENCY_CAP = 8;
     private ?AiProviderAccountQueryProvider $providerAccountQueryProvider = null;
 
     public function __construct(
@@ -37,14 +34,9 @@ class AiQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'generate', 'generateText' => $this->generate($params),
-            'generateImage' => $this->generateImage($params),
             'resolveModel' => $this->resolveModel($params),
             'listModels' => $this->listModels($params),
             'getAdapterModelBindings' => $this->getAdapterModelBindings($params),
-            'chat' => $this->chat($params),
-            'generateStream' => $this->generateStream($params),
-            'generateStreamBatch' => $this->generateStreamBatch($params),
             'providerListAccounts' => $this->providerAccountQueryProvider()->execute('listAccounts', $params),
             'providerGetAccount' => $this->providerAccountQueryProvider()->execute('getAccount', $params),
             'providerSaveAccount' => $this->providerAccountQueryProvider()->execute('saveAccount', $params),
@@ -76,87 +68,6 @@ class AiQueryProvider implements QueryProviderInterface
         };
     }
 
-    private function generate(array $params): string
-    {
-        try {
-            return $this->aiService->generate(
-                $this->requireNonEmptyString($params, 'prompt'),
-                $this->optionalString($params, 'model_code'),
-                $this->optionalString($params, 'scenario_code'),
-                $this->optionalString($params, 'locale'),
-                $this->optionalArray($params, 'params'),
-                $this->optionalInt($params, 'user_id'),
-                (bool)($params['is_backend'] ?? false)
-            );
-        } catch (AiBillingException $billingException) {
-            throw $billingException;
-        }
-    }
-
-    private function chat(array $params): array
-    {
-        $session = $this->sessionFactory->createFrontendSession();
-        if (!$session->isLoggedIn() && (int)($session->getUserId() ?? 0) <= 0) {
-            return [
-                'success' => false,
-                'message' => (string)__('璇峰厛鐧诲綍'),
-            ];
-        }
-
-        $message = $this->requireNonEmptyString($params, 'message');
-        $modelCode = $this->optionalString($params, 'model_code');
-        $scenarioCode = $this->optionalString($params, 'scenario_code');
-        $locale = $this->optionalString($params, 'locale');
-
-        try {
-            $response = $this->aiService->generate($message, $modelCode, $scenarioCode, $locale);
-            return [
-                'success' => true,
-                'data' => [
-                    'message' => $message,
-                    'response' => $response,
-                    'model_code' => $modelCode,
-                    'scenario_code' => $scenarioCode,
-                    'timestamp' => time(),
-                ],
-            ];
-        } catch (\Throwable $throwable) {
-            return [
-                'success' => false,
-                'message' => (string)__('鐢熸垚澶辫触锛?1', $throwable->getMessage()),
-            ];
-        }
-    }
-
-    private function generateImage(array $params): array
-    {
-        try {
-            return $this->aiService->generateImage(
-                $this->requireNonEmptyString($params, 'prompt'),
-                $this->optionalString($params, 'model_code'),
-                $this->optionalString($params, 'scenario_code'),
-                $this->optionalArray($params, 'params')
-            );
-        } catch (AiBillingException $billingException) {
-            return [
-                'success' => false,
-                'code' => $billingException->getBillingCode(),
-                'message' => $billingException->getMessage(),
-            ];
-        } catch (\Throwable $throwable) {
-            $billingCode = AiBillingException::classifyMessageToCode($throwable->getMessage());
-            if ($billingCode !== '') {
-                return [
-                    'success' => false,
-                    'code' => $billingCode,
-                    'message' => $throwable->getMessage(),
-                ];
-            }
-
-            throw $throwable;
-        }
-    }
-
     private function resolveModel(array $params): ?array
     {
         return $this->aiService->resolveModel(
@@ -182,153 +93,28 @@ class AiQueryProvider implements QueryProviderInterface
         );
     }
 
-    private function generateStream(array $params): array
-    {
-        $this->aiService->generateStream(
-            $this->requireNonEmptyString($params, 'prompt'),
-            $this->requireCallable($params, 'on_chunk'),
-            $this->optionalString($params, 'model_code'),
-            $this->optionalString($params, 'scenario_code'),
-            $this->optionalString($params, 'locale'),
-            $this->optionalArray($params, 'params')
-        );
-
-        return ['status' => 'fulfilled'];
-    }
-
-    /**
-     * @param array{
-     *     tasks?: array<string|int, array{prompt:string, on_chunk:callable, model_code?:?string, scenario_code?:?string, locale?:?string, params?:array}>,
-     *     concurrency?: int,
-     *     on_event?: callable
-     * } $params
-     * @return array<string|int, array{status:string, error?:\Throwable}>
-     */
-    private function generateStreamBatch(array $params): array
-    {
-        $tasksSpec = $params['tasks'] ?? [];
-        if (!is_array($tasksSpec) || $tasksSpec === []) {
-            return [];
-        }
-
-        $aiService = $this->aiService;
-        $tasks = [];
-        foreach ($tasksSpec as $key => $spec) {
-            if (!is_array($spec)) {
-                throw new \InvalidArgumentException(
-                    (string)__('generateStreamBatch task[%{1}] 必须是数组', (string)$key)
-                );
-            }
-
-            $prompt = $this->requireNonEmptyString($spec, 'prompt', "task[{$key}].prompt");
-            $callback = $this->requireCallable($spec, 'on_chunk', "task[{$key}].on_chunk");
-            $modelCode = $this->optionalString($spec, 'model_code');
-            $scenarioCode = $this->optionalString($spec, 'scenario_code');
-            $locale = $this->optionalString($spec, 'locale');
-            $callParams = $this->optionalArray($spec, 'params');
-
-            $tasks[$key] = static function () use (
-                $aiService,
-                $prompt,
-                $callback,
-                $modelCode,
-                $scenarioCode,
-                $locale,
-                $callParams
-            ): bool {
-                $aiService->generateStream(
-                    $prompt,
-                    $callback,
-                    $modelCode,
-                    $scenarioCode,
-                    $locale,
-                    $callParams
-                );
-                return true;
-            };
-        }
-
-        $concurrency = $this->resolveBatchConcurrency($params['concurrency'] ?? null, count($tasks));
-        $onEvent = isset($params['on_event']) && is_callable($params['on_event']) ? $params['on_event'] : null;
-        $runner = new FiberTaskRunner(defaultConcurrency: $concurrency);
-        $events = [];
-
-        foreach ($runner->runEvents($tasks) as $key => $event) {
-            $entry = ['status' => $event['status'] ?? 'rejected'];
-            if (($event['status'] ?? '') === 'rejected') {
-                $entry['error'] = ($event['error'] ?? null) instanceof \Throwable
-                    ? $event['error']
-                    : new \RuntimeException('AI batch task failed without exception payload');
-            }
-            $events[$key] = $entry;
-
-            if ($onEvent !== null) {
-                try {
-                    $onEvent($key, $event);
-                } catch (\Throwable) {
-                }
-            }
-        }
-
-        return $events;
-    }
-
-    private function resolveBatchConcurrency(mixed $requested, int $taskCount): int
-    {
-        if ($requested !== null && $requested !== '') {
-            $value = (int)$requested;
-            if ($value > 0) {
-                return max(1, min($value, $taskCount));
-            }
-        }
-
-        return max(1, min(self::DEFAULT_CONCURRENCY_CAP, $taskCount));
-    }
-
     public function getDescriptor(): array
     {
         return [
             'provider' => 'ai',
             'name' => __('AI 模型查询'),
-            'description' => __('对外暴露 AiService 的统一调用入口'),
+            'description' => __('后台 AI 模型、供应商账户与默认配置管理入口'),
             'module' => 'Weline_Ai',
             'operations' => array_merge([
                 [
-                    'name' => 'generate',
-                    'description' => __('生成文本内容，供后台适配器创建草稿、配置或模板内容。'),
-                    'mode' => 'write',
-                    'graph' => false,
-                    'cost' => 10,
-                    'auth' => 'backend_or_service',
-                    'params' => [
-                        ['name' => 'prompt', 'type' => 'string', 'required' => true, 'description' => __('生成提示词')],
-                        ['name' => 'model_code', 'type' => 'string|null', 'required' => false, 'description' => __('可选模型编码')],
-                        ['name' => 'scenario_code', 'type' => 'string|null', 'required' => false, 'description' => __('可选场景编码')],
-                        ['name' => 'locale', 'type' => 'string|null', 'required' => false, 'description' => __('可选语言')],
-                        ['name' => 'params', 'type' => 'array|null', 'required' => false, 'description' => __('传给模型适配器的上下文参数')],
-                        ['name' => 'user_id', 'type' => 'int|null', 'required' => false, 'description' => __('可选用户 ID')],
-                        ['name' => 'is_backend', 'type' => 'bool', 'required' => false, 'description' => __('是否后台调用')],
-                    ],
-                    'returns' => ['type' => 'string'],
-                    'summary' => 'Generate text through AiService',
-                ],
-                [
-                    'name' => 'chat',
+                    'name' => 'listModels',
                     'frontend' => true,
-                    'mode' => 'write',
+                    'mode' => 'read',
                     'graph' => false,
-                    'cost' => 10,
-                    'auth' => 'customer',
+                    'cost' => 1,
+                    'auth' => 'backend',
                     'params' => [
-                        'message' => ['type' => 'string', 'max_length' => 4000],
-                        'model_code' => ['type' => 'string', 'max_length' => 100],
-                        'scenario_code' => ['type' => 'string', 'max_length' => 100],
-                        'locale' => ['type' => 'string', 'max_length' => 20],
+                        'primary_modality' => ['type' => 'string', 'required' => false, 'max_length' => 32],
+                        'modality' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Send storefront AI chat message',
+                    'summary' => 'List active AI models for backend selectors',
                 ],
-            ], array_merge([
                 [
                     'name' => 'providerSaveModel',
                     'frontend' => true,
@@ -393,7 +179,7 @@ class AiQueryProvider implements QueryProviderInterface
                 ['name' => 'modelTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test an AI model connection'],
                 ['name' => 'modelBulkTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 5, 'auth' => 'backend', 'params' => ['model_ids' => ['type' => 'array', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model connections in batch'],
                 ['name' => 'modelTestSelfConfig', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model self configuration'],
-            ], $this->getProviderAccountOperationDescriptors())),
+            ], $this->getProviderAccountOperationDescriptors()),
         ];
     }
 
@@ -796,17 +582,6 @@ class AiQueryProvider implements QueryProviderInterface
         return $value;
     }
 
-    private function requireCallable(array $params, string $key, ?string $alias = null): callable
-    {
-        $label = $alias ?? $key;
-        $value = $params[$key] ?? null;
-        if (!is_callable($value)) {
-            throw new \InvalidArgumentException((string)__('参数 %{1} 必须是 callable', $label));
-        }
-
-        return $value;
-    }
-
     private function optionalString(array $params, string $key): ?string
     {
         if (!array_key_exists($key, $params) || $params[$key] === null) {
@@ -820,22 +595,4 @@ class AiQueryProvider implements QueryProviderInterface
         return $value;
     }
 
-    private function optionalArray(array $params, string $key): array
-    {
-        $value = $params[$key] ?? null;
-        return is_array($value) ? $value : [];
-    }
-
-    private function optionalInt(array $params, string $key): ?int
-    {
-        if (!array_key_exists($key, $params) || $params[$key] === null) {
-            return null;
-        }
-        $value = $params[$key];
-        if ($value === '' || (!is_int($value) && !is_numeric($value))) {
-            return null;
-        }
-
-        return (int)$value;
-    }
 }
