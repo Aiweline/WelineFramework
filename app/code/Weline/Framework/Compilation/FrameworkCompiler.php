@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Compilation;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Policy\RuntimePolicyProviderCompiler;
 use Weline\Framework\Service\Query\QueryProviderCompiler;
 use Weline\Framework\View\Cache\TemplateCachePolicyCompiler;
@@ -16,6 +17,7 @@ final class FrameworkCompiler
         private readonly RuntimePolicyProviderCompiler $runtimePolicyProviderCompiler = new RuntimePolicyProviderCompiler(),
         private readonly TemplateCachePolicyCompiler $templateCachePolicyCompiler = new TemplateCachePolicyCompiler(),
         private readonly ContainerCompiler $containerCompiler = new ContainerCompiler(),
+        private readonly FrameworkCompileManifest $compileManifest = new FrameworkCompileManifest(),
     ) {
     }
 
@@ -24,13 +26,23 @@ final class FrameworkCompiler
      */
     public function compile(string $modulesRoot, string $outputDirectory): array
     {
+        $outputDirectory = rtrim($outputDirectory, '/\\');
+        $publisher = new AtomicCompiledFilePublisher();
+        $outputLockAcquiredHere = $publisher->acquireDirectoryLock($outputDirectory, \LOCK_EX);
+        $previousProviderRegistry = null;
+        $providerRegistryInstalled = false;
         try {
-            $outputDirectory = rtrim($outputDirectory, '/\\');
+            $hooksFile = \dirname($outputDirectory) . DS . 'hooks.php';
+            $sourceBefore = $this->compileManifest->capture($modulesRoot, $hooksFile);
             $modules = $this->moduleRegistryCompiler->compile(
                 $modulesRoot,
                 $outputDirectory . DS . 'modules.php',
             );
-            return [
+            $previousProviderRegistry = ObjectManager::replaceServiceProviderRegistry(
+                new ServiceProviderRegistry($outputDirectory . DS . 'modules.php'),
+            );
+            $providerRegistryInstalled = true;
+            $compiled = [
                 'modules' => $modules,
                 'container' => $this->containerCompiler->compile(
                     $outputDirectory . DS . 'container.php',
@@ -45,62 +57,52 @@ final class FrameworkCompiler
                 'template_cache_policies' => $this->templateCachePolicyCompiler->compile(
                     $modules,
                     $outputDirectory . DS . 'template_cache_policies.php',
-                    \dirname($outputDirectory) . DS . 'hooks.php',
+                    $hooksFile,
                 ),
             ];
+
+            $sourceAfter = $this->compileManifest->capture(
+                $modulesRoot,
+                $hooksFile,
+                (array)($sourceBefore['sources'] ?? []),
+            );
+            if (!$this->compileManifest->sameSourceState($sourceBefore, $sourceAfter)) {
+                throw new \RuntimeException('Framework compiler inputs changed during compilation.');
+            }
+            $compiled['compile_manifest'] = $this->compileManifest->write(
+                $sourceAfter,
+                $outputDirectory,
+            );
+
+            return $compiled;
         } finally {
-            // server:start may fork/exec after control-plane compilation. Do
-            // not let a compile lock descriptor escape into Master/Workers.
-            AtomicCompiledFilePublisher::releaseProcessLocks();
+            if ($providerRegistryInstalled) {
+                ObjectManager::replaceServiceProviderRegistry($previousProviderRegistry);
+            }
+            // Never release an outer caller's same-directory generation lock.
+            if ($outputLockAcquiredHere) {
+                AtomicCompiledFilePublisher::releaseDirectoryLock($outputDirectory);
+            }
         }
     }
 
-    /**
-     * POSIX fast-path: published generation usable without recompile.
-     * Missing artifacts returns false and forces a fresh compile/promote.
-     */
     public function isFresh(string $modulesRoot, string $outputDirectory): bool
     {
-        unset($modulesRoot);
-        return $this->hasPublishedArtifacts($outputDirectory);
+        return $this->compileManifest->isFresh(
+            $modulesRoot,
+            rtrim($outputDirectory, '/\\'),
+        );
     }
 
-    /**
-     * Windows fast-path: prove published artifacts exist without recursively
-     * scanning the source tree (Defender-cold walks are prohibitively slow).
-     */
     public function isPublishedGenerationValid(
         string $modulesRoot,
         string $outputDirectory,
-        string $hookRegistry = '',
+        string $hooksFile,
     ): bool {
-        unset($modulesRoot);
-        if (!$this->hasPublishedArtifacts($outputDirectory)) {
-            return false;
-        }
-        if ($hookRegistry !== '' && !\is_file($hookRegistry)) {
-            return false;
-        }
-        return true;
-    }
-
-    private function hasPublishedArtifacts(string $outputDirectory): bool
-    {
-        $root = \rtrim($outputDirectory, '/\\');
-        if ($root === '' || !\is_dir($root)) {
-            return false;
-        }
-        foreach ([
-            'modules.php',
-            'query_providers.php',
-            'runtime_policy_providers.php',
-            'template_cache_policies.php',
-            'container.php',
-        ] as $fileName) {
-            if (!\is_file($root . DIRECTORY_SEPARATOR . $fileName)) {
-                return false;
-            }
-        }
-        return true;
+        return $this->compileManifest->isPublishedGenerationValid(
+            $modulesRoot,
+            rtrim($outputDirectory, '/\\'),
+            $hooksFile,
+        );
     }
 }
