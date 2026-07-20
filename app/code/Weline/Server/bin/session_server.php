@@ -110,6 +110,7 @@ if (!\defined('BP')) {
 if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
+require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 
 $sharedSidecarDetached = false;
 $sharedSidecarDetachError = '';
@@ -160,8 +161,12 @@ if ($processName) {
     \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $processLogInstanceName, $processTag);
 }
 
-if ($processName) {
-    \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
+$managedProcessIdentity = $processName !== '' ? '--name=' . $processName : '';
+if ($managedProcessIdentity !== '' && $orchestratorLaunchId !== '') {
+    $managedProcessIdentity .= ' --launch-id=' . $orchestratorLaunchId;
+}
+if ($managedProcessIdentity !== '') {
+    \Weline\Framework\System\Process\Processer::setPid($managedProcessIdentity, \getmypid());
 }
 
 $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
@@ -211,16 +216,23 @@ $sessionConfig['role'] = $role;
 $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
 $persistFileName = \trim((string)($sessionConfig['persist_file_name'] ?? ''));
 if ($persistFileName === '') {
-    $persistFileName = $role === 'memory_server' ? 'wls_memory_store.dat' : 'wls_session_store.dat';
+    $persistFileName = \Weline\Server\Service\SharedStateRuntimeScope::scopeDefaultFileName(
+        $role === 'memory_server' ? 'wls_memory_store.dat' : 'wls_session_store.dat'
+    );
 }
 $sessionConfig['persist_file_name'] = $persistFileName;
 if ($role === 'memory_server') {
     $sessionConfig['persist_enabled'] = false;
+    $sslConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['ssl'] ?? null))
+        ? $envConfig['wls']['ssl']
+        : [];
+    $sessionConfig['tls_session_cache'] = \is_array($sslConfig['session_cache'] ?? null)
+        ? $sslConfig['session_cache']
+        : [];
 }
-$safeRole = \preg_replace('/[^a-z0-9_]/i', '_', (string)$role) ?: 'session_server';
 $tokenFileName = \trim($tokenFileName);
 if ($tokenFileName === '') {
-    $tokenFileName = $safeRole . '.token';
+    $tokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
 }
 $sessionConfig['token_file_name'] = $tokenFileName;
 
@@ -235,9 +247,8 @@ if (!$server->start($host, $port)) {
 }
 
 $port = $server->getPort();
-if ($processName && $port > 0) {
-    \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
-}
+// SharedStateServiceRegistry and its authenticated PING are authoritative for
+// the sidecar PID/port. Avoid an OS-wide process/port scan before READY.
 
 WlsLogger::info_("Started on tcp://{$host}:{$port}");
 WlsLogger::info_("Instance: {$instanceName}, role={$role}, PID: " . \getmypid());
@@ -400,8 +411,8 @@ while ($server->isRunning()) {
 WlsLogger::info_('Shutting down...');
 $server->stop();
 
-if ($processName) {
-    \Weline\Framework\System\Process\Processer::removePidFile('--name=' . $processName);
+if ($managedProcessIdentity !== '') {
+    \Weline\Framework\System\Process\Processer::removePidFile($managedProcessIdentity);
 }
 
 $normalExit = true;

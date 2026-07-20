@@ -36,9 +36,7 @@ class DispatcherProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
-        // 优先使用运行态配置（由 Start.php 根据 CLI 参数和系统支持计算得出）
-        // 这确保了 --direct、--no-dispatcher 等参数能正确生效
-        return $context->isDispatcherEnabled();
+        return $context->runtimeSelection->isDispatcher();
     }
 
     public function getInstanceCount(ServiceContext $context): int

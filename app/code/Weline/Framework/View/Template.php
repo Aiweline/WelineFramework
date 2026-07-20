@@ -479,6 +479,58 @@ class Template extends DataObject
     }
 
     /**
+     * Keep compiled templates partitioned only by stable render dimensions.
+     *
+     * Request cookies, headers, Session IDs and tracking values must never
+     * become directory names or cache dimensions.
+     */
+    private function stableTemplateCompileDirectory(string $directory): string
+    {
+        $normalized = \rtrim(\str_replace('\\', '/', $directory), '/');
+        if ($normalized === '') {
+            return $directory;
+        }
+
+        // DEV and PROD supply different compile roots. Append the same stable
+        // scope to either one, stripping only a suffix previously generated
+        // here so repeated calls and scope switches remain idempotent.
+        $base = \preg_replace('#/[A-Za-z0-9_-]+_ctx_[a-f0-9]{32}$#iD', '', $normalized);
+        if (!\is_string($base) || $base === '') {
+            $base = $normalized;
+        }
+
+        $dimension = static function (string $key, string $default, string $pattern): string {
+            $value = \function_exists('w_env_get') ? (string)\w_env_get($key, $default) : $default;
+            return \preg_match($pattern, $value) === 1 ? $value : $default;
+        };
+
+        $scope = [
+            'area' => $dimension('area', 'frontend', '/^[a-z][a-z0-9_-]{0,31}$/i'),
+            'website_id' => $dimension('website_id', '0', '/^[0-9]{1,10}$/'),
+            'website_code' => $dimension('website_code', 'default', '/^[a-z0-9][a-z0-9_.-]{0,63}$/i'),
+            'lang' => $dimension('user.lang', 'default', '/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/'),
+            'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
+            'website_url' => \function_exists('w_env_get') ? (string)\w_env_get('website.url', '') : '',
+            'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
+        ];
+        $scopeJson = \json_encode($scope, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        $scopeKey = \substr(\hash('sha256', \is_string($scopeJson) ? $scopeJson : \serialize($scope)), 0, 32);
+        $labelParts = [
+            $scope['area'],
+            'w' . $scope['website_id'],
+            $scope['website_code'],
+            $scope['lang'],
+            $scope['currency'],
+        ];
+        $label = \implode('_', \array_map(fn(string $value): string => $this->sanitizeCompileContextSegment($value), $labelParts));
+        if (\strlen($label) > 96) {
+            $label = \substr($label, 0, 96);
+        }
+
+        return \str_replace('/', DS, \rtrim($base, '/')) . DS . $label . '_ctx_' . $scopeKey . DS;
+    }
+
+    /**
      * @param string $fileName 文件名转换查找
      *
      * @throws Core
@@ -486,7 +538,8 @@ class Template extends DataObject
      */
     public function convertFetchFileName(string $fileName): array
     {
-        $templateContextKey = KeyBuilder::environmentHash(['scope' => 'template-file-map'])
+        $absoluteSourcePath = $this->isAbsoluteTemplateSourcePath($fileName);
+        $templateContextKey = $this->viewEnvironmentCacheSuffix('template-file-map')
             . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName);
         $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName|' . $templateContextKey;
         $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
@@ -523,19 +576,23 @@ class Template extends DataObject
             }
             # 检测读取别的模块的模板文件
             list($fileName, $file_dir, $view_dir, $template_dir, $compile_dir) = $this->processFileSource($fileName, $file_dir);
+            $compile_dir = $this->stableTemplateCompileDirectory($compile_dir);
+            if ($absoluteSourcePath) {
+                $file_dir = '';
+            }
             // 判断文件后缀
             $file_ext = substr(strrchr($fileName, '.'), 1);
             //
             //            // 检测模板文件：如果文件名有后缀 则直接到view下面读取。没有说明是默认
             if ($file_ext) {
-                $tplFile = $view_dir . $fileName;
+                $tplFile = $absoluteSourcePath ? $fileName : $view_dir . $fileName;
             } else {
-                $tplFile = $view_dir . $fileName . $this->getFileExt();
+                $tplFile = ($absoluteSourcePath ? $fileName : $view_dir . $fileName) . $this->getFileExt();
             }
             //            p($tplFile,1);
             $sourceTplFile = $tplFile;
             $tplFile = $this->fetchFile($tplFile);
-            $sourceCompilePathSuffix = $this->buildSourceCompilePathSuffix($sourceTplFile, $tplFile);
+            $sourceCompilePathSuffix = $this->buildSourceCompilePathSuffix($sourceTplFile, $tplFile, $absoluteSourcePath);
             //            p($tplFile);
 
             if (!file_exists($tplFile)) {
@@ -577,11 +634,25 @@ class Template extends DataObject
         return [$comFileName, $tplFile];
     }
 
-    private function buildSourceCompilePathSuffix(string $logicalTplFile, string $resolvedTplFile): string
+    private function isAbsoluteTemplateSourcePath(string $path): bool
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return false;
+        }
+
+        return preg_match('/^(?:[A-Za-z]:[\\\\\/]|[\\\\\/])/', $path) === 1;
+    }
+
+    private function buildSourceCompilePathSuffix(
+        string $logicalTplFile,
+        string $resolvedTplFile,
+        bool $forceIsolation = false
+    ): string
     {
         $logicalPath = $this->normalizeTemplateSourcePath($logicalTplFile);
         $resolvedPath = $this->normalizeTemplateSourcePath($resolvedTplFile);
-        if ($logicalPath === '' || $resolvedPath === '' || $logicalPath === $resolvedPath) {
+        if ($logicalPath === '' || $resolvedPath === '' || (!$forceIsolation && $logicalPath === $resolvedPath)) {
             return '';
         }
 
@@ -605,8 +676,24 @@ class Template extends DataObject
 
     private function templateCompileContextDir(): string
     {
-        $lang = $this->sanitizeCompileContextSegment((string)State::getLang());
-        $currency = $this->sanitizeCompileContextSegment((string)State::getCurrency());
+        $lang = (string)State::getLang();
+        if (\preg_match('/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/', $lang) !== 1) {
+            $lang = \function_exists('w_env_get') ? (string)\w_env_get('user.lang', 'default') : 'default';
+        }
+        if (\preg_match('/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/', $lang) !== 1) {
+            $lang = 'default';
+        }
+
+        $currency = (string)State::getCurrency();
+        if (\preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            $currency = \function_exists('w_env_get') ? (string)\w_env_get('user.currency', 'CNY') : 'CNY';
+        }
+        if (\preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            $currency = 'CNY';
+        }
+
+        $lang = $this->sanitizeCompileContextSegment($lang);
+        $currency = $this->sanitizeCompileContextSegment($currency);
 
         return $lang . DS . $currency;
     }

@@ -16,9 +16,12 @@ final class SupervisorServer
     private const MAX_LINES_PER_BATCH = 32;
     private const MAX_LINES_PER_WAKE = 192;
     private const MAX_WRITE_BYTES_PER_FLUSH = 65536;
+    private const MAX_CLOSED_SESSION_SNAPSHOTS = 512;
     private const HELLO_DEADLINE_SEC = 5.0;
     private const REGISTERED_IDLE_TIMEOUT_SEC = 60.0;
     private const AUTH_NONCE_TTL_SEC = 60;
+    private const SELECT_FAILURE_BACKOFF_MIN_USEC = 1000;
+    private const SELECT_FAILURE_BACKOFF_MAX_USEC = 50000;
 
     /**
      * @var resource|null
@@ -30,6 +33,11 @@ final class SupervisorServer
      */
     private array $sessions = [];
 
+    /**
+     * @var array<int, array<string, mixed>>
+     */
+    private array $closedSessionSnapshots = [];
+
     private ?ControlEndpoint $boundEndpoint = null;
 
     /** @var null|callable(array<string, mixed>, int): void */
@@ -39,6 +47,9 @@ final class SupervisorServer
 
     /** @var array<string, int> */
     private array $usedHelloAuthNonces = [];
+
+    private int $selectFailureStreak = 0;
+    private int $nextSelectAttemptNs = 0;
 
     public function __construct(
         private readonly SupervisorRuntime $runtime,
@@ -53,6 +64,9 @@ final class SupervisorServer
 
     public function start(?ControlEndpoint $endpoint = null): ControlEndpoint
     {
+        $this->closedSessionSnapshots = [];
+        $this->selectFailureStreak = 0;
+        $this->nextSelectAttemptNs = 0;
         $endpoint ??= $this->runtime->endpoint();
         $this->boundEndpoint = $endpoint;
 
@@ -122,9 +136,9 @@ final class SupervisorServer
         $this->helloAuthSecret = \trim($secret);
     }
 
-    public function closeSessionById(int $sessionId): void
+    public function closeSessionById(int $sessionId, string $disconnectReason = 'server_close_client'): void
     {
-        $this->closeSession($sessionId);
+        $this->closeSession($sessionId, $disconnectReason);
     }
 
     public function markSessionMasterAccepted(int $sessionId): bool
@@ -174,7 +188,7 @@ final class SupervisorServer
         }
 
         if ((\strlen($this->sessions[$sessionId]->writeBuffer) + \strlen($message)) > self::MAX_WRITE_BUFFER_BYTES) {
-            $this->closeSession($sessionId);
+            $this->closeSession($sessionId, 'write_overflow');
             return false;
         }
         $this->sessions[$sessionId]->writeBuffer .= $message;
@@ -198,28 +212,24 @@ final class SupervisorServer
     {
         $snapshot = [];
         foreach ($this->sessions as $session) {
-            $snapshot[$session->id] = [
-                'id' => $session->id,
-                'peer' => $session->peer,
-                'pending_writes' => \strlen($session->writeBuffer),
-                'last_activity_at' => $session->lastActivityAt,
-                'instance' => $session->instance,
-                'channel' => $session->channel,
-                'role' => $session->role,
-                'slot_id' => $session->slotId,
-                'worker_id' => $session->workerId,
-                'pid' => $session->pid,
-                'port' => $session->port,
-                'launch_nonce' => $session->launchNonce,
-                'lease_id' => $session->leaseId,
-                'generation' => $session->generation,
-                'ready_capabilities' => $session->readyCapabilities,
-                'master_accepted' => $session->masterAccepted,
-                'pending_ready' => $session->pendingReady,
-            ];
+            $snapshot[$session->id] = $this->buildSessionSnapshot($session);
         }
 
         return $snapshot;
+    }
+
+    /**
+     * Consume sessions closed during the latest poll so the Hybrid bridge can
+     * retain the precise transport reason after the live socket is gone.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function drainClosedSessionSnapshots(): array
+    {
+        $snapshots = $this->closedSessionSnapshots;
+        $this->closedSessionSnapshots = [];
+
+        return $snapshots;
     }
 
     public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
@@ -228,18 +238,24 @@ final class SupervisorServer
             return 0;
         }
 
-        $events = $this->expireStaleSessions();
-        $events += $this->drainBufferedMessagesFairly();
+        // A delayed Master may already have healthy heartbeats in user-space
+        // or kernel buffers. Drain them before evaluating idle deadlines.
+        $events = $this->drainBufferedMessagesFairly();
         if ($events > 0) {
             $timeoutSec = 0;
             $timeoutUsec = 0;
+        }
+
+        if ($this->nextSelectAttemptNs > \hrtime(true)) {
+            return $events + $this->expireStaleSessions();
         }
 
         $read = [$this->serverSocket];
         $write = [];
         foreach ($this->sessions as $session) {
             if (!\is_resource($session->socket)) {
-                $this->closeSession($session->id);
+                $this->closeSession($session->id, 'invalid_socket');
+                $events++;
                 continue;
             }
             $read[] = $session->socket;
@@ -250,29 +266,45 @@ final class SupervisorServer
         $except = [];
 
         $changed = @\stream_select($read, $write, $except, $timeoutSec, $timeoutUsec);
-        if ($changed === false || $changed === 0) {
-            return $events;
-        }
-        foreach ($read as $socket) {
-            if ($socket === $this->serverSocket) {
-                $events += $this->acceptPendingConnections();
-                continue;
-            }
+        if ($changed === false) {
+            $this->selectFailureStreak = \min(16, $this->selectFailureStreak + 1);
+            $exponent = \min(6, $this->selectFailureStreak - 1);
+            $backoffUsec = \min(
+                self::SELECT_FAILURE_BACKOFF_MAX_USEC,
+                self::SELECT_FAILURE_BACKOFF_MIN_USEC * (1 << $exponent)
+            );
+            $jitterUsec = ((\getmypid() ?: 0) + ($this->selectFailureStreak * 97)) % 1000;
+            $this->nextSelectAttemptNs = \hrtime(true) + (($backoffUsec + $jitterUsec) * 1000);
 
-            $sessionId = (int) $socket;
-            if (!isset($this->sessions[$sessionId])) {
-                continue;
-            }
-            $events += $this->handleReadable($this->sessions[$sessionId]);
+            return $events + $this->expireStaleSessions();
         }
 
-        foreach ($write as $socket) {
-            $sessionId = (int) $socket;
-            if (!isset($this->sessions[$sessionId])) {
-                continue;
+        $this->selectFailureStreak = 0;
+        $this->nextSelectAttemptNs = 0;
+        if ($changed > 0) {
+            foreach ($read as $socket) {
+                if ($socket === $this->serverSocket) {
+                    $events += $this->acceptPendingConnections();
+                    continue;
+                }
+
+                $sessionId = (int)$socket;
+                if (!isset($this->sessions[$sessionId])) {
+                    continue;
+                }
+                $events += $this->handleReadable($this->sessions[$sessionId]);
             }
-            $events += $this->flushWrites($this->sessions[$sessionId]) ? 1 : 0;
+
+            foreach ($write as $socket) {
+                $sessionId = (int)$socket;
+                if (!isset($this->sessions[$sessionId])) {
+                    continue;
+                }
+                $events += $this->flushWrites($this->sessions[$sessionId]) ? 1 : 0;
+            }
         }
+
+        $events += $this->expireStaleSessions();
 
         return $events;
     }
@@ -280,18 +312,21 @@ final class SupervisorServer
     public function close(): void
     {
         foreach (\array_keys($this->sessions) as $sessionId) {
-            $this->closeSession($sessionId);
+            $this->closeSession($sessionId, 'server_shutdown');
         }
 
         if (\is_resource($this->serverSocket)) {
             @\fclose($this->serverSocket);
         }
         $this->serverSocket = null;
+        $this->selectFailureStreak = 0;
+        $this->nextSelectAttemptNs = 0;
 
         if ($this->boundEndpoint?->isUnix()) {
             @\unlink($this->boundEndpoint->address);
         }
         $this->boundEndpoint = null;
+        $this->closedSessionSnapshots = [];
     }
 
     private function acceptPendingConnections(): int
@@ -329,7 +364,7 @@ final class SupervisorServer
     private function handleReadable(SupervisorSession $session): int
     {
         if (!\is_resource($session->socket)) {
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'invalid_socket');
             return 1;
         }
 
@@ -338,12 +373,12 @@ final class SupervisorServer
             if (!@\feof($session->socket)) {
                 return $this->flushBufferedMessages($session);
             }
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'read_eof');
             return 1;
         }
 
         if ($data === '' && @\feof($session->socket)) {
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'read_eof');
             return 1;
         }
 
@@ -352,7 +387,7 @@ final class SupervisorServer
         }
 
         if ((\strlen($session->readBuffer) + \strlen($data)) > self::MAX_READ_BUFFER_BYTES) {
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'read_overflow');
             return 1;
         }
         $session->readBuffer .= $data;
@@ -394,7 +429,7 @@ final class SupervisorServer
             $messages++;
 
             if (\strlen($line) > self::MAX_READ_BUFFER_BYTES) {
-                $this->closeSession($session->id);
+                $this->closeSession($session->id, 'read_overflow');
                 break;
             }
 
@@ -414,7 +449,7 @@ final class SupervisorServer
             $rejection = $this->runtime->validateEnvelope($decoded);
             if ($rejection !== null) {
                 $this->sendToSession($session->id, $rejection);
-                $this->closeSession($session->id);
+                $this->closeSession($session->id, 'envelope_rejected');
                 break;
             }
 
@@ -439,15 +474,26 @@ final class SupervisorServer
                         $session->instance,
                     ),
                 );
-                $this->closeSession($session->id);
+                $this->closeSession($session->id, 'session_lease_mismatch');
                 break;
+            }
+
+            if ($type === SupervisorMessage::TYPE_HEARTBEAT) {
+                $session->lastActivityAt = \microtime(true);
+                $this->sessions[$session->id] = $session;
             }
 
             if ($type === SupervisorMessage::TYPE_READY && $this->deferReadyAck) {
                 $listen = \is_array($decoded['listen'] ?? null) ? $decoded['listen'] : [];
+                $requiresListenPort = Supervisor::requiresListenPort($session->role);
+                $invalidListenPort = $requiresListenPort
+                    && (int)($listen['port'] ?? $decoded['port'] ?? 0) <= 0;
                 if (!$session->masterAccepted
-                    || (int)($listen['port'] ?? $decoded['port'] ?? 0) <= 0
+                    || $invalidListenPort
                     || $session->pendingReady !== []) {
+                    $reason = !$session->masterAccepted
+                        ? 'master_register_pending'
+                        : ($invalidListenPort ? 'invalid_ready_payload' : 'ready_already_pending');
                     $this->sendToSession(
                         $session->id,
                         SupervisorMessage::readyNack(
@@ -455,12 +501,12 @@ final class SupervisorServer
                             $session->leaseId,
                             $session->generation,
                             (string)($decoded['msg_id'] ?? ''),
-                            !$session->masterAccepted ? 'master_register_pending' : 'ready_already_pending',
+                            $reason,
                             $session->channel,
                         ),
                     );
                     if (!$session->masterAccepted) {
-                        $this->closeSession($session->id);
+                        $this->closeSession($session->id, 'master_register_pending');
                     }
                     break;
                 }
@@ -527,14 +573,14 @@ final class SupervisorServer
                     (string)($message['instance'] ?? ''),
                 ),
             );
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'hello_identity_rejected');
             return false;
         }
 
         try {
             $response = $this->runtime->handle($message);
         } catch (\Throwable) {
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'hello_runtime_error');
             return false;
         }
         $responsePayload = \is_string($response) ? SupervisorMessage::decode($response) : [];
@@ -544,7 +590,7 @@ final class SupervisorServer
             if (\is_string($response) && $response !== '') {
                 $this->sendToSession($session->id, $response);
             }
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'lease_assignment_rejected');
             return false;
         }
 
@@ -662,14 +708,14 @@ final class SupervisorServer
         foreach ($this->sessions as $session) {
             $connectedAt = $session->connectedAt > 0.0 ? $session->connectedAt : $session->lastActivityAt;
             if ($session->role === '' && ($now - $connectedAt) > self::HELLO_DEADLINE_SEC) {
-                $this->closeSession($session->id);
+                $this->closeSession($session->id, 'hello_timeout');
                 $expired++;
                 continue;
             }
             if ($session->role !== ''
                 && $session->lastActivityAt > 0.0
                 && ($now - $session->lastActivityAt) > self::REGISTERED_IDLE_TIMEOUT_SEC) {
-                $this->closeSession($session->id);
+                $this->closeSession($session->id, 'idle_timeout');
                 $expired++;
             }
         }
@@ -684,7 +730,7 @@ final class SupervisorServer
             if (!\str_contains($session->readBuffer, "\n")) {
                 continue;
             }
-            $messages += $this->flushBufferedMessages($session, self::MAX_LINES_PER_BATCH);
+            $messages += $this->flushBufferedMessagesForWake($session);
         }
 
         return $messages;
@@ -697,7 +743,7 @@ final class SupervisorServer
         }
 
         if (!\is_resource($session->socket)) {
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'invalid_socket');
             return false;
         }
 
@@ -707,14 +753,14 @@ final class SupervisorServer
                 \substr($session->writeBuffer, 0, self::MAX_WRITE_BYTES_PER_FLUSH),
             );
         } catch (\Throwable) {
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'write_error');
             return false;
         }
         if ($written === false) {
             if (!@\feof($session->socket)) {
                 return false;
             }
-            $this->closeSession($session->id);
+            $this->closeSession($session->id, 'write_eof');
             return false;
         }
         if ($written > 0) {
@@ -807,12 +853,49 @@ final class SupervisorServer
         );
     }
 
-    private function closeSession(int $sessionId): void
+    /** @return array<string, mixed> */
+    private function buildSessionSnapshot(SupervisorSession $session): array
+    {
+        return [
+            'id' => $session->id,
+            'peer' => $session->peer,
+            'pending_writes' => \strlen($session->writeBuffer),
+            'last_activity_at' => $session->lastActivityAt,
+            'instance' => $session->instance,
+            'channel' => $session->channel,
+            'role' => $session->role,
+            'slot_id' => $session->slotId,
+            'worker_id' => $session->workerId,
+            'pid' => $session->pid,
+            'port' => $session->port,
+            'launch_nonce' => $session->launchNonce,
+            'lease_id' => $session->leaseId,
+            'generation' => $session->generation,
+            'ready_capabilities' => $session->readyCapabilities,
+            'master_accepted' => $session->masterAccepted,
+            'pending_ready' => $session->pendingReady,
+        ];
+    }
+
+    private function closeSession(int $sessionId, string $disconnectReason = 'socket_closed'): void
     {
         $session = $this->sessions[$sessionId] ?? null;
         if (!$session instanceof SupervisorSession) {
             return;
         }
+
+        $reason = \substr(\trim($disconnectReason), 0, 64);
+        $snapshot = $this->buildSessionSnapshot($session);
+        $snapshot['disconnect_reason'] = $reason !== '' ? $reason : 'socket_closed';
+        $snapshot['disconnected_at'] = \microtime(true);
+        if (!isset($this->closedSessionSnapshots[$sessionId])
+            && \count($this->closedSessionSnapshots) >= self::MAX_CLOSED_SESSION_SNAPSHOTS) {
+            $oldestSessionId = \array_key_first($this->closedSessionSnapshots);
+            if ($oldestSessionId !== null) {
+                unset($this->closedSessionSnapshots[$oldestSessionId]);
+            }
+        }
+        $this->closedSessionSnapshots[$sessionId] = $snapshot;
 
         if ($this->isCurrentRegisteredSession($session)) {
             $this->runtime->releaseLease(

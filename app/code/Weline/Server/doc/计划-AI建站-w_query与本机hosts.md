@@ -21,9 +21,11 @@
 
 ### 2. hosts 写入
 
-- `*.weline.test`
+- `*.weline.test` / `*.local.test`
   - 需要显式写入本机 hosts
-  - `server:start` 与 `server:hosts:add` 会沿用同一套校验逻辑
+  - **固定映射到 `127.0.0.1`（本地回环）**，不读取、不写入局域网 IP 或公网 IP
+  - `server:start`、`server:hosts:add`、`w_query('server','hostsAdd')` 共用 `HostsFileManager`
+  - 若 hosts 中已存在该域名但 IP 不是 `127.0.0.1`，会自动纠正（repair），不会当作“已存在”跳过
 - `*.weline.localhost`
   - 依赖 `.localhost` 的回环语义
   - 不写 hosts
@@ -49,9 +51,9 @@
 
 | 场景 | 入口 | 行为 |
 | --- | --- | --- |
-| 自动补 hosts | `server:start` | 仅对 `*.weline.test` 写 hosts |
-| 手动补 hosts | `php bin/w server:hosts:add <domain>` | 仅接受单标签 `*.weline.test` |
-| 查询接口 | `w_query('server', 'hostsAdd', ...)` | `.weline.localhost` 返回跳过 |
+| 自动补 hosts | `server:start` | 仅对 `*.weline.test` / `*.local.test` 写 `127.0.0.1`；错误 IP 自动纠正 |
+| 手动补 hosts | `php bin/w server:hosts:add <domain>` | 仅接受单标签托管本地域；固定 `127.0.0.1` |
+| 查询接口 | `w_query('server', 'hostsAdd', ...)` | 忽略传入非回环 IP；`.weline.localhost` 返回跳过 |
 | 本地通配证书 | `ensureLocalWelineWildcardCertificate` | 仅允许托管本地通配域名 |
 
 ## 推荐用法

@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -48,12 +47,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             return $this->dynamicInstanceCount;
         }
 
-        $workerCount = $context->getWorkerCount();
-        if ($workerCount === 'auto') {
-            $workerCount = $this->getAutoCpuCount();
-        }
-
-        return \max(1, (int) \ceil((int) $workerCount / 10));
+        return 1;
     }
 
     public function getPriority(): int
@@ -108,25 +102,14 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $arguments[] = '--ssl-key=' . $context->sslKey;
         }
 
-        if ($context->windowMode) {
-            $arguments[] = '--win';
-        }
+        $arguments[] = '--wls-runtime-topology='
+            . $context->runtimeSelection->effectiveTopology->value;
+        $arguments[] = '--wls-listener-mode=' . $context->runtimeSelection->listenerMode;
+        $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
 
-        $dispatcherEnabled = $context->isDispatcherEnabled();
-        $topology = $context->getEffectiveTopology()->value;
-        $arguments[] = '--wls-dispatcher-enabled=' . ($dispatcherEnabled ? '1' : '0');
-        $arguments[] = '--wls-runtime-topology=' . $topology;
+        $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::sharedState($context));
 
-        if ($direct) {
-            $arguments[] = '--reuseport';
-        }
-
-        $loopDriver = (string) $context->getConfig('wls.loop.driver', 'auto');
-        $loopDriver = \strtolower(\trim($loopDriver));
-        if ($loopDriver === '') {
-            $loopDriver = 'auto';
-        }
-        $arguments[] = '--wls-loop-driver=' . $loopDriver;
+        $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
         if ($context->sslEnabled) {
             $arguments[] = '--defer-ssl';
@@ -135,10 +118,6 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         return new ServiceCommand(
             script: $script,
             arguments: $arguments,
-            environment: [
-                'WLS_DISPATCHER_ENABLED' => $dispatcherEnabled ? '1' : '0',
-                'WLS_RUNTIME_TOPOLOGY' => $topology,
-            ],
             processName: $processName,
         );
     }
@@ -189,27 +168,15 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
 
     private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
     {
-        $engine = \strtolower(\trim((string)$context->getConfig('wls.ssl.engine', 'stream')));
-        if ($engine === '') {
-            $engine = 'stream';
-        }
+        $engine = $context->runtimeSelection->sslEngine;
         if ($engine === 'event_buffer' && PHP_OS_FAMILY === 'Windows') {
-            throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer is not supported on native Windows: '
-                . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
-            );
+            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer is not supported on native Windows.');
         }
-        if ($engine === 'event_buffer' && $context->isDirect()) {
-            throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer does not support direct mode. '
-                . 'Use wls.ssl.engine=stream for direct mode.'
-            );
+        if ($engine === 'event_buffer' && $context->runtimeSelection->isDirect()) {
+            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer does not support direct mode; use stream.');
         }
-        if ($engine === 'event_buffer' && $context->isDispatcherEnabled()) {
-            throw new \InvalidArgumentException(
-                'wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface before TLS. '
-                . 'Use wls.ssl.engine=stream; Dispatcher startup will not silently corrupt the TLS stream.'
-            );
+        if ($engine === 'event_buffer' && $context->runtimeSelection->isDispatcher()) {
+            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface; use stream.');
         }
 
         return match ($engine) {

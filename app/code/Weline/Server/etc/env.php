@@ -20,5 +20,31 @@ return [
             'idle_shutdown_grace_sec' => 30,
             'ephemeral_consumer_ttl_sec' => 120,
         ],
+        // 边缘协议终结：未在 app/etc/env.php 覆盖时即为 nginx（也可整段省略，Resolver 同样默认 nginx）。
+        'edge' => [
+            'adapter' => 'nginx', // nginx|wls
+            'reload_command' => '', // 宿主机 Nginx：systemctl reload nginx / nginx -s reload
+            'reload_timeout_sec' => 30,
+            'nginx' => [
+                // auto：检测宿主机 Nginx（宝塔/系统 PATH）；有则 managed=false，无则托管本项目实例
+                // true/false：强制托管或强制宿主机模式
+                'managed' => 'auto',
+                'auto_start' => true,
+                'listen_http' => null,
+                'listen_https' => null,
+                'server_names' => [],
+                'install_root' => 'extend/server/nginx',
+                'runtime_root' => 'var/server/nginx',
+                // 最佳性能默认：匿名边缘微缓存 + gzip + 大回源连接池
+                'edge_cache' => true,
+                'edge_cache_ttl_sec' => 60,
+                'edge_cache_max_size_mb' => 1024,
+                'edge_cache_keys_zone_mb' => 128,
+                'gzip' => true,
+                'gzip_comp_level' => 2,
+                'upstream_keepalive' => 256,
+                'worker_connections' => 32768,
+            ],
+        ],
     ],
 ];

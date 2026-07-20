@@ -105,6 +105,9 @@ class MasterControlServer implements ControlPlaneServerInterface
     /** @var array<string, float> */
     private array $transientClientLifecycleLoggedAt = [];
 
+    /** @var array<string,array{stream:mixed,handler:callable}> */
+    private array $externalReadableSources = [];
+
     /**
      * 设置是否将子进程日志输出到控制台（开发模式）
      * 前台模式：true，子进程日志实时显示在 Master 控制台；
@@ -126,6 +129,23 @@ class MasterControlServer implements ControlPlaneServerInterface
     public function setExpectedControlToken(string $controlToken): void
     {
         $this->expectedControlToken = \trim($controlToken);
+    }
+
+    public function registerExternalReadableSource(string $id, mixed $stream, callable $handler): void
+    {
+        $id = \trim($id);
+        if ($id === '' || !\is_resource($stream) || \get_resource_type($stream) !== 'stream') {
+            throw new \InvalidArgumentException('External readable source requires a non-empty id and stream resource.');
+        }
+        $this->externalReadableSources[$id] = [
+            'stream' => $stream,
+            'handler' => $handler,
+        ];
+    }
+
+    public function unregisterExternalReadableSource(string $id): void
+    {
+        unset($this->externalReadableSources[\trim($id)]);
     }
 
     public function setWindowsNativeSocketBridgeEnabled(bool $enabled): void
@@ -628,9 +648,17 @@ class MasterControlServer implements ControlPlaneServerInterface
             return;
         }
 
-        // 如果 stream_select 报告不可读，且 feof 已为真，说明连接已关闭
-        if ($ready === 0 && @\feof($socket)) {
-            $this->removeClient($clientId, 'peer_eof');
+        // The outer poll may have reported this descriptor readable, but the
+        // immediate zero-time recheck can still return 0 on Windows. Do not
+        // call fread in that state: a speculative non-blocking read may look
+        // like EOF and detach an otherwise healthy idle child (the Runtime
+        // Watchdog was particularly exposed because it sends little traffic).
+        if ($ready === 0) {
+            if (@\feof($socket)) {
+                $this->removeClient($clientId, 'peer_eof');
+                return;
+            }
+            $this->flushBufferedNdjsonForClient($clientId);
             return;
         }
 
@@ -1322,7 +1350,16 @@ class MasterControlServer implements ControlPlaneServerInterface
             return 0;
         }
 
-        $read = \array_merge([$this->serverSocket], $this->getClientSockets());
+        $externalStreams = [];
+        foreach ($this->externalReadableSources as $id => $source) {
+            $stream = $source['stream'] ?? null;
+            if (!\is_resource($stream) || \get_resource_type($stream) !== 'stream') {
+                unset($this->externalReadableSources[$id]);
+                continue;
+            }
+            $externalStreams[$id] = $stream;
+        }
+        $read = \array_merge([$this->serverSocket], $this->getClientSockets(), \array_values($externalStreams));
         $write  = $this->getWritableClientSockets();
         $except = [];
 
@@ -1351,6 +1388,7 @@ class MasterControlServer implements ControlPlaneServerInterface
 
         $events = 0;
         $clientSockets = [];
+        $readyExternalSourceIds = [];
         $serverReadable = false;
 
         foreach ($read as $socket) {
@@ -1358,7 +1396,38 @@ class MasterControlServer implements ControlPlaneServerInterface
                 $serverReadable = true;
                 continue;
             }
+            $externalId = \array_search($socket, $externalStreams, true);
+            if ($externalId !== false) {
+                $readyExternalSourceIds[] = (string)$externalId;
+                continue;
+            }
             $clientSockets[] = $socket;
+        }
+
+        // External data-plane sources must run before control clients.  A
+        // draining HTTP/3 Worker writes terminal QUIC packets to the Router
+        // channel immediately before its DRAINING_COMPLETE IPC message.  If
+        // IPC wins this turn, the Orchestrator can retire the endpoint while
+        // those packets are still queued, turning every old keep-alive CID
+        // into a silent UDP black hole until the client timeout.  Processing
+        // the bounded Router batch first preserves channel ordering; the
+        // native Router additionally keeps a terminal-close cache as the
+        // durable fence for endpoint publication and public-socket pressure.
+        foreach ($readyExternalSourceIds as $id) {
+            $source = $this->externalReadableSources[$id] ?? null;
+            if (!\is_array($source) || !\is_callable($source['handler'] ?? null)) {
+                continue;
+            }
+            try {
+                ($source['handler'])($source['stream'], $id, $this);
+            } catch (\Throwable $exception) {
+                WlsLogger::error_(
+                    '[IPC-Master] External readable source failed: id=' . $id
+                    . ', reason=' . $exception->getMessage()
+                );
+                unset($this->externalReadableSources[$id]);
+            }
+            $events++;
         }
 
         if ($serverReadable) {
@@ -1400,6 +1469,7 @@ class MasterControlServer implements ControlPlaneServerInterface
             }
         }
         $this->clients = [];
+        $this->externalReadableSources = [];
 
         // 关闭服务器 socket
         if ($this->serverSocket && \is_resource($this->serverSocket)) {

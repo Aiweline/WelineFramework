@@ -155,11 +155,21 @@ class SetupUpgradeObserver implements ObserverInterface
     {
         $active = Env::getInstance()->getActiveModules();
         $requested = $args['module'] ?? $args['m'] ?? null;
-        $requested = is_array($requested) ? $requested : ($requested ? [$requested] : []);
-        $requested = array_fill_keys(array_map('strval', $requested), true);
+        $requestedValues = is_array($requested) ? $requested : ($requested ? [$requested] : []);
+        $requestedModules = [];
+        foreach ($requestedValues as $requestedValue) {
+            if (!is_scalar($requestedValue)) {
+                continue;
+            }
+            foreach (preg_split('/[\s,]+/', trim((string)$requestedValue)) ?: [] as $moduleName) {
+                if ($moduleName !== '') {
+                    $requestedModules[$moduleName] = true;
+                }
+            }
+        }
         $modules = [];
         foreach ($active as $name => $_info) {
-            if ($requested !== [] && !isset($requested[$name])) {
+            if ($requestedModules !== [] && !isset($requestedModules[$name])) {
                 continue;
             }
             $modules[] = $name;

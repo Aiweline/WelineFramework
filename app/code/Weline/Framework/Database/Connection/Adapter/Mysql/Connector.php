@@ -39,8 +39,6 @@ final class Connector extends Query implements ConnectorInterface
     public function __construct(
         private readonly ?ConfigProvider $configProvider
     ) {
-        // FIXME 停止使用，适配不完全，仅提供Pgsql适配器，后续版本可能移除
-        throw new \Exception('MySQL 数据库连接适配器已停止使用，请使用 Pgsql。');
         $identifierFormatter = new DefaultIdentifierFormatter();
         $tableStrategy = new DefaultTableNameStrategy(
             $identifierFormatter,
@@ -89,7 +87,12 @@ final class Connector extends Query implements ConnectorInterface
         $lease = ConnectionPool::acquire(
             $this->configProvider,
             function () use ($db_type) {
-                $dsn = "{$db_type}:host={$this->configProvider->getHostName()}:{$this->configProvider->getHostPort()};dbname={$this->configProvider->getDatabase()};charset={$this->configProvider->getCharset()};collate={$this->configProvider->getCollate()}";
+                // PDO MySQL/MariaDB 要求 host 与 port 是两个独立 DSN 参数；
+                // collation 由 ConfigProvider 的 MYSQL_ATTR_INIT_COMMAND 设置。
+                $dsn = "mysql:host={$this->configProvider->getHostName()}"
+                    . ";port={$this->configProvider->getHostPort()}"
+                    . ";dbname={$this->configProvider->getDatabase()}"
+                    . ";charset={$this->configProvider->getCharset()}";
                 try {
                     $connection = new PDO($dsn, $this->configProvider->getUsername(), $this->configProvider->getPassword(), $this->configProvider->getOptions());
                     // 确保错误模式已设置（如果选项中没有设置）
@@ -301,7 +304,10 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
      */
     public function getCreateTableSql(string $table_name): string
     {
-        return $this->query("SHOW CREATE TABLE {$table_name}")->fetch()[0]["Create Table"];
+        [$schema, $table] = $this->resolveMetadataTable($table_name);
+        $qualified = $this->quoteIdentifier($schema) . '.' . $this->quoteIdentifier($table);
+        $rows = $this->query("SHOW CREATE TABLE {$qualified}")->fetch();
+        return (string)($rows[0]['Create Table'] ?? $rows[0]['Create View'] ?? '');
     }
 
     public function getConfigProvider(): ConfigProviderInterface
@@ -326,26 +332,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function dropTableIfExists(string $table): void
     {
-        $quoted = $this->quoteTable(str_replace(['`', '"'], '', $table));
+        $quoted = $this->formatTableName($table);
         $this->query("DROP TABLE IF EXISTS {$quoted}")->fetch();
     }
 
     public function tableExist(string $table_name): bool
     {
         try {
-            // 清理表名，移除反引号
-            $table_name = str_replace(['`', '"'], '', $table_name);
-
-            // 处理数据库名和表名（如果包含点号分隔）
-            $dbName = $this->configProvider->getDatabase();
-            $schema = $dbName;
-            $table = $table_name;
-
-            if (str_contains($table_name, '.')) {
-                $parts = explode('.', $table_name, 2);
-                $schema = $parts[0];
-                $table = $parts[1] ?? $parts[0];
-            }
+            [$schema, $table] = $this->resolveMetadataTable($table_name);
 
             // 使用 information_schema 查询表是否存在，不会产生错误或警告
             $sql = "SELECT COUNT(*) as count FROM information_schema.tables
@@ -366,11 +360,31 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getExistingTables(array $tableNames): array
     {
-        // MySQL connector 已弃用（构造函数 throw），此处降级为逐表检查
-        return array_values(array_filter(
-            array_map(fn($t) => trim(str_replace(['`', '"'], '', (string) $t)), $tableNames),
-            fn($t) => $t !== '' && $this->tableExist($t)
-        ));
+        $grouped = [];
+        foreach ($tableNames as $input) {
+            $lookup = $this->lookupInputTableName((string)$input);
+            if ($lookup === '') {
+                continue;
+            }
+            [$schema, $physical] = $this->resolveMetadataTable((string)$input);
+            $grouped[$schema][$physical][] = $lookup;
+        }
+
+        $existing = [];
+        foreach ($grouped as $schema => $tables) {
+            $names = array_keys($tables);
+            $placeholders = implode(',', array_fill(0, count($names), '?'));
+            $statement = $this->getWrappedConnection()->prepare(
+                "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ({$placeholders})"
+            );
+            $statement->execute(array_merge([$schema], $names));
+            foreach ($statement->fetchAll(PDO::FETCH_COLUMN, 0) ?: [] as $physical) {
+                foreach ($tables[(string)$physical] ?? [] as $lookup) {
+                    $existing[] = $lookup;
+                }
+            }
+        }
+        return array_values(array_unique($existing));
     }
 
     public function getVersion(): string
@@ -385,30 +399,34 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function hasField(string $table, string $field): bool
     {
-        # 使用 SHOW COLUMNS 检查字段
-        $query = "SHOW COLUMNS FROM {$table} LIKE '{$field}'";
-        $stmt = $this->link->prepare($query);
-        $stmt->execute();
-        return $stmt->rowCount() > 0;
+        [$schema, $physical] = $this->resolveMetadataTable($table);
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table AND COLUMN_NAME = :field'
+        );
+        $statement->execute([':schema' => $schema, ':table' => $physical, ':field' => str_replace(['`', '"'], '', $field)]);
+        return (int)$statement->fetchColumn() > 0;
     }
 
     public function hasIndex(string $table, string $idx_name): bool
     {
-        # 检查索引是否存在
-        $idx_name = Standar::getIndexName($table, $idx_name);
-
-        $query = "SHOW INDEXES FROM {$table} WHERE Key_name = '{$idx_name}'";
-        $stmt = $this->link->prepare($query);
-        $stmt->execute();
-        return $stmt->rowCount() > 0;
+        [$schema, $physical] = $this->resolveMetadataTable($table);
+        $standardName = Standar::getIndexName($this->formatTableName($table), $idx_name);
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table AND INDEX_NAME IN (:raw, :standard)'
+        );
+        $statement->execute([
+            ':schema' => $schema,
+            ':table' => $physical,
+            ':raw' => str_replace(['`', '"'], '', $idx_name),
+            ':standard' => $standardName,
+        ]);
+        return (int)$statement->fetchColumn() > 0;
     }
 
     /** @inheritDoc */
     public function getTableComment(string $table): string
     {
-        $db = $this->configProvider->getDatabase();
-        $table = str_replace(['`', '"'], '', $table);
-        $db = str_replace(['`', '"'], '', $db ?? '');
+        [$db, $table] = $this->resolveMetadataTable($table);
         try {
             $sql = 'SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :tbl LIMIT 1';
             $stmt = $this->getWrappedConnection()->prepare($sql);
@@ -429,11 +447,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getTableColumns(string $table): array
     {
-        $quoted = '`' . str_replace('`', '``', $table) . '`';
-        $rows = $this->query("SHOW FULL COLUMNS FROM {$quoted}")->fetchArray();
-        if (!is_array($rows)) {
-            return [];
-        }
+        [$schema, $physical] = $this->resolveMetadataTable($table);
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT COLUMN_NAME AS Field, COLUMN_TYPE AS Type, IS_NULLABLE AS `Null`, COLUMN_KEY AS `Key`, '
+            . 'COLUMN_DEFAULT AS `Default`, EXTRA AS Extra, COLUMN_COMMENT AS Comment '
+            . 'FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table ORDER BY ORDINAL_POSITION'
+        );
+        $statement->execute([':schema' => $schema, ':table' => $physical]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $list = [];
         foreach ($rows as $row) {
             $field = $row['Field'] ?? $row['field'] ?? '';
@@ -479,11 +500,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getTableIndexes(string $table): array
     {
-        $quoted = '`' . str_replace('`', '``', $table) . '`';
-        $rows = $this->query("SHOW INDEX FROM {$quoted}")->fetchArray();
-        if (!is_array($rows)) {
-            return [];
-        }
+        [$schema, $physical] = $this->resolveMetadataTable($table);
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT INDEX_NAME AS Key_name, COLUMN_NAME AS Column_name, NON_UNIQUE AS Non_unique, SEQ_IN_INDEX AS Seq_in_index '
+            . 'FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table ORDER BY INDEX_NAME, SEQ_IN_INDEX'
+        );
+        $statement->execute([':schema' => $schema, ':table' => $physical]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $byName = [];
         foreach ($rows as $row) {
             $keyName = $row['Key_name'] ?? $row['key_name'] ?? '';
@@ -581,7 +604,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $name = $d->quoteIdentifier($fk['name'] ?? '');
         $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $fk['columns'] ?? []);
         $refCols = array_map(fn (string $c) => $d->quoteIdentifier($c), $fk['referencesColumns'] ?? []);
-        $refTable = $d->quoteTable($fk['referencesTable'] ?? '');
+        $refTable = $d->quoteTable($this->formatTableName((string)($fk['referencesTable'] ?? '')));
         $onDelete = !empty($fk['onDeleteCascade']) ? ' ON DELETE CASCADE' : '';
         $onUpdate = !empty($fk['onUpdateCascade']) ? ' ON UPDATE CASCADE' : '';
         return "ALTER TABLE {$t} ADD CONSTRAINT {$name} FOREIGN KEY (" . implode(',', $cols) . ") REFERENCES {$refTable} (" . implode(',', $refCols) . "){$onDelete}{$onUpdate}";
@@ -630,9 +653,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getTableForeignKeys(string $table): array
     {
-        $db = $this->configProvider->getDatabase();
-        $table = str_replace(['`', '"'], '', $table);
-        $db = str_replace(['`', '"'], '', $db ?? '');
+        [$db, $table] = $this->resolveMetadataTable($table);
         try {
             $sql = "SELECT kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, rc.DELETE_RULE, rc.UPDATE_RULE
                 FROM information_schema.KEY_COLUMN_USAGE kcu
@@ -677,5 +698,26 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             ];
         }
         return $list;
+    }
+
+    /** @return array{0:string,1:string} [database, physical table] */
+    private function resolveMetadataTable(string $table): array
+    {
+        $formatted = str_replace(['`', '"'], '', $this->formatTableName($table));
+        if (str_contains($formatted, '.')) {
+            [$schema, $physical] = explode('.', $formatted, 2);
+            return [trim($schema), trim($physical)];
+        }
+        return [str_replace(['`', '"'], '', $this->configProvider->getDatabase()), trim($formatted)];
+    }
+
+    private function lookupInputTableName(string $table): string
+    {
+        $clean = trim(str_replace(['`', '"'], '', $table));
+        if (str_contains($clean, '.')) {
+            $parts = explode('.', $clean);
+            return trim((string)end($parts));
+        }
+        return $clean;
     }
 }

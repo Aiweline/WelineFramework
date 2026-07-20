@@ -43,27 +43,35 @@ class VersionService
         try {
             // 检查模块版本记录是否存在
             $existingVersion = $this->getModuleVersion($moduleName);
+            $writer = clone $this->versionModel;
+            $writer->reset();
             
             if ($existingVersion) {
                 // 更新现有记录
-                $existingVersion->setData([
+                $writer->load((int)$existingVersion->getId());
+                $writer->addData([
                     ModuleVersion::schema_fields_CURRENT_VERSION => $newVersion,
                     ModuleVersion::schema_fields_LAST_MIGRATION => $lastMigration,
                     ModuleVersion::schema_fields_UPDATED_AT => date('Y-m-d H:i:s')
                 ]);
-                $result = $existingVersion->save();
+                $writer->save();
             } else {
                 // 创建新记录
-                $this->versionModel->setData([
+                $writer->setData([
                     ModuleVersion::schema_fields_MODULE_NAME => $moduleName,
                     ModuleVersion::schema_fields_CURRENT_VERSION => $newVersion,
                     ModuleVersion::schema_fields_LAST_MIGRATION => $lastMigration,
                     ModuleVersion::schema_fields_UPDATED_AT => date('Y-m-d H:i:s')
                 ]);
-                $result = $this->versionModel->save();
+                $writer->save();
             }
             
-            $success = (bool)$result;
+            // SQLite/PDO 在部分 UPDATE 路径上会返回 false，即使数据已经落库。
+            // 版本游标是回滚的最终提交点，因此以独立查询回读为唯一成功判据。
+            $persisted = $this->getModuleVersion($moduleName);
+            $success = $persisted instanceof ModuleVersion
+                && (string)$persisted->getData(ModuleVersion::schema_fields_CURRENT_VERSION) === $newVersion
+                && (string)$persisted->getData(ModuleVersion::schema_fields_LAST_MIGRATION) === $lastMigration;
             if ($success) {
                 $this->printing->info(__("模块 %{1} 版本更新为 %{2}", [$moduleName, $newVersion]));
             }
@@ -132,7 +140,9 @@ class VersionService
      */
     public function getModuleVersion(string $moduleName): ?ModuleVersion
     {
-        $items = $this->versionModel->reset()
+        // VersionService 是 WLS 长进程共享服务，禁止把查询集合状态留在注入的 Model 上。
+        $model = clone $this->versionModel;
+        $items = $model->reset()
             ->where(ModuleVersion::schema_fields_MODULE_NAME, $moduleName)
             ->limit(1)
             ->select()
@@ -334,6 +344,31 @@ class VersionService
             $toVersion,
             ModuleVersionHistory::ACTION_ROLLBACK,
             $operationId
+        );
+    }
+
+    public function compensateCoordinatedRollback(
+        string $moduleName,
+        string $rolledBackVersion,
+        string $restoreVersion,
+        string $operationId,
+    ): void {
+        $currentVersion = $this->getModuleVersionString($moduleName);
+        if ($currentVersion !== $rolledBackVersion) {
+            throw new \RuntimeException(__(
+                '模块 %{1} 补偿版本游标已漂移：预期 %{2}，实际 %{3}',
+                [$moduleName, $rolledBackVersion, (string)$currentVersion]
+            ));
+        }
+        if (!$this->updateModuleVersion($moduleName, $restoreVersion, $operationId . ':compensated')) {
+            throw new \RuntimeException(__('无法恢复模块 %{1} 的版本游标', $moduleName));
+        }
+        $this->recordVersionHistory(
+            $moduleName,
+            $rolledBackVersion,
+            $restoreVersion,
+            ModuleVersionHistory::ACTION_UPGRADE,
+            $operationId . ':compensated'
         );
     }
     

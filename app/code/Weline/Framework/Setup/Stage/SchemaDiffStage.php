@@ -49,6 +49,9 @@ class SchemaDiffStage extends AbstractStage
     /** @var array<string, array{before: string, after: string}> */
     private array $tableFingerprints = [];
 
+    /** @var array<string, array<string, string>> */
+    private array $moduleSchemaFingerprints = [];
+
     public function __construct(
         private readonly Handle $moduleHandle,
         private readonly ModuleFileReader $moduleReader,
@@ -76,6 +79,7 @@ class SchemaDiffStage extends AbstractStage
         $this->diffOps = [];
         $this->moduleVersions = [];
         $this->tableFingerprints = [];
+        $this->moduleSchemaFingerprints = [];
         $processedTables = [];
 
         // ── Pass 1: 收集所有需要 diff 的表及其声明 schema ──
@@ -85,6 +89,7 @@ class SchemaDiffStage extends AbstractStage
         foreach ($modules as $moduleData) {
             $module = new Module($moduleData);
             $this->moduleVersions[$module->getName()] = $module->getVersion();
+            $this->moduleSchemaFingerprints[$module->getName()] ??= [];
             try {
                 $modelClasses = $this->moduleReader->readClass($module, 'Model');
             } catch (\Throwable $e) {
@@ -130,6 +135,8 @@ class SchemaDiffStage extends AbstractStage
                 }
                 $processedTables[$processedTableKey] = true;
                 $declaredSchemas[$declared->tableName] = $declared;
+                $this->moduleSchemaFingerprints[$module->getName()][$declared->tableName]
+                    = $this->schemaFingerprint($declared);
             }
         }
 
@@ -144,7 +151,11 @@ class SchemaDiffStage extends AbstractStage
                 'before' => $this->schemaFingerprint($actual),
                 'after' => $this->schemaFingerprint($declared),
             ];
-            $ops = $this->diffEngine->diff($declared, $actual);
+            $ops = $this->diffEngine->diff(
+                $declared,
+                $actual,
+                $connector->getConfigProvider()->getDbType(),
+            );
             foreach ($ops as $op) {
                 $this->diffOps[] = $op;
             }
@@ -168,15 +179,12 @@ class SchemaDiffStage extends AbstractStage
             return;
         }
 
-        if ($this->diffOps === []) {
-            $this->committed = true;
-            return;
-        }
         $connector = $this->connectionFactory->getConnector();
         try {
             $this->executor->execute($connector, $this->diffOps, [
                 'module_versions' => $this->moduleVersions,
                 'table_fingerprints' => $this->tableFingerprints,
+                'module_schema_fingerprints' => $this->moduleSchemaFingerprints,
             ]);
         } catch (\Throwable $e) {
             $this->addError(__('Schema 执行失败：%{1}', [$e->getMessage()]));
@@ -197,6 +205,7 @@ class SchemaDiffStage extends AbstractStage
         $this->diffOps = [];
         $this->moduleVersions = [];
         $this->tableFingerprints = [];
+        $this->moduleSchemaFingerprints = [];
     }
 
     /** @return list<SchemaDiffOp> */
@@ -219,6 +228,7 @@ class SchemaDiffStage extends AbstractStage
         $normalize = static function (mixed $value) use (&$normalize): mixed {
             if (is_object($value)) {
                 $value = get_object_vars($value);
+                unset($value['modelClass']);
             }
             if (is_array($value)) {
                 if (!array_is_list($value)) {

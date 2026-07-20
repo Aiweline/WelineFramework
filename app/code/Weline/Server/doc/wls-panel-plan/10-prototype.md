@@ -35,10 +35,8 @@ The backend menu is only an authorization and entry point. The panel itself uses
 
 ```text
 ┌──────────────────────────────┐
-│ WLS Panel                    │
-│ Dashboard | Projects         │
-│ Gateway   | Security         │
-│ Marketplace                  │
+│ [Menu]  WLS Panel             │
+│ Page title / context          │
 ├──────────────────────────────┤
 │ Header actions wrap          │
 ├──────────────────────────────┤
@@ -46,6 +44,18 @@ The backend menu is only an authorization and entry point. The panel itself uses
 │ Project cards stack          │
 │ Action cards stack           │
 └──────────────────────────────┘
+
+Menu opens from the left as an overlay:
+
+┌───────────────┬──────────────┐
+│ WLS Panel     │ dimmed page  │
+│ Dashboard     │              │
+│ Projects      │              │
+│ Gateway       │              │
+│ Security      │              │
+│ Marketplace   │              │
+│ Plugin items  │              │
+└───────────────┴──────────────┘
 ```
 
 ## Responsive Theme Shell Prototype
@@ -67,37 +77,31 @@ Desktop >= 1101px
 | - File Manager       |                                               |
 +----------------------+-----------------------------------------------+
 
-Tablet/mobile <= 1100px
-+--------------------------------------------------------------+
-| WLS Panel brand                                               |
-| Dashboard | Projects                                         |
-| Gateway   | Security                                         |
-| Marketplace                                                   |
-| Plugin Capabilities                                           |
-| File Manager | Deploy                                         |
-+--------------------------------------------------------------+
-| Page title                                                    |
-| [Theme] [Project Admin] [Exit]                                |
-| Content cards collapse before horizontal overflow appears     |
-+--------------------------------------------------------------+
+Tablet 761px-1100px
++----------------------+---------------------------------------+
+| WLS Panel sidebar    | Page title / context                 |
+| - Dashboard          | [Theme] [Project Admin] [Exit]       |
+| - Projects           |                                       |
+| - Gateway            | Content cards collapse before       |
+| - Security           | horizontal overflow appears         |
+| - Marketplace        |                                       |
+| Plugin Capabilities  |                                       |
++----------------------+---------------------------------------+
 
-Phone <= 520px
-+------------------------------+
-| WLS Panel                    |
-| Dashboard                    |
-| Projects                     |
-| Gateway                      |
-| Security                     |
-| Marketplace                  |
-| Plugin Capabilities          |
-| File Manager                 |
-+------------------------------+
-| Page title                   |
-| [Theme]                      |
-| [Project Admin]              |
-| [Exit]                       |
-| Single-column content        |
-+------------------------------+
+At `521px`-`1100px`, dashboard summary metrics use two equal-width tiles so
+the main column is used efficiently. At `520px` and below, the same metrics
+return to one column to preserve readable labels and values.
+
+Phone <= 760px
++--------------------------------------------------------------+
+| [Menu]  Page title / context                                  |
+| [Theme] [Project Admin] [Exit]                                |
++--------------------------------------------------------------+
+| Single-column content; sidebar is closed off-canvas           |
++--------------------------------------------------------------+
+| Opening [Menu] slides the sidebar in from the left and        |
+| overlays the content with a dismissible backdrop.             |
++--------------------------------------------------------------+
 ```
 
 Theme contract:
@@ -114,8 +118,16 @@ Layout assertions:
 
 - `document.scrollingElement.scrollWidth <= window.innerWidth`.
 - At desktop width, the sidebar and main column do not overlap.
-- At `1100px` and below, the sidebar becomes top navigation and main content
-  starts below it.
+- At `761px`-`1100px`, the sidebar remains in the left grid column and the main
+  content remains in the right column.
+- At `521px`-`1100px`, dashboard summary cards render as two equal tiles inside
+  the main column; at `520px` and below, they render as one tile per row.
+- At `760px` and below, the sidebar is a closed left off-canvas drawer by
+  default; opening it overlays the page instead of pushing the content below a
+  top navigation block.
+- The phone menu button exposes `aria-expanded`, the drawer exposes
+  `aria-hidden`, Escape and backdrop clicks close the drawer, and focus returns
+  to the menu button.
 - Plugin capability dividers span all nav columns.
 - Header actions left-align below the page title on narrow layouts.
 - Long translated button labels wrap inside their buttons instead of forcing

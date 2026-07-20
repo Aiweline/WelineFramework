@@ -13,9 +13,10 @@ Register::register(
     Register::MODULE,
     'Weline_ModuleManager',
     __DIR__,
-    '1.0.2',
+    '1.1.0',
     '<a href="https://bbs.aiweline.com">官网</a>模块管理器。',
     [
-        'Weline_Admin'
+        'Weline_Admin',
+        'Weline_Database'
     ]
 );
