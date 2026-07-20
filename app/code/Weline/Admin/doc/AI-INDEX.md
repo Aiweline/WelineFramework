@@ -56,6 +56,7 @@
 - `app/code/Weline/Admin/doc/hook/backend/dashboard/main-tabs.md`
 - `app/code/Weline/Admin/doc/hook/backend/dashboard/top-statistics.md`
 - `app/code/Weline/Admin/doc/hook/backend/login/providers.md`
+- `app/code/Weline/Admin/doc/登录页交互.md`
 - `app/code/Weline/Admin/doc/主题配色变量文档.md`
 - `app/code/Weline/Admin/doc/开发/plan.md`
 - `app/code/Weline/Admin/doc/开发/task.md`

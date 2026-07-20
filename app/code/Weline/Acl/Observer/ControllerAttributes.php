@@ -486,6 +486,27 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             }
         }
 
+        // pgsql 等迁移后的表常丢失列 DEFAULT；批量 insert 若显式写入 null 会触发 NOT NULL
+        if (!isset($aclData[Acl::schema_fields_ACL_ORIGIN]) || $aclData[Acl::schema_fields_ACL_ORIGIN] === null || $aclData[Acl::schema_fields_ACL_ORIGIN] === '') {
+            $aclData[Acl::schema_fields_ACL_ORIGIN] = Acl::acl_origin_menu_xml;
+        }
+        if (!isset($aclData[Acl::schema_fields_ACCESS_MODE]) || $aclData[Acl::schema_fields_ACCESS_MODE] === null || $aclData[Acl::schema_fields_ACCESS_MODE] === '') {
+            $aclData[Acl::schema_fields_ACCESS_MODE] = Acl::ACCESS_MODE_EDIT;
+        }
+        if (!isset($aclData[Acl::schema_fields_SCOPE_GROUP]) || $aclData[Acl::schema_fields_SCOPE_GROUP] === null) {
+            $aclData[Acl::schema_fields_SCOPE_GROUP] = '';
+        }
+        if (!array_key_exists(Acl::schema_fields_API_EXPOSABLE, $aclData) || $aclData[Acl::schema_fields_API_EXPOSABLE] === null || $aclData[Acl::schema_fields_API_EXPOSABLE] === '') {
+            $aclData[Acl::schema_fields_API_EXPOSABLE] = 0;
+        }
+        $now = date('Y-m-d H:i:s');
+        if (empty($aclData['create_time'])) {
+            $aclData['create_time'] = $now;
+        }
+        if (empty($aclData['update_time'])) {
+            $aclData['update_time'] = $now;
+        }
+
         return $aclData;
     }
 

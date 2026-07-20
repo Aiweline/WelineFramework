@@ -107,9 +107,6 @@ Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_en
 "实体代码已存在: %1","实体代码已存在: %1"
 系统实体不能删除,系统实体不能删除
 实体删除成功,实体删除成功
-"实体不存在: %s","实体不存在: %s"
-"缺少必要参数：attribute_id 或 (entity_code + attribute_code)","缺少必要参数：attribute_id 或 (entity_code + attribute_code)"
-缺少必要参数：entity_code,缺少必要参数：entity_code
 "模型类: %{1} 必须是 EavModelInterface 接口类的实例","模型类: %{1} 必须是 EavModelInterface 接口类的实例"
 请输入,请输入
 Eav属性输入：缺少select选项,Eav属性输入：缺少select选项
@@ -314,6 +311,9 @@ EAV管理,EAV管理
 选择左侧节点查看详情,选择左侧节点查看详情
 点击左侧树形导航中的节点，在此处查看和编辑详情,点击左侧树形导航中的节点，在此处查看和编辑详情
 搜索实体、属性集、属性...,搜索实体、属性集、属性...
+"实体不存在: %s","实体不存在: %s"
+"缺少必要参数：attribute_id 或 (entity_code + attribute_code)","缺少必要参数：attribute_id 或 (entity_code + attribute_code)"
+缺少必要参数：entity_code,缺少必要参数：entity_code
 鍏朵粬,鍏朵粬
 "当前实体不存在 %{1}","当前实体不存在 %{1}"
 类型不存在:%{1},类型不存在:%{1}

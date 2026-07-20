@@ -343,6 +343,21 @@ class SystemConfigTemplateService
             } elseif ($type === 'adapter') {
                 $result['adapters'][] = $attrs;
             } elseif ($type === 'hint') {
+                if (!str_ends_with(rtrim($raw), '/>')) {
+                    $bodyStart = (int)$match[0][1] + strlen($raw);
+                    $bodyEnd = stripos($source, '</w:config:hint>', $bodyStart);
+                    if ($bodyEnd !== false) {
+                        $body = trim(substr($source, $bodyStart, $bodyEnd - $bodyStart));
+                        $body = preg_replace('/<\?(?:php)?[\s\S]*?\?>/i', '', $body) ?? $body;
+                        $body = trim(html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                        if ($body !== '') {
+                            $attrs['text'] = $body;
+                        }
+                    }
+                }
+                if (($attrs['text'] ?? '') === '' && ($attrs['description'] ?? '') !== '') {
+                    $attrs['text'] = (string)$attrs['description'];
+                }
                 $result['hints'][] = $attrs;
             }
         }
@@ -401,7 +416,7 @@ class SystemConfigTemplateService
                 if (!is_array($item)) {
                     continue;
                 }
-                foreach (['code', 'key', 'label', 'description'] as $key) {
+                foreach (['code', 'key', 'label', 'description', 'text'] as $key) {
                     $haystack[] = (string)($item[$key] ?? '');
                 }
             }

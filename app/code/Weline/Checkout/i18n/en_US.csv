@@ -52,6 +52,14 @@
 当支付成功时触发，允许其他模块执行成功后的操作，如更新订单状态、发送通知、增加积分等。,"Triggered when payment succeeds, allowing other modules to perform post-success operations, such as updating order status, sending notifications, adding points, etc."
 支付失败,"Payment Failed"
 当支付失败时触发，允许其他模块执行失败后的操作，如记录日志、发送通知、释放库存等。,"Triggered when payment fails, allowing other modules to perform post-failure operations, such as logging, sending notifications, releasing inventory, etc."
+结账接口不支持该操作：%{1},"Checkout does not support operation: %{1}"
+结账信息已加载,"Checkout data loaded"
+请补全收货信息并选择配送和支付方式。,请补全收货信息并选择配送和支付方式。
+购物车为空，请先加入商品。,购物车为空，请先加入商品。
+订单创建成功,"Order created successfully"
+"预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
+请先登录,"Please login first"
+前台结账,"Storefront checkout"
 结账页面头部之前,"Before Checkout Page Head"
 "在渲染结账页面的 <head> 标签之前触发，允许其他模块在头部开始处注入内容（如CSS、JavaScript等）。","Triggered before rendering the <head> tag of the checkout page, allowing other modules to inject content at the beginning of the head (such as CSS, JavaScript, etc.)."
 结账页面头部之后,"After Checkout Page Head"
@@ -142,12 +150,10 @@
 我的订单,"My Orders"
 订单详情,"Order Details"
 无效的请求方法,"Invalid request method"
-请先登录,"Please login first"
 订单不存在,"Order does not exist"
 无权操作此订单,"No permission to operate this order"
 订单已取消,"Order cancelled"
 取消订单失败：%{1},"Failed to cancel order: %{1}"
-订单创建成功,"Order created successfully"
 订单创建失败：%{1},"Order creation failed: %{1}"
 结账成功,"Checkout Successful"
 支付处理成功,"Payment processed successfully"
@@ -198,12 +204,10 @@ SKU,SKU
 查看订单详情,"View Order Details"
 正在加载结账信息...,正在加载结账信息...
 结账信息加载失败，请稍后重试。,结账信息加载失败，请稍后重试。
-购物车为空，请先加入商品。,购物车为空，请先加入商品。
 提交订单并支付,提交订单并支付
 正在提交订单...,正在提交订单...
 订单已创建，正在前往支付页面。,订单已创建，正在前往支付页面。
 订单已创建，支付正在处理中。,订单已创建，支付正在处理中。
-请补全收货信息并选择配送和支付方式。,请补全收货信息并选择配送和支付方式。
 "Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api 尚未就绪，请刷新页面后重试。"
 安全结账,安全结账
 "购物车、配送、支付和订单创建都由 Weline 核心模块承接。","购物车、配送、支付和订单创建都由 Weline 核心模块承接。"

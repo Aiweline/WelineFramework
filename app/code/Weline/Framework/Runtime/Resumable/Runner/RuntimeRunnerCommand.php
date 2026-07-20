@@ -23,19 +23,44 @@ final class RuntimeRunnerCommand
         }
     }
 
-    public function toShellCommand(): string
+    /**
+     * Argv form for Processer::createDetachedPhpArgv(). Prefer this over the
+     * shell string so the Runner can posix_setsid() out of the parent WLS
+     * worker process group and survive request-fiber teardown.
+     *
+     * @return list<string>
+     */
+    public function toArgv(): array
     {
         $process = $this->invocation->process;
         $bin = rtrim($this->projectRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'w';
 
-        return escapeshellarg(PHP_BINARY)
-            . ' ' . escapeshellarg($bin)
-            . ' runtime:task:run'
-            . ' --task-id=' . escapeshellarg($process->taskId)
-            . ' --generation=' . $process->generation
-            . ' --epoch=' . $process->generation
-            . ' --runner-id=' . escapeshellarg($this->invocation->runnerId)
-            . ' --name=' . escapeshellarg($process->processName)
-            . ' --launch-id=' . escapeshellarg($process->launchId);
+        return [
+            PHP_BINARY,
+            $bin,
+            'runtime:task:run',
+            '--task-id=' . $process->taskId,
+            '--generation=' . (string)$process->generation,
+            '--epoch=' . (string)$process->generation,
+            '--runner-id=' . $this->invocation->runnerId,
+            '--name=' . $process->processName,
+            '--launch-id=' . $process->launchId,
+        ];
+    }
+
+    public function toShellCommand(): string
+    {
+        $argv = $this->toArgv();
+        $php = array_shift($argv);
+        $parts = [escapeshellarg((string)$php)];
+        foreach ($argv as $argument) {
+            // Keep flag tokens unquoted so Processer identity extractors and
+            // legacy shell launchers still see --name=/--launch-id= prefixes.
+            $parts[] = str_starts_with($argument, '--')
+                ? $argument
+                : escapeshellarg($argument);
+        }
+
+        return implode(' ', $parts);
     }
 }

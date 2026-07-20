@@ -1,0 +1,74 @@
+<?php
+/**
+ * @meta.title {default="Cloudflare OAuth 应用",description="Weline_Cdn Cloudflare 一键授权应用凭据（按站点配置）"}
+ * @meta.description {default="每个站点可配置独立的 Cloudflare OAuth Client。账户级 Access Token 仍保存在 CDN 账户中，勿在此填写 API Token。"}
+ * @config.area {backend}
+ * @config.sort {55}
+ * @config.acl {Weline_Cdn::cdn_account_manager}
+ */
+?>
+
+<w:config:group
+    code="cdn_cloudflare_oauth"
+    label="Cloudflare OAuth"
+    description="一键授权登录 Cloudflare。请先在 Cloudflare 控制台按下方「Weline 必选」创建 OAuth Client，再把 Client ID / Secret 填回本页。配置按站点隔离。"
+    sort="10"
+>
+    <w:config:adapter
+        code="cf.oauth.clients"
+        label="Cloudflare OAuth clients"
+        description="直达控制台：Manage Account → OAuth clients。可创建应用，或打开已有应用复制 Client ID / Secret。"
+        external-url="https://dash.cloudflare.com/?to=/:account/oauth-clients"
+        target="_blank"
+        action-label="打开 Cloudflare 创建/查看"
+    />
+
+    <w:config:adapter
+        code="cf.oauth.docs"
+        label="创建 OAuth Client 文档"
+        description="官方步骤与字段说明。创建时请严格按本页「Weline 必选」组合，不要选 Token / None。"
+        external-url="https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/"
+        target="_blank"
+        action-label="打开官方文档"
+    />
+
+    <w:config:adapter
+        code="cf.dashboard"
+        label="Cloudflare 控制台"
+        description="若 deep link 未选中账户，先进入控制台选择账户，再回到 OAuth clients。"
+        external-url="https://dash.cloudflare.com/"
+        target="_blank"
+        action-label="打开控制台首页"
+    />
+
+    <w:config:hint type="info">
+【Weline 必选 — 按此填 Cloudflare「配置 OAuth 客户端」】
+· 客户端名称：任意，例如 Weline
+· 响应类型：Code（禁止选 Token）
+· 授权类型：Authorization Code（需要长期免重新登录时，再额外勾选/加上 Refresh Token）
+· 令牌身份验证方法：Client Secret Post 或 Client Secret Basic（禁止选 None；None 仅用于纯前端/PKCE）
+· 重定向（回调）URL：https://本站域名/后台key/cdn/backend/oauth/callback（协议、域名、后台 key、路径必须与真实后台一致）
+· 客户端 URL：可选，填站点首页；若以后要公开客户端，该项可能变为必填
+
+【常见错误】
+· 响应类型选 Token：Token 会出现在浏览器地址栏，不安全，且本系统用「授权码换 Token」，对不上
+· 认证方法选 None：本系统保存并使用 Client Secret，必须选带 Secret 的方法
+· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败
+
+【创建后】
+把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。
+完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md
+    </w:config:hint>
+
+    <w:config:field key="cdn/cloudflare/oauth_client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global,website" sensitive="0" />
+    <w:config:field key="cdn/cloudflare/oauth_client_secret" label="OAuth Client Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" />
+    <w:config:field
+        key="cdn/cloudflare/oauth_scopes"
+        label="OAuth Scopes（空格分隔）"
+        type="text"
+        value-type="string"
+        default="account.read zone.read"
+        scope="global,website"
+        description="须与 Cloudflare OAuth Client 中勾选的 scopes 一致；创建 Client 时请包含 Zone/Cache Purge/Cache Rules 等 CDN 所需权限。"
+    />
+</w:config:group>
