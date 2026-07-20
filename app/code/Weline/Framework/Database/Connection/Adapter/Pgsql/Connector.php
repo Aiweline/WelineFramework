@@ -241,15 +241,15 @@ final class Connector extends Query implements ConnectorInterface
      */
     public function getLink(): PDO
     {
+        // Match Mysql/Sqlite: lazily (re)acquire when link is missing or lease ended.
+        // requestEndCleanup may return the PDO while this process retains the Connector.
+        if ($this->link === null || !$this->lease?->isActive()) {
+            $this->create();
+        }
         if ($this->link === null) {
             throw new LinkException(__('数据库连接未初始化'));
         }
-        if (!$this->lease?->isActive()) {
-            // requestEndCleanup may have returned the PDO while this process
-            // retains the Connector. Reacquire before exposing that reference.
-            $this->create();
-        }
-        
+
         // 🔧 修复：直接返回原始 PDO 对象，不再使用包装器
         // SQL 转换逻辑已移到 Query 类中处理
         return $this->link;
