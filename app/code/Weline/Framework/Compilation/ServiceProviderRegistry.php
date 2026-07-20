@@ -51,9 +51,15 @@ final class ServiceProviderRegistry
 
         $file = $this->registryFile ?? self::DEFAULT_REGISTRY_FILE;
         if (!is_file($file)) {
-            throw new \RuntimeException(
-                'Compiled module provider registry is missing. Run: php bin/w framework:compile',
-            );
+            // First framework:compile / cold bootstrap: allow Factory fallbacks.
+            // Explicit staging registries still throw via constructor path below.
+            if ($this->registryFile !== null) {
+                throw new \RuntimeException(
+                    'Compiled module provider registry is missing. Run: php bin/w framework:compile',
+                );
+            }
+            $this->providers = [];
+            return;
         }
         $registry = require $file;
         if (!is_array($registry) || ($registry['format'] ?? null) !== ModuleRegistryCompiler::FORMAT_VERSION) {
