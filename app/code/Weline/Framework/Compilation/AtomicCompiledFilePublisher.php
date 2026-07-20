@@ -18,7 +18,7 @@ final class AtomicCompiledFilePublisher
     private const LOCK_FILE = '.framework-compile.lock';
 
     /**
-     * @var array<string, array{pid:int, handle:resource}>
+     * @var array<string, array{pid:int, handle:resource, mode:int}>
      */
     private static array $directoryLocks = [];
 
@@ -43,7 +43,7 @@ final class AtomicCompiledFilePublisher
 
         $directory = \dirname($target);
         $this->ensureDirectory($directory);
-        $this->acquireCompileLock($directory);
+        $this->acquireCompileLock($directory, \LOCK_EX);
 
         if ($this->isWindows()) {
             $this->recoverInterruptedWindowsPublish($target);
@@ -71,16 +71,47 @@ final class AtomicCompiledFilePublisher
     /**
      * Hold the same directory lock used by publish() across a caller-owned
      * multi-file promotion. The caller must release it with
-     * releaseProcessLocks() from a finally block.
+     * releaseDirectoryLock() from a finally block only when this call returns
+     * true. False means the current PID already owned a compatible lock.
      */
-    public function acquireDirectoryLock(string $directory): void
+    public function acquireDirectoryLock(string $directory, int $mode = \LOCK_EX): bool
     {
         if (\trim($directory) === '') {
             throw new \InvalidArgumentException('Compiled artifact lock directory must not be empty.');
         }
+        if ($mode !== \LOCK_SH && $mode !== \LOCK_EX) {
+            throw new \InvalidArgumentException('Compiled artifact lock mode must be LOCK_SH or LOCK_EX.');
+        }
 
         $this->ensureDirectory($directory);
-        $this->acquireCompileLock($directory);
+        return $this->acquireCompileLock($directory, $mode);
+    }
+
+    /**
+     * Release one directory lock owned by the current PID without disturbing
+     * caller-owned locks for another compilation directory.
+     */
+    public static function releaseDirectoryLock(string $directory): void
+    {
+        if (\trim($directory) === '') {
+            return;
+        }
+
+        $key = self::directoryLockKey($directory);
+        $lock = self::$directoryLocks[$key] ?? null;
+        if ($lock === null) {
+            return;
+        }
+
+        $handle = $lock['handle'];
+        if (\is_resource($handle)) {
+            $pid = (int)(\getmypid() ?: 0);
+            if ($lock['pid'] === $pid) {
+                @\flock($handle, \LOCK_UN);
+            }
+            @\fclose($handle);
+        }
+        unset(self::$directoryLocks[$key]);
     }
 
     /**
@@ -120,10 +151,10 @@ final class AtomicCompiledFilePublisher
         }
     }
 
-    private function acquireCompileLock(string $directory): void
+    private function acquireCompileLock(string $directory, int $mode): bool
     {
         $resolvedDirectory = \realpath($directory) ?: $directory;
-        $key = $this->isWindows() ? \strtolower($resolvedDirectory) : $resolvedDirectory;
+        $key = self::directoryLockKey($resolvedDirectory);
         $pid = (int)(\getmypid() ?: 0);
         $existing = self::$directoryLocks[$key] ?? null;
         if ($existing !== null) {
@@ -132,7 +163,12 @@ final class AtomicCompiledFilePublisher
                     "Compiled artifact publisher cannot reuse an inherited or invalid lock: {$resolvedDirectory}.",
                 );
             }
-            return;
+            if ($existing['mode'] === \LOCK_EX || $existing['mode'] === $mode) {
+                return false;
+            }
+            throw new \RuntimeException(
+                "Compiled artifact publisher cannot upgrade a shared lock in place: {$resolvedDirectory}.",
+            );
         }
 
         $lockFile = $resolvedDirectory . \DIRECTORY_SEPARATOR . self::LOCK_FILE;
@@ -148,14 +184,16 @@ final class AtomicCompiledFilePublisher
 
         $deadline = \hrtime(true) + ($this->lockTimeoutMilliseconds * 1_000_000);
         do {
-            if (@\flock($handle, \LOCK_EX | \LOCK_NB)) {
-                self::$directoryLocks[$key] = ['pid' => $pid, 'handle' => $handle];
+            if (@\flock($handle, $mode | \LOCK_NB)) {
+                self::$directoryLocks[$key] = ['pid' => $pid, 'handle' => $handle, 'mode' => $mode];
                 $this->registerShutdownRelease();
-                @\ftruncate($handle, 0);
-                @\rewind($handle);
-                @\fwrite($handle, "pid={$pid}\nacquired_at=" . \date(\DATE_ATOM) . "\n");
-                @\fflush($handle);
-                return;
+                if ($mode === \LOCK_EX) {
+                    @\ftruncate($handle, 0);
+                    @\rewind($handle);
+                    @\fwrite($handle, "pid={$pid}\nacquired_at=" . \date(\DATE_ATOM) . "\n");
+                    @\fflush($handle);
+                }
+                return true;
             }
 
             $remainingNanoseconds = $deadline - \hrtime(true);
@@ -166,9 +204,16 @@ final class AtomicCompiledFilePublisher
         } while (true);
 
         @\fclose($handle);
+        $modeLabel = $mode === \LOCK_SH ? 'shared' : 'exclusive';
         throw new \RuntimeException(
-            "Timed out after {$this->lockTimeoutMilliseconds}ms waiting for framework compile lock: {$lockFile}.",
+            "Timed out after {$this->lockTimeoutMilliseconds}ms waiting for {$modeLabel} framework compile lock: {$lockFile}.",
         );
+    }
+
+    private static function directoryLockKey(string $directory): string
+    {
+        $resolvedDirectory = \realpath($directory) ?: $directory;
+        return \DIRECTORY_SEPARATOR === '\\' ? \strtolower($resolvedDirectory) : $resolvedDirectory;
     }
 
     private function registerShutdownRelease(): void
