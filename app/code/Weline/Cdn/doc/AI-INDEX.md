@@ -53,6 +53,7 @@
 
 - `app/code/Weline/Cdn/doc/CDN注释使用指南.md`
 - `app/code/Weline/Cdn/doc/Cloudflare-API-Token-Permissions.md`
+- `app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md`
 - `app/code/Weline/Cdn/doc/README.md`
 - `app/code/Weline/Cdn/doc/event/CDN供应商列表.md`
 - `app/code/Weline/Cdn/doc/event/CDN攻击检测信号.md`

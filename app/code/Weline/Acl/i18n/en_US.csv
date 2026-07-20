@@ -202,3 +202,5 @@ Acl角色添加,"Acl role addition"
 "资源 ID 不能为空","Resource ID cannot be empty"
 "资源 ID 已存在： %{1}","Resource ID already exists: %{1}"
 "该菜单下有 %{1} 个子菜单，请先删除子菜单","This menu has %{1} submenu(s). Please delete the submenus first"
+系统菜单,系统菜单
+用户菜单,用户菜单

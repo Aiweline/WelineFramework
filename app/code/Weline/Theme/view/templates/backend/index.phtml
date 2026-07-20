@@ -1,3 +1,4 @@
+<?php /* hash:840874070cac549db25582105c833ae9-80102 */ ?>
 <?php
 /**
  * 主题管理列表页面（前后端分 Tab，各自选择激活）
@@ -22,7 +23,7 @@ foreach ($themes as $themeItem) {
     }
 }
 ?>
-<!-- 页面标题 -->
+
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -37,9 +38,9 @@ foreach ($themes as $themeItem) {
     </div>
 </div>
 
-<!-- 消息提示 -->
+
 <div class="row">
-    <template>Weline_Component::message.phtml</template>
+    <?php include $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, 'Weline_Component::message.phtml'); ?>
 </div>
 
 <div class="weline-theme-manage">
@@ -65,7 +66,7 @@ foreach ($themes as $themeItem) {
         </div>
     <?php else: ?>
         <div class="weline-theme-manage__tabbar mb-3">
-            <!-- 前后端 Tab -->
+            
             <ul class="nav nav-tabs weline-theme-manage__tabs mb-0" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link active" data-bs-toggle="tab" href="#weline-theme-tab-frontend" role="tab">
@@ -129,6 +130,12 @@ foreach ($themes as $themeItem) {
                         ? ($theme['backend_preview_image'] ?? '')
                         : ($theme['frontend_preview_image'] ?? $theme['preview_image'] ?? '');
                     $previewImageSrc = $previewImage ? '/' . ltrim($previewImage, '/') : '';
+                    if ($previewImageSrc !== '') {
+                        $previewAbs = PUB . ltrim(str_replace('\\', '/', $previewImage), '/');
+                        if (is_file($previewAbs)) {
+                            $previewImageSrc .= '?v=' . (string)filemtime($previewAbs);
+                        }
+                    }
                     $hasPreview = $previewImageSrc !== '';
             ?>
                 <div class="theme-grid-item">
@@ -205,7 +212,7 @@ foreach ($themes as $themeItem) {
     <?php endif; ?>
 </div>
 
-<!-- AI创建虚拟主题弹窗 -->
+
 <div class="modal fade" id="aiVirtualThemeModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content theme-preview-modal ai-virtual-theme-modal">
@@ -280,7 +287,7 @@ foreach ($themes as $themeItem) {
     </div>
 </div>
 
-<!-- 批量生成预览图弹窗 -->
+
 <div class="modal fade" id="batchGenerateModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content theme-preview-modal">
@@ -300,27 +307,16 @@ foreach ($themes as $themeItem) {
                     <div class="mt-2 small text-muted" id="batchCount"></div>
                 </div>
                 <div id="batchResult" class="mt-3" style="display: none;"></div>
-                <div class="mt-3">
-                    <w:theme:sse-terminal
-                        id="theme-batch-preview-terminal"
-                        title="@lang{批量生成预览图进度}"
-                        height="260px"
-                        events="start,progress,chunk,warning,done,error"
-                        show-toolbar="false"
-                        show-start-toggle="false"
-                        show-timestamp="false"
-                        auto-scroll="true"
-                    />
-                </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" id="cancelBatchPreviewTask" disabled><?= __('取消任务') ?></button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 单个主题生成预览图弹窗 -->
+
 <div class="modal fade" id="singleGenerateModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content theme-preview-modal">
@@ -339,671 +335,19 @@ foreach ($themes as $themeItem) {
                     <?= __('正在生成预览图，请稍候...') ?>
                 </div>
             </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" id="cancelSinglePreviewTask" disabled><?= __('取消任务') ?></button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+            </div>
         </div>
     </div>
 </div>
 
-<script type="text/plain" id="theme-manage-legacy-script">
-(function() {
-    'use strict';
-
-    // 配置
-    const BASE_URL = '<?= $this->getBaseUrl() ?>';
-    const CSRF_TOKEN = '<?= $this->getFormKeyValue() ?>';
-    const GENERATE_PREVIEW_URL = '<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>';
-    const singleGenerateModalElement = document.getElementById('singleGenerateModal');
-    const singleGenerateModal = singleGenerateModalElement ? new bootstrap.Modal(singleGenerateModalElement) : null;
-
-    // 全局变量
-    let batchTotal = 0;
-    let batchProcessed = 0;
-
-    // 批量生成按钮点击事件
-    document.getElementById('batchGeneratePreviews')?.addEventListener('click', function() {
-        const modal = new bootstrap.Modal(document.getElementById('batchGenerateModal'));
-        modal.show();
-        
-        // 准备批量生成
-        batchTotal = <?= count($themes) ?>;
-        batchProcessed = 0;
-        
-        document.getElementById('batchStatus').innerText = '正在准备生成 ' + batchTotal + ' 个主题的预览图...';
-        document.getElementById('batchCount').innerText = '0 / ' + batchTotal;
-        document.getElementById('batchResult').style.display = 'none';
-        
-        startBatchPreviewsSse(modal);
-    });
-
-    function startBatchPreviewsSse(modal) {
-        const streamUrl = '<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviewsSse') ?>';
-        const term = window.WelineSseTerminal && window.WelineSseTerminal['theme-batch-preview-terminal'];
-        if (!term) {
-            console.error('SSE Terminal not found');
-            return;
-        }
-
-        // 清理旧输出
-        if (typeof term.clear === 'function') term.clear();
-
-        // 辅助函数：解析 SSE 事件数据
-        function parseSseData(e) {
-            if (!e) return null;
-            // 如果是字符串，直接解析
-            if (typeof e === 'string') {
-                try {
-                    return JSON.parse(e);
-                } catch (err) {
-                    return e;
-                }
-            }
-            // SSE Event 对象有 data 属性（字符串）
-            if (typeof e.data === 'string') {
-                try {
-                    return JSON.parse(e.data);
-                } catch (err) {
-                    return e.data;
-                }
-            }
-            // 如果 data 已经是对象，直接返回
-            if (typeof e.data === 'object' && e.data !== null) {
-                return e.data;
-            }
-            // 尝试直接解析整个 e
-            if (typeof e === 'object') {
-                return e;
-            }
-            return null;
-        }
-
-        // 监听 start 事件获取总任务数
-        term.on('start', function(e) {
-            console.log('SSE start event:', e);
-            const data = parseSseData(e);
-            console.log('SSE start parsed data:', data);
-            if (data) {
-                batchTotal = data.total || 0;
-                const statusEl = document.getElementById('batchStatus');
-                const countEl = document.getElementById('batchCount');
-                const msg = data.message || ('开始生成 ' + batchTotal + ' 个预览图');
-                if (statusEl) statusEl.innerText = msg + '（并发数：' + (data.concurrency || 4) + '）';
-                if (countEl) countEl.innerText = '0 / ' + batchTotal;
-
-                // 在终端内容区域显示开始消息
-                if (typeof term.log === 'function') {
-                    term.log(msg);
-                }
-            }
-        });
-
-        // 监听 progress 事件更新进度
-        term.on('progress', function(e) {
-            console.log('SSE progress event:', e);
-            const data = parseSseData(e);
-            console.log('SSE progress parsed data:', data);
-            if (data) {
-                batchProcessed = data.current || 0;
-                batchTotal = data.total || batchTotal;
-
-                // 更新进度条
-                const progressBar = document.querySelector('#batchProgress .progress-bar');
-                if (progressBar) {
-                    progressBar.style.width = (data.progress || 0) + '%';
-                }
-
-                // 更新计数
-                const countEl = document.getElementById('batchCount');
-                if (countEl) countEl.innerText = batchProcessed + ' / ' + batchTotal;
-
-                // 更新状态消息
-                const statusEl = document.getElementById('batchStatus');
-                if (statusEl && data.message) {
-                    statusEl.innerText = data.message;
-                }
-
-                // 在终端内容区域显示详细消息
-                if (data.message && typeof term.log === 'function') {
-                    term.log(data.message);
-                }
-            }
-        });
-
-        // 事件结束后关闭弹窗并刷新页面
-        term.on('done', function(e) {
-            const data = parseSseData(e) || {};
-            const detail = data.data && typeof data.data === 'object' ? data.data : {};
-            const failed = Number(detail.failed || 0);
-            const success = Number(detail.success || 0);
-            const total = Number(detail.total || batchTotal || 0);
-            const doneMessage = data.message || (failed > 0 ? '批量生成完成（存在失败）' : '全部预览图生成完成！');
-
-            if (typeof term.log === 'function') {
-                term.log(doneMessage);
-                if (total > 0) {
-                    term.log('结果：成功 ' + success + ' / 失败 ' + failed + ' / 总计 ' + total);
-                }
-            }
-
-            const statusEl = document.getElementById('batchStatus');
-            const countEl = document.getElementById('batchCount');
-            if (statusEl) {
-                statusEl.innerText = doneMessage;
-            }
-            if (countEl && total > 0) {
-                countEl.innerText = success + ' / ' + total + '（失败 ' + failed + '）';
-            }
-
-            if (failed > 0) {
-                const resultEl = document.getElementById('batchResult');
-                if (resultEl) {
-                    resultEl.style.display = 'block';
-                    resultEl.innerHTML = '<div class="alert alert-warning mb-0">' +
-                        '<i class="mdi mdi-alert-circle-outline me-1"></i>' +
-                        '仍有 ' + failed + ' 个预览图生成失败，请查看终端日志中的超时/错误项后重试。' +
-                        '</div>';
-                }
-                return;
-            }
-
-            modal.hide();
-            location.reload();
-        });
-        term.on('error', function(e) {
-            // 在终端内容区域显示错误消息
-            const data = parseSseData(e);
-            if (data && data.message && typeof term.log === 'function') {
-                term.log('错误: ' + data.message);
-            }
-            modal.hide();
-        });
-
-        const fd = new FormData();
-        fd.append('form_key', CSRF_TOKEN);
-
-        fd.append('concurrency', '2');
-        term.start(streamUrl, { method: 'POST', body: fd });
-    }
-
-    // 批量生成预览图
-    async function fetchBatchPreviews() {
-        try {
-            const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviews') ?>', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'form_key': CSRF_TOKEN
-                })
-            });
-
-            const result = await response.json();
-            
-            if (result.success === true || result.status === 'success' || result.status === 'warning') {
-                document.getElementById('batchStatus').innerHTML = 
-                    '<span class="text-success"><i class="mdi mdi-check-circle"></i> 生成完成！</span>';
-                document.getElementById('batchCount').innerHTML = 
-                    '✓ ' + result.data.success + ' 个成功，' + (result.data.failed || 0) + ' 个失败';
-                
-                // 显示详细结果
-                if (result.data.messages && result.data.messages.length > 0) {
-                    let html = '<div class="alert alert-warning"><h6>失败详情：</h6><ul class="mb-0">';
-                    result.data.messages.forEach(msg => {
-                        html += '<li>' + escapeHtml(msg) + '</li>';
-                    });
-                    html += '</ul></div>';
-                    document.getElementById('batchResult').innerHTML = html;
-                    document.getElementById('batchResult').style.display = 'block';
-                }
-                
-                // 3秒后自动刷新页面
-                setTimeout(() => {
-                    modal.hide();
-                    location.reload();
-                }, 3000);
-            } else {
-                document.getElementById('batchStatus').innerHTML = 
-                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 生成失败：' + 
-                    escapeHtml(result.message) + '</span>';
-            }
-        } catch (error) {
-            console.error('批量生成预览图失败:', error);
-            document.getElementById('batchStatus').innerHTML = 
-                '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 网络错误：' + 
-                escapeHtml(error.message) + '</span>';
-        }
-    }
-
-    // 激活主题按钮（按区域）
-    document.querySelectorAll('.activate-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (this.disabled) return;
-            const themeId = this.dataset.themeId;
-            const themeName = this.dataset.themeName;
-            const area = this.dataset.area || 'frontend';
-            const areaLabel = area === 'frontend' ? '<?= __('前台') ?>' : '<?= __('后台') ?>';
-            fetch('<?= $url->getBackendUrl('theme/backend/index/postActivate') ?>', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ form_key: CSRF_TOKEN, theme_id: themeId, area: area })
-            }).then(r => r.json()).then(function(result) {
-                const isSuccess = result && (
-                    result.status === 'success' ||
-                    result.success === true ||
-                    result.success === 1 ||
-                    result.success === '1' ||
-                    result.code === 200 ||
-                    result.code === '200'
-                );
-
-                if (isSuccess) {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.success('<?= __('主题已设为%{1}主题') ?>'.replace('%{1}', areaLabel));
-                        location.reload();
-                    } else if (typeof BackendConfirm !== 'undefined') {
-                        BackendConfirm.show('<?= __('主题激活成功') ?>', { type: 'success' }).then(function () {
-                            location.reload();
-                        });
-                    } else {
-                        location.reload();
-                    }
-                } else {
-                    const msg = result.message || '<?= __('激活失败') ?>';
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error(msg);
-                    } else {
-                        if (typeof BackendConfirm !== 'undefined') {
-                            BackendConfirm.show(msg, { type: 'danger' });
-                        } else {
-                            console.error(msg);
-                        }
-                    }
-                }
-            }).catch(function(err) {
-                const msg = '<?= __('网络错误') ?>: ' + (err.message || '');
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error(msg);
-                } else {
-                    if (typeof BackendConfirm !== 'undefined') {
-                        BackendConfirm.show(msg, { type: 'danger' });
-                    } else {
-                        console.error(msg);
-                    }
-                }
-            });
-        });
-    });
-
-    // 单个主题生成按钮点击事件
-    document.querySelectorAll('.generate-preview-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const themeId = this.dataset.themeId;
-            const themeName = this.dataset.themeName;
-            const area = this.dataset.area || 'frontend';
-            const areaLabel = area === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>';
-            
-            // 显示弹窗
-            const modal = new bootstrap.Modal(document.getElementById('singleGenerateModal'));
-            modal.show();
-            
-            // 更新标题
-            document.getElementById('singleGenerateTitle').innerText = '生成 "' + themeName + '" 的 ' + areaLabel + ' 预览图';
-            
-            // 显示进度
-            document.getElementById('singleStatus').innerHTML = '正在生成预览图，请稍候...';
-            document.getElementById('singleSpinner').style.display = 'block';
-            
-            // 发送生成请求
-            generateSinglePreview(themeId, area);
-        });
-    });
-
-    // 生成单个主题预览图
-    async function generateSinglePreview(themeId, area) {
-        try {
-            const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'form_key': CSRF_TOKEN,
-                    'theme_id': themeId,
-                    'area': area,
-                    'force': '1'
-                })
-            });
-
-            const result = await response.json();
-            
-            document.getElementById('singleSpinner').style.display = 'none';
-            
-            if (result.status === 'success') {
-                document.getElementById('singleStatus').innerHTML = 
-                    '<span class="text-success"><i class="mdi mdi-check-circle"></i> 预览图生成成功！</span>';
-                
-                // 1秒后刷新页面
-                setTimeout(() => {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('singleGenerateModal'));
-                    modal.hide();
-                    location.reload();
-                }, 1000);
-            } else {
-                document.getElementById('singleStatus').innerHTML = 
-                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 生成失败：' + 
-                    escapeHtml(result.message) + '</span>';
-            }
-        } catch (error) {
-            console.error('生成预览图失败:', error);
-            document.getElementById('singleSpinner').style.display = 'none';
-            document.getElementById('singleStatus').innerHTML = 
-                '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 网络错误：' + 
-                escapeHtml(error.message) + '</span>';
-        }
-    }
-
-    // HTML转义函数
-    function findThemeCard(themeId, area) {
-        return Array.from(document.querySelectorAll('.theme-card')).find(function(card) {
-            return card.dataset.themeId === String(themeId) && card.dataset.area === area;
-        }) || null;
-    }
-
-    function appendPreviewCacheBuster(url) {
-        if (!url) {
-            return '';
-        }
-
-        return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
-    }
-
-    function updatePreviewActionButton(card, hasPreview) {
-        if (!card) {
-            return;
-        }
-
-        const button = card.querySelector('.preview-action-btn');
-        const icon = button ? button.querySelector('i') : null;
-        card.dataset.hasPreview = hasPreview ? '1' : '0';
-        card.dataset.needsPreview = hasPreview ? '0' : '1';
-
-        if (!button) {
-            return;
-        }
-
-        button.dataset.force = hasPreview ? '1' : '0';
-        button.title = hasPreview ? '<?= __('刷新预览图') ?>' : '<?= __('生成预览图') ?>';
-        button.classList.remove('btn-primary', 'btn-outline-light', 'preview-action-btn--generate', 'preview-action-btn--refresh');
-        button.classList.add(hasPreview ? 'btn-outline-light' : 'btn-primary');
-        button.classList.add(hasPreview ? 'preview-action-btn--refresh' : 'preview-action-btn--generate');
-
-        if (icon) {
-            icon.className = 'mdi ' + (hasPreview ? 'mdi-refresh' : 'mdi-camera');
-        }
-    }
-
-    function setThemeCardStatus(card, type, message) {
-        if (!card) {
-            return;
-        }
-
-        const badge = card.querySelector('.theme-preview-status-badge');
-        if (!badge) {
-            return;
-        }
-
-        if (!message) {
-            badge.textContent = '';
-            badge.className = 'theme-preview-status-badge d-none';
-            return;
-        }
-
-        badge.textContent = message;
-        badge.className = 'theme-preview-status-badge preview-status--' + type;
-    }
-
-    function setThemeCardGenerating(card, generating) {
-        if (!card) {
-            return;
-        }
-
-        card.classList.toggle('is-generating', generating);
-        const button = card.querySelector('.preview-action-btn');
-        if (button) {
-            button.disabled = generating;
-        }
-    }
-
-    function showThemePreviewPlaceholder(image, placeholder) {
-        if (!image) {
-            return;
-        }
-
-        const targetSelector = image.getAttribute('data-fallback-target') || '.theme-preview-placeholder';
-        const target = placeholder || (image.parentNode ? image.parentNode.querySelector(targetSelector) : null);
-        image.classList.add('d-none');
-        if (target) {
-            target.classList.remove('d-none');
-        }
-    }
-
-    function bindThemePreviewImageFallback(image, placeholder) {
-        if (!image || image.dataset.fallbackBound === '1') {
-            return;
-        }
-
-        image.dataset.fallbackBound = '1';
-        image.addEventListener('error', function() {
-            showThemePreviewPlaceholder(image, placeholder);
-        });
-    }
-
-    document.querySelectorAll('.theme-preview-image[data-fallback-target]').forEach(function(image) {
-        bindThemePreviewImageFallback(image);
-    });
-
-    function updateThemeCardPreview(card, imageUrl) {
-        if (!card || !imageUrl) {
-            return;
-        }
-
-        const preview = card.querySelector('.theme-preview');
-        let image = card.querySelector('.theme-preview-image');
-        const placeholder = card.querySelector('.theme-preview-placeholder');
-
-        if (!image && preview) {
-            image = document.createElement('img');
-            image.alt = '<?= __('主题预览') ?>';
-            image.className = 'theme-preview-image';
-            image.setAttribute('data-fallback-target', '.theme-preview-placeholder');
-            bindThemePreviewImageFallback(image, placeholder);
-            preview.insertBefore(image, preview.firstChild);
-        } else {
-            bindThemePreviewImageFallback(image, placeholder);
-        }
-
-        if (image) {
-            image.src = appendPreviewCacheBuster(imageUrl);
-            image.classList.remove('d-none');
-        }
-
-        if (placeholder) {
-            placeholder.classList.add('d-none');
-        }
-
-        updatePreviewActionButton(card, true);
-    }
-
-    async function generateSinglePreview(themeId, area, options = {}) {
-        const config = Object.assign({
-            force: true,
-            showModal: false,
-            card: null,
-            themeName: '',
-            statusMessage: '',
-            successMessage: '',
-            errorMessage: '',
-        }, options);
-
-        const card = config.card || findThemeCard(themeId, area);
-
-        if (config.showModal && singleGenerateModal) {
-            singleGenerateModal.show();
-            document.getElementById('singleGenerateTitle').innerText = config.themeName || '';
-            document.getElementById('singleStatus').innerHTML = config.statusMessage || '<?= __('正在生成预览图，请稍候...') ?>';
-            document.getElementById('singleSpinner').style.display = 'block';
-        }
-
-        if (card) {
-            setThemeCardGenerating(card, true);
-            setThemeCardStatus(card, 'info', config.statusMessage || '<?= __('正在生成') ?>');
-        }
-
-        try {
-            const response = await fetch(GENERATE_PREVIEW_URL, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'form_key': CSRF_TOKEN,
-                    'theme_id': themeId,
-                    'area': area,
-                    'force': config.force ? '1' : '0'
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.status === 'success') {
-                const imageUrl = result?.data?.image_url || '';
-                if (card) {
-                    updateThemeCardPreview(card, imageUrl);
-                    setThemeCardStatus(card, 'success', config.successMessage || '<?= __('预览图已更新') ?>');
-                    window.setTimeout(function() {
-                        setThemeCardStatus(card, '', '');
-                    }, 1800);
-                }
-
-                if (config.showModal) {
-                    document.getElementById('singleSpinner').style.display = 'none';
-                    document.getElementById('singleStatus').innerHTML =
-                        '<span class="text-success"><i class="mdi mdi-check-circle"></i> ' +
-                        escapeHtml(config.successMessage || '<?= __('预览图生成成功') ?>') +
-                        '</span>';
-                    window.setTimeout(function() {
-                        singleGenerateModal.hide();
-                    }, 800);
-                }
-
-                return result;
-            }
-
-            const errorMessage = (result && result.message) ? result.message : (config.errorMessage || '<?= __('生成失败') ?>');
-            if (card) {
-                setThemeCardStatus(card, 'error', errorMessage);
-            }
-            if (config.showModal) {
-                document.getElementById('singleSpinner').style.display = 'none';
-                document.getElementById('singleStatus').innerHTML =
-                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> ' +
-                    escapeHtml(errorMessage) +
-                    '</span>';
-            }
-
-            return null;
-        } catch (error) {
-            const message = (config.errorMessage || '<?= __('网络错误') ?>') + ': ' + (error.message || '');
-            console.error('Theme preview generation failed', error);
-            if (card) {
-                setThemeCardStatus(card, 'error', message);
-            }
-            if (config.showModal) {
-                document.getElementById('singleSpinner').style.display = 'none';
-                document.getElementById('singleStatus').innerHTML =
-                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> ' +
-                    escapeHtml(message) +
-                    '</span>';
-            }
-
-            return null;
-        } finally {
-            if (card) {
-                setThemeCardGenerating(card, false);
-            }
-        }
-    }
-
-    async function autoGenerateMissingPreviews() {
-        const cards = Array.from(document.querySelectorAll('.theme-card[data-needs-preview="1"]'));
-        if (!cards.length) {
-            return;
-        }
-
-        for (const card of cards) {
-            const themeId = card.dataset.themeId;
-            const area = card.dataset.area || 'frontend';
-            const areaLabel = area === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>';
-
-            await generateSinglePreview(themeId, area, {
-                force: false,
-                showModal: false,
-                card: card,
-                statusMessage: '<?= __('自动生成中') ?>' + ' ' + areaLabel,
-                successMessage: '<?= __('自动生成完成') ?>',
-                errorMessage: '<?= __('自动生成失败') ?>',
-            });
-        }
-    }
-
-    document.querySelectorAll('.preview-action-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const themeId = this.dataset.themeId;
-            const themeName = this.dataset.themeName;
-            const area = this.dataset.area || 'frontend';
-            const force = this.dataset.force === '1';
-            const areaLabel = area === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>';
-            const actionText = force ? '<?= __('刷新') ?>' : '<?= __('生成') ?>';
-
-            generateSinglePreview(themeId, area, {
-                force: force,
-                showModal: true,
-                card: findThemeCard(themeId, area),
-                themeName: actionText + ' "' + themeName + '" ' + areaLabel + ' <?= __('预览图') ?>',
-                statusMessage: actionText + '<?= __('中...') ?>',
-                successMessage: force ? '<?= __('预览图已刷新') ?>' : '<?= __('预览图生成成功') ?>',
-                errorMessage: force ? '<?= __('刷新失败') ?>' : '<?= __('生成失败') ?>',
-            });
-        });
-    });
-
-    window.setTimeout(autoGenerateMissingPreviews, 300);
-
-    function escapeHtml(text) {
-        if (!text) return '';
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-})();
-</script>
 
 <script>
 (function() {
     'use strict';
 
-    const CSRF_TOKEN = '<?= $this->getFormKeyValue() ?>';
-    const ACTIVATE_URL = '<?= $url->getBackendUrl('theme/backend/index/postActivate') ?>';
-    const GENERATE_PREVIEW_URL = '<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>';
-    const BATCH_GENERATE_URL = '<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviews') ?>';
-    const AI_CATALOG_URL = '<?= $url->getBackendUrl('theme/backend/virtual-theme/ai-catalog') ?>';
-    const AI_CREATE_DRAFT_URL = '<?= $url->getBackendUrl('theme/backend/virtual-theme/create-draft') ?>';
     const THEME_EDITOR_URL = '<?= $url->getBackendUrl('theme/backend/theme-editor') ?>';
     const batchGenerateModalElement = document.getElementById('batchGenerateModal');
     const singleGenerateModalElement = document.getElementById('singleGenerateModal');
@@ -1048,6 +392,248 @@ foreach ($themes as $themeItem) {
     const singleGenerateModal = createModalAdapter(singleGenerateModalElement);
     const aiVirtualThemeModal = createModalAdapter(aiVirtualThemeModalElement);
     let aiVirtualThemeCatalogPromise = null;
+    let apiPromise = null;
+    let runtimeApiPromise = null;
+    const PREVIEW_TASK_STORAGE_PREFIX = 'weline.theme.preview.task.';
+    const activePreviewStreams = new Map();
+    const activeVirtualThemeStreams = new Map();
+    const activePreviewTargets = new Set();
+    let activeBatchTaskId = null;
+    let activeSingleTaskId = null;
+
+    function resolveFullApiModule(api) {
+        if (window.WelineApiModule
+            && window.WelineApiModule.__full === true
+            && typeof window.WelineApiModule.resource === 'function') {
+            return window.WelineApiModule;
+        }
+        return api;
+    }
+
+    function getApi() {
+        if (!apiPromise) {
+            apiPromise = (async function() {
+                if (!window.Weline || typeof window.Weline.load !== 'function') {
+                    throw new Error('<?= addslashes(__('加载失败')) ?>');
+                }
+                const Weline = window.Weline;
+                const api = resolveFullApiModule(await Weline.load('api'));
+                if (!api || typeof api.resource !== 'function') {
+                    throw new Error('<?= addslashes(__('加载失败')) ?>');
+                }
+                if (window.Weline) {
+                    window.Weline.Api = api;
+                }
+                return api;
+            })();
+        }
+        return apiPromise;
+    }
+
+    function getRuntimeApi() {
+        if (!runtimeApiPromise) {
+            runtimeApiPromise = getApi().then(function(api) {
+                api = resolveFullApiModule(api);
+                if (typeof api.createStream !== 'function') {
+                    throw new Error('<?= addslashes(__('可恢复任务 API 不可用。')) ?>');
+                }
+                return api;
+            });
+        }
+        return runtimeApiPromise;
+    }
+
+    function createPreviewRequestId(prefix) {
+        if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            window.crypto.getRandomValues(bytes);
+            return prefix + '-' + Array.from(bytes, function(byte) {
+                return byte.toString(16).padStart(2, '0');
+            }).join('');
+        }
+        return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
+    }
+
+    function streamPayload(event) {
+        if (!event) {
+            return {};
+        }
+        if (event.data && typeof event.data === 'object') {
+            return event.data;
+        }
+        try {
+            const value = JSON.parse(String(event.data || '{}'));
+            return value && typeof value === 'object' ? value : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function normalizeRuntimeTaskHandle(value) {
+        if (!value || typeof value !== 'object'
+            || typeof value.task_id !== 'string' || !value.task_id
+            || typeof value.lease_id !== 'string' || !value.lease_id
+            || typeof value.stream_channel !== 'string' || !value.stream_channel) {
+            throw new Error('<?= addslashes(__('后台任务启动响应无效。')) ?>');
+        }
+        return {
+            task_id: value.task_id,
+            lease_id: value.lease_id,
+            stream_channel: value.stream_channel,
+        };
+    }
+
+    function previewTaskStorageKey(taskId) {
+        return PREVIEW_TASK_STORAGE_PREFIX + taskId;
+    }
+
+    function persistPreviewTask(task, descriptor) {
+        try {
+            window.sessionStorage.setItem(previewTaskStorageKey(task.task_id), JSON.stringify({
+                task_id: task.task_id,
+                lease_id: task.lease_id,
+                stream_channel: task.stream_channel,
+                descriptor: descriptor,
+            }));
+        } catch (error) {
+            // StreamHandle persists its cursor/lease independently when storage is available.
+        }
+    }
+
+    function clearPreviewTask(taskId) {
+        try {
+            window.sessionStorage.removeItem(previewTaskStorageKey(taskId));
+        } catch (error) {
+            // Storage is optional and never controls task lifetime.
+        }
+    }
+
+    function storedPreviewTasks() {
+        const tasks = [];
+        try {
+            for (let index = 0; index < window.sessionStorage.length; index++) {
+                const key = window.sessionStorage.key(index);
+                if (!key || key.indexOf(PREVIEW_TASK_STORAGE_PREFIX) !== 0) {
+                    continue;
+                }
+                const value = JSON.parse(window.sessionStorage.getItem(key) || '{}');
+                if (!value || typeof value !== 'object' || !value.descriptor) {
+                    continue;
+                }
+                tasks.push({
+                    task: normalizeRuntimeTaskHandle(value),
+                    descriptor: value.descriptor,
+                });
+            }
+        } catch (error) {
+            return [];
+        }
+        return tasks;
+    }
+
+    function taskFailureMessage(payload, fallback) {
+        return String(payload?.reason || payload?.message || payload?.error_code || fallback);
+    }
+
+    function setPreviewCancelButton(id, enabled) {
+        const button = document.getElementById(id);
+        if (button) {
+            button.disabled = !enabled;
+        }
+    }
+
+    async function startThemePreviewTask(input) {
+        const api = await getRuntimeApi();
+        const taskApi = api.resource('runtime_task');
+        const payload = Object.assign({
+            capture_base_url: window.location.origin,
+        }, input || {});
+        const task = normalizeRuntimeTaskHandle(await taskApi.start({
+            type_code: 'theme.preview_batch',
+            input: payload,
+        }, { silent: true }));
+        return { api: api, task: task };
+    }
+
+    function createThemePreviewStream(api, task) {
+        return api.createStream(task.stream_channel, {
+            task_id: task.task_id,
+            lease_id: task.lease_id,
+        }, {
+            eventTypes: [
+                'start', 'progress', 'runtime_reset', 'runtime_snapshot',
+                'completed', 'failed', 'cancelled', 'expired',
+                'recovery_unsafe', 'event_backlog_limit',
+            ],
+            storageKey: 'theme-preview:' + task.task_id,
+        });
+    }
+
+    async function runAiVirtualThemeTask(payload, onProgress) {
+        const api = await getRuntimeApi();
+        const task = normalizeRuntimeTaskHandle(await api.resource('runtime_task').start({
+            type_code: 'theme.virtual_theme_generation',
+            input: payload
+        }, { silent: true }));
+        const stream = api.createStream(task.stream_channel, {
+            task_id: task.task_id,
+            lease_id: task.lease_id
+        }, {
+            eventTypes: [
+                'start', 'progress', 'runtime_reset', 'runtime_snapshot',
+                'completed', 'failed', 'cancelled', 'expired',
+                'recovery_unsafe', 'event_backlog_limit'
+            ],
+            storageKey: 'theme-virtual-theme:' + task.task_id
+        });
+        activeVirtualThemeStreams.set(task.task_id, stream);
+
+        return new Promise(function(resolve, reject) {
+            let settled = false;
+            const finish = function(callback, value) {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                activeVirtualThemeStreams.delete(task.task_id);
+                stream.close();
+                callback(value);
+            };
+            stream.addEventListener('progress', function(event) {
+                onProgress?.(streamPayload(event));
+            });
+            stream.addEventListener('completed', function(event) {
+                const terminal = streamPayload(event);
+                finish(resolve, terminal.result || terminal.data || {});
+            });
+            ['failed', 'cancelled', 'expired', 'recovery_unsafe', 'event_backlog_limit'].forEach(function(type) {
+                stream.addEventListener(type, function(event) {
+                    const terminal = streamPayload(event);
+                    finish(reject, new Error(taskFailureMessage(terminal, '<?= addslashes(__('虚拟主题任务失败')) ?>')));
+                });
+            });
+            stream.start().catch(function(error) {
+                finish(reject, error);
+            });
+        });
+    }
+
+    async function cancelThemePreviewTask(taskId, reason) {
+        const stream = activePreviewStreams.get(taskId);
+        if (!stream) {
+            return;
+        }
+        await stream.cancel(reason || '<?= addslashes(__('用户明确取消')) ?>');
+    }
+
+    window.addEventListener('pagehide', function() {
+        activePreviewStreams.forEach(function(stream) {
+            stream.close(); // detach only; task cancellation is always explicit
+        });
+        activeVirtualThemeStreams.forEach(function(stream) {
+            stream.close(); // detach only; VirtualTheme task lifetime is lease based
+        });
+    });
 
     function escapeHtml(text) {
         if (!text) {
@@ -1190,14 +776,8 @@ foreach ($themes as $themeItem) {
 
     async function loadAiVirtualThemeCatalog() {
         if (!aiVirtualThemeCatalogPromise) {
-            aiVirtualThemeCatalogPromise = fetch(AI_CATALOG_URL, {
-                method: 'GET',
-                credentials: 'include',
-                headers: {
-                    'Accept': 'application/json'
-                }
-            }).then(function(response) {
-                return response.json();
+            aiVirtualThemeCatalogPromise = getRuntimeApi().then(function(api) {
+                return api.resource('theme').virtual_theme_catalog({}, { silent: true });
             }).then(function(result) {
                 if (!isSuccessResponse(result)) {
                     throw new Error(result?.message || '<?= __('AI目录加载失败') ?>');
@@ -1296,7 +876,6 @@ foreach ($themes as $themeItem) {
 
         try {
             const payload = {
-                form_key: CSRF_TOKEN,
                 theme_id: themeId,
                 area: 'frontend',
                 page_type: 'all',
@@ -1307,24 +886,15 @@ foreach ($themes as $themeItem) {
                 instructions: instructions ? instructions.value : '',
                 selected_skill_codes: readCheckedValues(modal, 'input[name="ai_virtual_theme_skill"]'),
                 selected_style_codes: readCheckedValues(modal, 'input[name="ai_virtual_theme_style"]'),
-                use_ai: 1
+                use_ai: true
             };
-
-            const response = await fetch(AI_CREATE_DRAFT_URL, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(payload)
+            const data = await runAiVirtualThemeTask(payload, function(progress) {
+                const current = Number(progress.current || 0);
+                const total = Number(progress.total || 0);
+                setAiVirtualThemeStatus('info', total > 0
+                    ? '<?= __('正在创建虚拟主题草稿') ?> (' + current + '/' + total + ')'
+                    : '<?= __('正在创建虚拟主题草稿...') ?>');
             });
-            const result = await response.json();
-            if (!isSuccessResponse(result)) {
-                throw new Error(result?.message || '<?= __('虚拟主题创建失败') ?>');
-            }
-
-            const data = result.data || result;
             const layoutOption = data.layout_option || 'default';
             const layoutTypes = Array.isArray(data.layout_types) ? data.layout_types : [];
             const previewLayoutType = layoutTypes.indexOf('homepage') !== -1
@@ -1332,7 +902,7 @@ foreach ($themes as $themeItem) {
                 : (layoutTypes[0] || 'homepage');
             const createdCount = Number(data.created_count || (Array.isArray(data.results) ? data.results.length : 0));
             const editorUrl = buildThemeEditorUrl(themeId, previewLayoutType, layoutOption);
-            setAiVirtualThemeStatus('success', result.message || '<?= __('虚拟主题草稿已创建') ?>');
+            setAiVirtualThemeStatus('success', '<?= __('虚拟主题草稿已创建') ?>');
             if (resultEl) {
                 resultEl.style.display = 'block';
                 resultEl.innerHTML =
@@ -1491,6 +1061,154 @@ foreach ($themes as $themeItem) {
         updatePreviewActionButton(card, true);
     }
 
+    function previewTargetKey(themeId, area) {
+        return 'theme_' + Number(themeId) + '_' + area;
+    }
+
+    function setSinglePreviewModalState(type, message) {
+        const spinner = document.getElementById('singleSpinner');
+        const status = document.getElementById('singleStatus');
+        if (spinner) {
+            spinner.style.display = type === 'working' ? 'block' : 'none';
+        }
+        if (!status) {
+            return;
+        }
+        if (type === 'success') {
+            status.innerHTML = '<span class="text-success"><i class="mdi mdi-check-circle"></i> ' + escapeHtml(message) + '</span>';
+        } else if (type === 'error') {
+            status.innerHTML = '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> ' + escapeHtml(message) + '</span>';
+        } else {
+            status.textContent = message;
+        }
+    }
+
+    function applySinglePreviewResult(descriptor, result) {
+        const card = findThemeCard(descriptor.theme_id, descriptor.area);
+        const success = !!(result && result.success);
+        const message = success
+            ? (descriptor.success_message || '<?= __('预览图已更新') ?>')
+            : String(result?.error || descriptor.error_message || '<?= __('生成失败') ?>');
+        if (card && success) {
+            updateThemeCardPreview(card, result.image_url || '');
+            setThemeCardStatus(card, 'success', message);
+            window.setTimeout(function() {
+                setThemeCardStatus(card, '', '');
+            }, 1800);
+        } else if (card) {
+            setThemeCardStatus(card, 'error', message);
+        }
+        if (descriptor.show_modal) {
+            setSinglePreviewModalState(success ? 'success' : 'error', message);
+            if (success && singleGenerateModal) {
+                window.setTimeout(function() {
+                    singleGenerateModal.hide();
+                }, 800);
+            }
+        }
+        return success;
+    }
+
+    async function attachSinglePreviewTask(api, task, descriptor) {
+        if (activePreviewStreams.has(task.task_id)) {
+            return null;
+        }
+        const targetKey = previewTargetKey(descriptor.theme_id, descriptor.area);
+        const card = findThemeCard(descriptor.theme_id, descriptor.area);
+        const stream = createThemePreviewStream(api, task);
+        activePreviewStreams.set(task.task_id, stream);
+        activePreviewTargets.add(targetKey);
+        activeSingleTaskId = task.task_id;
+        setPreviewCancelButton('cancelSinglePreviewTask', true);
+        if (card) {
+            setThemeCardGenerating(card, true);
+            setThemeCardStatus(card, 'info', descriptor.status_message || '<?= __('正在生成') ?>');
+        }
+
+        let finished = false;
+        let resolveCompletion;
+        const completion = new Promise(function(resolve) {
+            resolveCompletion = resolve;
+        });
+        const finish = function(outcome) {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            activePreviewStreams.delete(task.task_id);
+            activePreviewTargets.delete(targetKey);
+            clearPreviewTask(task.task_id);
+            if (activeSingleTaskId === task.task_id) {
+                activeSingleTaskId = null;
+                setPreviewCancelButton('cancelSinglePreviewTask', false);
+            }
+            if (card) {
+                setThemeCardGenerating(card, false);
+            }
+            resolveCompletion(outcome);
+        };
+        const resultForTarget = function(payload) {
+            const results = payload?.result?.results;
+            return Array.isArray(results)
+                ? results.find(function(item) { return item && item.key === targetKey; })
+                : null;
+        };
+
+        stream.addEventListener('progress', function(event) {
+            const payload = streamPayload(event);
+            if (Number(payload.theme_id) === Number(descriptor.theme_id) && payload.area === descriptor.area
+                && payload.success === false && card) {
+                setThemeCardStatus(card, 'error', String(payload.error || payload.message || descriptor.error_message || '<?= __('生成失败') ?>'));
+            }
+        });
+        stream.addEventListener('runtime_snapshot', function(event) {
+            const state = streamPayload(event)?.checkpoint?.state || {};
+            const result = state.results ? state.results[targetKey] : null;
+            if (result) {
+                applySinglePreviewResult(descriptor, result);
+            }
+        });
+        stream.addEventListener('completed', function(event) {
+            const result = resultForTarget(streamPayload(event));
+            const success = applySinglePreviewResult(descriptor, result || {
+                success: false,
+                error: '<?= __('未找到预览图任务结果') ?>',
+            });
+            finish({ success: success });
+        });
+        const terminalFailure = function(event, fallback) {
+            const message = taskFailureMessage(streamPayload(event), fallback);
+            applySinglePreviewResult(descriptor, { success: false, error: message });
+            finish({ success: false, error: message });
+        };
+        stream.addEventListener('failed', function(event) {
+            terminalFailure(event, '<?= __('预览图生成失败') ?>');
+        });
+        stream.addEventListener('cancelled', function(event) {
+            terminalFailure(event, '<?= __('预览图生成已取消') ?>');
+        });
+        stream.addEventListener('expired', function(event) {
+            terminalFailure(event, '<?= __('客户端失联超时，预览图任务已停止') ?>');
+        });
+        stream.addEventListener('recovery_unsafe', function(event) {
+            terminalFailure(event, '<?= __('预览图任务无法安全恢复') ?>');
+        });
+        stream.addEventListener('event_backlog_limit', function(event) {
+            terminalFailure(event, '<?= __('预览图任务事件达到资源上限') ?>');
+        });
+        stream.addEventListener('terminal', function() {
+            finish({ success: false });
+        });
+        stream.addEventListener('error', function() {
+            if (descriptor.show_modal) {
+                setSinglePreviewModalState('working', '<?= __('连接暂时中断，正在重连…') ?>');
+            }
+        });
+
+        await stream.start();
+        return completion;
+    }
+
     async function generateSinglePreview(themeId, area, options = {}) {
         const config = Object.assign({
             force: true,
@@ -1501,195 +1219,362 @@ foreach ($themes as $themeItem) {
             successMessage: '',
             errorMessage: '',
         }, options);
-
-        const card = config.card || findThemeCard(themeId, area);
-
-        if (config.showModal && singleGenerateModal) {
-            document.getElementById('singleGenerateTitle').innerText = config.title || '<?= __('生成预览图') ?>';
-            document.getElementById('singleStatus').innerHTML = escapeHtml(config.statusMessage || '<?= __('正在生成预览图，请稍候...') ?>');
-            document.getElementById('singleSpinner').style.display = 'block';
-            singleGenerateModal.show();
+        const normalizedThemeId = Number(themeId);
+        const targetKey = previewTargetKey(normalizedThemeId, area);
+        if (!normalizedThemeId || activePreviewTargets.has(targetKey)) {
+            return null;
         }
 
+        const card = config.card || findThemeCard(normalizedThemeId, area);
+        if (config.showModal && singleGenerateModal) {
+            document.getElementById('singleGenerateTitle').innerText = config.title || '<?= __('生成预览图') ?>';
+            setSinglePreviewModalState('working', config.statusMessage || '<?= __('正在生成预览图，请稍候...') ?>');
+            singleGenerateModal.show();
+        }
         if (card) {
             setThemeCardGenerating(card, true);
             setThemeCardStatus(card, 'info', config.statusMessage || '<?= __('正在生成') ?>');
         }
-
         try {
-            const response = await fetch(GENERATE_PREVIEW_URL, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'form_key': CSRF_TOKEN,
-                    'theme_id': themeId,
-                    'area': area,
-                    'force': config.force ? '1' : '0'
-                })
+            const started = await startThemePreviewTask({
+                request_id: createPreviewRequestId('theme-preview'),
+                scope: 'single',
+                theme_id: normalizedThemeId,
+                area: area,
+                force: config.force,
             });
-
-            const result = await response.json();
-            if (isSuccessResponse(result)) {
-                const imageUrl = result?.data?.image_url || result?.image_url || '';
-                if (card) {
-                    updateThemeCardPreview(card, imageUrl);
-                    setThemeCardStatus(card, 'success', config.successMessage || '<?= __('预览图已更新') ?>');
-                    window.setTimeout(function() {
-                        setThemeCardStatus(card, '', '');
-                    }, 1800);
-                }
-
-                if (config.showModal && singleGenerateModal) {
-                    document.getElementById('singleSpinner').style.display = 'none';
-                    document.getElementById('singleStatus').innerHTML =
-                        '<span class="text-success"><i class="mdi mdi-check-circle"></i> ' +
-                        escapeHtml(config.successMessage || '<?= __('预览图生成成功') ?>') +
-                        '</span>';
-                    window.setTimeout(function() {
-                        singleGenerateModal.hide();
-                    }, 800);
-                }
-
-                return result;
-            }
-
-            const errorMessage = result?.message || config.errorMessage || '<?= __('生成失败') ?>';
-            if (card) {
-                setThemeCardStatus(card, 'error', errorMessage);
-            }
-            if (config.showModal) {
-                document.getElementById('singleSpinner').style.display = 'none';
-                document.getElementById('singleStatus').innerHTML =
-                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> ' +
-                    escapeHtml(errorMessage) +
-                    '</span>';
-            }
-            return null;
+            const descriptor = {
+                kind: 'single',
+                theme_id: normalizedThemeId,
+                area: area,
+                show_modal: !!config.showModal,
+                status_message: config.statusMessage || '',
+                success_message: config.successMessage || '',
+                error_message: config.errorMessage || '',
+            };
+            persistPreviewTask(started.task, descriptor);
+            return await attachSinglePreviewTask(started.api, started.task, descriptor);
         } catch (error) {
-            const message = (config.errorMessage || '<?= __('网络错误') ?>') + ': ' + (error.message || '');
-            console.error('Theme preview generation failed', error);
+            const message = (config.errorMessage || '<?= __('无法启动预览图任务') ?>') + ': ' + (error?.message || '');
             if (card) {
+                setThemeCardGenerating(card, false);
                 setThemeCardStatus(card, 'error', message);
             }
             if (config.showModal) {
-                document.getElementById('singleSpinner').style.display = 'none';
-                document.getElementById('singleStatus').innerHTML =
-                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> ' +
-                    escapeHtml(message) +
-                    '</span>';
+                setSinglePreviewModalState('error', message);
             }
             return null;
-        } finally {
-            if (card) {
-                setThemeCardGenerating(card, false);
-            }
         }
     }
 
     async function autoGenerateMissingPreviews() {
         const cards = Array.from(document.querySelectorAll('.theme-card[data-needs-preview="1"]'));
-        for (const card of cards) {
-            const themeId = card.dataset.themeId;
-            const area = card.dataset.area || 'frontend';
-            const areaLabel = area === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>';
+        if (cards.length === 0 || activeBatchTaskId) {
+            return;
+        }
 
-            await generateSinglePreview(themeId, area, {
+        cards.forEach(function(card) {
+            setThemeCardGenerating(card, true);
+            setThemeCardStatus(
+                card,
+                'info',
+                '<?= __('自动生成中') ?>' + ' ' + ((card.dataset.area || 'frontend') === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>')
+            );
+        });
+
+        try {
+            // One silent batch with force=false: existing preview files are skipped,
+            // missing ones are created, and empty DB paths are filled from disk.
+            const started = await startThemePreviewTask({
+                request_id: createPreviewRequestId('theme-preview-auto'),
+                scope: 'all',
                 force: false,
-                showModal: false,
-                card: card,
-                statusMessage: '<?= __('自动生成中') ?>' + ' ' + areaLabel,
-                successMessage: '<?= __('自动生成完成') ?>',
-                errorMessage: '<?= __('自动生成失败') ?>',
+            });
+            const descriptor = {
+                kind: 'batch',
+                silent: true,
+                auto_missing: true,
+            };
+            persistPreviewTask(started.task, descriptor);
+            await attachBatchPreviewTask(started.api, started.task, descriptor);
+        } catch (error) {
+            const message = '<?= __('自动生成失败') ?>: ' + (error?.message || '');
+            cards.forEach(function(card) {
+                setThemeCardGenerating(card, false);
+                setThemeCardStatus(card, 'error', message);
             });
         }
+    }
+
+    function batchPreviewElements() {
+        return {
+            status: document.getElementById('batchStatus'),
+            count: document.getElementById('batchCount'),
+            result: document.getElementById('batchResult'),
+            bar: document.querySelector('#batchProgress .progress-bar'),
+        };
+    }
+
+    function setBatchPreviewProgress(payload) {
+        const elements = batchPreviewElements();
+        const current = Number(payload.current || 0);
+        const total = Number(payload.total || 0);
+        const progress = Number(payload.progress || (total > 0 ? (current / total) * 100 : 0));
+        if (elements.bar) {
+            elements.bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+        }
+        if (elements.status) {
+            elements.status.textContent = String(payload.message || '<?= __('正在批量生成预览图，请稍候...') ?>');
+        }
+        if (elements.count) {
+            elements.count.textContent = current + ' / ' + total;
+        }
+    }
+
+    function renderBatchPreviewSummary(result) {
+        const elements = batchPreviewElements();
+        const success = Number(result?.success || 0);
+        const failed = Number(result?.failed || 0);
+        const items = Array.isArray(result?.results) ? result.results : [];
+        items.forEach(function(item) {
+            const card = findThemeCard(item?.theme_id, item?.area);
+            if (!card) {
+                return;
+            }
+            if (item.success) {
+                updateThemeCardPreview(card, item.image_url || '');
+                setThemeCardStatus(card, 'success', '<?= __('预览图已更新') ?>');
+            } else {
+                setThemeCardStatus(card, 'error', String(item.error || '<?= __('生成失败') ?>'));
+            }
+            setThemeCardGenerating(card, false);
+        });
+        if (elements.bar) {
+            elements.bar.style.width = '100%';
+        }
+        if (elements.status) {
+            elements.status.textContent = failed > 0
+                ? '<?= __('批量生成已完成，但存在失败项') ?>'
+                : '<?= __('批量生成完成') ?>';
+        }
+        if (elements.count) {
+            elements.count.textContent = '<?= __('成功') ?> ' + success + ' / <?= __('失败') ?> ' + failed;
+        }
+        if (failed > 0 && elements.result) {
+            const messages = items.filter(function(item) {
+                return item && !item.success;
+            }).map(function(item) {
+                return '<li>' + escapeHtml(String(item.error || (item.theme_id + ' ' + item.area))) + '</li>';
+            }).join('');
+            elements.result.style.display = 'block';
+            elements.result.innerHTML = '<div class="alert alert-warning mb-0"><ul class="mb-0">' + messages + '</ul></div>';
+        }
+    }
+
+    async function attachBatchPreviewTask(api, task, descriptor) {
+        if (activePreviewStreams.has(task.task_id)) {
+            return null;
+        }
+        const stream = createThemePreviewStream(api, task);
+        activePreviewStreams.set(task.task_id, stream);
+        activeBatchTaskId = task.task_id;
+        setPreviewCancelButton('cancelBatchPreviewTask', true);
+        let finished = false;
+        let resolveCompletion;
+        const completion = new Promise(function(resolve) {
+            resolveCompletion = resolve;
+        });
+        const finish = function(outcome) {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            activePreviewStreams.delete(task.task_id);
+            clearPreviewTask(task.task_id);
+            if (activeBatchTaskId === task.task_id) {
+                activeBatchTaskId = null;
+                setPreviewCancelButton('cancelBatchPreviewTask', false);
+            }
+            resolveCompletion(outcome);
+        };
+        const silent = !!descriptor.silent;
+        stream.addEventListener('start', function(event) {
+            if (!silent) {
+                setBatchPreviewProgress(streamPayload(event));
+            }
+        });
+        stream.addEventListener('progress', function(event) {
+            const payload = streamPayload(event);
+            if (!silent) {
+                setBatchPreviewProgress(payload);
+            }
+            const card = findThemeCard(payload?.theme_id, payload?.area);
+            if (!card) {
+                return;
+            }
+            if (payload?.success) {
+                updateThemeCardPreview(card, payload.image_url || '');
+                setThemeCardStatus(card, 'success', '<?= __('自动生成完成') ?>');
+                setThemeCardGenerating(card, false);
+            } else if (payload?.error) {
+                setThemeCardStatus(card, 'error', String(payload.error));
+                setThemeCardGenerating(card, false);
+            } else {
+                setThemeCardStatus(card, 'info', String(payload?.message || '<?= __('自动生成中') ?>'));
+            }
+        });
+        stream.addEventListener('runtime_snapshot', function(event) {
+            const state = streamPayload(event)?.checkpoint?.state || {};
+            if (!silent) {
+                setBatchPreviewProgress({
+                    current: state.next_index || 0,
+                    total: Number(state.total || Object.keys(state.results || {}).length),
+                    message: '<?= __('已恢复预览图任务订阅') ?>',
+                });
+            }
+        });
+        stream.addEventListener('completed', function(event) {
+            const result = streamPayload(event)?.result || {};
+            if (!silent) {
+                renderBatchPreviewSummary(result);
+            } else {
+                renderBatchPreviewSummary(result);
+                document.querySelectorAll('.theme-card.is-generating').forEach(function(card) {
+                    setThemeCardGenerating(card, false);
+                });
+            }
+            finish({ success: Number(result.failed || 0) === 0 });
+        });
+        const terminalFailure = function(event, fallback) {
+            const elements = batchPreviewElements();
+            const message = taskFailureMessage(streamPayload(event), fallback);
+            if (!silent) {
+                if (elements.status) {
+                    elements.status.textContent = message;
+                }
+                if (elements.result) {
+                    elements.result.style.display = 'block';
+                    elements.result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(message) + '</div>';
+                }
+            } else {
+                document.querySelectorAll('.theme-card[data-needs-preview="1"]').forEach(function(card) {
+                    setThemeCardGenerating(card, false);
+                    setThemeCardStatus(card, 'error', message);
+                });
+            }
+            finish({ success: false, error: message });
+        };
+        stream.addEventListener('failed', function(event) {
+            terminalFailure(event, '<?= __('批量预览图生成失败') ?>');
+        });
+        stream.addEventListener('cancelled', function(event) {
+            terminalFailure(event, '<?= __('批量预览图生成已取消') ?>');
+        });
+        stream.addEventListener('expired', function(event) {
+            terminalFailure(event, '<?= __('客户端失联超时，批量预览图任务已停止') ?>');
+        });
+        stream.addEventListener('recovery_unsafe', function(event) {
+            terminalFailure(event, '<?= __('批量预览图任务无法安全恢复') ?>');
+        });
+        stream.addEventListener('event_backlog_limit', function(event) {
+            terminalFailure(event, '<?= __('批量预览图任务事件达到资源上限') ?>');
+        });
+        stream.addEventListener('terminal', function() {
+            finish({ success: false });
+        });
+        await stream.start();
+        return completion;
     }
 
     async function runBatchPreviewGeneration() {
         if (!batchGenerateModal) {
             return;
         }
-
-        const statusEl = document.getElementById('batchStatus');
-        const countEl = document.getElementById('batchCount');
-        const resultEl = document.getElementById('batchResult');
-
+        const elements = batchPreviewElements();
         batchGenerateModal.show();
-        if (statusEl) {
-            statusEl.innerText = '<?= __('正在批量生成预览图，请稍候...') ?>';
+        if (elements.bar) {
+            elements.bar.style.width = '0%';
         }
-        if (countEl) {
-            countEl.innerText = '';
+        if (elements.status) {
+            elements.status.textContent = '<?= __('正在批量生成预览图，请稍候...') ?>';
         }
-        if (resultEl) {
-            resultEl.style.display = 'none';
-            resultEl.innerHTML = '';
+        if (elements.count) {
+            elements.count.textContent = '';
         }
-
+        if (elements.result) {
+            elements.result.style.display = 'none';
+            elements.result.innerHTML = '';
+        }
         try {
-            const response = await fetch(BATCH_GENERATE_URL, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'form_key': CSRF_TOKEN
-                })
+            const started = await startThemePreviewTask({
+                request_id: createPreviewRequestId('theme-preview-batch'),
+                scope: 'all',
+                force: true,
             });
+            const descriptor = { kind: 'batch' };
+            persistPreviewTask(started.task, descriptor);
+            return await attachBatchPreviewTask(started.api, started.task, descriptor);
+        } catch (error) {
+            const message = '<?= __('无法启动批量预览图任务') ?>: ' + (error?.message || '');
+            if (elements.status) {
+                elements.status.textContent = message;
+            }
+            if (elements.result) {
+                elements.result.style.display = 'block';
+                elements.result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(message) + '</div>';
+            }
+            return null;
+        }
+    }
 
-            const result = await response.json();
-            const successCount = Number(result?.data?.success || 0);
-            const failedCount = Number(result?.data?.failed || 0);
-
-            if (result.status === 'success' || result.status === 'warning' || result.success === true) {
-                if (statusEl) {
-                    statusEl.innerText = failedCount > 0 ? '<?= __('批量生成已完成，但存在失败项') ?>' : '<?= __('批量生成完成') ?>';
-                }
-                if (countEl) {
-                    countEl.innerText = '<?= __('成功') ?> ' + successCount + ' / <?= __('失败') ?> ' + failedCount;
-                }
-
-                if (failedCount > 0 && resultEl) {
-                    resultEl.style.display = 'block';
-                    const messages = Array.isArray(result?.data?.messages) ? result.data.messages : [];
-                    const html = messages.map(function(message) {
-                        return '<li>' + escapeHtml(message) + '</li>';
-                    }).join('');
-                    resultEl.innerHTML = '<div class="alert alert-warning mb-0"><ul class="mb-0">' + html + '</ul></div>';
-                    return;
-                }
-
-                window.setTimeout(function() {
-                    window.location.reload();
-                }, 1000);
+    async function restoreActivePreviewTasks() {
+        const entries = storedPreviewTasks();
+        if (entries.length === 0) {
+            return;
+        }
+        let api;
+        try {
+            api = await getRuntimeApi();
+        } catch (error) {
+            return;
+        }
+        entries.forEach(function(entry) {
+            if (activePreviewStreams.has(entry.task.task_id)) {
                 return;
             }
-
-            const message = result?.message || '<?= __('批量生成失败') ?>';
-            if (statusEl) {
-                statusEl.innerText = message;
-            }
-            if (resultEl) {
-                resultEl.style.display = 'block';
-                resultEl.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(message) + '</div>';
-            }
-        } catch (error) {
-            console.error('Batch preview generation failed:', error);
-            if (statusEl) {
-                statusEl.innerText = '<?= __('网络错误') ?>';
-            }
-            if (resultEl) {
-                resultEl.style.display = 'block';
-                resultEl.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error.message || '') + '</div>';
-            }
-        }
+            const restore = entry.descriptor.kind === 'single'
+                ? attachSinglePreviewTask(api, entry.task, entry.descriptor)
+                : attachBatchPreviewTask(api, entry.task, entry.descriptor);
+            restore.catch(function(error) {
+                console.warn('Unable to restore Theme preview task stream', error);
+            });
+        });
     }
 
     document.getElementById('batchGeneratePreviews')?.addEventListener('click', function() {
         runBatchPreviewGeneration();
+    });
+
+    document.getElementById('cancelBatchPreviewTask')?.addEventListener('click', function() {
+        if (!activeBatchTaskId) {
+            return;
+        }
+        setPreviewCancelButton('cancelBatchPreviewTask', false);
+        cancelThemePreviewTask(activeBatchTaskId, '<?= addslashes(__('用户取消批量预览图任务')) ?>').catch(function(error) {
+            setPreviewCancelButton('cancelBatchPreviewTask', true);
+            showToast('error', error?.message || '<?= __('取消任务失败') ?>');
+        });
+    });
+
+    document.getElementById('cancelSinglePreviewTask')?.addEventListener('click', function() {
+        if (!activeSingleTaskId) {
+            return;
+        }
+        setPreviewCancelButton('cancelSinglePreviewTask', false);
+        cancelThemePreviewTask(activeSingleTaskId, '<?= addslashes(__('用户取消预览图任务')) ?>').catch(function(error) {
+            setPreviewCancelButton('cancelSinglePreviewTask', true);
+            showToast('error', error?.message || '<?= __('取消任务失败') ?>');
+        });
     });
 
     document.getElementById('openAiVirtualThemeModal')?.addEventListener('click', function() {
@@ -1711,19 +1596,11 @@ foreach ($themes as $themeItem) {
             const area = this.dataset.area || 'frontend';
             const areaLabel = area === 'frontend' ? '<?= __('前台') ?>' : '<?= __('后台') ?>';
 
-            fetch(ACTIVATE_URL, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({
-                    form_key: CSRF_TOKEN,
-                    theme_id: themeId,
+            getApi().then(function(api) {
+                return api.resource('theme').activateTheme({
+                    theme_id: Number(themeId),
                     area: area
-                })
-            }).then(function(response) {
-                return response.json();
+                }, { silent: true });
             }).then(function(result) {
                 if (isSuccessResponse(result)) {
                     showToast('success', '<?= __('主题已设置为 %{1} 主题') ?>'.replace('%{1}', areaLabel));
@@ -1733,7 +1610,7 @@ foreach ($themes as $themeItem) {
 
                 showToast('error', result?.message || '<?= __('激活失败') ?>');
             }).catch(function(error) {
-                showToast('error', '<?= __('网络错误') ?>: ' + (error.message || ''));
+                showToast('error', '<?= __('激活失败') ?>: ' + (error.message || ''));
             });
         });
     });
@@ -1759,7 +1636,9 @@ foreach ($themes as $themeItem) {
         });
     });
 
-    window.setTimeout(autoGenerateMissingPreviews, 300);
+    restoreActivePreviewTasks().finally(function() {
+        window.setTimeout(autoGenerateMissingPreviews, 300);
+    });
 })();
 </script>
 
