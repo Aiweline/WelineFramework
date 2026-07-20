@@ -6,8 +6,11 @@ namespace Weline\Database\test;
 use Weline\Framework\UnitTest\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Database\Service\MigrationService;
+use Weline\Database\Service\BackupService;
 use Weline\Database\Model\Migration;
+use Weline\Database\Model\MigrationBackup;
 use Weline\Database\Interface\MigrationInterface;
+use Weline\Framework\Database\ConnectionFactory;
 
 /**
  * 数据库迁移服务测试
@@ -26,15 +29,32 @@ class MigrationServiceTest extends TestCore
     
     public function tearDown(): void
     {
-        parent::tearDown();
+        $this->removeFixtureMigration();
         // 清理测试数据 - 删除测试模块的迁移记录
         $testModules = ['Weline_Test', 'Weline_TestModule'];
         foreach ($testModules as $moduleName) {
+            $records = (clone $this->migrationModel)->reset()
+                ->where(Migration::schema_fields_MODULE, $moduleName)
+                ->select()
+                ->fetch()
+                ->getItems();
+            $backupService = ObjectManager::getInstance(BackupService::class);
+            foreach ($records as $record) {
+                $backupService->cleanupBackupData((int)$record->getId());
+            }
             $this->migrationModel->reset()
                 ->where(Migration::schema_fields_MODULE, $moduleName)
                 ->delete()
                 ->fetch();
         }
+        $rollbackTable = trim((string)getenv('WELINE_TEST_ROLLBACK_TABLE'));
+        if ($rollbackTable !== '') {
+            ObjectManager::getInstance(ConnectionFactory::class)
+                ->getConnector()
+                ->dropTableIfExists($rollbackTable);
+        }
+        putenv('WELINE_TEST_ROLLBACK_TABLE');
+        parent::tearDown();
     }
     
     /**
@@ -63,9 +83,9 @@ class MigrationServiceTest extends TestCore
         $testMigrationContent = '<?php
 namespace Weline\Test\Setup\Db\Migration;
 
-use Weline\Database\Interface\MigrationInterface;
+use Weline\Database\AbstractMigration;
 
-class CreateTableTest20250101V100 implements MigrationInterface
+class CreateTableTest20250101V100 extends AbstractMigration
 {
     public function install(): bool { return true; }
     public function uninstall(): bool { return true; }
@@ -106,9 +126,9 @@ class CreateTableTest20250101V100 implements MigrationInterface
         $testMigrationContent = '<?php
 namespace Weline\Test\Setup\Db\Migration;
 
-use Weline\Database\Interface\MigrationInterface;
+use Weline\Database\AbstractMigration;
 
-class CreateTableTest20250101V100 implements MigrationInterface
+class CreateTableTest20250101V100 extends AbstractMigration
 {
     public function install(): bool { return true; }
     public function uninstall(): bool { return true; }
@@ -150,7 +170,7 @@ class CreateTableTest20250101V100 implements MigrationInterface
     {
         // 测试标准模块名称解析
         $moduleName = 'Weline_Test';
-        $expectedPath = 'app/code/Weline/Test/Setup/Db/Migration/';
+        $expectedPath = BP . 'app/code/Weline/Test/Setup/Db/Migration/';
         
         // 通过反射访问私有方法
         $reflection = new \ReflectionClass($this->migrationService);
@@ -199,6 +219,176 @@ class CreateTableTest20250101V100 implements MigrationInterface
         // 测试有依赖但未安装的情况
         $result = $method->invoke($this->migrationService, $moduleName, $dependencies);
         $this->assertFalse($result, '未安装的依赖应该返回false');
+    }
+
+    public function testRollbackDependencyGraphOrdersDependentBeforeDependency(): void
+    {
+        $method = (new \ReflectionClass($this->migrationService))
+            ->getMethod('sortRollbackDependencyGraph');
+        $result = $method->invoke($this->migrationService, [
+            ['filename' => 'z_base.php', 'version' => '1.1.0'],
+            ['filename' => 'a_child.php', 'version' => '1.1.0'],
+        ], [
+            'z_base.php' => [],
+            'a_child.php' => ['z_base.php'],
+        ]);
+
+        $this->assertSame([], $result['blockers']);
+        $this->assertSame(
+            ['a_child.php', 'z_base.php'],
+            array_column($result['migrations'], 'filename')
+        );
+    }
+
+    public function testRollbackDependencyGraphBlocksOutsideDependentMissingDependencyAndCycle(): void
+    {
+        $method = (new \ReflectionClass($this->migrationService))
+            ->getMethod('sortRollbackDependencyGraph');
+        $result = $method->invoke($this->migrationService, [
+            ['filename' => 'base.php', 'version' => '1.1.0'],
+            ['filename' => 'cycle.php', 'version' => '1.1.0'],
+            ['filename' => 'missing.php', 'version' => '1.1.0'],
+        ], [
+            'base.php' => ['cycle.php'],
+            'cycle.php' => ['base.php'],
+            'missing.php' => ['not-installed.php'],
+            'outside.php' => ['base.php'],
+        ]);
+
+        $messages = implode("\n", $result['blockers']);
+        $this->assertStringContainsString('outside.php', $messages);
+        $this->assertStringContainsString('not-installed.php', $messages);
+        $this->assertStringContainsString('循环', $messages);
+    }
+
+    public function testScriptColumnRollbackBacksUpAndRestoresValueOnReupgrade(): void
+    {
+        $table = 'migration_rollback_' . substr(hash('sha256', uniqid('', true)), 0, 10);
+        putenv('WELINE_TEST_ROLLBACK_TABLE=' . $table);
+        $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+        $connector = $connectionFactory->getConnector();
+        $physical = $connector->formatTableName($table);
+        $connector->query("CREATE TABLE {$physical} (id INTEGER NOT NULL PRIMARY KEY)")->fetch();
+        $connector->getQuery()->clearQuery()->table($table)->insert(['id' => 7])->fetch();
+
+        $migrationPath = BP . 'app/code/Weline/Test/Setup/Db/Migration/';
+        if (!is_dir($migrationPath)) {
+            mkdir($migrationPath, 0755, true);
+        }
+        $migrationFile = $migrationPath . 'rollback_backup_fixture_20260713-v1.1.0.php';
+        file_put_contents($migrationFile, <<<'PHP'
+<?php
+namespace Weline\Test\Setup\Db\Migration;
+
+use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Migration\RollbackBackupStrategyInterface;
+
+final class RollbackBackupFixture20260713V110 extends AbstractMigration implements RollbackBackupStrategyInterface
+{
+    public function __construct(private ConnectionFactory $connectionFactory)
+    {
+    }
+
+    public function install(): bool
+    {
+        $table = (string)getenv('WELINE_TEST_ROLLBACK_TABLE');
+        $connector = $this->connectionFactory->getConnector();
+        if (!$connector->hasField($table, 'rollback_value')) {
+            $connector->query($connector->buildAlterAddColumnSql($table, [
+                'name' => 'rollback_value',
+                'type' => 'varchar',
+                'length' => 255,
+                'nullable' => true,
+                'primaryKey' => false,
+                'autoIncrement' => false,
+                'default' => null,
+                'comment' => '',
+                'unique' => false,
+            ]))->fetch();
+        }
+        return true;
+    }
+
+    public function uninstall(): bool
+    {
+        $table = (string)getenv('WELINE_TEST_ROLLBACK_TABLE');
+        $connector = $this->connectionFactory->getConnector();
+        if ($connector->hasField($table, 'rollback_value')) {
+            $connector->query($connector->buildAlterDropColumnSql($table, 'rollback_value'))->fetch();
+        }
+        return true;
+    }
+
+    public function getVersion(): string
+    {
+        return '1.1.0';
+    }
+
+    public function getRollbackBackupStrategy(): array
+    {
+        return [
+            'strategy' => 'column',
+            'tables' => [(string)getenv('WELINE_TEST_ROLLBACK_TABLE')],
+            'columns' => ['rollback_value'],
+            'reason' => 'The column is introduced by this migration and is removed during rollback.',
+        ];
+    }
+}
+PHP
+        );
+
+        self::assertTrue($this->migrationService->upgradeMigration('Weline_Test', $migrationFile));
+        self::assertTrue($connector->hasField($table, 'rollback_value'));
+        $connector->getQuery()->clearQuery()->table($table)
+            ->where('id', 7)
+            ->update(['rollback_value' => 'value-written-on-1.1'])
+            ->fetch();
+
+        $plan = $this->migrationService->planRollbackToVersion('Weline_Test', '1.0.0', '1.1.0');
+        self::assertSame([], $plan['blockers']);
+        self::assertCount(1, $plan['migrations']);
+        self::assertSame('column', $plan['migrations'][0]['rollback_backup_strategy']['strategy']);
+        $completed = $this->migrationService->executeRollbackPlan(
+            'Weline_Test',
+            $plan['migrations'],
+            'op-script-column-restore',
+        );
+        self::assertCount(1, $completed);
+        self::assertFalse($connector->hasField($table, 'rollback_value'));
+
+        self::assertTrue($this->migrationService->upgradeMigration('Weline_Test', $migrationFile));
+        self::assertTrue($connector->hasField($table, 'rollback_value'));
+        $rows = $connector->getQuery()->clearQuery()->table($table)
+            ->fields(['rollback_value'])
+            ->where('id', 7)
+            ->limit(1)
+            ->select()
+            ->fetch();
+        self::assertSame('value-written-on-1.1', $rows[0]['rollback_value'] ?? null);
+
+        $backups = ObjectManager::getInstance(MigrationBackup::class, [], false)
+            ->where(MigrationBackup::schema_fields_OPERATION_ID, 'op-script-column-restore')
+            ->where(MigrationBackup::schema_fields_BACKUP_SCOPE, MigrationBackup::SCOPE_ROLLBACK)
+            ->select()
+            ->fetch()
+            ->getItems();
+        self::assertNotEmpty($backups);
+        self::assertSame(
+            MigrationBackup::RETENTION_EXPIRING,
+            $backups[0]->getData(MigrationBackup::schema_fields_RETENTION_STATE),
+        );
+    }
+
+    public function testLegacyScriptWithoutRollbackBackupContractIsBlockedByPreflight(): void
+    {
+        $migration = $this->createMock(MigrationInterface::class);
+        $method = (new \ReflectionClass($this->migrationService))
+            ->getMethod('resolveRollbackBackupStrategy');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('RollbackBackupStrategyInterface');
+        $method->invoke($this->migrationService, $migration);
     }
     
     /**
@@ -284,5 +474,29 @@ class CreateTableTest20250101V100 implements MigrationInterface
         $migration = $items[0] ?? null;
         $this->assertNotNull($migration);
         $this->assertEquals(Migration::STATUS_ROLLED_BACK, $migration->getData(Migration::schema_fields_STATUS));
+    }
+
+    private function removeFixtureMigration(): void
+    {
+        $migrationPath = BP . 'app/code/Weline/Test/Setup/Db/Migration/';
+        foreach ([
+            $migrationPath . 'create_table__test_20250101-v1.0.0.php',
+            $migrationPath . 'rollback_backup_fixture_20260713-v1.1.0.php',
+        ] as $migrationFile) {
+            if (is_file($migrationFile)) {
+                unlink($migrationFile);
+            }
+        }
+
+        foreach ([
+            rtrim($migrationPath, '/'),
+            dirname(rtrim($migrationPath, '/')),
+            dirname(dirname(rtrim($migrationPath, '/'))),
+            dirname(dirname(dirname(rtrim($migrationPath, '/')))),
+        ] as $directory) {
+            if (is_dir($directory) && count(scandir($directory) ?: []) === 2) {
+                rmdir($directory);
+            }
+        }
     }
 }

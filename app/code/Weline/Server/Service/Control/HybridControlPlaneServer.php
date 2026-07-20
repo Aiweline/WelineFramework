@@ -150,6 +150,16 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         $this->controlServer->setExpectedControlToken($this->expectedControlToken);
     }
 
+    public function registerExternalReadableSource(string $id, mixed $stream, callable $handler): void
+    {
+        $this->controlServer->registerExternalReadableSource($id, $stream, $handler);
+    }
+
+    public function unregisterExternalReadableSource(string $id): void
+    {
+        $this->controlServer->unregisterExternalReadableSource($id);
+    }
+
     public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
     {
         $events = $this->controlServer->poll($timeoutSec, $timeoutUsec);
@@ -308,9 +318,10 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
 
         $before = $this->supervisorServer->sessionsSnapshot();
         $events = $this->supervisorServer->poll($timeoutSec, $timeoutUsec);
+        $closed = $this->supervisorServer->drainClosedSessionSnapshots();
         $after = $this->supervisorServer->sessionsSnapshot();
 
-        $this->dispatchSupervisorLifecycleEvents($before, $after);
+        $this->dispatchSupervisorLifecycleEvents($before, $after, $closed);
         $this->dispatchSupervisorPassthroughMessages();
         foreach (\array_keys($this->notifiedSupervisorDisconnects) as $sessionId) {
             if (!isset($before[$sessionId]) && !isset($after[$sessionId])) {
@@ -406,6 +417,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 ...$policyAcks,
                 ControlMessage::TYPE_CACHE_CLEAR_ACK,
                 ControlMessage::TYPE_POLICY_STATE_DELTA,
+                ControlMessage::TYPE_HTTP3_ROUTE_ACTIVATED,
                 ControlMessage::TYPE_DRAINING_COMPLETE,
                 ControlMessage::TYPE_EXITED,
                 ControlMessage::TYPE_EXIT_REASON,
@@ -476,6 +488,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ControlMessage::TYPE_POLICY_COMMITTED_ACK,
             ControlMessage::TYPE_POLICY_ROLLBACK_ACK,
             ControlMessage::TYPE_CACHE_CLEAR_ACK,
+            ControlMessage::TYPE_HTTP3_ROUTE_ACTIVATED,
             ControlMessage::TYPE_DRAINING_COMPLETE,
             ControlMessage::TYPE_EXITED,
             ControlMessage::TYPE_EXIT_REASON,
@@ -576,7 +589,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         if (!$session instanceof SupervisorSession) {
             return;
         }
-        $this->supervisorServer?->closeSessionById($sessionId);
+        $this->supervisorServer?->closeSessionById($sessionId, $reason);
         $this->removePendingSupervisorMessagesForSession($sessionId);
         if ($this->disconnectHandler !== null) {
             ($this->disconnectHandler)(
@@ -609,8 +622,9 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     /**
      * @param array<int, array<string, mixed>> $before
      * @param array<int, array<string, mixed>> $after
+     * @param array<int, array<string, mixed>> $closed
      */
-    private function dispatchSupervisorLifecycleEvents(array $before, array $after): void
+    private function dispatchSupervisorLifecycleEvents(array $before, array $after, array $closed): void
     {
         foreach ($after as $sessionId => $sessionInfo) {
             $prev = $before[$sessionId] ?? null;
@@ -654,6 +668,14 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             }
         }
 
+        // A session can be accepted, identified and closed inside one poll, so
+        // merge its terminal snapshot even when it was absent from $before.
+        foreach ($closed as $sessionId => $sessionInfo) {
+            if (!isset($before[$sessionId])) {
+                $before[$sessionId] = $sessionInfo;
+            }
+        }
+
         foreach ($before as $sessionId => $sessionInfo) {
             if (isset($after[$sessionId])) {
                 continue;
@@ -662,11 +684,22 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 unset($this->notifiedSupervisorDisconnects[$sessionId]);
                 continue;
             }
-            if (($sessionInfo['role'] ?? '') === '' || $this->disconnectHandler === null) {
+            $disconnectInfo = \is_array($closed[$sessionId] ?? null)
+                ? $closed[$sessionId]
+                : $sessionInfo;
+            if (($disconnectInfo['role'] ?? '') === '' || $this->disconnectHandler === null) {
                 continue;
             }
+            $reason = \trim((string)($disconnectInfo['disconnect_reason'] ?? ''));
+            if ($reason === '') {
+                $reason = 'socket_closed';
+            }
             $clientId = $this->toSupervisorClientId((int)$sessionId);
-            ($this->disconnectHandler)($clientId, $this->buildSupervisorClientInfo($sessionInfo, 'socket_closed'), $this);
+            ($this->disconnectHandler)(
+                $clientId,
+                $this->buildSupervisorClientInfo($disconnectInfo, $reason),
+                $this,
+            );
         }
     }
 
@@ -814,6 +847,9 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
 
         $type = (string)($message['type'] ?? '');
         if (\in_array($type, [ControlMessage::TYPE_ACK_READY, ControlMessage::TYPE_READY_ACK], true)) {
+            if (\strtolower(\trim((string)($message['ready_phase'] ?? 'final'))) !== 'final') {
+                return ControlMessage::encode($message);
+            }
             return $this->translateSupervisorReadyAck($sessionId, $session, $message);
         }
 
@@ -874,6 +910,11 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             'port' => (int)($message['port'] ?? $listen['port'] ?? 0),
             'worker_id' => (int)($message['worker_id'] ?? $session->workerId),
             'reason' => $reason,
+            'ready_phase' => 'final',
+            'activation_id' => (string)($message['activation_id'] ?? ''),
+            'http3_route' => \is_array($message['http3_route'] ?? null)
+                ? $message['http3_route']
+                : [],
         ]);
     }
 

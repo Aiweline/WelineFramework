@@ -40,10 +40,18 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     public static function getInstance(string $host, int $port, array $options = []): self
     {
         $normalizedOptions = self::normalizeOptions($options);
-        // 池 key 仅取连接身份字段（host:port:token）；min_idle/max_size 等由 mergeOptions 取并集升级，
-        // 确保同一 host:port:token 的探测端与 Worker 共享同一连接池且可升到长连池策略。
         $tokenFileName = (string)($normalizedOptions['token_file_name'] ?? '');
-        $key = $host . ':' . $port . ':' . $tokenFileName;
+        if ($tokenFileName === '') {
+            $tokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                (string)($normalizedOptions['service_type'] ?? 'session'),
+                $port
+            );
+            $normalizedOptions['token_file_name'] = $tokenFileName;
+        }
+        // 默认池按连接身份字段（host:port:token）复用；显式 profile 用于隔离启动协调器等
+        // 具有不同 deadline/cooldown 语义的控制面连接，避免被请求热路径的 fail-fast 参数污染。
+        $poolProfile = \trim((string)($normalizedOptions['pool_profile'] ?? ''));
+        $key = $host . ':' . $port . ':' . $tokenFileName . ':' . \hash('sha256', $poolProfile);
         if (!isset(self::$instances[$key])) {
             self::$instances[$key] = new self($host, $port, $normalizedOptions);
         } else {
@@ -55,14 +63,25 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     /**
      * 丢弃指定 host:port:token 的连接池（关闭套接字并移除单例），用于共享侧车冷启动探测前清理陈旧状态。
      */
-    public static function discardPool(string $host, int $port, string $tokenFileName = ''): void
-    {
-        $key = $host . ':' . $port . ':' . $tokenFileName;
-        if (!isset(self::$instances[$key])) {
-            return;
+    public static function discardPool(
+        string $host,
+        int $port,
+        string $tokenFileName = '',
+        ?string $poolProfile = null
+    ): void {
+        $tokenFileName = self::normalizeTokenFileName($tokenFileName);
+        $normalizedProfile = $poolProfile !== null ? \trim($poolProfile) : null;
+        foreach (self::$instances as $key => $instance) {
+            if ($instance->host !== $host
+                || $instance->port !== $port
+                || (string)($instance->options['token_file_name'] ?? '') !== $tokenFileName
+                || ($normalizedProfile !== null
+                    && \trim((string)($instance->options['pool_profile'] ?? '')) !== $normalizedProfile)) {
+                continue;
+            }
+            $instance->shutdown();
+            unset(self::$instances[$key]);
         }
-        self::$instances[$key]->shutdown();
-        unset(self::$instances[$key]);
     }
 
     /**
@@ -454,14 +473,14 @@ class ConnectionPoolManager implements ConnectionPoolInterface
 
     private function createConnection(): PooledConnection
     {
-        $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
         $tokenFileName = (string)($this->options['token_file_name'] ?? '');
         $serviceType = (string)($this->options['service_type'] ?? '');
         if ($tokenFileName === '') {
             $normalizedServiceType = \strtolower(\trim($serviceType));
-            $tokenFileName = \str_starts_with($normalizedServiceType, 'memory')
-                ? 'memory_server.token'
-                : 'session_server.token';
+            $tokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                $normalizedServiceType,
+                $this->port
+            );
         } elseif ($serviceType === '') {
             $normalizedToken = \strtolower($tokenFileName);
             if (\str_contains($normalizedToken, 'memory')) {
@@ -470,7 +489,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 $serviceType = 'Session';
             }
         }
-        $tokenFilePath = $basePath . $tokenFileName;
+        $tokenFilePath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
 
         return new PooledConnection(
             $this->host,
@@ -503,7 +522,17 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         if (!isset($options['max_size']) && isset($options['pool_size'])) {
             $options['max_size'] = (int)$options['pool_size'];
         }
+        if (\array_key_exists('token_file_name', $options)) {
+            $options['token_file_name'] = self::normalizeTokenFileName((string)$options['token_file_name']);
+        }
         return $options;
+    }
+
+    private static function normalizeTokenFileName(string $tokenFileName): string
+    {
+        $tokenFileName = \trim($tokenFileName, " \t\n\r\0\x0B\"'");
+
+        return \basename(\str_replace('\\', '/', $tokenFileName));
     }
 
     private static function mergeFloatOptionPreferLower(mixed $current, mixed $incoming, float $fallback): float

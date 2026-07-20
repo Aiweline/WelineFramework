@@ -23,6 +23,7 @@ use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -123,12 +124,31 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        $allInstances = $manager->getAllPersistedInstanceInfo();
+        $rejectedRecords = [];
+        $allInstances = $manager->getAllPersistedInstanceInfo($rejectedRecords);
         $processInfoMap = $this->buildProcessInfoMap($allInstances);
         $allInstances = $this->filterActiveInstances($allInstances, $processInfoMap);
 
         $this->printer->setup(__('Weline Server 状态'));
         echo "\n";
+
+        if ($rejectedRecords !== []) {
+            $rejectedCount = \count($rejectedRecords);
+            $this->printer->warning(
+                __('已拒绝 %{1} 份非 v4 endpoint；以下最多显示 10 份，文件保持不变。', [$rejectedCount])
+            );
+            foreach (\array_slice($rejectedRecords, 0, 10, true) as $name => $reason) {
+                $this->printer->warning(
+                    __('  [%{1}] %{2}', [$name, $reason])
+                );
+            }
+            if ($rejectedCount > 10) {
+                $this->printer->warning(
+                    __('  其余 %{1} 份已省略。', [$rejectedCount - 10])
+                );
+            }
+            echo "\n";
+        }
 
         if (empty($allInstances)) {
             $this->printer->note(__('没有运行中的服务器实例'));
@@ -154,7 +174,6 @@ class Status extends CommandAbstract
             $count = $info->workerCount;
             $host = $info->host;
             $startedAt = $info->startedAt;
-            $dispatcherEnabled = $info->dispatcherEnabled;
             
             // 从实际服务列表获取 Worker 信息
             $workers = $info->getWorkers();
@@ -176,15 +195,8 @@ class Status extends CommandAbstract
             $this->printer->note($childPrefix . '  ├─ ' . __('地址：') . $scheme . '://' . $host . ':' . $port);
             $this->showRuntimeMetadata($name, $childPrefix . '  ├─ ', true);
             
-            // 显示实际 Worker 端口范围
-            $workerPorts = [];
-            foreach ($workers as $worker) {
-                if ($worker->port !== null && $worker->port > 0) {
-                    $workerPorts[] = $worker->port;
-                }
-            }
-            $workerPortStr = !empty($workerPorts) ? \implode(',', $workerPorts) : __('(未知)');
-            $portRangeStr = $dispatcherEnabled ? 'Dispatcher:' . $port . ', Workers:' . $workerPortStr : $workerPortStr;
+            // 端口展示统一由实例契约根据 RuntimeSelection 与实际服务计算
+            $portRangeStr = $info->getPortRangeDescription();
             $this->printer->note($childPrefix . '  ├─ ' . __('端口范围：') . $portRangeStr);
             $this->printer->note($childPrefix . '  ├─ ' . __('启动时间：') . $startedAt);
             
@@ -313,48 +325,42 @@ class Status extends CommandAbstract
             return;
         }
 
-        $runtime = RuntimeEndpointMetadata::fromEndpoint($raw)->toArray();
-        $schemaVersion = (int)($runtime['endpoint_schema_version'] ?? 0);
-        $selectionValid = $runtime['runtime_selection_valid'] ?? null;
-        if ($schemaVersion >= 3 && $selectionValid !== true) {
-            $message = __('运行时选择：endpoint schema v%{1} 校验失败，已拒绝从兼容字段重新推导拓扑。', [$schemaVersion]);
-            $error = \trim((string)($runtime['runtime_selection_error'] ?? ''));
-            $this->printer->warning($prefix . $message . ($error !== '' ? ' ' . $error : ''));
+        try {
+            $runtime = RuntimeEndpointMetadata::fromEndpoint($raw)->toArray();
+            $selectionData = $runtime['runtime_selection'] ?? null;
+            if (!\is_array($selectionData)) {
+                throw new \RuntimeException('Endpoint metadata is missing runtime_selection.');
+            }
+            $selection = RuntimeSelection::fromArray($selectionData);
+        } catch (\Throwable $exception) {
+            $this->printer->warning($prefix . __('运行时选择：仅接受 endpoint schema v4，当前记录已拒绝。')
+                . ' ' . $exception->getMessage());
             return;
         }
 
-        $effective = (string)($runtime['effective_topology'] ?? '');
-        $listener = (string)($runtime['listener_strategy'] ?? '');
-        $eventLoop = (string)($runtime['event_loop_driver'] ?? '');
-        $sslEngine = (string)($runtime['ssl_engine'] ?? '');
+        $effective = $selection->effectiveTopology->value;
+        $listener = $selection->listenerMode;
+        $eventLoop = $selection->eventLoopDriver;
+        $sslEngine = $selection->sslEngine;
         $digest = \strtolower(\trim((string)($runtime['policy_digest'] ?? '')));
         $digestSource = 'endpoint';
         try {
-            // RuntimeSelection in endpoint metadata is the immutable startup
-            // topology fact. Policy activation is independently hot-swappable,
-            // so its current digest must come from the authoritative policy
-            // store instead of the startup snapshot.
             $activePolicy = (new RuntimePolicyStore())->active($instanceName);
             if ($activePolicy !== null) {
                 $digest = $activePolicy->digest;
                 $digestSource = 'active-store';
             }
         } catch (\Throwable) {
-            // Status stays available during a partial policy-store failure and
-            // explicitly labels the endpoint fallback below.
         }
         $digestShort = $digest !== '' ? \substr($digest, 0, 12) : '-';
         $containerDigest = \strtolower(\trim((string)($runtime['container_registry_digest'] ?? '')));
         $containerDigestShort = $containerDigest !== '' ? \substr($containerDigest, 0, 12) : '-';
 
         if ($compact) {
-            if ($effective === '' && $listener === '' && $eventLoop === '' && $sslEngine === '') {
-                return;
-            }
-            $summary = ($effective !== '' ? $effective : '-')
-                . ' / ' . ($listener !== '' ? $listener : '-')
-                . ' / ' . ($eventLoop !== '' ? $eventLoop : '-')
-                . ' / ' . ($sslEngine !== '' ? $sslEngine : '-')
+            $summary = $effective
+                . ' / ' . $listener
+                . ' / ' . $eventLoop
+                . ' / ' . $sslEngine
                 . ' / policy=' . $digestShort
                 . ' / container=' . $containerDigestShort;
             $this->printer->note($prefix . __('实际运行时：') . $summary);
@@ -363,37 +369,27 @@ class Status extends CommandAbstract
 
         echo "\n";
         $this->printer->note(__('实际运行时选择：'));
-        $requested = (string)($runtime['requested_topology'] ?? '');
-        $source = (string)($runtime['topology_source'] ?? '');
         $this->printer->note($prefix . __('拓扑：')
-            . ($requested !== '' ? $requested : '-')
+            . $selection->requestedTopology->value
             . ' -> '
-            . ($effective !== '' ? $effective : '-')
-            . ($source !== '' ? ' (source=' . $source . ')' : ''));
+            . $effective
+            . ' (source=' . $selection->source . ')');
         $this->printer->note($prefix . __('数据面：')
-            . 'listener=' . ($listener !== '' ? $listener : '-')
-            . ', event=' . ($eventLoop !== '' ? $eventLoop : '-')
-            . ', ssl=' . ($sslEngine !== '' ? $sslEngine : '-'));
-        $compatible = $runtime['policy_compatible'] ?? null;
-        $compatibleText = \is_bool($compatible) ? ($compatible ? 'true' : 'false') : '-';
+            . 'listener=' . $listener
+            . ', event=' . $eventLoop
+            . ', ssl=' . $sslEngine);
         $this->printer->note($prefix . __('策略：')
-            . 'compatible=' . $compatibleText
+            . 'compatible=' . ($selection->policyCompatible ? 'true' : 'false')
             . ', digest=' . ($digest !== '' ? $digest : '-')
             . ', source=' . $digestSource);
         $this->printer->note($prefix . __('Endpoint：')
-            . 'schema=v' . $schemaVersion
+            . 'schema=v' . RuntimeSelection::ENDPOINT_SCHEMA_VERSION
             . ', metadata=' . (string)($runtime['metadata_source'] ?? '-')
             . ', container=' . ($containerDigest !== '' ? $containerDigest : '-'));
 
-        $reasonCodes = \is_array($runtime['topology_reason_codes'] ?? null)
-            ? \array_values($runtime['topology_reason_codes'])
-            : [];
-        $reason = \trim((string)($runtime['topology_reason'] ?? ''));
-        if ($reasonCodes !== [] || $reason !== '') {
-            $this->printer->note($prefix . __('选择原因：')
-                . ($reasonCodes !== [] ? '[' . \implode(', ', $reasonCodes) . '] ' : '')
-                . $reason);
-        }
+        $this->printer->note($prefix . __('选择原因：')
+            . '[' . \implode(', ', $selection->reasonCodes) . '] '
+            . $selection->reason);
     }
 
     protected function showStartupFailureSummary(ServerInstanceInfo $info): void
@@ -438,7 +434,6 @@ class Status extends CommandAbstract
             'main_port',
             'control_port',
             'worker_count',
-            'dispatcher_enabled',
             'ssl_enabled',
             'startup_timeout_sec',
             'elapsed_sec',
@@ -580,11 +575,31 @@ class Status extends CommandAbstract
         }
 
         if ($service->role === ControlMessage::ROLE_WORKER) {
+            $homepageFpc = \is_array($service->metadata['homepage_fpc'] ?? null)
+                ? $service->metadata['homepage_fpc']
+                : [];
+            $warmupState = (string)($service->metadata['warmup_state'] ?? '');
+            if ($homepageFpc !== [] || $warmupState !== '') {
+                $runtimeDetails[] = __('首页预热：')
+                    . 'state=' . ($warmupState !== '' ? $warmupState : '-')
+                    . ', hit=' . (($homepageFpc['hit'] ?? false) === true ? 'true' : 'false')
+                    . ', source=' . (string)($homepageFpc['source'] ?? '-')
+                    . ', status=' . (int)($homepageFpc['http_status'] ?? 0)
+                    . ', fpc=' . (string)($homepageFpc['fpc_status'] ?? '-')
+                    . ', reason=' . (string)($homepageFpc['reason'] ?? '-');
+            }
+
             $proof = \is_array($service->metadata['dynamic_first_render'] ?? null)
                 ? $service->metadata['dynamic_first_render']
                 : [];
-            if ($proof !== []) {
-                $runtimeDetails[] = __('动态首渲染：')
+            $proofRecorded = (int)($proof['attempts'] ?? 0) > 0
+                || (int)($proof['status_code'] ?? 0) > 0
+                || (string)($proof['host'] ?? '') !== ''
+                || (string)($proof['path'] ?? '') !== '';
+            if (!$proofRecorded) {
+                $runtimeDetails[] = __('动态首渲染测量：') . __('未记录');
+            } else {
+                $runtimeDetails[] = __('动态首渲染测量：')
                     . 'ready=' . (($proof['ready'] ?? false) === true ? 'true' : 'false')
                     . ', elapsed=' . \round((float)($proof['elapsed_ms'] ?? 0.0), 2)
                     . '/' . \round((float)($proof['target_ms'] ?? 0.0), 2) . 'ms'

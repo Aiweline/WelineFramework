@@ -12,7 +12,7 @@ final class SchemaDiffEngine
     /**
      * @return list<SchemaDiffOp>
      */
-    public function diff(TableSchema $declared, ?TableSchema $actual): array
+    public function diff(TableSchema $declared, ?TableSchema $actual, ?string $databaseType = null): array
     {
         $ops = [];
         $tableName = $declared->tableName;
@@ -31,7 +31,8 @@ final class SchemaDiffEngine
                 $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_ADD_COLUMN, $tableName, $col, $modelClass);
             } else {
                 $existing = $actualCols[$col->name];
-                if (!$this->columnEquals($col, $existing) && !$this->skipTimestampCompatibleModify($col, $existing)) {
+                if (!$this->columnEquals($col, $existing, $databaseType)
+                    && !$this->skipTimestampCompatibleModify($col, $existing)) {
                     $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_MODIFY_COLUMN, $tableName, $col, $modelClass, $existing);
                 }
             }
@@ -80,7 +81,10 @@ final class SchemaDiffEngine
 
         $declaredComment = (string) $declared->comment;
         $actualComment = (string) $actual->comment;
-        if ($declaredComment !== $actualComment) {
+        // SQLite does not persist table comments. Treating an empty physical
+        // comment as drift makes every setup run emit the same no-op DDL and
+        // prevents a target-code read-only validation from ever reaching zero.
+        if ($databaseType !== 'sqlite' && $declaredComment !== $actualComment) {
             $ops[] = new SchemaDiffOp(
                 SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT,
                 $tableName,
@@ -123,10 +127,10 @@ final class SchemaDiffEngine
         return $out;
     }
 
-    private function columnEquals(ColumnDefinition $a, ColumnDefinition $b): bool
+    private function columnEquals(ColumnDefinition $a, ColumnDefinition $b, ?string $databaseType = null): bool
     {
         return $a->name === $b->name
-            && $this->normalizeType($a->type) === $this->normalizeType($b->type)
+            && $this->columnTypeCompatible($a, $b, $databaseType)
             && $this->normalizeLength($a->type, $a->length) === $this->normalizeLength($b->type, $b->length)
             && $a->nullable === $b->nullable
             && $a->primaryKey === $b->primaryKey
@@ -136,10 +140,39 @@ final class SchemaDiffEngine
             && (string) ($a->default ?? '') === (string) ($b->default ?? '');
     }
 
+    private function columnTypeCompatible(
+        ColumnDefinition $declared,
+        ColumnDefinition $actual,
+        ?string $databaseType,
+    ): bool {
+        $declaredType = $this->normalizeType($declared->type);
+        $actualType = $this->normalizeType($actual->type);
+        if ($declaredType === $actualType) {
+            return true;
+        }
+        if ($databaseType !== 'sqlite'
+            || !$declared->primaryKey
+            || !$declared->autoIncrement
+            || !$actual->primaryKey
+            || !$actual->autoIncrement) {
+            return false;
+        }
+
+        // SQLite 的自增 rowid 别名只接受精确的 INTEGER PRIMARY KEY。
+        // bigint/smallint 是声明侧语义，物理层必须收敛为 INTEGER。
+        $integerFamily = ['int', 'bigint', 'smallint', 'tinyint', 'mediumint'];
+        return in_array($declaredType, $integerFamily, true)
+            && in_array($actualType, $integerFamily, true);
+    }
+
     /** timestamp/datetime/date 间变更易触发 PostgreSQL USING/UPDATE 转换错误，跳过兼容的 MODIFY */
     private function columnUniqueCompatible(ColumnDefinition $declared, ColumnDefinition $actual): bool
     {
-        return $declared->unique === $actual->unique || !$actual->unique;
+        // Physical adapters expose uniqueness as an index/constraint and may
+        // also mirror it onto the column. Index comparison below is the
+        // authoritative source; comparing the mirrored flag here would create
+        // a permanent MODIFY COLUMN loop for separately declared unique indexes.
+        return true;
     }
 
     private function columnCommentCompatible(ColumnDefinition $declared, ColumnDefinition $actual): bool

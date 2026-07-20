@@ -5,9 +5,15 @@ namespace Weline\Server\Service;
 
 /**
  * Manage local hosts entries for WLS development domains.
+ *
+ * Managed local suffixes that require hosts (*.weline.test / *.local.test)
+ * always map to the loopback address 127.0.0.1. Callers must not inject LAN
+ * or public IPs for those domains; wrong existing entries are repaired.
  */
 class HostsFileManager
 {
+    public const LOOPBACK_IPV4 = '127.0.0.1';
+
     private const MARKER_START = '# Weline WLS Auto-Config Start';
     private const MARKER_END = '# Weline WLS Auto-Config End';
 
@@ -26,16 +32,36 @@ class HostsFileManager
     }
 
     /**
-     * @return array{success: bool, message: string, needs_admin?: bool, command?: string, already_exists?: bool, elevated?: bool}
+     * Resolve the IP that must be written for a domain.
+     * Managed local hosts domains are always 127.0.0.1 — never read LAN/public IP.
      */
-    public static function addDomain(string $domain, string $ip = '127.0.0.1'): array
+    public static function resolveIpForDomain(string $domain, string $ip = self::LOOPBACK_IPV4): string
     {
+        $domain = \strtolower(\trim($domain));
+        if ($domain !== '' && LocalDomainPolicy::requiresHostsEntry($domain)) {
+            return self::LOOPBACK_IPV4;
+        }
+
+        $ip = \trim($ip);
+
+        return $ip !== '' ? $ip : self::LOOPBACK_IPV4;
+    }
+
+    /**
+     * @return array{success: bool, message: string, needs_admin?: bool, command?: string, already_exists?: bool, repaired?: bool, elevated?: bool, ip?: string}
+     */
+    public static function addDomain(string $domain, string $ip = self::LOOPBACK_IPV4): array
+    {
+        $domain = \strtolower(\trim($domain));
+        $ip = self::resolveIpForDomain($domain, $ip);
+
         $hostsFile = self::getHostsFilePath();
         if (!file_exists($hostsFile)) {
             return [
                 'success' => false,
                 'message' => "Hosts file not found: {$hostsFile}",
                 'needs_admin' => false,
+                'ip' => $ip,
             ];
         }
 
@@ -45,23 +71,35 @@ class HostsFileManager
                 'success' => false,
                 'message' => "Unable to read hosts file: {$hostsFile}",
                 'needs_admin' => false,
+                'ip' => $ip,
             ];
         }
 
-        if (self::domainExists($content, $domain)) {
+        $existingIps = self::findDomainIps($content, $domain);
+        if ($existingIps !== [] && self::allIpsMatch($existingIps, $ip)) {
             return [
                 'success' => true,
                 'message' => "Domain {$domain} already exists in hosts file",
                 'needs_admin' => false,
                 'already_exists' => true,
+                'ip' => $ip,
             ];
         }
 
-        $newContent = self::addDomainToContent($content, $domain, $ip);
+        $repaired = $existingIps !== [];
+        $newContent = $repaired
+            ? self::rewriteDomainIpInContent($content, $domain, $ip)
+            : self::addDomainToContent($content, $domain, $ip);
 
         if (!self::hasPermission()) {
             $elevated = self::tryAddDomainWithElevation($hostsFile, $newContent, $domain, $ip);
             if ($elevated !== null) {
+                if ($repaired && ($elevated['success'] ?? false)) {
+                    $elevated['repaired'] = true;
+                    $elevated['message'] = "Repaired {$domain} hosts entry to {$ip}";
+                }
+                $elevated['ip'] = $ip;
+
                 return $elevated;
             }
 
@@ -70,6 +108,7 @@ class HostsFileManager
                 'message' => 'Administrator privileges are required to modify the hosts file',
                 'needs_admin' => true,
                 'command' => self::getAdminCommand($domain, $ip),
+                'ip' => $ip,
             ];
         }
 
@@ -78,13 +117,18 @@ class HostsFileManager
                 'success' => false,
                 'message' => "Unable to write hosts file: {$hostsFile}",
                 'needs_admin' => true,
+                'ip' => $ip,
             ];
         }
 
         return [
             'success' => true,
-            'message' => "Added {$domain} to hosts file",
+            'message' => $repaired
+                ? "Repaired {$domain} hosts entry to {$ip}"
+                : "Added {$domain} to hosts file",
             'needs_admin' => false,
+            'repaired' => $repaired,
+            'ip' => $ip,
         ];
     }
 
@@ -110,18 +154,8 @@ class HostsFileManager
             ];
         }
 
-        $lines = explode("\n", $content);
-        $newLines = [];
-        $removed = false;
-        foreach ($lines as $line) {
-            if (preg_match('/\s+' . preg_quote($domain, '/') . '(\s|$)/', $line)) {
-                $removed = true;
-                continue;
-            }
-            $newLines[] = $line;
-        }
-
-        if (!$removed) {
+        $newContent = self::removeDomainFromContent($content, $domain);
+        if ($newContent === $content) {
             return [
                 'success' => true,
                 'message' => "Domain {$domain} was not present in hosts file",
@@ -129,7 +163,7 @@ class HostsFileManager
             ];
         }
 
-        if (file_put_contents($hostsFile, implode("\n", $newLines)) === false) {
+        if (file_put_contents($hostsFile, $newContent) === false) {
             return [
                 'success' => false,
                 'message' => "Unable to write hosts file: {$hostsFile}",
@@ -189,7 +223,7 @@ PS1;
         @unlink($payloadPath);
 
         $content = file_get_contents($hostsFile);
-        if ($content !== false && self::domainExists($content, $domain)) {
+        if ($content !== false && self::domainHasExactIp($content, $domain, $ip)) {
             return [
                 'success' => true,
                 'message' => "Added {$domain} to hosts file",
@@ -238,7 +272,7 @@ PS1;
 
         if ($exitCode === 0) {
             $content = \file_get_contents($hostsFile);
-            if ($content !== false && self::domainExists($content, $domain)) {
+            if ($content !== false && self::domainHasExactIp($content, $domain, $ip)) {
                 return [
                     'success' => true,
                     'message' => "Added {$domain} to hosts file",
@@ -294,7 +328,7 @@ PS1;
 
         if ($exitCode === 0) {
             $content = \file_get_contents($hostsFile);
-            if ($content !== false && self::domainExists($content, $domain)) {
+            if ($content !== false && self::domainHasExactIp($content, $domain, $ip)) {
                 return [
                     'success' => true,
                     'message' => "Added {$domain} to hosts file",
@@ -348,19 +382,92 @@ PS1;
         return self::findUnixCommand('authopen');
     }
 
-    private static function domainExists(string $content, string $domain): bool
+    private static function domainHasExactIp(string $content, string $domain, string $ip): bool
     {
+        $existingIps = self::findDomainIps($content, $domain);
+
+        return $existingIps !== [] && self::allIpsMatch($existingIps, $ip);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function findDomainIps(string $content, string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return [];
+        }
+
+        $ips = [];
         foreach (explode("\n", $content) as $line) {
             $line = trim($line);
             if ($line === '' || str_starts_with($line, '#')) {
                 continue;
             }
-            if (preg_match('/\s+' . preg_quote($domain, '/') . '(\s|$)/', $line)) {
-                return true;
+            if (!preg_match('/^(\S+)\s+(.+)$/', $line, $matches)) {
+                continue;
+            }
+            $hosts = preg_split('/\s+/', \strtolower(\trim((string) $matches[2]))) ?: [];
+            if (\in_array($domain, $hosts, true)) {
+                $ips[] = (string) $matches[1];
             }
         }
 
-        return false;
+        return \array_values(\array_unique($ips));
+    }
+
+    /**
+     * @param list<string> $ips
+     */
+    private static function allIpsMatch(array $ips, string $expectedIp): bool
+    {
+        if ($ips === []) {
+            return false;
+        }
+        foreach ($ips as $ip) {
+            if (\strtolower(\trim($ip)) !== \strtolower(\trim($expectedIp))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static function removeDomainFromContent(string $content, string $domain): string
+    {
+        $domain = \strtolower(\trim($domain));
+        $lines = explode("\n", $content);
+        $newLines = [];
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed !== '' && !str_starts_with($trimmed, '#')) {
+                if (preg_match('/^(\S+)\s+(.+)$/', $trimmed, $matches)) {
+                    $hosts = preg_split('/\s+/', \strtolower(\trim((string) $matches[2]))) ?: [];
+                    if (\in_array($domain, $hosts, true)) {
+                        $remaining = \array_values(\array_filter(
+                            $hosts,
+                            static fn(string $host): bool => $host !== $domain
+                        ));
+                        if ($remaining === []) {
+                            continue;
+                        }
+                        $newLines[] = (string) $matches[1] . ' ' . \implode(' ', $remaining);
+                        continue;
+                    }
+                }
+            }
+            $newLines[] = $line;
+        }
+
+        return implode("\n", $newLines);
+    }
+
+    private static function rewriteDomainIpInContent(string $content, string $domain, string $ip): string
+    {
+        $withoutDomain = self::removeDomainFromContent($content, $domain);
+
+        return self::addDomainToContent($withoutDomain, $domain, $ip);
     }
 
     private static function addDomainToContent(string $content, string $domain, string $ip): string

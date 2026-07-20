@@ -405,13 +405,9 @@ class Dispatcher
         );
         WlsLogger::info_('[DispatcherPolicy] active digest=' . $policyDigest . ' topology=dispatcher');
         $this->startTime = \time();
-        // 注册 PID
-        if ($processName) {
-            Processer::setPid('--name=' . $processName, \getmypid());
-            if ($port > 0) {
-                Processer::setProcessPorts('--name=' . $processName, [$port]);
-            }
-        }
+        // Process identity and listening ports are published once by the
+        // dispatcher entrypoint. Constructors must remain side-effect free;
+        // repeating the transaction here caused duplicate Windows OS probes.
         
         // 初始化硬编码维护页（纯内存，最后一道防线）
         $this->fallbackMaintenancePage = $this->buildFriendlyStartupMaintenancePage();

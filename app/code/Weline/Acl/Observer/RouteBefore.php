@@ -401,7 +401,11 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
         $hasUser = $user !== null || $sessionAclContext !== null;
         if (!$hasUser) {
-            $sidHint = \strlen((string) (\w_env_cookie(WlsStrategy::SESSION_NAME) ?? '')) > 0 ? \substr((string) \w_env_cookie(WlsStrategy::SESSION_NAME), 0, 8) . '...' : 'none';
+            $resolvedCookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolve();
+            $resolvedCookie = (string) (\w_env_cookie($resolvedCookieName) ?? '');
+            $legacyCookie = (string) (\w_env_cookie(WlsStrategy::SESSION_NAME) ?? '');
+            $sidSource = $resolvedCookie !== '' ? $resolvedCookie : $legacyCookie;
+            $sidHint = \strlen($sidSource) > 0 ? \substr($sidSource, 0, 8) . '...' : 'none';
             $backendSess = $this->getBackendSession()->getSession();
             $actualSid = $backendSess->getId();
             $sessIdHint = \strlen($actualSid) > 0 ? \substr($actualSid, 0, 8) . '...' : 'empty';
@@ -424,7 +428,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $this->returnApiError(401, __('请先登录'), $request);
                     return;
                 }
-                // 避免 403 响应带上本请求新创建的 Session Cookie，否则会覆盖浏览器已有的登录 cookie，造成「已登录→进 admin→403→带新 sid→再进 login 有 session→302 admin→403」循环
+                // 避免 403 响应带上本请求新创建的 Session Cookie，否则会覆盖浏览器已有的登录 cookie
+                $resolvedCookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolve();
+                HeaderCollector::getInstance()->removeCookie($resolvedCookieName);
                 HeaderCollector::getInstance()->removeCookie(WlsStrategy::SESSION_NAME);
                 /**@var EventsManager $eventsManager */
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);

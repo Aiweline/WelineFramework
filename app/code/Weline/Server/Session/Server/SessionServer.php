@@ -46,6 +46,9 @@ final class SessionServer
     /** Session 存储实例 */
     private SessionStore $store;
 
+    /** Dedicated RAM-only TLS cache. It is never created by the persistent Session role. */
+    private ?TlsSessionCacheStore $tlsSessionCacheStore = null;
+
     /** 运行状态 */
     private bool $running = false;
 
@@ -98,6 +101,19 @@ final class SessionServer
         $this->port = (int)($config['port'] ?? (19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset()));
         $this->gcInterval = (int)($config['gc_interval'] ?? 300);
         $this->store = new SessionStore($config);
+        if ($this->serviceRole === 'memory_server') {
+            $tlsConfig = \is_array($config['tls_session_cache'] ?? null)
+                ? $config['tls_session_cache']
+                : [];
+            $this->tlsSessionCacheStore = new TlsSessionCacheStore(
+                \max(128, \min(200000, (int)($tlsConfig['max_entries'] ?? 20000))),
+                \max(1048576, \min(536870912, (int)($tlsConfig['max_total_bytes'] ?? 67108864))),
+                \max(1024, \min(262144, (int)($tlsConfig['max_session_bytes'] ?? 16384))),
+                \max(30, \min(86400, (int)($tlsConfig['timeout_seconds'] ?? 300))),
+                (float)($config['memory_high_watermark_ratio'] ?? 0.75),
+                (float)($config['memory_low_watermark_ratio'] ?? 0.60),
+            );
+        }
         $this->lastGcTime = \time();
 
         $authEnabled = (bool)($config['auth_enabled'] ?? true);
@@ -118,16 +134,20 @@ final class SessionServer
         $this->authToken = \bin2hex(\random_bytes(32));
         $this->authTokenVersion = \time(); // 使用时间戳作为版本号
 
-        $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
+        $basePath = \Weline\Server\Service\SharedStateRuntimeScope::tokenDirectory();
         if (!\is_dir($basePath)) {
             @\mkdir($basePath, 0755, true);
         }
 
-        $tokenFileName = (string)($this->config['token_file_name'] ?? 'session_server.token');
+        $defaultTokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole(
+            $this->serviceRole,
+            $this->port
+        );
+        $tokenFileName = (string)($this->config['token_file_name'] ?? $defaultTokenFileName);
         $tokenFileName = \trim($tokenFileName, " \t\n\r\0\x0B\"'");
         $tokenFileName = \basename($tokenFileName);
         if ($tokenFileName === '') {
-            $tokenFileName = 'session_server.token';
+            $tokenFileName = $defaultTokenFileName;
         }
         $this->tokenFilePath = $basePath . $tokenFileName;
     }
@@ -417,6 +437,7 @@ final class SessionServer
             'write_buffer' => '',
             'addr' => $peerName ?? 'unknown',
             'authenticated' => $this->authToken === null,
+            'tls_cache_channel' => false,
             'consumer_code' => '',
             'instance_name' => '',
             'owner_type' => 'instance',
@@ -455,10 +476,20 @@ final class SessionServer
             return 0;
         }
 
-        $this->store->relieveMemoryPressure();
         $this->clients[$clientId]['buffer'] .= $data;
 
-        $messages = SessionProtocol::extractMessages($this->clients[$clientId]['buffer']);
+        $tlsCacheChannel = !empty($this->clients[$clientId]['tls_cache_channel']);
+        if ($tlsCacheChannel) {
+            $messages = SessionProtocol::extractTlsMessages($this->clients[$clientId]['buffer']);
+            if ($messages === null) {
+                $this->disconnectClient($clientId);
+                return 0;
+            }
+        } else {
+            $this->tlsSessionCacheStore?->relieveMemoryPressure();
+            $this->store->relieveMemoryPressure();
+            $messages = SessionProtocol::extractMessages($this->clients[$clientId]['buffer']);
+        }
         foreach ($messages as $msg) {
             $this->handleMessage($clientId, $msg);
         }
@@ -471,7 +502,7 @@ final class SessionServer
      */
     private function handleMessage(int $clientId, array $msg): void
     {
-        $cmd = $msg['cmd'] ?? '';
+        $cmd = \is_string($msg['cmd'] ?? null) ? $msg['cmd'] : '';
         
         if ($cmd === SessionProtocol::CMD_AUTH) {
             $this->handleAuth($clientId, $msg);
@@ -480,6 +511,28 @@ final class SessionServer
         
         if (!$this->isClientAuthenticated($clientId)) {
             $this->sendToClient($clientId, SessionProtocol::encodeError('Authentication required', 'AUTH_REQUIRED'));
+            $this->disconnectClient($clientId);
+            return;
+        }
+
+        $tlsCacheChannel = !empty($this->clients[$clientId]['tls_cache_channel']);
+        if ($tlsCacheChannel) {
+            if (!$this->isTlsSessionCacheCommand($cmd)) {
+                $this->sendToClient(
+                    $clientId,
+                    SessionProtocol::encodeTlsError('TLS cache channel accepts TLS cache commands only', 'TLS_CACHE_CHANNEL_REQUIRED'),
+                );
+                $this->disconnectClient($clientId);
+                return;
+            }
+            $this->handleTlsSessionCacheMessage($clientId, $cmd, $msg);
+            return;
+        }
+        if ($this->isTlsSessionCacheCommand($cmd)) {
+            $this->sendToClient(
+                $clientId,
+                SessionProtocol::encodeError('Dedicated TLS cache channel required', 'TLS_CACHE_CHANNEL_REQUIRED'),
+            );
             $this->disconnectClient($clientId);
             return;
         }
@@ -666,6 +719,60 @@ final class SessionServer
         $this->sendToClient($clientId, $response);
     }
 
+    /** @param array<string, mixed> $msg */
+    private function handleTlsSessionCacheMessage(int $clientId, string $cmd, array $msg): void
+    {
+        if ($this->tlsSessionCacheStore === null) {
+            $this->sendToClient(
+                $clientId,
+                SessionProtocol::encodeTlsError('TLS session cache is unavailable', 'TLS_CACHE_UNAVAILABLE'),
+            );
+            return;
+        }
+
+        $contextHex = \is_string($msg['ctx'] ?? null) ? \strtolower($msg['ctx']) : '';
+        $sessionIdHex = \is_string($msg['sid'] ?? null) ? \strtolower($msg['sid']) : '';
+        $response = match ($cmd) {
+            SessionProtocol::CMD_TLS_SESSION_GET => SessionProtocol::encodeTlsSuccess(
+                $this->tlsSessionCacheStore->get($contextHex, $sessionIdHex),
+            ),
+            SessionProtocol::CMD_TLS_SESSION_PUT => $this->tlsSessionCacheStore->put(
+                $contextHex,
+                $sessionIdHex,
+                \is_string($msg['der'] ?? null) ? $msg['der'] : '',
+                \is_int($msg['created_at'] ?? null) ? $msg['created_at'] : 0,
+                \is_int($msg['expires_at'] ?? null) ? $msg['expires_at'] : 0,
+            )
+                ? SessionProtocol::encodeTlsSuccess()
+                : SessionProtocol::encodeTlsError('Invalid or over-budget TLS session', 'TLS_CACHE_REJECTED'),
+            SessionProtocol::CMD_TLS_SESSION_REMOVE => $this->removeTlsSession($contextHex, $sessionIdHex),
+            SessionProtocol::CMD_TLS_SESSION_STATS => SessionProtocol::encodeTlsSuccess(
+                $this->tlsSessionCacheStore->stats(),
+            ),
+            default => SessionProtocol::encodeTlsError('Unknown TLS cache command', 'TLS_CACHE_COMMAND_UNKNOWN'),
+        };
+
+        $this->sendToClient($clientId, $response);
+    }
+
+    private function removeTlsSession(string $contextHex, string $sessionIdHex): string
+    {
+        $this->tlsSessionCacheStore?->remove($contextHex, $sessionIdHex);
+
+        // OpenSSL removal is advisory; a missing entry is the requested final state.
+        return SessionProtocol::encodeTlsSuccess();
+    }
+
+    private function isTlsSessionCacheCommand(string $cmd): bool
+    {
+        return \in_array($cmd, [
+            SessionProtocol::CMD_TLS_SESSION_GET,
+            SessionProtocol::CMD_TLS_SESSION_PUT,
+            SessionProtocol::CMD_TLS_SESSION_REMOVE,
+            SessionProtocol::CMD_TLS_SESSION_STATS,
+        ], true);
+    }
+
     /**
      * 发送消息给客户端
      */
@@ -759,6 +866,8 @@ final class SessionServer
      */
     private function doMaintenance(): void
     {
+        $this->tlsSessionCacheStore?->maintain();
+        $this->tlsSessionCacheStore?->relieveMemoryPressure();
         $this->store->relieveMemoryPressure();
         $this->store->checkPersist();
 
@@ -1070,15 +1179,18 @@ final class SessionServer
     private function handleAuth(int $clientId, array $msg): void
     {
         $token = $this->normalizeAuthToken((string)($msg['token'] ?? ''));
+        $tlsCacheChannel = ($msg['channel'] ?? null) === 'tls_session_cache';
 
         if ($this->authToken === null) {
             $this->clients[$clientId]['authenticated'] = true;
+            $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Auth disabled'));
             return;
         }
 
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
+            $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
             $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
             $this->logDebug("Client authenticated: {$addr} (id={$clientId})");
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));

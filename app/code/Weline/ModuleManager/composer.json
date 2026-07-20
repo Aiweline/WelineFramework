@@ -5,7 +5,8 @@
     "type": "weline-module",
     "require": {
         "php": "^8.4",
-        "weline/module-admin": "@dev"
+        "weline/module-admin": "@dev",
+        "weline/module-database": "@dev"
     },
     "suggest": {
         "weline/module-ai": "Enables optional AI-assisted module translation.",

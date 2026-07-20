@@ -5,6 +5,7 @@ namespace Weline\Server\Service\Contract;
 
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
  * 服务器实例信息值对象
@@ -28,7 +29,7 @@ class ServerInstanceInfo
         public readonly string $host,
         public readonly int $port,
         public readonly bool $sslEnabled,
-        public readonly bool $dispatcherEnabled,
+        public readonly RuntimeSelection $runtimeSelection,
         public readonly int $workerCount,
         public readonly int $workerBasePort,
         public readonly int $httpRedirectPort,
@@ -41,7 +42,8 @@ class ServerInstanceInfo
         public readonly string $startupFailureClass = '',
         public readonly array $startupFailureContext = [],
         public readonly array $startupFailureDiagnostics = [],
-    ) {}
+    ) {
+    }
 
     /**
      * 检查 Master 进程是否运行中
@@ -222,7 +224,7 @@ class ServerInstanceInfo
         \sort($workerPorts);
 
         $segments = [];
-        if ($this->dispatcherEnabled) {
+        if ($this->runtimeSelection->isDispatcher()) {
             $segments[] = 'Dispatcher:' . $this->port;
         }
 
@@ -283,10 +285,7 @@ class ServerInstanceInfo
         foreach ($this->services as $service) {
             $role = $service->role;
             if (!isset($servicesArray[$role])) {
-                $servicesArray[$role] = [
-                    'display_name' => $service->displayName,
-                    'instances' => [],
-                ];
+                $servicesArray[$role] = ['display_name' => $service->displayName, 'instances' => []];
             }
             $servicesArray[$role]['instances'][] = $service->toArray();
         }
@@ -298,7 +297,7 @@ class ServerInstanceInfo
             'host' => $this->host,
             'port' => $this->port,
             'ssl_enabled' => $this->sslEnabled,
-            'dispatcher_enabled' => $this->dispatcherEnabled,
+            'runtime_selection' => $this->runtimeSelection->toArray(),
             'worker_count' => $this->workerCount,
             'worker_base_port' => $this->workerBasePort,
             'http_redirect_port' => $this->httpRedirectPort,

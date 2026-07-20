@@ -62,6 +62,58 @@ final class SqliteAlterTableTest extends TestCase
         self::assertSame(['first', 'second', 'third'], array_column($rows, 'name'));
     }
 
+    public function testSqliteBigintAutoIncrementModifyRebuildsAsIntegerAndPreservesData(): void
+    {
+        $this->connector = $this->createConnector();
+        $this->connector->query(
+            'CREATE TABLE demo (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(32) NOT NULL)'
+        )->fetch();
+        $this->connector->query('CREATE INDEX idx_demo_name ON demo (name)')->fetch();
+        $this->connector->query("INSERT INTO demo (name) VALUES ('kept')")->fetch();
+
+        $ddl = $this->connector->buildAlterModifyColumnSql('demo', [
+            'name' => 'id',
+            'type' => 'bigint',
+            'length' => null,
+            'nullable' => false,
+            'primaryKey' => true,
+            'autoIncrement' => true,
+            'default' => null,
+            'unique' => true,
+        ]);
+
+        self::assertStringContainsString('INTEGER PRIMARY KEY AUTOINCREMENT', $ddl);
+        self::assertStringNotContainsString('BIGINT PRIMARY KEY AUTOINCREMENT', $ddl);
+        $this->executeSqliteRebuild($ddl);
+
+        $column = $this->connector->getTableColumns('demo')[0] ?? [];
+        self::assertSame('integer', $column['type'] ?? null);
+        self::assertTrue((bool)($column['primary_key'] ?? false));
+        self::assertTrue((bool)($column['auto_increment'] ?? false));
+        self::assertSame('kept', $this->connector->query('SELECT name FROM demo WHERE id = 1')->fetch()[0]['name'] ?? null);
+        self::assertTrue($this->connector->hasIndex('demo', 'idx_demo_name'));
+    }
+
+    private function executeSqliteRebuild(string $ddl): void
+    {
+        $ddl = str_replace('/* WELINE_SQLITE_REBUILD */', '', $ddl);
+        $this->connector->query('PRAGMA foreign_keys=OFF')->fetch();
+        $this->connector->beginTransaction();
+        try {
+            foreach (explode("\n-- WELINE_DDL_STATEMENT\n", $ddl) as $statement) {
+                if (trim($statement) !== '') {
+                    $this->connector->query($statement)->fetch();
+                }
+            }
+            $this->connector->commit();
+        } catch (\Throwable $e) {
+            $this->connector->rollBack();
+            throw $e;
+        } finally {
+            $this->connector->query('PRAGMA foreign_keys=ON')->fetch();
+        }
+    }
+
     private function createConnector(): Connector
     {
         if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {

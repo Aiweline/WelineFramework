@@ -13,6 +13,8 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
+use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -117,6 +119,17 @@ class SslCertificateService
      * 证书模型
      */
     protected SslCertificate $certModel;
+
+    /**
+     * 证书表首次启动兜底只需每进程执行一次。
+     */
+    protected static bool $certificateStorageReady = false;
+
+    /**
+     * Definitive SQLite corruption is non-transient for this PHP process.
+     * Caching the reason prevents repeated table probes and bootstrap writes.
+     */
+    protected static ?string $certificateStorageCorruptionReason = null;
     
     /**
      * 判断缓存：本地域名 [domain => bool]
@@ -163,16 +176,92 @@ class SslCertificateService
      */
     protected array $certParseCache = [];
     
-    public function __construct()
+    public function __construct(bool $deferCertificateStorage = false)
     {
         $this->certBaseDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS;
         $this->accountKeyPath = $this->certBaseDir . 'account.key';
         $this->updateAcmeDirectory();
         $this->certModel = ObjectManager::getInstance(SslCertificate::class);
+        if (!$deferCertificateStorage) {
+            $this->ensureCertificateStorageReady();
+        }
         
         // 确保目录存在
         if (!\is_dir($this->certBaseDir)) {
             @\mkdir($this->certBaseDir, 0755, true);
+        }
+    }
+
+    /**
+     * WLS 首次启动可能早于 setup:upgrade 触达 Server 模块表。
+     * SSL 证书准备是 server:start 的前置链路，必须能在缺表时用声明式 schema
+     * 原子创建本模块证书表；已有表则零写入，避免影响正常升级和已有证书。
+     */
+    public function ensureCertificateStorageReady(): void
+    {
+        if (self::$certificateStorageReady) {
+            return;
+        }
+        if (self::$certificateStorageCorruptionReason !== null) {
+            throw new \RuntimeException((string) __(
+                'WLS SSL 证书数据库已在本次启动中熔断：%{1}',
+                [self::$certificateStorageCorruptionReason]
+            ));
+        }
+
+        $connector = null;
+        $tableName = '';
+        $isDefinitiveCorruption = static function (\Throwable $error): bool {
+            return \preg_match(
+                '/database disk image is malformed|file is not a database|not a database|SQLITE_CORRUPT|SQLITE_NOTADB/i',
+                $error->getMessage()
+            ) === 1;
+        };
+
+        try {
+            $connector = $this->certModel->getConnection()->getConnector();
+            $tableName = $this->certModel->getTable();
+            if ($connector->tableExist($tableName)) {
+                self::$certificateStorageReady = true;
+                return;
+            }
+
+            $schema = ObjectManager::getInstance(SchemaParser::class)->parse(SslCertificate::class);
+            if ($schema === null) {
+                throw new \RuntimeException('Unable to build schema for ' . SslCertificate::class . ' during WLS SSL bootstrap.');
+            }
+
+            ObjectManager::getInstance(SchemaMigrationExecutor::class)
+                ->createBootstrapTable($connector, $schema);
+            self::$certificateStorageReady = true;
+            w_log_info('[SslCertificateService] SSL certificate storage table created during WLS startup bootstrap: ' . $tableName);
+        } catch (\Throwable $error) {
+            $failure = $error;
+            if (!$isDefinitiveCorruption($failure) && $connector !== null && $tableName !== '') {
+                try {
+                    if ($connector->tableExist($tableName)) {
+                        self::$certificateStorageReady = true;
+                        return;
+                    }
+                } catch (\Throwable $probeError) {
+                    $failure = $probeError;
+                }
+            }
+
+            if ($isDefinitiveCorruption($failure)) {
+                self::$certificateStorageCorruptionReason = \trim($failure->getMessage());
+                w_log_error((string) __(
+                    '[SslCertificateService] SQLite 证书存储已损坏，本次启动已熔断后续探测和写入：%{1}',
+                    [self::$certificateStorageCorruptionReason]
+                ));
+                throw new \RuntimeException((string) __(
+                    'WLS SSL 证书数据库已损坏，无法安全生成或恢复证书：%{1}',
+                    [self::$certificateStorageCorruptionReason]
+                ), 0, $failure);
+            }
+
+            w_log_error('[SslCertificateService] SSL certificate storage bootstrap failed: ' . $failure->getMessage());
+            throw $failure;
         }
     }
 
@@ -1444,14 +1533,104 @@ CNF;
     protected function runTrustCommand(string $command, ?int &$exitCode = null): string
     {
         $exitCode = 1;
-        if (!\function_exists('exec')) {
+        if (!\function_exists('proc_open')) {
+            if (!\function_exists('exec')) {
+                return '';
+            }
+            $output = [];
+            @\exec($command, $output, $exitCode);
+            return \implode("\n", $output);
+        }
+
+        $timeoutMs = (int) (\getenv('WLS_SSL_TRUST_COMMAND_TIMEOUT_MS') ?: 5000);
+        if ($timeoutMs < 500) {
+            $timeoutMs = 500;
+        }
+        $deadline = \microtime(true) + ($timeoutMs / 1000.0);
+        $pipes = [];
+        $process = @\proc_open(
+            $command,
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes
+        );
+        if (!\is_resource($process)) {
             return '';
         }
 
-        $output = [];
-        @\exec($command, $output, $exitCode);
+        foreach ($pipes as $pipe) {
+            if (\is_resource($pipe)) {
+                @\stream_set_blocking($pipe, false);
+            }
+        }
+        if (isset($pipes[0]) && \is_resource($pipes[0])) {
+            @\fclose($pipes[0]);
+        }
 
-        return \implode("\n", $output);
+        $output = '';
+        $timedOut = false;
+        while (true) {
+            foreach ([1, 2] as $idx) {
+                if (isset($pipes[$idx]) && \is_resource($pipes[$idx])) {
+                    $chunk = @\stream_get_contents($pipes[$idx]);
+                    if (\is_string($chunk) && $chunk !== '') {
+                        $output .= $chunk;
+                    }
+                }
+            }
+
+            $status = @\proc_get_status($process);
+            $running = \is_array($status) && !empty($status['running']);
+            if (!$running) {
+                if (\is_array($status) && isset($status['exitcode']) && (int)$status['exitcode'] >= 0) {
+                    $exitCode = (int)$status['exitcode'];
+                }
+                break;
+            }
+
+            if (\microtime(true) >= $deadline) {
+                $timedOut = true;
+                @\proc_terminate($process);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000);
+                $status = @\proc_get_status($process);
+                if (\is_array($status) && !empty($status['running'])) {
+                    @\proc_terminate($process, 9);
+                }
+                $exitCode = 124;
+                break;
+            }
+
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(50000);
+        }
+
+        foreach ([1, 2] as $idx) {
+            if (isset($pipes[$idx]) && \is_resource($pipes[$idx])) {
+                $chunk = @\stream_get_contents($pipes[$idx]);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $output .= $chunk;
+                }
+                @\fclose($pipes[$idx]);
+            }
+        }
+        if ($timedOut) {
+            $output .= ($output === '' ? '' : "\n") . 'WLS_SSL_TRUST_COMMAND_TIMEOUT after ' . $timeoutMs . 'ms';
+            w_log_warning(
+                'SSL trust command timed out after {timeout_ms}ms: {command}',
+                ['timeout_ms' => $timeoutMs, 'command' => $command],
+                'ssl_cert'
+            );
+            return \trim($output);
+        }
+
+        $closeCode = @\proc_close($process);
+        if ($exitCode === 1 && \is_int($closeCode) && $closeCode >= 0) {
+            $exitCode = $closeCode;
+        }
+
+        return \trim($output);
     }
 
     protected function runInteractiveTrustCommand(string $command, ?int &$exitCode = null): string
@@ -2042,6 +2221,17 @@ CNF;
         };
 
         if ($this->getOsFamily() === 'Windows') {
+            // Windows 证书信任库可能被组策略、杀软或 certutil 交互卡住。
+            // WLS 启动路径默认只负责生成可用证书，绝不阻塞或修改系统信任库；
+            // 如确需自动导入本地 CA，可显式设置 WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1。
+            if ((string)\getenv('WLS_SSL_TRUST_WINDOWS_LOCAL_CA') !== '1') {
+                return $remember([
+                    'success' => true,
+                    'trusted' => false,
+                    'message' => __('Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in.', [$caCertPath]),
+                ]);
+            }
+
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
                 return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')]);
             }
@@ -6330,8 +6520,9 @@ CNF;
             return;
         }
 
-        // 通知所有运行中的实例热重载 SNI 证书映射（无需重启即可生效新证书）
-        ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)
-            ->reloadSslCert();
+        // 按边缘适配器互斥处理：nginx → edge reload；wls → ssl_cert_reload IPC
+        ObjectManager::getInstance(\Weline\Server\Service\Edge\EdgeAdapterResolver::class)
+            ->resolve()
+            ->onCertificateMaterialUpdated('');
     }
 }

@@ -23,7 +23,7 @@
 
 Dispatcher 拓扑使用 PROXY Protocol v2 把经过认证的客户端 peer 元数据传给 Worker。Direct 使用公开 socket 的真实 peer。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
 
-Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx/Caddy 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
+Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
 
 ## 3. RuntimePolicyBundle
 
@@ -113,6 +113,12 @@ AcceptGate
 
 “语义只解析一次”是数据契约，不是文档口号：`WorkerPolicyKernel` 只接受分帧器验证后且无尾部字节的单条请求，完成唯一一次请求行/Header 语义解析，产生不可变 `WorkerPolicyDecision` / Framework `RequestEnvelope`。该快照同时携带 method、HTTP protocol、已规范化 path、原始 target/query、小写 Header map、body、canonical client IP、trusted-proxy 结论和 policy digest。Static/FPC 与动态路由必须消费同一份 Decision；动态路由 `WlsRequest::fromEnvelope()` 直接水合，不再调用 `fromRaw()` 或重复扫描 HTTP 头。
 
+HTTP/3 只能改变传输和 framing，不能复制或缩短安全管线。原生 QUIC Adapter 将已验证的 H3 method/path/Header/body 水合为同一份不可变请求快照，再进入上述 `WorkerPolicyKernel`；Host、后台 Key、Origin Token、Ban、限流、URI/Header/Body 规则、Maintenance、Static/FPC 与 Framework Router 的顺序和 H2/H1.1 完全一致。Adapter、UDP listener、当前 policy digest 与预热未全部 READY 时不得发布 `Alt-Svc`。macOS Direct 的公开 UDP Router 只按已认证 Worker channel 和 QUIC connection ID 派发密文包，不解析 HTTP、不得自行执行或绕过业务规则。
+
+正文深度规则不得把 Weline 前端 Worker 的 WQB1 包当作 UTF-8 文本。只有同时满足 `POST`、当前 `Env::getFrontendQueryBinPath()`、`application/x-weline-query-bin`、`WQB1` magic 和版本号的包，才作为不透明二进制包跳过正文正则扫描；URI、Header、限流、封禁和后续 QueryBin 的协议头、同源、包大小/解码、worker session 与签名校验仍全部执行。该例外不是按 URL 或 Content-Type 的宽泛放行，伪造或损坏的包仍由 QueryBin 拒绝。
+
+XSS 事件属性规则必须以单词边界匹配 `\bon\w+\s*=`。边界不能省略，否则 `frontend_theme_id=` 等合法查询键会从中间的 `ontend_theme_id=` 被误判；`onload=`、`onerror=` 与 `onclick=` 等真实事件属性仍应命中。
+
 `WorkerStaticResponseL1::lookup()` 只接受该 Decision；GET/HEAD、`If-None-Match` / `If-Modified-Since`、HTTP/1.0/1.1 和 Connection close/keep-alive 都从快照判定。后续 `WorkerFullPageCacheFastPath` 也只消费该 Decision，并在 SSE/upgrade、`Cache-Control: no-cache/no-store/max-age=0`、`Pragma: no-cache` 和显式 warmup/bypass 时拒绝命中。HTTP 与 stream TLS 在 Static/FPC 命中后直接进入 transport 写缓冲收尾，EventBuffer 使用显式 hit 结果跳过响应头重扫描；三者都不再在普通热命中调用冷 static handler、文件系统、ObjectManager、同步 telemetry 或 post-response queue。`cache_clear(cache_epoch)` 在 ACK 前清空每个 Worker 的 Static L1 与 FPC Process L1。
 
 fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-Weline-Performance-Diagnostics: 1` 显式开启，且仍需通过 DeveloperAccessPolicy。DEV 模式本身不再导致所有 Static/FPC 请求生成随机 request-id 并写 TraceStore。`X-WLS-Benchmark-Worker: 1` 是独立的平台 benchmark 归因契约，仅返回 Worker ID/port/PID，不开启面板 trace，也不绕过 Origin Token、ban、限流或攻击规则。业务路径高压必须使用专用测试实例，并仅对实际压测源 IP 显式配置 whitelist CIDR；不得用裸 Header 伪造安全绕过。
@@ -131,7 +137,7 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - 默认 `bad_user_agents` 只保留 `sqlmap`、`nikto`、`nmap`、`masscan` 等高置信扫描器；空 UA、`curl`、`python-requests` 可能来自健康检查、部署与运维命令，不得仅凭 UA 默认封禁。
 - 路径扫描计数只统计具有扫描价值的路径。普通 `GET/HEAD` 浏览器静态扩展（CSS、JS、图片、字体、音视频、WASM、source map）不占用 unique-path 预算；点文件、无扩展路径和服务端可执行扩展仍参与计数，并继续执行 protected-path 与恶意规则。
 - Slowloris 只统计超过 `grace_seconds` 仍未完成 TLS/HTTP 请求帧的连接。默认宽限为 1.5 秒，明显高于 fresh-TLS 的 `<1s` 运行门槛；正常 c32/c128 并发不能因事件循环调度超过旧的 250ms 窗口而被误判。宽限后仍使用实例级每 IP 10 条上限和 30 秒总超时，不能把提高宽限解释为取消慢连接防护。
-- `server:security:unblock` 由 Master 同时广播给当前实例的业务 Worker、维护 Worker 与 Dispatcher。各进程会同步清除请求策略内核、Connection AcceptGate、共享状态和进程内分布式 Ban。`--clear-all` 只按当前实例 hash 前缀删除共享 Ban，不得清空其他 WLS 实例。
+- `server:security:unblock` 由 Master 同时广播给当前实例的业务 Worker、维护 Worker 与 Dispatcher。各进程会同步清除请求策略内核、Connection AcceptGate、共享状态和进程内分布式 Ban。`--clear-all` 只按当前实例 hash 前缀删除共享 Ban，不得清空其他 WLS 实例；指定实例可用位置参数，或 `-n <instance>` / `--instance=<instance>`。
 - Dispatcher 不再构建 `AttackDetector`、不读取或轮询攻击规则文件，也不重复维护 whitelist/CIDR 索引。其 accept 热路的唯一安全事实源是当前已激活 Bundle 构建的 `ConnectionAcceptGatePool`；URI/Header/Body 攻击规则只在 WorkerPolicyKernel 执行。
 - 攻击日志进入进程 ring buffer 后批量提交；请求热路径不直接 ORM、写 JSON 或同步 IPC。
 - TLS 握手和握手后的首请求都必须有总 deadline。macOS shared-FD 路径只对新握手连接执行 200ms 有界首读泵送，不允许将兼容补偿扩展为普通 keep-alive 的全连接扫描或秒级等待。
@@ -142,15 +148,17 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - 对同一请求语料对比 Dispatcher/direct 的状态码、Header、Body、封禁、限流和缓存来源，结果必须一致。
 - 三种 transport 必须一致拒绝 TE+CL、任何未支持 TE/chunked 和冲突的重复 CL；同一连接一次写入两条完整请求时，必须按顺序返回两个响应，不得把尾部当作第一请求 body 或静默丢弃。
 - 伪造 XFF/CF Header 不能覆盖非受信 peer；Dispatcher 的 PROXY v2 元数据必须通过实例认证。
-- loopback peer 未显式命中 whitelist CIDR 时，必须与公网 peer 一样执行 Origin Token、ban、限流和攻击规则；trusted proxy 不等于 whitelist。
+- 生产/预发环境中，loopback peer 未显式命中 whitelist CIDR 时，必须与公网 peer 一样执行 Origin Token、ban、限流和攻击规则；trusted proxy 不等于 whitelist。DEV/local/test 策略编译会自动加入 `127.0.0.1/32` 与 `::1/128`，避免本机浏览器调试时因扫描规则残留导致全站 Forbidden，该例外不得扩展到生产。
 - 对已声明实例 Host 的 Bundle，`host_policy_strict=true`、context digest 与最终 Start 配置一致；正确 Host 可通过，任意非托管 Host 必须在缓存和 Router 前 403。staged/rollback 的旧 Host context 不得激活。
 - 16 Worker 全局限流仍为一份实例总额。
 - 普通 `curl` 与浏览器 UA 必须通过；连续超过实例/路径额度时响应为 `429`，随后不得变成 `shared_ban`。高置信扫描器应立即 403，并使同一客户端后续请求命中共享 Ban。
+- 含 `|` 等普通二进制字节的有效 WQB1 query-bin 请求不得触发正文攻击规则或把浏览器封禁；同样的攻击特征出现在普通文本请求正文时仍必须由正文规则处理。
 - 同一客户端访问超过路径扫描阈值数量的不同静态资源后，首页仍必须可访问；非静态扫描路径超过阈值仍应触发 Ban。
 - fresh-TLS c32/c128 在正常运行门槛内必须 0 reset/0 handshake error；只有连接超过 1.5 秒仍未形成完整请求时才进入 slowloris 共享计数。
 - Static/FPC 命中时不创建 Session、Router 或 Controller，但 mandatory guard 必须已执行。
 - 禁用 `server.cache.static` 或 `server.cache.fpc` 后，三种 transport 都不得继续命中或发布对应缓存；重新启用只能由新的 active digest 生效。
 - 普通、TLS stream、EventBuffer 的动态请求在策略通过后均由同一 `RequestEnvelope` 创建 `WlsRequest`；Worker 热路不应再出现 `WlsRequest::fromRaw()`。
+- 同一请求语料经 H3/H2/H1.1 必须得到一致的后台 Key、Host、Origin Token、攻击规则、限流、Static/FPC 与 Router 结果；H3 READY 前不得出现 `Alt-Svc`，滚动重载后旧 QUIC connection ID 必须收到明确终止包而不是静默黑洞。
 - 注入含密码/文件路径的 runtime 初始化错误时，公开 500 只能看到通用消息和 `request_id`，日志可用该 ID 定位内部细节。
 - 策略发布失败后旧 active digest 不变；任一请求观测到混合 digest 都是发布失败。
 - 可在 Dispatcher 中执行但 direct 无法履行的策略（例如按 SNI 切到不同进程池）必须让 direct 启动明确失败，不得静默忽略。

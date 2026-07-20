@@ -62,8 +62,7 @@ class Restart extends CommandAbstract
                 $this->printer->note(__('检测到服务器已运行，执行滚动重启（Master 保持运行）...'));
             }
             $reloadCommand = ObjectManager::getInstance(Reload::class);
-            $reloadCommand->execute($args, $data);
-            return;
+            return $reloadCommand->execute($args, $data);
         }
 
         $this->printer->note(__('服务器未运行，正在启动...'));
@@ -128,8 +127,8 @@ class Restart extends CommandAbstract
         $keys = [
             'p', 'port', 'host', 'h', 'count', 'c',
             'no-ssl', 'no_ssl', 'ssl-cert', 'ssl-key',
-            'direct', 'dispatcher', 'force-dispatcher', 'no-dispatcher', 'no_dispatcher',
-            'topology', 'runtime-strategy', 'runtime_strategy',
+            'direct', 'dispatcher',
+            'runtime-strategy', 'runtime_strategy',
             'event-loop', 'event_loop', 'loop-driver', 'loop_driver',
             'worker-memory-limit', 'worker_memory_limit', 'dispatcher-memory-limit', 'dispatcher_memory_limit',
         ];

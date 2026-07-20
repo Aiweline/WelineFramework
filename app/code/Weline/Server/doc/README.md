@@ -9,7 +9,7 @@
 3. [IPC 控制通道架构](IPC控制通道架构.md) — REGISTER、READY、lease、heartbeat、route snapshot 和控制命令。
 4. [Dispatcher 分流架构设计](Dispatcher分流架构设计.md) — 数据面转发、路由快照、健康隔离和维护兜底。
 5. [WLS Session/Memory 共享服务架构](WLS_Session共享服务架构.md) — 跨 Worker/实例共享状态 sidecar。
-6. [WLS 模式部署指南](WLS模式部署指南.md) — 启动参数、生产部署和运维入口。
+6. [WLS 模式部署指南](WLS模式部署指南.md) — 启动参数、生产部署、WLS 托管/宿主机 Nginx、运维入口。
 
 ## 按问题定位
 
@@ -19,6 +19,7 @@
 | Worker 掉线、整池重载、路由为空 | [WLS 运行时架构](WLS架构图.md)、[IPC 控制通道](IPC控制通道架构.md) |
 | 请求转发、Worker 故障转移 | [Dispatcher 分流架构](Dispatcher分流架构设计.md) |
 | TLS 1.3、密钥交换策略、HTTPS 压测 | [WLS 模式部署指南](WLS模式部署指南.md#5-https--ssl)、[WLS 运行时架构](WLS架构图.md#37-tls-13-进程性能策略与实测证据) |
+| Nginx 边缘（托管 / 宿主机 managed=false）、trusted_proxy、统一入口 | [WLS 模式部署指南](WLS模式部署指南.md#12-宿主机已有-nginx推荐关闭托管)、[域名接入](WLS模式部署指南.md#4-域名接入) |
 | 首页预热、常驻内存、请求长尾 | [WLS 运行时架构](WLS架构图.md) |
 | Session/Memory 服务异常 | [共享服务架构](WLS_Session共享服务架构.md) |
 | SSE/长连接 | [SSE 无阻塞检测方法](SSE无阻塞检测方法.md)、[WLS EventBuffer SSL Worker](WLS-EventBuffer-SSL-Worker.md) |

@@ -4,17 +4,15 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Contract;
 
 use Weline\Server\Service\Runtime\EffectiveTopology;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
  * 服务启动上下文
  *
  * 包含启动服务所需的全局信息。
  * 
- * 拓扑 mode 是新实例的唯一事实源；legacy 实例再回退运行态字段和 envConfig：
- * - dispatcherEnabled: 本次启动是否启用 Dispatcher（由 CLI 参数或智能决策）
- * - workerCount: 本次启动的 Worker 数量
- * - workerBasePort: Worker 基础端口
- * - workerPort: 首个 Worker 端口
+ * RuntimeSelection 是拓扑、事件循环、TLS 引擎与监听模式的唯一事实源。
+ * workerCount、workerBasePort 与 workerPort 仅描述本次启动的容量和端口分配。
  */
 class ServiceContext
 {
@@ -28,15 +26,13 @@ class ServiceContext
         public readonly bool $sslEnabled,
         public readonly string $sslCert,
         public readonly string $sslKey,
-        public readonly string $mode,
+        public readonly RuntimeSelection $runtimeSelection,
         public readonly bool $daemon,
         public readonly bool $debug,
         /** Windows 子进程可见窗口等（原 frontend 语义中的「窗口」部分） */
         public readonly bool $windowMode,
         public readonly array $envConfig,
         public readonly int $httpRedirectPort = 0,
-        // 运行态字段：由 Start.php 计算后传入，优先级高于 envConfig
-        public readonly ?bool $dispatcherEnabled = null,
         public readonly int|string|null $workerCount = null,
         public readonly ?int $workerBasePort = null,
         public readonly ?int $workerPort = null,
@@ -62,14 +58,13 @@ class ServiceContext
             sslEnabled: $this->sslEnabled,
             sslCert: $this->sslCert,
             sslKey: $this->sslKey,
-            mode: $this->mode,
+            runtimeSelection: $this->runtimeSelection,
             daemon: $this->daemon,
             debug: $this->debug,
             controlToken: $this->controlToken,
             windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
-            dispatcherEnabled: $this->dispatcherEnabled,
             workerCount: $this->workerCount,
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
@@ -91,14 +86,13 @@ class ServiceContext
             sslEnabled: $this->sslEnabled,
             sslCert: $this->sslCert,
             sslKey: $this->sslKey,
-            mode: $this->mode,
+            runtimeSelection: $this->runtimeSelection,
             daemon: $this->daemon,
             debug: $this->debug,
             controlToken: $this->controlToken,
             windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
-            dispatcherEnabled: $this->dispatcherEnabled,
             workerCount: $this->workerCount,
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
@@ -124,44 +118,19 @@ class ServiceContext
         return $value;
     }
 
-    /**
-     * 判断是否启用 Dispatcher
-     * 
-     * 优先级：拓扑 mode > legacy 运行态字段 > envConfig
-     */
-    public function isDispatcherEnabled(): bool
+    public function isDispatcher(): bool
     {
-        if ($this->isDirect() || $this->mode === 'independent') {
-            return false;
-        }
-        if (\in_array($this->mode, ['dispatcher', 'windows-dispatcher'], true)) {
-            return true;
-        }
-        // 新拓扑 mode 是唯一事实源；仅 legacy 实例回退运行态布尔值。
-        if ($this->dispatcherEnabled !== null) {
-            return $this->dispatcherEnabled;
-        }
-        // 回退到 envConfig（仅显式禁用时为 false）
-        $wls = $this->envConfig['wls'] ?? [];
-        $envValue = \is_array($wls) ? ($wls['dispatcher_enabled'] ?? null) : null;
-        return $envValue !== false;
+        return $this->runtimeSelection->isDispatcher();
     }
 
     public function isDirect(): bool
     {
-        return \in_array($this->mode, ['direct', 'linux-direct'], true);
+        return $this->runtimeSelection->isDirect();
     }
 
     public function getEffectiveTopology(): EffectiveTopology
     {
-        if ($this->isDirect()) {
-            return EffectiveTopology::Direct;
-        }
-        if ($this->isDispatcherEnabled()) {
-            return EffectiveTopology::Dispatcher;
-        }
-
-        return EffectiveTopology::Independent;
+        return $this->runtimeSelection->effectiveTopology;
     }
 
     /**

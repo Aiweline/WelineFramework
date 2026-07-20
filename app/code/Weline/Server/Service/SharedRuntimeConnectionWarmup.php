@@ -32,10 +32,21 @@ final class SharedRuntimeConnectionWarmup
 
     public static function warmWorkerPools(int $workerId = 0, string $instanceName = 'default', array $runtime = []): array
     {
-        return self::warm($workerId, $instanceName, $runtime, true);
+        return self::warm($workerId, $instanceName, $runtime, true, 'full');
     }
 
-    private static function warm(int $workerId, string $instanceName, array $runtime, bool $connectNow): array
+    public static function warmReadyMemory(int $workerId = 0, string $instanceName = 'default', array $runtime = []): array
+    {
+        return self::warm($workerId, $instanceName, $runtime, true, 'ready_memory');
+    }
+
+    private static function warm(
+        int $workerId,
+        string $instanceName,
+        array $runtime,
+        bool $connectNow,
+        string $mode
+    ): array
     {
         if (!self::enabled()) {
             return [
@@ -44,7 +55,8 @@ final class SharedRuntimeConnectionWarmup
             ];
         }
 
-        $scope = self::scope($instanceName, $workerId, $connectNow);
+        $scope = self::scope($instanceName, $workerId, $connectNow, $mode);
+        $readyMemoryOnly = $mode === 'ready_memory';
         $now = \microtime(true);
         if ($connectNow && ($now < (self::$nextRetryAt[$scope] ?? 0.0))) {
             return [
@@ -64,11 +76,15 @@ final class SharedRuntimeConnectionWarmup
 
         self::$lastWarmupAt[$scope] = $now;
         $policyOptions = self::policyMemoryOptions();
-        $session = self::resolveEndpoint('session', $runtime);
+        $session = $readyMemoryOnly ? null : self::resolveEndpoint('session', $runtime);
         $memory = self::resolveEndpoint('memory', $runtime);
 
-        $sessionMinIdle = $connectNow ? self::intConfig('wls.shared_state.prewarm_session_min_idle', 1, 0, 16) : 0;
-        $memoryMinIdle = $connectNow ? self::intConfig('wls.shared_state.prewarm_memory_min_idle', 2, 0, 32) : 0;
+        $sessionMinIdle = $connectNow && !$readyMemoryOnly
+            ? self::intConfig('wls.shared_state.prewarm_session_min_idle', 1, 0, 16)
+            : 0;
+        $memoryMinIdle = $readyMemoryOnly
+            ? 1
+            : ($connectNow ? self::intConfig('wls.shared_state.prewarm_memory_min_idle', 2, 0, 32) : 0);
 
         $result = [
             'enabled' => true,
@@ -79,16 +95,18 @@ final class SharedRuntimeConnectionWarmup
             'errors' => [],
         ];
 
-        try {
-            $result['session'] = self::warmPool(
-                $session,
-                'Session',
-                ControlMessage::ROLE_SESSION_SERVER,
-                $sessionMinIdle,
-                $policyOptions
-            );
-        } catch (\Throwable $e) {
-            $result['errors']['session'] = $e->getMessage();
+        if (!$readyMemoryOnly && \is_array($session)) {
+            try {
+                $result['session'] = self::warmPool(
+                    $session,
+                    'Session',
+                    ControlMessage::ROLE_SESSION_SERVER,
+                    $sessionMinIdle,
+                    $policyOptions
+                );
+            } catch (\Throwable $e) {
+                $result['errors']['session'] = $e->getMessage();
+            }
         }
 
         try {
@@ -264,7 +282,7 @@ final class SharedRuntimeConnectionWarmup
             $port = $defaultPort;
         }
 
-        $defaultToken = $kind === 'memory' ? 'memory_server.token' : 'session_server.token';
+        $defaultToken = SharedStateRuntimeScope::defaultTokenFileNameForRole($kind, $port);
         $tokenFileName = \trim((string) ($source['token_file_name'] ?? $defaultToken));
         if ($tokenFileName === '') {
             $tokenFileName = $defaultToken;
@@ -277,9 +295,9 @@ final class SharedRuntimeConnectionWarmup
         ];
     }
 
-    private static function scope(string $instanceName, int $workerId, bool $connectNow): string
+    private static function scope(string $instanceName, int $workerId, bool $connectNow, string $mode): string
     {
-        return $instanceName . ':' . $workerId . ':' . ($connectNow ? 'warm' : 'prime');
+        return $instanceName . ':' . $workerId . ':' . ($connectNow ? 'warm' : 'prime') . ':' . $mode;
     }
 
     private static function boolConfig(string $path, bool $default): bool

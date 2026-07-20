@@ -10,6 +10,11 @@ final class ConnectionSemantics
 {
     public static function shouldKeepAlive(string $protocol, string $connectionHeader = ''): bool
     {
+        $protocol = \strtoupper(\trim($protocol));
+        if (\in_array($protocol, ['H2', 'HTTP/2', 'HTTP/2.0', 'H3', 'HTTP/3', 'HTTP/3.0'], true)) {
+            return true;
+        }
+
         $hasKeepAlive = false;
         foreach (\explode(',', $connectionHeader) as $rawToken) {
             $token = \strtolower(\trim($rawToken, " \t"));
@@ -23,7 +28,6 @@ final class ConnectionSemantics
             }
         }
 
-        $protocol = \strtoupper(\trim($protocol));
         if ($protocol === 'HTTP/1.0') {
             return $hasKeepAlive;
         }

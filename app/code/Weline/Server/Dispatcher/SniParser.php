@@ -2,10 +2,11 @@
 declare(strict_types=1);
 
 /**
- * Weline Server - SNI 解析器
+ * Weline Server - TLS ClientHello 解析器
  *
- * 解析 TLS ClientHello 消息，提取 SNI (Server Name Indication)。
- * 用于 TCP 透传模式下的智能路由决策。
+ * 解析 TLS ClientHello 消息，提取 SNI (Server Name Indication) 和 ALPN。
+ * 用于 TCP 透传模式下的智能路由决策，也用于 WLS Worker 在启用
+ * HTTP/2/HTTP/3 前做真实协议协商门禁。
  *
  * TLS ClientHello 结构:
  * - TLS Record Header (5 bytes)
@@ -40,6 +41,11 @@ class SniParser
      * SNI 扩展类型
      */
     private const TLS_EXTENSION_SNI = 0x0000;
+
+    /**
+     * ALPN 扩展类型
+     */
+    private const TLS_EXTENSION_ALPN = 0x0010;
     
     /**
      * SNI 名称类型（主机名）
@@ -137,6 +143,66 @@ class SniParser
         
         return null;
     }
+
+    /**
+     * 从原始 ClientHello 中提取 ALPN 协议列表，保持客户端顺序。
+     *
+     * @return list<string>
+     */
+    public static function extractAlpnProtocols(string $data): array
+    {
+        $length = \strlen($data);
+        if ($length < self::MIN_CLIENT_HELLO_LENGTH) {
+            return [];
+        }
+        if (\ord($data[0]) !== self::TLS_CONTENT_TYPE_HANDSHAKE) {
+            return [];
+        }
+        if (\ord($data[5]) !== self::TLS_HANDSHAKE_TYPE_CLIENT_HELLO) {
+            return [];
+        }
+
+        $pos = 43;
+        if ($pos >= $length) {
+            return [];
+        }
+        $sessionIdLength = \ord($data[$pos]);
+        $pos += 1 + $sessionIdLength;
+
+        if ($pos + 2 > $length) {
+            return [];
+        }
+        $cipherSuitesLength = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+        $pos += 2 + $cipherSuitesLength;
+
+        if ($pos >= $length) {
+            return [];
+        }
+        $compressionMethodsLength = \ord($data[$pos]);
+        $pos += 1 + $compressionMethodsLength;
+
+        if ($pos + 2 > $length) {
+            return [];
+        }
+        $extensionsLength = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+        $pos += 2;
+        $extensionsEnd = \min($length, $pos + $extensionsLength);
+
+        while ($pos + 4 <= $extensionsEnd) {
+            $extType = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+            $extLength = (\ord($data[$pos + 2]) << 8) | \ord($data[$pos + 3]);
+            $pos += 4;
+            if ($pos + $extLength > $extensionsEnd) {
+                return [];
+            }
+            if ($extType === self::TLS_EXTENSION_ALPN) {
+                return self::parseAlpnExtension($data, $pos, $extLength, $length);
+            }
+            $pos += $extLength;
+        }
+
+        return [];
+    }
     
     /**
      * 解析 SNI 扩展内容
@@ -190,6 +256,38 @@ class SniParser
         }
         
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function parseAlpnExtension(string $data, int $pos, int $extLength, int $dataLength): array
+    {
+        if ($extLength < 2 || $pos + 2 > $dataLength) {
+            return [];
+        }
+        $listLength = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+        $pos += 2;
+        $end = \min($dataLength, $pos + $listLength);
+        if ($listLength !== $extLength - 2 || $end > $dataLength) {
+            return [];
+        }
+
+        $protocols = [];
+        while ($pos < $end) {
+            $nameLength = \ord($data[$pos]);
+            $pos++;
+            if ($nameLength < 1 || $pos + $nameLength > $end) {
+                return [];
+            }
+            $protocol = \substr($data, $pos, $nameLength);
+            $pos += $nameLength;
+            if (\preg_match('/^[A-Za-z0-9!#$%&*+.^_`|~-][A-Za-z0-9!#$%&*+.^_`|~\/-]*$/D', $protocol) === 1) {
+                $protocols[] = \strtolower($protocol);
+            }
+        }
+
+        return \array_values(\array_unique($protocols));
     }
     
     /**

@@ -93,7 +93,11 @@ function wlsParseHttpRequestFrame(
             return wlsInvalidHttpRequestFrame('invalid_header', 400, $headerBytes);
         }
         $headers[$name] = isset($headers[$name])
-            ? $headers[$name] . ', ' . $value
+            ? (
+                $name === 'cookie'
+                    ? $headers[$name] . '; ' . $value
+                    : $headers[$name] . ', ' . $value
+            )
             : $value;
 
         if ($name === 'transfer-encoding') {

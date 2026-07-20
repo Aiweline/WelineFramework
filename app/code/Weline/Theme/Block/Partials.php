@@ -770,9 +770,11 @@ class Partials extends Block
         // - 未找到时返回原始路径
         if ($resolvedPath !== $partialPath) {
             // 如果找到了文件（返回绝对路径），转换为 Weline_Theme 模块路径
-            // 绝对路径判断：Windows (E:\) 或 Unix (/ 开头的绝对路径)
+            // 绝对路径判断：Windows drive/UNC 或 Unix (/ 开头的绝对路径)
             $isAbsolutePath = strpos($resolvedPath, '://') === false
-                && (preg_match('/^[A-Z]:/i', $resolvedPath) || strpos($resolvedPath, '/') === 0);
+                && (preg_match('/^[A-Z]:/i', $resolvedPath)
+                    || strpos($resolvedPath, '/') === 0
+                    || strpos($resolvedPath, '\\') === 0);
             if ($isAbsolutePath) {
                 return 'Weline_Theme::' . $partialPath;
             }

@@ -2,6 +2,18 @@
 
 Windows 固定使用 Dispatcher 拓扑。`event` 是 Dispatcher 的可选事件循环优化，不是启动或 HTTPS 的必要条件；没有可信 DLL 时，WLS 保持 `Dispatcher + stream SSL + 有界 stream_select`，不改写拓扑。
 
+## Windows ARM64 上的 x64 PHP 运行时安全档案
+
+Windows ARM64 可以通过系统仿真层运行 AMD64/x64 PHP。实机已确认该组合会产生 PHP 无法捕获的 `0xc0000005`：启用 tracing JIT 时主要崩溃在 `php_opcache.dll`，仅关闭 JIT、继续启用 CLI 字节码缓存时，`server:status` 仍可崩溃在 `ntdll.dll`。WLS 同时检查 PHP 架构以及 `PROCESSOR_ARCHITECTURE`、`PROCESSOR_ARCHITEW6432`、`PROCESSOR_IDENTIFIER`；即使 x64 仿真把前两项暴露为 AMD64，`ARMv8` 标识也能触发保护。
+
+- `bin/w` 与 `bin/m` 在应用 bootstrap 前执行零依赖预检；仅当 Windows ARM64 上运行 AMD64/x64 PHP 时，原子发布托管 ini 并同步安全重启一次；
+- 重启后的 PHP 必须同时读到 `opcache.enable_cli=0`、`opcache.jit=off`、`opcache.jit_buffer_size=0`，且 `php_ini_scanned_files()` 必须包含托管文件，否则立即非零失败，禁止递归重启；
+- 原生 Windows x64、原生 Windows ARM64、Linux 和 macOS 不受该档案影响；
+- 设置通过 WLS 托管的附加 ini 目录传给 Master、Dispatcher、Worker、Watchdog、Session 与 Memory 子进程，不改写用户全局 `php.ini`，也不丢失已有 `PHP_INI_SCAN_DIR`；
+- 首次启用新档案必须使用全新进程树，不能复用未继承该档案的旧共享侧车。
+
+迁移到原生 ARM64 PHP 后，先恢复 CLI OPcache，再分别执行同机 benchmark 决定是否启用 JIT，不能沿用跨架构的固定建议。
+
 ## 一、ABI 门禁（必须完全匹配）
 
 只能使用与当前 `PHP_BINARY` 完全匹配的 DLL：
@@ -115,4 +127,4 @@ php bin/w server:doctor
 
 - 保持框架要求的 PHP 8.4，使用 Windows 默认 `Dispatcher + stream/select`。
 - HTTPS 由当前 PHP 的 OpenSSL 扩展承担；`server:start` 会用同一 `PHP_BINARY` 验证 OpenSSL，不会因 event 缺失关闭 HTTPS。
-- 运维对照或诊断时显式使用 `php bin/w server:start --dispatcher`；Windows 上 `--direct`、`--no-dispatcher` 和 `independent` 会在任何 Master/Worker 创建前被拒绝。
+- Windows 数据面固定为 Dispatcher：`auto` 与显式 `php bin/w server:start --dispatcher` 可用，`--direct` 会在任何 Master/Worker 创建前被拒绝。event DLL 只影响 Worker event loop 选择，不改变拓扑。

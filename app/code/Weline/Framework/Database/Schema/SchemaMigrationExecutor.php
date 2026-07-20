@@ -10,6 +10,7 @@ use Weline\Framework\Setup\Model\Migration;
 use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Setup\Model\MigrationBackup;
 
 /**
  * 执行 SchemaDiffOp 列表：生成 DDL/rollback、记录 Migration、DROP 前备份、派发 table_ddl_before/after。
@@ -28,16 +29,16 @@ final class SchemaMigrationExecutor
     ) {
     }
 
-    /** 执行顺序优先级：先 ADD（列、索引、外键），再 DROP，确保 ADD_INDEX 引用的列在 DROP_COLUMN 前仍存在 */
+    /** 先创建列再创建依赖；删除时先外键/索引再列。回滚按 sequence 倒序执行时恰好相反。 */
     private const KIND_PRIORITY = [
         SchemaDiffOp::KIND_CREATE_TABLE => 0,
         SchemaDiffOp::KIND_ADD_COLUMN => 1,
         SchemaDiffOp::KIND_MODIFY_COLUMN => 2,
         SchemaDiffOp::KIND_ADD_INDEX => 3,
         SchemaDiffOp::KIND_ADD_FOREIGN_KEY => 4,
-        SchemaDiffOp::KIND_DROP_COLUMN => 5,
+        SchemaDiffOp::KIND_DROP_FOREIGN_KEY => 5,
         SchemaDiffOp::KIND_DROP_INDEX => 6,
-        SchemaDiffOp::KIND_DROP_FOREIGN_KEY => 7,
+        SchemaDiffOp::KIND_DROP_COLUMN => 7,
         SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT => 8,
     ];
 
@@ -52,9 +53,13 @@ final class SchemaMigrationExecutor
         $connectionName = self::CONNECTION_NAME_DEFAULT;
         $moduleVersions = is_array($context['module_versions'] ?? null) ? $context['module_versions'] : [];
         $tableFingerprints = is_array($context['table_fingerprints'] ?? null) ? $context['table_fingerprints'] : [];
+        $moduleSchemaFingerprints = is_array($context['module_schema_fingerprints'] ?? null)
+            ? $context['module_schema_fingerprints']
+            : [];
         $operationId = trim((string)($context['operation_id'] ?? ''));
         $batchIds = [];
         $sequences = [];
+        $checkpointState = $this->prepareSchemaCheckpoints($moduleVersions, $moduleSchemaFingerprints);
 
         usort($ops, function (SchemaDiffOp $a, SchemaDiffOp $b): int {
             $cmp = strcmp($a->tableName, $b->tableName);
@@ -94,6 +99,18 @@ final class SchemaMigrationExecutor
             $fingerprints = is_array($tableFingerprints[$op->tableName] ?? null)
                 ? $tableFingerprints[$op->tableName]
                 : [];
+            $declaredFingerprint = (string)($moduleSchemaFingerprints[$moduleName][$op->tableName]
+                ?? $fingerprints['after']
+                ?? '');
+            $currentCheckpoint = $checkpointState[$moduleName]['current'] ?? null;
+            $previousCheckpoint = $checkpointState[$moduleName]['previous'] ?? null;
+            if ($currentCheckpoint === null && is_array($previousCheckpoint)) {
+                $fingerprints['before'] = (string)($previousCheckpoint['tables'][$op->tableName]
+                    ?? hash('sha256', 'absent'));
+            }
+            if ($declaredFingerprint !== '') {
+                $fingerprints['after'] = $declaredFingerprint;
+            }
             try {
                 $migrationId = $this->migrationModel->recordSchemaDdl(
                     $moduleName,
@@ -114,61 +131,164 @@ final class SchemaMigrationExecutor
             } catch (\Throwable $e) {
                 throw $e;
             }
-            if ($migrationId > 0 && $op->kind === SchemaDiffOp::KIND_DROP_COLUMN && $this->backupService !== null) {
-                /** @var ColumnDefinition $col */
-                $col = $op->payload;
-                $this->backupService->backupColumnData($op->tableName, $col->name, $migrationId, $connector, $op->modelClass, 'DROP');
-            }
+            try {
+                if ($migrationId > 0
+                    && in_array($op->kind, [SchemaDiffOp::KIND_DROP_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
+                    && $this->backupService !== null) {
+                    /** @var ColumnDefinition $col */
+                    $col = $op->payload;
+                    $reason = $op->kind === SchemaDiffOp::KIND_DROP_COLUMN ? 'DROP' : 'MODIFY';
+                    $this->backupService->backupColumnData(
+                        $op->tableName,
+                        $col->name,
+                        $migrationId,
+                        $connector,
+                        $op->modelClass,
+                        $reason,
+                    );
+                }
 
-            $this->dispatchBefore($op);
+                $this->dispatchBefore($op);
 
-            if ($op->kind === SchemaDiffOp::KIND_CREATE_TABLE && $op->payload instanceof TableSchema) {
-                $this->createTableViaAdapter($connector, $op->tableName, $op->payload);
-            } else {
-                foreach ($this->splitDdlStatements($forwardSql) as $sql) {
-                    if (trim($sql) !== '') {
-                        try {
-                            $connector->query($sql)->fetch();
-                        } catch (\Throwable $e) {
-                            if ($this->shouldHealDocumentCatalogNamePidDuplicate($op, $e)) {
-                                $this->dedupeDocumentCatalogNamePid(
-                                    $connector,
-                                    $op->tableName,
-                                    $this->shouldCoalesceDocumentCatalogPidDuringDedupe($op),
-                                );
-                                $connector->query($sql)->fetch();
+                if ($op->kind === SchemaDiffOp::KIND_CREATE_TABLE && $op->payload instanceof TableSchema) {
+                    $this->createTableViaAdapter($connector, $op->tableName, $op->payload);
+                } else {
+                    $sqliteRebuild = str_contains($forwardSql, '/* WELINE_SQLITE_REBUILD */');
+                    $ddl = str_replace('/* WELINE_SQLITE_REBUILD */', '', $forwardSql);
+                    try {
+                        if ($sqliteRebuild) {
+                            $connector->query('PRAGMA foreign_keys=OFF')->fetch();
+                            $connector->beginTransaction();
+                        }
+                        foreach ($this->splitDdlStatements($ddl) as $sql) {
+                            if (trim($sql) === '') {
                                 continue;
                             }
-                            if ($this->shouldHealDocumentModuleFileDuplicate($op, $e)) {
-                                $this->dedupeDocumentModuleFile($connector, $op->tableName);
+                            try {
                                 $connector->query($sql)->fetch();
-                                continue;
+                            } catch (\Throwable $e) {
+                                if ($this->shouldHealDocumentCatalogNamePidDuplicate($op, $e)) {
+                                    $this->dedupeDocumentCatalogNamePid(
+                                        $connector,
+                                        $op->tableName,
+                                        $this->shouldCoalesceDocumentCatalogPidDuringDedupe($op),
+                                    );
+                                    $connector->query($sql)->fetch();
+                                    continue;
+                                }
+                                if ($this->shouldHealDocumentModuleFileDuplicate($op, $e)) {
+                                    $this->dedupeDocumentModuleFile($connector, $op->tableName);
+                                    $connector->query($sql)->fetch();
+                                    continue;
+                                }
+                                if ($this->healPgsqlConstraintBackedIndexDrop($connector, $op, $e)) {
+                                    $connector->query($sql)->fetch();
+                                    continue;
+                                }
+                                $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
+                                    ? $op->payload->name : '';
+                                $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
+                                throw new \RuntimeException("Schema DDL failed ({$ctx}): " . $e->getMessage(), 0, $e);
                             }
-                            if ($this->healPgsqlConstraintBackedIndexDrop($connector, $op, $e)) {
-                                $connector->query($sql)->fetch();
-                                continue;
-                            }
-                            $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
-                                ? $op->payload->name : '';
-                            $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
-                            throw new \RuntimeException("Schema DDL failed ({$ctx}): " . $e->getMessage(), 0, $e);
+                        }
+                        if ($sqliteRebuild) {
+                            $connector->commit();
+                        }
+                    } catch (\Throwable $e) {
+                        if ($sqliteRebuild) {
+                            $connector->rollBack();
+                        }
+                        throw $e;
+                    } finally {
+                        if ($sqliteRebuild) {
+                            $connector->query('PRAGMA foreign_keys=ON')->fetch();
                         }
                     }
                 }
-            }
 
-            $this->dispatchAfter($op);
-            if ($migrationId > 0 && $op->kind === SchemaDiffOp::KIND_ADD_COLUMN && $op->payload instanceof ColumnDefinition) {
-                $this->restorePreviouslyRolledBackColumnData(
-                    $moduleName,
-                    $op->tableName,
-                    $op->payload,
-                    $migrationId,
-                    $connector,
-                    $op->modelClass,
-                );
+                $this->dispatchAfter($op);
+                if ($migrationId > 0
+                    && in_array($op->kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
+                    && $op->payload instanceof ColumnDefinition) {
+                    $this->restorePreviouslyRolledBackColumnData(
+                        $moduleName,
+                        $op->tableName,
+                        $op->payload,
+                        $migrationId,
+                        $connector,
+                        $op->modelClass,
+                    );
+                }
+                $this->migrationModel->updateStatus(Migration::STATUS_INSTALLED);
+            } catch (\Throwable $e) {
+                $this->markMigrationFailed($migrationId);
+                throw $e;
             }
-            $this->migrationModel->updateStatus(Migration::STATUS_INSTALLED);
+        }
+
+        foreach ($checkpointState as $moduleName => $state) {
+            $this->migrationModel->recordSchemaCheckpoint(
+                $moduleName,
+                (string)$state['version'],
+                (array)$state['tables'],
+                $operationId,
+            );
+        }
+    }
+
+    /**
+     * Validate immutable checkpoints before executing DDL. For a first upgrade
+     * to a version, the previous checkpoint supplies the logical "before"
+     * fingerprint; same-version drift keeps the physical fingerprint so the
+     * rollback planner can detect and block an unverifiable chain.
+     *
+     * @param array<string, string> $moduleVersions
+     * @param array<string, array<string, string>> $moduleSchemaFingerprints
+     * @return array<string, array{version: string, tables: array<string, string>, current: ?array, previous: ?array}>
+     */
+    private function prepareSchemaCheckpoints(array $moduleVersions, array $moduleSchemaFingerprints): array
+    {
+        $state = [];
+        foreach ($moduleVersions as $moduleName => $moduleVersion) {
+            $moduleName = trim((string)$moduleName);
+            $moduleVersion = trim((string)$moduleVersion);
+            if ($moduleName === '') {
+                continue;
+            }
+            $tables = is_array($moduleSchemaFingerprints[$moduleName] ?? null)
+                ? $moduleSchemaFingerprints[$moduleName]
+                : [];
+            $current = $this->migrationModel->assertSchemaCheckpointCompatible(
+                $moduleName,
+                $moduleVersion,
+                $tables,
+            );
+            $state[$moduleName] = [
+                'version' => $moduleVersion,
+                'tables' => $tables,
+                'current' => $current,
+                'previous' => $current === null
+                    ? $this->migrationModel->getLatestSchemaCheckpointBefore($moduleName, $moduleVersion)
+                    : null,
+            ];
+        }
+
+        return $state;
+    }
+
+    private function markMigrationFailed(int $migrationId): void
+    {
+        if ($migrationId <= 0) {
+            return;
+        }
+        try {
+            $migration = clone $this->migrationModel;
+            $migration->load($migrationId);
+            if ($migration->getId()) {
+                $migration->updateStatus(Migration::STATUS_FAILED);
+            }
+        } catch (\Throwable) {
+            // Preserve the original DDL/backup exception; the running row remains an audit signal.
         }
     }
 
@@ -206,7 +326,6 @@ final class SchemaMigrationExecutor
             ->where(Migration::schema_fields_MODULE, $moduleName)
             ->where(Migration::schema_fields_FILE, 'schema_diff')
             ->where(Migration::schema_fields_SCHEMA_TABLE_NAME, $tableName)
-            ->where(Migration::schema_fields_OPERATION_KIND, SchemaDiffOp::KIND_ADD_COLUMN)
             ->where(Migration::schema_fields_STATUS, Migration::STATUS_ROLLED_BACK)
             ->order(Migration::schema_fields_ROLLBACK_AT, 'DESC')
             ->select()
@@ -216,6 +335,13 @@ final class SchemaMigrationExecutor
         foreach ($items as $item) {
             $migrationId = (int)$item->getId();
             if ($migrationId <= 0 || $migrationId === $currentMigrationId) {
+                continue;
+            }
+            if (!in_array(
+                (string)$item->getData(Migration::schema_fields_OPERATION_KIND),
+                [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN],
+                true
+            )) {
                 continue;
             }
             $payload = json_decode((string)$item->getData(Migration::schema_fields_OPERATION_PAYLOAD), true);
@@ -229,6 +355,7 @@ final class SchemaMigrationExecutor
                 $connector,
                 $modelClass,
                 $column->default,
+                MigrationBackup::SCOPE_ROLLBACK,
             );
             if (($result['conflicts'] ?? 0) > 0) {
                 $this->eventsManager->dispatch('Weline_Framework_Schema::column_restore_conflict', new DataObject([
@@ -267,6 +394,9 @@ final class SchemaMigrationExecutor
     private function splitDdlStatements(string $sql): array
     {
         $normalized = str_replace("\r\n", "\n", $sql);
+        if (str_contains($normalized, "\n-- WELINE_DDL_STATEMENT\n")) {
+            return explode("\n-- WELINE_DDL_STATEMENT\n", $normalized);
+        }
         if (!str_contains($normalized, ";\n")) {
             return [$normalized];
         }
@@ -480,7 +610,7 @@ final class SchemaMigrationExecutor
             $create->addForeignKey(
                 $fk->name,
                 implode(',', $fk->columns),
-                $fk->referencesTable,
+                $connector->formatTableName($fk->referencesTable),
                 implode(',', $fk->referencesColumns),
                 $fk->onDeleteCascade,
                 $fk->onUpdateCascade,

@@ -212,25 +212,24 @@ class Request extends Request\RequestAbstract implements RequestInterface
     public function getModulePath(): string
     {
         $path = (string)($this->getRouterData('module_path') ?? '');
-        if ($path !== '') {
-            return $path;
-        }
-        // 路由若未带 module_path（例如维护拦截里手工 setRouter），则 view_dir 会变成相对路径「view/」，
-        // getModuleViewDir 会在当前工作目录 mkdir，导致项目根目录偶发出现 view/。按模块名回退到注册表中的 base_path。
         $module = (string)($this->getRouter()['module'] ?? '');
         if ($module === '') {
             $module = $this->getModuleName();
         }
-        if ($module === '') {
-            return '';
+
+        if ($module !== '') {
+            $moduleInfo = Env::getInstance()->getModuleList()[$module] ?? [];
+            $path = Env::resolveModuleBasePath(
+                $path !== '' ? $path : (string)($moduleInfo['base_path'] ?? ''),
+                (string)($moduleInfo['path'] ?? '')
+            );
         }
-        $modules = Env::getInstance()->getModuleList();
-        $basePath = $modules[$module]['base_path'] ?? '';
-        if ($basePath === '') {
+
+        if ($path === '') {
             return '';
         }
 
-        return rtrim((string) $basePath, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
+        return rtrim($path, '/\\') . \DIRECTORY_SEPARATOR;
     }
 
     public function getHeader(string $key = ''): array|string|null
