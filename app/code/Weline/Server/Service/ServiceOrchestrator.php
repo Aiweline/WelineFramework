@@ -8055,8 +8055,17 @@ class ServiceOrchestrator
 
     private function isNativeHttp3Enabled(): bool
     {
-        return $this->context !== null
-            && $this->context->isDirect()
+        if ($this->context === null) {
+            return false;
+        }
+        if (!(new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+            ->resolve()
+            ->allowsNativeHttp3()
+        ) {
+            return false;
+        }
+
+        return $this->context->isDirect()
             && $this->context->sslEnabled
             && self::normalizeBooleanConfig($this->context->getConfig('wls.http3.enabled', false));
     }
@@ -14296,7 +14305,7 @@ class ServiceOrchestrator
             echo self::ANSI_BOLD . self::ANSI_GREEN . "  " . $this->translateMessage('使用说明：') . self::ANSI_RESET . "\n";
             $tips = [
                 $this->translateMessage('WLS 默认仅监听 127.0.0.1，仅本机可访问'),
-                $this->translateMessage('外网访问需用 Nginx/Caddy 等反向代理转发到 %{1}:%{2}', [$bindHost, $mainPort]),
+                $this->translateMessage('外网访问需用 Nginx 等反向代理转发到 %{1}:%{2}', [$bindHost, $mainPort]),
                 $this->translateMessage('Nginx 示例：') . "proxy_pass {$protocol}://{$bindHost}:{$mainPort};",
                 $this->translateMessage('需直连外网时：') . "php bin/w server:start --host 0.0.0.0",
             ];

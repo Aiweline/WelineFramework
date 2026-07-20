@@ -91,7 +91,10 @@ class WorkerProvider extends AbstractServiceProvider
         if ($context->sslEnabled && $context->sslCert && $context->sslKey) {
             $arguments[] = '--ssl-cert=' . $context->sslCert;
             $arguments[] = '--ssl-key=' . $context->sslKey;
-            if ($direct && (bool)$context->getConfig('wls.http3.enabled', false)) {
+            if ($direct
+                && (bool)$context->getConfig('wls.http3.enabled', false)
+                && (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve()->allowsNativeHttp3()
+            ) {
                 $nativeDigest = \strtolower(\trim((string)$context->getConfig('wls.http3.native_digest', '')));
                 $nativeFingerprint = \strtolower(\trim((string)$context->getConfig(
                     'wls.http3.fingerprint',

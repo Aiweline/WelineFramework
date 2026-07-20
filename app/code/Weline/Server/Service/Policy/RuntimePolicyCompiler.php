@@ -202,7 +202,7 @@ final class RuntimePolicyCompiler
                     'header' => (string)($originValidation['header'] ?? 'X-Weline-Origin-Token'),
                     'token_sha256' => $originToken !== '' ? \hash('sha256', $originToken) : '',
                     // The only policy bypass is the explicit IP whitelist.
-                    // A loopback peer can be an Nginx/Caddy upstream and is
+                    // A loopback peer can be an Nginx upstream and is
                     // therefore never an implicit Origin credential.
                     'bypass' => 'explicit_whitelist_only',
                 ],

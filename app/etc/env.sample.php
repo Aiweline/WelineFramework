@@ -30,8 +30,8 @@ return [
         'processer' => [
             // macOS/Linux 先并发提交全部子进程，再共享一个 PID 回显窗口；0 表示按数量自动计算。
             'unix_batch_create_result_timeout_sec' => 0,
-            // Windows 批量拉起使用固定 K 路 PowerShell launcher；范围 1-8。
-            'windows_batch_create_helper_parallelism' => 4,
+            // Windows 批量拉起的 PowerShell launcher 并发；0=按批量大小自适应，显式值范围 1-8。
+            'windows_batch_create_helper_parallelism' => 0,
             // 兼容开关：false 会退化成单 launcher，仅用于问题隔离。
             'windows_batch_create_split_helpers' => true,
             // helper 超时后只发终止并在确认退出后清理，避免句柄和临时文件泄漏。
@@ -42,18 +42,19 @@ return [
     ],
     
     // ==================== 主数据库配置 ====================
+    // 默认主库为 PostgreSQL；SQLite 仅用于 sandbox / 快速预览开发
     'db' => [
-        'default' => 'mysql',  // 默认数据库类型：mysql, sqlite, pgsql
+        'default' => 'pgsql',  // 默认数据库类型：pgsql, mysql, sqlite
         'master' => [
-            'type' => 'mysql',
-            'hostname' => 'localhost',
+            'type' => 'pgsql',
+            'hostname' => '127.0.0.1',
             'database' => 'weline',
             'username' => 'weline',
             'password' => 'weline',
-            'hostport' => '3306',
-            'prefix' => 'm_',
-            'charset' => 'utf8mb4',
-            'collate' => 'utf8mb4_general_ci',
+            'hostport' => '5432',
+            'prefix' => 'w_',
+            'charset' => 'utf8',
+            'collate' => 'utf8_general_ci',
             'persistent' => true,
             'pool_size' => 10,
             'timeout' => 30,
@@ -61,12 +62,15 @@ return [
         'slaves' => [],
     ],
     
-    // ==================== 沙盒数据库配置 ====================
+    // ==================== 沙盒数据库配置（快速预览） ====================
     'sandbox_db' => [
         'default' => 'sqlite',
         'master' => [
             'type' => 'sqlite',
             'path' => 'app/etc/sandbox_db.sqlite',
+            'prefix' => 'w_',
+            'charset' => 'utf8mb4',
+            'collate' => 'utf8mb4_general_ci',
         ],
         'slaves' => [],
     ],
@@ -292,6 +296,53 @@ return [
             'handshake_max_advance_per_loop' => 16,
             'handshake_queue_high_watermark' => 512,
             'idle_select_timeout_usec' => 5000,
+            // PHP 8.6 可选纯 PHP 外部有状态 TLS Session Cache。默认关闭，启动不下载/安装/编译任何 WLS 协议组件。
+            // external 仅支持 stream + defer-SSL；PHP < 8.6 或非 loopback Memory sidecar 会在 listen 前明确拒绝。
+            'session_cache' => [
+                'mode' => 'off', // off|external
+                'timeout_seconds' => 300,
+                'num_tickets' => 2, // TLS 1.3 必须 >= 1
+                'local_cache_size' => 256,
+                'max_session_bytes' => 16384,
+                'max_entries' => 20000,
+                'max_total_bytes' => 67108864,
+                'callback_timeout_ms' => 2.0,
+                'ready_timeout_ms' => 250.0,
+                'reconnect_cooldown_ms' => 1000.0,
+                // 证书/SNI/策略不变但需要主动废弃旧 Session 时递增。
+                'context_epoch' => '1',
+            ],
+        ],
+        // 边缘协议终结适配器（整段可省略：未配置时代码默认即为 nginx）。
+        // nginx（默认）：对外由 Nginx 终结 TLS/HTTP2/HTTP3，WLS 建议 --no-ssl 明文回源。
+        // wls：恢复自研 HTTP/2 与可选 native HTTP/3（Protocol/Http2|Http3 代码保留）。
+        'edge' => [
+            'adapter' => 'nginx', // 默认 nginx；仅当需要自研边缘时改为 wls
+            // 证书续签后：托管 Nginx 优先自动 reload；宿主机 Nginx 请配置下方白名单命令。
+            // 白名单：nginx -s reload | systemctl reload nginx | /绝对路径/nginx -s reload
+            'reload_command' => '', // 宿主机 Nginx 示例：'systemctl reload nginx' 或 'nginx -s reload'
+            'reload_timeout_sec' => 30,
+            // 本项目独立 Nginx（安装到 extend/server/nginx）。已有宿主机 Nginx 时设 managed=false，或保持 auto。
+            'nginx' => [
+                // auto：自动检测宿主机 Nginx（有则不托管）；true：强制托管；false：强制宿主机反代
+                'managed' => 'auto',
+                // 仅 managed=true 时有效；false 或 CLI --no-nginx 时 server:start 不同启 Nginx
+                'auto_start' => true,
+                'listen_http' => null,       // null → 8080 + projectPortOffset（仅托管模式）
+                'listen_https' => null,      // null → 8443 + projectPortOffset（仅托管模式）
+                'server_names' => [],
+                'install_root' => 'extend/server/nginx',
+                'runtime_root' => 'var/server/nginx',
+                // —— 最佳性能默认（匿名页边缘缓存；有 Cookie 跳过）——
+                'edge_cache' => true,
+                'edge_cache_ttl_sec' => 60,
+                'edge_cache_max_size_mb' => 1024,
+                'edge_cache_keys_zone_mb' => 128,
+                'gzip' => true,
+                'gzip_comp_level' => 2,          // 偏低压缩级别：CPU 更省，吞吐更高
+                'upstream_keepalive' => 256,
+                'worker_connections' => 32768,
+            ],
         ],
         // EventLoop 后端：auto 当前保持稳定 select；event 需显式开启并通过压测后再进入 auto。
         'loop' => [
@@ -320,7 +371,7 @@ return [
         'attack_detector' => [
             'ip_whitelist' => [
                 'enabled' => true,
-                // Default fail-close: loopback may be an Nginx/Caddy peer.
+                // Default fail-close: loopback may be an Nginx peer.
                 // Add only deliberate operator/test source CIDRs here.
                 'ips' => [],
             ],
@@ -377,7 +428,8 @@ return [
             'enabled' => true,
             'host' => '127.0.0.1',
             'port' => 19971,
-            'token_file_name' => 'memory_server.token',
+            // 默认 token 文件名由运行域自动生成，避免共享目录下 macOS/Linux/容器互相覆盖。
+            // 仅在明确承担隔离责任时才设置 token_file_name；显式名称不会自动追加运行域。
         ],
         // Session/Memory 共享服务：实例停机只卸载本实例令牌；令牌为空后由共享服务自治退出。
         'shared_service' => [
@@ -538,6 +590,52 @@ return [
         'status' => 'stopped',
     ],
     
+    // ==================== 自动部署默认配置 ====================
+    // 与顶层/system.deploy（dev/test/prod）不同；这里是 Weline_Deploy 的默认值。
+    // 优先级：代码默认 < 旧 .env/.config 兼容 < 本数组 < 后台逐字段覆盖 < WLS 项目画像。
+    'deploy_settings' => [
+        'deploy_root' => '/var/www/weline',
+        'project_repo_url' => 'https://gitee.com/your-org/your-project.git',
+        'project_branch' => 'master',
+        'project_remote' => 'origin',
+        'project_username' => '',
+        'project_token' => '', // 不要提交真实 Token；建议在后台逐字段覆盖。
+        'git_update_mode' => 'reset',
+        'deploy_force_reset' => '0',
+        'deploy_switch_branch' => '0',
+        'git_submodule_update' => '0',
+        'backup_before_deploy' => 'true',
+        'clean_before_deploy' => '',
+        'run_composer_install' => '0',
+        'composer_command' => 'composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress',
+        'post_deploy_command' => 'php bin/w setup:upgrade -y',
+        'core_repo_url' => 'https://github.com/Aiweline/WelineFramework.git',
+        'core_branch_default' => 'master',
+        'core_repo_username' => '',
+        'core_repo_token' => '',
+        'core_update_check_enabled' => '1', // 自动检测远端核心标签；不代表自动升级。
+        'core_update_notify_enabled' => '1', // 发现新版本后通过 w_msg 提醒后台用户。
+        'core_update_check_interval_minutes' => '360', // Cron 每 30 分钟轮询，实际远端检测按此间隔节流。
+        'core_version_prefix' => 'v', // 区分大小写的完整标签前缀；留空则读取全部标签。
+        'webhook_host' => '127.0.0.1', // 仅旧独立 Webhook 进程兼容；模块路由无需单独端口。
+        'webhook_port' => '9097',
+        'webhook_path' => '', // 用 deploy:webhook:setup 生成随机 ~wh~ 路径并保存为后台覆盖。
+        'webhook_secret' => '', // 用 deploy:webhook:setup 生成，不要提交真实密钥。
+        'webhook_branch' => 'master',
+        'webhook_bash' => 'bash',
+        'deploy_trigger_mode' => 'tag', // tag | branch（Commit Push）| both
+        'webhook_allow_tag_deploy' => '0', // 仅旧配置兼容；新配置使用 deploy_trigger_mode。
+        'webhook_tag_prefix' => 'v', // 区分大小写的完整起始前缀；记录时不会移除。
+        'webhook_gitee_remote' => 'origin',
+        'webhook_github_remote' => 'github',
+        'wls_reload_mode' => 'auto', // auto | required | off
+        'wls_instance' => '', // 必须写明确实例名；不会隐式重载 default。
+        'deploy_probe_token' => '',
+        'cloudflare_enabled' => '0',
+        'cloudflare_api_token' => '',
+        'cloudflare_zone_id' => '',
+    ],
+
     // ==================== 开发配置 ====================
     'dev' => [
         'php_cs' => false,              // PHP 代码规范检查
