@@ -277,12 +277,24 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
         }
 
         $runtime = $this->resolveConfiguredRuntime($config);
+        $resolvedPort = (int)($runtime['port'] ?? 0);
+        $resolvedToken = \trim((string)($runtime['token_file_name'] ?? ''));
+        $tokenWasImplicit = $resolvedToken === ''
+            || $resolvedToken === SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $resolvedPort);
         // 兼容直连快捷配置：允许用通用键覆盖 session 端点。
         if (\array_key_exists('port', $config)) {
             $runtime['port'] = (int) $config['port'];
         }
-        if (\array_key_exists('token_file_name', $config)) {
-            $runtime['token_file_name'] = (string) $config['token_file_name'];
+        $configuredToken = \array_key_exists('token_file_name', $config)
+            ? \trim((string)$config['token_file_name'])
+            : null;
+        if ($configuredToken !== null && $configuredToken !== '') {
+            $runtime['token_file_name'] = $configuredToken;
+        } elseif ($configuredToken === '' || $tokenWasImplicit) {
+            $runtime['token_file_name'] = SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                'session_server',
+                (int)$runtime['port']
+            );
         }
         $serviceOptions = $this->buildServiceOptions($config, $runtime);
         $host = (string) $runtime['host'];
@@ -394,12 +406,13 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
 
         $defaultPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
         $port = (int) ($wlsServer['port'] ?? $sessionConfig['port'] ?? $defaultPort);
-        $tokenFileName = \trim((string) ($wlsServer['token_file_name'] ?? $sessionConfig['token_file_name'] ?? 'session_server.token'));
+        $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $port);
+        $tokenFileName = \trim((string) ($wlsServer['token_file_name'] ?? $sessionConfig['token_file_name'] ?? $defaultTokenFileName));
 
         return [
             'host' => $host,
             'port' => $port > 0 ? $port : $defaultPort,
-            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'session_server.token',
+            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : $defaultTokenFileName,
         ];
     }
 }

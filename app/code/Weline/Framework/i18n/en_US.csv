@@ -924,6 +924,7 @@ dev=true,dev=true
 标签注册表收集时发生错误：%{1}，但将继续执行。,"Error occurred during tag registry collection: %{1}, but execution will continue."
 注册表已在本次升级中收集过，跳过重复收集,"The registry has already been collected in this upgrade, skipping duplicate collection"
 检测到模块安装或升级，正在重新收集所有注册表信息...,"Detected module installation or upgrade, re-collecting all registry information..."
+检测到工作区路径变化，先修正模块路径：%{1},检测到工作区路径变化，先修正模块路径：%{1}
 检测到新部署模块，先写入模块注册表：%{1},检测到新部署模块，先写入模块注册表：%{1}
 "指定模块升级模式：仅升级 %{1}","Specified module upgrade mode: upgrade %{1} only"
 "未知阶段 code：%{1}。可选：%{2}","Unknown stage code: %{1}. Options: %{2}"
@@ -1211,6 +1212,10 @@ dev=true,dev=true
 【推荐扩展】（可选，提升性能）,"[Recommended extension] (optional, improves performance)"
 【推荐依赖】（可选，提升性能）,"[Recommended dependencies] (optional, improve performance)"
 没有可自动修复的问题，请参考上面的手动修复指引,"No auto-fixable issues found. Please refer to the manual fix instructions above"
+"扩展 FFI 已由当前 PHP 二进制加载且运行时可用 ✔","扩展 FFI 已由当前 PHP 二进制加载且运行时可用 ✔"
+"正在安装 WLS Direct HTTPS 原生传输扩展: FFI","正在安装 WLS Direct HTTPS 原生传输扩展: FFI"
+"扩展 FFI 已由当前 PHP 二进制启用 ✔","扩展 FFI 已由当前 PHP 二进制启用 ✔"
+"扩展 FFI 自动安装失败","扩展 FFI 自动安装失败"
 "正在安装数据库驱动扩展: %{ext}","Installing database driver extension: %{ext}"
 "扩展 %{ext} 已启用 ✔","Extension %{ext} enabled ✔"
 "扩展 %{ext} 自动安装失败","Extension %{ext} auto-install failed"

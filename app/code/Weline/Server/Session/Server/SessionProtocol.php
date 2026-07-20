@@ -24,9 +24,12 @@ final class SessionProtocol
     /** 当前序列化器 */
     private static string $serializer = self::SERIALIZER_JSON;
 
-    private const MAX_FRAME_BYTES = 1_048_576;
-    private const MAX_BUFFER_BYTES = 16_777_216;
+    // Memory FPC 使用同一原子 NDJSON 协议；8 MiB 覆盖大页面，同时保持严格有界。
+    private const MAX_FRAME_BYTES = 8_388_608;
+    public const MAX_BUFFER_BYTES = 16_777_216;
     private const MAX_MESSAGES_PER_EXTRACT = 1024;
+    private const MAX_TLS_FRAME_BYTES = 524_288;
+    private const MAX_TLS_BUFFER_BYTES = 1_048_576;
     
     /**
      * 设置序列化器
@@ -132,6 +135,12 @@ final class SessionProtocol
     
     /** 列出 Session（支持过滤） */
     public const CMD_LIST = 'list';
+
+    /** RAM-only TLS session cache commands; accepted only by the Memory sidecar. */
+    public const CMD_TLS_SESSION_GET = 'tls_session_get';
+    public const CMD_TLS_SESSION_PUT = 'tls_session_put';
+    public const CMD_TLS_SESSION_REMOVE = 'tls_session_remove';
+    public const CMD_TLS_SESSION_STATS = 'tls_session_stats';
 
     // ==================== 编码方法 ====================
 
@@ -260,6 +269,32 @@ final class SessionProtocol
     }
 
     /**
+     * Encode a response for the dedicated TLS cache channel.
+     *
+     * This intentionally bypasses the generic serializer, metrics, and logging:
+     * OpenSSL can invoke this channel while a TLS handshake is on the hot path.
+     */
+    public static function encodeTlsSuccess(mixed $data = null): string
+    {
+        $message = ['ok' => true];
+        if ($data !== null) {
+            $message['data'] = $data;
+        }
+
+        return self::encodeTlsMessage($message);
+    }
+
+    public static function encodeTlsError(string $error, ?string $code = null): string
+    {
+        $message = ['ok' => false, 'err' => $error];
+        if ($code !== null) {
+            $message['code'] = $code;
+        }
+
+        return self::encodeTlsMessage($message);
+    }
+
+    /**
      * 解码消息
      *
      * @param string $message 原始消息（可能包含多行）
@@ -323,6 +358,83 @@ final class SessionProtocol
         }
         
         return $messages;
+    }
+
+    /**
+     * Extract strict JSON frames for an authenticated TLS cache channel.
+     *
+     * @return list<array<string, mixed>>|null Null means the channel is invalid
+     *                                            and must be disconnected quietly.
+     */
+    public static function extractTlsMessages(
+        string &$buffer,
+        int $maximumMessages = self::MAX_MESSAGES_PER_EXTRACT,
+        float $deadline = 0.0
+    ): ?array
+    {
+        $messages = [];
+        $maximumMessages = \max(1, \min(self::MAX_MESSAGES_PER_EXTRACT, $maximumMessages));
+        $bufferLength = \strlen($buffer);
+        if ($bufferLength > self::MAX_TLS_BUFFER_BYTES && \strpos($buffer, "\n") === false) {
+            $buffer = '';
+            return null;
+        }
+
+        $offset = 0;
+        while (($pos = \strpos($buffer, "\n", $offset)) !== false) {
+            if (\count($messages) >= $maximumMessages
+                || ($deadline > 0.0 && \microtime(true) >= $deadline)
+            ) {
+                break;
+            }
+            $lineLength = $pos - $offset;
+            if ($lineLength > self::MAX_TLS_FRAME_BYTES) {
+                $buffer = '';
+                return null;
+            }
+            if ($lineLength > 0) {
+                $line = \substr($buffer, $offset, $lineLength);
+                try {
+                    $decoded = \json_decode($line, true, 16, \JSON_THROW_ON_ERROR);
+                } catch (\Throwable) {
+                    $buffer = '';
+                    return null;
+                }
+                if (!\is_array($decoded)) {
+                    $buffer = '';
+                    return null;
+                }
+                $messages[] = $decoded;
+            }
+
+            $offset = $pos + 1;
+            if (\count($messages) >= $maximumMessages) {
+                break;
+            }
+        }
+
+        if ($offset > 0) {
+            $buffer = \substr($buffer, $offset);
+        }
+        if (\strlen($buffer) > self::MAX_TLS_BUFFER_BYTES) {
+            $buffer = '';
+            return null;
+        }
+
+        return $messages;
+    }
+
+    /** @param array<string, mixed> $message */
+    private static function encodeTlsMessage(array $message): string
+    {
+        try {
+            return \json_encode(
+                $message,
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
+            ) . "\n";
+        } catch (\Throwable) {
+            return "{\"ok\":false,\"err\":\"TLS cache response encoding failed\",\"code\":\"TLS_CACHE_ENCODING_FAILED\"}\n";
+        }
     }
 
     private static function recordProtocolReject(string $reason, int $bytes): void

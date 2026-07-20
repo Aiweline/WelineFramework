@@ -113,6 +113,8 @@ AcceptGate
 
 “语义只解析一次”是数据契约，不是文档口号：`WorkerPolicyKernel` 只接受分帧器验证后且无尾部字节的单条请求，完成唯一一次请求行/Header 语义解析，产生不可变 `WorkerPolicyDecision` / Framework `RequestEnvelope`。该快照同时携带 method、HTTP protocol、已规范化 path、原始 target/query、小写 Header map、body、canonical client IP、trusted-proxy 结论和 policy digest。Static/FPC 与动态路由必须消费同一份 Decision；动态路由 `WlsRequest::fromEnvelope()` 直接水合，不再调用 `fromRaw()` 或重复扫描 HTTP 头。
 
+HTTP/3 只能改变传输和 framing，不能复制或缩短安全管线。原生 QUIC Adapter 将已验证的 H3 method/path/Header/body 水合为同一份不可变请求快照，再进入上述 `WorkerPolicyKernel`；Host、后台 Key、Origin Token、Ban、限流、URI/Header/Body 规则、Maintenance、Static/FPC 与 Framework Router 的顺序和 H2/H1.1 完全一致。Adapter、UDP listener、当前 policy digest 与预热未全部 READY 时不得发布 `Alt-Svc`。macOS Direct 的公开 UDP Router 只按已认证 Worker channel 和 QUIC connection ID 派发密文包，不解析 HTTP、不得自行执行或绕过业务规则。
+
 正文深度规则不得把 Weline 前端 Worker 的 WQB1 包当作 UTF-8 文本。只有同时满足 `POST`、当前 `Env::getFrontendQueryBinPath()`、`application/x-weline-query-bin`、`WQB1` magic 和版本号的包，才作为不透明二进制包跳过正文正则扫描；URI、Header、限流、封禁和后续 QueryBin 的协议头、同源、包大小/解码、worker session 与签名校验仍全部执行。该例外不是按 URL 或 Content-Type 的宽泛放行，伪造或损坏的包仍由 QueryBin 拒绝。
 
 XSS 事件属性规则必须以单词边界匹配 `\bon\w+\s*=`。边界不能省略，否则 `frontend_theme_id=` 等合法查询键会从中间的 `ontend_theme_id=` 被误判；`onload=`、`onerror=` 与 `onclick=` 等真实事件属性仍应命中。
@@ -156,6 +158,7 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - Static/FPC 命中时不创建 Session、Router 或 Controller，但 mandatory guard 必须已执行。
 - 禁用 `server.cache.static` 或 `server.cache.fpc` 后，三种 transport 都不得继续命中或发布对应缓存；重新启用只能由新的 active digest 生效。
 - 普通、TLS stream、EventBuffer 的动态请求在策略通过后均由同一 `RequestEnvelope` 创建 `WlsRequest`；Worker 热路不应再出现 `WlsRequest::fromRaw()`。
+- 同一请求语料经 H3/H2/H1.1 必须得到一致的后台 Key、Host、Origin Token、攻击规则、限流、Static/FPC 与 Router 结果；H3 READY 前不得出现 `Alt-Svc`，滚动重载后旧 QUIC connection ID 必须收到明确终止包而不是静默黑洞。
 - 注入含密码/文件路径的 runtime 初始化错误时，公开 500 只能看到通用消息和 `request_id`，日志可用该 ID 定位内部细节。
 - 策略发布失败后旧 active digest 不变；任一请求观测到混合 digest 都是发布失败。
 - 可在 Dispatcher 中执行但 direct 无法履行的策略（例如按 SNI 切到不同进程池）必须让 direct 启动明确失败，不得静默忽略。

@@ -35,6 +35,12 @@ class SharedStateRuntimeResolver
 
         $session = $base->getSession();
         $memory = $base->getMemory();
+        $envWls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $envWlsSession = \is_array($envWls['session'] ?? null) ? $envWls['session'] : [];
+        $envWlsServer = \is_array($envWlsSession['wls_server'] ?? null)
+            ? $envWlsSession['wls_server']
+            : [];
+        $envMemory = \is_array($envWls['memory_service'] ?? null) ? $envWls['memory_service'] : [];
 
         $sessionHost = \trim((string) ($config['session_host'] ?? $config['session_server_host'] ?? $session['host']));
         if ($sessionHost === '') {
@@ -51,17 +57,27 @@ class SharedStateRuntimeResolver
         }
 
         $sessionTokenExplicit = \array_key_exists('session_token_file_name', $config)
-            || \array_key_exists('session_server_token_file_name', $config);
+            || \array_key_exists('session_server_token_file_name', $config)
+            || \trim((string)($envWlsSession['token_file_name'] ?? '')) !== ''
+            || \trim((string)($envWlsServer['token_file_name'] ?? '')) !== '';
         $sessionToken = \trim((string) (
             $config['session_token_file_name']
             ?? $config['session_server_token_file_name']
             ?? $session['token_file_name']
         ));
-        if (!$sessionTokenExplicit && ($sessionToken === '' || $sessionToken === 'session_server.token')) {
+        if (!$sessionTokenExplicit && (
+            $sessionToken === ''
+            || $sessionToken === 'session_server.token'
+            || $sessionToken === SharedStateRuntimeScope::scopeDefaultFileName('session_server.token')
+            || $sessionToken === SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                'session_server',
+                (int)($session['port'] ?? 0)
+            )
+        )) {
             $sessionToken = $this->resolveImplicitTokenFileName('session_server', $sessionPort);
         }
         if ($sessionToken === '') {
-            $sessionToken = 'session_server.token';
+            $sessionToken = SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $sessionPort);
         }
 
         $memoryHost = \trim((string) ($config['memory_host'] ?? $config['memory_server_host'] ?? $memory['host']));
@@ -79,17 +95,26 @@ class SharedStateRuntimeResolver
         }
 
         $memoryTokenExplicit = \array_key_exists('memory_token_file_name', $config)
-            || \array_key_exists('memory_server_token_file_name', $config);
+            || \array_key_exists('memory_server_token_file_name', $config)
+            || \trim((string)($envMemory['token_file_name'] ?? '')) !== '';
         $memoryToken = \trim((string) (
             $config['memory_token_file_name']
             ?? $config['memory_server_token_file_name']
             ?? $memory['token_file_name']
         ));
-        if (!$memoryTokenExplicit && ($memoryToken === '' || $memoryToken === 'memory_server.token')) {
+        if (!$memoryTokenExplicit && (
+            $memoryToken === ''
+            || $memoryToken === 'memory_server.token'
+            || $memoryToken === SharedStateRuntimeScope::scopeDefaultFileName('memory_server.token')
+            || $memoryToken === SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                'memory_server',
+                (int)($memory['port'] ?? 0)
+            )
+        )) {
             $memoryToken = $this->resolveImplicitTokenFileName('memory_server', $memoryPort);
         }
         if ($memoryToken === '') {
-            $memoryToken = 'memory_server.token';
+            $memoryToken = SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $memoryPort);
         }
 
         $runtime = [
@@ -147,10 +172,17 @@ class SharedStateRuntimeResolver
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
         $session = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
 
+        $port = (int) ($runtimeSession['port'] ?? $session['server_port'] ?? $wlsSession['port'] ?? $wlsServer['port'] ?? (19970 + MasterProcess::getProjectPortOffset()));
+
         return [
             'host' => (string) ($runtimeSession['host'] ?? $wlsSession['host'] ?? $session['server_host'] ?? $wlsServer['host'] ?? '127.0.0.1'),
-            'port' => (int) ($runtimeSession['port'] ?? $session['server_port'] ?? $wlsSession['port'] ?? $wlsServer['port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
-            'token_file_name' => (string) ($runtimeSession['token_file_name'] ?? $wlsSession['token_file_name'] ?? $wlsServer['token_file_name'] ?? 'session_server.token'),
+            'port' => $port,
+            'token_file_name' => (string) (
+                $runtimeSession['token_file_name']
+                ?? $wlsSession['token_file_name']
+                ?? $wlsServer['token_file_name']
+                ?? SharedStateRuntimeScope::defaultTokenFileNameForRole('session_server', $port)
+            ),
         ];
     }
 
@@ -164,25 +196,21 @@ class SharedStateRuntimeResolver
             ? $envConfig['wls']['memory_service']
             : [];
 
+        $port = (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset()));
+
         return [
             'host' => (string) ($memory['host'] ?? '127.0.0.1'),
-            'port' => (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
-            'token_file_name' => (string) ($memory['token_file_name'] ?? 'memory_server.token'),
+            'port' => $port,
+            'token_file_name' => (string) (
+                $memory['token_file_name']
+                ?? SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $port)
+            ),
         ];
     }
 
     private function resolveImplicitTokenFileName(string $role, int $port): string
     {
-        $defaultToken = $role === 'memory_server' ? 'memory_server.token' : 'session_server.token';
-        $defaultPort = ($role === 'memory_server' ? 19971 : 19970) + MasterProcess::getProjectPortOffset();
-        if ($port <= 0 || $port === $defaultPort) {
-            return $defaultToken;
-        }
-
-        $name = \pathinfo($defaultToken, \PATHINFO_FILENAME);
-        $ext = \pathinfo($defaultToken, \PATHINFO_EXTENSION) ?: 'token';
-
-        return $name . '.' . $port . '.' . $ext;
+        return SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
     }
 
 }

@@ -14,18 +14,16 @@ flowchart TB
     B --> C{"启动分支?"}
     C -->|--cli| C1["转到 CLI Server 链路<br/>不进入 WLS Master/Orchestrator"]
     C -->|--strategy| C2["executeWithStrategy()<br/>不进入默认 WLS Orchestrator"]
-    C -->|--master-only| M1["runMasterOnly(instance)<br/>schema v3 校验 RuntimeSelection 与投影<br/>从 instance.json 恢复 Master 运行态"]
+    C -->|--master-only| M1["runMasterOnly(instance)<br/>只校验 endpoint schema v4<br/>读取嵌套 runtime_selection"]
     C -->|默认 WLS| D["acquireStartLock(instance)"]
-    D --> E["getServerConfig()<br/>解析 host/port/count/frontend/ssl"]
-    E --> E1["RuntimeSelection 预检<br/>参数冲突、平台能力、策略兼容、依赖安装与复验"]
-    E1 --> E2{"effective topology 是 independent?"}
-    E2 -->|是| E3["在创建进程前拒绝<br/>要求 direct 或 Dispatcher"]
-    E2 -->|否| F{"是否需要先清旧实例?"}
+    D --> E["getServerConfig()<br/>解析 host/port/count/ssl"]
+    E --> E1["RuntimeSelection 预检<br/>参数冲突、平台能力、策略兼容、默认只读依赖探测<br/>仅 --install-deps 安装与复验"]
+    E1 --> F{"是否需要先清旧实例?"}
     F -->|是: -r 或端口/实例冲突| G["停止前固化旧代实际监听端口<br/>stopExistingServer() 委托 server:stop"]
     F -->|否| H["检查主端口 / worker 端口 / redirect 端口"]
     G --> G1["Restart handoff fence<br/>monotonic deadline 内等目标端口无监听<br/>+本实例 scoped 进程全退出"]
     G1 --> H
-    H --> I["saveInstanceInfo()<br/>写 endpoint schema v3 + 完整 RuntimeSelection<br/>var/server/instances/{instance}.json"]
+    H --> I["saveInstanceInfo()<br/>写 endpoint schema v4 + 嵌套 runtime_selection<br/>var/server/instances/{instance}.json"]
     I --> J["saveInstanceConfig()<br/>syncServerConfigToEnv()"]
     J --> K{"daemon?"}
     K -->|后台| L["startMasterInBackground()<br/>后台拉起 server:start --master-only<br/>并轮询 instance.json 等待 master_pid/control_port"]
@@ -87,9 +85,9 @@ flowchart TB
 
 ## 关键分支说明
 
-- 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v3 写入完整数组。`--master-only` 不再从多个布尔/字符串重新推导；v3 中任一 topology/listener/event/SSL/policy 投影缺失或冲突就在绑定端口前拒绝。旧 v2 只做读取兼容，Master 运行期不会在没有完整 selection 时把它标记为 v3。
-- `independent` 尚无完整 READY/策略保证，`RuntimeStrategyResolver` 和旧 endpoint 的 `--master-only` 重入都明确拒绝，不允许进入永远无法 READY 的运行态。
-- `server:start -r` 在调用 `server:stop` 前会固化旧实例当下真实监听的主端口、控制端口、Dispatcher/Worker 端口和 Redirect 端口（排除可跨实例复用的 Session/Memory sidecar）。停止后在一个 monotonic 总 deadline 内反复清理端口探测缓存，只有目标端口全部无监听且本项目+本实例 scoped 进程前缀全部无存活 PID 才能继续。
+- 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v4 写入嵌套 `runtime_selection`。`--master-only` 只接受这一个事实源；旧 endpoint、缺失/未知字段或根级 topology/listener/event/SSL 投影都在绑定端口前拒绝，不重新推导或升级。
+- 拓扑只接受 `auto/direct/dispatcher`；已删除的模式、配置键和命令行别名没有兼容读取入口。
+- `server:start -r` 在任何新 Session/Memory sidecar、Master 或 Worker 创建前冻结一次旧代端口快照；空集合也是已捕获的有效快照，禁止在本次启动改写运行态后重新枚举。实际停止旧实例时，快照包含主端口、控制端口、Dispatcher/Worker、Redirect 和 Gateway 端口，排除可跨实例复用的 Session/Memory sidecar。停止后在一个 monotonic 总 deadline 内反复清理端口探测缓存，只有目标端口全部无监听且本项目+本实例的 Master、Dispatcher、Redirect、Worker、Maintenance、Gateway、Runtime Watchdog scoped 进程全部退出才继续。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动。
 - `-r` 和 `-r -f` 都会在停止旧代前保存 `app/etc/env.php` 中的原始 `system.maintenance` 值；平滑 `-r` 随后才临时开启维护态。无论新 Master 成功、超时、端口栅栏失败或中途 return/fatal，启动事务都恢复该原值：原来已开启则保持开启，原来关闭则恢复关闭。
 - 后台重启只有在新 Master 已进入 `running` 后才提交维护事务：启动进程绕过实例列表缓存，按显式实例 endpoint 直连控制面，保留本次命令的 `operation_id`，并在一个 monotonic 总 deadline 内等待该操作退出 `active/queued` 且 `maintenance_mode` 等于快照值。Direct Master 只会在全部 READY Worker 完成维护门禁 ACK 后提交该状态；缺失 `maintenance_mode/control_operation` 字段、endpoint 不可控或超时都属于启动失败，禁止打印“维护模式已关闭”。
@@ -123,21 +121,21 @@ flowchart TB
 
 ### 进程身份租约与安全退场
 
-- 所有 Master 发起的终止、滚动替换、surge 退场和 PID 文件清理都先冻结 `pid + canonical process_name + launch_id`；探测结果只允许 `running / exited / identity_mismatch / unknown` 四类处理。
-- `exited` 与 `identity_mismatch` 表示当前 PID 已不属于该租约，只清理匹配的旧记录，不向该 PID 发信号；`unknown` 必须 fail closed 并保留诊断，不能把“探测不到”当作“可以杀”。
-- Worker 终止默认不做进程树 kill；Direct 公开端口是共享资源，任何单槽恢复与 surge 退场都禁止按端口杀进程。
-- 进程标题只保留实例、role、slot、launch/generation 的短标识；PID/端口/生命周期文件和日志不得保存控制 token、TLS key 路径等敏感参数。
-- `name_index/pid_index/port_index` 的更新必须持有同一全局锁；清理路径锁失败时 fail closed，不允许退化为无锁删除。`port_index` 只是共享端口的建议代表，删除旧代时只有当前 owner 与冻结租约一致才可 CAS 释放，并优先提升仍存活的共享 owner。
-- 端口占用诊断必须分别报告内核 listener PID/命令和 `port_index` 建议 owner；不得把内核 Master PID 与历史 Worker 名称拼成一个伪进程事实。
+- Master `ServiceRegistry` 是当前进程生命周期、slot、generation、lease、launch id 和 READY 的唯一运行时权威。所有终止、滚动替换和 surge 退场先从已认证 Registry 冻结 `pid + canonical process_name + launch_id + expected pname`。
+- 冻结身份通过 `expected pname + PID` 确定性读取独立 `*-{pid}-pid.json` 租约，并叠加实时 OS 命令行、launch id 和 canonical pname 校验；不扫描目录，也不因 `pid_index/name_index` 暂时缺项放宽身份栅栏。
+- `pid_index/name_index` 只承担 CLI 发现、兼容查询和可重建快照。索引存在时必须与独立租约一致；索引缺失不否定 Master 已知的完整租约，索引矛盾则 fail closed。
+- 探测结果只允许 `running / exited / identity_mismatch / unknown`。只有 fresh probe 得到 `running + identity_match` 才能执行一次终止动作；其余状态绝不向当前 PID 发信号。
+- Windows 索引发布禁止 `unlink(live target) -> rename`。同目录唯一临时文件写完并 flush 后先尝试原子 rename；目标替换不受支持时，在目标 `LOCK_EX` 内完整覆盖，读端 `LOCK_SH` 只能看到完整旧版或完整新版。
+- Worker 终止默认不做进程树 kill；Direct 公开端口是共享资源，任何单槽恢复与 surge 退场都禁止按端口杀进程。端口占用诊断必须分别报告内核 listener PID/命令和 `port_index` 建议 owner。
 
 ## 运行拓扑平台边界
 
 - Windows `auto` 固定使用 Dispatcher + stream Worker；Linux `auto` 在真实 SO_REUSEPORT 探测通过后 direct，macOS `auto` 在 Master 共享 listener FD 探测通过后 direct。三者共用 REGISTER→WARMING→READY、policy digest 与分批重载契约；业务 Worker 的 READY v3 必须证明首页 Process FPC 已热，并提交绕过 FPC 的动态首渲染回执。动态目标默认是发布性能门禁而非存活门禁；显式开启 strict 开关时才会因超标拒绝 READY。初启与 Direct surge replacement 使用同一契约。
-- 拓扑/依赖预检发生在任何 Master/Worker 创建之前；POSIX direct 不满足能力时明确失败并提示显式 `--dispatcher`，不在已创建进程后静默改拓扑。
+- 拓扑/依赖预检发生在任何 Master/Worker 创建之前；普通启动只读探测，不下载、安装或编译。POSIX direct 不满足真实 socket/event/TLS/policy 能力时明确失败并提示显式 `--dispatcher`，不在已创建进程后静默改拓扑；只有 `--install-deps` 分支允许安装并用新 PHP 复验。HTTP/3 普通启动同样只读选择已发布组件；当前 PHP 必须预装并启用 FFI，显式构建只准备原生组件且不属于本启动链。
 - macOS `worker_count=auto` 使用性能核数并受内存预算限制；启动与 Doctor/建议共用同一个 resolver，显式 `-c` 保持不变。
-- 旧 `linux-direct` 只做读取兼容，新状态统一写为 `direct`；新实例的 SSL engine 默认为 `stream`。
+- 平台无关的 `direct` 是唯一 Direct 状态值；旧平台专属值会被拒绝。新实例的 SSL engine 默认为 `stream`。
 - 当前 `RuntimeStrategyResolver` 在启动预检阶段同时拒绝 `event_buffer + direct` 与 `event_buffer + authenticated PROXY v2 Dispatcher`；Windows 原生 EventBuffer 也明确拒绝。EventBuffer Adapter 仍属实验代码，不是当前受支持拓扑的可选 SSL engine，不得再把它描述为 macOS/Linux Dispatcher+TLS 可用路径。
-- Worker 通过 `--public-origin` 获得对外 scheme/authority；READY 首页预热与真实 HTTP/HTTPS FPC key 一致，实例文件只是兼容兜底。
+- Worker 通过 `--public-origin` 获得对外 scheme/authority；READY 首页预热与真实 HTTP/HTTPS FPC key 一致，endpoint v4 是控制面只读发现来源。
 - macOS shared-FD HTTPS 的 listener 仅用于 event readiness，Worker 原生 accept 后导出 TLS stream；新握手连接有 200ms 有界首读衔接，避免 ClientHello 成功后首请求停在 OpenSSL 用户态缓冲。
 
 ## 平台验收边界
@@ -150,7 +148,7 @@ flowchart TB
 
 - Worker 数达到阈值后默认三批，`worker_reload_min_ready=auto` 默认保留约三分之二 READY 容量。
 - 每批 DRAIN 前按实时 Registry 再校验容量；不足时拒绝摘批。
-- force 只有在 maintenance 池已被所有 Dispatcher ACK 后才允许整池单批，否则自动降级为安全分批。
+- 普通 reload 只有在 maintenance/standby 容量已确认时才可整池切换；显式 `server:reload -f` 是用户接受短暂停机的强制契约，Windows Dispatcher 一次并发重建全池且不再静默降级为分批，POSIX Direct 仍先完成 new-first surge 再替换 canonical Worker。
 - 每批先统一置 DRAINING 并发布一次摘批快照，批内全部 READY 后再发布一次加回快照。
 - Direct 使用 new-first：先拉起独立 surge 槽并验证 policy、listener、runtime 和首页 Process FPC，再分批替换 canonical 槽；canonical 全部 READY 后，surge 按冻结身份租约排水和退场。
 - 普通、stream TLS 与 EventBuffer Worker 的 DRAIN 都先停止公开 accept，并完成已分派请求与待写响应。维护模式 ACK 是另一条更短的屏障：策略先立即生效，业务 Worker 至少跨过一个 transport loop，再等待 active request/Fiber 与 response output 清空；空闲 preconnect、未完成 TLS/HTTP 和 slowloris 不得阻塞 ACK。EventBuffer 已完整落入 PHP buffer 的流水线请求属于已接纳工作，按每 tick 有界预算通过同一 WorkerPolicyKernel 生成响应后再 ACK；只有不完整输入可忽略。

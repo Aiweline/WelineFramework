@@ -50,9 +50,18 @@ class ServiceCommand
      */
     public function getAbsoluteScript(): string
     {
-        if (\str_starts_with($this->script, '/') || \str_starts_with($this->script, '\\') || \preg_match('/^[A-Z]:/i', $this->script)) {
+        if ((\defined('IS_WIN') && IS_WIN) || \DIRECTORY_SEPARATOR === '\\') {
+            if (\str_starts_with($this->script, '\\\\') || \preg_match('/^[A-Z]:[\\\\\/]/i', $this->script)) {
+                return $this->script;
+            }
+
+            return \rtrim((string) BP, '\\\\/') . '\\' . \ltrim($this->script, '\\\\/');
+        }
+
+        if (\str_starts_with($this->script, '/')) {
             return $this->script;
         }
+
         return BP . $this->script;
     }
 

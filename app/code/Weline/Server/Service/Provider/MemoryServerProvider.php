@@ -5,6 +5,7 @@ namespace Weline\Server\Service\Provider;
 
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -77,7 +78,7 @@ class MemoryServerProvider extends AbstractServiceProvider
 
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
-        $tokenFileName = $this->getTokenFileName($context);
+        $tokenFileName = $this->getTokenFileName($context, $port);
 
         $arguments = [
             '127.0.0.1',
@@ -110,11 +111,12 @@ class MemoryServerProvider extends AbstractServiceProvider
         return (int) ($ms['port'] ?? $defaultPort);
     }
 
-    private function getTokenFileName(ServiceContext $context): string
+    private function getTokenFileName(ServiceContext $context, int $port): string
     {
         $memory = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
-        $tokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
+        $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $port);
+        $tokenFileName = (string) ($memory['token_file_name'] ?? $defaultTokenFileName);
 
-        return $tokenFileName !== '' ? $tokenFileName : 'memory_server.token';
+        return $tokenFileName !== '' ? $tokenFileName : $defaultTokenFileName;
     }
 }
