@@ -36,8 +36,12 @@ class SocialWebsiteAccountService
             if (!\is_array($row)) {
                 continue;
             }
-            $websiteId = (int)($row['website_id'] ?? 0);
-            if ($websiteId <= 0) {
+            // website_id=0 is the system default site and must remain selectable.
+            if (!\array_key_exists('website_id', $row) && !\array_key_exists('id', $row)) {
+                continue;
+            }
+            $websiteId = (int)($row['website_id'] ?? $row['id'] ?? -1);
+            if ($websiteId < 0) {
                 continue;
             }
             $websites[] = [
@@ -64,7 +68,8 @@ class SocialWebsiteAccountService
                 'scope_type' => SocialWebsiteAccount::SCOPE_TYPE_WEBSITE,
                 'scope_id' => (int)($website['website_id'] ?? 0),
             ], false);
-            if ((int)$scope['scope_id'] <= 0) {
+            // Keep website_id=0 (system default site); only reject missing/negative IDs.
+            if (!\array_key_exists('scope_id', $scope) || (int)$scope['scope_id'] < 0) {
                 continue;
             }
             $child = [
@@ -408,10 +413,10 @@ class SocialWebsiteAccountService
         }
 
         $scopeType = \strtolower(\trim((string)($params['scope_type'] ?? '')));
-        $scopeId = (int)($params['scope_id'] ?? 0);
-        if ($scopeType === '' && isset($params['website_id'])) {
+        $hasExplicitScopeId = \array_key_exists('scope_id', $params) || \array_key_exists('website_id', $params);
+        $scopeId = (int)($params['scope_id'] ?? $params['website_id'] ?? 0);
+        if ($scopeType === '' && \array_key_exists('website_id', $params)) {
             $scopeType = SocialWebsiteAccount::SCOPE_TYPE_WEBSITE;
-            $scopeId = (int)$params['website_id'];
         }
         if ($scopeType === '') {
             $scopeType = SocialWebsiteAccount::SCOPE_TYPE_WEBSITE;
@@ -419,11 +424,11 @@ class SocialWebsiteAccountService
         if ($scopeType !== SocialWebsiteAccount::SCOPE_TYPE_WEBSITE) {
             throw new \InvalidArgumentException((string)__('暂不支持的社媒配置范围：%{1}', [$scopeType]));
         }
-        if ($scopeId <= 0 && isset($params['website_id'])) {
-            $scopeId = (int)$params['website_id'];
-        }
 
-        if ($requireScope && $scopeId <= 0) {
+        if ($requireScope && !$hasExplicitScopeId) {
+            throw new \InvalidArgumentException((string)__('请选择一级范围。'));
+        }
+        if ($scopeId < 0) {
             throw new \InvalidArgumentException((string)__('请选择一级范围。'));
         }
 
@@ -434,7 +439,7 @@ class SocialWebsiteAccountService
         $childScopeId = (int)($params['child_scope_id'] ?? 0);
 
         $website = null;
-        if ($scopeId > 0) {
+        if ($hasExplicitScopeId || $requireScope) {
             $website = $this->getWebsite($scopeId);
             if ($requireScope && $website === null) {
                 throw new \InvalidArgumentException((string)__('站点不存在。'));
@@ -444,7 +449,7 @@ class SocialWebsiteAccountService
         $scopeLabel = $website !== null
             ? \trim((string)($website['name'] ?? '') . ' · ' . (string)($website['code'] ?? ''), " \t\n\r\0\x0B·")
             : '';
-        if ($scopeLabel === '' && $scopeId > 0) {
+        if ($scopeLabel === '' && $hasExplicitScopeId && $scopeId >= 0) {
             $scopeLabel = (string)__('站点 #%{1}', [(string)$scopeId]);
         }
         $childLabel = $childScopeType === SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT
@@ -472,7 +477,7 @@ class SocialWebsiteAccountService
      */
     private function getWebsite(int $websiteId): ?array
     {
-        if ($websiteId <= 0 || !\function_exists('w_query')) {
+        if ($websiteId < 0 || !\function_exists('w_query')) {
             return null;
         }
         try {
@@ -480,14 +485,18 @@ class SocialWebsiteAccountService
         } catch (\Throwable) {
             $website = null;
         }
-        if (!\is_array($website) || (int)($website['website_id'] ?? 0) <= 0) {
+        if (!\is_array($website) || !\array_key_exists('website_id', $website)) {
+            return null;
+        }
+        $resolvedId = (int)$website['website_id'];
+        if ($resolvedId < 0) {
             return null;
         }
 
         return [
-            'website_id' => (int)($website['website_id'] ?? 0),
+            'website_id' => $resolvedId,
             'scope_type' => SocialWebsiteAccount::SCOPE_TYPE_WEBSITE,
-            'scope_id' => (int)($website['website_id'] ?? 0),
+            'scope_id' => $resolvedId,
             'name' => (string)($website['name'] ?? ''),
             'code' => (string)($website['code'] ?? ''),
             'url' => (string)($website['url'] ?? ''),

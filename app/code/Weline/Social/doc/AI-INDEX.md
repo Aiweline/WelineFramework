@@ -52,6 +52,7 @@
 
 - `app/code/Weline/Social/doc/README.md`
 - `app/code/Weline/Social/doc/extends.md`
+- `app/code/Weline/Social/doc/用户/官方凭据与一键授权指南.md`
 
 ## 开发前门禁
 

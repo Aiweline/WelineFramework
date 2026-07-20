@@ -7,6 +7,7 @@
 获取社媒账户详情。,获取社媒账户详情。
 列出可展示的社媒账户。,列出可展示的社媒账户。
 生成平台授权地址。,生成平台授权地址。
+完成平台授权回调并保存账户。,完成平台授权回调并保存账户。
 保存官方凭据账户。,保存官方凭据账户。
 检测账户凭据。,检测账户凭据。
 禁用社媒账户。,禁用社媒账户。
@@ -23,20 +24,106 @@
 创建一键多平台发布批次。,创建一键多平台发布批次。
 获取发布批次状态。,获取发布批次状态。
 未知社媒平台：%{1},未知社媒平台：%{1}
-授权地址已生成。,授权地址已生成。
-该平台当前不支持自动授权地址生成。,该平台当前不支持自动授权地址生成。
+"YouTube 授权回调缺少 code 或应用凭据。","YouTube 授权回调缺少 code 或应用凭据。"
+"交换 YouTube access token 失败。","交换 YouTube access token 失败。"
+"YouTube 授权完成。","YouTube 授权完成。"
+"缺少 YouTube Access Token。","缺少 YouTube Access Token。"
+"YouTube 连通性检测失败。","YouTube 连通性检测失败。"
+"YouTube 连通性检测通过：%{1}","YouTube 连通性检测通过：%{1}"
+"YouTube 第一期仅支持授权与连通性检测；视频文件上传将在二期实现。当前草稿标题：%{1}","YouTube 第一期仅支持授权与连通性检测；视频文件上传将在二期实现。当前草稿标题：%{1}"
+（无标题）,（无标题）
 该平台尚未实现授权回调处理。,该平台尚未实现授权回调处理。
 "该平台已有官方文档记录，但当前 Provider 尚未实现实发 API。","该平台已有官方文档记录，但当前 Provider 尚未实现实发 API。"
 缺少必填凭据：%{1},缺少必填凭据：%{1}
 凭据字段完整，尚未执行远端连通性检测。,凭据字段完整，尚未执行远端连通性检测。
+"TikTok 授权回调缺少 code 或应用凭据。","TikTok 授权回调缺少 code 或应用凭据。"
+"交换 TikTok access token 失败。","交换 TikTok access token 失败。"
+"TikTok 授权完成。","TikTok 授权完成。"
+"缺少 TikTok Access Token。","缺少 TikTok Access Token。"
+"TikTok 连通性检测失败。","TikTok 连通性检测失败。"
+"TikTok 连通性检测通过：%{1}","TikTok 连通性检测通过：%{1}"
+"TikTok 第一期仅支持授权与连通性检测；视频上传将在二期实现。当前草稿：%{1}","TikTok 第一期仅支持授权与连通性检测；视频上传将在二期实现。当前草稿：%{1}"
+"LinkedIn 授权回调缺少 code 或应用凭据。","LinkedIn 授权回调缺少 code 或应用凭据。"
+"交换 LinkedIn access token 失败。","交换 LinkedIn access token 失败。"
+"LinkedIn 授权完成。","LinkedIn 授权完成。"
+"缺少 LinkedIn Access Token。","缺少 LinkedIn Access Token。"
+"LinkedIn 连通性检测失败。","LinkedIn 连通性检测失败。"
+"LinkedIn 连通性检测通过：%{1}","LinkedIn 连通性检测通过：%{1}"
+"缺少 LinkedIn Access Token 或 Author URN。","缺少 LinkedIn Access Token 或 Author URN。"
+发布内容为空。,发布内容为空。
+"LinkedIn 发布失败。","LinkedIn 发布失败。"
+"LinkedIn 发布成功。","LinkedIn 发布成功。"
+"Facebook 授权回调缺少 code 或应用凭据。","Facebook 授权回调缺少 code 或应用凭据。"
+"交换 Facebook access token 失败。","交换 Facebook access token 失败。"
+"未找到可管理的 Facebook 主页，请确认授权权限。","未找到可管理的 Facebook 主页，请确认授权权限。"
+"Facebook 授权完成。","Facebook 授权完成。"
+"缺少 Page Access Token 或 Page ID。","缺少 Page Access Token 或 Page ID。"
+"Facebook 连通性检测失败。","Facebook 连通性检测失败。"
+"Facebook 主页连通性检测通过：%{1}","Facebook 主页连通性检测通过：%{1}"
+"缺少 Facebook 发布凭据。","缺少 Facebook 发布凭据。"
+"Facebook 发布失败。","Facebook 发布失败。"
+"Facebook 发布成功。","Facebook 发布成功。"
+"Snapchat 授权回调缺少 code 或应用凭据。","Snapchat 授权回调缺少 code 或应用凭据。"
+"交换 Snapchat access token 失败。","交换 Snapchat access token 失败。"
+"Snapchat 授权完成。","Snapchat 授权完成。"
+"缺少 Snapchat Access Token。","缺少 Snapchat Access Token。"
+"Snapchat 连通性检测失败。","Snapchat 连通性检测失败。"
+"Snapchat Marketing API 连通性检测通过。","Snapchat Marketing API 连通性检测通过。"
+"Snapchat 第一期仅支持授权与连通性检测；创意/媒体发布将在二期实现。当前草稿：%{1}","Snapchat 第一期仅支持授权与连通性检测；创意/媒体发布将在二期实现。当前草稿：%{1}"
+"Pinterest 授权回调缺少 code 或应用凭据。","Pinterest 授权回调缺少 code 或应用凭据。"
+"交换 Pinterest access token 失败。","交换 Pinterest access token 失败。"
+"Pinterest 授权完成。","Pinterest 授权完成。"
+"缺少 Pinterest Access Token。","缺少 Pinterest Access Token。"
+"Pinterest 连通性检测失败。","Pinterest 连通性检测失败。"
+"Pinterest 连通性检测通过：%{1}","Pinterest 连通性检测通过：%{1}"
+"缺少 Pinterest Access Token 或 Board ID。","缺少 Pinterest Access Token 或 Board ID。"
+"Pinterest 发布需要图片 URL。","Pinterest 发布需要图片 URL。"
+"Pinterest 发布失败。","Pinterest 发布失败。"
+"Pinterest Pin 已创建。","Pinterest Pin 已创建。"
+"Instagram 授权回调缺少 code 或应用凭据。","Instagram 授权回调缺少 code 或应用凭据。"
+"交换 Instagram access token 失败。","交换 Instagram access token 失败。"
+"未找到 Instagram 商业账户，请确认主页已绑定 IG 账号。","未找到 Instagram 商业账户，请确认主页已绑定 IG 账号。"
+"Instagram 授权完成。","Instagram 授权完成。"
+"缺少 Instagram Access Token 或 User ID。","缺少 Instagram Access Token 或 User ID。"
+"Instagram 连通性检测失败。","Instagram 连通性检测失败。"
+"Instagram 连通性检测通过：%{1}","Instagram 连通性检测通过：%{1}"
+"缺少 Instagram 发布凭据。","缺少 Instagram 发布凭据。"
+"Instagram 发布需要图片 URL（第一期不支持纯文本帖）。","Instagram 发布需要图片 URL（第一期不支持纯文本帖）。"
+"创建 Instagram 媒体容器失败。","创建 Instagram 媒体容器失败。"
+"Instagram 发布失败。","Instagram 发布失败。"
+"Instagram 发布成功。","Instagram 发布成功。"
+"X 授权回调缺少 code / PKCE verifier 或应用凭据。","X 授权回调缺少 code / PKCE verifier 或应用凭据。"
+"交换 X access token 失败。","交换 X access token 失败。"
+"X 授权完成。","X 授权完成。"
+"缺少 X Access Token。","缺少 X Access Token。"
+"X 连通性检测失败。","X 连通性检测失败。"
+"X 连通性检测通过：@%{1}","X 连通性检测通过：@%{1}"
+"X 发帖失败。","X 发帖失败。"
+"X 发帖成功。","X 发帖成功。"
 "Fake Token 不能为空。","Fake Token 不能为空。"
 "Fake 模式凭据已通过本地检测。","Fake 模式凭据已通过本地检测。"
 "Fake 发布已完成，可用于浏览器冒烟验证。","Fake 发布已完成，可用于浏览器冒烟验证。"
+微信公众号连通性检测失败。,微信公众号连通性检测失败。
+"微信公众号 access_token 检测通过。","微信公众号 access_token 检测通过。"
+"缺少微信 OpenID。","缺少微信 OpenID。"
+微信客服消息发送失败。,微信客服消息发送失败。
+微信客服消息已发送。,微信客服消息已发送。
+"缺少微信 AppID/AppSecret。","缺少微信 AppID/AppSecret。"
+"获取微信 access_token 失败。","获取微信 access_token 失败。"
+"缺少 WhatsApp Phone Number ID 或 Access Token。","缺少 WhatsApp Phone Number ID 或 Access Token。"
+"WhatsApp 连通性检测失败。","WhatsApp 连通性检测失败。"
+"WhatsApp Cloud API 连通性检测通过。","WhatsApp Cloud API 连通性检测通过。"
+"缺少 WhatsApp 发布凭据或收件人。","缺少 WhatsApp 发布凭据或收件人。"
+"WhatsApp 发送失败。","WhatsApp 发送失败。"
+"WhatsApp 消息已发送。","WhatsApp 消息已发送。"
 "浏览器 fake 模式一键发布验证","浏览器 fake 模式一键发布验证"
 暂无站点，无法验证站点社媒账户关系。,暂无站点，无法验证站点社媒账户关系。
 "Fake 浏览器发布草稿","Fake 浏览器发布草稿"
 "Fake 浏览器发布批次","Fake 浏览器发布批次"
 "Weline Social Fake Smoke","Weline Social Fake Smoke"
+授权被拒绝。,授权被拒绝。
+授权完成。,授权完成。
+授权失败。,授权失败。
 融媒体管理,融媒体管理
 社媒账户,社媒账户
 "Fake 验证通过","Fake 验证通过"
@@ -54,16 +141,28 @@
 发布批次,发布批次
 目标结果,目标结果
 社媒账户部件,社媒账户部件
+请选择站点,请选择站点
+搜索站点名称或编码,搜索站点名称或编码
 营销管理,营销管理
 "平台 Provider","平台 Provider"
 已连接账户,已连接账户
 可发布账户,可发布账户
 当前配置范围,当前配置范围
-先选择一级范围和二级范围，再添加平台账户或配置默认发布账户。当前版本一级范围为站点，二级范围预留店铺等子范围。,先选择一级范围和二级范围，再添加平台账户或配置默认发布账户。当前版本一级范围为站点，二级范围预留店铺等子范围。
+先选择一级范围和二级范围，再添加平台账户或配置默认发布账户。当前版本一级范围为站点，二级范围预留店铺等子范围。,先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。
+先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。,先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。
 "Scope 优先","Scope 优先"
-一级范围类型,一级范围类型
-一级范围,一级范围
+一级范围类型,范围类型
+范围类型,范围类型
+请选择范围类型,请选择范围类型
+搜索范围类型,搜索范围类型
+未找到匹配范围类型,未找到匹配范围类型
+一级范围,站点范围
+站点范围,站点范围
+未找到匹配站点,未找到匹配站点
 二级范围,二级范围
+请选择二级范围,请选择二级范围
+搜索二级范围,搜索二级范围
+未找到匹配二级范围,未找到匹配二级范围
 正在配置,正在配置
 未选择范围,未选择范围
 暂无可配置范围，无法按范围配置社媒账户。,暂无可配置范围，无法按范围配置社媒账户。
@@ -74,19 +173,31 @@
 一键发布,一键发布
 发布记录,发布记录
 "内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。","内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。"
+搜索平台,搜索平台
+搜索平台名称、编码、状态或授权方式,搜索平台名称、编码、状态或授权方式
 "运行 fake 浏览器验证","运行 fake 浏览器验证"
 添加到当前范围,添加到当前范围
+未找到匹配平台，请调整关键词。,未找到匹配平台，请调整关键词。
 新增或编辑账户,新增或编辑账户
 从平台库添加时，保存后会自动绑定到当前配置范围。,从平台库添加时，保存后会自动绑定到当前配置范围。
 平台,平台
+请选择平台,请选择平台
+搜索平台名称或编码,搜索平台名称或编码
+未找到匹配平台,未找到匹配平台
 账户名称,账户名称
 "公开主页 URL","公开主页 URL"
 授权方式,授权方式
+仅展示,仅展示
+搜索授权方式,搜索授权方式
+未找到匹配授权方式,未找到匹配授权方式
 排序,排序
 显示在社媒账户部件,显示在社媒账户部件
 启用发布能力,启用发布能力
 官方凭据,官方凭据
 编辑时留空将保留已加密凭据,编辑时留空将保留已加密凭据
+一键授权,一键授权
+"应用 App/Client 请先在统一配置中心「融媒体平台应用」配置。也可下方人工粘贴 Token。","应用 App/Client 请先在统一配置中心「融媒体平台应用」配置。也可下方人工粘贴 Token。"
+该平台不支持一键授权，请人工填写官方凭据。,该平台不支持一键授权，请人工填写官方凭据。
 保存账户,保存账户
 清空表单,清空表单
 账户列表,账户列表
@@ -139,11 +250,14 @@
 创意草稿已生成。,创意草稿已生成。
 发布批次已创建。,发布批次已创建。
 请选择发布账户。,请选择发布账户。
-请选择一级范围和二级范围。,请选择一级范围和二级范围。
+请选择一级范围和二级范围。,请先选择范围类型和站点范围。
+请先选择范围类型和站点范围。,请先选择范围类型和站点范围。
 "请填写草稿 ID。","请填写草稿 ID。"
-仅展示,仅展示
+正在生成授权地址...,正在生成授权地址...
+"该平台暂不可一键授权，请检查系统配置中的 App/Client 凭据。","该平台暂不可一键授权，请检查系统配置中的 App/Client 凭据。"
 必填,必填
 可选,可选
+请选择授权方式,请选择授权方式
 社媒发布队列,社媒发布队列
 "按 SocialPublishTarget 执行单个平台发布。","按 SocialPublishTarget 执行单个平台发布。"
 "缺少 target_id。","缺少 target_id。"
@@ -166,7 +280,8 @@
 范围默认社媒账户已保存。,范围默认社媒账户已保存。
 账户不存在。,账户不存在。
 暂不支持的社媒配置范围：%{1},暂不支持的社媒配置范围：%{1}
-请选择一级范围。,请选择一级范围。
+请选择一级范围。,请选择站点范围。
+请选择站点范围。,请选择站点范围。
 站点不存在。,站点不存在。
 "站点 #%{1}","站点 #%{1}"
 "%{1} #%{2}","%{1} #%{2}"
@@ -174,6 +289,10 @@
 融媒体创意草稿,融媒体创意草稿
 请为以下平台生成一份统一融媒体发布创意，并输出适合多平台复用的中文稿件：%{1}。需求：%{2},请为以下平台生成一份统一融媒体发布创意，并输出适合多平台复用的中文稿件：%{1}。需求：%{2}
 "Weline_Social fake 模式发布验证：%{1}","Weline_Social fake 模式发布验证：%{1}"
+该平台不支持一键授权，请在账户表单中人工配置凭据。,该平台不支持一键授权，请在账户表单中人工配置凭据。
+"未配置平台应用凭据，请先到统一配置中心填写 App/Client 信息。","未配置平台应用凭据，请先到统一配置中心填写 App/Client 信息。"
+授权地址已生成。,授权地址已生成。
+授权状态无效或已过期，请重新发起一键授权。,授权状态无效或已过期，请重新发起一键授权。
 账户名称不能为空。,账户名称不能为空。
 "启用社媒账户部件时必须填写公开主页 URL。","启用社媒账户部件时必须填写公开主页 URL。"
 账户已保存为仅展示模式，未启用发布。,账户已保存为仅展示模式，未启用发布。
@@ -181,3 +300,10 @@
 平台未提供配置检测器。,平台未提供配置检测器。
 "公开主页 URL 格式不正确。","公开主页 URL 格式不正确。"
 "公开主页 URL 只允许 http 或 https。","公开主页 URL 只允许 http 或 https。"
+查看官方凭据指南,查看官方凭据指南
+官方凭据指南（简版）,官方凭据指南（简版）
+统一配置中心 → Weline_Social →「融媒体平台应用」填写该平台 App/Client。,统一配置中心 → Weline_Social →「融媒体平台应用」填写该平台 App/Client。
+顶部选好范围类型、站点范围、二级范围。,顶部选好范围类型、站点范围、二级范围。
+支持 OAuth 的平台点「一键授权」；WhatsApp/微信等按字段人工粘贴 Token。,支持 OAuth 的平台点「一键授权」；WhatsApp/微信等按字段人工粘贴 Token。
+保存账户后点「检测」；通过后再启用发布，并确认已加入「范围社媒」。,保存账户后点「检测」；通过后再启用发布，并确认已加入「范围社媒」。
+详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md,详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md

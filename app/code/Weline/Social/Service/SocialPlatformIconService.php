@@ -10,6 +10,16 @@ class SocialPlatformIconService
      * @var array<string, array{color: string, label: string}>
      */
     private const PLATFORM_META = [
+        'facebook' => ['color' => '#1877f2', 'label' => 'f'],
+        'youtube' => ['color' => '#ff0000', 'label' => 'YT'],
+        'instagram' => ['color' => '#e4405f', 'label' => 'Ig'],
+        'tiktok' => ['color' => '#010101', 'label' => 'Tk'],
+        'whatsapp' => ['color' => '#25d366', 'label' => 'Wa'],
+        'wechat' => ['color' => '#07c160', 'label' => 'Wx'],
+        'x' => ['color' => '#000000', 'label' => 'X'],
+        'linkedin' => ['color' => '#0a66c2', 'label' => 'in'],
+        'pinterest' => ['color' => '#e60023', 'label' => 'P'],
+        'snapchat' => ['color' => '#fffc00', 'label' => 'Sc'],
         'mastodon' => ['color' => '#6364ff', 'label' => 'M'],
         'tumblr' => ['color' => '#36465d', 'label' => 'T'],
         'wordpress' => ['color' => '#21759b', 'label' => 'W'],
