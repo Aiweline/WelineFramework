@@ -3897,11 +3897,20 @@ class Start extends CommandAbstract
         $sslService = new SslCertificateService(true);
 
         // 只有配置文件缺失时才启用持久层恢复；完整文件绝不因数据库对账阻塞配置解析。
-        if (!empty($config['ssl_domain'])
+        // --no-ssl / 明文回源时不访问证书库，避免 CLI 启动被 DB/证书表问题阻断。
+        if (empty($config['no_ssl'])
+            && !empty($config['ssl_domain'])
             && (!\is_file((string)($config['ssl_cert'] ?? ''))
                 || !\is_file((string)($config['ssl_key'] ?? '')))) {
-            $sslService->ensureCertificateStorageReady();
-            $this->restoreManagedCertificateForConfig($config, $sslService, (string) $config['host']);
+            try {
+                $sslService->ensureCertificateStorageReady();
+                $this->restoreManagedCertificateForConfig($config, $sslService, (string) $config['host']);
+            } catch (\Throwable $e) {
+                $this->printer->warning(__(
+                    '证书持久层恢复失败，已跳过并继续启动：%{1}',
+                    [$e->getMessage()]
+                ));
+            }
         }
 
         // 如果未显式配置 SSL，检查是否有已存在的证书可用
