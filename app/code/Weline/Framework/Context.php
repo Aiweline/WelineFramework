@@ -668,7 +668,12 @@ class Context
 
     private static function extractSessionIdFromCookies(array $cookies): string
     {
-        return (string)($cookies['WELINE_SESSID'] ?? '');
+        $resolved = \Weline\Framework\Session\SessionCookieNameResolver::resolve();
+        if ($resolved !== '' && isset($cookies[$resolved]) && \is_string($cookies[$resolved]) && $cookies[$resolved] !== '') {
+            return $cookies[$resolved];
+        }
+
+        return (string)($cookies[\Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME] ?? '');
     }
 
     private static function mergeRecursive(array $base, array $override): array

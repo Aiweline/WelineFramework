@@ -226,6 +226,32 @@ class HeaderCollector implements HeaderCollectorInterface
         }
 
         foreach ($this->cookies as $cookie) {
+            [$sameSite, $partitioned] = $this->normalizeSameSiteAttributes($cookie);
+            if ($partitioned) {
+                $parts = [\rawurlencode((string)$cookie['name']) . '=' . \rawurlencode((string)$cookie['value'])];
+                if (($cookie['expire'] ?? 0) !== 0) {
+                    $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', (int)$cookie['expire']);
+                }
+                if (($cookie['path'] ?? '') !== '') {
+                    $parts[] = 'Path=' . $cookie['path'];
+                }
+                if (($cookie['domain'] ?? '') !== '') {
+                    $parts[] = 'Domain=' . $cookie['domain'];
+                }
+                if (!empty($cookie['secure'])) {
+                    $parts[] = 'Secure';
+                }
+                if (!empty($cookie['httpOnly'])) {
+                    $parts[] = 'HttpOnly';
+                }
+                if ($sameSite !== '') {
+                    $parts[] = 'SameSite=' . $sameSite;
+                }
+                $parts[] = 'Partitioned';
+                \header('Set-Cookie: ' . \implode('; ', $parts), false);
+                continue;
+            }
+
             \setcookie(
                 $cookie['name'],
                 $cookie['value'],
@@ -235,7 +261,7 @@ class HeaderCollector implements HeaderCollectorInterface
                     'domain' => $cookie['domain'],
                     'secure' => $cookie['secure'],
                     'httponly' => $cookie['httpOnly'],
-                    'samesite' => $cookie['sameSite'],
+                    'samesite' => $sameSite !== '' ? $sameSite : 'Lax',
                 ]
             );
         }
@@ -282,11 +308,32 @@ class HeaderCollector implements HeaderCollectorInterface
         if (!empty($cookie['httpOnly'])) {
             $parts[] = 'HttpOnly';
         }
-        if (($cookie['sameSite'] ?? '') !== '') {
-            $parts[] = 'SameSite=' . $cookie['sameSite'];
+        [$sameSite, $partitioned] = $this->normalizeSameSiteAttributes($cookie);
+        if ($sameSite !== '') {
+            $parts[] = 'SameSite=' . $sameSite;
+        }
+        if ($partitioned) {
+            $parts[] = 'Partitioned';
         }
 
         return \implode('; ', $parts);
+    }
+
+    /**
+     * @return array{0:string,1:bool}
+     */
+    private function normalizeSameSiteAttributes(array $cookie): array
+    {
+        $sameSite = \trim((string)($cookie['sameSite'] ?? ''));
+        $partitioned = !empty($cookie['partitioned']);
+        if ($sameSite !== '' && \preg_match('/^none\s*;\s*partitioned$/i', $sameSite) === 1) {
+            return ['None', true];
+        }
+        if ($sameSite !== '' && \stripos($sameSite, 'Partitioned') !== false) {
+            return ['None', true];
+        }
+
+        return [$sameSite, $partitioned];
     }
 
     private function getCookieStorageKey(string $name, string $path, string $domain): string
