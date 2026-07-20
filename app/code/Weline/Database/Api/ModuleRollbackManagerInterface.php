@@ -6,6 +6,9 @@ namespace Weline\Database\Api;
 
 interface ModuleRollbackManagerInterface
 {
+    /** @return array<string, mixed> */
+    public function getModuleState(string $moduleName): array;
+
     /** @return list<array<string, mixed>> */
     public function listTargets(string $moduleName): array;
 

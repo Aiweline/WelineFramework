@@ -17,13 +17,14 @@ class MigrationTest extends TestCore
     public function setUp(): void
     {
         parent::setUp();
-        $this->migrationModel = ObjectManager::getInstance(Migration::class);
+        $this->migrationModel = ObjectManager::getInstance(Migration::class, [], false);
+        $this->cleanupMigrationFixtures();
     }
     
     public function tearDown(): void
     {
+        $this->cleanupMigrationFixtures();
         parent::tearDown();
-        // 清理测试数据
     }
     
     /**
@@ -32,7 +33,7 @@ class MigrationTest extends TestCore
     public function testModelInitialization()
     {
         $this->assertInstanceOf(Migration::class, $this->migrationModel);
-        $this->assertEquals('weline_database_migrations', $this->migrationModel->getTable());
+        $this->assertStringContainsString('weline_database_migrations', $this->migrationModel->getTable());
         $this->assertEquals('migration_id', $this->migrationModel->getPrimaryKey());
     }
     
@@ -83,7 +84,7 @@ class MigrationTest extends TestCore
         ];
         
         $result = $this->migrationModel->recordMigration($testData);
-        $this->assertTrue($result, '记录迁移应该成功');
+        $this->assertGreaterThan(0, $result, '记录迁移应该返回有效 ID');
         
         // 验证数据是否正确保存
         $this->assertEquals($testData['module_name'], $this->migrationModel->getData(Migration::schema_fields_MODULE));
@@ -222,14 +223,16 @@ class MigrationTest extends TestCore
             'executed_at' => date('Y-m-d H:i:s')
         ];
         
-        $this->migrationModel->recordMigration($testData);
+        $migrationId = $this->migrationModel->recordMigration($testData);
         
         // 更新状态为回滚
-        $result = $this->migrationModel->updateStatus(Migration::STATUS_ROLLED_BACK);
+        $migration = ObjectManager::getInstance(Migration::class, [], false);
+        $migration->load($migrationId);
+        $result = $migration->updateStatus(Migration::STATUS_ROLLED_BACK);
         $this->assertTrue($result, '更新状态应该成功');
         
         // 验证状态已更新
-        $this->assertEquals(Migration::STATUS_ROLLED_BACK, $this->migrationModel->getData(Migration::schema_fields_STATUS));
+        $this->assertEquals(Migration::STATUS_ROLLED_BACK, $migration->getData(Migration::schema_fields_STATUS));
     }
     
     /**
@@ -276,5 +279,13 @@ class MigrationTest extends TestCore
         $this->assertGreaterThanOrEqual(2, $stats['total']);
         $this->assertGreaterThanOrEqual(1, $stats['installed']);
         $this->assertGreaterThanOrEqual(1, $stats['failed']);
+    }
+
+    private function cleanupMigrationFixtures(): void
+    {
+        ObjectManager::getInstance(Migration::class, [], false)
+            ->where(Migration::schema_fields_MODULE, 'Weline_Test')
+            ->delete()
+            ->fetch();
     }
 }

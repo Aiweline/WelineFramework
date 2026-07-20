@@ -275,8 +275,14 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return false;
         }
 
-        $response = $this->waitForResponse(SupervisorMessage::TYPE_READY_ACK, 2.0);
-        if (!\is_array($response) || !($response['accepted'] ?? false)) {
+        $response = $this->waitForResponse(
+            SupervisorMessage::TYPE_READY_ACK,
+            ControlMessage::READY_CONFIRM_TIMEOUT_SEC,
+        );
+        if (!\is_array($response)
+            || !($response['accepted'] ?? false)
+            || \strtolower(\trim((string)($response['ready_phase'] ?? 'final'))) !== 'final'
+        ) {
             $this->readyConfirmed = false;
             return false;
         }
@@ -362,6 +368,24 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return [];
         }
         $this->maybeSendHeartbeat();
+
+        // Some daemon loops poll this method directly instead of first
+        // including the control socket in their own stream_select set. On
+        // Windows a non-blocking fread with no available bytes may look like
+        // EOF, which caused an idle Runtime Watchdog to disconnect and be
+        // resurrected continuously. Make an idle poll a no-op while retaining
+        // the normal EOF path once the socket is actually readable.
+        $read = [$this->socket];
+        $write = [];
+        $except = [];
+        $changed = @\stream_select($read, $write, $except, 0, 0);
+        if ($changed === false) {
+            return [];
+        }
+        if ($changed === 0) {
+            return $this->extractMessages();
+        }
+
         $data = @\fread($this->socket, 65536);
         if ($data === false) {
             if (!@\feof($this->socket)) {
@@ -594,7 +618,9 @@ final class SupervisorChildClient implements ChildControlClientInterface
                 $this->readyConfirmed = false;
             }
             if (($decoded['type'] ?? '') === SupervisorMessage::TYPE_READY_ACK) {
-                $this->readyConfirmed = (bool)($decoded['accepted'] ?? false);
+                $readyPhase = \strtolower(\trim((string)($decoded['ready_phase'] ?? 'final')));
+                $this->readyConfirmed = (bool)($decoded['accepted'] ?? false)
+                    && $readyPhase === 'final';
                 $this->poolSnapshotVersion = (int)($decoded['pool_snapshot_version'] ?? $this->poolSnapshotVersion);
             }
             if (($decoded['type'] ?? '') === ControlMessage::TYPE_SHUTDOWN) {

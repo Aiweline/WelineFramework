@@ -25,11 +25,4 @@ interface MigrationInterface
 
     public function getDate(): string;
 
-    public function getType(): string;
-
-    public function getAffectedTables(): array;
-
-    public function requiresBackup(): bool;
-
-    public function getBackupStrategy(): array;
 }

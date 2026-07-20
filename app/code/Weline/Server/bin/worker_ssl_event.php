@@ -21,7 +21,7 @@ if (!\function_exists('wlsEventMakeAbsolutePath')) {
         if ($path === '') {
             return '';
         }
-        if (\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $path)) {
+        if (\preg_match('/^(?:[a-zA-Z]:[\\\\\\/]|[\\\\\\/]{2}|\/)/', $path)) {
             return $path;
         }
 
@@ -55,14 +55,14 @@ $wlsMemoryLimit = '256M';
 $processName = '';
 $isFrontend = false;
 $isMaintenanceWorker = false;
-$useReusePort = false;
+$wlsListenerMode = '';
 $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $controlPort = 0;
 $masterPid = 0;
 $workerCount = 1;
-$wlsRuntimeTopology = 'auto';
+$wlsRuntimeTopology = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
@@ -87,10 +87,10 @@ $sslKey = $positionalArgs[5] ?? '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
-    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend') {
         $isFrontend = true;
-    } elseif ($arg === '--reuseport' || $arg === '-reuseport') {
-        $useReusePort = true;
+    } elseif (\str_starts_with($arg, '--wls-listener-mode=')) {
+        $wlsListenerMode = \strtolower(\trim((string)\substr($arg, 20)));
     } elseif (\str_starts_with($arg, '--host=')) {
         $host = \substr($arg, 7);
     } elseif (\str_starts_with($arg, '--port=')) {
@@ -124,6 +124,20 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
     }
+}
+if (!\in_array($wlsRuntimeTopology, ['direct', 'dispatcher'], true)) {
+    \fwrite(\STDERR, "--wls-runtime-topology must be direct or dispatcher.\n");
+    exit(1);
+}
+if (!\in_array($wlsListenerMode, ['single', 'reuseport', 'shared_fd'], true)) {
+    \fwrite(\STDERR, "--wls-listener-mode must be single, reuseport, or shared_fd.\n");
+    exit(1);
+}
+if (($wlsRuntimeTopology === 'dispatcher' && $wlsListenerMode !== 'single')
+    || ($wlsRuntimeTopology === 'direct' && $wlsListenerMode === 'single')
+) {
+    \fwrite(\STDERR, "Listener mode does not match the selected WLS topology.\n");
+    exit(1);
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
 
@@ -248,6 +262,11 @@ $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $orchestratorEpoch
 );
 $childMasterGuard->assertAliveOrExit('Event SSL listen 前 Master 自治检查');
+\Weline\Server\Service\Runtime\WorkerProcessLease::register(
+    $processName,
+    $orchestratorLaunchId,
+    $orchestratorEpoch
+);
 
 if ($sslEngine !== 'event_buffer') {
     \Weline\Server\Log\WlsLogger::error_('worker_ssl_event.php requires wls.ssl.engine=event_buffer');
@@ -291,19 +310,7 @@ if (!wlsEventEnsureRuntimeFileReadable($sslCert, 0644) || !wlsEventEnsureRuntime
     exit(2);
 }
 
-if ($processName !== '') {
-    $managedProcessIdentity = '--name=' . $processName;
-    if ($orchestratorLaunchId !== '') {
-        $managedProcessIdentity .= ' --launch-id=' . $orchestratorLaunchId;
-    }
-    if ($orchestratorEpoch > 0) {
-        $managedProcessIdentity .= ' --epoch=' . $orchestratorEpoch;
-    }
-    \Weline\Framework\System\Process\Processer::setPid($managedProcessIdentity, \getmypid());
-    if ($port > 0) {
-        \Weline\Framework\System\Process\Processer::setProcessPorts($managedProcessIdentity, [$port]);
-    }
-}
+// 子进程只发布脱敏的 generation lease；Master/IPC 仍是槽位、READY 与监听能力权威。
 
 \Weline\Server\Service\RouteHintService::init($port, $wlsRuntimeTopology === 'dispatcher', 3600);
 
@@ -636,6 +643,9 @@ $listener = new \EventListener(
                         $response = wlsEventInjectProcessTimeHeader($response, $durationMs);
                     }
                     $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
+                    if ($ipcDraining) {
+                        $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
+                    }
                     $bev->write($response);
 
                     $activeRequests = \max(0, $activeRequests - 1);
@@ -1243,8 +1253,32 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
         return;
     }
 
-    if ($connections !== [] && (\microtime(true) - $drainStartTime) < $maxDrainTime) {
-        return;
+    if ($connections !== []) {
+        $drainElapsed = \microtime(true) - $drainStartTime;
+        if ($drainElapsed < $maxDrainTime) {
+            return;
+        }
+
+        $hasPendingApplicationWork = $activeRequests > 0;
+        if (!$hasPendingApplicationWork) {
+            foreach ($connections as $connection) {
+                $bev = $connection['bev'] ?? null;
+                if ($bev instanceof \EventBufferEvent && (int)($bev->getOutput()->length ?? 0) > 0) {
+                    $hasPendingApplicationWork = true;
+                    break;
+                }
+            }
+        }
+        if ($hasPendingApplicationWork) {
+            static $lastEventDrainExtensionLogAt = 0.0;
+            if (($now - $lastEventDrainExtensionLogAt) >= 1.0) {
+                \Weline\Server\Log\WlsLogger::warning_(
+                    'EventBuffer drain soft deadline reached; waiting for response output to flush'
+                );
+                $lastEventDrainExtensionLogAt = $now;
+            }
+            return;
+        }
     }
 
     foreach (\array_keys($connections) as $id) {
@@ -1290,6 +1324,12 @@ function wlsEventBuildSslContext(string $sslCert, string $sslKey): \EventSslCont
     $context = new \EventSslContext(\EventSslContext::TLS_SERVER_METHOD, $options);
     if (\method_exists($context, 'setMinProtoVersion')) {
         @$context->setMinProtoVersion(\EventSslContext::TLS1_2_VERSION);
+    }
+    if (
+        \method_exists($context, 'setMaxProtoVersion')
+        && \defined('EventSslContext::TLS1_3_VERSION')
+    ) {
+        @$context->setMaxProtoVersion((int)\constant('EventSslContext::TLS1_3_VERSION'));
     }
 
     return $context;
@@ -1556,6 +1596,7 @@ function wlsEventDrainBufferedMaintenanceRequests(
                 $response = wlsEventInjectProcessTimeHeader($response, $durationMs);
             }
             $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
+            $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
             $bev->write($response);
             if (!\str_contains($response, "\r\nX-WLS-Static-Cache: HIT\r\n") && !$isFpcHit) {
                 $workerTelemetryReporter->record(

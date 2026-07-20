@@ -4,9 +4,24 @@ if (PHP_SAPI !== 'cli') {
     echo chr(27) . '[34m bin/m' . chr(27) . '[31m  ??? CLI ??????' . chr(27) . '[0m' . PHP_EOL;
     exit(1);
 }
+require_once __DIR__ . '/../app/code/Weline/Server/bin/windows_start_process_working_directory.php';
+try {
+    require_once __DIR__ . '/../app/code/Weline/Framework/Console/PhpCliRuntimePreflight.php';
+    $runtimePreflightExitCode = \Weline\Framework\Console\PhpCliRuntimePreflight::enforce(
+        $argv,
+        __FILE__,
+        dirname(__DIR__),
+    );
+    if ($runtimePreflightExitCode !== null) {
+        exit($runtimePreflightExitCode);
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, '[Weline CLI runtime preflight failed] ' . $e->getMessage() . PHP_EOL);
+    exit(70);
+}
 try {
     require __DIR__ . '/../app/bootstrap.php';
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $chr = chr(27);
     echo <<<CLI_E
 {$chr}[34m [CLI 运行异常]
@@ -23,7 +38,7 @@ try {
         $exitCode = (new Weline\Framework\Console\Cli('M?? CLI', ['bin/m','dev:tool:phpcsfixer','no-show','.']))->run();
     }
     exit($exitCode);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $chr = chr(27);
     $root = $e;
     $code = '?????';

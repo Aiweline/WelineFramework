@@ -23,6 +23,14 @@ interface ControlPlaneServerInterface
 
     public function setExpectedControlToken(string $controlToken): void;
 
+    /**
+     * Register a process-local readable stream in the same bounded event wait
+     * as the control sockets. The handler must perform non-blocking work only.
+     */
+    public function registerExternalReadableSource(string $id, mixed $stream, callable $handler): void;
+
+    public function unregisterExternalReadableSource(string $id): void;
+
     public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int;
 
     public function sendTo(int $clientId, string $message): bool;

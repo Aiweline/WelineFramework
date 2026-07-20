@@ -38,12 +38,19 @@ final class SessionClient
         if ($port <= 0) {
             $port = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
         }
+        $tokenFileName = (string)($options['token_file_name'] ?? '');
+        if ($tokenFileName === '') {
+            $tokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                'session_server',
+                $port
+            );
+        }
         $this->stateClient = new SharedStateClient($host, $port, [
             'connect_timeout' => (float)($options['connect_timeout'] ?? 1.0),
             'timeout' => (float)($options['timeout'] ?? 2.0),
             'min_idle' => (int)($options['pool_min_idle'] ?? 0),
             'max_size' => (int)($options['pool_size'] ?? 8),
-            'token_file_name' => (string)($options['token_file_name'] ?? 'session_server.token'),
+            'token_file_name' => $tokenFileName,
             'log_connect_fail' => (bool)($options['log_connect_fail'] ?? true),
             // Worker 常驻：拉长空闲 TCP 寿命，避免池健康检查频繁关连导致 Session 进程刷屏「Client disconnected」
             'idle_timeout' => (float)($options['idle_timeout'] ?? 86400.0),

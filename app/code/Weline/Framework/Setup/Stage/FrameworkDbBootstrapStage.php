@@ -168,6 +168,41 @@ class FrameworkDbBootstrapStage extends AbstractStage
         if ($missing !== []) {
             $connector->dropTableIfExists($backupsTable);
             $this->createTableFromModel($connector, MigrationBackup::class);
+            return;
+        }
+
+        $schema = $this->schemaParser->parse(MigrationBackup::class);
+        if ($schema === null) {
+            return;
+        }
+        $retentionColumns = [
+            'column_name',
+            'backup_scope',
+            'operation_id',
+            'source_backup_id',
+            'retention_state',
+            'retain_until',
+            'restored_at',
+        ];
+        foreach ($schema->columns as $column) {
+            if (!in_array($column->name, $retentionColumns, true)
+                || $connector->hasField($backupsTable, $column->name)) {
+                continue;
+            }
+            $sql = $connector->buildAlterAddColumnSql($backupsTable, [
+                'name' => $column->name,
+                'type' => $column->type,
+                'length' => $column->length,
+                'nullable' => $column->nullable,
+                'primaryKey' => $column->primaryKey,
+                'autoIncrement' => $column->autoIncrement,
+                'default' => $column->default,
+                'comment' => $column->comment,
+                'unique' => $column->unique,
+            ]);
+            if ($sql !== '') {
+                $connector->query($sql)->fetch();
+            }
         }
     }
 }

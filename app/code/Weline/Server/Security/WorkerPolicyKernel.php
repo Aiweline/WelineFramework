@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Security;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Runtime\Policy\PolicyStage;
 use Weline\Framework\Runtime\Policy\RequestEnvelope;
 use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
@@ -318,7 +319,7 @@ final class WorkerPolicyKernel
             ],
         );
 
-        // A loopback transport peer is common when Nginx/Caddy proxies to a
+        // A loopback transport peer is common when Nginx proxies to a
         // direct Worker. It is transport metadata, not proof that the original
         // client is local. Only the compiled, explicit whitelist may bypass
         // bans, quotas and request attack rules.
@@ -818,6 +819,14 @@ final class WorkerPolicyKernel
         if ($envelope->body === '' || $patterns === []) {
             return false;
         }
+        // Query-bin is a bounded WQB1 binary envelope. Treating its
+        // bytes as textual input makes ordinary payload bytes match attack
+        // regexes such as `|`, then incorrectly bans the browser client.
+        // Its URI, headers, strict packet decoder, same-origin guard and
+        // worker-session/signature validation remain independently enforced downstream.
+        if ($this->isOpaqueWelineQueryBinPacket($envelope)) {
+            return false;
+        }
         $chunkBytes = \max(32768, \min(524288, (int)($descriptor->matcher['scan_chunk_bytes'] ?? 262144)));
         $overlapBytes = \max(4096, \min(65536, (int)($descriptor->matcher['scan_overlap_bytes'] ?? 65536)));
         $overlapBytes = \min($overlapBytes, (int)($chunkBytes / 2));
@@ -843,6 +852,28 @@ final class WorkerPolicyKernel
         $decodedBody = \urldecode($envelope->body);
         return $decodedBody !== $envelope->body
             && $this->bodyVariantMatchesPatterns($decodedBody, $patterns, $chunkBytes, $overlapBytes);
+    }
+
+    private function isOpaqueWelineQueryBinPacket(RequestEnvelope $envelope): bool
+    {
+        if (\strtoupper($envelope->method) !== 'POST'
+            || \strtolower($envelope->path) !== \strtolower(Env::getFrontendQueryBinPath())
+            || \strlen($envelope->body) < 5
+        ) {
+            return false;
+        }
+
+        $contentType = \strtolower(\trim((string)($envelope->headers['content-type'] ?? '')));
+        $separator = \strpos($contentType, ';');
+        if ($separator !== false) {
+            $contentType = \trim(\substr($contentType, 0, $separator));
+        }
+        if ($contentType !== WelineBinaryCodec::CONTENT_TYPE) {
+            return false;
+        }
+
+        return \str_starts_with($envelope->body, WelineBinaryCodec::MAGIC)
+            && \ord($envelope->body[4]) === WelineBinaryCodec::VERSION;
     }
 
     /**
@@ -987,7 +1018,13 @@ final class WorkerPolicyKernel
             ) {
                 return $this->invalidParsed('invalid_header');
             }
-            $headers[$name] = isset($headers[$name]) ? $headers[$name] . ', ' . $value : $value;
+            $headers[$name] = isset($headers[$name])
+                ? (
+                    $name === 'cookie'
+                        ? $headers[$name] . '; ' . $value
+                        : $headers[$name] . ', ' . $value
+                )
+                : $value;
         }
         $host = (string)($headers['host'] ?? '');
         if ($host === '') {
@@ -1046,10 +1083,14 @@ final class WorkerPolicyKernel
         if ($host === '') {
             return $this->invalidParsed('missing_host');
         }
+        $protocol = $this->normalizeValidatedProtocol((string)$frame['protocol']);
+        if ($protocol === null) {
+            return $this->invalidParsed('invalid_protocol');
+        }
 
         return [
             'method' => (string)$frame['method'],
-            'protocol' => (string)$frame['protocol'],
+            'protocol' => $protocol,
             'target' => $target,
             'path' => $path,
             'query' => $query,
@@ -1058,6 +1099,17 @@ final class WorkerPolicyKernel
             'body' => (string)$frame['body'],
             'header_bytes' => (int)($frame['header_bytes'] ?? 0),
         ];
+    }
+
+    private function normalizeValidatedProtocol(string $protocol): ?string
+    {
+        return match (\strtoupper(\trim($protocol))) {
+            'HTTP/1.0' => 'HTTP/1.0',
+            'HTTP/1.1' => 'HTTP/1.1',
+            'H2', 'HTTP/2', 'HTTP/2.0' => 'HTTP/2',
+            'H3', 'HTTP/3', 'HTTP/3.0' => 'HTTP/3',
+            default => null,
+        };
     }
 
     /** @return array{method:string,protocol:string,target:string,path:string,query:string,host:string,headers:array<string,string>,body:string,header_bytes:int,error:string} */
