@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\System\Process\Driver;
 
+use Weline\Framework\System\Process\Processer;
+
 /**
  * Windows 进程驱动
  * 
@@ -202,7 +204,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
 
         $descriptors = [
-            0 => ['file', 'NUL', 'r'],
+            0 => ['file', Processer::resolveNullDevice(), 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
