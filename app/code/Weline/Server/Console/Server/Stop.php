@@ -140,6 +140,29 @@ class Stop extends CommandAbstract
     }
     
     /**
+     * Stop per-project managed nginx (if running) before tearing down WLS.
+     */
+    private function maybeStopManagedNginx(): void
+    {
+        try {
+            $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
+            if (!$service->paths()->managedEnabled()) {
+                return;
+            }
+            $status = $service->doctorSnapshot();
+            if (!(bool)($status['running'] ?? false) && !(bool)($status['installed'] ?? false)) {
+                return;
+            }
+            $result = $service->stop();
+            if ($result['ok'] ?? false) {
+                $this->printer->note(__('托管 Nginx：%{1}', [(string)$result['message']]));
+            }
+        } catch (\Throwable $e) {
+            $this->printer->warning(__('托管 Nginx 停止异常：%{1}', [$e->getMessage()]));
+        }
+    }
+
+    /**
      * 解析实例名称
      */
     protected function parseInstanceName(array $args): string
@@ -387,6 +410,8 @@ class Stop extends CommandAbstract
             $this->stopCliServer($force);
             return;
         }
+
+        $this->maybeStopManagedNginx();
 
         // 通过 ServerInstanceManager 获取实例信息（统一入口）
         $manager = $this->getInstanceManager();
