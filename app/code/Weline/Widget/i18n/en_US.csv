@@ -75,6 +75,7 @@ AI翻译,"AI Translate"
 模型代码,模型代码
 "Widget 生成智能体","Widget 生成智能体"
 "根据 slot 协议生成普通 Widget registry JSON","根据 slot 协议生成普通 Widget registry JSON"
+"AI 模型执行契约未注册","AI 模型执行契约未注册"
 "AI Widget 生成调用失败：%{1}","AI Widget 生成调用失败：%{1}"
 "AI Widget 生成结果为空","AI Widget 生成结果为空"
 部件类型和名称不能为空,"Widget type and name cannot be empty"

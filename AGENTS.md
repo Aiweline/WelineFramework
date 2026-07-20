@@ -47,6 +47,8 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation,
 
 ## Delivery
 - After every development/fix/deploy delivery, always give the user the related addresses in the final response: runnable page URLs, backend/admin URLs, API endpoints, doc paths/URLs, PR/commit/release URLs, and the test instance URL when one was started.
+- **Changed feature → verification URL must be explicit**: map each change to the exact place to verify it, and prefer full absolute Markdown links on the current dedicated WLS test instance so the user can open them in the built-in Browser immediately. List multiple surfaces separately (list page, form/OffCanvas, SystemConfig deep link, API/doc) with a one-line purpose each.
+- Do not give only relative paths, vague menu directions, or “find it in settings”; if no live instance is running, still give the full route/path plus access prerequisites.
 - If no live URL is available, still list relevant route/path addresses and clearly state what is required to access them, such as starting WLS or logging into the backend. If there is truly no accessible address, explicitly say `无可访问链接`.
 - If a WLS instance is started for user manual acceptance, do not close it before the user confirms acceptance. The final response must list the test URL, instance name, port, current status, and exact stop command; after the user confirms acceptance, stop the instance and report cleanup.
 

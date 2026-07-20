@@ -38,23 +38,23 @@ $escapeAttr = static function (mixed $value): string {
     <div class="action-toolbar-left">
         <block class='Weline\Component\Block\OffCanvas'
                template='Weline_Component::off-canvas.phtml'
-               title='<?= __('添加账户') ?>'
+               title='@lang(添加账户)'
                cache='0'
                id='cdn_account_add_offcanvas'
                action='*/backend/account/form'
                target-tag='button'
                icon='mdi mdi-plus'
-               submit-button-text='<?= __('保存') ?>'
+               submit-button-text='@lang(保存)'
                submit-button-class='btn btn-primary'
-               target-button-text='<?= __('添加账户') ?>'
+               target-button-text='@lang(添加账户)'
                target-button-class='btn btn-primary'
-               flush-button-text='<?= __('刷新') ?>'
-               flush-button-class='btn btn-default'
+               flush-button-text='@lang(刷新)'
+               flush-button-class='btn btn-light'
                flush='1'
                save='1'
                save-form='#accountForm'
                close-button-show='1'
-               close-button-text='<?= __('关闭') ?>'
+               close-button-text='@lang(关闭)'
                direction='right'
                class-names='w-75'
                off-canvas-body-style=''
@@ -92,7 +92,7 @@ $escapeAttr = static function (mixed $value): string {
             <div class="empty-state text-center py-5">
                 <i class="mdi mdi-account-circle-outline d-block" style="font-size: 64px; color: var(--backend-color-border);"></i>
                 <h5 class="mt-3"><?= __('暂无账户数据') ?></h5>
-                <p class="text-muted"><?= __('点击"添加账户"按钮创建第一个CDN账户') ?></p>
+                <p class="text-muted"><?= __('点击「添加账户」按钮创建第一个CDN账户') ?></p>
             </div>
         <?php else: ?>
             <div class="table-responsive">

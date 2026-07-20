@@ -8,6 +8,7 @@ use Weline\Admin\Api\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Social\Service\SocialAccountService;
 use Weline\Social\Service\SocialCreativeService;
+use Weline\Social\Service\SocialPlatformCredentialGuide;
 use Weline\Social\Service\SocialPlatformIconService;
 use Weline\Social\Service\SocialPlatformRegistry;
 use Weline\Social\Service\SocialPublishService;
@@ -22,7 +23,8 @@ class Social extends BaseController
         private readonly SocialCreativeService $creativeService,
         private readonly SocialPublishService $publishService,
         private readonly SocialPlatformIconService $iconService,
-        private readonly SocialWebsiteAccountService $websiteAccountService
+        private readonly SocialWebsiteAccountService $websiteAccountService,
+        private readonly SocialPlatformCredentialGuide $credentialGuide
     ) {
     }
 
@@ -57,6 +59,8 @@ class Social extends BaseController
         $this->assign('warnings', $this->registry->getWarnings());
         $this->assign('query_provider', 'welineSocial');
         $this->assign('fake_smoke_url', '/weline_social/frontend/social/smoke?fake=1&relation=1&no_publish=1');
+        $this->assign('platform_credential_guides', $this->credentialGuide->getAllGuides());
+        $this->assign('platform_guide_keys', $this->credentialGuide->getGuideKeys());
 
         return $this->fetchBase();
     }

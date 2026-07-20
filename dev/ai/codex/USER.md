@@ -15,6 +15,9 @@ file.
 - Keep progress updates short and factual.
 - Final reports should include changed files, verification evidence, accessible
   routes or paths, and known risks.
+- After any feature/fix delivery, explicitly map each change to a verification
+  URL. Prefer absolute Markdown links on the running dedicated WLS test
+  instance so the user can open them in the built-in Browser immediately.
 
 ## Execution Style
 

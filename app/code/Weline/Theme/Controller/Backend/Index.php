@@ -21,6 +21,7 @@ use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemePreviewEntryApplication;
 use Weline\Theme\Service\ThemePreviewGenerator;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
@@ -215,52 +216,20 @@ class Index extends BackendController
      */
     public function postActivate()
     {
-        $themeId = $this->request->getPost('theme_id');
+        $themeId = (int)$this->request->getPost('theme_id');
         $area = $this->request->getPost('area');
         if (!in_array($area, ['frontend', 'backend'], true)) {
             $area = null;
         }
-        
-        if (!$themeId) {
-            return $this->fetchJson($this->error(__('请选择主题')));
+
+        $result = ObjectManager::getInstance(ThemeContextService::class)
+            ->activateThemeForArea($themeId, $area);
+
+        if (!empty($result['success'])) {
+            return $this->fetchJson($this->success((string)($result['message'] ?? __('主题激活成功'))));
         }
 
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
-        
-        if (!$theme->getId()) {
-            return $this->fetchJson($this->error(__('主题不存在')));
-        }
-
-        if ($area && !$this->themeSupportsArea($theme, $area)) {
-            return $this->fetchJson($this->error(__('主题不支持 %{1} 区域', [$area])));
-        }
-
-        try {
-            if ($area === 'frontend') {
-                if ($this->safeToggleAreaThemeActivation($theme, (int)$themeId, WelineTheme::schema_fields_IS_ACTIVE_FRONTEND)) {
-                    $theme->_cache->delete('theme_frontend');
-                } else {
-                    $this->activateThemeFallback($theme, (int)$themeId);
-                }
-            } elseif ($area === 'backend') {
-                if ($this->safeToggleAreaThemeActivation($theme, (int)$themeId, WelineTheme::schema_fields_IS_ACTIVE_BACKEND)) {
-                    $theme->_cache->delete('theme_backend');
-                } else {
-                    $this->activateThemeFallback($theme, (int)$themeId);
-                }
-            } else {
-                $this->activateThemeFallback($theme, (int)$themeId);
-            }
-            $theme->_cache->delete('theme');
-            $theme->_cache->delete('theme_parent_' . $themeId);
-            $this->clearActivationRuntimeCaches((int)$themeId, $area);
-
-            return $this->fetchJson($this->success(__('主题激活成功')));
-        } catch (\Exception $e) {
-            return $this->fetchJson($this->error(__('激活失败：%{1}', [$e->getMessage()])));
-        }
+        return $this->fetchJson($this->error((string)($result['message'] ?? __('激活失败'))));
     }
 
     /**

@@ -38,7 +38,7 @@ backend|frontend,backend|frontend
 "回滚配置版本 %{1}","回滚配置版本 %{1}"
 回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
 "当前 system_config 表尚未升级，不能保存非全局 scope 配置。","当前 system_config 表尚未升级，不能保存非全局 scope 配置。"
-定位配置项,"Find configuration item"
+定位当前项,"Locate current item"
 返回引导,"Back to guide"
 模块,模块
 全部模块,全部模块
@@ -56,6 +56,7 @@ Locale,Locale
 当前值,当前值
 保存值,保存值
 继承,继承
+当前定位,"Current target"
 引导目标,"Guide target"
 默认值,默认值
 保存配置,保存配置
@@ -65,11 +66,20 @@ Locale,Locale
 时间,时间
 回滚,回滚
 不可回滚,不可回滚
+引导定位,"Guide navigation"
+收起,"Collapse"
+展开,"Expand"
+定位,Locate
+未找到,"Not found"
 打开,打开
 "引导步骤 %{1}","Guide step %{1}"
 配置引导,"Configuration guide"
 配置或字段,配置或字段
 保存原因,保存原因
+当前：%{1},"Current: %{1}"
+未找到引导配置项，请确认已选中对应模块。,"Guide target was not found. Make sure the matching module is selected."
+同页,"Same page"
+跳转,Navigate
 存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
 配置校验失败，当前配置未改变。,配置校验失败，当前配置未改变。
 没有需要保存的配置。,没有需要保存的配置。

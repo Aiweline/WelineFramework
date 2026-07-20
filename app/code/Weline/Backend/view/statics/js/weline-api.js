@@ -947,6 +947,585 @@
         }, this);
     };
 
+    const STREAM_TERMINAL_EVENTS = new Set([
+        'done',
+        'complete',
+        'completed',
+        'failed',
+        'cancelled',
+        'expired',
+        'recovery_unsafe',
+        'event_backlog_limit'
+    ]);
+    const STREAM_RUNTIME_CHANNEL_PREFIX = 'runtime_task.';
+    const STREAM_STORAGE_PREFIX = 'weline.runtime.stream.';
+
+    const normalizeStreamCursor = (value) => {
+        const cursor = value === null || typeof value === 'undefined' ? '' : String(value).trim();
+        return cursor.length <= 128 && !/[\x00-\x1F\x7F]/.test(cursor) ? cursor : '';
+    };
+
+    const normalizeStreamParamName = (value) => {
+        const name = String(value || '').trim();
+        return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : '';
+    };
+
+    const compareNumericStreamCursors = (left, right) => {
+        const normalizedLeft = String(left).replace(/^0+(?=\d)/, '');
+        const normalizedRight = String(right).replace(/^0+(?=\d)/, '');
+        if (normalizedLeft.length !== normalizedRight.length) {
+            return normalizedLeft.length < normalizedRight.length ? -1 : 1;
+        }
+        if (normalizedLeft === normalizedRight) {
+            return 0;
+        }
+        return normalizedLeft < normalizedRight ? -1 : 1;
+    };
+
+    const createStreamIntentId = () => {
+        if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            window.crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+    };
+
+    class StreamHandle extends EventTarget {
+        constructor(client, channel, params = {}, options = {}) {
+            super();
+
+            this.client = client;
+            this.channel = String(channel || '');
+            this.options = options && typeof options === 'object' ? options : {};
+            this.params = params && typeof params === 'object' && !Array.isArray(params) && !isFormData(params)
+                ? Object.assign({}, normalizeCallParams(params))
+                : {};
+            this._source = null;
+            this._sourceEventTypes = new Set();
+            this._eventTypes = new Set(['message']);
+            (Array.isArray(this.options.eventTypes) ? this.options.eventTypes : []).forEach(type => {
+                if (typeof type === 'string' && type !== '') {
+                    this._eventTypes.add(type);
+                }
+            });
+            this._seenEventIds = new Set();
+            this._retryTimer = null;
+            this._leaseTimer = null;
+            this._connecting = false;
+            this._closed = false;
+            this._terminal = false;
+            this._cancelRequested = false;
+            this._cancelPromise = null;
+            this._retryAttempt = 0;
+            this._renewingLease = false;
+            this._onopen = null;
+            this._onerror = null;
+            this._onmessage = null;
+
+            this.taskId = String(this.params.task_id || '');
+            this._storageKey = this.resolveStorageKey();
+            const stored = this.readStoredState();
+            if (!this.params.lease_id && stored.lease_id) {
+                this.params.lease_id = stored.lease_id;
+            }
+            this.leaseId = String(this.params.lease_id || '');
+            this.lastEventId = normalizeStreamCursor(
+                this.options.lastEventId
+                ?? this.options.last_event_id
+                ?? this.params.last_event_id
+                ?? stored.cursor
+            );
+            this._lastNumericEventId = /^\d+$/.test(this.lastEventId) ? this.lastEventId : '';
+            if (this.lastEventId !== '') {
+                this._seenEventIds.add(this.lastEventId);
+            }
+            this.cancelIntentId = normalizeStreamCursor(this.options.intentId || stored.intent_id) || createStreamIntentId();
+            this.cursorParam = this.resolveCursorParam();
+            this.isRuntimeTaskStream = this.channel.indexOf(STREAM_RUNTIME_CHANNEL_PREFIX) === 0;
+            this.leaseEnabled = this.options.lease === true
+                || (this.options.lease !== false && this.isRuntimeTaskStream);
+            this.leaseProvider = String(this.options.leaseProvider || 'runtime_task');
+            this.touchOperation = String(this.options.touchOperation || 'touch');
+            this.cancelOperation = String(this.options.cancelOperation || 'cancel');
+            this.leaseIntervalMs = this.resolveInterval(this.options.leaseIntervalMs, 30000, 1000, 300000);
+            this.retryMinMs = this.resolveInterval(this.options.retryMinMs, 1000, 1, 30000);
+            this.retryMaxMs = this.resolveInterval(this.options.retryMaxMs, 30000, this.retryMinMs, 30000);
+            this.terminalEvents = new Set(STREAM_TERMINAL_EVENTS);
+            (Array.isArray(this.options.terminalEvents) ? this.options.terminalEvents : []).forEach(type => {
+                if (typeof type === 'string' && type !== '') {
+                    this.terminalEvents.add(type.toLowerCase());
+                    this._eventTypes.add(type);
+                }
+            });
+            // Terminal events must always be observed internally. Otherwise a
+            // caller that only subscribes to e.g. `progress` would miss a
+            // persisted `completed`/`failed` frame and reconnect forever.
+            this.terminalEvents.forEach(type => this._eventTypes.add(type));
+
+            this._onlineHandler = () => this.handleOnline();
+            this._offlineHandler = () => this.dispatchLifecycleEvent('offline');
+            window.addEventListener('online', this._onlineHandler);
+            window.addEventListener('offline', this._offlineHandler);
+            this.persistState();
+        }
+
+        get onopen() {
+            return this._onopen;
+        }
+
+        set onopen(listener) {
+            this.replacePropertyListener('_onopen', 'open', listener);
+        }
+
+        get onerror() {
+            return this._onerror;
+        }
+
+        set onerror(listener) {
+            this.replacePropertyListener('_onerror', 'error', listener);
+        }
+
+        get onmessage() {
+            return this._onmessage;
+        }
+
+        set onmessage(listener) {
+            this.replacePropertyListener('_onmessage', 'message', listener);
+        }
+
+        get readyState() {
+            if (this._closed || this._terminal) {
+                return 2;
+            }
+            return this._source ? this._source.readyState : 0;
+        }
+
+        get url() {
+            return this._source ? this._source.url : '';
+        }
+
+        get withCredentials() {
+            return this.options.withCredentials !== false;
+        }
+
+        addEventListener(type, listener, options) {
+            super.addEventListener(type, listener, options);
+            if (typeof type === 'string' && type !== '' && type !== 'open' && type !== 'error') {
+                this._eventTypes.add(type);
+                this.attachSourceEvent(this._source, type);
+            }
+        }
+
+        async start() {
+            await this.connect(true);
+            return this;
+        }
+
+        close() {
+            if (this._closed) {
+                return;
+            }
+            this._closed = true;
+            this.clearReconnectTimer();
+            this.stopLeaseRenewal();
+            this.closeSource();
+            this.removeWindowListeners();
+            this.persistState();
+            this.dispatchLifecycleEvent('close');
+        }
+
+        async cancel(reason = '') {
+            if (!this.taskId) {
+                throw new Error('[Weline.Api] StreamHandle.cancel() requires a task_id.');
+            }
+            if (this._cancelPromise) {
+                return this._cancelPromise;
+            }
+
+            this._cancelPromise = this.client.call(this.leaseProvider, this.cancelOperation, {
+                task_id: this.taskId,
+                intent_id: this.cancelIntentId,
+                reason: String(reason || ''),
+            }).then(result => {
+                this._cancelRequested = true;
+                this.stopLeaseRenewal();
+                this.persistState();
+                this.dispatchLifecycleEvent('cancel_requested', { intent_id: this.cancelIntentId });
+                return result;
+            }).finally(() => {
+                this._cancelPromise = null;
+            });
+
+            return this._cancelPromise;
+        }
+
+        resolveStorageKey() {
+            if (typeof this.options.storageKey === 'string' && this.options.storageKey !== '') {
+                return STREAM_STORAGE_PREFIX + this.options.storageKey;
+            }
+            if (!this.taskId) {
+                return '';
+            }
+            return STREAM_STORAGE_PREFIX + encodeURIComponent(this.channel) + ':' + encodeURIComponent(this.taskId);
+        }
+
+        readStoredState() {
+            if (!this._storageKey) {
+                return {};
+            }
+            try {
+                const value = window.sessionStorage.getItem(this._storageKey);
+                const parsed = value ? JSON.parse(value) : null;
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        persistState() {
+            if (!this._storageKey) {
+                return;
+            }
+            try {
+                window.sessionStorage.setItem(this._storageKey, JSON.stringify({
+                    task_id: this.taskId,
+                    lease_id: this.leaseId,
+                    cursor: this.lastEventId,
+                    intent_id: this.cancelIntentId,
+                }));
+            } catch (error) {
+                /* session storage may be unavailable */
+            }
+        }
+
+        resolveCursorParam() {
+            if (this.options.cursorParam === false) {
+                return '';
+            }
+            if (typeof this.options.cursorParam === 'string') {
+                return normalizeStreamParamName(this.options.cursorParam);
+            }
+            return this.channel.indexOf(STREAM_RUNTIME_CHANNEL_PREFIX) === 0 ? 'last_event_id' : '';
+        }
+
+        resolveInterval(value, fallback, minimum, maximum) {
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+                return fallback;
+            }
+            return Math.max(minimum, Math.min(maximum, Math.floor(parsed)));
+        }
+
+        replacePropertyListener(property, type, listener) {
+            const previous = this[property];
+            if (typeof previous === 'function') {
+                super.removeEventListener(type, previous);
+            }
+            this[property] = typeof listener === 'function' ? listener : null;
+            if (this[property]) {
+                super.addEventListener(type, this[property]);
+            }
+        }
+
+        async connect(initial) {
+            if (this._closed || this._terminal || this._connecting) {
+                return;
+            }
+            this._connecting = true;
+            this.clearReconnectTimer();
+
+            try {
+                const ticket = await this.client.send({
+                    type: 'stream-ticket',
+                    channel: this.channel,
+                    params: this.buildTicketParams(),
+                    options: this.options.ticketOptions || this.options,
+                });
+                if (!ticket || !ticket.url) {
+                    throw new Error('[Weline.Api] stream ticket did not include a stream URL.');
+                }
+                if (this._closed || this._terminal) {
+                    return;
+                }
+
+                this.openSource(sameOriginUrl(ticket.url));
+                this.startLeaseRenewal();
+            } catch (error) {
+                this.dispatchError(error);
+                this.scheduleReconnect();
+                // A recoverable initial ticket failure must not strand a
+                // detached stream without a handle the caller can later
+                // close. Opt into the former rejecting behavior explicitly.
+                if (initial && this.options.rejectOnInitialError === true) {
+                    this.close();
+                    throw error;
+                }
+            } finally {
+                this._connecting = false;
+            }
+        }
+
+        buildTicketParams() {
+            const params = Object.assign({}, this.params);
+            if (this.cursorParam && this.lastEventId) {
+                params[this.cursorParam] = this.lastEventId;
+            }
+            return params;
+        }
+
+        openSource(url) {
+            if (!window.EventSource) {
+                throw new Error('[Weline.Api] EventSource is unavailable.');
+            }
+
+            this.closeSource();
+            const source = new window.EventSource(url, { withCredentials: this.withCredentials });
+            this._source = source;
+            this._sourceEventTypes = new Set();
+
+            source.addEventListener('open', event => {
+                if (this._source !== source || this._closed || this._terminal) {
+                    return;
+                }
+                this._retryAttempt = 0;
+                this.dispatchEvent(this.createEvent('open', event));
+            });
+            source.addEventListener('error', event => this.handleSourceError(source, event));
+            this._eventTypes.forEach(type => this.attachSourceEvent(source, type));
+        }
+
+        attachSourceEvent(source, type) {
+            if (!source || type === 'open' || type === 'error' || this._sourceEventTypes.has(type)) {
+                return;
+            }
+            this._sourceEventTypes.add(type);
+            source.addEventListener(type, event => {
+                if (this._source === source && !this._closed && !this._terminal) {
+                    this.receiveEvent(event);
+                }
+            });
+        }
+
+        handleSourceError(source, event) {
+            if (this._source !== source || this._closed || this._terminal) {
+                return;
+            }
+            this.closeSource(source);
+            this.dispatchEvent(this.createEvent('error', event));
+            this.scheduleReconnect();
+        }
+
+        receiveEvent(event) {
+            const eventId = normalizeStreamCursor(event && event.lastEventId);
+            if (eventId && this.isDuplicateEvent(eventId)) {
+                return;
+            }
+            if (eventId) {
+                this.rememberEventId(eventId);
+            }
+
+            const forwarded = this.createMessageEvent(event);
+            this.dispatchEvent(forwarded);
+            if (this.isTerminalEvent(forwarded)) {
+                this.markTerminal();
+            }
+        }
+
+        isDuplicateEvent(eventId) {
+            if (this._seenEventIds.has(eventId)) {
+                return true;
+            }
+            if (/^\d+$/.test(eventId) && this._lastNumericEventId) {
+                return compareNumericStreamCursors(eventId, this._lastNumericEventId) <= 0;
+            }
+            return false;
+        }
+
+        rememberEventId(eventId) {
+            this.lastEventId = eventId;
+            if (/^\d+$/.test(eventId)) {
+                this._lastNumericEventId = eventId;
+            }
+            this._seenEventIds.add(eventId);
+            while (this._seenEventIds.size > 1024) {
+                this._seenEventIds.delete(this._seenEventIds.values().next().value);
+            }
+            this.persistState();
+        }
+
+        isTerminalEvent(event) {
+            const type = String(event.type || '').toLowerCase();
+            if (this.terminalEvents.has(type)) {
+                return true;
+            }
+            let payload = event.data;
+            if (typeof payload === 'string') {
+                try {
+                    payload = JSON.parse(payload);
+                } catch (error) {
+                    return false;
+                }
+            }
+            if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                return false;
+            }
+            if (payload.terminal === true) {
+                return true;
+            }
+            const status = String(payload.status || payload.state || '').toLowerCase();
+            return this.terminalEvents.has(status);
+        }
+
+        markTerminal() {
+            if (this._terminal) {
+                return;
+            }
+            this._terminal = true;
+            this.clearReconnectTimer();
+            this.stopLeaseRenewal();
+            this.closeSource();
+            this.removeWindowListeners();
+            this.persistState();
+            this.dispatchLifecycleEvent('terminal');
+        }
+
+        scheduleReconnect() {
+            if (this._closed || this._terminal || this._retryTimer !== null || this.isOffline()) {
+                return;
+            }
+            this._retryAttempt += 1;
+            const baseDelay = Math.min(this.retryMaxMs, this.retryMinMs * (2 ** (this._retryAttempt - 1)));
+            const delay = Math.max(this.retryMinMs, Math.round(baseDelay * (0.75 + (Math.random() * 0.5))));
+            this.dispatchLifecycleEvent('reconnecting', { attempt: this._retryAttempt, delay });
+            this._retryTimer = window.setTimeout(() => {
+                this._retryTimer = null;
+                this.connect(false).catch(() => {});
+            }, delay);
+        }
+
+        clearReconnectTimer() {
+            if (this._retryTimer !== null) {
+                window.clearTimeout(this._retryTimer);
+                this._retryTimer = null;
+            }
+        }
+
+        handleOnline() {
+            if (this._closed || this._terminal) {
+                return;
+            }
+            this.clearReconnectTimer();
+            this.closeSource();
+            this.connect(false).catch(() => {});
+        }
+
+        isOffline() {
+            return typeof window.navigator !== 'undefined' && window.navigator.onLine === false;
+        }
+
+        startLeaseRenewal() {
+            if (!this.leaseEnabled || !this.taskId || !this.leaseId || this._terminal || this._closed || this._cancelRequested) {
+                return;
+            }
+            if (this._leaseTimer !== null) {
+                return;
+            }
+            this.renewLease();
+            this._leaseTimer = window.setInterval(() => this.renewLease(), this.leaseIntervalMs);
+        }
+
+        stopLeaseRenewal() {
+            if (this._leaseTimer !== null) {
+                window.clearInterval(this._leaseTimer);
+                this._leaseTimer = null;
+            }
+        }
+
+        renewLease() {
+            if (this._renewingLease || this._closed || this._terminal || this._cancelRequested || this.isOffline()) {
+                return;
+            }
+            this._renewingLease = true;
+            this.client.call(this.leaseProvider, this.touchOperation, {
+                task_id: this.taskId,
+                lease_id: this.leaseId,
+            }).then(result => {
+                this.dispatchLifecycleEvent('lease', { result });
+            }).catch(error => {
+                // A missing touch is intentionally not a cancel. The server-side
+                // lease timeout decides whether the detached task eventually expires.
+                this.dispatchLifecycleEvent('leaseerror', { error });
+            }).finally(() => {
+                this._renewingLease = false;
+            });
+        }
+
+        closeSource(source = this._source) {
+            if (!source) {
+                return;
+            }
+            if (this._source === source) {
+                this._source = null;
+                this._sourceEventTypes = new Set();
+            }
+            try {
+                source.close();
+            } catch (error) {
+                /* EventSource close is best-effort */
+            }
+        }
+
+        removeWindowListeners() {
+            window.removeEventListener('online', this._onlineHandler);
+            window.removeEventListener('offline', this._offlineHandler);
+        }
+
+        dispatchError(error) {
+            const event = this.createEvent('error');
+            Object.defineProperty(event, 'error', { value: error, enumerable: true });
+            this.dispatchEvent(event);
+        }
+
+        dispatchLifecycleEvent(type, detail = null) {
+            const event = typeof window.CustomEvent === 'function'
+                ? new window.CustomEvent(type, { detail })
+                : this.createEvent(type);
+            this.dispatchEvent(event);
+        }
+
+        createEvent(type, sourceEvent = null) {
+            const event = new window.Event(type);
+            if (sourceEvent && sourceEvent.lastEventId) {
+                Object.defineProperty(event, 'lastEventId', { value: sourceEvent.lastEventId, enumerable: true });
+            }
+            return event;
+        }
+
+        createMessageEvent(sourceEvent) {
+            const type = String(sourceEvent.type || 'message');
+            if (typeof window.MessageEvent === 'function') {
+                return new window.MessageEvent(type, {
+                    data: sourceEvent.data,
+                    lastEventId: sourceEvent.lastEventId || '',
+                    origin: sourceEvent.origin || window.location.origin,
+                });
+            }
+            const event = this.createEvent(type, sourceEvent);
+            Object.defineProperty(event, 'data', { value: sourceEvent.data, enumerable: true });
+            return event;
+        }
+    }
+
+
+    BackendQueryBinClient.prototype.createStream = function (channel, params, options) {
+        return new StreamHandle(this, channel, params || {}, options || {});
+    };
+
+    BackendQueryBinClient.prototype.stream = function (channel, params, options) {
+        return this.createStream(channel, params, options).start();
+    };
+
     var client = new BackendApiClient({
         workerUrl: withDevCacheBust(sameOriginUrl(defaultWorkerUrl())),
         requestTimeoutMs: 60000
@@ -977,12 +1556,16 @@
         graph: function (graph, options) {
             return queryBinClient.graph(graph, options);
         },
-        stream: function () {
-            return Promise.reject(new Error('[Weline.Api] backend stream() is not available yet.'));
+        createStream: function (channel, params, options) {
+            return queryBinClient.createStream(channel, params, options);
+        },
+        stream: function (channel, params, options) {
+            return queryBinClient.stream(channel, params, options);
         },
         resource: function (provider, optionalMap) {
             return queryBinClient.resource(provider, optionalMap);
         },
+        StreamHandle: StreamHandle,
         markCartActive: function () {},
         markCartEmpty: function () {},
         enableAutoRequests: function () {},

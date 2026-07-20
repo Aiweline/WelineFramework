@@ -207,7 +207,7 @@ SystemConfig 提供配置模板专用标签：
 | `<w:config:group>` | 声明配置组，生成后台分组标题和导航 |
 | `<w:config:field>` | 声明一个可保存字段，自动绑定当前显式选择的 scope |
 | `<w:config:adapter>` | 声明复杂业务对象入口，只展示摘要和管理入口 |
-| `<w:config:hint>` | 展示说明、警告或文档链接，不参与保存 |
+| `<w:config:hint>` | 展示说明、警告或文档链接，不参与保存。正文写在标签之间，或用 `description`/`text` 属性；`type` 支持 `info` / `warning` / `danger`。配置中心按分组渲染在 adapter 之后、字段之前。 |
 
 字段完整身份仍然是：
 

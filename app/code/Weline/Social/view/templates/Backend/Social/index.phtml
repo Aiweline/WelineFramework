@@ -43,6 +43,23 @@ foreach ($socialScopes as $group) {
 $socialWebsiteSelectOptionsJson = json_encode($socialWebsiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 $socialWebsiteSelectEmptyLabel = (string)__('请选择站点');
 $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
+$socialConfigCenterUrl = (string)$this->getBackendUrl('weline_systemconfig/backend/config');
+$socialConfigGuideReturn = (string)$this->getBackendUrl('weline_social/backend/social');
+$platformCredentialGuides = (array)($this->getData('platform_credential_guides') ?? []);
+$socialPlatformGuideKeys = (array)($this->getData('platform_guide_keys') ?? []);
+$socialConfigDefaultGuideKey = 'social/platform/facebook/app_id';
+$socialConfigQuery = [
+    'area' => 'backend',
+    'module' => 'Weline_Social',
+    'search' => '融媒体平台应用',
+    'guide_key' => $socialConfigDefaultGuideKey,
+    'guide_title' => (string)__('配置融媒体平台应用'),
+    'guide_summary' => (string)__('填写该平台 App/Client 后返回融媒体管理，即可一键授权或保存账户凭据。'),
+    'guide_return' => $socialConfigGuideReturn,
+];
+$socialConfigCenterHref = $socialConfigCenterUrl
+    . (str_contains($socialConfigCenterUrl, '?') ? '&' : '?')
+    . http_build_query($socialConfigQuery, '', '&', PHP_QUERY_RFC3986);
 ?>
 <style>
 .weline-social-admin {
@@ -548,23 +565,25 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
                             <label class="form-label mb-0"><?= __('官方凭据') ?></label>
                             <span class="text-muted small"><?= __('编辑时留空将保留已加密凭据') ?></span>
                         </div>
-                        <div id="social-one-click-auth-wrap" class="mb-2 d-none">
-                            <button class="btn btn-outline-primary btn-sm" type="button" id="social-one-click-auth">
-                                <i class="mdi mdi-shield-key-outline me-1"></i><?= __('一键授权') ?>
-                            </button>
-                            <div class="form-text"><?= __('应用 App/Client 请先在统一配置中心「融媒体平台应用」配置。也可下方人工粘贴 Token。') ?>
-                                <button class="btn btn-link btn-sm p-0 align-baseline" type="button" data-social-toggle-credential-guide><?= __('查看官方凭据指南') ?></button>
-                            </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                            <a class="btn btn-outline-secondary btn-sm"
+                               id="social-open-system-config"
+                               href="<?= $h($socialConfigCenterHref) ?>"
+                               target="_top"
+                               rel="noopener">
+                                <i class="mdi mdi-cog-outline me-1"></i><?= __('打开系统配置') ?>
+                            </a>
+                            <span id="social-one-click-auth-wrap" class="d-none">
+                                <button class="btn btn-outline-primary btn-sm" type="button" id="social-one-click-auth">
+                                    <i class="mdi mdi-shield-key-outline me-1"></i><?= __('一键授权') ?>
+                                </button>
+                            </span>
+                            <button class="btn btn-link btn-sm p-0" type="button" data-social-toggle-credential-guide><?= __('查看官方凭据指南') ?></button>
                         </div>
+                        <div class="form-text mb-2"><?= __('应用 App/Client 请先点「打开系统配置」定位到「融媒体平台应用」。也可下方人工粘贴 Token。') ?></div>
                         <div id="social-credential-guide" class="alert alert-light border small mb-2 d-none" role="note">
-                            <div class="fw-semibold mb-1"><?= __('官方凭据指南（简版）') ?></div>
-                            <ol class="mb-2 ps-3">
-                                <li><?= __('统一配置中心 → Weline_Social →「融媒体平台应用」填写该平台 App/Client。') ?></li>
-                                <li><?= __('顶部选好范围类型、站点范围、二级范围。') ?></li>
-                                <li><?= __('支持 OAuth 的平台点「一键授权」；WhatsApp/微信等按字段人工粘贴 Token。') ?></li>
-                                <li><?= __('保存账户后点「检测」；通过后再启用发布，并确认已加入「范围社媒」。') ?></li>
-                            </ol>
-                            <div class="text-muted"><?= __('详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md') ?></div>
+                            <div id="social-credential-guide-body"></div>
+                            <div class="text-muted mt-2"><?= __('详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md') ?></div>
                         </div>
                         <div id="social-manual-auth-hint" class="form-text mb-2 d-none"><?= __('该平台不支持一键授权，请人工填写官方凭据。') ?></div>
                         <div id="social-credential-fields" class="credential-grid"></div>
@@ -579,7 +598,6 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
             <div class="col-xl-8">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h5 class="mb-0"><?= __('账户列表') ?></h5>
-                    <code>Weline.Query.request('<?= $h($queryProvider) ?>', ...)</code>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle account-table">
@@ -781,6 +799,13 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
 <script type="application/json" id="weline-social-website-relation-json"><?= $json($websiteRelations) ?></script>
 <script type="application/json" id="weline-social-scope-json"><?= $json($socialScopes) ?></script>
 <script type="application/json" id="weline-social-scope-relation-json"><?= $json($scopeRelations) ?></script>
+<script type="application/json" id="weline-social-config-center-json"><?= $json([
+    'url' => $socialConfigCenterUrl,
+    'query' => $socialConfigQuery,
+    'guide_keys' => $socialPlatformGuideKeys,
+    'default_guide_key' => $socialConfigDefaultGuideKey,
+]) ?></script>
+<script type="application/json" id="weline-social-platform-guides-json"><?= $json($platformCredentialGuides) ?></script>
 <script>
 (function () {
     var provider = '<?= $h($queryProvider) ?>';
@@ -788,6 +813,8 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
     var accounts = JSON.parse(document.getElementById('weline-social-account-json').textContent || '[]');
     var socialScopes = JSON.parse(document.getElementById('weline-social-scope-json').textContent || '[]');
     var scopeRelations = JSON.parse(document.getElementById('weline-social-scope-relation-json').textContent || '[]');
+    var socialConfigCenter = JSON.parse(document.getElementById('weline-social-config-center-json').textContent || '{}');
+    var platformGuides = JSON.parse(document.getElementById('weline-social-platform-guides-json').textContent || '{}');
     var platformMap = {};
     var accountMap = {};
     var relationsByScope = {};
@@ -813,7 +840,7 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
         needScope: '<?= $h((string)__('请先选择范围类型和站点范围。')) ?>',
         needDraft: '<?= $h((string)__('请填写草稿 ID。')) ?>',
         oauthStarting: '<?= $h((string)__('正在生成授权地址...')) ?>',
-        oauthUnavailable: '<?= $h((string)__('该平台暂不可一键授权，请检查系统配置中的 App/Client 凭据。')) ?>'
+        oauthUnavailable: '<?= $h((string)__('未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。')) ?>'
     };
 
     platforms.forEach(function (platform) {
@@ -850,7 +877,17 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
         if (!window.Weline || !window.Weline.Query || typeof window.Weline.Query.request !== 'function') {
             return Promise.reject(new Error(messages.queryUnavailable));
         }
-        return window.Weline.Query.request(provider, operation, params || {}, {area: 'backend'});
+        return window.Weline.Query.request(provider, operation, params || {}, {area: 'backend'}).then(function (response) {
+            if (response && typeof response === 'object') {
+                if (response.data && typeof response.data === 'object' && (response.data.success !== undefined || response.data.authorization_url !== undefined || response.data.accounts !== undefined || response.data.platforms !== undefined)) {
+                    return response.data;
+                }
+                if (response.result && typeof response.result === 'object') {
+                    return response.result;
+                }
+            }
+            return response;
+        });
     }
 
     function activateTab(name) {
@@ -952,6 +989,129 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
         }
         var hidden = document.getElementById('social-platform-code_value');
         return hidden ? String(hidden.value || '') : '';
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function renderGuideSection(title, items, ordered) {
+        if (!Array.isArray(items) || !items.length) {
+            return '';
+        }
+        var tag = ordered ? 'ol' : 'ul';
+        var html = '<div class="mb-2"><div class="fw-semibold mb-1">' + escapeHtml(title) + '</div>';
+        html += '<' + tag + ' class="mb-0 ps-3">';
+        items.forEach(function (item) {
+            html += '<li>' + escapeHtml(String(item || '')) + '</li>';
+        });
+        html += '</' + tag + '></div>';
+        return html;
+    }
+
+    function renderPlatformGuide(platformCode) {
+        var body = document.getElementById('social-credential-guide-body');
+        if (!body) {
+            return;
+        }
+        var code = String(platformCode || '').toLowerCase();
+        var platform = platformMap[code] || {};
+        var guide = platformGuides[code] || null;
+        var title = String(platform.title || code || '<?= $h((string)__('平台')) ?>');
+        if (!guide) {
+            body.innerHTML = '<div class="fw-semibold mb-1">' + escapeHtml(title) + ' <?= $h((string)__('官方凭据指南')) ?></div>'
+                + renderGuideSection('<?= $h((string)__('通用步骤')) ?>', [
+                    '<?= $h((string)__('顶部选好范围类型、站点范围、二级范围。')) ?>',
+                    '<?= $h((string)__('需要 App/Client 的平台先点「打开系统配置」。')) ?>',
+                    '<?= $h((string)__('支持 OAuth 的平台点「一键授权」；其余按字段人工填写。')) ?>',
+                    '<?= $h((string)__('保存账户后点「检测」；通过后再启用发布。')) ?>'
+                ], true);
+            return;
+        }
+        var html = '<div class="fw-semibold mb-1">' + escapeHtml(title) + ' <?= $h((string)__('官方凭据指南')) ?></div>';
+        if (guide.auth_label) {
+            html += '<div class="mb-2"><span class="badge bg-primary-subtle text-primary">' + escapeHtml(guide.auth_label) + '</span></div>';
+        }
+        if (guide.system_config_title || (Array.isArray(guide.system_config_fields) && guide.system_config_fields.length)) {
+            html += '<div class="mb-2"><div class="fw-semibold mb-1"><?= $h((string)__('系统配置（融媒体平台应用）')) ?></div>';
+            if (guide.system_config_title) {
+                html += '<div class="mb-1">' + escapeHtml(guide.system_config_title) + '</div>';
+            }
+            if (Array.isArray(guide.system_config_fields) && guide.system_config_fields.length) {
+                html += '<div class="text-muted mb-1"><?= $h((string)__('字段')) ?>：' + escapeHtml(guide.system_config_fields.join('、')) + '</div>';
+            }
+            if (guide.guide_key) {
+                html += '<a class="small" href="' + escapeHtml(buildSystemConfigUrl()) + '" id="social-open-system-config-guide" target="_top" rel="noopener"><?= $h((string)__('立即打开系统配置')) ?></a>';
+            } else {
+                html += '<div class="text-muted small"><?= $h((string)__('该平台无需系统配置应用，直接在下方账户表单填写凭据。')) ?></div>';
+            }
+            html += '</div>';
+        } else if (!guide.guide_key) {
+            html += '<div class="text-muted small mb-2"><?= $h((string)__('该平台无需系统配置应用，直接在下方账户表单填写凭据。')) ?></div>';
+        }
+        html += renderGuideSection('<?= $h((string)__('开发者后台准备')) ?>', guide.developer_steps, true);
+        html += renderGuideSection('<?= $h((string)__('本页连接步骤')) ?>', guide.account_steps, true);
+        if (Array.isArray(guide.account_fields) && guide.account_fields.length) {
+            html += '<div class="mb-2"><div class="fw-semibold mb-1"><?= $h((string)__('账户凭据字段')) ?></div><div>'
+                + escapeHtml(guide.account_fields.join('、')) + '</div></div>';
+        }
+        if (guide.publish_note) {
+            html += '<div class="mb-2"><div class="fw-semibold mb-1"><?= $h((string)__('发布能力')) ?></div><div>'
+                + escapeHtml(guide.publish_note) + '</div></div>';
+        }
+        if (Array.isArray(guide.docs) && guide.docs.length) {
+            html += '<div class="mb-0"><div class="fw-semibold mb-1"><?= $h((string)__('官方文档')) ?></div><div class="d-flex flex-wrap gap-2">';
+            guide.docs.forEach(function (doc) {
+                if (!doc || !doc.url) {
+                    return;
+                }
+                html += '<a href="' + escapeHtml(String(doc.url)) + '" target="_blank" rel="noopener">'
+                    + escapeHtml(String(doc.label || doc.url)) + '</a>';
+            });
+            html += '</div></div>';
+        }
+        body.innerHTML = html;
+    }
+
+    function buildSystemConfigUrl() {
+        var baseUrl = String((socialConfigCenter && socialConfigCenter.url) || '');
+        if (!baseUrl) {
+            return '#';
+        }
+        var query = Object.assign({}, (socialConfigCenter && socialConfigCenter.query) || {});
+        var guideKeys = (socialConfigCenter && socialConfigCenter.guide_keys) || {};
+        var platformCode = String(getAccountPlatformCode() || '').toLowerCase();
+        query.guide_key = guideKeys[platformCode]
+            || (socialConfigCenter && socialConfigCenter.default_guide_key)
+            || query.guide_key
+            || 'social/platform/facebook/app_id';
+        var group = findScopeGroup(getSelectedScopeType());
+        var item = findScopeItem(group, getSelectedScopeId());
+        var scopeCode = item && (item.scope_code || item.website_code) ? String(item.scope_code || item.website_code) : '';
+        query.scope = scopeCode !== '' ? (scopeCode + '.default.default') : 'default.default.default';
+        var parts = [];
+        Object.keys(query).forEach(function (key) {
+            var value = query[key];
+            if (value === undefined || value === null || value === '') {
+                return;
+            }
+            parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
+        });
+        return baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + parts.join('&');
+    }
+
+    function syncSystemConfigLinks() {
+        var href = buildSystemConfigUrl();
+        ['social-open-system-config', 'social-open-system-config-guide'].forEach(function (id) {
+            var link = document.getElementById(id);
+            if (link) {
+                link.setAttribute('href', href);
+            }
+        });
     }
 
     function setAccountPlatformCode(code, silent) {
@@ -1127,6 +1287,7 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
             currentScope.display_label = scopeDisplay(currentScope);
         }
         renderScopeState();
+        syncSystemConfigLinks();
     }
 
     function buildSuggestedAccountName() {
@@ -1303,6 +1464,8 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
         if (manualHint) {
             manualHint.classList.toggle('d-none', supportsOneClick);
         }
+        renderPlatformGuide(platformCode);
+        syncSystemConfigLinks();
     }
 
     function resetAccountForm() {
@@ -1653,11 +1816,17 @@ $socialWebsiteSelectPlaceholder = (string)__('搜索站点名称或编码');
             }).then(function (result) {
                 if (!result || !result.success || !result.authorization_url) {
                     setStatus('social-account-status', (result && result.message) || messages.oauthUnavailable, 'error');
+                    var configLink = document.getElementById('social-open-system-config');
+                    if (configLink) {
+                        configLink.classList.add('btn-warning');
+                        configLink.classList.remove('btn-outline-secondary');
+                        configLink.focus();
+                    }
                     return;
                 }
                 window.location.href = result.authorization_url;
             }).catch(function (error) {
-                setStatus('social-account-status', error.message, 'error');
+                setStatus('social-account-status', error.message || messages.oauthUnavailable, 'error');
             });
         });
     }
