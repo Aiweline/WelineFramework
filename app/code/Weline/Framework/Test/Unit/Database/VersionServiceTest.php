@@ -7,6 +7,7 @@ use Weline\Framework\UnitTest\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Database\Service\VersionService;
 use Weline\Database\Model\ModuleVersion;
+use Weline\Database\Model\ModuleVersionHistory;
 
 /**
  * 版本管理服务测试
@@ -15,6 +16,8 @@ class VersionServiceTest extends TestCore
 {
     private VersionService $versionService;
     private ModuleVersion $versionModel;
+    /** @var list<string> */
+    private array $fixtureModules = [];
     
     public function setUp(): void
     {
@@ -25,8 +28,17 @@ class VersionServiceTest extends TestCore
     
     public function tearDown(): void
     {
+        foreach ($this->fixtureModules as $moduleName) {
+            ObjectManager::getInstance(ModuleVersion::class, [], false)
+                ->where(ModuleVersion::schema_fields_MODULE_NAME, $moduleName)
+                ->delete()
+                ->fetch();
+            ObjectManager::getInstance(ModuleVersionHistory::class, [], false)
+                ->where(ModuleVersionHistory::schema_fields_MODULE_NAME, $moduleName)
+                ->delete()
+                ->fetch();
+        }
         parent::tearDown();
-        // 清理测试数据
     }
     
     /**
@@ -42,11 +54,11 @@ class VersionServiceTest extends TestCore
      */
     public function testGetModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = $this->fixtureModule('get');
         
-        // 测试获取模块版本
-        $version = $this->versionService->getModuleVersion($moduleName);
-        $this->assertIsString($version);
+        $this->assertNull($this->versionService->getModuleVersion($moduleName));
+        $this->assertTrue($this->versionService->setModuleVersion($moduleName, '1.0.0'));
+        $this->assertInstanceOf(ModuleVersion::class, $this->versionService->getModuleVersion($moduleName));
     }
     
     /**
@@ -54,7 +66,7 @@ class VersionServiceTest extends TestCore
      */
     public function testSetModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = $this->fixtureModule('set');
         $version = '1.0.0';
         
         // 测试设置模块版本
@@ -62,7 +74,7 @@ class VersionServiceTest extends TestCore
         $this->assertTrue($result, '设置模块版本应该成功');
         
         // 验证版本是否设置成功
-        $actualVersion = $this->versionService->getModuleVersion($moduleName);
+        $actualVersion = $this->versionService->getModuleVersionString($moduleName);
         $this->assertEquals($version, $actualVersion);
     }
     
@@ -87,7 +99,7 @@ class VersionServiceTest extends TestCore
      */
     public function testCheckVersionUpdate()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = $this->fixtureModule('changed');
         $currentVersion = '1.0.0';
         $newVersion = '1.0.1';
         
@@ -105,8 +117,10 @@ class VersionServiceTest extends TestCore
     public function testGetAllModuleVersions()
     {
         // 设置一些测试版本
-        $this->versionService->setModuleVersion('Weline_Test1', '1.0.0');
-        $this->versionService->setModuleVersion('Weline_Test2', '1.0.1');
+        $moduleOne = $this->fixtureModule('all_one');
+        $moduleTwo = $this->fixtureModule('all_two');
+        $this->versionService->setModuleVersion($moduleOne, '1.0.0');
+        $this->versionService->setModuleVersion($moduleTwo, '1.0.1');
         
         // 获取所有模块版本
         $versions = $this->versionService->getAllModuleVersions();
@@ -119,7 +133,7 @@ class VersionServiceTest extends TestCore
      */
     public function testUpgradeModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = $this->fixtureModule('upgrade');
         $fromVersion = '1.0.0';
         $toVersion = '1.0.1';
         
@@ -131,7 +145,7 @@ class VersionServiceTest extends TestCore
         $this->assertTrue($result, '版本升级应该成功');
         
         // 验证版本已升级
-        $actualVersion = $this->versionService->getModuleVersion($moduleName);
+        $actualVersion = $this->versionService->getModuleVersionString($moduleName);
         $this->assertEquals($toVersion, $actualVersion);
     }
     
@@ -140,7 +154,7 @@ class VersionServiceTest extends TestCore
      */
     public function testRollbackModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = $this->fixtureModule('rollback');
         $fromVersion = '1.0.1';
         $toVersion = '1.0.0';
         
@@ -149,11 +163,11 @@ class VersionServiceTest extends TestCore
         
         // 测试版本回滚
         $result = $this->versionService->rollbackModuleVersion($moduleName, $toVersion);
-        $this->assertTrue($result, '版本回滚应该成功');
+        $this->assertFalse($result, '单独修改数据库版本游标必须被拒绝');
         
-        // 验证版本已回滚
-        $actualVersion = $this->versionService->getModuleVersion($moduleName);
-        $this->assertEquals($toVersion, $actualVersion);
+        // 联动编排尚未执行，因此游标必须保持不变。
+        $actualVersion = $this->versionService->getModuleVersionString($moduleName);
+        $this->assertEquals($fromVersion, $actualVersion);
     }
     
     /**
@@ -174,5 +188,12 @@ class VersionServiceTest extends TestCore
         
         $result4 = $this->versionService->validateVersion('1.0');
         $this->assertFalse($result4, '1.0应该是无效版本');
+    }
+
+    private function fixtureModule(string $suffix): string
+    {
+        $moduleName = 'Weline_Test_' . $suffix . '_' . substr(hash('sha256', uniqid('', true)), 0, 10);
+        $this->fixtureModules[] = $moduleName;
+        return $moduleName;
     }
 }

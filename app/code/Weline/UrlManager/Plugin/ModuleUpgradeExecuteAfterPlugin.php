@@ -24,6 +24,7 @@ class ModuleUpgradeExecuteAfterPlugin
 
     private $urlManager =  null;
     private ?ModuleIdentityProviderInterface $moduleIdentity = null;
+    private bool $moduleIdentityUnavailableLogged = false;
     /** @var array<string, int> */
     private array $moduleIdCache = [];
     function __construct(
@@ -107,7 +108,13 @@ class ModuleUpgradeExecuteAfterPlugin
             return $this->moduleIdCache[$moduleName];
         }
 
-        $moduleId = (int)($this->moduleIdentity()->idsByNames([$moduleName])[$moduleName] ?? 0);
+        $moduleIdentity = $this->moduleIdentity();
+        if (!$moduleIdentity instanceof ModuleIdentityProviderInterface) {
+            $this->moduleIdCache[$moduleName] = 0;
+            return 0;
+        }
+
+        $moduleId = (int)($moduleIdentity->idsByNames([$moduleName])[$moduleName] ?? 0);
         $this->moduleIdCache[$moduleName] = $moduleId;
         return $moduleId;
     }
@@ -132,17 +139,26 @@ class ModuleUpgradeExecuteAfterPlugin
             return;
         }
 
-        $this->moduleIdCache += $this->moduleIdentity()->idsByNames(\array_values($moduleNames));
+        $moduleIdentity = $this->moduleIdentity();
+        if (!$moduleIdentity instanceof ModuleIdentityProviderInterface) {
+            return;
+        }
+
+        $this->moduleIdCache += $moduleIdentity->idsByNames(\array_values($moduleNames));
     }
 
-    private function moduleIdentity(): ModuleIdentityProviderInterface
+    private function moduleIdentity(): ?ModuleIdentityProviderInterface
     {
         if ($this->moduleIdentity instanceof ModuleIdentityProviderInterface) {
             return $this->moduleIdentity;
         }
         $provider = $this->runtimeProviders->resolve(ModuleIdentityProviderInterface::class);
         if (!$provider instanceof ModuleIdentityProviderInterface) {
-            throw new \RuntimeException('Module identity provider is unavailable.');
+            if (!$this->moduleIdentityUnavailableLogged) {
+                $this->moduleIdentityUnavailableLogged = true;
+                w_log_warning('UrlManager route sync skipped: Module identity provider is unavailable during setup bootstrap.', [], 'url_manager.log');
+            }
+            return null;
         }
         return $this->moduleIdentity = $provider;
     }

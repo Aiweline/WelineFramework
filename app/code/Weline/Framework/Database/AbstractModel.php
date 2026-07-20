@@ -268,19 +268,22 @@ abstract class AbstractModel extends DataObject
         } else {
             # 检测app应用级别的数据库配置信息 读链接 和  写链接
             $filename = ObjectManager::getReflectionInstance($this)->getFileName();
-            # 去除相对的模组路径
-            if (str_starts_with($filename, APP_CODE_PATH)) {
-                $filename = substr($filename, strlen(APP_CODE_PATH));
+            # 去除相对的模组路径。Windows/Parallels 共享盘下 Reflection 可能返回 T:\app\code\...，
+            # 而框架常量可能使用 / 分隔符；前缀判断只做路径规范化，不改变后续 ORM 行为。
+            $appRelative = $this->stripFilesystemPrefix($filename, APP_CODE_PATH);
+            if ($appRelative !== null) {
                 try {
-                    $this->processModelDbConnection($filename);
+                    $this->processModelDbConnection($appRelative);
                 } catch (DbException $e) {
                     throw $e;
                 }
-            } elseif (str_starts_with($filename, VENDOR_PATH)) {
-                $filename = substr($filename, strlen(VENDOR_PATH));
-                $this->processModelDbConnection($filename);
             } else {
-                throw new DbException(__('模型文件路径错误，无法确定数据库配置信息') . (DEV ? '(' . $filename . ')' : ''));
+                $vendorRelative = $this->stripFilesystemPrefix($filename, VENDOR_PATH);
+                if ($vendorRelative !== null) {
+                    $this->processModelDbConnection($vendorRelative);
+                } else {
+                    throw new DbException(__('模型文件路径错误，无法确定数据库配置信息') . (DEV ? '(' . $filename . ')' : ''));
+                }
             }
         }
         
@@ -293,8 +296,32 @@ abstract class AbstractModel extends DataObject
         return $this;
     }
 
+    private function stripFilesystemPrefix(string $path, string $prefix): ?string
+    {
+        $normalizedPath = $this->normalizeFilesystemPathForCompare($path);
+        $normalizedPrefix = rtrim($this->normalizeFilesystemPathForCompare($prefix), '/') . '/';
+
+        if (!str_starts_with($normalizedPath, $normalizedPrefix)) {
+            return null;
+        }
+
+        return ltrim(substr($normalizedPath, strlen($normalizedPrefix)), '/');
+    }
+
+    private function normalizeFilesystemPathForCompare(string $path): string
+    {
+        $path = str_replace('\\', '/', trim($path));
+        $path = preg_replace('#/+#', '/', $path) ?: $path;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $path = strtolower($path);
+        }
+
+        return rtrim($path, '/');
+    }
+
     private function processModelDbConnection(string $filename)
     {
+        $filename = trim(str_replace(['\\', '/'], DS, $filename), DS);
         # 读取模组名称
         $file_name_arr = explode(DS, $filename);
         # 模组目录
@@ -495,6 +522,11 @@ abstract class AbstractModel extends DataObject
                 $this->_bind_query->clearQuery();
             }
             $query = $this->_bind_query->table($tableName)->identity($this->_primary_key);
+        } elseif ($transactionQuery = TransactionContext::queryForModel($this->getConnection(), spl_object_id($this))) {
+            if (!$keep_condition) {
+                $transactionQuery->clearQuery();
+            }
+            $query = $transactionQuery->table($tableName)->identity($this->_primary_key);
         } else {
             if ($this->current_query) {
                 if (!$keep_condition) {
@@ -538,7 +570,9 @@ abstract class AbstractModel extends DataObject
      */
     public function newQuery(bool $really_new = true): QueryInterface
     {
-        $query = $this->getConnection()->getConnector()->clearQuery();
+        $query = TransactionContext::queryForModel($this->getConnection(), spl_object_id($this))
+            ?? $this->getConnection()->getConnector();
+        $query->clearQuery();
         if ($really_new) {
             $query->table($this->getOriginTableName())->identity($this->_primary_key);
         }

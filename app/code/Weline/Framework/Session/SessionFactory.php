@@ -200,15 +200,37 @@ class SessionFactory
      */
     private function getStrategyConfig(): array
     {
+        // Keep raw SameSite / Partitioned flags. Strategies resolve the final
+        // attribute at Set-Cookie time so WLS workers do not freeze a warmup-time Lax.
         return [
             'lifetime' => (int)($this->config['lifetime'] ?? $this->config['session_ttl'] ?? 3600),
             'cookie_path' => $this->config['cookie_path'] ?? '/',
             'cookie_domain' => $this->config['cookie_domain'] ?? '',
             'cookie_secure' => $this->config['cookie_secure'] ?? null,
             'cookie_httponly' => $this->config['cookie_httponly'] ?? true,
-            'cookie_samesite' => $this->config['cookie_samesite'] ?? 'Lax',
+            'cookie_samesite' => \trim((string)($this->config['cookie_samesite'] ?? '')),
+            'cookie_partitioned' => $this->config['cookie_partitioned'] ?? null,
             'cookie_lifetime' => (int)($this->config['cookie_lifetime'] ?? 86400 * 30),
         ];
+    }
+
+    /**
+     * 解析 Session Cookie 的 SameSite 策略（请求时调用）。
+     *
+     * 常规站点继续使用 Lax。HTTPS 非标准端口通常用于 WLS 独立验收实例，
+     * 使用 CHIPS Partitioned Cookie，既支持嵌入式浏览器，又避免普通的
+     * SameSite=None Cookie 跨顶层站点共享。正式环境也可通过
+     * session.cookie_partitioned 显式开启或关闭。
+     */
+    public function resolveCookieSameSite(?bool $secure = null): string
+    {
+        $secure ??= (bool)($this->config['cookie_secure'] ?? (\w_env('server.https') === 'on'));
+
+        return SessionCookieNameResolver::resolveSameSite(
+            $secure,
+            \trim((string)($this->config['cookie_samesite'] ?? '')),
+            $this->config['cookie_partitioned'] ?? null,
+        );
     }
 
     // ==================== Session 创建 ====================

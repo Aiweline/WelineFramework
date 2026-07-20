@@ -9,6 +9,16 @@ use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
 final class Supervisor
 {
+    /**
+     * Only HTTP-serving worker roles need a listen port to become ready.
+     * Other supervised services (for example the resumable-task Watchdog)
+     * participate in the same lease protocol but are deliberately portless.
+     */
+    public static function requiresListenPort(string $role): bool
+    {
+        return \in_array($role, ['worker', 'maintenance'], true);
+    }
+
     public function __construct(
         private readonly LeaseRegistry $leases = new LeaseRegistry(),
     ) {
@@ -95,7 +105,14 @@ final class Supervisor
         $listen = \is_array($message['listen'] ?? null) ? $message['listen'] : [];
         $port = (int)($listen['port'] ?? $message['port'] ?? 0);
 
-        if ($generation <= 0 || $port <= 0) {
+        if ($generation <= 0) {
+            return SupervisorMessage::readyNack($slotId, $leaseId, $generation, $msgId, 'invalid_ready_payload', $channel);
+        }
+
+        $currentLease = $this->leases->get($slotId);
+        if ($port < 0 || ($currentLease instanceof SlotLease
+            && self::requiresListenPort($currentLease->role)
+            && $port <= 0)) {
             return SupervisorMessage::readyNack($slotId, $leaseId, $generation, $msgId, 'invalid_ready_payload', $channel);
         }
 

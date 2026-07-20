@@ -7,7 +7,6 @@ enum EffectiveTopology: string
 {
     case Direct = 'direct';
     case Dispatcher = 'dispatcher';
-    case Independent = 'independent';
 
     public function isDirect(): bool
     {

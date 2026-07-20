@@ -34,6 +34,7 @@ class Unblock extends CommandAbstract
                 $this->printer->warning(__('请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁'));
                 $this->printer->note(__('示例：php bin/w server:security:unblock --ip=101.204.98.197'));
                 $this->printer->note(__('示例：php bin/w server:security:unblock --clear-all'));
+                $this->printer->note(__('指定实例：php bin/w server:security:unblock --clear-all -n ai-test-example'));
                 return;
             }
         }
@@ -54,6 +55,13 @@ class Unblock extends CommandAbstract
 
     protected function parseInstanceName(array $args): string
     {
+        foreach (['instance', 'name', 'n'] as $option) {
+            $instanceName = $args[$option] ?? null;
+            if (\is_string($instanceName) && \trim($instanceName) !== '') {
+                return \trim($instanceName);
+            }
+        }
+
         $positionalArgs = [];
         foreach ($args as $key => $arg) {
             if (\is_int($key) && !\str_starts_with((string) $arg, '-')) {

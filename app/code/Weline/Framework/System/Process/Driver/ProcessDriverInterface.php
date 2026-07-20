@@ -146,6 +146,17 @@ interface ProcessDriverInterface
      * @return string 命令行，失败返回空字符串
      */
     public function getProcessCommandLine(int $pid): string;
+
+    /**
+     * 批量获取指定进程的命令行。
+     *
+     * 只允许查询调用方明确给出的 PID 集合；失败或不存在的 PID 必须保留为空字符串，
+     * 以便上层身份栅栏 fail closed。
+     *
+     * @param int[] $pids 进程 ID 集合
+     * @return array<int, string> pid => 命令行
+     */
+    public function getProcessCommandLines(array $pids): array;
     
     /**
      * 通过进程名模式查找所有匹配的 PID

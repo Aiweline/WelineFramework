@@ -8,7 +8,7 @@ use Weline\Framework\App\Env;
 
 class SharedStateServiceRegistry
 {
-    private const REGISTRY_FILE = 'server' . DIRECTORY_SEPARATOR . 'shared-services' . DIRECTORY_SEPARATOR . 'registry.json';
+    private const REGISTRY_DIR = 'server' . DIRECTORY_SEPARATOR . 'shared-services' . DIRECTORY_SEPARATOR;
 
     /**
      * @return array<string, mixed>
@@ -194,7 +194,8 @@ class SharedStateServiceRegistry
 
     public function getRegistryFile(): string
     {
-        return Env::VAR_DIR . self::REGISTRY_FILE;
+        return Env::VAR_DIR . self::REGISTRY_DIR
+            . SharedStateRuntimeScope::scopeDefaultFileName('registry.json');
     }
 
     /**
