@@ -673,10 +673,7 @@ class ServerQueryProvider implements QueryProviderInterface
         }
 
         $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
-        $ip = \trim((string)($params['ip'] ?? '127.0.0.1'));
-        if ($ip === '') {
-            $ip = '127.0.0.1';
-        }
+        $requestedIp = \trim((string)($params['ip'] ?? ''));
         if ($domain === '') {
             return ['success' => false, 'message' => (string)__('Domain is required')];
         }
@@ -687,6 +684,11 @@ class ServerQueryProvider implements QueryProviderInterface
                 'domain' => $domain,
             ];
         }
+        // *.weline.test / *.local.test always use loopback; never read LAN/public IP.
+        $ip = HostsFileManager::resolveIpForDomain(
+            $domain,
+            $requestedIp !== '' ? $requestedIp : HostsFileManager::LOOPBACK_IPV4
+        );
         if (!LocalDomainPolicy::requiresHostsEntry($domain)) {
             return [
                 'success' => true,

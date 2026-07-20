@@ -33,7 +33,8 @@ class LocalWelineHostsSyncService
     public function ensureHostsInjected(string $domain, string $ip = '127.0.0.1'): array
     {
         $domain = \strtolower(\trim($domain));
-        $ip = \trim($ip) !== '' ? \trim($ip) : '127.0.0.1';
+        // Managed local WLS domains always use loopback. Ignore caller IP / LAN / public detection.
+        $ip = '127.0.0.1';
 
         if (\class_exists(LocalDomainPolicy::class)
             && LocalDomainPolicy::resolvesViaLoopbackSuffix($domain)) {

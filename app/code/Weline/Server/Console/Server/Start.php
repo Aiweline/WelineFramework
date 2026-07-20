@@ -4741,7 +4741,9 @@ class Start extends CommandAbstract
         $result = \Weline\Server\Service\HostsFileManager::addDomain($host);
 
         if ($result['success']) {
-            if (!($result['already_exists'] ?? false)) {
+            if (($result['repaired'] ?? false) === true) {
+                $this->printer->note(__('已将 %{1} 的 hosts 记录纠正为 127.0.0.1', [$host]));
+            } elseif (!($result['already_exists'] ?? false)) {
                 $this->printer->note(__('已将 %{1} 添加到 hosts 文件', [$host]));
             }
         } elseif ($result['needs_admin'] ?? false) {
