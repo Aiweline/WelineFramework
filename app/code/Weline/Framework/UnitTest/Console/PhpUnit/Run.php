@@ -130,12 +130,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
     /**
      * @inheritDoc
      */
-    public function execute(array $args = [], array $data = [])
+    public function execute(array $args = [], array $data = []): int
     {
         # 提示是否运行：生产环境禁止运行
         if (Env::system('deploy') !== 'dev') {
             $this->printing->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行php bin/w deploy:model:set dev 转换环境后运行！'));
-            exit(1);
+            return 1;
         }
         
         # 检查是否使用 Pest（--pest 参数）
@@ -347,6 +347,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $php_unit_xml = $this->generateSuiteConfig($php_unit_report_path);
             }
             
+            if (!$this->configurationContainsRunnableTests($php_unit_xml)) {
+                $this->printing->error(__('没有收集到可执行测试，已终止且返回失败状态。'));
+                return 2;
+            }
+
             // 如果生成了 XML 配置，写入文件并传递给 Pest
             // 注意：当使用 XML 配置文件时，Pest 会从配置文件中读取测试，不需要再传递测试路径
             if (!empty($php_unit_xml)) {
@@ -406,7 +411,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 检查帮助参数（只检查明确的帮助参数，避免误识别）
         if (isset($args['h']) || isset($args['help']) || isset($args['--help'])) {
             $this->printing->success($this->tip());
-            return;
+            return 0;
         }
         
         # 注意：不检查位置参数中的help，避免与套件名冲突
@@ -483,7 +488,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('运行模式: 指定模块文件 - %{1}::%{2}', [$moduleName, $fileName]));
                 $php_unit_xml = $this->generateModuleFileConfig($moduleName, $fileName, $php_unit_report_path);
                 if (empty($php_unit_xml)) {
-                    return;
+                    return 2;
                 }
                 # 统计单个文件的测试方法数量
                 $totalTestCount = $this->countTestMethodsInFile($fileName, $moduleName);
@@ -492,7 +497,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('运行模式: 指定文件 - %{1}', [$fileName]));
                 $php_unit_xml = $this->generateFileConfig($fileName, $php_unit_report_path);
                 if (empty($php_unit_xml)) {
-                    return;
+                    return 2;
                 }
                 # 统计单个文件的测试方法数量
                 $totalTestCount = $this->countTestMethodsInFile($fileName);
@@ -502,7 +507,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('运行模式: 指定模块 - %{1}', [$moduleName]));
             $php_unit_xml = $this->generateModuleConfig($moduleName, $php_unit_report_path);
             if (empty($php_unit_xml)) {
-                return;
+                return 2;
             }
             # 统计整个模块的测试方法数量
             $totalTestCount = $this->countTestMethodsInModule($moduleName);
@@ -514,13 +519,20 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $totalTestCount = $this->countTestMethodsInSuite('unit');
         }
         
+        if (!$this->configurationContainsRunnableTests($php_unit_xml)) {
+            $this->printing->error(__('没有收集到可执行测试，已终止且返回失败状态。'));
+            return 2;
+        }
+
         file_put_contents($php_unit_config_path, $php_unit_xml);
         # 根据运行模式执行不同的命令
         $this->printing->note(__('收集完成，准备运行...'));
         
         $ds = DS;
         // PHPUnit 10.x 不支持 --verbose 参数，使用 --testdox 代替以获得更好的输出
-        $coverageRequested = str_contains($php_unit_xml, '<coverage') || $this->isCoverageRequested($args, $data);
+        // 配置中会始终包含 coverage source，它不代表用户要求采集覆盖率。
+        // 只有显式参数才启用 Xdebug/PCOV/phpdbg，避免 phpdbg 把 Web 入口的 404 当成成功。
+        $coverageRequested = $this->isCoverageRequested($args, $data);
         $phpBinaryCommand = $this->resolvePhpCommandForTests($coverageRequested);
         $phpunitCommand = $phpBinaryCommand . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testdox";
         // 如果指定了 debug 参数，添加 --debug
@@ -535,7 +547,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $resolved = $this->resolveTestFilePathFromInput($oneFile);
                 if ($resolved === null) {
                     $this->printing->error(__('未找到测试文件: %{1}', [$oneFile]));
-                    return;
+                    return 2;
                 }
                 $resolvedFiles[] = escapeshellarg($resolved);
             }
@@ -548,7 +560,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $testFile = $this->findTestFileInModule($fileName, $moduleName);
                 if (!$testFile) {
                     $this->printing->error(__('在模块 %{1} 中未找到测试文件: %{2}', [$moduleName, $fileName]));
-                    return;
+                    return 2;
                 }
                 
                 # 检查是否是测试方法名
@@ -557,7 +569,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     # 检查测试方法是否存在
                     if (!$this->checkTestMethodExists($testFile, $methodName)) {
                         $this->printing->error(__('在文件 %{1} 中未找到测试方法: %{2}', [basename($testFile), $methodName]));
-                        return;
+                        return 2;
                     }
                     $this->printing->note(__('正在运行模块测试方法: %{1}::%{2}', [$moduleName, $fileName]));
                     # 对于测试方法，直接使用测试方法名
@@ -572,7 +584,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $testFile = $this->findTestFile($fileName, isset($args['debug']) || isset($data['debug']));
                 if (!$testFile) {
                     $this->printing->error(__('未找到测试文件: %{1}', [$fileName]));
-                    return;
+                    return 2;
                 }
                 
                 # 检查是否是测试方法名
@@ -581,7 +593,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     # 检查测试方法是否存在
                     if (!$this->checkTestMethodExists($testFile, $methodName)) {
                         $this->printing->error(__('在文件 %{1} 中未找到测试方法: %{2}', [basename($testFile), $methodName]));
-                        return;
+                        return 2;
                     }
                     $this->printing->note(__('正在运行测试方法: %{1}', [$fileName]));
                     # 对于测试方法，直接使用测试方法名
@@ -619,12 +631,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->setup(__('重要提示：测试套件运行过程中会操作数据库，从而产生不可预知的风险。请确认当前环境非生产环境，你确认当前环境非生产环境么？(y/n)'));
             if (strtolower(trim($this->system->input())) !== 'y') {
                 $this->printing->setup(__('已停止运行！'));
-                exit(1);
+                return 1;
             }
             $this->printing->setup(__('重要提示：再次确认需要运行么？(y/n)'));
             if (strtolower(trim($this->system->input())) !== 'y') {
                 $this->printing->setup(__('已停止运行！'));
-                exit(1);
+                return 1;
             }
         }
         $this->printing->success($command['command']);
@@ -756,8 +768,18 @@ class Run implements \Weline\Framework\Console\CommandInterface
             echo "\n";
         }
         
-        if ($command['return_vars']) {
-            $this->printing->success((string)$command['return_vars']);
+        $exitCode = (int)($command['return_vars'] ?? 1);
+        $commandOutput = (array)($command['output'] ?? []);
+        if ($this->outputReportsNoTests($commandOutput) || !$this->outputConfirmsTestExecution($commandOutput)) {
+            $this->printing->error(__('测试运行器未确认执行任何测试，本次运行按失败处理。'));
+            if ($exitCode === 0) {
+                $exitCode = 2;
+            }
+        }
+        $command['return_vars'] = $exitCode;
+
+        if ($exitCode !== 0) {
+            $this->printing->error(__('测试运行失败，退出代码: %{1}', [(string)$exitCode]));
         }
         
         # 判断是否为文件或方法测试模式（快速测试）
@@ -765,10 +787,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 文件或方法测试时，如果指定了前台运行，直接输出结果后返回
         if ($isQuickTest && !$isBackground) {
-            $this->printing->separator('─', 0, 'SUCCESS');
-            $this->printing->success(__('✓ 测试完成！'));
+            $this->printing->separator('─', 0, $exitCode === 0 ? 'SUCCESS' : 'ERROR');
+            if ($exitCode === 0) {
+                $this->printing->success(__('✓ 测试完成！'));
+            } else {
+                $this->printing->error(__('✗ 测试失败！'));
+            }
             $this->printing->note(__('提示：测试已完成。'));
-            return;
+            return $exitCode;
         }
         
         # 生成自定义HTML报告（包含测试文件数据）
@@ -791,7 +817,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             if (!$this->isInteractiveConsole()) {
                 $this->printing->warning(__('检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）'));
                 $this->printing->note(__('如需查看报告，请在交互终端手动执行：php bin/w phpunit:run --web'));
-                return;
+                return $exitCode;
             }
             $this->startPhpUnitServerBackground($php_unit_path, $port, $watchMode);
             
@@ -816,10 +842,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('=== PHPUNIT_TEST_COMPLETED ==='));
             $this->printing->separator('═', 0, 'SUCCESS');
             # 确保立即返回
-            return;
+            return $exitCode;
         }
         
         $this->printing->note(__('测试运行完成；如需 Web 报告请添加 --web 参数。'));
+        return $exitCode;
     }
 
     /**
@@ -1564,11 +1591,47 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
 
         if (is_file($file)) {
-            return $file;
+            return realpath($file) ?: $file;
         }
 
         $absolute = BP . ltrim(str_replace(['/', '\\'], DS, $file), DS);
-        return is_file($absolute) ? $absolute : null;
+        if (!is_file($absolute)) {
+            return null;
+        }
+
+        return realpath($absolute) ?: $absolute;
+    }
+
+    private function configurationContainsRunnableTests(string $xml): bool
+    {
+        return $xml !== '' && preg_match('/<(?:file|directory)\b[^>]*>\s*[^<]+\s*<\/(?:file|directory)>/i', $xml) === 1;
+    }
+
+    /**
+     * @param array<int, mixed> $output
+     */
+    private function outputReportsNoTests(array $output): bool
+    {
+        $text = implode("\n", array_map(static fn(mixed $line): string => (string)$line, $output));
+
+        return preg_match('/\bNo tests executed\b|\bTests:\s*0\b|\b0\s+tests?\b/i', $text) === 1;
+    }
+
+    /**
+     * PHPUnit 可能在返回 0 时仍未真正启动（例如启动器只输出 HTTP 404）。
+     * 只有出现明确的非零测试统计才认定执行成功。
+     *
+     * @param array<int, mixed> $output
+     */
+    private function outputConfirmsTestExecution(array $output): bool
+    {
+        $text = implode("\n", array_map(static fn(mixed $line): string => (string)$line, $output));
+
+        if (preg_match('/\bTests:\s*([1-9]\d*)\b/i', $text) === 1) {
+            return true;
+        }
+
+        return preg_match('/\bOK\s*\(\s*([1-9]\d*)\s+tests?/i', $text) === 1;
     }
 
     private function buildPhpUnitXml(string $defaultSuite, string $testsuites, string $coverageSource, string $reportPath): string

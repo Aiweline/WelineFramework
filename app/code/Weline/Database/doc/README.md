@@ -17,6 +17,7 @@
 - 目录：`app/code/Weline/Database`
 - 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
 - 数据库管理页挂载到 Backend 的数据工具 ACL 资源，Backend 是必需依赖；命令行数据库能力仍保持模块内聚。
+- 模块代码、Model Schema、数据迁移、备份、补偿和版本游标的联动回滚由本模块单一持有；ModuleManager 只通过公开接口引用。
 
 ## 代码面概览
 
@@ -53,6 +54,7 @@
 - `app/code/Weline/Database/doc/开发/task.md`
 - `app/code/Weline/Database/doc/开发/数据库管理后台路由烟测.md`
 - `app/code/Weline/Database/doc/开发/数据库迁移系统开发文档.md`
+- `app/code/Weline/Database/doc/开发/模块代码与数据库一致性回滚.md`
 - `app/code/Weline/Database/doc/用户/数据库迁移系统使用手册.md`
 
 ## 维护规则

@@ -5,7 +5,7 @@ namespace Weline\Server\Service\Runtime;
 
 final readonly class RuntimeSelection
 {
-    public const ENDPOINT_SCHEMA_VERSION = 3;
+    public const ENDPOINT_SCHEMA_VERSION = 4;
 
     /**
      * @param string[] $reasonCodes
@@ -54,14 +54,34 @@ final readonly class RuntimeSelection
     }
 
     /**
-     * Rehydrate the immutable selection stored in an endpoint schema v3 record.
-     * Missing or malformed fields are rejected instead of being inferred from
-     * legacy projections, because that would recreate multiple topology facts.
+     * Rehydrate the immutable selection stored in an endpoint schema v4 record.
+     * Missing, malformed, or removed topology values are rejected.
      *
      * @param array<string, mixed> $data
      */
     public static function fromArray(array $data): self
     {
+        $allowedFields = [
+            'requested_topology',
+            'effective_topology',
+            'topology_source',
+            'os_family',
+            'event_loop_driver',
+            'ssl_engine',
+            'listener_mode',
+            'policy_compatible',
+            'reason_codes',
+            'reason',
+        ];
+        $unknownFields = \array_values(\array_diff(\array_keys($data), $allowedFields));
+        if ($unknownFields !== []) {
+            throw new \RuntimeException(
+                'runtime_selection contains unsupported fields: '
+                . \implode(', ', \array_map(static fn(mixed $field): string => (string)$field, $unknownFields))
+                . '.'
+            );
+        }
+
         $requested = RequestedTopology::tryFrom(self::requiredString($data, 'requested_topology'));
         if (!$requested instanceof RequestedTopology) {
             throw new \RuntimeException('runtime_selection.requested_topology is invalid.');
@@ -109,36 +129,72 @@ final readonly class RuntimeSelection
     }
 
     /**
-     * Ensure all schema v3 compatibility projections still describe this one
-     * immutable selection. A conflict is corruption and must fail closed.
+     * Rehydrate and validate the canonical selection from an endpoint schema v4 record.
      *
      * @param array<string, mixed> $endpoint
      */
-    public function assertEndpointProjection(array $endpoint): void
+    public static function fromEndpoint(array $endpoint): self
     {
-        $expected = [
-            'requested_topology' => $this->requestedTopology->value,
-            'effective_topology' => $this->effectiveTopology->value,
-            'topology' => $this->effectiveTopology->value,
-            'topology_source' => $this->source,
-            'topology_reason' => $this->reason,
-            'topology_reason_codes' => $this->reasonCodes,
-            'os_family' => $this->osFamily,
-            'event_loop_driver' => $this->eventLoopDriver,
-            'ssl_engine' => $this->sslEngine,
-            'direct_listener_mode' => $this->listenerMode,
-            'listener_strategy' => $this->listenerMode,
-            'policy_compatible' => $this->policyCompatible,
-            'dispatcher_enabled' => $this->isDispatcher(),
-            'master_mode' => $this->effectiveTopology->value,
-        ];
+        $selectionData = $endpoint['runtime_selection'] ?? null;
+        if (!\is_array($selectionData)) {
+            throw new \RuntimeException('WLS endpoint schema v4 requires runtime_selection.');
+        }
 
-        foreach ($expected as $field => $value) {
-            if (!\array_key_exists($field, $endpoint)) {
-                throw new \RuntimeException('WLS endpoint schema v3 is missing projection field "' . $field . '".');
-            }
-            if ($endpoint[$field] !== $value) {
-                throw new \RuntimeException('WLS endpoint schema v3 projection conflict at "' . $field . '".');
+        $selection = self::fromArray($selectionData);
+        $selection->assertCanonicalEndpoint($endpoint);
+
+        return $selection;
+    }
+
+    /**
+     * Enforce the schema v4 canonical endpoint shape. RuntimeSelection is the
+     * only topology fact; every flattened or legacy projection is rejected.
+     *
+     * @param array<string, mixed> $endpoint
+     */
+    public function assertCanonicalEndpoint(array $endpoint): void
+    {
+        $schemaVersion = $endpoint['schema_version'] ?? null;
+        if (!\is_int($schemaVersion) || $schemaVersion !== self::ENDPOINT_SCHEMA_VERSION) {
+            throw new \RuntimeException(
+                'WLS endpoint schema_version must be exactly ' . self::ENDPOINT_SCHEMA_VERSION . '.'
+            );
+        }
+
+        if (!\array_key_exists('runtime_selection', $endpoint)
+            || !\is_array($endpoint['runtime_selection'])
+        ) {
+            throw new \RuntimeException('WLS endpoint schema v4 requires runtime_selection.');
+        }
+        if ($endpoint['runtime_selection'] !== $this->toArray()) {
+            throw new \RuntimeException('WLS endpoint runtime_selection does not match the canonical selection.');
+        }
+
+        foreach ([
+            'requested_topology',
+            'effective_topology',
+            'topology',
+            'runtime_topology',
+            'topology_source',
+            'topology_reason',
+            'topology_reason_codes',
+            'reason_codes',
+            'reason',
+            'os_family',
+            'event_loop_driver',
+            'ssl_engine',
+            'listener_mode',
+            'direct_listener_mode',
+            'listener_strategy',
+            'policy_compatible',
+            'dispatcher_enabled',
+            'direct_reuse_port',
+            'master_mode',
+        ] as $field) {
+            if (\array_key_exists($field, $endpoint)) {
+                throw new \RuntimeException(
+                    'WLS endpoint schema v4 forbids duplicate topology field "' . $field . '".'
+                );
             }
         }
     }

@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
 use Weline\Framework\Runtime\Policy\RuntimePolicyDescriptor;
 use Weline\Framework\Runtime\Policy\RuntimePolicyProviderCompiler;
 use Weline\Server\Security\AttackDetector;
+use Weline\Server\Service\LocalDomainPolicy;
 
 final class RuntimePolicyCompiler
 {
@@ -115,6 +116,13 @@ final class RuntimePolicyCompiler
             \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR,
         );
         $connectionPolicy = $this->compileConnectionPolicyMatcher($wls, $rules);
+        $developmentLoopbackWhitelist = LocalDomainPolicy::isDevelopmentMode();
+        if ($developmentLoopbackWhitelist) {
+            $connectionPolicy['whitelist_cidrs'] = \array_values(\array_unique(\array_merge(
+                (array)($connectionPolicy['whitelist_cidrs'] ?? []),
+                ['127.0.0.1/32', '::1/128'],
+            )));
+        }
 
         $both = ['direct', 'dispatcher'];
         $descriptors = [
@@ -194,7 +202,7 @@ final class RuntimePolicyCompiler
                     'header' => (string)($originValidation['header'] ?? 'X-Weline-Origin-Token'),
                     'token_sha256' => $originToken !== '' ? \hash('sha256', $originToken) : '',
                     // The only policy bypass is the explicit IP whitelist.
-                    // A loopback peer can be an Nginx/Caddy upstream and is
+                    // A loopback peer can be an Nginx upstream and is
                     // therefore never an implicit Origin credential.
                     'bypass' => 'explicit_whitelist_only',
                 ],
@@ -323,6 +331,7 @@ final class RuntimePolicyCompiler
             'host_policy_source' => $hostPolicySource,
             'host_policy_context_host_count' => \count($instanceHosts),
             'host_policy_context_digest' => \hash('sha256', $hostContextMaterial),
+            'development_loopback_whitelist' => $developmentLoopbackWhitelist,
             'connection_policy' => [
                 'max_active_connections' => (int)$connectionPolicy['max_active_connections'],
                 'deny_cidr_count' => \count((array)$connectionPolicy['deny_cidrs']),

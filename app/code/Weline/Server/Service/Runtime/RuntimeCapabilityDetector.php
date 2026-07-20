@@ -3,8 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Runtime;
 
-use Weline\Framework\Runtime\SchedulerSystem;
-
 final class RuntimeCapabilityDetector
 {
     /** @var array<string, array<string, mixed>> */
@@ -17,7 +15,7 @@ final class RuntimeCapabilityDetector
     {
         $disabled = $this->disabledFunctions();
         $functions = [];
-        foreach (['proc_open', 'proc_close', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill', 'exec', 'popen', 'shell_exec', 'passthru'] as $function) {
+        foreach (['proc_open', 'proc_close', 'proc_get_status', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill', 'exec', 'popen', 'shell_exec', 'passthru'] as $function) {
             $functions[$function] = \function_exists($function) && !\in_array($function, $disabled, true);
         }
 
@@ -460,21 +458,25 @@ final class RuntimeCapabilityDetector
     }
 
     /**
-     * Spawn two consumers through the same descriptor contract used by WLS,
-     * then require real accepts to reach both consumers. This validates the
-     * descriptor inheritance and accept scheduling semantics, not just bind().
+     * Verify the macOS Master-owned listener prerequisites without launching
+     * synthetic PHP Workers.
+     *
+     * The real Master listener, FD 3 delivery, Worker bootstrap, policy digest,
+     * and warmup are mandatory runtime READY gates. Repeating those checks with
+     * two extra PHP interpreters made a healthy host look unsupported whenever
+     * macOS executable verification was busy.
      *
      * @param array<string, bool> $functions
      * @return array<string, mixed>
      */
     private function probeDarwinSharedListener(string $family, array $functions): array
     {
-        foreach (['proc_open', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'] as $required) {
+        foreach (['proc_open', 'proc_close', 'proc_get_status', 'posix_setsid', 'posix_kill'] as $required) {
             if (empty($functions[$required])) {
                 return [
                     'supported' => false,
                     'mode' => 'shared_fd',
-                    'reason' => 'macOS direct shared listener requires proc_open, pcntl and POSIX process functions.',
+                    'reason' => 'macOS direct shared listener requires proc_open and POSIX process lifecycle functions.',
                     'missing_function' => $required,
                 ];
             }
@@ -506,7 +508,6 @@ final class RuntimeCapabilityDetector
             ];
         }
 
-        $children = [];
         try {
             @\stream_set_blocking($listener, false);
             $endpoint = (string)@\stream_socket_get_name($listener, false);
@@ -520,187 +521,16 @@ final class RuntimeCapabilityDetector
                 ];
             }
 
-            $childCode = <<<'PHP'
-$listener = @fopen('php://fd/3', 'r+');
-if (!is_resource($listener)) {
-    fwrite(STDOUT, "ERROR:fd3\n");
-    exit(2);
-}
-stream_set_blocking($listener, false);
-fwrite(STDOUT, "READY\n");
-fflush(STDOUT);
-$count = 0;
-$lastAccept = 0.0;
-$deadline = microtime(true) + 0.75;
-while (microtime(true) < $deadline) {
-    $read = [$listener];
-    $write = null;
-    $except = null;
-    $changed = @stream_select($read, $write, $except, 0, 50000);
-    if ($changed > 0) {
-        $client = @stream_socket_accept($listener, 0);
-        if (is_resource($client)) {
-            $count++;
-            $lastAccept = microtime(true);
-            @fclose($client);
-        }
-        continue;
-    }
-    // Allow the sibling consumer enough time to be scheduled after a burst.
-    // An 80ms idle cutoff produced intermittent false imbalance failures on
-    // otherwise healthy Apple Silicon hosts during concurrent startup work.
-    if ($count > 0 && $lastAccept > 0.0 && microtime(true) - $lastAccept >= 0.15) {
-        break;
-    }
-}
-fwrite(STDOUT, "COUNT:" . $count . "\n");
-fflush(STDOUT);
-PHP;
-            for ($index = 0; $index < 2; $index++) {
-                $process = @\proc_open(
-                    [PHP_BINARY, '-r', $childCode],
-                    [
-                        0 => ['file', '/dev/null', 'r'],
-                        1 => ['pipe', 'w'],
-                        2 => ['pipe', 'w'],
-                        DirectSharedListener::INHERITED_FD => $listener,
-                    ],
-                    $pipes,
-                    null,
-                    null,
-                    ['bypass_shell' => true],
-                );
-                if (!\is_resource($process)) {
-                    return [
-                        'supported' => false,
-                        'mode' => 'shared_fd',
-                        'reason' => 'Unable to spawn a macOS shared-listener probe consumer.',
-                    ];
-                }
-                @\stream_set_blocking($pipes[1], false);
-                @\stream_set_blocking($pipes[2], false);
-                $children[] = [
-                    'process' => $process,
-                    'pipes' => $pipes,
-                    'stdout' => '',
-                    'stderr' => '',
-                ];
-            }
-
-            $readyDeadline = \microtime(true) + 0.4;
-            do {
-                $ready = 0;
-                foreach ($children as &$child) {
-                    $child['stdout'] .= (string)(@\fread($child['pipes'][1], 8192) ?: '');
-                    $child['stderr'] .= (string)(@\fread($child['pipes'][2], 8192) ?: '');
-                    if (\str_contains($child['stdout'], "READY\n")) {
-                        $ready++;
-                    }
-                }
-                unset($child);
-                if ($ready === 2) {
-                    break;
-                }
-                SchedulerSystem::usleep(1000);
-            } while (\microtime(true) < $readyDeadline);
-            if ($ready !== 2) {
-                return [
-                    'supported' => false,
-                    'mode' => 'shared_fd',
-                    'reason' => 'macOS shared-listener probe consumers did not become ready.',
-                ];
-            }
-
-            $clients = [];
-            // Use a statistically meaningful sample so the <=1.5 balance gate
-            // measures listener scheduling rather than a short scheduler
-            // burst. This still completes well inside the startup budget.
-            for ($index = 0; $index < 256; $index++) {
-                $client = @\stream_socket_client(
-                    'tcp://' . $addressHost . ':' . $port,
-                    $clientErrno,
-                    $clientErrstr,
-                    0.2,
-                    \STREAM_CLIENT_CONNECT,
-                );
-                if (\is_resource($client)) {
-                    $clients[] = $client;
-                }
-            }
-            foreach ($clients as $client) {
-                @\fclose($client);
-            }
-
-            $finishDeadline = \microtime(true) + 1.0;
-            do {
-                $running = 0;
-                foreach ($children as &$child) {
-                    $child['stdout'] .= (string)(@\fread($child['pipes'][1], 8192) ?: '');
-                    $child['stderr'] .= (string)(@\fread($child['pipes'][2], 8192) ?: '');
-                    $status = @\proc_get_status($child['process']);
-                    if (($status['running'] ?? false) === true) {
-                        $running++;
-                    }
-                }
-                unset($child);
-                if ($running === 0) {
-                    break;
-                }
-                SchedulerSystem::usleep(2000);
-            } while (\microtime(true) < $finishDeadline);
-
-            $counts = [];
-            foreach ($children as &$child) {
-                $child['stdout'] .= (string)(@\stream_get_contents($child['pipes'][1]) ?: '');
-                $child['stderr'] .= (string)(@\stream_get_contents($child['pipes'][2]) ?: '');
-                if (\preg_match('/COUNT:(\d+)/', $child['stdout'], $match) === 1) {
-                    $counts[] = (int)$match[1];
-                }
-            }
-            unset($child);
-            $min = $counts !== [] ? \min($counts) : 0;
-            $max = $counts !== [] ? \max($counts) : 0;
-            $ratio = $min > 0 ? $max / $min : INF;
-            $balanceWarning = \is_finite($ratio) && $ratio > 1.5;
-            $supported = \count($counts) === 2
-                && \count($clients) >= 128
-                && \array_sum($counts) >= 128
-                && $min > 0;
-
-            if (!$supported) {
-                $reason = 'Inherited listener FD did not deliver the required real accept sample to both probe consumers.';
-            } elseif ($balanceWarning) {
-                $reason = 'Master-owned listener FD delivered real connections to both probe consumers; '
-                    . 'short-window accept balance exceeded the diagnostic ratio 1.5.';
-            } else {
-                $reason = 'Master-owned listener FD delivered real connections across both probe consumers.';
-            }
-
             return [
-                'supported' => $supported,
+                'supported' => true,
                 'mode' => 'shared_fd',
-                'reason' => $reason,
-                'connected' => \count($clients),
-                'accepted' => $counts,
-                'max_min_ratio' => \is_finite($ratio) ? \round($ratio, 3) : null,
-                'balance_warning' => $balanceWarning,
+                'reason' => 'Preflight created a real Master listener; actual FD 3 delivery, Worker READY, and warmup remain mandatory runtime gates.',
+                'host' => $bindHost,
+                'family' => $family,
                 'inherited_fd' => DirectSharedListener::INHERITED_FD,
+                'runtime_ack_required' => true,
             ];
         } finally {
-            foreach ($children as $child) {
-                foreach (($child['pipes'] ?? []) as $pipe) {
-                    if (\is_resource($pipe)) {
-                        @\fclose($pipe);
-                    }
-                }
-                if (\is_resource($child['process'] ?? null)) {
-                    $status = @\proc_get_status($child['process']);
-                    if (($status['running'] ?? false) === true) {
-                        @\proc_terminate($child['process']);
-                    }
-                    @\proc_close($child['process']);
-                }
-            }
             @\fclose($listener);
         }
     }
@@ -802,7 +632,15 @@ PHP;
                     : 'Install with pecl install event and enable extension=event.',
             ];
         }
-        if (empty($extensions['opcache']) || (string)($data['opcache_enable_cli'] ?? '') !== '1') {
+        $runtimeSafetyRequired = PhpRuntimeSafetyProfile::requiresJitIsolation();
+        if ($runtimeSafetyRequired) {
+            $findings[] = [
+                'level' => 'info',
+                'code' => 'windows_arm64_x64_php_opcache_isolated',
+                'message' => 'CLI OPcache and JIT are intentionally disabled for x64 PHP emulation on Windows ARM64 after reproduced native access violations.',
+                'action' => 'Use a native ARM64 PHP runtime to restore bytecode OPcache, then benchmark JIT separately.',
+            ];
+        } elseif (empty($extensions['opcache']) || (string)($data['opcache_enable_cli'] ?? '') !== '1') {
             $findings[] = [
                 'level' => 'info',
                 'code' => 'opcache_cli_disabled',
@@ -812,7 +650,8 @@ PHP;
         }
         $jit = \strtolower(\trim((string)($data['opcache_jit'] ?? '')));
         $jitBuffer = \strtolower(\trim((string)($data['opcache_jit_buffer_size'] ?? '')));
-        if (!empty($extensions['opcache'])
+        if (!$runtimeSafetyRequired
+            && !empty($extensions['opcache'])
             && ($jit === '' || \in_array($jit, ['0', 'off', 'disable', 'disabled'], true) || \preg_match('/^0+[kmg]?$/', $jitBuffer))) {
             $findings[] = [
                 'level' => 'info',

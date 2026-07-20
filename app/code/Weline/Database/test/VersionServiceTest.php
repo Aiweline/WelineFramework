@@ -7,6 +7,7 @@ use Weline\Framework\UnitTest\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Database\Service\VersionService;
 use Weline\Database\Model\ModuleVersion;
+use Weline\Database\Model\ModuleVersionHistory;
 
 /**
  * 版本管理服务测试
@@ -21,12 +22,13 @@ class VersionServiceTest extends TestCore
         parent::setUp();
         $this->versionService = ObjectManager::getInstance(VersionService::class);
         $this->versionModel = ObjectManager::getInstance(ModuleVersion::class);
+        $this->cleanupVersionFixtures();
     }
     
     public function tearDown(): void
     {
+        $this->cleanupVersionFixtures();
         parent::tearDown();
-        // 清理测试数据
     }
     
     /**
@@ -164,13 +166,13 @@ class VersionServiceTest extends TestCore
         // 设置初始版本
         $this->versionService->setModuleVersion($moduleName, $fromVersion);
         
-        // 测试版本回滚
+        // 旧 API 不得再单独改写数据库游标，必须经由 ModuleRollbackManager 编排。
         $result = $this->versionService->rollbackModuleVersion($moduleName, $toVersion);
-        $this->assertTrue($result, '版本回滚应该成功');
+        $this->assertFalse($result, '单独版本游标回滚应被拒绝');
         
-        // 验证版本已回滚（使用 getModuleVersionString）
+        // 验证游标未被改写
         $actualVersion = $this->versionService->getModuleVersionString($moduleName);
-        $this->assertEquals($toVersion, $actualVersion);
+        $this->assertEquals($fromVersion, $actualVersion);
     }
     
     /**
@@ -191,5 +193,28 @@ class VersionServiceTest extends TestCore
         
         $result4 = $this->versionService->validateVersion('1.0');
         $this->assertFalse($result4, '1.0应该是无效版本');
+    }
+
+    private function cleanupVersionFixtures(): void
+    {
+        $modules = [
+            'Weline_Test',
+            'Weline_TestVersionStr',
+            'Weline_TestSet',
+            'Weline_Test1',
+            'Weline_Test2',
+            'Weline_TestUpgrade',
+            'Weline_TestRollback',
+        ];
+        foreach ($modules as $moduleName) {
+            ObjectManager::getInstance(ModuleVersion::class, [], false)
+                ->where(ModuleVersion::schema_fields_MODULE_NAME, $moduleName)
+                ->delete()
+                ->fetch();
+            ObjectManager::getInstance(ModuleVersionHistory::class, [], false)
+                ->where(ModuleVersionHistory::schema_fields_MODULE_NAME, $moduleName)
+                ->delete()
+                ->fetch();
+        }
     }
 }

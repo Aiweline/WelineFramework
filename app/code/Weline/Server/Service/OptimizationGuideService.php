@@ -13,6 +13,8 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Server\Service\Runtime\PhpRuntimeSafetyProfile;
+
 /**
  * OptimizationGuideService - 性能优化指南服务
  * 
@@ -104,14 +106,18 @@ class OptimizationGuideService
         
         // 3. OPCache
         $hasOpcache = $this->hasOpcacheLoaded();
-        $opcacheEnabled = $hasOpcache && \ini_get('opcache.enable_cli');
+        $runtimeSafetyRequired = PhpRuntimeSafetyProfile::requiresJitIsolation();
+        $opcacheEnabled = $hasOpcache && !$runtimeSafetyRequired && \ini_get('opcache.enable_cli');
         $optimizations['opcache'] = [
             'name' => __('OPCache 扩展'),
             'installed' => $hasOpcache,
+            'available' => !$runtimeSafetyRequired,
             'enabled_cli' => $opcacheEnabled,
-            'impact' => '+30-50%',
-            'priority' => 'high',
-            'description' => __('字节码缓存，提升 PHP 执行速度'),
+            'impact' => $runtimeSafetyRequired ? 'stability' : '+30-50%',
+            'priority' => $runtimeSafetyRequired ? 'skip' : 'high',
+            'description' => $runtimeSafetyRequired
+                ? __('Windows ARM64 的 x64 PHP 仿真已禁用 WLS CLI OPcache/JIT；请使用原生 ARM64 PHP 后再按基准评估。')
+                : __('字节码缓存，提升 PHP 执行速度'),
             'performance' => [
                 'without' => __('每次请求重新编译'),
                 'with' => __('使用缓存的字节码'),
@@ -121,14 +127,18 @@ class OptimizationGuideService
         
         // 4. JIT (PHP 8+)
         $hasJit = \version_compare(PHP_VERSION, '8.0.0', '>=');
-        $jitEnabled = $hasOpcache && !empty(\ini_get('opcache.jit'));
+        $jitSafetyRequired = $runtimeSafetyRequired;
+        $jitEnabled = $hasOpcache && !$jitSafetyRequired && PhpRuntimeSafetyProfile::isJitEnabled();
         $optimizations['jit'] = [
             'name' => __('JIT 编译器'),
             'installed' => $hasJit,
+            'available' => $hasJit && !$jitSafetyRequired,
             'enabled' => $jitEnabled,
-            'impact' => '+100-200%',
-            'priority' => 'high',
-            'description' => __('PHP 8 即时编译器，显著提升 CPU 密集型任务性能'),
+            'impact' => $jitSafetyRequired ? 'stability' : '+100-200%',
+            'priority' => $jitSafetyRequired ? 'skip' : 'high',
+            'description' => $jitSafetyRequired
+                ? __('Windows ARM64 的 x64 PHP 仿真不支持 WLS JIT；请使用原生 ARM64 PHP 后再按基准评估 JIT。')
+                : __('PHP 8 即时编译器，显著提升 CPU 密集型任务性能'),
             'performance' => [
                 'without' => __('解释执行'),
                 'with' => __('编译执行，接近 C 语言性能'),
@@ -471,6 +481,18 @@ CONFIG,
     protected function getOpcacheInstallGuide(): array
     {
         $installed = $this->hasOpcacheLoaded();
+        if (PhpRuntimeSafetyProfile::requiresJitIsolation()) {
+            return [
+                'platform' => 'Windows ARM64 / x64 PHP emulation',
+                'available' => false,
+                'installed' => $installed,
+                'cli_enabled' => false,
+                'safety_profile' => PhpRuntimeSafetyProfile::PROFILE_WINDOWS_ARM64_X64_NOOPCACHE,
+                'note' => __('Windows ARM64 的 x64 PHP 仿真已禁用 WLS CLI OPcache/JIT；请使用原生 ARM64 PHP 后再按基准评估。'),
+                'steps' => [],
+            ];
+        }
+
         $cliEnabled = $installed && \ini_get('opcache.enable_cli');
         
         $steps = [];
@@ -541,8 +563,18 @@ INI,
                 'note' => __('JIT 需要 PHP 8.0+，当前版本：%{1}', [PHP_VERSION]),
             ];
         }
+
+        if (PhpRuntimeSafetyProfile::requiresJitIsolation()) {
+            return [
+                'platform' => 'Windows ARM64 / x64 PHP emulation',
+                'available' => false,
+                'enabled' => false,
+                'safety_profile' => PhpRuntimeSafetyProfile::PROFILE_WINDOWS_ARM64_X64_NOOPCACHE,
+                'note' => __('Windows ARM64 的 x64 PHP 仿真已禁用 WLS CLI OPcache/JIT；请使用原生 ARM64 PHP 后再按基准评估。'),
+            ];
+        }
         
-        $jitEnabled = !empty(\ini_get('opcache.jit'));
+        $jitEnabled = PhpRuntimeSafetyProfile::isJitEnabled();
         
         return [
             'platform' => 'all',

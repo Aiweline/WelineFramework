@@ -10,7 +10,7 @@ namespace Weline\Database\Model;
  * This compatibility subclass deliberately owns no schema declaration. Both
  * runtimes now operate on the single Framework bootstrap table/model.
  */
-class Migration extends \Weline\Framework\Setup\Model\Migration
+class Migration extends \Weline\Framework\Setup\Model\Migration implements \Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface
 {
     /** @return list<string> */
     public function getInstalledMigrationFiles(string $moduleName): array

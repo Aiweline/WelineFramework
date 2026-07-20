@@ -4,6 +4,8 @@
 
 WLS 将跨 Worker 状态放到两个独立 sidecar：Session Server 保存会话，Memory Server 提供共享缓存与原子操作。Worker 只持有客户端连接池和可重建本地缓存，不把单个 Worker 内存当作跨进程权威。
 
+普通后台启动在 Windows、macOS、Linux 统一通过 `Processer::batchCreate()` 并发拉起 Session 与 Memory，共享一个 READY deadline；只有显式 frontend 可见窗口模式逐个创建独立控制台。launcher 返回值只用于确认提交成功，最终 runtime/registry 的服务 PID 必须来自已认证的 sidecar 存活身份，不能依赖创建顺序。
+
 ## 1. 组件关系
 
 ```mermaid
@@ -78,6 +80,10 @@ sequenceDiagram
 
 多个 WLS 实例可以共享同一 sidecar。每个实例登记 consumer token；停止单实例只释放自己的 token。最后一个 token 消失后，sidecar 按 grace period 自治退出或由显式 stop/restart 关闭。
 
+Windows 冷创建也必须遵守同一并发边界。`SharedStateServiceManager` 为 Session/Memory 构造同一批精确 argv；批次项同时携带平台无关 `argv` 与 Windows `windowsArgv`。符合“非阻塞、child owns PID、当前 PHP_BINARY、有效 cwd/log”的项由 `Processer` 一次进入 Master-owned `proc_open(array)`，不得再退回逐项 PowerShell `Start-Process`。两个进程先全部创建，再在一个总 deadline 内并行执行 token-authenticated PING；只有协议回传的 PID、role、instance 和 token 全部一致才发布 READY，任何 PID=0 或关键角色超时都明确失败。
+
+2026-07-17 在 Parallels Windows 11 ARM + PHP 8.4.23 NTS x64 仿真、本地磁盘副本中做了独占冷建：旧 PowerShell 路径实际需要约 3.5–4 秒/进程，并会撞上 2 秒 helper 结果预算；修正后 Session/Memory 两项以 `master_owned_proc_open` 提交共 `36.309ms`，同一秒取得 PID，约 1 秒完成 authenticated PING。该结果证明 sidecar 创建不再制造 10 秒级串行等待；它不替代原生 Windows ARM64 PHP 的后续复测。
+
 ## 4. Worker 访问路径
 
 - Session：框架 Session 层 → `SessionStateFacade` → WLS/Redis/Memcached Backend。
@@ -92,7 +98,13 @@ sequenceDiagram
 - Worker 启动后以低优先 Fiber 预连 Session/Memory；失败不阻断事件循环，真实请求仍按连接超时与重连策略处理。
 - sidecar 断开是基础设施故障，Master 优先单服务复活；不能把一次 status 查询变成“修正 PID”的副作用。
 
-## 5. 配置
+## 5. TLS Session Cache 边界
+
+业务 Session 命名空间仍不是 TLS Session Cache。PHP 8.4 的 Stream SSL 服务端没有纯 PHP 外部 Session Cache 回调，因此该版本只验证同一 HTTP/1.1 Keep-Alive 或 HTTP/2 多路复用连接内的握手复用；跨连接、跨 Worker TCP TLS 恢复保持 unsupported/unverified。
+
+PHP 8.6 的 `session_new_cb/session_get_cb/session_remove_cb` 与 `Openssl\Session` 已接入独立 TLS 子存储和专用 fail-fast 客户端：逐条 TTL、条目/字节/DER 上限、原子读取删除、禁用持久化，证据不记录 Session ID/DER/密钥或控制令牌；回调不会调用可能阻塞重连的通用业务 `SharedStateClient`。sidecar 不可用时立即退化为完整握手且不能阻断 Worker 事件循环。该机制是 TCP 外部有状态缓存，不是 HTTP/3 原生数据面的无状态 Ticket Key Ring。故障窗口门禁要求所有 HTTPS 请求成功、实际跨 Worker、sidecar 代际切换和恢复后的独立复用证明；故障窗口内的恢复比例只作诊断，因为 sidecar 不可用时完整握手是正确降级。Windows PHP 8.6.0alpha2 x64-on-ARM 样本已实证同 Worker、跨 Worker、reload 与恢复后各 24/24；400 轮故障窗口的 800 次 HTTPS 均成功，其中 382 次为恢复握手，恢复后再次 24/24。当前恢复握手 P95 156.236ms 未通过固定生产门禁 P95 ≤ 50ms，运行时非原生且仍为 prerelease，稳定三平台原生矩阵也未完成；因此默认仍关闭，持久功能证据不得等同当前 active scope 或 production-ready。
+
+## 6. 配置
 
 当前示例位于 `app/etc/env.sample.php`：
 
@@ -120,7 +132,7 @@ sequenceDiagram
 
 默认 token 文件位于项目 `var/session/`，端口非默认时 runtime resolver 会生成端口作用域 token，避免不同项目/实例误复用。
 
-## 6. 验证重点
+## 7. 验证重点
 
 - 多 Worker 写入同一 Session 后读到一致值。
 - Memory 原子操作和 FPC shared key 在 Worker 间可见。
@@ -128,3 +140,5 @@ sequenceDiagram
 - 连续运行 `server:status`/peek 前后 registry/runtime file 内容不变。
 - 端口被非 WLS 或其它项目进程占用时拒绝复用。
 - 单实例停止只移除自身 consumer；最后 consumer 释放后按 grace period 清理。
+- Windows 全冷状态必须记录 launcher mode、批量提交时间、两个权威 PID 和 authenticated ready 时间；正常 WLS sidecar 批次不得出现 `parallel_helpers`。
+- 首页 Shared FPC 写入超过协议帧上限时必须返回失败，不能继续生成 Process receipt 或伪 READY；压缩后的首页载荷需在 Memory 日志验证无 `frame_too_large`，随后每个 Worker 仍须完成 Process L1 精确读回。
