@@ -250,6 +250,26 @@ final class ManagedNginxPaths
         return \max(1024, \min(65535, $n));
     }
 
+    public function tempDir(): string
+    {
+        return $this->runtimeRoot() . DIRECTORY_SEPARATOR . 'temp';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function nginxTempSubdirs(): array
+    {
+        return [
+            'client_body_temp',
+            'proxy_temp',
+            'fastcgi_temp',
+            'uwsgi_temp',
+            'scgi_temp',
+            'proxy_cache_temp',
+        ];
+    }
+
     public function ensureRuntimeDirectories(): void
     {
         $dirs = [
@@ -258,7 +278,11 @@ final class ManagedNginxPaths
             $this->runDir(),
             $this->confDir() . DIRECTORY_SEPARATOR . 'conf.d',
             $this->cacheDir(),
+            $this->tempDir(),
         ];
+        foreach ($this->nginxTempSubdirs() as $sub) {
+            $dirs[] = $this->tempDir() . DIRECTORY_SEPARATOR . $sub;
+        }
         foreach ($dirs as $dir) {
             if (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
                 throw new \RuntimeException('Unable to create managed nginx directory: ' . $dir);
