@@ -23,6 +23,7 @@ use Weline\Server\Observer\CliCommandExecutedObserver;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\Runtime\WorkerRestartBatchPlanner;
 
 /**
  * server:reload - 热重载 Worker 代码
@@ -43,8 +44,8 @@ class Reload extends CommandAbstract
     /** 等待模式最小硬超时（秒） */
     private const WAIT_MIN_TIMEOUT = 30;
 
-    /** 等待模式最大硬超时（秒） */
-    private const WAIT_MAX_TIMEOUT = 300;
+    /** 等待模式绝对安全上限（秒）；正常 deadline 由实例规模和启动预算动态计算。 */
+    private const WAIT_MAX_TIMEOUT = 7200;
 
     /** 等待模式无进度超时（秒）：超过后主动退出，避免 CLI 卡死。 */
     private const WAIT_IDLE_TIMEOUT = 15;
@@ -52,14 +53,14 @@ class Reload extends CommandAbstract
     /**
      * @inheritDoc
      */
-    public function execute(array $args = [], array $data = [])
+    public function execute(array $args = [], array $data = []): int
     {
         $requestedInstanceName = $this->parseInstanceName($args);
         
         // 强制模式：批量杀死后重启，不等待排水
         $forceMode = isset($args['f']) || isset($args['force']);
         
-        // 等待模式（默认），-n 跳过等待；-f 强制模式固定为不等待
+        // 等待模式（默认），-n 跳过等待；-f 仍等待单批重建完成，便于准确返回结果。
         $waitMode = !(isset($args['n']) || isset($args['no-wait']));
         
         $reloadType = $forceMode 
@@ -87,7 +88,7 @@ class Reload extends CommandAbstract
                     $this->printer->note($message);
                 }
                 $this->printer->note('This does not mean there are no workers. Check server:status and Master control-plane health first.');
-                return;
+                return 1;
             }
             $globalStats = $manager->getRunningStats();
             if (($globalStats['workers'] ?? 0) > 0) {
@@ -103,11 +104,11 @@ class Reload extends CommandAbstract
                         $this->printer->note(__('请确认实例名称，或执行 server:listing 查看所有实例'));
                     }
                 }
-                return;
+                return 1;
             }
             $this->printer->warning(__('未检测到运行中的 WLS Worker'));
             $this->printer->note(__('请先启动服务器：php bin/w server:start'));
-            return;
+            return 1;
         }
 
         $this->printer->note(__('当前操作实例：%{1}', [$instanceName]));
@@ -124,33 +125,37 @@ class Reload extends CommandAbstract
         $this->printer->note(__('Worker 数：%{1}', [$totalWorkers]));
         
         if ($waitMode) {
-            $this->executeReloadAndWait($instanceName, $totalWorkers, $reloadType);
+            $exitCode = $this->executeReloadAndWait($instanceName, $totalWorkers, $reloadType);
         } else {
-            $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
+            $exitCode = $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
         }
         
         echo "\n";
+        return $exitCode;
     }
     
     /**
      * 发送 reload_wait 命令并等待完成
      */
-    protected function executeReloadAndWait(string $instanceName, int $totalWorkers, string $reloadType): void
+    protected function executeReloadAndWait(string $instanceName, int $totalWorkers, string $reloadType): int
     {
         $info = MasterProcess::getMasterEndpoint($instanceName);
         $controlPort = (int)($info['control_port'] ?? 0);
-        $waitTimeout = $this->estimateWaitTimeout($totalWorkers);
+        $waitTimeout = $this->estimateWaitTimeout(
+            $totalWorkers,
+            $reloadType === ControlMessage::RELOAD_TYPE_FORCE
+        );
         
         if ($controlPort <= 0) {
             $this->printer->warning(__('无法获取控制端口，请检查 Master 是否运行'));
-            return;
+            return 1;
         }
         
         // 建立 IPC 连接
         $conn = @\stream_socket_client("tcp://127.0.0.1:{$controlPort}", $errno, $errstr, 5);
         if (!$conn) {
             $this->printer->warning(__('无法建立 IPC 连接: %{1}', [$errstr]));
-            return;
+            return 1;
         }
         
         \stream_set_timeout($conn, $waitTimeout);
@@ -168,7 +173,7 @@ class Reload extends CommandAbstract
         if ($written === false || $written === 0) {
             @\fclose($conn);
             $this->printer->warning(__('发送命令失败'));
-            return;
+            return 1;
         }
         
         echo "\n";
@@ -176,13 +181,13 @@ class Reload extends CommandAbstract
         $this->printer->note(__('等待实例 [%{1}] 的 Orchestrator 完成滚动重启...', [$instanceName]));
         
         // 等待 Master 推送完成/失败事件
-        $this->waitForCompletion($conn, $totalWorkers, $waitTimeout);
+        return $this->waitForCompletion($conn, $totalWorkers, $waitTimeout);
     }
     
     /**
      * 等待 Orchestrator 完成滚动重启
      */
-    protected function waitForCompletion($conn, int $totalWorkers, int $waitTimeout): void
+    protected function waitForCompletion($conn, int $totalWorkers, int $waitTimeout): int
     {
         $startTime = \microtime(true);
         $deadline = $startTime + $waitTimeout;
@@ -198,7 +203,7 @@ class Reload extends CommandAbstract
                 @\fclose($conn);
                 echo "\n";
                 $this->printer->warning(__('连接异常断开'));
-                return;
+                return 1;
             }
 
             if ($data === '') {
@@ -206,7 +211,7 @@ class Reload extends CommandAbstract
                     @\fclose($conn);
                     echo "\n";
                     $this->printer->warning(__('控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果'));
-                    return;
+                    return 1;
                 }
 
                 if ((\microtime(true) - $lastMessageAt) >= self::WAIT_IDLE_TIMEOUT) {
@@ -233,11 +238,11 @@ class Reload extends CommandAbstract
                 switch ($type) {
                     case ControlMessage::TYPE_RELOAD_COMPLETED:
                         $this->handleReloadCompleted($msg, $conn, $totalWorkers);
-                        return;
+                        return 0;
                         
                     case ControlMessage::TYPE_RELOAD_FAILED:
                         $this->handleReloadFailed($msg, $conn);
-                        return;
+                        return 1;
                         
                     case ControlMessage::TYPE_RELOAD_PROGRESS:
                         $lastProgress = $this->handleReloadProgress($msg, $totalWorkers, $lastProgress);
@@ -246,7 +251,7 @@ class Reload extends CommandAbstract
                     case ControlMessage::TYPE_COMMAND_RESULT:
                         // handleCommandResult 返回 true 表示最终结果，false 表示继续等待
                         if ($this->handleCommandResult($msg, $conn, $totalWorkers)) {
-                            return;
+                            return !empty($msg['success']) ? 0 : 1;
                         }
                         break;
                 }
@@ -259,6 +264,7 @@ class Reload extends CommandAbstract
         echo "\n";
         $this->printer->warning(__('等待超时（%{1}s），重启可能仍在进行中', [$waitTimeout]));
         $this->printer->note(__('可用 server:status 查看当前状态'));
+        return 1;
     }
     
     /**
@@ -356,21 +362,21 @@ class Reload extends CommandAbstract
         return $message;
     }
 
-    protected function estimateWaitTimeout(int $totalWorkers): int
+    protected function estimateWaitTimeout(int $totalWorkers, bool $forceSingleBatch = false): int
     {
         $workerCount = \max(1, $totalWorkers);
         $minThree = (int) (Env::get('wls.orchestrator.worker_three_batch_min_count', 7) ?? 7);
-        if ($minThree < 4) {
-            $minThree = 7;
-        }
-
-        $batchCount = $workerCount >= $minThree ? 3 : $workerCount;
-        $baseSize = intdiv($workerCount, $batchCount);
-        $remainder = $workerCount % $batchCount;
-        $batchSizes = [];
-        for ($i = 0; $i < $batchCount; $i++) {
-            $batchSizes[] = $baseSize + ($i < $remainder ? 1 : 0);
-        }
+        $configuredBatchCount = (int) (Env::get('wls.orchestrator.worker_reload_batch_count', 3) ?? 3);
+        $configuredMinReady = Env::get('wls.orchestrator.worker_reload_min_ready', null);
+        $workerIds = \range(1, $workerCount);
+        $batches = WorkerRestartBatchPlanner::plan(
+            $workerIds,
+            $forceSingleBatch,
+            $minThree,
+            $configuredBatchCount,
+            WorkerRestartBatchPlanner::resolveMinReady($workerCount, $configuredMinReady)
+        );
+        $batchSizes = \array_map('count', $batches);
 
         $drainTimeout = (float) (Env::get('wls.orchestrator.drain_timeout_sec', 5.0) ?? 5.0);
         $drainTimeout = \max(1.0, \min(60.0, $drainTimeout));
@@ -386,7 +392,15 @@ class Reload extends CommandAbstract
         }
         $estimated += 30.0;
 
-        return (int) \max(self::WAIT_MIN_TIMEOUT, \min(self::WAIT_MAX_TIMEOUT, (int) \ceil($estimated)));
+        $configuredTimeout = (float) (Env::get('wls.orchestrator.reload_wait_timeout_sec', 0.0) ?? 0.0);
+        if ($configuredTimeout > 0.0) {
+            $estimated = \max($estimated, $configuredTimeout);
+        }
+
+        return (int) \max(
+            self::WAIT_MIN_TIMEOUT,
+            \min(self::WAIT_MAX_TIMEOUT, (int) \ceil($estimated))
+        );
     }
     
     /**
@@ -425,7 +439,7 @@ class Reload extends CommandAbstract
     /**
      * 异步发送重载命令（不等待完成）
      */
-    protected function executeReloadAsync(string $instanceName, string $reloadType, bool $forceMode): void
+    protected function executeReloadAsync(string $instanceName, string $reloadType, bool $forceMode): int
     {
         /** @var BroadcastControlDispatchService $dispatchService */
         $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
@@ -462,7 +476,7 @@ class Reload extends CommandAbstract
 
         if (empty($result['success'])) {
             $this->printer->warning($result['message']);
-            return;
+            return 1;
         }
         
         echo "\n";
@@ -474,6 +488,8 @@ class Reload extends CommandAbstract
         } else {
             $this->printer->note(__('Orchestrator 将编排滚动重启，Worker 逐个优雅重启'));
         }
+
+        return 0;
     }
     
     /**
@@ -562,7 +578,7 @@ class Reload extends CommandAbstract
                 '-n, --no-wait' => __('不等待：发送命令后立即返回'),
             ],
             [
-                __('默认行为') => __('等待滚动重启完成后返回，显示进度（-f 强制模式除外）'),
+                __('默认行为') => __('默认等待重载完成并显示进度；只有 -n 会立即返回'),
                 __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，属于停机型更新，快速但会中断请求'),
                 __('-n 不等待') => __('发送命令后立即返回，适合脚本调用'),
                 __('适用场景') => __('修改了 Worker 代码、业务代码、模板、配置等'),

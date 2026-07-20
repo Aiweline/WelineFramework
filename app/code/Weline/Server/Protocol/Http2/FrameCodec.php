@@ -4,10 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Protocol\Http2;
 
 /**
- * Minimal HTTP/2 binary frame codec.
- *
- * It intentionally has no Worker side effects. The TLS Worker can use this
- * codec after ALPN selects h2; until then WLS must not advertise h2.
+ * Bounded HTTP/2 binary frame codec.
  */
 final class FrameCodec
 {
@@ -37,6 +34,21 @@ final class FrameCodec
     public const SETTINGS_MAX_FRAME_SIZE = 0x5;
     public const SETTINGS_MAX_HEADER_LIST_SIZE = 0x6;
 
+    public const ERROR_NO_ERROR = 0x0;
+    public const ERROR_PROTOCOL_ERROR = 0x1;
+    public const ERROR_INTERNAL_ERROR = 0x2;
+    public const ERROR_FLOW_CONTROL_ERROR = 0x3;
+    public const ERROR_SETTINGS_TIMEOUT = 0x4;
+    public const ERROR_STREAM_CLOSED = 0x5;
+    public const ERROR_FRAME_SIZE_ERROR = 0x6;
+    public const ERROR_REFUSED_STREAM = 0x7;
+    public const ERROR_CANCEL = 0x8;
+    public const ERROR_COMPRESSION_ERROR = 0x9;
+    public const ERROR_CONNECT_ERROR = 0xa;
+    public const ERROR_ENHANCE_YOUR_CALM = 0xb;
+    public const ERROR_INADEQUATE_SECURITY = 0xc;
+    public const ERROR_HTTP_1_1_REQUIRED = 0xd;
+
     public const DEFAULT_MAX_FRAME_SIZE = 16384;
 
     /**
@@ -58,11 +70,10 @@ final class FrameCodec
             return ['status' => 'incomplete', 'consumed' => 0];
         }
 
-        $streamId = (\ord($buffer[5]) << 24)
+        $streamId = ((\ord($buffer[5]) << 24)
             | (\ord($buffer[6]) << 16)
             | (\ord($buffer[7]) << 8)
-            | \ord($buffer[8]);
-        $streamId &= 0x7fffffff;
+            | \ord($buffer[8])) & 0x7fffffff;
 
         return [
             'status' => 'frame',
@@ -123,7 +134,15 @@ final class FrameCodec
         return self::encode(self::TYPE_WINDOW_UPDATE, 0, $streamId, \pack('N', $increment));
     }
 
-    public static function goaway(int $lastStreamId, int $errorCode = 0, string $debug = ''): string
+    public static function rstStream(int $streamId, int $errorCode = self::ERROR_CANCEL): string
+    {
+        if ($streamId <= 0) {
+            throw new \InvalidArgumentException('HTTP/2 RST_STREAM requires a non-zero stream id.');
+        }
+        return self::encode(self::TYPE_RST_STREAM, 0, $streamId, \pack('N', $errorCode & 0xffffffff));
+    }
+
+    public static function goaway(int $lastStreamId, int $errorCode = self::ERROR_NO_ERROR, string $debug = ''): string
     {
         return self::encode(
             self::TYPE_GOAWAY,

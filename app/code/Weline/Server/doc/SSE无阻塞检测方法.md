@@ -2,6 +2,12 @@
 
 用于验证 WLS 在保持一条 SSE 长连接的同时，其他请求仍能快速响应（Fiber 调度 + 请求级上下文隔离生效）。
 
+> 可恢复后台任务的业务执行不属于这条 SSE Fiber：它由独立 CLI Runner 执行，Watchdog 负责崩溃恢复和客户端租约。SSE 在该架构中只重放/订阅持久事件；断开连接不能停止任务。此文的 `SseTest` 路由仅用于检测传输协议与 WLS 并发，不可作为业务任务实现范式。
+
+> Runtime 的任务、lease、事件与清理截止时间统一按 UTC 持久化和解析。WLS Worker、Runner 与 Watchdog 不得根据各自 PHP 默认时区解释这些字段；否则已完成任务可能被错误拒绝为不可用，或终态清理时间发生偏移。完整约定见 Framework 的《SSE 可恢复后台任务架构》。
+
+> `/<backend-prefix>/server/backend/sse-test` 的视觉颜色表达事件语义：蓝色为正常进度，红色仅为错误，青绿色为完成，琥珀色为已停止。正常测试进度不应呈现为错误红色。
+
 ---
 
 ## 架构说明
@@ -81,7 +87,7 @@
 ## 方法一：浏览器双标签（最直观）
 
 1. **标签 A**：打开 SSE 测试页并保持流式连接  
-   - 后台：`/admin/<backendKey>/<lang>/server/sse-test/index`  
+   - 后台：`/<backend-prefix>/server/backend/sse-test`
    - 前台：`/server/sse-test/index`  
    - 点击「开始测试」，保持 SSE 连接（约 5 秒内会持续收事件，不要点停止）
 
@@ -102,7 +108,7 @@
 **终端 1**：保持 SSE 长连接（会持续输出事件，不要关）
 
 ```bash
-curl -N -H "Accept: text/event-stream" "http://127.0.0.1:端口/admin/你的后台路径/server/sse-test/stream"
+curl -N -H "Accept: text/event-stream" "http://127.0.0.1:端口/<backend-prefix>/server/backend/sse-test/stream"
 ```
 
 若走 Dispatcher，把 `http://127.0.0.1:端口` 换成实际前端访问的域名和端口。
@@ -127,7 +133,7 @@ curl -o /dev/null -s -w "耗时: %{time_total}s\n" "http://127.0.0.1:端口/admi
 
 ```javascript
 (function () {
-  var streamUrl = '你的 SSE stream 地址';  // 如: /admin/xx/zh_cn/server/sse-test/stream
+  var streamUrl = '你的 SSE stream 地址';  // 如: /<backend-prefix>/server/backend/sse-test/stream
   var apiUrl = '你的普通接口地址';          // 如: /admin/xx/zh_cn/ 或任意 API
 
   var es = new EventSource(streamUrl);

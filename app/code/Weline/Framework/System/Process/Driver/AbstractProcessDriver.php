@@ -80,6 +80,23 @@ abstract class AbstractProcessDriver implements ProcessDriverInterface
     {
         self::$availableFunctionsCache = null;
     }
+
+    /**
+     * @inheritDoc
+     */
+    public function getProcessCommandLines(array $pids): array
+    {
+        $commandLines = [];
+        foreach ($pids as $pid) {
+            $pid = (int)$pid;
+            if ($pid <= 0 || \array_key_exists($pid, $commandLines)) {
+                continue;
+            }
+            $commandLines[$pid] = $this->getProcessCommandLine($pid);
+        }
+
+        return $commandLines;
+    }
     
     /**
      * 执行命令并返回输出

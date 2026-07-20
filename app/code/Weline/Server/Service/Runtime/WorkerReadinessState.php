@@ -15,9 +15,12 @@ use Weline\Framework\Container\ContainerRuntime;
  */
 final class WorkerReadinessState
 {
-    public const READINESS_PROTOCOL_VERSION = 3;
+    public const READINESS_PROTOCOL_VERSION = 7;
     public const CAPABILITY_DYNAMIC_FIRST_RENDER_PROOF = 'dynamic_first_render_proof_v1';
     public const CAPABILITY_COMPILED_CONTAINER_DIGEST = 'compiled_container_digest_v1';
+    public const CAPABILITY_HTTP3_QUIC_READY = 'http3_quic_ready_v3';
+    public const CAPABILITY_HTTP3_LINUX_EBPF_ROUTE = 'http3_linux_ebpf_route_v1';
+    public const CAPABILITY_HTTP3_TLS_TICKET_RING = 'http3_tls_ticket_ring_v1';
 
     private static string $topology = '';
     private static string $policyDigest = '';
@@ -60,6 +63,21 @@ final class WorkerReadinessState
     private static int $inheritedFd = 0;
     private static string $eventLoop = '';
     private static string $sslEngine = '';
+    private static string $http3Mode = '';
+    private static bool $http3ListenerBound = false;
+    private static bool $http3DatagramChannelReady = false;
+    private static bool $http3RouteGenerationReady = false;
+    private static int $http3Port = 0;
+    private static string $http3NativeDigest = '';
+    private static bool $http3RuntimeVerified = false;
+    private static bool $http3TlsTicketRingActive = false;
+    private static bool $http3EarlyDataDisabled = false;
+    private static int $http3TlsTicketRingEpoch = 0;
+    private static int $http3TlsTicketLifetimeSeconds = 0;
+    private static string $http3TlsTicketRingDigest = '';
+    /** @var array<string,int|string> */
+    private static array $http3Route = [];
+    private static string $http3ActivationId = '';
 
     public static function reset(string $topology): void
     {
@@ -76,6 +94,20 @@ final class WorkerReadinessState
         self::$inheritedFd = 0;
         self::$eventLoop = '';
         self::$sslEngine = '';
+        self::$http3Mode = '';
+        self::$http3ListenerBound = false;
+        self::$http3DatagramChannelReady = false;
+        self::$http3RouteGenerationReady = false;
+        self::$http3Port = 0;
+        self::$http3NativeDigest = '';
+        self::$http3RuntimeVerified = false;
+        self::$http3TlsTicketRingActive = false;
+        self::$http3EarlyDataDisabled = false;
+        self::$http3TlsTicketRingEpoch = 0;
+        self::$http3TlsTicketLifetimeSeconds = 0;
+        self::$http3TlsTicketRingDigest = '';
+        self::$http3Route = [];
+        self::$http3ActivationId = '';
     }
 
     public static function markListenerBound(
@@ -106,6 +138,89 @@ final class WorkerReadinessState
         self::$inheritedFd = 0;
     }
 
+    /** @param array<string,int|string> $routeStatus */
+    public static function markHttp3LinuxRouteStaged(
+        int $port,
+        string $nativeDigest,
+        bool $runtimeVerified,
+        array $routeStatus,
+    ): void {
+        self::markHttp3Ready('reuseport-ebpf', $port, $nativeDigest, $runtimeVerified, true, false, false);
+        $route = self::normalizeLinuxRouteStatus($routeStatus, 'staged');
+        if (self::$http3Mode === '' || $route === []) {
+            self::markHttp3Closed();
+            return;
+        }
+        self::$http3Route = $route;
+        self::$http3ActivationId = '';
+    }
+
+    /** @param array<string,int|string> $routeStatus */
+    public static function markHttp3LinuxRouteActivated(array $routeStatus, string $activationId): void
+    {
+        $activationId = \strtolower(\trim($activationId));
+        $route = self::normalizeLinuxRouteStatus($routeStatus, 'active');
+        if (self::$http3Mode !== 'reuseport-ebpf'
+            || self::$http3Route === []
+            || $route === []
+            || \preg_match('/^[a-f0-9]{64}$/D', $activationId) !== 1
+            || !self::sameLinuxRouteIdentity(self::$http3Route, $route)
+        ) {
+            throw new \RuntimeException('Linux HTTP/3 route activation identity mismatch.');
+        }
+        self::$http3Route = $route;
+        self::$http3ActivationId = $activationId;
+        self::$http3RouteGenerationReady = true;
+    }
+
+    public static function markHttp3DatagramWorkerReady(
+        int $port,
+        string $nativeDigest,
+        bool $runtimeVerified,
+    ): void {
+        self::markHttp3Ready('datagram-router', $port, $nativeDigest, $runtimeVerified, false, true, true);
+    }
+
+    /** @param array<string,bool|int|string> $status */
+    public static function markHttp3TlsTicketRingReady(array $status): void
+    {
+        $digest = \strtolower(\trim((string)($status['digest'] ?? '')));
+        $epoch = (int)($status['epoch'] ?? 0);
+        $lifetime = (int)($status['lifetime_seconds'] ?? 0);
+        if (!($status['active'] ?? false)
+            || !($status['early_data_disabled'] ?? false)
+            || $epoch <= 0
+            || $lifetime < 300
+            || $lifetime > 604800
+            || \preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1
+        ) {
+            throw new \RuntimeException('HTTP/3 TLS ticket-ring readiness is invalid.');
+        }
+        self::$http3TlsTicketRingActive = true;
+        self::$http3EarlyDataDisabled = true;
+        self::$http3TlsTicketRingEpoch = $epoch;
+        self::$http3TlsTicketLifetimeSeconds = $lifetime;
+        self::$http3TlsTicketRingDigest = $digest;
+    }
+
+    public static function markHttp3Closed(): void
+    {
+        self::$http3Mode = '';
+        self::$http3ListenerBound = false;
+        self::$http3DatagramChannelReady = false;
+        self::$http3RouteGenerationReady = false;
+        self::$http3Port = 0;
+        self::$http3NativeDigest = '';
+        self::$http3RuntimeVerified = false;
+        self::$http3TlsTicketRingActive = false;
+        self::$http3EarlyDataDisabled = false;
+        self::$http3TlsTicketRingEpoch = 0;
+        self::$http3TlsTicketLifetimeSeconds = 0;
+        self::$http3TlsTicketRingDigest = '';
+        self::$http3Route = [];
+        self::$http3ActivationId = '';
+    }
+
     public static function markPolicyLoaded(string $digest): void
     {
         $digest = \strtolower(\trim($digest));
@@ -132,18 +247,15 @@ final class WorkerReadinessState
             'reason' => \trim((string)($proof['reason'] ?? '')),
             'http_status' => (int)($proof['http_status'] ?? 0),
         ];
-        if (!$normalized['hit']
-            || $normalized['fpc_status'] !== 'HIT'
-            || !\str_starts_with($normalized['source'], 'process')
-            || \preg_match('#^https?://#i', $normalized['full_uri']) !== 1
-            || $normalized['http_status'] < 200
-            || $normalized['http_status'] >= 400
-        ) {
-            throw new \InvalidArgumentException('Business Worker hot state requires a valid homepage process FPC proof.');
-        }
+        $validProcessFpcProof = $normalized['hit']
+            && $normalized['fpc_status'] === 'HIT'
+            && \str_starts_with($normalized['source'], 'process')
+            && \preg_match('#^https?://#i', $normalized['full_uri']) === 1
+            && $normalized['http_status'] >= 200
+            && $normalized['http_status'] < 400;
 
         self::$homepageFpcProof = $normalized;
-        self::$warmupState = 'hot';
+        self::$warmupState = $validProcessFpcProof ? 'hot' : 'warm';
     }
 
     /**
@@ -192,7 +304,11 @@ final class WorkerReadinessState
      *     },
      *     listen_capabilities:array{
      *         bound:bool,reuseport:bool,mode:string,shared_listener:bool,inherited_fd:int,
-     *         event_loop:string,ssl_engine:string
+     *         event_loop:string,ssl_engine:string,
+     *         http3:array{
+     *             mode:string,listener_bound:bool,datagram_channel_ready:bool,
+     *             route_generation_ready:bool,port:int,native_digest:string,runtime_verified:bool
+     *         }
      *     }
      * }
      */
@@ -203,6 +319,9 @@ final class WorkerReadinessState
             'readiness_capabilities' => [
                 self::CAPABILITY_DYNAMIC_FIRST_RENDER_PROOF,
                 self::CAPABILITY_COMPILED_CONTAINER_DIGEST,
+                self::CAPABILITY_HTTP3_QUIC_READY,
+                self::CAPABILITY_HTTP3_LINUX_EBPF_ROUTE,
+                self::CAPABILITY_HTTP3_TLS_TICKET_RING,
             ],
             'topology' => self::$topology,
             'policy_digest' => self::$policyDigest,
@@ -218,8 +337,110 @@ final class WorkerReadinessState
                 'inherited_fd' => self::$inheritedFd,
                 'event_loop' => self::$eventLoop,
                 'ssl_engine' => self::$sslEngine,
+                'http3' => [
+                    'mode' => self::$http3Mode,
+                    'listener_bound' => self::$http3ListenerBound,
+                    'datagram_channel_ready' => self::$http3DatagramChannelReady,
+                    'route_generation_ready' => self::$http3RouteGenerationReady,
+                    'port' => self::$http3Port,
+                    'native_digest' => self::$http3NativeDigest,
+                    'runtime_verified' => self::$http3RuntimeVerified,
+                    'tls_ticket_ring' => [
+                        'active' => self::$http3TlsTicketRingActive,
+                        'early_data_disabled' => self::$http3EarlyDataDisabled,
+                        'epoch' => self::$http3TlsTicketRingEpoch,
+                        'lifetime_seconds' => self::$http3TlsTicketLifetimeSeconds,
+                        'digest' => self::$http3TlsTicketRingDigest,
+                    ],
+                    'activation_id' => self::$http3ActivationId,
+                    'route' => self::$http3Route,
+                ],
             ],
         ];
+    }
+
+    private static function markHttp3Ready(
+        string $mode,
+        int $port,
+        string $nativeDigest,
+        bool $runtimeVerified,
+        bool $listenerBound,
+        bool $datagramChannelReady,
+        bool $routeGenerationReady,
+    ): void {
+        $nativeDigest = \strtolower(\trim($nativeDigest));
+        $valid = \in_array($mode, ['reuseport-ebpf', 'datagram-router'], true)
+            && $port > 0
+            && $port <= 65535
+            && $runtimeVerified
+            && \preg_match('/^[a-f0-9]{64}$/D', $nativeDigest) === 1;
+        self::$http3Mode = $valid ? $mode : '';
+        self::$http3ListenerBound = $valid && $listenerBound;
+        self::$http3DatagramChannelReady = $valid && $datagramChannelReady;
+        self::$http3RouteGenerationReady = $valid && $routeGenerationReady;
+        self::$http3Port = $valid ? $port : 0;
+        self::$http3NativeDigest = $valid ? $nativeDigest : '';
+        self::$http3RuntimeVerified = $valid;
+    }
+
+    /** @param array<string,mixed> $status @return array<string,int|string> */
+    private static function normalizeLinuxRouteStatus(array $status, string $expectedState): array
+    {
+        $state = (int)($status['state'] ?? 0);
+        $stateName = \strtolower(\trim((string)($status['state_name'] ?? '')));
+        $normalizedState = $state === 1 && $stateName === 'staged'
+            ? 'staged'
+            : (($state === 2 && \in_array($stateName, ['active', 'activated'], true)) ? 'active' : '');
+        $route = [
+            'state' => $normalizedState,
+            'slot' => (int)($status['slot'] ?? -1),
+            'slot_count' => (int)($status['slot_count'] ?? 0),
+            'owner_epoch' => (int)($status['owner_epoch'] ?? 0),
+            'generation' => (int)($status['generation'] ?? 0),
+            'listener_cookie' => (int)($status['listener_cookie'] ?? 0),
+            'connection_cookie' => (int)($status['connection_cookie'] ?? 0),
+            'program_id' => (int)($status['program_id'] ?? 0),
+            'listen_map_id' => (int)($status['listen_map_id'] ?? 0),
+            'worker_map_id' => (int)($status['worker_map_id'] ?? 0),
+            'count_map_id' => (int)($status['count_map_id'] ?? 0),
+            'owner_map_id' => (int)($status['owner_map_id'] ?? 0),
+            'namespace_digest' => \strtolower(\trim((string)($status['namespace_digest'] ?? ''))),
+        ];
+        if ($route['state'] !== $expectedState
+            || $route['slot'] < 0
+            || $route['slot_count'] < 1
+            || $route['slot_count'] > 64
+            || $route['slot'] >= $route['slot_count']
+            || $route['owner_epoch'] <= 0
+            || $route['generation'] <= 0
+            || $route['listener_cookie'] <= 0
+            || $route['connection_cookie'] <= 0
+            || $route['program_id'] <= 0
+            || $route['listen_map_id'] <= 0
+            || $route['worker_map_id'] <= 0
+            || $route['count_map_id'] <= 0
+            || $route['owner_map_id'] <= 0
+            || \preg_match('/^[a-f0-9]{64}$/D', (string)$route['namespace_digest']) !== 1
+        ) {
+            return [];
+        }
+        return $route;
+    }
+
+    /** @param array<string,int|string> $left @param array<string,int|string> $right */
+    private static function sameLinuxRouteIdentity(array $left, array $right): bool
+    {
+        foreach ([
+            'slot', 'slot_count', 'owner_epoch', 'generation',
+            'listener_cookie', 'connection_cookie', 'program_id',
+            'listen_map_id', 'worker_map_id', 'count_map_id', 'owner_map_id',
+            'namespace_digest',
+        ] as $key) {
+            if (($left[$key] ?? null) !== ($right[$key] ?? null)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

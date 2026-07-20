@@ -39,6 +39,9 @@ class Processer
      */
     private static ?bool $powerShellAvailableCache = null;
 
+    /** @var array<string, string> */
+    private static array $windowsPersistentDriveRoots = [];
+
     /**
      * Windows batchCreate 非等待模式下的后台 helper 资源。
      *
@@ -51,6 +54,28 @@ class Processer
     private static array $windowsDetachedBatchHelpers = [];
 
     private static bool $windowsDetachedBatchHelperShutdownRegistered = false;
+
+    /**
+     * Windows WLS children started directly by the long-lived Master.
+     *
+     * Keeping the proc_open resources makes the ownership model explicit and
+     * removes PowerShell/Start-Process from the service startup path. Running
+     * children are never TTL-reaped; normal WLS IPC owns their lifecycle.
+     *
+     * @var array<int, array{process: resource, pid: int, key: string, started_at: float}>
+     */
+    private static array $windowsMasterOwnedChildren = [];
+
+    private static bool $windowsMasterOwnedChildShutdownRegistered = false;
+
+    /**
+     * POSIX WLS children launched directly and owned by the long-lived Master.
+     *
+     * @var array<int, array{process: resource, pid: int, key: string, started_at: float}>
+     */
+    private static array $unixMasterOwnedChildren = [];
+
+    private static bool $unixMasterOwnedChildShutdownRegistered = false;
     
     /**
      * 已验证为受信任的 PID 缓存
@@ -76,6 +101,10 @@ class Processer
     public const PROCESS_STATE_UNKNOWN = ProcessDriverInterface::PROCESS_STATE_UNKNOWN;
     public const PROCESS_STATE_IDENTITY_MISMATCH = 'identity_mismatch';
     private const PROCESS_RECORD_VERSION = 2;
+    private const INDEX_STATE_VALID = 'valid';
+    private const INDEX_STATE_ABSENT = 'absent';
+    private const INDEX_STATE_UNREADABLE = 'unreadable';
+    private const INDEX_STATE_CORRUPT = 'corrupt';
     
     /**
      * 进程名最大长度
@@ -540,7 +569,7 @@ class Processer
         }
 
         $descriptors = [
-            0 => ['file', 'NUL', 'r'],
+            0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
@@ -823,7 +852,7 @@ class Processer
                         self::buildWindowsPowerShellProcOpenCommand($scriptPath),
                         $descriptorspec,
                         $psPipes,
-                        BP,
+                        self::resolveWindowsHelperWorkingDirectory(),
                         null,
                         ['bypass_shell' => true]
                     );
@@ -995,6 +1024,242 @@ class Processer
     }
 
     /**
+     * 使用原生 argv 拉起独立 PHP 子进程。
+     *
+     * POSIX 通过短命 pcntl launcher 直接 exec PHP；Windows 通过
+     * Start-Process ArgumentList 数组启动。两条路径都不经过 shell 字符串解析，
+     * 并返回实际 PHP 子进程 PID。
+     *
+     * @param list<string> $argv
+     */
+    public static function createDetachedPhpArgv(
+        array $argv,
+        string $cwd,
+        string $processIdentity,
+        ?bool $enableLog = null
+    ): int {
+        $argv = self::normalizeManagedPhpArgv($argv);
+        if ($argv === []) {
+            throw new \InvalidArgumentException('Detached PHP argv is invalid or does not use the current PHP binary.');
+        }
+
+        $resolvedCwd = \realpath($cwd);
+        if ($resolvedCwd === false || !\is_dir($resolvedCwd)) {
+            throw new \InvalidArgumentException('Detached PHP working directory does not exist.');
+        }
+
+        if (IS_WIN) {
+            $resolvedCwd = self::resolveWindowsPersistentPath($resolvedCwd);
+            $argv = \array_map(
+                static fn (string $argument): string => self::resolveWindowsPersistentPath($argument),
+                $argv
+            );
+        }
+
+        $processIdentity = \trim($processIdentity);
+        if ($processIdentity === '' || \preg_match('/--?name[=\s]+/', $processIdentity) !== 1) {
+            throw new \InvalidArgumentException('Detached PHP process identity requires an explicit --name.');
+        }
+
+        if (IS_WIN) {
+            $pid = self::createWindowsDetachedPhpArgv(
+                $argv,
+                $resolvedCwd,
+                $processIdentity,
+                $enableLog
+            );
+            if ($pid <= 0) {
+                throw new \RuntimeException('Windows detached PHP argv launcher did not return a child PID.');
+            }
+
+            return $pid;
+        }
+
+        $pid = self::createPosixDetachedPhpArgv(
+            $argv,
+            $resolvedCwd,
+            $processIdentity,
+            $enableLog
+        );
+        if ($pid <= 0) {
+            throw new \RuntimeException('POSIX detached PHP fork/exec did not return a child PID.');
+        }
+
+        return $pid;
+    }
+
+    /**
+     * Fork the already-loaded CLI once, create a detached session, then exec the
+     * requested PHP argv. This removes the extra PHP -r launcher from Master and
+     * shared-sidecar cold starts while still giving the parent the real PID.
+     *
+     * @param list<string> $argv
+     */
+    private static function createPosixDetachedPhpArgv(
+        array $argv,
+        string $cwd,
+        string $processIdentity,
+        ?bool $enableLog
+    ): int {
+        $disabledFunctions = \array_map(
+            'trim',
+            \explode(',', \ini_get('disable_functions') ?: '')
+        );
+        foreach (['pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'] as $required) {
+            if (!\function_exists($required)
+                || \in_array($required, $disabledFunctions, true)
+            ) {
+                throw new \RuntimeException(
+                    'POSIX detached PHP fork/exec requires function: ' . $required
+                );
+            }
+        }
+
+        $openFileDescriptors = self::listUnixOpenFileDescriptors();
+        if ($openFileDescriptors === null) {
+            throw new \RuntimeException(
+                'POSIX detached PHP fork/exec cannot enumerate inherited descriptors.'
+            );
+        }
+
+        $logEnabled = $enableLog ?? self::isLogEnabled();
+        $stdoutPath = '/dev/null';
+        if ($logEnabled) {
+            $candidate = self::getLogFile($processIdentity);
+            if (self::prepareProcessLogFileForWrite($candidate)) {
+                $stdoutPath = $candidate;
+            } else {
+                self::logLifecycleEvent(
+                    'log_unwritable',
+                    $processIdentity,
+                    0,
+                    'detached fork/exec log unavailable'
+                );
+            }
+        }
+
+        $pid = @\pcntl_fork();
+        if ($pid < 0) {
+            return 0;
+        }
+        if ($pid > 0) {
+            return $pid;
+        }
+
+        $sessionId = @\posix_setsid();
+        if (!\is_int($sessionId) || $sessionId <= 0) {
+            @\posix_kill((int)\getmypid(), \defined('SIGKILL') ? \SIGKILL : 9);
+            throw new \RuntimeException('POSIX detached child could not create an isolated session.');
+        }
+        @\chdir($cwd);
+        self::closeUnixDescriptorsBeforeExec($openFileDescriptors);
+        @\fclose(\STDIN);
+        @\fclose(\STDOUT);
+        @\fclose(\STDERR);
+        $stdin = @\fopen('/dev/null', 'rb');
+        $stdout = @\fopen($stdoutPath, 'ab');
+        if (!\is_resource($stdout)) {
+            $stdout = @\fopen('/dev/null', 'ab');
+        }
+        $stderr = @\fopen($stdoutPath, 'ab');
+        if (!\is_resource($stderr)) {
+            $stderr = @\fopen('/dev/null', 'ab');
+        }
+
+        $php = (string)\array_shift($argv);
+        @\pcntl_exec($php, $argv);
+        $errorCode = \function_exists('pcntl_get_last_error')
+            ? \pcntl_get_last_error()
+            : 0;
+        $errorText = \function_exists('pcntl_strerror')
+            ? \pcntl_strerror($errorCode)
+            : 'unknown';
+        @\fwrite(
+            $stderr,
+            '[ERROR] POSIX detached pcntl_exec failed errno=' . $errorCode
+            . ' message=' . $errorText
+            . ' executable=' . \basename($php)
+            . PHP_EOL
+        );
+        @\fflush($stderr);
+        @\posix_kill((int)\getmypid(), \defined('SIGKILL') ? \SIGKILL : 9);
+
+        throw new \RuntimeException('POSIX detached pcntl_exec failed.');
+    }
+
+    /**
+     * Close inherited descriptors in the forked child before pcntl_exec.
+     *
+     * @param list<int> $openFileDescriptors
+     */
+    private static function closeUnixDescriptorsBeforeExec(array $openFileDescriptors): void
+    {
+        if (\function_exists('get_resources')) {
+            foreach (\get_resources('stream') as $resource) {
+                if (!\is_resource($resource)
+                    || $resource === \STDIN
+                    || $resource === \STDOUT
+                    || $resource === \STDERR
+                ) {
+                    continue;
+                }
+                try {
+                    @\fclose($resource);
+                } catch (\Throwable) {
+                    // Another PHP resource alias may already have closed the
+                    // same underlying descriptor.
+                }
+            }
+        }
+
+        if (!\class_exists(\FFI::class)) {
+            return;
+        }
+        try {
+            $libc = \FFI::cdef('int close(int fd);');
+            foreach ($openFileDescriptors as $fd) {
+                if ($fd > 2) {
+                    $libc->close($fd);
+                }
+            }
+        } catch (\Throwable) {
+            // PHP streams were already closed; remaining native handles rely
+            // on their close-on-exec flag.
+        }
+    }
+
+    /**
+     * @param array<int, mixed> $argv
+     * @return list<string>
+     */
+    private static function normalizeManagedPhpArgv(array $argv): array
+    {
+        if (\count($argv) < 2) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach (\array_values($argv) as $argument) {
+            if (!\is_scalar($argument) && !$argument instanceof \Stringable) {
+                return [];
+            }
+            $argument = (string)$argument;
+            if ($argument === '' || \str_contains($argument, "\0")) {
+                return [];
+            }
+            $normalized[] = $argument;
+        }
+
+        $expectedPhp = \realpath(PHP_BINARY) ?: PHP_BINARY;
+        $actualPhp = \realpath($normalized[0]) ?: $normalized[0];
+        $sameBinary = IS_WIN
+            ? \strcasecmp($expectedPhp, $actualPhp) === 0
+            : $expectedPhp === $actualPhp;
+
+        return $sameBinary ? $normalized : [];
+    }
+
+    /**
      * Windows：用 PowerShell Start-Process，且 ArgumentList 为字符串数组，避免「整段命令行」经 ANSI/控制台编码后损坏（中文 BP、中文参数等），导致 PID 回传为空。
      *
      * @param list<string> $argv [php.exe 路径, 脚本绝对路径, ...脚本 argv]
@@ -1028,7 +1293,6 @@ class Processer
             return 0;
         }
 
-        $nullDevice = 'NUL';
         if ($enableLog) {
             self::setOutput(
                 $pname,
@@ -1038,7 +1302,7 @@ class Processer
         }
 
         $descriptorspec = [
-            0 => ['file', $nullDevice, 'r'],
+            0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
@@ -1054,7 +1318,7 @@ class Processer
                 self::buildWindowsPowerShellProcOpenCommand($scriptPath),
                 $descriptorspec,
                 $psPipes,
-                $cwd,
+                self::resolveWindowsHelperWorkingDirectory(),
                 null,
                 ['bypass_shell' => true]
             );
@@ -1064,6 +1328,9 @@ class Processer
 
         $pid = 0;
         if (\is_resource($psProcess)) {
+            if (isset($psPipes[0])) {
+                @\fclose($psPipes[0]);
+            }
             $output = '';
             $stderr = '';
             // 非阻塞读取 PID 回传，避免 PowerShell 脚本异常挂起拖慢 Master 启动编排。
@@ -1073,7 +1340,7 @@ class Processer
             if (isset($psPipes[2])) {
                 @\stream_set_blocking($psPipes[2], false);
             }
-            $deadline = \microtime(true) + 0.35;
+            $deadline = \microtime(true) + self::resolveWindowsStartProcessPidEchoTimeout();
             while (\microtime(true) < $deadline) {
                 if (isset($psPipes[1])) {
                     $chunk = @\fread($psPipes[1], 256);
@@ -1197,17 +1464,58 @@ class Processer
             @\mkdir($dir, 0777, true);
         }
 
-        self::withManagedIndexLock(static function () use ($pid_file, $payload, $pname, $pid): void {
-            // 带 PID 的记录文件天然是一进程一文件，使用原子写可避免 Windows
-            // 上阻塞 flock 把 Master 启动链卡死在 registerMasterPid()。
-            self::atomicWrite($pid_file, $payload);
+        $registered = false;
+        self::withManagedIndexLock(static function () use (
+            $pid_file,
+            $payload,
+            $pname,
+            $pid,
+            &$registered
+        ): void {
+            $hadPreviousLease = \is_file($pid_file);
+            $previousPayload = $hadPreviousLease ? @\file_get_contents($pid_file) : null;
+            if ($hadPreviousLease && !\is_string($previousPayload)) {
+                return;
+            }
 
-            // 更新索引（写顺序：先 *-pid.json 已完成，再 name_index，再 pid_index）
-            self::updateIndexes($pname, $pid, $pid_file);
+            $previousIndexes = self::updateIndexes($pname, $pid, $pid_file);
+            if (!\is_array($previousIndexes)) {
+                return;
+            }
 
-            // 标记为受信任 PID（后续操作跳过命令行校验）
+            $restoreIndexes = static function (array $snapshots): void {
+                self::writeNameIndex((array)($snapshots['name'] ?? []));
+                self::writePidIndex((array)($snapshots['pid'] ?? []));
+                self::writePortIndex((array)($snapshots['port'] ?? []));
+            };
+
+            // The exact lease is the commit marker and is published last.
+            if (!self::atomicWrite($pid_file, $payload)) {
+                $restoreIndexes($previousIndexes);
+                return;
+            }
+
+            $verified = self::getManagedProcessLeaseRecord($pid, $pname);
+            if ($verified === []
+                || self::buildManagedIdentity((string)($verified['pname'] ?? '')) !== $pname) {
+                if (\is_string($previousPayload)) {
+                    self::atomicWrite($pid_file, $previousPayload);
+                } else {
+                    @\unlink($pid_file);
+                }
+                $restoreIndexes($previousIndexes);
+                return;
+            }
+
             self::markPidAsTrusted($pid);
-        });
+            $registered = true;
+        }, true);
+
+        if (!$registered) {
+            throw new \RuntimeException(
+                'Failed to publish managed process lease for ' . $task_name . ' (pid=' . $pid . ')'
+            );
+        }
 
         // 记录进程创建日志；只允许 canonical identity 跨日志边界。
         self::logLifecycleEvent('create', $pname, $pid);
@@ -1332,6 +1640,148 @@ class Processer
         $data = self::getData($pname);
         return \is_array($data) ? $data : [];
     }
+    /**
+     * Read one committed managed-process lease.
+     *
+     * The exact per-PID lease is the authority. Aggregate PID/name indexes are
+     * rebuildable discovery caches: when present and valid they may veto an
+     * explicit conflict, but absence or a publication window cannot erase an
+     * otherwise valid exact lease.
+     */
+    public static function getManagedProcessLeaseRecord(int $pid, string $expectedPname): array
+    {
+        $expectedPname = \trim($expectedPname);
+        if ($pid <= 0 || $expectedPname === '') {
+            return [];
+        }
+
+        $expectedPnameKey = self::buildPnameKey($expectedPname);
+        $expectedProcessName = self::getTaskName($expectedPname);
+        $expectedManagedIdentity = self::buildManagedIdentity($expectedPname);
+        $requiresExactGeneration = self::getManagedIdentityLaunchId($expectedManagedIdentity) !== ''
+            || self::extractCommandLineArg($expectedManagedIdentity, 'epoch') !== '';
+        if ($expectedPnameKey === '' || $expectedProcessName === '') {
+            return [];
+        }
+
+        $jsonPath = self::getPidFile($expectedPname, $pid);
+        if (!\is_file($jsonPath)) {
+            return [];
+        }
+
+        $handle = @\fopen($jsonPath, 'rb');
+        if (!\is_resource($handle) || !@\flock($handle, \LOCK_SH)) {
+            if (\is_resource($handle)) {
+                @\fclose($handle);
+            }
+            return [];
+        }
+        try {
+            $content = \stream_get_contents($handle);
+            $decoded = \is_string($content) ? \json_decode($content, true) : null;
+            $record = \is_array($decoded) && \json_last_error() === \JSON_ERROR_NONE
+                ? $decoded
+                : [];
+        } finally {
+            @\flock($handle, \LOCK_UN);
+            @\fclose($handle);
+        }
+
+        $recordedPname = \trim((string)($record['pname'] ?? ''));
+        if ((int)($record['record_version'] ?? 0) !== self::PROCESS_RECORD_VERSION
+            || (int)($record['pid'] ?? 0) !== $pid
+            || $recordedPname === ''
+            || ($requiresExactGeneration
+                && self::buildManagedIdentity($recordedPname) !== $expectedManagedIdentity)
+            || (string)($record['pname_key'] ?? '') !== $expectedPnameKey
+            || self::buildPnameKey($recordedPname) !== $expectedPnameKey
+            || self::getRecordedProcessName($record) !== $expectedProcessName) {
+            return [];
+        }
+
+        $normalizePath = static function (string $path): string {
+            $normalized = \str_replace('\\', '/', @\realpath($path) ?: $path);
+            return PHP_OS_FAMILY === 'Windows' ? \strtolower($normalized) : $normalized;
+        };
+        $pathsEquivalent = static function (string $left, string $right) use ($normalizePath): bool {
+            if (\is_link($left) || \is_link($right)) {
+                return false;
+            }
+            if (\hash_equals($normalizePath($left), $normalizePath($right))) {
+                return true;
+            }
+            if (PHP_OS_FAMILY !== 'Windows'
+                || !\is_file($left)
+                || !\is_file($right)
+            ) {
+                return false;
+            }
+            $leftName = \strtolower(\basename(\str_replace('\\', '/', $left)));
+            $rightName = \strtolower(\basename(\str_replace('\\', '/', $right)));
+            if ($leftName === '' || !\hash_equals($leftName, $rightName)) {
+                return false;
+            }
+            $leftSize = @\filesize($left);
+            $rightSize = @\filesize($right);
+            if (!\is_int($leftSize)
+                || !\is_int($rightSize)
+                || $leftSize <= 0
+                || $leftSize > 65_536
+                || $leftSize !== $rightSize
+            ) {
+                return false;
+            }
+            $leftBytes = @\file_get_contents($left);
+            $rightBytes = @\file_get_contents($right);
+
+            return \is_string($leftBytes)
+                && \is_string($rightBytes)
+                && \hash_equals(\hash('sha256', $leftBytes), \hash('sha256', $rightBytes));
+        };
+
+        $pidSnapshot = self::readJsonIndexSnapshot(self::getPidIndexFile());
+        if (($pidSnapshot['state'] ?? '') === self::INDEX_STATE_VALID) {
+            $pidEntry = ((array)($pidSnapshot['data'] ?? []))[$pid] ?? null;
+            if ($pidEntry !== null) {
+                if (!\is_array($pidEntry)) {
+                    return [];
+                }
+                $indexedPname = \trim((string)($pidEntry['pname'] ?? ''));
+                $indexedPath = \trim((string)($pidEntry['jsonPath'] ?? ''));
+                if ($indexedPname === ''
+                    || self::buildManagedIdentity($indexedPname) !== self::buildManagedIdentity($recordedPname)
+                    || $indexedPath === ''
+                    || !$pathsEquivalent($jsonPath, $indexedPath)) {
+                    return [];
+                }
+            }
+        }
+
+        $nameSnapshot = self::readJsonIndexSnapshot(self::getNameIndexFile());
+        if (($nameSnapshot['state'] ?? '') === self::INDEX_STATE_VALID) {
+            $nameIndex = (array)($nameSnapshot['data'] ?? []);
+            foreach ($nameIndex as $indexedPname => $entries) {
+                if (!\is_array($entries)) {
+                    continue;
+                }
+                foreach ($entries as $entry) {
+                    if (!\is_array($entry) || (int)($entry['pid'] ?? 0) !== $pid) {
+                        continue;
+                    }
+                    $indexedPath = \trim((string)($entry['jsonPath'] ?? ''));
+                    if (self::buildManagedIdentity((string)$indexedPname)
+                            !== self::buildManagedIdentity($recordedPname)
+                        || $indexedPath === ''
+                        || !$pathsEquivalent($jsonPath, $indexedPath)) {
+                        return [];
+                    }
+                }
+            }
+        }
+
+        return $record;
+    }
+
 
     /**
      * 三态探测 PID，保留 unknown 以便生命周期控制面 fail closed。
@@ -1374,9 +1824,162 @@ class Processer
         ?string $expectedPname = null,
         bool $fresh = false
     ): array {
+        $processState = self::probeProcessState($pid, $fresh);
+        $preflight = self::validateManagedProcessIdentitySnapshot(
+            $pid,
+            $expectedProcessName,
+            $expectedLaunchId,
+            $expectedPname,
+            $processState,
+            ''
+        );
+        if ($processState !== self::PROCESS_STATE_RUNNING
+            || ($preflight['reason'] ?? '') !== 'live_identity_unavailable'
+        ) {
+            return $preflight;
+        }
+
+        $driver = self::getDriver();
+        if ($fresh) {
+            $driver->clearPortCache();
+        }
+        $liveIdentity = \trim($driver->getProcessCommandLine($pid));
+
+        return self::validateManagedProcessIdentitySnapshot(
+            $pid,
+            $expectedProcessName,
+            $expectedLaunchId,
+            $expectedPname,
+            $processState,
+            $liveIdentity
+        );
+    }
+
+    /**
+     * Probe a frozen managed-process set with one driver batch snapshot.
+     *
+     * Raw command lines remain private to Processer. Each request contains only
+     * immutable expectations, and its exact managed lease is checked both before
+     * and after the OS snapshot so PID reuse or lease publication races fail closed.
+     *
+     * @param array<int|string,array{
+     *     pid:int,
+     *     expected_process_name:string,
+     *     expected_launch_id:string,
+     *     expected_pname:string
+     * }> $requests
+     * @return array<int|string,array<string,mixed>>
+     */
+    public static function probeManagedProcessIdentities(array $requests, bool $fresh = false): array
+    {
+        $normalized = [];
+        $results = [];
+        $snapshotPids = [];
+
+        foreach ($requests as $key => $request) {
+            $request = \is_array($request) ? $request : [];
+            $pid = (int)($request['pid'] ?? 0);
+            $expectedProcessName = \trim((string)($request['expected_process_name'] ?? ''));
+            $expectedLaunchId = \trim((string)($request['expected_launch_id'] ?? ''));
+            $expectedPname = \trim((string)($request['expected_pname'] ?? ''));
+            $normalized[$key] = [
+                'pid' => $pid,
+                'expected_process_name' => $expectedProcessName,
+                'expected_launch_id' => $expectedLaunchId,
+                'expected_pname' => $expectedPname,
+            ];
+
+            if ($pid <= 0) {
+                $results[$key] = self::validateManagedProcessIdentitySnapshot(
+                    $pid,
+                    $expectedProcessName,
+                    $expectedLaunchId,
+                    $expectedPname,
+                    self::PROCESS_STATE_EXITED,
+                    ''
+                );
+                continue;
+            }
+
+            $managedLease = self::getManagedProcessLeaseRecord($pid, $expectedPname);
+            $managedLaunchId = \trim((string)($managedLease['launch_id'] ?? ''));
+            if ($managedLease === []
+                || $expectedProcessName === ''
+                || $expectedLaunchId === ''
+                || $expectedPname === ''
+                || $managedLaunchId === ''
+                || !\hash_equals($expectedLaunchId, $managedLaunchId)
+            ) {
+                $results[$key] = self::validateManagedProcessIdentitySnapshot(
+                    $pid,
+                    $expectedProcessName,
+                    $expectedLaunchId,
+                    $expectedPname,
+                    self::PROCESS_STATE_RUNNING,
+                    ''
+                );
+                continue;
+            }
+
+            $snapshotPids[$pid] = true;
+        }
+
+        $snapshots = [];
+        if ($snapshotPids !== []) {
+            $driver = self::getDriver();
+            if ($fresh) {
+                $driver->clearPortCache();
+            }
+            $snapshots = $driver->getProcessCommandLines(\array_keys($snapshotPids));
+        }
+
+        foreach ($normalized as $key => $request) {
+            if (\array_key_exists($key, $results)) {
+                continue;
+            }
+            $pid = (int)$request['pid'];
+            $liveIdentity = \trim((string)($snapshots[$pid] ?? ''));
+            $results[$key] = self::validateManagedProcessIdentitySnapshot(
+                $pid,
+                (string)$request['expected_process_name'],
+                (string)$request['expected_launch_id'],
+                (string)$request['expected_pname'],
+                $liveIdentity !== ''
+                    ? self::PROCESS_STATE_RUNNING
+                    : self::PROCESS_STATE_UNKNOWN,
+                $liveIdentity
+            );
+            if ($liveIdentity === ''
+                && ($results[$key]['state'] ?? self::PROCESS_STATE_UNKNOWN) === self::PROCESS_STATE_UNKNOWN
+            ) {
+                $results[$key]['reason'] = 'live_identity_unavailable';
+            }
+        }
+
+        $ordered = [];
+        foreach ($normalized as $key => $_request) {
+            $ordered[$key] = $results[$key];
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * Validate one OS identity snapshot. Raw snapshots never cross the public
+     * managed-process API boundary; callers can provide only frozen expectations.
+     */
+    private static function validateManagedProcessIdentitySnapshot(
+        int $pid,
+        string $expectedProcessName,
+        string $expectedLaunchId,
+        ?string $expectedPname,
+        string $processState,
+        string $liveIdentity
+    ): array {
         $expectedProcessName = \trim($expectedProcessName);
         $expectedLaunchId = \trim($expectedLaunchId);
-        $expectedPname = \trim((string) $expectedPname);
+        $expectedPname = \trim((string)$expectedPname);
+        $liveIdentity = \trim($liveIdentity);
         $result = [
             'state' => self::PROCESS_STATE_UNKNOWN,
             'reason' => 'process_probe_unknown',
@@ -1386,7 +1989,6 @@ class Processer
             'expected_launch_id' => $expectedLaunchId,
         ];
 
-        $processState = self::probeProcessState($pid, $fresh);
         if ($processState === self::PROCESS_STATE_EXITED) {
             $result['state'] = self::PROCESS_STATE_EXITED;
             $result['reason'] = 'process_exited';
@@ -1395,7 +1997,6 @@ class Processer
         if ($processState !== self::PROCESS_STATE_RUNNING) {
             return $result;
         }
-
         if ($expectedProcessName === '') {
             $result['reason'] = 'expected_live_identity_missing';
             return $result;
@@ -1409,13 +2010,13 @@ class Processer
             return $result;
         }
 
-        $record = self::getProcessRecordByPid($pid);
+        $record = self::getManagedProcessLeaseRecord($pid, $expectedPname);
         if ($record === []) {
-            $result['reason'] = 'managed_record_missing';
+            $result['reason'] = 'managed_lease_record_missing_or_conflicting';
             return $result;
         }
 
-        $recordedPid = (int) ($record['pid'] ?? 0);
+        $recordedPid = (int)($record['pid'] ?? 0);
         if ($recordedPid <= 0) {
             $result['reason'] = 'recorded_pid_missing';
             return $result;
@@ -1426,10 +2027,12 @@ class Processer
             return $result;
         }
 
-        $recordedLaunchId = \trim((string) ($record['launch_id'] ?? ''));
+        $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
         $recordedProcessName = self::getRecordedProcessName($record);
+        $recordedPname = \trim((string)($record['pname'] ?? ''));
         $result['recorded_launch_id'] = $recordedLaunchId;
         $result['recorded_process_name'] = $recordedProcessName;
+        $result['recorded_pname'] = $recordedPname;
         if ($recordedLaunchId === '') {
             $result['reason'] = 'recorded_launch_id_missing';
             return $result;
@@ -1439,8 +2042,6 @@ class Processer
             $result['reason'] = 'recorded_launch_id_mismatch';
             return $result;
         }
-
-        $recordedPname = \trim((string) ($record['pname'] ?? ''));
         if ($recordedPname === '') {
             $result['reason'] = 'recorded_pname_missing';
             return $result;
@@ -1462,12 +2063,6 @@ class Processer
             return $result;
         }
 
-        $driver = self::getDriver();
-        if ($fresh) {
-            // Windows command-line 查询有独立 TTL 缓存；身份围栏必须绕过。
-            $driver->clearPortCache();
-        }
-        $liveIdentity = \trim($driver->getProcessCommandLine($pid));
         if ($liveIdentity === '') {
             $result['reason'] = 'live_identity_unavailable';
             return $result;
@@ -1475,26 +2070,49 @@ class Processer
 
         $result['expected_identity_hash'] = \hash('sha256', $expectedProcessName);
         $result['live_identity_hash'] = \hash('sha256', $liveIdentity);
-        if (!\hash_equals($expectedProcessName, $liveIdentity)) {
-            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
-            $result['reason'] = 'live_identity_mismatch';
-            return $result;
-        }
-
-        // Linux/Windows 的完整 argv 可提供第二份 live 身份证据；macOS 在
-        // cli_set_process_title 后只暴露 title，因此缺少参数时仍以记录 launch_id 为准。
         $liveLaunchId = self::extractCommandLineArg($liveIdentity, 'launch-id');
-        if ($liveLaunchId !== '' && !\hash_equals($expectedLaunchId, $liveLaunchId)) {
-            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
-            $result['reason'] = 'live_launch_id_mismatch';
-            return $result;
-        }
         $liveCanonicalName = self::extractCommandLineArg($liveIdentity, 'name');
-        if ($liveCanonicalName !== ''
-            && self::normalizeName($liveCanonicalName) !== $expectedCanonicalName) {
-            $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
-            $result['reason'] = 'live_pname_mismatch';
-            return $result;
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            // CIM exposes the immutable argv, not cli_set_process_title().
+            // The generation token plus canonical process name is the identity
+            // fence; quoting and path rendering are deliberately not compared.
+            if ($liveLaunchId === '') {
+                $result['reason'] = 'live_launch_id_missing';
+                return $result;
+            }
+            if (!\hash_equals($expectedLaunchId, $liveLaunchId)) {
+                $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+                $result['reason'] = 'live_launch_id_mismatch';
+                return $result;
+            }
+            if ($liveCanonicalName === '') {
+                $result['reason'] = 'live_pname_missing';
+                return $result;
+            }
+            if (self::normalizeName($liveCanonicalName) !== $expectedCanonicalName) {
+                $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+                $result['reason'] = 'live_pname_mismatch';
+                return $result;
+            }
+        } else {
+            // POSIX workers replace argv[0] with a generation-scoped title.
+            if (!\hash_equals($expectedProcessName, $liveIdentity)) {
+                $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+                $result['reason'] = 'live_identity_mismatch';
+                return $result;
+            }
+            if ($liveLaunchId !== '' && !\hash_equals($expectedLaunchId, $liveLaunchId)) {
+                $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+                $result['reason'] = 'live_launch_id_mismatch';
+                return $result;
+            }
+            if ($liveCanonicalName !== ''
+                && self::normalizeName($liveCanonicalName) !== $expectedCanonicalName) {
+                $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+                $result['reason'] = 'live_pname_mismatch';
+                return $result;
+            }
         }
 
         $result['state'] = self::PROCESS_STATE_RUNNING;
@@ -2002,7 +2620,7 @@ class Processer
     public static function removePidFile(string $pname): bool
     {
         $identity = self::buildManagedIdentity($pname);
-        $processInfo = self::snapshotIndexedProcessInfo();
+        $processInfo = self::snapshotManagedIdentityPortReplacementInfo($identity);
         $result = self::withManagedIndexLock(static function () use ($identity, $processInfo): bool {
             $nameIndex = self::readNameIndex();
             $identityKeys = self::findManagedIdentityKeys($identity, $nameIndex);
@@ -2123,95 +2741,103 @@ class Processer
         }
 
         $expectedName = self::getTaskName(self::buildManagedIdentity($expectedProcessName));
-        $processInfo = self::snapshotIndexedProcessInfo();
+        $expectedPname = '--name=' . $expectedName;
+        $preflightRecord = self::getManagedProcessLeaseRecord($pid, $expectedPname);
+        $processInfo = self::snapshotIndexedProcessInfo(
+            targetPorts: (array)($preflightRecord['ports'] ?? []),
+            excludedPids: [$pid => true]
+        );
         $result = self::withManagedIndexLock(static function () use (
             $pid,
             $expectedName,
+            $expectedPname,
             $expectedLaunchId,
             $processInfo
         ): bool {
-            $pidIndex = self::readPidIndex();
-            $pidEntry = $pidIndex[$pid] ?? null;
-            if (!\is_array($pidEntry)) {
+            $record = self::getManagedProcessLeaseRecord($pid, $expectedPname);
+            if ($record === []) {
                 return false;
             }
 
-            $indexedPname = (string) ($pidEntry['pname'] ?? '');
-            $jsonPath = (string) ($pidEntry['jsonPath'] ?? '');
-            if ($indexedPname === '' || $jsonPath === '' || !\is_file($jsonPath)) {
-                return false;
-            }
-            $canonicalPname = self::buildManagedIdentity($indexedPname);
-            if (self::getTaskName($canonicalPname) !== $expectedName
+            $recordedPname = \trim((string)($record['pname'] ?? ''));
+            $canonicalPname = self::buildManagedIdentity($recordedPname);
+            $recordedLaunchId = \trim((string)($record['launch_id'] ?? ''));
+            if ((int)($record['pid'] ?? 0) !== $pid
+                || self::getRecordedProcessName($record) !== $expectedName
+                || $recordedPname === ''
+                || self::buildPnameKey($recordedPname) !== self::buildPnameKey($expectedPname)
+                || $recordedLaunchId === ''
+                || !\hash_equals($expectedLaunchId, $recordedLaunchId)
                 || !\hash_equals($expectedLaunchId, self::getManagedIdentityLaunchId($canonicalPname))) {
                 return false;
             }
 
-            $record = [];
-            $recordHandle = @\fopen($jsonPath, 'rb');
-            if (!\is_resource($recordHandle) || !@\flock($recordHandle, \LOCK_SH)) {
-                if (\is_resource($recordHandle)) {
-                    @\fclose($recordHandle);
-                }
-                return false;
-            }
-            try {
-                $decoded = \json_decode((string) \stream_get_contents($recordHandle), true);
-                $record = \is_array($decoded) ? $decoded : [];
-            } finally {
-                @\flock($recordHandle, \LOCK_UN);
-                @\fclose($recordHandle);
-            }
-
-            if ((int) ($record['pid'] ?? 0) !== $pid
-                || self::normalizeName((string) ($record['process_name'] ?? '')) !== $expectedName
-                || !\hash_equals($expectedLaunchId, (string) ($record['launch_id'] ?? ''))
-                || self::buildManagedIdentity((string) ($record['pname'] ?? '')) !== $canonicalPname) {
-                return false;
-            }
-
-            $nameIndex = self::readNameIndex();
-            $entries = (array) ($nameIndex[$indexedPname] ?? []);
-            $matchingEntryFound = false;
-            foreach ($entries as $entry) {
-                if ((int) ($entry['pid'] ?? 0) === $pid
-                    && (string) ($entry['jsonPath'] ?? '') === $jsonPath) {
-                    $matchingEntryFound = true;
-                    break;
+            $jsonPath = self::getPidFile($expectedPname, $pid);
+            $pidSnapshot = self::readJsonIndexSnapshot(self::getPidIndexFile());
+            $nameSnapshot = self::readJsonIndexSnapshot(self::getNameIndexFile());
+            $portSnapshot = self::readJsonIndexSnapshot(self::getPortIndexFile());
+            foreach ([$pidSnapshot, $nameSnapshot, $portSnapshot] as $snapshot) {
+                if (($snapshot['state'] ?? '') !== self::INDEX_STATE_VALID) {
+                    return false;
                 }
             }
-            if (!$matchingEntryFound) {
+
+            $pidIndex = (array)($pidSnapshot['data'] ?? []);
+            $nameIndex = (array)($nameSnapshot['data'] ?? []);
+            $portIndex = (array)($portSnapshot['data'] ?? []);
+            $previousPidIndex = $pidIndex;
+            $previousNameIndex = $nameIndex;
+            $previousPortIndex = $portIndex;
+
+            $pidEntry = $pidIndex[$pid] ?? null;
+            if (!\is_array($pidEntry)) {
                 return false;
             }
-
-            $nameIndex[$indexedPname] = \array_values(\array_filter(
-                $entries,
-                static fn(array $entry): bool => (int) ($entry['pid'] ?? 0) !== $pid
-                    || (string) ($entry['jsonPath'] ?? '') !== $jsonPath
-            ));
-            if ($nameIndex[$indexedPname] === []) {
-                unset($nameIndex[$indexedPname]);
+            $indexedPname = \trim((string)($pidEntry['pname'] ?? ''));
+            $indexedPath = \trim((string)($pidEntry['jsonPath'] ?? ''));
+            if ($indexedPname === ''
+                || self::buildManagedIdentity($indexedPname) !== $canonicalPname
+                || $indexedPath === '') {
+                return false;
             }
             unset($pidIndex[$pid]);
 
-            $portIndex = self::readPortIndex();
-            foreach ((array) ($record['ports'] ?? []) as $port) {
+            $entries = (array)($nameIndex[$recordedPname] ?? []);
+            $nameIndex[$recordedPname] = \array_values(\array_filter(
+                $entries,
+                static fn(array $entry): bool => (int)($entry['pid'] ?? 0) !== $pid
+                    || (string)($entry['jsonPath'] ?? '') !== $jsonPath
+            ));
+            if ($nameIndex[$recordedPname] === []) {
+                unset($nameIndex[$recordedPname]);
+            }
+            foreach ((array)($record['ports'] ?? []) as $port) {
                 self::releasePortIndexRepresentative(
                     $portIndex,
-                    (int) $port,
-                    $indexedPname,
+                    (int)$port,
+                    $recordedPname,
                     $pidIndex,
                     $processInfo,
                     [$pid => true]
                 );
             }
 
-            if (!self::writePortIndex($portIndex)
-                || !self::writeNameIndex($nameIndex)
-                || !self::writePidIndex($pidIndex)) {
+            if (!self::writePortIndex($portIndex)) {
+                return false;
+            }
+            if (!self::writeNameIndex($nameIndex)) {
+                self::writePortIndex($previousPortIndex);
+                return false;
+            }
+            if (!self::writePidIndex($pidIndex)) {
+                self::writeNameIndex($previousNameIndex);
+                self::writePortIndex($previousPortIndex);
                 return false;
             }
             if (\is_file($jsonPath) && !@\unlink($jsonPath)) {
+                self::writePidIndex($previousPidIndex);
+                self::writeNameIndex($previousNameIndex);
+                self::writePortIndex($previousPortIndex);
                 return false;
             }
 
@@ -3200,26 +3826,23 @@ class Processer
     }
 
     /**
-     * Launch a whole Unix batch through one short-lived PHP/pcntl launcher.
-     * The launcher forks isolated sessions, redirects stdio, execs strict PHP
-     * argv and reports the real grandchild PIDs before it exits. Master file
-     * descriptors above 2 are replaced in the launcher descriptor map, and no
-     * shell or long-lived proc resource remains in the Master.
+     * Launch a Unix batch through its explicitly selected ownership lane.
+     * Master-owned WLS child processes start directly so their real PID is
+     * available immediately. Other managed processes keep the short-lived
+     * PHP/pcntl launcher, which isolates sessions before exec.
      *
      * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, inheritDescriptors?: array<int, resource>}> $commands
      * @return array<string, int>|null
      */
     private static function batchCreateUnix(array $commands): ?array
     {
-        $requiredFunctions = ['proc_open', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'];
-        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
-        foreach ($requiredFunctions as $function) {
-            if (!\function_exists($function) || \in_array($function, $disabledFunctions, true)) {
-                return null;
-            }
-        }
         foreach ($commands as $config) {
             if ((bool) ($config['foreground'] ?? false)) {
+                if ((bool)($config['masterOwned'] ?? false)) {
+                    throw new \InvalidArgumentException(
+                        'POSIX Master-owned processes cannot run in foreground mode.'
+                    );
+                }
                 return null;
             }
         }
@@ -3248,6 +3871,26 @@ class Processer
             return $groupedResults;
         }
 
+        $masterOwnedRequested = false;
+        if ($commands !== []) {
+            $firstConfig = $commands[\array_key_first($commands)];
+            $masterOwnedRequested = (bool)($firstConfig['masterOwned'] ?? false);
+        }
+        $requiredFunctions = $masterOwnedRequested
+            ? ['proc_open', 'proc_get_status']
+            : ['proc_open', 'pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'];
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        foreach ($requiredFunctions as $function) {
+            if (!\function_exists($function) || \in_array($function, $disabledFunctions, true)) {
+                if ($masterOwnedRequested) {
+                    throw new \RuntimeException(
+                        'POSIX Master-owned process support is unavailable: ' . $function
+                    );
+                }
+                return null;
+            }
+        }
+
         $inheritedDescriptors = [];
         if ($commands !== []) {
             $firstConfig = $commands[\array_key_first($commands)];
@@ -3257,24 +3900,48 @@ class Processer
         }
         $openFileDescriptors = self::listUnixOpenFileDescriptors();
         if ($openFileDescriptors === null) {
+            if ($masterOwnedRequested) {
+                throw new \RuntimeException(
+                    'POSIX Master-owned process launch cannot enumerate open descriptors.'
+                );
+            }
             return null;
         }
 
         $startedAt = \microtime(true);
         $results = [];
         $prepared = [];
-        // Strict preflight: every non-empty command must be a safely parsed PHP
-        // argv before the launcher is allowed to create any child.
+        // Strict preflight: callers may provide an already separated argv.
+        // Legacy command inputs are still parsed into argv here, but neither path
+        // is ever delegated to a shell by the POSIX launcher.
         foreach ($commands as $key => $config) {
-            $command = (string) ($config['command'] ?? '');
+            $command = (string)($config['command'] ?? '');
             if ($command === '') {
                 $results[$key] = 0;
                 continue;
             }
             $processInfo = self::ensureProcessName($command);
-            $processCommand = (string) $processInfo['command'];
-            $argv = self::parseUnixManagedPhpArgv($processCommand);
+            $processCommand = (string)$processInfo['command'];
+            $explicitArgv = $config['argv'] ?? null;
+            $argv = \is_array($explicitArgv)
+                ? self::normalizeManagedPhpArgv($explicitArgv)
+                : self::parseUnixManagedPhpArgv($processCommand);
             if ($argv === []) {
+                if ((bool)($config['masterOwned'] ?? false)) {
+                    throw new \InvalidArgumentException(
+                        'POSIX Master-owned process requires a valid managed PHP argv.'
+                    );
+                }
+                return null;
+            }
+            $cwd = (string)($config['cwd'] ?? BP);
+            $cwd = \realpath($cwd) ?: '';
+            if ($cwd === '' || !\is_dir($cwd)) {
+                if ((bool)($config['masterOwned'] ?? false)) {
+                    throw new \InvalidArgumentException(
+                        'POSIX Master-owned process working directory is unavailable.'
+                    );
+                }
                 return null;
             }
             $enableLog = $config['enableLog'] ?? null;
@@ -3283,11 +3950,13 @@ class Processer
             }
             $prepared[$key] = [
                 'argv' => $argv,
+                'cwd' => $cwd,
                 'command' => $processCommand,
-                'process_name' => (string) ($processInfo['name'] ?? ''),
-                'block' => (bool) ($config['block'] ?? false),
-                'enable_log' => (bool) $enableLog,
-                'child_owns_pid' => (bool) ($config['childOwnsPid'] ?? false),
+                'process_name' => (string)($processInfo['name'] ?? ''),
+                'block' => (bool)($config['block'] ?? false),
+                'enable_log' => (bool)$enableLog,
+                'child_owns_pid' => (bool)($config['childOwnsPid'] ?? false),
+                'master_owned' => (bool)($config['masterOwned'] ?? false),
                 'preserve_fds' => \array_keys(self::normalizeUnixInheritedDescriptors(
                     $config['inheritDescriptors'] ?? []
                 )),
@@ -3324,7 +3993,7 @@ class Processer
                 self::setOutput(
                     $processCommand,
                     PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . ' ---' . PHP_EOL
-                    . '[INFO] unix isolated pcntl batch launcher' . PHP_EOL . $processCommand . PHP_EOL,
+                    . '[INFO] unix managed PHP process launch' . PHP_EOL . $processCommand . PHP_EOL,
                     true
                 );
             }
@@ -3332,17 +4001,31 @@ class Processer
             $launchItems[$id] = [
                 'id' => $id,
                 'argv' => $item['argv'],
-                'cwd' => BP,
+                'cwd' => (string)$item['cwd'],
                 'stdout' => $enableLog ? $logFile : '/dev/null',
                 'stderr' => $enableLog ? $logFile : '/dev/null',
                 'command' => $processCommand,
                 'child_owns_pid' => (bool) $item['child_owns_pid'],
+                'block' => (bool) $item['block'],
+                'master_owned' => (bool) $item['master_owned'],
                 'preserve_fds' => $item['preserve_fds'],
                 'result_key' => $key,
             ];
         }
         if ($launchItems === []) {
             return $results;
+        }
+
+        $masterOwnedResults = self::batchCreateUnixMasterOwned(
+            $commands,
+            $launchItems,
+            $results,
+            $inheritedDescriptors,
+            $openFileDescriptors,
+            $startedAt,
+        );
+        if ($masterOwnedResults !== null) {
+            return $masterOwnedResults;
         }
 
         $payload = \json_encode(\array_values($launchItems), \JSON_UNESCAPED_SLASHES);
@@ -3456,6 +4139,247 @@ class Processer
     }
 
     /**
+     * Launch child-owned POSIX processes directly from the long-lived Master.
+     *
+     * The descriptor map isolates every Master descriptor while mapping the
+     * shared Direct listener to FD 3. proc_open returns the real Worker PID as
+     * soon as the child exists, so reload and slot repair never wait for a
+     * second full PHP launcher to bootstrap merely to echo that PID.
+     *
+     * @param array<string|int, array<string, mixed>> $commands
+     * @param array<string, array<string, mixed>> $launchItems
+     * @param array<string|int, int> $results
+     * @param array<int, resource> $inheritedDescriptors
+     * @param list<int> $openFileDescriptors
+     * @return array<string|int, int>|null
+     */
+    private static function batchCreateUnixMasterOwned(
+        array $commands,
+        array $launchItems,
+        array $results,
+        array $inheritedDescriptors,
+        array $openFileDescriptors,
+        float $startedAt,
+    ): ?array {
+        if (IS_WIN || $launchItems === []) {
+            return null;
+        }
+
+        $masterOwnedRequested = false;
+        foreach ($launchItems as $item) {
+            if ((bool)($item['master_owned'] ?? false)) {
+                $masterOwnedRequested = true;
+                break;
+            }
+        }
+        if (!$masterOwnedRequested) {
+            return null;
+        }
+
+        foreach ($launchItems as $id => $item) {
+            $argv = \is_array($item['argv'] ?? null)
+                ? self::normalizeManagedPhpArgv($item['argv'])
+                : [];
+            $cwd = (string)($item['cwd'] ?? '');
+            if (!(bool)($item['child_owns_pid'] ?? false)
+                || !(bool)($item['master_owned'] ?? false)
+                || (bool)($item['block'] ?? false)
+                || $argv === []
+                || $cwd === ''
+                || !\is_dir($cwd)
+            ) {
+                throw new \InvalidArgumentException(
+                    'Invalid POSIX Master-owned process configuration for key=' . (string)$id
+                );
+            }
+            foreach (['stdout', 'stderr'] as $streamField) {
+                $path = (string)($item[$streamField] ?? '/dev/null');
+                if ($path !== '/dev/null' && ($path === '' || !\is_dir(\dirname($path)))) {
+                    throw new \RuntimeException(
+                        'POSIX Master-owned process log directory is unavailable.'
+                    );
+                }
+            }
+            $launchItems[$id]['argv'] = $argv;
+        }
+
+        self::reapUnixMasterOwnedChildren();
+        $submitStartedAt = \microtime(true);
+        $started = [];
+        $failed = 0;
+        foreach ($launchItems as $item) {
+            $key = $item['result_key'];
+            $stdoutPath = (string)($item['stdout'] ?? '/dev/null');
+            $stderrPath = (string)($item['stderr'] ?? '/dev/null');
+            $stdoutPath = $stdoutPath !== '' ? $stdoutPath : '/dev/null';
+            $stderrPath = $stderrPath !== '' ? $stderrPath : '/dev/null';
+            $descriptors = [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $stdoutPath, 'ab'],
+                2 => ['file', $stderrPath, 'ab'],
+            ];
+            foreach ($openFileDescriptors as $fd) {
+                if ($fd > 2 && !isset($inheritedDescriptors[$fd])) {
+                    $descriptors[$fd] = ['file', '/dev/null', 'r'];
+                }
+            }
+            foreach ($inheritedDescriptors as $fd => $resource) {
+                $descriptors[$fd] = $resource;
+            }
+            \ksort($descriptors, \SORT_NUMERIC);
+
+            \set_error_handler(static function (): bool {
+                return true;
+            });
+            $pipes = [];
+            try {
+                $process = @\proc_open(
+                    $item['argv'],
+                    $descriptors,
+                    $pipes,
+                    (string)$item['cwd'],
+                    null,
+                    ['bypass_shell' => true, 'suppress_errors' => true],
+                );
+            } finally {
+                \restore_error_handler();
+            }
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    @\fclose($pipe);
+                }
+            }
+
+            $status = \is_resource($process) ? @\proc_get_status($process) : [];
+            $pid = (int)($status['pid'] ?? 0);
+            if (!\is_resource($process)
+                || $pid <= 0
+                || ($status['running'] ?? false) !== true
+            ) {
+                if (\is_resource($process)) {
+                    self::finishUnixMasterOwnedChild($process, $pid, true);
+                }
+                $failed++;
+                $results[$key] = 0;
+                $failure = \json_encode([
+                    'key' => (string)$key,
+                    'reason' => 'proc_open_or_pid_unavailable',
+                ], \JSON_UNESCAPED_SLASHES);
+                \error_log('[Processer] POSIX Master-owned launch failed '
+                    . ($failure !== false ? $failure : '{}'));
+                continue;
+            }
+
+            $started[] = ['process' => $process, 'pid' => $pid, 'key' => (string)$key];
+            self::rememberUnixMasterOwnedChild($process, $pid, (string)$key);
+            $results[$key] = $pid;
+        }
+        foreach ($commands as $key => $config) {
+            unset($config);
+            $results[$key] ??= 0;
+        }
+
+        $timing = \json_encode([
+            'mode' => 'master_owned_proc_open',
+            'item_count' => \count($commands),
+            'submitted_count' => \count($launchItems),
+            'returned_count' => \count($started),
+            'missing_count' => $failed,
+            'submit_ms' => \round((\microtime(true) - $submitStartedAt) * 1000, 3),
+            'total_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
+        ], \JSON_UNESCAPED_SLASHES);
+        \error_log('[Processer] batchCreateUnix timing ' . ($timing !== false ? $timing : '{}'));
+
+        return $results;
+    }
+
+    /**
+     * @param resource $process
+     */
+    private static function rememberUnixMasterOwnedChild($process, int $pid, string $key): void
+    {
+        self::registerUnixMasterOwnedChildShutdown();
+        self::$unixMasterOwnedChildren[$pid] = [
+            'process' => $process,
+            'pid' => $pid,
+            'key' => $key,
+            'started_at' => \microtime(true),
+        ];
+    }
+
+    private static function registerUnixMasterOwnedChildShutdown(): void
+    {
+        if (self::$unixMasterOwnedChildShutdownRegistered) {
+            return;
+        }
+        self::$unixMasterOwnedChildShutdownRegistered = true;
+        \register_shutdown_function(static function (): void {
+            // A Direct Worker without its owning Master must not keep accepting
+            // public connections through an inherited listener.
+            self::reapUnixMasterOwnedChildren(true);
+        });
+    }
+
+    private static function reapUnixMasterOwnedChildren(bool $force = false): void
+    {
+        foreach (self::$unixMasterOwnedChildren as $pid => $child) {
+            $process = $child['process'] ?? null;
+            if (!\is_resource($process)) {
+                unset(self::$unixMasterOwnedChildren[$pid]);
+                continue;
+            }
+            $status = @\proc_get_status($process);
+            if (($status['running'] ?? false) === true && !$force) {
+                continue;
+            }
+            if (self::finishUnixMasterOwnedChild($process, (int)$pid, $force)) {
+                unset(self::$unixMasterOwnedChildren[$pid]);
+            }
+        }
+    }
+
+    /**
+     * Close a Master-owned child resource without an unbounded proc_close().
+     *
+     * @param resource $process
+     */
+    private static function finishUnixMasterOwnedChild($process, int $pid, bool $terminate): bool
+    {
+        if (!\is_resource($process)) {
+            return true;
+        }
+
+        $status = @\proc_get_status($process);
+        $running = ($status['running'] ?? false) === true;
+        if ($running && $terminate) {
+            @\proc_terminate($process);
+            $termDeadline = \hrtime(true) + 100_000_000;
+            do {
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
+                $status = @\proc_get_status($process);
+                $running = ($status['running'] ?? false) === true;
+            } while ($running && \hrtime(true) < $termDeadline);
+
+            if ($running && $pid > 0 && \function_exists('posix_kill')) {
+                @\posix_kill($pid, \defined('SIGKILL') ? \SIGKILL : 9);
+                $killDeadline = \hrtime(true) + 50_000_000;
+                do {
+                    \Weline\Framework\Runtime\SchedulerSystem::usleep(5_000);
+                    $status = @\proc_get_status($process);
+                    $running = ($status['running'] ?? false) === true;
+                } while ($running && \hrtime(true) < $killDeadline);
+            }
+        }
+
+        if ($running) {
+            return false;
+        }
+        @\proc_close($process);
+
+        return true;
+    }
+
+    /**
      * @param array<string|int, array<string, mixed>> $commands
      */
     private static function hasInheritedDescriptors(array $commands): bool
@@ -3483,6 +4407,7 @@ class Processer
                 $signatureParts[] = $fd . ':' . \get_resource_id($resource);
             }
             $signature = $signatureParts === [] ? 'none' : \implode(',', $signatureParts);
+            $signature .= '|master_owned=' . ((bool)($config['masterOwned'] ?? false) ? '1' : '0');
             $groups[$signature][$key] = $config;
         }
 
@@ -3524,16 +4449,15 @@ class Processer
 
         $configured = (float) (Env::get('system.processer.unix_batch_create_result_timeout_sec', 0) ?? 0);
         if ($configured > 0.0) {
-            return \max(0.1, \min(5.0, $configured));
+            return \max(0.1, \min(10.0, $configured));
         }
 
         // Fork/exec is normally far below 100ms, but a busy host can defer the
         // short-lived launcher for several scheduler quanta. This deadline is
-        // only a failure bound: successful batches return immediately. Keep at
-        // least one second so rolling reload cannot terminate the launcher
-        // before it emits its first PID, and scale to a still-bounded window
-        // for larger batches.
-        return \min(3.0, \max(1.0, 0.5 + ($pendingCount * 0.05)));
+        // only a failure bound: successful batches return immediately. Five
+        // seconds prevents a heavily loaded POSIX host from killing the clean
+        // exec launcher before it emits its PID; larger batches remain bounded.
+        return \min(8.0, \max(5.0, 1.0 + ($pendingCount * 0.05)));
     }
 
     /**
@@ -3771,6 +4695,7 @@ PHP;
         $timingStartedAt = \microtime(true);
         $timings = [];
         $phaseStartedAt = $timingStartedAt;
+        self::reapWindowsMasterOwnedChildren();
         self::reapWindowsDetachedBatchHelpers();
         $timings['reap'] = \microtime(true) - $phaseStartedAt;
 
@@ -3829,7 +4754,12 @@ PHP;
 
             $arguments = '';
             $argumentList = [];
-            $detachedPhpArgv = self::buildWindowsDetachedPhpArgvFromCommand($processCommand);
+            $configuredArgv = \is_array($config['windowsArgv'] ?? null)
+                ? \array_values(\array_map('strval', $config['windowsArgv']))
+                : [];
+            $detachedPhpArgv = $configuredArgv !== []
+                ? $configuredArgv
+                : self::buildWindowsDetachedPhpArgvFromCommand($processCommand);
             if ($detachedPhpArgv !== []) {
                 $phpBinary = (string) ($detachedPhpArgv[0] ?? PHP_BINARY);
                 $argumentList = \array_values(\array_slice($detachedPhpArgv, 1));
@@ -3845,6 +4775,7 @@ PHP;
                 'php' => $phpBinary,
                 'arguments' => $arguments,
                 'argument_list' => $argumentList,
+                'exact_argv' => $configuredArgv !== [],
                 'process_name' => $processName,
                 'cwd' => BP,
                 'enable_log' => $enableLog,
@@ -3863,6 +4794,16 @@ PHP;
         }
 
         $timings['prepare'] = \microtime(true) - $phaseStartedAt;
+
+        $masterOwnedResults = self::batchCreateWindowsMasterOwned(
+            $batchLaunchItems,
+            $results,
+            $timingStartedAt,
+            $timings,
+        );
+        if ($masterOwnedResults !== null) {
+            return $masterOwnedResults;
+        }
 
         $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
         if (!$waitForResults) {
@@ -3900,12 +4841,17 @@ PHP;
             $psProcess = @\proc_open(
                 self::buildWindowsPowerShellProcOpenCommand($scriptPath),
                 [
-                    0 => ['file', 'NUL', 'r'],
-                    1 => ['file', 'NUL', 'w'],
+                    0 => ['pipe', 'r'],
+                    // Do not use the Windows NUL pseudo-file here: PHP on
+                    // UNC/Parallels shared folders can resolve it relative to
+                    // the current path and fail proc_open(NUL). The helper
+                    // writes diagnostics to $errorPath/resultPath, so stdout is
+                    // only a short PowerShell side channel and can be closed.
+                    1 => ['pipe', 'w'],
                     2 => ['file', $errorPath, 'a'],
                 ],
                 $psPipes,
-                BP,
+                self::resolveWindowsHelperWorkingDirectory(),
                 null,
                 ['bypass_shell' => true]
             );
@@ -3913,6 +4859,13 @@ PHP;
             \restore_error_handler();
         }
         $timings['submit'] = \microtime(true) - $phaseStartedAt;
+
+        if (\is_resource($psProcess) && isset($psPipes[0])) {
+            @\fclose($psPipes[0]);
+        }
+        if (\is_resource($psProcess) && isset($psPipes[1])) {
+            @\fclose($psPipes[1]);
+        }
 
         if (!\is_resource($psProcess)) {
             self::logWindowsBatchCreateUnavailable(
@@ -3966,6 +4919,222 @@ PHP;
         );
 
         return $results;
+    }
+
+    /**
+     * Start a complete non-blocking child-owned batch directly from Master.
+     *
+     * On Windows, proc_open with an argv array and bypass_shell returns the
+     * real PHP PID immediately. WLS already requires children to publish their
+     * authoritative identity over IPC, so adding PowerShell and Start-Process
+     * only delays process creation and weakens ownership. This branch is
+     * intentionally all-or-nothing: a partial direct batch is terminated and
+     * startup fails instead of silently mixing process topologies.
+     *
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, exact_argv?: bool, process_name: string, cwd: string, enable_log: bool, stdout_log: string, stderr_log: string, block: bool, foreground: bool, child_owns_pid: bool}> $launchItems
+     * @param array<string, int> $results
+     * @param array<string, float> $timings
+     * @return array<string, int>|null
+     */
+    private static function batchCreateWindowsMasterOwned(
+        array $launchItems,
+        array $results,
+        float $timingStartedAt,
+        array $timings,
+    ): ?array {
+        if ($launchItems === []) {
+            return $results;
+        }
+
+        foreach ($launchItems as $item) {
+            $arguments = $item['argument_list'] ?? null;
+            if (!(bool)($item['child_owns_pid'] ?? false)
+                || (bool)($item['block'] ?? false)
+                || (bool)($item['foreground'] ?? false)
+                || !(bool)($item['exact_argv'] ?? false)
+                || \trim((string)($item['php'] ?? '')) === ''
+                || !\is_array($arguments)
+            ) {
+                return null;
+            }
+
+            $expectedPhp = \realpath(PHP_BINARY) ?: PHP_BINARY;
+            $actualPhp = \realpath((string)$item['php']) ?: (string)$item['php'];
+            if (\strcasecmp($expectedPhp, $actualPhp) !== 0) {
+                return null;
+            }
+            $requestedCwd = (string)($item['cwd'] ?? BP);
+            $childCwd = self::resolveWindowsBatchChildWorkingDirectory($requestedCwd);
+            if ($childCwd === '' || !\is_dir($childCwd)) {
+                throw new \RuntimeException('Windows Master-owned process cwd is unavailable: ' . $childCwd);
+            }
+            foreach (['stdout_log', 'stderr_log'] as $logField) {
+                $logPath = (string)($item[$logField] ?? '');
+                if ((bool)($item['enable_log'] ?? false)
+                    && ($logPath === '' || !\is_dir(\dirname($logPath)))
+                ) {
+                    throw new \RuntimeException(
+                        'Windows Master-owned process log directory is unavailable for ' . (string)($item['key'] ?? '')
+                    );
+                }
+            }
+        }
+
+        $phaseStartedAt = \microtime(true);
+        $started = [];
+        foreach ($launchItems as $item) {
+            $key = (string)($item['key'] ?? '');
+            $phpBinary = (string)($item['php'] ?? '');
+            $arguments = \array_values(\array_map(
+                static fn (mixed $argument): string => (string)$argument,
+                $item['argument_list'] ?? [],
+            ));
+            $argv = [$phpBinary, ...$arguments];
+            $requestedCwd = (string)($item['cwd'] ?? BP);
+            $childCwd = self::resolveWindowsBatchChildWorkingDirectory($requestedCwd);
+            $nullDevice = 'NUL';
+            $stdoutPath = (bool)($item['enable_log'] ?? false)
+                ? (string)($item['stdout_log'] ?? '')
+                : $nullDevice;
+            $stderrPath = (bool)($item['enable_log'] ?? false)
+                ? (string)($item['stderr_log'] ?? '')
+                : $nullDevice;
+            if ($stdoutPath === '') {
+                $stdoutPath = $nullDevice;
+            }
+            if ($stderrPath === '') {
+                $stderrPath = $nullDevice;
+            }
+
+            $environment = null;
+            if ($childCwd !== $requestedCwd) {
+                $inheritedEnvironment = \getenv();
+                if (\is_array($inheritedEnvironment)) {
+                    $inheritedEnvironment['WELINE_START_PROCESS_CWD'] = $requestedCwd;
+                    $environment = $inheritedEnvironment;
+                }
+            }
+
+            $lastError = null;
+            \set_error_handler(static function ($type, $message) use (&$lastError): bool {
+                $lastError = (string)$message;
+                return true;
+            });
+            try {
+                $process = @\proc_open(
+                    $argv,
+                    [
+                        0 => ['file', $nullDevice, 'r'],
+                        1 => ['file', $stdoutPath, 'ab'],
+                        2 => ['file', $stderrPath, 'ab'],
+                    ],
+                    $pipes,
+                    $childCwd,
+                    $environment,
+                    ['bypass_shell' => true, 'suppress_errors' => true],
+                );
+            } finally {
+                \restore_error_handler();
+            }
+
+            $status = \is_resource($process) ? @\proc_get_status($process) : [];
+            $pid = (int)($status['pid'] ?? 0);
+            if (!\is_resource($process) || $pid <= 0) {
+                if (\is_resource($process)) {
+                    @\proc_terminate($process);
+                }
+                self::terminateWindowsMasterOwnedBatch($started);
+                throw new \RuntimeException(
+                    'Windows Master-owned process launch failed for ' . $key
+                    . ($lastError !== null && $lastError !== '' ? ': ' . $lastError : '')
+                );
+            }
+
+            $started[] = ['process' => $process, 'pid' => $pid, 'key' => $key];
+            self::rememberWindowsMasterOwnedChild($process, $pid, $key);
+            $results[$key] = self::recordWindowsBatchCreatePid($item, $pid);
+        }
+
+        $timings['submit'] = \microtime(true) - $phaseStartedAt;
+        $timings['result'] = 0.0;
+        $timings['pid_record'] = 0.0;
+        self::logWindowsBatchCreateTiming(
+            'master_owned_proc_open',
+            $timingStartedAt,
+            $timings,
+            0,
+            \count($launchItems),
+        );
+
+        return $results;
+    }
+
+    /**
+     * @param resource $process
+     */
+    private static function rememberWindowsMasterOwnedChild($process, int $pid, string $key): void
+    {
+        self::registerWindowsMasterOwnedChildShutdown();
+        self::$windowsMasterOwnedChildren[$pid] = [
+            'process' => $process,
+            'pid' => $pid,
+            'key' => $key,
+            'started_at' => \microtime(true),
+        ];
+    }
+
+    private static function registerWindowsMasterOwnedChildShutdown(): void
+    {
+        if (self::$windowsMasterOwnedChildShutdownRegistered) {
+            return;
+        }
+        self::$windowsMasterOwnedChildShutdownRegistered = true;
+        \register_shutdown_function(static function (): void {
+            // Normal WLS shutdown/reload owns drain and termination through
+            // authenticated IPC. A generic PHP shutdown hook must not kill a
+            // live generation merely because the Master is rotating.
+            self::reapWindowsMasterOwnedChildren(false);
+        });
+    }
+
+    private static function reapWindowsMasterOwnedChildren(bool $force = false): void
+    {
+        foreach (self::$windowsMasterOwnedChildren as $index => $child) {
+            $process = $child['process'] ?? null;
+            if (!\is_resource($process)) {
+                unset(self::$windowsMasterOwnedChildren[$index]);
+                continue;
+            }
+            $status = @\proc_get_status($process);
+            if (($status['running'] ?? false) === true) {
+                if ($force) {
+                    @\proc_terminate($process);
+                } else {
+                    continue;
+                }
+            }
+            unset(self::$windowsMasterOwnedChildren[$index]);
+        }
+        if (self::$windowsMasterOwnedChildren !== []) {
+            self::$windowsMasterOwnedChildren = \array_values(self::$windowsMasterOwnedChildren);
+        }
+    }
+
+    /**
+     * @param array<int, array{process: resource, pid: int, key: string}> $started
+     */
+    private static function terminateWindowsMasterOwnedBatch(array $started): void
+    {
+        foreach ($started as $child) {
+            $process = $child['process'] ?? null;
+            if (\is_resource($process)) {
+                @\proc_terminate($process);
+            }
+            $pid = (int)($child['pid'] ?? 0);
+            if ($pid > 0) {
+                unset(self::$windowsMasterOwnedChildren[$pid]);
+            }
+        }
     }
 
     /**
@@ -4046,6 +5215,8 @@ PHP;
             }
         }
         $timings['submit'] = \microtime(true) - $phaseStartedAt;
+
+
         $deadline = \microtime(true) + $resultBudgetSeconds;
 
         $phaseStartedAt = \microtime(true);
@@ -4092,9 +5263,13 @@ PHP;
         $phaseStartedAt = \microtime(true);
         $pidResolutionItems = self::collectLaunchItemsNeedingPidResolution($batchLaunchItems, $pidMap, false);
         $pidResolutionTimeout = self::resolveWindowsBatchCreateNonBlockingPidResolutionTimeout(\count($pidResolutionItems));
-        $remainingSeconds = \max(0.0, $deadline - \microtime(true));
-        $resolvedPidMap = $pidResolutionTimeout > 0.0 && $remainingSeconds > 0.0
-            ? self::waitForManagedProcessLaunchBatch($pidResolutionItems, \min($pidResolutionTimeout, $remainingSeconds))
+        // Result-row waiting and managed-process adoption are two different
+        // recovery paths. On Windows/UNC, PowerShell may start children and then
+        // fail to flush result rows before the row deadline; still give the
+        // process-name/launch-id registry path its own short budget so WLS does
+        // not report live dispatcher/workers as pid=0.
+        $resolvedPidMap = $pidResolutionTimeout > 0.0
+            ? self::waitForManagedProcessLaunchBatch($pidResolutionItems, $pidResolutionTimeout)
             : [];
 
         foreach ($helpers as $helper) {
@@ -4107,8 +5282,23 @@ PHP;
                 $item['launcher_pid_recorded'] = !(bool) ($item['child_owns_pid'] ?? false)
                     && (int) $results[$key] > 0;
                 $rememberLaunchItems[] = $item;
-                if ($pid <= 0 && !empty($item['enable_log']) && $stderr !== '') {
-                    self::setOutput($item['command'], '[ERROR] batchCreate(raw output) ' . $stderr . PHP_EOL, true);
+                if ($pid <= 0 && !empty($item['enable_log'])) {
+                    if ($stderr !== '') {
+                        self::setOutput($item['command'], '[ERROR] batchCreate(raw output) ' . $stderr . PHP_EOL, true);
+                    } else {
+                        $argv0 = '';
+                        if (\is_array($item['argument_list'] ?? null) && isset($item['argument_list'][0])) {
+                            $argv0 = (string) $item['argument_list'][0];
+                        }
+                        $diagnostic = $argv0 !== ''
+                            ? ' argv0=' . $argv0 . ' cwd=' . (string) ($item['cwd'] ?? '')
+                            : '';
+                        self::setOutput(
+                            $item['command'],
+                            '[WARN] batchCreate helper returned no PID within the startup deadline; child IPC registration may still recover it.' . $diagnostic . PHP_EOL,
+                            true
+                        );
+                    }
                 }
             }
 
@@ -4119,6 +5309,7 @@ PHP;
                     (string) ($helper['script_path'] ?? ''),
                     (string) ($helper['result_path'] ?? ''),
                     (string) ($helper['error_path'] ?? ''),
+                    (string) ($helper['stdout_path'] ?? ''),
                     $rememberLaunchItems
                 );
             }
@@ -4151,12 +5342,16 @@ PHP;
     {
         $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
         $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
-        if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
+        $stdoutPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-stdout-');
+        if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '' || $stdoutPath === false || $stdoutPath === '') {
             if (\is_string($resultPath) && $resultPath !== '') {
                 @\unlink($resultPath);
             }
             if (\is_string($errorPath) && $errorPath !== '') {
                 @\unlink($errorPath);
+            }
+            if (\is_string($stdoutPath) && $stdoutPath !== '') {
+                @\unlink($stdoutPath);
             }
 
             return ['helper' => null, 'reason' => 'temp file allocation failed'];
@@ -4166,6 +5361,7 @@ PHP;
         if ($scriptPath === null) {
             @\unlink($resultPath);
             @\unlink($errorPath);
+            @\unlink($stdoutPath);
 
             return ['helper' => null, 'reason' => 'PowerShell script write failed'];
         }
@@ -4180,12 +5376,16 @@ PHP;
             $psProcess = @\proc_open(
                 self::buildWindowsPowerShellProcOpenCommand($scriptPath),
                 [
-                    0 => ['file', 'NUL', 'r'],
-                    1 => ['file', 'NUL', 'w'],
+                    0 => ['pipe', 'r'],
+                    // PowerShell can emit progress/CLIXML on startup. NUL is
+                    // unreliable from UNC shared-folder working directories and
+                    // a closed pipe can abort the helper before PID rows are
+                    // written, so stdout goes to a bounded temp file instead.
+                    1 => ['file', $stdoutPath, 'w'],
                     2 => ['file', $errorPath, 'a'],
                 ],
                 $psPipes,
-                BP,
+                self::resolveWindowsHelperWorkingDirectory(),
                 null,
                 ['bypass_shell' => true]
             );
@@ -4193,10 +5393,15 @@ PHP;
             \restore_error_handler();
         }
 
+        if (\is_resource($psProcess) && isset($psPipes[0])) {
+            @\fclose($psPipes[0]);
+        }
+
         if (!\is_resource($psProcess)) {
             @\unlink($scriptPath);
             @\unlink($resultPath);
             @\unlink($errorPath);
+            @\unlink($stdoutPath);
 
             return [
                 'helper' => null,
@@ -4211,6 +5416,7 @@ PHP;
                 'script_path' => $scriptPath,
                 'result_path' => $resultPath,
                 'error_path' => $errorPath,
+                'stdout_path' => $stdoutPath,
                 'launch_items' => $launchItems,
             ],
             'reason' => '',
@@ -4265,9 +5471,18 @@ PHP;
 
     private static function resolveWindowsBatchCreateHelperParallelism(int $itemCount): int
     {
-        $configured = (int) (Env::get('system.processer.windows_batch_create_helper_parallelism', 4) ?? 4);
+        $configured = Env::get('system.processer.windows_batch_create_helper_parallelism', null);
+        if (\is_numeric($configured) && (int)$configured > 0) {
+            return \min(\max(1, $itemCount), \max(1, \min(8, (int)$configured)));
+        }
 
-        return \min(\max(1, $itemCount), \max(1, \min(8, $configured)));
+        $adaptive = match (true) {
+            $itemCount >= 16 => 8,
+            $itemCount >= 8 => 6,
+            default => 4,
+        };
+
+        return \min(\max(1, $itemCount), $adaptive);
     }
 
     /**
@@ -4367,7 +5582,7 @@ PHP;
             return \max(0.02, \min(1.0, $configured));
         }
 
-        return 0.0;
+        return \min(0.8, \max(0.15, 0.08 + ($pendingCount * 0.06)));
     }
 
     private static function resolveWindowsBatchCreateNonBlockingResultRowTimeout(int $pendingCount): float
@@ -4378,10 +5593,15 @@ PHP;
 
         $configured = (float) (Env::get('system.processer.windows_batch_create_nonblocking_result_timeout_sec', 0) ?? 0);
         if ($configured > 0.0) {
-            return \max(0.05, \min(1.0, $configured));
+            return \max(0.05, \min(8.0, $configured));
         }
 
-        return \min(0.6, \max(0.2, 0.08 + ($pendingCount * 0.04)));
+        // Windows Start-Process is still parallel, but Parallels/UNC/shared-folder
+        // startups can need several seconds before the helper writes all PID
+        // rows. Returning all-zero PIDs leaves WLS children unmanaged and makes
+        // the Master fail fast while processes are still starting, so keep a
+        // strict but realistic deadline for dispatcher/worker batches.
+        return \min(8.0, \max(2.0, 0.5 + ($pendingCount * 0.75)));
     }
 
     /**
@@ -4543,6 +5763,180 @@ PHP;
         // turn an async launch into a multi-second synchronous stall.
     }
 
+    private static function resolveWindowsBatchChildWorkingDirectory(string $cwd): string
+    {
+        if (!self::isWindows()) {
+            return $cwd;
+        }
+
+        $cwd = self::resolveWindowsPersistentPath($cwd);
+        $trimmed = \trim($cwd);
+        if ($trimmed !== '' && !\str_starts_with($trimmed, '\\\\')) {
+            return $cwd;
+        }
+
+        // Start-Process may route process creation through Windows console/CMD
+        // plumbing. CMD refuses UNC current directories and silently falls back
+        // to the Windows directory, which makes WLS worker/dispatcher launch rows
+        // come back with pid=0. Worker scripts are passed as absolute arguments,
+        // so only the launcher working directory needs a local fallback.
+        return self::resolveWindowsHelperWorkingDirectory()
+            ?: (\sys_get_temp_dir() ?: 'C:\\Windows\\Temp');
+    }
+
+    /**
+     * Resolve a local working directory accepted by Windows Start-Process.
+     * Absolute executable and script arguments keep the original project path.
+     */
+    public static function resolveWindowsStartProcessWorkingDirectory(string $cwd): string
+    {
+        return self::resolveWindowsBatchChildWorkingDirectory($cwd);
+    }
+
+    /**
+     * Resolve a temporary drive created by CMD `pushd \\\\server\\share` to
+     * its persistent UNC root before a detached process inherits the path.
+     * Drive mappings disappear when the invoking CMD executes `popd`; keeping
+     * the drive letter in argv/cwd would therefore strand the WLS process.
+     */
+    public static function resolveWindowsPersistentPath(string $path): string
+    {
+        if (!self::isWindows()) {
+            return $path;
+        }
+
+        $trimmed = \trim($path);
+        if ($trimmed === '' || \str_starts_with($trimmed, '\\\\')) {
+            return $path;
+        }
+        $equalsAt = \strpos($trimmed, '=');
+        if ($equalsAt !== false && $equalsAt > 1 && $trimmed[0] === '-') {
+            $value = \substr($trimmed, $equalsAt + 1);
+            $resolvedValue = self::resolveWindowsPersistentPath($value);
+            if ($resolvedValue !== $value) {
+                return \substr($trimmed, 0, $equalsAt + 1) . $resolvedValue;
+            }
+        }
+        if (\preg_match('/^([a-z]):(?:(?:[\\\\\/])(.*))?$/i', $trimmed, $matches) !== 1) {
+            return $path;
+        }
+
+        $drive = \strtoupper((string)$matches[1]);
+        $root = self::resolveWindowsPersistentDriveRoot($drive);
+        if ($root === '') {
+            return $path;
+        }
+
+        $tail = \substr($trimmed, 2);
+        if ($tail === '') {
+            return $root;
+        }
+
+        return \rtrim($root, '\\\\/') . '\\' . \ltrim(\str_replace('/', '\\', $tail), '\\');
+    }
+
+    private static function resolveWindowsPersistentDriveRoot(string $drive): string
+    {
+        $drive = \strtoupper(\trim($drive));
+        if (\preg_match('/^[A-Z]$/', $drive) !== 1) {
+            return '';
+        }
+        if (\array_key_exists($drive, self::$windowsPersistentDriveRoots)) {
+            return self::$windowsPersistentDriveRoots[$drive];
+        }
+
+        $inheritedDrive = \strtoupper(\trim((string)\getenv('WELINE_PERSISTENT_PROJECT_DRIVE')));
+        $inheritedRoot = \trim((string)\getenv('WELINE_PERSISTENT_PROJECT_ROOT'));
+        if ($inheritedDrive === $drive . ':' && \str_starts_with($inheritedRoot, '\\\\')) {
+            return self::$windowsPersistentDriveRoots[$drive] = \rtrim($inheritedRoot, '\\\\/');
+        }
+
+        $command = '$welineDrive = Get-PSDrive -PSProvider FileSystem -Name '
+            . self::toPowerShellSingleQuoted($drive)
+            . ' -ErrorAction SilentlyContinue; '
+            . 'if ($null -ne $welineDrive -and $null -ne $welineDrive.DisplayRoot) '
+            . '{ [Console]::Out.Write([string]$welineDrive.DisplayRoot) }';
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = @\proc_open(
+            [
+                self::resolveWindowsPowerShellExecutable(),
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                $command,
+            ],
+            $descriptors,
+            $pipes,
+            self::resolveWindowsHelperWorkingDirectory(),
+            null,
+            ['bypass_shell' => true]
+        );
+        if (!\is_resource($process)) {
+            return self::$windowsPersistentDriveRoots[$drive] = '';
+        }
+
+        if (isset($pipes[0])) {
+            @\fclose($pipes[0]);
+        }
+        if (isset($pipes[1])) {
+            @\stream_set_blocking($pipes[1], false);
+        }
+        if (isset($pipes[2])) {
+            @\stream_set_blocking($pipes[2], false);
+        }
+
+        $output = '';
+        $deadline = \microtime(true) + 2.0;
+        $status = null;
+        do {
+            if (isset($pipes[1])) {
+                $chunk = @\fread($pipes[1], 4096);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $output .= $chunk;
+                }
+            }
+            $status = @\proc_get_status($process);
+            if (($status['running'] ?? false) !== true) {
+                break;
+            }
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+        } while (\microtime(true) < $deadline);
+
+        if (isset($pipes[1])) {
+            $chunk = @\stream_get_contents($pipes[1]);
+            if (\is_string($chunk) && $chunk !== '') {
+                $output .= $chunk;
+            }
+            @\fclose($pipes[1]);
+        }
+        if (isset($pipes[2])) {
+            @\fclose($pipes[2]);
+        }
+        if (($status['running'] ?? false) === true) {
+            self::finishWindowsDetachedHelperProcess($process, $status);
+        } else {
+            @\proc_close($process);
+        }
+
+        $root = \trim(\preg_replace('/^\\xEF\\xBB\\xBF/', '', $output) ?? $output);
+        if (!\str_starts_with($root, '\\\\')) {
+            return self::$windowsPersistentDriveRoots[$drive] = '';
+        }
+
+        $root = \rtrim($root, '\\\\/');
+        self::$windowsPersistentDriveRoots[$drive] = $root;
+        \putenv('WELINE_PERSISTENT_PROJECT_DRIVE=' . $drive . ':');
+        \putenv('WELINE_PERSISTENT_PROJECT_ROOT=' . $root);
+        $_ENV['WELINE_PERSISTENT_PROJECT_DRIVE'] = $drive . ':';
+        $_ENV['WELINE_PERSISTENT_PROJECT_ROOT'] = $root;
+
+        return $root;
+    }
+
     /**
      * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
@@ -4600,9 +5994,27 @@ PHP;
         }
 
         $resolved = [];
+        $allowSystemScan = \in_array(\strtolower(\trim((string) Env::get(
+            'system.processer.windows_batch_create_pid_resolution_system_scan',
+            '0'
+        ))), ['1', 'true', 'yes', 'on'], true);
         $deadline = \microtime(true) + \max(0.1, $timeoutSeconds);
         do {
             foreach ($pending as $key => $item) {
+                // Fast path: WLS children register their own exact managed
+                // identity. This is O(1) file/index lookup and avoids the very
+                // slow Windows command-line scan in the startup hot path.
+                $registeredPid = (int) self::getData($item['command'], 'pid');
+                if ($registeredPid > 0) {
+                    $resolved[$key] = $registeredPid;
+                    unset($pending[$key]);
+                    continue;
+                }
+
+                if (!$allowSystemScan) {
+                    continue;
+                }
+
                 foreach (self::getProcessIdsByName($item['process_name']) as $candidatePid) {
                     $candidatePid = (int) $candidatePid;
                     if ($candidatePid <= 0) {
@@ -4628,7 +6040,7 @@ PHP;
                 break;
             }
 
-            \Weline\Framework\Runtime\SchedulerSystem::usleep(100_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(50_000);
         } while (\microtime(true) < $deadline);
 
         return $resolved;
@@ -4736,12 +6148,78 @@ PHP;
         return $value;
     }
 
+    private static function normalizeWindowsStartProcessValue(string $value): string
+    {
+        $value = self::normalizeWindowsPathForUtf8Script($value);
+        if (!self::isWindows() || $value === '') {
+            return $value;
+        }
+
+        if (\preg_match('/^([A-Za-z]):\\\\/', $value, $matches) !== 1) {
+            return $value;
+        }
+
+        $valueDrive = \strtoupper((string) $matches[1]);
+        $bpDrive = '';
+        if (\defined('BP') && \preg_match('/^([A-Za-z]):\\\\/', (string) BP, $bpMatches) === 1) {
+            $bpDrive = \strtoupper((string) $bpMatches[1]);
+        }
+        if ($bpDrive === '' || $valueDrive !== $bpDrive) {
+            return $value;
+        }
+
+        $remoteRoot = self::resolveWindowsMappedDriveRemoteRoot($valueDrive);
+        if ($remoteRoot === '') {
+            return $value;
+        }
+        if (\str_starts_with($remoteRoot, '\\') && !\str_starts_with($remoteRoot, '\\\\')) {
+            $remoteRoot = '\\' . $remoteRoot;
+        }
+
+        return \rtrim($remoteRoot, '\\/') . \substr($value, 2);
+    }
+
+    private static function resolveWindowsMappedDriveRemoteRoot(string $drive): string
+    {
+        static $cache = [];
+
+        $drive = \strtoupper(\substr(\trim($drive), 0, 1));
+        if ($drive === '' || !\preg_match('/^[A-Z]$/', $drive)) {
+            return '';
+        }
+        if (\array_key_exists($drive, $cache)) {
+            return $cache[$drive];
+        }
+
+        $cache[$drive] = '';
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        if (!\function_exists('exec') || \in_array('exec', $disabledFunctions, true)) {
+            return '';
+        }
+
+        $lines = [];
+        $exitCode = 1;
+        @\exec('cmd.exe /d /c net use ' . $drive . ': 2>NUL', $lines, $exitCode);
+        if ($lines === []) {
+            return '';
+        }
+
+        foreach ($lines as $line) {
+            if (\preg_match('/(\\\\\\\\[^\s]+)/u', (string) $line, $matches) === 1) {
+                $cache[$drive] = \rtrim((string) $matches[1], '\\/');
+                break;
+            }
+        }
+
+        return $cache[$drive];
+    }
+
     /**
      * PowerShell 单引号字符串字面量（值内单引号加倍）。
      */
     private static function toPowerShellSingleQuoted(string $value): string
     {
-        $value = self::normalizeWindowsPathForUtf8Script($value);
+        $value = self::normalizeWindowsStartProcessValue($value);
 
         return "'" . \str_replace("'", "''", $value) . "'";
     }
@@ -4822,10 +6300,17 @@ PHP;
             return null;
         }
 
+        $argv = \array_map(
+            static fn (string $argument): string => self::resolveWindowsPersistentPath($argument),
+            $argv
+        );
+        $projectWorkingDir = self::resolveWindowsPersistentPath($workingDir);
+        $workingDir = self::resolveWindowsStartProcessWorkingDirectory($projectWorkingDir);
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $phpExe = __PHP__
 $wd = __WD__
+$env:WELINE_START_PROCESS_CWD = __PROJECT_WD__
 $argList = __ARGS__
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
@@ -4858,10 +6343,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP__', '__WD__', '__ARGS__'],
+            ['__PHP__', '__WD__', '__PROJECT_WD__', '__ARGS__'],
             [
                 self::toPowerShellSingleQuoted((string) $argv[0]),
                 self::toPowerShellSingleQuoted($workingDir),
+                self::toPowerShellSingleQuoted($projectWorkingDir),
                 self::buildPowerShellArrayLiteral(\array_map('strval', \array_slice($argv, 1))),
             ],
             $template
@@ -4886,10 +6372,19 @@ POWERSHELL;
 
     private static function writeWindowsStartScript(string $phpBinary, string $arguments, string $workingDir): ?string
     {
+        $phpBinary = self::resolveWindowsPersistentPath($phpBinary);
+        $argumentList = \array_map(
+            static fn (string $argument): string => self::resolveWindowsPersistentPath($argument),
+            self::tokenizeCommandLineArguments($arguments)
+        );
+        $arguments = self::buildWindowsCommandLineFromArgv($argumentList);
+        $projectWorkingDir = self::resolveWindowsPersistentPath($workingDir);
+        $workingDir = self::resolveWindowsStartProcessWorkingDirectory($projectWorkingDir);
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $phpExe = __PHP__
 $wd = __WD__
+$env:WELINE_START_PROCESS_CWD = __PROJECT_WD__
 $arguments = __ARGUMENTS__
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
@@ -4922,10 +6417,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP__', '__WD__', '__ARGUMENTS__'],
+            ['__PHP__', '__WD__', '__PROJECT_WD__', '__ARGUMENTS__'],
             [
                 self::toPowerShellSingleQuoted($phpBinary),
                 self::toPowerShellSingleQuoted($workingDir),
+                self::toPowerShellSingleQuoted($projectWorkingDir),
                 self::toPowerShellSingleQuoted(\trim($arguments)),
             ],
             $template
@@ -4957,11 +6453,19 @@ POWERSHELL;
         string $windowTitle = ''
     ): ?string {
         $windowTitle = self::normalizeWindowsForegroundWindowTitle($windowTitle);
+        $phpBinary = self::resolveWindowsPersistentPath($phpBinary);
+        $arguments = \array_map(
+            static fn (string $argument): string => self::resolveWindowsPersistentPath($argument),
+            $arguments
+        );
+        $projectWorkingDir = self::resolveWindowsPersistentPath($workingDir);
+        $workingDir = self::resolveWindowsStartProcessWorkingDirectory($projectWorkingDir);
         $argList = self::buildPowerShellArrayLiteral($arguments);
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $phpExe = __PHP__
 $wd = __WD__
+$env:WELINE_START_PROCESS_CWD = __PROJECT_WD__
 $windowTitle = __WINDOW_TITLE__
 $argList = __ARGS__
 try {
@@ -4996,10 +6500,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP__', '__WD__', '__WINDOW_TITLE__', '__ARGS__'],
+            ['__PHP__', '__WD__', '__PROJECT_WD__', '__WINDOW_TITLE__', '__ARGS__'],
             [
                 self::toPowerShellSingleQuoted($phpBinary),
                 self::toPowerShellSingleQuoted($workingDir),
+                self::toPowerShellSingleQuoted($projectWorkingDir),
                 self::toPowerShellSingleQuoted($windowTitle),
                 $argList,
             ],
@@ -5038,7 +6543,7 @@ POWERSHELL;
         }
 
         $descriptorspec = [
-            0 => ['file', 'NUL', 'r'],
+            0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
@@ -5066,6 +6571,9 @@ POWERSHELL;
         $output = '';
         $stderr = '';
         if (\is_resource($psProcess)) {
+            if (isset($psPipes[0])) {
+                @\fclose($psPipes[0]);
+            }
             if (isset($psPipes[1])) {
                 @\stream_set_blocking($psPipes[1], false);
             }
@@ -5192,6 +6700,32 @@ POWERSHELL;
         return \str_replace("'", "''", $value);
     }
 
+    private static function resolveWindowsStartProcessPidEchoTimeout(): float
+    {
+        $configured = (float) (Env::get('system.processer.windows_start_process_pid_echo_timeout_sec', 0) ?? 0);
+        if ($configured > 0.0) {
+            return \max(0.2, \min(5.0, $configured));
+        }
+
+        return 2.0;
+    }
+
+    private static function resolveWindowsHelperWorkingDirectory(): ?string
+    {
+        if (!self::isWindows()) {
+            return BP;
+        }
+
+        foreach ([\sys_get_temp_dir(), (string) \getenv('TEMP'), (string) \getenv('TMP'), (string) \getenv('SystemRoot')] as $candidate) {
+            $candidate = \rtrim(\trim($candidate), '\\/');
+            if ($candidate !== '' && @\is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @return list<string>
      */
@@ -5210,7 +6744,7 @@ POWERSHELL;
 
     private static function resolveWindowsPowerShellExecutable(): string
     {
-        if (!IS_WIN) {
+        if (!self::isWindows()) {
             return 'powershell';
         }
 
@@ -5250,6 +6784,7 @@ POWERSHELL;
         string $scriptPath,
         string $resultPath,
         string $errorPath,
+        string $stdoutPath = '',
         array $launchItems = []
     ): void
     {
@@ -5264,6 +6799,7 @@ POWERSHELL;
             'script_path' => $scriptPath,
             'result_path' => $resultPath,
             'error_path' => $errorPath,
+            'stdout_path' => $stdoutPath,
             'launch_items' => $launchItems,
         ];
     }
@@ -5380,7 +6916,7 @@ POWERSHELL;
      */
     private static function cleanupWindowsDetachedBatchHelperFiles(array $helper): void
     {
-        foreach (['script_path', 'result_path', 'error_path'] as $field) {
+        foreach (['script_path', 'result_path', 'error_path', 'stdout_path'] as $field) {
             $path = (string) ($helper[$field] ?? '');
             if ($path !== '') {
                 @\unlink($path);
@@ -5400,8 +6936,10 @@ POWERSHELL;
 
         $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['result_path'] ?? '')) ?: ''));
         $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['error_path'] ?? '')) ?: ''));
+        $stdout = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents((string) ($helper['stdout_path'] ?? '')) ?: ''));
         $pidMap = self::parseWindowsBatchCreatePidMap($output);
         $stderr = \trim($stderr);
+        $stdout = \trim($stdout);
         $reason = \trim($reason) !== '' ? \trim($reason) : 'finished';
 
         foreach ($launchItems as $item) {
@@ -5418,6 +6956,10 @@ POWERSHELL;
             if ($stderr !== '') {
                 self::setOutput($command, "[ERROR] batchCreate(helper {$reason}) {$stderr}" . PHP_EOL, true);
                 continue;
+            }
+
+            if ($stdout !== '') {
+                self::setOutput($command, "[INFO] batchCreate(helper {$reason}) stdout: " . self::truncateText($stdout, 1000) . PHP_EOL, true);
             }
 
             if ($key !== '' && (int) ($pidMap[$key] ?? 0) <= 0 && $reason === 'timeout') {
@@ -5447,30 +6989,36 @@ POWERSHELL;
 
         foreach ($launchItems as $item) {
             $key = (string) ($item['key'] ?? '');
-            $php = (string) ($item['php'] ?? '');
-            $cwd = (string) ($item['cwd'] ?? BP);
+            $php = self::resolveWindowsPersistentPath((string) ($item['php'] ?? ''));
+            $cwd = self::resolveWindowsPersistentPath((string) ($item['cwd'] ?? BP));
             $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
-            $arguments = \array_map(static fn (mixed $argument): string => (string) $argument, $argumentList);
+            $arguments = \array_map(
+                static fn (mixed $argument): string => self::resolveWindowsPersistentPath((string) $argument),
+                $argumentList
+            );
+            $startProcessCwd = self::resolveWindowsBatchChildWorkingDirectory($cwd);
             $foreground = !empty($item['foreground']);
             $stdoutLog = (string) ($item['stdout_log'] ?? '');
             $stderrLog = (string) ($item['stderr_log'] ?? '');
+            $redirectChildOutput = !(self::isWindows() && \str_starts_with(\trim($cwd), '\\\\'));
 
             if ($key === '' || $php === '') {
                 return null;
             }
 
             $lines[] = 'try {';
+            $lines[] = '    $env:WELINE_START_PROCESS_CWD = ' . self::toPowerShellSingleQuoted($cwd);
             $lines[] = '    $startArgs = @{';
             $lines[] = '        FilePath = ' . self::toPowerShellSingleQuoted($php);
-            $lines[] = '        WorkingDirectory = ' . self::toPowerShellSingleQuoted($cwd);
+            $lines[] = '        WorkingDirectory = ' . self::toPowerShellSingleQuoted($startProcessCwd);
             $lines[] = '        WindowStyle = ' . self::toPowerShellSingleQuoted($foreground ? 'Normal' : 'Hidden');
             $lines[] = '        PassThru = $true';
             $lines[] = '        ErrorAction = ' . self::toPowerShellSingleQuoted('Stop');
             $lines[] = '    }';
-            if ($stdoutLog !== '') {
+            if ($redirectChildOutput && $stdoutLog !== '') {
                 $lines[] = '    $startArgs.RedirectStandardOutput = ' . self::toPowerShellSingleQuoted($stdoutLog);
             }
-            if ($stderrLog !== '') {
+            if ($redirectChildOutput && $stderrLog !== '') {
                 $lines[] = '    $startArgs.RedirectStandardError = ' . self::toPowerShellSingleQuoted($stderrLog);
             }
             $lines[] = '    $argList = ' . self::buildPowerShellArrayLiteral($arguments);
@@ -6555,30 +8103,81 @@ POWERSHELL;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0777, true);
         }
-        $tmpPath = $path . '.tmp';
-        $fp = @\fopen($tmpPath, 'wb');
-        if (!$fp) {
+
+        $writeAll = static function ($stream, string $data): bool {
+            $offset = 0;
+            $length = \strlen($data);
+            while ($offset < $length) {
+                $written = @\fwrite($stream, \substr($data, $offset));
+                if (!\is_int($written) || $written <= 0) {
+                    return false;
+                }
+                $offset += $written;
+            }
+            return true;
+        };
+
+        $tmpPath = $path . '.' . \getmypid() . '.' . (string)\hrtime(true) . '.tmp';
+        $fp = @\fopen($tmpPath, 'xb');
+        if (!\is_resource($fp)) {
             return false;
         }
-        if (\flock($fp, \LOCK_EX)) {
-            \fwrite($fp, $content);
-            \fflush($fp);
-            \flock($fp, \LOCK_UN);
-            \fclose($fp);
-            // rename 在同目录下通常是原子操作；Windows 目标已存在时 rename
-            // 可能失败，因此这里补一层可恢复覆盖逻辑。
-            if (@\rename($tmpPath, $path)) {
-                return true;
-            }
-            if (\is_file($path) && @\unlink($path) && @\rename($tmpPath, $path)) {
-                return true;
+        if (!@\flock($fp, \LOCK_EX)) {
+            @\fclose($fp);
+            @\unlink($tmpPath);
+            return false;
+        }
+
+        $tmpReady = $writeAll($fp, $content) && @\fflush($fp);
+        if ($tmpReady && \function_exists('fsync')) {
+            @\fsync($fp);
+        }
+        @\flock($fp, \LOCK_UN);
+        @\fclose($fp);
+        if (!$tmpReady) {
+            @\unlink($tmpPath);
+            return false;
+        }
+        if (@\rename($tmpPath, $path)) {
+            return true;
+        }
+
+        // Windows may reject rename-over-existing. Keep the live target present
+        // and replace it under LOCK_EX so LOCK_SH readers see a complete version.
+        if (!\is_file($path)) {
+            @\unlink($tmpPath);
+            return false;
+        }
+        $target = @\fopen($path, 'r+b');
+        if (!\is_resource($target) || !@\flock($target, \LOCK_EX)) {
+            if (\is_resource($target)) {
+                @\fclose($target);
             }
             @\unlink($tmpPath);
             return false;
         }
-        \fclose($fp);
+
+        @\rewind($target);
+        $previous = \stream_get_contents($target);
+        $previous = \is_string($previous) ? $previous : '';
+        $replaced = @\rewind($target)
+            && @\ftruncate($target, 0)
+            && $writeAll($target, $content)
+            && @\fflush($target);
+        if ($replaced && \function_exists('fsync')) {
+            @\fsync($target);
+        }
+        if (!$replaced) {
+            @\rewind($target);
+            @\ftruncate($target, 0);
+            $writeAll($target, $previous);
+            @\fflush($target);
+        }
+
+        @\flock($target, \LOCK_UN);
+        @\fclose($target);
         @\unlink($tmpPath);
-        return false;
+        return $replaced;
     }
 
     /**
@@ -6611,6 +8210,53 @@ POWERSHELL;
         }
     }
     
+    /**
+     * Read one index without collapsing corruption or lock failures into an
+     * apparently valid empty index.
+     *
+     * @return array{state:string,data:array<string|int,mixed>,sha256:string}
+     */
+    private static function readJsonIndexSnapshot(string $path): array
+    {
+        if (!\is_file($path)) {
+            return ['state' => self::INDEX_STATE_ABSENT, 'data' => [], 'sha256' => ''];
+        }
+
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return ['state' => self::INDEX_STATE_UNREADABLE, 'data' => [], 'sha256' => ''];
+        }
+        if (!@\flock($handle, \LOCK_SH)) {
+            @\fclose($handle);
+            return ['state' => self::INDEX_STATE_UNREADABLE, 'data' => [], 'sha256' => ''];
+        }
+
+        try {
+            $content = \stream_get_contents($handle);
+        } finally {
+            @\flock($handle, \LOCK_UN);
+            @\fclose($handle);
+        }
+        if (!\is_string($content)) {
+            return ['state' => self::INDEX_STATE_UNREADABLE, 'data' => [], 'sha256' => ''];
+        }
+
+        $decoded = \json_decode($content, true);
+        if (!\is_array($decoded) || \json_last_error() !== \JSON_ERROR_NONE) {
+            return [
+                'state' => self::INDEX_STATE_CORRUPT,
+                'data' => [],
+                'sha256' => \hash('sha256', $content),
+            ];
+        }
+
+        return [
+            'state' => self::INDEX_STATE_VALID,
+            'data' => $decoded,
+            'sha256' => \hash('sha256', $content),
+        ];
+    }
+
     /**
      * 读取 name_index.json
      * @return array<string, list<array{pid: int, jsonPath: string}>>
@@ -7007,15 +8653,10 @@ POWERSHELL;
             return true;
         }
 
-        if ($expectedPnameKey !== '' && $indexedPname !== '') {
-            return self::buildPnameKey($indexedPname) === $expectedPnameKey;
-        }
-
-        if ($expectedProcessName !== '' && $indexedPname !== '') {
-            return self::getTaskName($indexedPname) === $expectedProcessName;
-        }
-
-        return $indexedPname !== '';
+        // PID 与 pid_index/name_index 都可能跨系统重启残留并被系统进程复用。
+        // 无法读取当前 OS 命令行时，历史索引只能作为诊断线索，不能证明当前 PID 仍属于 Weline。
+        // 返回 false 保证停止/清理流程绝不向身份未知的进程发送信号。
+        return false;
     }
 
     private static function doesRecordedPidIdentityAllowOperation(int $pid, array $record): bool
@@ -7056,7 +8697,7 @@ POWERSHELL;
             return '';
         }
 
-        $pattern = "/--" . \preg_quote($name, '/') . "(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s]+))/i";
+        $pattern = "/--" . \preg_quote($name, '/') . "(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s\"']+))/i";
         if (!\preg_match($pattern, $commandLine, $matches)) {
             return '';
         }
@@ -7187,24 +8828,107 @@ POWERSHELL;
     /*----------------------------------------索引更新区域------------------------------------------*/
 
     /**
-     * Capture a best-effort liveness snapshot before entering the managed index
-     * transaction. OS probes can be comparatively slow on Windows and must not
-     * hold the global index lock. Entries registered after this snapshot are
-     * never selected as replacement representatives; their own setProcessPorts()
-     * call remains authoritative.
+     * Build the replacement liveness snapshot for every lease removed by one
+     * managed identity. Leases without ports never need an OS process probe.
      *
-     * @param array<int, array{pname:string,jsonPath:string}>|null $pidIndex
      * @return array<int, array<string, mixed>>
      */
-    private static function snapshotIndexedProcessInfo(?array $pidIndex = null): array
+    private static function snapshotManagedIdentityPortReplacementInfo(string $identity): array
+    {
+        $nameIndex = self::readNameIndex();
+        $pidIndex = self::readPidIndex();
+        $ports = [];
+        $excludedPids = [];
+
+        foreach (self::findManagedIdentityKeys($identity, $nameIndex) as $ownerPname) {
+            foreach ((array)($nameIndex[$ownerPname] ?? []) as $entry) {
+                $entryPid = (int)($entry['pid'] ?? 0);
+                if ($entryPid > 0) {
+                    $excludedPids[$entryPid] = true;
+                }
+
+                $jsonPath = (string)($entry['jsonPath'] ?? '');
+                if ($jsonPath === '' || !\is_file($jsonPath)) {
+                    continue;
+                }
+                $decoded = \json_decode((string)(@\file_get_contents($jsonPath) ?: ''), true);
+                if (!\is_array($decoded)) {
+                    continue;
+                }
+                foreach ((array)($decoded['ports'] ?? []) as $port) {
+                    $port = (int)$port;
+                    if ($port > 0) {
+                        $ports[$port] = $port;
+                    }
+                }
+            }
+        }
+
+        return self::snapshotIndexedProcessInfo($pidIndex, \array_values($ports), $excludedPids);
+    }
+
+    /**
+     * Capture candidate liveness before entering the managed index transaction.
+     * When target ports are supplied, only leases that declare one of those
+     * ports are probed. New registrations after this snapshot remain
+     * authoritative through their own setProcessPorts() transaction.
+     *
+     * @param array<int, array{pname:string,jsonPath:string}>|null $pidIndex
+     * @param int[]|null $targetPorts Null keeps the full snapshot behavior; an empty array skips OS probes.
+     * @param array<int, true> $excludedPids
+     * @return array<int, array<string, mixed>>
+     */
+    private static function snapshotIndexedProcessInfo(
+        ?array $pidIndex = null,
+        ?array $targetPorts = null,
+        array $excludedPids = []
+    ): array
     {
         $pidIndex ??= self::readPidIndex();
-        $pids = \array_values(\array_filter(\array_map(
-            'intval',
-            \array_keys($pidIndex)
-        ), static fn(int $pid): bool => $pid > 0));
+        if ($targetPorts === null) {
+            $pids = \array_values(\array_filter(\array_map(
+                'intval',
+                \array_keys($pidIndex)
+            ), static fn(int $pid): bool => $pid > 0));
 
-        return $pids !== [] ? self::batchGetProcessInfo($pids) : [];
+            return $pids !== [] ? self::batchGetProcessInfo($pids) : [];
+        }
+
+        $targetPortSet = [];
+        foreach ($targetPorts as $port) {
+            $port = (int)$port;
+            if ($port > 0) {
+                $targetPortSet[$port] = true;
+            }
+        }
+        if ($targetPortSet === []) {
+            return [];
+        }
+
+        $pids = [];
+        foreach ($pidIndex as $candidatePid => $entry) {
+            $candidatePid = (int)$candidatePid;
+            if ($candidatePid <= 0 || isset($excludedPids[$candidatePid]) || !\is_array($entry)) {
+                continue;
+            }
+
+            $jsonPath = (string)($entry['jsonPath'] ?? '');
+            if ($jsonPath === '' || !\is_file($jsonPath)) {
+                continue;
+            }
+            $decoded = \json_decode((string)(@\file_get_contents($jsonPath) ?: ''), true);
+            if (!\is_array($decoded) || (int)($decoded['pid'] ?? 0) !== $candidatePid) {
+                continue;
+            }
+            foreach ((array)($decoded['ports'] ?? []) as $port) {
+                if (isset($targetPortSet[(int)$port])) {
+                    $pids[$candidatePid] = $candidatePid;
+                    break;
+                }
+            }
+        }
+
+        return $pids !== [] ? self::batchGetProcessInfo(\array_values($pids)) : [];
     }
 
     /**
@@ -7336,54 +9060,86 @@ POWERSHELL;
     /**
      * 更新索引（setPid 调用后同步更新 name_index 和 pid_index）
      * 
-     * 写顺序：先 *-pid.json（已写），再 name_index（原子），再 pid_index
+     * 写顺序：name_index -> pid_index -> port_index；exact lease 由调用方最后提交。
      * 
      * @param string $pname 进程名
      * @param int $pid 进程 ID
      * @param string $jsonPath PID JSON 文件路径
      */
-    private static function updateIndexes(string $pname, int $pid, string $jsonPath): void
+    private static function updateIndexes(string $pname, int $pid, string $jsonPath): ?array
     {
-        $deadPids = [];
-        
-        // 1. 原子更新 name_index：追加前清理死亡 PID，防止膨胀
-        self::atomicUpdateNameIndex(function (array $nameIndex) use ($pname, $pid, $jsonPath, &$deadPids): array {
-            if (!isset($nameIndex[$pname])) {
-                $nameIndex[$pname] = [];
-            }
-            
-            // 清理死亡 PID
-            $alive = [];
-            foreach ($nameIndex[$pname] as $entry) {
-                $entryPid = (int) ($entry['pid'] ?? 0);
-                if ($entryPid === $pid) {
-                    continue; // 将在下面追加/更新
-                }
-                if ($entryPid > 0) {
-                    $alive[] = $entry;
-                } else {
-                    $deadPids[] = $entryPid;
-                }
-            }
-            
-            // 追加当前 PID
-            $alive[] = ['pid' => $pid, 'jsonPath' => $jsonPath];
-            $nameIndex[$pname] = $alive;
-            
-            return $nameIndex;
-        });
-        
-        // 2. 更新 pid_index
-        $pidIndex = self::readPidIndex();
-        // 移除已死亡的旧 PID 索引项
-        foreach ($deadPids as $deadPid) {
-            if ($deadPid > 0 && isset($pidIndex[$deadPid])) {
-                unset($pidIndex[$deadPid]);
-                self::untrustPid($deadPid);
+        $nameSnapshot = self::readJsonIndexSnapshot(self::getNameIndexFile());
+        $pidSnapshot = self::readJsonIndexSnapshot(self::getPidIndexFile());
+        $portSnapshot = self::readJsonIndexSnapshot(self::getPortIndexFile());
+        foreach ([$nameSnapshot, $pidSnapshot, $portSnapshot] as $snapshot) {
+            $state = (string)($snapshot['state'] ?? self::INDEX_STATE_UNREADABLE);
+            if (!\in_array($state, [self::INDEX_STATE_VALID, self::INDEX_STATE_ABSENT], true)) {
+                return null;
             }
         }
+
+        $nameIndex = (array)($nameSnapshot['data'] ?? []);
+        $pidIndex = (array)($pidSnapshot['data'] ?? []);
+        $portIndex = (array)($portSnapshot['data'] ?? []);
+        $previous = [
+            'name' => $nameIndex,
+            'pid' => $pidIndex,
+            'port' => $portIndex,
+        ];
+
+        foreach ($nameIndex as $identity => $entries) {
+            if (!\is_string($identity) || !\is_array($entries)) {
+                return null;
+            }
+            $filtered = [];
+            foreach ($entries as $entry) {
+                if (!\is_array($entry)
+                    || (int)($entry['pid'] ?? 0) <= 0
+                    || \trim((string)($entry['jsonPath'] ?? '')) === '') {
+                    return null;
+                }
+                if ((int)$entry['pid'] !== $pid) {
+                    $filtered[] = $entry;
+                }
+            }
+            if ($filtered === []) {
+                unset($nameIndex[$identity]);
+            } else {
+                $nameIndex[$identity] = $filtered;
+            }
+        }
+
+        foreach ($pidIndex as $indexedPid => $entry) {
+            if ((int)$indexedPid <= 0
+                || !\is_array($entry)
+                || \trim((string)($entry['pname'] ?? '')) === ''
+                || \trim((string)($entry['jsonPath'] ?? '')) === '') {
+                return null;
+            }
+        }
+        foreach ($portIndex as $port => $owner) {
+            if ((int)$port <= 0 || !\is_string($owner) || \trim($owner) === '') {
+                return null;
+            }
+        }
+
+        $nameIndex[$pname] = [['pid' => $pid, 'jsonPath' => $jsonPath]];
         $pidIndex[$pid] = ['pname' => $pname, 'jsonPath' => $jsonPath];
-        self::writePidIndex($pidIndex);
+
+        if (!self::writeNameIndex($nameIndex)) {
+            return null;
+        }
+        if (!self::writePidIndex($pidIndex)) {
+            self::writeNameIndex($previous['name']);
+            return null;
+        }
+        if (!self::writePortIndex($portIndex)) {
+            self::writePidIndex($previous['pid']);
+            self::writeNameIndex($previous['name']);
+            return null;
+        }
+
+        return $previous;
     }
     
     /**
@@ -7397,7 +9153,11 @@ POWERSHELL;
     public static function setProcessPorts(string $pname, array $ports): void
     {
         $pname = self::buildManagedIdentity($pname);
-        $processInfo = self::snapshotIndexedProcessInfo();
+        // Port publication normally only adds the freshly bound listener. A
+        // full Windows process-table snapshot here costs seconds and does no
+        // useful work unless an older lease owned ports that may need a live
+        // replacement. Restrict the probe to those exact historical ports.
+        $processInfo = self::snapshotManagedIdentityPortReplacementInfo($pname);
         self::withManagedIndexLock(static function () use ($pname, $ports, $processInfo): void {
             $pidFile = self::getPidFile($pname, (int) \getmypid());
             if (!\is_file($pidFile)) {
@@ -7766,7 +9526,7 @@ POWERSHELL;
 
         return $driver->getProcessCommandLine($pid);
     }
-    
+
     /**
      * 检测指定 PID 的进程是否由进程管理器创建（命令行含 weline- 标识）
      * 
@@ -8600,7 +10360,7 @@ POWERSHELL;
         }
 
         $descriptors = [
-            0 => ['file', 'NUL', 'r'],
+            0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];

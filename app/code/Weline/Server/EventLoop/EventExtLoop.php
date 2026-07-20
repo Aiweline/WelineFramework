@@ -25,12 +25,33 @@ final class EventExtLoop implements EventLoopInterface
     /** @var array<int, resource> */
     private array $readyWrite = [];
 
+    private \Event $timeoutEvent;
+
     public function __construct()
     {
         if (!\extension_loaded('event') || !\class_exists(\EventBase::class) || !\class_exists(\Event::class)) {
             throw new \RuntimeException('event extension is not loaded');
         }
         $this->base = new \EventBase();
+        $this->timeoutEvent = new \Event(
+            $this->base,
+            -1,
+            \Event::TIMEOUT,
+            static function (): void {
+            }
+        );
+    }
+
+    public function __destruct()
+    {
+        foreach (\array_keys($this->readWatchers) as $rid) {
+            $this->removeWatcher((int)$rid, true);
+        }
+        foreach (\array_keys($this->writeWatchers) as $rid) {
+            $this->removeWatcher((int)$rid, false);
+        }
+        $this->timeoutEvent->del();
+        $this->timeoutEvent->free();
     }
 
     public function wait(
@@ -49,7 +70,7 @@ final class EventExtLoop implements EventLoopInterface
 
         if ($this->readWatchers === [] && $this->writeWatchers === []) {
             if ($timeout > 0.0) {
-                \usleep((int) \round($timeout * 1_000_000));
+                \usleep((int)\round($timeout * 1_000_000));
             }
             $read = [];
             $write = [];
@@ -57,16 +78,11 @@ final class EventExtLoop implements EventLoopInterface
             return 0;
         }
 
-        $timer = null;
         if ($timeout > 0.0) {
-            $timer = new \Event(
-                $this->base,
-                -1,
-                \Event::TIMEOUT,
-                static function (): void {
-                }
-            );
-            $timer->add($timeout);
+            // Re-arm one process-lifetime timer instead of allocating/freeing an
+            // Event object on every hot-loop iteration.
+            $this->timeoutEvent->del();
+            $this->timeoutEvent->add($timeout);
         }
 
         $flags = \EventBase::LOOP_ONCE;
@@ -75,9 +91,8 @@ final class EventExtLoop implements EventLoopInterface
         }
 
         $loopResult = $this->base->loop($flags);
-        if ($timer instanceof \Event) {
-            $timer->del();
-            $timer->free();
+        if ($timeout > 0.0) {
+            $this->timeoutEvent->del();
         }
 
         if ($loopResult === false || $loopResult < 0) {

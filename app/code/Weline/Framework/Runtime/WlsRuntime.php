@@ -15,6 +15,7 @@ namespace Weline\Framework\Runtime;
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\Contract\SharedCacheStateHealthInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Context;
 use Weline\Framework\Container\ContainerRuntime;
@@ -51,7 +52,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private const HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX = 'wls_homepage_warmup:';
     private const HOMEPAGE_WARMUP_OWNER_KEY = 'owner';
     private const HOMEPAGE_WARMUP_READY_KEY = 'ready';
-    private const HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS = 2;
+    // POSIX keeps the tight 4.5s/6s gate. Windows x64 PHP on ARM64 can spend
+    // materially longer loading a cold homepage from a shared UNC tree, so its
+    // bounded 12s/15s pair still preserves budget < lease < two attempts.
+    private const HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS = 6;
+    private const HOMEPAGE_WARMUP_WINDOWS_OWNER_LEASE_SECONDS = 15;
+    private const HOMEPAGE_WARMUP_READY_BUDGET_MILLISECONDS = 4500;
+    private const HOMEPAGE_WARMUP_WINDOWS_READY_BUDGET_MILLISECONDS = 12000;
+    private const HOMEPAGE_WARMUP_OWNER_RECORD_TTL_SECONDS = 180;
+    private const HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS = 25;
+    private const HOMEPAGE_WARMUP_FOLLOWER_POLL_MILLISECONDS = 50;
     private const HOMEPAGE_WARMUP_READY_TTL_SECONDS = 120;
 
     /**
@@ -283,6 +293,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
             $this->logReadyGateWarmupStep('optional_bootstrap_skipped', $workerId, $startedAt);
+            $this->logReadyGateWarmupStep('homepage_fpc_final_begin', $workerId, $startedAt);
+            $this->readyGateHomepageFpcProof = $this->runRequiredHomepageProcessFpcReadyGate(
+                $workerId,
+                $startedAt
+            );
+            $this->logReadyGateWarmupStep('homepage_fpc_final_done', $workerId, $startedAt);
             $this->readyGateWorkerBootstrapWarmupCompleted = true;
             $this->scheduleNextHomepageKeepWarm();
             return $this->readyGateHomepageFpcProof;
@@ -365,9 +381,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $this->logReadyGateWarmupStep('dynamic_skipped', $workerId, $startedAt);
         }
         if ($this->readyGateDynamicFirstRenderProof === []) {
-            throw new \RuntimeException(
-                'READY gate dynamic first-render proof is mandatory for business workers.'
-            );
+            $this->logReadyGateWarmupStep('dynamic_nonblocking_deferred', $workerId, $startedAt);
         }
 
         // Optional registry/controller warmups may reset request-local state or
@@ -442,27 +456,72 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         $this->logReadyGateWarmupStep('homepage_fpc_begin', $workerId, $startedAt);
         $host = $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
-        $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, true);
-        $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
-        $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
-        $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
-        $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
-            ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
-        $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
-        $fullUri = \trim((string)($meta['full_uri'] ?? ''));
-        $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
-        $hit = (bool)($validation['ok'] ?? false)
-            && $fpcStatus === 'HIT'
-            && \str_starts_with($source, 'process')
-            && $fullUri !== '';
+        $maxAttempts = (int)Env::get('wls.worker.ready_gate_homepage_attempts', 3);
+        $maxAttempts = \max(1, \min(5, $maxAttempts));
+        $perAttemptBudgetNs = self::homepageWarmupReadyBudgetMilliseconds() * 1000000;
+        $retryDelayBudgetNs = self::HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS
+            * \max(0, $maxAttempts - 1)
+            * 1000000;
+        // Each transaction owns its independent READY deadline. The outer
+        // deadline therefore covers every configured attempt instead of
+        // expiring as soon as attempt one consumes its platform-specific budget.
+        $deadlineNs = \hrtime(true) + ($perAttemptBudgetNs * $maxAttempts) + $retryDelayBudgetNs;
         $proof = [
-            'hit' => $hit,
-            'fpc_status' => $fpcStatus,
-            'source' => $source,
-            'full_uri' => $fullUri,
-            'reason' => $reason,
-            'http_status' => (int)($meta['status_code'] ?? 0),
+            'hit' => false,
+            'fpc_status' => '',
+            'source' => '',
+            'full_uri' => '',
+            'reason' => 'homepage validation missing',
+            'http_status' => 0,
         ];
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            if ($attempt > 1 && \hrtime(true) >= $deadlineNs) {
+                $reason = (string)($proof['reason'] ?? 'homepage validation missing')
+                    . ':total-ready-budget-exhausted';
+                $proof['reason'] = $reason;
+                break;
+            }
+            $transaction = $this->runHomepageFpcWarmupTransaction($host, $attempt, true);
+            $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
+            $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
+            $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
+            $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+                ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
+            $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
+            $fullUri = \trim((string)($meta['full_uri'] ?? ''));
+            $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
+            $hit = (bool)($validation['ok'] ?? false)
+                && $fpcStatus === 'HIT'
+                && \str_starts_with($source, 'process')
+                && $fullUri !== '';
+            $proof = [
+                'hit' => $hit,
+                'fpc_status' => $fpcStatus,
+                'source' => $source,
+                'full_uri' => $fullUri,
+                'reason' => $reason,
+                'http_status' => (int)($meta['status_code'] ?? 0),
+            ];
+            if ($hit) {
+                break;
+            }
+            if ($attempt >= $maxAttempts) {
+                $reason .= ':attempts-exhausted=' . $maxAttempts;
+                $proof['reason'] = $reason;
+                break;
+            }
+            if (\hrtime(true) >= $deadlineNs) {
+                $reason .= ':total-ready-budget-exhausted';
+                $proof['reason'] = $reason;
+                break;
+            }
+            $this->logReadyGateWarmupStep(
+                'homepage_fpc_retry attempt=' . $attempt . ' status=' . $proof['http_status'] . ' reason=' . $reason,
+                $workerId,
+                $startedAt
+            );
+            SchedulerSystem::yieldDelay(self::HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS);
+        }
         if (!$hit) {
             throw new \RuntimeException(
                 'READY gate homepage process FPC proof failed worker=' . $workerId
@@ -798,7 +857,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '1');
+            // Dynamic first-render is valuable warmup, but it must not block
+            // worker admission by default. The READY gate is the process-local
+            // homepage FPC proof; strict deployments can opt in explicitly.
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '0');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
@@ -1276,7 +1338,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
         }
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '0');
+            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '1');
         }
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
             return false;
@@ -1285,13 +1347,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         return $this->isDynamicFirstRenderWarmupOwnerWorker(
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID',
             'wls.worker.backend_deferred_warmup_owner_worker_id',
-            1
+            0
         );
     }
 
     private function runDeferredBackendFirstRenderWarmup(): void
     {
-        $delayMs = (int)(Env::get('wls.worker.backend_deferred_warmup_delay_ms', 1500) ?: 0);
+        $delayMs = (int)(Env::get('wls.worker.backend_deferred_warmup_delay_ms', 250) ?: 0);
         $delayMs = \max(0, \min($delayMs, 30000));
         if ($delayMs > 0) {
             SchedulerSystem::yieldDelay($delayMs);
@@ -1460,9 +1522,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             ? Env::get('wls.worker.backend_ready_gate_warmup_paths', null)
             : Env::get('wls.worker.backend_warmup_paths', null);
         if ($configured === null || $configured === '') {
-            $configured = $scope === 'ready-gate'
-                ? ['admin/login', 'admin']
-                : ['admin'];
+            $configured = ['admin/login', 'admin'];
         }
         if (\is_string($configured)) {
             $decoded = \json_decode($configured, true);
@@ -1840,6 +1900,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'wls.worker.homepage_warmup_peer_wait_ms',
                 3000
             )));
+            $readyBudgetMilliseconds = self::homepageWarmupReadyBudgetMilliseconds();
+            $readyDeadlineNs = \hrtime(true) + ($readyBudgetMilliseconds * 1000000);
 
             $sharedCoordinator = $this->dynamicWarmupCoordinator();
             if ($sharedCoordinator === null) {
@@ -1856,59 +1918,143 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $coordinationPool = $this->homepageWarmupCoordinationPool($fullUri);
             $ownerToken = $this->homepageWarmupOwnerToken();
             $ownerLease = null;
+            $publishedPublicationId = '';
             $publishedReceipt = $this->readHomepageWarmupPublishedReceipt(
                 $sharedCoordinator,
-                $coordinationPool
+                $coordinationPool,
+                $publishedPublicationId
             );
             $this->addHomepageWarmupReceipt($candidateReceipts, $publishedReceipt);
+            $lastHydratedPublicationId = '';
+            $leaseFailureReason = '';
             $ownsPrimeLease = $this->tryAcquireHomepageWarmupLease(
                 $sharedCoordinator,
                 $coordinationPool,
                 $ownerToken,
-                $ownerLease
+                $ownerLease,
+                $leaseFailureReason,
             );
-            $deadline = \microtime(true) + ($waitMs / 1000);
+            $coordinatorFailureCount = $leaseFailureReason === 'coordinator_unavailable' ? 1 : 0;
+            $selectionStartedAt = \microtime(true);
+            $peerDeadline = $selectionStartedAt
+                + (\min($waitMs, $readyBudgetMilliseconds) / 1000);
+            $observedLiveOwner = false;
+            $observedOwnerLease = null;
 
-            // A follower never enters Router/Controller. It only hydrates the
-            // exact fresh Shared L2 entry, or atomically takes over after the
-            // previous owner's short lease expires.
-            while (!$ownsPrimeLease && \microtime(true) < $deadline) {
+            // A follower never enters Router/Controller while a live owner is
+            // priming. A missing owner still fails within the peer window; once
+            // a fenced owner is observed, the follower yields until publication,
+            // owner release/takeover, or the independent READY budget is exhausted.
+            while (!$ownsPrimeLease && \hrtime(true) < $readyDeadlineNs) {
+                $publishedPublicationId = '';
                 $publishedReceipt = $this->readHomepageWarmupPublishedReceipt(
                     $sharedCoordinator,
-                    $coordinationPool
+                    $coordinationPool,
+                    $publishedPublicationId
                 );
-                $this->addHomepageWarmupReceipt($candidateReceipts, $publishedReceipt);
-                foreach ($candidateReceipts as $candidateReceipt) {
+                if ($publishedPublicationId !== ''
+                    && $publishedPublicationId !== $lastHydratedPublicationId
+                ) {
+                    $lastHydratedPublicationId = $publishedPublicationId;
+                    $this->addHomepageWarmupReceipt($candidateReceipts, $publishedReceipt);
                     if ($this->warmHomepageProcessCacheForReceipt(
                         $coordinator,
-                        $candidateReceipt,
+                        $publishedReceipt,
                         true
                     )) {
-                        $activeReceipt = $candidateReceipt;
+                        $activeReceipt = $publishedReceipt;
                         $cacheFullUri = $activeReceipt['full_uri'];
                         $pulledFromShared = true;
-                        break 2;
+                        break;
                     }
                 }
 
-                $remainingMs = (int)\max(0, \ceil(($deadline - \microtime(true)) * 1000));
-                if ($remainingMs <= 0) {
-                    break;
-                }
                 $ownsPrimeLease = $this->tryAcquireHomepageWarmupLease(
                     $sharedCoordinator,
                     $coordinationPool,
                     $ownerToken,
-                    $ownerLease
+                    $ownerLease,
+                    $leaseFailureReason,
                 );
                 if ($ownsPrimeLease) {
                     break;
                 }
-                SchedulerSystem::yieldDelay(\min(10, $remainingMs));
+                if ($leaseFailureReason === 'coordinator_unavailable') {
+                    $coordinatorFailureCount++;
+                    if ($coordinatorFailureCount >= 2) {
+                        break;
+                    }
+                } else {
+                    $coordinatorFailureCount = 0;
+                }
+
+                $now = \microtime(true);
+                $nowMs = (int)\floor($now * 1000);
+                try {
+                    $currentOwnerLease = $sharedCoordinator->getCache(
+                        $coordinationPool,
+                        self::HOMEPAGE_WARMUP_OWNER_KEY
+                    );
+                } catch (\Throwable) {
+                    $currentOwnerLease = null;
+                }
+                $ownerIsLive = \is_array($currentOwnerLease)
+                    && \trim((string)($currentOwnerLease['token'] ?? '')) !== ''
+                    && (int)($currentOwnerLease['expires_at_ms'] ?? 0) > $nowMs;
+                if ($ownerIsLive) {
+                    $observedLiveOwner = true;
+                    $observedOwnerLease = $currentOwnerLease;
+                } elseif (!$observedLiveOwner && $now >= $peerDeadline) {
+                    break;
+                }
+
+                $remainingMs = (int)\max(
+                    0,
+                    \ceil(($readyDeadlineNs - \hrtime(true)) / 1000000)
+                );
+                if ($remainingMs <= 0) {
+                    break;
+                }
+                $jitterMs = (int)((\getmypid() ?: 0) % 11) - 5;
+                SchedulerSystem::yieldDelay(\min(
+                    self::HOMEPAGE_WARMUP_FOLLOWER_POLL_MILLISECONDS + $jitterMs,
+                    $remainingMs
+                ));
+            }
+
+            if (!$ownsPrimeLease && !$pulledFromShared) {
+                $ownerExpiresAtMs = \is_array($observedOwnerLease)
+                    ? (int)($observedOwnerLease['expires_at_ms'] ?? 0)
+                    : 0;
+                return [
+                    'meta' => [
+                        'full_uri' => $cacheFullUri,
+                        'status_code' => 0,
+                    ],
+                    'validation' => [
+                        'ok' => false,
+                        'reason' => ($leaseFailureReason === 'coordinator_unavailable'
+                            ? 'homepage-warmup-coordinator-unavailable'
+                            : ($leaseFailureReason === 'owner_state_invalid'
+                                ? 'homepage-warmup-owner-state-invalid'
+                                : ($observedLiveOwner
+                                    ? 'homepage-warmup-owner-startup-deadline'
+                                    : 'homepage-warmup-owner-election-timeout')))
+                            . ':owner-observed=' . ($observedLiveOwner ? '1' : '0')
+                            . ':owner-expires-at-ms=' . $ownerExpiresAtMs,
+                        'cache' => '',
+                    ],
+                ];
             }
 
             $primeMeta = [];
             if ($ownsPrimeLease) {
+                // Election/follower wait and owner work have independent
+                // budgets. A takeover must receive the same complete prime
+                // window as the first owner instead of inheriting time already
+                // spent waiting for the previous lease to expire.
+                $readyDeadlineNs = \hrtime(true) + ($readyBudgetMilliseconds * 1000000);
+                $ownsPublishFence = true;
                 try {
                     // Close the miss->CAS race: another owner may have
                     // published immediately before this Worker acquired.
@@ -1931,21 +2077,158 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     }
 
                     if (!$pulledFromShared) {
-                        $primeMeta = $this->runInternalWarmupRequest(
-                            $host,
-                            '/',
-                            $sequence,
-                            'homepage-fpc-prime',
-                            [
-                                'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
-                                'WLS_INTERNAL_HOMEPAGE_PRIME' => '1',
-                            ],
-                            [
-                                'User-Agent' => 'WLS-Homepage-Warmup/1.0',
-                                'Accept-Encoding' => 'identity',
-                                'X-WLS-Dynamic-Warmup' => '1',
-                                'X-WLS-FPC-Prime' => '1',
-                            ]
+                        $ownsPublishFence = $this->renewHomepageWarmupLease(
+                            $sharedCoordinator,
+                            $coordinationPool,
+                            $ownerLease
+                        );
+                        if (!$ownsPublishFence) {
+                            return [
+                                'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                'validation' => [
+                                    'ok' => false,
+                                    'reason' => 'homepage-warmup-owner-lease-lost:stage=before-prime',
+                                    'cache' => '',
+                                ],
+                            ];
+                        }
+                        if (\hrtime(true) >= $readyDeadlineNs) {
+                            return [
+                                'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                'validation' => [
+                                    'ok' => false,
+                                    'reason' => 'homepage-warmup-ready-deadline:stage=before-prime',
+                                    'cache' => '',
+                                ],
+                            ];
+                        }
+                        $remainingPrimeNanoseconds = $readyDeadlineNs - \hrtime(true);
+                        $remainingPrimeSeconds = \PHP_OS_FAMILY === 'Windows'
+                            ? (int)\ceil($remainingPrimeNanoseconds / 1000000000)
+                            : (int)\floor($remainingPrimeNanoseconds / 1000000000);
+                        if ($remainingPrimeSeconds < 1) {
+                            return [
+                                'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                'validation' => [
+                                    'ok' => false,
+                                    'reason' => 'homepage-warmup-ready-deadline:stage=before-prime',
+                                    'cache' => '',
+                                ],
+                            ];
+                        }
+                        $restoreExecutionTimeLimit = null;
+                        $restorePosixAlarm = null;
+                        if (\PHP_OS_FAMILY === 'Windows') {
+                            if (!\function_exists('set_time_limit')) {
+                                return [
+                                    'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                    'validation' => [
+                                        'ok' => false,
+                                        'reason' => 'homepage-warmup-hard-timeout-unavailable',
+                                        'cache' => '',
+                                    ],
+                                ];
+                            }
+                            $restoreExecutionTimeLimit = (int)\ini_get('max_execution_time');
+                            if (@\set_time_limit($remainingPrimeSeconds) === false) {
+                                return [
+                                    'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                    'validation' => [
+                                        'ok' => false,
+                                        'reason' => 'homepage-warmup-hard-timeout-arm-failed',
+                                        'cache' => '',
+                                    ],
+                                ];
+                            }
+                        } else {
+                            if (!\defined('SIGALRM')
+                                || !\defined('SIG_DFL')
+                                || !\function_exists('pcntl_alarm')
+                                || !\function_exists('pcntl_signal')
+                                || !\function_exists('pcntl_signal_get_handler')
+                            ) {
+                                return [
+                                    'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                    'validation' => [
+                                        'ok' => false,
+                                        'reason' => 'homepage-warmup-hard-timeout-unavailable',
+                                        'cache' => '',
+                                    ],
+                                ];
+                            }
+                            $previousAlarmHandler = \pcntl_signal_get_handler(\SIGALRM);
+                            $previousAlarmSeconds = \pcntl_alarm(0);
+                            if ($previousAlarmSeconds > 0) {
+                                \pcntl_alarm($previousAlarmSeconds);
+                                return [
+                                    'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                    'validation' => [
+                                        'ok' => false,
+                                        'reason' => 'homepage-warmup-hard-timeout-alarm-in-use',
+                                        'cache' => '',
+                                    ],
+                                ];
+                            }
+                            // SIG_DFL is installed in the kernel rather than a
+                            // PHP callback. It can terminate a Worker even when
+                            // the prime is blocked inside native code and never
+                            // returns to the Zend VM to dispatch user handlers.
+                            if (!@\pcntl_signal(\SIGALRM, \SIG_DFL)) {
+                                @\pcntl_signal(\SIGALRM, $previousAlarmHandler);
+                                return [
+                                    'meta' => ['full_uri' => $cacheFullUri, 'status_code' => 0],
+                                    'validation' => [
+                                        'ok' => false,
+                                        'reason' => 'homepage-warmup-hard-timeout-arm-failed',
+                                        'cache' => '',
+                                    ],
+                                ];
+                            }
+                            \pcntl_alarm($remainingPrimeSeconds);
+                            $restorePosixAlarm = [
+                                'handler' => $previousAlarmHandler,
+                            ];
+                        }
+                        try {
+                            $primeMeta = $this->runInternalWarmupRequest(
+                                $host,
+                                '/',
+                                $sequence,
+                                'homepage-fpc-prime',
+                                [
+                                    'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
+                                    'WLS_INTERNAL_HOMEPAGE_PRIME' => '1',
+                                ],
+                                [
+                                    'User-Agent' => 'WLS-Homepage-Warmup/1.0',
+                                    'Accept-Encoding' => 'identity',
+                                    'X-WLS-Dynamic-Warmup' => '1',
+                                    'X-WLS-FPC-Prime' => '1',
+                                ]
+                            );
+                        } finally {
+                            if ($restorePosixAlarm !== null) {
+                                \pcntl_alarm(0);
+                                @\pcntl_signal(\SIGALRM, $restorePosixAlarm['handler']);
+                            }
+                            if ($restoreExecutionTimeLimit !== null) {
+                                @\set_time_limit($restoreExecutionTimeLimit > 0 ? $restoreExecutionTimeLimit : 0);
+                            }
+                        }
+                        if (\hrtime(true) >= $readyDeadlineNs) {
+                            return [
+                                'meta' => $primeMeta,
+                                'validation' => [
+                                    'ok' => false,
+                                    'reason' => 'homepage-warmup-ready-deadline:stage=prime',
+                                    'cache' => '',
+                                ],
+                            ];
+                        }
+                        $ownsPublishFence = $this->renewHomepageWarmupLease(
+                            $sharedCoordinator,
+                            $coordinationPool,
+                            $ownerLease
                         );
                         $primeValidation = $this->validateHomepageWarmupResponse($primeMeta, false);
                         if (!$primeValidation['ok']) {
@@ -1969,8 +2252,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         // Publishing is not considered successful until this
                         // owner can read the same exact entry back from Shared
                         // L2 and install it into Process L1.
-                        $publishDeadline = \microtime(true) + ($waitMs / 1000);
-                        do {
+                        $publishDeadlineNs = \min(
+                            $readyDeadlineNs,
+                            \hrtime(true) + ($waitMs * 1000000)
+                        );
+                        while (\hrtime(true) < $publishDeadlineNs) {
                             foreach ($candidateReceipts as $candidateReceipt) {
                                 if ($this->warmHomepageProcessCacheForReceipt(
                                     $coordinator,
@@ -1984,20 +2270,31 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                                 }
                             }
 
-                            $remainingMs = (int)\max(0, \ceil(($publishDeadline - \microtime(true)) * 1000));
+                            $remainingMs = (int)\max(
+                                0,
+                                \ceil(($publishDeadlineNs - \hrtime(true)) / 1000000)
+                            );
                             if ($remainingMs <= 0) {
                                 break;
                             }
                             SchedulerSystem::yieldDelay(\min(10, $remainingMs));
-                        } while (\microtime(true) < $publishDeadline);
+                        }
 
                     }
                     if ($pulledFromShared) {
-                        $this->publishHomepageWarmupReceipt(
-                            $sharedCoordinator,
-                            $coordinationPool,
-                            $activeReceipt
-                        );
+                        $pulledFromShared = \hrtime(true) < $readyDeadlineNs
+                            && $ownsPublishFence
+                            && $this->renewHomepageWarmupLease(
+                                $sharedCoordinator,
+                                $coordinationPool,
+                                $ownerLease
+                            )
+                            && $this->publishHomepageWarmupReceipt(
+                                $sharedCoordinator,
+                                $coordinationPool,
+                                $activeReceipt,
+                                $ownerLease
+                            );
                     }
                 } finally {
                     $this->releaseHomepageWarmupLease(
@@ -2020,7 +2317,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     ],
                     'validation' => [
                         'ok' => false,
-                        'reason' => 'shared-fpc-publish-timeout'
+                        'reason' => (\hrtime(true) >= $readyDeadlineNs
+                            ? 'homepage-warmup-ready-deadline:stage=publish'
+                            : 'shared-fpc-publish-timeout')
                             . ':prime-status=' . (int)($primeMeta['status_code'] ?? 0)
                             . ':prime-fpc=' . ($primeFpc !== '' ? $primeFpc : 'none')
                             . ':prime-source=' . ($primeSource !== '' ? $primeSource : 'none')
@@ -2136,26 +2435,53 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             . ':' . $nonce;
     }
 
+    private static function homepageWarmupReadyBudgetMilliseconds(): int
+    {
+        return \PHP_OS_FAMILY === 'Windows'
+            ? self::HOMEPAGE_WARMUP_WINDOWS_READY_BUDGET_MILLISECONDS
+            : self::HOMEPAGE_WARMUP_READY_BUDGET_MILLISECONDS;
+    }
+
+    private static function homepageWarmupOwnerLeaseSeconds(): int
+    {
+        return \PHP_OS_FAMILY === 'Windows'
+            ? self::HOMEPAGE_WARMUP_WINDOWS_OWNER_LEASE_SECONDS
+            : self::HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS;
+    }
+
     private function tryAcquireHomepageWarmupLease(
         SharedCacheStateInterface $coordinator,
         string $pool,
         string $ownerToken,
-        ?array &$acquiredLease
+        ?array &$acquiredLease,
+        string &$failureReason,
     ): bool {
+        $failureReason = '';
         try {
             $currentLease = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_OWNER_KEY);
             $nowMs = (int)\floor(\microtime(true) * 1000);
             $newLease = [
                 'token' => $ownerToken,
-                'expires_at_ms' => $nowMs + (self::HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS * 1000),
+                'fence' => $nowMs . ':' . \hash('sha256', $ownerToken),
+                'owner_pid' => (int)(\getmypid() ?: 0),
+                'acquired_at_ms' => $nowMs,
+                'expires_at_ms' => $nowMs + (self::homepageWarmupOwnerLeaseSeconds() * 1000),
+                'renewal_count' => 0,
             ];
             $expected = null;
             if ($currentLease !== null) {
-                if (!\is_array($currentLease)
-                    || (int)($currentLease['expires_at_ms'] ?? 0) > $nowMs
-                ) {
+                if (!\is_array($currentLease)) {
+                    $failureReason = 'owner_state_invalid';
                     return false;
                 }
+                if ((int)($currentLease['expires_at_ms'] ?? 0) > $nowMs) {
+                    $failureReason = 'owner_live';
+                    return false;
+                }
+                // expires_at_ms is the takeover authority. The CAS fence below
+                // prevents an expired owner from publishing, while avoiding a
+                // recycled PID (or a live Worker after an aborted prime) from
+                // blocking every follower indefinitely.
                 $expected = $currentLease;
             }
 
@@ -2164,15 +2490,90 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 self::HOMEPAGE_WARMUP_OWNER_KEY,
                 $expected,
                 $newLease,
-                30
+                \max(
+                    self::HOMEPAGE_WARMUP_OWNER_RECORD_TTL_SECONDS,
+                    self::homepageWarmupOwnerLeaseSeconds() + 5
+                )
             );
             if ($acquired) {
                 $acquiredLease = $newLease;
+                return true;
             }
-            return $acquired;
+
+            $failureReason = $coordinator instanceof SharedCacheStateHealthInterface
+                && !$coordinator->isSharedCacheAvailable()
+                ? 'coordinator_unavailable'
+                : 'lease_contended';
+            return false;
+        } catch (\Throwable) {
+            $failureReason = 'coordinator_unavailable';
+            return false;
+        }
+    }
+
+    private function renewHomepageWarmupLease(
+        SharedCacheStateInterface $coordinator,
+        string $pool,
+        ?array &$acquiredLease
+    ): bool {
+        if ($acquiredLease === null) {
+            return false;
+        }
+
+        $nowMs = (int)\floor(\microtime(true) * 1000);
+        if ((int)($acquiredLease['expires_at_ms'] ?? 0) <= $nowMs) {
+            return false;
+        }
+        $renewedLease = $acquiredLease;
+        $renewedLease['expires_at_ms'] = $nowMs
+            + (self::homepageWarmupOwnerLeaseSeconds() * 1000);
+        $renewedLease['renewal_count'] = (int)($acquiredLease['renewal_count'] ?? 0) + 1;
+        try {
+            if (!$coordinator->compareAndSetCache(
+                $pool,
+                self::HOMEPAGE_WARMUP_OWNER_KEY,
+                $acquiredLease,
+                $renewedLease,
+                \max(
+                    self::HOMEPAGE_WARMUP_OWNER_RECORD_TTL_SECONDS,
+                    self::homepageWarmupOwnerLeaseSeconds() + 5
+                )
+            )) {
+                return false;
+            }
+            $acquiredLease = $renewedLease;
+            return true;
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    private function ownsHomepageWarmupLease(
+        SharedCacheStateInterface $coordinator,
+        string $pool,
+        ?array $ownerLease
+    ): bool {
+        if ($ownerLease === null) {
+            return false;
+        }
+        try {
+            $currentLease = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_OWNER_KEY);
+        } catch (\Throwable) {
+            return false;
+        }
+        if (!\is_array($currentLease)
+            || (int)($currentLease['expires_at_ms'] ?? 0) <= (int)\floor(\microtime(true) * 1000)
+        ) {
+            return false;
+        }
+        $currentToken = (string)($currentLease['token'] ?? '');
+        $currentFence = (string)($currentLease['fence'] ?? '');
+        $ownerToken = (string)($ownerLease['token'] ?? '');
+        $ownerFence = (string)($ownerLease['fence'] ?? '');
+        return $currentToken !== ''
+            && $currentFence !== ''
+            && \hash_equals($currentToken, $ownerToken)
+            && \hash_equals($currentFence, $ownerFence);
     }
 
     private function releaseHomepageWarmupLease(
@@ -2202,17 +2603,26 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function readHomepageWarmupPublishedReceipt(
         SharedCacheStateInterface $coordinator,
-        string $pool
+        string $pool,
+        ?string &$publicationId = null
     ): array {
         try {
             $ready = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_READY_KEY);
         } catch (\Throwable) {
+            $publicationId = '';
             return [];
         }
 
-        return $this->normalizeHomepageWarmupReceipt(
-            \is_array($ready) ? ($ready['receipt'] ?? []) : []
-        );
+        if (!\is_array($ready)) {
+            $publicationId = '';
+            return [];
+        }
+        $publicationId = \trim((string)($ready['publication_id'] ?? ''));
+        if ($publicationId === '') {
+            $legacy = \json_encode($ready, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+            $publicationId = \is_string($legacy) ? \hash('sha256', $legacy) : '';
+        }
+        return $this->normalizeHomepageWarmupReceipt($ready['receipt'] ?? []);
     }
 
     /**
@@ -2221,16 +2631,24 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function publishHomepageWarmupReceipt(
         SharedCacheStateInterface $coordinator,
         string $pool,
-        array $receipt
-    ): void {
+        array $receipt,
+        ?array $ownerLease
+    ): bool {
         $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
-        if ($receipt === []) {
-            return;
+        if ($receipt === [] || !$this->ownsHomepageWarmupLease($coordinator, $pool, $ownerLease)) {
+            return false;
         }
 
         try {
-            $coordinator->setCache($pool, self::HOMEPAGE_WARMUP_READY_KEY, [
+            $fence = (string)($ownerLease['fence'] ?? '');
+            $publicationId = \hash(
+                'sha256',
+                $fence . '|' . $receipt['identity_digest'] . '|' . \sprintf('%.6F', \microtime(true))
+            );
+            return $coordinator->setCache($pool, self::HOMEPAGE_WARMUP_READY_KEY, [
                 'receipt' => $receipt,
+                'publication_id' => $publicationId,
+                'owner_fence' => $fence,
                 'pid' => \getmypid(),
                 'worker_id' => (int)($_SERVER['WLS_WORKER_ID']
                     ?? $_ENV['WLS_WORKER_ID']
@@ -2241,6 +2659,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         } catch (\Throwable) {
             // Followers retain their bounded takeover path when shared state is
             // transiently unavailable.
+            return false;
         }
     }
 
@@ -2777,6 +3196,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'prefer_direct_connect' => true,
                 'persistent' => true,
                 'lazy_connect' => true,
+                // Startup coordination is not a request hot-path lookup. The
+                // normal 10ms/50ms WLS cache budget is too small for Windows
+                // ARM x64 emulation and can turn a healthy local CAS into a
+                // false election timeout.
+                'connect_timeout' => 0.5,
+                'timeout' => 1.0,
+                'acquire_timeout' => 0.5,
+                'pool_size' => 4,
+                'fail_fast_on_cooldown' => false,
+                'pool_profile' => 'homepage_warmup_coordinator',
             ]);
         } catch (\Throwable) {
             self::$dynamicWarmupCoordinator = null;
@@ -2846,10 +3275,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
             return false;
         }
+        if ($this->readyGateDynamicFirstRenderWarmupCompleted) {
+            return false;
+        }
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0');
+            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '1');
         }
 
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
@@ -3537,12 +3969,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             $responseHeaders[(string)$name] = $value;
         }
-        $statusCode = (int)($pendingStatus['status_code'] ?? 0);
+        // A formatted HTTP result is a terminal response produced by an
+        // exception/early-exit path. Its status line is authoritative; the
+        // response object and HeaderCollector may still contain their default
+        // 200 and must not make a failed warmup look successful.
+        $statusCode = (int)($formattedResult['status_code'] ?? 0);
+        if ($statusCode <= 0) {
+            $statusCode = (int)($pendingStatus['status_code'] ?? 0);
+        }
         if ($statusCode <= 0 && \method_exists($response, 'getStatusCode')) {
             $statusCode = (int)$response->getStatusCode();
-        }
-        if ($statusCode <= 0 && $formattedResult['status_code'] > 0) {
-            $statusCode = $formattedResult['status_code'];
         }
         $cookieNames = $this->warmupCookieNames($responseCookies, $pendingCookies, $responseHeaders);
         $fpcReceipt = $this->decodeHomepageWarmupReceipt(

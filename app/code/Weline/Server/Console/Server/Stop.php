@@ -23,6 +23,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SharedStateServiceManager;
 
@@ -497,8 +498,7 @@ class Stop extends CommandAbstract
                 'Instance startup_phase=%s, skip IPC graceful stop and use local cleanup.',
                 $phaseLabel
             ));
-            if ($masterPid > 0) {
-                Processer::killProcessTreeByPid($masterPid, true);
+            if ($masterPid > 0 && $this->terminateResidualProcesses([$masterPid], false) > 0) {
                 SchedulerSystem::usleep(500000);
             }
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
@@ -534,9 +534,10 @@ class Stop extends CommandAbstract
                 return;
             }
             // IPC 失败，强制杀死 Master 并彻底清理该实例下所有进程（含 Worker/Dispatcher 等）
-            $this->printer->warning(__('IPC 超时，强制终止 Master 并清理该实例下所有进程...'));
-            Processer::killProcessTreeByPid($masterPid, true);
-            SchedulerSystem::usleep(500000);
+            $this->printer->warning(__('IPC 超时，验证 Master 实时身份后清理该实例下所有进程...'));
+            if ($this->terminateResidualProcesses([$masterPid], false) > 0) {
+                SchedulerSystem::usleep(500000);
+            }
             
             $this->runResidualCleanupPairWithRetry($name, $instanceInfo, true);
             if (!$this->wasLastResidualCleanupComplete()) {
@@ -989,41 +990,32 @@ class Stop extends CommandAbstract
      */
     private function collectRecoverablePortsFromRecord(array $record, bool $includeSharedState = false): array
     {
-        $ports = [];
-        $runtimeSelection = \is_array($record['runtime_selection'] ?? null)
-            ? $record['runtime_selection']
-            : [];
-        $effectiveTopology = \strtolower(\trim((string)(
-            $runtimeSelection['effective_topology']
-            ?? $record['effective_topology']
-            ?? $record['topology']
-            ?? ''
-        )));
-        $direct = $effectiveTopology === 'direct';
+        unset($includeSharedState);
 
-        // Direct workers share the public listener. worker_base_port is only
-        // a compatibility/allocation hint and the adjacent range is not owned
-        // by this instance. Treating it like legacy independent worker ports
-        // can terminate a different WLS instance on a neighbouring port.
+        $selection = RuntimeSelection::fromEndpoint($record);
+        $direct = $selection->isDirect();
+        $ports = [];
+
         $recordFields = $direct
-            ? ['port', 'worker_port', 'control_port', 'http_redirect_port']
-            : ['port', 'worker_port', 'worker_base_port', 'control_port', 'dispatcher_port', 'http_redirect_port'];
+            ? ['port', 'main_port', 'control_port', 'http_redirect_port']
+            : ['port', 'main_port', 'dispatcher_port', 'worker_port', 'worker_base_port', 'control_port', 'http_redirect_port'];
         foreach ($recordFields as $field) {
-            $port = (int) ($record[$field] ?? 0);
+            $port = (int)($record[$field] ?? 0);
             if ($port > 0) {
                 $ports[] = $port;
             }
         }
 
-        $rangeBaseFields = $direct ? [] : ['port', 'worker_port', 'worker_base_port'];
-        foreach ($rangeBaseFields as $baseField) {
-            $basePort = (int) ($record[$baseField] ?? 0);
-            $count = (int) ($record['count'] ?? 0);
-            if ($basePort <= 0 || $count <= 1) {
-                continue;
-            }
-            for ($offset = 1; $offset < $count; $offset++) {
-                $ports[] = $basePort + $offset;
+        if (!$direct) {
+            $count = \max(1, (int)($record['count'] ?? 1));
+            foreach (['worker_base_port', 'worker_port'] as $baseField) {
+                $basePort = (int)($record[$baseField] ?? 0);
+                if ($basePort <= 0 || $count <= 1) {
+                    continue;
+                }
+                for ($offset = 1; $offset < $count; $offset++) {
+                    $ports[] = $basePort + $offset;
+                }
             }
         }
 
@@ -1081,14 +1073,10 @@ class Stop extends CommandAbstract
     protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
     {
         $candidates = $this->collectDirectForceStopCandidatePids($info);
-        $trustedCurrentPids = $candidates;
-        $killedByPid = $this->terminateResidualProcesses(
-            $candidates,
-            true,
-            $trustedCurrentPids
-        );
 
-        return $killedByPid;
+        // Instance metadata only supplies candidates. Every PID must still prove
+        // its current OS command line identity before any destructive signal.
+        return $this->terminateResidualProcesses($candidates, false);
     }
 
     /**
@@ -1126,19 +1114,13 @@ class Stop extends CommandAbstract
             static fn (int $pid): bool => $pid > 0 && $pid !== \getmypid()
         )));
 
-        $killed = 0;
-        if ($candidatePids !== []) {
-            $result = Processer::dispatchBatchKillProcessTrees($candidatePids, true);
-            $killed = (int) ($result['killed'] ?? 0);
-            $this->invalidateStopRuntimeState();
-        }
-
+        $killed = $this->terminateResidualProcesses($candidatePids, false);
         if ($killed > 0) {
             SchedulerSystem::usleep(200000);
         }
 
         $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
-        $remaining = $this->collectRunningResidualPids($candidatePids, $candidatePids);
+        $remaining = $this->collectRunningResidualPids($candidatePids);
         if ($remaining !== []) {
             $this->printer->warning(__('  Fast-local cleanup still has residual process ids: %{1}', [
                 \implode(',', $remaining),
@@ -1149,7 +1131,7 @@ class Stop extends CommandAbstract
         if ($killed > 0) {
             $this->printer->success(__('  Fast-local cleanup terminated %{1} residual processes.', [$killed]));
         } else {
-            $this->printer->note(__('  Fast-local cleanup found no residual processes.'));
+            $this->printer->note(__('  Fast-local cleanup found no verified residual processes.'));
         }
         $this->lastResidualCleanupComplete = true;
     }
@@ -2263,23 +2245,20 @@ class Stop extends CommandAbstract
             static fn (int $pid): bool => $pid > 0 && $pid !== $currentPid
         )));
 
-        if (empty($uniquePids)) {
+        if ($uniquePids === []) {
             return 0;
         }
 
-        if ($this->areAllResidualPidsTrusted($uniquePids, $trustedPids)) {
-            $result = Processer::dispatchBatchKillProcessTrees($uniquePids, $skipCheck);
-            $this->invalidateStopRuntimeState();
-
-            return (int) ($result['killed'] ?? 0);
-        }
-
-        $runningPids = $this->collectRunningResidualPids($uniquePids, $trustedPids);
+        // Historical metadata/trusted arrays are never destructive authority:
+        // Windows may reuse their PID for svchost or another unrelated process.
+        unset($skipCheck, $trustedPids);
+        $runningPids = $this->collectRunningResidualPids($uniquePids);
         if ($runningPids === []) {
             return 0;
         }
 
-        $result = Processer::dispatchBatchKillProcessTrees($runningPids, $skipCheck);
+        // Processer repeats the live managed-identity check immediately before kill.
+        $result = Processer::dispatchBatchKillProcessTrees($runningPids, false);
         $this->invalidateStopRuntimeState();
 
         return (int) ($result['killed'] ?? 0);
@@ -2315,29 +2294,20 @@ class Stop extends CommandAbstract
             \array_map('intval', $pids),
             static fn (int $pid): bool => $pid > 0
         )));
-        if (empty($uniquePids)) {
+        if ($uniquePids === []) {
             return [];
         }
-        $trustedPidMap = \array_fill_keys(\array_map('intval', $trustedPids), true);
 
-        // 统一走 Processer::batchGetProcessInfo（内部带进程内 TTL 缓存的 tasklist 全表 map）。
-        // 历史上 Windows 分支自己跑 `tasklist /FO CSV /NH`（约 2.6s/次）且每个残留清理 retry 都重复调用，
-        // 是 server:stop 在 Windows 上慢 10×+ 的主因；现在改为命中共享缓存即可。
+        // Kept for caller compatibility only; a PID number can never self-authorize.
+        unset($trustedPids);
         $processInfo = $this->batchGetStopProcessInfo($uniquePids);
         $running = [];
         foreach ($uniquePids as $pid) {
             $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
-            if (!(bool) ($info['exists'] ?? false)) {
-                continue;
-            }
-            if ((bool) ($info['is_zombie'] ?? false)) {
+            if (!(bool) ($info['exists'] ?? false) || (bool) ($info['is_zombie'] ?? false)) {
                 continue;
             }
             if (!$this->isLikelyResidualWlsProcessName((string) ($info['name'] ?? ''))) {
-                continue;
-            }
-            if (isset($trustedPidMap[$pid])) {
-                $running[] = $pid;
                 continue;
             }
             if ($this->isResidualPidStillOwnedByWls($pid)) {
@@ -2890,11 +2860,14 @@ class Stop extends CommandAbstract
 
     protected function queryKillManagedProcessTreeForStop(int $pid): bool
     {
+        if (!$this->isResidualPidStillOwnedByWls($pid)) {
+            return false;
+        }
         if ($this->isWindowsPlatform()) {
-            return $this->killWindowsProcessForStop($pid, true);
+            return $this->killWindowsProcessForStop($pid, true, false);
         }
 
-        return Processer::killProcessTreeByPid($pid, true);
+        return Processer::killProcessTreeByPid($pid, false);
     }
 
     protected function killWindowsProcessForStop(int $pid, bool $tree, bool $skipCheck = true): bool
@@ -2904,6 +2877,9 @@ class Stop extends CommandAbstract
         }
 
         unset($skipCheck);
+        if (!$this->isResidualPidStillOwnedByWls($pid)) {
+            return false;
+        }
 
         $this->executeWindowsTaskkillForStop($pid, $tree);
         unset($this->stopPidRunningCache[$pid]);

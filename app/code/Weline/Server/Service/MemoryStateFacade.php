@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Cache\Contract\SharedBufferStateInterface;
+use Weline\Framework\Cache\Contract\SharedCacheStateHealthInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
@@ -13,7 +14,7 @@ use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 use Weline\Server\Shared\Service\SharedMemoryService;
 
-class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateInterface, SharedBufferStateInterface
+class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateInterface, SharedCacheStateHealthInterface, SharedBufferStateInterface
 {
     private SharedStateServiceManager $manager;
     private SharedMemoryService $sharedMemoryService;
@@ -202,6 +203,15 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
         return $this->traceOperation('wls.memory.ping', ['operation' => 'ping'], fn(): bool => $this->stateClient->ping());
     }
 
+    public function isSharedCacheAvailable(): bool
+    {
+        return $this->traceOperation(
+            'wls.memory.cache_ping',
+            ['operation' => 'cache_ping'],
+            fn(): bool => $this->sharedMemoryService->ping(),
+        );
+    }
+
     public function getStats(): array
     {
         $response = $this->traceOperation('wls.memory.stats', ['operation' => 'stats'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_STATS));
@@ -278,6 +288,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
             'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
             'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
             'fail_fast_on_cooldown' => (bool) ($config['fail_fast_on_cooldown'] ?? $wlsMode),
+            'pool_profile' => \trim((string)($config['pool_profile'] ?? '')),
             'token_file_name' => (string) (
                 $config['token_file_name']
                 ?? $this->runtime['token_file_name']
@@ -382,11 +393,23 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
         }
 
         $runtime = $this->resolveConfiguredRuntime($config);
+        $resolvedPort = (int)($runtime['port'] ?? 0);
+        $resolvedToken = \trim((string)($runtime['token_file_name'] ?? ''));
+        $tokenWasImplicit = $resolvedToken === ''
+            || $resolvedToken === SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $resolvedPort);
         if (\array_key_exists('port', $config)) {
             $runtime['port'] = (int)$config['port'];
         }
-        if (\array_key_exists('token_file_name', $config)) {
-            $runtime['token_file_name'] = (string)$config['token_file_name'];
+        $configuredToken = \array_key_exists('token_file_name', $config)
+            ? \trim((string)$config['token_file_name'])
+            : null;
+        if ($configuredToken !== null && $configuredToken !== '') {
+            $runtime['token_file_name'] = $configuredToken;
+        } elseif ($configuredToken === '' || $tokenWasImplicit) {
+            $runtime['token_file_name'] = SharedStateRuntimeScope::defaultTokenFileNameForRole(
+                'memory_server',
+                (int)$runtime['port']
+            );
         }
         $serviceOptions = $this->buildServiceOptions(\array_merge($config, $runtime));
         $host = (string)$runtime['host'];
@@ -480,12 +503,13 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
 
         $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
         $port = (int) ($memoryService['port'] ?? $defaultPort);
-        $tokenFileName = \trim((string) ($memoryService['token_file_name'] ?? 'memory_server.token'));
+        $defaultTokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole('memory_server', $port);
+        $tokenFileName = \trim((string) ($memoryService['token_file_name'] ?? $defaultTokenFileName));
 
         return [
             'host' => $host,
             'port' => $port > 0 ? $port : $defaultPort,
-            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'memory_server.token',
+            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : $defaultTokenFileName,
         ];
     }
 }

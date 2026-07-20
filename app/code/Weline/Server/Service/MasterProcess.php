@@ -26,6 +26,7 @@ use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\LogConfig;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Protocol\Http3\NativeTransportLibrary;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Control\IpcControlGateway;
@@ -36,18 +37,7 @@ use Weline\Server\Service\SslCertificateService;
 class MasterProcess
 {
     private static ?string $projectScopeToken = null;
-    /**
-     * 运行模式常量
-     */
-    public const MODE_LEGACY = 'legacy';
-    public const MODE_DIRECT = 'direct';
-    public const MODE_DISPATCHER = 'dispatcher';
-    public const MODE_INDEPENDENT = 'independent';
-    /** @deprecated 仅用于读取旧实例元数据 */
-    public const MODE_LINUX_DIRECT = 'linux-direct';
-    /** @deprecated 仅用于读取旧实例元数据 */
-    public const MODE_WINDOWS_DISPATCHER = 'windows-dispatcher';
-
+    private static ?string $projectIdentityHash = null;
     /**
      * Master 进程名统一前缀
      */
@@ -79,7 +69,7 @@ class MasterProcess
     public const WORKER_STATE_STOPPED = 'stopped';
 
     protected string $instanceName = '';
-    protected string $mode = self::MODE_LEGACY;
+    protected ?RuntimeSelection $runtimeSelection = null;
     protected int $mainPort = 0;
     protected array $config = [];
     protected bool $running = true;
@@ -93,7 +83,6 @@ class MasterProcess
     protected int $httpRedirectPort = 0;
     
     // 运行态配置（由 Start.php 传递）
-    protected ?bool $dispatcherEnabled = null;
     protected int|string|null $workerCount = null;
     protected ?int $workerBasePort = null;
     protected ?int $workerPort = null;
@@ -135,42 +124,24 @@ class MasterProcess
         return $this;
     }
 
-    public function setMode(string $mode): self
+    public function setRuntimeSelection(RuntimeSelection $runtimeSelection): self
     {
-        $mode = match ($mode) {
-            self::MODE_LINUX_DIRECT => self::MODE_DIRECT,
-            self::MODE_WINDOWS_DISPATCHER => self::MODE_DISPATCHER,
-            default => $mode,
-        };
-        $validModes = [self::MODE_LEGACY, self::MODE_DIRECT, self::MODE_DISPATCHER, self::MODE_INDEPENDENT];
-        if (\in_array($mode, $validModes, true)) {
-            $this->mode = $mode;
-        }
+        $this->runtimeSelection = $runtimeSelection;
         return $this;
     }
 
-    public static function isDirectMode(string $mode): bool
+    private function requireRuntimeSelection(): RuntimeSelection
     {
-        return \in_array($mode, [self::MODE_DIRECT, self::MODE_LINUX_DIRECT], true);
-    }
+        if (!$this->runtimeSelection instanceof RuntimeSelection) {
+            throw new \LogicException('MasterProcess requires a canonical RuntimeSelection before initialization.');
+        }
 
-    public function getMode(): string
-    {
-        return $this->mode;
+        return $this->runtimeSelection;
     }
 
     public function setMainPort(int $port): self
     {
         $this->mainPort = $port;
-        return $this;
-    }
-    
-    /**
-     * 设置 Dispatcher 是否启用（运行态配置）
-     */
-    public function setDispatcherEnabled(?bool $enabled): self
-    {
-        $this->dispatcherEnabled = $enabled;
         return $this;
     }
     
@@ -214,6 +185,7 @@ class MasterProcess
         int $httpRedirectPort = 0,
         bool $windowMode = false
     ): self {
+        $runtimeSelection = $this->requireRuntimeSelection();
         $this->instanceName = $instanceName;
         $this->config = $config;
         $this->sslCert = $sslCert;
@@ -233,7 +205,7 @@ class MasterProcess
         $this->log('========================================');
         $this->log(__('Master 初始化开始 (Orchestrator 模式)'));
         $this->log(__('  实例名称: %{1}', [$instanceName]));
-        $this->log(__('  运行模式: %{1}', [$this->mode]));
+        $this->log(__('  运行拓扑: %{1}', [$runtimeSelection->effectiveTopology->value]));
         $this->log(__('  守护进程: %{1}', [(bool) ($config['daemon'] ?? true) ? __('是') : __('否')]));
         $this->log(__('  Windows 窗口模式: %{1}', [$windowMode ? __('是') : __('否')]));
 
@@ -284,11 +256,8 @@ class MasterProcess
             $this->log(__('  已注册 Master PID'));
             $this->logger->flush(true);
 
-            // 标记/清理孤儿 endpoint；运行态恢复必须回到 Master IPC。
-            $this->traceStartupPhase('master-stale-cleanup:before');
-            $this->cleanupStaleInstanceFiles();
-            $this->traceStartupPhase('master-stale-cleanup:after');
-            $this->logger->flush(true);
+            // Master 启动只管理当前实例；跨实例清理由显式 server:clean 执行。
+            $this->traceStartupPhase('master-current-instance-authority:ready');
 
             // 初始化控制端口：
             // 1) 优先使用 server.control_port（手动配置，不扫描）
@@ -378,23 +347,10 @@ class MasterProcess
                 $this->log(__('  控制端口: %{1}', [$this->controlPort]));
             }
 
-            // ========== 启动前清理：检查端口占用并清理僵尸进程 ==========
-            $this->log(__('检查控制端口是否被占用...'));
-            $this->traceStartupPhase('master-preboot-cleanup:before', [
+            // 控制服务的原子 bind 是唯一端口权威；冲突必须明确失败，绝不终止端口占用者。
+            $this->traceStartupPhase('master-control-port-bind-authority:selected', [
                 'control_port' => $this->controlPort,
             ]);
-            if (!MasterCleanupBootstrap::preBoot($this->instanceName, $this->controlPort)) {
-                throw new \RuntimeException(
-                    "无法清理控制端口 {$this->controlPort}，该端口被其他进程占用。" .
-                    "请确保没有其他 WLS 实例运行，或手动杀死占用该端口的进程。"
-                );
-            }
-            $this->traceStartupPhase('master-preboot-cleanup:after');
-
-            // 清理陈旧的锁文件（Master 上次崩溃留下的）
-            $this->traceStartupPhase('master-lock-cleanup:before');
-            MasterCleanupBootstrap::cleanupLockFiles($this->instanceName);
-            $this->traceStartupPhase('master-lock-cleanup:after');
 
             // 构建 ServiceContext
             $this->traceStartupPhase('master-build-context:before');
@@ -560,42 +516,55 @@ class MasterProcess
     }
 
     /**
-     * 清理孤儿实例记录（启动时调用）
-     *
-     * 标记/清理 updated_at 超过 60 秒未更新的实例记录，
-     * 说明对应的 Master 进程已经死亡或崩溃；endpoint 文件只保留停止态诊断信息。
-     */
-    private function cleanupStaleInstanceFiles(): void
-    {
-        try {
-            $budgetMs = (float)(Env::get('wls.master.startup_stale_cleanup_budget_ms', 500) ?? 500);
-            if ($budgetMs < 0.0) {
-                $budgetMs = 0.0;
-            }
-            $cleaned = (new ServerInstanceManager())->cleanupStaleInstancesForStartup($this->instanceName, $budgetMs);
-            $this->traceStartupPhase('master-stale-cleanup:budget', [
-                'budget_ms' => (int)\round($budgetMs),
-                'cleaned' => $cleaned,
-            ]);
-            if ($cleaned > 0) {
-                $this->log(__('共清理 %{1} 个孤儿 endpoint 记录', [$cleaned]));
-            }
-        } catch (\Throwable $e) {
-            $this->log(__('孤儿实例清理过程出错: %{1}', [$e->getMessage()]));
-        }
-    }
-
-    /**
      * 构建 ServiceContext
      */
     private function buildContext(): ServiceContext
     {
+        $runtimeSelection = $this->requireRuntimeSelection();
         $envConfig = Env::getInstance()->getConfig() ?: [];
         if (!\is_array($envConfig)) {
             $envConfig = [];
         }
         $envConfig = $this->applySharedStateRuntimeConfig($envConfig);
         $envConfig = $this->applyRuntimeWlsConfig($envConfig);
+
+        $http3Config = \is_array($envConfig['wls']['http3'] ?? null)
+            ? $envConfig['wls']['http3']
+            : [];
+        if ($runtimeSelection->isDirect()
+            && $this->sslEnabled
+            && (bool)($http3Config['enabled'] ?? false)
+        ) {
+            $nativeDigest = \strtolower(\trim((string)($http3Config['native_digest'] ?? '')));
+            $nativeFingerprint = \strtolower(\trim((string)($http3Config['fingerprint'] ?? '')));
+            if (\preg_match('/^[a-f0-9]{64}$/D', $nativeDigest) !== 1
+                || \preg_match('/^[a-f0-9]{32}$/D', $nativeFingerprint) !== 1
+            ) {
+                throw new \RuntimeException('Direct HTTP/3 Master requires a verified native fingerprint and digest.');
+            }
+            $pinnedManifest = NativeTransportLibrary::pinManifest($nativeFingerprint, $nativeDigest);
+            $loadedNative = NativeTransportLibrary::load();
+            if (!($loadedNative['available'] ?? false)
+                || !NativeTransportLibrary::hasVerifiedRuntimeEvidence($pinnedManifest)
+            ) {
+                throw new \RuntimeException('Direct HTTP/3 Master could not load its pinned verified component.');
+            }
+            $ticketRing = (new \Weline\Server\Service\Runtime\TlsTicketRingStore())->ensure(
+                $this->instanceName,
+                (int)($http3Config['tls_ticket_rotation_seconds']
+                    ?? \Weline\Server\Service\Runtime\TlsTicketRingStore::DEFAULT_ROTATION_SECONDS)
+            );
+            $ticketRingEpoch = (int)($ticketRing['epoch'] ?? 0);
+            $ticketRingDigest = \strtolower(\trim((string)($ticketRing['digest'] ?? '')));
+            if ($ticketRingEpoch <= 0
+                || \preg_match('/^[a-f0-9]{64}$/D', $ticketRingDigest) !== 1
+            ) {
+                throw new \RuntimeException('Direct HTTP/3 Master could not publish TLS ticket-ring metadata.');
+            }
+            $http3Config['tls_ticket_ring_epoch'] = $ticketRingEpoch;
+            $http3Config['tls_ticket_ring_digest'] = $ticketRingDigest;
+            $envConfig['wls']['http3'] = $http3Config;
+        }
 
         $publicHostRaw = $this->config['public_host'] ?? null;
         $publicHost = \is_string($publicHostRaw) && $publicHostRaw !== '' ? $publicHostRaw : null;
@@ -607,7 +576,7 @@ class MasterProcess
         }
         $this->masterLeaseFile = MasterLeaseManager::pathForInstance($this->instanceName);
 
-        return new ServiceContext(
+        $context = new ServiceContext(
             instanceName: $this->instanceName,
             epoch: $this->resolveNextMasterEpoch(),
             controlPort: $this->controlPort,
@@ -617,15 +586,13 @@ class MasterProcess
             sslEnabled: $this->sslEnabled,
             sslCert: $this->sslCert,
             sslKey: $this->sslKey,
-            mode: $this->mode,
-            daemon: (bool) ($this->config['daemon'] ?? true),
-            debug: (bool) ($this->config['debug'] ?? false),
+            runtimeSelection: $runtimeSelection,
+            daemon: (bool)($this->config['daemon'] ?? true),
+            debug: (bool)($this->config['debug'] ?? false),
             controlToken: $this->controlToken,
             windowMode: $this->windowMode,
             envConfig: $envConfig,
             httpRedirectPort: $this->httpRedirectPort,
-            // 运行态配置：由 Start.php 传入，优先级高于 envConfig
-            dispatcherEnabled: $this->dispatcherEnabled,
             workerCount: $this->workerCount,
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
@@ -633,6 +600,8 @@ class MasterProcess
             masterLeaseFile: $this->masterLeaseFile,
             masterToken: $this->masterLeaseToken,
         );
+
+        return $context;
     }
 
     private function writeMasterLeaseRunning(?ServiceContext $context): void
@@ -706,6 +675,7 @@ class MasterProcess
      */
     private function applyRuntimeWlsConfig(array $envConfig): array
     {
+        $runtimeSelection = $this->requireRuntimeSelection();
         $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 
         if (isset($this->config['worker_memory_limit'])) {
@@ -717,43 +687,41 @@ class MasterProcess
                 ServiceContext::normalizeMemoryLimit($wls['worker_memory_limit'] ?? '256M')
             );
         }
-        if (isset($this->config['event_loop'])) {
-            if (!isset($wls['loop']) || !\is_array($wls['loop'])) {
-                $wls['loop'] = [];
-            }
-            $wls['loop']['driver'] = (string)$this->config['event_loop'];
+
+        $configuredLoop = \is_array($this->config['loop'] ?? null) ? $this->config['loop'] : [];
+        $wls['loop'] = \array_merge(\is_array($wls['loop'] ?? null) ? $wls['loop'] : [], $configuredLoop, [
+            'driver' => $runtimeSelection->eventLoopDriver,
+        ]);
+        $wls['ssl'] = \array_merge(\is_array($wls['ssl'] ?? null) ? $wls['ssl'] : [], [
+            'engine' => $runtimeSelection->sslEngine,
+        ]);
+        if (\is_array($this->config['http3'] ?? null)) {
+            $wls['http3'] = \array_merge(
+                \is_array($wls['http3'] ?? null) ? $wls['http3'] : [],
+                $this->config['http3']
+            );
         }
-        if (isset($this->config['loop']) && \is_array($this->config['loop'])) {
-            $wls['loop'] = \array_merge(\is_array($wls['loop'] ?? null) ? $wls['loop'] : [], $this->config['loop']);
-        }
+
         if (isset($this->config['supervisor']) && \is_array($this->config['supervisor'])) {
             $wls['supervisor'] = \array_merge(\is_array($wls['supervisor'] ?? null) ? $wls['supervisor'] : [], $this->config['supervisor']);
         }
         if (isset($this->config['gateway']) && \is_array($this->config['gateway'])) {
+            if (\array_key_exists('traffic_mode', $this->config['gateway'])) {
+                throw new \RuntimeException(
+                    'Removed WLS configuration "wls.gateway.traffic_mode" is not supported; use wls.runtime.topology.'
+                );
+            }
             $wls['gateway'] = \array_merge(\is_array($wls['gateway'] ?? null) ? $wls['gateway'] : [], $this->config['gateway']);
         }
-        if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
-            $configuredRuntime = \is_array($this->config['runtime'] ?? null)
-                ? $this->config['runtime']
-                : [];
-            $listenerMode = (string)($this->config['direct_listener_mode']
-                ?? ($configuredRuntime['listener_mode'] ?? ($wls['runtime']['listener_mode'] ?? '')));
-            if ($listenerMode === '' && self::isDirectMode($this->mode)) {
-                $listenerMode = PHP_OS_FAMILY === 'Darwin' ? 'shared_fd' : 'reuseport';
-            }
-            $wls['runtime'] = \array_merge(\is_array($wls['runtime'] ?? null) ? $wls['runtime'] : [], [
-                'strategy' => (string)($this->config['runtime_strategy'] ?? ($wls['runtime']['strategy'] ?? 'auto')),
-                'topology' => (string)($this->config['topology'] ?? ($wls['runtime']['topology'] ?? 'auto')),
-                'listener_mode' => $listenerMode,
-                'container_registry_digest' => (string)($configuredRuntime['container_registry_digest']
-                    ?? ($this->config['container_registry_digest'] ?? ($wls['runtime']['container_registry_digest'] ?? ''))),
-            ]);
-        }
 
-        if ($wls !== []) {
-            $envConfig['wls'] = $wls;
-        }
+        $configuredRuntime = \is_array($this->config['runtime'] ?? null) ? $this->config['runtime'] : [];
+        $wls['runtime'] = \array_merge(\is_array($wls['runtime'] ?? null) ? $wls['runtime'] : [], [
+            'topology' => $runtimeSelection->requestedTopology->value,
+            'container_registry_digest' => (string)($configuredRuntime['container_registry_digest']
+                ?? ($this->config['container_registry_digest'] ?? ($wls['runtime']['container_registry_digest'] ?? ''))),
+        ]);
 
+        $envConfig['wls'] = $wls;
         return $envConfig;
     }
 
@@ -1060,21 +1028,20 @@ class MasterProcess
      */
     public function saveMasterInfo(string $startupPhase = 'running'): void
     {
+        $runtimeSelection = $this->requireRuntimeSelection();
         $instanceFile = $this->getInstanceFile();
         $dir = \dirname($instanceFile);
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
 
-        // Master data is merged under the instance lock below.
-        // Master 进程的状态信息
         $masterData = [
             'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+            'runtime_selection' => $runtimeSelection->toArray(),
             'master_pid' => \getmypid(),
             'pid' => \getmypid(),
             'master_enabled' => true,
             'master_started_at' => \date('Y-m-d H:i:s'),
-            'master_mode' => $this->mode,
             'main_port' => $this->mainPort,
             'port' => $this->mainPort,
             'control_port' => $this->controlPort,
@@ -1087,31 +1054,23 @@ class MasterProcess
             'instance_name' => $this->instanceName,
             'name' => $this->instanceName,
             'orchestrator_mode' => true,
-            'updated_at' => \time(),  // 心跳时间戳（用于检测 Master 是否存活）
+            'updated_at' => \time(),
         ];
 
-        // 合并：保留现有配置（如 worker_port、count、ssl_enabled 等）并更新 Master 状态
         $controlServer = $this->orchestrator?->getControlServer();
         if ($controlServer instanceof HybridControlPlaneServer) {
-            $masterData['control_plane_mode'] = $controlServer->isSupervisorEnabled() ? 'hybrid' : 'legacy';
+            $masterData['control_plane_mode'] = $controlServer->isSupervisorEnabled() ? 'hybrid' : 'master';
             $masterData['supervisor_enabled'] = $controlServer->isSupervisorEnabled();
             $masterData['supervisor_channel'] = $controlServer->supervisorChannelId();
             $masterData['supervisor_endpoint'] = $controlServer->supervisorEndpointUri();
         }
 
-        $mergeMasterData = static function (array $existingData) use ($masterData): array {
-            $existingSchemaVersion = (int)($existingData['schema_version'] ?? 2);
-            // A legacy endpoint stays v2 until a new Start preflight publishes a
-            // complete RuntimeSelection. Never label inferred legacy data as v3.
-            $masterData['schema_version'] = $existingSchemaVersion >= RuntimeSelection::ENDPOINT_SCHEMA_VERSION
-                ? $existingSchemaVersion
-                : 2;
-
-            return self::normalizeMasterEndpointRecord($existingData, $masterData);
+        $mergeMasterData = static function (array $existingData) use ($masterData, $runtimeSelection): array {
+            $record = self::normalizeMasterEndpointRecord($existingData, $masterData);
+            $runtimeSelection->assertCanonicalEndpoint($record);
+            return $record;
         };
 
-        // Use the same read-modify-write lock as Start.php and the orchestrator.
-        // This avoids overwriting runtime fields during Windows rename windows.
         ServerInstanceManager::updateJsonFileAtomically($instanceFile, $mergeMasterData, 10);
     }
 
@@ -1122,32 +1081,46 @@ class MasterProcess
      */
     private function traceStartupPhase(string $phase, array $context = []): void
     {
-        if ((string)\getenv('WLS_STARTUP_TRACE') !== '1') {
-            return;
-        }
-        if (!\defined('BP')) {
+        if ((string)\getenv('WLS_STARTUP_TRACE') !== '1' || !\defined('BP')) {
             return;
         }
 
+        static $traceStartNs = null;
+        static $tracePreviousNs = null;
+        static $traceSequence = 0;
+        static $traceHandle = null;
+        static $tracePath = '';
+
+        $nowNs = \hrtime(true);
+        $traceStartNs ??= $nowNs;
+        $tracePreviousNs ??= $nowNs;
+        $context['sequence'] = ++$traceSequence;
+        $context['mono_ns'] = $nowNs;
+        $context['total_ms'] = \round(($nowNs - $traceStartNs) / 1_000_000, 3);
+        $context['delta_ms'] = \round(($nowNs - $tracePreviousNs) / 1_000_000, 3);
+        $context['process_elapsed_ms'] = \round((\microtime(true) - (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? \microtime(true))) * 1000, 3);
         $context['memory_mb'] = (int)\round(\memory_get_usage(true) / 1048576);
-        $payload = [
-            'ts' => \date('Y-m-d H:i:s'),
-            'pid' => (int)\getmypid(),
-            'instance' => $this->instanceName,
-            'phase' => $phase,
-            'context' => $context,
-        ];
+        $tracePreviousNs = $nowNs;
+        $payload = ['ts' => \date('Y-m-d H:i:s'), 'pid' => (int)\getmypid(), 'instance' => $this->instanceName, 'phase' => $phase, 'context' => $context];
 
         $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
-
-        @\file_put_contents(
-            $dir . 'wls-startup-trace.log',
-            \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . \PHP_EOL,
-            \FILE_APPEND | \LOCK_EX
-        );
+        $path = $dir . 'wls-startup-trace.log';
+        if (!\is_resource($traceHandle) || $tracePath !== $path) {
+            $traceHandle = @\fopen($path, 'ab');
+            $tracePath = $path;
+        }
+        $line = \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . \PHP_EOL;
+        if (\is_resource($traceHandle)) {
+            @\flock($traceHandle, LOCK_EX);
+            @\fwrite($traceHandle, $line);
+            @\fflush($traceHandle);
+            @\flock($traceHandle, LOCK_UN);
+            return;
+        }
+        @\file_put_contents($path, $line, \FILE_APPEND | \LOCK_EX);
     }
 
     /**
@@ -1168,21 +1141,7 @@ class MasterProcess
             'public_host',
             'port',
             'main_port',
-            'master_mode',
             'runtime_selection',
-            'topology',
-            'requested_topology',
-            'effective_topology',
-            'topology_source',
-            'topology_reason',
-            'topology_reason_codes',
-            'runtime_strategy',
-            'os_family',
-            'event_loop_driver',
-            'direct_listener_mode',
-            'listener_strategy',
-            'ssl_engine',
-            'policy_compatible',
             'policy_digest',
             'container_registry_digest',
             'supervisor_enabled',
@@ -1192,7 +1151,7 @@ class MasterProcess
             'ssl_enabled',
             'ssl_cert',
             'ssl_key',
-            'dispatcher_enabled',
+            'http3',
             'worker_port',
             'worker_base_port',
             'gateway',
@@ -1203,7 +1162,6 @@ class MasterProcess
             'php_version',
             'os',
             'window_mode',
-            'frontend',
             'control_token',
             'control_token_created_at',
             'epoch',
@@ -1219,6 +1177,13 @@ class MasterProcess
             if (\array_key_exists($field, $existingData)) {
                 $record[$field] = $existingData[$field];
             }
+        }
+        if (\is_array($record['gateway'] ?? null)
+            && \array_key_exists('traffic_mode', $record['gateway'])
+        ) {
+            throw new \RuntimeException(
+                'Removed WLS endpoint field "gateway.traffic_mode" is not supported; use wls.runtime.topology.'
+            );
         }
 
         return \array_merge($record, $masterData);
@@ -1272,11 +1237,44 @@ class MasterProcess
             return self::$projectScopeToken;
         }
 
-        $basePath = \str_replace('\\', '/', \rtrim((string) BP, "\\/"));
-        $hash = \substr(\sha1(\strtolower($basePath)), 0, 8);
+        $hash = \substr(self::getProjectIdentityHash(), 0, 8);
         self::$projectScopeToken = 'p' . $hash;
 
         return self::$projectScopeToken;
+    }
+
+    /**
+     * Returns the stable identity hash used by process names, default ports,
+     * local domains and Windows shared-state storage.
+     *
+     * cmd.exe pushd maps a UNC share root to whichever temporary drive letter
+     * is free. On that exact Windows layout, hashing BP would give the same
+     * project a different identity in concurrent CLI sessions. The directory
+     * file ID is stable across those drive aliases and needs no subprocess.
+     */
+    public static function getProjectIdentityHash(): string
+    {
+        if (self::$projectIdentityHash !== null) {
+            return self::$projectIdentityHash;
+        }
+
+        $rawBasePath = (string) BP;
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $rawBasePath = Processer::resolveWindowsPersistentPath($rawBasePath);
+        }
+        $basePath = \str_replace('\\', '/', \rtrim($rawBasePath, "\\/"));
+        if (\PHP_OS_FAMILY === 'Windows' && \preg_match('/^[a-z]:$/i', $basePath) === 1) {
+            $stat = @\stat((string) BP);
+            $inode = \is_array($stat) ? (int)($stat['ino'] ?? 0) : 0;
+            if ($inode > 0) {
+                $device = (int)($stat['dev'] ?? 0);
+                self::$projectIdentityHash = \sha1('windows-mapped-root:' . $device . ':' . $inode);
+                return self::$projectIdentityHash;
+            }
+        }
+
+        self::$projectIdentityHash = \sha1(\strtolower($basePath));
+        return self::$projectIdentityHash;
     }
 
     /**
@@ -1301,9 +1299,8 @@ class MasterProcess
             return $offset;
         }
 
-        // 基于项目路径哈希自动计算偏移量
-        $basePath = \str_replace('\\', '/', \rtrim((string) BP, "\\/"));
-        $hash = \sha1(\strtolower($basePath));
+        // 基于稳定项目身份哈希自动计算偏移量
+        $hash = self::getProjectIdentityHash();
 
         // 取哈希的前 4 个字节转为整数，模 10000 得到偏移量
         $hashInt = \hexdec(\substr($hash, 0, 8));

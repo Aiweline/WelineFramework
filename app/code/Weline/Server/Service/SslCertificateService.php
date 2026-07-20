@@ -13,6 +13,8 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
+use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -117,6 +119,17 @@ class SslCertificateService
      * 证书模型
      */
     protected SslCertificate $certModel;
+
+    /**
+     * 证书表首次启动兜底只需每进程执行一次。
+     */
+    protected static bool $certificateStorageReady = false;
+
+    /**
+     * Definitive SQLite corruption is non-transient for this PHP process.
+     * Caching the reason prevents repeated table probes and bootstrap writes.
+     */
+    protected static ?string $certificateStorageCorruptionReason = null;
     
     /**
      * 判断缓存：本地域名 [domain => bool]
@@ -163,16 +176,92 @@ class SslCertificateService
      */
     protected array $certParseCache = [];
     
-    public function __construct()
+    public function __construct(bool $deferCertificateStorage = false)
     {
         $this->certBaseDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS;
         $this->accountKeyPath = $this->certBaseDir . 'account.key';
         $this->updateAcmeDirectory();
         $this->certModel = ObjectManager::getInstance(SslCertificate::class);
+        if (!$deferCertificateStorage) {
+            $this->ensureCertificateStorageReady();
+        }
         
         // 确保目录存在
         if (!\is_dir($this->certBaseDir)) {
             @\mkdir($this->certBaseDir, 0755, true);
+        }
+    }
+
+    /**
+     * WLS 首次启动可能早于 setup:upgrade 触达 Server 模块表。
+     * SSL 证书准备是 server:start 的前置链路，必须能在缺表时用声明式 schema
+     * 原子创建本模块证书表；已有表则零写入，避免影响正常升级和已有证书。
+     */
+    public function ensureCertificateStorageReady(): void
+    {
+        if (self::$certificateStorageReady) {
+            return;
+        }
+        if (self::$certificateStorageCorruptionReason !== null) {
+            throw new \RuntimeException((string) __(
+                'WLS SSL 证书数据库已在本次启动中熔断：%{1}',
+                [self::$certificateStorageCorruptionReason]
+            ));
+        }
+
+        $connector = null;
+        $tableName = '';
+        $isDefinitiveCorruption = static function (\Throwable $error): bool {
+            return \preg_match(
+                '/database disk image is malformed|file is not a database|not a database|SQLITE_CORRUPT|SQLITE_NOTADB/i',
+                $error->getMessage()
+            ) === 1;
+        };
+
+        try {
+            $connector = $this->certModel->getConnection()->getConnector();
+            $tableName = $this->certModel->getTable();
+            if ($connector->tableExist($tableName)) {
+                self::$certificateStorageReady = true;
+                return;
+            }
+
+            $schema = ObjectManager::getInstance(SchemaParser::class)->parse(SslCertificate::class);
+            if ($schema === null) {
+                throw new \RuntimeException('Unable to build schema for ' . SslCertificate::class . ' during WLS SSL bootstrap.');
+            }
+
+            ObjectManager::getInstance(SchemaMigrationExecutor::class)
+                ->createBootstrapTable($connector, $schema);
+            self::$certificateStorageReady = true;
+            w_log_info('[SslCertificateService] SSL certificate storage table created during WLS startup bootstrap: ' . $tableName);
+        } catch (\Throwable $error) {
+            $failure = $error;
+            if (!$isDefinitiveCorruption($failure) && $connector !== null && $tableName !== '') {
+                try {
+                    if ($connector->tableExist($tableName)) {
+                        self::$certificateStorageReady = true;
+                        return;
+                    }
+                } catch (\Throwable $probeError) {
+                    $failure = $probeError;
+                }
+            }
+
+            if ($isDefinitiveCorruption($failure)) {
+                self::$certificateStorageCorruptionReason = \trim($failure->getMessage());
+                w_log_error((string) __(
+                    '[SslCertificateService] SQLite 证书存储已损坏，本次启动已熔断后续探测和写入：%{1}',
+                    [self::$certificateStorageCorruptionReason]
+                ));
+                throw new \RuntimeException((string) __(
+                    'WLS SSL 证书数据库已损坏，无法安全生成或恢复证书：%{1}',
+                    [self::$certificateStorageCorruptionReason]
+                ), 0, $failure);
+            }
+
+            w_log_error('[SslCertificateService] SSL certificate storage bootstrap failed: ' . $failure->getMessage());
+            throw $failure;
         }
     }
 
@@ -1528,7 +1617,11 @@ CNF;
         }
         if ($timedOut) {
             $output .= ($output === '' ? '' : "\n") . 'WLS_SSL_TRUST_COMMAND_TIMEOUT after ' . $timeoutMs . 'ms';
-            w_log_warning('ssl_cert', 'SSL trust command timed out after ' . $timeoutMs . 'ms: ' . $command);
+            w_log_warning(
+                'SSL trust command timed out after {timeout_ms}ms: {command}',
+                ['timeout_ms' => $timeoutMs, 'command' => $command],
+                'ssl_cert'
+            );
             return \trim($output);
         }
 

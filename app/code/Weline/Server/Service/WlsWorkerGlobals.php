@@ -59,6 +59,14 @@ class WlsWorkerGlobals
      */
     private static ?array $lastStaticCache = null;
 
+    /** @var array{observed:int,resumed:int,full:int,missing:int} */
+    private static array $tlsSessionReuse = [
+        'observed' => 0,
+        'resumed' => 0,
+        'full' => 0,
+        'missing' => 0,
+    ];
+
     // ========== CLI 参数 ==========
 
     /**
@@ -188,6 +196,22 @@ class WlsWorkerGlobals
     public static function setLastStaticCache(?array $cache): void
     {
         self::$lastStaticCache = $cache;
+    }
+
+    public static function recordTlsSessionHandshake(?bool $reused): void
+    {
+        if ($reused === null) {
+            self::$tlsSessionReuse['missing']++;
+            return;
+        }
+        self::$tlsSessionReuse['observed']++;
+        self::$tlsSessionReuse[$reused ? 'resumed' : 'full']++;
+    }
+
+    /** @return array{observed:int,resumed:int,full:int,missing:int} */
+    public static function getTlsSessionReuse(): array
+    {
+        return self::$tlsSessionReuse;
     }
 
     /**
