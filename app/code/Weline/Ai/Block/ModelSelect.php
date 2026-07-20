@@ -4,8 +4,6 @@ declare(strict_types=1);
 namespace Weline\Ai\Block;
 
 use Weline\Framework\View\Block as ViewBlock;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Http\Url;
 
 class ModelSelect extends ViewBlock
 {
@@ -29,11 +27,6 @@ class ModelSelect extends ViewBlock
         $classNames = (string)($this->getData('class') ?? 'w-100');
         $style = (string)($this->getData('style') ?? '');
 
-        /** @var Url $url */
-        $url = ObjectManager::getInstance(Url::class);
-        $endpoint = (string)($this->getData('endpoint') ?? '*/backend/api/models');
-        $api = $url->getBackendUrl($endpoint);
-
         $id = 'ms_' . md5($name . '_' . $serviceType . '_' . __CLASS__);
 
         $this->assign([
@@ -46,9 +39,7 @@ class ModelSelect extends ViewBlock
             'limit' => $limit,
             'class' => $classNames,
             'style' => $style,
-            'api' => $api,
         ]);
     }
 }
-
 

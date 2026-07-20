@@ -57,7 +57,7 @@
 ## 源码锚点
 
 - `app/code/Weline/Api/Controller/Framework/Query.php`
-- `app/code/Weline/Api/Controller/Framework/Stream.php`
+- `app/code/Weline/Api/Api/Framework/Stream.php`
 - `app/code/Weline/Api/Controller/Framework/QueryBin.php`
 - `app/code/Weline/Api/Observer/ApiControllerInitBefore.php`
 - `app/code/Weline/Api/Service/ApiSecurityService.php`

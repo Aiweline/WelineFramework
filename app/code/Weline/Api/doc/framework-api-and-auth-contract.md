@@ -18,7 +18,7 @@
 对应入口在：
 
 - `app/code/Weline/Api/Controller/Framework/Query.php`
-- `app/code/Weline/Api/Controller/Framework/Stream.php`
+- `app/code/Weline/Api/Api/Framework/Stream.php`
 - `app/code/Weline/Api/Controller/Framework/QueryBin.php`
 
 ## 2. REST 接口层
@@ -31,6 +31,11 @@ REST 接口按 `Api/Rest/V1/*` 组织。这里更适合：
 - 明确版本化的稳定接口
 
 而不是替代浏览器业务 Query 协议。
+
+框架管理的 SSE 订阅入口是一个例外：它位于
+`Api/Framework/Stream.php`，因此会生成到前台 REST 路由表并由
+`/api/framework/stream` 提供服务。不要把它放进 `Controller/`，否则会被
+错误地注册为页面路由。
 
 ## 3. 鉴权判断入口
 

@@ -32,20 +32,33 @@ php bin/w ai:default-model:manage --action=init
 ```php
 use Weline\Ai\Service\AiService;
 
-// 简单文本生成
+// 仅用于受控 CLI、Runner 或模块内部服务。
+// 不得在 HTTP 请求或 SSE 控制器中直接调用后输出到浏览器。
 $response = AiService::generateText('请介绍一下人工智能的发展历史');
-echo $response;
 ```
 
-#### 通过API调用
+#### 通过浏览器启动可恢复任务
 
-```bash
-curl -X POST http://your-domain/ai/api/chat/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "请介绍一下人工智能的发展历史"}'
+```js
+const api = await Weline.load('api');
+const task = await api.resource('runtime_task').start({
+  type_code: 'ai.chat_generation',
+  input: {
+    message: '请介绍一下人工智能的发展历史',
+    request_id: crypto.randomUUID(),
+  },
+}, { silent: true });
+
+const stream = api.createStream(task.stream_channel, {
+  task_id: task.task_id,
+  lease_id: task.lease_id,
+});
+stream.addEventListener('chunk', (event) => renderChunk(JSON.parse(event.data).chunk));
 ```
 
 ## 功能详解
+
+以下 PHP 示例仅用于受控 CLI、Runner 或模块内部服务；浏览器交互请使用上面的可恢复任务流程。
 
 ### AI模型管理
 
@@ -97,21 +110,24 @@ $code = AiService::generateText(
 );
 ```
 
-### 流式响应
+### 可恢复事件订阅
 
-对于长文本生成，可以使用流式响应获得更好的用户体验：
+对于长文本生成，浏览器必须让任务在独立 Runner 中执行，并通过可重连的 `StreamHandle` 接收事件：
 
-```php
-AiService::generateTextStream(
-    '写一篇1000字的关于AI发展的文章',
-    function($chunk) {
-        echo $chunk;
-        flush(); // 立即输出到浏览器
-    },
-    null,
-    'text_generation'
-);
+```js
+const stream = api.createStream(task.stream_channel, {
+  task_id: task.task_id,
+  lease_id: task.lease_id,
+});
+stream.addEventListener('chunk', (event) => appendChunk(JSON.parse(event.data).chunk));
+stream.addEventListener('runtime_snapshot', (event) => restoreFromCheckpoint(event.data));
+stream.addEventListener('completed', () => stream.close());
+
+// 页面离开或短暂网络中断只会退订或重连，不会取消后台任务。
+// 只有用户明确中止时才调用：await stream.cancel('user_cancelled');
 ```
+
+`AiService::generateTextStream()` 仍是模块内部的回调能力；它不能作为浏览器 SSE 输出方式，也不能用来保存或恢复 PHP 调用栈。
 
 ### 多语言支持
 
@@ -175,41 +191,14 @@ $japaneseContent = AiService::generateText(
 2. **优先级设置**：配置模型选择优先级
 3. **保护状态查看**：查看哪些模型受到删除保护
 
-## API接口
+## 浏览器 / HTTP 交互
 
-### 基本聊天接口
+聊天生成不再采用 HTTP 请求内执行或旧的直接生成、流式生成端点。浏览器通过
+`Weline.Api.resource('runtime_task').start()` 启动 `ai.chat_generation`，再使用
+`Weline.Api.createStream(task.stream_channel, { task_id, lease_id })` 接收持久事件。
 
-**端点**：`POST /ai/api/chat/generate`
-
-**请求参数**：
-```json
-{
-  "prompt": "您的提示词",
-  "model_code": "模型代码（可选）",
-  "scenario_code": "场景代码（可选）",
-  "locale": "语言代码（可选）",
-  "params": {}
-}
-```
-
-**响应格式**：
-```json
-{
-  "success": true,
-  "data": {
-    "response": "AI生成的回答",
-    "model_code": "使用的模型代码",
-    "scenario_code": "使用的场景代码",
-    "locale": "语言代码"
-  }
-}
-```
-
-### 流式聊天接口
-
-**端点**：`POST /ai/api/chat/stream`
-
-使用Server-Sent Events (SSE) 格式返回流式数据。
+任务句柄包含 `task_id`、`lease_id`、`stream_channel` 和租约到期时间。前端每次重连都会申请新的
+SSE ticket，并从最后持久事件 ID 补发；关闭订阅只会退订，明确调用 `stream.cancel(reason)` 才会取消任务。
 
 ### 获取适配器列表
 

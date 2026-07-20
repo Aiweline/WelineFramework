@@ -2,27 +2,22 @@
 
 ## 概述
 
-本系统实现了多层级AI模型配置优先级管理，支持前端用户和后端管理员的不同配置需求。
+本系统实现多层级 AI 模型配置优先级管理。浏览器生成通过可恢复后台任务执行；浏览器不能提交
+供应商密钥、`user_config` 或直接调用 AI 服务。
 
 ## 配置优先级
 
-### 1. 前端用户调用优先级
+### 1. 受控 Runtime / 内部服务调用优先级
 
-1. **用户提供的配置** (最高优先级)
-   - 用户在调用时直接提供的API密钥和配置
-   - 适用于临时测试或特殊需求
-
-2. **用户为模型配置的供应商账户**
-   - 用户为特定模型配置的API密钥
-   - 存储在用户账户中，仅该用户可见
-
-3. **模型关联的配置**
+1. **模型关联的配置**
    - 后台为模型配置的默认API密钥
-   - 所有用户共享
+   - 由 Runner 在受控服务边界内解析
 
-4. **后台默认供应商账户** (最低优先级)
+2. **后台默认供应商账户** (最低优先级)
    - 系统默认的供应商账户配置
    - 作为最后的备选方案
+
+需要按用户选择账户或计费的能力只能由受控服务根据已认证 owner 解析，不能由浏览器请求直接传入。
 
 ### 2. 后端管理员调用优先级
 
@@ -50,7 +45,7 @@
 #### AiService
 - **位置**: `app/code/Weline/Ai/Service/AiService.php`
 - **功能**: AI服务核心类，集成配置解析器
-- **更新**: 新增 `userId` 和 `isBackend` 参数
+- **边界**: 仅供 Runner、CLI 或模块内部服务使用；不是 HTTP/SSE 控制器的执行入口
 
 ### 数据模型
 
@@ -66,53 +61,53 @@
 - **功能**: 供应商账户管理
 - **字段**: `user_id`, `model_id`, `is_default`, `status`
 
-### API控制器
+### 执行入口
 
-#### 前端API
-- **位置**: `app/code/Weline/Ai/Controller/Frontend/AiController.php`
-- **功能**: 处理前端用户的AI调用
-- **特点**: 需要用户认证，支持余额检查
+#### 前端可恢复任务
+- **任务类型**: `ai.chat_generation`
+- **启动**: `Weline.Api.resource('runtime_task').start()`
+- **订阅**: `Weline.Api.createStream()` 返回的 `StreamHandle`
+- **特点**: Runner 脱离 HTTP 连接执行；断线只退订，只有显式取消才请求停止
 
-#### 后端API
-- **位置**: `app/code/Weline/Ai/Controller/Backend/ApiController.php`
-- **功能**: 处理后端管理员的AI调用
-- **特点**: 管理员权限，无需用户认证
+#### 后端配置操作
+- **位置**: `Weline\Ai\Extends\Module\Weline_Framework\Query\AiQueryProvider`
+- **功能**: 管理模型、适配器、默认模型和供应商账户
+- **边界**: 不暴露直接文本、图片或流式生成功能
 
 ## 使用示例
 
-### 前端用户调用
+### 前端聊天任务
+
+```js
+const api = await Weline.load('api');
+const task = await api.resource('runtime_task').start({
+  type_code: 'ai.chat_generation',
+  input: { message, request_id: crypto.randomUUID() },
+}, { silent: true });
+const stream = api.createStream(task.stream_channel, {
+  task_id: task.task_id,
+  lease_id: task.lease_id,
+});
+stream.addEventListener('chunk', (event) => appendChunk(JSON.parse(event.data).chunk));
+```
+
+### 内部 Runner / CLI 调用
 
 ```php
-// 前端控制器调用
+// 不能从 HTTP 控制器直接调用。由 Runner、CLI 或模块内部服务负责。
 $aiService = ObjectManager::getInstance(AiService::class);
 $response = $aiService->generate(
     $prompt,
     $modelCode,
     $scenarioCode,
     $locale,
-    ['user_config' => $userConfig],
-    $userId,    // 前端用户ID
-    false       // 前端调用
+    [],
+    null,
+    true
 );
 ```
 
-### 后端管理员调用
-
-```php
-// 后端控制器调用
-$aiService = ObjectManager::getInstance(AiService::class);
-$response = $aiService->generate(
-    $prompt,
-    $modelCode,
-    $scenarioCode,
-    $locale,
-    ['user_config' => $userConfig],
-    null,       // 后端调用不需要用户ID
-    true        // 后端调用
-);
-```
-
-### 脱敏服务调用
+### 脱敏内部服务调用
 
 ```php
 // 脱敏服务中的AI调用
@@ -136,9 +131,8 @@ $response = $aiService->generate(
 - JSON格式存储，包含 `api_key`, `base_url` 等
 
 ### 用户配置
-- 用户可以为模型配置个人API密钥
-- 存储在用户账户表中
-- 优先级高于系统默认配置
+- 任何用户级账户或计费资料都由已认证 owner 的受控服务解析
+- 浏览器任务输入不接收 API 密钥或任意 `user_config`
 
 ### 供应商账户
 - 系统默认的供应商账户
@@ -148,10 +142,8 @@ $response = $aiService->generate(
 ## 计费系统
 
 ### 前端用户计费
-- 检查用户余额
-- 记录使用情况
-- 扣除费用
-- 余额不足时提示充值
+- Runner 根据任务 owner 执行余额检查、使用记录和扣费
+- 余额不足时将失败状态作为持久任务事件返回
 
 ### 后端管理员
 - 使用系统账户
@@ -166,8 +158,8 @@ $response = $aiService->generate(
 - 系统默认账户配置仅系统可见
 
 ### 权限控制
-- 前端API需要用户认证
-- 后端API需要管理员权限
+- 前端 `runtime_task.start` 和订阅均绑定已认证 owner、area 与租约
+- 后端配置操作需要管理员权限
 - 配置访问权限分离
 
 ## 扩展性

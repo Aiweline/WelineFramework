@@ -2072,7 +2072,7 @@ class AiService
         $resolvedConfig = $this->resolveModelConfig($model, $params);
         $params['resolved_config'] = $resolvedConfig;
         $providerRuntime = new ProviderRuntime($this->providerFactory, $this->aiModel);
-        $params['provider_factory'] = $providerRuntime;
+        $params['provider_runtime'] = $providerRuntime;
         $params['model_executor'] = new AgentModelExecutor($providerRuntime);
 
         // 5.1 包装 streamCallback：所有智能体事件流式写入 ai_activity.log
