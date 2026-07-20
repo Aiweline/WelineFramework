@@ -7,6 +7,7 @@ namespace Weline\Social\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Social\Service\SocialAccountService;
 use Weline\Social\Service\SocialCreativeService;
+use Weline\Social\Service\SocialOauthService;
 use Weline\Social\Service\SocialPlatformIconService;
 use Weline\Social\Service\SocialPlatformRegistry;
 use Weline\Social\Service\SocialPublishService;
@@ -20,7 +21,8 @@ class SocialManagementQueryProvider implements QueryProviderInterface
         private readonly SocialCreativeService $creativeService,
         private readonly SocialPublishService $publishService,
         private readonly SocialPlatformIconService $iconService,
-        private readonly SocialWebsiteAccountService $websiteAccountService
+        private readonly SocialWebsiteAccountService $websiteAccountService,
+        private readonly SocialOauthService $oauthService
     ) {
     }
 
@@ -38,6 +40,7 @@ class SocialManagementQueryProvider implements QueryProviderInterface
             'getAccount' => $this->accountService->getAccountSafeArray((int)($params['account_id'] ?? 0)),
             'listWidgetAccounts' => $this->accountService->listWidgetAccounts($params),
             'startAuthorization' => $this->startAuthorization($params),
+            'completeAuthorization' => $this->oauthService->complete($params),
             'saveCredentialAccount' => $this->accountService->saveCredentialAccount($params),
             'testAccount' => $this->accountService->testAccount((int)($params['account_id'] ?? 0)),
             'disableAccount' => $this->accountService->disableAccount((int)($params['account_id'] ?? 0)),
@@ -70,27 +73,28 @@ class SocialManagementQueryProvider implements QueryProviderInterface
             'description' => __('提供 Weline_Social 平台、账户、AI 创意和发布批次操作。'),
             'module' => 'Weline_Social',
             'operations' => [
-                ['name' => 'listPlatforms', 'description' => __('列出平台注册表。'), 'frontend' => true, 'mode' => 'read', 'graph' => true, 'params' => ['force_reload' => ['type' => 'bool']]],
-                ['name' => 'getPlatform', 'description' => __('获取单个平台定义。'), 'frontend' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64]]],
-                ['name' => 'listAccounts', 'description' => __('列出已连接账户。'), 'frontend' => false, 'mode' => 'read', 'params' => []],
-                ['name' => 'getAccount', 'description' => __('获取社媒账户详情。'), 'frontend' => false, 'mode' => 'read', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
-                ['name' => 'listWidgetAccounts', 'description' => __('列出可展示的社媒账户。'), 'frontend' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platforms' => ['type' => 'list', 'max_items' => 100], 'limit' => ['type' => 'int', 'min' => 1, 'max' => 100]]],
-                ['name' => 'startAuthorization', 'description' => __('生成平台授权地址。'), 'frontend' => false, 'mode' => 'write', 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'redirect_uri' => ['type' => 'string', 'max_length' => 2048], 'state' => ['type' => 'string', 'max_length' => 128], 'account_context' => ['type' => 'map']]],
-                ['name' => 'saveCredentialAccount', 'description' => __('保存官方凭据账户。'), 'frontend' => false, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'min' => 0], 'platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'account_name' => ['type' => 'string', 'required' => true, 'max_length' => 150], 'auth_mode' => ['type' => 'string', 'max_length' => 64], 'profile_url' => ['type' => 'string', 'max_length' => 512], 'widget_enabled' => ['type' => 'bool'], 'publish_enabled' => ['type' => 'bool'], 'sort_order' => ['type' => 'int'], 'credentials' => ['type' => 'map'], 'scopes' => ['type' => 'list', 'max_items' => 50], 'token_expires_at' => ['type' => 'string', 'max_length' => 32], 'remote_account_id' => ['type' => 'string', 'max_length' => 150], 'remote_account_name' => ['type' => 'string', 'max_length' => 190]]],
-                ['name' => 'testAccount', 'description' => __('检测账户凭据。'), 'frontend' => false, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
-                ['name' => 'disableAccount', 'description' => __('禁用社媒账户。'), 'frontend' => false, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
-                ['name' => 'listWebsites', 'description' => __('列出可配置社媒默认账户的站点。'), 'frontend' => false, 'mode' => 'read', 'params' => []],
-                ['name' => 'listScopes', 'description' => __('列出可配置社媒默认账户的两级范围。'), 'frontend' => false, 'mode' => 'read', 'params' => []],
-                ['name' => 'listWebsiteAccountRelations', 'description' => __('列出站点与社媒账户关系。'), 'frontend' => false, 'mode' => 'read', 'params' => ['website_id' => ['type' => 'int', 'min' => 1], 'include_disabled' => ['type' => 'bool']]],
-                ['name' => 'listScopeAccountRelations', 'description' => __('列出范围与社媒账户关系。'), 'frontend' => false, 'mode' => 'read', 'params' => ['scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 1], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'include_disabled' => ['type' => 'bool']]],
-                ['name' => 'saveWebsiteAccountDefaults', 'description' => __('保存站点默认社媒账户。'), 'frontend' => false, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'sort_orders' => ['type' => 'map']]],
-                ['name' => 'saveScopeAccountDefaults', 'description' => __('保存范围默认社媒账户。'), 'frontend' => false, 'mode' => 'write', 'params' => ['scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'scope_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'child_scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'sort_orders' => ['type' => 'map']]],
-                ['name' => 'getWebsiteDefaultAccounts', 'description' => __('获取单个站点默认社媒账户。'), 'frontend' => false, 'mode' => 'read', 'params' => ['website_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'publish_only' => ['type' => 'bool']]],
-                ['name' => 'getScopeDefaultAccounts', 'description' => __('获取单个范围默认社媒账户。'), 'frontend' => false, 'mode' => 'read', 'params' => ['scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'scope_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'child_scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'publish_only' => ['type' => 'bool']]],
-                ['name' => 'resolvePublishAccounts', 'description' => __('按范围、站点或全部站解析默认发布账户。'), 'frontend' => false, 'mode' => 'read', 'params' => ['scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 1], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'website_id' => ['type' => 'int', 'min' => 1], 'website_ids' => ['type' => 'list', 'max_items' => 500], 'all_sites' => ['type' => 'bool']]],
-                ['name' => 'generateCreative', 'description' => __('生成融媒体创意。'), 'frontend' => false, 'mode' => 'write', 'params' => ['title' => ['type' => 'string', 'max_length' => 190], 'prompt' => ['type' => 'string', 'max_length' => 4000], 'platforms' => ['type' => 'list', 'max_items' => 100], 'fake_mode' => ['type' => 'bool'], 'use_ai' => ['type' => 'bool'], 'assets' => ['type' => 'list', 'max_items' => 50]]],
-                ['name' => 'createPublishBatch', 'description' => __('创建一键多平台发布批次。'), 'frontend' => false, 'mode' => 'write', 'params' => ['draft_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 1], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'website_id' => ['type' => 'int', 'min' => 1], 'website_ids' => ['type' => 'list', 'max_items' => 500], 'all_sites' => ['type' => 'bool'], 'content_kind' => ['type' => 'string', 'max_length' => 32], 'title' => ['type' => 'string', 'max_length' => 190], 'scheduled_at' => ['type' => 'string', 'max_length' => 32], 'fake_mode' => ['type' => 'bool']]],
-                ['name' => 'getPublishBatchStatus', 'description' => __('获取发布批次状态。'), 'frontend' => false, 'mode' => 'read', 'params' => ['batch_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
+                ['name' => 'listPlatforms', 'description' => __('列出平台注册表。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['force_reload' => ['type' => 'bool']]],
+                ['name' => 'getPlatform', 'description' => __('获取单个平台定义。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64]]],
+                ['name' => 'listAccounts', 'description' => __('列出已连接账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => []],
+                ['name' => 'getAccount', 'description' => __('获取社媒账户详情。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
+                ['name' => 'listWidgetAccounts', 'description' => __('列出可展示的社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platforms' => ['type' => 'list', 'max_items' => 100], 'limit' => ['type' => 'int', 'min' => 1, 'max' => 100]]],
+                ['name' => 'startAuthorization', 'description' => __('生成平台授权地址。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'redirect_uri' => ['type' => 'string', 'max_length' => 2048], 'state' => ['type' => 'string', 'max_length' => 128], 'account_context' => ['type' => 'map']]],
+                ['name' => 'completeAuthorization', 'description' => __('完成平台授权回调并保存账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['code' => ['type' => 'string', 'max_length' => 2048], 'state' => ['type' => 'string', 'required' => true, 'max_length' => 128], 'error' => ['type' => 'string', 'max_length' => 255], 'error_description' => ['type' => 'string', 'max_length' => 1024]]],
+                ['name' => 'saveCredentialAccount', 'description' => __('保存官方凭据账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'min' => 0], 'platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'account_name' => ['type' => 'string', 'required' => true, 'max_length' => 150], 'auth_mode' => ['type' => 'string', 'max_length' => 64], 'profile_url' => ['type' => 'string', 'max_length' => 512], 'widget_enabled' => ['type' => 'bool'], 'publish_enabled' => ['type' => 'bool'], 'sort_order' => ['type' => 'int'], 'credentials' => ['type' => 'map'], 'scopes' => ['type' => 'list', 'max_items' => 50], 'token_expires_at' => ['type' => 'string', 'max_length' => 32], 'remote_account_id' => ['type' => 'string', 'max_length' => 150], 'remote_account_name' => ['type' => 'string', 'max_length' => 190]]],
+                ['name' => 'testAccount', 'description' => __('检测账户凭据。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
+                ['name' => 'disableAccount', 'description' => __('禁用社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
+                ['name' => 'listWebsites', 'description' => __('列出可配置社媒默认账户的站点。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => []],
+                ['name' => 'listScopes', 'description' => __('列出可配置社媒默认账户的两级范围。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => []],
+                ['name' => 'listWebsiteAccountRelations', 'description' => __('列出站点与社媒账户关系。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'include_disabled' => ['type' => 'bool']]],
+                ['name' => 'listScopeAccountRelations', 'description' => __('列出范围与社媒账户关系。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 0], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'include_disabled' => ['type' => 'bool']]],
+                ['name' => 'saveWebsiteAccountDefaults', 'description' => __('保存站点默认社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'required' => true, 'min' => 0], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'sort_orders' => ['type' => 'map']]],
+                ['name' => 'saveScopeAccountDefaults', 'description' => __('保存范围默认社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'scope_id' => ['type' => 'int', 'required' => true, 'min' => 0], 'child_scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'sort_orders' => ['type' => 'map']]],
+                ['name' => 'getWebsiteDefaultAccounts', 'description' => __('获取单个站点默认社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['website_id' => ['type' => 'int', 'required' => true, 'min' => 0], 'publish_only' => ['type' => 'bool']]],
+                ['name' => 'getScopeDefaultAccounts', 'description' => __('获取单个范围默认社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'scope_id' => ['type' => 'int', 'required' => true, 'min' => 0], 'child_scope_type' => ['type' => 'string', 'required' => true, 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'publish_only' => ['type' => 'bool']]],
+                ['name' => 'resolvePublishAccounts', 'description' => __('按范围、站点或全部站解析默认发布账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 0], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'website_id' => ['type' => 'int', 'min' => 0], 'website_ids' => ['type' => 'list', 'max_items' => 500], 'all_sites' => ['type' => 'bool']]],
+                ['name' => 'generateCreative', 'description' => __('生成融媒体创意。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['title' => ['type' => 'string', 'max_length' => 190], 'prompt' => ['type' => 'string', 'max_length' => 4000], 'platforms' => ['type' => 'list', 'max_items' => 100], 'fake_mode' => ['type' => 'bool'], 'use_ai' => ['type' => 'bool'], 'assets' => ['type' => 'list', 'max_items' => 50]]],
+                ['name' => 'createPublishBatch', 'description' => __('创建一键多平台发布批次。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['draft_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 0], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'website_id' => ['type' => 'int', 'min' => 0], 'website_ids' => ['type' => 'list', 'max_items' => 500], 'all_sites' => ['type' => 'bool'], 'content_kind' => ['type' => 'string', 'max_length' => 32], 'title' => ['type' => 'string', 'max_length' => 190], 'scheduled_at' => ['type' => 'string', 'max_length' => 32], 'fake_mode' => ['type' => 'bool']]],
+                ['name' => 'getPublishBatchStatus', 'description' => __('获取发布批次状态。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['batch_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
             ],
         ];
     }
@@ -116,27 +120,10 @@ class SocialManagementQueryProvider implements QueryProviderInterface
      */
     private function startAuthorization(array $params): array
     {
-        $platformCode = \strtolower(\trim((string)($params['platform_code'] ?? $params['platform'] ?? '')));
-        $provider = $this->registry->getProvider($platformCode);
-        if ($provider === null) {
-            throw new \InvalidArgumentException((string)__('未知社媒平台：%{1}', [$platformCode]));
-        }
-
-        $redirectUri = (string)($params['redirect_uri'] ?? '');
-        $state = (string)($params['state'] ?? \bin2hex(\random_bytes(8)));
-        $url = $provider->buildAuthorizationUrl(
+        return $this->oauthService->start(
+            \strtolower(\trim((string)($params['platform_code'] ?? $params['platform'] ?? ''))),
             \is_array($params['account_context'] ?? null) ? $params['account_context'] : [],
-            $redirectUri,
-            $state
+            isset($params['redirect_uri']) ? (string)$params['redirect_uri'] : null
         );
-
-        return [
-            'success' => $url !== null,
-            'authorization_url' => $url,
-            'state' => $state,
-            'message' => $url !== null
-                ? (string)__('授权地址已生成。')
-                : (string)__('该平台当前不支持自动授权地址生成。'),
-        ];
     }
 }

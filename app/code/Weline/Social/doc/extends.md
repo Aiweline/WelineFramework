@@ -50,8 +50,8 @@ Weline\Social\Interface\SocialPlatformConfigTesterInterface
 Provider 不需要在模板中输出图标。`Weline\Social\Service\SocialPlatformIconService` 会按以下顺序解析：
 
 1. Provider 定义里的受控 `icon_svg`。
-2. `Weline_Social/view/statics/icons/social/{icon}.svg`。
-3. 根据 `platform_code` 生成安全 SVG fallback。
+2. `Weline_Social/view/statics/icons/social/{icon}.svg`（核心已内置各平台品牌 SVG，禁止用字母占位图替代已知平台）。
+3. 仅未知平台才根据 `platform_code` 生成安全 SVG fallback。
 
 不允许后台用户提交任意未清洗 SVG。
 
