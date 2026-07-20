@@ -61,6 +61,19 @@ NGINX;
         $upstreamKeepalive = $this->paths->upstreamKeepalive();
         $workerConnections = $this->paths->workerConnections();
 
+        $tempBlock = '';
+        if ($isWindows) {
+            $tempRoot = $this->nginxPath($this->paths->tempDir());
+            $tempBlock = <<<NGINX
+
+    client_body_temp_path {$tempRoot}/client_body_temp;
+    proxy_temp_path       {$tempRoot}/proxy_temp;
+    fastcgi_temp_path     {$tempRoot}/fastcgi_temp;
+    uwsgi_temp_path       {$tempRoot}/uwsgi_temp;
+    scgi_temp_path        {$tempRoot}/scgi_temp;
+NGINX;
+        }
+
         $cacheHttpBlock = '';
         $cacheLocationBlock = '';
         $gzipBlock = '';
@@ -135,7 +148,7 @@ http {
     open_file_cache_valid 30s;
     open_file_cache_min_uses 2;
     open_file_cache_errors on;
-{$gzipBlock}
+{$tempBlock}{$gzipBlock}
 {$cacheHttpBlock}
 
     upstream wls_backend {

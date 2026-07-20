@@ -121,7 +121,9 @@ php bin/w server:stop   # managed=true 时会先停本项目托管 Nginx
 
 对外访问端口为 `8080/8443 + projectPortOffset`（可用 env 覆盖）。安装目录 `extend/server/nginx`、运行态 `var/server/nginx` 均按项目 BP 隔离。托管 conf 默认：`upstream keepalive`、`access_log off`、较大 `worker_connections`；改 conf 后对已运行实例会 `reload`。
 
-> 性能提示：内置 `server:benchmark` 是 PHP 客户端，测出的 QPS 常低于真实边缘能力。对比边缘吞吐建议用 `ab -k` / `wrk`。托管 Nginx **默认最佳性能配置**：匿名 GET 边缘微缓存（`edge_cache=true`，TTL 60s，有 Cookie 跳过）、gzip（comp_level=2）、upstream keepalive=256、worker_connections=32768、access_log off。健康检查 `/_wls/` 不走边缘缓存。修改 `proxy_cache_path` 的 zone 大小后需 `server:nginx:stop` 再 `start`（reload 无法重建共享内存区）。
+> 性能提示：内置 `server:benchmark` 是 PHP 客户端，测出的 QPS 常低于真实边缘能力。对比边缘吞吐建议用 `ab -k` / `wrk` / `bombardier`。托管 Nginx **默认最佳性能配置**：匿名 GET 边缘微缓存（`edge_cache=true`，TTL 60s，有 Cookie 跳过）、gzip（comp_level=2）、upstream keepalive=256、worker_connections=32768、access_log off。健康检查 `/_wls/` 不走边缘缓存。修改 `proxy_cache_path` 的 zone 大小后需 `server:nginx:stop` 再 `start`（reload 无法重建共享内存区）。
+>
+> **实测参考（匿名 GET 边缘 HIT，100 万请求 0 失败）**：macOS `ab -k` ~64117 QPS；Windows 11 ARM VM + 托管 nginx 1.26.3 + `bombardier -c100` ~14845 QPS（Windows 无 `reuseport`、`worker_processes 1`，VM 内绝对值低于 macOS 属预期）。Windows 首次启动前需 `ensureRuntimeDirectories()` 创建 `var/server/nginx/temp/*`（`client_body_temp` 等），conf 内已写绝对 temp 路径。
 
 切换自研：在 `env.php` 设置 `wls.edge.adapter=wls` 后按既有 HTTPS 启动流程（可省略 `--no-ssl`）。`server:doctor` 会报告适配器、托管/宿主机模式与原生协议状态。
 
