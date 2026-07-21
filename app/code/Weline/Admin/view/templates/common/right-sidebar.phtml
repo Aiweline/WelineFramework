@@ -31,6 +31,9 @@ $rtlModeSwitch = !empty($themeConfigData['rtl-mode-switch']);
             </a>
         </div>
 
+        <!-- 系统维护：清理缓存（仅拥有 Weline_CacheManager::system_cache_clear ACL 的用户可见） -->
+        <w:cache:clear />
+
         <!-- 布局预设配置包 -->
         <hr class='mt-0'/>
         <h6 class='text-center mb-0'><?= __('布局预设配置包') ?></h6>

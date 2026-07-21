@@ -48,6 +48,29 @@ This skill owns module-level configuration, cache usage, backend menu integratio
 - Use framework cache factories instead of direct driver construction.
 - Update module README after fixing bugs or changing admin behavior.
 
+# 缓存键契约
+
+`w_cache($pool)` 默认自动注入当前请求的 **website_code + lang + currency**（并固定带 area）。业务只写逻辑键。
+
+特殊（全局词典、模块元数据、bootstrap 结构缓存）使用 `*Custom`，维度 bool **默认 false = 逃逸**：
+
+```php
+// 常规
+w_cache('product')->remember('price:'.$id, 1800, $builder);
+
+// 全逃逸
+w_cache('phrase')->getCustom($key);
+w_cache('phrase')->setCustom($key, $words);
+
+// 只启用语言维
+w_cache('view')->getCustom($key, lang: true);
+```
+
+提供方法：`getCustom` / `setCustom` / `rememberCustom` / `deleteCustom` / `hasCustom`。  
+完整说明见 `app/code/Weline/Framework/doc/3-开发/缓存使用指南.md`。
+
+禁止：手拼站点/语言/货币进逻辑键；用全 true 的 Custom 代替普通 API；直接 new 缓存驱动。
+
 # Inputs Required
 
 - The owning module and configuration or admin surface being changed.

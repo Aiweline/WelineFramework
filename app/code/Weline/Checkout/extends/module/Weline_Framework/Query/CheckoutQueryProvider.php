@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Extends\Module\Weline_Framework\Query;
 
+use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Checkout\Service\CheckoutService;
 use Weline\Checkout\Service\PaymentService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -18,6 +19,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
         private readonly CheckoutService $checkoutService,
         private readonly PaymentService $paymentService,
         private readonly SessionFactory $sessionFactory,
+        private readonly CheckoutIdentityService $checkoutIdentityService,
     ) {
     }
 
@@ -41,8 +43,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function getData(array $params): array
     {
-        $this->assertLoggedIn();
-
+        $identity = $this->resolveCheckoutIdentity($params);
         $shippingAddress = \is_array($params['shipping_address'] ?? null)
             ? $params['shipping_address']
             : [];
@@ -53,6 +54,13 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
         return $this->ok((string)__('结账信息已加载'), [
             'currency' => $currency,
+            'identity' => [
+                'checkout_mode' => (string)($identity['checkout_mode'] ?? 'guest'),
+                'is_guest_checkout' => !empty($identity['is_guest_checkout']),
+                'guest_allowed' => !empty($identity['guest_allowed']),
+                'customer_allowed' => !empty($identity['customer_allowed']),
+                'requires_guest_email' => !empty($identity['requires_guest_email']),
+            ],
             'cart' => [
                 'subtotal' => (float)($cart['subtotal'] ?? 0),
                 'grand_total' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
@@ -75,8 +83,17 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function placeOrder(array $params): array
     {
-        $customerId = $this->assertLoggedIn();
+        $identity = $this->resolveCheckoutIdentity($params);
+        if (!empty($identity['is_guest_checkout'])) {
+            $this->checkoutIdentityService->validateGuestCheckout($identity, $params);
+        }
+
         $shippingAddress = \is_array($params['shipping_address'] ?? null) ? $params['shipping_address'] : [];
+        $guestEmail = (string)($identity['guest_email'] ?? '');
+        if ($guestEmail !== '' && trim((string)($shippingAddress['email'] ?? '')) === '') {
+            $shippingAddress['email'] = $guestEmail;
+        }
+
         $shippingMethod = trim((string)($params['shipping_method'] ?? ''));
         $paymentMethod = trim((string)($params['payment_method'] ?? ''));
 
@@ -106,7 +123,12 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
 
         $order = $this->checkoutService->createOrder([
-            'customer_id' => $customerId,
+            'customer_id' => !empty($identity['is_guest_checkout']) ? 0 : max(0, (int)$identity['customer_id']),
+            'authenticated_customer_id' => max(0, (int)($identity['authenticated_customer_id'] ?? 0)),
+            'checkout_mode' => (string)($identity['checkout_mode'] ?? 'guest'),
+            'is_guest_checkout' => !empty($identity['is_guest_checkout']),
+            'guest_email' => $guestEmail,
+            'guest_allowed' => true,
             'items' => $orderItems,
             'shipping_address' => $shippingAddress,
             'billing_address' => $shippingAddress,
@@ -321,15 +343,34 @@ class CheckoutQueryProvider implements QueryProviderInterface
         return 0.0;
     }
 
-    private function assertLoggedIn(): int
+    private function resolveCheckoutIdentity(array $params = []): array
     {
         $session = $this->sessionFactory->createFrontendSession();
-        $userId = (int)($session->getUserId() ?? 0);
-        if ($userId <= 0 || !$session->isLoggedIn()) {
-            throw new \RuntimeException((string)__('请先登录'));
+        $authenticatedCustomerId = 0;
+        try {
+            if ($session->isLoggedIn()) {
+                $authenticatedCustomerId = max(0, (int)($session->getUserId() ?? 0));
+            }
+        } catch (\Throwable) {
+            $authenticatedCustomerId = 0;
         }
 
-        return $userId;
+        $shippingAddress = \is_array($params['shipping_address'] ?? null) ? $params['shipping_address'] : [];
+
+        return $this->checkoutIdentityService->resolve([
+            'authenticated_customer_id' => $authenticatedCustomerId,
+            'customer_id' => $authenticatedCustomerId,
+            'guest_allowed' => true,
+            'customer_allowed' => $authenticatedCustomerId > 0,
+            'checkout_mode' => $params['checkout_mode']
+                ?? ($authenticatedCustomerId > 0
+                    ? CheckoutIdentityService::MODE_CUSTOMER
+                    : CheckoutIdentityService::MODE_GUEST),
+            'guest_email' => $params['guest_email']
+                ?? $params['email']
+                ?? ($shippingAddress['email'] ?? ''),
+            'requires_guest_email' => $params['requires_guest_email'] ?? true,
+        ]);
     }
 
     /**
@@ -350,13 +391,13 @@ class CheckoutQueryProvider implements QueryProviderInterface
         return [
             'provider' => 'checkout',
             'name' => (string)__('前台结账'),
-            'description' => (string)__('聚合购物车、配送与支付，供结账页 Weline.Api.resource(\'checkout\') 使用。'),
+            'description' => (string)__('聚合购物车、配送与支付，供结账页 Weline.Api.resource(\'checkout\') 使用。默认支持匿名结账。'),
             'module' => 'Weline_Checkout',
             'operations' => [
                 [
                     'name' => 'getData',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 2,
@@ -369,7 +410,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'placeOrder',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 5,
@@ -377,6 +418,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'shipping_address' => ['type' => 'array', 'required' => true],
                         'shipping_method' => ['type' => 'string', 'required' => true],
                         'payment_method' => ['type' => 'string', 'required' => true],
+                        'guest_email' => ['type' => 'string', 'required' => false],
+                        'checkout_mode' => ['type' => 'string', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Create order from cart and start payment',
@@ -384,7 +427,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'createOrder',
                     'frontend' => true,
-                    'auth' => 'customer',
+                    'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 5,
@@ -392,6 +435,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'shipping_address' => ['type' => 'array', 'required' => true],
                         'shipping_method' => ['type' => 'string', 'required' => true],
                         'payment_method' => ['type' => 'string', 'required' => true],
+                        'guest_email' => ['type' => 'string', 'required' => false],
+                        'checkout_mode' => ['type' => 'string', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Alias of placeOrder',
