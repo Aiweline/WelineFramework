@@ -278,16 +278,17 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheStateI
     private function buildServiceOptions(array $config): array
     {
         $wlsMode = \defined('WLS_MODE') && WLS_MODE;
+        $defaults = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::memoryClientOptions($wlsMode);
 
         return [
-            'connect_timeout' => (float) ($config['connect_timeout'] ?? ($wlsMode ? 0.05 : 1.0)),
-            'timeout' => (float) ($config['timeout'] ?? ($wlsMode ? 0.05 : 2.0)),
-            'pool_size' => (int) ($config['pool_size'] ?? 8),
-            'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 0),
-            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? ($wlsMode ? 0.01 : 0.2)),
-            'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
-            'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
-            'fail_fast_on_cooldown' => (bool) ($config['fail_fast_on_cooldown'] ?? $wlsMode),
+            'connect_timeout' => (float) ($config['connect_timeout'] ?? $defaults['connect_timeout']),
+            'timeout' => (float) ($config['timeout'] ?? $defaults['timeout']),
+            'pool_size' => (int) ($config['pool_size'] ?? $defaults['pool_size']),
+            'pool_min_idle' => (int) ($config['pool_min_idle'] ?? $defaults['pool_min_idle']),
+            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? $defaults['acquire_timeout']),
+            'idle_timeout' => (float) ($config['idle_timeout'] ?? $defaults['idle_timeout']),
+            'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? $defaults['pool_health_ping_idle']),
+            'fail_fast_on_cooldown' => (bool) ($config['fail_fast_on_cooldown'] ?? $defaults['fail_fast_on_cooldown']),
             'pool_profile' => \trim((string)($config['pool_profile'] ?? '')),
             'token_file_name' => (string) (
                 $config['token_file_name']

@@ -37,6 +37,7 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop after automated validation,
 - WLS Testing: **ALWAYS** start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`) | Default port 9501 is PRODUCTION (DO NOT TOUCH) | **Stop after automated validation; if user manual acceptance is required, keep the dedicated instance running and report URL/name/port/stop command until the user confirms acceptance**
 - WLS Lifecycle: code→`reload` | master→`restart -r` | NO `sleep/die/exit`
 - I18n: `__('text')` or `<lang>text</lang>` | Placeholders: `%{1}` or `%{name}`
+- Cache: `w_cache()` ordinary get/set/remember auto-inject website_code+lang+currency; global/bootstrap data uses `*Custom` (dimension bools default false = escape). See `app/code/Weline/Framework/doc/3-开发/缓存使用指南.md`
 
 ## Critical Constraints
 **NEVER:** Edit `generated/` | Use `routes.xml` | Native Ajax/XHR/fetch/axios for frontend-backend business APIs | JS `alert/confirm` | Hardcode text | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | **Test on default port 9501 or reuse instance names** | **Leave unmanaged test instances running; manual-acceptance WLS handoff must include URL/name/port/stop command**

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Controller\Frontend;
 
+use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Checkout\Service\CheckoutService;
 use Weline\Checkout\Service\PaymentService;
 use Weline\Framework\App\Controller\FrontendController;
@@ -21,20 +22,21 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Checkout extends FrontendController
 {
-    private const LOGIN_PATH = '/customer/account/login';
-    private const CHECKOUT_PATH = '/checkout';
     private const CART_PATH = '/cart';
     private const ORDER_LIST_PATH = '/weline_checkout/frontend/order/list';
 
     private CheckoutService $checkoutService;
     private PaymentService $paymentService;
+    private CheckoutIdentityService $checkoutIdentityService;
 
     public function __construct(
         CheckoutService $checkoutService,
-        PaymentService $paymentService
+        PaymentService $paymentService,
+        CheckoutIdentityService $checkoutIdentityService
     ) {
         $this->checkoutService = $checkoutService;
         $this->paymentService = $paymentService;
+        $this->checkoutIdentityService = $checkoutIdentityService;
     }
 
     /**
@@ -44,11 +46,7 @@ class Checkout extends FrontendController
      */
     public function index(): string
     {
-        // 检查登录状态
-        if (!$this->isLoggedIn()) {
-            return $this->redirectToLogin();
-        }
-
+        // 默认允许匿名结账：未登录也直接渲染结账页。
         $this->assign('page_title', __('结账'));
         $this->layoutType = 'checkout';
         
@@ -69,20 +67,39 @@ class Checkout extends FrontendController
             ]);
         }
 
-        if (!$this->isLoggedIn()) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('请先登录')
-            ]);
-        }
-
-        $customerId = $this->getLoginUserId();
-        
         try {
+            $shippingAddress = $this->request->getPost('shipping_address', []);
+            if (!\is_array($shippingAddress)) {
+                $shippingAddress = [];
+            }
+            $authenticatedCustomerId = $this->isLoggedIn() ? (int)$this->getLoginUserId() : 0;
+            $identity = $this->checkoutIdentityService->resolve([
+                'authenticated_customer_id' => $authenticatedCustomerId,
+                'customer_id' => $authenticatedCustomerId,
+                'guest_allowed' => true,
+                'customer_allowed' => $authenticatedCustomerId > 0,
+                'checkout_mode' => $this->request->getPost('checkout_mode', $authenticatedCustomerId > 0 ? 'customer' : 'guest'),
+                'guest_email' => $this->request->getPost(
+                    'guest_email',
+                    $this->request->getPost('email', $shippingAddress['email'] ?? '')
+                ),
+            ]);
+            if (!empty($identity['is_guest_checkout'])) {
+                $this->checkoutIdentityService->validateGuestCheckout($identity, [
+                    'shipping_address' => $shippingAddress,
+                    'guest_email' => $identity['guest_email'],
+                ]);
+            }
+
             $data = [
-                'customer_id' => $customerId,
+                'customer_id' => !empty($identity['is_guest_checkout']) ? 0 : max(0, (int)$identity['customer_id']),
+                'authenticated_customer_id' => $authenticatedCustomerId,
+                'checkout_mode' => (string)$identity['checkout_mode'],
+                'is_guest_checkout' => !empty($identity['is_guest_checkout']),
+                'guest_email' => (string)($identity['guest_email'] ?? ''),
+                'guest_allowed' => true,
                 'items' => $this->request->getPost('items', []),
-                'shipping_address' => $this->request->getPost('shipping_address', []),
+                'shipping_address' => $shippingAddress,
                 'billing_address' => $this->request->getPost('billing_address', []),
                 'shipping_method' => $this->request->getPost('shipping_method', ''),
                 'shipping_amount' => (float)$this->request->getPost('shipping_amount', 0),
@@ -162,13 +179,6 @@ class Checkout extends FrontendController
             ]);
         }
 
-        if (!$this->isLoggedIn()) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('请先登录')
-            ]);
-        }
-
         $orderId = (int)$this->request->getPost('order_id');
         $paymentMethod = $this->request->getPost('payment_method', '');
         $paymentData = $this->request->getPost('payment_data', []);
@@ -187,10 +197,5 @@ class Checkout extends FrontendController
                 'message' => __('支付处理失败：%{1}', $e->getMessage())
             ]);
         }
-    }
-
-    private function redirectToLogin(): string
-    {
-        return $this->redirect(self::LOGIN_PATH, ['redirect_url' => self::CHECKOUT_PATH]);
     }
 }

@@ -21,11 +21,11 @@ final class BackendLocaleCatalogProvider implements BackendLocaleCatalogInterfac
         bool $autoSize = true,
     ): array {
         $result = [];
-        foreach ($this->localeCatalog->installedPackages(
+        // Use Locale 表「已安装+已激活」集合，而不是语言包目录（目录可能只有默认语言）。
+        foreach ($this->localeCatalog->installed(
             $displayLocale,
             $flagWidth,
             $flagHeight,
-            $autoSize,
         ) as $language) {
             $languageCode = (string)($language['code'] ?? '');
             if ($languageCode === '') {

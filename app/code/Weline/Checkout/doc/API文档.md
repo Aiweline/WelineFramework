@@ -12,7 +12,7 @@
 
 **方法**: `POST`
 
-**权限**: 需要登录
+**权限**: 支持匿名结账（默认）与已登录账户结账；匿名下单需有效邮箱
 
 **请求参数**:
 ```json
@@ -33,6 +33,7 @@
     "shipping_address": {
         "name": "张三",
         "phone": "13800138000",
+        "email": "guest@example.com",
         "address": "北京市朝阳区xxx街道xxx号",
         "postal_code": "100000"
     },
@@ -47,7 +48,9 @@
     "discount_amount": 0.00,
     "payment_method": "alipay",
     "currency": "CNY",
-    "remark": "订单备注"
+    "remark": "订单备注",
+    "checkout_mode": "guest",
+    "guest_email": "guest@example.com"
 }
 ```
 

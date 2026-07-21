@@ -172,4 +172,42 @@ final class CacheHealthFakePool implements CachePoolInterface
     {
         return \array_key_exists($key, $this->store);
     }
+
+    public function getCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): mixed {
+        return $this->get($key);
+    }
+
+    public function setCustom(
+        string $key,
+        mixed $value,
+        int $ttl = 0,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->set($key, $value, $ttl);
+    }
+
+    public function deleteCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->delete($key);
+    }
+
+    public function hasCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->has($key);
+    }
 }

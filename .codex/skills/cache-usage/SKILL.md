@@ -14,3 +14,9 @@ This is a lightweight Codex adapter for the workspace-local WelineFramework skil
 2. If that skill points to required references, read only the relevant referenced files.
 3. Keep `dev/ai/skills` as the single source of truth; do not duplicate detailed rules here.
 4. Also respect `dev/ai/global-constraints.md` for cross-skill hard constraints.
+
+## Contract summary
+
+- Ordinary `w_cache()->get/set/remember`: auto-inject `website_code` + `lang` + `currency` (+ area).
+- Escape via `*Custom` with dimension bools defaulting to `false` (full escape).
+- Full text: `dev/ai/skills/业务模块工程师-配置缓存与后台权限/SKILL.md` and `app/code/Weline/Framework/doc/3-开发/缓存使用指南.md`.

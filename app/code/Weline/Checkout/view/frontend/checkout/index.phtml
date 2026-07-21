@@ -39,7 +39,7 @@ $copy = [
                     </label>
                     <label>
                         <span><?= __('邮箱') ?></span>
-                        <input name="email" type="email" autocomplete="email">
+                        <input name="email" type="email" autocomplete="email" required>
                     </label>
                     <label>
                         <span><?= __('国家/地区代码') ?></span>
@@ -344,6 +344,12 @@ $copy = [
         cart: {},
         shippingMethods: [],
         paymentMethods: [],
+        identity: {
+            checkout_mode: 'guest',
+            is_guest_checkout: true,
+            guest_allowed: true,
+            requires_guest_email: true,
+        },
     };
 
     function text(value) {
@@ -478,6 +484,16 @@ $copy = [
         checkoutState.cart = data.cart || {};
         checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
         checkoutState.paymentMethods = Array.isArray(data.payment_methods) ? data.payment_methods : [];
+        checkoutState.identity = data.identity || checkoutState.identity || {
+            checkout_mode: 'guest',
+            is_guest_checkout: true,
+            guest_allowed: true,
+            requires_guest_email: true,
+        };
+        const emailInput = form ? form.querySelector('input[name="email"]') : null;
+        if (emailInput) {
+            emailInput.required = Boolean(checkoutState.identity.is_guest_checkout);
+        }
         renderItems(Array.isArray(data.items) ? data.items : []);
         renderMethods(shippingBox, checkoutState.shippingMethods, 'shipping_method');
         renderMethods(paymentBox, checkoutState.paymentMethods, 'payment_method');
@@ -549,10 +565,13 @@ $copy = [
             setMessage(copy.submitting, '');
             try {
                 const api = await getApi();
+                const address = formAddress();
                 const result = await api.placeOrder({
-                    shipping_address: formAddress(),
+                    shipping_address: address,
                     shipping_method: shippingMethod,
                     payment_method: paymentMethod,
+                    guest_email: address.email,
+                    checkout_mode: text(checkoutState.identity && checkoutState.identity.checkout_mode) || 'guest',
                 });
                 const redirect = text(result && result.redirect);
                 if (redirect) {

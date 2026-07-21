@@ -63,7 +63,7 @@ final class ThemeRuntimeCacheCleaner
         });
 
         $this->runStep($result, 'partials_runtime', static function (): void {
-            Partials::clearMetaCache();
+            Partials::clearAllCaches();
         });
 
         foreach ($this->themeCacheServices() as $step => $serviceClass) {

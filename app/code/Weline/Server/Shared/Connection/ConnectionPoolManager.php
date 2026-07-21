@@ -138,8 +138,41 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         if (isset($incoming['service_type']) && \trim((string)$incoming['service_type']) !== '') {
             $merged['service_type'] = (string)$incoming['service_type'];
         }
+        $timeoutsTightened = $merged['connect_timeout'] < (float)($a['connect_timeout'] ?? $merged['connect_timeout'])
+            || $merged['timeout'] < (float)($a['timeout'] ?? $merged['timeout']);
         $this->options = $merged;
+        if ($timeoutsTightened) {
+            $this->refreshIdleConnectionTimeouts();
+        }
         $this->ensureMinIdleConnections();
+    }
+
+    /**
+     * Push current pool timeouts onto idle connections so prewarm sockets do not
+     * keep a longer readonly budget after a later facade merge.
+     */
+    private function refreshIdleConnectionTimeouts(): void
+    {
+        foreach (\array_keys($this->pool) as $idx) {
+            $item = $this->pool[$idx] ?? null;
+            if (!\is_array($item) || ($item['busy'] ?? false)) {
+                continue;
+            }
+            $conn = self::poolConnFromSlot($item);
+            if ($conn instanceof PooledConnection) {
+                $this->applyCurrentTimeouts($conn);
+            }
+        }
+    }
+
+    private function applyCurrentTimeouts(PooledConnectionInterface $conn): void
+    {
+        if ($conn instanceof PooledConnection) {
+            $conn->applyTimeouts(
+                (float)($this->options['connect_timeout'] ?? 1.0),
+                (float)($this->options['timeout'] ?? 2.0)
+            );
+        }
     }
 
     /**
@@ -252,6 +285,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 }
                 $this->registerConnectSuccess();
                 $now = \microtime(true);
+                $this->applyCurrentTimeouts($conn);
                 $this->pool[$idx] = [
                     'conn' => $conn,
                     'busy' => true,
@@ -277,6 +311,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 try {
                     if ($conn->connect()) {
                         $this->registerConnectSuccess();
+                        $this->applyCurrentTimeouts($conn);
                         $this->pool[] = [
                             'conn' => $conn,
                             'busy' => true,

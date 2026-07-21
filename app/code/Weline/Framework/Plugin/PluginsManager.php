@@ -56,7 +56,7 @@ class PluginsManager
             return $this->plugins;
         }
         // 检测插件缓存
-        if ($cache && $plugins = $this->pluginCache->get($cache_key)) {
+        if ($cache && $plugins = $this->pluginCache->getCustom($cache_key)) {
             $this->plugins = $plugins;
             return $this->plugins;
         }
@@ -338,7 +338,7 @@ class PluginsManager
 //        p($types_plugins_info['Aiweline\Index\Controller\Index']);
         // 正式环境则缓存
         if ($cache) {
-            $this->pluginCache->set($cache_key, $types_plugins_info);
+            $this->pluginCache->setCustom($cache_key, $types_plugins_info);
         }
         $this->plugins = $types_plugins_info;
         return $this->plugins;
@@ -455,7 +455,7 @@ class PluginsManager
     public function compileForModules(array $moduleNames): void
     {
         // 清除插件缓存以强制重新扫描
-        $this->pluginCache->delete('plugins_data');
+        $this->pluginCache->deleteCustom('plugins_data');
         
         // 扫描所有插件
         $allPlugins = $this->scanPlugins(false);

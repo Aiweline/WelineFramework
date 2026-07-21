@@ -252,6 +252,7 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
 /**
  * @param array<int, array<string, mixed>> $activeFibers
  */
+if (!\function_exists('wlsCountActiveFibersForAdmission')) {
 function wlsCountActiveFibersForAdmission(array $activeFibers): int
 {
     $count = 0;
@@ -264,10 +265,12 @@ function wlsCountActiveFibersForAdmission(array $activeFibers): int
 
     return $count;
 }
+}
 
 /**
  * 进入 Fiber 请求上下文；有其他挂起请求 Fiber 时，省略会破坏同伴状态的 reset 回调。
  */
+if (!\function_exists('wlsFiberRequestContextEnter')) {
 function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
 {
     $omitCallbacks = null;
@@ -302,10 +305,12 @@ function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId 
         $resolvedConnectionId === null ? null : (string)$resolvedConnectionId
     );
 }
+}
 
 /**
  * Fiber 请求结束后统一清台（响应已完成/连接已关闭后调用）。
  */
+if (!\function_exists('wlsFiberRequestContextLeave')) {
 function wlsFiberRequestContextLeave(): void
 {
     if (\session_status() === PHP_SESSION_ACTIVE) {
@@ -322,7 +327,9 @@ function wlsFiberRequestContextLeave(): void
     } catch (\Throwable) {
     }
 }
+}
 
+if (!\function_exists('wlsDrainPostResponseTasks')) {
 function wlsDrainPostResponseTasks(
     int $activeRequests = 0,
     array $requestBuffers = [],
@@ -345,7 +352,9 @@ function wlsDrainPostResponseTasks(
         \max(1, $maxTasks)
     );
 }
+}
 
+if (!\function_exists('wlsWorkerHasPendingRequestWork')) {
 function wlsWorkerHasPendingRequestWork(
     int $activeRequests,
     array $requestBuffers,
@@ -376,7 +385,9 @@ function wlsWorkerHasPendingRequestWork(
 
     return false;
 }
+}
 
+if (!\function_exists('wlsGetStaticFileCacheStatus')) {
 function wlsGetStaticFileCacheStatus(): array
 {
     if (!\function_exists('handleStaticFile')) {
@@ -391,7 +402,9 @@ function wlsGetStaticFileCacheStatus(): array
     $decoded = \json_decode($rawStatus, true);
     return \is_array($decoded) ? $decoded : [];
 }
+}
 
+if (!\function_exists('wlsCompactWorkerMemoryCaches')) {
 function wlsCompactWorkerMemoryCaches(
     string $reason,
     int $maxMemoryBytes = 0,
@@ -432,7 +445,9 @@ function wlsCompactWorkerMemoryCaches(
 
     return $compaction;
 }
+}
 
+if (!\function_exists('wlsWorkerMemoryHealthDiagnostics')) {
 function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false, bool $includeObjectProperties = false): array
 {
     $diagnostics = [
@@ -468,7 +483,9 @@ function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false,
 
     return $diagnostics;
 }
+}
 
+if (!\function_exists('wlsWorkerStaticPropertyDiagnostics')) {
 function wlsWorkerStaticPropertyDiagnostics(int $limit = 25, int $thresholdBytes = 8192): array
 {
     $limit = \max(1, \min(100, $limit));
@@ -517,7 +534,9 @@ function wlsWorkerStaticPropertyDiagnostics(int $limit = 25, int $thresholdBytes
         'top' => \array_slice($items, 0, $limit),
     ];
 }
+}
 
+if (!\function_exists('wlsApproxMemoryValueSize')) {
 function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 0): int
 {
     if ($visited > 50000) {
@@ -555,3 +574,5 @@ function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 
 
     return $size;
 }
+}
+

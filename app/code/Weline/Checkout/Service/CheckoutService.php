@@ -42,6 +42,58 @@ class CheckoutService
     }
 
     /**
+     * 标准化结账身份：默认允许匿名结账（guest_allowed=true）。
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function normalizeCheckoutIdentity(array $data): array
+    {
+        $identityService = ObjectManager::getInstance(CheckoutIdentityService::class);
+        $shippingAddress = \is_array($data['shipping_address'] ?? null) ? $data['shipping_address'] : [];
+        $authenticatedCustomerId = max(0, (int)($data['authenticated_customer_id'] ?? 0));
+        $requestedCustomerId = max(0, (int)($data['customer_id'] ?? 0));
+        $explicitGuest = !empty($data['is_guest_checkout'])
+            || (($data['checkout_mode'] ?? '') === CheckoutIdentityService::MODE_GUEST);
+
+        $identity = $identityService->resolve([
+            'authenticated_customer_id' => $authenticatedCustomerId > 0 ? $authenticatedCustomerId : $requestedCustomerId,
+            'customer_id' => $requestedCustomerId,
+            'guest_allowed' => $data['guest_allowed'] ?? true,
+            'customer_allowed' => !$explicitGuest && ($authenticatedCustomerId > 0 || $requestedCustomerId > 0),
+            'checkout_mode' => $data['checkout_mode']
+                ?? ($explicitGuest ? CheckoutIdentityService::MODE_GUEST : ''),
+            'default_checkout_mode' => $requestedCustomerId > 0
+                ? CheckoutIdentityService::MODE_CUSTOMER
+                : CheckoutIdentityService::MODE_GUEST,
+            'guest_email' => $data['guest_email']
+                ?? $data['email']
+                ?? ($shippingAddress['email'] ?? ''),
+            'requires_guest_email' => $data['requires_guest_email'] ?? true,
+        ]);
+
+        if (!empty($identity['is_guest_checkout'])) {
+            $guestEmail = (string)($identity['guest_email'] ?? '');
+            $data['customer_id'] = 0;
+            $data['is_guest_checkout'] = true;
+            $data['checkout_mode'] = CheckoutIdentityService::MODE_GUEST;
+            $data['guest_email'] = $guestEmail;
+            if ($guestEmail !== '' && trim((string)($shippingAddress['email'] ?? '')) === '') {
+                $shippingAddress['email'] = $guestEmail;
+                $data['shipping_address'] = $shippingAddress;
+            }
+
+            return $data;
+        }
+
+        $data['customer_id'] = max($requestedCustomerId, (int)($identity['customer_id'] ?? 0));
+        $data['is_guest_checkout'] = false;
+        $data['checkout_mode'] = CheckoutIdentityService::MODE_CUSTOMER;
+
+        return $data;
+    }
+
+    /**
      * 验证结账数据
      * 
      * @param array $data
@@ -50,17 +102,28 @@ class CheckoutService
     public function validateCheckout(array $data): array
     {
         // 派遣验证前事件
-        $this->eventsManager->dispatch('Weline_Checkout::checkout::validate::before', [
-            'data' => &$data,
-        ]);
-        
+        $beforeEvent = ['data' => &$data];
+        $this->eventsManager->dispatch('Weline_Checkout::checkout::validate::before', $beforeEvent);
+        $data = \is_array($beforeEvent['data'] ?? null) ? $beforeEvent['data'] : $data;
+
+        $data = $this->normalizeCheckoutIdentity($data);
         $errors = [];
-        
-        // 验证客户ID
-        if (empty($data['customer_id'])) {
+
+        if (!empty($data['is_guest_checkout'])) {
+            try {
+                ObjectManager::getInstance(CheckoutIdentityService::class)
+                    ->validateGuestCheckout([
+                        'is_guest_checkout' => true,
+                        'guest_email' => (string)($data['guest_email'] ?? ''),
+                        'requires_guest_email' => $data['requires_guest_email'] ?? true,
+                    ], $data);
+            } catch (\InvalidArgumentException $e) {
+                $errors[] = $e->getMessage();
+            }
+        } elseif ((int)($data['customer_id'] ?? 0) <= 0) {
             $errors[] = __('客户ID不能为空');
         }
-        
+
         // 验证订单项
         if (empty($data['items']) || !is_array($data['items'])) {
             $errors[] = __('订单项不能为空');
@@ -89,10 +152,14 @@ class CheckoutService
         ];
         
         // 派遣验证后事件
-        $this->eventsManager->dispatch('Weline_Checkout::checkout::validate::after', [
+        $afterEvent = [
             'data' => $data,
             'result' => &$result,
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Checkout::checkout::validate::after', $afterEvent);
+        if (\is_array($afterEvent['result'] ?? null)) {
+            $result = $afterEvent['result'];
+        }
         
         return $result;
     }
@@ -109,12 +176,17 @@ class CheckoutService
     public function calculateTotals(array $items, float $shippingAmount = 0.0, float $taxAmount = 0.0, float $discountAmount = 0.0): array
     {
         // 派遣计算前事件
-        $this->eventsManager->dispatch('Weline_Checkout::checkout::calculate_totals::before', [
+        $beforeEvent = [
             'items' => &$items,
             'shipping_amount' => &$shippingAmount,
             'tax_amount' => &$taxAmount,
             'discount_amount' => &$discountAmount,
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Checkout::checkout::calculate_totals::before', $beforeEvent);
+        $items = \is_array($beforeEvent['items'] ?? null) ? $beforeEvent['items'] : $items;
+        $shippingAmount = (float)($beforeEvent['shipping_amount'] ?? $shippingAmount);
+        $taxAmount = (float)($beforeEvent['tax_amount'] ?? $taxAmount);
+        $discountAmount = (float)($beforeEvent['discount_amount'] ?? $discountAmount);
         
         $subtotal = 0.0;
         
@@ -135,10 +207,14 @@ class CheckoutService
         ];
         
         // 派遣计算后事件
-        $this->eventsManager->dispatch('Weline_Checkout::checkout::calculate_totals::after', [
+        $afterEvent = [
             'items' => $items,
             'result' => &$result,
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Checkout::checkout::calculate_totals::after', $afterEvent);
+        if (\is_array($afterEvent['result'] ?? null)) {
+            $result = $afterEvent['result'];
+        }
         
         return $result;
     }
@@ -152,6 +228,8 @@ class CheckoutService
      */
     public function createOrder(array $data): Order
     {
+        $data = $this->normalizeCheckoutIdentity($data);
+
         // 验证数据
         $validation = $this->validateCheckout($data);
         if (!$validation['valid']) {
@@ -163,9 +241,9 @@ class CheckoutService
         
         try {
             // 派遣创建订单前事件
-            $this->eventsManager->dispatch('Weline_Checkout::checkout::create_order::before', [
-                'data' => &$data,
-            ]);
+            $beforeCreateEvent = ['data' => &$data];
+            $this->eventsManager->dispatch('Weline_Checkout::checkout::create_order::before', $beforeCreateEvent);
+            $data = \is_array($beforeCreateEvent['data'] ?? null) ? $beforeCreateEvent['data'] : $data;
             
             // 计算订单总额
             $totals = $this->calculateTotals(

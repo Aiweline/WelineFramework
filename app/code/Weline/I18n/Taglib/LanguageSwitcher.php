@@ -55,71 +55,39 @@ class LanguageSwitcher implements TaglibInterface
 
     public static function callback(): callable
     {
+        // 编译期只输出运行时调用：语言列表会随 Locale 安装态变化，不能把 HTML 烘焙进模板。
         return static function ($tag_key, $config, $tag_data, $attributes): string {
+            $attrs = \is_array($attributes) ? $attributes : [];
+            $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attrs);
+
+            return '<?php ' . $code
+                . ' echo \\Weline\\I18n\\Taglib\\LanguageSwitcher::render(['
+                . '\'for\' => (string)($Taglib__for ?? \'\'),'
+                . ']); ?>';
+        };
+    }
+
+    /**
+     * Runtime render entry used by compiled templates.
+     *
+     * @param array<string, mixed> $attributes
+     */
+    public static function render(array $attributes = []): string
+    {
             $websiteId = 0;
-            $isBackendArea = false;
             $request = null;
             try {
                 /** @var Request $request */
                 $request = ObjectManager::getInstance(Request::class);
                 $websiteId = (int)($request->getData('website_id') ?? 0);
-                $isBackendArea = (bool)$request->isBackend()
-                    || (\method_exists($request, 'isApiBackend') && (bool)$request->isApiBackend());
             } catch (\Throwable) {
                 $websiteId = 0;
-                $isBackendArea = false;
             }
+            // Worker chrome 预热时可能尚无 HTTP Request 后台态，但 ThemeData area 已是 backend。
+            $isBackendArea = self::resolveIsBackendArea($request);
 
-            // 后台读取完整 locale 集合，再按 Locals 激活状态过滤；避免仅“已安装语言包目录”导致的漏项。
+            // 后台按已安装+已激活 Locale 集合构建；前台再按站点语言过滤。
             $welineLanguages = self::getLanguageOptions(State::getLangLocal(), $isBackendArea, $websiteId);
-
-            if ($isBackendArea) {
-                // 后台：读取 i18n 模块已安装且已激活语言
-                try {
-                    /** @var ActiveLocaleCodeProvider $activeLocaleCodeProvider */
-                    $activeLocaleCodeProvider = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
-                    $allowedMap = $activeLocaleCodeProvider->getInstalledActiveCodeMap();
-                    if ($allowedMap !== []) {
-                        $allowedMapLower = [];
-                        foreach (\array_keys($allowedMap) as $allowedCode) {
-                            $allowedMapLower[\strtolower((string)$allowedCode)] = true;
-                        }
-                        $filteredLanguages = [];
-                        foreach ($welineLanguages as $languageCode => $languageData) {
-                            if (isset($allowedMap[(string)$languageCode]) || isset($allowedMapLower[\strtolower((string)$languageCode)])) {
-                                $filteredLanguages[$languageCode] = $languageData;
-                            }
-                        }
-                        // 后台严格使用「已安装+已激活」语言集合，不参与网站维度过滤。
-                        $welineLanguages = $filteredLanguages;
-                    }
-                } catch (\Throwable) {
-                    // 失败时保持已安装语言兜底
-                }
-            } elseif ($websiteId > 0) {
-                // 前台：按站点语言限制语言选项
-                $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
-                if (is_array($websiteLanguageCodes) && !empty($websiteLanguageCodes)) {
-                    $allowedMap = [];
-                    foreach ($websiteLanguageCodes as $websiteLanguageCode) {
-                        $websiteLanguageCode = (string)$websiteLanguageCode;
-                        if ($websiteLanguageCode !== '') {
-                            $allowedMap[$websiteLanguageCode] = true;
-                        }
-                    }
-                    if (!empty($allowedMap)) {
-                        $filteredLanguages = [];
-                        foreach ($welineLanguages as $languageCode => $languageData) {
-                            if (isset($allowedMap[(string)$languageCode])) {
-                                $filteredLanguages[$languageCode] = $languageData;
-                            }
-                        }
-                        if (!empty($filteredLanguages)) {
-                            $welineLanguages = $filteredLanguages;
-                        }
-                    }
-                }
-            }
 
             $currentCode = State::getLangLocal();
             $firstCode = (string)(array_key_first($welineLanguages) ?? 'zh_Hans_CN');
@@ -328,7 +296,6 @@ class LanguageSwitcher implements TaglibInterface
             ];
 
             return $output;
-        };
     }
 
     /**
@@ -355,6 +322,32 @@ class LanguageSwitcher implements TaglibInterface
         }
     }
 
+    private static function resolveIsBackendArea(?Request $request): bool
+    {
+        try {
+            if ($request instanceof Request) {
+                if ((bool)$request->isBackend()
+                    || (\method_exists($request, 'isApiBackend') && (bool)$request->isApiBackend())
+                ) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
+                $area = \strtolower((string)(\Weline\Theme\Helper\ThemeData::getCurrentArea() ?? ''));
+                if ($area === 'backend') {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return false;
+    }
+
     private static function getLanguageOptions(string $displayLocale, bool $isBackendArea, int $websiteId): array
     {
         $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
@@ -369,12 +362,14 @@ class LanguageSwitcher implements TaglibInterface
 
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
-        $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, $installedOnly, true);
-
         if ($isBackendArea) {
-            $welineLanguages = self::filterBackendLanguages($welineLanguages);
-        } elseif ($websiteId > 0) {
-            $welineLanguages = self::filterFrontendLanguages($welineLanguages, $websiteId);
+            // 后台不以「语言包目录」为准，按 Locale/Locals 已安装+已激活集合构建。
+            $welineLanguages = self::buildBackendLanguages($displayLocale, $i18n);
+        } else {
+            $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, $installedOnly, true);
+            if ($websiteId > 0) {
+                $welineLanguages = self::filterFrontendLanguages($welineLanguages, $websiteId);
+            }
         }
 
         self::$languageCache[$cacheKey] = [
@@ -385,32 +380,78 @@ class LanguageSwitcher implements TaglibInterface
         return $welineLanguages;
     }
 
-    private static function filterBackendLanguages(array $welineLanguages): array
+    /**
+     * @return array<string, array{code?: string, name?: string, flag?: string}>
+     */
+    private static function buildBackendLanguages(string $displayLocale, I18n $i18n): array
     {
         try {
             /** @var ActiveLocaleCodeProvider $activeLocaleCodeProvider */
             $activeLocaleCodeProvider = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
-            $allowedMap = $activeLocaleCodeProvider->getInstalledActiveCodeMap();
-            if ($allowedMap === []) {
-                return $welineLanguages;
-            }
-
-            $allowedMapLower = [];
-            foreach (\array_keys($allowedMap) as $allowedCode) {
-                $allowedMapLower[\strtolower((string)$allowedCode)] = true;
-            }
-
-            $filteredLanguages = [];
-            foreach ($welineLanguages as $languageCode => $languageData) {
-                if (isset($allowedMap[(string)$languageCode]) || isset($allowedMapLower[\strtolower((string)$languageCode)])) {
-                    $filteredLanguages[$languageCode] = $languageData;
-                }
-            }
-
-            return $filteredLanguages;
+            $codes = $activeLocaleCodeProvider->getInstalledActiveCodes();
         } catch (\Throwable) {
-            return $welineLanguages;
+            $codes = [];
         }
+
+        $catalog = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, false, true);
+        if ($codes === []) {
+            return \is_array($catalog) ? $catalog : [];
+        }
+
+        $languages = [];
+        foreach ($codes as $code) {
+            $code = \trim((string)$code);
+            if ($code === '') {
+                continue;
+            }
+            if (isset($catalog[$code]) && \is_array($catalog[$code])) {
+                $languages[$code] = $catalog[$code];
+                continue;
+            }
+
+            $name = '';
+            $flag = '';
+            try {
+                $name = (string)$i18n->getLocaleName($code, $displayLocale);
+            } catch (\Throwable) {
+            }
+            try {
+                $flag = (string)($i18n->getCountryFlagWithLocal($code, 24, 18)['flag'] ?? '');
+            } catch (\Throwable) {
+            }
+            $languages[$code] = [
+                'code' => $code,
+                'name' => $name !== '' ? $name : $code,
+                'flag' => $flag,
+            ];
+        }
+
+        return $languages;
+    }
+
+    /**
+     * Fingerprint of backend switcher locale catalog for chrome/output cache keys.
+     */
+    public static function backendLocaleCatalogFingerprint(): string
+    {
+        try {
+            /** @var ActiveLocaleCodeProvider $activeLocaleCodeProvider */
+            $activeLocaleCodeProvider = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
+            $codes = $activeLocaleCodeProvider->getInstalledActiveCodes();
+        } catch (\Throwable) {
+            $codes = [];
+        }
+        $normalized = [];
+        foreach ($codes as $code) {
+            $code = \strtolower(\trim((string)$code));
+            if ($code !== '') {
+                $normalized[$code] = true;
+            }
+        }
+        $keys = \array_keys($normalized);
+        \sort($keys);
+
+        return \sha1(\implode('|', $keys));
     }
 
     private static function filterFrontendLanguages(array $welineLanguages, int $websiteId): array

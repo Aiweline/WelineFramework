@@ -114,7 +114,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             );
             unset($module_event_observers);
         }
-        $this->eventCache->set('event', $event_observers_list);
+        $this->eventCache->setCustom('event', $event_observers_list);
         return $event_observers_list;
     }
 
