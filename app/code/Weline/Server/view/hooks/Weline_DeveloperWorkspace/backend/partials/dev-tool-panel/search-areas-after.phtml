@@ -941,6 +941,7 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
                 } else {
                     html += '<p style="font-size: 12px; color: #999;">刷新页面或点击「刷新」多次，即可看到各 Worker 被分配的次数。</p>';
                 }
+                html += '</div>';
                 // 攻击监控区域
                 html += '<div class="wls-section wls-section--security wls-tab-pane"' + wlsPaneAttrs('security', activeWlsSectionTab) + '><div class="wls-section-title"><i class="fa fa-shield"></i> 安全监控</div>';
                 html += '<div id="wls-attack-stats" class="wls-attack-stats">';

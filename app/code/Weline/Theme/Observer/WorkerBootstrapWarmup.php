@@ -54,6 +54,10 @@ class WorkerBootstrapWarmup implements ObserverInterface
         });
         SchedulerSystem::yield();
         $warmed += $this->tryWarm(function (): void {
+            $this->warmBackendChromePartialOutputs();
+        });
+        SchedulerSystem::yield();
+        $warmed += $this->tryWarm(function (): void {
             $this->warmHotTemplateFiles();
         });
         SchedulerSystem::yield();
@@ -145,6 +149,23 @@ class WorkerBootstrapWarmup implements ObserverInterface
                 }
             }
         }
+
+        ThemeData::resetRequestState();
+    }
+
+    private function warmBackendChromePartialOutputs(): void
+    {
+        /** @var ThemeContextService $themeContext */
+        $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+        $theme = $themeContext->resolveTheme('backend', null, false);
+        if ($theme instanceof WelineTheme && $theme->getId()) {
+            ThemeData::setCurrentTheme($theme);
+        }
+        ThemeData::setCurrentArea('backend');
+
+        /** @var \Weline\Theme\Block\Partials $partials */
+        $partials = ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
+        $partials->warmChromePartialOutputs();
 
         ThemeData::resetRequestState();
     }

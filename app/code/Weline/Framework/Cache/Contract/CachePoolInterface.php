@@ -68,4 +68,46 @@ interface CachePoolInterface extends CacheAdapterInterface
      * @return array{identity: string, hits: int, misses: int, hit_ratio: float, permanent: bool}
      */
     public function getStats(): array;
+
+    /**
+     * 特殊缓存读取：默认全逃逸；维度 bool=true 时才注入对应请求环境维。
+     */
+    public function getCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): mixed;
+
+    /**
+     * 特殊缓存写入：默认全逃逸；维度 bool=true 时才注入对应请求环境维。
+     */
+    public function setCustom(
+        string $key,
+        mixed $value,
+        int $ttl = 0,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool;
+
+    /**
+     * 特殊缓存删除：默认全逃逸；维度 bool=true 时才注入对应请求环境维。
+     */
+    public function deleteCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool;
+
+    /**
+     * 特殊缓存存在检查：默认全逃逸；维度 bool=true 时才注入对应请求环境维。
+     */
+    public function hasCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool;
 }

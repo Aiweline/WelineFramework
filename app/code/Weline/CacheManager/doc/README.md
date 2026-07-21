@@ -42,6 +42,17 @@ Cron 是可选集成：安装后缓存面板通过 `Weline\Cron\Api\Task\CronTas
 - 分页显示
 - 搜索过滤
 
+### 6. 顶部设置面板清理缓存标签 `<w:cache:clear />`
+- 由 `Weline\CacheManager\Taglib\CacheClear` 提供，已挂载到后台顶部「设置」面板（`Weline_Admin::common/right-sidebar.phtml`）。
+- 编译期只输出运行时调用 `CacheClear::render()`，可见性在每次渲染时按当前用户 ACL 判定，不会被烘焙进模板缓存。
+- ACL 管控：
+  - 入口按钮与弹窗：需要清理缓存控制器 ACL `Weline_CacheManager::system_cache_clear`（无权限时整个入口不渲染，且使用 `Acl::hasPermissionQuiet()` 静默检查，不产生「无权限」警告消息）；
+  - 弹窗内「全部清理（非持久）」按钮：额外需要 `Weline_CacheManager::system_cache_clear_all`。
+- 弹窗能力：搜索过滤缓存池（identity / 名称 / 模块）、全选当前结果、多选清理（持久池自动带 `force=1`）、一键全部清理非持久缓存。
+- 请求复用现有控制器接口：`admin/system/cache/clear` 与 `admin/system/cache/clearAll`，前端优先走 `Weline.Api.post`。
+- 缓存池列表来自 `CacheAdminService::listPoolOptions()`（轻量列表，不做逐池统计）。
+- 新模块新增标签后需执行 `php bin/w taglib:collect` 重新生成 `generated/taglibs.php`。
+
 ## 使用方法
 
 ### 缓存模型使用

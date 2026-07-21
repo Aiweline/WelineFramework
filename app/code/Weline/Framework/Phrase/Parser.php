@@ -298,7 +298,8 @@ class Parser
                 // 缓存键包含所有模块名，用于区分不同模块组合
                 $cache_key = self::buildWordsCacheKey($lang, $modules);
                 # 非实时翻译
-                if ($translate_mode !== 'online' && $phrase_words = $phraseCache->get($cache_key)) {
+                // Phrase dictionaries are global per language key — escape request storefront dimensions.
+                if ($translate_mode !== 'online' && $phrase_words = $phraseCache->getCustom($cache_key)) {
                     self::$words = $phrase_words;
                 } else {
                     // 从所有关联模块的词典读取（支持多模块）
@@ -313,7 +314,7 @@ class Parser
                     // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）
                     // 先加载总词典，再加载模块词典，这样模块词典会覆盖总词典
                     self::$words = array_merge($all_words, $module_words);
-                    $phraseCache->set($cache_key, self::$words);
+                    $phraseCache->setCustom($cache_key, self::$words);
                 }
                 self::$workerWordsCache[$requestCacheKey] = self::$words;
                 self::$currentRequestWordsId = $requestId;
@@ -694,7 +695,7 @@ class Parser
             $sharedCacheKey = 'module_dictionary|v1|' . \sha1($cache_key);
             if (Runtime::isPersistent()) {
                 try {
-                    $cached = self::getSharedPhraseCachePool()?->get($sharedCacheKey);
+                    $cached = self::getSharedPhraseCachePool()?->getCustom($sharedCacheKey);
                     if (\is_array($cached)) {
                         return self::$workerModuleWordsCache[$worker_cache_key] = $cached;
                     }
@@ -738,7 +739,7 @@ class Parser
 
             if (Runtime::isPersistent()) {
                 try {
-                    self::getSharedPhraseCachePool()?->set(
+                    self::getSharedPhraseCachePool()?->setCustom(
                         $sharedCacheKey,
                         $words,
                         self::MODULE_DICTIONARY_SHARED_TTL_SECONDS,
@@ -985,15 +986,18 @@ class Parser
         $cacheKey = 'global_dictionary_words|' . $lang . '|v2|' . \sha1($scope);
         if ($cachePool !== null) {
             try {
-                $cached = $cachePool->get($cacheKey);
+                $cached = $cachePool->getCustom($cacheKey);
                 if (\is_array($cached)) {
                     return self::$workerGlobalDictionaryWordsCache[$workerCacheKey] = $cached;
                 }
 
-                $words = $cachePool->remember(
+                $words = $cachePool->rememberCustom(
                     $cacheKey,
                     3600,
                     static fn(): ?array => self::loadGlobalDictionaryWordsFromDatabase($lang, $modules),
+                    false,
+                    false,
+                    false,
                     new RememberOptions(
                         nullTtl: 5,
                         jitter: true,
@@ -1053,12 +1057,15 @@ class Parser
         $cacheKey = 'global_dictionary_word|v1|' . \sha1($workerCacheKey);
         if ($cachePool !== null) {
             try {
-                $record = $cachePool->get($cacheKey);
+                $record = $cachePool->getCustom($cacheKey);
                 if (!\is_array($record)) {
-                    $record = $cachePool->remember(
+                    $record = $cachePool->rememberCustom(
                         $cacheKey,
                         self::GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS,
                         static fn(): ?array => self::loadGlobalDictionaryWordRecordFromDatabase($lang, $word),
+                        false,
+                        false,
+                        false,
                         new RememberOptions(
                             nullTtl: 5,
                             jitter: true,

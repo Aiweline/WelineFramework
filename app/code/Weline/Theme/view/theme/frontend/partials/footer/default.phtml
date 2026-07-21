@@ -1,468 +1,613 @@
 <?php
 /**
- * Theme partial: default frontend footer.
+ * 片段：Footer
+ * 
+ * 页面底部区域（链接、版权信息等）
+ * 字段
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @meta.name {default="Footer底部片段",name="Footer底部片段",description="Footer底部片段，用于描述片段的名称"}
+ * @meta.description {default="页面底部区域（链接、版权信息等）",name="页面底部区域（链接、版权信息等）",description="页面底部区域（链接、版权信息等），用于描述片段的用途"}
+ * @param.copyright {default="© 2025 Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
+ * @param.links {default=[{"title":"关于我们","items":[{"text":"公司简介","url":"/about"},{"text":"联系我们","url":"/contact"},{"text":"加入我们","url":"/careers"}]},{"title":"帮助中心","items":[{"text":"使用指南","url":"/help"},{"text":"常见问题","url":"/faq"},{"text":"服务条款","url":"/terms"}]},{"title":"客户服务","items":[{"text":"在线客服","url":"/support"},{"text":"意见反馈","url":"/feedback"},{"text":"隐私政策","url":"/privacy"}]}],name="链接数组",description="链接数组，用于设置页面底部的链接列表，格式：[{\"title\":\"标题\",\"items\":[{\"text\":\"链接文字\",\"url\":\"链接地址\"}]}]"}
+ * @param.showBackToTop {default=true,name="是否显示返回顶部",description="是否显示返回顶部按钮，用于控制返回顶部按钮的显示"}
+ * @param.socialMedia {default=[{"name":"微信公众号","icon":"fab fa-weixin","url":"#","color":"#07c160"},{"name":"微博","icon":"fab fa-weibo","url":"#","color":"#e6162d"},{"name":"抖音","icon":"fab fa-tiktok","url":"#","color":"#000000"},{"name":"B站","icon":"fab fa-bilibili","url":"#","color":"#fb7299"},{"name":"小红书","icon":"fab fa-instagram","url":"#","color":"#ff2442"}],name="官媒配置",description="官媒配置，用于设置官方社交媒体链接，格式：[{\"name\":\"名称\",\"icon\":\"图标类名\",\"url\":\"链接地址\",\"color\":\"主题色\"}]"}
+ * @param.showSocialMedia {default=true,name="是否显示官媒",description="是否显示官媒链接，用于控制官媒区域的显示"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  *
- * @meta.name {default="Default Footer",name="Default Footer",description="Theme-owned frontend footer"}
- * @param.copyright {default="",name="Copyright",description="Footer copyright text"}
- * @param.links {default=[],name="Footer Links",description="Footer link sections"}
- * @param.socialMedia {default=[],name="Social Links",description="Social media links"}
- * @param.showBackToTop {default=true,name="Show Back To Top",description="Whether to show the back-to-top control"}
- * @param.showSocialMedia {default=true,name="Show Social Media",description="Whether to show social links"}
- * @param.class {default="",name="Extra CSS class",description="Extra CSS class"}
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ * - 参数配置由 Block\Partials 在渲染时自动加载
+ * - 模板中使用 {{meta.参数}} 输出 partials 的参数，使用 {{layout.参数}} 输出 layout 的参数
  */
-
 $meta = $this->getData('meta') ?? [];
-$class = (string)($meta['class'] ?? '');
-$copyright = (string)($meta['copyright'] ?? '');
-if ($copyright === '' && class_exists(\Weline\Theme\Helper\FooterCopyrightHelper::class)) {
-    $copyright = \Weline\Theme\Helper\FooterCopyrightHelper::resolve(null);
-}
-if ($copyright === '') {
-    $copyright = '© ' . date('Y') . ' Weline Framework. All rights reserved.';
-}
-
+$layout = $this->getData('layout') ?? [];
+$copyright = \Weline\Theme\Helper\FooterCopyrightHelper::resolve(
+    isset($meta['copyright']) ? (string) $meta['copyright'] : null
+);
+// 确保$links是数组
 $links = $meta['links'] ?? [];
-if (is_string($links)) {
-    $decodedLinks = json_decode($links, true);
-    $links = is_array($decodedLinks) ? $decodedLinks : [];
-}
-if (!is_array($links) || $links === []) {
-    $links = [
-        [
-            'title' => __('Theme'),
-            'items' => [
-                ['text' => __('Home'), 'url' => '/'],
-                ['text' => __('Products'), 'url' => '/products'],
-                ['text' => __('Solutions'), 'url' => '/solutions'],
-                ['text' => __('Contact'), 'url' => '/contact'],
-            ],
-        ],
-        [
-            'title' => __('Support'),
-            'items' => [
-                ['text' => __('Help Center'), 'url' => '/help'],
-                ['text' => __('Orders'), 'url' => '/account/orders'],
-                ['text' => __('Returns'), 'url' => '/policy/refund'],
-                ['text' => __('FAQ'), 'url' => '/faq'],
-            ],
-        ],
-        [
-            'title' => __('Policies'),
-            'items' => [
-                ['text' => __('Privacy'), 'url' => '/policy/privacy'],
-                ['text' => __('Terms'), 'url' => '/policy/term-condition'],
-                ['text' => __('Cookie'), 'url' => '/policy/cookie'],
-                ['text' => __('Disclaimer'), 'url' => '/policy/disclaimer'],
-            ],
-        ],
-    ];
-}
-
-$socialMedia = $meta['socialMedia'] ?? [];
-if (is_string($socialMedia)) {
-    $decodedSocial = json_decode($socialMedia, true);
-    $socialMedia = is_array($decodedSocial) ? $decodedSocial : [];
-}
-if (!is_array($socialMedia) || $socialMedia === []) {
-    $socialMedia = [
-        ['name' => __('WeChat'), 'icon' => 'ri-wechat-line', 'url' => '#'],
-        ['name' => __('Douyin'), 'icon' => 'ri-music-2-line', 'url' => '#'],
-        ['name' => __('YouTube'), 'icon' => 'ri-youtube-line', 'url' => '#'],
-        ['name' => __('Instagram'), 'icon' => 'ri-instagram-line', 'url' => '#'],
-    ];
-}
-
-$boolValue = static function ($value, bool $default): bool {
-    if ($value === null || $value === '') {
-        return $default;
+if (!is_array($links)) {
+    if (is_string($links)) {
+        $decoded = json_decode($links, true);
+        $links = is_array($decoded) ? $decoded : [];
+    } else {
+        $links = [];
     }
-    $parsed = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
-    return $parsed ?? $default;
+}
+$showBackToTop = $meta['showBackToTop'] ?? true;
+// 确保$socialMedia是数组
+$socialMedia = $meta['socialMedia'] ?? [];
+if (!is_array($socialMedia)) {
+    if (is_string($socialMedia)) {
+        $decoded = json_decode($socialMedia, true);
+        $socialMedia = is_array($decoded) ? $decoded : [];
+    } else {
+        $socialMedia = [];
+    }
+}
+$showSocialMedia = $meta['showSocialMedia'] ?? true;
+$class = $meta['class'] ?? '';
+
+// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
+// 直接使用colors数组，无需重复读取和处理
+$colors = $this->getData('colors') ?? [];
+$footerLabel = static function ($value): string {
+    return \Weline\Theme\Helper\WidgetI18n::label((string) ($value ?? ''));
 };
-$showBackToTop = $boolValue($meta['showBackToTop'] ?? true, true);
-$showSocialMedia = $boolValue($meta['showSocialMedia'] ?? true, true);
-$esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!-- theme-partial:footer option=default -->
-<style data-theme-inline="footer-default">
-    .weline-footer {
-        margin-top: auto;
-        color: #d9e2f0;
-        background: linear-gradient(180deg, #172033 0%, #0f172a 100%);
-    }
-
-    .weline-footer a {
-        color: inherit;
-    }
-
-    .weline-footer__top {
-        padding: clamp(36px, 6vw, 72px) 0 28px;
-    }
-
-    .weline-footer__grid {
-        display: grid;
-        grid-template-columns: minmax(220px, 1.2fr) minmax(0, 2fr);
-        gap: clamp(28px, 5vw, 64px);
-        align-items: start;
-    }
-
-    .weline-footer__brand {
-        display: grid;
-        gap: 14px;
-    }
-
-    .weline-footer__brand-title {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        color: #fff;
-        font-size: 20px;
-        font-weight: 900;
-    }
-
-    .weline-footer__mark {
-        display: grid;
-        place-items: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, var(--weline-theme-primary, #5b4cf5), #18a47a);
-        color: #fff;
-    }
-
-    .weline-footer__lead {
-        max-width: 360px;
-        margin: 0;
-        color: #aab7ca;
-    }
-
-    .weline-footer__links {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 24px;
-    }
-
-    .weline-footer__section-title {
-        margin: 0 0 12px;
-        color: #fff;
-        font-size: 14px;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-    }
-
-    .weline-footer__list {
-        display: grid;
-        gap: 9px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-    }
-
-    .weline-footer__list a {
-        color: #aab7ca;
-        font-size: 14px;
-    }
-
-    .weline-footer__list a:hover {
-        color: #fff;
-    }
-
-    .weline-footer__middle {
-        display: grid;
-        grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr);
-        gap: 24px;
-        align-items: center;
-        padding: 24px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .weline-footer__newsletter {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-
-    .weline-footer__newsletter-text {
-        color: #fff;
-        font-weight: 800;
-    }
-
-    .weline-footer__newsletter-form {
-        display: flex;
-        min-width: min(100%, 360px);
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.08);
-    }
-
-    .weline-footer__newsletter-form input {
-        min-width: 0;
-        width: 100%;
-        border: 0;
-        outline: 0;
-        padding: 0 13px;
-        color: #fff;
-        background: transparent;
-    }
-
-    .weline-footer__newsletter-form input::placeholder {
-        color: #8fa0b8;
-    }
-
-    .weline-footer__newsletter-form button {
-        min-height: 42px;
-        border: 0;
-        padding: 0 15px;
-        background: var(--weline-theme-primary, #5b4cf5);
-        color: #fff;
-        font-weight: 800;
-        cursor: pointer;
-    }
-
-    .weline-footer__social {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .weline-footer__social-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        min-height: 38px;
-        padding: 0 11px;
-        border: 1px solid rgba(255, 255, 255, 0.13);
-        border-radius: 11px;
-        color: #d9e2f0;
-        background: rgba(255, 255, 255, 0.06);
-        font-size: 13px;
-        font-weight: 700;
-    }
-
-    .weline-footer__social-link:hover {
-        color: #fff;
-        background: rgba(255, 255, 255, 0.12);
-    }
-
-    .weline-footer__bottom {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 20px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        color: #8fa0b8;
-        font-size: 13px;
-    }
-
-    .weline-footer__payment {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .weline-footer__payment-badge {
-        display: inline-flex;
-        align-items: center;
-        min-height: 28px;
-        padding: 0 9px;
-        border: 1px solid rgba(255, 255, 255, 0.13);
-        border-radius: 8px;
-        color: #d9e2f0;
-        background: rgba(255, 255, 255, 0.06);
-        font-size: 12px;
-        font-weight: 800;
-    }
-
-    .weline-footer__back-top {
-        position: fixed;
-        right: 20px;
-        bottom: 20px;
-        z-index: 40;
-        display: grid;
-        place-items: center;
-        width: 42px;
-        height: 42px;
-        border: 0;
-        border-radius: 50%;
-        color: #fff;
-        background: var(--weline-theme-primary, #5b4cf5);
-        box-shadow: 0 14px 32px rgba(91, 76, 245, 0.32);
-        cursor: pointer;
-    }
-
-    @media (max-width: 860px) {
-        .weline-footer__grid,
-        .weline-footer__middle {
-            grid-template-columns: 1fr;
-        }
-
-        .weline-footer__links {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .weline-footer__social {
-            justify-content: flex-start;
-        }
-
-        .weline-footer__bottom {
-            align-items: flex-start;
-            flex-direction: column;
-        }
-    }
-
-    @media (max-width: 560px) {
-        .weline-footer__links {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-
-<footer id="footer"
-        class="weline-footer <?= $esc($class) ?>"
-        data-layout="default"
-        data-layout-type="footer"
+<footer id="footer" 
+        class="weline-footer <?= htmlspecialchars($class) ?>" 
+        data-layout="default" 
+        data-layout-type="default" 
         data-layout-option="default"
         data-wslot="footer"
-        data-wslot-name="Footer area"
-        data-wslot-accept="layout-global-footer,footer-container,footer-banner"
-        data-wslot-multiple="true"
-        data-wslot-append="true"
+        data-wslot-name="整体底部"
+        data-wslot-accept="layout-global-footer,footer-container"
+        data-wslot-exclusive="true"
         data-wslot-position="footer">
     <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
+    
+    <w:block>Weline\Frontend\Block\Footer\Base</w:block>
+    <?php
+    /**@var \Weline\Framework\View\Template $this */
+    echo $this->getFooter()->getHtml();
+    ?>
+    <!-- Footer Hooks -->
     <w:hook>footer</w:hook>
-
-    <div class="weline-container">
-        <div class="weline-footer__top">
-            <div class="weline-footer__grid">
-                <w:slot id="footer-brand"
-                        name="Footer brand"
-                        accept="layout-footer-brand,footer-brand,brand"
-                        exclusive="true"
-                        position="footer"
-                        class="weline-footer__brand">
-                    <w:hook>Weline_Theme::frontend::partials::footer::brand<else/>
-                    <div class="weline-footer__brand-title">
-                        <span class="weline-footer__mark"><i class="ri-layout-grid-line"></i></span>
-                        <span>Weline</span>
-                    </div>
-                    <p class="weline-footer__lead"><?= __('A clean default theme surface for modules, real data hooks, and visual composition.') ?></p>
-                    </w:hook>
-                </w:slot>
-
-                <w:slot id="footer-links"
-                        name="Footer links"
-                        accept="layout-footer-links,layout-global-footer-links,footer-links,links"
-                        multiple="true"
-                        position="footer"
-                        class="weline-footer__links">
-                    <w:hook>Weline_Theme::frontend::partials::footer::links<else/>
-                    <?php foreach ($links as $section): ?>
-                        <?php if (!is_array($section)) continue; ?>
-                        <section class="weline-footer__section">
-                            <h3 class="weline-footer__section-title"><?= $esc($section['title'] ?? '') ?></h3>
-                            <ul class="weline-footer__list">
-                                <?php foreach (($section['items'] ?? []) as $item): ?>
+    
+    <div class="footer-container">
+        <w:hook>Weline_Theme::frontend::partials::footer::content-before</w:hook>
+        
+        <!-- Footer链接内容区域 - 支持hook覆盖 -->
+        <?php
+        // 如果没有hook内容，使用默认的亚马逊风格链接
+        // 如果$links为空，使用默认样例数据
+        if (empty($links) || !is_array($links)) {
+            $links = [
+                [
+                    'title' => __('了解我们'),
+                    'items' => [
+                        ['text' => __('关于我们'), 'url' => '/about'],
+                        ['text' => __('职业机会'), 'url' => '/careers'],
+                        ['text' => __('新闻中心'), 'url' => '/news'],
+                        ['text' => __('投资者关系'), 'url' => '/investors'],
+                        ['text' => __('设备与服务'), 'url' => '/devices'],
+                    ]
+                ],
+                [
+                    'title' => __('赚钱'),
+                    'items' => [
+                        ['text' => __('在网站上销售'), 'url' => '/sell'],
+                        ['text' => __('销售您的应用'), 'url' => '/sell-apps'],
+                        ['text' => __('成为合作伙伴'), 'url' => '/partner'],
+                        ['text' => __('广告'), 'url' => '/advertising'],
+                        ['text' => __('自助出版'), 'url' => '/self-publish'],
+                    ]
+                ],
+                [
+                    'title' => __('付款产品'),
+                    'items' => [
+                        ['text' => __('商店卡'), 'url' => '/store-card'],
+                        ['text' => __('购物积分'), 'url' => '/rewards'],
+                        ['text' => __('货币转换器'), 'url' => '/currency'],
+                        ['text' => __('礼品卡'), 'url' => '/gift-cards'],
+                    ]
+                ],
+                [
+                    'title' => __('需要帮助？'),
+                    'items' => [
+                        ['text' => __('COVID-19和网站'), 'url' => '/covid'],
+                        ['text' => __('您的账户'), 'url' => '/account'],
+                        ['text' => __('配送率和政策'), 'url' => '/shipping'],
+                        ['text' => __('退货和换货'), 'url' => '/returns'],
+                        ['text' => __('管理您的内容和设备'), 'url' => '/manage-content'],
+                        ['text' => __('帮助'), 'url' => '/help'],
+                    ]
+                ],
+                [
+                    'title' => __('法律与政策'),
+                    'items' => [
+                        ['text' => __('服务条款'), 'url' => '/policy/term-condition'],
+                        ['text' => __('隐私政策'), 'url' => '/policy/privacy'],
+                        ['text' => __('Cookie 政策'), 'url' => '/policy/cookie'],
+                        ['text' => __('退款政策'), 'url' => '/policy/refund'],
+                        ['text' => __('免责声明'), 'url' => '/policy/disclaimer'],
+                    ]
+                ],
+            ];
+        }
+        ?>
+        <w:hook>Weline_Theme::frontend::partials::footer::links<else/>
+        <?php if (!empty($links) && is_array($links)): ?>
+            <w:slot id="footer-links"
+                    name="链接区"
+                accept="layout-footer-links,layout-global-footer-links,footer-links,links"
+                    multiple="true"
+                    position="footer"
+                    class="footer-content">
+                <w:hook>Weline_Theme::frontend::partials::footer::section-before</w:hook>
+                
+                <?php foreach ($links as $section): ?>
+                    <?php if (!is_array($section)) continue; ?>
+                    <div class="footer-section">
+                        <?php if (isset($section['title'])): ?>
+                            <h3><?= htmlspecialchars($footerLabel($section['title']), ENT_QUOTES, 'UTF-8') ?></h3>
+                        <?php endif; ?>
+                        <?php if (isset($section['items']) && is_array($section['items'])): ?>
+                            <ul>
+                                <?php foreach ($section['items'] as $item): ?>
                                     <?php if (!is_array($item)) continue; ?>
                                     <li>
-                                        <a href="<?= $esc($item['url'] ?? '#') ?>"><?= $esc($item['text'] ?? '') ?></a>
+                                        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
+                                            <?= htmlspecialchars($footerLabel($item['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                        </a>
                                     </li>
                                 <?php endforeach; ?>
                             </ul>
-                        </section>
-                    <?php endforeach; ?>
-                    </w:hook>
-                </w:slot>
-            </div>
-        </div>
-
-        <div class="weline-footer__middle">
-            <w:slot id="footer-newsletter"
-                    name="Footer newsletter"
-                    accept="layout-footer-newsletter,newsletter,subscribe-form"
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+                
+                <w:hook>Weline_Theme::frontend::partials::footer::section-after</w:hook>
+            </w:slot>
+        <?php endif; ?>
+        </w:hook>
+        
+        <w:hook>Weline_Theme::frontend::partials::footer::content-after</w:hook>
+        
+        <!-- 社交媒体区域 - 支持hook覆盖 -->
+        <?php
+        // 如果没有hook内容，使用默认的社交媒体链接
+        if ($showSocialMedia) {
+            if (empty($socialMedia) || !is_array($socialMedia)) {
+                $socialMedia = [
+                    ['name' => __('微信公众号'), 'icon' => 'fab fa-weixin', 'url' => '#', 'color' => '#07c160'],
+                    ['name' => __('微博'), 'icon' => 'fab fa-weibo', 'url' => '#', 'color' => '#e6162d'],
+                    ['name' => __('抖音'), 'icon' => 'fab fa-tiktok', 'url' => '#', 'color' => '#000000'],
+                    ['name' => __('B站'), 'icon' => 'fab fa-bilibili', 'url' => '#', 'color' => '#fb7299'],
+                    ['name' => __('小红书'), 'icon' => 'fab fa-instagram', 'url' => '#', 'color' => '#ff2442'],
+                ];
+            }
+        }
+        ?>
+        <w:hook>Weline_Theme::frontend::partials::footer::social-media<else/>
+        <?php if ($showSocialMedia && !empty($socialMedia) && is_array($socialMedia)): ?>
+            <w:hook>Weline_Theme::frontend::partials::footer::social-media-before</w:hook>
+            <w:slot id="footer-social"
+                    name="社交媒体"
+                accept="layout-footer-social,layout-global-footer-social,footer-social,social"
                     exclusive="true"
                     position="footer"
-                    class="weline-footer__newsletter">
-                <w:hook>Weline_Theme::frontend::partials::footer::newsletter<else/>
-                <span class="weline-footer__newsletter-text"><?= __('Get updates') ?></span>
-                <form class="weline-footer__newsletter-form" action="/newsletter/subscribe" method="post">
-                    <input type="email" name="email" placeholder="<?= $esc(__('Email address')) ?>">
-                    <button type="submit"><?= __('Subscribe') ?></button>
-                </form>
-                </w:hook>
-            </w:slot>
-
-            <?php if ($showSocialMedia): ?>
-                <w:slot id="footer-social"
-                        name="Footer social"
-                        accept="layout-footer-social,layout-global-footer-social,footer-social,social"
-                        multiple="true"
-                        position="footer"
-                        class="weline-footer__social">
-                    <w:hook>Weline_Theme::frontend::partials::footer::social<else/>
+                    class="footer-social-media">
+                <div class="social-media-title"><?= __('关注我们') ?></div>
+                <div class="social-media-links">
+                    <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-before</w:hook>
+                    
                     <?php foreach ($socialMedia as $media): ?>
                         <?php if (!is_array($media)) continue; ?>
-                        <a class="weline-footer__social-link"
-                           href="<?= $esc($media['url'] ?? '#') ?>"
+                        <?php $mediaName = $footerLabel($media['name'] ?? ''); ?>
+                        <a href="<?= htmlspecialchars($media['url'] ?? '#') ?>" 
+                           class="social-media-link" 
+                           title="<?= htmlspecialchars($mediaName, ENT_QUOTES, 'UTF-8') ?>"
                            target="_blank"
-                           rel="noopener noreferrer">
-                            <i class="<?= $esc($media['icon'] ?? 'ri-link') ?>"></i>
-                            <span><?= $esc($media['name'] ?? '') ?></span>
+                           rel="noopener noreferrer"
+                           style="--social-color: <?= htmlspecialchars($media['color'] ?? '#3b82f6') ?>">
+                            <i class="<?= htmlspecialchars($media['icon'] ?? 'fas fa-link') ?>"></i>
+                            <span class="social-media-name"><?= htmlspecialchars($mediaName, ENT_QUOTES, 'UTF-8') ?></span>
                         </a>
                     <?php endforeach; ?>
-                    </w:hook>
-                </w:slot>
-            <?php endif; ?>
-        </div>
-
-        <div class="weline-footer__bottom">
-            <w:slot id="footer-copyright"
-                    name="Footer copyright"
-                    accept="layout-footer-copyright,layout-global-footer-copyright,copyright"
-                    exclusive="true"
-                    position="footer"
-                    class="weline-footer__copyright">
-                <w:hook>Weline_Theme::frontend::partials::footer::copyright<else/>
-                <span><?= $esc($copyright) ?></span>
-                </w:hook>
+                    
+                    <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-after</w:hook>
+                </div>
             </w:slot>
-
-            <w:slot id="footer-payment"
-                    name="Footer payment"
-                    accept="layout-footer-payment,payment-badges,payment"
-                    multiple="true"
-                    position="footer"
-                    class="weline-footer__payment">
-                <w:hook>Weline_Theme::frontend::partials::footer::payment<else/>
-                <span class="weline-footer__payment-badge">Visa</span>
-                <span class="weline-footer__payment-badge">Mastercard</span>
-                <span class="weline-footer__payment-badge">PayPal</span>
-                </w:hook>
-            </w:slot>
-        </div>
+            
+            <w:hook>Weline_Theme::frontend::partials::footer::social-media-after</w:hook>
+        <?php endif; ?>
+        </w:hook>
+        
+        <!-- 版权区域 Widget Slot -->
+        <w:slot id="footer-copyright"
+                name="版权信息"
+            accept="layout-footer-copyright,layout-global-footer-copyright,footer-copyright,copyright"
+                exclusive="true"
+                position="footer"
+                class="footer-bottom">
+            <w:hook>Weline_Theme::frontend::partials::footer::copyright-before</w:hook>
+            <p><?= htmlspecialchars($copyright) ?></p>
+            <w:hook>Weline_Theme::frontend::partials::footer::copyright-after</w:hook>
+        </w:slot>
     </div>
-
+    
+    <?php if ($showBackToTop): ?>
+        <button class="back-to-top" id="backToTop" title="<?= __('返回顶部') ?>">
+            <svg class="back-to-top__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 4.5 5.5 11l1.4 1.4L11 8.3V20h2V8.3l4.1 4.1 1.4-1.4L12 4.5z"/>
+            </svg>
+        </button>
+    <?php endif; ?>
+    
     <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
 </footer>
 
-<?php if ($showBackToTop): ?>
-    <button class="weline-footer__back-top" type="button" aria-label="<?= $esc(__('Back to top')) ?>" data-theme-back-top>
-        <i class="ri-arrow-up-line"></i>
-    </button>
-    <script data-no-extract="true">
-        (function() {
-            var control = document.querySelector('[data-theme-back-top]');
-            if (!control) {
-                return;
+<?php
+// 加载布局特定的JS文件（在footer中加载）
+// 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
+
+// 加载生成的布局JS文件（包含所有partials的JS）
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+    try {
+        $layoutAssetsEnabled = (bool)\Weline\Framework\App\Env::getInstance()
+            ->getConfig('theme.layout_assets.enabled', false);
+        $jsPath = $layoutAssetsEnabled
+            ? $assetsManager->getGeneratedJsPath($area, $layoutType, $layoutOption, $theme)
+            : '';
+        $hasLayoutJs = $jsPath !== '' && is_file($jsPath) && (filesize($jsPath) ?: 0) > 0;
+        if ($hasLayoutJs) {
+            $jsUrl = $assetsManager->getJsUrl($area, $layoutType, $layoutOption, $theme, $this);
+        ?>
+<!-- 布局JS（包含所有partials的JavaScript）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
+<script src="<?= htmlspecialchars($jsUrl) ?>"></script>
+<?php
+        }
+    } catch (\Exception $e) {
+        // 如果获取URL失败，记录错误
+        if (defined('DEV') && DEV) {
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->error('Footer Partial: 无法获取布局JS URL', [
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            } catch (\Exception $logError) {
+                // 忽略日志错误
             }
-            control.addEventListener('click', function() {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        })();
-    </script>
-<?php endif; ?>
+        }
+    }
+}
+?>
+
+<style>
+/* ========================================
+   Amazon风格 - Footer样式
+   ======================================== */
+
+.weline-footer {
+    background-color: <?= htmlspecialchars($colors['bgDark'] ?? '#131921') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    padding: 3rem 0 1.5rem;
+    margin-top: auto; /* 使用flexbox的margin-top: auto，让footer始终在底部 */
+    position: relative;
+    border-top: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
+}
+
+.footer-container {
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+    margin: 0 auto;
+    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
+}
+
+/* 隐藏可能意外显示的hook名称文本 */
+.footer-content > *:first-child:not(.footer-section):not(ul):not(li):not(h3):not(a) {
+    display: none;
+}
+
+.footer-section {
+    text-align: left;
+    min-width: 0; /* 防止grid溢出 */
+}
+
+.footer-section h3 {
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 1rem;
+    letter-spacing: 0.5px;
+    line-height: 1.4;
+    text-decoration: none;
+    cursor: default;
+}
+
+.footer-section ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.footer-section li {
+    margin: 0;
+}
+
+.footer-section a {
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ddd') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: normal;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+    display: inline-block;
+}
+
+.footer-section a:hover {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    text-decoration: underline;
+}
+
+/* 官媒区域 - 亚马逊风格 */
+.footer-social-media {
+    text-align: center;
+    padding: 2rem 0;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
+    margin-bottom: 1.5rem;
+}
+
+.social-media-title {
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    letter-spacing: 0.5px;
+}
+
+.social-media-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.social-media-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
+    border-radius: 4px;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ddd') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.social-media-link:hover {
+    border-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    background-color: rgba(255, 153, 0, 0.1);
+}
+
+.social-media-link i {
+    font-size: 1rem;
+}
+
+.footer-bottom {
+    text-align: center;
+    padding-top: 1.5rem;
+}
+
+.footer-bottom p {
+    margin: 0;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ddd') ?>;
+    font-size: 0.875rem;
+}
+
+/* 返回顶部按钮 - 亚马逊风格（橙色主题） */
+.back-to-top {
+    position: fixed;
+    bottom: 92px;
+    right: 26px;
+    width: 48px;
+    height: 48px;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.4);
+    transition: all 0.2s ease;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 999;
+}
+
+.back-to-top.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    background-color: <?= htmlspecialchars($colors['primaryDark'] ?? '#e68900') ?>;
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(255, 153, 0, 0.5);
+}
+
+.back-to-top:active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.4);
+}
+
+/* 响应式设计 - 亚马逊风格 */
+@media (max-width: 1024px) {
+    .footer-container {
+        padding: 0 1.5rem;
+    }
+    
+    .footer-content {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .weline-footer {
+        padding: 2rem 0 1rem;
+        margin-top: auto; /* 移动端也使用flexbox的margin-top: auto */
+    }
+    
+    .footer-container {
+        padding: 0 1rem;
+    }
+    
+    .footer-content {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+    
+    .footer-section h3 {
+        font-size: 0.95rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .footer-section a {
+        font-size: 0.8125rem;
+    }
+    
+    .footer-social-media {
+        padding: 1.5rem 0;
+        margin-bottom: 1.5rem;
+    }
+    
+    .social-media-links {
+        gap: 0.75rem;
+    }
+    
+    .social-media-link {
+        padding: 0.5rem 0.875rem;
+        font-size: 0.8125rem;
+    }
+    
+    .back-to-top {
+        width: 44px;
+        height: 44px;
+        bottom: 92px;
+        right: 28px;
+        font-size: 1.125rem;
+    }
+}
+
+.back-to-top__icon {
+    width: 22px;
+    height: 22px;
+    display: block;
+    fill: currentColor;
+}
+
+@media (max-width: 480px) {
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+    
+    .footer-section {
+        text-align: center;
+    }
+    
+    .footer-section ul {
+        align-items: center;
+    }
+    
+    .footer-social-media {
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .social-media-links {
+        gap: 0.5rem;
+    }
+    
+    .social-media-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+    }
+    
+    .social-media-link .social-media-name {
+        display: none;
+    }
+    
+    .footer-bottom p {
+        font-size: 0.8125rem;
+    }
+    
+    .back-to-top {
+        width: 40px;
+        height: 40px;
+        bottom: 70px;
+        right: 15px;
+        font-size: 1rem;
+    }
+}
+</style>
+
+<script>
+// 返回顶部按钮功能
+(function() {
+    const backToTopBtn = document.getElementById('backToTop');
+    if (!backToTopBtn) return;
+    
+    // 监听滚动事件
+    window.addEventListener('scroll', function() {
+        if (window.pageYOffset > 300) {
+            backToTopBtn.classList.add('show');
+        } else {
+            backToTopBtn.classList.remove('show');
+        }
+    });
+    
+    // 点击返回顶部
+    backToTopBtn.addEventListener('click', function() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+})();
+</script>

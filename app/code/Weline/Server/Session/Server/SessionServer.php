@@ -28,6 +28,11 @@ use Weline\Server\Service\SharedStateServiceRegistry;
 
 final class SessionServer
 {
+    private const MAX_ACCEPTS_PER_TICK = 8;
+    private const MAX_MESSAGES_PER_CLIENT_PER_TICK = 64;
+    private const MAX_CLIENT_HANDLE_MS_PER_TICK = 5.0;
+    private const MAX_WRITE_BUFFER_BYTES = 16_777_216;
+
     /** 监听 socket */
     private $serverSocket = null;
 
@@ -405,9 +410,16 @@ final class SessionServer
         }
 
         $processed = 0;
+        $tickStartedAt = \microtime(true);
 
         if (\in_array($this->serverSocket, $read, true)) {
-            $this->acceptConnection();
+            $accepts = 0;
+            while ($accepts < self::MAX_ACCEPTS_PER_TICK) {
+                if (!$this->acceptConnection()) {
+                    break;
+                }
+                ++$accepts;
+            }
             $key = \array_search($this->serverSocket, $read, true);
             if ($key !== false) {
                 unset($read[$key]);
@@ -415,6 +427,9 @@ final class SessionServer
         }
 
         foreach ($read as $socket) {
+            if (((\microtime(true) - $tickStartedAt) * 1000.0) >= self::MAX_CLIENT_HANDLE_MS_PER_TICK) {
+                break;
+            }
             $clientId = $this->getClientId($socket);
             if ($clientId !== null) {
                 $processed += $this->handleClientRead($clientId);
@@ -528,12 +543,14 @@ final class SessionServer
 
     /**
      * 接受新连接
+     *
+     * @return bool true when a client was accepted
      */
-    private function acceptConnection(): void
+    private function acceptConnection(): bool
     {
         $clientSocket = @\stream_socket_accept($this->serverSocket, 0, $peerName);
         if (!$clientSocket) {
-            return;
+            return false;
         }
 
         \stream_set_blocking($clientSocket, false);
@@ -555,6 +572,7 @@ final class SessionServer
         ];
 
         $this->logDebug("Client connected: {$peerName} (id={$clientId})");
+        return true;
     }
 
     /**
@@ -589,7 +607,10 @@ final class SessionServer
 
         $tlsCacheChannel = !empty($this->clients[$clientId]['tls_cache_channel']);
         if ($tlsCacheChannel) {
-            $messages = SessionProtocol::extractTlsMessages($this->clients[$clientId]['buffer']);
+            $messages = SessionProtocol::extractTlsMessages(
+                $this->clients[$clientId]['buffer'],
+                self::MAX_MESSAGES_PER_CLIENT_PER_TICK
+            );
             if ($messages === null) {
                 $this->disconnectClient($clientId);
                 return 0;
@@ -597,7 +618,10 @@ final class SessionServer
         } else {
             $this->tlsSessionCacheStore?->relieveMemoryPressure();
             $this->store->relieveMemoryPressure();
-            $messages = SessionProtocol::extractMessages($this->clients[$clientId]['buffer']);
+            $messages = SessionProtocol::extractMessages(
+                $this->clients[$clientId]['buffer'],
+                self::MAX_MESSAGES_PER_CLIENT_PER_TICK
+            );
         }
         foreach ($messages as $msg) {
             $this->handleMessage($clientId, $msg);
@@ -898,6 +922,11 @@ final class SessionServer
         }
 
         $this->clients[$clientId]['write_buffer'] = (string)($this->clients[$clientId]['write_buffer'] ?? '') . $message;
+        if (\strlen((string)$this->clients[$clientId]['write_buffer']) > self::MAX_WRITE_BUFFER_BYTES) {
+            $this->log("Client write buffer exceeded limit; disconnecting id={$clientId}");
+            $this->disconnectClient($clientId);
+            return false;
+        }
         return $this->flushClientWriteBuffer($clientId);
     }
 
@@ -983,7 +1012,10 @@ final class SessionServer
         $now = \time();
         if ($now - $this->lastGcTime >= $this->gcInterval) {
             $this->store->gc();
-            $this->pruneFallbackSessionMirrorFiles();
+            // Memory role is RAM-only; do not scan Session mirror files on the hot GC path.
+            if ($this->serviceRole !== 'memory_server') {
+                $this->pruneFallbackSessionMirrorFiles();
+            }
             $this->lastGcTime = $now;
         }
 

@@ -1864,6 +1864,7 @@ Webroot：%{1},Webroot：%{1}
 "停止 Weline Server 或 PHP 内置服务器实例","停止 Weline Server 或 PHP 内置服务器实例"
 "停止正在运行的 Weline Server 或 PHP 内置服务器实例","停止正在运行的 Weline Server 或 PHP 内置服务器实例"
 "实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）"
+"一个或多个实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","一个或多个实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）"
 "停止所有运行中的实例（含 Weline Server 与 CLI 服务器）","停止所有运行中的实例（含 Weline Server 与 CLI 服务器）"
 "停止所有实例名以该前缀开头的 Weline Server 实例","停止所有实例名以该前缀开头的 Weline Server 实例"
 "强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc","强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc"
@@ -1871,6 +1872,7 @@ Webroot：%{1},Webroot：%{1}
 显示帮助信息,显示帮助信息
 停止默认实例,停止默认实例
 停止指定实例,停止指定实例
+停止多个指定实例,停止多个指定实例
 按前缀停止实例,按前缀停止实例
 "停止 PHP 内置服务器","停止 PHP 内置服务器"
 停止所有实例,停止所有实例

@@ -11,9 +11,8 @@ use Weline\Server\Scheduler\FiberScheduler;
 /**
  * 调度器等待事件观察者
  *
- * 监听 Weline_Framework::scheduler::wait，根据 type 向 FiberScheduler 注册定时器。
- * 当调度器已激活且已注入 FiberScheduler 时注册定时器（含 Master Orchestrator 主循环 Fiber）。
- * FPM 或未 enableScheduler 时 SchedulerSystem 会走原生 sleep，通常不会派发本事件。
+ * 监听 Weline_Framework::scheduler::wait，根据 type 向 FiberScheduler 注册定时器 / I/O waiter。
+ * I/O await 仅在 Worker 显式 enableIoWait()（CoroutineRuntime 驱动主循环）后生效。
  */
 class SchedulerWaitObserver implements ObserverInterface
 {
@@ -36,6 +35,8 @@ class SchedulerWaitObserver implements ObserverInterface
                 'usleep' => $scheduler->addUsleepTimer($fiber, (int) ($params['microseconds'] ?? 1000)),
                 'yield' => $scheduler->addYieldTimer($fiber),
                 'yield_delay' => $scheduler->addYieldDelayTimer($fiber, (int) ($params['milliseconds'] ?? 1)),
+                'io_readable' => self::registerIoWaiter($scheduler, $fiber, $params, false),
+                'io_writable' => self::registerIoWaiter($scheduler, $fiber, $params, true),
                 default => null,
             };
         });
@@ -44,6 +45,30 @@ class SchedulerWaitObserver implements ObserverInterface
     public static function getScheduler(): ?FiberScheduler
     {
         return self::$scheduler;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private static function registerIoWaiter(
+        FiberScheduler $scheduler,
+        \Fiber $fiber,
+        array $params,
+        bool $writable
+    ): void {
+        if (!SchedulerSystem::isIoWaitEnabled()) {
+            return;
+        }
+        $stream = $params['stream'] ?? null;
+        if (!\is_resource($stream)) {
+            return;
+        }
+        $timeout = (float) ($params['timeout'] ?? 0.0);
+        if ($writable) {
+            $scheduler->addWritableWaiter($fiber, $stream, $timeout);
+        } else {
+            $scheduler->addReadableWaiter($fiber, $stream, $timeout);
+        }
     }
 
     public function execute(Event &$event): void
@@ -65,10 +90,10 @@ class SchedulerWaitObserver implements ObserverInterface
         match ($data['type']) {
             'sleep' => self::$scheduler->addSleepTimer($fiber, (int) ($data['seconds'] ?? 1)),
             'usleep' => self::$scheduler->addUsleepTimer($fiber, (int) ($data['microseconds'] ?? 1000)),
-            // yield: 让出控制权，下一轮事件循环立即 resume（通过 getNextTimerDelay 返回 0 实现）
             'yield' => self::$scheduler->addYieldTimer($fiber),
-            // yield_delay: 让出控制权并注册延迟定时器
             'yield_delay' => self::$scheduler->addYieldDelayTimer($fiber, (int) ($data['milliseconds'] ?? 1)),
+            'io_readable' => self::registerIoWaiter(self::$scheduler, $fiber, $data, false),
+            'io_writable' => self::registerIoWaiter(self::$scheduler, $fiber, $data, true),
             default => null,
         };
     }

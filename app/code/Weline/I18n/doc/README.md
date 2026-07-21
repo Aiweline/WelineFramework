@@ -108,6 +108,9 @@ Weline.Api.resource('i18n_admin').action({
 - Cookie 语言设置
 - 动态语言切换
 - 语言检测
+- 后台顶栏 `<w:i18n:language:switcher />` 的可选语言集合由 `ActiveLocaleCodeProvider` 提供：合并 `Locals`（翻译行）与 `Locale`（安装态）中「已安装 + 已激活」的代码，与表单侧 `<w:i18n:language:select />` 对齐；避免仅读 `Locals` 时漏掉已安装语言
+- `<w:i18n:language:switcher />` **必须运行时渲染**（编译期只输出 `LanguageSwitcher::render()` 调用），禁止把语言列表 HTML 烘焙进 `com_*.phtml`；否则 Worker chrome 预热/非后台编译上下文会把「仅中文」冻进模板
+- 后台 Topbar 语言目录 provider（`BackendLocaleCatalogProvider`）使用 `LocaleCatalogInterface::installed()`，不以语言包目录为准
 
 ## 使用方法
 
