@@ -170,6 +170,85 @@ class KeyBuilder
     }
 
     /**
+     * Canonical storefront dimensions for CachePool default keys.
+     *
+     * website is always a website_code (zero-site = default). Never mixes in website_id.
+     *
+     * @return array{schema: string, area: string, website: string, lang: string, currency: string}
+     */
+    public static function storefrontDimensions(): array
+    {
+        $lang = \trim((string)self::requestScopeValue('user.lang', 'WELINE_USER_LANG', ''));
+        if ($lang === '') {
+            $lang = (string)State::getLang();
+        }
+        $currency = \trim((string)self::requestScopeValue('user.currency', 'WELINE_USER_CURRENCY', ''));
+        if ($currency === '') {
+            $currency = (string)State::getCurrency();
+        }
+
+        return [
+            'schema' => 'storefront-cache-v1',
+            'area' => self::getAreaKey(),
+            'website' => self::resolveWebsiteCode(),
+            'lang' => $lang,
+            'currency' => $currency,
+        ];
+    }
+
+    /**
+     * Resolve the canonical website_code for cache keys.
+     *
+     * Empty / unresolved context falls back to default (system zero-site).
+     * Never embeds raw website_id into the cache key.
+     */
+    public static function resolveWebsiteCode(): string
+    {
+        $code = \trim((string)self::requestScopeValue('website_code', 'WELINE_WEBSITE_CODE', ''));
+        if ($code !== '') {
+            return $code;
+        }
+
+        return 'default';
+    }
+
+    /**
+     * Apply optional storefront dimension flags to a logical cache key.
+     *
+     * All flags false (and area excluded) => full escape (logical key unchanged).
+     * Default CachePool path passes website/lang/currency/area all enabled.
+     * Custom path only enables the flags the caller sets to true.
+     */
+    public static function applyDimensionFlags(
+        string $logicalKey,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false,
+        bool $includeArea = false
+    ): string {
+        if (!$website && !$lang && !$currency && !$includeArea) {
+            return $logicalKey;
+        }
+
+        $dims = self::storefrontDimensions();
+        $parts = [$logicalKey];
+        if ($includeArea) {
+            $parts[] = 'area=' . $dims['area'];
+        }
+        if ($website) {
+            $parts[] = 'website=' . $dims['website'];
+        }
+        if ($lang) {
+            $parts[] = 'lang=' . $dims['lang'];
+        }
+        if ($currency) {
+            $parts[] = 'currency=' . $dims['currency'];
+        }
+
+        return \implode('|', $parts);
+    }
+
+    /**
      * Build the default environment context for rendered output.
      *
      * Dimensions are opt-out to keep the common output-cache path safe while
@@ -201,11 +280,8 @@ class KeyBuilder
             $environment['area_route'] = (string)self::requestScopeValue('area_route', 'WELINE_AREA_ROUTE', '');
         }
         if (!empty($dimensions['website'])) {
-            $environment['website'] = (string)(
-                self::requestScopeValue('website_code', 'WELINE_WEBSITE_CODE', '')
-                ?: self::requestScopeValue('website.id', 'WELINE_WEBSITE_ID', '')
-                ?: self::requestScopeValue('website_id', 'WELINE_WEBSITE_ID', '')
-            );
+            // Prefer website_code only; never mix website_id into environment-scoped keys.
+            $environment['website'] = self::resolveWebsiteCode();
         }
         if (!empty($dimensions['website_url'])) {
             $environment['website_url'] = (string)self::requestScopeValue('website.url', 'WELINE_WEBSITE_URL', '');

@@ -16,14 +16,17 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        Partials::clearMetaCache();
-        if (!$context->isExplicitCacheClear()) {
-            return 1;
+        // Soft pressure: keep chrome HTML output (process + theme_runtime handle).
+        // Explicit cache clear: wipe everything including partial HTML.
+        if ($context->isExplicitCacheClear()) {
+            Partials::clearAllCaches();
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            ControllerFetchFileBefore::clearRuntimeCache();
+            ThemeData::clearCache();
+            return 4;
         }
 
-        ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-        ControllerFetchFileBefore::clearRuntimeCache();
-        ThemeData::clearCache();
-        return 4;
+        Partials::clearMetaCache();
+        return 1;
     }
 }

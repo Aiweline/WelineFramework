@@ -107,7 +107,7 @@ class Stop extends CommandAbstract
         // 欢迎语
         $this->printWelcome();
 
-        $instanceName = $this->parseInstanceName($args);
+        $instanceNames = $this->parseInstanceNames($args);
         $instancePrefix = $this->parseInstancePrefix($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
@@ -133,6 +133,12 @@ class Stop extends CommandAbstract
             return;
         }
 
+        if (\count($instanceNames) > 1) {
+            $this->stopNamedInstances($instanceNames, $force, $fastLocal, $restartCleanup);
+            return;
+        }
+
+        $instanceName = $instanceNames[0];
         if (!$this->acquireStopLock($instanceName)) {
             $this->printer->warning(__('另一个 server:stop 任务正在处理中，请稍后再试。'));
             $this->printer->note(__('若锁文件长期存在，请确认停止任务是否已结束后再重试。'));
@@ -173,15 +179,30 @@ class Stop extends CommandAbstract
      */
     protected function parseInstanceName(array $args): string
     {
+        return $this->parseInstanceNames($args)[0];
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function parseInstanceNames(array $args): array
+    {
         $positionalArgs = [];
         foreach ($args as $key => $arg) {
-            if (is_int($key) && !str_starts_with((string)$arg, '-')) {
-                $positionalArgs[] = $arg;
+            if (\is_int($key) && !\str_starts_with((string) $arg, '-')) {
+                $name = \trim((string) $arg);
+                if ($name !== '') {
+                    $positionalArgs[] = $name;
+                }
             }
         }
-        array_shift($positionalArgs);
-        
-        return $positionalArgs[0] ?? 'default';
+        \array_shift($positionalArgs);
+
+        if ($positionalArgs === []) {
+            return ['default'];
+        }
+
+        return \array_values(\array_unique($positionalArgs));
     }
 
     protected function parseInstancePrefix(array $args): string
@@ -3340,6 +3361,32 @@ class Stop extends CommandAbstract
         }
     }
 
+    /**
+     * @param list<string> $instanceNames
+     */
+    protected function stopNamedInstances(
+        array $instanceNames,
+        bool $force = false,
+        bool $fastLocal = false,
+        bool $restartCleanup = false
+    ): void
+    {
+        $totalInstances = \count($instanceNames);
+        foreach ($instanceNames as $index => $name) {
+            $this->printer->note(__('进度 [%{1}/%{2}] 正在停止实例 [%{3}]...', [$index + 1, $totalInstances, $name]));
+            if (!$this->acquireStopLock($name)) {
+                $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
+                continue;
+            }
+            try {
+                $this->stopInstance($name, $force, $fastLocal, $restartCleanup);
+            } finally {
+                $this->releaseStopLock();
+            }
+            echo "\n";
+        }
+    }
+
     protected function stopInstancesByPrefix(string $prefix, bool $force = false, bool $fastLocal = false): void
     {
         $prefix = \trim($prefix);
@@ -3503,10 +3550,10 @@ class Stop extends CommandAbstract
     public function help(): array|string
     {
         return CommandHelper::formatHelp(
-            'server:stop [name]',
+            'server:stop [name ...]',
             __('停止正在运行的 Weline Server 或 PHP 内置服务器实例'),
             [
-                '[name]' => __('实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
+                '[name ...]' => __('一个或多个实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
                 '-a, --all' => __('停止所有运行中的实例（含 Weline Server 与 CLI 服务器）'),
                 '-pre, --prefix <prefix>' => __('停止所有实例名以该前缀开头的 Weline Server 实例'),
                 '-f, --force' => __('强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc'),
@@ -3517,6 +3564,7 @@ class Stop extends CommandAbstract
             [
                 __('停止默认实例') => 'php bin/w server:stop',
                 __('停止指定实例') => 'php bin/w server:stop api-server',
+                __('停止多个指定实例') => 'php bin/w server:stop api-server worker-server',
                 __('按前缀停止实例') => 'php bin/w server:stop -pre=ai-test-login',
                 __('停止 PHP 内置服务器') => 'php bin/w server:stop cli-server',
                 __('停止所有实例') => 'php bin/w server:stop --all',

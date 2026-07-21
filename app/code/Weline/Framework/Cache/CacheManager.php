@@ -56,13 +56,17 @@ class CacheManager implements CacheManagerInterface
         'enabled' => true,
         'tip' => '',
         'jitter' => CachePool::DEFAULT_JITTER_RATIO,
+        // Deprecated: ordinary CachePool get/set always inject storefront dimensions.
+        // Kept so existing env.php pool configs do not break.
         'environment_scoped' => false,
     ];
-
+    
     /**
      * 预定义池配置
      *
      * jitter 缺省值由 DEFAULT_POOL_CONFIG 提供；短 TTL 池显式置 0 避免命中精度损失。
+     * Ordinary get/set/remember always auto-inject website_code + lang + currency (+ area).
+     * Global/bootstrap data must use getCustom/setCustom/rememberCustom (flags default false = escape).
      */
     private const PREDEFINED_POOLS = [
         'router' => ['ttl' => 86400, 'permanent' => true, 'tip' => '路由缓存'],
@@ -92,7 +96,7 @@ class CacheManager implements CacheManagerInterface
         'file_manager' => ['ttl' => 86400, 'permanent' => true, 'tip' => '文件管理器缓存'],
         'editor' => ['ttl' => 86400, 'permanent' => true, 'tip' => '编辑器缓存'],
         'api_doc' => ['ttl' => 3600, 'tip' => 'API文档缓存'],
-        'fpc' => ['ttl' => 3600, 'taggable' => true, 'tip' => '全页缓存', 'environment_scoped' => true],
+        'fpc' => ['ttl' => 3600, 'taggable' => true, 'tip' => '全页缓存'],
         'single_flight' => ['ttl' => 30, 'tip' => '请求合并锁池', 'jitter' => 0.0],
         'hot_key_tracker' => ['ttl' => 60, 'tip' => '热点 Key 跟踪', 'jitter' => 0.0],
         'url_guard' => ['ttl' => 1800, 'tip' => 'URL 越界规则缓存'],
@@ -181,6 +185,7 @@ class CacheManager implements CacheManagerInterface
         $taggable = $poolConfig['taggable'] ?? false;
         $enabled = $poolConfig['enabled'] ?? true;
         $jitter = (float)($poolConfig['jitter'] ?? CachePool::DEFAULT_JITTER_RATIO);
+        // Deprecated pool flag: ignored. Ordinary get/set always inject storefront dimensions.
         $environmentScoped = (bool)($poolConfig['environment_scoped'] ?? false);
 
         if ($taggable) {

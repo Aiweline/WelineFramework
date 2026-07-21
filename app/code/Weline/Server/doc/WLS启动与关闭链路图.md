@@ -2,9 +2,9 @@
 
 ## 适用范围
 
-- 本文描述默认 WLS Orchestrator 模式下的单实例链路，即 `php bin/w server:start [name]` 与 `php bin/w server:stop [name]`。
+- 本文描述默认 WLS Orchestrator 模式下的实例链路，即 `php bin/w server:start [name]` 与 `php bin/w server:stop [name ...]`。
 - `--cli` 和 `--strategy` 会在 `Start::execute()` 早期分流，不进入本文的 Master/Orchestrator 主链路。
-- `server:stop --all` 只是外层枚举多个实例，单实例的关闭协议仍然复用本文的关闭链路。
+- `server:stop name-a name-b`、`server:stop --prefix <prefix>` 与 `server:stop --all` 都只在外层枚举多个实例；每个实例仍复用同一关闭协议并单独获取 stop lock。
 
 ## 启动链路图
 
@@ -48,10 +48,15 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    A["CLI: php bin/w server:stop [name]"] --> B["Stop::execute()"]
-    B --> C{"--all?"}
-    C -->|是| C1["stopAllInstances()<br/>枚举实例逐个 stop"]
-    C -->|否| D["acquireStopLock(instance)"]
+    A["CLI: php bin/w server:stop [name ...]"] --> B["Stop::execute()"]
+    B --> C{"目标选择"}
+    C -->|--all| C1["stopAllInstances()<br/>枚举全部实例"]
+    C -->|--prefix| C2["stopInstancesByPrefix()<br/>枚举匹配实例"]
+    C -->|多个名称| C3["stopNamedInstances()<br/>按参数顺序去重"]
+    C -->|单个/默认名称| D["acquireStopLock(instance)"]
+    C1 --> D
+    C2 --> D
+    C3 --> D
     D --> E["ServerInstanceManager::getInstanceInfo()"]
     E --> F{"实例记录存在?"}
     F -->|否| F1["按 recoverable 线索清理残留进程<br/>然后结束"]
@@ -80,11 +85,11 @@ flowchart TB
     S -->|是| T["releaseSharedStateConsumersForInstance()<br/>deleteInstance()<br/>cleanupPidFiles()<br/>releaseStartLock()"]
     T --> Z["stop 完成"]
     F1 --> Z
-    C1 --> Z
 ```
 
 ## 关键分支说明
 
+- `server:stop` 可接收多个空格分隔的实例名，例如 `php bin/w server:stop api worker`；名称按输入顺序去重，逐个获取实例级 stop lock 并执行完整单实例关闭链路。某个实例锁被占用时只跳过该实例，继续处理后续名称。
 - 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v4 写入嵌套 `runtime_selection`。`--master-only` 只接受这一个事实源；旧 endpoint、缺失/未知字段或根级 topology/listener/event/SSL 投影都在绑定端口前拒绝，不重新推导或升级。
 - 拓扑只接受 `auto/direct/dispatcher`；已删除的模式、配置键和命令行别名没有兼容读取入口。
 - `server:start -r` 在任何新 Session/Memory sidecar、Master 或 Worker 创建前冻结一次旧代端口快照；空集合也是已捕获的有效快照，禁止在本次启动改写运行态后重新枚举。实际停止旧实例时，快照包含主端口、控制端口、Dispatcher/Worker、Redirect 和 Gateway 端口，排除可跨实例复用的 Session/Memory sidecar。停止后在一个 monotonic 总 deadline 内反复清理端口探测缓存，只有目标端口全部无监听且本项目+本实例的 Master、Dispatcher、Redirect、Worker、Maintenance、Gateway、Runtime Watchdog scoped 进程全部退出才继续。

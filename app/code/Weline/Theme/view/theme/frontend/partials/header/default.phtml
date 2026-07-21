@@ -1,851 +1,4168 @@
 <?php
 /**
- * Theme partial: default frontend header.
+ * 片段：Header
+ * 
+ * 页面头部区域（导航栏、Logo、搜索等）
+ * 字段
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.auth {default="user",name="鉴权维度"}
+ * @meta.name {default="Header头部片段",name="Header头部片段",description="Header头部片段，用于描述片段的名称"}
+ * @meta.description {default="页面头部区域（导航栏、Logo、搜索等）",name="页面头部区域（导航栏、Logo、搜索等）",description="页面头部区域（导航栏、Logo、搜索等），用于描述片段的用途"}
+ * @param.logo {default="",name="Logo URL",description="Logo图片URL，用于设置头部Logo图片地址"}
+ * @param.logoText {default="Weline",name="Logo文字",description="Logo文字，用于设置当Logo图片不存在时显示的文字"}
+ * @param.logoHeight {default=50,name="Logo高度",description="Logo高度（像素），用于设置Logo图片的高度，宽度自适应"}
+ * @param.navItems {default=[],name="导航项数组",description="导航项数组，用于设置头部导航菜单，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\"}]"}
+ * @param.showSearch {default=true,name="是否显示搜索框",description="是否显示搜索框，用于控制搜索框的显示"}
+ * @param.showUserMenu {default=true,name="是否显示用户菜单",description="是否显示用户菜单，用于控制用户菜单的显示"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  *
- * @meta.name {default="Default Header",name="Default Header",description="Theme-owned frontend header"}
- * @param.logo {default="",name="Logo URL",description="Logo image URL"}
- * @param.logoText {default="Weline",name="Logo Text",description="Text shown when no logo image is configured"}
- * @param.navItems {default=[],name="Navigation Items",description="Navigation items, format: [{\"text\":\"Home\",\"url\":\"/\"}]"}
- * @param.showSearch {default=true,name="Show Search",description="Whether the default search area is shown"}
- * @param.showUserMenu {default=true,name="Show User Menu",description="Whether account/cart actions are shown"}
- * @param.class {default="",name="Extra CSS class",description="Extra CSS class"}
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ * - 参数配置由 Block\Partials 在渲染时自动加载
+ * - 模板中使用 {{meta.参数}} 输出 partials 的参数，使用 {{layout.参数}} 输出 layout 的参数
  */
-
 $meta = $this->getData('meta') ?? [];
-$logo = (string)($meta['logo'] ?? '');
-$logoText = (string)($meta['logoText'] ?? __('Weline'));
-$logoHeight = max(28, (int)($meta['logoHeight'] ?? 38));
-$class = (string)($meta['class'] ?? '');
+$layout = $this->getData('layout') ?? [];
+$logo = $meta['logo'] ?? '';
+$logoText = $meta['logoText'] ?? __('Weline');
+$logoHeight = $meta['logoHeight'] ?? 50; // Logo高度，默认50px
+// navItems 可能在 hook 中被设置，先尝试从模板数据中获取，如果没有则从 meta 中获取
 $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? [];
+$showSearch = $meta['showSearch'] ?? true;
+$showUserMenu = $meta['showUserMenu'] ?? true;
+$class = $meta['class'] ?? '';
 
-if (is_string($navItems)) {
-    $decodedNavItems = json_decode($navItems, true);
-    $navItems = is_array($decodedNavItems) ? $decodedNavItems : [];
-}
+$baseUrl = $this->request->getBaseUrl();
 
-if (!is_array($navItems) || $navItems === []) {
-    $navItems = [
-        ['text' => __('Home'), 'url' => '/'],
-        ['text' => __('Products'), 'url' => '/products'],
-        ['text' => __('Solutions'), 'url' => '/solutions'],
-        ['text' => __('Docs'), 'url' => '/docs'],
-        ['text' => __('Support'), 'url' => '/support'],
-    ];
-}
-
-$boolValue = static function ($value, bool $default): bool {
-    if ($value === null || $value === '') {
-        return $default;
+// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
+// 直接使用colors数组，无需重复读取和处理
+$colors = $this->getData('colors') ?? [];
+$headerCategoryService = null;
+try {
+    if (class_exists(\WeShop\Catalog\Service\CategoryService::class)) {
+        $headerCategoryService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Catalog\Service\CategoryService::class);
     }
-    $parsed = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
-    return $parsed ?? $default;
+} catch (\Throwable) {
+    $headerCategoryService = null;
+}
+$headerLabel = static function ($value) use ($headerCategoryService): string {
+    $key = trim((string)($value ?? ''));
+    if ($key === '') {
+        return '';
+    }
+    $translated = (string)__($key);
+    if ($translated !== $key) {
+        return $translated;
+    }
+    $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
+    if ($widgetLabel !== $key) {
+        $widgetTranslated = (string)__($widgetLabel);
+        if ($widgetTranslated !== $widgetLabel) {
+            return $widgetTranslated;
+        }
+        $key = $widgetLabel;
+    }
+    if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService) {
+        return $headerCategoryService->localizeCategoryDisplayName($key);
+    }
+    return $key;
+};
+$headerEsc = static function ($value) use ($headerLabel): string {
+    return htmlspecialchars($headerLabel($value), ENT_QUOTES, 'UTF-8');
 };
 
-$showSearch = $boolValue($meta['showSearch'] ?? true, true);
-$showUserMenu = $boolValue($meta['showUserMenu'] ?? true, true);
-$esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-?>
-<?php
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Helper\SiteBrand;
-$__siteBrand = ObjectManager::getInstance(SiteBrand::class);
-$__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
-?>
+// 注意：navItems 可能在 hook (Weline_Theme::frontend::partials::header::categories-before) 中被设置
+// 如果 hook 设置了 navItems，会覆盖这里的默认值
+// 默认导航数据（统一用于横向菜单和汉堡菜单）
+$defaultNavItemsFactory = static function (): array {
+    static $defaultNavItems = null;
+    if ($defaultNavItems !== null) {
+        return $defaultNavItems;
+    }
 
+    $defaultNavItems = [
+    [
+        'text' => __('电子产品'), 'url' => '/category/electronics',
+        'children' => [
+            [
+                'text' => __('手机通讯'), 'url' => '/category/electronics/phones',
+                'children' => [
+                    ['text' => __('智能手机'), 'url' => '/category/electronics/phones/smartphones'],
+                    ['text' => __('功能手机'), 'url' => '/category/electronics/phones/feature-phones'],
+                    ['text' => __('5G手机'), 'url' => '/category/electronics/phones/5g-phones'],
+                    ['text' => __('折叠手机'), 'url' => '/category/electronics/phones/foldable'],
+                    ['text' => __('手机壳'), 'url' => '/category/electronics/phones/cases'],
+                    ['text' => __('屏幕保护膜'), 'url' => '/category/electronics/phones/screen-protectors'],
+                    ['text' => __('充电器'), 'url' => '/category/electronics/phones/chargers'],
+                    ['text' => __('数据线'), 'url' => '/category/electronics/phones/cables'],
+                    ['text' => __('移动电源'), 'url' => '/category/electronics/phones/power-banks'],
+                    ['text' => __('手机耳机'), 'url' => '/category/electronics/phones/headphones'],
+                ]
+            ],
+            [
+                'text' => __('电脑办公'), 'url' => '/category/electronics/computers',
+                'children' => [
+                    ['text' => __('笔记本'), 'url' => '/category/electronics/computers/laptops'],
+                    ['text' => __('游戏本'), 'url' => '/category/electronics/computers/gaming-laptops'],
+                    ['text' => __('超极本'), 'url' => '/category/electronics/computers/ultrabooks'],
+                    ['text' => __('台式机'), 'url' => '/category/electronics/computers/desktops'],
+                    ['text' => __('一体机'), 'url' => '/category/electronics/computers/all-in-one'],
+                    ['text' => __('平板电脑'), 'url' => '/category/electronics/computers/tablets'],
+                    ['text' => __('显示器'), 'url' => '/category/electronics/computers/monitors'],
+                    ['text' => __('键盘'), 'url' => '/category/electronics/computers/keyboards'],
+                    ['text' => __('鼠标'), 'url' => '/category/electronics/computers/mice'],
+                    ['text' => __('摄像头'), 'url' => '/category/electronics/computers/webcams'],
+                    ['text' => __('存储设备'), 'url' => '/category/electronics/computers/storage'],
+                ]
+            ],
+            [
+                'text' => __('智能设备'), 'url' => '/category/electronics/smart-devices',
+                'children' => [
+                    ['text' => __('智能手表'), 'url' => '/category/electronics/smart-devices/smart-watches'],
+                    ['text' => __('运动手环'), 'url' => '/category/electronics/smart-devices/fitness-trackers'],
+                    ['text' => __('智能音箱'), 'url' => '/category/electronics/smart-devices/smart-speakers'],
+                    ['text' => __('智能照明'), 'url' => '/category/electronics/smart-devices/smart-lights'],
+                    ['text' => __('智能门锁'), 'url' => '/category/electronics/smart-devices/smart-locks'],
+                    ['text' => __('智能摄像头'), 'url' => '/category/electronics/smart-devices/smart-cameras'],
+                    ['text' => __('智能家居套装'), 'url' => '/category/electronics/smart-devices/smart-home'],
+                    ['text' => __('可穿戴设备'), 'url' => '/category/electronics/smart-devices/wearables'],
+                ]
+            ],
+            [
+                'text' => __('影音娱乐'), 'url' => '/category/electronics/audio-video',
+                'children' => [
+                    ['text' => __('无线耳机'), 'url' => '/category/electronics/audio-video/wireless-headphones'],
+                    ['text' => __('有线耳机'), 'url' => '/category/electronics/audio-video/wired-headphones'],
+                    ['text' => __('入耳式耳机'), 'url' => '/category/electronics/audio-video/earbuds'],
+                    ['text' => __('蓝牙音响'), 'url' => '/category/electronics/audio-video/speakers'],
+                    ['text' => __('Soundbar'), 'url' => '/category/electronics/audio-video/soundbars'],
+                    ['text' => __('单反相机'), 'url' => '/category/electronics/audio-video/dslr-cameras'],
+                    ['text' => __('微单相机'), 'url' => '/category/electronics/audio-video/mirrorless'],
+                    ['text' => __('运动相机'), 'url' => '/category/electronics/audio-video/action-cameras'],
+                    ['text' => __('游戏主机'), 'url' => '/category/electronics/audio-video/gaming-consoles'],
+                    ['text' => __('游戏配件'), 'url' => '/category/electronics/audio-video/gaming-accessories'],
+                ]
+            ],
+        ]
+    ],
+    [
+        'text' => __('服装服饰'), 'url' => '/category/clothing',
+        'children' => [
+            [
+                'text' => __('男装'), 'url' => '/category/clothing/men',
+                'children' => [
+                    ['text' => __('衬衫'), 'url' => '/category/clothing/men/shirts'],
+                    ['text' => __('T恤'), 'url' => '/category/clothing/men/t-shirts'],
+                    ['text' => __('Polo衫'), 'url' => '/category/clothing/men/polo-shirts'],
+                    ['text' => __('长裤'), 'url' => '/category/clothing/men/pants'],
+                    ['text' => __('短裤'), 'url' => '/category/clothing/men/shorts'],
+                    ['text' => __('外套'), 'url' => '/category/clothing/men/jackets'],
+                    ['text' => __('毛衣'), 'url' => '/category/clothing/men/sweaters'],
+                    ['text' => __('皮鞋'), 'url' => '/category/clothing/men/shoes'],
+                    ['text' => __('运动鞋'), 'url' => '/category/clothing/men/sneakers'],
+                    ['text' => __('皮带'), 'url' => '/category/clothing/men/belts'],
+                    ['text' => __('手表'), 'url' => '/category/clothing/men/watches'],
+                    ['text' => __('包袋'), 'url' => '/category/clothing/men/bags'],
+                ]
+            ],
+            [
+                'text' => __('女装'), 'url' => '/category/clothing/women',
+                'children' => [
+                    ['text' => __('连衣裙'), 'url' => '/category/clothing/women/dresses'],
+                    ['text' => __('上装'), 'url' => '/category/clothing/women/tops'],
+                    ['text' => __('衬衫'), 'url' => '/category/clothing/women/blouses'],
+                    ['text' => __('下装'), 'url' => '/category/clothing/women/bottoms'],
+                    ['text' => __('半身裙'), 'url' => '/category/clothing/women/skirts'],
+                    ['text' => __('外套'), 'url' => '/category/clothing/women/outerwear'],
+                    ['text' => __('大衣'), 'url' => '/category/clothing/women/coats'],
+                    ['text' => __('高跟鞋'), 'url' => '/category/clothing/women/heels'],
+                    ['text' => __('平底鞋'), 'url' => '/category/clothing/women/flats'],
+                    ['text' => __('靴子'), 'url' => '/category/clothing/women/boots'],
+                    ['text' => __('手提包'), 'url' => '/category/clothing/women/handbags'],
+                    ['text' => __('斜挎包'), 'url' => '/category/clothing/women/crossbody-bags'],
+                    ['text' => __('首饰'), 'url' => '/category/clothing/women/jewelry'],
+                ]
+            ],
+            [
+                'text' => __('童装'), 'url' => '/category/clothing/kids',
+                'children' => [
+                    ['text' => __('男童装'), 'url' => '/category/clothing/kids/boys'],
+                    ['text' => __('女童装'), 'url' => '/category/clothing/kids/girls'],
+                    ['text' => __('婴儿装'), 'url' => '/category/clothing/kids/baby'],
+                    ['text' => __('童鞋'), 'url' => '/category/clothing/kids/shoes'],
+                    ['text' => __('童装配饰'), 'url' => '/category/clothing/kids/accessories'],
+                    ['text' => __('校服'), 'url' => '/category/clothing/kids/school-uniforms'],
+                    ['text' => __('泳装'), 'url' => '/category/clothing/kids/swimwear'],
+                ]
+            ],
+            [
+                'text' => __('运动服饰'), 'url' => '/category/clothing/sports',
+                'children' => [
+                    ['text' => __('运动装'), 'url' => '/category/clothing/sports/athletic-wear'],
+                    ['text' => __('跑步装备'), 'url' => '/category/clothing/sports/running-gear'],
+                    ['text' => __('健身服'), 'url' => '/category/clothing/sports/fitness-wear'],
+                    ['text' => __('运动鞋'), 'url' => '/category/clothing/sports/sports-shoes'],
+                    ['text' => __('跑鞋'), 'url' => '/category/clothing/sports/running-shoes'],
+                    ['text' => __('篮球鞋'), 'url' => '/category/clothing/sports/basketball-shoes'],
+                    ['text' => __('户外装备'), 'url' => '/category/clothing/sports/outdoor'],
+                    ['text' => __('露营装备'), 'url' => '/category/clothing/sports/camping'],
+                ]
+            ],
+        ]
+    ],
+    [
+        'text' => __('家居用品'), 'url' => '/category/home',
+        'children' => [
+            [
+                'text' => __('家具'), 'url' => '/category/home/furniture',
+                'children' => [
+                    ['text' => __('沙发'), 'url' => '/category/home/furniture/sofas'],
+                    ['text' => __('沙发床'), 'url' => '/category/home/furniture/sofa-beds'],
+                    ['text' => __('餐桌'), 'url' => '/category/home/furniture/tables'],
+                    ['text' => __('茶几'), 'url' => '/category/home/furniture/coffee-tables'],
+                    ['text' => __('椅子'), 'url' => '/category/home/furniture/chairs'],
+                    ['text' => __('办公椅'), 'url' => '/category/home/furniture/office-chairs'],
+                    ['text' => __('床具'), 'url' => '/category/home/furniture/beds'],
+                    ['text' => __('衣柜'), 'url' => '/category/home/furniture/wardrobes'],
+                    ['text' => __('书柜'), 'url' => '/category/home/furniture/bookcases'],
+                ]
+            ],
+            [
+                'text' => __('家纺'), 'url' => '/category/home/textiles',
+                'children' => [
+                    ['text' => __('床上用品'), 'url' => '/category/home/textiles/bedding'],
+                    ['text' => __('床单被套'), 'url' => '/category/home/textiles/sheets'],
+                    ['text' => __('枕头'), 'url' => '/category/home/textiles/pillows'],
+                    ['text' => __('被子'), 'url' => '/category/home/textiles/quilts'],
+                    ['text' => __('窗帘'), 'url' => '/category/home/textiles/curtains'],
+                    ['text' => __('毛巾'), 'url' => '/category/home/textiles/towels'],
+                    ['text' => __('地毯'), 'url' => '/category/home/textiles/rugs'],
+                    ['text' => __('靠垫'), 'url' => '/category/home/textiles/cushions'],
+                ]
+            ],
+            [
+                'text' => __('厨房用品'), 'url' => '/category/home/kitchen',
+                'children' => [
+                    ['text' => __('锅具'), 'url' => '/category/home/kitchen/cookware'],
+                    ['text' => __('刀具'), 'url' => '/category/home/kitchen/knives'],
+                    ['text' => __('餐具'), 'url' => '/category/home/kitchen/dining'],
+                    ['text' => __('杯具'), 'url' => '/category/home/kitchen/cups'],
+                    ['text' => __('收纳'), 'url' => '/category/home/kitchen/storage'],
+                    ['text' => __('厨房工具'), 'url' => '/category/home/kitchen/kitchen-tools'],
+                    ['text' => __('小家电'), 'url' => '/category/home/kitchen/small-appliances'],
+                ]
+            ],
+            [
+                'text' => __('装饰用品'), 'url' => '/category/home/decor',
+                'children' => [
+                    ['text' => __('墙饰'), 'url' => '/category/home/decor/wall-art'],
+                    ['text' => __('花瓶'), 'url' => '/category/home/decor/vases'],
+                    ['text' => __('灯具'), 'url' => '/category/home/decor/lamps'],
+                    ['text' => __('镜子'), 'url' => '/category/home/decor/mirrors'],
+                    ['text' => __('绿植'), 'url' => '/category/home/decor/plants'],
+                ]
+            ],
+        ]
+    ],
+    ['text' => __('运动户外'), 'url' => '/category/sports'],
+    ['text' => __('图书音像'), 'url' => '/category/books'],
+    ['text' => __('食品饮料'), 'url' => '/category/food'],
+    ];
+
+    return $defaultNavItems;
+};
+
+// 在 hook 执行前，navItems 为 null
+// hook 执行后，会从模板数据中获取 navItems（如果 hook 设置了的话）
+// 如果 hook 没有设置或设置为空，使用默认值
+?>
+<!-- Visual Editor Live Preview Listener -->
+<script>
+(function() {
+    window.addEventListener('message', function(event) {
+        // Accept messages from any origin (for iframe preview)
+        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
+            const cssVars = event.data.cssVars;
+            if (cssVars && typeof cssVars === 'object') {
+                const root = document.documentElement;
+                for (const [varName, value] of Object.entries(cssVars)) {
+                    root.style.setProperty(varName, value);
+                }
+                console.log('Theme colors updated via postMessage:', cssVars);
+            }
+        }
+    });
+})();
+</script>
+<!-- Skip to content link for accessibility -->
+<a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 <!-- theme-partial:header option=default -->
-<style data-theme-inline="header-default">
-    .weline-header {
-        position: sticky;
-        top: 0;
-        z-index: 50;
-        background: rgba(255, 255, 255, 0.94);
-        border-bottom: 1px solid var(--weline-theme-border, #e3e8ef);
-        box-shadow: 0 10px 28px rgba(23, 32, 51, 0.06);
-        backdrop-filter: blur(16px);
-    }
 
-    .weline-header__announcement {
-        background: var(--weline-theme-text, #172033);
-        color: #fff;
-        font-size: 13px;
-    }
-
-    .weline-header__announcement-inner {
-        min-height: 34px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        text-align: center;
-    }
-
-    .weline-header__bar {
-        display: grid;
-        grid-template-columns: auto minmax(260px, 1fr) auto;
-        align-items: center;
-        gap: 22px;
-        min-height: 74px;
-        container-type: inline-size;
-        container-name: weline-header-bar;
-    }
-
-    .weline-header__brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 11px;
-        min-width: 0;
-        color: var(--weline-theme-text, #172033);
-        font-weight: 800;
-    }
-
-    .weline-header__brand > span:last-child {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .weline-header__mark {
-        display: grid;
-        place-items: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, var(--weline-theme-primary, #5b4cf5), #18a47a);
-        color: #fff;
-        font-weight: 900;
-        box-shadow: 0 12px 26px rgba(91, 76, 245, 0.22);
-    }
-
-    .weline-header__logo {
-        display: block;
-        height: auto;
-        width: auto;
-        max-width: 180px;
-        object-fit: contain;
-    }
-
-    .weline-header__nav {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        min-width: 0;
-    }
-
-    .weline-header__nav-list {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-wrap: wrap;
-        align-content: flex-start;
-        gap: 8px 12px;
-        row-gap: 8px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-    }
-
-    .weline-header__nav-link {
-        display: inline-flex;
-        align-items: center;
-        min-height: 38px;
-        padding: 0 12px;
-        border-radius: 10px;
-        color: var(--weline-theme-muted, #657083);
-        font-weight: 700;
-        font-size: 14px;
-        white-space: nowrap;
-    }
-
-    .weline-header__nav-link:hover {
-        background: rgba(91, 76, 245, 0.08);
-        color: var(--weline-theme-primary, #5b4cf5);
-    }
-
-    .weline-header__tools {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 10px;
-        min-width: 0;
-    }
-
-    .weline-header__search {
-        width: min(100%, 330px);
-    }
-
-    .weline-header__search-form {
-        display: flex;
-        align-items: center;
-        overflow: hidden;
-        min-height: 42px;
-        border: 1px solid var(--weline-theme-border, #e3e8ef);
-        border-radius: 12px;
-        background: #fff;
-    }
-
-    .weline-header__search-input {
-        min-width: 0;
-        width: 100%;
-        border: 0;
-        outline: 0;
-        padding: 0 13px;
-        color: var(--weline-theme-text, #172033);
-        background: transparent;
-    }
-
-    .weline-header__search-button {
-        display: grid;
-        place-items: center;
-        width: 44px;
-        min-height: 42px;
-        border: 0;
-        background: var(--weline-theme-primary, #5b4cf5);
-        color: #fff;
-        cursor: pointer;
-    }
-
-    .weline-header__actions {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 8px;
-        min-width: 0;
-    }
-
-    .weline-header__action-slot {
-        min-width: 0;
-        flex: 0 1 auto;
-    }
-
-    .weline-header__actions .language-switcher.weline-choice-switcher {
-        max-width: 11rem;
-    }
-
-    .weline-header__actions .currency-switcher.weline-choice-switcher {
-        max-width: 9rem;
-        flex-shrink: 0;
-    }
-
-    .weline-header__actions .weline-choice-switcher {
-        min-width: 0;
-        overflow: hidden;
-    }
-
-    .weline-header__actions .weline-choice-switcher .action-line-2 {
-        min-width: 0;
-        overflow: hidden;
-    }
-
-    .weline-header__actions .weline-choice-switcher .current-language,
-    .weline-header__actions .weline-choice-switcher .current-currency,
-    .weline-header__actions .weline-choice-switcher .current-currency-symbol {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .weline-header__action {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        min-height: 38px;
-        padding: 0 10px;
-        border: 1px solid transparent;
-        border-radius: 10px;
-        color: var(--weline-theme-muted, #657083);
-        font-size: 13px;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-
-    .weline-header__action:hover {
-        border-color: var(--weline-theme-border, #e3e8ef);
-        background: #fff;
-        color: var(--weline-theme-primary, #5b4cf5);
-    }
-
-    .weline-header__menu-toggle {
-        display: none;
-        place-items: center;
-        width: 42px;
-        height: 42px;
-        border: 1px solid var(--weline-theme-border, #e3e8ef);
-        border-radius: 11px;
-        background: #fff;
-        color: var(--weline-theme-text, #172033);
-        cursor: pointer;
-    }
-
-    /*
-     * 桌面端：内容区放不下三列时，导航整行换到 logo/工具栏下方。
-     * 阈值需高于 --weline-theme-container（常见 1440px），否则中间列仍会挤换行。
-     */
-    @media (min-width: 1041px) {
-        .weline-header__nav-list {
-            flex-wrap: nowrap;
-        }
-
-        @container weline-header-bar (max-width: 1560px) {
-            .weline-header__bar {
-                grid-template-columns: minmax(0, 1fr) auto;
-                grid-template-rows: auto auto;
-                row-gap: 10px;
-                padding-bottom: 12px;
-            }
-
-            .weline-header__brand-slot {
-                grid-column: 1;
-                grid-row: 1;
-                min-width: 0;
-            }
-
-            .weline-header__tools {
-                grid-column: 2;
-                grid-row: 1;
-            }
-
-            .weline-header__nav {
-                grid-column: 1 / -1;
-                grid-row: 2;
-                justify-content: flex-start;
-                align-self: stretch;
-                width: 100%;
-                padding-top: 10px;
-                border-top: 1px solid var(--weline-theme-border, #e3e8ef);
-            }
-
-            .weline-header__nav-list {
-                flex-wrap: wrap;
-                justify-content: flex-start;
-                width: 100%;
-            }
-        }
-    }
-
-    /* 不支持 container query 的浏览器：按视口宽度回退到双行导航 */
-    @media (min-width: 1041px) and (max-width: 1560px) {
-        .weline-header__bar {
-            grid-template-columns: minmax(0, 1fr) auto;
-            grid-template-rows: auto auto;
-            row-gap: 10px;
-            padding-bottom: 12px;
-        }
-
-        .weline-header__brand-slot {
-            grid-column: 1;
-            grid-row: 1;
-            min-width: 0;
-        }
-
-        .weline-header__tools {
-            grid-column: 2;
-            grid-row: 1;
-        }
-
-        .weline-header__nav {
-            grid-column: 1 / -1;
-            grid-row: 2;
-            justify-content: flex-start;
-            align-self: stretch;
-            width: 100%;
-            padding-top: 10px;
-            border-top: 1px solid var(--weline-theme-border, #e3e8ef);
-        }
-
-        .weline-header__nav-list {
-            flex-wrap: wrap;
-            justify-content: flex-start;
-            width: 100%;
-        }
-    }
-
-    @media (max-width: 1040px) {
-        .weline-header {
-            --weline-header-panel-gap: 8px;
-        }
-
-        .weline-header__bar {
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 14px;
-            min-height: 66px;
-        }
-
-        .weline-header__brand-slot {
-            grid-column: 1;
-            grid-row: 1;
-            min-width: 0;
-        }
-
-        .weline-header__nav {
-            display: none;
-            grid-column: 1 / -1;
-            grid-row: 2;
-            width: 100%;
-            justify-content: stretch;
-            padding: 0 0 14px;
-        }
-
-        .weline-header.is-open .weline-header__nav {
-            display: block;
-        }
-
-        .weline-header__nav-list {
-            display: grid;
-            width: 100%;
-            grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-            gap: var(--weline-header-panel-gap);
-            justify-content: stretch;
-            padding-top: 12px;
-            border-top: 1px solid var(--weline-theme-border, #e3e8ef);
-        }
-
-        .weline-header__nav-link {
-            min-height: 42px;
-            justify-content: center;
-            padding: 0 12px;
-            border: 1px solid var(--weline-theme-border, #e3e8ef);
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.86);
-        }
-
-        .weline-header__brand {
-            gap: 9px;
-        }
-
-        .weline-header__tools {
-            grid-column: 2;
-            grid-row: 1;
-            gap: 6px;
-        }
-
-        .weline-header__actions {
-            justify-content: flex-end;
-            gap: 4px;
-        }
-
-        .weline-header__actions .weline-choice-switcher {
-            min-height: 38px;
-            padding: 0 8px;
-            border-radius: 10px;
-            flex-direction: row;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .weline-header__actions .weline-choice-switcher .action-line-1 {
-            display: none;
-        }
-
-        .weline-header__actions .weline-choice-switcher .action-line-2 {
-            min-width: 0;
-            font-size: 0.8rem;
-        }
-
-        .weline-header__actions .weline-choice-switcher .current-language {
-            max-width: 7rem;
-        }
-
-        .weline-header__action {
-            min-height: 38px;
-            padding: 0 8px;
-            border-radius: 10px;
-        }
-
-        .weline-header__menu-toggle {
-            display: grid;
-            flex: 0 0 auto;
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-        }
-
-        .weline-header__search {
-            display: none;
-        }
-
-        .weline-header.is-open .weline-header__menu-toggle {
-            border-color: var(--weline-theme-primary, #5b4cf5);
-            background: var(--weline-theme-primary, #5b4cf5);
-            color: #fff;
-        }
-    }
-
-    @media (min-width: 721px) and (max-width: 900px) {
-        .weline-header__action span {
-            display: none;
-        }
-
-        .weline-header__actions .weline-choice-switcher .current-language {
-            max-width: 5.75rem;
-        }
-
-        .weline-header__actions .weline-choice-switcher .current-currency-symbol {
-            display: none;
-        }
-    }
-
-    @media (max-width: 720px) {
-        .weline-header__bar {
-            grid-template-columns: minmax(0, 1fr) auto;
-            min-height: 64px;
-            gap: 10px;
-            padding-top: 10px;
-            padding-bottom: 10px;
-        }
-
-        .weline-header__brand-slot {
-            min-width: 0;
-            grid-column: 1;
-            grid-row: 1;
-        }
-
-        .weline-header__brand {
-            max-width: 100%;
-        }
-
-        .weline-header__mark {
-            width: 38px;
-            height: 38px;
-            border-radius: 11px;
-        }
-
-        .weline-header__tools {
-            display: contents;
-        }
-
-        .weline-header__menu-toggle {
-            grid-column: 2;
-            grid-row: 1;
-            align-self: center;
-            justify-self: end;
-        }
-
-        .weline-header__nav {
-            grid-column: 1 / -1;
-            grid-row: 2;
-            padding: 2px 0 0;
-        }
-
-        .weline-header__actions {
-            display: none;
-            grid-column: 1 / -1;
-            grid-row: 3;
-            width: 100%;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
-            padding-top: 10px;
-            border-top: 1px solid var(--weline-theme-border, #e3e8ef);
-        }
-
-        .weline-header.is-open .weline-header__actions {
-            display: grid;
-        }
-
-        .weline-header__action-slot {
-            min-width: 0;
-        }
-
-        .weline-header__action {
-            width: 100%;
-            justify-content: center;
-            min-height: 40px;
-            padding: 0 10px;
-            border-color: var(--weline-theme-border, #e3e8ef);
-            background: #fff;
-        }
-
-        .weline-header__action span {
-            display: inline;
-        }
-
-        .weline-header__actions .weline-choice-switcher {
-            width: 100%;
-            min-height: 40px;
-            padding: 0 10px;
-            border-color: var(--weline-theme-border, #e3e8ef);
-            background: #fff;
-            justify-content: center;
-        }
-
-        .weline-header__actions .weline-choice-switcher .weline-choice-panel {
-            position: fixed;
-            top: 76px;
-            left: 12px;
-            right: 12px;
-            width: auto;
-            min-width: 0;
-            max-width: none;
-        }
-
-        .weline-header__actions .weline-choice-switcher .action-line-1 {
-            display: none;
-        }
-
-        .weline-header__actions .weline-choice-switcher .action-line-2 {
-            min-width: 0;
-            font-size: 0.78rem;
-        }
-
-        .weline-header__actions .weline-choice-switcher .current-language {
-            max-width: 5.5rem;
-        }
-
-        .weline-header__nav-list {
-            grid-template-columns: 1fr;
-            padding-top: 10px;
-        }
-
-        .weline-header__nav-link {
-            justify-content: flex-start;
-        }
-    }
-
-    @media (max-width: 520px) {
-        .weline-header__actions {
-            grid-template-columns: 1fr;
-        }
-
-        .weline-header__action,
-        .weline-header__actions .weline-choice-switcher {
-            justify-content: flex-start;
-        }
-    }
-
-    @media (max-width: 420px) {
-        .weline-header__brand > span:last-child {
-            display: none;
-        }
-
-        .weline-header__actions .weline-choice-switcher .current-language {
-            max-width: 4.75rem;
-        }
-    }
-</style>
-
-<header id="header"
-        class="weline-header <?= $esc($class) ?>"
-        data-layout="default"
-        data-layout-type="header"
-        data-layout-option="default"
+<header class="weline-header <?= htmlspecialchars($class ?? '') ?>" 
+        data-layout="default" 
+        data-layout-type="default" 
+        role="banner"
         data-wslot="header"
-        data-wslot-name="Header area"
-        data-wslot-accept="layout-global-header,header-container,header-banner,announcement"
-        data-wslot-multiple="true"
-        data-wslot-append="true"
+        data-wslot-name="整体头部"
+        data-wslot-accept="layout-global-header,header-container"
+        data-wslot-exclusive="true"
         data-wslot-position="header">
     <w:hook>Weline_Theme::frontend::partials::header::before</w:hook>
-
-    <w:slot id="header-announcement"
-            name="Header announcement"
-            accept="layout-header-announcement,announcement,banner,promo-banner"
-            multiple="true"
-            append="true"
-            position="header"
-            class="weline-header__announcement">
-        <w:hook>Weline_Theme::frontend::partials::header::announcement<else/>
-        <div class="weline-container weline-header__announcement-inner">
-            <span><?= __('Free theme-ready header. Replace this area from any module hook or slot.') ?></span>
-        </div>
-        </w:hook>
-    </w:slot>
-
-    <div class="weline-container weline-header__bar">
-        <w:slot id="logo"
-                name="Logo"
-                accept="layout-header-logo,layout-global-header-logo,logo,brand"
-                exclusive="true"
-                position="header"
-                class="weline-header__brand-slot">
-            <w:hook>Weline_Theme::frontend::partials::header::logo<else/>
-            <a class="weline-header__brand" href="/" aria-label="<?= $esc($logoText) ?>">
-                <?php if ($logo !== ''): ?>
-                    <img class="weline-header__logo"
-                         src="<?= $esc($logo) ?>"
-                         alt="<?= $esc($logoText) ?>"
-                         style="max-height: <?= (int)$logoHeight ?>px">
-                <?php else: ?>
-                    <img class="weline-header__logo"
-                         src="<?= htmlspecialchars($__defaultFrontendLogo, ENT_QUOTES, 'UTF-8') ?>"
-                         alt="<?= $esc($logoText) ?>"
-                         style="max-height: <?= (int)$logoHeight ?>px">
+    <div class="header-container">
+        <!-- 顶部栏：Logo + 配送地址 + 搜索 + 用户功能（参考亚马逊 nav-belt） -->
+        <div class="header-belt">
+            <!-- 第一行：Logo + 搜索框 + Actions（移动端参考亚马逊 navbar-top-row） -->
+            <div class="header-belt-row-1">
+                <div class="header-belt-left">
+                    <!-- Logo Widget Slot -->
+                    <w:hook>Weline_Theme::frontend::partials::header::logo-before</w:hook>
+                    <div class="header-logo" 
+                         data-wslot="logo" 
+                         data-wslot-name="Logo"
+                         data-wslot-accept="layout-header-logo,layout-global-header-logo,logo"
+                         data-wslot-exclusive="true"
+                         data-wslot-position="header">
+                            <a href="/" title="<lang>首页</lang>">
+                                <?php if ($logo): ?>
+                                    <img src="<?= htmlspecialchars($logo ?? '') ?>" alt="<lang>网站Logo</lang>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                                <?php else: ?>
+                                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<lang>网站Logo</lang>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                                <?php endif; ?>
+                                <span class="logo-text" style="display: none;"><?= htmlspecialchars($logoText ?? '') ?></span>
+                            </a>
+                    </div>
+                    <w:hook>Weline_Theme::frontend::partials::header::logo-after</w:hook>
+                    
+                    <!-- 配送地址选择器（Hook） -->
+                    <div class="header-location">
+                        <w:hook>header-location-selector<else/>
+                            <a href="#" class="location-link" title="<lang>选择配送地址</lang>">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <div class="location-text">
+                                    <span class="location-line-1"><lang>配送至</lang></span>
+                                    <span class="location-line-2"><lang>中国大陆</lang></span>
+                                </div>
+                            </a>
+                        </w:hook>
+                    </div>
+                </div>
+                
+                <!-- 搜索框区域 Widget Slot（PC端在中间，移动端在第二行） -->
+                <w:hook>Weline_Theme::frontend::partials::header::search-before</w:hook>
+                <?php if ($showSearch): ?>
+                    <div class="header-search-wrapper"
+                         id="header-search-panel"
+                         data-wslot="search"
+                         data-wslot-name="搜索框"
+                         data-wslot-accept="layout-header-search,layout-global-header-search,header-search,search"
+                         data-wslot-exclusive="true"
+                         data-wslot-position="header">
+                        <form action="/search" method="get" class="header-search-form">
+                            <w:hook>
+                                Weline_Theme::frontend::partials::header::search-form-before
+                                <else/>
+                                <!-- 分类下拉菜单 -->
+                                <div class="search-category-dropdown">
+                                <select name="category" class="search-category-select" title="<?= $headerEsc('选择分类') ?>">
+                                    <option value=""><?= $headerEsc('全部分类') ?></option>
+                                    <option value="electronics"><?= $headerEsc('电子产品') ?></option>
+                                    <option value="clothing"><?= $headerEsc('服装服饰') ?></option>
+                                    <option value="home"><?= $headerEsc('家居用品') ?></option>
+                                    <option value="sports"><?= $headerEsc('运动户外') ?></option>
+                                    <option value="books"><?= $headerEsc('图书音像') ?></option>
+                                    <option value="food"><?= $headerEsc('食品饮料') ?></option>
+                                </select>
+                                <div class="search-category-facade">
+                                    <span class="search-category-label"><?= $headerEsc('全部分类') ?></span>
+                                    <i class="fas fa-chevron-down"></i>
+                                </div>
+                                </div>
+                            </w:hook>
+                            <!-- 搜索输入框 -->
+                            <div class="search-input-wrapper">
+                                <input type="text" name="q" class="search-input" placeholder="<lang>搜索商品...</lang>" autocomplete="off" value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>">
+                            </div>
+                            <!-- 搜索按钮 -->
+                            <button type="submit" class="search-submit-btn" title="<lang>搜索</lang>" aria-label="<lang>搜索</lang>">
+                                <!-- SVG 图标通过 CSS ::after 伪元素添加 -->
+                            </button>
+                        </form>
+                        <!-- 搜索建议容器 -->
+                        <div class="search-suggestions" id="search-suggestions" role="listbox" aria-label="<lang>搜索建议</lang>" aria-hidden="true">
+                            <div class="search-suggestions-header"><lang>搜索建议</lang></div>
+                            <ul class="search-suggestions-list" id="search-suggestions-list">
+                                <!-- 搜索建议项将通过 JavaScript 动态添加 -->
+                            </ul>
+                        </div>
+                    </div>
                 <?php endif; ?>
-            </a>
-            </w:hook>
-        </w:slot>
-
-        <w:slot id="header-navigation"
-                name="Header navigation"
-                accept="layout-header-navigation,layout-global-navigation,navigation,menu,category-menu"
-                exclusive="true"
-                position="header"
-                wrapper="nav"
-                class="weline-header__nav"
-                style="">
-            <w:hook>Weline_Theme::frontend::partials::header::navigation<else/>
-            <ul class="weline-header__nav-list">
-                <?php foreach ($navItems as $item): ?>
-                    <?php if (!is_array($item)) continue; ?>
-                    <li>
-                        <a class="weline-header__nav-link" href="<?= $esc($item['url'] ?? '#') ?>">
-                            <?= $esc($item['text'] ?? '') ?>
-                        </a>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-            </w:hook>
-        </w:slot>
-
-        <div class="weline-header__tools">
-            <?php if ($showSearch): ?>
-                <w:slot id="search"
-                        name="Header search"
-                        accept="layout-header-search,layout-global-search,search,search-box"
-                        exclusive="true"
-                        position="header"
-                        class="weline-header__search">
-                    <w:hook>Weline_Theme::frontend::partials::header::search<else/>
-                    <form class="weline-header__search-form" action="/search" method="get" role="search">
-                        <input class="weline-header__search-input"
-                               type="search"
-                               name="q"
-                               placeholder="<?= $esc(__('Search...')) ?>"
-                               autocomplete="off">
-                        <button class="weline-header__search-button" type="submit" aria-label="<?= $esc(__('Search')) ?>">
-                            <i class="ri-search-line"></i>
-                        </button>
-                    </form>
+                <w:hook>Weline_Theme::frontend::partials::header::search-after</w:hook>
+                
+                <!-- 右侧用户功能区 Widget Slot -->
+                <w:hook>Weline_Theme::frontend::partials::header::actions-before</w:hook>
+                <div class="header-actions"
+                     data-wslot="user-area"
+                     data-wslot-name="用户区域"
+                     data-wslot-accept="layout-header-actions,layout-global-header-actions,account,mini-cart-icon,language-switcher,currency-switcher"
+                     data-wslot-multiple="true"
+                     data-wslot-position="header">
+                <button type="button"
+                        class="header-search-toggle"
+                        aria-label="<lang>展开搜索</lang>"
+                        aria-controls="header-search-panel"
+                        aria-expanded="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m16.5 16.5 4 4"></path>
+                    </svg>
+                </button>
+                <!-- 移动端"我的"下拉菜单（合并账户、订单等功能） -->
+                <div class="header-action-item header-my-menu mobile-only" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" aria-label="<lang>我的</lang>">
+                    <button type="button" class="action-link my-menu-link" title="<lang>我的</lang>" aria-label="<lang>我的</lang>">
+                        <span class="action-line-2"><lang>我的</lang></span>
+                        <i class="fas fa-chevron-down" aria-hidden="true" style="font-size: 0.7rem; margin-left: 0.2rem;"></i>
+                    </button>
+                    <div class="my-menu-dropdown" role="menu" aria-label="<lang>我的菜单</lang>">
+                        <ul>
+                            <!-- 账户相关 -->
+                            <?php if ($showUserMenu): ?>
+                                <w:hook>header-account-links<else/>
+                                    <li role="none"><a href="/account/login" role="menuitem"><i class="fas fa-user" aria-hidden="true"></i> <lang>账户及心愿单</lang></a></li>
+                                    <li role="none"><a href="/account/dashboard" role="menuitem"><i class="fas fa-tachometer-alt" aria-hidden="true"></i> <lang>账户</lang></a></li>
+                                    <li role="none"><a href="/customer/account/index#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
+                                    <li role="none"><a href="/account/settings" role="menuitem"><i class="fas fa-cog" aria-hidden="true"></i> <lang>账户设置</lang></a></li>
+                                    <li role="none"><a href="/account/logout" role="menuitem"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> <lang>退出登录</lang></a></li>
+                                </w:hook>
+                            <?php else: ?>
+                                <li role="none"><a href="/customer/account/index#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
+                            <?php endif; ?>
+                            <!-- 语言和货币切换（移动端也放到下拉菜单中） -->
+                            <li role="none" class="my-menu-divider"></li>
+                            <li role="none" class="my-menu-submenu">
+                                <span class="my-menu-submenu-title">
+                                    <span class="my-menu-submenu-icon" aria-hidden="true">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10" />
+                                            <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" fill="none" stroke="currentColor" stroke-width="1" />
+                                        </svg>
+                                    </span>
+                                    <span><lang>语言</lang></span>
+                                    <span class="my-menu-submenu-indicator" aria-hidden="true">
+                                        <svg width="10" height="10" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                                            <path d="M3 5l5 6 5-6" />
+                                        </svg>
+                                    </span>
+                                    <i class="fas fa-chevron-right my-menu-submenu-arrow" aria-hidden="true"></i>
+                                </span>
+                                <div class="my-menu-submenu-content">
+                                    <a href="#" class="my-menu-submenu-item active" data-lang="zh_Hans_CN" role="menuitem"><lang>简体中文</lang></a>
+                                    <a href="#" class="my-menu-submenu-item" data-lang="en_US" role="menuitem">English</a>
+                                    <a href="#" class="my-menu-submenu-item" data-lang="zh_Hant_TW" role="menuitem"><lang>繁體中文</lang></a>
+                                </div>
+                            </li>
+                            <li role="none" class="my-menu-submenu">
+                                <span class="my-menu-submenu-title">
+                                    <span class="my-menu-submenu-icon my-menu-submenu-icon-currency" aria-hidden="true">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+                                            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4" />
+                                            <path d="M12 7v10M9 10h6M9 14h6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                                        </svg>
+                                    </span>
+                                    <span><lang>货币</lang></span>
+                                    <span class="my-menu-submenu-indicator" aria-hidden="true">
+                                        <svg width="10" height="10" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                                            <path d="M3 5l5 6 5-6" />
+                                        </svg>
+                                    </span>
+                                    <i class="fas fa-chevron-right my-menu-submenu-arrow" aria-hidden="true"></i>
+                                </span>
+                                <div class="my-menu-submenu-content">
+                                    <a href="#" class="my-menu-submenu-item active" data-currency="CNY" role="menuitem">CNY (¥)</a>
+                                    <a href="#" class="my-menu-submenu-item" data-currency="USD" role="menuitem">USD ($)</a>
+                                    <a href="#" class="my-menu-submenu-item" data-currency="EUR" role="menuitem">EUR (€)</a>
+                                    <a href="#" class="my-menu-submenu-item" data-currency="GBP" role="menuitem">GBP (£)</a>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <!-- 语言切换（直接显示选项） -->
+                <!-- 
+                    Hook: header-language-switcher
+                    Hook 类型: 简单格式 Hook
+                    功能: 语言切换器，支持 hover 展开下拉菜单
+                    CSS 类: .header-language-switcher, .language-switcher, .language-options
+                    Hover 展开: 是（通过 CSS :hover 实现）
+                    查找实现: 在模块的 view/hooks/header-language-switcher.phtml 中查找
+                    可能实现模块: Weline_I18n, Weline_Frontend 等
+                -->
+                <div class="header-action-item header-language-switcher" data-hook="header-language-switcher">
+                    <w:hook>header-language-switcher<else/>
+                        <div class="language-switcher" role="button" tabindex="0" aria-label="<lang>切换语言</lang>">
+                            <span class="action-line-1"><lang>语言</lang></span>
+                            <span class="action-line-2">
+                                <span class="language-switcher-icon" aria-hidden="true">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" fill="none" stroke="currentColor" stroke-width="1" />
+                                    </svg>
+                                </span>
+                                <span class="current-language"><lang>ZH</lang></span>
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </span>
+                            <div class="language-options" role="menu" aria-label="<lang>语言选项</lang>">
+                                <a href="#" class="language-option active" data-lang="zh_Hans_CN" role="menuitem">
+                                    <span><lang>简体中文</lang></span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="#" class="language-option" data-lang="en_US" role="menuitem">
+                                    <span><lang>English</lang></span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="#" class="language-option" data-lang="zh_Hant_TW" role="menuitem">
+                                    <span><lang>繁體中文</lang></span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                            </div>
+                        </div>
                     </w:hook>
-                </w:slot>
-            <?php endif; ?>
+                </div>
 
-            <?php if ($showUserMenu): ?>
-                <w:slot id="header-actions"
-                        name="Header actions"
-                        accept="layout-header-actions,layout-global-header-actions,header-actions,account,currency,language,cart"
-                        multiple="true"
-                        append="true"
-                        position="header"
-                        class="weline-header__actions">
-                    <w:slot id="header-language"
-                            name="Language switcher"
-                            accept="layout-header-language,language-switcher,language"
-                            exclusive="true"
-                            position="header"
-                            class="weline-header__action-slot">
-                        <w:hook>Weline_Theme::frontend::partials::header::language<else/>
-                        <w:hook>header-language-switcher<else/>
-                        <span class="weline-header__action"><i class="ri-translate-2"></i><span>ZH</span></span>
-                        </w:hook>
-                        </w:hook>
-                    </w:slot>
+                <!-- 货币切换（直接显示选项） -->
+                <!-- 
+                    Hook: header-currency-switcher
+                    Hook 类型: 简单格式 Hook
+                    功能: 货币切换器，支持 hover 展开下拉菜单
+                    CSS 类: .header-currency-switcher, .currency-switcher, .currency-options
+                    Hover 展开: 是（通过 CSS :hover 实现）
+                    查找实现: 在模块的 view/hooks/header-currency-switcher.phtml 中查找
+                    可能实现模块: Weline_Currency, Weline_Frontend 等
+                -->
+                <div class="header-action-item header-currency-switcher" data-hook="header-currency-switcher">
+                    <w:hook>header-currency-switcher<else/>
+                        <div class="currency-switcher" role="button" tabindex="0" aria-label="<lang>切换货币</lang>">
+                            <span class="action-line-1"><lang>货币</lang></span>
+                            <span class="action-line-2">
+                                <span class="currency-switcher-icon" aria-hidden="true">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4" />
+                                        <path d="M12 7v10M9 10h6M9 14h6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                                    </svg>
+                                </span>
+                                <span class="current-currency"><lang>CNY</lang></span>
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </span>
+                            <div class="currency-options" role="menu" aria-label="<lang>货币选项</lang>">
+                                <a href="#" class="currency-option active" data-currency="CNY" role="menuitem">
+                                    <span>CNY (¥)</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="#" class="currency-option" data-currency="USD" role="menuitem">
+                                    <span>USD ($)</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="#" class="currency-option" data-currency="EUR" role="menuitem">
+                                    <span>EUR (€)</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="#" class="currency-option" data-currency="GBP" role="menuitem">
+                                    <span>GBP (£)</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </w:hook>
+                </div>
 
-                    <w:slot id="header-currency"
-                            name="Currency switcher"
-                            accept="layout-header-currency,currency-switcher,currency"
-                            exclusive="true"
-                            position="header"
-                            class="weline-header__action-slot">
-                        <w:hook>Weline_Theme::frontend::partials::header::currency<else/>
-                        <w:hook>header-currency-switcher<else/>
-                        <span class="weline-header__action"><i class="ri-money-cny-circle-line"></i><span>CNY</span></span>
-                        </w:hook>
-                        </w:hook>
-                    </w:slot>
-
-                    <w:slot id="header-account"
-                            name="Account action"
-                            accept="layout-header-account,account,user-menu"
-                            exclusive="true"
-                            position="header"
-                            class="weline-header__action-slot">
-                        <w:hook>Weline_Theme::frontend::partials::header::account<else/>
+                <!-- 账户登录 Hook -->
+                <!-- 
+                    Hook: header-account
+                    Hook 类型: 简单格式 Hook
+                    功能: 账户菜单，支持 hover 展开下拉菜单
+                    CSS 类: .header-account, .account-dropdown
+                    Hover 展开: 是（通过 CSS :hover 实现，见 theme.css .header-account:hover .account-dropdown）
+                    查找实现: 在模块的 view/hooks/header-account.phtml 中查找
+                    可能实现模块: Weline_Customer, Weline_Frontend 等
+                -->
+                <?php if ($showUserMenu): ?>
+                    <div class="header-action-item header-account" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" aria-label="<lang>账户菜单</lang>">
                         <w:hook>header-account<else/>
-                        <a class="weline-header__action" href="/account"><i class="ri-user-3-line"></i><span><?= __('Account') ?></span></a>
+                            <a href="/account/login" class="action-link" title="<lang>账户</lang>" aria-label="<lang>账户及心愿单</lang>">
+                                <span class="action-line-1"><lang>您好, 登录</lang></span>
+                                <span class="action-line-2"><lang>账户及心愿单</lang></span>
+                            </a>
                         </w:hook>
-                        </w:hook>
-                    </w:slot>
+                        <div class="account-dropdown" role="menu" aria-label="<lang>账户菜单</lang>">
+                            <ul>
+                                <w:hook>header-account-links<else/>
+                                    <li role="none"><a href="/account/dashboard" role="menuitem"><lang>账户</lang></a></li>
+                                    <li role="none"><a href="/customer/account/index#orders" role="menuitem"><lang>我的订单</lang></a></li>
+                                    <li role="none"><a href="/account/settings" role="menuitem"><lang>账户设置</lang></a></li>
+                                    <li role="none"><a href="/account/logout" role="menuitem"><lang>退出登录</lang></a></li>
+                                </w:hook>
+                            </ul>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
-                    <w:slot id="header-cart"
-                            name="Cart action"
-                            accept="layout-header-cart,cart,mini-cart"
-                            exclusive="true"
-                            position="header"
-                            class="weline-header__action-slot">
-                        <w:hook>Weline_Theme::frontend::partials::header::cart<else/>
-                        <w:hook>header-cart<else/>
-                        <a class="weline-header__action" href="/cart"><i class="ri-shopping-bag-3-line"></i><span><?= __('Cart') ?></span></a>
-                        </w:hook>
-                        </w:hook>
-                    </w:slot>
-                </w:slot>
-            <?php endif; ?>
+                <!-- 订单 Hook -->
+                <div class="header-action-item">
+                    <w:hook>header-orders<else/>
+                        <a href="/customer/account/index#orders" class="action-link" title="<lang>我的订单</lang>">
+                            <span class="action-line-1"><lang>退货</lang></span>
+                            <span class="action-line-2"><lang>与我的订单</lang></span>
+                        </a>
+                    </w:hook>
+                </div>
 
-            <button class="weline-header__menu-toggle" type="button" aria-label="<?= $esc(__('Toggle navigation')) ?>" aria-controls="header-navigation" aria-expanded="false" data-theme-header-toggle>
-                <i class="ri-menu-line"></i>
-            </button>
+                <!-- 购物车 Hook -->
+                <!-- 
+                    Hook: header-cart
+                    Hook 类型: 简单格式 Hook
+                    功能: 购物车按钮，支持 hover 展开下拉菜单（.cart-dropdown）和迷你购物车（.mini-cart）
+                    CSS 类: .header-cart, .cart-link, .cart-dropdown, .mini-cart
+                    Hover 展开: 是（通过 CSS :hover 实现，见 theme.css .header-cart:hover .cart-dropdown 和 .header-cart:hover ~ .mini-cart）
+                    查找实现: 在模块的 view/hooks/header-cart.phtml 中查找
+                    可能实现模块: WeShop_Cart, Weline_Frontend 等
+                    注意: 如果其他模块实现了此 hook，可能会覆盖默认的购物车下拉菜单
+                -->
+                <div class="header-action-item header-cart" data-hook="header-cart" role="button" tabindex="0" aria-label="<lang>购物车</lang>" aria-expanded="false">
+                    <w:hook>header-cart<else/>
+                        <button type="button" class="action-link cart-link" title="<lang>购物车</lang>" aria-label="<lang>打开购物车</lang>">
+                            <span class="cart-count">0</span>
+                            <span class="cart-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                                    <circle cx="9" cy="20" r="1.5" />
+                                    <circle cx="17" cy="20" r="1.5" />
+                                    <path d="M4 4h2l1.5 9h9l2-7H7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </span>
+                            <span class="action-line-2"><lang>购物车</lang></span>
+                        </button>
+                        <!-- 迷你购物车（hover 时显示） -->
+                        <div class="mini-cart-overlay" id="mini-cart-overlay" aria-hidden="true"></div>
+                        <div class="mini-cart" id="mini-cart" role="dialog" aria-modal="true" aria-labelledby="mini-cart-title" aria-hidden="true">
+                            <div class="mini-cart-header">
+                                <h2 class="mini-cart-title" id="mini-cart-title"><lang>购物车</lang></h2>
+                                <button class="mini-cart-close" id="mini-cart-close" aria-label="<lang>关闭购物车</lang>" type="button">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="mini-cart-content">
+                                <div class="mini-cart-empty" id="mini-cart-empty">
+                                    <span class="mini-cart-empty-icon" aria-hidden="true">
+                                        <svg width="34" height="34" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                                            <circle cx="9" cy="20" r="1.7" />
+                                            <circle cx="17" cy="20" r="1.7" />
+                                            <path d="M3 4h2l1.5 9h9l2-7H6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                        </svg>
+                                    </span>
+                                    <p><lang>购物车是空的</lang></p>
+                                    <a href="/" class="w-btn w-btn-primary"><lang>继续购物</lang></a>
+                                </div>
+                                <div class="mini-cart-items" id="mini-cart-items" style="display: none;">
+                                    <ul class="mini-cart-list" role="list">
+                                        <!-- 购物车商品项将通过 JavaScript 动态添加 -->
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="mini-cart-footer" id="mini-cart-footer" style="display: none;">
+                                <div class="mini-cart-total">
+                                    <span class="total-label"><lang>总计</lang>:</span>
+                                    <span class="total-amount" id="mini-cart-total">¥0.00</span>
+                                </div>
+                                <div class="mini-cart-actions">
+                                    <a href="/cart" class="w-btn w-btn-secondary"><lang>查看购物车</lang></a>
+                                    <a href="/checkout" class="w-btn w-btn-primary"><lang>去结算</lang></a>
+                                </div>
+                            </div>
+                        </div>
+                    </w:hook>
+                </div>
+
+                <!-- 其他个人信息 Hook -->
+                <w:hook>header-user-info</w:hook>
+                </div>
+                <w:hook>Weline_Theme::frontend::partials::header::actions-after</w:hook>
+            </div>
+        </div>
+        
+        <!-- 底部导航栏：汉堡菜单 + 横向导航链接（参考亚马逊 nav-main） -->
+        <div class="header-main-nav">
+            <div class="header-nav-left">
+                <!-- 汉堡菜单（全部） -->
+                <w:hook>header-hamburger-menu<else/>
+                    <a href="#" class="hamburger-menu-btn" id="hamburger-menu" role="button" aria-label="<lang>打开所有类别菜单</lang>" aria-expanded="false" aria-controls="categories-list">
+                        <i class="fas fa-bars" aria-hidden="true"></i>
+                        <span class="hamburger-label"><?= $headerEsc('全部') ?></span>
+                    </a>
+                </w:hook>
+                
+                <!-- 分类菜单区域（Hook，横向导航） -->
+                <w:hook>Weline_Theme::frontend::partials::header::categories-before<else/>
+                    <div class="header-categories">
+                    <?php 
+                    // hook 执行后，重新从模板数据中获取 navItems
+                    $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
+                    // 如果 hook 没有设置，使用默认值
+                    if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
+                        $navItems = $defaultNavItemsFactory();
+                    }
+                    if (!empty($navItems)): ?>
+                        <nav class="categories-nav">
+                            <ul class="categories-list" id="categories-list">
+                                <?php 
+                                // 递归函数：渲染菜单项（支持多级）
+                                $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem, $headerEsc) {
+                                    $hasChildren = !empty($item['children']) && is_array($item['children']);
+                                    ?>
+                                    <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
+                                        <div class="category-link-wrapper">
+                                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
+                                                <?= $headerEsc($item['text'] ?? '') ?>
+                                            </a>
+                                            <?php if ($hasChildren): ?>
+                                                <span class="category-arrow" role="button" aria-label="<?= $headerEsc('展开子菜单') ?>"></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php if ($hasChildren): ?>
+                                            <ul class="category-submenu">
+                                                <?php foreach ($item['children'] as $child): ?>
+                                                    <?php $renderMenuItem($child, $level + 1); ?>
+                                                <?php endforeach; ?>
+                                             </ul>
+                                        <?php endif; ?>
+                                    </li>
+                                <?php };
+                                
+                                foreach ($navItems as $item): 
+                                    $renderMenuItem($item);
+                                endforeach; 
+                                ?>
+                                <li class="categories-overflow-wrapper" id="categories-overflow-wrapper" style="display: none;">
+                                    <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="<?= $headerEsc('更多分类') ?>" aria-expanded="false" type="button">
+                                        <span><?= $headerEsc('更多') ?></span>
+                                        <i class="fas fa-chevron-down"></i>
+                                    </button>
+                                    <ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true">
+                                        <!-- 动态添加的分类菜单项 -->
+                                    </ul>
+                                </li>
+                            </ul>
+                        </nav>
+                    <?php endif; ?>
+                    </div>
+                    </div>
+                </w:hook>
+                <w:hook>Weline_Theme::frontend::partials::header::categories-after</w:hook>
+            </div>
+            <div class="header-nav-fill" id="header-nav-fill"
+                 data-wslot="navigation"
+                 data-wslot-name="导航菜单"
+                 data-wslot-accept="layout-header-navigation,layout-global-header-navigation,main-nav,category-menu,navigation"
+                 data-wslot-exclusive="true"
+                 data-wslot-position="header">
+                <!-- 横向导航链接（今日特价、Prime Video等） -->
+                <w:hook>header-nav-links<else/>
+                    <nav class="header-nav-links">
+                        <ul class="nav-links-list" id="nav-links-list">
+                            <li><a href="/deals"><?= $headerEsc('今日特价') ?></a></li>
+                            <li><a href="/video"><?= $headerEsc('会员视频') ?></a></li>
+                            <li><a href="/registry"><?= $headerEsc('礼品心愿单') ?></a></li>
+                            <li><a href="/gift-cards"><?= $headerEsc('礼品卡') ?></a></li>
+                            <li><a href="/help"><?= $headerEsc('客户服务') ?></a></li>
+                        </ul>
+                        <!-- 更多按钮 -->
+                        <div class="nav-more-wrapper" id="nav-more-wrapper" style="display: none;">
+                            <button class="nav-more-btn" id="nav-more-btn" aria-label="<?= $headerEsc('更多') ?>" aria-expanded="false">
+                                <span><?= $headerEsc('更多') ?></span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <ul class="nav-more-dropdown" id="nav-more-dropdown" role="menu" aria-hidden="true">
+                                <!-- 动态添加的菜单项 -->
+                            </ul>
+                        </div>
+                    </nav>
+                </w:hook>
+            </div>
+            
+            <div class="header-nav-right">
+                <w:hook>header-nav-right</w:hook>
+            </div>
         </div>
     </div>
-
+    
     <w:hook>Weline_Theme::frontend::partials::header::after</w:hook>
 </header>
 
-<script data-no-extract="true">
-    (function() {
-        var header = document.getElementById('header');
-        if (!header) {
-            return;
+<!-- 侧边栏菜单（全部分类） -->
+<div class="categories-sidebar-overlay" id="categories-sidebar-overlay" aria-hidden="true"></div>
+<div class="categories-sidebar" id="categories-sidebar" role="dialog" aria-modal="true" aria-labelledby="categories-sidebar-title" aria-hidden="true">
+    <div class="categories-sidebar-header">
+        <h2 class="categories-sidebar-title" id="categories-sidebar-title"><?= $headerEsc('全部') ?></h2>
+        <button class="categories-sidebar-close" id="categories-sidebar-close" aria-label="<lang>关闭菜单</lang>" type="button">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+    </div>
+    <div class="categories-sidebar-content">
+        <!-- 侧边栏首部：快捷链接 (今日特价等，仅在手机端显示) -->
+        <div class="sidebar-shortcuts mobile-only">
+            <ul class="sidebar-shortcuts-list">
+                <?php
+                // 获取侧边栏快捷方式数据（从 hook 中设置）
+                $sidebarShortcuts = $this->getData('sidebarShortcuts') ?? $meta['sidebarShortcuts'] ?? [];
+                
+                // 如果 hook 设置了侧边栏快捷方式，使用 hook 的数据
+                if (!empty($sidebarShortcuts)):
+                    foreach ($sidebarShortcuts as $shortcut):
+                        $shortcutUrl = htmlspecialchars($shortcut['url'] ?? '#');
+                        $shortcutText = htmlspecialchars($shortcut['text'] ?? '');
+                        $shortcutIcon = htmlspecialchars($shortcut['icon'] ?? 'fas fa-circle');
+                ?>
+                    <li><a href="<?= $shortcutUrl ?>"><i class="<?= $shortcutIcon ?>"></i> <?= $headerEsc($shortcut['text'] ?? '') ?></a></li>
+                <?php
+                    endforeach;
+                else:
+                    // 如果没有 hook 数据，使用默认快捷方式
+                ?>
+                    <li><a href="/deals"><i class="fas fa-bolt"></i> <?= $headerEsc('今日特价') ?></a></li>
+                    <li><a href="/video"><i class="fas fa-play"></i> <?= $headerEsc('会员视频') ?></a></li>
+                    <li><a href="/registry"><i class="fas fa-gift"></i> <?= $headerEsc('礼品心愿单') ?></a></li>
+                    <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <?= $headerEsc('礼品卡') ?></a></li>
+                    <li><a href="/help"><i class="fas fa-question-circle"></i> <?= $headerEsc('客户服务') ?></a></li>
+                <?php endif; ?>
+            </ul>
+        </div>
+
+        <nav class="categories-sidebar-nav" role="navigation" aria-label="<?= $headerEsc('分类导航') ?>">
+            <ul class="categories-sidebar-list" id="categories-sidebar-list">
+                <?php 
+                // 确保使用最新的 navItems（hook 可能已经设置了真实分类数据）
+                // hook 执行后，重新从模板数据中获取 navItems
+                $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
+                // 如果 hook 没有设置，使用默认值
+                if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
+                    $navItems = $defaultNavItemsFactory();
+                }
+                // 使用相同的渲染函数生成侧边栏菜单（汉堡菜单）
+                if (!empty($navItems)): 
+                    $renderSidebarItem = function($item, $level = 1) use (&$renderSidebarItem, $headerEsc) {
+                        $hasChildren = !empty($item['children']) && is_array($item['children']);
+                        ?>
+                        <li class="sidebar-category-item <?= $hasChildren ? 'has-children' : '' ?>">
+                            <div class="sidebar-category-link-wrapper">
+                                <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="sidebar-category-link">
+                                    <?= $headerEsc($item['text'] ?? '') ?>
+                                    <?php if ($hasChildren): ?>
+                                        <span class="sidebar-category-badge" aria-label="<?= $headerEsc('有子菜单') ?>">▶</span>
+                                    <?php endif; ?>
+                                </a>
+                                <?php if ($hasChildren): ?>
+                                    <i class="fas fa-chevron-right sidebar-category-arrow" role="button" aria-label="<?= $headerEsc('展开子菜单') ?>"></i>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($hasChildren): ?>
+                                <ul class="sidebar-category-submenu" data-level="<?= $level + 1 ?>">
+                                    <?php foreach ($item['children'] as $child): ?>
+                                        <?php $renderSidebarItem($child, $level + 1); ?>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
+                        </li>
+                    <?php };
+                    
+                    foreach ($navItems as $item): 
+                        $renderSidebarItem($item);
+                    endforeach; 
+                endif; ?>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<style>
+/* ========================================
+   Amazon风格 - Header样式
+   ======================================== */
+
+/* 全局滚动条样式（遵循主题规范） */
+html,
+body {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 表单控件与下拉框滚动条（包含搜索分类 select） */
+select,
+textarea,
+.search-category-select {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+select::-webkit-scrollbar,
+textarea::-webkit-scrollbar,
+.search-category-select::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+select::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track,
+.search-category-select::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+select::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb,
+.search-category-select::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+select::-webkit-scrollbar-thumb:hover,
+textarea::-webkit-scrollbar-thumb:hover,
+.search-category-select::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 跳过内容链接 */
+.skip-to-content {
+    position: absolute;
+    left: -9999px;
+    z-index: 9999;
+}
+
+.skip-to-content:focus {
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    background: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+/* Header主容器 */
+.weline-header {
+    width: 100%;
+    background-color: <?= htmlspecialchars($colors['bgDark'] ?? '#131921') ?>;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: visible; 
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* 粘性状态下应用精致的磨砂玻璃效果 */
+.weline-header.is-compact {
+    background-color: rgba(19, 25, 33, 0.9);
+    backdrop-filter: blur(15px) saturate(160%);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.weline-header.is-compact .header-belt {
+    min-height: 50px;
+    padding: 0.25rem 1rem;
+}
+
+.weline-header.is-compact .header-logo img {
+    height: <?= (int)($logoHeight * 0.8) ?>px; /* compact状态下使用配置高度的80% */
+}
+
+.header-container {
+    width: 100%;
+    /* 版心宽度：与全站统一，支持主题变量覆盖 */
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+    margin: 0 auto;
+    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+    overflow: visible;
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* ========== 顶部栏（nav-belt）- 亚马逊风格 ========== */
+.header-belt {
+    display: flex;
+    flex-direction: column; /* 移动端改为纵向布局 */
+    background-color: <?= htmlspecialchars($colors['bgDark'] ?? '#131921') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    padding: 0.5rem 1rem;
+    min-height: 60px;
+    gap: 0;
+    width: 100%;
+}
+
+/* 桌面端：横向布局（Logo + 搜索框 + Actions 在同一行） */
+@media (min-width: 769px) {
+    .header-belt {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    
+    /* 桌面端：第一行包含 Logo、搜索框和 Actions */
+    .header-belt-row-1 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 1rem;
+        flex: 1 1 100%;
+    }
+    
+    /* 桌面端：Logo 在左侧 */
+    .header-belt-left {
+        flex: 0 0 auto;
+    }
+    
+    /* 桌面端：搜索框在中间，自动占据剩余空间 */
+    .header-search-wrapper {
+        flex: 1 1 auto;
+        max-width: 600px;
+        margin: 0 auto;
+        min-width: 0;
+    }
+    
+    /* 桌面端：Actions 在右侧 */
+    .header-actions {
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+}
+
+/* 第一行：Logo + Actions（参考亚马逊 navbar-top-row，移动端使用） */
+.header-belt-row-1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+.header-belt-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+/* Logo样式 */
+.header-logo {
+    display: flex;
+    align-items: center;
+}
+
+.header-logo a {
+    display: flex;
+    align-items: center;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+}
+
+.header-logo img {
+    height: <?= (int)$logoHeight ?>px; /* 使用配置的高度，默认50px */
+    width: auto; /* 宽度自适应 */
+    object-fit: contain; /* 保持比例 */
+}
+
+.logo-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+/* 配送地址选择器 */
+.header-location {
+    display: flex;
+    align-items: center;
+}
+
+.location-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    padding: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    transition: border-color 0.2s ease;
+}
+
+.location-link:hover {
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+.location-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.location-line-1 {
+    font-size: 0.75rem;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ccc') ?>;
+}
+
+.location-line-2 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+/* 搜索框区域 - 占据主要空间 */
+.header-search-wrapper {
+    flex: 1;
+    max-width: 800px;
+    position: relative;
+    margin: 0 auto;
+}
+
+.header-search-form {
+    display: flex;
+    width: 100%;
+    height: 40px;
+    border-radius: 4px;
+    transition: box-shadow 0.2s ease;
+}
+
+/* 聚焦时整条搜索栏统一高亮，避免中段单独描边造成断裂感 */
+.header-search-form:focus-within {
+    box-shadow: 0 0 0 3px <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 搜索分类下拉菜单 */
+.search-category-dropdown {
+    position: relative;
+    flex-shrink: 0;
+    height: 100%;
+}
+
+.search-category-select {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    z-index: 2;
+}
+
+/* 多级分类选项样式 */
+.search-category-select option {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* 为不同层级的分类选项添加视觉区分 */
+.search-category-select option[data-level="0"] {
+    font-weight: 600;
+}
+
+.search-category-select option[data-level="1"] {
+    font-weight: 500;
+    padding-left: 1.5rem;
+}
+
+.search-category-select option[data-level="2"] {
+    font-weight: 400;
+    padding-left: 2.25rem;
+}
+
+.search-category-select option[data-level="3"],
+.search-category-select option[data-level="4"],
+.search-category-select option[data-level="5"] {
+    font-weight: 400;
+    padding-left: 3rem;
+}
+
+.search-category-facade {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.75rem;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    height: 100%;
+    min-width: 120px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+}
+
+.search-category-facade:hover {
+    background-color: <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>;
+}
+
+.search-category-label {
+    white-space: nowrap;
+}
+
+.search-category-facade i {
+    margin-left: 0.5rem;
+    font-size: 0.625rem;
+}
+
+/* 搜索输入框 */
+.search-input-wrapper {
+    flex: 1;
+    position: relative;
+}
+
+/* 提升优先级覆盖全局 input[type="text"] 规则，保证三段拼接平整 */
+.header-search-form .search-input {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 0 1rem;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    background: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    outline: none;
+    box-shadow: none;
+    transition: border-color 0.2s ease;
+}
+
+.header-search-form .search-input:focus {
+    border-color: <?= htmlspecialchars($colors['borderFocus'] ?? '#ff9900') ?>;
+    box-shadow: none;
+}
+
+/* 搜索按钮 */
+.search-submit-btn {
+    width: 45px;
+    height: 100%;
+    background-color: <?= htmlspecialchars($colors['primaryLight'] ?? '#febd69') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    border-left: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+}
+
+.search-submit-btn:hover {
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.search-submit-btn::after {
+    content: '';
+    width: 22px;
+    height: 22px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* 搜索建议下拉 */
+.search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+.search-suggestions[aria-hidden="false"] {
+    display: block;
+}
+
+.search-suggestions-header {
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>;
+}
+
+.search-suggestions-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.search-suggestions-list li {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-suggestions-list li:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+/* 右侧用户功能区 */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.header-search-toggle {
+    display: none;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.header-search-toggle:hover,
+.header-search-toggle:focus-visible,
+.header-search-toggle[aria-expanded="true"] {
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    background-color: rgba(255, 255, 255, 0.08);
+    outline: none;
+}
+
+.header-search-toggle svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.header-action-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+/* 移动端"我的"菜单 */
+.header-my-menu {
+    display: none; /* 默认隐藏，只在移动端显示 */
+}
+
+/* 桌面端隐藏移动端专用元素 */
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none !important;
+    }
+}
+
+.my-menu-link {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.6rem;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?> !important;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    transition: border-color 0.2s ease;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.my-menu-link:hover {
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+.my-menu-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: auto; /* 根据内容宽度自适应 */
+    min-width: 200px; /* 最小宽度 */
+    max-width: 90vw;
+    margin-top: 0.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    max-height: 80vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.header-my-menu.active .my-menu-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.my-menu-dropdown ul {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+}
+
+.my-menu-dropdown li {
+    margin: 0;
+}
+
+.my-menu-dropdown li a {
+    display: flex;
+    align-items: center;
+    padding: 0.875rem 1.25rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: nowrap; /* 防止文字换行 */
+}
+
+.my-menu-dropdown li a:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    padding-left: 1.5rem; /* 悬停时稍微右移，增加交互感 */
+}
+
+.my-menu-dropdown li a i {
+    margin-right: 0.875rem;
+    width: 20px;
+    text-align: center;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    font-size: 0.95rem;
+    transition: color 0.2s ease;
+}
+
+.my-menu-dropdown li a:hover i {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.my-menu-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>, transparent);
+    margin: 0.75rem 1.25rem;
+    padding: 0 !important;
+    border: none;
+}
+
+.my-menu-submenu {
+    position: relative;
+}
+
+.my-menu-submenu-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1.25rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.my-menu-submenu-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.5rem;
+}
+
+.my-menu-submenu-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+}
+
+.my-menu-submenu-icon-currency svg {
+    stroke-width: 1.6;
+}
+
+.my-menu-submenu-indicator {
+    margin-left: 0.4rem;
+    margin-right: 0.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    opacity: 0.85;
+}
+
+.my-menu-submenu-indicator svg {
+    display: block;
+    width: 10px;
+    height: 10px;
+    fill: currentColor;
+}
+
+.my-menu-submenu-title:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.my-menu-submenu-title i:first-child {
+    margin-right: 0.875rem;
+    width: 20px;
+    text-align: center;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    font-size: 0.95rem;
+    transition: color 0.2s ease;
+}
+
+.my-menu-submenu-title:hover i:first-child {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 展开/收起箭头图标 */
+.my-menu-submenu-arrow {
+    margin-left: auto;
+    margin-right: 0;
+    width: auto;
+    font-size: 0.75rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#999') ?>;
+    transition: transform 0.3s ease, color 0.2s ease;
+}
+
+.my-menu-submenu.active .my-menu-submenu-arrow {
+    transform: rotate(90deg);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.my-menu-submenu-title:hover .my-menu-submenu-arrow {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.my-menu-submenu-content {
+    display: none;
+    padding: 0.25rem 0;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f8f9fa') ?>;
+    border-top: 1px solid <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        transform: translateY(0);
+    }
+}
+
+.my-menu-submenu.active .my-menu-submenu-content {
+    display: block;
+}
+
+.my-menu-submenu-item {
+    display: flex;
+    align-items: center;
+    padding: 0.625rem 1.25rem 0.625rem 2.5rem; /* 左侧缩进，表示二级菜单 */
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    position: relative;
+}
+
+.my-menu-submenu-item::before {
+    content: '';
+    position: absolute;
+    left: 1.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background-color: <?= htmlspecialchars($colors['textSecondary'] ?? '#999') ?>;
+    transition: background-color 0.2s ease;
+}
+
+.my-menu-submenu-item:hover {
+    background-color: <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    padding-left: 2.75rem; /* 悬停时稍微右移 */
+}
+
+.my-menu-submenu-item:hover::before {
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.my-menu-submenu-item.active {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    font-weight: 600;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+.my-menu-submenu-item.active::before {
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    width: 6px;
+    height: 6px;
+}
+
+.action-link {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.5rem;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    transition: border-color 0.2s ease;
+    line-height: 1.2;
+    min-width: 60px;
+}
+
+.action-link:hover {
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+.action-line-1 {
+    font-size: 0.75rem;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ccc') ?>;
+}
+
+.action-line-2 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+/* 语言切换器 */
+.header-language-switcher,
+.header-currency-switcher {
+    position: relative;
+}
+
+.language-switcher,
+.currency-switcher {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.language-switcher-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.25rem;
+}
+
+.language-switcher-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+}
+
+.language-switcher:hover,
+.currency-switcher:hover {
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+.currency-switcher-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.25rem;
+}
+
+.currency-switcher-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+}
+
+.language-options,
+.currency-options {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    min-width: 200px;
+    margin-top: 0.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1000;
+}
+
+.language-switcher:hover .language-options,
+.currency-switcher:hover .currency-options {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.language-option,
+.currency-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.language-option:hover,
+.currency-option:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+.language-option.active .fa-check,
+.currency-option.active .fa-check {
+    display: inline-block;
+}
+
+.language-option .fa-check,
+.currency-option .fa-check {
+    display: none;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 账户菜单 */
+.header-account {
+    position: relative;
+}
+
+.account-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    min-width: 200px;
+    margin-top: 0.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1000;
+}
+
+.header-account:hover .account-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.account-dropdown ul {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+}
+
+.account-dropdown li {
+    margin: 0;
+}
+
+.account-dropdown a {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.account-dropdown a:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 购物车 */
+.cart-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    transition: border-color 0.2s ease;
+    background: none;
+    border: none;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    cursor: pointer;
+    position: relative; /* 让数量角标相对按钮定位 */
+}
+
+.cart-link:hover {
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+.cart-count {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.header-cart:hover .cart-count {
+    transform: scale(1.2);
+}
+
+.cart-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.5em; /* 基于字体大小的高度 */
+    min-height: 24px; /* 最小高度保证 */
+}
+
+.cart-icon svg {
+    height: 100%; /* SVG高度跟随容器 */
+    width: auto; /* 宽度自适应保持比例 */
+    display: block; /* 确保正确渲染 */
+}
+
+/* 迷你购物车 */
+.mini-cart-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.header-cart.mini-cart-open ~ .mini-cart-overlay,
+.header-cart.mini-cart-open .mini-cart-overlay {
+    opacity: 1;
+    visibility: visible;
+}
+
+.mini-cart {
+    position: fixed;
+    top: 60px;
+    right: 0;
+    width: 400px;
+    max-width: 90vw;
+    max-height: calc(100vh - 60px);
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    box-shadow: -4px 0 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow: hidden;
+}
+
+.header-cart.mini-cart-open .mini-cart {
+    transform: translateX(0);
+}
+
+.mini-cart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+}
+
+.mini-cart-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+}
+
+.mini-cart-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s ease;
+}
+
+.mini-cart-close:hover {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+}
+
+.mini-cart-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.mini-cart-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+}
+
+.mini-cart-empty i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+}
+
+.mini-cart-items {
+    display: none;
+}
+
+.mini-cart-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.mini-cart-footer {
+    padding: 1rem;
+    border-top: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+.mini-cart-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.mini-cart-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.mini-cart-actions .w-btn {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.mini-cart-actions .w-btn-primary {
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+}
+
+.mini-cart-actions .w-btn-primary:hover {
+    background-color: <?= htmlspecialchars($colors['primaryDark'] ?? '#e68900') ?>;
+}
+
+.mini-cart-actions .w-btn-secondary {
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+}
+
+.mini-cart-actions .w-btn-secondary:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+/* ========== 底部导航栏（nav-main）- 亚马逊风格 ========== */
+.header-main-nav {
+    display: flex;
+    align-items: center;
+    background-color: <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    min-height: 40px;
+    width: 100%; /* 锁定宽度，确保不会被内容撑开 */
+    max-width: 100vw;
+    overflow: visible; 
+    position: relative;
+    gap: 1.5rem;
+}
+
+/* 左侧分类区域 */
+.header-nav-left {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto; /* 仅占据内容宽度，不强制填充 */
+    overflow: visible; 
+    white-space: nowrap;
+    position: relative;
+    min-width: 0;
+    z-index: 11;
+}
+
+@media (max-width: 768px) {
+    .header-nav-left {
+        overflow-x: auto; /* 手机端支持滑动 */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .header-nav-left::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* 右侧链接区域 - 自动宽度且靠右 */
+.header-nav-fill {
+    flex: 1 1 auto; /* 占据剩余空间 */
+    margin-left: auto; /* 核心：产生弹性间距并推向右侧 */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* 内容靠右对齐 */
+    position: relative;
+    overflow: visible; 
+    height: 40px;
+    z-index: 10;
+    min-width: fit-content;
+}
+
+/* 汉堡菜单 */
+.hamburger-menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: transparent;
+    border: none;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+/* 确保整个按钮区域都可以点击 - 让子元素不拦截点击事件 */
+.hamburger-menu-btn * {
+    pointer-events: none;
+}
+
+.hamburger-menu-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.hamburger-menu-btn i {
+    font-size: 1rem;
+}
+
+/* 分类菜单 */
+.header-categories {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    overflow: visible; /* 允许megamenu溢出显示 */
+    position: relative; /* 为绝对定位的子菜单提供定位上下文 */
+}
+
+/* 当宽度小于 200px 时隐藏 */
+.header-categories.hide-narrow {
+    display: none !important;
+}
+
+/* 渐变遮罩：提示有更多内容 (移至父容器以保持固定) */
+.header-categories::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 60px;
+    height: 100%;
+    background: linear-gradient(to right, transparent, <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+.header-categories.has-overflow::after {
+    opacity: 1;
+}
+
+.categories-nav {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    overflow: visible; /* 允许子菜单溢出显示 */
+}
+
+.categories-list {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.category-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.categories-list > li.hidden {
+    display: none !important;
+}
+
+.category-link-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.category-link {
+    padding: 0.5rem 0.75rem;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 2px;
+    cursor: pointer;
+    pointer-events: auto;
+    flex: 1;
+}
+
+.category-link:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.category-link-wrapper:hover .category-link {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 确保 hover 时文字颜色优先级最高 */
+.category-item:hover .category-link,
+.category-link-wrapper:hover .category-link,
+.category-link:hover {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.category-arrow {
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    pointer-events: auto;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, border-top-color 0.2s ease;
+}
+
+.category-item.has-children:hover .category-arrow {
+    transform: rotate(180deg);
+    border-top-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.category-link-wrapper:hover .category-arrow {
+    border-top-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 分类子菜单 - Megamenu 样式（第一层，直接子菜单） */
+.category-item.has-children > .category-submenu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.92) 100%);
+    backdrop-filter: blur(18px) saturate(145%);
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 12px;
+    box-shadow: none;
+    min-width: 1100px;
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+    width: auto;
+    margin-top: 0.5rem;
+    display: none;
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 1001;
+    list-style: none;
+    margin: 0;
+    padding: 2rem;
+    grid-template-columns: repeat(4, minmax(220px, 1fr)); /* 固定4列，确保所有列都显示 */
+    gap: 2rem;
+    column-gap: 3rem;
+    grid-auto-flow: row; /* 确保按行排列 */
+}
+
+/* 当菜单项靠近右边缘时，megamenu 从右侧对齐 */
+.category-item:last-child .category-submenu,
+.category-item:nth-last-child(2) .category-submenu,
+.category-item:nth-last-child(3) .category-submenu {
+    left: auto;
+    right: 0;
+}
+
+/* 确保megamenu可以超出header-container边界显示 */
+.category-item.has-children > .category-submenu {
+    /* 如果megamenu超出右边界，自动调整到左侧对齐 */
+    max-width: calc(100vw - 2rem); /* 确保不超出视口 */
+    left: 0;
+}
+
+/* 当菜单项在右侧时，megamenu从右侧对齐 */
+.category-item:last-child.has-children > .category-submenu,
+.category-item:nth-last-child(2).has-children > .category-submenu {
+    left: auto;
+    right: 0;
+}
+
+/* 关键修改：只在鼠标悬停在菜单项链接容器上时显示子菜单
+   不要对li下面的category-submenu的元素hover生效 */
+.category-item.has-children > .category-link-wrapper:hover ~ .category-submenu,
+.category-item.has-children .category-link:hover ~ .category-submenu {
+    display: grid !important; /* 显示子菜单，使用grid布局 */
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* 当鼠标在父菜单项（category-item）上时，也显示子菜单
+   由于子菜单是绝对定位的，鼠标从category-link移动到子菜单时
+   仍然在父菜单项的范围内，所以hover状态不会丢失 */
+.category-item.has-children:hover > .category-submenu {
+    display: grid !important; /* 显示子菜单，使用grid布局 */
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* 确保category-item不会因为子菜单的hover而触发hover状态
+   只有category-link的hover才会触发 */
+.category-item.has-children {
+    position: relative;
+}
+
+/* 子菜单不会触发父菜单项的hover
+   但由于子菜单与父菜单项重叠，鼠标在子菜单上时，仍然在父菜单项的范围内
+   所以通过父菜单项的hover来保持子菜单显示 */
+.category-item.has-children > .category-submenu {
+    /* 子菜单可以响应鼠标事件，但不会影响父菜单的hover检测 */
+    pointer-events: auto;
+}
+
+/* Megamenu 列容器（第一层子菜单的直接子项） */
+.category-item.has-children > .category-submenu > .category-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 220px; /* 设置最小宽度，确保列有足够空间 */
+    max-width: 280px; /* 设置最大宽度，避免列过宽 */
+    width: 100%; /* 使用100%宽度，让网格布局控制 */
+    align-items: flex-start;
+    flex-shrink: 0; /* 防止列被压缩 */
+    overflow: visible; /* 确保内容不被裁剪 */
+}
+
+/* Megamenu 主分类标题（第一层子菜单中的列标题） */
+.category-item.has-children > .category-submenu > .category-item > .category-link {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.5rem 0;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#e0e0e0') ?>;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: 100%;
+    display: block;
+    cursor: pointer;
+    pointer-events: auto;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.category-item.has-children > .category-submenu > .category-item > .category-link:hover {
+    background-color: transparent;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    border-bottom-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* Megamenu 子分类链接（第二层及以下） */
+.category-submenu > .category-item > .category-submenu {
+    position: static;
+    display: block !important; /* 确保第二层子菜单是单列 */
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    box-shadow: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    min-width: auto;
+    max-width: none;
+    width: auto;
+    grid-template-columns: none !important; /* 移除网格布局 */
+    gap: 0;
+}
+
+/* Megamenu 子分类链接（第二层子菜单中的链接） */
+.category-item.has-children > .category-submenu > .category-item > .category-submenu .category-link {
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#4b5563') ?>;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    font-weight: normal;
+    display: block;
+    transition: color 0.2s ease, padding-left 0.2s ease;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    pointer-events: auto;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.category-item.has-children > .category-submenu > .category-item > .category-submenu .category-link:hover {
+    background-color: transparent;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    padding-left: 0.5rem;
+}
+
+/* 第三层及更深层级的菜单样式 */
+.category-submenu > .category-item > .category-submenu > .category-item {
+    position: relative;
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item > .category-submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 4px;
+    box-shadow: none;
+    min-width: 180px;
+    padding: 0.75rem 0;
+    margin-left: 0.5rem;
+    display:none;
+    visibility: hidden;
+    transform: translateX(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1002;
+    list-style: none;
+    display: block;
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item:hover > .category-submenu {
+    display: block;
+    visibility: visible;
+    transform: translateX(0);
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item > .category-submenu .category-link {
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#4b5563') ?>;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    display: block;
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item > .category-submenu .category-link:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    padding-left: 1.25rem;
+}
+
+/* 移除子菜单中的箭头（在 megamenu 中不需要，但第三层可以显示） */
+.category-submenu > .category-item > .category-link .category-arrow {
+    display: none;
+}
+
+/* 第三层菜单项如果有子菜单，显示箭头 */
+.category-submenu > .category-item > .category-submenu > .category-item.has-children > .category-link::after {
+    content: '›';
+    float: right;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#999') ?>;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+
+
+/* 更多下拉菜单容器 */
+.header-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 100%;
+}
+
+.nav-links-list {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 1rem;
+    flex-wrap: nowrap; /* 禁止换行 */
+}
+
+.nav-links-list li {
+    flex-shrink: 0; /* 禁止项被压缩 */
+}
+
+.nav-links-list a {
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+    padding: 0.5rem 0;
+    display: block;
+}
+
+.nav-links-list a:hover {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.categories-overflow-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.categories-overflow-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background-color: transparent;
+    border: none;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 2px;
+}
+
+.categories-overflow-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.categories-overflow-btn i {
+    font-size: 0.625rem;
+    transition: transform 0.2s ease;
+}
+
+.categories-overflow-wrapper.active .categories-overflow-btn i,
+.categories-overflow-wrapper:hover .categories-overflow-btn i {
+    transform: rotate(180deg);
+}
+
+.categories-overflow-dropdown {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    min-width: 240px;
+    max-width: min(420px, calc(100vw - 2rem));
+    max-height: min(70vh, 560px);
+    overflow: auto;
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1003;
+}
+
+.categories-overflow-wrapper.active .categories-overflow-dropdown,
+.categories-overflow-wrapper:hover .categories-overflow-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.categories-overflow-dropdown > .category-item {
+    display: block;
+    width: 100%;
+}
+
+.categories-overflow-dropdown > .category-item > .category-link-wrapper {
+    width: 100%;
+    justify-content: space-between;
+}
+
+.categories-overflow-dropdown > .category-item > .category-link-wrapper > .category-link {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0;
+}
+
+.categories-overflow-dropdown > .category-item > .category-link-wrapper > .category-arrow {
+    margin-right: 1rem;
+    border-top-color: <?= htmlspecialchars($colors['textSecondary'] ?? '#666') ?>;
+}
+
+.categories-overflow-dropdown > .category-item:hover > .category-link-wrapper > .category-link {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?> !important;
+}
+
+.categories-overflow-dropdown > .category-item.has-children > .category-submenu {
+    top: 0;
+    left: calc(100% - 0.5rem);
+    right: auto;
+    min-width: 280px;
+    max-width: min(720px, calc(100vw - 3rem));
+}
+
+/* 更多按钮 */
+.nav-more-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.nav-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background-color: transparent;
+    border: none;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 2px;
+}
+
+.nav-more-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.nav-more-btn i {
+    font-size: 0.625rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-more-wrapper.active .nav-more-btn i {
+    transform: rotate(180deg);
+}
+
+/* 更多下拉菜单 */
+.nav-more-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+    margin-top: 0.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1001;
+}
+
+.nav-more-wrapper.active .nav-more-dropdown,
+.nav-more-wrapper:hover .nav-more-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* hover时也显示箭头旋转 */
+.nav-more-wrapper:hover .nav-more-btn i {
+    transform: rotate(180deg);
+}
+
+.nav-more-dropdown li {
+    margin: 0;
+}
+
+.nav-more-dropdown a {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-more-dropdown a:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 隐藏的菜单项 */
+.nav-links-list li.hidden {
+    display: none;
+}
+
+
+
+/* 侧边栏菜单（全部分类） */
+.categories-sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.categories-sidebar-overlay[aria-hidden="false"] {
+    opacity: 1;
+    visibility: visible;
+}
+
+.categories-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 300px;
+    max-width: 90vw;
+    height: 100vh;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    /* overflow: hidden; -- Removed to allow flyout menu to overflow */
+}
+
+.categories-sidebar[aria-hidden="false"] {
+    transform: translateX(0);
+}
+
+.categories-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background-color: <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+}
+
+.categories-sidebar-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.categories-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s ease;
+}
+
+.categories-sidebar-close:hover {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.categories-sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0; /* 移除 padding，由内部元素控制 */
+}
+
+.sidebar-section-title {
+    padding: 1rem 1rem 0.5rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    letter-spacing: 1px;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    margin: 0;
+}
+
+.sidebar-shortcuts {
+    border-bottom: 4px solid <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    padding-bottom: 0.5rem;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+}
+
+.sidebar-shortcuts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-shortcuts-list li a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+}
+
+.sidebar-shortcuts-list li a:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-shortcuts-list li a i {
+    width: 16px;
+    text-align: center;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+}
+
+.mobile-only {
+    display: none;
+}
+
+.categories-sidebar-nav {
+    width: 100%;
+}
+
+.categories-sidebar-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-category-item {
+    position: relative;
+}
+
+.sidebar-category-link-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    transition: background-color 0.2s ease;
+}
+
+.sidebar-category-link-wrapper:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+.sidebar-category-link {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.sidebar-category-link:hover {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-link:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-arrow {
+    font-size: 0.875rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    cursor: pointer;
+    pointer-events: auto;
+    flex-shrink: 0;
+    padding: 0.25rem;
+    margin-left: 0.5rem;
+    transition: transform 0.2s ease, color 0.2s ease;
+    font-weight: 600;
+}
+
+/* 有子菜单的链接标记 */
+.sidebar-category-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-size: 0.7rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    vertical-align: middle;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-category-link:hover .sidebar-category-badge {
+    opacity: 1;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 有子菜单的项目视觉增强 */
+.sidebar-category-item.has-children .sidebar-category-link {
+    font-weight: 500;
+    position: relative;
+}
+
+.sidebar-category-item.has-children .sidebar-category-link-wrapper {
+    border-left: 3px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.sidebar-category-item.has-children:hover .sidebar-category-link-wrapper {
+    border-left-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-item.active .sidebar-category-arrow {
+    transform: rotate(90deg);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-link-wrapper:hover .sidebar-category-arrow {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-submenu {
+    display: none;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    z-index: 1001; /* 确保子菜单层级足够高 */
+}
+
+/* 移动端：侧边栏子菜单层级缩进与引导线条 */
+@media (max-width: 768px) {
+    .sidebar-category-submenu {
+        padding-left: 0.75rem;
+        border-left: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    }
+
+    .sidebar-category-submenu .sidebar-category-link-wrapper {
+        padding-left: 0.75rem;
+    }
+
+    .sidebar-category-submenu[data-level="3"] .sidebar-category-link-wrapper {
+        padding-left: 1.25rem;
+    }
+
+    .sidebar-category-submenu[data-level="4"] .sidebar-category-link-wrapper {
+        padding-left: 1.75rem;
+    }
+
+    .sidebar-category-submenu .sidebar-category-item::before {
+        content: '';
+        position: absolute;
+        left: 0.35rem;
+        top: 0;
+        bottom: 0;
+        border-left: 1px dashed <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+        opacity: 0.7;
+    }
+
+    .sidebar-category-submenu .sidebar-category-link-wrapper::before {
+        content: '';
+        position: absolute;
+        left: 0.35rem;
+        top: 50%;
+        width: 0.5rem;
+        border-top: 1px dashed <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+        transform: translateY(-50%);
+        opacity: 0.7;
+    }
+}
+
+.sidebar-category-item.has-children.active .sidebar-category-submenu {
+    display: block;
+}
+
+/* ========== 响应式设计 ========== */
+@media (min-width: 769px) {
+    /* 桌面端：Hover 展开侧边栏子菜单（Flyout 模式） */
+    .sidebar-category-item:hover > .sidebar-category-submenu {
+        display: block;
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .sidebar-category-submenu {
+        position: fixed; /* 使用 fixed 定位，脱离 overflow:auto 的父容器 */
+        top: 0;
+        left: 300px; /* 默认二级菜单位置 (侧边栏宽 300px) */
+        width: 300px; /* 子菜单宽度 */
+        height: 100vh;
+        background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+        box-shadow: 4px 0 8px rgba(0, 0, 0, 0.1);
+        overflow-y: auto;
+        border-left: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+        z-index: 1002;
+        padding: 1rem 0;
+        /* 初始隐藏状态 */
+        display: none;
+    }
+
+    /* 三级菜单位置 (侧边栏 300px + 二级菜单 300px) */
+    .sidebar-category-submenu[data-level="3"] {
+        left: 600px;
+        z-index: 1003;
+    }
+
+    /* 四级菜单位置 (300px + 300px + 300px) */
+    .sidebar-category-submenu[data-level="4"] {
+        left: 900px;
+        z-index: 1004;
+    }
+
+    /* 选中状态样式增强 */
+    .sidebar-category-item:hover > .sidebar-category-link {
+        background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+        color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    }
+}
+
+@media (max-width: 1280px) {
+    .header-belt-row-1 {
+        flex-wrap: wrap;
+    }
+
+    .header-search-toggle {
+        display: inline-flex;
+    }
+
+    .header-search-wrapper {
+        display: none;
+        order: 3;
+        flex: 0 0 100%;
+        width: 100%;
+        max-width: 100%;
+        margin: 0.625rem 0 0.125rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .weline-header.is-search-open .header-search-wrapper {
+        display: block;
+        animation: headerSearchSlide 0.18s ease-out;
+    }
+
+    @keyframes headerSearchSlide {
+        from {
+            opacity: 0;
+            transform: translateY(-4px);
         }
-        var toggle = header.querySelector('[data-theme-header-toggle]');
-        if (!toggle) {
-            return;
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .weline-header.is-search-open .header-search-wrapper {
+            animation: none;
+        }
+    }
+
+    .header-language-switcher .language-switcher,
+    .header-language-switcher .weline-choice-switcher {
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+
+    .header-language-switcher .action-line-1,
+    .header-language-switcher .current-language,
+    .header-language-switcher .action-line-2 > .fa-chevron-down {
+        display: none !important;
+    }
+
+    .header-language-switcher .action-line-2 {
+        display: flex;
+        overflow: visible;
+    }
+
+    .header-language-switcher .weline-choice-current-flag,
+    .header-language-switcher .language-switcher-icon {
+        margin: 0;
+    }
+
+    .header-language-switcher .weline-choice-current-flag svg {
+        width: 24px;
+        height: 18px;
+    }
+
+    .header-language-switcher .language-options,
+    .header-language-switcher .weline-choice-panel {
+        right: 0;
+    }
+    
+    .header-actions {
+        gap: 0.25rem;
+    }
+    
+    .action-link {
+        min-width: 50px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-belt {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+    
+    /* 第一行：Logo + Actions（参考亚马逊 navbar-top-row） */
+    .header-belt-row-1 {
+        display: flex;
+        flex-wrap: wrap; /* 允许换行 */
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+    
+    .header-belt-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 0 0 auto;
+        order: 1; /* Logo 在第一行左侧 */
+    }
+    
+    /* 隐藏配送地址 */
+    .header-belt-left .header-location {
+        display: none;
+    }
+    
+    /* Actions 部分靠右，在第一行 */
+    .header-actions {
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+        flex: 0 0 auto;
+        margin-left: auto; /* 靠右对齐 */
+        order: 2; /* Actions 在第一行右侧 */
+    }
+    
+    /* 搜索框由放大镜按钮展开到第二行，避免挤压操作区 */
+    .header-search-wrapper {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 100%; /* 强制占满一行 */
+        order: 3; /* 搜索框在第二行 */
+    }
+    
+    /* 移动端隐藏桌面端的功能项，只显示"我的"和购物车 */
+    .header-language-switcher,
+    .header-currency-switcher,
+    .header-account:not(.mobile-only),
+    .header-action-item:has([href*="orders"]):not(.mobile-only) {
+        display: none !important; /* 移动端隐藏这些功能项 */
+    }
+    
+    /* 显示移动端"我的"菜单 */
+    .header-my-menu.mobile-only {
+        display: flex !important;
+    }
+    
+    /* 移动端购物车只显示图标 */
+    .cart-link .action-line-2 {
+        display: none !important; /* 移动端隐藏"购物车"文字，只显示图标 */
+    }
+    
+    .cart-link {
+        min-width: 52px;
+        padding: 0.5rem;
+        flex-direction: row;
+        gap: 0;
+        justify-content: center;
+    }
+    
+    .cart-icon {
+        font-size: 1.8rem !important; /* 移动端更大一点 */
+    }
+    
+    /* 移动端增大字体 */
+    .action-link {
+        font-size: 0.9rem;
+        min-width: 55px;
+    }
+    
+    .action-line-1 {
+        font-size: 0.8rem;
+    }
+    
+    .action-line-2 {
+        font-size: 1rem;
+        font-weight: 600;
+    }
+    
+    /* 购物车文字颜色优化 - 确保清晰可见 */
+    .cart-link {
+        color: #ffffff !important; /* 强制使用纯白色，确保可见 */
+    }
+    
+    .cart-link .action-line-2 {
+        color: #ffffff !important; /* 强制使用纯白色 */
+        font-weight: 600;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); /* 添加文字阴影增强对比度 */
+    }
+    
+    .cart-icon {
+        color: #ffffff !important; /* 强制使用纯白色 */
+        font-size: 1.4rem;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)); /* 图标阴影 */
+    }
+    
+    /* 其他 action-link 文字也优化 */
+    .action-link {
+        color: #ffffff !important;
+    }
+    
+    .action-line-1 {
+        color: #e0e0e0 !important; /* 浅灰色，确保可见 */
+    }
+    
+    .action-line-2 {
+        color: #ffffff !important; /* 纯白色 */
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .header-location {
+        display: none;
+    }
+    
+    .action-line-2 {
+        display: block; /* 移动端也显示文字 */
+    }
+    
+    .header-main-nav {
+        flex-wrap: nowrap; /* 移动端也保持一行，靠滑动解决 */
+    }
+    
+    .header-nav-fill {
+        display: flex; /* 移动端也显示，以展示“更多”按钮 */
+    }
+    
+    .categories-nav {
+        overflow-x: auto;
+        overflow-y: visible; /* 允许子菜单垂直溢出显示 */
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .categories-list {
+        flex-wrap: nowrap;
+    }
+    
+    /* 在小屏幕上，megamenu 调整为单列或双列布局 */
+    .categories-submenu {
+        min-width: 300px;
+        max-width: 500px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        column-gap: 1.5rem;
+        padding: 1rem;
+    }
+
+    .mobile-only {
+        display: block;
+    }
+
+    .categories-nav::after {
+        /* 在移动端默认显示渐变提示 */
+        opacity: 1;
+    }
+    
+    .mini-cart {
+        width: 100%;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-logo img {
+        height: <?= (int)($logoHeight * 0.9) ?>px; /* 移动端使用配置高度的90% */
+    }
+    
+    .search-category-facade {
+        min-width: 80px;
+        font-size: 0.625rem;
+    }
+    
+    .header-search-form .search-input {
+        font-size: 0.75rem;
+    }
+    
+    .header-actions {
+        gap: 0.25rem;
+    }
+    
+    /* 超小屏幕字体优化 */
+    .action-link {
+        min-width: 50px;
+        font-size: 0.85rem;
+    }
+    
+    .action-line-1 {
+        font-size: 0.75rem;
+    }
+    
+    .action-line-2 {
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    
+    /* 购物车图标和文字优化 - 超小屏幕 */
+    .cart-link {
+        color: #ffffff !important;
+    }
+    
+    .cart-link .action-line-2 {
+        color: #ffffff !important;
+        font-weight: 600;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .cart-icon {
+        font-size: 1.3rem;
+        color: #ffffff !important;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    }
+    
+    /* 其他 action-link 文字优化 */
+    .action-link {
+        color: #ffffff !important;
+    }
+    
+    .action-line-1 {
+        color: #e0e0e0 !important;
+    }
+    
+    .action-line-2 {
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    const headerMoreCategoriesLabel = <?= json_encode($headerLabel('更多分类'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const headerMoreLabel = <?= json_encode($headerLabel('更多'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+    function escapeHeaderHtml(value) {
+        return String(value).replace(/[&<>"']/g, function(match) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[match];
+        });
+    }
+
+    function initHeaderInteractions() {
+
+        const header = document.querySelector('.weline-header');
+        const searchToggle = header ? header.querySelector('.header-search-toggle') : null;
+        const searchPanel = header ? header.querySelector('#header-search-panel') : null;
+        const searchInput = searchPanel ? searchPanel.querySelector('.search-input') : null;
+
+        if (header && searchToggle && searchPanel) {
+            const setSearchOpen = function(open, focusInput) {
+                header.classList.toggle('is-search-open', open);
+                searchToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+                if (open && focusInput && searchInput) {
+                    requestAnimationFrame(function() {
+                        searchInput.focus();
+                    });
+                }
+            };
+
+            searchToggle.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setSearchOpen(!header.classList.contains('is-search-open'), true);
+            });
+
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth <= 1280
+                    && header.classList.contains('is-search-open')
+                    && !searchPanel.contains(event.target)
+                    && !searchToggle.contains(event.target)
+                ) {
+                    setSearchOpen(false, false);
+                }
+            });
+
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && header.classList.contains('is-search-open')) {
+                    setSearchOpen(false, false);
+                    searchToggle.focus();
+                }
+            });
+
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1280) {
+                    setSearchOpen(false, false);
+                }
+            });
         }
 
-        var nav = header.querySelector('#header-navigation');
-        var icon = toggle.querySelector('i');
-        var mobileQuery = window.matchMedia('(max-width: 1040px)');
 
-        function setOpen(open) {
-            header.classList.toggle('is-open', open);
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (icon) {
-                icon.className = open ? 'ri-close-line' : 'ri-menu-line';
+        // 移动端多级菜单点击展开/收起
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            const categoryItems = document.querySelectorAll('.category-item.has-children');
+            // 删除点击展开逻辑，改为纯hover展开
+        }
+
+        // 搜索相关功能已移至 search.js 模块
+        // 搜索分类下拉菜单同步和搜索建议功能由 Weline.Search 模块处理
+
+        // 导航链接"更多"按钮功能
+        const categoriesList = document.getElementById('categories-list');
+        let categoriesOverflowWrapper = document.getElementById('categories-overflow-wrapper');
+        let categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
+        let categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
+        const navLinksList = document.getElementById('nav-links-list');
+        const navMoreWrapper = document.getElementById('nav-more-wrapper');
+        const navMoreBtn = document.getElementById('nav-more-btn');
+        const navMoreDropdown = document.getElementById('nav-more-dropdown');
+        const headerNavFill = document.getElementById('header-nav-fill');
+        const headerMainNav = document.querySelector('.header-main-nav');
+
+        if (categoriesList && !categoriesOverflowWrapper) {
+            categoriesOverflowWrapper = document.createElement('li');
+            categoriesOverflowWrapper.className = 'categories-overflow-wrapper';
+            categoriesOverflowWrapper.id = 'categories-overflow-wrapper';
+            categoriesOverflowWrapper.style.display = 'none';
+            categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="' + escapeHeaderHtml(headerMoreCategoriesLabel) + '" aria-expanded="false" type="button"><span>' + escapeHeaderHtml(headerMoreLabel) + '</span><i class="fas fa-chevron-down"></i></button><ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>';
+            categoriesList.appendChild(categoriesOverflowWrapper);
+            categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
+            categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');
+        }
+        
+        if (navLinksList && navMoreWrapper && navMoreBtn && navMoreDropdown && headerNavFill) {
+            let resizeTimeout;
+            
+            // 检查并调整菜单项
+            function adjustNavLinks() {
+                // 重置所有菜单项
+                const allItems = navLinksList.querySelectorAll('li');
+                allItems.forEach(function(item) {
+                    item.classList.remove('hidden');
+                });
+                navMoreDropdown.innerHTML = '';
+                navMoreWrapper.style.display = 'none';
+                
+                // 等待DOM更新
+                requestAnimationFrame(function() {
+                    // 获取nav-links-list的实际宽度和可用宽度
+                    const navLinksListRect = navLinksList.getBoundingClientRect();
+                    const headerNavFillRect = headerNavFill.getBoundingClientRect();
+                    
+                    // 计算可用宽度（从nav-links-list左边缘到header-nav-fill右边缘）
+                    const availableWidth = Math.max(0, headerNavFill.clientWidth - 12);
+                    
+                    // 临时显示"更多"按钮以获取其宽度
+                    navMoreWrapper.style.display = 'flex';
+                    const moreBtnWidth = navMoreWrapper.getBoundingClientRect().width + 10; // 加一些边距
+                    navMoreWrapper.style.display = 'none';
+                    
+                    // 计算每个菜单项的宽度
+                    const items = Array.from(navLinksList.querySelectorAll('li'));
+                    let totalWidth = 0;
+                    let itemsToHide = [];
+                    
+                    // 获取gap值（从CSS中，gap: 1.25rem）
+                    const computedStyle = window.getComputedStyle(navLinksList);
+                    const gap = parseFloat(computedStyle.gap) || 20; // 默认20px
+                    
+                    // 计算可见项的总宽度
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        const itemRect = item.getBoundingClientRect();
+                        const itemWidth = itemRect.width;
+                        const itemGap = i > 0 ? gap : 0;
+                        
+                        // 检查是否需要显示"更多"按钮
+                        if (totalWidth + itemWidth + itemGap + moreBtnWidth > availableWidth) {
+                            // 需要隐藏这个及之后的项
+                            itemsToHide = items.slice(i);
+                            break;
+                        }
+                        totalWidth += itemWidth + itemGap;
+                    }
+                    
+                    // 如果有需要隐藏的项，显示"更多"按钮并移动项
+                    if (itemsToHide.length > 0) {
+                        navMoreWrapper.style.display = 'flex';
+                        itemsToHide.forEach(function(item) {
+                            item.classList.add('hidden');
+                            // 创建下拉菜单项
+                            const dropdownItem = document.createElement('li');
+                            const link = item.querySelector('a');
+                            if (link) {
+                                dropdownItem.innerHTML = link.outerHTML;
+                                navMoreDropdown.appendChild(dropdownItem);
+                            }
+                        });
+                    } else {
+                        navMoreWrapper.style.display = 'none';
+                    }
+                });
+            }
+            
+            // 初始调整
+            function adjustCategoriesOverflow() {
+                if (!categoriesList || !categoriesOverflowWrapper || !categoriesOverflowBtn || !categoriesOverflowDropdown || !headerMainNav) {
+                    return;
+                }
+
+                const categoryItems = Array.from(categoriesList.children).filter(function(item) {
+                    return item !== categoriesOverflowWrapper;
+                });
+
+                categoryItems.forEach(function(item) {
+                    item.classList.remove('hidden');
+                });
+                categoriesOverflowDropdown.innerHTML = '';
+                categoriesOverflowWrapper.style.display = 'none';
+                categoriesOverflowWrapper.classList.remove('active');
+                categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+
+                requestAnimationFrame(function() {
+                    const categoriesListRect = categoriesList.getBoundingClientRect();
+                    const headerNavFillRect = headerNavFill.getBoundingClientRect();
+                    const mainNavRect = headerMainNav.getBoundingClientRect();
+                    const availableWidth = Math.max(
+                        0,
+                        Math.min(headerNavFillRect.left - categoriesListRect.left - 16, mainNavRect.width - 32)
+                    );
+
+                    categoriesOverflowWrapper.style.display = 'flex';
+                    const overflowBtnWidth = categoriesOverflowWrapper.getBoundingClientRect().width + 8;
+                    categoriesOverflowWrapper.style.display = 'none';
+
+                    const computedStyle = window.getComputedStyle(categoriesList);
+                    const gap = parseFloat(computedStyle.gap) || 8;
+                    let totalWidth = 0;
+                    let itemsToHide = [];
+
+                    for (let i = 0; i < categoryItems.length; i++) {
+                        const item = categoryItems[i];
+                        const itemWidth = item.getBoundingClientRect().width;
+                        const itemGap = i > 0 ? gap : 0;
+
+                        if (totalWidth + itemWidth + itemGap + overflowBtnWidth > availableWidth) {
+                            itemsToHide = categoryItems.slice(i);
+                            break;
+                        }
+                        totalWidth += itemWidth + itemGap;
+                    }
+
+                    if (itemsToHide.length > 0) {
+                        categoriesOverflowWrapper.style.display = 'flex';
+                        itemsToHide.forEach(function(item) {
+                            item.classList.add('hidden');
+                            const clone = item.cloneNode(true);
+                            clone.classList.remove('hidden');
+                            categoriesOverflowDropdown.appendChild(clone);
+                        });
+                    } else {
+                        categoriesOverflowWrapper.style.display = 'none';
+                    }
+                });
+            }
+
+            adjustNavLinks();
+            adjustCategoriesOverflow();
+            
+            // 窗口大小变化时重新调整
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    adjustNavLinks();
+                    adjustCategoriesOverflow();
+                }, 100);
+            });
+            
+            let isClickActivated = false; // 标记是否通过点击激活
+            
+            // "更多"按钮点击事件
+            navMoreBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const isActive = navMoreWrapper.classList.contains('active');
+                
+                isClickActivated = !isActive; // 如果激活则为true，如果关闭则为false
+                
+                if (isActive) {
+                    navMoreWrapper.classList.remove('active');
+                    navMoreBtn.setAttribute('aria-expanded', 'false');
+                    navMoreDropdown.setAttribute('aria-hidden', 'true');
+                } else {
+                    navMoreWrapper.classList.add('active');
+                    navMoreBtn.setAttribute('aria-expanded', 'true');
+                    navMoreDropdown.setAttribute('aria-hidden', 'false');
+                }
+            });
+            
+            // hover事件：鼠标进入时展开（CSS会自动处理，这里更新aria属性）
+            navMoreWrapper.addEventListener('mouseenter', function() {
+                navMoreBtn.setAttribute('aria-expanded', 'true');
+                navMoreDropdown.setAttribute('aria-hidden', 'false');
+            });
+            
+            // 鼠标离开时：如果是通过点击激活的，保持展开；如果是hover，延迟关闭
+            let hoverTimeout;
+            navMoreWrapper.addEventListener('mouseleave', function() {
+                if (!isClickActivated) {
+                    // 如果不是点击激活的，延迟关闭（给用户时间移动到下拉菜单）
+                    hoverTimeout = setTimeout(function() {
+                        if (!navMoreWrapper.matches(':hover')) {
+                            navMoreWrapper.classList.remove('active');
+                            navMoreBtn.setAttribute('aria-expanded', 'false');
+                            navMoreDropdown.setAttribute('aria-hidden', 'true');
+                        }
+                    }, 200);
+                }
+            });
+            
+            // 点击外部关闭下拉菜单（仅在点击激活时）
+            document.addEventListener('click', function(e) {
+                if (!navMoreWrapper.contains(e.target) && isClickActivated) {
+                    navMoreWrapper.classList.remove('active');
+                    navMoreBtn.setAttribute('aria-expanded', 'false');
+                    navMoreDropdown.setAttribute('aria-hidden', 'true');
+                    isClickActivated = false;
+                }
+            });
+
+            if (categoriesOverflowWrapper && categoriesOverflowBtn && categoriesOverflowDropdown) {
+                let categoriesOverflowClickActivated = false;
+                let categoriesOverflowHoverTimeout;
+
+                categoriesOverflowBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const isActive = categoriesOverflowWrapper.classList.contains('active');
+
+                    categoriesOverflowClickActivated = !isActive;
+
+                    if (isActive) {
+                        categoriesOverflowWrapper.classList.remove('active');
+                        categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                        categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+                    } else {
+                        categoriesOverflowWrapper.classList.add('active');
+                        categoriesOverflowBtn.setAttribute('aria-expanded', 'true');
+                        categoriesOverflowDropdown.setAttribute('aria-hidden', 'false');
+                    }
+                });
+
+                categoriesOverflowWrapper.addEventListener('mouseenter', function() {
+                    categoriesOverflowBtn.setAttribute('aria-expanded', 'true');
+                    categoriesOverflowDropdown.setAttribute('aria-hidden', 'false');
+                });
+
+                categoriesOverflowWrapper.addEventListener('mouseleave', function() {
+                    if (!categoriesOverflowClickActivated) {
+                        categoriesOverflowHoverTimeout = setTimeout(function() {
+                            if (!categoriesOverflowWrapper.matches(':hover')) {
+                                categoriesOverflowWrapper.classList.remove('active');
+                                categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                                categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+                            }
+                        }, 200);
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!categoriesOverflowWrapper.contains(e.target) && categoriesOverflowClickActivated) {
+                        categoriesOverflowWrapper.classList.remove('active');
+                        categoriesOverflowBtn.setAttribute('aria-expanded', 'false');
+                        categoriesOverflowDropdown.setAttribute('aria-hidden', 'true');
+                        categoriesOverflowClickActivated = false;
+                    }
+                });
+            }
+        }
+        
+        // 汉堡菜单切换 - 侧边栏菜单
+        const hamburgerMenu = document.getElementById('hamburger-menu');
+        const categoriesSidebar = document.getElementById('categories-sidebar');
+        const categoriesSidebarOverlay = document.getElementById('categories-sidebar-overlay');
+        const categoriesSidebarClose = document.getElementById('categories-sidebar-close');
+        
+        // 检查是否已经有其他处理器（避免与 theme.js 冲突）
+        if (hamburgerMenu && categoriesSidebar && categoriesSidebarOverlay && !hamburgerMenu.dataset.hamburgerHandler) {
+            // 标记已处理
+            hamburgerMenu.dataset.hamburgerHandler = 'true';
+            // 使用一个标志来防止重复触发
+            let isProcessing = false;
+            let lastClickTime = 0;
+            let mouseDownPos = null;
+            let mouseDownTime = 0;
+            
+            // 处理汉堡菜单点击的函数
+            function handleHamburgerClick(e) {
+                // 防止重复触发
+                const now = Date.now();
+                if (isProcessing || (now - lastClickTime < 300)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return;
+                }
+                
+                // 检测是否为误触：如果鼠标移动距离过大，可能是滑动操作
+                if (mouseDownPos) {
+                    const moveDistance = Math.sqrt(
+                        Math.pow(e.clientX - mouseDownPos.x, 2) + 
+                        Math.pow(e.clientY - mouseDownPos.y, 2)
+                    );
+                    // 如果移动距离超过 5px，认为是滑动操作，不触发
+                    if (moveDistance > 5) {
+                        mouseDownPos = null;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return;
+                    }
+                }
+                
+                // 检测点击持续时间：如果按下时间过短（< 50ms），可能是误触
+                if (mouseDownTime && (now - mouseDownTime < 50)) {
+                    mouseDownPos = null;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return;
+                }
+                
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                isProcessing = true;
+                lastClickTime = now;
+                mouseDownPos = null;
+                mouseDownTime = 0;
+                
+                const isExpanded = hamburgerMenu.getAttribute('aria-expanded') === 'true';
+                if (!isExpanded) {
+                    showSidebar();
+                } else {
+                    hideSidebar();
+                }
+                
+                // 延迟后重置标志，防止快速连续点击
+                setTimeout(function() {
+                    isProcessing = false;
+                }, 300);
+            }
+            
+            // 记录鼠标按下位置和时间
+            hamburgerMenu.addEventListener('mousedown', function(e) {
+                mouseDownPos = { x: e.clientX, y: e.clientY };
+                mouseDownTime = Date.now();
+            }, true);
+            
+            // 触摸设备支持
+            hamburgerMenu.addEventListener('touchstart', function(e) {
+                const touch = e.touches[0];
+                mouseDownPos = { x: touch.clientX, y: touch.clientY };
+                mouseDownTime = Date.now();
+            }, true);
+            
+            hamburgerMenu.addEventListener('touchend', function(e) {
+                if (!mouseDownPos) return;
+                
+                const touch = e.changedTouches[0];
+                const moveDistance = Math.sqrt(
+                    Math.pow(touch.clientX - mouseDownPos.x, 2) + 
+                    Math.pow(touch.clientY - mouseDownPos.y, 2)
+                );
+                
+                // 触摸移动距离超过 10px，认为是滑动
+                if (moveDistance > 10) {
+                    mouseDownPos = null;
+                    mouseDownTime = 0;
+                    return;
+                }
+                
+                // 模拟点击事件
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                hamburgerMenu.dispatchEvent(clickEvent);
+            }, true);
+            
+            // 只使用 click 事件，避免重复触发
+            hamburgerMenu.addEventListener('click', handleHamburgerClick, true);
+            
+            if (categoriesSidebarClose) {
+                categoriesSidebarClose.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    hideSidebar();
+                });
+            }
+            
+            categoriesSidebarOverlay.addEventListener('click', function(e) {
+                if (categoriesSidebar.contains(e.target)) {
+                    return;
+                }
+                hideSidebar();
+            });
+            
+            // 侧边栏菜单项点击展开/收起
+            const sidebarItems = categoriesSidebar.querySelectorAll('.sidebar-category-item.has-children');
+            sidebarItems.forEach(function(item) {
+                const linkWrapper = item.querySelector('.sidebar-category-link-wrapper');
+                const link = item.querySelector('.sidebar-category-link');
+                const arrow = item.querySelector('.sidebar-category-arrow');
+                
+                if (linkWrapper) {
+                    // 点击容器（除了链接文字部分）时展开/收起
+                    linkWrapper.addEventListener('click', function(e) {
+                        // 如果点击的是链接文字，允许默认跳转
+                        if (link && (e.target === link || link.contains(e.target))) {
+                            return; // 允许链接正常跳转
+                        }
+                        
+                        // 如果点击的是箭头或其他区域，阻止默认行为并切换展开状态
+                        if (arrow && (e.target === arrow || arrow.contains(e.target))) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            item.classList.toggle('active');
+                        } else if (window.innerWidth <= 768) {
+                            // 移动端：点击容器其他区域也展开/收起
+                            e.preventDefault();
+                            e.stopPropagation();
+                            item.classList.toggle('active');
+                        }
+                    });
+                }
+            });
+        }
+        
+        function showSidebar() {
+            if (hamburgerMenu) {
+                hamburgerMenu.setAttribute('aria-expanded', 'true');
+            }
+            if (categoriesSidebar) {
+                categoriesSidebar.setAttribute('aria-hidden', 'false');
+            }
+            if (categoriesSidebarOverlay) {
+                categoriesSidebarOverlay.setAttribute('aria-hidden', 'false');
+            }
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function hideSidebar() {
+            if (hamburgerMenu) {
+                hamburgerMenu.setAttribute('aria-expanded', 'false');
+            }
+            if (categoriesSidebar) {
+                categoriesSidebar.setAttribute('aria-hidden', 'true');
+            }
+            if (categoriesSidebarOverlay) {
+                categoriesSidebarOverlay.setAttribute('aria-hidden', 'true');
+            }
+            document.body.style.overflow = '';
+        }
+
+
+
+        // 移动端"我的"菜单：点击展开/关闭
+        const myMenu = document.querySelector('.header-my-menu');
+        const myMenuLink = document.querySelector('.my-menu-link');
+        const myMenuDropdown = document.querySelector('.my-menu-dropdown');
+        
+        if (myMenu && myMenuLink && myMenuDropdown) {
+            // 点击"我的"按钮切换显示/隐藏
+            myMenuLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                myMenu.classList.toggle('active');
+                myMenu.setAttribute('aria-expanded', myMenu.classList.contains('active') ? 'true' : 'false');
+            });
+            
+            // 点击页面其他地方时关闭
+            document.addEventListener('click', function(e) {
+                if (myMenu && !myMenu.contains(e.target)) {
+                    myMenu.classList.remove('active');
+                    myMenu.setAttribute('aria-expanded', 'false');
+                }
+            });
+            
+            // 子菜单展开/收起
+            const submenuTitles = myMenuDropdown.querySelectorAll('.my-menu-submenu-title');
+            submenuTitles.forEach(function(title) {
+                title.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const submenu = title.parentElement;
+                    const isActive = submenu.classList.contains('active');
+                    
+                    // 关闭其他已展开的子菜单（可选：如果需要手风琴效果）
+                    // submenuTitles.forEach(function(otherTitle) {
+                    //     if (otherTitle !== title) {
+                    //         otherTitle.parentElement.classList.remove('active');
+                    //     }
+                    // });
+                    
+                    // 切换当前子菜单
+                    submenu.classList.toggle('active');
+                    
+                    // 更新 aria-expanded 属性（如果需要）
+                    const arrow = title.querySelector('.my-menu-submenu-arrow');
+                    if (arrow) {
+                        arrow.setAttribute('aria-expanded', !isActive ? 'true' : 'false');
+                    }
+                });
+            });
+        }
+
+        // 迷你购物车：点击展开/关闭
+        const miniCartOverlay = document.getElementById('mini-cart-overlay');
+        const miniCart = document.getElementById('mini-cart');
+        const headerCart = document.querySelector('.header-cart');
+        const cartLink = document.querySelector('.cart-link');
+
+        // 迷你购物车控制函数（需要在 if 之前定义，以便在 if 内部调用）
+        function toggleMiniCart() {
+            if (headerCart && headerCart.classList.contains('mini-cart-open')) {
+                hideMiniCart();
+            } else {
+                showMiniCart();
             }
         }
 
-        toggle.addEventListener('click', function() {
-            setOpen(!header.classList.contains('is-open'));
-        });
-
-        if (nav) {
-            nav.addEventListener('click', function(event) {
-                var link = event.target && event.target.closest ? event.target.closest('a') : null;
-                if (link) {
-                    setOpen(false);
-                }
-            });
-        }
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                setOpen(false);
+        function showMiniCart() {
+            if (headerCart) {
+                headerCart.classList.add('mini-cart-open');
+                headerCart.setAttribute('aria-expanded', 'true');
             }
-        });
+        }
 
-        if (typeof mobileQuery.addEventListener === 'function') {
-            mobileQuery.addEventListener('change', function(event) {
-                if (!event.matches) {
-                    setOpen(false);
-                }
+        function hideMiniCart() {
+            if (headerCart) {
+                headerCart.classList.remove('mini-cart-open');
+                headerCart.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        if (miniCartOverlay && miniCart && headerCart && cartLink) {
+            // 点击购物车按钮切换显示/隐藏
+            cartLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleMiniCart();
             });
-        } else if (typeof mobileQuery.addListener === 'function') {
-            mobileQuery.addListener(function(event) {
-                if (!event.matches) {
-                    setOpen(false);
+            
+            // 点击 header-cart 容器也切换（如果点击的不是按钮）
+            headerCart.addEventListener('click', function(e) {
+                // 如果点击的是按钮，不处理（已在上面处理）
+                if (cartLink.contains(e.target)) {
+                    return;
                 }
+                // 如果点击的是 mini-cart 或 overlay，不处理
+                if (miniCart.contains(e.target) || miniCartOverlay.contains(e.target)) {
+                    return;
+                }
+                // 其他情况切换显示
+                toggleMiniCart();
+            });
+
+            // 点击 overlay 时关闭（关键：确保点击蒙版能关闭，但点击 mini-cart 本身不关闭）
+            miniCartOverlay.addEventListener('click', function(e) {
+                // 如果点击的是 mini-cart 本身，不关闭
+                if (miniCart.contains(e.target)) {
+                    return;
+                }
+                // 点击的是 overlay（蒙版），立即关闭
+                e.preventDefault();
+                e.stopPropagation();
+                hideMiniCart();
+            });
+            
+            // 确保 overlay 可以接收点击事件
+            miniCartOverlay.style.pointerEvents = 'auto';
+            
+            // 阻止 mini-cart 的点击事件冒泡到 overlay
+            miniCart.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+
+            // 点击关闭按钮时关闭
+            const miniCartClose = document.getElementById('mini-cart-close');
+            if (miniCartClose) {
+                miniCartClose.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    hideMiniCart();
+                });
+            }
+
+            // 点击页面其他地方时关闭（排除购物车按钮和迷你购物车本身）
+            // 注意：overlay 的点击事件在上面单独处理，这里排除 overlay 避免重复
+            document.addEventListener('click', function(e) {
+                // 如果点击的是 overlay 或 mini-cart，不在这里处理（已在上面单独处理）
+                if (miniCartOverlay.contains(e.target) || miniCart.contains(e.target)) {
+                    return;
+                }
+                // 如果点击的是购物车按钮或容器，不关闭（会触发切换）
+                if (headerCart.contains(e.target)) {
+                    return;
+                }
+                // 点击页面其他地方，立即关闭
+                hideMiniCart();
             });
         }
-    })();
+
+        // --- 修复：导航条溢出检测与处理 ---
+        const mainNav = document.querySelector('.header-main-nav');
+        const navLeft = document.querySelector('.header-nav-left');
+        const navRight = document.querySelector('.header-nav-right');
+        // 复用上面已声明的变量：headerNavFill, navLinksList, navMoreWrapper, navMoreDropdown
+        const navList = navLinksList; // navLinksList 已在上面声明
+
+        if (mainNav && navList && navMoreWrapper) {
+            function checkNavFillOverflow() {
+                // 1. 获取最原始的、不可变的外层物理宽度
+                // 不要直接测量 mainNav，因为它可能被内部项撑开，要测量它的父容器
+                const headerContainer = mainNav.parentElement;
+                const totalPhysicalWidth = headerContainer.getBoundingClientRect().width;
+                
+                // 2. 先重置所有项显示，以便后续循环计算它们的真实宽度
+                const items = Array.from(navList.children);
+                items.forEach(item => {
+                    item.style.display = 'block';
+                    item.classList.remove('hidden');
+                });
+                navMoreWrapper.style.display = 'none';
+
+                // 3. 测量左右两侧已占用的空间
+                const leftWidth = navLeft ? navLeft.getBoundingClientRect().width : 0;
+                const rightWidth = navRight ? navRight.getBoundingClientRect().width : 0;
+                
+                // 4. 计算中间链接区域能拿到的真正“净空”
+                const baseGap = 30; // 区域间固定安全间隙
+                let availableForLinks = totalPhysicalWidth - leftWidth - rightWidth - baseGap;
+
+                // 5. 遍历计算
+                const moreBtnWidth = 90; // “更多”按钮预估宽
+                let currentAccumulatedWidth = 0;
+                let overflowIndices = [];
+                const itemGap = 20; // 链接项之间的间隙
+
+                items.forEach((item, index) => {
+                    // 在这一步，由于我们之前设为了 display: block，getBoundingClientRect 拿到的就是它们的自然宽度
+                    const itemWidth = item.getBoundingClientRect().width;
+                    currentAccumulatedWidth += itemWidth + itemGap; 
+                    
+                    if (currentAccumulatedWidth > availableForLinks) {
+                        overflowIndices.push(index);
+                    } else if (currentAccumulatedWidth > (availableForLinks - moreBtnWidth) && index < items.length - 1) {
+                        // 灵敏预测：如果剩下的空间不够放“更多”按钮，就开始折叠
+                        overflowIndices.push(index);
+                    }
+                });
+
+                // 6. 应用折叠结果
+                if (overflowIndices.length > 0) {
+                    // 只有这里显式设置为 flex
+                    navMoreWrapper.style.display = 'flex';
+                    navMoreDropdown.innerHTML = '';
+                    
+                    overflowIndices.forEach(index => {
+                        const item = items[index];
+                        item.style.display = 'none';
+                        item.classList.add('hidden');
+                        
+                        const link = item.querySelector('a');
+                        if (link) {
+                            const li = document.createElement('li');
+                            const newLink = link.cloneNode(true);
+                            li.appendChild(newLink);
+                            navMoreDropdown.appendChild(li);
+                        }
+                    });
+                }
+            }
+
+            // 使用 ResizeObserver 监听关键容器变化
+            const navResizeObserver = new ResizeObserver(() => {
+                requestAnimationFrame(checkNavFillOverflow);
+            });
+            navResizeObserver.observe(mainNav);
+            if (navLeft) navResizeObserver.observe(navLeft);
+
+            // 同时绑定窗口缩放事件作为备用
+            window.addEventListener('resize', checkNavFillOverflow);
+
+            // 初始执行
+            setTimeout(checkNavFillOverflow, 100); // 稍微延迟以等待布局完全稳定
+        }
+
+        // 检测 header-categories 宽度，小于 200px 时隐藏
+        (function() {
+            const headerCategories = document.querySelector('.header-categories');
+            if (!headerCategories) return;
+
+            function checkCategoriesWidth() {
+                const width = headerCategories.offsetWidth;
+                if (width < 200) {
+                    headerCategories.classList.add('hide-narrow');
+                } else {
+                    headerCategories.classList.remove('hide-narrow');
+                }
+            }
+
+            // 使用 ResizeObserver 监听元素尺寸变化
+            if (window.ResizeObserver) {
+                const resizeObserver = new ResizeObserver(function(entries) {
+                    checkCategoriesWidth();
+                });
+                resizeObserver.observe(headerCategories);
+            }
+
+            // 同时监听窗口缩放事件
+            window.addEventListener('resize', checkCategoriesWidth);
+
+            // 初始执行
+            setTimeout(checkCategoriesWidth, 100);
+        })();
+
+    }
+
+    function scheduleHeaderInteractions() {
+        var scheduleIdle = function () {
+            var run = function () {
+                requestAnimationFrame(initHeaderInteractions);
+            };
+
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(run, { timeout: 800 });
+                return;
+            }
+
+            setTimeout(run, 160);
+        };
+
+        if (document.readyState === 'complete') {
+            scheduleIdle();
+            return;
+        }
+
+        window.addEventListener('load', scheduleIdle, { once: true });
+    }
+
+    scheduleHeaderInteractions();
+})();
 </script>
+
